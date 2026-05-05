@@ -48,6 +48,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
   <script>
     const form = document.getElementById("formEquipos");
     const container = document.getElementById("equiposContainer");
@@ -172,11 +176,7 @@ async function syncContratoCacheFromOrden(ordenId) {
       updated_at: firebase.firestore.FieldValue.serverTimestamp()
     };
 
-    await db.collection("contratos")
-      .doc(c.contrato_doc_id)
-      .collection("ordenes")
-      .doc(ordenId)
-      .set(cacheDoc, { merge: true });
+    await ContratosService.linkOrden(c.contrato_doc_id, ordenId, cacheDoc, { merge: true });
     
     console.log(`✅ Caché de contrato sincronizado para orden ${ordenId}`);
   } catch (error) {

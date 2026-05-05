@@ -9,6 +9,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/mailService.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -419,32 +424,26 @@
       try {
         // ✅ Query simplificado: Firestore no requiere orderBy para deleted cuando usamos == false
         // Esto evita errores de índice compuesto
-        const snapshot = await db.collection("contratos")
-          .where("cliente_id", "==", clienteId)
-          .where("deleted", "==", false)
-          .where("estado", "in", ["aprobado", "activo"])
-          .orderBy("fecha_creacion", "desc")
-          .get();
-        
-        snapshot.forEach(doc => {
-          const contrato = doc.data();
+        const contratosCliente = await ContratosService.getContratosActivosPorCliente(clienteId);
+
+        contratosCliente.forEach(contrato => {
           const option = document.createElement("option");
-          option.value = doc.id;
-          
+          option.value = contrato.id;
+
           // Formato: CT-XXX — Tipo — Estado — 📻 X equipos
-          const contratoId = contrato.contrato_id || doc.id;
+          const contratoId = contrato.contrato_id || contrato.id;
           const tipoContrato = contrato.tipo_contrato || "N/A";
           const estado = contrato.estado || "N/A";
-          
+
           // Agregar total de equipos si existe
           const total = Number(contrato.total_equipos);
           const extra = Number.isFinite(total) ? ` — 📻 ${total} equipos` : "";
-          
+
           option.textContent = `${contratoId} — ${tipoContrato} — ${estado}${extra}`;
           contratoSelect.appendChild(option);
         });
-        
-        if (snapshot.empty) {
+
+        if (contratosCliente.length === 0) {
           const option = document.createElement("option");
           option.value = "";
           option.textContent = "(No hay contratos vigentes)";
@@ -723,9 +722,9 @@
             let contratoId = null;
             
             try {
-              const contratoDoc = await db.collection("contratos").doc(contratoDocId).get();
-              if (contratoDoc.exists) {
-                contratoId = contratoDoc.data().contrato_id || null;
+              const contratoDoc = await ContratosService.getContrato(contratoDocId);
+              if (contratoDoc) {
+                contratoId = contratoDoc.contrato_id || null;
               }
             } catch (error) {
               console.warn("No se pudo obtener contrato_id:", error);
@@ -745,7 +744,7 @@
         
         // ✅ Enviar notificación al jefe de taller
 try {
-await db.collection("mail_queue").add({
+await MailService.enqueue({
   to: "tecnico@cecomunica.com",
   subject: `Nueva Orden Creada – ${id}`,
   text: `

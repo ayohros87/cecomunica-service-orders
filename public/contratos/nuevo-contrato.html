@@ -7,6 +7,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/mailService.js"></script>
 <link rel="stylesheet" href="../css/ceco-ui.css">
 <style>
 /* ===================================
@@ -1461,13 +1466,8 @@ async function guardarContratoConfirmado(user) {
   const inicio = new Date(fechaStr.slice(0,4), fechaStr.slice(4,6)-1, fechaStr.slice(6,8));
   const fin = new Date(inicio); fin.setDate(fin.getDate() + 1);
 
-  const snap = await db.collection("contratos")
-    .where("codigo_tipo", "==", tipoCorto)
-    .where("fecha_creacion", ">=", inicio)
-    .where("fecha_creacion", "<", fin)
-    .get();
-
-  const num = String(snap.size + 1).padStart(2, "0");
+  const count = await ContratosService.contarPorTipoYFecha(tipoCorto, inicio, fin);
+  const num = String(count + 1).padStart(2, "0");
   const contrato_id = tipoCorto + fechaStr + "-" + num;
 
   const equipos = [...document.querySelectorAll("#tablaEquipos tbody tr")].map(row => {
@@ -1539,7 +1539,7 @@ async function guardarContratoConfirmado(user) {
   };
 
   // Guardar contrato
-  const docRef = await db.collection("contratos").add(contrato);
+  const docRef = await ContratosService.addContrato(contrato);
 
   // --- Encolar correo para envío en background y redirigir rápido ---
   try {
@@ -1551,7 +1551,7 @@ async function guardarContratoConfirmado(user) {
       ? `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #2563eb;border-radius:10px;background:#eff6ff;font:700 15px Arial,sans-serif;color:#1e3a8a;">Modalidad de renovación: ${contrato.renovacion_sin_equipo ? "RENOVACIÓN SIN EQUIPO" : "RENOVACIÓN CON EQUIPO"}</div>`
       : "";
 
-    await db.collection("mail_queue").add({
+    await MailService.enqueue({
       to: "ventas@cecomunica.com",
       cc: firebase.auth().currentUser?.email || null,
       subject: `Nuevo contrato creado: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,

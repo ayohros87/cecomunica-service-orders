@@ -35,6 +35,17 @@ const ContratosService = {
     return db.collection('contratos').add(data);
   },
 
+  // Count contracts matching a codigo_tipo in a date window (used for sequential ID generation).
+  async contarPorTipoYFecha(codigoTipo, inicio, fin) {
+    const db = firebase.firestore();
+    const snap = await db.collection('contratos')
+      .where('codigo_tipo', '==', codigoTipo)
+      .where('fecha_creacion', '>=', inicio)
+      .where('fecha_creacion', '<', fin)
+      .get();
+    return snap.size;
+  },
+
   // ── List queries ─────────────────────────────────────────────────────────
 
   // Primary paginated list.
@@ -99,6 +110,29 @@ const ContratosService = {
     return { docs, lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1] };
   },
 
+  // Active/approved contracts for a specific client (used in nueva/editar-orden dropdowns).
+  async getContratosActivosPorCliente(clienteId) {
+    const db = firebase.firestore();
+    const snap = await db.collection('contratos')
+      .where('cliente_id', '==', clienteId)
+      .where('deleted', '!=', true)
+      .where('estado', 'in', ['aprobado', 'activo'])
+      .orderBy('deleted')
+      .orderBy('fecha_creacion', 'desc')
+      .get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  // Remove a linked orden from the cache subcollection.
+  async unlinkOrden(contratoId, ordenId) {
+    const db = firebase.firestore();
+    return db.collection('contratos')
+      .doc(contratoId)
+      .collection('ordenes')
+      .doc(ordenId)
+      .delete();
+  },
+
   // All contracts in aprobado or activo estado (used for assignment dropdowns).
   async getContratosActivosAprobados() {
     const db = firebase.firestore();
@@ -135,14 +169,11 @@ const ContratosService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
-  // Write/overwrite a single cache subdoc.
-  async linkOrden(contratoId, ordenId, data) {
+  // Write a single cache subdoc. Pass { merge: true } to merge instead of overwrite.
+  async linkOrden(contratoId, ordenId, data, { merge = false } = {}) {
     const db = firebase.firestore();
-    return db.collection('contratos')
-      .doc(contratoId)
-      .collection('ordenes')
-      .doc(ordenId)
-      .set(data);
+    const ref = db.collection('contratos').doc(contratoId).collection('ordenes').doc(ordenId);
+    return merge ? ref.set(data, { merge: true }) : ref.set(data);
   },
 };
 

@@ -8,6 +8,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -508,11 +512,7 @@
       };
 
       try {
-        await db.collection("contratos")
-          .doc(c.contrato_doc_id)
-          .collection("ordenes")
-          .doc(ordenId)
-          .set(cache, { merge: true });
+        await ContratosService.linkOrden(c.contrato_doc_id, ordenId, cache, { merge: true });
         console.log(`✅ Caché de contrato sincronizado para orden ${ordenId}`);
       } catch (error) {
         console.warn("⚠️ No se pudo sincronizar caché de contrato:", error);
@@ -523,11 +523,7 @@
     async function deleteContratoCacheIfExists(ordenId, contratoDocId) {
       if (!contratoDocId) return;
       try {
-        await db.collection("contratos")
-          .doc(contratoDocId)
-          .collection("ordenes")
-          .doc(ordenId)
-          .delete();
+        await ContratosService.unlinkOrden(contratoDocId, ordenId);
         console.log(`🗑️ Caché de contrato eliminado para orden ${ordenId}`);
       } catch (error) {
         console.warn("⚠️ No se pudo eliminar caché de contrato:", error);
@@ -541,33 +537,26 @@
       if (!clienteId) return;
       
       try {
-        const snapshot = await db.collection("contratos")
-          .where("cliente_id", "==", clienteId)
-          .where("deleted", "!=", true)
-          .where("estado", "in", ["aprobado", "activo"])
-          .orderBy("deleted")
-          .orderBy("fecha_creacion", "desc")
-          .get();
-        
-        snapshot.forEach(doc => {
-          const contrato = doc.data();
+        const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
+
+        contratos.forEach(contrato => {
           const option = document.createElement("option");
-          option.value = doc.id;
-          
+          option.value = contrato.id;
+
           // Formato: CT-XXX — Tipo — Estado — 📻 X equipos
-          const contratoId = contrato.contrato_id || doc.id;
+          const contratoId = contrato.contrato_id || contrato.id;
           const tipoContrato = contrato.tipo_contrato || "N/A";
           const estado = contrato.estado || "N/A";
-          
+
           // Agregar total de equipos si existe
           const total = Number(contrato.total_equipos);
           const extra = Number.isFinite(total) ? ` — 📻 ${total} equipos` : "";
-          
+
           option.textContent = `${contratoId} — ${tipoContrato} — ${estado}${extra}`;
           contratoSelect.appendChild(option);
         });
-        
-        if (snapshot.empty) {
+
+        if (contratos.length === 0) {
           const option = document.createElement("option");
           option.value = "";
           option.textContent = "(No hay contratos vigentes)";
@@ -829,9 +818,9 @@
           let contratoId = null;
           
           try {
-            const contratoDoc = await db.collection("contratos").doc(contratoDocId).get();
-            if (contratoDoc.exists) {
-              contratoId = contratoDoc.data().contrato_id || null;
+            const contratoDoc = await ContratosService.getContrato(contratoDocId);
+            if (contratoDoc) {
+              contratoId = contratoDoc.contrato_id || null;
             }
           } catch (error) {
             console.warn("No se pudo obtener contrato_id:", error);
