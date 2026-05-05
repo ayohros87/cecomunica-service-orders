@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cecomunica - Plataforma</title>
+<link rel="stylesheet" href="css/ceco-ui.css">
+
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-init.js"></script>
+
+</head>
+<body>
+  <!-- Barra superior -->
+  <div class="topbar">
+    <h1>Cecomunica — Centro de Gestión</h1>
+    <button class="btn-top" onclick="cerrarSesion()">🚪 Salir</button>
+  </div>
+
+  <div class="app-wrap">
+    <!-- Herramientas -->
+    <div class="app-tools">
+      <div class="app-search">
+        <input id="buscador" type="search" placeholder="Buscar módulo (ej: inventario, poc, órdenes)..." oninput="filtrarModulos()">
+      </div>
+      <div>
+        <button class="btn" onclick="window.location.href='perfil.html'">👤 Mi perfil</button>
+      </div>
+    </div>
+
+    <!-- Grid de módulos -->
+    <div id="gridModulos" class="app-grid">
+      
+      <!-- Skeleton loaders (mostrados mientras carga) -->
+      <div class="skeleton-card" id="skeleton1">
+        <div class="skeleton-icon"></div>
+        <div class="skeleton-text">
+          <div class="skeleton-line title"></div>
+          <div class="skeleton-line subtitle"></div>
+        </div>
+      </div>
+      <div class="skeleton-card" id="skeleton2">
+        <div class="skeleton-icon"></div>
+        <div class="skeleton-text">
+          <div class="skeleton-line title"></div>
+          <div class="skeleton-line subtitle"></div>
+        </div>
+      </div>
+      <div class="skeleton-card" id="skeleton3">
+        <div class="skeleton-icon"></div>
+        <div class="skeleton-text">
+          <div class="skeleton-line title"></div>
+          <div class="skeleton-line subtitle"></div>
+        </div>
+      </div>
+      
+      <!-- Órdenes -->
+      <div class="app-card" data-keywords="ordenes servicio reparaciones equipos tecnicos" data-mod="ordenes" data-visible="false"
+           onclick="location.href='ordenes/index.html'">
+        <div class="ico">🛠️</div>
+        <div class="meta">
+          <div class="t">Órdenes de Servicio</div>
+          <div class="s">Recepción, técnicos, estados y equipos</div>
+        </div>
+      </div>
+
+      <!-- PoC -->
+      <div class="app-card" data-keywords="poc base datos radios sim ip gps grupos" data-mod="poc" data-visible="false"
+           onclick="location.href='POC/index.html'">
+        <div class="ico">📡</div>
+        <div class="meta">
+          <div class="t">Base de Datos PoC</div>
+          <div class="s">Radios, SIM, IP, grupos y notas</div>
+        </div>
+      </div>
+
+      <!-- Inventario -->
+      <div class="app-card" data-keywords="inventario radios stock modelos almacen" data-mod="inventario" data-visible="false"
+           onclick="location.href='inventario/index.html'">
+        <div class="ico">📦</div>
+        <div class="meta">
+          <div class="t">Inventario de Radios</div>
+          <div class="s">Ingresos, salidas y existencias</div>
+        </div>
+      </div>
+
+      <!-- Inventario de Piezas -->
+      <div class="app-card" data-keywords="piezas repuestos stock inventario taller servicio" data-mod="piezas" data-visible="false"
+           onclick="location.href='inventario/piezas.html'">
+        <div class="ico">🧩</div>
+        <div class="meta">
+          <div class="t">Inventario de Piezas</div>
+          <div class="s">Repuestos y precios para servicio</div>
+        </div>
+      </div>
+
+      <!-- Contratos -->
+      <div class="app-card" data-keywords="contratos clientes facturacion vigencia" data-mod="contratos" data-visible="false"
+           onclick="location.href='contratos/index.html'">
+        <div class="ico">📝</div>
+        <div class="meta">
+          <div class="t">Contratos</div>
+          <div class="s">Altas, renovaciones y estados</div>
+        </div>
+      </div>
+
+      <!-- Cotizaciones -->
+      <div class="app-card" data-keywords="cotizaciones ventas proformas ofertas clientes" data-mod="cotizaciones" data-visible="false"
+           onclick="location.href='cotizaciones/index.html'">
+        <div class="ico">🧾</div>
+        <div class="meta">
+          <div class="t">Cotizaciones</div>
+          <div class="s">Crear, editar e imprimir</div>
+        </div>
+      </div>
+
+<!-- Clientes -->
+<div class="app-card" data-keywords="clientes ruc cedula contactos cuentas empresas" data-mod="clientes" data-visible="false"
+     onclick="location.href='clientes/index.html'">
+  <div class="ico">👥</div>
+  <div class="meta">
+    <div class="t">Clientes</div>
+    <div class="s">Listado y edición masiva</div>
+  </div>
+</div>
+
+      <!-- Vendedores -->
+      <div class="app-card" data-keywords="vendedores ventas carga batch equipos radios" data-mod="vendedores" data-visible="false"
+           onclick="location.href='POC/vendedores-batch.html'">
+        <div class="ico">🧑‍💼</div>
+        <div class="meta">
+          <div class="t">Registro de Equipos (Ventas)</div>
+          <div class="s">Carga rápida por vendedor</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // === VISIBILIDAD POR ROL ===
+firebase.auth().onAuthStateChanged(async (user) => {
+  if (!user) { location.href = "login.html"; return; }
+
+  verificarAccesoYAplicarVisibilidad(async (rol) => {
+    // Mapa de rol → módulos visibles
+    const visiblesPorRol = {
+  administrador: ["ordenes", "poc", "inventario", "vendedores", "contratos", "cotizaciones", "clientes", "piezas"],
+  inventario:    ["inventario", "piezas"],
+  vista:         ["ordenes", "poc"],
+  tecnico:       ["ordenes", "poc"],
+  recepcion:     ["ordenes", "poc", "vendedores", "contratos", "clientes"],
+  vendedor:      ["ordenes", "vendedores", "contratos"],
+  tecnico_operativo: ["ordenes"]
+};
+
+
+    const visibles = new Set(visiblesPorRol[rol] || []);
+    document.querySelectorAll("#gridModulos .app-card").forEach(card => {
+      const mod = card.getAttribute("data-mod");
+      card.setAttribute("data-visible", visibles.has(mod) ? "true" : "false");
+    });
+
+    // Ocultar skeletons y aplicar filtro
+    document.querySelectorAll(".skeleton-card").forEach(el => el.style.display = "none");
+    
+    // Aplica el filtro inicial del buscador (vacío) para mostrar lo visible
+    (window.filtrarModulos || function(){})();
+  });
+});
+
+function cerrarSesion() {
+  firebase.auth().signOut().then(() => {
+    window.location.href = "login.html"; // relativo (no uses "/login.html")
+  });
+}
+    // === BUSCADOR DE MÓDULOS ===
+    function filtrarModulos() {
+      const q = (document.getElementById("buscador").value || "").toLowerCase().trim();
+      const cards = Array.from(document.querySelectorAll("#gridModulos .app-card"));
+
+      cards.forEach(card => {
+        // Respeta visibilidad por rol
+        if (card.getAttribute("data-visible") !== "true") { card.style.display = "none"; return; }
+
+        if (!q) { card.style.display = ""; return; }
+        const keys = (card.getAttribute("data-keywords") || "").toLowerCase();
+        const titulo = (card.querySelector(".meta .t")?.textContent || "").toLowerCase();
+        card.style.display = (keys.includes(q) || titulo.includes(q)) ? "" : "none";
+      });
+    }
+  </script>
+  <script>
+  document.addEventListener("keydown", (e) => {
+    if (["INPUT","TEXTAREA"].includes((e.target.tagName||""))) return;
+    const go = (sel) => {
+      const el = document.querySelector(`.app-card[data-mod='${sel}'][data-visible='true']`);
+      if (el) el.click();
+    };
+    if (e.key === "o") go("ordenes");
+    if (e.key === "p") go("poc");
+    if (e.key === "i") go("inventario");
+    if (e.key === "c") go("contratos");
+    if (e.key === "v") go("vendedores");
+    if (e.key === "q") go("cotizaciones");
+    if (e.key === "x") go("piezas");
+  });
+</script>
+</body>
+</html>

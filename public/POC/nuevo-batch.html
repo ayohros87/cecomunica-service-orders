@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Nuevo Batch de Equipos PoC - Cecomunica</title>
+<link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+    body {
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+      padding: 24px;
+      min-height: 100vh;
+    }
+    
+    .page-header {
+      max-width: 1000px;
+      margin: 0 auto 32px auto;
+      text-align: center;
+    }
+    
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0 0 8px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    
+    .page-header p {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0;
+    }
+    
+    .form-container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    #batchForm {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    
+    .section.form {
+      padding: 32px;
+      border-bottom: 2px solid var(--line);
+    }
+    
+    .section.form:last-of-type {
+      border-bottom: none;
+    }
+    
+    .form-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 24px 0;
+      padding-bottom: 12px;
+      border-bottom: 3px solid var(--brand);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .form-field label {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      transition: all 0.2s;
+      background: white;
+    }
+    
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      outline: none;
+    }
+    
+    .form-field textarea.mono {
+      font-family: 'Courier New', monospace;
+      min-height: 180px;
+    }
+    
+    .form-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    
+    .form-hint ul {
+      list-style: none;
+      padding: 0;
+      margin: 4px 0;
+    }
+    
+    .form-hint li {
+      padding: 4px 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    
+    .input-row {
+      display: flex;
+      gap: 8px;
+    }
+    
+    .input-row select {
+      flex: 1;
+    }
+    
+    .btn-pill {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      border-radius: 8px;
+    }
+    
+    .form-actions {
+      padding: 24px 32px;
+      background: #f8fafc;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      border-top: 2px solid var(--line);
+    }
+    
+    .form-actions .btn {
+      font-size: 15px;
+      padding: 12px 24px;
+      font-weight: 600;
+    }
+    
+    .file-preview {
+      margin-top: 16px;
+      padding: 16px;
+      background: #f0f9ff;
+      border: 2px solid #3b82f6;
+      border-radius: 8px;
+    }
+    
+    .file-preview table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    
+    .file-preview th {
+      background: white;
+      padding: 8px;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 2px solid var(--line);
+    }
+    
+    .file-preview td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+      
+      .page-header h1 {
+        font-size: 24px;
+      }
+      
+      .section.form {
+        padding: 20px;
+      }
+      
+      .form-actions {
+        padding: 16px 20px;
+        flex-direction: column;
+      }
+      
+      .form-actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+</head>
+<body>
+  <div class="page-header">
+    <h1><span style="font-size: 36px;">📦</span> Registrar Nuevo Batch de Equipos PoC</h1>
+    <p>Carga múltiples equipos de forma rápida usando seriales consecutivos</p>
+  </div>
+  
+  <div class="form-container">
+  <form id="batchForm">
+  <div class="section form">
+  <h3 class="form-title">🔢 Datos del Batch</h3>
+  <div class="form-grid cols-2">
+    <div class="form-field" style="grid-column:1/-1">
+      <label class="req">Seriales (uno por línea)</label>
+      <textarea id="seriales" required class="mono"></textarea>
+    </div>
+
+    <div class="form-field">
+      <label>📂 Cargar archivo JSON del vendedor</label>
+      <input type="file" class="file" accept=".json" onchange="cargarDesdeJSON(this)">
+      <div id="previewVendedor" class="form-hint"></div>
+    </div>
+
+    <div class="form-field">
+      <label class="req">Unit ID Inicial</label>
+      <input type="number" id="unit_id_inicial" required placeholder="Ejemplo: 5001">
+      <div class="form-hint">
+        Últimos Unit IDs asignados:
+        <ul id="ultimosUnitIDs" style="margin-top:6px;"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section form">
+  <h3 class="form-title">📦 Datos Generales</h3>
+  <div class="form-grid cols-2">
+    <div class="form-field" style="grid-column:1/-1">
+      <label class="req">Cliente</label>
+      <div class="input-row">
+        <select id="cliente" required></select>
+        <button type="button" id="addCliente" class="btn btn-pill fit">➕</button>
+      </div>
+    </div>
+
+    <div class="form-field" style="grid-column:1/-1">
+      <label class="req">IP</label>
+      <div class="input-row">
+        <select id="ip" required></select>
+        <button type="button" id="addIP" class="btn btn-pill fit">➕</button>
+      </div>
+    </div>
+
+    <div class="form-field" style="grid-column:1/-1">
+      <label>Notas</label>
+      <textarea id="notas"></textarea>
+    </div>
+  </div>
+</div>
+
+<div class="form-actions">
+  <button type="submit" class="btn primary">💾 Crear Equipos</button>
+  <button type="button" class="btn" onclick="window.location.href='index.html'">⬅️ Cancelar</button>
+</div>
+</form>
+</div>
+
+  <script>
+
+    async function cargarSelect(ruta, id) {
+      const snap = await db.doc(ruta).get();
+      const select = document.getElementById(id);
+      if (snap.exists) {
+        (snap.data().list || []).forEach(item => {
+          const option = new Option(item, item);
+          select.appendChild(option);
+        });
+      }
+    }
+async function cargarListaSelect(ruta, selectId) {
+  const ref = db.doc(ruta);
+  const snap = await ref.get();
+  const select = document.getElementById(selectId);
+  
+  select.innerHTML = '<option value="" disabled selected>Seleccione...</option>';
+
+  if (snap.exists) {
+    const lista = snap.data().list || [];
+    lista.sort().forEach(item => {
+      const option = document.createElement("option");
+      option.value = item;
+      option.textContent = item;
+      select.appendChild(option);
+    });
+  }
+}
+
+async function mostrarUltimosUnitIDs() {
+  const snap = await db.collection("poc_devices")
+    .orderBy("created_at", "desc")
+    .limit(5)
+    .get();
+
+  const ul = document.getElementById("ultimosUnitIDs");
+  ul.innerHTML = "";
+
+  snap.forEach(doc => {
+    const d = doc.data();
+    const item = document.createElement("li");
+    item.textContent = `${d.unit_id || "(sin Unit ID)"} – ${d.radio_name || "(sin nombre)"}`;
+    ul.appendChild(item);
+  });
+}
+
+
+
+async function agregarElemento(ruta, selectId, label) {
+  const nuevo = prompt(`Nuevo ${label}:`);
+  if (nuevo) {
+    const ref = db.doc(ruta);
+    const snap = await ref.get();
+    const lista = snap.exists ? (snap.data().list || []) : [];
+    if (!lista.includes(nuevo)) {
+      lista.push(nuevo);
+      await ref.set({ list: lista });
+      const option = new Option(nuevo, nuevo);
+      const select = document.getElementById(selectId);
+      select.appendChild(option);
+      select.value = nuevo;
+    }
+  }
+}
+async function cargarClientes() {
+  const snapshot = await db.collection("clientes").where("deleted", "==", false).orderBy("nombre").get();
+  const select = document.getElementById("cliente");
+  select.innerHTML = '<option value="" disabled selected>Seleccione...</option>';
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    const option = document.createElement("option");
+    option.value = doc.id;
+    option.textContent = data.nombre;
+    select.appendChild(option);
+  });
+}
+
+
+    // ✅ Data-sanity validator: Block invalid group values (magnifying glass, icon-only, etc.)
+    function limpiarGrupos(grupos = []) {
+      return grupos
+        .map(g => g.trim())
+        .filter(g =>
+          g !== "" &&
+          g !== "🔍" &&          // bloquea lupa explícitamente
+          !/^[🔍]+$/.test(g) &&  // bloquea solo iconos
+          g.length > 1           // evita símbolos sueltos
+        );
+    }
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      firebase.auth().onAuthStateChanged(async user => {
+        if (!user) return window.location.href = "/login.html";
+
+        await cargarClientes();
+        await cargarListaSelect("empresa/IPs", "ip");
+        await mostrarUltimosUnitIDs();
+document.getElementById("addCliente").onclick = async () => {
+  const nombre = prompt("Ingrese el nombre del nuevo cliente:");
+  if (!nombre) return;
+
+  const nombreLimpio = nombre.trim();
+  const regexProhibidos = /[\\/\\.#[\\]\\$]/;
+
+  if (regexProhibidos.test(nombreLimpio)) {
+    alert("❌ El nombre contiene caracteres no permitidos: / . # [ ]");
+    return;
+  }
+
+  await registrarCliente(nombreLimpio);
+  await cargarClientes();
+
+  // Selecciona automáticamente si se encuentra
+  const select = document.getElementById("cliente");
+  for (let i = 0; i < select.options.length; i++) {
+    if (select.options[i].textContent === nombreLimpio) {
+      select.selectedIndex = i;
+      break;
+    }
+  }
+
+  alert("✅ Cliente registrado y cargado.");
+};
+
+
+        document.getElementById("addIP").onclick = () => agregarElemento("empresa/IPs", "ip", "IP");
+
+      
+      });
+
+      document.getElementById("batchForm").addEventListener("submit", async e => {
+        e.preventDefault();
+
+        const seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
+        const unitIdInicial = parseInt(document.getElementById("unit_id_inicial").value.trim(), 10);
+
+        if (isNaN(unitIdInicial)) {
+        alert("Debe ingresar un número válido para Unit ID inicial.");
+        return;
+        }
+
+
+        if (seriales.length === 0) {
+          alert("Debe ingresar al menos un serial.");
+          return;
+        }
+
+        const grupos = [...document.querySelectorAll(".grupo-input")].map(i => i.value.trim()).filter(g => g);
+        const cliente = document.getElementById("cliente").value;
+        await registrarCliente(document.getElementById("cliente").selectedOptions[0].textContent);
+
+        if ((detallesBatch || []).length > 0 && detallesBatch.length !== seriales.length) {
+          alert(`❌ El archivo JSON tiene ${detallesBatch.length} filas pero ingresaste ${seriales.length} seriales. Deben coincidir para guardar modelo por equipo.`);
+          return;
+        }
+
+        // ✅ Hard-stop: Block save if invalid groups detected in batch
+        const gruposInvalidos = (detallesBatch || [])
+          .flatMap(d => d.grupos || [])
+          .some(g => g === "🔍");
+
+        if (gruposInvalidos) {
+          alert("❌ El archivo contiene un grupo inválido (🔍). Corrige el archivo antes de continuar.");
+          return;
+        }
+
+        for (let i = 0; i < seriales.length; i++) {
+         const detalle = normalizarDetalleBatch(detallesBatch?.[i] || {});
+         const data = {
+        cliente_id: cliente,
+        cliente_nombre: document.getElementById("cliente").selectedOptions[0].textContent,
+        ip: document.getElementById("ip").value,
+        serial: seriales[i],
+        unit_id: String(unitIdInicial + i), // Unit ID consecutivo
+        radio_name: "",
+        notas: document.getElementById("notas").value,
+        creado_por_uid: firebase.auth().currentUser.uid,
+        creado_por_email: firebase.auth().currentUser.email,
+        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+        radio_name: detalle.radio_name || "",
+        gps: detalle.gps ?? false,
+        modelo: detalle.modelo_label || detalle.modelo || "",
+        modelo_id: detalle.modelo_id || detalle.modeloId || null,
+        modelo_label: detalle.modelo_label || detalle.modeloLabel || detalle.modelo || "",
+        grupos: limpiarGrupos(detalle.grupos || []),
+        activo: true,
+        deleted: false
+        };
+          await db.collection("poc_devices").add(data);
+        }
+
+        alert("✅ Equipos creados correctamente.");
+        window.location.href = "index.html";
+      });
+    });
+  </script>
+  <script>
+let detallesBatch = [];
+
+function obtenerValor(...valores) {
+  for (const valor of valores) {
+    if (typeof valor === "string" && valor.trim() !== "") return valor.trim();
+    if (valor !== undefined && valor !== null && typeof valor !== "string") return valor;
+  }
+  return "";
+}
+
+function normalizarBooleanGPS(valor) {
+  if (typeof valor === "boolean") return valor;
+  if (typeof valor === "number") return valor === 1;
+  if (typeof valor === "string") {
+    const v = valor.trim().toLowerCase();
+    return ["true", "1", "si", "sí", "yes", "y", "✅", "🛰️"].includes(v);
+  }
+  return false;
+}
+
+function normalizarDetalleBatch(item = {}) {
+  const modeloIdRaw = obtenerValor(
+    item.modelo_id,
+    item.modeloId,
+    item.model_id,
+    item.modelId
+  );
+  const modeloLabelRaw = obtenerValor(
+    item.modelo_label,
+    item.modeloLabel,
+    item.model_label,
+    item.modelLabel,
+    item.Modelo,
+    item.modelo,
+    item.model
+  );
+
+  return {
+    ...item,
+    radio_name: obtenerValor(item.radio_name, item.radioName, item.nombre_radio, item.nombreRadio, item.Nombre, item.nombre),
+    gps: normalizarBooleanGPS(obtenerValor(item.gps, item.GPS)),
+    modelo_id: typeof modeloIdRaw === "string" ? modeloIdRaw.trim() : String(modeloIdRaw || "").trim(),
+    modelo_label: typeof modeloLabelRaw === "string" ? modeloLabelRaw.trim() : String(modeloLabelRaw || "").trim(),
+    modelo: typeof modeloLabelRaw === "string" ? modeloLabelRaw.trim() : String(modeloLabelRaw || ""),
+    grupos: Array.isArray(item.grupos)
+      ? item.grupos
+      : (typeof item.grupos === "string" ? item.grupos.split(",") : [])
+  };
+}
+
+function cargarDesdeJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+            const dataRaw = JSON.parse(e.target.result);
+          if (!Array.isArray(dataRaw)) throw "Formato inválido";
+          const data = dataRaw.map(normalizarDetalleBatch);
+
+      const clienteSelect = document.getElementById("cliente");
+      const clienteIdSeleccionado = clienteSelect.value;
+      const clienteNombreSeleccionado = clienteSelect.options[clienteSelect.selectedIndex]?.textContent || "";
+
+      if (data.length > 0 && data[0].cliente_id && data[0].cliente_id !== clienteIdSeleccionado) {
+        alert("⚠️ El cliente seleccionado no coincide con el cliente del archivo JSON:\n\n" +
+              "Cliente seleccionado: " + clienteNombreSeleccionado + "\n" +
+              "Cliente en archivo: " + (data[0].cliente_nombre || "desconocido"));
+        return;
+      }
+
+      detallesBatch = data;
+
+      const preview = document.getElementById("previewVendedor");
+      preview.className = "file-preview";
+      preview.innerHTML = `
+        <strong style="color: #155724;">✅ Archivo cargado: ${data.length} equipos detectados</strong>
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre del Radio</th>
+              <th>Modelo</th>
+              <th>GPS</th>
+              <th>Grupos</th>
+              <th>Cliente Referencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map(d => `
+              <tr>
+                <td>${d.radio_name || "—"}</td>
+                <td>${d.modelo || "—"}</td>
+                <td>${d.gps ? "✅" : "❌"}</td>
+                <td>${(d.grupos || []).join(", ") || "—"}</td>
+                <td>${d.cliente_nombre || "—"}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+      
+      alert("✅ Archivo cargado correctamente. Puedes continuar pegando los seriales y eligiendo el cliente correcto.");
+    } catch (err) {
+      alert("❌ Error al leer el archivo JSON: " + err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function registrarCliente(nombreCliente) {
+  if (!nombreCliente) return;
+
+  const nombre = nombreCliente.trim();
+  const snap = await db.collection("clientes").where("nombre", "==", nombre).limit(1).get();
+
+  if (!snap.empty) return; // ya existe
+
+  await db.collection("clientes").add({
+    nombre,
+    fecha_creacion: new Date()
+  });
+}
+
+
+</script>
+</body>
+</html>

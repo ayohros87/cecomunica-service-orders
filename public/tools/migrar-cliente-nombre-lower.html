@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Migración: cliente_nombre_lower</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+    body {
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+    h1 {
+      color: #0ea5a3;
+      margin-top: 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .info-box {
+      background: #e0f2f1;
+      border-left: 4px solid #0ea5a3;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .warning-box {
+      background: #fff3e0;
+      border-left: 4px solid #ff9800;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .success-box {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    .stat-card {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: #0ea5a3;
+    }
+    .stat-label {
+      color: #666;
+      font-size: 0.9rem;
+      margin-top: 5px;
+    }
+    .btn {
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #0ea5a3;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #0c8a88;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(14, 165, 163, 0.3);
+    }
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+      margin-left: 10px;
+    }
+    .btn-secondary:hover {
+      background: #5a6268;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #e0e0e0;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 20px 0;
+      display: none;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #0ea5a3, #4caf50);
+      width: 0%;
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+    .log {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      margin-top: 20px;
+      display: none;
+    }
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+    .log-success { color: #4caf50; }
+    .log-warning { color: #ff9800; }
+    .log-error { color: #f44336; }
+    .log-info { color: #2196f3; }
+    #scanResults {
+      display: none;
+    }
+  </style>
+  
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 Migración: cliente_nombre_lower</h1>
+    
+    <div class="info-box">
+      <strong>¿Qué hace esta migración?</strong>
+      <p>Agrega el campo <code>cliente_nombre_lower</code> a todos los contratos existentes para habilitar la búsqueda en toda la base de datos.</p>
+      <p>Este campo convierte el nombre del cliente a minúsculas (ej: "Juan Pérez" → "juan pérez") para permitir búsquedas sin distinción de mayúsculas.</p>
+    </div>
+
+    <div id="authCheck" style="text-align: center; padding: 40px;">
+      <div class="loader" style="margin: 0 auto;"></div>
+      <p>Verificando autenticación...</p>
+    </div>
+
+    <div id="mainContent" style="display: none;">
+      <div class="warning-box">
+        <strong>⚠️ Importante:</strong>
+        <ul>
+          <li>Solo administradores pueden ejecutar esta migración</li>
+          <li>Este proceso no puede revertirse automáticamente</li>
+          <li>Se recomienda hacer un backup antes de continuar</li>
+          <li>La migración puede tomar varios minutos si hay muchos contratos</li>
+        </ul>
+      </div>
+
+      <div style="text-align: center; margin: 30px 0;">
+        <button id="btnScan" class="btn btn-primary" onclick="escanearContratos()">
+          🔍 Escanear Contratos
+        </button>
+        <button class="btn btn-secondary" onclick="window.location.href='index.html'">
+          ← Volver a Contratos
+        </button>
+      </div>
+
+      <div id="scanResults">
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-number" id="statTotal">0</div>
+            <div class="stat-label">Total Contratos</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="statNeedsMigration" style="color: #ff9800;">0</div>
+            <div class="stat-label">Necesitan Migración</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number" id="statAlreadyMigrated" style="color: #4caf50;">0</div>
+            <div class="stat-label">Ya Migrados</div>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <button id="btnMigrate" class="btn btn-primary" onclick="ejecutarMigracion()" disabled>
+            ▶️ Ejecutar Migración
+          </button>
+        </div>
+
+        <div class="progress-bar" id="progressBar">
+          <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const auth = firebase.auth();
+    let contratosParaMigrar = [];
+    let totalContratos = 0;
+
+    // Verificar autenticación y rol
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        window.location.href = "/login.html";
+        return;
+      }
+
+      try {
+        const userDoc = await db.collection("usuarios").doc(user.uid).get();
+        const rol = userDoc.data()?.rol || "vista";
+
+        if (rol !== "administrador") {
+          alert("❌ Solo administradores pueden ejecutar migraciones.");
+          window.location.href = "index.html";
+          return;
+        }
+
+        document.getElementById("authCheck").style.display = "none";
+        document.getElementById("mainContent").style.display = "block";
+      } catch (error) {
+        console.error(error);
+        alert("Error verificando permisos");
+        window.location.href = "index.html";
+      }
+    });
+
+    function addLog(message, type = 'info') {
+      const logDiv = document.getElementById('log');
+      logDiv.style.display = 'block';
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    async function escanearContratos() {
+      const btnScan = document.getElementById('btnScan');
+      const scanResults = document.getElementById('scanResults');
+      
+      btnScan.disabled = true;
+      btnScan.textContent = '🔍 Escaneando...';
+      
+      addLog('Iniciando escaneo de contratos...', 'info');
+      
+      try {
+        const snapshot = await db.collection('contratos')
+          .where('deleted', '!=', true)
+          .get();
+        
+        totalContratos = snapshot.size;
+        contratosParaMigrar = [];
+        let yaMigrados = 0;
+
+        addLog(`Encontrados ${totalContratos} contratos`, 'info');
+
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (!data.cliente_nombre_lower && data.cliente_nombre) {
+            contratosParaMigrar.push({
+              id: doc.id,
+              nombre: data.cliente_nombre
+            });
+          } else if (data.cliente_nombre_lower) {
+            yaMigrados++;
+          }
+        });
+
+        document.getElementById('statTotal').textContent = totalContratos;
+        document.getElementById('statNeedsMigration').textContent = contratosParaMigrar.length;
+        document.getElementById('statAlreadyMigrated').textContent = yaMigrados;
+
+        scanResults.style.display = 'block';
+        
+        if (contratosParaMigrar.length > 0) {
+          document.getElementById('btnMigrate').disabled = false;
+          addLog(`✓ ${contratosParaMigrar.length} contratos necesitan migración`, 'warning');
+        } else {
+          addLog('✓ Todos los contratos ya tienen el campo cliente_nombre_lower', 'success');
+        }
+
+        btnScan.textContent = '🔍 Escanear Contratos';
+        btnScan.disabled = false;
+
+      } catch (error) {
+        console.error(error);
+        addLog(`Error: ${error.message}`, 'error');
+        btnScan.textContent = '🔍 Escanear Contratos';
+        btnScan.disabled = false;
+      }
+    }
+
+    async function ejecutarMigracion() {
+      if (contratosParaMigrar.length === 0) {
+        alert('No hay contratos para migrar');
+        return;
+      }
+
+      const confirmacion = confirm(
+        `¿Estás seguro de migrar ${contratosParaMigrar.length} contratos?\n\n` +
+        'Esta operación agregará el campo cliente_nombre_lower a todos los contratos seleccionados.'
+      );
+
+      if (!confirmacion) return;
+
+      const btnMigrate = document.getElementById('btnMigrate');
+      const progressBar = document.getElementById('progressBar');
+      const progressFill = document.getElementById('progressFill');
+
+      btnMigrate.disabled = true;
+      btnMigrate.textContent = '⏳ Migrando...';
+      progressBar.style.display = 'block';
+
+      addLog('🚀 Iniciando migración...', 'info');
+
+      const batchSize = 500; // Firestore batch limit
+      let processed = 0;
+      let errors = 0;
+
+      try {
+        // Process in batches of 500
+        for (let i = 0; i < contratosParaMigrar.length; i += batchSize) {
+          const batch = db.batch();
+          const batchContratos = contratosParaMigrar.slice(i, i + batchSize);
+
+          for (const contrato of batchContratos) {
+            const contratoRef = db.collection('contratos').doc(contrato.id);
+            const clienteNombreLower = contrato.nombre.toLowerCase();
+            
+            batch.update(contratoRef, {
+              cliente_nombre_lower: clienteNombreLower
+            });
+
+            processed++;
+            const progress = Math.round((processed / contratosParaMigrar.length) * 100);
+            progressFill.style.width = progress + '%';
+            progressFill.textContent = progress + '%';
+
+            if (processed % 10 === 0 || processed === contratosParaMigrar.length) {
+              addLog(`Procesando: ${processed}/${contratosParaMigrar.length}`, 'info');
+            }
+          }
+
+          await batch.commit();
+          addLog(`✓ Batch ${Math.floor(i / batchSize) + 1} completado (${batchContratos.length} contratos)`, 'success');
+        }
+
+        addLog(`\n🎉 ¡Migración completada exitosamente!`, 'success');
+        addLog(`✓ ${processed} contratos actualizados`, 'success');
+        addLog(`✗ ${errors} errores`, errors > 0 ? 'error' : 'success');
+
+        // Show success message
+        const successBox = document.createElement('div');
+        successBox.className = 'success-box';
+        successBox.innerHTML = `
+          <h3 style="margin-top: 0;">✅ Migración Completada</h3>
+          <p><strong>${processed}</strong> contratos fueron actualizados exitosamente.</p>
+          <p>Ahora la búsqueda funcionará en toda la base de datos.</p>
+        `;
+        document.getElementById('scanResults').insertBefore(
+          successBox,
+          document.getElementById('scanResults').firstChild
+        );
+
+        btnMigrate.textContent = '✓ Migración Completada';
+
+        // Refresh scan
+        setTimeout(() => {
+          escanearContratos();
+        }, 2000);
+
+      } catch (error) {
+        console.error(error);
+        addLog(`❌ Error durante la migración: ${error.message}`, 'error');
+        btnMigrate.textContent = '▶️ Ejecutar Migración';
+        btnMigrate.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

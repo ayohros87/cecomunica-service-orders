@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Trabajar Orden – Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+    .fila-equipo{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0;background:#fff}
+    .fila-equipo .hdr{display:flex;justify-content:space-between;align-items:center}
+    .consumos table{width:100%;border-collapse:collapse;margin-top:8px}
+    .consumos th,.consumos td{border:1px solid var(--line);padding:6px;text-align:left}
+    .badge-tipo{padding:2px 6px;border-radius:999px;font-size:12px;border:1px solid var(--line)}
+    .badge-tipo.cobro{background:#ecfeff}
+    .badge-tipo.garantia{background:#f0f9ff}
+    .badge-tipo.interno{background:#fff7ed}
+    .acciones{display:flex;gap:8px;flex-wrap:wrap}
+    .total-mini{font-weight:600}
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center}
+    .modal{background:#fff;padding:16px;border-radius:12px;min-width:320px;max-width:520px}
+    .form-field{display:flex;flex-direction:column;margin:8px 0}
+  </style>
+</head>
+<body>
+  <h2 style="margin:8px 0;">🧰 Trabajar Orden</h2>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <div class="card">
+    <div id="infoOrden" class="resumen"></div>
+    <div class="acciones">
+      <button class="btn" onclick="window.open('imprimir-orden.html?id='+ordenId,'_blank')">🖨️ Imprimir orden</button>
+      <button class="btn primary" onclick="irACotizar()">🧾 Previsualizar cotización</button>
+      <button class="btn" onclick="history.back()">⬅️ Volver</button>
+    </div>
+  </div>
+
+  <div id="equiposWrap"></div>
+
+  <!-- Modal Agregar Pieza -->
+  <div id="modalPieza" class="overlay">
+    <div class="modal">
+      <h3 style="margin:0 0 8px 0;">Agregar pieza utilizada</h3>
+      <div class="form-field">
+        <label>Buscar pieza (nombre o SKU)</label>
+        <input id="buscarPieza" type="text" placeholder="Ej. Micrófono, Batería BL2009, etc.">
+        <div id="sugerencias" class="chips"></div>
+      </div>
+      <div class="form-field">
+        <label>Cantidad</label>
+        <input id="qty" type="number" min="1" step="1" value="1">
+      </div>
+      <div class="form-field">
+        <label>Tipo</label>
+        <select id="tipo">
+          <option value="cobro" selected>Cobrar</option>
+          <option value="garantia">Garantía</option>
+          <option value="interno">Uso interno</option>
+        </select>
+      </div>
+
+      <div class="acciones" style="justify-content:flex-end;margin-top:8px;">
+        <button class="btn" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn ok" onclick="confirmarAgregar()">Agregar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const ordenId = params.get('id');
+let ordenData = null;
+let equipos = [];
+let inventario = [];      // cache piezas
+let equipoSeleccionado = null; // equipoId donde agrego
+
+firebase.auth().onAuthStateChanged(async (user)=>{
+  if(!user){ location.href = 'login.html'; return; }
+
+  // Cargar orden
+  const oSnap = await db.collection('ordenes_de_servicio').doc(ordenId).get();
+  if(!oSnap.exists){ alert('Orden no encontrada'); return; }
+  ordenData = oSnap.data();
+
+  // Nombre del cliente (si viene con cliente_id)
+  let cliente = ordenData.cliente_nombre || ordenData.cliente || '—';
+  if(ordenData.cliente_id){
+    try{
+      const c = await db.collection('clientes').doc(ordenData.cliente_id).get();
+      if(c.exists) cliente = c.data().nombre || cliente;
+    }catch{}
+  }
+
+  // Equipos no eliminados
+  equipos = Array.isArray(ordenData.equipos) ? ordenData.equipos.filter(e=>!e.eliminado) : [];
+
+  // Mostrar cabecera
+  const fecha = ordenData.fecha_creacion?.toDate ? ordenData.fecha_creacion.toDate().toISOString().slice(0,10) : '—';
+  document.getElementById('infoOrden').innerHTML =
+    `Orden <strong>${ordenId}</strong> · Cliente <strong>${cliente}</strong> · `+
+    `Servicio <strong>${ordenData.tipo_de_servicio || '—'}</strong> · `+
+    `Creada <strong>${fecha}</strong> · Estado <strong>${(ordenData.estado_reparacion||'').toUpperCase()}</strong>`;
+
+  // Cargar inventario activo
+  const invSnap = await db.collection('inventario_piezas').where('activo','==',true).get();
+  inventario = invSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+
+  // Render equipos
+  await renderEquiposYConsumos();
+});
+
+async function renderEquiposYConsumos(){
+  const wrap = document.getElementById('equiposWrap');
+  wrap.innerHTML = '';
+
+  for(const e of equipos){
+    const div = document.createElement('div');
+    div.className = 'fila-equipo';
+    div.innerHTML = `
+      <div class="hdr">
+        <div>
+          <div><strong>Serie:</strong> ${e.numero_de_serie || '-'}</div>
+          <div><small>Modelo: ${e.modelo || '-'}</small></div>
+        </div>
+        <div class="acciones">
+          <button class="btn" onclick="abrirModal('${e.id}')">➕ Agregar pieza</button>
+        </div>
+      </div>
+      <div class="consumos" id="consumos_${e.id}">
+        <div class="muted">Cargando consumos...</div>
+      </div>
+    `;
+    wrap.appendChild(div);
+
+    await cargarConsumosEquipo(e.id);
+  }
+}
+
+async function cargarConsumosEquipo(equipoId){
+  const zona = document.getElementById('consumos_'+equipoId);
+  const consSnap = await db.collection('ordenes_de_servicio').doc(ordenId)
+    .collection('consumos')
+    .where('equipoId','==',equipoId)
+    .orderBy('added_at','desc')
+    .get();
+
+  const items = consSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+
+  if(items.length===0){
+    zona.innerHTML = '<em>No hay piezas registradas.</em>';
+    return;
+  }
+
+  let html = `<table>
+    <thead>
+      <tr>
+        <th>Pieza</th><th>SKU</th><th>Tipo</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th>Acciones</th>
+      </tr>
+    </thead><tbody>`;
+
+  let totalEquipo = 0;
+  items.forEach(it=>{
+    const badge = `<span class="badge-tipo ${it.tipo}">${it.tipo}</span>`;
+    const sub = Number(it.subtotal||0);
+    if(it.tipo==='cobro') totalEquipo += sub;
+    html += `
+      <tr>
+        <td>${it.pieza_nombre}</td>
+        <td>${it.sku||'-'}</td>
+        <td>${badge}</td>
+        <td>${it.qty}</td>
+        <td>${fmtMoney(it.precio_unit)}</td>
+        <td>${fmtMoney(sub)}</td>
+        <td>
+          <button class="btn" title="Editar" onclick="editarLinea('${it.id}')">✏️</button>
+          <button class="btn danger" title="Eliminar" onclick="eliminarLinea('${it.id}','${equipoId}')">🗑️</button>
+        </td>
+      </tr>`;
+  });
+  html += `</tbody></table>
+  <div class="total-mini">Subtotal cobrado (equipo): ${fmtMoney(totalEquipo)}</div>`;
+
+  zona.innerHTML = html;
+}
+
+function fmtMoney(n){ n = Number(n||0); return '$'+n.toFixed(2); }
+
+// ==== Modal ====
+function abrirModal(eqId){
+  equipoSeleccionado = eqId;
+  document.getElementById('buscarPieza').value = '';
+  document.getElementById('sugerencias').innerHTML = '';
+  document.getElementById('qty').value = 1;
+  document.getElementById('tipo').value = 'cobro';
+  document.getElementById('modalPieza').style.display='flex';
+}
+function cerrarModal(){ document.getElementById('modalPieza').style.display='none'; }
+
+document.getElementById('buscarPieza').addEventListener('input', (e)=>{
+  const q = e.target.value.trim().toLowerCase();
+  const sug = document.getElementById('sugerencias');
+  if(!q){ sug.innerHTML=''; return; }
+  const top = inventario
+    .filter(p=> (p.nombre||'').toLowerCase().includes(q) || (p.sku||'').toLowerCase().includes(q))
+    .slice(0,8);
+  sug.innerHTML = top.map(p=>`<button class="chip" onclick='pick("${p.id}")'>${p.nombre} · ${p.sku||'-'} · ${fmtMoney(p.precio_venta||0)}</button>`).join('');
+});
+
+let piezaSeleccionada = null;
+function pick(id){
+  piezaSeleccionada = inventario.find(p=>p.id===id);
+  const sug = document.getElementById('sugerencias');
+  sug.innerHTML = `<div class="muted">Seleccionado: <strong>${piezaSeleccionada.nombre}</strong> (${piezaSeleccionada.sku||'-'}) – ${fmtMoney(piezaSeleccionada.precio_venta||0)}</div>`;
+}
+
+async function confirmarAgregar(){
+  if(!equipoSeleccionado){ alert('Equipo no válido'); return; }
+  if(!piezaSeleccionada){ alert('Selecciona una pieza'); return; }
+
+  const qty = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
+  const tipo = document.getElementById('tipo').value || 'cobro';
+  const precio = Number(piezaSeleccionada.precio_venta||0);
+  const subtotal = (tipo==='cobro') ? (qty * precio) : 0;
+
+  await db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').add({
+    equipoId: equipoSeleccionado,
+    pieza_id: piezaSeleccionada.id,
+    pieza_nombre: piezaSeleccionada.nombre,
+    sku: piezaSeleccionada.sku || '',
+    qty,
+    precio_unit: precio,
+    tipo,
+    subtotal,
+    added_by_uid: firebase.auth().currentUser.uid,
+    added_at: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
+  cerrarModal();
+  await cargarConsumosEquipo(equipoSeleccionado);
+  alert('✅ Pieza agregada');
+}
+
+async function eliminarLinea(lineaId, equipoId){
+  if(!confirm('¿Eliminar esta línea?')) return;
+  await db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(lineaId).delete();
+  await cargarConsumosEquipo(equipoId);
+}
+
+async function editarLinea(lineaId){
+  const ref = db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(lineaId);
+  const s = await ref.get();
+  if(!s.exists) return;
+  const d = s.data();
+  const nuevaQty = parseInt(prompt('Cantidad', d.qty),10);
+  if(!nuevaQty || nuevaQty<1) return;
+  const nuevoTipo = prompt('Tipo (cobro/garantia/interno)', d.tipo||'cobro') || 'cobro';
+  const nuevoSub = (nuevoTipo==='cobro') ? (nuevaQty * Number(d.precio_unit||0)) : 0;
+
+  await ref.update({ qty:nuevaQty, tipo:nuevoTipo, subtotal:nuevoSub });
+  await cargarConsumosEquipo(d.equipoId);
+}
+
+function irACotizar(){
+  location.href = 'cotizar-orden.html?id='+ordenId;
+}
+</script>
+</body>
+</html>

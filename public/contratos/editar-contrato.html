@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Editar Contrato</title>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <style>
+  body {
+    font-family: Arial, sans-serif;
+    background-color: #f9f9f9;
+    margin: 0;
+    padding: 30px;
+  }
+
+  h2 {
+    text-align: center;
+    color: #333;
+  }
+
+  form {
+    max-width: 960px;
+    margin: 20px auto;
+    background-color: #ffffff;
+    padding: 24px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+  }
+
+  fieldset {
+    border: 1px solid #ccc;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    border-radius: 8px;
+    background-color: #fdfdfd;
+  }
+
+  legend {
+    font-weight: bold;
+    font-size: 16px;
+    padding: 0 8px;
+    color: #222;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: #444;
+  }
+
+  input, select, textarea {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    box-sizing: border-box;
+    margin-top: 4px;
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  button {
+    padding: 10px 16px;
+    font-size: 14px;
+    margin-top: 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background-color: #007bff;
+    color: white;
+  }
+
+  button:hover {
+    background-color: #0056b3;
+  }
+
+  .inline-btn { margin-left: 8px; }
+  .flex { display: flex; gap: 10px; }
+  .align-end { display:flex; justify-content:flex-end; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+    background-color: white;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  th {
+    background-color: #f4f4f4;
+    text-align: left;
+  }
+
+  .total {
+    font-weight: bold;
+    text-align: right;
+    margin-top: 10px;
+    font-size: 16px;
+  }
+
+  #mensaje {
+    margin-top: 10px;
+    font-weight: bold;
+  }
+
+  .renovacion-box {
+    background: #eff6ff;
+    border: 2px solid #3b82f6;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-top: 8px;
+  }
+
+  .renovacion-box .title {
+    margin: 0 0 8px 0;
+    color: #1e3a8a;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .renovacion-badge {
+    display: inline-block;
+    background: #dbeafe;
+    color: #1e3a8a;
+    border: 1px solid #93c5fd;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+</style>
+
+</head>
+<body>
+  <h2>Editar Contrato</h2>
+<form id="formEditar">
+
+  <fieldset>
+    <legend>🧾 Información del Cliente</legend>
+    <!-- mantenemos el campo como read-only para edición -->
+    <label>Cliente:
+      <input type="text" id="cliente_nombre" disabled>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>📄 Detalles del Contrato</legend>
+
+    <label>Tipo de contrato:
+      <select id="tipo_contrato" required>
+        <option value="ALQ">Alquiler</option>
+        <option value="PROP">Propio</option>
+        <option value="REEMP">Reemplazo</option>
+        <option value="DEMO">Demo</option>
+      </select>
+    </label>
+
+    <label>Tipo de acción:
+      <select id="accion" required>
+        <option value="Nuevo">Nuevo</option>
+        <option value="Renovación">Renovación</option>
+        <option value="Adición">Adición</option>
+        <option value="No Aplica">No Aplica</option>
+      </select>
+    </label>
+
+    <div id="renovacionBox" class="renovacion-box" style="display:none;">
+      <p class="title">Modalidad de renovación</p>
+      <div id="renovacionBadge" class="renovacion-badge">Renovación con equipo</div>
+      <label>
+        <input type="checkbox" id="renovacion_sin_equipo">
+        Marcar si es renovación sin equipo
+      </label>
+      <label id="renovacionRefurbishedWrap" style="display:none; margin-top:8px;">
+        <input type="checkbox" id="renovacion_refurbished_componentes">
+        ¿El contrato lleva refurbished de batería, antena, clip y piezas?
+      </label>
+    </div>
+
+<label>Duración del contrato:
+  <select id="duracion" required onchange="toggleOtraDuracion(this.value)">
+    <option value="">Seleccione…</option>
+    <option value="12 meses">12 meses</option>
+    <option value="18 meses">18 meses</option>
+    <option value="Otro">Otro (especificar)</option>
+  </select>
+</label>
+
+<label id="otraDuracionLabel" style="display:none;">
+  Especificar duración (meses)
+  <input type="number" id="otra_duracion" min="1" placeholder="Ej. 24">
+</label>
+
+    <label>Estado:
+  <select id="estado" disabled>
+    <option value="activo">Activo</option>
+    <option value="pendiente_aprobacion">Pendiente Aprobación</option>
+    <option value="vencido">Vencido</option>
+  </select>
+</label>
+
+
+    <label>Observaciones:
+      <textarea id="observaciones"></textarea>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>📦 Equipos</legend>
+    <table>
+     <thead>
+      <tr>
+        <th>Modelo</th>
+        <th>Descripción</th>
+        <th>Cantidad</th>
+        <th>Precio Unitario</th>
+        <th>Total</th>
+        <th>❌</th>
+      </tr>
+    </thead>
+      <tbody id="tablaEquipos"></tbody>
+    </table>
+    <div class="align-end">
+      <button type="button" onclick="agregarEquipo()">➕ Agregar Equipo</button>
+    </div>
+    <div class="total">Total: $<span id="total">0.00</span></div>
+  </fieldset>
+
+  <div class="flex">
+    <button type="submit">💾 Guardar Cambios</button>
+    <button type="button" onclick="window.location.href='index.html'">⬅️ Cancelar</button>
+  </div>
+
+  <p id="mensaje"></p>
+</form>
+
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const contratoDocId = params.get("id");
+    let contratoRef = null;
+    let modelosDisponibles = [];
+async function cargarContrato() {
+  if (!contratoDocId) {
+    alert("Falta el id del contrato.");
+    window.location.href = "index.html";
+    return;
+  }
+
+  // 1) Cargar modelos primero (para poblar los <select>)
+  const snapModelos = await db.collection("modelos").orderBy("modelo").get();
+  modelosDisponibles = snapModelos.docs.map(doc => ({
+    modelo_id: doc.id,
+    modelo: doc.data().modelo
+  }));
+
+  // 2) Traer el contrato
+  contratoRef = db.collection("contratos").doc(contratoDocId);
+  const doc = await contratoRef.get();
+  if (!doc.exists) {
+    alert("Contrato no encontrado.");
+    window.location.href = "index.html";
+    return;
+  }
+  const c = doc.data(); // ← ahora sí existe 'c'
+
+  // 3) Bloquear edición si ya fue aprobado
+  if (c.estado === "activo") {
+    alert("Este contrato ya fue aprobado y no se puede editar.");
+    window.location.href = `imprimir-contrato.html?id=${c.contrato_id || contratoDocId}`;
+    return;
+  }
+
+  // 4) Poblar formulario
+  document.getElementById("cliente_nombre").value = c.cliente_nombre || "";
+  document.getElementById("tipo_contrato").value = c.codigo_tipo || "";
+  document.getElementById("accion").value = c.accion || "";
+  document.getElementById("renovacion_sin_equipo").checked = !!c.renovacion_sin_equipo;
+  refreshRenovacionEditorUI();
+  document.getElementById("estado").value = c.estado || "";
+  document.getElementById("observaciones").value = c.observaciones || "";
+    // Precargar duración si existe
+  if (c.duracion) {
+    if (["12 meses", "18 meses"].includes(c.duracion)) {
+      document.getElementById("duracion").value = c.duracion;
+    } else {
+      document.getElementById("duracion").value = "Otro";
+      document.getElementById("otra_duracion").value = c.duracion.replace(" meses", "").trim();
+      toggleOtraDuracion("Otro");
+    }
+  }
+
+  // 5) Cargar filas de equipos con dropdown de modelos
+  (c.equipos || []).forEach(eq =>
+  agregarEquipo(eq.modelo_id || "", eq.modelo || "", eq.cantidad, eq.precio, eq.descripcion)
+);
+}
+
+function agregarEquipo(modelo_id = '', modeloNombre = '', cantidad = 1, precio = 0, descripcion = "Equipos de Comunicación") {
+  const tr = document.createElement("tr");
+
+  const opciones = modelosDisponibles
+    .map(m => `<option value="${m.modelo_id}">${m.modelo}</option>`)
+    .join('');
+
+  tr.innerHTML = `
+    <td><select class="modelo">${opciones}</select></td>
+    <td><input type="text" class="descripcion" value="${descripcion}"></td>
+    <td><input type="number" class="cantidad" value="${cantidad}" min="1"></td>
+    <td><input type="number" class="precio" value="${precio}" step="0.01" min="0"></td>
+    <td class="subtotal">$0.00</td>
+    <td><button type="button" onclick="this.closest('tr').remove(); calcularTotal()">❌</button></td>
+  `;
+
+  const sel = tr.querySelector('.modelo');
+  if (modelo_id) {
+    sel.value = modelo_id;
+  } else if (modeloNombre) {
+    const match = modelosDisponibles.find(m => m.modelo === modeloNombre);
+    if (match) sel.value = match.modelo_id;
+  }
+
+  tr.querySelectorAll("input").forEach(i => i.addEventListener("input", calcularTotal));
+  document.getElementById("tablaEquipos").appendChild(tr);
+  calcularTotal();
+}
+
+
+      // Reemplazar COMPLETO
+  function calcularTotal() {
+    let total = 0;
+    document.querySelectorAll("#tablaEquipos tr").forEach(row => {
+      const cant = parseFloat(row.querySelector(".cantidad")?.value || 0);
+      const price = parseFloat(row.querySelector(".precio")?.value || 0);
+      const subtotal = cant * price;
+      row.querySelector(".subtotal").textContent = "$" + subtotal.toFixed(2);
+      total += subtotal;
+    });
+    document.getElementById("total").textContent = total.toFixed(2);
+  }
+
+function refreshRenovacionEditorUI() {
+  const accion = document.getElementById("accion")?.value;
+  const box = document.getElementById("renovacionBox");
+  const badge = document.getElementById("renovacionBadge");
+  const checkbox = document.getElementById("renovacion_sin_equipo");
+  if (!box || !badge || !checkbox) return;
+
+  const esRenovacion = accion === "Renovación";
+  if (!esRenovacion) {
+    box.style.display = "none";
+    checkbox.checked = false;
+    checkbox.disabled = true;
+    badge.textContent = "Renovación con equipo";
+    return;
+  }
+
+  box.style.display = "block";
+  checkbox.disabled = false;
+  badge.textContent = checkbox.checked ? "Renovación sin equipo" : "Renovación con equipo";
+}
+
+
+  document.getElementById("formEditar").addEventListener("submit", async e => {
+    e.preventDefault();
+
+const duracionSeleccionada = document.getElementById("duracion").value;
+const otraDuracion = document.getElementById("otra_duracion").value;
+const duracionFinal = duracionSeleccionada === "Otro"
+  ? `${otraDuracion} meses`
+  : duracionSeleccionada;
+
+const equipos = [...document.querySelectorAll("#tablaEquipos tr")].map(row => {
+  const modelo_id = row.querySelector(".modelo").value.trim();
+  const modelo = modelosDisponibles.find(m => m.modelo_id === modelo_id)?.modelo || "";
+  const descripcion = (row.querySelector(".descripcion")?.value || "").trim() || "Equipos de Comunicación";
+  return {
+    modelo_id,
+    modelo,
+    descripcion,
+    cantidad: parseInt(row.querySelector(".cantidad").value || 0),
+    precio: parseFloat(row.querySelector(".precio").value || 0)
+  };
+});
+const total = equipos.reduce((sum, eq) => sum + (eq.cantidad * eq.precio), 0);
+const accionSeleccionada = document.getElementById("accion").value;
+const esRenovacion = accionSeleccionada === "Renovación";
+const renovacionSinEquipo = esRenovacion && !!document.getElementById("renovacion_sin_equipo")?.checked;
+const renovacionRefurbishedComponentes = esRenovacion
+  && renovacionSinEquipo
+  && !!document.getElementById("renovacion_refurbished_componentes")?.checked;
+const renovacionModalidad = esRenovacion
+  ? (renovacionSinEquipo ? "Renovación sin equipo" : "Renovación con equipo")
+  : "";
+
+// Calcular total de equipos
+const total_equipos = equipos.reduce((acc, e) => acc + Number(e.cantidad || 0), 0);
+
+await contratoRef.update({
+  codigo_tipo: document.getElementById("tipo_contrato").value,
+  tipo_contrato: document.getElementById("tipo_contrato").selectedOptions[0].text,
+  accion: accionSeleccionada,
+  renovacion_sin_equipo: renovacionSinEquipo,
+  renovacion_refurbished_componentes: renovacionRefurbishedComponentes,
+  renovacion_modalidad: renovacionModalidad,
+  duracion: duracionFinal,
+  observaciones: document.getElementById("observaciones").value.trim(),
+  equipos,
+  total,
+  total_equipos,
+  fecha_modificacion: new Date()
+});
+
+    alert("✅ Cambios guardados");
+    location.href = "index.html";
+  });
+
+
+    (async () => {
+      await cargarContrato();  // ✅ aquí ya cargas modelos y luego el contrato
+    })();
+
+document.addEventListener('DOMContentLoaded', () => {
+  const selEstado = document.getElementById('estado');
+  if (selEstado) selEstado.disabled = true;
+
+  document.getElementById("accion")?.addEventListener("change", refreshRenovacionEditorUI);
+  document.getElementById("renovacion_sin_equipo")?.addEventListener("change", refreshRenovacionEditorUI);
+  document.getElementById("renovacion_refurbished_componentes")?.addEventListener("change", refreshRenovacionEditorUI);
+});
+function toggleOtraDuracion(valor) {
+  document.getElementById("otraDuracionLabel").style.display =
+    valor === "Otro" ? "block" : "none";
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Equipos por Cliente</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-equipos-cliente.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/admin-equipos-cliente.js" defer></script>
+</head>
+<body>
+  <div class="topbar">
+    <h1 class="topbar-title">🛡️ Equipos por Cliente (Administrador)</h1>
+    <div class="topbar-actions">
+      <button class="btn secondary" id="btnVolverOrdenes">⬅️ Volver a órdenes</button>
+    </div>
+  </div>
+
+  <div class="app-wrap" id="adminToolRoot">
+    <div class="card" id="accesoDenegado" style="display:none; margin-bottom: 12px;">
+      <h3>Sin acceso</h3>
+      <p>Esta herramienta está disponible solo para usuarios con rol administrador.</p>
+    </div>
+
+    <div class="card" id="panelBusqueda" style="display:none;">
+      <div class="toolbar admin-toolbar">
+        <div class="left admin-fields">
+          <div class="field-stack">
+            <label for="filtroClienteAdmin">Cliente</label>
+            <input type="text" id="filtroClienteAdmin" placeholder="Nombre del cliente (requerido)">
+          </div>
+          <div class="field-stack">
+            <label for="filtroTipoOrdenAdmin">Tipo de orden</label>
+            <select id="filtroTipoOrdenAdmin">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="field-stack">
+            <label for="filtroEstadoOrdenAdmin">Estado</label>
+            <select id="filtroEstadoOrdenAdmin">
+              <option value="">Todos</option>
+              <option value="POR ASIGNAR">POR ASIGNAR</option>
+              <option value="ASIGNADO">ASIGNADO</option>
+              <option value="COMPLETADO (EN OFICINA)">COMPLETADO (EN OFICINA)</option>
+              <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
+            </select>
+          </div>
+          <div class="field-stack">
+            <label for="sortByAdmin">Ordenar por</label>
+            <select id="sortByAdmin">
+              <option value="cliente">Cliente</option>
+              <option value="ordenId">Orden</option>
+              <option value="serial">Serial</option>
+              <option value="modelo">Modelo</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar admin-toolbar-secondary">
+        <div class="left admin-configs">
+          <label class="check-inline"><input type="checkbox" id="soloConSerial"> Solo equipos con serial</label>
+          <label class="check-inline"><input type="checkbox" id="incluirEquiposEliminados"> Incluir equipos eliminados</label>
+        </div>
+        <div class="right admin-actions">
+          <button class="btn primary" id="btnBuscarAdmin">🔎 Buscar</button>
+          <button class="btn secondary" id="btnExportarExcelAdmin" disabled>📥 Exportar Excel</button>
+          <button class="btn" id="btnLimpiarAdmin">Limpiar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="panelResultados" style="display:none; margin-top: 12px;">
+      <div class="toolbar">
+        <div class="left" id="resumenAdmin">Sin resultados</div>
+      </div>
+
+      <div class="table-wrap mt-12">
+        <table class="orders-table admin-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Orden</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Serial</th>
+              <th>Modelo</th>
+              <th>Descripción</th>
+            </tr>
+          </thead>
+          <tbody id="adminResultsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

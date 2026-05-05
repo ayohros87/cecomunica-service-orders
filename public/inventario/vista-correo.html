@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Inventario para Envío</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { padding: 6px 10px; border: 1px solid #ccc; text-align: center; }
+    th { background-color: #f0f0f0; }
+  </style>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <script>
+    window.onload = async () => {
+  const tabla = document.getElementById("tablaCorreo");
+
+  const modelosSnap = await db.collection("modelos").get();
+  const modelosMap = {};
+  modelosSnap.forEach(doc => modelosMap[doc.id] = doc.data());
+
+  const inventarioSnap = await db.collection("inventario_actual").get();
+  if (inventarioSnap.empty) {
+    tabla.innerHTML = "<tr><td colspan='9'>No hay datos</td></tr>";
+    return;
+  }
+
+  const datos = [];
+  inventarioSnap.forEach(doc => {
+    const data = doc.data();
+    const modelo = modelosMap[data.modelo_id] || {};
+    datos.push({ modelo, data });
+  });
+
+  datos.sort((a, b) => {
+  const amA = a.modelo.alto_movimiento ? 1 : 0;
+  const amB = b.modelo.alto_movimiento ? 1 : 0;
+  if (amA !== amB) return amB - amA; // true first
+
+  const marcaA = (a.modelo.marca || "").toLowerCase();
+  const marcaB = (b.modelo.marca || "").toLowerCase();
+  if (marcaA !== marcaB) return marcaA.localeCompare(marcaB);
+
+  const tipoA = (a.modelo.tipo || "").toLowerCase();
+  const tipoB = (b.modelo.tipo || "").toLowerCase();
+  if (tipoA !== tipoB) return tipoA.localeCompare(tipoB);
+
+  const modeloA = (a.modelo.modelo || "").toLowerCase();
+  const modeloB = (b.modelo.modelo || "").toLowerCase();
+  return modeloA.localeCompare(modeloB);
+});
+
+
+datos.forEach(({ modelo, data }) => {
+  // Convertir tipo y estado a nombres completos
+  let tipoTexto = "-";
+  if (modelo.tipo === "P") tipoTexto = "Portátil";
+  else if (modelo.tipo === "C") tipoTexto = "Cámara";
+  else if (modelo.tipo === "B") tipoTexto = "Base";
+
+  let estadoTexto = "-";
+  if (modelo.estado === "N") estadoTexto = "Nuevo";
+  else if (modelo.estado === "R") estadoTexto = "Reuso";
+
+  tabla.innerHTML += `
+    <tr>
+      <td>${modelo.marca || "-"}</td>
+      <td>${modelo.modelo || "-"}</td>
+      <td>${tipoTexto}</td>
+      <td>${estadoTexto}</td>
+      <td>${modelo.alto_movimiento ? "✅" : "❌"}</td>
+      <td>${data.cantidad ?? "-"}</td>
+      <td>${data.ultima_actualizacion?.toDate().toLocaleString() ?? "-"}</td>
+    </tr>`;
+});
+
+};
+
+  </script>
+</head>
+<body>
+  <h2>📄 Inventario para envío por correo</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Marca</th>
+        <th>Modelo</th>
+        <th>Tipo</th>
+        <th>Estado</th>
+        <th>Alto Movimiento</th>
+        <th>Cantidad</th>
+        <th>Última actualización</th>
+      </tr>
+    </thead>
+    <tbody id="tablaCorreo"></tbody>
+  </table>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Editar Equipos en Batch - Cecomunica</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    textarea, input, select, button { padding: 6px; margin: 4px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    th { background-color: #f0f0f0; }
+    input[type=text], select { width: 120px; }
+    .grupo-container { display: flex; gap: 6px; margin-bottom: 4px; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+</head>
+<body>
+  <h2>Editar Equipos en Batch</h2>
+
+  <label>Seriales o Unit IDs (uno por línea):
+    <br>
+    <textarea id="lista_ids" rows="5" cols="50" placeholder="Ejemplo:\nABC12345\n5001\n5002"></textarea>
+  </label>
+  <br>
+  <button onclick="buscarEquipos()">🔍 Buscar</button>
+
+  <div id="tablaContainer"></div>
+
+  <button onclick="guardarCambios()">💾 Guardar Cambios</button>
+  <button onclick="window.location.href='index.html'">⬅️ Volver</button>
+
+  <script>
+    let equipos = [];
+
+    function formatSimPhone(sim, phone) {
+      return `${sim || ''} ${phone || ''}`.trim();
+    }
+
+    function parseSimPhone(value) {
+      const partes = value.trim().split(' ');
+      return { sim: partes[0] || '', phone: partes[1] || '' };
+    }
+
+    async function cargarProveedores(selectId) {
+      const snap = await db.doc("empresa/proveedores").get();
+      const select = document.getElementById(selectId);
+      select.innerHTML = '';
+      if (snap.exists) {
+        const lista = snap.data().list || [];
+        lista.forEach(op => {
+          const option = new Option(op, op);
+          select.appendChild(option);
+        });
+      }
+    }
+
+    function agregarGrupo(index) {
+      const container = document.getElementById(`gruposContainer_${index}`);
+      const div = document.createElement("div");
+      div.className = "grupo-container";
+      div.innerHTML = `<input type="text" class="grupo-input">
+                        <button type="button" onclick="this.parentNode.remove()">❌</button>`;
+      container.appendChild(div);
+    }
+
+    async function buscarEquipos() {
+      const ids = document.getElementById("lista_ids").value.trim().split('\n').map(s => s.trim()).filter(s => s);
+      if (ids.length === 0) return alert("Debe ingresar al menos un Serial o Unit ID.");
+
+      const resultados = [];
+      for (const id of ids) {
+        const q1 = await db.collection("poc_devices").where("serial", "==", id).get();
+        const q2 = await db.collection("poc_devices").where("unit_id", "==", id).get();
+        q1.forEach(doc => resultados.push({ id: doc.id, data: doc.data() }));
+        q2.forEach(doc => resultados.push({ id: doc.id, data: doc.data() }));
+      }
+
+      if (resultados.length === 0) return alert("No se encontraron equipos.");
+
+      equipos = resultados;
+      renderizarTabla();
+    }
+
+    function renderizarTabla() {
+      const container = document.getElementById("tablaContainer");
+      let html = '<table><tr>' +
+        '<th>Cliente</th><th>IP</th><th>Serial</th><th>Unit ID</th><th>Nombre Radio</th>' +
+        '<th>Grupos</th><th>Proveedor</th><th>SIM / Teléfono</th>' +
+        '<th>Activo</th><th>GPS</th><th>Notas</th>' +
+        '</tr>';
+
+      equipos.forEach((eq, index) => {
+        const d = eq.data;
+        html += `<tr>
+          <td><input type="text" value="${d.cliente || ''}" id="cliente_${index}"></td>
+          <td><input type="text" value="${d.ip || ''}" id="ip_${index}"></td>
+          <td>${d.serial}</td>
+          <td>${d.unit_id}</td>
+          <td><input type="text" value="${d.radio_name || ''}" id="radio_${index}"></td>
+          <td>
+            <div id="gruposContainer_${index}"></div>
+            <button type="button" onclick="agregarGrupo(${index})">➕</button>
+          </td>
+          <td>
+            <select id="proveedor_${index}"></select>
+          </td>
+          <td><input type="text" value="${formatSimPhone(d.sim_number, d.sim_phone)}" id="simtel_${index}"></td>
+          <td><input type="checkbox" id="activo_${index}" ${d.activo ? 'checked' : ''}></td>
+          <td><input type="checkbox" id="gps_${index}" ${d.gps ? 'checked' : ''}></td>
+          <td><input type="text" value="${d.notas || ''}" id="notas_${index}"></td>
+        </tr>`;
+      });
+      html += '</table>';
+      container.innerHTML = html;
+
+      equipos.forEach((eq, index) => {
+        const grupos = eq.data.grupos || [];
+        const container = document.getElementById(`gruposContainer_${index}`);
+        grupos.forEach(g => {
+          const div = document.createElement("div");
+          div.className = "grupo-container";
+          div.innerHTML = `<input type="text" class="grupo-input" value="${g}">
+                            <button type="button" onclick="this.parentNode.remove()">❌</button>`;
+          container.appendChild(div);
+        });
+        cargarProveedores(`proveedor_${index}`);
+        document.getElementById(`proveedor_${index}`).value = eq.data.operador || '';
+      });
+    }
+
+    async function guardarCambios() {
+      const updates = equipos.map(async (eq, index) => {
+        const simTel = parseSimPhone(document.getElementById(`simtel_${index}`).value);
+        const grupos = [...document.querySelectorAll(`#gruposContainer_${index} .grupo-input`)]
+          .map(input => input.value.trim()).filter(g => g);
+
+        return db.collection("poc_devices").doc(eq.id).update({
+          cliente: document.getElementById(`cliente_${index}`).value,
+          ip: document.getElementById(`ip_${index}`).value,
+          sim_number: simTel.sim,
+          sim_phone: simTel.phone,
+          operador: document.getElementById(`proveedor_${index}`).value,
+          grupos,
+          radio_name: document.getElementById(`radio_${index}`).value,
+          activo: document.getElementById(`activo_${index}`).checked,
+          gps: document.getElementById(`gps_${index}`).checked,
+          notas: document.getElementById(`notas_${index}`).value,
+          updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+
+      await Promise.all(updates);
+      alert("✅ Cambios guardados correctamente.");
+      window.location.href = "index.html";
+    }
+  </script>
+</body>
+</html>

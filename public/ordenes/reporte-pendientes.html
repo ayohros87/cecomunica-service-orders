@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>📋 Reporte de Órdenes Pendientes</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h2 { margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+    th, td { border: 1px solid #000; padding: 6px 8px; text-align: center; }
+    th { background-color: #f0f0f0; }
+    #mensaje { margin-top: 15px; font-weight: bold; }
+    .toolbar { margin-bottom: 15px; }
+    .toolbar button { margin-right: 8px; }
+  </style>
+</head>
+<body>
+  <h2>⏳ Reporte de Órdenes Pendientes</h2>
+  <div class="toolbar">
+    <button onclick="window.print()">🖨️ Imprimir</button>
+    <button onclick="window.close()">❌ Cerrar</button>
+  </div>
+  <div id="mensaje"></div>
+  <div id="tablaReporte"></div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <script>
+    const tablaDiv = document.getElementById("tablaReporte");
+    const mensajeDiv = document.getElementById("mensaje");
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) {
+        mensajeDiv.style.color = "red";
+        mensajeDiv.textContent = "Debe iniciar sesión para ver este reporte.";
+        return;
+      }
+      generarReporte();
+    });
+
+    async function generarReporte() {
+      mensajeDiv.textContent = "Cargando datos...";
+      tablaDiv.innerHTML = "";
+
+      try {
+        // Traer órdenes cuyo estado sea POR ASIGNAR o ASIGNADO
+        const snap = await db.collection("ordenes_de_servicio")
+          .where("estado_reparacion", "in", ["POR ASIGNAR", "ASIGNADO"])
+          .orderBy("fecha_entrada", "desc")
+          .get();
+
+        if (snap.empty) {
+          mensajeDiv.textContent = "No hay órdenes pendientes.";
+          return;
+        }
+
+        let tabla = `
+          <table>
+            <thead>
+            <tr>
+              <th>N° Orden</th>
+              <th>Cliente</th>
+              <th>Tipo de Servicio</th>
+              <th>Estado</th>
+              <th>Fecha Entrada</th>
+              <th>Cantidad de Radios</th>
+              <th>Vendedor</th>
+            </tr>
+            </thead>
+            <tbody>
+        `;
+
+        let totalRadios = 0;
+
+        for (const doc of snap.docs) {
+          const data = doc.data();
+          if (data.eliminado === true) continue;
+
+// Usar lo que ya está guardado en la orden
+let nombreCliente = data.cliente_nombre || data.cliente || "No disponible";
+let vendedor = data.vendedor_email || "No disponible";
+
+
+          const equipos = (data.equipos || []).filter(e => !e.eliminado);
+          const cantidadRadios = equipos.length;
+          totalRadios += cantidadRadios;
+
+        tabla += `
+          <tr>
+            <td>${doc.id}</td>
+            <td>${nombreCliente}</td>
+            <td>${data.tipo_de_servicio || "-"}</td>
+            <td>${data.estado_reparacion || "-"}</td>
+            <td>${data.fecha_entrada || "-"}</td>
+            <td>${cantidadRadios}</td>
+            <td>${vendedor}</td>
+          </tr>
+        `;
+        }
+
+        tabla += `
+          <tr>
+            <td colspan="5" style="text-align:right; font-weight:bold;">TOTAL</td>
+            <td style="font-weight:bold;">${totalRadios}</td>
+          </tr>
+        `;
+
+        tabla += "</tbody></table>";
+        tablaDiv.innerHTML = tabla;
+        mensajeDiv.textContent = "";
+
+      } catch (e) {
+        console.error("❌ Error generando reporte:", e);
+        mensajeDiv.style.color = "red";
+        mensajeDiv.textContent = "Error al generar reporte.";
+      }
+    }
+  </script>
+</body>
+</html>

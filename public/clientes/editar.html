@@ -1,0 +1,202 @@
+<!-- public/clientes/editar.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Editar cliente – Cecomunica</title>
+
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+</head>
+<div class="topbar">
+  <h1 class="auth-title" id="title">Nuevo cliente</h1>
+  <div class="auth-actions">
+    <button id="volver" class="btn">← Volver</button>
+  </div>
+</div>
+
+<div class="form section">
+  <h2 class="form-title">Datos del cliente</h2>
+
+  <div class="form-grid cols-2">
+    <div class="form-field">
+      <label class="req">Nombre</label>
+      <input id="nombre" type="text" placeholder="Ej: Constructora XYZ" />
+      <div class="form-hint">Campo obligatorio</div>
+    </div>
+
+    <div class="form-field">
+      <label>Representante</label>
+      <input id="representante" type="text" placeholder="Nombre del representante legal" />
+    </div>
+   <div class="form-field">
+      <label>Cedula del Representante</label>
+      <input id="cedula_representante" type="text" placeholder="Cedula del representante legal" />
+    </div>
+    <div class="form-field">
+      <label>RUC</label>
+      <input id="ruc" type="text" placeholder="RUC / NIT" />
+    </div>
+
+    <div class="form-field">
+      <label>Teléfono</label>
+      <input id="telefono" type="tel" placeholder="+507 ..." />
+    </div>
+
+    <div class="form-field">
+      <label>Email</label>
+      <input id="email" type="email" placeholder="correo@empresa.com" />
+    </div>
+
+    <div class="form-field">
+      <label>Activo</label>
+      <div class="input-row">
+        <input id="activo" type="checkbox" checked />
+        <span class="form-hint">Marcar si el cliente está activo</span>
+      </div>
+    </div>
+
+    <div class="form-field" style="grid-column: 1 / -1;">
+      <label>Dirección</label>
+      <textarea id="direccion" rows="3" placeholder="Dirección fiscal / de facturación"></textarea>
+    </div>
+    <div class="form-field">
+      <label>Vendedor asignado</label>
+      <select id="vendedor_asignado"></select>
+    </div>
+    <div class="form-field" style="grid-column: 1 / -1;">
+      <label>Tags (separados por coma)</label>
+      <input id="tags" type="text" placeholder="educacion, escuela, gobierno" />
+      <div class="form-hint">Usa palabras clave para mejorar la búsqueda</div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button id="guardar" class="btn primary">Guardar</button>
+  </div>
+</div>
+
+
+<script>
+(function(){
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const $ = (id)=>document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+
+  function tokensFrom(text){
+    if(!text) return [];
+    const parts = text
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .split(/[^a-z0-9]+/).filter(Boolean);
+    const toks = new Set();
+    for(const p of parts){
+      for(let i=2;i<=p.length;i++){ toks.add(p.slice(0,i)); }
+    }
+    return Array.from(toks).slice(0,200);
+  }
+
+  auth.onAuthStateChanged(async (user)=>{
+    if(!user){ location.href = '../index.html'; return; }
+    if(id){ await cargar(); }
+  });
+
+  async function cargar(){
+    const snap = await db.collection('clientes').doc(id).get();
+    if(!snap.exists){ alert('Cliente no encontrado'); location.href='./index.html'; return; }
+    const c = snap.data();
+        // Cargar lista de vendedores
+    const snapVend = await db.collection('usuarios')
+      .where('rol', 'in', ['vendedor', 'administrador'])
+      .get();
+    const $vend = document.getElementById('vendedor_asignado');
+    $vend.innerHTML = '<option value="">-- Sin asignar --</option>';
+    snapVend.forEach(d => {
+      const data = d.data();
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      if (data.nombre) {
+        opt.textContent = `${data.nombre} (${data.email || ''})`;
+      } else {
+        opt.textContent = data.email || d.id;
+      }
+      if (c.vendedor_asignado === d.id) opt.selected = true;
+      $vend.appendChild(opt);
+    });
+
+    $('title').textContent = 'Editar cliente';
+    $('nombre').value = c.nombre||'';
+    $('representante').value = c.representante||'';
+    $('cedula_representante').value = c.cedula_representante||'';
+    $('ruc').value = c.ruc||'';
+    $('telefono').value = c.telefono||'';
+    $('email').value = c.email||'';
+    $('direccion').value = c.direccion||'';
+    $('activo').checked = !!c.activo;
+    $('tags').value = (c.tags||[]).join(', ');
+  }
+
+$('guardar').onclick = async ()=> {
+  const payload = {
+    nombre: $('nombre').value.trim(),
+    representante: $('representante').value.trim()||null,
+    cedula_representante: $('cedula_representante').value.trim()||null,
+    ruc: $('ruc').value.trim()||null,
+    telefono: $('telefono').value.trim()||null,
+    email: $('email').value.trim()||null,
+    direccion: $('direccion').value.trim()||null,
+    activo: $('activo').checked,
+    tags: $('tags').value.split(',').map(x=>x.trim()).filter(Boolean)
+  };
+
+  // vendedor asignado
+  const vendSel = document.getElementById('vendedor_asignado');
+  payload.vendedor_asignado = vendSel.value || null;
+  if (vendSel.value) {
+    const opt = vendSel.options[vendSel.selectedIndex].textContent;
+    payload.vendedor_email = opt.match(/\((.*?)\)/)?.[1] || null;
+  } else {
+    payload.vendedor_email = null;
+  }
+
+  if(!payload.nombre){ alert('El nombre es obligatorio'); return; }
+
+  // derivados
+  payload.nombreLower = payload.nombre.toLowerCase();
+  const toks = new Set([
+    ...tokensFrom(payload.nombre),
+    ...tokensFrom(payload.representante||''),
+    ...payload.tags.map(t=>t.toLowerCase())
+  ]);
+  payload.searchTokens = Array.from(toks);
+
+  try {
+    if(id){
+      payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('clientes').doc(id).update(payload);
+    } else {
+      payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+      const ref = await db.collection('clientes').add(payload);
+    }
+    alert('Guardado');
+    location.href = './index.html';
+  } catch(e){
+    alert('Error al guardar: '+e.message);
+  }
+};
+
+  $('volver').onclick = ()=> history.back();
+})();
+</script>
+</body>
+</html>

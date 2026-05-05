@@ -1,0 +1,91 @@
+#adminToolRoot {
+  max-width: 1500px;
+}
+
+.admin-toolbar {
+  align-items: flex-end;
+}
+
+.admin-fields {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.field-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-stack label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field-stack input,
+.field-stack select {
+  height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.admin-toolbar-secondary {
+  margin-top: 10px;
+  justify-content: space-between;
+}
+
+.admin-configs {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.admin-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.admin-table td {
+  vertical-align: top;
+}
+
+.empty-row {
+  text-align: center;
+  color: #6b7280;
+}
+
+@media (max-width: 1024px) {
+  .admin-fields {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-toolbar-secondary {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .admin-actions {
+    width: 100%;
+  }
+
+  .admin-actions .btn {
+    flex: 1;
+  }
+}

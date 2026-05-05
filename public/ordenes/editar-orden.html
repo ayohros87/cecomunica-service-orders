@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Editar Orden - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+      padding: 24px;
+      min-height: 100vh;
+    }
+    
+    .page-header {
+      max-width: 900px;
+      margin: 0 auto 32px auto;
+      text-align: center;
+    }
+    
+    .page-header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 0 0 8px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    
+    .page-header p {
+      color: var(--muted);
+      font-size: 14px;
+      margin: 0;
+    }
+    
+    .order-id-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--brand), #2563eb);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      margin-top: 8px;
+    }
+    
+    .form-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    #ordenForm {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    
+    .section.form {
+      padding: 32px;
+      border-bottom: 2px solid var(--line);
+      transition: background 0.2s;
+    }
+    
+    .section.form:hover {
+      background: #fafbfc;
+    }
+    
+    .section.form:last-of-type {
+      border-bottom: none;
+    }
+    
+    .form-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 24px 0;
+      padding-bottom: 12px;
+      border-bottom: 3px solid var(--brand);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .form-field label {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      transition: all 0.2s;
+      background: white;
+    }
+    
+    .form-field input:focus,
+    .form-field select:focus,
+    .form-field textarea:focus {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      outline: none;
+    }
+    
+    .form-field input[readonly],
+    .form-field select:disabled,
+    .form-field textarea[readonly] {
+      background: #f3f4f6;
+      color: var(--muted);
+      cursor: not-allowed;
+      border-color: #e5e7eb;
+    }
+    
+    .form-actions {
+      padding: 24px 32px;
+      background: #f8fafc;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      border-top: 2px solid var(--line);
+    }
+    
+    .form-actions .btn {
+      font-size: 15px;
+      padding: 12px 24px;
+      font-weight: 600;
+    }
+    
+    .contrato-block {
+      background: #eff6ff;
+      border: 2px solid #93c5fd;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    
+    .contrato-hint {
+      font-size: 12px;
+      color: #1e40af;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .checkbox-field {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 0;
+    }
+    
+    .checkbox-field input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    
+    .checkbox-field label {
+      margin: 0;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    
+    #mensaje {
+      max-width: 900px;
+      margin: 20px auto;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-weight: 600;
+      text-align: center;
+      display: none;
+    }
+    
+    #mensaje:not(:empty) {
+      display: block;
+    }
+    
+    .form-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .locked-field-notice {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #856404;
+    }
+    
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+      
+      .page-header h1 {
+        font-size: 24px;
+      }
+      
+      .section.form {
+        padding: 20px;
+      }
+      
+      /* Enhanced mobile form fields */
+      .form-field {
+        margin-bottom: 20px;
+      }
+      
+      .form-field input,
+      .form-field select,
+      .form-field textarea {
+        min-height: 44px;
+        font-size: 16px;
+        padding: 14px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      
+      .form-field textarea {
+        min-height: 100px;
+      }
+      
+      .form-field label {
+        font-size: 14px;
+        margin-bottom: 10px;
+      }
+      
+      /* Input rows stack on mobile */
+      .input-row {
+        flex-direction: column;
+        gap: 12px;
+      }
+      
+      .btn-pill {
+        width: 48px;
+        height: 48px;
+        font-size: 22px;
+      }
+      
+      /* Mobile actions */
+      .form-actions {
+        padding: 16px 20px;
+        flex-direction: column-reverse;
+        gap: 10px;
+      }
+      
+      .form-actions .btn {
+        width: 100%;
+        min-height: 48px;
+        font-size: 16px;
+        padding: 14px 24px;
+      }
+      
+      /* Checkbox larger tap target */
+      .checkbox-field input[type="checkbox"] {
+        width: 22px;
+        height: 22px;
+      }
+      
+      .checkbox-field label {
+        font-size: 15px;
+      }
+      
+      /* Contrato block spacing */
+      .contrato-block {
+        padding: 14px;
+        margin-top: 12px;
+      }
+      
+      /* Form title */
+      .form-title {
+        font-size: 16px;
+        margin-bottom: 20px;
+      }
+      
+      /* Order ID badge */
+      .order-id-badge {
+        font-size: 14px;
+        padding: 6px 12px;
+      }
+      
+      /* Equipment table on mobile - make scrollable */
+      .section.form table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      
+      .section.form table td,
+      .section.form table th {
+        font-size: 13px;
+        padding: 8px 6px;
+      }
+    }
+    
+    /* Toast Animations */
+    @keyframes slideInRight {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1><span style="font-size: 36px;">✏️</span> Editar Orden de Servicio</h1>
+    <p>Modifique los datos de la orden seleccionada</p>
+    <div class="order-id-badge" id="orderIdDisplay"></div>
+  </div>
+  
+  <div class="form-container">
+
+  <form id="ordenForm" class="card form">
+    <div class="section form">
+      <h3 class="form-title">🧾 Información General</h3>
+      <div class="form-grid cols-2">
+        <div class="form-field">
+          <label class="req">Número de Orden</label>
+          <input type="text" id="orden_id" readonly>
+        </div>
+
+        <div class="form-field">
+          <label class="req">Cliente</label>
+          <input type="text" id="cliente" readonly>
+        </div>
+
+        <div class="form-field">
+          <label class="req">Vendedor</label>
+          <select id="vendedor">
+            <option value="">Seleccione vendedor</option>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label class="req">Tipo de Servicio</label>
+          <select id="tipo" required>
+            <option value="">Seleccione tipo de servicio</option>
+          </select>
+        </div>
+        
+        <!-- Bloque de Contrato (solo para PROGRAMACION) -->
+        <div id="contratoBlock" class="contrato-block" style="display: none; grid-column: 1 / -1;">
+          <div class="contrato-hint">
+            <span>ℹ️</span>
+            <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marque "No aplica" solo si corresponde.</span>
+          </div>
+          
+          <div class="form-field">
+            <label id="contratoLabel" class="req">Contrato</label>
+            <select id="contratoSelect" required>
+              <option value="">Seleccione contrato</option>
+            </select>
+          </div>
+          
+          <div class="checkbox-field">
+            <input type="checkbox" id="contratoNoAplica">
+            <label for="contratoNoAplica">No aplica contrato</label>
+          </div>
+          
+          <div class="form-field" id="contratoMotivoField" style="display: none;">
+            <label class="req">Motivo (No aplica)</label>
+            <textarea id="contratoMotivo" rows="3" placeholder="Explique por qué no aplica contrato..."></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section form">
+      <h3 class="form-title">🛠️ Asignación y Estado</h3>
+      <div class="form-grid cols-2">
+        <div class="form-field">
+          <label>Técnico</label>
+          <select id="tecnico" disabled>
+            <option value="">Por asignar</option>
+          </select>
+          <p class="form-hint">🔒 Solo se puede asignar desde el listado principal</p>
+        </div>
+
+        <div class="form-field">
+          <label>Estado de Reparación</label>
+          <select id="estado" disabled>
+            <option value="">Cargando estados...</option>
+          </select>
+          <p class="form-hint">🔒 Se actualiza automáticamente según el flujo</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="section form">
+      <h3 class="form-title">📝 Observaciones</h3>
+      <div class="form-field">
+        <label># Contrato / Observaciones</label>
+        <textarea id="observaciones" rows="4"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn primary">💾 Guardar Cambios</button>
+      <button type="button" class="btn" onclick="window.location.href='index.html'">⬅️ Cancelar y volver</button>
+    </div>
+
+  </form>
+  
+  <p id="mensaje" class="resumen"></p>
+  </div>
+
+  <script>
+    let currentUser = null;
+    const form = document.getElementById("ordenForm");
+    const mensaje = document.getElementById("mensaje");
+    const params = new URLSearchParams(window.location.search);
+    const ordenId = params.get("id");
+    
+    // Variables para el bloque de contrato
+    const contratoBlock = document.getElementById("contratoBlock");
+    const contratoSelect = document.getElementById("contratoSelect");
+    const contratoNoAplica = document.getElementById("contratoNoAplica");
+    const contratoMotivo = document.getElementById("contratoMotivo");
+    const contratoMotivoField = document.getElementById("contratoMotivoField");
+    const contratoLabel = document.getElementById("contratoLabel");
+    const tipoSelect = document.getElementById("tipo");
+    
+    // Función para normalizar el tipo de servicio (sin tildes, sin espacios, mayúsculas)
+    function normalizarTipo(tipo) {
+      return (tipo || "")
+        .trim()
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, ""); // Elimina diacríticos (tildes)
+    }
+    
+    // Función para verificar si es tipo PROGRAMACION
+    function esProgramacion(tipo) {
+      return normalizarTipo(tipo) === "PROGRAMACION";
+    }
+    
+    // Función para sincronizar caché de contrato
+    async function syncContratoCacheFromOrden(ordenId, ordenData) {
+      // solo si tiene un contrato aplicable
+      const c = ordenData?.contrato;
+      if (!c?.aplica || !c?.contrato_doc_id) return;
+
+      // normalizar equipos
+      const equipos = Array.isArray(ordenData.equipos) ? ordenData.equipos : [];
+      const serials = equipos
+        .map(e => (e?.serial || e?.SERIAL || e?.numero_de_serie || "").toString().trim())
+        .filter(Boolean);
+
+      const cache = {
+        numero_orden: ordenId,
+        cliente_id: ordenData.cliente_id || null,
+        cliente_nombre: ordenData.cliente_nombre || null,
+        tipo_de_servicio: ordenData.tipo_de_servicio || null,
+        estado_reparacion: ordenData.estado_reparacion || null,
+        fecha_creacion: ordenData.fecha_creacion || null,
+        updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+
+        // mantener lista completa para modal detallado:
+        equipos: equipos.map(e => ({
+          serial: (e?.serial || e?.SERIAL || e?.numero_de_serie || "").toString().trim(),
+          modelo: e?.modelo || e?.MODEL || e?.modelo_nombre || "",
+          descripcion: e?.descripcion || e?.nombre || "",
+          unit_id: e?.unit_id || e?.unitId || "",
+          sim: e?.sim || e?.simcard || "",
+        })),
+
+        // ayudantes para hover:
+        equipos_count: equipos.length,
+        serials
+      };
+
+      try {
+        await db.collection("contratos")
+          .doc(c.contrato_doc_id)
+          .collection("ordenes")
+          .doc(ordenId)
+          .set(cache, { merge: true });
+        console.log(`✅ Caché de contrato sincronizado para orden ${ordenId}`);
+      } catch (error) {
+        console.warn("⚠️ No se pudo sincronizar caché de contrato:", error);
+      }
+    }
+    
+    // Función para eliminar caché de contrato si ya no aplica
+    async function deleteContratoCacheIfExists(ordenId, contratoDocId) {
+      if (!contratoDocId) return;
+      try {
+        await db.collection("contratos")
+          .doc(contratoDocId)
+          .collection("ordenes")
+          .doc(ordenId)
+          .delete();
+        console.log(`🗑️ Caché de contrato eliminado para orden ${ordenId}`);
+      } catch (error) {
+        console.warn("⚠️ No se pudo eliminar caché de contrato:", error);
+      }
+    }
+    
+    // Función para cargar contratos del cliente
+    async function cargarContratosDelCliente(clienteId) {
+      contratoSelect.innerHTML = '<option value="">Seleccione contrato</option>';
+      
+      if (!clienteId) return;
+      
+      try {
+        const snapshot = await db.collection("contratos")
+          .where("cliente_id", "==", clienteId)
+          .where("deleted", "!=", true)
+          .where("estado", "in", ["aprobado", "activo"])
+          .orderBy("deleted")
+          .orderBy("fecha_creacion", "desc")
+          .get();
+        
+        snapshot.forEach(doc => {
+          const contrato = doc.data();
+          const option = document.createElement("option");
+          option.value = doc.id;
+          
+          // Formato: CT-XXX — Tipo — Estado — 📻 X equipos
+          const contratoId = contrato.contrato_id || doc.id;
+          const tipoContrato = contrato.tipo_contrato || "N/A";
+          const estado = contrato.estado || "N/A";
+          
+          // Agregar total de equipos si existe
+          const total = Number(contrato.total_equipos);
+          const extra = Number.isFinite(total) ? ` — 📻 ${total} equipos` : "";
+          
+          option.textContent = `${contratoId} — ${tipoContrato} — ${estado}${extra}`;
+          contratoSelect.appendChild(option);
+        });
+        
+        if (snapshot.empty) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "(No hay contratos vigentes)";
+          option.disabled = true;
+          contratoSelect.appendChild(option);
+        }
+      } catch (error) {
+        console.error("Error cargando contratos:", error);
+        mostrarMensaje("Error al cargar contratos: " + error.message, "rojo");
+      }
+    }
+    
+    // Event listener para cambio de tipo de servicio
+    tipoSelect.addEventListener("change", async function() {
+      const tipo = tipoSelect.value;
+      
+      if (esProgramacion(tipo)) {
+        // Mostrar bloque de contrato
+        contratoBlock.style.display = "block";
+        
+        // Por defecto: aplica contrato (checkbox desmarcado)
+        if (!contratoNoAplica.checked) {
+          contratoSelect.disabled = false;
+          contratoSelect.required = true;
+          contratoLabel.classList.add("req");
+          contratoMotivoField.style.display = "none";
+          contratoMotivo.required = false;
+        }
+        
+        // Cargar contratos del cliente actual
+        const clienteField = document.getElementById("cliente");
+        const clienteIdMatch = clienteField.dataset.clienteId;
+        if (clienteIdMatch) {
+          await cargarContratosDelCliente(clienteIdMatch);
+        }
+      } else {
+        // Ocultar y limpiar bloque de contrato
+        contratoBlock.style.display = "none";
+        contratoSelect.value = "";
+        contratoSelect.required = false;
+        contratoLabel.classList.remove("req");
+        contratoNoAplica.checked = false;
+        contratoMotivo.value = "";
+        contratoMotivo.required = false;
+        contratoMotivoField.style.display = "none";
+      }
+    });
+    
+    // Event listener para checkbox "No aplica"
+    contratoNoAplica.addEventListener("change", function() {
+      if (contratoNoAplica.checked) {
+        // No aplica contrato
+        contratoSelect.disabled = true;
+        contratoSelect.value = "";
+        contratoSelect.required = false;
+        contratoLabel.classList.remove("req");
+        
+        contratoMotivoField.style.display = "block";
+        contratoMotivo.required = true;
+      } else {
+        // Sí aplica contrato
+        contratoSelect.disabled = false;
+        contratoSelect.required = true;
+        contratoLabel.classList.add("req");
+        
+        contratoMotivoField.style.display = "none";
+        contratoMotivo.value = "";
+        contratoMotivo.required = false;
+      }
+    });
+
+    function mostrarToast(mensaje, tipo = 'ok') {
+      const toast = document.createElement('div');
+      toast.className = `toast ${tipo}`;
+      toast.textContent = mensaje;
+      toast.style.position = 'fixed';
+      toast.style.bottom = '20px';
+      toast.style.right = '20px';
+      toast.style.padding = '16px 24px';
+      toast.style.borderRadius = '8px';
+      toast.style.zIndex = '9999';
+      toast.style.fontWeight = '500';
+      toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+      toast.style.animation = 'slideInRight 0.3s ease';
+      
+      if (tipo === 'ok' || tipo === 'verde') {
+        toast.style.background = '#d4edda';
+        toast.style.color = '#155724';
+        toast.style.border = '2px solid #28a745';
+      } else {
+        toast.style.background = '#f8d7da';
+        toast.style.color = '#721c24';
+        toast.style.border = '2px solid #dc3545';
+      }
+      
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = 'fadeOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 2500);
+    }
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (user) {
+        currentUser = user;
+        const userDoc = await db.collection("usuarios").doc(user.uid).get();
+        const rol = userDoc.exists ? userDoc.data().rol || "" : "";
+        limitarEdicionPorRol(rol);
+      } else {
+        alert("No ha iniciado sesión. Redirigiendo al login...");
+        window.location.href = "../login.html";
+      }
+    });
+
+    async function cargarOrden() {
+      if (!ordenId) {
+        mostrarMensaje("No se proporcionó ID de orden en la URL.", "rojo");
+        return;
+      }
+
+      document.getElementById("orden_id").value = ordenId;
+      document.getElementById("orderIdDisplay").textContent = `Orden #${ordenId}`;
+      const docRef = db.collection("ordenes_de_servicio").doc(ordenId);
+      const docSnap = await docRef.get();
+
+      if (docSnap.exists) {
+        const d = docSnap.data();
+        window.ordenDataOriginal = d; // Guardar data original para detectar cambios de contrato
+        let nombreCliente = d.cliente_nombre || d.cliente || "";
+        
+        if (d.cliente_id) {
+          try {
+            const cSnap = await db.collection("clientes").doc(d.cliente_id).get();
+            if (cSnap.exists) nombreCliente = cSnap.data().nombre || nombreCliente;
+          } catch (e) { /* opcional: console.warn(e); */ }
+        }
+        
+        document.getElementById("cliente").value = nombreCliente;
+        // Guardar cliente_id para cargar contratos
+        document.getElementById("cliente").dataset.clienteId = d.cliente_id || "";
+        
+        // Cargar vendedores
+        const vendSelect = document.getElementById("vendedor");
+        vendSelect.innerHTML = '<option value="">Seleccione vendedor</option>';
+        const uSnap = await db.collection("usuarios")
+          .where("rol", "in", ["vendedor", "administrador"])
+          .get();
+
+        uSnap.forEach(doc => {
+          const u = doc.data();
+          const opt = document.createElement("option");
+          opt.value = doc.id;
+          opt.textContent = (u.nombre || u.email || doc.id);
+          if (doc.id === (d.vendedor_asignado || "")) opt.selected = true;
+          vendSelect.appendChild(opt);
+        });
+
+        await cargarTipos();
+        document.getElementById("tipo").value = d.tipo_de_servicio || "";
+        
+        // Manejar bloque de contrato si el tipo es PROGRAMACION
+        if (esProgramacion(d.tipo_de_servicio)) {
+          contratoBlock.style.display = "block";
+          
+          // Cargar contratos del cliente
+          if (d.cliente_id) {
+            await cargarContratosDelCliente(d.cliente_id);
+          }
+          
+          // Prellenar datos del contrato
+          if (d.contrato) {
+            if (d.contrato.aplica === false) {
+              // No aplica contrato
+              contratoNoAplica.checked = true;
+              contratoSelect.disabled = true;
+              contratoSelect.required = false;
+              contratoLabel.classList.remove("req");
+              contratoMotivoField.style.display = "block";
+              contratoMotivo.value = d.contrato.motivo_no_aplica || "";
+              contratoMotivo.required = true;
+            } else {
+              // Sí aplica contrato
+              contratoNoAplica.checked = false;
+              contratoSelect.disabled = false;
+              contratoSelect.required = true;
+              contratoLabel.classList.add("req");
+              contratoSelect.value = d.contrato.contrato_doc_id || "";
+              contratoMotivoField.style.display = "none";
+              contratoMotivo.required = false;
+            }
+          } else {
+            // Orden antigua sin campo contrato - por defecto aplica
+            contratoNoAplica.checked = false;
+            contratoSelect.disabled = false;
+            contratoSelect.required = true;
+            contratoLabel.classList.add("req");
+          }
+        } else {
+          // No es PROGRAMACION, ocultar bloque
+          contratoBlock.style.display = "none";
+        }
+        
+        await cargarTecnicos();
+        document.getElementById("tecnico").value = d.tecnico_asignado || "";
+        document.getElementById("estado").value = d.estado_reparacion || "POR ASIGNAR";
+        document.getElementById("observaciones").value = d.observaciones || "";
+      } else {
+        mostrarMensaje("Orden no encontrada.", "rojo");
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      
+      const tipoServicio = document.getElementById("tipo").value;
+      
+      // Validación específica para PROGRAMACIÓN
+      if (esProgramacion(tipoServicio)) {
+        if (!contratoNoAplica.checked) {
+          // Debe tener contrato seleccionado
+          if (!contratoSelect.value) {
+            mostrarMensaje("⚠️ Para PROGRAMACIÓN debe seleccionar un contrato o marcar 'No aplica'.", "rojo");
+            return;
+          }
+        } else {
+          // Debe tener motivo
+          if (!contratoMotivo.value.trim()) {
+            mostrarMensaje("⚠️ Debe indicar el motivo por el cual no aplica contrato.", "rojo");
+            return;
+          }
+        }
+      }
+      
+      const data = {
+        vendedor_asignado: document.getElementById("vendedor").value || "",
+        tipo_de_servicio: tipoServicio,
+        tecnico_asignado: document.getElementById("tecnico").value || "",
+        estado_reparacion: document.getElementById("estado").value || "POR ASIGNAR",
+        observaciones: document.getElementById("observaciones").value?.trim() || "",
+        actualizado_por_uid: currentUser?.uid || "",
+        actualizado_por_email: currentUser?.email || "",
+        actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      
+      // Agregar o remover contrato según el tipo de servicio
+      if (esProgramacion(tipoServicio)) {
+        if (contratoNoAplica.checked) {
+          // No aplica contrato
+          data.contrato = {
+            aplica: false,
+            contrato_doc_id: null,
+            contrato_id: null,
+            motivo_no_aplica: contratoMotivo.value.trim()
+          };
+        } else {
+          // Sí aplica contrato - obtener contrato_id del documento
+          const contratoDocId = contratoSelect.value;
+          let contratoId = null;
+          
+          try {
+            const contratoDoc = await db.collection("contratos").doc(contratoDocId).get();
+            if (contratoDoc.exists) {
+              contratoId = contratoDoc.data().contrato_id || null;
+            }
+          } catch (error) {
+            console.warn("No se pudo obtener contrato_id:", error);
+          }
+          
+          data.contrato = {
+            aplica: true,
+            contrato_doc_id: contratoDocId,
+            contrato_id: contratoId,
+            motivo_no_aplica: null
+          };
+        }
+      } else {
+        // Si no es PROGRAMACION, eliminar el campo contrato
+        data.contrato = firebase.firestore.FieldValue.delete();
+      }
+
+      try {
+        // Leer datos actuales para comparar contrato
+        const docSnap = await db.collection("ordenes_de_servicio").doc(ordenId).get();
+        const datosActuales = docSnap.exists ? docSnap.data() : {};
+        
+        // Si antes tenía contrato pero ahora no (o cambió), eliminar caché anterior
+        const contratoAnterior = datosActuales?.contrato;
+        if (contratoAnterior?.contrato_doc_id) {
+          // Si ya no aplica o cambió de contrato, eliminar el caché anterior
+          if (!esProgramacion(tipoServicio) || 
+              (data.contrato && !data.contrato.aplica) ||
+              (data.contrato && data.contrato.contrato_doc_id !== contratoAnterior.contrato_doc_id)) {
+            await deleteContratoCacheIfExists(ordenId, contratoAnterior.contrato_doc_id);
+          }
+        }
+        
+        await db.collection("ordenes_de_servicio").doc(ordenId).set(data, { merge: true });
+        
+        // Sincronizar caché nuevo si aplica
+        if (esProgramacion(tipoServicio) && data.contrato?.aplica) {
+          await syncContratoCacheFromOrden(ordenId, { ...datosActuales, ...data });
+        }
+        
+        mostrarToast("✅ Orden actualizada correctamente", "ok");
+        setTimeout(() => window.location.href = 'index.html', 1500);
+      } catch (error) {
+        mostrarToast("❌ Error al guardar: " + error.message, "error");
+      }
+    });
+
+    async function cargarTecnicos() {
+      const select = document.getElementById("tecnico");
+      select.innerHTML = '<option value="">Por asignar</option>';
+      const snap = await db.collection("usuarios")
+        .where("rol", "in", ["tecnico", "tecnico_operativo"])
+        .get();
+      snap.forEach(doc => {
+        const u = doc.data();
+        const opt = document.createElement("option");
+        opt.value = doc.id;
+        opt.textContent = u.nombre || u.email || doc.id;
+        select.appendChild(opt);
+      });
+    }
+
+    async function cargarEstados() {
+      const docSnap = await db.collection("empresa").doc("estado_de_reparacion").get();
+      const select = document.getElementById("estado");
+      select.innerHTML = "";
+      if (docSnap.exists) {
+        const lista = docSnap.data().list || [];
+        lista.forEach(nombre => {
+          const option = document.createElement("option");
+          option.value = nombre;
+          option.textContent = nombre;
+          select.appendChild(option);
+        });
+      }
+    }
+
+    async function cargarTipos() {
+      const docSnap = await db.collection("empresa").doc("tipo_de_servicio").get();
+      const select = document.getElementById("tipo");
+      select.innerHTML = '<option value="">Seleccione tipo de servicio</option>';
+      if (docSnap.exists) {
+        const lista = docSnap.data().list || [];
+        lista.forEach(nombre => {
+          const option = document.createElement("option");
+          option.value = nombre;
+          option.textContent = nombre;
+          select.appendChild(option);
+        });
+      }
+    }
+
+    function limitarEdicionPorRol(rol) {
+      // Asignación y estado SIEMPRE bloqueados
+      document.getElementById("tecnico").disabled = true;
+      document.getElementById("estado").disabled = true;
+
+      // Tipo de servicio y observaciones editables solo para administrador/recepción
+      const puedeEditarDetalles = rol === "administrador" || rol === "recepcion";
+      document.getElementById("tipo").disabled = !puedeEditarDetalles;
+      document.getElementById("observaciones").readOnly = !puedeEditarDetalles;
+    }
+
+    cargarOrden();
+    cargarEstados();
+    cargarTipos();
+  </script>
+</body>
+</html>

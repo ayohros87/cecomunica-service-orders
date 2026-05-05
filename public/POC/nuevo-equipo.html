@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Nuevo Equipo PoC - Cecomunica</title>
+ <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    form { max-width: 600px; margin: auto; }
+    label { display: flex; flex-direction: column; margin-bottom: 12px; font-size: 16px; }
+    input, select, textarea, button {
+      box-sizing: border-box; width: 100%; padding: 10px; font-size: 16px; margin-top: 4px;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    button { margin-top: 10px; }
+    .inline-button { width: auto; margin-left: 10px; }
+    .grupo-container { display: flex; gap: 8px; margin-bottom: 8px; }
+    .required::after { content: ' *'; color: red; margin-left: 2px; position: static; }
+    #mensaje { color: green; text-align: center; font-weight: bold; margin-top: 20px; }
+    fieldset {
+      border: 1px solid #ccc; padding: 10px 15px; margin-bottom: 20px; border-radius: 6px;
+    }
+    legend { font-weight: bold; font-size: 15px; padding: 0 6px; }
+    .wrap-text {
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+</head>
+<body>
+  <h2>Registrar Nuevo Equipo PoC</h2>
+  <form id="equipoForm">
+    <fieldset>
+      <legend>📦 Información del Equipo</legend>
+      <label class="wrap-text"><span class="required">Cliente:</span>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <select id="cliente" required style="flex: 1;"></select>
+          <button type="button" id="addCliente" class="inline-button">➕</button>
+        </div>
+      </label>
+      <label class="wrap-text"><span class="required">Operador:</span>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <select id="operador" required style="flex: 1;"></select>
+          <button type="button" id="addOperador" class="inline-button">➕</button>
+        </div>
+      </label>
+      <label class="wrap-text"><span class="required"># SIMCARD:</span>
+        <input type="text" id="sim_number" required>
+      </label>
+      <label class="wrap-text"><span class="required"># Teléfono SIMCARD:</span>
+        <input type="text" id="sim_phone" required>
+      </label>
+      <label class="wrap-text"><span class="required">Serial:</span>
+        <input type="text" id="serial" required>
+      </label>
+      <label class="wrap-text"><span class="required">Unit ID:</span>
+        <input type="text" id="unit_id" required>
+      </label>
+      <label class="wrap-text">Nombre del Radio:
+        <input type="text" id="radio_name">
+      </label>
+      <label class="wrap-text">IP:
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <select id="ip" style="flex: 1;"></select>
+          <button type="button" id="addIP" class="inline-button">➕</button>
+        </div>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>⚙️ Configuración y Estado</legend>
+      <label class="wrap-text">GPS:
+        <input type="checkbox" id="gps">
+      </label>
+      <label class="wrap-text">Activo:
+        <input type="checkbox" id="activo">
+      </label>
+      <label class="wrap-text">Grupos:
+        <div id="gruposContainer"></div>
+        <button type="button" id="addGrupo">➕ Agregar grupo</button>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>📝 Notas</legend>
+      <label class="wrap-text">Notas:
+        <textarea id="notas" rows="3"></textarea>
+      </label>
+    </fieldset>
+
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+      <button type="submit" style="flex: 1; padding: 10px; font-size: 16px;">💾 Guardar Equipo</button>
+      <button type="button" onclick="window.location.href='index.html'" style="flex: 1; padding: 10px; font-size: 16px;">⬅️ Cancelar y volver</button>
+    </div>
+  </form>
+  <p id="mensaje"></p>
+
+  <script>
+    const mensaje = document.getElementById("mensaje");
+
+    function mostrarMensaje(texto, tipo = 'verde') {
+      mensaje.style.color = tipo === 'verde' ? 'green' : 'red';
+      mensaje.textContent = texto;
+    }
+
+    async function cargarListaSelect(path, selectId) {
+      const snap = await db.doc(path).get();
+      const select = document.getElementById(selectId);
+      if (snap.exists) {
+        const lista = snap.data().list || [];
+        lista.forEach(op => {
+          const option = document.createElement("option");
+          option.value = op;
+          option.textContent = op;
+          select.appendChild(option);
+        });
+      }
+    }
+
+    function agregarGrupoAnimado() {
+      const contenedor = document.getElementById("gruposContainer");
+      const div = document.createElement("div");
+      div.className = "grupo-container";
+      div.innerHTML = `<input type="text" class="grupo-input">
+                       <button type="button" onclick="this.parentNode.remove()">❌</button>`;
+      contenedor.appendChild(div);
+      div.scrollIntoView({ behavior: "smooth", block: "center" });
+      div.style.backgroundColor = "#e6f7ff";
+      setTimeout(() => div.style.backgroundColor = "transparent", 800);
+    }
+
+    
+    document.addEventListener("DOMContentLoaded", async () => {
+      firebase.auth().onAuthStateChanged(async user => {
+        if (!user) return window.location.href = "/login.html";
+        window.currentUser = user;
+        if (location.search.includes("copiar=1")) {
+  const datos = JSON.parse(localStorage.getItem("duplicarEquipo") || "{}");
+  delete datos.created_at;
+  delete datos.id;
+
+  // Campos simples
+  const camposTexto = [
+    "sim_number", "sim_phone", "serial", "unit_id",
+    "radio_name", "ip", "cliente", "operador", "notas"
+  ];
+  camposTexto.forEach(id => {
+    if (datos[id]) {
+      const input = document.getElementById(id);
+      if (input) input.value = datos[id];
+    }
+  });
+
+  // Checkboxes
+  document.getElementById("gps").checked = !!datos.gps;
+  document.getElementById("activo").checked = !!datos.activo;
+
+  // Grupos
+  const grupos = datos.grupos || [];
+  const contenedor = document.getElementById("gruposContainer");
+  contenedor.innerHTML = "";
+  grupos.forEach(valor => {
+    const div = document.createElement("div");
+    div.className = "grupo-container";
+    div.innerHTML = `<input type="text" class="grupo-input" value="${valor}">
+                     <button type="button" onclick="this.parentNode.remove()">❌</button>`;
+    contenedor.appendChild(div);
+  });
+
+  // Siempre dejar al menos una fila si no hay grupos
+  if (grupos.length === 0) agregarGrupoAnimado();
+}
+
+
+
+        await cargarListaSelect("empresa/clientes", "cliente");
+        await cargarListaSelect("empresa/operadores", "operador");
+        await cargarListaSelect("empresa/IPs", "ip");
+
+        document.getElementById("addCliente").onclick = async () => {
+          const nuevo = prompt("Nuevo cliente:");
+          if (nuevo) {
+            const ref = db.doc("empresa/clientes");
+            const snap = await ref.get();
+            const lista = snap.exists ? snap.data().list || [] : [];
+            if (!lista.includes(nuevo)) {
+              lista.push(nuevo);
+              await ref.set({ list: lista });
+              const option = new Option(nuevo, nuevo);
+              document.getElementById("cliente").appendChild(option);
+              document.getElementById("cliente").value = nuevo;
+            }
+          }
+        };
+          
+        document.getElementById("addIP").onclick = async () => {
+          const nuevo = prompt("Nueva IP:");
+          if (nuevo) {
+            const ref = db.doc("empresa/IPs");
+            const snap = await ref.get();
+            const lista = snap.exists ? snap.data().list || [] : [];
+            if (!lista.includes(nuevo)) {
+              lista.push(nuevo);
+              await ref.set({ list: lista });
+              const option = new Option(nuevo, nuevo);
+              document.getElementById("ip").appendChild(option);
+              document.getElementById("ip").value = nuevo;
+            }
+          }
+        };
+
+        document.getElementById("addGrupo").addEventListener("click", agregarGrupoAnimado);
+        agregarGrupoAnimado();
+
+        document.getElementById("equipoForm").addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const sim = document.getElementById("sim_number").value.trim();
+          const tel = document.getElementById("sim_phone").value.trim();
+          const serial = document.getElementById("serial").value.trim();
+
+          const checks = await Promise.all([
+            db.collection("poc_devices").where("sim_number", "==", sim).get(),
+            db.collection("poc_devices").where("sim_phone", "==", tel).get(),
+            db.collection("poc_devices").where("serial", "==", serial).get()
+          ]);
+
+          if (checks[0].size > 0) return mostrarMensaje("⚠️ SIM ya registrado.", "rojo");
+          if (checks[1].size > 0) return mostrarMensaje("⚠️ Teléfono ya registrado.", "rojo");
+          if (checks[2].size > 0) return mostrarMensaje("⚠️ Serial ya registrado.", "rojo");
+
+          const grupos = [...document.querySelectorAll(".grupo-input")].map(i => i.value.trim()).filter(g => g);
+          const setGrupos = new Set(grupos);
+          if (grupos.length !== setGrupos.size) {
+            return mostrarMensaje("⚠️ Hay grupos duplicados. Revise.", "rojo");
+          }
+
+          const data = {
+            cliente: document.getElementById("cliente").value,
+            operador: document.getElementById("operador").value,
+            sim_number: sim,
+            sim_phone: tel,
+            serial: serial,
+            gps: document.getElementById("gps").checked,
+            activo: document.getElementById("activo").checked,
+            ip: document.getElementById("ip").value,
+            unit_id: document.getElementById("unit_id").value,
+            radio_name: document.getElementById("radio_name").value,
+            grupos,
+            notas: document.getElementById("notas").value,
+            creado_por_uid: window.currentUser?.uid || "",
+            creado_por_email: window.currentUser?.email || "",
+            created_at: firebase.firestore.FieldValue.serverTimestamp(),
+            updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+            deleted: false
+          };
+
+          try {
+            await db.collection("poc_devices").add(data);
+            mostrarMensaje("✅ Equipo guardado exitosamente.");
+            setTimeout(() => window.location.href = "index.html", 1000);
+          } catch (error) {
+            mostrarMensaje("Error: " + error.message, "rojo");
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>

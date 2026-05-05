@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Contrato</title>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-init.js"></script>
+<!-- QR simple (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+
+  <style>
+    body {
+  font-family: Arial, sans-serif;
+  margin: 10mm; /* margen reducido en impresión */
+  max-width: none;
+}
+
+    h1, h2 { text-align: center; }
+    .seccion { margin-bottom: 20px; }
+    .label { font-weight: bold; display: inline-block; width: 140px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #333; padding: 6px; text-align: left; }
+    .firmas { margin-top: 40px; display: flex; justify-content: space-between; }
+    .firmas div { width: 45%; text-align: center; }
+    .firmas hr { margin: 40px 0 10px; }
+    
+    @media print {
+  button { display: none; }
+  body { margin: 0mm !important; }
+}
+@media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+@page {
+  size: A4;
+  margin: 5mm; /* o usa 0mm si lo quieres pegado al borde */
+}
+body {
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+fieldset {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-top: 20px;
+  background: #fafafa;
+}
+legend {
+  font-weight: bold;
+  font-size: 15px;
+  padding: 0 4px;
+}
+th {
+  background-color: #f4f4f4;
+}
+td:nth-child(5), td:nth-child(6) {
+  text-align: right;
+}
+/* Título sin línea negra; el separador será un <hr> aparte */
+h1 {
+  font-size: 20px;
+  border: none;
+  padding: 0;
+  margin: 12px 0 16px;
+}
+
+/* Tamaño controlado del logo */
+img.logo-centrado {
+  height: 65px;      /* tamaño intermedio, más balanceado */
+  max-width: 220px;
+  object-fit: contain;
+}
+@media print {
+  img.logo-centrado {
+    height: 60px;
+    max-width: 200px;
+  }
+}
+
+
+/* Línea separadora debajo del encabezado */
+.hr-encabezado {
+  border: 0;
+  border-top: 2px solid #000;
+  margin: 6px 0 0;
+}
+
+.firmas div {
+  border-top: 1px solid #000;
+  padding-top: 6px;
+  margin-top: 40px;
+  font-size: 12px;
+}
+@media screen {
+  #contenido {
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    padding: 24px;
+    background: white;
+    margin: auto;
+    max-width: 800px;
+  }
+}
+.firma-electronica {
+  font-size: 12px;
+  font-style: italic;
+  color: #2e7d32;
+  border-top: 1px solid #000;
+  padding-top: 6px;
+  margin-top: 6px;
+}
+#chipEstado{ background:#fff; }
+.estado-activo-chip{ background:#ecfdf5 !important; color:#065f46; border-color:#bbf7d0; }
+.estado-aprobado-chip{ background:#e6ffea !important; color:#2e7d32; border-color:#bbf7d0; }
+.estado-pendiente-chip{ background:#fff8e1 !important; color:#9a3412; border-color:#f4e5c2; }
+.estado-inactivo-chip{ background:#fff0f0 !important; color:#7f1d1d; border-color:#f8d7da; }
+.mono{font-family: ui-monospace, Menlo, Consolas, monospace;}
+
+  </style>
+</head>
+<body>
+  <button onclick="window.print()">🖨️ Imprimir</button>
+  <div id="contenido">
+<!-- Encabezado corporativo -->
+<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+  <!-- Membrete alineado a la izquierda -->
+  <div style="flex:1; text-align:left;">
+    <div style="font-size:18px; font-weight:800;">C COMUNICA, S.A.</div>
+    <div style="font-size:12px; color:#555;">RUC 32977-27-249966 DV 39 · Panamá</div>
+    <div style="font-size:12px; color:#555;">CC. Bal Harbour, Piso 1, oficina 5A, Via Italia, Paitilla</div>
+    <div style="font-size:12px; color:#555;">ventas@cecomunica.com · +507 279-5570</div>
+  </div>
+
+  <!-- Logo centrado (tamaño controlado por CSS) -->
+  <div style="flex:1; text-align:center;">
+    <img src="../logo_cecomunica.png" alt="Logo Cecomunica" class="logo-centrado">
+  </div>
+
+  <!-- Badge de tipo a la derecha -->
+  <div id="tipoContratoBadge" style="border:1px solid #111; padding:6px 10px; border-radius:8px; font-size:13px; font-weight:700;">
+    <!-- Se llena por JS -->
+  </div>
+</div>
+
+<!-- Línea negra separadora del encabezado -->
+<hr class="hr-encabezado">
+
+<!-- Título debajo de la línea negra -->
+<h1 style="text-align:center; margin-top:12px;">CONTRATO DE SERVICIO DE COMUNICACIÓN</h1>
+
+    <!-- Resumen del contrato (más formal) -->
+<section id="resumenContrato" style="border:1px solid #ddd; border-radius:10px; padding:14px; margin-top:14px;">
+
+
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+    <div style="font-size:14px;">
+      <div style="font-weight:700; letter-spacing:.3px;">Contrato</div>
+      <div class="mono" style="font-size:18px;">ID: <span id="contrato_id"></span></div>
+    </div>
+    <div class="chips" style="display:flex; gap:6px; flex-wrap:wrap;">
+      <span id="chipAccion" style="padding:4px 10px; border:1px solid #111; border-radius:999px; font-weight:700; font-size:12px;">—</span>
+      <span id="chipDuracion" style="padding:4px 10px; border:1px solid #111; border-radius:999px; font-weight:700; font-size:12px;">—</span>
+      <span id="chipEstado" style="padding:4px 10px; border:1px solid #111; border-radius:999px; font-weight:700; font-size:12px;">—</span>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px;">
+    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:12px; background:#fafafa;">
+      <div style="font-weight:700; margin-bottom:6px;">🧾 Ficha del Cliente</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <div><span style="color:#6b7280;">Cliente</span><br><strong id="cliente_nombre"></strong></div>
+        <div><span style="color:#6b7280;">RUC / DV</span><br><strong id="cliente_ruc"></strong></div>
+        <div><span style="color:#6b7280;">Representante</span><br><strong id="cliente_representante"></strong></div>
+        <div><span style="color:#6b7280;">Teléfono</span><br><strong id="cliente_telefono"></strong></div>
+        <div style="grid-column:1 / -1;">
+          <span style="color:#6b7280;">Dirección</span><br>
+          <div id="cliente_direccion"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+    <h2>Equipos</h2>
+    <table>
+      <thead style="background:#f0f0f0;">
+  <tr>
+    <th>No.</th>
+    <th>Descripción</th>
+    <th>Modelo</th>
+    <th>Cantidad</th>
+    <th>Precio Unitario</th>
+    <th>Total</th>
+  </tr>
+</thead>
+
+      <tbody id="tablaEquipos"></tbody>
+    </table>
+   <!-- Contenedor de observaciones + totales -->
+<div style="display:flex; justify-content:space-between; margin-top:12px; gap:20px; align-items:flex-start;">
+  <!-- Observaciones -->
+  <div style="flex:1; font-size:13px;">
+    <strong>Observaciones:</strong>
+    <div id="observaciones" style="min-height:50px; border:1px solid #ccc; padding:6px; border-radius:4px; background:#fafafa; margin-top:4px;"></div>
+  </div>
+
+  <!-- Totales -->
+  <div>
+<!-- == TOTALES (IMPRESIÓN) == -->
+<table class="tabla-totales" style="margin-top:12px; width:100%; border-collapse:collapse">
+  <tr>
+    <td style="padding:6px 8px;">Subtotal</td>
+    <td id="imp_subtotal" style="padding:6px 8px; text-align:right;">$0.00</td>
+  </tr>
+  <tr>
+    <td id="imp_itbms_label" style="padding:6px 8px;">ITBMS (7%)</td>
+    <td id="imp_itbms" style="padding:6px 8px; text-align:right;">$0.00</td>
+  </tr>
+  <tr>
+    <th style="padding:8px 8px; border-top:1px solid #e5e7eb;">Total</th>
+    <th id="imp_total" style="padding:8px 8px; text-align:right; border-top:1px solid #e5e7eb;">$0.00</th>
+  </tr>
+</table>
+<!-- == /TOTALES (IMPRESIÓN) == -->
+
+  </div>
+</div>
+
+
+<div style="margin-top: 50px;">
+  <div style="display: flex; justify-content: space-between; margin-bottom: 60px; gap:12px;">
+    <!-- Firma Cliente -->
+    <div style="width: 32%; text-align: center;">
+      <hr style="margin-bottom: 6px;">
+      <div id="firmaClienteLabel">Firma del Cliente</div>
+      <div>Representante Legal: <span id="nombreRepresentante">____________________</span></div>
+      <div>Cédula del Representante: <span id="rucRepresentante">________________</span></div>
+      <div class="fecha-cliente-manual">Fecha: _____ / _____ / ______</div>
+    </div>
+
+    <!-- Firma Cecomunica (Aprobador) -->
+    <div id="firmaCecomunica" style="width: 32%; text-align: center;">
+      <hr style="margin-bottom: 6px;">
+      <div>Firma C COMUNICA, S.A.</div>
+      <!-- La info (nombre, cargo, email y fecha) se inyecta en la firma electrónica -->
+    </div>
+
+    <!-- Firma Vendedor (Elaborador) -->
+    <div id="firmaVendedor" style="width: 32%; text-align: center;">
+      <hr style="margin-bottom: 6px;">
+      <div>Firma del Vendedor</div>
+      <!-- La info (nombre, cargo y fecha) se inyecta en la firma electrónica -->
+    </div>
+  </div>
+
+  <!-- Bloque de verificación y autenticidad -->
+<div id="verificacionContrato" style="margin-top:18px; padding:10px; border:1px dashed #888; border-radius:8px; display:flex; align-items:center; gap:14px;">
+  <div>
+    <div id="qrVerificacion" style="width:100px; height:100px; background:#fff;"></div>
+  </div>
+  <div style="font-size:12px; line-height:1.35;">
+    <div><strong>Verificación oficial Cecomunica</strong></div>
+    <div>Contrato: <span id="verifContratoId"></span></div>
+    <div>Código: <span id="verifCodigo" class="mono" style="font-weight:700;"></span></div>
+    <div>URL: <span id="verifUrl" class="mono"></span></div>
+    <div style="margin-top:6px; color:#444;">Documento válido solo si el código y la URL coinciden con el portal de verificación.</div>
+  </div>
+</div>
+
+
+  <p style="font-size: 13px; margin-top: 30px;">
+    El suscrito declara conocer y aceptar la totalidad de los términos y condiciones del presente contrato.
+  </p>
+</div>
+
+
+  <p style="font-size: 13px; margin-top: 30px;">
+    El suscrito, con la firma puesta al pie de este documento, declara tener conocimiento de todos los términos y condiciones descritos en el presente contrato y lo acepta en su totalidad sin reserva ni limitación.
+  </p>
+</div>
+
+
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const contratoId = params.get("id");
+
+async function cargarContrato() {
+  const snap = await db.collection("contratos")
+    .where("contrato_id", "==", contratoId).limit(1).get();
+  if (snap.empty) return alert("Contrato no encontrado");
+  const data = snap.docs[0].data();
+
+  // --- declarar antes de usar ---
+  let nombreVendedorResuelto = null;
+  let cargoVendedor = "Vendedor";
+
+  // Tipo de contrato (badge)
+  const tipo = data.tipo_contrato || "";
+  const tipoBadge = document.getElementById("tipoContratoBadge");
+  if (tipoBadge) tipoBadge.textContent = tipo ? `Tipo: ${tipo}` : "Tipo: —";
+
+  // Chips de resumen (si los agregas en el paso 2)
+  const chipTipo = document.getElementById("chipTipo");
+  if (chipTipo) chipTipo.textContent = data.tipo_contrato || "—";
+  const chipAccion = document.getElementById("chipAccion");
+  if (chipAccion) chipAccion.textContent = data.accion || "—";
+  const chipDur = document.getElementById("chipDuracion");
+  if (chipDur) chipDur.textContent = data.duracion || "—";
+const chipEstado = document.getElementById("chipEstado");
+if (chipEstado) {
+  chipEstado.textContent =
+    data.estado === "activo" ? "Activo" :
+    data.estado === "aprobado" ? "Aprobado" :
+    data.estado === "pendiente_aprobacion" ? "Pendiente aprobación" :
+    data.estado === "anulado" ? "Anulado" :
+    "Inactivo";
+
+  chipEstado.classList.remove("estado-activo-chip","estado-aprobado-chip","estado-pendiente-chip","estado-inactivo-chip","estado-cancelado-chip");
+  const cls =
+    data.estado === "activo" ? "estado-activo-chip" :
+    data.estado === "aprobado" ? "estado-aprobado-chip" :
+    data.estado === "pendiente_aprobacion" ? "estado-pendiente-chip" :
+    data.estado === "anulado" ? "estado-cancelado-chip" :
+    "estado-inactivo-chip";
+  chipEstado.classList.add(cls);
+}
+
+
+  // Fechas de aprobación en layout
+if (data.estado === "activo" && data.fecha_aprobacion) {
+  const fecha = new Date(data.fecha_aprobacion.toDate ? data.fecha_aprobacion.toDate() : data.fecha_aprobacion);
+  const fechaFormato = fecha.toLocaleDateString("es-PA");
+  // Solo actualizar fecha en la firma de Cecomunica
+  const firmaCecom = document.querySelector("#firmaCecomunica .fecha-aprobacion");
+  if (firmaCecom) firmaCecom.textContent = `Fecha: ${fechaFormato}`;
+}
+
+
+  // Datos cliente
+  document.getElementById("contrato_id").textContent = data.contrato_id || "";
+  document.getElementById("cliente_nombre").textContent = data.cliente_nombre || "";
+  document.getElementById("cliente_direccion").textContent = data.cliente_direccion || data.direccion || "";
+  document.getElementById("cliente_telefono").textContent = data.cliente_telefono || data.telefono || "";
+    // Construye "RUC - DV" con fallbacks para contratos antiguos
+  const rucdv = (data.cliente_rucdv && String(data.cliente_rucdv).trim())
+    ? data.cliente_rucdv
+    : ((data.cliente_ruc || data.ruc || "") + (data.cliente_dv ? (" - DV" + data.cliente_dv) : "")).trim();
+
+  document.getElementById("cliente_ruc").textContent = rucdv || "—";
+  document.getElementById("firmaClienteLabel").textContent = `Firma del Cliente – ${data.cliente_nombre || ""}`;
+  document.getElementById("nombreRepresentante").textContent = data.representante || "____________________";
+  document.getElementById("rucRepresentante").textContent = data.representante_cedula || "________________";
+  document.getElementById("observaciones").textContent = data.observaciones || "—";
+  const repEl = document.getElementById("cliente_representante");
+  if (repEl) repEl.textContent = data.representante || "";
+
+
+  // Evitar error si #total no existe en el HTML actual
+  const totalEl = document.getElementById("total");
+  if (totalEl) totalEl.textContent = (data.total || 0).toFixed(2);
+
+  // Tabla equipos + totales (ITBMS 7%)
+    const tbody = document.getElementById("tablaEquipos");
+    tbody.innerHTML = "";
+
+  
+    let subtotal = 0;
+    (data.equipos || []).forEach((eq, i) => {
+
+    const cantidad = Number(eq.cantidad || 0);
+    const precio   = Number(eq.precio || 0);
+    const filaTotal = cantidad * precio;
+    subtotal += filaTotal;
+    const tr = document.createElement("tr");
+    const desc = (eq.descripcion || "Equipos de Comunicación");
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td>${desc}</td>
+      <td>${eq.modelo || ""}</td>
+      <td>${cantidad}</td>
+      <td>$${precio.toFixed(2)}</td>
+      <td>$${filaTotal.toFixed(2)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // 👉 Pintar totales usando los campos persistidos y,
+  //    si faltan, usando el subtotal calculado arriba.
+  const mergedParaTotales = { ...data, subtotal: Number((data.subtotal ?? subtotal) || 0) };
+  pintarTotalesImpresion(resolverTotalesParaImpresion(mergedParaTotales));
+
+  // --- Vendedor / Elaborador ---
+let vendedorInfo = { nombre: "Vendedor", cargo: "Vendedor", email: "" };
+
+if (data.creado_por_uid) {
+  try {
+    const docUser = await db.collection("usuarios").doc(data.creado_por_uid).get();
+   if (docUser.exists) {
+  const u = docUser.data();
+  vendedorInfo.nombre = u.nombre || u.Nombre || vendedorInfo.nombre; // acepta ambas variantes
+  vendedorInfo.cargo  = u.cargo || "Vendedor";
+  vendedorInfo.email  = u.email || "";
+}
+
+
+  } catch (e) {
+    console.warn("No se pudo leer el usuario (vendedor):", e);
+  }
+}
+
+  // --- Aprobador ---
+let aprobadorInfo = null;
+if (data.aprobado_por_uid) {
+  try {
+    const docApr = await db.collection("usuarios").doc(data.aprobado_por_uid).get();
+    if (docApr.exists) {
+      const u = docApr.data();
+      aprobadorInfo = {
+        nombre: u.nombre || "________",
+        cargo:  u.cargo || (u.rol ? u.rol.charAt(0).toUpperCase() + u.rol.slice(1) : "Administrador"),
+        email:  u.email || "________",
+      };
+    }
+  } catch (e) {
+    console.warn("No se pudo leer el usuario aprobador:", e);
+  }
+}
+  // Fecha de firma del vendedor
+  const tsVend = data.fecha_modificacion || data.fecha_creacion;
+  if (tsVend) {
+    const fechaVend = tsVend.toDate ? tsVend.toDate() : new Date(tsVend);
+    const fechaVendTxt = fechaVend.toLocaleDateString("es-PA");
+    const fechaVendEl = document.querySelector("#firmaVendedor .fecha-vendedor");
+    if (fechaVendEl) fechaVendEl.textContent = `Fecha: ${fechaVendTxt}`;
+  }
+
+ // Firmas electrónicas (activo o aprobado)
+if (data.estado === "activo" || data.estado === "aprobado") {
+  renderFirmasElectronicas(data, vendedorInfo, aprobadorInfo);
+}
+
+ // Términos y condiciones (duración)
+  const duracionTexto = data.duracion?.match(/\d+/)?.[0] || "12";
+const plantillaCondiciones = `TERMINOS Y CONDICIONES
+
+Este contrato se suscribe entre las partes que aparecen debidamente identificadas al dorso de la presente hoja, que en adelante se denominarán LA EMPRESA y EL CLIENTE, conforme al mismo señalamiento que aquí se hace. La información, términos y condiciones que aparecen escritos al dorso de la presente página se incorporan para que formen parte integrante del presente contrato.
+
+SERVICIO:
+
+LA EMPRESA se compromete a brindar a EL CLIENTE un servicio de comunicación, ininterrumpido y privado, en condiciones óptimas y eficientes, durante las veinticuatro (24) horas del día a través de ondas de radio y/o telefonía, de acuerdo al desarrollo tecnológico de que ésta disponga en este momento en la República de Panamá, en adelante EL SERVICIO. EL SERVICIO será prestado dentro de las áreas especificadas al dorso de este contrato. EL CLIENTE autoriza a LA EMPRESA el monitoreo del sistema para controlar la calidad de la señal. LA EMPRESA, cuando estén disponibles y de tiempo en tiempo, informará a EL CLIENTE de nuevos productos y de ampliación de cobertura.
+
+DESCRIPCION DEL EQUIPO:
+
+Declara EL CLIENTE que recibe el equipo detallado al dorso de este documento, en adelante EL EQUIPO, en perfecto estado y que el mismo es de su propiedad. Dicho EQUIPO le permitirá a EL CLIENTE hacer uso de EL SERVICIO descrito en este contrato, siendo responsable por el mismo. Para la modalidad de  alquiler, EL EQUIPO permanecerá en poder de EL CLIENTE para su uso, sin que el derecho a su propiedad sea transferido, siendo responsable del mismo con la diligencia de un buen padre de familia.  Entiende EL CLIENTE que EL EQUIPO, producto de este contrato de alquiler, incluye la batería de fábrica con el pago de la activación, pero que es su responsabilidad la compra de las subsiguientes baterías una vez terminen su vida útil
+
+DISPONIBILIDAD DEL SERVICIO:
+
+La disponibilidad de EL SERVICIO estará sujeta a limitaciones y/o interrupciones debidas a factores fuera del control de LA EMPRESA, tales como regulaciones o restricciones gubernamentales o administrativas, topografía, condiciones medio ambientales, suministro eléctrico, servicios proveídos por terceros, limitaciones de capacidad del equipo utilizado o mal uso por parte de EL CLIENTE, así como cualquier otra causa de fuerza mayor o caso fortuito fuera del control de LA EMPRESA. Por lo tanto LA EMPRESA no se hace responsable por aquellas transmisiones que por las razones expuestas hayan sido defectuosas, incompletas o tardías. LA EMPRESA, en su afán de ofrecer un servicio óptimo y de la mejor calidad podrá, de tiempo en tiempo, suspender temporalmente el suministro de EL SERVICIO por motivos de reparación o mantenimiento de los equipos, así como para la instalación de aquellos nuevos equipos y/o servicios.
+
+GARANTIA:
+
+EL EQUIPO adquirido por EL CLIENTE tendrá seis (6) meses de garantía de fábrica, es decir, de garantía que incluirá mano de obra y piezas en concepto de daños o desperfectos, siempre y cuando los mismos no se deban al mal uso o uso negligente por parte de EL CLIENTE. En el evento de que EL EQUIPO no pueda ser reparado en los talleres de LA EMPRESA el mismo se enviará a la fábrica, siempre y cuando la garantía esté vigente, para su reparación, entendiéndose que LA EMPRESA desde ese momento da cumplimiento a los términos de la garantía. Los daños como cubierta frontal, teclado, antena y batería serán cubiertos por EL CLIENTE.
+
+TARIFAS Y/O CARGOS:
+
+EL CLIENTE por este medio se obliga al pago irrevocable de las tarifas y/o cargos acordados, así como de aquellos adicionales que ambas partes acepten por escrito, y aquellos que se deban a reconexiones, por EL SERVICIO descrito en este contrato. EL CLIENTE acepta que las tarifas y/o cargos podrán modificarse de tiempo en tiempo, para lo cual LA EMPRESA notificará mediante anuncio publicado con treinta (30) días de antelación a la vigencia de la nueva tarifa y/o cargo, y por escrito a EL CLIENTE con sesenta (60) días de antelación a la vigencia de la nueva tarifa y/o cargo. EL CLIENTE tendrá la opción de dar por terminado este contrato notificándolo por escrito a LA EMPRESA dentro de los siguientes quince (15) días calendarios; de lo contrario, se entenderá aceptada la modificación y será efectivamente aplicada en la facturación del mes siguiente.
+
+EL CLIENTE se obliga a pagar dentro de los cinco (5) primeros días de cada mes, la tarifa y/o cargos relativos al servicio detallados en este contrato en las oficinas de LA EMPRESA o en los sitios que ésta le comunique a EL CLIENTE por escrito. Cualquier demora en el pago o problema que se presente para hacer efectivo el cobro por parte de LA EMPRESA, acarreará para EL CLIENTE un recargo del dos por ciento (2%) mensual sobre la suma adeuda y la suspensión inmediata del servicio.  Si LA EMPRESA tuviera que incurrir en gastos adicionales, así como gastos legales o judiciales, para hacer efectivo el cobro, los mismos correrán por cuenta de EL CLIENTE.
+
+EL CLIENTE podrá pagar la tarifa y/o cargos mediante tarjeta de crédito, descuento directo, ACH, sistema Clave, para lo cual completará los datos correspondientes al dorso de este documento. El pago mediante tarjeta de crédito será irrevocable mientras el servicio no sea suspendido y durante todo el término de vigencia de este contrato o sus renovaciones, por lo que EL CLIENTE se obliga a realizar y otorgar las autorizaciones correspondientes para que LA EMPRESA pueda cargar mensualmente las sumas adeudadas; además EL CLIENTE autoriza expresamente a LA EMPRESA para que contra su tarjeta de crédito se cargue el total de la Tasa de Cancelación o cualquier otra cantidad que quede obligado a pagar por razón de este contrato. En el evento de que la tarjeta de crédito identificada al dorso fuera cancelada, desautorizada o en alguna forma no se pudiera realizar el cargo correspondiente, LA EMPRESA notificará a EL CLIENTE, y éste en un término no mayor de siete (7) días calendarios, deberá dar una nueva autorización para que se cargue EL SERVICIO contra otra tarjeta de crédito. De no cumplir EL CLIENTE con esta obligación, el servicio le será suspendido inmediatamente y quedará obligado a cancelar, además de la Tasa de Cancelación, una indemnización adicional igual a la suma pagada como Tasa de Cancelación en concepto de daños y perjuicios.
+
+RESPONSABILIDAD:
+
+No obstante cualquiera de las estipulaciones contenidas en este contrato, la responsabilidad de LA EMPRESA hacia EL CLIENTE que resulte del fallo o imposibilidad de proveer EL SERVICIO descrito en este contrato, se limitará al crédito por la interrupción y el mismo no sobrepasará un mes de servicio o el prorrateo correspondiente durante el tiempo que dure el desperfecto o falla.
+
+EL CLIENTE reconoce que las interrupciones del servicio en la industria de las telecomunicaciones son frecuentes y producidas por circunstancias fuera del control de LA EMPRESA lo que hace imposible la comprobación del daño producido, por lo que EN NINGUN MOMENTO DEBERA SER LA EMPRESA RESPONSABLE HACIA EL CLIENTE POR CUALQUIER CANTIDAD QUE REPRESENTE PERDIDA DE GANANCIAS, PERDIDA DE NEGOCIO, DIRECTA O INDIRECTAMENTE, O DAÑO PUNITIVO PRODUCTO DE LA EJECUCION O NO EJECUCION DE ESTE CONTRATO O CUALQUIER ACTO U OMISION ASOCIADO O RELACIONADO CON EL USO DE CUALQUIER ARTICULO O SERVICIO OFRECIDO.
+
+LA EMPRESA NO SERA RESPONSABLE POR EL HECHO DE QUE SE SUSPENDA TEMPORAL O TOTALMENTE EL SERVICIO POR CAUSAS FUERA DE SU CONTROL, TALES COMO CAUSA FORTUITA, FUERZA MAYOR, RESTRICCIONES GUBERNAMENTALES O ADMINISTRATIVAS, TOPOGRAFIA, Y EN GENERAL, POR CUALQUIER ACTO U OMISION QUE AUNQUE PREVISIBLE NO PUDO SER IMPEDIDO. TAMPOCO SERA RESPONSABLE POR DESCONEXION DE LOS ENLACES, YA SEAN A TRAVÉS DE INTERNET U OTROS SERVICIOS BRINDADOS POR TERCEROS EN LOS QUE NO INTERVENGA LA EMPRESA.
+
+LIBERACION:
+
+EL CLIENTE por este medio se compromete a mantener libre de todo reclamo y sanción a LA EMPRESA por cualquier acto u omisión que sea considerado como violatorio de las leyes, decretos, reglamentos o contratos vigentes que ocurran como consecuencia del mal uso o uso indebido del servicio y/o equipo en cualquier forma o que se incluya el servicio y/o equipo como acto preparatorio, consumativo o posterior al hecho considerado violatorio de dichas disposiciones. Asimismo, EL CLIENTE exime de toda responsabilidad a LA EMPRESA por cualquier daño o perjuicio que se pueda causar por el uso que del equipo o del servicio de EL CLIENTE o terceros ajenos a LA EMPRESA. EL CLIENTE, expresamente autoriza, y por lo tanto libera de toda responsabilidad a LA EMPRESA, por el suministro de información relacionada con él a las autoridades competentes que la soliciten. LA EMPRESA queda autorizada expresamente para obtener información financiera, crediticia o de cualquier otra índole de EL CLIENTE, así como para suministrarla  en caso de que sea requerido.
+
+OBLIGACIONES DEL CLIENTE:
+
+EL CLIENTE se obliga y compromete a lo siguiente:
+
+A realizar puntualmente los pagos y dar las autorizaciones a su banco o proveedor de tarjeta de crédito, cuando sea necesario, de lo contrario, expresamente autoriza que al solo criterio de LA EMPRESA, se informe a la Asociación Panameña de Crédito (APC) el incumplimiento de sus obligaciones.
+
+A utilizar el equipo y/o servicio como un diligente padre de familia para comunicaciones personales, comerciales o profesionales, haciendo uso de un lenguaje apropiado y siguiendo todos los procedimientos y recomendaciones del fabricante y/o técnicos autorizados, así como de las normas legales vigentes.
+
+En el caso de que la modalidad de servicio incluya el alquiler de EL EQUIPO, EL CLIENTE deberá cuidarlo como un buen padre de familia y será responsable por el mismo, al Precio de Lista del radio PNC360S es de: $200.00 (Doscientos con 00/100) más itbms dólares estadounidenses, radio PNC460 es de : $460.00 (Cuatrocientos sesenta con 00/100) más itbms dólares estadounidenses, cámara SC580 es de : $400.00 (Cuatrocientos con 00/100) más itbms dólares estadounidenses, cámara SC780 es de : $625.00 (seiscientos veinticinco con 00/100) más itbms dólares estadounidenses, otros equipos : $500.00 (Quinientos con 00/100) mas itbms dólares estadounidenses, estos precios han sido previamente establecido por LA EMPRESA y aceptado por EL CLIENTE. Bajo ninguna circunstancia EL CLIENTE podrá ceder, vender, transferir, pignorar o gravar dicho equipo.
+
+A no utilizar el equipo y/o servicio para comunicaciones delictivas, temerarias o para cualquier uso que sea contrario a las leyes, decretos o reglamentos vigentes en la República de Panamá.
+
+A acatar los instructivos de uso que de cuando en cuando le comunique por escrito o por cualquier otro medio electrónico LA EMPRESA.
+
+A comunicar inmediatamente a LA EMPRESA cualquier interferencia en el servicio de que tenga conocimiento.
+
+A no manipular el equipo inadecuadamente.
+
+A dar aviso inmediato y por escrito a LA EMPRESA de cualquier EQUIPO que haya sido robado o perdido, formulando la correspondiente denuncia ante las autoridades correspondientes. Si el cliente no coopera con LA EMPRESA o se demuestra que hubo dolo, culpa o negligencia, EL CLIENTE deberá responder a LA EMPRESA por los daños y perjuicios causados.
+
+A no ceder, traspasar, pignorar, total o parcialmente, los derechos y obligaciones contenidos en este contrato, a no ser que medie autorización expresa de LA EMPRESA.
+
+A llevar el equipo para desprogramación una vez terminado el contrato.
+
+A cumplir con las normas y disposiciones que la Autoridad de los Servicios Públicos de tiempo en tiempo apruebe.
+
+VIGENCIA Y RENOVACION:
+
+Este contrato tendrá un período inicial de vigencia de [[DURACION]] meses  meses a partir de su firma. Vencido el período inicial de vigencia, el mismo será renovado automáticamente por iguales períodos. La notificación para la no renovación automática deberá darla por escrito EL CLIENTE con sesenta (60) días de anticipación a la fecha de terminación de dicho período, de lo contrario operará la renovación automática y el contrato se habrá extendido por un período más.
+
+DEPOSITO:
+
+Si la modalidad de contrato que utiliza EL CLIENTE es el alquiler del equipo, al momento de la firma EL CLIENTE entrega a LA EMPRESA la suma que se señala al dorso como depósito de garantía, que no causará intereses. El mismo se devolverá en el último mes del período inicial de vigencia de este contrato, siempre y cuando EL CLIENTE esté al día en sus obligaciones para con LA EMPRESA. En la renovación del contrato, y a criterio exclusivo de LA EMPRESA, podrá eximirse la constitución del depósito.
+
+SEGURO;
+
+Si EL CLIENTE opta por la suscripción del seguro contra robo que ofrece LA EMPRESA, el costo del deducible será pagado por EL CLIENTE. En la modalidad de alquiler, el seguro será obligatorio.
+
+TERMINACION:
+
+Las partes acuerdan que este contrato no podrá terminarse con anterioridad al vencimiento del período inicial de vigencia  de [[DURACION]] meses  meses, contado a partir de la firma de este contrato.  No obstante, si EL CLIENTE insiste en darlo por terminado deberá pagar una Tasa de Cancelación correspondiente a tres (3) mensualidades.  La mora, pérdida, robo o daño del equipo no se considerará causa justificada de terminación del contrato. LA EMPRESA, una vez reciba la notificación correspondiente de parte de EL CLIENTE, suministrará al mismo, al Precio de Lista, un equipo renovado para que el servicio continúe ofreciéndose.
+
+Serán causas de terminación de este contrato con anterioridad al vencimiento del mismo, que podrá ejercer LA EMPRESA a su discreción, además de las ya descritas en este contrato, las siguientes:
+
+La falta de pago, luego de 45 días después de la fecha de pago.
+
+El incumplimiento de cualquiera de las cláusulas de este contrato.
+
+El incumplimiento del contrato por falta de pago de 2 meses consecutivos permitirá a LA EMPRESA a su discreción el cobro de una penalidad equivalente a la tasa de cancelación.
+
+LA EMPRESA podrá terminar este contrato en cualquier momento, previo aviso por escrito a EL CLIENTE con treinta (30) días de anticipación.
+
+NO RENUNCIA Y CLAUSULAS ILEGALES:
+
+El hecho de que LA EMPRESA no ejerza su derecho, o no insista en el perfecto cumplimiento de las obligaciones contenidas en este contrato, no quiere decir que renuncie a ellos, ni que se ha modificado el contrato; por lo tanto, el fiel y perfecto cumplimiento podrá ser exigido en cualquier momento.
+
+Si alguna de las cláusulas contenidas en este contrato es encontrada ilegal, nula o de imposible cumplimiento, la misma se entenderá como no puesta y el contrato se interpretará como si la misma nunca hubiera existido, quedando por lo demás el contrato completamente vigente.
+
+RENUNCIA AL DOMICILIO Y A TRÁMITE:
+
+EL CLIENTE  declara como su domicilio el consignado al reverso de esta página, renunciando al mismo en caso de reclamo judicial pues expresamente se somete a los tribunales de la ciudad de Panamá, República de Panamá. Expresamente renuncia a los trámites del juicio ejecutivo en el evento de que LA EMPRESA tuviera que reclamar cualquier suma adeudada en razón de este contrato, la cual se tendrá por clara y de plazo vencido. Se tendrá como líquida y exigible la suma que haya sido expresada por LA EMPRESA en la demanda, lo que dará plena fe en juicio, prestará mérito ejecutivo y surtirá todos los efectos legales pertinentes.
+
+CESION:
+
+LA EMPRESA podrá ceder, en todo o en parte, sus derechos y obligaciones contenidas en este contrato, sin necesidad de aprobación de EL CLIENTE, sujeto a lo establecido por la normativa vigente en materia de servicios de telecomunicaciones.
+
+LEY APLICABLE Y NOTIFICACIONES:
+
+Este contrato y sus enmiendas, las cuales deberán ser siempre por escrito y debidamente firmadas por las partes, se regirán por las leyes y tribunales de la República de Panamá.
+
+Para los efectos de las notificaciones y/o avisos por escrito a que se hace referencia en este contrato, se entenderán hechas en las direcciones expresadas al reverso de este documento por correspondencia entregada personalmente con acuse de recibo, por correo certificado cinco (5) días después de la fecha consignada en el recibo, enviadas por fax o por cualquier medio electrónico, con confirmación de recibo.
+
+LAS PARTES DECLARAN QUE HAN LEIDO Y ENTENDIDO ESTE CONTRATO, Y UNA VEZ FIRMADO, SERA DE OBLIGATORIO CUMPLIMIENTO.`;
+
+const condicionesFinal = plantillaCondiciones.replace(/\[\[DURACION\]\]/g, duracionTexto);
+  document.getElementById("contenidoCondiciones").textContent = condicionesFinal;
+renderVerificacion(data);
+
+}
+
+    cargarContrato();
+
+function renderVerificacion(data) {
+  const contId = document.getElementById("verifContratoId");
+  const contCod = document.getElementById("verifCodigo");
+  const contUrl = document.getElementById("verifUrl");
+  const contQR = document.getElementById("qrVerificacion");
+
+// Mostrar QR también si está aprobado
+if (!data.firma_url || !data.firma_codigo || (data.estado !== "activo" && data.estado !== "aprobado")) {
+  if (contId) contId.textContent = data.contrato_id || "—";
+  if (contCod) contCod.textContent = "NO APROBADO";
+  if (contUrl) contUrl.textContent = "—";
+  if (contQR) contQR.innerHTML = "";
+  return;
+}
+
+
+  if (contId) contId.textContent = data.contrato_id || "";
+  if (contCod) contCod.textContent = data.firma_codigo;
+  if (contUrl) contUrl.textContent = data.firma_url;
+
+  if (contQR) {
+    contQR.innerHTML = "";
+    const canvas = document.createElement("canvas");
+    QRCode.toCanvas(canvas, data.firma_url, { width: 100 }, (err) => {
+      if (err) {
+        console.error("Error generando QR:", err);
+        return;
+      }
+      contQR.appendChild(canvas);
+    });
+  }
+}
+
+function renderFirmasElectronicas(data, vendedorInfo, aprobadorInfo) {
+  const fechaAprob = data.fecha_aprobacion?.toDate?.()
+    ? data.fecha_aprobacion.toDate()
+    : (data.fecha_modificacion?.toDate?.()
+        ? data.fecha_modificacion.toDate()
+        : new Date());
+  const fechaTxt = fechaAprob.toLocaleString("es-PA");
+
+  // Firma electrónica Cecomunica (aprobador)
+  const cecom = document.getElementById("firmaCecomunica");
+  if (cecom && aprobadorInfo) {
+   cecom.insertAdjacentHTML("afterbegin", `
+    <div class="firma-electronica" style="margin-top:8px; border-top:none;">
+      ✔ Firmado electrónicamente por ${aprobadorInfo.nombre}<br>
+      Cargo: ${aprobadorInfo.cargo}<br>
+      Email: ${aprobadorInfo.email}<br>
+      Contrato: ${data.contrato_id}<br>
+      Fecha y hora: ${fechaTxt}
+    </div>
+  `);
+
+  }
+
+  // Firma electrónica del vendedor (elaborador)
+  const vend = document.getElementById("firmaVendedor");
+  if (vend && vendedorInfo) {
+    const fechaVendBase = data.fecha_modificacion?.toDate?.()
+      ? data.fecha_modificacion.toDate()
+      : (data.fecha_creacion?.toDate?.()
+          ? data.fecha_creacion.toDate()
+          : new Date());
+
+    vend.insertAdjacentHTML("afterbegin", `
+    <div class="firma-electronica" style="margin-top:8px; border-top:none;">
+      ✔ Firmado electrónicamente por ${vendedorInfo.nombre}<br>
+      Cargo: ${vendedorInfo.cargo}<br>
+      Contrato: ${data.contrato_id}<br>
+      Fecha y hora: ${fechaVendBase.toLocaleString("es-PA")}
+    </div>
+  `);
+
+  }
+}
+function round2(n){ return Math.round((Number(n)+Number.EPSILON)*100)/100; }
+function fmt(n){ return `$${round2(n).toFixed(2)}`; }
+
+// Usa los valores persistidos si existen; si no, asume histórico 7% aplicado.
+// contrato: objeto leído de Firestore.
+function resolverTotalesParaImpresion(contrato) {
+  const tieneCamposNuevos = typeof contrato.itbms_aplica !== 'undefined';
+
+  const subtotal = Number(contrato.subtotal ?? contrato.total ?? 0);
+  const itbmsPorc = Number(contrato.itbms_porcentaje ?? 0.07);
+
+  let itbmsAplica, itbmsMonto, totalConITBMS;
+
+  if (tieneCamposNuevos) {
+    itbmsAplica = Boolean(contrato.itbms_aplica);
+    itbmsMonto = Number(contrato.itbms_monto ?? 0);
+    totalConITBMS = Number(contrato.total_con_itbms ?? subtotal + itbmsMonto);
+  } else {
+    // Fallback para contratos antiguos (consistencia histórica)
+    itbmsAplica = true;
+    itbmsMonto = round2(subtotal * itbmsPorc);
+    totalConITBMS = round2(subtotal + itbmsMonto);
+  }
+
+  const itbmsLabel = itbmsAplica ? `ITBMS (${round2(itbmsPorc*100)}%)` : 'ITBMS EXENTO';
+
+  return { subtotal, itbmsAplica, itbmsPorc, itbmsMonto, totalConITBMS, itbmsLabel };
+}
+
+function pintarTotalesImpresion(tot) {
+  const $sub = document.getElementById('imp_subtotal');
+  const $lbl = document.getElementById('imp_itbms_label');
+  const $itb = document.getElementById('imp_itbms');
+  const $tot = document.getElementById('imp_total');
+
+  if ($sub) $sub.textContent = fmt(tot.subtotal);
+  if ($lbl) $lbl.textContent = tot.itbmsLabel;
+  if ($itb) $itb.textContent = fmt(tot.itbmsMonto);
+  if ($tot) $tot.textContent = fmt(tot.totalConITBMS);
+}
+  </script>
+<div id="terminosCondiciones" style="page-break-before: always; margin-top:40px;">
+  <h2 style="text-align:center;">TÉRMINOS Y CONDICIONES</h2>
+  <div id="contenidoCondiciones" style="
+    font-size: 9px;
+    line-height: 1.25;
+    column-count: 2;
+    column-gap: 16px;
+    text-align: justify;
+    white-space: pre-wrap;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  "></div>
+</div>
+
+<!-- 👇 Aquí va el bloque de firma, ahora DESPUÉS de los términos -->
+<div id="firmaCondicionesFinal" style="margin-top: 40px; text-align:center;">
+  <h3>FIRMA DE ACEPTACIÓN</h3>
+  <p style="font-size:13px; text-align:justify; max-width:700px; margin: 0 auto 20px;">
+    El suscrito, <strong><span id="firmaNombreCliente">__________________</span></strong>,
+    representante de la empresa <strong><span id="firmaClienteEmpresa">__________________</span></strong>,
+    declara que ha leído y aceptado íntegramente los términos y condiciones del presente contrato, firmando en señal de conformidad.
+  </p>
+  <div style="margin-top: 50px;">
+    <hr style="width: 300px; margin: 0 auto 6px;">
+    <div>Firma del Cliente</div>
+    <div style="margin-top:6px;">Fecha: _____ / _____ / ______</div>
+  </div>
+</div>
+
+
+
+</div>
+
+
+</body>
+</html>

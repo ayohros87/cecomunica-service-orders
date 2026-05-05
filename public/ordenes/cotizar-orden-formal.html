@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Cotización – Cecomunica</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<style>
+  :root{ --line:#e5e7eb; --muted:#6b7280; --ink:#111; }
+  *{ box-sizing:border-box }
+  body{font-family:Arial, sans-serif; margin:22mm max(8mm,5%); color:var(--ink)}
+  header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border-bottom:none;        /* la línea ahora va como <hr> aparte */
+  padding-bottom:0;
+  margin-bottom:8px;
+}
+  .logo{font-weight:800;font-size:22px;letter-spacing:.5px}
+  .emisor small{color:#555; display:block; line-height:1.25}
+  .doc-title{font-size:18px;margin:4px 0 2px 0;font-weight:700}
+  .muted{color:#555}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:10px 0 14px}
+  .kvs div{margin:2px 0}
+  h3.equipo{font-size:14px;margin:18px 0 6px 0;border-left:4px solid #000;padding-left:8px}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
+  th,td{border:1px solid #000;padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:#f3f4f6}
+  td.num, th.num{ text-align:right }
+  .nota-cli{font-size:12px;color:#333;background:#f9fafb;border:1px dashed var(--line);padding:8px;border-radius:8px;margin-top:8px}
+  .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .thumbs a{display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .thumbs img{width:84px;height:84px;object-fit:cover;display:block}
+  .totales{display:flex;justify-content:flex-end;margin-top:12px}
+  .totales table{width:auto}
+  .terms{margin-top:16px;font-size:12px}
+  .sign{display:flex;justify-content:space-between;margin-top:28px;gap:20px}
+  .sign .box{width:50%}
+  .sign .line{margin-top:40px;border-top:1px solid #000;padding-top:6px;text-align:center;font-size:12px}
+  .actions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+  .btn{border:1px solid #000;background:#fff;padding:8px 10px;cursor:pointer;border-radius:8px}
+  .btn.primary{background:#111;color:#fff;border-color:#111}
+  .badge{display:inline-block;border:1px solid var(--line);padding:2px 6px;border-radius:999px;font-size:12px;color:#333;background:#f8fafc}
+  @media print {
+    @page{size:A4;margin:12mm}
+    .actions{display:none}
+    body{margin:10mm}
+  }
+  /* Membrete tipo contrato */
+.logo-centrado{ height:65px; max-width:220px; object-fit:contain; }
+.hr-encabezado{ border:0; border-top:2px solid #000; margin:6px 0 0; }
+.badge-box{ border:1px solid #111; padding:6px 10px; border-radius:8px; font-size:13px; font-weight:700; }
+
+/* Ajuste de márgenes en impresión como el contrato */
+@media print {
+  body{ margin:10mm !important; }
+  .logo-centrado{ height:60px; max-width:200px; }
+}
+
+</style>
+</head>
+<body>
+<header>
+  <!-- Columna izquierda: membrete/empresa -->
+  <div style="flex:1; text-align:left;">
+    <div class="logo" id="empresa_nombre">C COMUNICA, S.A.</div>
+    <!-- Reuso tu caja dinámica para RUC / Tel / Dirección -->
+    <div class="emisor" id="empresa_box" style="margin-top:4px;">
+      <small>RUC: 32977-27-249966 DV 39 · Panamá</small>
+      <small>Tel: +507 279-5570 · Email: ventas@cecomunica.com</small>
+      <small>Dirección: CC. Bal Harbour, Piso 1, oficina 5A, Via Italia, Paitilla</small>
+    </div>
+  </div>
+
+  <!-- Columna centro: logo -->
+  <div style="flex:1; text-align:center;">
+    <img src="../logo_cecomunica.png" alt="Logo Cecomunica" class="logo-centrado">
+  </div>
+
+  <!-- Columna derecha: badge “Cotización” -->
+  <div class="badge-box">COTIZACIÓN</div>
+</header>
+
+<!-- Línea separadora (como en contrato) -->
+<hr class="hr-encabezado">
+
+
+<div class="doc-title">Cotización de Servicio</div>
+<div id="head" class="muted"></div>
+
+<div class="grid">
+  <div class="kvs">
+    <strong>Cliente</strong>
+    <div id="clienteBox" class="muted">—</div>
+  </div>
+  <div class="kvs">
+    <strong>Datos de la orden</strong>
+    <div id="ordenBox" class="muted">—</div>
+  </div>
+</div>
+
+<div id="contenido"></div>
+
+<div class="totales">
+  <table>
+    <tbody>
+      <tr><th class="num">Subtotal:</th><td id="t_subtotal" class="num">$0.00</td></tr>
+      <tr><th class="num">ITBMS (<span id="itbms_pct">7</span>%):</th><td id="t_itbms" class="num">$0.00</td></tr>
+      <tr><th class="num">Total:</th><td id="t_total" class="num" style="font-weight:bold">$0.00</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="terms">
+  <strong>Términos y condiciones</strong>
+  <ul>
+    <li>Precios en USD. ITBMS no incluido salvo se indique.</li>
+    <li>Validez de esta cotización: 15 días.</li>
+    <li>Garantía según pieza/servicio indicado por el fabricante o Cecomunica.</li>
+    <li>Tiempo estimado de ejecución sujeto a disponibilidad.</li>
+  </ul>
+</div>
+
+<div class="sign">
+  <div class="box">
+    <div class="line">Aprobado por Cliente</div>
+  </div>
+  <div class="box">
+    <div class="line" id="firma_empresa">C COMUNICA, S.A.</div>
+  </div>
+</div>
+
+<div class="actions">
+  <button class="btn" onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+<script src="../js/firebase-init.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const ordenId = params.get('id');
+
+firebase.auth().onAuthStateChanged(async (user)=>{
+  if(!user){ location.href='login.html'; return; }
+
+  // === Empresa (perfil + ITBMS) ===
+  let itbms = 0.07;
+  try{
+    const pf = await db.collection('empresa').doc('perfil').get();
+    if(pf.exists){
+      const ed = pf.data();
+      byId('empresa_nombre').innerText = ed.nombre_legal || 'C COMUNICA, S.A.';
+      byId('firma_empresa').innerText = ed.nombre_legal || 'C COMUNICA, S.A.';
+      byId('empresa_slogan').innerText = ed.slogan || '';
+      byId('empresa_box').innerHTML = `
+        <small>RUC: ${ed.ruc || '—'}</small>
+        <small>Tel: ${ed.telefono || '—'} · Email: ${ed.email || '—'}</small>
+        <small>Dirección: ${ed.direccion || '—'}</small>`;
+    }
+    const pr = await db.collection('empresa').doc('parametros').get();
+    if(pr.exists && typeof pr.data().itbms === 'number') itbms = pr.data().itbms;
+  }catch(e){ console.warn('empresa',e); }
+  byId('itbms_pct').innerText = (itbms*100).toFixed(0);
+
+  // === Orden ===
+  const oRef = db.collection('ordenes_de_servicio').doc(ordenId);
+  const o = await oRef.get();
+  if(!o.exists){ byId('head').innerText='Orden no encontrada'; return; }
+  const od = o.data();
+
+  // Encabezado
+  const fecha = od.fecha_creacion?.toDate ? od.fecha_creacion.toDate().toISOString().slice(0,10) : '—';
+  byId('head').innerHTML = `Orden <strong>${ordenId}</strong> · Fecha <strong>${fecha}</strong> ` +
+    (od.cotizacion_emitida ? `· <span class="badge">Emitida</span>` : '');
+
+  // Cliente
+  let clienteNombre = od.cliente_nombre || od.cliente || '—';
+  let clienteExtra = '';
+  if(od.cliente_id){
+    try{
+      const c = await db.collection('clientes').doc(od.cliente_id).get();
+      if(c.exists){
+        const cd = c.data();
+        clienteNombre = cd.nombre || clienteNombre;
+        clienteExtra = [cd.representante, cd.telefono, cd.correo, cd.direccion].filter(Boolean).join(' · ');
+      }
+    }catch{}
+  }
+  byId('clienteBox').innerHTML = `<div><strong>${clienteNombre}</strong></div><div>${clienteExtra||''}</div>`;
+  byId('ordenBox').innerHTML = `
+    <div>Servicio: <strong>${od.tipo_de_servicio || '—'}</strong></div>
+    <div>Estado: <strong>${(od.estado_reparacion||'').toUpperCase()}</strong></div>`;
+
+  // === Consumos cobrables (una sola lectura) ===
+  const consSnap = await oRef.collection('consumos').where('tipo','==','cobro').get();
+  const rows = consSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+
+  // === Agrupar por equipo ===
+  // Determina IDs de equipo (usa e.id o numero_de_serie)
+  const equipos = Array.isArray(od.equipos) ? od.equipos.filter(e=>!e.eliminado) : [];
+  const equipoKey = (e)=> e.id || e.numero_de_serie || 'X';
+  const equiposById = {};
+  equipos.forEach(e=>{ equiposById[equipoKey(e)] = e; });
+
+  const porEquipo = {};
+  rows.forEach(r=>{
+    const eid = r.equipoId || 'X';
+    if(!porEquipo[eid]) porEquipo[eid] = [];
+    porEquipo[eid].push(r);
+  });
+
+  // === Render por equipo: tabla + notas cliente + miniaturas ===
+  const cont = byId('contenido');
+  cont.innerHTML = '';
+  let subtotalGlobal = 0;
+
+  for(const eid of Object.keys(porEquipo).sort()){
+    const eq = equiposById[eid] || {};
+    const titulo = `Equipo: Serie ${eq.numero_de_serie || eid} · Modelo ${eq.modelo || '—'}`;
+    const registros = porEquipo[eid];
+
+    // Agrupa por (nombre + sku + precio_unit) para compactar
+    const key = r => `${r.pieza_nombre}||${r.sku||''}||${Number(r.precio_unit||0)}`;
+    const grupos = {};
+    registros.forEach(r=>{
+      const k = key(r);
+      if(!grupos[k]) grupos[k] = { nombre:r.pieza_nombre, sku:r.sku||'', precio:r.precio_unit||0, qty:0, subtotal:0 };
+      grupos[k].qty += Number(r.qty||0);
+      grupos[k].subtotal += Number(r.subtotal || (r.qty||0)*(r.precio_unit||0));
+    });
+
+    let html = `<h3 class="equipo">${titulo}</h3>
+      <table>
+        <thead><tr>
+          <th>Descripción</th><th>SKU</th><th class="num">Cantidad</th><th class="num">Precio Unit.</th><th class="num">Subtotal</th>
+        </tr></thead><tbody>`;
+
+    let subtotalEquipo = 0;
+    Object.values(grupos).forEach(g=>{
+      subtotalEquipo += g.subtotal;
+      html += `<tr>
+        <td>${escapeHTML(g.nombre)}</td>
+        <td>${g.sku||'-'}</td>
+        <td class="num">${g.qty}</td>
+        <td class="num">${fmt(g.precio)}</td>
+        <td class="num">${fmt(g.subtotal)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    subtotalGlobal += subtotalEquipo;
+
+    // Inserta bloque
+    const section = document.createElement('section');
+    section.innerHTML = html;
+    cont.appendChild(section);
+
+    // Notas del cliente
+    try{
+      const meta = await oRef.collection('equipos_meta').doc(eid).get();
+      if(meta.exists && meta.data().notas_cliente){
+        const n = document.createElement('div');
+        n.className = 'nota-cli';
+        n.innerHTML = `<strong>Nota para el cliente:</strong><br>${escapeHTML(meta.data().notas_cliente)}`;
+        cont.appendChild(n);
+      }
+    }catch{}
+
+    // Miniaturas de adjuntos (si hay)
+    try{
+      const listRef = firebase.storage().ref().child(`ordenes/${ordenId}/${eid}`);
+      const res = await listRef.listAll();
+      if(res.items.length){
+        const div = document.createElement('div');
+        div.className = 'thumbs';
+        // Máximo 6 miniaturas para no saturar
+        const first = res.items.slice(0,6);
+        const urls = await Promise.all(first.map(x=>x.getDownloadURL()));
+        urls.forEach(u=>{
+          const a = document.createElement('a');
+          a.href = u; a.target = '_blank'; a.rel='noopener';
+          a.innerHTML = `<img src="${u}" alt="Adjunto">`;
+          div.appendChild(a);
+        });
+        cont.appendChild(div);
+      }
+    }catch(e){ /* sin adjuntos */ }
+  }
+
+  setTotales(subtotalGlobal, itbms);
+
+  // Cachea resumen (opcional)
+  try{
+    await oRef.set({
+      cotizacion_resumen:{
+        subtotal: round2(subtotalGlobal),
+        itbms: round2(subtotalGlobal*itbms),
+        total: round2(subtotalGlobal*(1+itbms)),
+        items: rows.length,
+        actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
+      }
+    },{merge:true});
+  }catch(e){ console.warn('No se pudo cachear cotizacion_resumen', e); }
+});
+
+
+
+// === Utilidades ===
+function setTotales(sub, itbms){
+  const t_itbms = round2(sub*itbms);
+  const t_total = round2(sub + t_itbms);
+  byId('t_subtotal').innerText = fmt(sub);
+  byId('t_itbms').innerText = fmt(t_itbms);
+  byId('t_total').innerText = fmt(t_total);
+}
+function fmt(n){ return '$' + Number(n||0).toFixed(2); }
+function round2(n){ return Math.round(Number(n||0)*100)/100; }
+function byId(x){ return document.getElementById(x); }
+function escapeHTML(s=''){
+  return String(s)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#39;');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Migrar contratos ACTIVO → APROBADO</title>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script> <!-- Tu inicialización -->
+</head>
+<body>
+  <h2>🔄 Migración de contratos ACTIVO → APROBADO</h2>
+  <button id="migrarBtn">Migrar ahora</button>
+  <pre id="log"></pre>
+
+<script>
+const log = msg => {
+  console.log(msg);
+  document.getElementById("log").textContent += msg + "\n";
+};
+
+firebase.auth().onAuthStateChanged(async user => {
+  if (!user) {
+    log("⚠️ No hay usuario autenticado. Inicia sesión primero.");
+    return;
+  }
+  log("✅ Autenticado como: " + user.email);
+});
+
+document.getElementById("migrarBtn").addEventListener("click", async () => {
+  try {
+    log("⏳ Buscando contratos en estado ACTIVO...");
+    const snap = await db.collection("contratos")
+      .where("estado", "==", "activo")
+      .get();
+
+    if (snap.empty) {
+      log("✔️ No se encontraron contratos en ACTIVO.");
+      return;
+    }
+
+    log(`Encontrados ${snap.size} contratos. Migrando...`);
+
+    const batch = db.batch();
+    snap.forEach(doc => {
+      batch.update(doc.ref, {
+        estado: "aprobado",
+        fecha_migracion: firebase.firestore.Timestamp.now(),
+        migrado_por_uid: firebase.auth().currentUser?.uid || null
+      });
+      log("Marcado para migrar: " + doc.id);
+    });
+
+    await batch.commit();
+    log("🎉 Migración completada correctamente.");
+  } catch (err) {
+    console.error(err);
+    log("❌ Error: " + err.message);
+  }
+});
+</script>
+</body>
+</html>

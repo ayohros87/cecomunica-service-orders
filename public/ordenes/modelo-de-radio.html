@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Modelos de Radio - Cecomunica</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .top-buttons {
+      display: flex;
+      justify-content: space-between;
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 20px;
+    }
+    .top-buttons button {
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .form-section, .list-section {
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 30px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: #f9f9f9;
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .actions button {
+      margin-left: 5px;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script>
+   firebase.auth().onAuthStateChanged(async function(user) {
+    if (!user) {
+      alert("Debes iniciar sesión.");
+      window.location.href = "login.html";
+      return;
+    }
+
+    try {
+      const doc = await firebase.firestore().collection("usuarios").doc(user.uid).get();
+
+      if (!doc.exists || doc.data().rol !== "administrador") {
+        alert("Acceso restringido solo a administradores.");
+        window.location.href = "index.html";
+        return;
+      }
+
+      // ✅ Si es admin, el resto del script continúa normalmente
+
+    } catch (error) {
+      console.error("Error al verificar rol:", error);
+      alert("Error al verificar permisos.");
+      window.location.href = "index.html";
+    }
+  });
+
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      
+   
+
+      const lista = document.getElementById("lista-modelos");
+      const form = document.getElementById("form-modelo");
+      const inputModelo = document.getElementById("nombre-modelo");
+      let editandoId = null;
+
+      
+      async function cargarModelos() {
+      lista.innerHTML = "";
+      const snapshot = await db.collection("modelos").orderBy("modelo").get();
+      snapshot.forEach(doc => {
+        const modelo = doc.data();
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <span>
+            <strong>${modelo.modelo}</strong> - ${modelo.marca || ''} / ${modelo.tipo || ''} / ${modelo.estado || ''}
+
+          </span>
+          <div class="actions">
+            <button onclick="editarModelo('${doc.id}')">✏️</button>
+            <button onclick="borrarModelo('${doc.id}')">🗑️</button>
+          </div>`;
+        lista.appendChild(li);
+      });
+    }
+
+
+      window.editarModelo = async (id) => {
+      const doc = await db.collection("modelos").doc(id).get();
+      if (!doc.exists) return alert("Modelo no encontrado");
+
+      const data = doc.data();
+      document.getElementById("nombre-modelo").value = data.modelo || "";
+      document.getElementById("marca-modelo").value = data.marca || "";
+      document.getElementById("tipo-modelo").value = data.tipo || "";
+document.getElementById("estado-modelo").value = data.estado || "";
+
+      editandoId = id;
+    };
+
+
+    window.borrarModelo = async (id) => {
+    if (!confirm(`¿Eliminar modelo permanentemente?`)) return;
+    await db.collection("modelos").doc(id).delete();
+    await cargarModelos();
+  };
+
+
+     form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const modelo = document.getElementById("nombre-modelo").value.trim();
+  const marca = document.getElementById("marca-modelo").value.trim();
+  const tipo = document.getElementById("tipo-modelo").value.trim();
+  const estado = document.getElementById("estado-modelo").value.trim();
+
+  if (!modelo) return;
+
+  if (editandoId) {
+    await db.collection("modelos").doc(editandoId).update({
+      modelo,
+      marca,
+      tipo,
+      estado,
+      actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    editandoId = null;
+  } else {
+    await db.collection("modelos").add({
+      modelo,
+      marca,
+      tipo,
+      estado,
+      creado_en: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
+  form.reset();
+  await cargarModelos();
+});
+
+
+
+      await cargarModelos();
+    });
+  </script>
+</head>
+<body>
+  <h2>📡 Modelos de Radio</h2>
+  <div class="top-buttons">
+    <button onclick="window.location.href='config.html'">⬅️ Volver</button>
+  </div>
+
+  <div class="form-section">
+    <form id="form-modelo">
+      <label for="nombre-modelo">Modelo:</label>
+<input type="text" id="nombre-modelo" required>
+
+      <label for="marca-modelo">Marca:</label>
+      <input type="text" id="marca-modelo">
+
+      <label for="tipo-modelo">Tipo:</label>
+      <input type="text" id="tipo-modelo">
+
+      <label for="estado-modelo">Estado:</label>
+      <input type="text" id="estado-modelo">
+
+      <button type="submit">💾 Guardar Modelo</button>
+
+    </form>
+  </div>
+
+  <div class="list-section">
+    <h3>Lista de Modelos:</h3>
+    <ul id="lista-modelos"></ul>
+  </div>
+</body>
+</html>

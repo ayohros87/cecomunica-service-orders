@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nueva Cotización - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <style>
+    .form-section { background: white; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+    input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    th { background: #f8fafc; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+    .totals { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .totals .item { background: #f8fafc; padding: 8px 12px; border-radius: 8px; font-weight: 600; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .app-wrap { max-width: 1400px; margin: 0 auto; }
+    .page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+    .items-row { display: grid; grid-template-columns: 2fr 1fr 0.8fr 1fr 1.2fr auto; align-items: end; gap: 10px; }
+    .sidebar { position: sticky; top: 84px; }
+    .card { background: white; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 10px; }
+    h3 { margin: 0 0 10px; font-size: 16px; }
+    .section-hint { font-size: 12px; color: var(--muted); margin-top: -4px; margin-bottom: 8px; }
+    .cliente-search { position: relative; }
+    .cliente-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--line); border-radius: 8px; max-height: 220px; overflow: auto; z-index: 20; display: none; }
+    .cliente-option { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid var(--line); }
+    .cliente-option:hover { background: #f8fafc; }
+    .cliente-preview { background: #f8fafc; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 13px; color: var(--text); }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .items-table { table-layout: fixed; }
+      .summary-card .totals-row { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+      .summary-card .totals-row.muted { color: var(--muted); }
+      .summary-card .total-strong { font-size: 20px; font-weight: 800; }
+      .summary-card hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+    .items-table th:nth-child(1) { width: 160px; }
+    .items-table th:nth-child(2) { width: 160px; }
+    .items-table th:nth-child(4) { width: 90px; }
+    .items-table th:nth-child(5) { width: 120px; }
+    .items-table th:nth-child(6) { width: 140px; }
+    .items-table th:nth-child(7) { width: 90px; }
+    .items-table input[type="number"], .items-table input[type="text"] { width: 100%; box-sizing: border-box; }
+    .items-table input[type="number"] { text-align: right; }
+    .item-total { font-weight: 700; text-align: right; }
+    .toast { position: fixed; right: 20px; bottom: 20px; background: #0f172a; color: white; padding: 10px 14px; border-radius: 8px; z-index: 9999; opacity: 0; transform: translateY(8px); transition: all .2s; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    details.summary-block summary { cursor: pointer; font-weight: 700; }
+    @media (max-width: 980px) {
+      .page-grid { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>🧾 Nueva Cotización</h1>
+    <div style="margin-left:auto; display:flex; gap:10px;">
+      <button class="btn-top" onclick="window.location.href='index.html'">⬅️ Volver</button>
+      <button class="btn danger" onclick="cerrarSesion()" style="background: var(--bad); border-color: var(--bad);">🚪 Salir</button>
+    </div>
+  </div>
+
+  <div class="app-wrap">
+    <div class="page-grid">
+      <main>
+        <div class="form-section">
+          <h3>Cliente</h3>
+          <div class="section-hint">Seleccione el cliente para esta cotización.</div>
+          <div class="grid-2">
+            <div class="cliente-search">
+              <label>Buscar cliente</label>
+              <input type="text" id="clienteBuscar" placeholder="Buscar cliente...">
+              <div id="clienteDropdown" class="cliente-dropdown"></div>
+              <input type="hidden" id="clienteId">
+            </div>
+            <div>
+              <label>Cliente seleccionado</label>
+              <div id="clientePreview" class="cliente-preview">Sin seleccionar</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3>Ítems</h3>
+          <div class="section-hint">Agregue los ítems que formarán parte de la cotización.</div>
+
+          <div class="items-row">
+            <div>
+              <label>Modelo</label>
+              <select id="modeloSelect"></select>
+            </div>
+            <div>
+              <label>Modalidad</label>
+              <select id="modeloModalidad">
+                <option value="venta">Venta</option>
+                <option value="alquiler">Alquiler</option>
+              </select>
+            </div>
+            <div>
+              <label>Cantidad</label>
+              <input type="number" id="modeloCantidad" min="1" value="1">
+            </div>
+            <div>
+              <label>Precio</label>
+              <input type="number" id="modeloPrecio" min="0" step="0.01" value="0">
+              <div id="modeloPrecioHint" class="hint"></div>
+            </div>
+            <div>
+              <label>Descripción</label>
+              <input type="text" id="modeloDescripcion" placeholder="Descripción">
+            </div>
+            <div>
+              <button class="btn" style="margin-top: 22px;" onclick="agregarDesdeModelo()">Agregar ítem</button>
+            </div>
+          </div>
+
+          <div class="table-wrap" style="margin-top: 12px;">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Modelo</th>
+                  <th>Descripción</th>
+                  <th>Cant</th>
+                  <th>P.Unit</th>
+                  <th>Total</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="itemsTabla"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <details class="summary-block form-section" id="firmaBancoDetails">
+          <summary>Firma y banco — <span id="firmaResumenNombre">Sin firmante</span> · <span id="bancoResumen">Banistmo - 0101081314</span></summary>
+          <div style="margin-top:12px;">
+            <div class="grid-2">
+              <div>
+                <label>Firmado por (nombre)</label>
+                <input type="text" id="firmadoNombre" value="">
+              </div>
+              <div>
+                <label>Cargo</label>
+                <input type="text" id="firmadoCargo" value="Asistente Ejecutiva">
+              </div>
+            </div>
+            <div class="grid-2" style="margin-top:10px;">
+              <div>
+                <label>Teléfono</label>
+                <input type="text" id="firmadoTel" value="279-5570">
+              </div>
+              <div>
+                <label>Celular</label>
+                <input type="text" id="firmadoCel" value="">
+              </div>
+            </div>
+
+            <div class="grid-2" style="margin-top:10px;">
+              <div>
+                <label>Banco</label>
+                <input type="text" id="bancoNombre" value="Banistmo" disabled>
+              </div>
+              <div>
+                <label>Tipo de cuenta</label>
+                <input type="text" id="bancoTipo" value="Cuenta corriente" disabled>
+              </div>
+            </div>
+            <div class="grid-2" style="margin-top:10px;">
+              <div>
+                <label>Número de cuenta</label>
+                <input type="text" id="bancoNumero" value="0101081314" disabled>
+              </div>
+              <div>
+                <label>Titular</label>
+                <input type="text" id="bancoTitular" value="C COMUNICA, S.A." disabled>
+              </div>
+            </div>
+          </div>
+        </details>
+      </main>
+
+      <aside class="sidebar">
+        <div class="card summary-card">
+          <h3>Resumen de cotización</h3>
+          <div class="totals-row"><span>Subtotal</span><strong id="subtotalTxt">$0.00</strong></div>
+          <div class="totals-row muted"><span>ITBMS (7%)</span><span id="itbmsTxt">$0.00</span></div>
+          <div class="totals-row total-strong"><span>Total</span><span id="totalTxt">$0.00</span></div>
+          <div id="notaAlquiler" class="hint" style="display:none; margin-top:6px;">Nota: precios de alquiler son /mes.</div>
+
+          <hr>
+
+          <div>
+            <label>Validez (días)</label>
+            <input type="number" id="validezDias" min="1" value="30">
+          </div>
+          <div style="margin-top:10px;">
+            <label>Forma de pago</label>
+            <select id="formaPago">
+              <option value="contado">Contado</option>
+              <option value="credito">Crédito</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div style="margin-top:10px;">
+            <label>Tiempo de entrega</label>
+            <input type="text" id="tiempoEntrega" placeholder="Ej: 3-5 días hábiles">
+          </div>
+          <div style="margin-top:10px;">
+            <label>Notas</label>
+            <textarea id="notas" rows="3"></textarea>
+          </div>
+
+          <hr>
+
+          <div class="actions">
+            <button class="btn primary" onclick="guardar('emitida')">✅ Emitir</button>
+            <button class="btn secondary" onclick="guardar('borrador')">💾 Guardar borrador</button>
+            <button class="btn secondary" onclick="guardarYImprimir()">🖨️ Imprimir</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    let clientesMap = {};
+    let clientesList = [];
+    let modelosMap = {};
+    let items = [];
+    let docId = null;
+
+    function cerrarSesion() { firebase.auth().signOut().then(() => location.href = "../login.html"); }
+
+    function money(n) { return Number(n || 0).toLocaleString("es-PA", { style: "currency", currency: "USD" }); }
+
+    function mostrarToast(mensaje) {
+      const t = document.createElement("div");
+      t.className = "toast";
+      t.textContent = mensaje;
+      document.body.appendChild(t);
+      requestAnimationFrame(() => t.classList.add("show"));
+      setTimeout(() => {
+        t.classList.remove("show");
+        setTimeout(() => t.remove(), 200);
+      }, 2200);
+    }
+
+    async function cargarClientes() {
+      const snap = await db.collection("clientes").get();
+      clientesMap = {};
+      clientesList = [];
+      snap.forEach(doc => {
+        const d = doc.data() || {};
+        clientesMap[doc.id] = d;
+        clientesList.push({ id: doc.id, nombre: d.nombre || doc.id, data: d });
+      });
+      renderClienteDropdown("");
+    }
+
+    function renderClienteDropdown(query) {
+      const dropdown = document.getElementById("clienteDropdown");
+      const q = (query || "").toLowerCase().trim();
+      dropdown.innerHTML = "";
+      const lista = clientesList.filter(c => (c.nombre || "").toLowerCase().includes(q));
+      lista.slice(0, 30).forEach(c => {
+        const div = document.createElement("div");
+        div.className = "cliente-option";
+        div.textContent = c.nombre;
+        div.onclick = () => seleccionarCliente(c.id);
+        dropdown.appendChild(div);
+      });
+      dropdown.style.display = lista.length ? "block" : "none";
+    }
+
+    function seleccionarCliente(id) {
+      const c = clientesMap[id];
+      document.getElementById("clienteId").value = id || "";
+      document.getElementById("clienteBuscar").value = c?.nombre || "";
+      document.getElementById("clienteDropdown").style.display = "none";
+      actualizarClientePreview(c);
+    }
+
+    function actualizarClientePreview(c) {
+      const el = document.getElementById("clientePreview");
+      if (!c) {
+        el.textContent = "Sin seleccionar";
+        return;
+      }
+      el.innerHTML = `
+        <strong>${c.nombre || ""}</strong><br>
+        ${c.ruc ? `RUC: ${c.ruc}<br>` : ""}
+        ${c.direccion ? `Dirección: ${c.direccion}<br>` : ""}
+        ${c.representante ? `Representante: ${c.representante}<br>` : ""}
+        ${c.email ? `Email: ${c.email}` : ""}
+      `;
+    }
+
+    async function cargarModelos() {
+      const snap = await db.collection("modelos").get();
+      modelosMap = {};
+      const select = document.getElementById("modeloSelect");
+      select.innerHTML = "<option value=\"\">Seleccione modelo...</option>";
+
+      const lista = [];
+      snap.forEach(doc => {
+        const d = doc.data() || {};
+        const label = `${d.marca || ""} ${d.modelo || ""}`.trim() || doc.id;
+        modelosMap[doc.id] = d;
+        lista.push({ id: doc.id, label });
+      });
+
+      lista
+        .sort((a, b) => a.label.localeCompare(b.label, "es", { sensitivity: "base" }))
+        .forEach(item => {
+          const opt = document.createElement("option");
+          opt.value = item.id;
+          opt.textContent = item.label;
+          select.appendChild(opt);
+        });
+    }
+
+    function actualizarModeloSeleccionado() {
+      const id = document.getElementById("modeloSelect").value;
+      const d = modelosMap[id] || {};
+      const modelo = `${d.marca || ""} ${d.modelo || ""}`.trim();
+      const precioInput = document.getElementById("modeloPrecio");
+      const descInput = document.getElementById("modeloDescripcion");
+      const hint = document.getElementById("modeloPrecioHint");
+      if (modelo && !descInput.value) descInput.value = modelo;
+      if ((!precioInput.value || Number(precioInput.value) === 0) && d.precio_venta) {
+        precioInput.value = d.precio_venta;
+      }
+      hint.textContent = d.precio_venta ? `Precio sugerido: ${money(d.precio_venta)}` : "";
+    }
+
+    function agregarItem(item) {
+      item.total = Number(item.cantidad || 0) * Number(item.precio_unitario || 0);
+      items.push(item);
+      renderItems();
+    }
+
+    function agregarDesdeModelo() {
+      const id = document.getElementById("modeloSelect").value;
+      if (!id) return mostrarToast("Seleccione un modelo.");
+      const d = modelosMap[id] || {};
+      const modalidad = document.getElementById("modeloModalidad").value;
+      const descripcionInput = (document.getElementById("modeloDescripcion").value || "").trim();
+      const cantidad = Number(document.getElementById("modeloCantidad").value || 1);
+      const precio = Number(document.getElementById("modeloPrecio").value || d.precio_venta || 0);
+      const modelo = `${d.marca || ""} ${d.modelo || ""}`.trim();
+      agregarItem({
+        tipo: "Radio",
+        modalidad,
+        fuente: "modelos",
+        ref_id: id,
+        modelo,
+        descripcion: descripcionInput || modelo,
+        cantidad,
+        precio_unitario: precio
+      });
+
+      document.getElementById("modeloSelect").value = "";
+      document.getElementById("modeloModalidad").value = "venta";
+      document.getElementById("modeloDescripcion").value = "";
+      document.getElementById("modeloCantidad").value = "1";
+      document.getElementById("modeloPrecio").value = "0";
+      document.getElementById("modeloPrecioHint").textContent = "";
+    }
+
+    function renderItems() {
+      const tbody = document.getElementById("itemsTabla");
+      tbody.innerHTML = "";
+      items.forEach((it, idx) => {
+        const tr = document.createElement("tr");
+        const sufijo = it.modalidad === "alquiler" ? " / mes" : "";
+        tr.innerHTML = `
+          <td>${it.tipo} · ${it.modalidad === "alquiler" ? "Alquiler" : "Venta"}</td>
+          <td>${it.modelo || ""}</td>
+          <td><input type="text" value="${it.descripcion || ""}" data-idx="${idx}" data-field="descripcion"></td>
+          <td><input type="number" min="1" value="${it.cantidad}" data-idx="${idx}" data-field="cantidad"></td>
+          <td><input type="number" min="0" step="0.01" value="${it.precio_unitario}" data-idx="${idx}" data-field="precio_unitario"></td>
+          <td class="item-total" data-total="${idx}">${money(it.total)}${sufijo}</td>
+          <td><button class="btn secondary" title="Eliminar ítem" data-remove="${idx}">🗑️</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      recalcularTotales();
+    }
+
+    function recalcularTotales() {
+      items = items.map(it => ({ ...it, total: Number(it.cantidad || 0) * Number(it.precio_unitario || 0) }));
+      const subtotal = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
+      const itbms = subtotal * 0.07;
+      const total = subtotal + itbms;
+      document.getElementById("subtotalTxt").textContent = money(subtotal);
+      document.getElementById("itbmsTxt").textContent = money(itbms);
+      document.getElementById("totalTxt").textContent = money(total);
+      document.getElementById("notaAlquiler").style.display = items.some(it => it.modalidad === "alquiler") ? "block" : "none";
+      return { subtotal, itbms, total };
+    }
+
+    document.addEventListener("input", (e) => {
+      const idx = e.target.getAttribute("data-idx");
+      const field = e.target.getAttribute("data-field");
+      if (idx == null || !field) return;
+      if (field === "descripcion") {
+        items[idx][field] = e.target.value || "";
+      } else {
+        items[idx][field] = Number(e.target.value || 0);
+      }
+      items[idx].total = Number(items[idx].cantidad || 0) * Number(items[idx].precio_unitario || 0);
+      const sufijo = items[idx].modalidad === "alquiler" ? " / mes" : "";
+      const totalCell = document.querySelector(`[data-total="${idx}"]`);
+      if (totalCell) totalCell.textContent = `${money(items[idx].total)}${sufijo}`;
+      recalcularTotales();
+    });
+
+    document.addEventListener("click", (e) => {
+      const idx = e.target.getAttribute("data-remove");
+      if (idx == null) return;
+      items.splice(Number(idx), 1);
+      renderItems();
+    });
+
+    async function generarCotizacionIdSimple() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, "0");
+      const d = String(now.getDate()).padStart(2, "0");
+      const prefix = `COT-${y}${m}${d}-`;
+
+      const start = new Date(y, now.getMonth(), now.getDate(), 0, 0, 0);
+      const end = new Date(y, now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+      const snap = await db.collection("cotizaciones")
+        .where("fecha_creacion", ">=", start)
+        .where("fecha_creacion", "<=", end)
+        .orderBy("fecha_creacion", "desc")
+        .limit(20)
+        .get();
+
+      let max = 0;
+      snap.forEach(doc => {
+        const id = doc.data()?.cotizacion_id || "";
+        if (id.startsWith(prefix)) {
+          const n = parseInt(id.replace(prefix, ""), 10);
+          if (!isNaN(n)) max = Math.max(max, n);
+        }
+      });
+      const next = String(max + 1).padStart(3, "0");
+      return `${prefix}${next}`;
+    }
+
+    async function guardar(estado) {
+      const clienteId = document.getElementById("clienteId").value;
+      if (!clienteId) return mostrarToast("Seleccione un cliente.");
+      if (!items.length) return mostrarToast("Agregue al menos un ítem.");
+
+      const cliente = clientesMap[clienteId] || {};
+      const totales = recalcularTotales();
+      const user = firebase.auth().currentUser;
+
+      const data = {
+        cotizacion_id: await generarCotizacionIdSimple(),
+        cliente_id: clienteId,
+        cliente_nombre: cliente.nombre || "",
+        cliente_ruc: cliente.ruc || null,
+        representante: cliente.representante || null,
+        cliente_email: cliente.email || null,
+        cliente_direccion: cliente.direccion || null,
+        items,
+        subtotal: totales.subtotal,
+        itbms_rate: 0.07,
+        itbms: totales.itbms,
+        total: totales.total,
+        validez_dias: Number(document.getElementById("validezDias").value || 30),
+        forma_pago: document.getElementById("formaPago").value,
+        notas: document.getElementById("notas").value || "",
+        tiempo_entrega: document.getElementById("tiempoEntrega").value || "",
+        firmado_por_nombre: document.getElementById("firmadoNombre").value || "",
+        firmado_por_cargo: document.getElementById("firmadoCargo").value || "",
+        firmado_por_tel: document.getElementById("firmadoTel").value || "",
+        firmado_por_cel: document.getElementById("firmadoCel").value || "",
+        banco_nombre: document.getElementById("bancoNombre").value || "",
+        banco_tipo_cuenta: document.getElementById("bancoTipo").value || "",
+        banco_numero: document.getElementById("bancoNumero").value || "",
+        banco_titular: document.getElementById("bancoTitular").value || "",
+        estado,
+        deleted: false,
+        creado_por_uid: user?.uid || null,
+        creado_por_email: user?.email || null,
+        vendedor_uid: user?.uid || null,
+        fecha_creacion: firebase.firestore.FieldValue.serverTimestamp(),
+        fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      const ref = await db.collection("cotizaciones").add(data);
+      docId = ref.id;
+      mostrarToast("✅ Cotización guardada");
+    }
+
+    async function guardarYImprimir() {
+      await guardar("emitida");
+      if (docId) window.open(`imprimir-cotizacion.html?id=${encodeURIComponent(docId)}`, "_blank");
+    }
+
+    async function cargarPerfilUsuario(user) {
+      const perfil = { nombre: user?.displayName || user?.email || "", cel: "", cargo: "" };
+      try {
+        const snap = await db.collection("usuarios").doc(user.uid).get();
+        if (snap.exists) {
+          const d = snap.data() || {};
+          perfil.nombre = d.nombre || d.name || perfil.nombre;
+          perfil.cel = d.user_cel || d.cel || d.celular || "";
+          perfil.cargo = d.cargo || d.puesto || d.rol_titulo || "";
+        }
+      } catch {}
+      return perfil;
+    }
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) { location.href = "../login.html"; return; }
+      verificarAccesoYAplicarVisibilidad(async (rol) => {
+        const permitidos = ["administrador", "vendedor"];
+        if (!permitidos.includes(rol)) {
+          mostrarToast("Sin acceso");
+          location.href = "../index.html";
+          return;
+        }
+        const perfil = await cargarPerfilUsuario(user);
+        document.getElementById("firmadoNombre").value = perfil.nombre || "";
+        document.getElementById("firmadoCargo").value = perfil.cargo || document.getElementById("firmadoCargo").value || "";
+        document.getElementById("firmadoCel").value = perfil.cel || "";
+        document.getElementById("firmaResumenNombre").textContent = perfil.nombre || "Sin firmante";
+        await cargarClientes();
+        await cargarModelos();
+        document.getElementById("modeloSelect").addEventListener("change", actualizarModeloSeleccionado);
+        document.getElementById("clienteBuscar").addEventListener("input", (e) => renderClienteDropdown(e.target.value));
+        document.getElementById("clienteBuscar").addEventListener("focus", (e) => renderClienteDropdown(e.target.value));
+        document.addEventListener("click", (e) => {
+          if (!document.querySelector(".cliente-search")?.contains(e.target)) {
+            document.getElementById("clienteDropdown").style.display = "none";
+          }
+        });
+        document.getElementById("firmadoNombre").addEventListener("input", (e) => {
+          document.getElementById("firmaResumenNombre").textContent = e.target.value || "Sin firmante";
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Contrato interno — Cecomunica</title>
+  <style>
+    /* --- Layout base --- */
+    html, body { margin:0; padding:0; }
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 10mm;
+    }
+    @page { size: A4; margin: 5mm; }
+    @media print {
+      button { display:none; }
+      body { margin:0 !important; }
+    }
+
+    /* --- Watermark: USO INTERNO --- */
+    body::before{
+      content:"USO INTERNO – NO ENTREGAR AL CLIENTE";
+      position:fixed;
+      top:40%;
+      left:50%;
+      transform:translate(-50%,-50%) rotate(-25deg);
+      font-size:44px;
+      color:rgba(200,0,0,.12);
+      z-index:0;
+      white-space:nowrap;
+      pointer-events:none;
+    }
+    #contenido{ position:relative; z-index:1; }
+
+    /* --- Estilos visuales --- */
+    h1 {
+      font-size: 20px;
+      text-align:center;
+      border-bottom: 2px solid #333;
+      padding-bottom: 4px;
+      margin: 12px 0 18px;
+    }
+    h2 { text-align:center; }
+    fieldset {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 12px 16px;
+      background: #fafafa;
+    }
+    legend { font-weight: bold; font-size: 15px; padding: 0 4px; }
+    .mono{font-family: ui-monospace, Menlo, Consolas, monospace;}
+
+    .chip {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #ccc;
+      font-size: 12px;
+    }
+    .estado-activo-chip{ background:#ecfdf5; color:#065f46; border-color:#bbf7d0; }
+    .estado-pendiente-chip{ background:#fff8e1; color:#9a3412; border-color:#f4e5c2; }
+    .estado-inactivo-chip{ background:#fff0f0; color:#7f1d1d; border-color:#f8d7da; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #333; padding: 6px; text-align: left; }
+    th { background-color: #f4f4f4; }
+    td:nth-child(5), td:nth-child(6) { text-align: right; }
+
+    .firmas { margin-top: 40px; display: flex; justify-content: space-between; gap:12px; }
+    .firmas > div { width: 48%; text-align: center; }
+    .firmas hr { margin: 40px 0 10px; }
+    .firma-electronica { font-size: 12px; font-style: italic; color: #2e7d32; border-top: 1px solid #000; padding-top: 6px; margin-top: 6px; }
+
+    /* Verificación interna */
+    .box-verif {
+      margin-top:18px; padding:10px; border:1px dashed #888; border-radius:8px;
+      display:flex; align-items:center; gap:14px;
+      font-size:12px; line-height:1.35;
+    }
+
+    /* Contenedor en pantalla (opcional) */
+    @media screen {
+      #contenido {
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        padding: 24px;
+        background: white;
+        margin: 16px auto;
+        max-width: 800px;
+      }
+    }
+    /* Tamaño controlado del logo */
+img.logo-centrado {
+  height: 65px;      /* tamaño intermedio, más balanceado */
+  max-width: 220px;
+  object-fit: contain;
+}
+@media print {
+  img.logo-centrado {
+    height: 60px;
+    max-width: 200px;
+  }
+}
+
+  </style>
+</head>
+<body>
+  <button onclick="window.print()">🖨️ Imprimir</button>
+
+  <div id="contenido">
+    <!-- Encabezado corporativo -->
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px;">
+        <!-- Columna izquierda: datos corporativos -->
+        <div>
+            <div style="font-size:18px; font-weight:800;">C COMUNICA, S.A.</div>
+            <div style="font-size:12px; color:#555;">RUC 32977-27-249966 DV 39 · Panamá</div>
+            <div style="font-size:12px; color:#555;">ventas@cecomunica.com · +507 279-5570</div>
+        </div>
+
+        <!-- Centro: logo -->
+        <img src="https://app.cecomunica.net/logo_cecomunica.png" alt="Logo Cecomunica" class="logo-centrado">
+
+        <!-- Derecha: badge -->
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            <div class="chip" style="border:2px solid #b91c1c; color:#b91c1c; font-weight:800; text-transform:uppercase;">
+            USO INTERNO
+            </div>
+            {{TIPO_CONTRATO}}
+        </div>
+        </div>
+
+
+    <h1>CONTRATO DE SERVICIO DE COMUNICACIÓN</h1>
+
+    <!-- Resumen / chips -->
+    <section id="resumenContrato" style="border:1px solid #ddd; border-radius:10px; padding:14px; margin-top:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div style="font-size:14px;">
+          <div style="font-weight:700; letter-spacing:.3px;">Contrato</div>
+          <div class="mono" style="font-size:18px;">ID: {{CONTRATO_ID}}</div>
+        </div>
+       <div class="chips" style="display:flex; gap:6px; flex-wrap:wrap;">
+        {{ACCION}}
+        {{DURACION}}
+        {{ESTADO}}
+        </div>
+      </div>
+
+      <!-- Ficha Cliente -->
+      <div style="display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px;">
+        <div style="border:1px solid #e5e7eb; border-radius:8px; padding:12px; background:#fafafa;">
+          <div style="font-weight:700; margin-bottom:6px;">🧾 Ficha del Cliente</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div><span style="color:#6b7280;">Cliente</span><br>{{CLIENTE_NOMBRE}}</div>
+            <div><span style="color:#6b7280;">RUC / Cédula</span><br>{{CLIENTE_RUC}}</div>
+            <div><span style="color:#6b7280;">Representante</span><br>{{REPRESENTANTE}}</div>
+            <div><span style="color:#6b7280;">Teléfono</span><br>{{CLIENTE_TELEFONO}}</div>
+            <div style="grid-column:1 / -1;">
+              <span style="color:#6b7280;">Dirección</span><br>{{CLIENTE_DIRECCION}}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Equipos -->
+    <h2 style="margin-top:18px;">Equipos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>No.</th>
+          <th>Descripción</th>
+          <th>Modelo</th>
+          <th>Cantidad</th>
+          <th>Precio Unitario</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <!-- El generador debe inyectar <tbody>...</tbody> aquí -->
+      {{TABLA_EQUIPOS}}
+    </table>
+
+   <!-- Observaciones + Totales -->
+<div style="display:flex; justify-content:space-between; margin-top:12px; gap:20px; align-items:flex-start;">
+  <!-- Observaciones -->
+  <div style="flex:1; font-size:13px;">
+    <strong>Observaciones:</strong>
+    <div style="min-height:50px; border:1px solid #ccc; padding:6px; border-radius:4px; background:#fafafa; margin-top:4px;">
+      {{OBSERVACIONES}}
+    </div>
+  </div>
+
+  <!-- Totales -->
+  <div>
+    <table style="width:auto; border-collapse:collapse; font-size:14px;">
+      <tr>
+        <td style="padding:6px 10px; border:1px solid #333;">Subtotal</td>
+        <td style="padding:6px 10px; border:1px solid #333; text-align:right;">${{SUBTOTAL}}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border:1px solid #333;">ITBMS (7%)</td>
+        <td style="padding:6px 10px; border:1px solid #333; text-align:right;">${{ITBMS}}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 10px; border:1px solid #333; font-weight:700;">Total</td>
+        <td style="padding:6px 10px; border:1px solid #333; text-align:right; font-weight:700;">${{TOTAL_CON_ITBMS}}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+
+    <!-- Firmas internas (sin cliente) -->
+    <div class="firmas">
+      <div>
+        <hr>
+        <div style="font-weight:700">Aprobación interna — Cecomunica</div>
+        {{FIRMA_CECOMUNICA}}
+      </div>
+      <div>
+        <hr>
+        <div style="font-weight:700">Elaborado por — Vendedor</div>
+        {{FIRMA_VENDEDOR}}
+      </div>
+    </div>
+
+    <!-- Verificación interna -->
+    <div class="box-verif">
+      <div>
+        <!-- Si generas QR como <img src="data:image/png;base64,...">, inyecta aquí -->
+        {{QR_VERIFICACION}}
+      </div>
+      <div>
+        <div><strong>Verificación interna Cecomunica (no pública)</strong></div>
+        <div>Contrato: <span class="mono">{{VERIF_CONTRATO_ID}}</span></div>
+        <div>Código: <span class="mono" style="font-weight:700;">{{VERIF_CODIGO}}</span></div>
+        <div>URL interna: <span class="mono">{{VERIF_URL}}</span></div>
+        <div style="margin-top:6px; color:#444;">Documento de uso interno. No válido como contrato con el cliente.</div>
+      </div>
+    </div>
+
+    <!-- Términos y condiciones -->
+    <div id="terminosCondiciones" style="page-break-before: always; margin-top:40px;">
+      <h2>TÉRMINOS Y CONDICIONES</h2>
+      <div style="
+        font-size: 9px;
+        line-height: 1.25;
+        column-count: 2;
+        column-gap: 16px;
+        text-align: justify;
+        white-space: pre-wrap;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      ">{{TERMINOS_CONDICIONES}}</div>
+    </div>
+
+    <div style="margin-top: 16px; text-align:center; font-size:12px;">
+      <em>Documento de uso interno — no requiere firma del cliente.</em>
+    </div>
+    <footer style="margin-top:18px; font-size:11px; color:#555; text-align:center;">
+      Documento interno y confidencial de Cecomunica. No constituye contrato con el cliente. Prohibida su distribución externa.
+    </footer>
+  </div>
+</body>
+</html>

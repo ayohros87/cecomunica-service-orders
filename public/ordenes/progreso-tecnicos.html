@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Progreso de Técnicos – Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+  <!-- Estilos base -->
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <style>
+    .subtle { color: var(--muted); font-size: 12px; }
+    .chip-periodo { padding:.25rem .5rem; border-radius: 999px; background: var(--chip); font-size: 12px; }
+/* === Tabla centrada completamente === */
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tbl thead th {
+  text-align: center;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  background: #f9fafb;
+}
+
+.tbl tbody td {
+  text-align: center;
+  padding: 8px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.tbl tbody tr:hover {
+  background: #f9fafb;
+}
+
+/* Centrar texto de la columna Técnico */
+.tbl tbody td:nth-child(2) {
+  text-align: center;
+}
+
+.tbl tbody td:nth-child(2) span {
+  display: block;
+}
+
+/* Medalla y número alineados correctamente */
+.rank-medal {
+  font-size: 18px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+/* Encabezados uniformes */
+.tbl thead th,
+.tbl tbody td {
+  min-width: 100px;
+}
+
+
+    .pill-ok { background:#bbf7d0; padding:.15rem .5rem; border-radius: 999px; font-weight:600; }
+    .pill-warn { background:#fde68a; padding:.15rem .5rem; border-radius: 999px; font-weight:600; }
+    .legend { display:flex; gap:8px; align-items:center; font-size: 12px; color:var(--muted); }
+    .dot-green { width:8px; height:8px; background:#22c55e; border-radius:999px; display:inline-block }
+    .dot-yellow{ width:8px; height:8px; background:#f59e0b; border-radius:999px; display:inline-block }
+    .banner { background:#eef2ff; padding:10px 12px; border-radius:12px; margin:8px 0; }
+    .self-stats { display:flex; gap:8px; flex-wrap:wrap; }
+    .self-card { background:var(--card); padding:10px 12px; border-radius:12px; box-shadow: var(--shadow); }
+    .nowrap { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <h2 style="margin:8px 0;">📊 Progreso de Técnicos</h2>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="left">
+      <input id="buscarNombre" type="text" placeholder="Buscar técnico por nombre o correo" style="min-width:260px;">
+      <button class="btn primary" id="btnBuscar">🔍 Buscar</button>
+      <button class="btn secondary" id="btnLimpiar">❌ Limpiar</button>
+    </div>
+    <div class="right">
+      <label class="subtle">Periodo:</label>
+      <select id="selPeriodo">
+        <option value="mensual" selected>Mensual</option>
+        <option value="semanal">Semanal</option>
+        <option value="total">Total histórico</option>
+      </select>
+      <button class="btn" id="btnRefrescar">↻ Refrescar</button>
+      <button class="btn" onclick="window.location.href='index.html'">📋 Ir a Órdenes</button>
+      <button class="btn" onclick="window.location.href='../index.html'">🏠 Menú</button>
+    </div>
+  </div>
+
+  <div class="banner">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+      <div class="legend">
+        <span class="chip-periodo" id="chipPeriodo">Periodo: Mensual</span>
+        <span><span class="dot-green"></span> Top 3</span>
+        <span><span class="dot-yellow"></span> En progreso</span>
+      </div>
+      <div class="subtle" id="stamp"></div>
+    </div>
+  </div>
+
+  <!-- Tus propias estadísticas (si es técnico) -->
+  <div id="misStatsWrap" class="self-stats" style="display:none; margin-top:12px;">
+    <div class="self-card"><strong>Mi Semanal:</strong> <span id="miSemanal">0</span></div>
+    <div class="self-card"><strong>Mi Mensual:</strong> <span id="miMensual">0</span></div>
+    <div class="self-card"><strong>Mi Total:</strong> <span id="miTotal">0</span></div>
+  </div>
+
+  <!-- Tabla ranking -->
+  <div class="table-wrap mt-12">
+    <table class="tbl" style="width:100%;">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Técnico</th>
+          <th class="nowrap">Semanal</th>
+          <th class="nowrap">Mensual</th>
+          <th class="nowrap">Total</th>
+          <th class="nowrap">Estado Actual</th>
+        </tr>
+      </thead>
+      <tbody id="tbodyRanking"></tbody>
+    </table>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let currentRole = null;
+    let cacheUsuarios = []; // {uid, nombre, email, rol}
+    let cacheProgreso = {}; // uid -> {semanal, mensual, total, mes, semana}
+
+// 🔒 Restringir funciones interactivas si el usuario es técnico
+function aplicarModoSoloLectura() {
+  if (currentRole === 'tecnico' || currentRole === 'tecnico_operativo') {
+    // Desactivar búsqueda y botones
+    document.getElementById('buscarNombre').disabled = true;
+    document.getElementById('selPeriodo').disabled = true;
+    document.getElementById('btnBuscar').disabled = true;
+    document.getElementById('btnLimpiar').disabled = true;
+    document.getElementById('btnRefrescar').disabled = true;
+
+    // Atenuar visualmente los controles
+    document.querySelectorAll('.btn, select, input').forEach(el => {
+      el.style.opacity = '0.6';
+      el.style.cursor = 'not-allowed';
+    });
+
+    // Mostrar una nota visual
+    const note = document.createElement('div');
+    note.textContent = "🔒 Modo lectura: solo puedes ver tu progreso y ranking general.";
+    note.style.background = "#fef9c3";
+    note.style.border = "1px solid #facc15";
+    note.style.padding = "8px 12px";
+    note.style.borderRadius = "8px";
+    note.style.margin = "12px 0";
+    note.style.fontSize = "14px";
+    document.body.insertBefore(note, document.querySelector(".banner").nextSibling);
+  }
+}
+
+    function formatStamp(){
+      const d = new Date();
+      const f = d.toISOString().slice(0,19).replace('T',' ');
+      document.getElementById('stamp').textContent = 'Actualizado: ' + f;
+    }
+
+    function setPeriodoChip(value){
+      const map = { semanal:'Semanal', mensual:'Mensual', total:'Total histórico' };
+      document.getElementById('chipPeriodo').textContent = 'Periodo: ' + (map[value] || 'Mensual');
+    }
+
+    function canViewAll(role){
+      // Admin y Recepción pueden ver todo; técnicos ven su propia fila + ranking sin info sensible
+      return role === 'administrador' || role === 'recepcion';
+    }
+
+    function medalla(idx){
+      if (idx === 0) return '🥇';
+      if (idx === 1) return '🥈';
+      if (idx === 2) return '🥉';
+      return '';
+    }
+
+    function estadoVisual(p){
+      // Pequeño “estado” a modo de ejemplo: si semanal>0 => en progreso
+      if ((p?.semanal || 0) > 0) return '<span class="pill-warn">En progreso</span>';
+      return '<span class="pill-ok">—</span>';
+    }
+
+    async function cargarUsuariosTecnicos(){
+      const snap = await db.collection('usuarios')
+        .where('rol','in',['tecnico','tecnico_operativo'])
+        .get();
+
+      cacheUsuarios = snap.docs.map(d => ({
+        uid: d.id,
+        nombre: d.data().nombre || '',
+        email : d.data().email || '',
+        rol   : d.data().rol
+      }));
+    }
+
+async function cargarProgresos(periodoSel = 'mensual') {
+  // periodoSel: 'mensual' | 'semanal' | 'total'
+  cacheProgreso = {};
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth()+1).padStart(2,'0');
+  const yyyyMM = `${year}-${month}`;
+  const isoWeek = getISOWeekKey(now);
+
+  // Lee total (doc raíz) + subcolección del periodo
+  const batch = [];
+  for (const u of cacheUsuarios) {
+    const statDoc = db.collection('tecnico_stats').doc(u.uid);
+    batch.push(Promise.all([
+      statDoc.get(),
+      (periodoSel === 'mensual' ? statDoc.collection('mensual').doc(yyyyMM).get()
+       : periodoSel === 'semanal' ? statDoc.collection('semanal').doc(isoWeek).get()
+       : Promise.resolve(null))
+    ]).then(([root, per]) => {
+      const total = root.exists ? (root.data().total || 0) : 0;
+      const mensual = (per && per.exists && periodoSel==='mensual') ? (per.data().count || 0) : 0;
+      const semanal = (per && per.exists && periodoSel==='semanal') ? (per.data().count || 0) : 0;
+      cacheProgreso[u.uid] = { total, mensual, semanal };
+    }));
+  }
+  await Promise.all(batch);
+}
+
+function getISOWeekKey(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+}
+
+
+    function renderTabla(periodo='mensual', filtro=''){
+      const tbody = document.getElementById('tbodyRanking');
+      tbody.innerHTML = '';
+
+      // filtro simple por nombre/correo
+      const needle = filtro.trim().toLowerCase();
+
+      let rows = cacheUsuarios
+        .filter(u => {
+          if (!needle) return true;
+          const txt = (u.nombre + ' ' + u.email).toLowerCase();
+          return txt.includes(needle);
+        })
+        .map(u => {
+          const p = cacheProgreso[u.uid] || {semanal:0, mensual:0, total:0};
+          return {
+            uid: u.uid,
+            nombre: u.nombre || u.email || u.uid,
+            email: u.email,
+            semanal: p.semanal || 0,
+            mensual: p.mensual || 0,
+            total: p.total || 0,
+            estado: estadoVisual(p)
+          };
+        });
+
+      // ordenar por periodo
+      rows.sort((a,b) => {
+        if (periodo === 'semanal') return b.semanal - a.semanal;
+        if (periodo === 'total')   return b.total - a.total;
+        return b.mensual - a.mensual; // default: mensual
+      });
+
+      rows.forEach((r, idx) => {
+        const m = medalla(idx);
+        const isTop3 = idx < 3;
+        const tr = document.createElement('tr');
+        if (isTop3) tr.style.boxShadow = 'inset 2px 0 0 #22c55e';
+
+        tr.innerHTML = `
+        <td class="nowrap"><span class="rank-medal">${m}</span> ${idx + 1}</td>
+        <td class="nowrap">${r.nombre}<br><span class="subtle">${r.email || ''}</span></td>
+        <td class="nowrap">${r.semanal}</td>
+        <td class="nowrap">${r.mensual}</td>
+        <td class="nowrap">${r.total}</td>
+        <td>${r.estado}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function cargarPantalla(periodo='mensual', filtro=''){
+      // Permisos: si no es admin/recepcion, igual cargamos ranking pero mostramos mi bloque propio
+      await cargarUsuariosTecnicos();
+      await cargarProgresos(periodo); 
+      renderTabla(periodo, filtro);
+      setPeriodoChip(periodo);
+      formatStamp();
+
+      // Mis estadísticas (si soy técnico)
+      if (currentRole === 'tecnico' || currentRole === 'tecnico_operativo') {
+        const mine = cacheProgreso[currentUser.uid] || {semanal:0,mensual:0,total:0};
+        document.getElementById('misStatsWrap').style.display = 'flex';
+        document.getElementById('miSemanal').textContent = mine.semanal || 0;
+        document.getElementById('miMensual').textContent = mine.mensual || 0;
+        document.getElementById('miTotal').textContent = mine.total || 0;
+      } else {
+        document.getElementById('misStatsWrap').style.display = 'none';
+      }
+    }
+
+    // Auth guard
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) {
+        window.location.href = '../login.html';
+        return;
+      }
+      currentUser = user;
+      const uDoc = await db.collection('usuarios').doc(user.uid).get();
+      currentRole = uDoc.exists ? (uDoc.data().rol || '') : '';
+
+      // Todos pueden ver (técnico ve sus propios números + ranking general sin datos sensibles)
+      await cargarPantalla('mensual','');
+      aplicarModoSoloLectura();
+    });
+
+    // UI handlers
+    document.getElementById('btnRefrescar').addEventListener('click', async () => {
+      const periodo = document.getElementById('selPeriodo').value || 'mensual';
+      const filtro  = document.getElementById('buscarNombre').value || '';
+      await cargarPantalla(periodo, filtro);
+    });
+
+    document.getElementById('selPeriodo').addEventListener('change', async (e) => {
+      const filtro = document.getElementById('buscarNombre').value || '';
+      await cargarPantalla(e.target.value, filtro);
+    });
+
+    document.getElementById('btnBuscar').addEventListener('click', async () => {
+      const periodo = document.getElementById('selPeriodo').value || 'mensual';
+      const filtro  = document.getElementById('buscarNombre').value || '';
+      renderTabla(periodo, filtro);
+    });
+
+    document.getElementById('btnLimpiar').addEventListener('click', async () => {
+      document.getElementById('buscarNombre').value = '';
+      const periodo = document.getElementById('selPeriodo').value || 'mensual';
+      renderTabla(periodo, '');
+    });
+  </script>
+</body>
+</html>

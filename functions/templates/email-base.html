@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml">
+<head>
+  <meta charset="utf-8">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cecomunica</title>
+  <style>
+    /* ===== Variables “lógicas” (algunos clientes sí respetan) ===== */
+    :root{
+      color-scheme: light dark;  /* supported-color-schemes: light dark;  // Apple Mail only */
+      --brand:#0ea5a3; --ink:#111827; --muted:#6b7280; --bg:#f3f4f6; --card:#ffffff;
+    }
+    /* Reset seguro */
+    html,body{margin:0;padding:0}
+    img{border:0;outline:none;text-decoration:none;display:block;max-width:100%;height:auto}
+    table{border-collapse:collapse}
+    /* Dark mode suave (clientes modernos) */
+    @media (prefers-color-scheme: dark){
+      body{background:#0b0f12 !important}
+      .card{background:#12181d !important; color:#f3f4f6 !important}
+      .muted{color:#a6adbb !important}
+      .header{background:#0ea5a3 !important}
+      .btn{background:#0ea5a3 !important; color:#ffffff !important}
+    }
+    /* Mobile fix para fuentes */
+    @media screen and (max-width: 620px){
+      .container{width:100% !important}
+      .p-24{padding:16px !important}
+      h2{font-size:20px !important}
+    }
+  </style>
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {font-family: Arial, sans-serif !important;}
+  </style>
+  <![endif]-->
+</head>
+<body style="background:#f3f4f6; margin:0; padding:0;">
+  <!-- Preheader (oculto) -->
+  <div style="display:none; font-size:1px; color:#fff; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">
+    {{PREHEADER}}
+  </div>
+
+  <table role="presentation" width="100%" bgcolor="#f3f4f6" style="background:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:24px;">
+        <table class="container" role="presentation" width="600" style="width:600px;">
+          <!-- Header -->
+          <tr>
+            <td class="header" bgcolor="#0ea5a3" style="background:#0ea5a3; padding:16px 24px;">
+              <table role="presentation" width="100%">
+                <tr>
+                  <td align="left" valign="middle" style="color:#ffffff; font:600 16px/1 Arial, sans-serif;">
+                    <!-- Usa CID o URL HTTPS -->
+                    <img src="https://app.cecomunica.net/logo_cecomunica.png" alt="Cecomunica" width="140" height="40" style="display:block;">
+                  </td>
+                  <td align="right" valign="middle" style="color:#ffffff; font:600 14px/1 Arial, sans-serif;">
+                    Notificación
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td class="card" bgcolor="#ffffff" style="background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.06);">
+              <table role="presentation" width="100%">
+                <tr><td class="p-24" style="padding:24px;">
+                  {{BODY_CONTENT}}
+
+                  <!-- Botón “bulletproof” con VML -->
+                  <!--[if mso]>
+                  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{CTA_URL}}" style="height:40px;v-text-anchor:middle;width:220px;" arcsize="12%" stroke="f" fillcolor="#0ea5a3">
+                    <w:anchorlock/>
+                    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">
+                      {{CTA_LABEL}}
+                    </center>
+                  </v:roundrect>
+                  <![endif]-->
+                  <!--[if !mso]><!-- -->
+                <a class="btn" href="{{CTA_URL}}" rel="noopener noreferrer"
+                style="display:inline-block; background:#0ea5a3; color:#ffffff; text-decoration:none; padding:12px 18px; border-radius:6px; font:bold 14px Arial, sans-serif; margin-top:8px;">
+                {{CTA_LABEL}}
+                </a>
+                  <!--<![endif]-->
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" class="muted" style="padding:12px; color:#6b7280; font:13px Arial, sans-serif;">
+              © Cecomunica, S.A. — Comunicación Empresarial Segura · <a href="https://app.cecomunica.net" style="color:#0ea5a3; text-decoration:none;">app.cecomunica.net</a><br>
+              <span class="muted">Este es un mensaje automático, no responda a este correo.</span>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

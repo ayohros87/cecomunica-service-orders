@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Imprimir Cotización</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <style>
+    body { background: #f5f7fa; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .print-wrap { background: white; max-width: 900px; margin: 20px auto; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); line-height: 1.35; }
+    .doc-header { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: start; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; }
+    .empresa { display: flex; gap: 12px; align-items: flex-start; }
+    .empresa-logo { width: 64px; height: 64px; object-fit: contain; }
+    .empresa h2 { margin: 0 0 4px; }
+    .empresa .meta { font-size: 12px; color: #475569; }
+    .cot-box { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; font-size: 12px; }
+    .cot-box .title { font-weight: 800; letter-spacing: .6px; margin-bottom: 6px; }
+    .cliente-card { margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px; background: #f8fafc; }
+    .cliente-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; }
+    .cliente-nombre { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; border: 1px solid #d1d5db; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; }
+    th { background: #eef2f7; text-transform: uppercase; font-size: 11px; letter-spacing: .6px; border-bottom: 2px solid #cbd5e1; color: #0f172a; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    .text-right { text-align: right; }
+    .totales { margin-top: 12px; display: flex; justify-content: flex-end; }
+    .totales table { width: 320px; border: 1px solid #d1d5db; border-radius: 4px; }
+    .totales td { border-bottom: 1px solid #e5e7eb; }
+    .totales .grand { font-weight: 800; font-size: 16px; }
+    .section { margin-top: 14px; font-size: 12px; }
+    .section h4 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #475569; }
+    .firma { margin-top: 16px; }
+    @media print {
+      @page { size: Letter; margin: 12mm; }
+      .no-print { display: none; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar no-print">
+    <h1>🧾 Cotización</h1>
+    <div style="margin-left:auto; display:flex; gap:10px;">
+      <button class="btn-top" onclick="window.location.href='index.html'">⬅️ Volver</button>
+      <button class="btn" onclick="window.print()">🖨️ Imprimir</button>
+    </div>
+  </div>
+
+  <div class="print-wrap" id="printArea">
+    <div class="doc-header">
+      <div class="empresa">
+        <img src="../logo_cecomunica.png" alt="CECOMUNICA" class="empresa-logo">
+        <div>
+          <h2>C COMUNICA, S.A.</h2>
+          <div class="meta">RUC: 32977-27-249966 D.V. 39 · Tel: 279-5570 · cecomunica.com</div>
+          <div class="meta">Centro Comercial Bal Harbour, Galerías, Mezanine, oficina 5A</div>
+          <div class="meta">Vía Italia, Punta Paitilla, Panamá</div>
+        </div>
+      </div>
+      <div class="cot-box">
+        <div class="title">COTIZACIÓN</div>
+        <div><strong>ID:</strong> <span id="cotizacionId"></span></div>
+        <div><strong>Fecha:</strong> <span id="fechaTexto"></span></div>
+      </div>
+    </div>
+
+    <div class="cliente-card">
+      <div class="cliente-nombre" id="clienteNombre"></div>
+      <div class="cliente-grid">
+        <div id="clienteRucRow"><strong>RUC:</strong> <span id="clienteRuc"></span></div>
+        <div id="clienteEmailRow"><strong>Email:</strong> <span id="clienteEmail"></span></div>
+        <div id="clienteDireccionRow"><strong>Dirección:</strong> <span id="clienteDireccion"></span></div>
+        <div id="clienteRepresentanteRow"><strong>Representante:</strong> <span id="clienteRepresentante"></span></div>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cant</th>
+          <th>Descripción</th>
+          <th class="text-right">P.Unit</th>
+          <th class="text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody id="itemsTabla"></tbody>
+    </table>
+
+    <div class="totales">
+      <table>
+        <tr><td>Subtotal</td><td class="text-right" id="subtotalTxt"></td></tr>
+        <tr><td>ITBMS (7%)</td><td class="text-right" id="itbmsTxt"></td></tr>
+        <tr><td class="grand">Total</td><td class="text-right grand" id="totalTxt"></td></tr>
+      </table>
+    </div>
+
+    <div class="section">
+      <h4>Condiciones comerciales</h4>
+      <ul style="margin:0; padding-left:16px;">
+        <li id="notaValidez"></li>
+        <li id="notaForma"></li>
+        <li id="notaEntrega"></li>
+        <li id="notaAlquiler" style="display:none;">Alquiler: valores mensuales (/mes).</li>
+      </ul>
+      <div id="notaTexto" style="margin-top:6px;"></div>
+    </div>
+
+    <div class="section">
+      <h4>Datos bancarios</h4>
+      <div id="bancoTxt"></div>
+      <div id="bancoCuentaTxt"></div>
+      <div id="bancoTitularTxt"></div>
+    </div>
+
+    <div class="firma section">
+      <h4>Firma</h4>
+      <div><strong id="firmadoNombre"></strong></div>
+      <div id="firmadoCargo"></div>
+      <div id="firmadoTel"></div>
+      <div id="firmadoCel"></div>
+    </div>
+  </div>
+
+  <script>
+    function money(n) { return Number(n || 0).toLocaleString("es-PA", { style: "currency", currency: "USD" }); }
+
+    function formatFechaLarga(ts) {
+      const d = ts?.toDate?.();
+      if (!d) return "";
+      return d.toLocaleDateString("es-PA", { day: "numeric", month: "long", year: "numeric" });
+    }
+
+    async function cargarCotizacion(id) {
+      const doc = await db.collection("cotizaciones").doc(id).get();
+      if (!doc.exists) { alert("Cotización no encontrada"); return; }
+      const d = doc.data() || {};
+
+      const setRow = (rowId, valueId, value) => {
+        const row = document.getElementById(rowId);
+        const el = document.getElementById(valueId);
+        if (!value) { row.style.display = "none"; return; }
+        el.textContent = value;
+      };
+
+      document.getElementById("fechaTexto").textContent = formatFechaLarga(d.fecha_creacion);
+      document.getElementById("cotizacionId").textContent = d.cotizacion_id || "";
+      document.getElementById("clienteNombre").textContent = d.cliente_nombre || "";
+      setRow("clienteRucRow", "clienteRuc", d.cliente_ruc || "");
+      setRow("clienteDireccionRow", "clienteDireccion", d.cliente_direccion || "");
+      setRow("clienteRepresentanteRow", "clienteRepresentante", d.representante || "");
+      setRow("clienteEmailRow", "clienteEmail", d.cliente_email || "");
+
+      const tbody = document.getElementById("itemsTabla");
+      tbody.innerHTML = "";
+      let tieneAlquiler = false;
+      (d.items || []).forEach((it, idx) => {
+        const sufijo = it.modalidad === "alquiler" ? " / mes" : "";
+        if (it.modalidad === "alquiler") tieneAlquiler = true;
+        const desc = `${it.modelo || ""} — ${it.descripcion || ""}`.trim();
+        const tipo = `${it.tipo || ""} · ${it.modalidad === "alquiler" ? "Alquiler" : "Venta"}`.trim();
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>${it.cantidad || 0}</td>
+          <td>${desc}<br><span style="color:#64748b; font-size:11px;">${tipo}</span></td>
+          <td class="text-right">${money(it.precio_unitario)}${sufijo}</td>
+          <td class="text-right">${money(it.total)}${sufijo}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById("subtotalTxt").textContent = money(d.subtotal);
+      document.getElementById("itbmsTxt").textContent = money(d.itbms);
+      document.getElementById("totalTxt").textContent = money(d.total);
+
+      document.getElementById("bancoTxt").textContent = d.banco_nombre || "";
+      document.getElementById("bancoCuentaTxt").textContent = `${d.banco_tipo_cuenta || ""} - ${d.banco_numero || ""}`;
+      document.getElementById("bancoTitularTxt").textContent = d.banco_titular || "";
+
+      document.getElementById("notaValidez").textContent = `Validez: ${d.validez_dias || 30} días.`;
+      document.getElementById("notaForma").textContent = `Forma de pago: ${d.forma_pago || "contado"}.`;
+      const notaEntrega = document.getElementById("notaEntrega");
+      if (d.tiempo_entrega) {
+        notaEntrega.textContent = `Tiempo de entrega: ${d.tiempo_entrega}.`;
+        notaEntrega.style.display = "list-item";
+      } else {
+        notaEntrega.style.display = "none";
+      }
+      document.getElementById("notaAlquiler").style.display = tieneAlquiler ? "list-item" : "none";
+      const notaTexto = document.getElementById("notaTexto");
+      notaTexto.textContent = d.notas ? `Notas: ${d.notas}` : "";
+      notaTexto.style.display = d.notas ? "block" : "none";
+
+      document.getElementById("firmadoNombre").textContent = d.firmado_por_nombre || "";
+      document.getElementById("firmadoCargo").textContent = d.firmado_por_cargo || "";
+      document.getElementById("firmadoTel").textContent = d.firmado_por_tel || "";
+      document.getElementById("firmadoCel").textContent = d.firmado_por_cel || "";
+    }
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) { location.href = "../login.html"; return; }
+      verificarAccesoYAplicarVisibilidad(async (rol) => {
+        const permitidos = ["administrador", "vendedor"];
+        if (!permitidos.includes(rol)) {
+          alert("Sin acceso");
+          location.href = "../index.html";
+          return;
+        }
+        const params = new URLSearchParams(location.search);
+        const id = params.get("id");
+        if (!id) { alert("Falta ID"); location.href = "index.html"; return; }
+        await cargarCotizacion(id);
+      });
+    });
+  </script>
+</body>
+</html>

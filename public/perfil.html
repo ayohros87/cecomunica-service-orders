@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mi Perfil - Cecomunica</title>
+  <link rel="stylesheet" href="css/ceco-ui.css">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-init.js"></script>
+</head>
+<body>
+  <div class="section" style="max-width: 600px; margin: 40px auto;">
+    <h2 style="margin-top:0;">👤 Mi Perfil</h2>
+    <div class="form-grid">
+      <div class="form-field">
+        <label>Nombre</label>
+        <input id="perfil-nombre" type="text" readonly>
+      </div>
+      <div class="form-field">
+        <label>Correo electrónico</label>
+        <input id="perfil-correo" type="text" readonly>
+      </div>
+      <div class="form-field">
+        <label>Rol</label>
+        <input id="perfil-rol" type="text" readonly>
+      </div>
+    </div>
+    <div class="form-actions center">
+      <button class="btn" onclick="window.location.href='index.html'">⬅️ Volver</button>
+      <button class="btn danger" onclick="cerrarSesion()">🚪 Cerrar Sesión</button>
+    </div>
+  </div>
+
+<script>
+  firebase.auth().onAuthStateChanged(async (user) => {
+    if (!user) {
+      location.href = "login.html";
+      return;
+    }
+
+    document.getElementById("perfil-correo").value = user.email || "";
+
+    // Buscar datos de Firestore (colección usuarios)
+    try {
+      const snap = await firebase.firestore().collection("usuarios").doc(user.uid).get();
+      if (snap.exists) {
+        const data = snap.data();
+        document.getElementById("perfil-nombre").value = data.nombre || "";
+        document.getElementById("perfil-rol").value = data.rol || "";
+      }
+    } catch (e) {
+      console.error("Error al cargar perfil:", e);
+    }
+  });
+
+  function cerrarSesion() {
+    firebase.auth().signOut().then(() => {
+      location.href = "login.html";
+    });
+  }
+</script>
+</body>
+</html>

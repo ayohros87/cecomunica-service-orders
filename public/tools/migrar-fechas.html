@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Migrar Fechas – Cecomunica</title>
+  <!-- Firebase compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <!-- Tu inicialización -->
+  <script src="../js/firebase-init.js"></script>
+
+  <script>
+    async function migrar() {
+      document.getElementById("log").textContent = "⏳ Iniciando migración...";
+      const snap = await db.collection("ordenes_de_servicio").get();
+      let count = 0;
+
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        const updates = {};
+
+        // Migrar fecha_creacion si falta
+        if (!data.fecha_creacion) {
+          if (data.creado_en && data.creado_en.toDate) {
+            updates.fecha_creacion = data.creado_en;
+          } else if (typeof data.fecha_entrada === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha_entrada)) {
+            updates.fecha_creacion = firebase.firestore.Timestamp.fromDate(new Date(data.fecha_entrada));
+          }
+        }
+
+        // Migrar fecha_entrega si falta
+        if (!data.fecha_entrega && typeof data.fecha_salida === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha_salida)) {
+          updates.fecha_entrega = firebase.firestore.Timestamp.fromDate(new Date(data.fecha_salida));
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await doc.ref.update(updates);
+          count++;
+          document.getElementById("log").textContent += `\n✔️ ${doc.id} actualizado: ${JSON.stringify(updates)}`;
+        }
+      }
+
+      document.getElementById("log").textContent += `\n🎯 Migración completa. ${count} documentos actualizados.`;
+    }
+
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        document.getElementById("status").textContent = "✅ Sesión iniciada como " + user.email;
+      } else {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        firebase.auth().signInWithPopup(provider).catch(err => alert("Error de login: " + err));
+      }
+    });
+  </script>
+</head>
+<body style="font-family: system-ui; margin: 20px;">
+  <h2>Migración de Fechas – Órdenes de Servicio</h2>
+  <p id="status">🔒 No autenticado</p>
+  <button onclick="migrar()">▶️ Ejecutar migración</button>
+  <pre id="log" style="background:#f8f8f8; padding:10px; border:1px solid #ccc; max-height:400px; overflow:auto;"></pre>
+</body>
+</html>

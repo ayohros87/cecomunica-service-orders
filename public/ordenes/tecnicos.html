@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Administrar Técnicos - Cecomunica</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .top-buttons {
+      display: flex;
+      justify-content: space-between;
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 20px;
+    }
+    .top-buttons button {
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .form-section, .list-section {
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 30px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: #f9f9f9;
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .actions button {
+      margin-left: 5px;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const firebaseConfig = {
+        apiKey: "AIzaSyDN1ErV5svRGPtx5tCi_FU_Vei6Dl-J_ng",
+        authDomain: "cecomunica-service-orders.firebaseapp.com",
+        projectId: "cecomunica-service-orders",
+        storageBucket: "cecomunica-service-orders.firebasestorage.app",
+        messagingSenderId: "615730883223",
+        appId: "1:615730883223:web:8cf1941241657bd08ad7d2"
+      };
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
+
+      const lista = document.getElementById("lista-tecnicos");
+      const form = document.getElementById("form-tecnico");
+      const inputNombre = document.getElementById("nombre-tecnico");
+      let editandoId = null;
+
+    async function cargarTecnicos() {
+  lista.innerHTML = "";
+  const docSnap = await db.collection("empresa").doc("tecnicos").get();
+  if (docSnap.exists) {
+    const data = docSnap.data();
+    const listaTecnicos = data.list || [];
+    listaTecnicos.forEach(nombre => {
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <span>${nombre}</span>
+        <div class="actions">
+          <button onclick="editarTecnico('${nombre}')">✏️</button>
+          <button onclick="borrarTecnico('${nombre}')">🗑️</button>
+        </div>`;
+      lista.appendChild(li);
+    });
+  }
+}
+
+
+
+      window.editarTecnico = async (id) => {
+        inputNombre.value = id;
+        editandoId = id;
+      };
+window.borrarTecnico = async (id) => {
+  if (!confirm(`¿Eliminar técnico "${id}"?`)) return;
+  const docRef = db.collection("empresa").doc("tecnicos");
+  const docSnap = await docRef.get();
+  const data = docSnap.data();
+  const nuevaLista = (data.list || []).filter(n => n !== id);
+  await docRef.set({ list: nuevaLista });
+  await cargarTecnicos();
+};
+
+
+    form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const nombre = inputNombre.value.trim();
+  if (!nombre) return;
+
+  const docRef = db.collection("empresa").doc("tecnicos");
+  const docSnap = await docRef.get();
+  let lista = docSnap.exists ? docSnap.data().list || [] : [];
+
+  if (editandoId && editandoId !== nombre) {
+    lista = lista.filter(n => n !== editandoId);
+  }
+  if (!lista.includes(nombre)) {
+    lista.push(nombre);
+  }
+
+  await docRef.set({ list: lista });
+
+  inputNombre.value = "";
+  editandoId = null;
+  await cargarTecnicos();
+});
+
+      await cargarTecnicos();
+    });
+  </script>
+</head>
+<body>
+  <h2>👷 Administración de Técnicos</h2>
+  <div class="top-buttons">
+    <button onclick="window.location.href='config.html'">⬅️ Volver</button>
+  </div>
+
+  <div class="form-section">
+    <form id="form-tecnico">
+      <label for="nombre-tecnico">Nombre del Técnico:</label>
+      <input type="text" id="nombre-tecnico" required>
+      <button type="submit">💾 Guardar Técnico</button>
+    </form>
+  </div>
+
+  <div class="list-section">
+    <h3>Lista de Técnicos:</h3>
+    <ul id="lista-tecnicos"></ul>
+  </div>
+</body>
+</html>

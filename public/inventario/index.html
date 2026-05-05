@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Inventario de Radios - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+<style>
+/* ========================================
+   UNIFIED DESIGN SYSTEM
+   ======================================== */
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+  min-height: 100vh;
+}
+
+/* Unified Topbar */
+.topbar {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 3px solid var(--brand);
+  width: 100%;
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+}
+
+.topbar-left h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.app-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 6px 10px;
+  border: 2px solid var(--line);
+  transition: all 0.2s;
+}
+
+.app-search:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.app-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  min-width: 280px;
+}
+
+/* Unified Content Area */
+.app-wrap {
+  max-width: none;
+  margin: 0 auto;
+  padding: 12px 20px;
+  box-sizing: border-box;
+}
+
+/* Unified Table Styling */
+.table-wrap {
+  background: white;
+  border-radius: 8px;
+  padding: 0;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  overflow: hidden;
+  width: 100%;
+  margin-top: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+table thead {
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+}
+
+table th {
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 12px 16px;
+  color: var(--text);
+  vertical-align: middle;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+table td {
+  padding: 10px 16px;
+  vertical-align: middle;
+  font-size: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+table tbody tr {
+  transition: background 0.15s;
+}
+
+table tbody tr:hover {
+  background: #f0f9ff;
+}
+
+/* Unified Button System */
+.btn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sort {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+/* === PAGE-SPECIFIC STYLES === */
+  transition: var(--transition);
+}
+.app-search:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.app-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 300px;
+  font-size: 15px;
+  padding: 4px 6px;
+}
+.app-search .btn.icon {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+/* === DROPDOWN === */
+.dropdown {
+  position: relative;
+}
+.dropdown .menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  padding: 8px;
+  min-width: 220px;
+  animation: slideDown 0.2s ease;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.dropdown.open .menu,
+.dropdown:hover .menu {
+  display: block;
+}
+.dropdown .menu .menu-item {
+  font-size: 14px;
+  margin: 4px 0;
+}
+.dropdown .menu hr {
+  margin: 6px 0;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+
+/* === APP WRAP & TABLE === */
+.app-wrap {
+  max-width: 1600px;
+  margin: 32px auto;
+  padding: 32px 48px;
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+}
+
+.resumen {
+  text-align: right;
+  color: #6b7280;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+/* === TABLE & SORT === */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+th[data-sort] {
+  cursor: pointer;
+  user-select: none;
+}
+th .sort {
+  font-size: 12px;
+  opacity: .6;
+  margin-left: 4px;
+}
+
+/* === DENSITY === */
+.table-wrap[data-density="dense"] table {
+  font-size: 12.5px;
+}
+.table-wrap[data-density="dense"] th,
+.table-wrap[data-density="dense"] td {
+  padding: 6px 8px;
+}
+.table-wrap[data-density="roomy"] table {
+  font-size: 14.5px;
+}
+.table-wrap[data-density="roomy"] th,
+.table-wrap[data-density="roomy"] td {
+  padding: 10px 12px;
+}
+
+/* === BADGES === */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 8px;
+  height: 22px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge.completo {
+  background: #e6f4ea;
+  color: #1e7d32;
+}
+.badge.pendiente {
+  background: #fff4e6;
+  color: #b45309;
+}
+.badge.danger {
+  background: #fde8e8;
+  color: #b91c1c;
+}
+
+/* === HIDDEN COLS === */
+.hidden-col {
+  display: none;
+}
+
+/* === SKELETON === */
+.skeleton {
+  background: linear-gradient(90deg,#f2f4f7 25%,#e9edf3 37%,#f2f4f7 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  height: 12px;
+  border-radius: 4px;
+}
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* === TOASTS === */
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  background: #111;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  z-index: 9999;
+  opacity: 0.96;
+}
+.toast.ok { background: var(--ok, #2e7d32); }
+.toast.warn { background: var(--warn, #f59e0b); color: #111; }
+.toast.bad { background: var(--bad, #c62828); }
+
+/* === RESPONSIVE === */
+@media (max-width: 900px) {
+  .topbar {
+    flex-wrap: wrap;
+    padding: 14px 20px;
+  }
+  .app-search input {
+    width: 100%;
+    max-width: none;
+  }
+  .app-wrap {
+    padding: 20px;
+  }
+}
+</style>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+
+
+  <script>
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) return window.location.href = "../login.html";
+      const userDoc = await firebase.firestore().collection("usuarios").doc(user.uid).get();
+      const rol = userDoc.exists ? userDoc.data().rol : null;
+
+      if (rol !== "administrador" && rol !== "inventario") {
+        document.body.innerHTML = '<div style="text-align:center; margin-top:100px; color:red;">Acceso restringido: área en construcción.</div>';
+        return;
+      }
+
+      window.userRole = rol;
+      document.getElementById("loader").style.display = "block";
+      await cargarInventario();
+      document.getElementById("loader").style.display = "none";
+    });
+
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => window.location.href = "../login.html");
+    }
+
+    async function cargarInventario() {
+  const tabla = document.getElementById("inventarioTable");
+  tabla.innerHTML = "";
+
+  try {
+    // 1. Cargar todos los modelos una sola vez
+    const modelosSnapshot = await db.collection("modelos").get();
+    const modelosMap = {};
+    modelosSnapshot.forEach(doc => {
+      modelosMap[doc.id] = doc.data();
+    });
+
+    // 2. Cargar inventario_actual (con modelo_id como string)
+    const inventarioSnapshot = await db.collection("inventario_actual").get();
+
+    if (inventarioSnapshot.empty) {
+      tabla.innerHTML = `
+      <tr>
+        <td colspan="10" style="text-align:center; padding: 20px; color: #666;">
+          ⚠️ No se encontraron datos en el inventario actual.
+        </td>
+      </tr>
+    `;
+
+      return;
+    }
+
+    const datos = [];
+
+inventarioSnapshot.forEach(doc => {
+  const data = doc.data();
+  const modelo = modelosMap[data.modelo_id] || {};
+  datos.push({ data, modelo });
+});
+
+// Ordenar por alto_movimiento (true primero), luego marca, tipo y modelo
+datos.sort((a, b) => {
+  const altoA = a.modelo.alto_movimiento === true ? 1 : 0;
+  const altoB = b.modelo.alto_movimiento === true ? 1 : 0;
+  if (altoA !== altoB) return altoB - altoA; // true primero
+
+  const marcaA = a.modelo.marca?.toLowerCase() || "";
+  const marcaB = b.modelo.marca?.toLowerCase() || "";
+  if (marcaA !== marcaB) return marcaA.localeCompare(marcaB);
+
+  const tipoA = a.modelo.tipo?.toLowerCase() || "";
+  const tipoB = b.modelo.tipo?.toLowerCase() || "";
+  if (tipoA !== tipoB) return tipoA.localeCompare(tipoB);
+
+  const modeloA = a.modelo.modelo?.toLowerCase() || "";
+  const modeloB = b.modelo.modelo?.toLowerCase() || "";
+  return modeloA.localeCompare(modeloB);
+});
+
+
+
+// Mostrar ordenado
+inventarioDatos = datos;
+renderizarTabla(inventarioDatos);
+
+  } catch (err) {
+    console.error("❌ Error al cargar inventario:", err);
+    tabla.innerHTML = "<tr><td colspan='7' style='color:red;'>Error al cargar datos</td></tr>";
+  }
+}
+
+async function verHistorico(modeloId) {
+  const snapshot = await db.collection("ultimo_inventario")
+    .where("modelo_id", "==", modeloId)
+    .orderBy("timestamp", "desc")
+    .get();
+
+  if (snapshot.empty) {
+    alert("No hay registros históricos para este modelo.");
+    return;
+  }
+
+  let resumen = `📜 Histórico del modelo: ${modeloId}\n\n`;
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    const fecha = data.timestamp?.toDate().toLocaleString() || "-";
+    resumen += `• ${fecha} → Cantidad: ${data.cantidad}\n`;
+  });
+
+  alert(resumen);
+}
+
+let inventarioDatos = [];
+let ordenCampo = 'alto_movimiento';
+let ordenAsc = false;
+
+function filtrarInventario() {
+  const marca = document.getElementById("filtroMarca").value.toLowerCase();
+  const modelo = document.getElementById("filtroModelo").value.toLowerCase();
+
+  const filtrados = inventarioDatos.filter(({ data, modelo: m }) => {
+    const marcaOk = m.marca?.toLowerCase().includes(marca);
+    const modeloOk = m.modelo?.toLowerCase().includes(modelo);
+    return marcaOk && modeloOk;
+  });
+
+  renderizarTabla(filtrados);
+}
+
+function limpiarFiltro() {
+  document.getElementById("filtroMarca").value = "";
+  document.getElementById("filtroModelo").value = "";
+  renderizarTabla(inventarioDatos);
+}
+
+function ordenarPor(campo) {
+  if (ordenCampo === campo) ordenAsc = !ordenAsc;
+  else {
+    ordenCampo = campo;
+    ordenAsc = true;
+  }
+
+  renderizarTabla(inventarioDatos);
+}
+function renderizarTabla(datos) {
+  const tabla = document.getElementById("inventarioTable");
+  const encabezado = document.getElementById("headerInventario");
+  tabla.innerHTML = "";
+
+  const cols = [
+    { campo: "marca", label: "Marca" },
+    { campo: "modelo", label: "Modelo" },
+    { campo: "tipo", label: "Tipo" },
+    { campo: "estado", label: "Estado" },
+    { campo: "alto_movimiento", label: "Alto Mov." },
+    { campo: "cantidad", label: "Cantidad" },
+    { campo: "cantidad_anterior", label: "Cant. anterior", cls: "col-anterior" },
+    { campo: "ultima_actualizacion", label: "Última actualización" },
+    { campo: "penultima_actualizacion", label: "Penúltima actualización", cls: "col-penultima" },
+  ];
+
+  // Header con sort arrow
+  encabezado.innerHTML = `
+    <tr>
+      ${cols.map(c=>{
+        const isCurr = c.campo === ordenCampo;
+        const arrow = isCurr ? (ordenAsc ? '↑' : '↓') : '↕';
+        return `<th data-sort="${c.campo}" class="${c.cls||''}" onclick="ordenarPor('${c.campo}')">${c.label} <span class="sort">${arrow}</span></th>`;
+      }).join('')}
+      <th>Acciones</th>
+    </tr>`;
+
+  // Orden
+  datos.sort((a,b)=>{
+    if (ordenCampo === "alto_movimiento") {
+      const amA = a.modelo.alto_movimiento === true ? 1 : 0;
+      const amB = b.modelo.alto_movimiento === true ? 1 : 0;
+      if (amA !== amB) return ordenAsc ? amA - amB : amB - amA;
+      const ma = a.modelo.marca?.toLowerCase() || "", mb = b.modelo.marca?.toLowerCase() || "";
+      if (ma !== mb) return ma.localeCompare(mb);
+      const ta = a.modelo.tipo?.toLowerCase() || "", tb = b.modelo.tipo?.toLowerCase() || "";
+      if (ta !== tb) return ta.localeCompare(tb);
+      const moa = a.modelo.modelo?.toLowerCase() || "", mob = b.modelo.modelo?.toLowerCase() || "";
+      return moa.localeCompare(mob);
+    }
+    const vA = obtenerValor(a, ordenCampo);
+    const vB = obtenerValor(b, ordenCampo);
+    if (typeof vA === "number" && typeof vB === "number") return ordenAsc ? vA - vB : vB - vA;
+    return ordenAsc ? String(vA).localeCompare(String(vB)) : String(vB).localeCompare(String(vA));
+  });
+
+  // Skeleton si vacío
+  if (datos.length === 0){
+    tabla.innerHTML = `
+      <tr><td colspan="10" style="padding:20px;">
+        <div class="skeleton" style="width:60%; height:12px; margin-bottom:8px;"></div>
+        <div class="skeleton" style="width:40%; height:12px;"></div>
+      </td></tr>`;
+    applyColumnVisibility(); applyDensity(); return;
+  }
+
+  // Filas
+  tabla.innerHTML = datos.map(({ data, modelo })=>{
+    const cant = Number(data.cantidad ?? 0);
+    const minBadge = cant <= 0 ? '<span class="badge danger">0</span>'
+                  : cant < 5 ? `<span class="badge pendiente">${cant}</span>`
+                  : `<span class="badge completo">${cant}</span>`;
+    const tipoTxt = modelo.tipo === "P" ? "Portátil" : modelo.tipo === "C" ? "Cámara" : modelo.tipo === "B" ? "Base" : "-";
+    const estadoTxt = modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-";
+    const ua = data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-";
+    const pa = data.penultima_actualizacion ? data.penultima_actualizacion.toDate().toLocaleString() : "-";
+    const am = modelo.alto_movimiento ? "✅" : "❌";
+
+    return `
+      <tr>
+        <td>${modelo.marca || "-"}</td>
+        <td>${modelo.modelo || "-"}</td>
+        <td>${tipoTxt}</td>
+        <td>${estadoTxt}</td>
+        <td>${am}</td>
+        <td>${minBadge}</td>
+        <td class="col-anterior">${data.cantidad_anterior ?? "-"}</td>
+        <td>${ua}</td>
+        <td class="col-penultima">${pa}</td>
+        <td><button class="btn" onclick="verHistorico('${data.modelo_id}')">📊 Histórico</button></td>
+      </tr>`;
+  }).join('');
+
+  // Resumen
+  const total = datos.length;
+  const altoMov = datos.filter(({modelo})=>modelo.alto_movimiento===true).length;
+  const resumen = document.getElementById("resumenInv");
+  if (resumen) resumen.innerHTML = `<strong>${total}</strong> modelos · <span class="badge completo">${altoMov}</span> alto mov.`;
+
+  // Aplica visibilidad/densidad
+  applyColumnVisibility(); applyDensity();
+}
+
+function obtenerValor(obj, campo) {
+  if (campo === "marca") return obj.modelo.marca?.toLowerCase() || "";
+  if (campo === "modelo") return obj.modelo.modelo?.toLowerCase() || "";
+  if (campo === "tipo") return obj.modelo.tipo || "";
+  if (campo === "estado") return obj.modelo.estado || "";
+  if (campo === "alto_movimiento") return obj.modelo.alto_movimiento === true ? 1 : 0;
+  if (campo === "cantidad") return obj.data.cantidad ?? 0;
+  if (campo === "cantidad_anterior") return obj.data.cantidad_anterior ?? 0;
+  if (campo === "ultima_actualizacion") return obj.data.ultima_actualizacion?.toDate().getTime() ?? 0;
+  if (campo === "penultima_actualizacion") return obj.data.penultima_actualizacion?.toDate().getTime() ?? 0;
+  return "";
+}
+function exportarExcel() {
+  const wb = XLSX.utils.book_new();
+  const wsData = [
+    ["Marca", "Modelo", "Tipo", "Estado", "Alto Movimiento", "Cantidad", "Última actualización"]
+  ];
+
+  inventarioDatos.forEach(({ modelo, data }) => {
+    wsData.push([
+      modelo.marca || "-",
+      modelo.modelo || "-",
+      modelo.tipo === "P" ? "Portátil" : modelo.tipo === "C" ? "Cámara" : modelo.tipo === "B" ? "Base" : "-",
+      modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-",
+      modelo.alto_movimiento ? "✅" : "❌",
+      data.cantidad ?? "-",
+      data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-"
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+
+  const fecha = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `Inventario_Cecomunica_${fecha}.xlsx`);
+}
+// ===== Toast
+function toast(msg, type='ok', t=2400){
+  const el = document.createElement('div'); el.className = `toast ${type}`; el.textContent = msg;
+  document.body.appendChild(el); setTimeout(()=>el.remove(), t);
+}
+
+// ===== Densidad
+let dense = false;
+function applyDensity(){
+  const wrap = document.getElementById('wrapTabla');
+  if (wrap) wrap.setAttribute('data-density', dense ? 'dense' : 'roomy');
+}
+function toggleDensity(){
+  dense = !dense; applyDensity();
+  toast(dense ? 'Vista compacta' : 'Vista cómoda', 'ok');
+}
+
+// ===== Columnas ocultables
+const hiddenCols = new Set(); // 'anterior' | 'penultima'
+function applyColumnVisibility(){
+  const map = { anterior: '.col-anterior', penultima: '.col-penultima' };
+  Object.entries(map).forEach(([k, sel])=>{
+    const hide = hiddenCols.has(k);
+    document.querySelectorAll(sel).forEach(el=>{
+      if (hide) el.classList.add('hidden-col'); else el.classList.remove('hidden-col');
+    });
+  });
+}
+document.addEventListener('change', (e)=>{
+  if (e.target.id === 'col-CHK-anterior'){
+    if (!e.target.checked) hiddenCols.add('anterior'); else hiddenCols.delete('anterior');
+    applyColumnVisibility();
+  }
+  if (e.target.id === 'col-CHK-penultima'){
+    if (!e.target.checked) hiddenCols.add('penultima'); else hiddenCols.delete('penultima');
+    applyColumnVisibility();
+  }
+});
+
+// ===== Búsqueda unificada
+function debounce(fn, t=220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); } }
+const onQuickFilter = debounce(aplicarFiltroRapido, 220);
+window.addEventListener('DOMContentLoaded', ()=>{
+  // abrir menú por click
+  const ddBtn = document.querySelector('.dropdown > button.btn');
+  if (ddBtn){
+    ddBtn.addEventListener('click',(ev)=>{ev.stopPropagation(); ddBtn.parentElement.classList.toggle('open');});
+    document.addEventListener('click',()=>document.querySelector('.dropdown.open')?.classList.remove('open'));
+  }
+  const q = document.getElementById('buscador');
+  if (q){
+    q.addEventListener('input', onQuickFilter);
+    q.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); aplicarFiltroRapido(); }});
+  }
+  applyDensity();
+});
+function aplicarFiltroRapido(){
+  const q = (document.getElementById('buscador')?.value || '').toLowerCase().trim();
+  if (!Array.isArray(inventarioDatos)){ toast('Inventario aún no cargado','warn'); return; }
+  const filtrados = inventarioDatos.filter(({modelo})=>{
+    const marca = (modelo.marca||'').toLowerCase();
+    const mod = (modelo.modelo||'').toLowerCase();
+    const tipo = (modelo.tipo||'').toLowerCase();
+    return marca.includes(q) || mod.includes(q) || tipo.includes(q);
+  });
+  renderizarTabla(filtrados);
+}
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>📦 Inventario de Radios</h1>
+    <div class="app-search">
+      <input id="buscador" placeholder="Buscar marca, modelo o tipo..." />
+      <button class="btn icon" onclick="aplicarFiltroRapido()">🔍</button>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <button class="btn primary" onclick="window.location.href='./cargar-inventario.html'">➕ Cargar</button>
+    <button class="btn" onclick="window.location.href='./modelos.html'">📘 Modelos</button>
+    <button class="btn" onclick="window.open('./vista-correo.html','_blank')">✉️ Vista correo</button>
+    <button class="btn" onclick="exportarExcel()">📥 Excel</button>
+
+    <div class="dropdown">
+      <button class="btn">⚙️ Vista</button>
+      <div class="menu" style="min-width:220px;">
+        <label class="menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Cant. anterior</label>
+        <label class="menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltima actualización</label>
+        <hr style="margin:6px 0;border:none;border-top:1px solid var(--line);">
+        <button class="btn sm" onclick="toggleDensity()">↕️ Alternar densidad</button>
+      </div>
+    </div>
+
+    <button class="btn" onclick="window.location.href='../index.html'">🏠 Menú</button>
+    <button class="btn danger" onclick="cerrarSesion()">🚪 Salir</button>
+  </div>
+</div>
+<div id="loader" style="display:none;" class="loader-center">
+  <div class="loader"></div>
+</div>
+
+<div class="app-wrap">
+  <p id="resumenInv" class="resumen"></p>
+  <div class="table-wrap" id="wrapTabla" data-density="roomy">
+    <table>
+      <thead id="headerInventario"></thead>
+      <tbody id="inventarioTable"></tbody>
+    </table>
+  </div>
+</div>
+
+  <p id="contadorInventario"></p>
+</body>
+</html>

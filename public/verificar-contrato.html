@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Verificación de Contrato – Cecomunica</title>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="./js/firebase-init.js"></script>
+  <style>
+    body{font-family:Arial, sans-serif; max-width:700px; margin:40px auto; padding:0 16px;}
+    .ok{color:#065f46; background:#ecfdf5; border:1px solid #bbf7d0; padding:10px; border-radius:8px;}
+    .bad{color:#7f1d1d; background:#fff0f0; border:1px solid #f8d7da; padding:10px; border-radius:8px;}
+    .mono{font-family: ui-monospace, Menlo, Consolas, monospace;}
+  </style>
+</head>
+<body>
+  <h1>Verificación de Contrato</h1>
+  <div id="status"></div>
+  <div id="info" style="margin-top:12px;"></div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const contratoId = params.get("id") || location.pathname.split("/").pop(); // soporta /c/{id}?v=CODE
+    const v = params.get("v");
+
+    async function verificar() {
+      const elStatus = document.getElementById("status");
+      const elInfo = document.getElementById("info");
+      try {
+        const doc = await db.collection("verificaciones").doc(contratoId).get();
+        if (!doc.exists) {
+          elStatus.innerHTML = '<div class="bad">No existe verificación para este contrato.</div>';
+          return;
+        }
+        const data = doc.data();
+        if (data.firma_codigo === v && data.estado === "activo") {
+          elStatus.innerHTML = '<div class="ok">✔ Contrato VÁLIDO</div>';
+          elInfo.innerHTML = `
+            <div>Contrato: <span class="mono">${data.contrato_id}</span></div>
+            <div>Código: <span class="mono">${data.firma_codigo}</span></div>
+            <div>Estado: ${data.estado}</div>
+            <div>Cliente: ${data.cliente_nombre || "—"}</div>
+            <div>Total (ITBMS incl.): ${data.total_con_itbms != null ? "$" + data.total_con_itbms : "—"}</div>
+          `;
+        } else {
+          elStatus.innerHTML = '<div class="bad">✖ Código inválido o contrato no activo.</div>';
+        }
+      } catch (e) {
+        elStatus.innerHTML = '<div class="bad">Error de verificación.</div>';
+      }
+    }
+    verificar();
+  </script>
+</body>
+</html>

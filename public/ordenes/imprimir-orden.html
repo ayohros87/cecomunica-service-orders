@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orden de Servicio - C COMUNICA</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+
+@media print {
+
+  /* Set real paper margins (not fake padding) */
+  @page {
+    size: letter;        /* If you use A4 instead, change to: size: A4; */
+    margin: 0.35in;      /* Adjust between 0.25in and 0.5in if needed */
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .no-print { display: none !important; }
+
+  /* Make content use printable width */
+  .print-page {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+
+    padding: 0 !important;          /* IMPORTANT: remove the 1in padding */
+    width: 100% !important;
+    max-width: none !important;     /* IMPORTANT: allow full page width */
+    margin: 0 !important;
+  }
+
+  /* Optional: avoid weird scaling/spacing in tables */
+  table {
+    page-break-inside: auto;
+  }
+
+  tr, td, th {
+    page-break-inside: avoid;
+  }
+}
+
+    
+    body {
+      background: #f3f4f6;
+      padding: 20px;
+    }
+    
+    .print-page {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border-radius: 12px;
+      border: 1px solid var(--line);
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--brand);
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 13px;
+      color: var(--brand);
+      font-weight: 700;
+    }
+    
+    .header h2 {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px 8px;
+      padding: 6px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+    }
+    
+    .info-item {
+      display: block;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    
+    .info-item.full {
+      grid-column: 1 / -1;
+    }
+    
+    .info-label {
+      font-weight: 700;
+      color: var(--text);
+    }
+    
+    .info-value {
+      font-weight: 400;
+      color: var(--text);
+    }
+    
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 8px 0 4px 0;
+      padding-bottom: 2px;
+      border-bottom: 1px solid var(--line);
+    }
+    
+    .equipos-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 4px 0;
+      font-size: 10px;
+    }
+    
+    .equipos-table thead {
+      background: #f8fafc;
+    }
+    
+    .equipos-table th {
+      padding: 6px 4px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 9px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+    
+    .equipos-table td {
+      padding: 5px 4px;
+      text-align: center;
+      border: 1px solid var(--line);
+    }
+    
+    .equipos-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    
+    .equipos-table tbody tr:hover {
+      background: #f0f9ff;
+    }
+    
+    .firma-section {
+      margin-top: 20px;
+      padding: 10px;
+      font-size: 10px;
+      display: flex;
+      gap: 40px;
+      align-items: center;
+    }
+    
+    .firma-item {
+      display: inline-block;
+    }
+    
+    .firma-label {
+      font-weight: 700;
+      margin-right: 4px;
+    }
+    
+    .firma-line {
+      display: inline-block;
+      border-bottom: 1px solid #000;
+      width: 200px;
+      height: 16px;
+    }
+    
+    .footer-info {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      font-size: 9px;
+      color: var(--muted);
+      text-align: center;
+    }
+    
+    .toolbar {
+      max-width: 900px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    
+    .alert-box {
+      background: #fef3c7;
+      border: 1px solid #fbbf24;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 16px 0;
+      font-size: 12px;
+      color: #92400e;
+    }
+    
+    @media (max-width: 760px) {
+      .print-page {
+        padding: 20px;
+      }
+      
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .firma-grid {
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button class="btn secondary" onclick="window.print()">
+      <span style="font-size: 16px;">🖨️</span> Imprimir
+    </button>
+    <button class="btn" onclick="window.close()">
+      <span style="font-size: 16px;">✕</span> Cerrar
+    </button>
+  </div>
+
+  <div class="print-page">
+    <div class="header">
+      <h1>C COMUNICA, S.A.</h1>
+      <h2 id="documentTitle">ORDEN DE SERVICIO</h2>
+    </div>
+
+    <div id="infoContainer">
+      <!-- La información se cargará aquí -->
+    </div>
+
+    <h3 class="section-title">
+      <span id="tituloEquipos">Equipos Asociados</span>
+    </h3>
+
+    <div id="tablaContainer">
+      <!-- La tabla se cargará aquí -->
+    </div>
+
+    <div class="firma-section">
+      <div class="firma-item">
+        <span class="firma-label">Firma del Técnico:</span>
+        <span class="firma-line"></span>
+      </div>
+      <div class="firma-item">
+        <span class="firma-label">Fecha:</span>
+        <span class="firma-line"></span>
+      </div>
+    </div>
+
+    <div class="footer-info">
+      <p>Documento generado: <span id="fechaGeneracion"></span></p>
+      <p>C COMUNICA, S.A. - Sistema de Órdenes de Servicio</p>
+    </div>
+  </div>
+
+  <!-- Firebase Compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script>
+    (function ensureFirebaseInit(){
+      function ok(){
+        try { return firebase && firebase.apps && firebase.apps.length>0 && typeof db!=="undefined"; }
+        catch { return false; }
+      }
+      if (ok()) return;
+
+      // 2do intento: ./js
+      var s=document.createElement('script');
+      s.src='./js/firebase-init.js';
+      s.onload=function(){ if(!ok()){ thirdTry(); } };
+      s.onerror=function(){ thirdTry(); };
+      document.head.appendChild(s);
+
+      function thirdTry(){
+        var s2=document.createElement('script');
+        s2.src='/js/firebase-init.js';
+        document.head.appendChild(s2);
+      }
+    })();
+  </script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const ordenId = params.get("id");
+
+    // Fecha de generación
+    const ahora = new Date();
+    document.getElementById("fechaGeneracion").textContent = ahora.toLocaleString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    function firebaseListo() {
+      try {
+        return (firebase?.apps?.length > 0) && (typeof db !== "undefined");
+      } catch { return false; }
+    }
+
+    function resolverNombreCliente(o) {
+      return new Promise((resolve) => {
+        const fallback = o.cliente_nombre || o.cliente || "—";
+        if (!o.cliente_id) return resolve(fallback);
+        db.collection("clientes").doc(o.cliente_id).get()
+          .then(s => resolve(s.exists ? (s.data().nombre || fallback) : fallback))
+          .catch(() => resolve(fallback));
+      });
+    }
+
+    function cargarOrden() {
+      const infoContainer = document.getElementById("infoContainer");
+      const tablaContainer = document.getElementById("tablaContainer");
+
+      db.collection("ordenes_de_servicio").doc(ordenId).get().then(async (ordenSnap) => {
+        if (!ordenSnap.exists) {
+          infoContainer.innerHTML = `<div class="alert-box">❌ Orden no encontrada</div>`;
+          return;
+        }
+
+        const o = ordenSnap.data();
+        const tituloEquipos = document.getElementById("tituloEquipos");
+        
+        // Actualizar título según tipo de servicio
+        switch ((o.tipo_de_servicio || "").toUpperCase()) {
+          case "ENTRADA":
+            tituloEquipos.textContent = "Equipos en Entrada";
+            break;
+          case "REPARACIÓN":
+            tituloEquipos.textContent = "Equipos en Reparación";
+            break;
+          case "PROGRAMACIÓN":
+            tituloEquipos.textContent = "Equipos a Programar";
+            break;
+          default:
+            tituloEquipos.textContent = "Equipos Asociados";
+        }
+
+        const equipos = Array.isArray(o.equipos) ? o.equipos.filter(e => !e.eliminado) : [];
+        const nombreCliente = await resolverNombreCliente(o);
+        
+        const fechaCreacion = o.fecha_creacion?.toDate
+          ? o.fecha_creacion.toDate().toISOString().slice(0,10)
+          : "—";
+
+        const fechaEntrega = o.fecha_entrega?.toDate
+          ? o.fecha_entrega.toDate().toISOString().slice(0,10)
+          : "—";
+
+        // Renderizar información
+        infoContainer.innerHTML = `
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">N° Orden:</span> <span class="info-value">${ordenId}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Fecha Creación:</span> <span class="info-value">${fechaCreacion}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Fecha Entrega:</span> <span class="info-value">${fechaEntrega}</span>
+            </div>
+            <div class="info-item full">
+              <span class="info-label">Cliente:</span> <span class="info-value">${nombreCliente}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Tipo Servicio:</span> <span class="info-value">${o.tipo_de_servicio || '—'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Técnico:</span> <span class="info-value">${o.tecnico_asignado || 'Sin asignar'}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Estado:</span> <span class="info-value">${o.estado_reparacion || 'POR ASIGNAR'}</span>
+            </div>
+            ${o.observaciones ? `
+              <div class="info-item full">
+                <span class="info-label">Observaciones Generales:</span> <span class="info-value">${o.observaciones}</span>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        // Renderizar tabla de equipos
+        if (equipos.length === 0) {
+          tablaContainer.innerHTML = `
+            <div class="alert-box">
+              ⚠️ No hay equipos asociados a esta orden
+            </div>
+          `;
+        } else {
+          let tabla = `
+            <table class="equipos-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px;">#</th>
+                  <th>Serie</th>
+                  <th>Modelo</th>
+                  <th style="width: 60px;">Batería</th>
+                  <th style="width: 60px;">Clip</th>
+                  <th style="width: 60px;">Cargador</th>
+                  <th style="width: 60px;">Fuente</th>
+                  <th style="width: 60px;">Antena</th>
+                  <th>Observaciones</th>
+                </tr>
+              </thead>
+              <tbody>
+          `;
+
+          equipos.forEach((e, i) => {
+            tabla += `
+              <tr>
+                <td><strong>${i + 1}</strong></td>
+                <td>${e.numero_de_serie || '—'}</td>
+                <td>${e.modelo || '—'}</td>
+                <td>${e.bateria ? '✅' : '❌'}</td>
+                <td>${e.clip ? '✅' : '❌'}</td>
+                <td>${e.cargador ? '✅' : '❌'}</td>
+                <td>${e.fuente ? '✅' : '❌'}</td>
+                <td>${e.antena ? '✅' : '❌'}</td>
+                <td style="text-align: left;">${e.observaciones || '—'}</td>
+              </tr>
+            `;
+          });
+
+          tabla += `</tbody></table>`;
+          tablaContainer.innerHTML = tabla;
+        }
+      }).catch((error) => {
+        console.error("❌ Error al cargar la orden:", error);
+        infoContainer.innerHTML = `<div class="alert-box">❌ Error al cargar la orden</div>`;
+      });
+    }
+
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!ordenId) {
+        document.getElementById("infoContainer").innerHTML = `
+          <div class="alert-box">❌ Falta el parámetro ?id en la URL</div>
+        `;
+        return;
+      }
+
+      if (!firebaseListo()) {
+        document.getElementById("infoContainer").innerHTML = `
+          <div class="alert-box">❌ Firebase no inicializó correctamente</div>
+        `;
+        return;
+      }
+
+      if (!user) {
+        document.getElementById("infoContainer").innerHTML = `
+          <div class="alert-box">❌ Debes iniciar sesión para ver esta orden</div>
+        `;
+        return;
+      }
+
+      try {
+        await cargarOrden();
+      } catch (e) {
+        console.error("❌ Error al cargar la orden:", e);
+        document.getElementById("infoContainer").innerHTML = `
+          <div class="alert-box">❌ Error al cargar la orden (ver consola)</div>
+        `;
+      }
+    });
+  </script>
+</body>
+</html>

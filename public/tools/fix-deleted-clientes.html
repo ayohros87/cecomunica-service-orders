@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Fix Deleted en Clientes</title>
+
+  <!-- Firebase Compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+</head>
+<body>
+  <h3>Agregar deleted:false a clientes que no lo tengan</h3>
+  <button id="fixBtn">Ejecutar</button>
+  <pre id="log"></pre>
+
+  <script>
+    const log = document.getElementById("log");
+
+    document.getElementById("fixBtn").addEventListener("click", async () => {
+      log.textContent = "🔍 Buscando clientes...\n";
+
+      const snap = await db.collection("clientes").get();
+      let count = 0;
+
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        if (data.deleted === undefined) {
+          await db.collection("clientes").doc(doc.id).update({
+            deleted: false
+          });
+          count++;
+          log.textContent += `✔️ Fix aplicado a: ${data.nombre}\n`;
+        }
+      }
+
+      log.textContent += `\n✅ Total corregidos: ${count}`;
+    });
+  </script>
+</body>
+</html>

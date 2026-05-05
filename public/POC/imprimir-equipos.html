@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Hoja de Programación - C COMUNICA</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 20px;
+      background: #f5f7fa;
+    }
+    
+    .print-page {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      border-radius: 12px;
+    }
+    
+    .header {
+      text-align: center;
+      border-bottom: 4px solid #3b82f6;
+      padding-bottom: 20px;
+      margin-bottom: 24px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      color: #1f2937;
+      font-weight: 700;
+    }
+    
+    .header h2 {
+      margin: 8px 0 0 0;
+      font-size: 20px;
+      color: #6b7280;
+      font-weight: 600;
+    }
+
+    .info-section {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      background: #f8fafc;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      border-left: 4px solid #3b82f6;
+    }
+    
+    .info-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .info-label {
+      font-weight: 600;
+      font-size: 12px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .info-value {
+      font-size: 16px;
+      color: #1f2937;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    thead {
+      background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    }
+
+    th {
+      border: 1px solid #d1d5db;
+      padding: 12px 8px;
+      text-align: center;
+      vertical-align: middle;
+      font-weight: 600;
+      color: #374151;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+    
+    td {
+      border: 1px solid #d1d5db;
+      padding: 10px 8px;
+      text-align: center;
+      vertical-align: middle;
+    }
+    
+    tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    
+    tbody tr:hover {
+      background: #f0f9ff;
+    }
+    
+    .toolbar {
+      max-width: 1200px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .btn.primary {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .btn.primary:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+    
+    .btn.secondary {
+      background: #e5e7eb;
+      color: #374151;
+    }
+    
+    .btn.secondary:hover {
+      background: #d1d5db;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+        background: white;
+      }
+      
+      .print-page {
+        box-shadow: none;
+        border-radius: 0;
+        padding: 20px;
+      }
+      
+      .toolbar {
+        display: none !important;
+      }
+      
+      .header {
+        margin-top: 0;
+      }
+      
+      table {
+        font-size: 10px;
+      }
+      
+      th, td {
+        padding: 6px 4px;
+      }
+    }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn primary" onclick="window.print()">🖨️ Imprimir</button>
+    <button class="btn secondary" onclick="window.close()">✕ Cerrar</button>
+  </div>
+  
+  <div class="print-page">
+    <div class="header">
+      <h1>C COMUNICA, S.A.</h1>
+      <h2>HOJA DE PROGRAMACIÓN DE EQUIPOS</h2>
+    </div>
+
+    <div class="info-section">
+      <div class="info-item">
+        <span class="info-label">📅 Fecha de Impresión</span>
+        <span class="info-value" id="fechaHoy"></span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">📦 Total Equipos</span>
+        <span class="info-value" id="cantidadEquipos">0</span>
+      </div>
+    </div>
+
+  <table id="tablaEquipos">
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Serial</th>
+        <th>Operador</th>
+        <th>IP</th>
+        <th>GPS</th>
+        <th>Activo</th>
+        <th>Unit ID</th>
+        <th>Nombre del Radio</th>
+        <th>Modelo</th>
+        <th>Grupos</th>
+        <th>Notas</th>
+      </tr>
+    </thead>
+    <tbody id="cuerpoTabla"></tbody>
+  </table>
+  </div>
+
+  <script>
+    // Mapa: cliente_id -> nombre
+let clientesMap = {};
+  let modelosMap = {};
+
+// Carga solo los clientes necesarios para los equipos seleccionados
+async function cargarClientesPara(equipos) {
+  const ids = [...new Set(equipos.map(x => x.cliente_id).filter(Boolean))];
+  clientesMap = {};
+  await Promise.all(ids.map(async (cid) => {
+    try {
+      const s = await db.collection("clientes").doc(cid).get();
+      if (s.exists) clientesMap[cid] = s.data().nombre || cid;
+    } catch (e) {/* opcional: console.warn(e); */}
+  }));
+}
+
+async function cargarModelosPara(equipos) {
+  const ids = [...new Set(equipos
+    .map(x => x.modelo_id || x.modeloId || x.model_id || x.modelId)
+    .filter(Boolean))];
+
+  modelosMap = {};
+  await Promise.all(ids.map(async (mid) => {
+    try {
+      const s = await db.collection("modelos").doc(mid).get();
+      if (s.exists) {
+        const m = s.data() || {};
+        const label = `${(m.marca || "").toString().trim()} ${(m.modelo || "").toString().trim()}`.trim();
+        modelosMap[mid] = label || m.modelo || m.marca || mid;
+      }
+    } catch (e) {/* opcional */}
+  }));
+}
+
+// Resolver nombre de cliente (nuevo esquema o legacy)
+function nombreClienteDe(d) {
+  return d.cliente || (d.cliente_id && clientesMap[d.cliente_id]) || "";
+}
+
+function modeloDe(d) {
+  return (d.modelo_id && modelosMap[d.modelo_id])
+    || (d.modeloId && modelosMap[d.modeloId])
+    || (d.model_id && modelosMap[d.model_id])
+    || (d.modelId && modelosMap[d.modelId])
+    || d.modelo_label
+    || d.modeloLabel
+    || d.Modelo
+    || d.modelo
+    || d.model_label
+    || d.modelLabel
+    || d.model
+    || "";
+}
+    const params = new URLSearchParams(window.location.search);
+    const ids = JSON.parse(params.get("ids") || "[]");
+    const cuerpoTabla = document.getElementById("cuerpoTabla");
+
+    async function cargarEquipos() {
+      const datos = [];
+
+      for (const id of ids) {
+        const doc = await db.collection("poc_devices").doc(id).get();
+        if (doc.exists) {
+          datos.push({ id, ...doc.data() });
+        }
+      }
+
+      // Ordenar por unit_id (alfanumérico)
+      datos.sort((a, b) => {
+        const ua = (a.unit_id || "").toString().padStart(10, '0');
+        const ub = (b.unit_id || "").toString().padStart(10, '0');
+        return ua.localeCompare(ub, undefined, { numeric: true });
+      });
+
+await cargarClientesPara(datos);
+await cargarModelosPara(datos);
+
+      // Mostrar fecha y conteo
+      document.getElementById("fechaHoy").textContent = new Date().toLocaleDateString("es-PA");
+      document.getElementById("cantidadEquipos").textContent = datos.length;
+
+      // Llenar tabla
+      for (const d of datos) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${nombreClienteDe(d)}</td>
+          <td>${d.serial || ""}</td>
+          <td>${d.operador || ""}</td>
+          <td>${d.ip || ""}</td>
+          <td>${d.gps ? "🛰️" : "⛔"}</td>
+          <td>${d.activo ? "🟢" : "🔴"}</td>
+          <td>${d.unit_id || ""}</td>
+          <td>${d.radio_name || ""}</td>
+          <td>${modeloDe(d)}</td>
+          <td>${(d.grupos || []).join(", ")}</td>
+          <td>${d.notas || ""}</td>
+        `;
+        cuerpoTabla.appendChild(tr);
+      }
+    }
+
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) cargarEquipos();
+      else window.location.href = "/login.html";
+    });
+  </script>
+</body>
+</html>

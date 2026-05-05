@@ -1,0 +1,96 @@
+Plataforma de Servicio Cecomunica  
+Notas sobre cambios realizados
+
+
+v1.8 2025-07-25
+en poc/index:
+
+* Edición de serial directamente en la tabla
+* Impresión de equipos seleccionados
+* Indicador ❗ por campos faltantes
+* Filtro de incompletos y duplicados (serial/SIM)
+* Mejoras visuales y contador más preciso
+
+
+v1.7 – 2025-07-18  
+- Se lanza módulo Base de Datos POC y módulo Ingreso por Vendedores.  
+- Se incluye un resumen actualizado de los módulos de Órdenes de Servicio e Inventario.
+
+============================
+📦 Módulo Base de Datos PoC
+============================
+- Visualización completa de radios PoC con filtros y ordenamiento.
+- Edición rápida en línea (IP, SIM, Teléfono, Grupos, Notas, etc.).
+- Íconos visuales: GPS (🛰️), Activo (🟢/🔴), campos largos (🔍).
+- Filtro "solo activos" con contador dinámico.
+- Asignación masiva de SIM/Teléfono desde textarea.
+- Duplicación de equipos (solo administradores).
+- Eliminación lógica con opción de restaurar (♻️).
+- Botones para: importar Excel, carga en batch, volver al menú.
+
+==============================
+🧾 Módulo Ingreso por Vendedores
+==============================
+- Entrada rápida de equipos PoC por vendedores.
+- Generación automática de tabla desde lista de nombres.
+- Definición de grupos personalizados (checkbox por fila).
+- Cliente y modelo aplicables globalmente a todas las filas.
+- Botones maestros para marcar GPS y grupos.
+- Exportación como archivo JSON (para carga posterior) o Excel.
+- Acceso restringido a roles: administrador, vendedor, recepción.
+
+============================
+📝 Módulo Órdenes de Servicio
+============================
+- Visualización de órdenes en tabla desplegable con equipos asociados.
+- Edición directa de campos en los equipos (modelo, accesorios, observaciones).
+- Filtros por número de orden, cliente y serial.
+- Acciones rápidas: editar orden, imprimir, generar nota de entrega, agregar nota técnica.
+- Botón para copiar seriales de todos los equipos.
+- Edición masiva de accesorios (checkboxes por lote).
+- Control de acceso por rol (técnico, recepción, administrador).
+- Eliminación lógica de órdenes y equipos con trazabilidad.
+- Ordenamiento por número o cliente (ascendente/descendente).
+
+=============================
+📦 Módulo Inventario de Radios
+=============================
+- Visualización de inventario actual con detalles de cada modelo.
+- Ordenamiento por marca, modelo, cantidad, fecha, etc.
+- Filtros por marca y modelo.
+- Indicador visual para alto movimiento (✅).
+- Vista histórica por modelo con un clic.
+- Exportación de inventario completo a Excel.
+- Control de acceso por rol (`inventario`, `administrador`).
+- Enlace a módulos relacionados: modelos, carga de inventario, vista para email.
+
+v1.6 – 2025-07-10  
+- Se implementa función de edición de accesorios masiva.  
+- Se arregla bug que duplicaba órdenes de servicio en `ordenes/index`.  
+- Se corrige error en tipo de servicio en `ordenes/imprimir-orden`.
+
+v1.5 – 2025-06-25  
+- Órdenes: se agrega opción para copiar seriales, se corrigen errores menores.  
+- Inventario: se agrega opción para exportar inventario a Excel.
+
+v1.4 – 2025-06-12  
+- Inventario: se agrega campo “cantidad penúltima”, vista histórica, mejoras de lógica.  
+- Órdenes: se restringen campos y botones visibles según rol.  
+- Public/index: se limita por rol la visibilidad de iconos.
+
+v1.3 – 2025-06-11  
+- Se crea el módulo Inventario.
+
+v1.2 – 2025-06-11  
+- Se añade `firebase-init.js` para simplificar autenticación.  
+- Se agrega seguimiento de qué perfil creó, modificó o eliminó órdenes.
+
+v1.1 – 2025-06-10  
+- Se agregan perfiles de usuario.  
+- Se incorpora selección de modelo en los equipos.  
+- Se incluye campo de nota técnica por orden.  
+- Se implementa eliminación lógica (soft delete).  
+- Correcciones generales.
+
+v1.0  
+- Primera versión de Órdenes de Servicio.

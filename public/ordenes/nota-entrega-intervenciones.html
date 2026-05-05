@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nota de Entrega con Intervenciones - C COMUNICA</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+@media print {
+
+  /* REAL paper margins (instead of fake padding) */
+  @page {
+    size: letter;      /* change to A4 if needed */
+    margin: 0.75in;    /* adjust: 0.25in–0.5in */
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .no-print { display: none !important; }
+
+  .print-page {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+
+    /* IMPORTANT: remove big padding */
+    padding: 0 !important;
+
+    /* IMPORTANT: allow full printable width */
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  /* Optional: prevent awkward table breaks */
+  tr, td, th { page-break-inside: avoid; }
+  table { page-break-inside: auto; }
+}
+
+    
+    body {
+      background: #f3f4f6;
+      padding: 20px;
+    }
+    
+    .print-page {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      border-radius: 12px;
+      border: 1px solid var(--line);
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--brand);
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 13px;
+      color: var(--brand);
+      font-weight: 700;
+    }
+    
+    .header h2 {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    
+    .info-section {
+      padding: 6px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      font-size: 10px;
+      line-height: 1.6;
+    }
+    
+    .info-row {
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .info-label {
+      font-weight: 700;
+      color: var(--text);
+    }
+    
+    .info-value {
+      font-weight: 400;
+      color: var(--text);
+    }
+    
+    .note-box {
+      background: #eff6ff;
+      border: 1px solid #93c5fd;
+      border-radius: 4px;
+      padding: 6px 8px;
+      margin: 8px 0;
+      font-size: 9px;
+      color: #1e40af;
+    }
+    
+    .equipos-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 10px;
+    }
+    
+    .equipos-table thead {
+      background: #f8fafc;
+    }
+    
+    .equipos-table th {
+      padding: 6px 4px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 9px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+    
+    .equipos-table td {
+      padding: 5px 4px;
+      text-align: center;
+      border: 1px solid var(--line);
+      vertical-align: top;
+    }
+    
+    .equipos-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    
+    .intervencion-cell {
+      text-align: left;
+      font-size: 9px;
+      line-height: 1.4;
+      color: #374151;
+      max-width: 300px;
+    }
+    
+    .intervencion-cell.sin-intervencion {
+      color: #9ca3af;
+      font-style: italic;
+      text-align: center;
+    }
+    
+    .firma-section {
+      margin-top: 20px;
+      padding: 10px;
+      font-size: 10px;
+      display: flex;
+      gap: 40px;
+      align-items: center;
+    }
+    
+    .firma-item {
+      display: inline-block;
+    }
+    
+    .firma-label {
+      font-weight: 700;
+      margin-right: 4px;
+    }
+    
+    .firma-line {
+      display: inline-block;
+      border-bottom: 1px solid #000;
+      width: 200px;
+      height: 16px;
+    }
+    
+    .footer-info {
+      margin-top: 12px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      font-size: 9px;
+      color: var(--muted);
+      text-align: center;
+    }
+    
+    .toolbar {
+      max-width: 800px;
+      margin: 0 auto 20px auto;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    
+    @media (max-width: 760px) {
+      .print-page {
+        padding: 20px;
+      }
+      
+      .firma-section {
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+      
+      .info-row {
+        flex-direction: column;
+      }
+      
+      .info-label {
+        min-width: auto;
+        margin-bottom: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar no-print">
+    <button class="btn secondary" onclick="window.print()">
+      <span style="font-size: 16px;">🖨️</span> Imprimir
+    </button>
+    <button class="btn" onclick="window.close()">
+      <span style="font-size: 16px;">✕</span> Cerrar
+    </button>
+  </div>
+
+  <div class="print-page">
+    <div class="header">
+      <h1>C COMUNICA, S.A.</h1>
+      <h2>NOTA DE ENTREGA CON INTERVENCIONES</h2>
+    </div>
+
+    <div class="info-section">
+      <div class="info-row">
+        <span class="info-label">Número de Orden:</span>
+        <span class="info-value" id="numeroOrden">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Cliente:</span>
+        <span class="info-value" id="cliente">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Contrato / Observaciones:</span>
+        <span class="info-value" id="observaciones">—</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Equipos Entregados:</span>
+        <span class="info-value"><strong id="cantidadRadios">0</strong> Radios</span>
+      </div>
+    </div>
+
+    <div class="note-box">
+      <strong>Nota:</strong> Cada radio incluye: radio, antena incorporada, batería, clip*, adaptador y cable. Las intervenciones realizadas se detallan a continuación.
+    </div>
+
+    <table class="equipos-table">
+      <thead>
+        <tr>
+          <th style="width: 50px;">#</th>
+          <th style="width: 120px;">Modelo</th>
+          <th style="width: 130px;">Número de Serie</th>
+          <th>Intervención Realizada</th>
+        </tr>
+      </thead>
+      <tbody id="tablaEquipos">
+        <!-- Equipos se insertan aquí -->
+      </tbody>
+    </table>
+
+    <div class="firma-section">
+      <div class="firma-item">
+        <span class="firma-label">Entregado por:</span>
+        <span class="firma-line"></span>
+      </div>
+      <div class="firma-item">
+        <span class="firma-label">Recibido por:</span>
+        <span class="firma-line"></span>
+      </div>
+    </div>
+
+    <div class="footer-info">
+      <p>Documento generado: <span id="fechaGeneracion"></span></p>
+      <p>Este documento es de control interno para el registro de entrega de equipos con detalle de intervenciones</p>
+    </div>
+  </div>
+
+  <script>
+    // Cargar datos desde localStorage
+    const data = JSON.parse(localStorage.getItem("notaEntregaData") || "{}");
+
+    document.getElementById("numeroOrden").textContent = data.numeroOrden || "—";
+    document.getElementById("cliente").textContent = data.cliente || "—";
+    document.getElementById("observaciones").textContent = data.observaciones || "—";
+    document.getElementById("cantidadRadios").textContent = data.equipos?.length || 0;
+    
+    // Fecha de generación
+    const ahora = new Date();
+    document.getElementById("fechaGeneracion").textContent = ahora.toLocaleString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // Renderizar equipos con intervenciones
+    const tbody = document.getElementById("tablaEquipos");
+    (data.equipos || []).forEach((e, index) => {
+      const row = document.createElement("tr");
+      
+      // Determinar si hay intervención
+      const tieneIntervencion = e.intervencion && e.intervencion.trim() !== "";
+      const intervencionTexto = tieneIntervencion ? e.intervencion : "Sin intervención registrada";
+      const intervencionClass = tieneIntervencion ? "intervencion-cell" : "intervencion-cell sin-intervencion";
+      
+      row.innerHTML = `
+        <td><strong>${index + 1}</strong></td>
+        <td>${e.modelo || "—"}</td>
+        <td>${e.serial || "—"}</td>
+        <td class="${intervencionClass}">${intervencionTexto}</td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    // Si no hay equipos, mostrar mensaje
+    if (!data.equipos || data.equipos.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="4" style="padding: 20px; color: var(--muted);">
+            <em>No hay equipos registrados</em>
+          </td>
+        </tr>
+      `;
+    }
+  </script>
+</body>
+</html>

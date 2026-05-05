@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Administrar Estado de Reparación - Cecomunica</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .top-buttons {
+      display: flex;
+      justify-content: space-between;
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 20px;
+    }
+    .top-buttons button {
+      padding: 10px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .form-section, .list-section {
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 30px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: #f9f9f9;
+      margin-bottom: 10px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .actions button {
+      margin-left: 5px;
+    }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const firebaseConfig = {
+        apiKey: "AIzaSyDN1ErV5svRGPtx5tCi_FU_Vei6Dl-J_ng",
+        authDomain: "cecomunica-service-orders.firebaseapp.com",
+        projectId: "cecomunica-service-orders",
+        storageBucket: "cecomunica-service-orders.firebasestorage.app",
+        messagingSenderId: "615730883223",
+        appId: "1:615730883223:web:8cf1941241657bd08ad7d2"
+      };
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
+
+      const lista = document.getElementById("lista-estados");
+      const form = document.getElementById("form-estado");
+      const inputEstado = document.getElementById("nombre-estado");
+      let editandoId = null;
+
+      async function cargarEstados() {
+        lista.innerHTML = "";
+       const docSnap = await db.collection("empresa").doc("estado_de_reparacion").get();
+if (docSnap.exists) {
+  const data = docSnap.data();
+  const estados = data.list || [];
+  estados.forEach(nombre => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span>${nombre}</span>
+      <div class="actions">
+        <button onclick="editarEstado('${nombre}')">✏️</button>
+        <button onclick="borrarEstado('${nombre}')">🗑️</button>
+      </div>`;
+    lista.appendChild(li);
+  });
+}
+
+      }
+
+      window.editarEstado = async (id) => {
+        inputEstado.value = id;
+        editandoId = id;
+      };
+
+      window.borrarEstado = async (id) => {
+        if (confirm(`¿Eliminar estado "${id}"?`)) {
+         const ref = db.collection("empresa").doc("estado_de_reparacion");
+          const snap = await ref.get();
+          const data = snap.data();
+          const nuevaLista = (data.list || []).filter(e => e !== id);
+          await ref.set({ list: nuevaLista });
+
+          await cargarEstados();
+        }
+      };
+
+     form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const estado = inputEstado.value.trim();
+  if (!estado) return;
+
+  const ref = db.collection("empresa").doc("estado_de_reparacion");
+  const snap = await ref.get();
+  let lista = snap.exists ? snap.data().list || [] : [];
+
+  if (editandoId && editandoId !== estado) {
+    lista = lista.filter(e => e !== editandoId);
+  }
+  if (!lista.includes(estado)) {
+    lista.push(estado);
+  }
+
+  await ref.set({ list: lista });
+
+  inputEstado.value = "";
+  editandoId = null;
+  await cargarEstados();
+});
+
+
+      await cargarEstados();
+    });
+  </script>
+</head>
+<body>
+  <h2>🔧 Administración de Estados de Reparación</h2>
+  <div class="top-buttons">
+    <button onclick="window.location.href='config.html'">⬅️ Volver</button>
+  </div>
+
+  <div class="form-section">
+    <form id="form-estado">
+      <label for="nombre-estado">Nombre del Estado:</label>
+      <input type="text" id="nombre-estado" required>
+      <button type="submit">💾 Guardar Estado</button>
+    </form>
+  </div>
+
+  <div class="list-section">
+    <h3>Lista de Estados:</h3>
+    <ul id="lista-estados"></ul>
+  </div>
+</body>
+</html>

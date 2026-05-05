@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "noImplicitAny": false,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2020",
+    "module": "ESNext"
+  },
+  "exclude": [
+    "node_modules",
+    "**/node_modules/*",
+    "functions"
+  ]
+}

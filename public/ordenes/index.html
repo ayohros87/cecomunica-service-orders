@@ -1,0 +1,335 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Órdenes de Servicio - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ordenes-index.css">
+  
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+<script src="../js/firebase-init.js"></script>
+<script src="../js/services/clientesService.js"></script>
+<script src="../js/services/ordenesService.js"></script>
+<script src="../js/ordenes.state.js"></script>
+<script src="../js/ordenes-index.js"></script>
+</head>
+<body>
+  <div class="topbar" id="desktopTopbar">
+    <h1 class="topbar-title">📋 Órdenes de Servicio</h1>
+    <div class="topbar-actions">
+      <button class="btn primary" data-action="go-nueva-orden">➕ Crear nueva orden</button>
+      <div class="overflow-menu topbar-menu">
+        <button class="btn" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false">☰ Más</button>
+        <div class="overflow-menu-dropdown" id="topbar-menu">
+          <button class="overflow-menu-item" data-action="go-reporte-pendientes">⏳ Pendientes</button>
+          <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos">🏆 Progreso</button>
+          <button class="overflow-menu-item" data-action="go-config">⚙️ Config</button>
+          <div class="overflow-menu-divider"></div>
+          <button class="overflow-menu-item" data-action="go-menu-principal">🏠 Menú principal</button>
+          <button class="overflow-menu-item danger" data-action="logout">🚺 Salir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="app-wrap">
+
+<!-- MOBILE ONLY: Header -->
+<div id="mobileHeader">
+  <div class="mh-top">
+    <div class="mh-title">📋 Órdenes de Servicio</div>
+    <button class="mh-filterBtn" type="button" data-action="mobile-open-filters">🎛️</button>
+  </div>
+
+  <div class="mh-sub" id="mobileResumen">
+    <!-- we will mirror resumenOrdenes content here via JS -->
+  </div>
+</div>
+
+<!-- Tarjeta de filtros -->
+<div class="card filters-card-sticky" id="desktopFiltersCard">
+  <!-- Búsqueda rápida -->
+  <div class="toolbar">
+    <div class="left" style="flex: 1;">
+      <input type="text" id="filtroRapido" placeholder="🔍 Buscar orden, cliente o serial..." class="input-compact" />
+      <button class="btn primary" data-action="filtrar-rapido">🔍 Buscar</button>
+      <button class="btn secondary" data-action="limpiar-filtros">Limpiar</button>
+      <button class="btn ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
+        <span id="iconoAvanzados">▼</span> Avanzado
+      </button>
+    </div>
+
+    <div class="right" style="display: flex; align-items: center; gap: 12px;">
+      <label class="text-label">Ordenar:</label>
+      <select id="campoOrdenamiento" data-action="cambiar-orden" style="min-width: 140px;">
+        <option value="ordenId">Número</option>
+        <option value="cliente_nombre">Cliente</option>
+      </select>
+      <button class="btn" title="Cambiar dirección" data-action="cambiar-direccion">⬆️⬇️</button>
+      <button class="btn ghost toggle-fecha-entrega-btn" id="btnToggleFechaEntrega" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
+    </div>
+  </div>
+
+  <!-- Filtros avanzados (colapsable) -->
+  <div id="filtrosAvanzados" class="filtros-avanzados" style="display: none;">
+    <div class="toolbar">
+      <div class="left compact-filters">
+        <input type="text" id="filtroOrden" placeholder="Orden" />
+        <input type="text" id="filtroCliente" placeholder="Cliente" />
+        <input type="text" id="filtroSerial" placeholder="Serial" />
+        <button class="btn primary" data-action="filtrar">Buscar</button>
+        <button class="btn ghost" id="btnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;">🛡️ Equipos por cliente (Admin)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado y Resumen como chips clickeables -->
+  <div class="toolbar mt-8 filtros-row">
+    <div class="left filtros-inline">
+      <div class="filter-field">
+        <label for="filtroTipo" class="form-label-bold">Tipo</label>
+        <select id="filtroTipo" class="filter-select" data-action="filtrar-tipo">
+          <option value="">Tipo (todos)</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="filtroEstado" class="form-label-bold">Estado</label>
+        <select id="filtroEstado" class="filter-select" data-action="filtrar-estado">
+          <option value="">Todos</option>
+          <option value="POR ASIGNAR">POR ASIGNAR</option>
+          <option value="ASIGNADO">ASIGNADO</option>
+          <option value="COMPLETADO (EN OFICINA)">COMPLETADO (EN OFICINA)</option>
+          <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="filtroTecnico" class="form-label-bold">Técnico</label>
+        <select id="filtroTecnico" class="filter-select" data-action="filtrar-tecnico">
+          <option value="">Técnico (todos)</option>
+        </select>
+      </div>
+    </div>  
+    <div class="right resumen resumen-compacto">
+      <label class="filter-toggle" for="toggleMisOrdenes">
+        <input type="checkbox" id="toggleMisOrdenes" class="toggle-input" data-action="filtrar-mias">
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">Mis órdenes</span>
+      </label>
+      <div id="resumenOrdenes"></div>
+    </div>
+  </div>
+</div>
+<div id="loader" class="loader-center hidden">
+  <div class="loader"></div>
+</div>
+  <div class="table-wrap mt-12">
+  <table class="orders-table">
+  <colgroup>
+  <col style="width: 11%;">   <!-- Número -->
+  <col style="width: 24%;">  <!-- Cliente -->
+  <col style="width: 13%;">  <!-- Técnico -->
+  <col style="width: 10%;">  <!-- Tipo -->
+  <col style="width: 12%;">  <!-- Estado -->
+  <col style="width: 10%;">   <!-- Fecha creación -->
+  <col style="width: 10%;" class="col-fecha-entrega">   <!-- Fecha entrega -->
+  <col style="width: 10%;">  <!-- Acciones -->
+  </colgroup>
+ <thead>
+  <tr>
+    <th>Número</th>
+    <th>Cliente</th>
+    <th>Técnico</th>
+    <th>Tipo</th>
+    <th>Estado</th>
+    <th>Fecha Creación</th>
+    <th class="col-fecha-entrega">Fecha Entrega</th>
+    <th>Acciones</th>
+  </tr>
+</thead>
+
+    <tbody id="ordersTable"></tbody>
+  </table>
+  </div>
+  <div class="cards-list" id="ordersCards"></div>
+
+
+ <div class="toolbar between mt-16">
+  <div></div>
+  <button id="btnCargarMas" class="btn">⬇️ Cargar más órdenes</button>
+</div>
+<!-- Modal Asignar Técnico -->
+<div id="modalAsignar" class="overlay hidden">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h3 class="modal-title">🛠️ Asignar técnico</h3>
+      <button class="btn ghost btn-close-modal" data-action="cerrar-modal-asignar">✕</button>
+    </div>
+    <div class="form-field">
+      <label class="form-label">Selecciona un técnico</label>
+      <select id="asignarTecnicoSelect" class="form-select-full" onchange="this.style.borderColor = this.value ? 'var(--brand)' : 'var(--line)'"></select>
+      <p class="form-hint">
+        💡 El técnico recibirá una notificación por email
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn secondary" data-action="cerrar-modal-asignar">Cancelar</button>
+      <button class="btn primary" data-action="confirmar-asignar-tecnico">
+        <span class="btn-icon-sm">✅</span> Asignar técnico
+      </button>
+    </div>
+  </div>
+</div>
+
+  </div> <!-- app-wrap -->
+
+<!-- MOBILE ONLY: Bottom Nav -->
+<nav id="mobileBottomNav" aria-label="Mobile navigation">
+  <button class="mnav-item" type="button" data-action="mobile-scroll-top">
+    <span class="mnav-ico">📋</span>
+    <span class="mnav-label">Órdenes</span>
+  </button>
+
+  <button class="mnav-item mnav-primary" type="button" data-action="go-nueva-orden">
+    <span class="mnav-ico">➕</span>
+    <span class="mnav-label">Nueva</span>
+  </button>
+
+  <button class="mnav-item" type="button" data-action="mobile-open-filters">
+    <span class="mnav-ico">🎛️</span>
+    <span class="mnav-label">Filtros</span>
+  </button>
+</nav>
+
+<!-- MOBILE ONLY: Filter Drawer -->
+<div id="mobileDrawerBackdrop" class="mbackdrop hidden" data-action="mobile-close-filters" data-backdrop="true">
+  <div id="mobileDrawer" class="mdrawer" role="dialog" aria-modal="true" aria-label="Filtros">
+    <div class="mdrawer-head">
+      <div class="mdrawer-title">Filtros</div>
+      <div class="mdrawer-actions">
+        <button class="btn ghost" type="button" data-action="mobile-clear-all">Limpiar</button>
+        <button class="btn ghost" type="button" data-action="mobile-close-filters">✕</button>
+      </div>
+    </div>
+
+    <!-- Quick Search -->
+    <div class="mdrawer-section">
+      <label class="mlabel">Buscar</label>
+      <input id="mobileQuickSearch" class="minput" type="text" placeholder="Orden / Cliente / Serial…" />
+      <div class="mrow">
+        <button class="btn primary mfull" type="button" data-action="mobile-apply-search">Buscar</button>
+      </div>
+    </div>
+
+    <!-- Estado chips -->
+    <div class="mdrawer-section">
+      <label class="mlabel">Estado</label>
+      <div class="mchips" id="mobileEstadoChips">
+        <button type="button" class="mchip" data-estado="">Todos</button>
+        <button type="button" class="mchip" data-estado="POR ASIGNAR">POR ASIGNAR</button>
+        <button type="button" class="mchip" data-estado="ASIGNADO">ASIGNADO</button>
+        <button type="button" class="mchip" data-estado="COMPLETADO (EN OFICINA)">COMPLETADO</button>
+        <button type="button" class="mchip" data-estado="ENTREGADO AL CLIENTE">ENTREGADO</button>
+      </div>
+    </div>
+
+    <div class="mdrawer-section">
+      <label class="mlabel">Filtros avanzados</label>
+      <input id="mobileFiltroOrden" class="minput" type="text" placeholder="Orden" />
+      <input id="mobileFiltroCliente" class="minput" type="text" placeholder="Cliente" />
+      <input id="mobileFiltroSerial" class="minput" type="text" placeholder="Serial" />
+      <select id="mobileFiltroTipo" class="minput">
+        <option value="">Tipo (todos)</option>
+      </select>
+      <select id="mobileFiltroTecnico" class="minput">
+        <option value="">Técnico (todos)</option>
+      </select>
+      <label class="mcheck">
+        <input type="checkbox" id="mobileSoloMias">
+        <span>Ver solo mis órdenes</span>
+      </label>
+      <div class="mrow">
+        <button class="btn primary mfull" type="button" data-action="mobile-apply-advanced">Buscar</button>
+      </div>
+      <div class="mrow">
+        <button class="btn ghost mfull" id="mobileBtnAdminEquiposCliente" type="button" data-action="go-admin-equipos-cliente" style="display:none;">🛡️ Equipos por cliente (Admin)</button>
+      </div>
+    </div>
+
+    <!-- Sorting compact row (reuses existing controls) -->
+    <div class="mdrawer-section">
+      <label class="mlabel">Ordenar</label>
+      <div class="mrow">
+        <select id="mobileSortField" class="minput" data-action="mobile-sync-sort">
+          <option value="ordenId">Número de orden</option>
+          <option value="cliente_nombre">Cliente</option>
+        </select>
+
+        <button class="btn msort" type="button" data-action="mobile-toggle-sort">⬆️⬇️</button>
+      </div>
+      <button class="btn ghost mfull toggle-fecha-entrega-btn" type="button" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
+    </div>
+
+    <!-- Move secondary actions here (mobile) -->
+    <div class="mdrawer-section">
+      <label class="mlabel">Acciones</label>
+      <div class="mmenu">
+        <button class="mmenu-item" type="button" data-action="go-reporte-pendientes">⏳ Pendientes</button>
+        <button class="mmenu-item" type="button" data-action="go-progreso-tecnicos">🏆 Progreso</button>
+        <button class="mmenu-item" type="button" data-action="go-config">⚙️ Config</button>
+        <button class="mmenu-item" type="button" data-action="go-menu-principal">🏠 Menú principal</button>
+        <button class="mmenu-item danger" type="button" data-action="logout">🚪 Salir</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE: Modal Equipos -->
+<div id="modalEquiposMobile" class="overlay hidden" data-action="cerrar-equipos-mobile" data-backdrop="true">
+  <div class="modal modal-lg">
+    <div class="modal-header-mobile">
+      <div>
+        <div id="equiposMobileTitle" class="modal-title-mobile">Equipos</div>
+        <div id="equiposMobileSub" class="modal-subtitle"></div>
+      </div>
+      <button class="btn ghost" data-action="cerrar-equipos-mobile">✕</button>
+    </div>
+
+    <div id="equiposMobileList" class="d-grid gap-10 max-h-70"></div>
+  </div>
+</div>
+
+<!-- MOBILE: Modal Trabajo por Equipo -->
+<div id="modalTrabajoEquipo" class="overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header-mobile">
+      <div>
+        <div id="trabajoEquipoTitle" class="modal-title-mobile">Intervención técnica</div>
+        <div id="trabajoEquipoSub" class="modal-subtitle"></div>
+      </div>
+      <button class="btn ghost" data-action="cerrar-trabajo-equipo">✕</button>
+    </div>
+
+    <textarea id="trabajoEquipoText" class="textarea-full"
+      placeholder="Describe la intervención técnica realizada..."></textarea>
+
+    <div class="intervencion-ctrl intervencion-ctrl-modal">
+      <label class="intervencion-no-disponible">
+        <input type="checkbox" id="trabajoNoDisponible">
+        <span>Equipo no disponible para intervención</span>
+      </label>
+      <input type="text" id="trabajoMotivoNoDisponible" class="motivo-no-disponible" placeholder="Motivo (libre)">
+    </div>
+
+    <div class="modal-footer-mobile">
+      <button class="btn secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
+      <button id="btnGuardarTrabajoEquipo" class="btn primary btn-full" data-action="guardar-trabajo-equipo">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
+

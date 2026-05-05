@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Importar Dispositivos POC - Cecomunica</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .section {
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 30px;
+    }
+    .section label, .section input, .section button {
+      display: block;
+      width: 100%;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    button {
+      padding: 10px;
+      cursor: pointer;
+    }
+    #estadoImportacion {
+      text-align: center;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+</head>
+<body>
+  <h2>📦 Importar Dispositivos POC</h2>
+  <div style="max-width: 600px; margin: auto; margin-bottom: 20px;">
+    <button onclick="window.location.href='index.html'">⬅️ Volver al Menú Principal</button>
+  </div>
+
+  <div class="section">
+    <h3>📥 Importar desde Excel (.xlsx):</h3>
+    <label for="archivoExcel">Selecciona archivo Excel:</label>
+    <input type="file" id="archivoExcel" accept=".xlsx">
+    <button onclick="importarExcelAFirestore()">📤 Importar Dispositivos</button>
+    <div id="estadoImportacion"></div>
+  </div>
+
+  <div class="section">
+    <h3>⬇️ Exportar dispositivos actuales:</h3>
+    <button onclick="exportarDispositivos()">📄 Exportar a Excel</button>
+  </div>
+
+<script>
+async function importarExcelAFirestore() {
+  const archivoInput = document.getElementById('archivoExcel');
+  const archivo = archivoInput.files[0];
+  const estado = document.getElementById("estadoImportacion");
+
+  if (!archivo) {
+    estado.textContent = "⚠️ Selecciona un archivo .xlsx";
+    return;
+  }
+
+  estado.textContent = "⏳ Importando, por favor espera...";
+
+  const data = await archivo.arrayBuffer();
+  const workbook = XLSX.read(data);
+  const sheet = workbook.Sheets["BD"];
+  const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+  const coleccion = db.collection("poc_devices");
+  let contador = 0;
+
+  for (let fila of jsonData) {
+    const serialValue = fila["SERIAL"] && fila["SERIAL"].toString().trim() !== "" ? fila["SERIAL"] : "N/D";
+
+    const grupos = Object.keys(fila)
+      .filter(k => k.startsWith("GRUPO ") && fila[k])
+      .map(k => fila[k].toString().trim())
+      .filter(g => g.length > 0);
+
+    const docRef = coleccion.doc();
+    await docRef.set({
+      cliente: fila["CLIENTE"] || "",
+      operador: fila["OPERADOR"] || "",
+      sim_number: fila["# SIMCARD"] || "",
+      sim_phone: fila["# TEL SIMCARD"] || "",
+      serial: serialValue,
+      gps: (fila["GPS"] || '').toString().toLowerCase().includes("true"),
+      activo: (fila["ACTIVO"] || '').toString().toUpperCase() !== "NO",
+      ip: fila["IP del Servidor"] || "",
+      unit_id: fila["UNIT ID"] || "",
+      radio_name: fila["Nombre del Radio"] || "",
+      grupos,
+      notas: fila["DAÑOS"] || "",
+      deleted: false,
+      created_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    contador++;
+    estado.textContent = `📦 Dispositivos importados: ${contador}`;
+  }
+
+  estado.textContent = `✅ Importación completada. Total: ${contador}`;
+}
+
+async function exportarDispositivos() {
+  const estado = document.getElementById("estadoImportacion");
+  estado.textContent = "⏳ Exportando dispositivos...";
+  try {
+    const snapshot = await db.collection("poc_devices").get();
+    const datos = snapshot.docs.map(doc => doc.data());
+    const ws = XLSX.utils.json_to_sheet(datos);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Dispositivos");
+    XLSX.writeFile(wb, "poc_dispositivos.xlsx");
+    estado.textContent = "✅ Exportación completada.";
+  } catch (error) {
+    console.error("Error al exportar:", error);
+    estado.textContent = "❌ Error al exportar.";
+  }
+}
+</script>
+</body>
+</html>

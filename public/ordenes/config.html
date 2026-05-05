@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Configuración - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <!-- Firebase desde CDN + configuración centralizada -->
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+<script>
+  firebase.auth().onAuthStateChanged(function(user) {
+    if (!user) {
+      window.location.href = "login.html";
+    }
+  });
+
+  function cerrarSesion() {
+    firebase.auth().signOut().then(() => {
+      window.location.href = "login.html";
+    });
+  }
+</script>
+
+</head>
+<body>
+  <div class="toolbar">
+  <div class="left">
+    <h2 style="margin:8px 0;">⚙️ Configuración del Sistema</h2>
+  </div>
+  <div class="right">
+    <button class="btn" onclick="window.location.href='./index.html'">⬅️ Volver</button>
+    <button class="btn danger" onclick="cerrarSesion()">🚪 Cerrar Sesión</button>
+  </div>
+</div>
+
+
+  <div class="card" style="max-width:700px; margin:16px auto;">
+  <div class="form-grid cols-2">
+    <button class="btn w-100" onclick="window.location.href='importar-exportar.html'">📦 Importar / Exportar Datos</button>
+  </div>
+</div>
+
+
+</body>
+</html>

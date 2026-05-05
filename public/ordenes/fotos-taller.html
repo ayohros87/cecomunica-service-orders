@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Fotos de Taller - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <style>
+    :root {
+      --ft-brand: #2563eb;
+      --ft-bg: #f3f6fb;
+      --ft-card: #ffffff;
+      --ft-text: #0f172a;
+      --ft-muted: #64748b;
+      --ft-line: #dbe4ee;
+      --ft-danger: #dc2626;
+      --ft-ok: #16a34a;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(140deg, #eef4fb 0%, #f8fbff 100%);
+      color: var(--ft-text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      min-height: 100%;
+    }
+
+    .ft-header {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: #fff;
+      border-bottom: 1px solid var(--ft-line);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+      padding: 10px 12px;
+    }
+
+    .ft-header-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .ft-back {
+      border: 1px solid var(--ft-line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-weight: 700;
+      color: #1e293b;
+      min-height: 42px;
+      cursor: pointer;
+    }
+
+    .ft-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      margin: 0;
+    }
+
+    .ft-order-meta {
+      display: grid;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .ft-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .ft-chip {
+      background: #eef2ff;
+      color: #1e3a8a;
+      border: 1px solid #c7d2fe;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .ft-main {
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .ft-card {
+      background: var(--ft-card);
+      border: 1px solid var(--ft-line);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(2, 6, 23, 0.05);
+      padding: 12px;
+    }
+
+    .ft-card-title {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      font-weight: 800;
+      color: #334155;
+    }
+
+    .capture-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .capture-btn {
+      min-height: 52px;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
+    }
+
+    .capture-btn.antes { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+    .capture-btn.despues { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
+    .capture-btn.detalle { background: linear-gradient(135deg, #14b8a6, #0f766e); }
+
+    .hidden-input { display: none; }
+
+    .preview-card {
+      display: none;
+      gap: 10px;
+    }
+
+    .preview-card.show {
+      display: grid;
+    }
+
+    .preview-thumb {
+      width: 100%;
+      max-height: 220px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid var(--ft-line);
+      background: #e2e8f0;
+    }
+
+    .label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 4px;
+      display: inline-block;
+    }
+
+    .input, .select, .textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 15px;
+      background: #fff;
+    }
+
+    .textarea {
+      min-height: 86px;
+      resize: vertical;
+    }
+
+    .preview-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-touch {
+      min-height: 46px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .btn-upload { background: var(--ft-ok); color: #fff; }
+    .btn-cancel { background: #eef2f7; color: #334155; border: 1px solid #cbd5e1; }
+
+    .gallery-section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .gallery-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .photo-item {
+      background: #fff;
+      border: 1px solid var(--ft-line);
+      border-radius: 12px;
+      overflow: hidden;
+      display: grid;
+    }
+
+    .photo-thumb {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      background: #e2e8f0;
+      cursor: pointer;
+    }
+
+    .photo-body {
+      padding: 8px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .photo-meta {
+      font-size: 12px;
+      color: #334155;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .photo-note {
+      font-size: 12px;
+      color: var(--ft-muted);
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    .photo-delete {
+      border: 1px solid #fecaca;
+      color: #b91c1c;
+      background: #fff1f2;
+      border-radius: 9px;
+      min-height: 36px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .empty-state {
+      text-align: center;
+      color: #64748b;
+      padding: 20px 12px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 10px;
+      background: #f8fafc;
+      font-size: 14px;
+    }
+
+    .status-msg {
+      font-size: 13px;
+      color: #475569;
+      min-height: 18px;
+    }
+
+    .viewer {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.9);
+      display: none;
+      z-index: 200;
+      padding: 14px;
+      box-sizing: border-box;
+    }
+
+    .viewer.show {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 10px;
+    }
+
+    .viewer-top {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .viewer-close {
+      min-height: 40px;
+      min-width: 40px;
+      border-radius: 50%;
+      border: none;
+      font-size: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .viewer-img-wrap {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .viewer-img {
+      max-width: 100%;
+      max-height: 100%;
+      border-radius: 12px;
+      object-fit: contain;
+    }
+
+    .viewer-meta {
+      color: #e2e8f0;
+      font-size: 13px;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    @media (min-width: 840px) {
+      .ft-main {
+        max-width: 980px;
+        margin: 0 auto;
+      }
+
+      .capture-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .gallery-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="ft-header">
+    <div class="ft-header-top">
+      <button class="ft-back" id="btnBack" type="button">← Volver</button>
+      <h1 class="ft-title">📸 Fotos de Taller</h1>
+    </div>
+
+    <div class="ft-order-meta">
+      <div class="ft-meta-row">
+        <span class="ft-chip" id="metaOrden">Orden: —</span>
+        <span class="ft-chip" id="metaEstado">Estado: —</span>
+      </div>
+      <div class="ft-meta-row" id="metaCliente">Cliente: —</div>
+    </div>
+  </header>
+
+  <main class="ft-main">
+    <section class="ft-card">
+      <h2 class="ft-card-title">Captura rápida</h2>
+      <div class="capture-grid">
+        <button class="capture-btn antes" type="button" data-tipo="antes">📸 Tomar foto Antes</button>
+        <button class="capture-btn despues" type="button" data-tipo="despues">📸 Tomar foto Después</button>
+        <button class="capture-btn detalle" type="button" data-tipo="detalle">📸 Tomar foto Detalle</button>
+      </div>
+
+      <input id="inputAntes" class="hidden-input" type="file" accept="image/*" capture="environment" data-tipo="antes">
+      <input id="inputDespues" class="hidden-input" type="file" accept="image/*" capture="environment" data-tipo="despues">
+      <input id="inputDetalle" class="hidden-input" type="file" accept="image/*" capture="environment" data-tipo="detalle">
+
+      <p id="statusMsg" class="status-msg"></p>
+    </section>
+
+    <section class="ft-card preview-card" id="previewCard">
+      <h2 class="ft-card-title">Confirmar foto</h2>
+      <img id="previewImg" class="preview-thumb" alt="Vista previa">
+      <div>
+        <span class="label">Tipo</span>
+        <div><span class="ft-chip" id="previewTipo">—</span></div>
+      </div>
+      <div>
+        <label class="label" for="equipoSerial">Equipo/Serial (opcional)</label>
+        <select id="equipoSerial" class="select">
+          <option value="">Sin serial</option>
+        </select>
+      </div>
+      <div>
+        <label class="label" for="fotoNota">Nota (opcional)</label>
+        <textarea id="fotoNota" class="textarea" placeholder="Ej: Golpe en carcasa, estado de antena, etc."></textarea>
+      </div>
+      <div class="preview-actions">
+        <button class="btn-touch btn-upload" id="btnSubirFoto" type="button">Subir foto</button>
+        <button class="btn-touch btn-cancel" id="btnCancelarFoto" type="button">Cancelar</button>
+      </div>
+    </section>
+
+    <section class="ft-card" id="galleryCard">
+      <h2 class="ft-card-title">Galería</h2>
+      <div id="emptyState" class="empty-state">Aún no hay fotos registradas.</div>
+
+      <div class="gallery-section" id="sectionAntes" style="display:none;">
+        <h3 class="gallery-title">Antes <span id="countAntes">0</span></h3>
+        <div class="gallery-grid" id="gridAntes"></div>
+      </div>
+
+      <div class="gallery-section" id="sectionDespues" style="display:none;">
+        <h3 class="gallery-title">Después <span id="countDespues">0</span></h3>
+        <div class="gallery-grid" id="gridDespues"></div>
+      </div>
+
+      <div class="gallery-section" id="sectionDetalle" style="display:none;">
+        <h3 class="gallery-title">Detalle <span id="countDetalle">0</span></h3>
+        <div class="gallery-grid" id="gridDetalle"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="viewer" id="viewer">
+    <div class="viewer-top">
+      <button class="viewer-close" id="btnViewerClose" type="button">×</button>
+    </div>
+    <div class="viewer-img-wrap">
+      <img id="viewerImg" class="viewer-img" alt="Foto ampliada">
+    </div>
+    <div id="viewerMeta" class="viewer-meta"></div>
+  </div>
+
+  <script>
+    const storage = firebase.storage();
+    const firestore = firebase.firestore();
+
+    const state = {
+      ordenId: "",
+      orderDoc: null,
+      user: null,
+      userRole: "",
+      equiposActivos: [],
+      pendingTipo: "",
+      pendingFile: null,
+      pendingPreviewUrl: "",
+      fotos: []
+    };
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById("statusMsg");
+      if (!el) return;
+      el.textContent = msg || "";
+      el.style.color = isError ? "#b91c1c" : "#475569";
+    }
+
+    function sanitizeFileName(name) {
+      const raw = (name || "foto").toLowerCase();
+      const noSpaces = raw.replace(/\s+/g, "-");
+      return noSpaces.replace(/[^a-z0-9._-]/g, "");
+    }
+
+    function genPhotoId() {
+      return `ft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    }
+
+    function prettyTipo(tipo) {
+      if (tipo === "antes") return "Antes";
+      if (tipo === "despues") return "Después";
+      if (tipo === "detalle") return "Detalle";
+      return "—";
+    }
+
+    function formatTimestamp(ts) {
+      if (!ts) return "";
+      try {
+        const d = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
+        if (!d || Number.isNaN(d.getTime())) return "";
+        return d.toLocaleString("es-CO", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function getOrdenIdFromQuery() {
+      const params = new URLSearchParams(window.location.search);
+      return (params.get("ordenId") || "").trim();
+    }
+
+    function bindCaptureButtons() {
+      document.querySelectorAll(".capture-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const tipo = btn.dataset.tipo;
+          const inputId = tipo === "antes" ? "inputAntes" : tipo === "despues" ? "inputDespues" : "inputDetalle";
+          const input = document.getElementById(inputId);
+          if (!input) return;
+          input.value = "";
+          input.click();
+        });
+      });
+
+      document.querySelectorAll(".hidden-input").forEach(input => {
+        input.addEventListener("change", (e) => {
+          const tipo = e.target.dataset.tipo;
+          const file = e.target.files && e.target.files[0];
+          onImageSelected(file, tipo);
+        });
+      });
+    }
+
+    function bindUiEvents() {
+      document.getElementById("btnBack").addEventListener("click", () => {
+        window.location.href = "index.html";
+      });
+
+      document.getElementById("btnCancelarFoto").addEventListener("click", clearPendingCapture);
+      document.getElementById("btnSubirFoto").addEventListener("click", uploadPendingPhoto);
+
+      const viewer = document.getElementById("viewer");
+      document.getElementById("btnViewerClose").addEventListener("click", closeViewer);
+      viewer.addEventListener("click", (e) => {
+        if (e.target === viewer) closeViewer();
+      });
+    }
+
+    function clearPendingCapture() {
+      if (state.pendingPreviewUrl) {
+        URL.revokeObjectURL(state.pendingPreviewUrl);
+      }
+      state.pendingPreviewUrl = "";
+      state.pendingFile = null;
+      state.pendingTipo = "";
+
+      document.getElementById("previewImg").src = "";
+      document.getElementById("previewTipo").textContent = "—";
+      document.getElementById("fotoNota").value = "";
+      document.getElementById("equipoSerial").value = "";
+      document.getElementById("previewCard").classList.remove("show");
+      setStatus("");
+    }
+
+    function populateEquiposSelect() {
+      const select = document.getElementById("equipoSerial");
+      if (!select) return;
+
+      const options = ["<option value=''>Sin serial</option>"];
+      state.equiposActivos.forEach(eq => {
+        const serial = (eq.numero_de_serie || eq.serial || "").toString().trim();
+        if (!serial) return;
+        const modelo = (eq.modelo || eq.modelo_nombre || "").toString().trim();
+        const label = modelo ? `${serial} - ${modelo}` : serial;
+        options.push(`<option value="${escapeHtml(serial)}">${escapeHtml(label)}</option>`);
+      });
+
+      select.innerHTML = options.join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function onImageSelected(file, tipo) {
+      if (!file) {
+        setStatus("No se seleccionó imagen.", true);
+        return;
+      }
+      if (!/^image\//i.test(file.type || "")) {
+        alert("Selecciona una imagen válida.");
+        return;
+      }
+
+      clearPendingCapture();
+      state.pendingFile = file;
+      state.pendingTipo = tipo;
+      state.pendingPreviewUrl = URL.createObjectURL(file);
+
+      document.getElementById("previewImg").src = state.pendingPreviewUrl;
+      document.getElementById("previewTipo").textContent = prettyTipo(tipo);
+      document.getElementById("previewCard").classList.add("show");
+      setStatus("Foto lista para subir.");
+    }
+
+    async function compressImage(file, maxWidth = 1600, quality = 0.75) {
+      const dataUrl = await readFileAsDataURL(file);
+      const img = await loadImage(dataUrl);
+
+      let targetWidth = img.width;
+      let targetHeight = img.height;
+      if (img.width > maxWidth) {
+        const ratio = maxWidth / img.width;
+        targetWidth = maxWidth;
+        targetHeight = Math.round(img.height * ratio);
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+      const blob = await new Promise((resolve, reject) => {
+        canvas.toBlob((result) => {
+          if (result) resolve(result);
+          else reject(new Error("No se pudo comprimir la imagen"));
+        }, "image/jpeg", quality);
+      });
+
+      return blob;
+    }
+
+    function readFileAsDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function loadImage(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    function normalizeFotos(arr) {
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .filter(Boolean)
+        .map(f => ({
+          id: f.id || genPhotoId(),
+          url: f.url || "",
+          path: f.path || "",
+          tipo: f.tipo || "detalle",
+          equipo_serial: f.equipo_serial || null,
+          nota: f.nota || "",
+          uploaded_by_uid: f.uploaded_by_uid || "",
+          uploaded_by_email: f.uploaded_by_email || "",
+          uploaded_at: f.uploaded_at || null,
+          deleted: f.deleted === true,
+          deleted_by_uid: f.deleted_by_uid || null,
+          deleted_by_email: f.deleted_by_email || null,
+          deleted_at: f.deleted_at || null
+        }));
+    }
+
+    function activeFotos() {
+      return (state.fotos || []).filter(f => f.deleted !== true && !!f.url);
+    }
+
+    function countByTipo(list, tipo) {
+      return list.filter(f => f.tipo === tipo).length;
+    }
+
+    function openViewer(url, meta) {
+      const viewer = document.getElementById("viewer");
+      document.getElementById("viewerImg").src = url;
+      document.getElementById("viewerMeta").innerHTML = meta;
+      viewer.classList.add("show");
+    }
+
+    function closeViewer() {
+      const viewer = document.getElementById("viewer");
+      viewer.classList.remove("show");
+      document.getElementById("viewerImg").src = "";
+      document.getElementById("viewerMeta").textContent = "";
+    }
+
+    function canSoftDelete() {
+      return String(state.userRole || "").toLowerCase() === "administrador";
+    }
+
+    function renderGallery() {
+      const all = activeFotos();
+      const before = all.filter(f => f.tipo === "antes");
+      const after = all.filter(f => f.tipo === "despues");
+      const detail = all.filter(f => f.tipo === "detalle");
+
+      const empty = document.getElementById("emptyState");
+      empty.style.display = all.length ? "none" : "block";
+
+      renderTipoSection("antes", before, "sectionAntes", "gridAntes", "countAntes");
+      renderTipoSection("despues", after, "sectionDespues", "gridDespues", "countDespues");
+      renderTipoSection("detalle", detail, "sectionDetalle", "gridDetalle", "countDetalle");
+    }
+
+    function renderTipoSection(tipo, fotos, sectionId, gridId, countId) {
+      const section = document.getElementById(sectionId);
+      const grid = document.getElementById(gridId);
+      const countEl = document.getElementById(countId);
+
+      countEl.textContent = fotos.length;
+      section.style.display = fotos.length ? "grid" : "none";
+
+      if (!fotos.length) {
+        grid.innerHTML = "";
+        return;
+      }
+
+      grid.innerHTML = fotos.map(f => {
+        const serial = f.equipo_serial ? `Serial: ${escapeHtml(f.equipo_serial)}` : "Sin serial";
+        const noteShort = (f.nota || "").trim();
+        const noteHtml = noteShort ? `<div class=\"photo-note\">${escapeHtml(noteShort.slice(0, 90))}</div>` : "";
+
+        return `
+          <article class="photo-item">
+            <img class="photo-thumb" src="${escapeHtml(f.url)}" alt="Foto ${escapeHtml(tipo)}" data-action="open-viewer" data-photo-id="${escapeHtml(f.id)}">
+            <div class="photo-body">
+              <div class="photo-meta">${serial}</div>
+              ${noteHtml}
+              ${canSoftDelete() ? `<button class=\"photo-delete\" data-action=\"delete-photo\" data-photo-id=\"${escapeHtml(f.id)}\">Eliminar</button>` : ""}
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      grid.querySelectorAll('[data-action="open-viewer"]').forEach(img => {
+        img.addEventListener("click", () => {
+          const photoId = img.dataset.photoId;
+          const foto = (state.fotos || []).find(f => f.id === photoId);
+          if (!foto || !foto.url) return;
+
+          const fecha = formatTimestamp(foto.uploaded_at);
+          const meta = `${escapeHtml(prettyTipo(foto.tipo))}${foto.equipo_serial ? ` · ${escapeHtml(foto.equipo_serial)}` : ""}${foto.nota ? `<br>${escapeHtml(foto.nota)}` : ""}${fecha ? `<br>${escapeHtml(fecha)}` : ""}`;
+          openViewer(foto.url, meta);
+        });
+      });
+
+      grid.querySelectorAll('[data-action="delete-photo"]').forEach(btn => {
+        btn.addEventListener("click", () => {
+          softDeletePhoto(btn.dataset.photoId);
+        });
+      });
+    }
+
+    async function uploadPendingPhoto() {
+      if (!state.user) {
+        alert("Usuario no autenticado.");
+        return;
+      }
+      if (!state.ordenId) {
+        alert("No se detectó la orden.");
+        return;
+      }
+      if (!state.pendingFile || !state.pendingTipo) {
+        alert("No hay imagen seleccionada.");
+        return;
+      }
+
+      const btn = document.getElementById("btnSubirFoto");
+      btn.disabled = true;
+      btn.textContent = "Subiendo...";
+
+      try {
+        setStatus("Comprimiendo imagen...");
+        const compressed = await compressImage(state.pendingFile, 1600, 0.75);
+
+        setStatus("Subiendo a almacenamiento...");
+        const ts = Date.now();
+        const safeName = sanitizeFileName(state.pendingFile.name || "foto.jpg").replace(/\.[a-z0-9]+$/i, "") || "foto";
+        const fileName = `${state.pendingTipo}_${ts}_${safeName}.jpg`;
+        const path = `ordenes_taller_fotos/${state.ordenId}/${fileName}`;
+        const ref = storage.ref(path);
+
+        await ref.put(compressed, { contentType: "image/jpeg" });
+        const url = await ref.getDownloadURL();
+
+        const equipoSerial = (document.getElementById("equipoSerial").value || "").trim() || null;
+        const nota = (document.getElementById("fotoNota").value || "").trim();
+
+        const photoMeta = {
+          id: genPhotoId(),
+          url,
+          path,
+          tipo: state.pendingTipo,
+          equipo_serial: equipoSerial,
+          nota,
+          uploaded_by_uid: state.user.uid || "",
+          uploaded_by_email: state.user.email || "",
+          uploaded_at: firebase.firestore.Timestamp.now(),
+          deleted: false
+        };
+
+        const logEntry = {
+          action: "SUBIR_FOTO_TALLER",
+          by: state.user.uid || "",
+          email: state.user.email || "",
+          tipo: state.pendingTipo,
+          ts: firebase.firestore.Timestamp.now()
+        };
+
+        const orderRef = firestore.collection("ordenes_de_servicio").doc(state.ordenId);
+        await orderRef.update({
+          fotos_taller: firebase.firestore.FieldValue.arrayUnion(photoMeta),
+          os_logs: firebase.firestore.FieldValue.arrayUnion(logEntry),
+          fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        const fresh = await orderRef.get();
+        const freshData = fresh.exists ? fresh.data() : {};
+        const freshFotos = normalizeFotos(freshData.fotos_taller || []);
+        const count = freshFotos.filter(f => f.deleted !== true).length;
+
+        await orderRef.update({
+          fotos_taller_count: count,
+          fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        setStatus("Foto subida correctamente.");
+        clearPendingCapture();
+        await loadOrder();
+      } catch (err) {
+        console.error("Error al subir foto:", err);
+        alert("No se pudo subir la foto. Intenta de nuevo.");
+        setStatus("Error al subir la foto.", true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Subir foto";
+      }
+    }
+
+    async function softDeletePhoto(photoId) {
+      if (!photoId) return;
+      if (!canSoftDelete()) {
+        alert("Solo un administrador puede eliminar fotos.");
+        return;
+      }
+      if (!confirm("¿Marcar esta foto como eliminada?")) return;
+
+      try {
+        const orderRef = firestore.collection("ordenes_de_servicio").doc(state.ordenId);
+        const snap = await orderRef.get();
+        if (!snap.exists) {
+          alert("La orden no existe.");
+          return;
+        }
+
+        const data = snap.data() || {};
+        const fotos = normalizeFotos(data.fotos_taller || []);
+        let found = false;
+        let deletedTipo = "";
+
+        const updatedFotos = fotos.map(f => {
+          if (f.id !== photoId || f.deleted === true) return f;
+          found = true;
+          deletedTipo = f.tipo || "";
+          return {
+            ...f,
+            deleted: true,
+            deleted_by_uid: state.user.uid || "",
+            deleted_by_email: state.user.email || "",
+            deleted_at: firebase.firestore.Timestamp.now()
+          };
+        });
+
+        if (!found) {
+          alert("No se encontró la foto seleccionada.");
+          return;
+        }
+
+        const count = updatedFotos.filter(f => f.deleted !== true).length;
+        const logEntry = {
+          action: "ELIMINAR_FOTO_TALLER",
+          by: state.user.uid || "",
+          email: state.user.email || "",
+          tipo: deletedTipo,
+          ts: firebase.firestore.Timestamp.now()
+        };
+
+        await orderRef.update({
+          fotos_taller: updatedFotos,
+          fotos_taller_count: count,
+          fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+          os_logs: firebase.firestore.FieldValue.arrayUnion(logEntry)
+        });
+
+        await loadOrder();
+      } catch (err) {
+        console.error("Error eliminando foto:", err);
+        alert("No se pudo eliminar la foto.");
+      }
+    }
+
+    async function loadUserRole(uid) {
+      try {
+        const snap = await firestore.collection("usuarios").doc(uid).get();
+        if (snap.exists) {
+          state.userRole = (snap.data().rol || "").toString().trim().toLowerCase();
+        } else {
+          state.userRole = "";
+        }
+      } catch (err) {
+        console.warn("No se pudo cargar rol:", err);
+        state.userRole = "";
+      }
+    }
+
+    async function loadOrder() {
+      if (!state.ordenId) return;
+
+      const orderRef = firestore.collection("ordenes_de_servicio").doc(state.ordenId);
+      const snap = await orderRef.get();
+      if (!snap.exists) {
+        alert("Orden no encontrada.");
+        window.location.href = "index.html";
+        return;
+      }
+
+      const data = snap.data() || {};
+      state.orderDoc = data;
+      state.fotos = normalizeFotos(data.fotos_taller || []);
+      state.equiposActivos = (data.equipos || []).filter(e => e && e.eliminado !== true);
+
+      document.getElementById("metaOrden").textContent = `Orden: ${state.ordenId}`;
+      document.getElementById("metaCliente").textContent = `Cliente: ${data.cliente_nombre || "—"}`;
+      document.getElementById("metaEstado").textContent = `Estado: ${data.estado_reparacion || "—"}`;
+
+      populateEquiposSelect();
+      renderGallery();
+    }
+
+    function init() {
+      bindUiEvents();
+      bindCaptureButtons();
+
+      state.ordenId = getOrdenIdFromQuery();
+      if (!state.ordenId) {
+        alert("Falta el parámetro ordenId en la URL.");
+        window.location.href = "index.html";
+        return;
+      }
+
+      firebase.auth().onAuthStateChanged(async (user) => {
+        if (!user) {
+          alert("Debes iniciar sesión para usar esta función.");
+          window.location.href = "../login.html";
+          return;
+        }
+
+        state.user = user;
+        await loadUserRole(user.uid);
+
+        try {
+          await loadOrder();
+        } catch (err) {
+          console.error("Error cargando orden:", err);
+          alert("No se pudo cargar la orden.");
+        }
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>

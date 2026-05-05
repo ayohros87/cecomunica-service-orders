@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Modelos de Radios - Cecomunica</title>
+
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+
+  <!-- XLSX (exportación) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+/* =========================
+   Base variables & resets
+   ========================= */
+:root{
+  --bg:#f8fafc;
+  --ink:#111827;
+  --muted:#6b7280;
+  --line:#e5e7eb;
+  --ok:#2e7d32;
+  --warn:#f59e0b;
+  --bad:#c62828;
+  --primary:#0ea5a3;      /* teal-ish */
+  --primary-2:#0b8583;
+  --card:#ffffff;
+  --shadow:0 1px 2px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.06);
+  --radius:12px;
+  --page-pad:40px;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* =========================
+   Buttons
+   ========================= */
+.btn{
+  appearance:none; border:1px solid var(--line); background:#fff; color:var(--ink);
+  padding:8px 12px; border-radius:10px; cursor:pointer; line-height:1;
+  box-shadow: 0 0 0 rgba(0,0,0,0); transition: box-shadow .15s ease, transform .05s ease, background .15s;
+}
+.btn:hover{ box-shadow: var(--shadow); background:#fff; }
+.btn:active{ transform: translateY(1px); }
+.btn.primary{ background: var(--primary); border-color: var(--primary); color:#fff; }
+.btn.primary:hover{ background: var(--primary-2); }
+.btn.ok{ background:#e6f4ea; color:#1e7d32; border-color:#cde7d3; }
+.btn.danger{ background:#fde8e8; color:#b91c1c; border-color:#f5caca; }
+.btn.icon{ padding:6px 8px; }
+.btn.sm{ padding:6px 10px; font-size:.92rem; border-radius:9px; }
+.btn-group{ display:inline-flex; gap:8px; }
+
+/* =========================
+   Chips / Badges / Helpers
+   ========================= */
+.chip{
+  display:inline-flex; align-items:center; padding:0 8px; height:24px;
+  border-radius:999px; background:#eef2ff; color:#3730a3; font-size:12px;
+}
+.badge{ display:inline-flex; align-items:center; justify-content:center; border-radius:999px;
+  padding:0 8px; height:22px; font-size:12px; }
+.badge.completo{ background:#e6f4ea; color:#1e7d32; }
+.badge.pendiente{ background:#fff4e6; color:#b45309; }
+.badge.danger{ background:#fde8e8; color:#b91c1c; }
+.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+.muted{ color: var(--muted); }
+
+/* =========================
+   Cards / Layout
+   ========================= */
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding:16px;
+}
+.app-wrap{ max-width:1600px; margin:24px auto; padding:0 var(--page-pad); }
+.resumen{ text-align:right; color:var(--muted); margin:8px 0; }
+
+/* =========================
+   Topbar (namespaced)
+   ========================= */
+.modelos-topbar{
+  position: sticky; top:0; left:0; z-index:1000;
+  width: 100%;
+  background:#fff;
+  border-bottom:1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  display:flex; align-items:center; justify-content:space-between;
+  gap:16px; padding:14px 24px; flex-wrap: wrap;   /* wrap evita solape del buscador */
+}
+.modelos-topbar .left{
+  display:flex; align-items:center; gap:16px;
+  flex: 1 1 420px; min-width:320px;
+}
+.modelos-topbar h1{
+  margin:0; font-size:1.4rem; font-weight:600; white-space:nowrap; color: var(--ink);
+}
+.modelos-topbar .app-search{
+  display:flex; align-items:center; gap:8px; background:#f3f4f6; border-radius:8px; padding:4px 6px;
+  flex: 1 1 320px; max-width: 560px;
+}
+.modelos-topbar .app-search input{
+  border:none; background:transparent; outline:none; width:100%; font-size:15px; padding:4px 6px;
+}
+.modelos-topbar .right{
+  display:flex; align-items:center; gap:10px; flex: 0 0 auto; flex-wrap: wrap;
+}
+
+/* Dropdown */
+.dropdown{ position:relative; }
+.dropdown .menu{
+  display:none; position:absolute; right:0; top:calc(100% + 6px); min-width:240px;
+  background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow: var(--shadow);
+  padding:8px; z-index: 1100;
+}
+.dropdown.open .menu{ display:block; }
+.menu .menu-item{ display:flex; gap:8px; align-items:center; padding:6px 2px; font-size:14px; }
+
+/* =========================
+   Table
+   ========================= */
+.table-wrap{
+  background:#fff; border-radius: var(--radius); box-shadow: var(--shadow); overflow:auto; width:100%;
+}
+table{ width:100%; border-collapse: collapse; }
+th, td{ padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align: middle; }
+th[data-sort]{ cursor:pointer; user-select:none; }
+th .sort{ font-size:12px; opacity:.6; margin-left:4px; }
+.hidden-col{ display:none; }
+
+/* Densidad */
+.table-wrap[data-density="dense"] table{ font-size:12.5px; }
+.table-wrap[data-density="dense"] th, .table-wrap[data-density="dense"] td{ padding:6px 8px; }
+.table-wrap[data-density="roomy"] table{ font-size:14.5px; }
+.table-wrap[data-density="roomy"] th, .table-wrap[data-density="roomy"] td{ padding:10px 12px; }
+
+/* Acciones en celdas */
+.table-actions{ display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+
+/* Filas inactivas */
+tr.inactivo td{ opacity:.55; }
+
+/* =========================
+   Modal (namespaced)
+   ========================= */
+.modelos-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.18);
+  display:none; align-items:center; justify-content:center; z-index:2500; /* por encima del topbar */
+  backdrop-filter: blur(2px);
+}
+.modelos-overlay.show{ display:flex; }
+.modelos-overlay .modal{
+  width:min(920px, 92vw); background:#fff; border-radius:12px; box-shadow: var(--shadow);
+  overflow:hidden; border:1px solid var(--line);
+}
+.modelos-overlay .sheet-header{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  padding:12px 14px; border-bottom:1px solid var(--line);
+}
+.modelos-overlay .sheet-title{ margin:0; font-size:1.1rem; font-weight:600; }
+.modelos-overlay .sheet-body{ padding:16px; }
+.modelos-overlay .footer{
+  display:flex; justify-content:flex-end; gap:8px; padding:12px 14px; border-top:1px solid var(--line);
+}
+
+/* Formulario */
+.form-grid{ display:grid; gap:12px; grid-template-columns: repeat(2, minmax(0,1fr)); }
+.form-field label{ display:block; font-size:.9rem; margin:2px 0 4px; color:#374151; }
+.form-field .req::after{ content:" *"; color:#b91c1c; }
+.form-field input, .form-field select, .form-field textarea{
+  width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; outline:none; background:#fff;
+}
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus{
+  border-color:#cbd5e1; box-shadow: 0 0 0 3px rgba(99,102,241,.08);
+}
+.form-field textarea{ min-height:80px; resize:vertical; }
+
+@media (max-width: 900px){
+  .form-grid{ grid-template-columns: 1fr; }
+  .modelos-topbar{ padding:12px 16px; }
+  .modelos-topbar .app-search{ max-width: none; }
+}
+/* ===== Modal polish ===== */
+.modelos-overlay .modal{
+  border-radius:16px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.14);
+  overflow:hidden;
+}
+.modelos-overlay .sheet-header{
+  background: linear-gradient(180deg,#ffffff 0%, #fafafa 100%);
+  border-bottom:1px solid var(--line);
+}
+.modelos-overlay .sheet-body{
+  background:#ffffff;
+}
+.modelos-overlay .footer{
+  background:#fafafa;
+  border-top:1px solid var(--line);
+}
+
+/* ===== Better form rhythm ===== */
+.form-grid{ gap:14px; }
+.form-field label{ font-weight:600; color:#1f2937; }
+.form-field input, .form-field select, .form-field textarea{
+  background:#fff;
+  border:1px solid #dbe2ea;
+  transition: box-shadow .15s ease, border-color .15s ease;
+}
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus{
+  border-color:#94a3b8; /* slate-400 */
+  box-shadow: 0 0 0 3px rgba(14,165,163,.15); /* primary glow */
+}
+
+/* ===== Checkboxes row (Alto movimiento / Activo) ===== */
+.form-field.checkgroup{ display:flex; flex-direction:column; gap:6px; }
+.form-field .group-label{ font-weight:600; color:#1f2937; }
+.checks-row{
+  display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+}
+.check{
+  display:inline-flex; align-items:center; gap:8px;
+  padding:6px 10px; border:1px solid #e5e7eb; border-radius:10px; background:#fff;
+}
+.check input{
+  width:16px; height:16px; accent-color: var(--primary);
+}
+.check span{ font-size:14px; color:#111827; }
+
+/* Optional: compact the “Mínimo” input so it aligns nicely beside the checks on wide screens */
+@media (min-width: 901px){
+  .form-grid .form-field:nth-child(5){ align-self:end; }
+}
+
+/* =========================
+   Skeleton / Toast
+   ========================= */
+.skeleton{
+  background:linear-gradient(90deg,#f2f4f7 25%,#e9edf3 37%,#f2f4f7 63%);
+  background-size:400% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+  height:12px; border-radius:4px;
+}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+.toast{
+  position:fixed; right:16px; bottom:16px; background:#111; color:#fff;
+  padding:10px 14px; border-radius:10px; box-shadow: var(--shadow); z-index:9999; opacity:.96;
+}
+.toast.ok{ background: var(--ok); }
+.toast.warn{ background: var(--warn); color:#111; }
+.toast.bad{ background: var(--bad); }
+
+/* =========================
+   Utilities
+   ========================= */
+.w-full{ width:100%; }
+.center{ text-align:center; }
+.mt-8{ margin-top:8px; } .mt-12{ margin-top:12px; } .mt-16{ margin-top:16px; }
+.p-0{ padding:0; } .p-8{ padding:8px; } .p-16{ padding:16px; }
+</style>
+
+</head>
+<body>
+  <!-- ===== TOPBAR ===== -->
+  <div class="modelos-topbar">
+    <div class="left">
+      <h1>📘 Modelos de Radios</h1>
+      <div class="app-search">
+        <input id="q" placeholder="Buscar marca, modelo o tipo…" />
+        <button class="btn icon" onclick="aplicarFiltroRapido()">🔍</button>
+      </div>
+    </div>
+    <div class="right">
+      <button class="btn" onclick="window.location.href='./index.html'">📦 Inventario</button>
+      <button class="btn" onclick="exportarExcel()">📥 Excel</button>
+
+      <div class="dropdown" id="ddVista">
+        <button class="btn" id="btnVista">⚙️ Vista</button>
+        <div class="menu">
+          <label class="menu-item"><input type="checkbox" checked id="col-CHK-estado"> Columna “Estado”</label>
+          <label class="menu-item"><input type="checkbox" checked id="col-CHK-alto"> Columna “Alto mov.”</label>
+          <label class="menu-item"><input type="checkbox" checked id="col-CHK-minimo"> Columna “Mínimo”</label>
+          <label class="menu-item"><input type="checkbox" checked id="col-CHK-activo"> Columna “Activo”</label>
+          <hr style="margin:6px 0;border:none;border-top:1px solid var(--line);">
+          <label class="menu-item"><input type="checkbox" id="chk-inactivos" checked> Mostrar inactivos</label>
+          <button class="btn sm" style="width:100%;" onclick="toggleDensity()">↕️ Alternar densidad</button>
+        </div>
+      </div>
+
+      <button class="btn ok" onclick="abrirModal()">➕ Nuevo</button>
+      <button class="btn" onclick="window.location.href='../index.html'">🏠 Menú</button>
+      <button class="btn danger" onclick="cerrarSesion()">🚪 Salir</button>
+    </div>
+  </div>
+
+  <!-- ===== CONTENIDO ===== -->
+  <div class="app-wrap">
+    <p id="resumenModelos" class="resumen">Cargando modelos…</p>
+    <div class="table-wrap" id="wrapTabla" data-density="roomy">
+      <table>
+        <thead id="headerModelos"></thead>
+        <tbody id="tablaModelos"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== MODAL AGREGAR/EDITAR ===== -->
+  <div id="overlay" class="modelos-overlay">
+    <div class="modal">
+      <div class="sheet-header">
+        <h3 class="sheet-title" id="modalTitle">Nuevo modelo</h3>
+        <button class="btn" onclick="cerrarModal()">✖</button>
+      </div>
+      <div class="sheet-body">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="req">Marca</label>
+            <input id="f-marca" placeholder="Ej. Hytera" />
+          </div>
+          <div class="form-field">
+            <label class="req">Modelo</label>
+            <input id="f-modelo" placeholder="Ej. PD786" />
+          </div>
+
+          <div class="form-field">
+            <label>Tipo</label>
+            <select id="f-tipo">
+              <option value="P">Portátil</option>
+              <option value="B">Base</option>
+              <option value="C">Cámara</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Estado</label>
+            <select id="f-estado">
+              <option value="N">Nuevo</option>
+              <option value="R">Reuso</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label>Mínimo (alerta)</label>
+            <input id="f-minimo" type="number" step="1" min="0" placeholder="5" />
+          </div>
+<div class="form-field checkgroup">
+  <span class="group-label">Estado</span>
+  <div class="checks-row">
+    <label class="check">
+      <input type="checkbox" id="f-alto" />
+      <span>Alto movimiento</span>
+    </label>
+    <label class="check">
+      <input type="checkbox" id="f-activo" checked />
+      <span>Activo</span>
+    </label>
+  </div>
+</div>
+          <div class="form-field" style="grid-column:1 / -1;">
+            <label>Notas</label>
+            <textarea id="f-notas" placeholder="(opcional)"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        <button class="btn" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn primary" id="btnGuardar" onclick="guardarModelo()">💾 Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ===== Estado global ===== */
+    let showInactivos = true;
+    let listaModelos = [];
+    let modeloEditId = null;
+    let ordenCampo = 'marca';
+    let ordenAsc = true;
+    let dense = false;
+    const hiddenCols = new Set(); // 'estado' | 'alto' | 'minimo' | 'activo'
+
+    /* ===== Util ===== */
+    function toast(msg,type='ok',t=2400){ const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),t); }
+    function debounce(fn, t=220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); } }
+    function mapTipo(v){ return v==='P'?'Portátil':v==='B'?'Base':v==='C'?'Cámara':'-'; }
+    function mapEstado(v){ return v==='N'?'Nuevo':v==='R'?'Reuso':'-'; }
+
+    /* ===== Densidad & columnas ===== */
+    function applyDensity(){ document.getElementById('wrapTabla')?.setAttribute('data-density', dense ? 'dense' : 'roomy'); }
+    function toggleDensity(){ dense=!dense; applyDensity(); toast(dense?'Vista compacta':'Vista cómoda','ok'); }
+    function toggleCol(key, visible){ if(!visible) hiddenCols.add(key); else hiddenCols.delete(key); applyColumnVisibility(); }
+    function applyColumnVisibility(){
+      const map = { estado: '.col-estado', alto: '.col-alto', minimo: '.col-minimo', activo: '.col-activo' };
+      Object.entries(map).forEach(([k, sel])=>{
+        const hide = hiddenCols.has(k);
+        document.querySelectorAll(sel).forEach(el=>{ el.classList.toggle('hidden-col', hide); });
+      });
+    }
+
+    /* ===== Auth ===== */
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) return window.location.href = "../login.html";
+      try{
+        const userDoc = await db.collection("usuarios").doc(user.uid).get();
+        const rol = userDoc.exists ? userDoc.data().rol : null;
+        if (!userDoc.exists || (rol !== "administrador" && rol !== "inventario")) {
+          document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";
+          return;
+        }
+
+        // Dropdown por click
+        const dd = document.getElementById('ddVista');
+        if (dd){
+          const btn = document.getElementById('btnVista');
+          btn.addEventListener('click',(ev)=>{ ev.stopPropagation(); dd.classList.toggle('open'); });
+          document.addEventListener('click',()=>dd.classList.remove('open'));
+        }
+
+        // Listeners de checkboxes de vista (delegado)
+        document.addEventListener('change', (e)=>{
+          if (e.target.id === 'col-CHK-estado'){ toggleCol('estado', e.target.checked); }
+          if (e.target.id === 'col-CHK-alto'){ toggleCol('alto', e.target.checked); }
+          if (e.target.id === 'col-CHK-minimo'){ toggleCol('minimo', e.target.checked); }
+          if (e.target.id === 'col-CHK-activo'){ toggleCol('activo', e.target.checked); }
+          if (e.target.id === 'chk-inactivos'){ showInactivos = e.target.checked; renderizarTablaModelos(listaModelos); }
+        });
+
+        // Buscador
+        const q = document.getElementById('q');
+        if (q){
+          q.addEventListener('input', debounce(aplicarFiltroRapido, 220));
+          q.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); aplicarFiltroRapido(); }});
+        }
+
+        await cargarModelos();
+      }catch(e){
+        console.error(e); toast('Error validando usuario','bad');
+      }
+    });
+
+    /* ===== Carga ===== */
+    async function cargarModelos(){
+      showSkeleton();
+      try{
+        const snapshot = await db.collection("modelos").get();
+        listaModelos = snapshot.docs.map(d=>({ id:d.id, ...d.data() }));
+      }catch(e){
+        console.error(e); toast('Error cargando modelos','bad'); listaModelos=[];
+      }
+      renderizarTablaModelos(listaModelos);
+      actualizarResumen(listaModelos);
+    }
+
+    function showSkeleton(){
+      const tb = document.getElementById('tablaModelos');
+      tb.innerHTML = `
+        <tr>
+          <td colspan="8" style="padding:20px;">
+            <div class="skeleton" style="width:60%; height:12px; margin-bottom:8px;"></div>
+            <div class="skeleton" style="width:40%; height:12px;"></div>
+          </td>
+        </tr>`;
+    }
+
+    /* ===== Render ===== */
+    function actualizarResumen(lista){
+      const total = (lista||[]).length;
+      const inact = (lista||[]).filter(m=>m.activo===false).length;
+      const altos = (lista||[]).filter(m=>m.alto_movimiento===true).length;
+      document.getElementById('resumenModelos').innerHTML =
+        `<strong>${total}</strong> modelos · inactivos: <strong>${inact}</strong> · alto mov.: <span class="badge completo">${altos}</span>`;
+    }
+
+    function ordenarPor(campo){
+      if (ordenCampo === campo) ordenAsc = !ordenAsc;
+      else { ordenCampo = campo; ordenAsc = true; }
+      renderizarTablaModelos(listaModelos);
+    }
+
+    function valorOrden(m, campo){
+      if (campo==='marca' || campo==='modelo'){ return (m[campo]||'').toLowerCase(); }
+      if (campo==='tipo'){ return m.tipo||''; }
+      if (campo==='estado'){ return m.estado||''; }
+      if (campo==='alto_movimiento'){ return m.alto_movimiento===true?1:0; }
+      if (campo==='minimo'){ return Number.isFinite(m.minimo)?m.minimo:0; }
+      if (campo==='activo'){ return m.activo===false?0:1; }
+      return '';
+    }
+
+    function renderizarTablaModelos(lista){
+      const thead = document.getElementById('headerModelos');
+      const tbody = document.getElementById('tablaModelos');
+
+      const cols = [
+        { campo:'marca', label:'Marca' },
+        { campo:'modelo', label:'Modelo' },
+        { campo:'tipo', label:'Tipo' },
+        { campo:'estado', label:'Estado', cls:'col-estado' },
+        { campo:'alto_movimiento', label:'Alto mov.', cls:'col-alto' },
+        { campo:'minimo', label:'Mínimo', cls:'col-minimo' },
+        { campo:'activo', label:'Activo', cls:'col-activo' }
+      ];
+
+      thead.innerHTML = `
+        <tr>
+          ${cols.map(c=>{
+            const isCurr = c.campo === ordenCampo;
+            const arrow = isCurr ? (ordenAsc ? '↑' : '↓') : '↕';
+            return `<th data-sort="${c.campo}" class="${c.cls||''}" onclick="ordenarPor('${c.campo}')">${c.label} <span class="sort">${arrow}</span></th>`;
+          }).join('')}
+          <th>Acciones</th>
+        </tr>`;
+
+      // Filtro “mostrar inactivos”
+      const data = (lista||[]).filter(m => showInactivos ? true : (m.activo !== false));
+
+      // Orden
+      data.sort((a,b)=>{
+        const va = valorOrden(a, ordenCampo), vb = valorOrden(b, ordenCampo);
+        if (typeof va==='number' && typeof vb==='number') return ordenAsc ? va - vb : vb - va;
+        return ordenAsc
+          ? String(va).localeCompare(String(vb), 'es', {numeric:true, sensitivity:'base'})
+          : String(vb).localeCompare(String(va), 'es', {numeric:true, sensitivity:'base'});
+      });
+
+      if (data.length===0){
+        tbody.innerHTML = `<tr><td colspan="8" style="padding:20px; text-align:center; color:#666;">No hay modelos</td></tr>`;
+        applyColumnVisibility(); applyDensity(); return;
+      }
+
+      tbody.innerHTML = data.map(m=>{
+        const minimo = Number.isFinite(m.minimo) ? m.minimo : 0;
+        const activoTxt = (m.activo!==false) ? 'Sí' : 'No';
+        return `
+          <tr class="${m.activo===false ? 'inactivo' : ''}">
+            <td>${m.marca||'-'}</td>
+            <td>${m.modelo||'-'}</td>
+            <td>${mapTipo(m.tipo)}</td>
+            <td class="col-estado">${mapEstado(m.estado)}</td>
+            <td class="col-alto" style="text-align:center">${m.alto_movimiento ? '✅' : '❌'}</td>
+            <td class="col-minimo mono" style="text-align:right">${minimo}</td>
+            <td class="col-activo" style="text-align:center">${activoTxt}</td>
+            <td>
+              <div class="table-actions">
+                <button class="btn sm" onclick="abrirModal('${m.id}')">✏️ Editar</button>
+                ${m.activo===false
+                  ? `<button class="btn sm" onclick="activarModelo('${m.id}')">Activar</button>`
+                  : `<button class="btn sm" onclick="desactivarModelo('${m.id}')">Desactivar</button>`}
+                <button class="btn sm danger" onclick="eliminarDefinitivo('${m.id}')">🗑️ Borrar</button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+
+      applyColumnVisibility(); applyDensity();
+    }
+
+    /* ===== Filtro rápido ===== */
+    function aplicarFiltroRapido(){
+      const q=(document.getElementById('q')?.value||'').toLowerCase().trim();
+      if(!q){ renderizarTablaModelos(listaModelos); actualizarResumen(listaModelos); return; }
+      const filtrados = (listaModelos||[]).filter(m=>{
+        const marca=(m.marca||'').toLowerCase();
+        const mod=(m.modelo||'').toLowerCase();
+        const tipo=(mapTipo(m.tipo)||'').toLowerCase();
+        return marca.includes(q)||mod.includes(q)||tipo.includes(q);
+      });
+      renderizarTablaModelos(filtrados); actualizarResumen(filtrados);
+    }
+
+    /* ===== Modal ===== */
+    function abrirModal(id=null){
+      modeloEditId = id;
+      const creando = (id===null);
+      document.getElementById('modalTitle').textContent = creando ? 'Nuevo modelo' : 'Editar modelo';
+
+      // reset
+      setVal('f-marca',''); setVal('f-modelo','');
+      document.getElementById('f-tipo').value='P';
+      document.getElementById('f-estado').value='N';
+      setVal('f-minimo','5');
+      document.getElementById('f-alto').checked=false;
+      document.getElementById('f-activo').checked=true;
+      setVal('f-notas','');
+
+      if(!creando){
+        const m = listaModelos.find(x=>x.id===id);
+        if (m){
+          setVal('f-marca', m.marca||'');
+          setVal('f-modelo', m.modelo||'');
+          document.getElementById('f-tipo').value = m.tipo||'P';
+          document.getElementById('f-estado').value = m.estado||'N';
+          setVal('f-minimo', Number.isFinite(m.minimo)?m.minimo:5);
+          document.getElementById('f-alto').checked = m.alto_movimiento===true;
+          document.getElementById('f-activo').checked = m.activo!==false;
+          setVal('f-notas', m.notas||'');
+        }
+      }
+      document.getElementById('overlay').classList.add('show');
+    }
+    function cerrarModal(){ document.getElementById('overlay').classList.remove('show'); modeloEditId=null; }
+    function setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v; }
+
+    async function guardarModelo(){
+      const marca=(document.getElementById('f-marca').value||'').trim();
+      const modelo=(document.getElementById('f-modelo').value||'').trim();
+      const tipo=document.getElementById('f-tipo').value;
+      const estado=document.getElementById('f-estado').value;
+      const minimo=Math.max(0, Number(document.getElementById('f-minimo').value||0));
+      const alto=document.getElementById('f-alto').checked;
+      const activo=document.getElementById('f-activo').checked;
+      const notas=(document.getElementById('f-notas').value||'').trim();
+
+      if(!marca || !modelo){ toast('Marca y Modelo son requeridos','warn'); return; }
+
+      const payload = {
+        marca, modelo, tipo, estado, minimo,
+        alto_movimiento: alto, activo, notas,
+        actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try{
+        if (modeloEditId===null){
+          await db.collection('modelos').add({
+            ...payload,
+            creado_en: firebase.firestore.FieldValue.serverTimestamp()
+          });
+          toast('Modelo creado','ok');
+        } else {
+          await db.collection('modelos').doc(modeloEditId).update(payload);
+          toast('Modelo actualizado','ok');
+        }
+        cerrarModal();
+        await cargarModelos();
+      }catch(e){ console.error(e); toast('Error al guardar','bad'); }
+    }
+
+    /* ===== Acciones estado ===== */
+    async function desactivarModelo(id){
+      try{
+        await db.collection('modelos').doc(id).update({
+          activo:false,
+          actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        toast('Modelo desactivado','ok'); await cargarModelos();
+      }catch(e){ console.error(e); toast('Error','bad');}
+    }
+    async function activarModelo(id){
+      try{
+        await db.collection('modelos').doc(id).update({
+          activo:true,
+          actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        toast('Modelo activado','ok'); await cargarModelos();
+      }catch(e){ console.error(e); toast('Error','bad');}
+    }
+    async function eliminarDefinitivo(id){
+      if(!confirm('¿Eliminar definitivamente este modelo? (borra solo el documento del modelo)')) return;
+      try{
+        await db.collection('modelos').doc(id).delete();
+        toast('Modelo eliminado','ok'); await cargarModelos();
+      }catch(e){ console.error(e); toast('Error al eliminar','bad');}
+    }
+
+    /* ===== Exportar Excel ===== */
+    function exportarExcel(){
+      const wb = XLSX.utils.book_new();
+      const wsData = [["Marca","Modelo","Tipo","Estado","Alto mov.","Mínimo","Activo","Notas"]];
+      (listaModelos||[]).forEach(m=>{
+        wsData.push([
+          m.marca||'-', m.modelo||'-', mapTipo(m.tipo), mapEstado(m.estado),
+          m.alto_movimiento?'Sí':'No', Number.isFinite(m.minimo)?m.minimo:0,
+          (m.activo!==false)?'Sí':'No', m.notas||''
+        ]);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, "Modelos");
+      const fecha = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, `Modelos_Cecomunica_${fecha}.xlsx`);
+    }
+
+    /* ===== Exponer en window (onclick en HTML) ===== */
+    window.toggleDensity = toggleDensity;
+    window.ordenarPor = ordenarPor;
+    window.aplicarFiltroRapido = aplicarFiltroRapido;
+    window.abrirModal = abrirModal;
+    window.cerrarModal = cerrarModal;
+    window.guardarModelo = guardarModelo;
+    window.desactivarModelo = desactivarModelo;
+    window.activarModelo = activarModelo;
+    window.eliminarDefinitivo = eliminarDefinitivo;
+    window.exportarExcel = exportarExcel;
+
+    /* ===== Sesión ===== */
+    function cerrarSesion(){ firebase.auth().signOut().then(()=>window.location.href="../login.html"); }
+    window.cerrarSesion = cerrarSesion;
+  </script>
+</body>
+</html>

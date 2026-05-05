@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Verificación de Contrato – Cecomunica</title>
+  <link rel="stylesheet" href="/css/ceco-ui.css">
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="/js/firebase-init.js"></script>
+</head>
+<body>
+  <div class="card" style="max-width:600px;margin:40px auto;padding:20px;">
+    <h2>🔎 Verificación de Contrato</h2>
+    <div id="resultado">Cargando…</div>
+  </div>
+
+<script>
+  async function verificar() {
+    const params = new URLSearchParams(location.search);
+    const pathParts = location.pathname.split("/c/");
+    const contratoId = pathParts[1] ? pathParts[1].split("?")[0] : null;
+    const codigoUrl = params.get("v");
+
+    if (!contratoId || !codigoUrl) {
+      document.getElementById("resultado").textContent = "❌ URL inválida.";
+      return;
+    }
+
+    try {
+      const verifSnap = await db.collection("verificaciones").doc(contratoId).get();
+      if (!verifSnap.exists) {
+        document.getElementById("resultado").textContent = "❌ Contrato no encontrado.";
+        return;
+      }
+      const data = verifSnap.data();
+
+      if (data.firma_codigo !== codigoUrl) {
+        document.getElementById("resultado").innerHTML =
+          "<span style='color:red'>❌ Código de verificación incorrecto.</span>";
+        return;
+      }
+
+      const fecha = data.fecha_aprobacion?.toDate
+        ? data.fecha_aprobacion.toDate().toLocaleString("es-PA")
+        : "-";
+
+      const total = typeof data.total_con_itbms === "number"
+        ? data.total_con_itbms.toFixed(2)
+        : "0.00";
+
+      document.getElementById("resultado").innerHTML = `
+        <p style="color:green">✅ Contrato válido y activo</p>
+        <p><b>Contrato ID:</b> ${data.contrato_id || contratoId}</p>
+        <p><b>Cliente:</b> ${data.cliente_nombre || "-"}</p>
+        <p><b>Total (con ITBMS):</b> $${total}</p>
+        <p><b>Firmado por:</b> ${data.aprobado_por_nombre || "-"} 
+           (${data.aprobado_por_email || "-"}) – ${data.aprobado_por_rol || "-"}</p>
+        <p><b>Fecha de firma:</b> ${fecha}</p>
+      `;
+    } catch (e) {
+      console.error(e);
+      document.getElementById("resultado").textContent = "⚠️ Error verificando el contrato.";
+    }
+  }
+
+  verificar();
+</script>
+
+
+</body>
+</html>
