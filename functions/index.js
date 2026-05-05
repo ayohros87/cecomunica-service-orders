@@ -1020,7 +1020,7 @@ exports.onContratoAnuladoNotify = onDocumentUpdated(
 );
 
 // Trigger v2: cuando una orden pasa a COMPLETADO
-const { onDocumentUpdated: onDocUpdatedV2 } = require("firebase-functions/v2/firestore");
+const { onDocumentUpdated: onDocUpdatedV2, onDocumentWritten: onDocWrittenV2 } = require("firebase-functions/v2/firestore");
 
 exports.onOrdenCompletada = onDocUpdatedV2(
   { document: "ordenes_de_servicio/{ordenId}" },
@@ -1163,8 +1163,8 @@ function getISOWeekKey(d) {
  *   const tieneOS = data.tiene_os || (data.os_count ?? 0) > 0;
  *   celdaIcono.innerHTML = tieneOS ? '📦' : '⬜';
  */
-exports.onContratoOrdenWrite = onDocUpdatedV2(
-  { 
+exports.onContratoOrdenWrite = onDocWrittenV2(
+  {
     document: "contratos/{contratoId}/ordenes/{ordenId}",
     region: "us-central1"
   },
