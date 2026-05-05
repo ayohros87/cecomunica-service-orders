@@ -14,16 +14,12 @@ if (!firebase.apps.length) {
 
   firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 }
-// Habilita persistencia multi-tab usando la API moderna (reemplaza enablePersistence deprecado)
-try {
-  firebase.firestore().settings({
-    localCache: firebase.firestore.persistentLocalCache({
-      tabManager: firebase.firestore.persistentMultipleTabManager()
-    })
-  });
-} catch (err) {
+// enablePersistence is deprecated in SDK 10.x but not removed — the replacement
+// (persistentLocalCache) is only available via the modular SDK, not the compat CDN build.
+// Revisit when migrating off the compat SDK.
+firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((err) => {
   console.warn("Persistence no habilitada:", err.code || err);
-}
+});
 const db = firebase.firestore();
 
   window.verificarAccesoYAplicarVisibilidad = async function (callback) {
