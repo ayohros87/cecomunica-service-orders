@@ -65,18 +65,11 @@
     }
   </style>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
-      const firebaseConfig = {
-        apiKey: "AIzaSyDN1ErV5svRGPtx5tCi_FU_Vei6Dl-J_ng",
-        authDomain: "cecomunica-service-orders.firebaseapp.com",
-        projectId: "cecomunica-service-orders",
-        storageBucket: "cecomunica-service-orders.firebasestorage.app",
-        messagingSenderId: "615730883223",
-        appId: "1:615730883223:web:8cf1941241657bd08ad7d2"
-      };
-      firebase.initializeApp(firebaseConfig);
       const db = firebase.firestore();
 
       const lista = document.getElementById("lista-tecnicos");
