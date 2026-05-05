@@ -28,7 +28,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // ===== CONFIGURACIÓN =====
-const DRY_RUN = false; // Cambiar a false para escribir en DB
+const DRY_RUN = process.argv.includes("--dry-run"); // pasar --dry-run para preview sin escribir
 const BATCH_SIZE = 500;
 const LOG_EVERY = 10;
 const MAX_ORDENES_PER_BATCH = 100; // Para evitar timeout
