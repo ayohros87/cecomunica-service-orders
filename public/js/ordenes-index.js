@@ -234,7 +234,7 @@ document.addEventListener("DOMContentLoaded", function () {
       APP.state.user = userData || null;
       APP.state.userId = user.uid || null;
       APP.state.userRole = rol; // se usa globalmente
-      const shouldDefaultMine = ["tecnico", "tecnico_operativo"].includes(rol);
+      const shouldDefaultMine = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(rol);
       const toggleMisOrdenes = document.getElementById("toggleMisOrdenes");
       const mobileSoloMias = document.getElementById("mobileSoloMias");
       if (shouldDefaultMine) {
@@ -313,25 +313,25 @@ function aplicarRestriccionesPorRol(rol) {
   const mobileBtnAdminEquiposCliente = document.getElementById("mobileBtnAdminEquiposCliente");
 
   // Ocultar botones según rol
-  if (["vendedor", "vista"].includes(normalizedRole)) {
+  if ([ROLES.VENDEDOR, ROLES.VISTA].includes(normalizedRole)) {
     if (btnNuevaOrden) btnNuevaOrden.remove();
     if (btnConfig) btnConfig.remove();
   }
 
-  if (normalizedRole !== "administrador" && normalizedRole !== "recepcion") {
+  if (normalizedRole !== ROLES.ADMIN && normalizedRole !== ROLES.RECEPCION) {
     document.querySelectorAll(".btn-agregar-equipo").forEach(b => b.style.display = "none");
   }
 
   // ✅ Mostrar "Progreso Técnicos" a todos los técnicos y administradores
   if (btnProgreso) {
-    if (["administrador", "tecnico", "tecnico_operativo"].includes(normalizedRole)) {
+    if ([ROLES.ADMIN, ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(normalizedRole)) {
       btnProgreso.style.display = "inline-block";
     } else {
       btnProgreso.style.display = "none";
     }
   }
 
-  const isAdmin = normalizedRole === "administrador";
+  const isAdmin = normalizedRole === ROLES.ADMIN;
   if (btnAdminEquiposCliente) {
     btnAdminEquiposCliente.style.display = isAdmin ? "inline-flex" : "none";
   }
@@ -1098,7 +1098,7 @@ function botonesFlujo(ordenId, estado, ordenData) {
   let html = "";
   const tipoServicio = (ordenData?.tipo_de_servicio || "").toUpperCase();
 
-  if (rol === "administrador" || rol === "recepcion") {
+  if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     if (estado === "POR ASIGNAR") {
       html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">🛠️</span> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
@@ -1108,7 +1108,7 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
   }
 
-  else if (rol === "tecnico") {
+  else if (rol === ROLES.TECNICO) {
     if (estado === "POR ASIGNAR") {
       html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">🛠️</span> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
@@ -1116,13 +1116,13 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
   }
 
-  else if (rol === "tecnico_operativo") {
+  else if (rol === ROLES.TECNICO_OPERATIVO) {
     if (estado === "ASIGNADO") {
       html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">✅</span> Completar</button>`;
     }
   }
 
-  else if (rol === "vendedor") {
+  else if (rol === ROLES.VENDEDOR) {
     if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
       html += `<button class="btn" style="background:#8b5cf6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(139,92,246,0.3);" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">📲</span> Entregar</button>`;
     }
@@ -1145,7 +1145,7 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     { icon: "📸", label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
 
-  if (rol === "administrador" || rol === "recepcion") {
+  if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(
       { icon: "📜", label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: "📋", label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
@@ -1156,17 +1156,17 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       { icon: "✏️", label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
       { icon: "🗑️", label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" }
     );
-  } else if (rol === "tecnico" || rol === "tecnico_operativo") {
+  } else if (rol === ROLES.TECNICO || rol === ROLES.TECNICO_OPERATIVO) {
     menuItems.push(
       { icon: "🖨️", label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: "🧰", label: trabajo === 'COMPLETADO' ? "✓ Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
       { icon: "🧠", label: tieneNota ? "✓ Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
     );
-  } else if (rol === "vista") {
+  } else if (rol === ROLES.VISTA) {
     menuItems.push(
       { icon: "🖨️", label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
-  } else if (rol === "vendedor") {
+  } else if (rol === ROLES.VENDEDOR) {
     menuItems.push(
       { icon: "📜", label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: "�", label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
@@ -2138,7 +2138,7 @@ let _trabajoEquipoIdx = null;
 window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   // Check permissions
   const rol = APP.state.userRole || "";
-  if (!["tecnico","tecnico_operativo","administrador","recepcion"].includes(rol)) {
+  if (![ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.ADMIN, ROLES.RECEPCION].includes(rol)) {
     mostrarToast("Sin permisos para editar", "bad");
     return;
   }
@@ -2918,7 +2918,7 @@ window.closeAlertModal = function() {
     'go-config': () => window.location.href = BASE + 'config.html',
     'go-admin-equipos-cliente': () => {
       const currentRole = String(APP.state?.userRole || "").trim().toLowerCase();
-      if (currentRole !== 'administrador') {
+      if (currentRole !== ROLES.ADMIN) {
         mostrarToast('Solo administradores pueden acceder', 'bad');
         return;
       }

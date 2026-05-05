@@ -40,16 +40,6 @@ window.CONFIG = {
     MAIL_QUEUE: 'mail_queue'
   },
   
-  // Roles
-  ROLES: {
-    ADMIN: 'administrador',
-    TECNICO: 'tecnico',
-    TECNICO_OPERATIVO: 'tecnico_operativo',
-    RECEPCION: 'recepcion',
-    VENDEDOR: 'vendedor',
-    VISTA: 'vista'
-  },
-  
   // Estados de orden
   ESTADOS: {
     POR_ASIGNAR: 'POR ASIGNAR',
