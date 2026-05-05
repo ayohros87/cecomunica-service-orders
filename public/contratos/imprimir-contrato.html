@@ -7,6 +7,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 <script src="../js/firebase-init.js"></script>
+<script src="../js/core/roles.js"></script>
+<script src="../js/core/formatting.js"></script>
+<script src="../js/core/auth.js"></script>
+<script src="../js/services/contratosService.js"></script>
 <!-- QR simple (CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
@@ -294,10 +298,8 @@ img.logo-centrado {
     const contratoId = params.get("id");
 
 async function cargarContrato() {
-  const snap = await db.collection("contratos")
-    .where("contrato_id", "==", contratoId).limit(1).get();
-  if (snap.empty) return alert("Contrato no encontrado");
-  const data = snap.docs[0].data();
+  const data = await ContratosService.getByContratoId(contratoId);
+  if (!data) return alert("Contrato no encontrado");
 
   // --- declarar antes de usar ---
   let nombreVendedorResuelto = null;

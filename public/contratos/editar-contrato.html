@@ -7,6 +7,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
   <style>
   body {
     font-family: Arial, sans-serif;
@@ -253,7 +257,6 @@
   <script>
     const params = new URLSearchParams(location.search);
     const contratoDocId = params.get("id");
-    let contratoRef = null;
     let modelosDisponibles = [];
 async function cargarContrato() {
   if (!contratoDocId) {
@@ -270,14 +273,12 @@ async function cargarContrato() {
   }));
 
   // 2) Traer el contrato
-  contratoRef = db.collection("contratos").doc(contratoDocId);
-  const doc = await contratoRef.get();
-  if (!doc.exists) {
+  const c = await ContratosService.getContrato(contratoDocId);
+  if (!c) {
     alert("Contrato no encontrado.");
     window.location.href = "index.html";
     return;
   }
-  const c = doc.data(); // ← ahora sí existe 'c'
 
   // 3) Bloquear edición si ya fue aprobado
   if (c.estado === "activo") {
@@ -411,7 +412,7 @@ const renovacionModalidad = esRenovacion
 // Calcular total de equipos
 const total_equipos = equipos.reduce((acc, e) => acc + Number(e.cantidad || 0), 0);
 
-await contratoRef.update({
+await ContratosService.updateContrato(contratoDocId, {
   codigo_tipo: document.getElementById("tipo_contrato").value,
   tipo_contrato: document.getElementById("tipo_contrato").selectedOptions[0].text,
   accion: accionSeleccionada,
