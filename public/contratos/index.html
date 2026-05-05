@@ -159,6 +159,9 @@ table tbody tr:hover {
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
 <script src="../js/firebase-init.js"></script>
+<script src="../js/core/roles.js"></script>
+<script src="../js/core/formatting.js"></script>
+<script src="../js/core/auth.js"></script>
 
 </head>
 <body>
@@ -347,14 +350,14 @@ document.getElementById('btnCargarMas').addEventListener('click', async () => {
   }
 
   // === 💵 Totales con compatibilidad para contratos antiguos (fallback 7%) ===
-  function round2(n){ return Math.round((Number(n)+Number.EPSILON)*100)/100; }
+  const round2 = FMT.round2;
   function fmt(n){ return `$${round2(n).toFixed(2)}`; }
 
   // Recibe el documento del contrato (data) y devuelve totales normalizados.
   function resolverTotalesContrato(c){
     const tieneNuevos = typeof c.itbms_aplica !== 'undefined';
     const subtotal = Number(c.subtotal ?? c.total ?? 0);
-    const itbmsPorc = Number(c.itbms_porcentaje ?? 0.07);
+    const itbmsPorc = Number(c.itbms_porcentaje ?? FMT.ITBMS_RATE);
 
     let itbmsAplica, itbmsMonto, totalConITBMS;
     if (tieneNuevos){
@@ -439,7 +442,7 @@ auth.onAuthStateChanged(async user => {
     const params = new URLSearchParams(location.search);
     const aprobarId = params.get("aprobar");
     if (aprobarId) {
-      if (rol === "administrador") {
+      if (rol === ROLES.ADMIN) {
         try {
           const doc = await db.collection("contratos").doc(aprobarId).get();
           if (doc.exists) {
@@ -464,7 +467,7 @@ auth.onAuthStateChanged(async user => {
 
    function aplicarRestriccionesPorRol(rol) {
   // Solo admin, vendedor y recepción pueden usar este módulo
-  if (rol !== "administrador" && rol !== "vendedor" && rol !== "recepcion") {
+  if (rol !== ROLES.ADMIN && rol !== ROLES.VENDEDOR && rol !== ROLES.RECEPCION) {
     alert("❌ No autorizado para ver Contratos.");
     window.location.href = "/index.html";
     return;
@@ -472,12 +475,12 @@ auth.onAuthStateChanged(async user => {
 
   const btnNuevoContrato = document.getElementById("btnNuevoContrato");
   if (btnNuevoContrato) {
-    btnNuevoContrato.style.display = (rol === "administrador" || rol === "vendedor") ? "inline-block" : "none";
+    btnNuevoContrato.style.display = (rol === ROLES.ADMIN || rol === ROLES.VENDEDOR) ? "inline-block" : "none";
   }
 
   // ⚠️ Botón de backfill deshabilitado - Cloud Functions sincronizan automáticamente
   // const btnBackfill = document.getElementById("btnBackfillEquipos");
-  // if (btnBackfill && rol === "administrador") {
+  // if (btnBackfill && rol === ROLES.ADMIN) {
   //   btnBackfill.style.display = "inline-block";
   // }
 
@@ -554,9 +557,9 @@ if (filtroClienteInput) {
     }
 
 function crearFilaContrato(id, data) {
-  const puedeEditar = (window.userRole === 'administrador' || window.userRole === 'vendedor');
-  const esAdmin = window.userRole === 'administrador';
-  const esRecepcion = window.userRole === 'recepcion';
+  const puedeEditar = (AUTH.is(ROLES.ADMIN) || AUTH.is(ROLES.VENDEDOR));
+  const esAdmin = AUTH.is(ROLES.ADMIN);
+  const esRecepcion = AUTH.is(ROLES.RECEPCION);
   const puedePanelTrabajo = esAdmin || esRecepcion;
   const editable = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
   const yaFirmado = !!data.firmado_url;
@@ -596,7 +599,7 @@ function crearFilaContrato(id, data) {
   // Eliminar: no mostrar si activo, aprobado o anulado
   let btnBorrar = '';
   if (!['activo','aprobado','anulado'].includes(data.estado)) {
-    if (esAdmin || window.userRole === 'vendedor') {
+    if (esAdmin || AUTH.is(ROLES.VENDEDOR)) {
       btnBorrar = `<button class="btn danger" onclick="borrarContrato('${id}')" title="Eliminar">🗑️</button>`;
     }
   }
@@ -679,7 +682,7 @@ async function anularContrato(id) {
     if (!doc.exists) return alert("Contrato no encontrado.");
 
     const c = doc.data();
-    const esAdmin = window.userRole === 'administrador';
+    const esAdmin = AUTH.is(ROLES.ADMIN);
 
     // Ahora solo se puede anular si está ACTIVO y eres ADMIN
     if (!esAdmin) {
@@ -911,8 +914,8 @@ async function borrarContrato(id) {
     if (!snap.exists) return alert("Contrato no encontrado.");
 
     const c = snap.data();
-    const esAdmin = window.userRole === 'administrador';
-    const esVendedor = window.userRole === 'vendedor';
+    const esAdmin = AUTH.is(ROLES.ADMIN);
+    const esVendedor = AUTH.is(ROLES.VENDEDOR);
 
 if (["activo","aprobado","anulado"].includes(c.estado)) {
   return alert("Un contrato APROBADO/ACTIVO/ANULADO no se puede eliminar. Use ANULAR si corresponde.");
@@ -939,7 +942,7 @@ if (["activo","aprobado","anulado"].includes(c.estado)) {
 }
 async function marcarParaComision(id) {
   try {
-    if (window.userRole !== 'administrador') {
+    if (!AUTH.is(ROLES.ADMIN)) {
       alert("Solo el administrador puede cambiar este estado.");
       return;
     }
@@ -962,7 +965,7 @@ async function marcarParaComision(id) {
 
 async function quitarMarcaComision(id) {
   try {
-    if (window.userRole !== 'administrador') {
+    if (!AUTH.is(ROLES.ADMIN)) {
       alert("Solo el administrador puede cambiar este estado.");
       return;
     }
@@ -1081,7 +1084,7 @@ async function cargarContratos(reset = false) {
     }
 
     const role = String(window.userRole || "").toLowerCase();
-    if (role === "vendedor") {
+    if (role === ROLES.VENDEDOR) {
       if (!currentUser) return;
       baseQuery = baseQuery.where("creado_por_uid", "==", currentUser.uid);
     }
@@ -1362,7 +1365,7 @@ const storage = firebase.storage();
 let contratoParaFirma = null;
 
 function subirFirmado(idDocContrato) {
-  if (window.userRole !== 'administrador' && window.userRole !== 'vendedor') {
+  if (!AUTH.is(ROLES.ADMIN) && !AUTH.is(ROLES.VENDEDOR)) {
     alert('Solo administrador o vendedor pueden subir contratos firmados.');
     return;
   }
@@ -1494,9 +1497,9 @@ async function solicitarAprobacionPorCorreo(docId) {
 const esMovil = () => window.matchMedia("(max-width: 760px)").matches;
 
 function crearCardContratoMovil(data) {
-  const esAdmin = window.userRole === 'administrador';
-  const esRecepcion = window.userRole === 'recepcion';
-  const puedeEditar = (window.userRole === 'administrador' || window.userRole === 'vendedor');
+  const esAdmin = AUTH.is(ROLES.ADMIN);
+  const esRecepcion = AUTH.is(ROLES.RECEPCION);
+  const puedeEditar = (AUTH.is(ROLES.ADMIN) || AUTH.is(ROLES.VENDEDOR));
   const puedePanelTrabajo = esAdmin || esRecepcion;
   const editable = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
   const puedeAprobar = esAdmin && data.estado === 'pendiente_aprobacion';
@@ -1991,7 +1994,7 @@ async function backfillContratoEquipos(contratoDocId) {
 }
 
 async function iniciarBackfillTodosContratos() {
-  if (window.userRole !== "administrador") {
+  if (!AUTH.is(ROLES.ADMIN)) {
     alert("❌ Solo administradores pueden ejecutar esta acción.");
     return;
   }
