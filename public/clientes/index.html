@@ -11,6 +11,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
 
  <link rel="stylesheet" href="../css/ceco-ui.css">
  <style>
@@ -120,7 +123,7 @@
 
 async function cargarVendedores() {
   const snap = await db.collection('usuarios')
-    .where('rol', 'in', ['vendedor', 'administrador'])
+    .where('rol', 'in', [ROLES.VENDEDOR, ROLES.ADMIN])
     .get();
 
   listaVendedores = snap.docs.map(d => {
@@ -141,8 +144,8 @@ async function cargarVendedores() {
   const PAGE_SIZE = 20;
   let lastDoc = null;
   let currentQuery = null;
-  let role = "vista"; // por defecto
-  const ALLOWED_ROLES = new Set(['admin','administrador','recepcion']);
+  let role = ROLES.VISTA; // por defecto
+  const ALLOWED_ROLES = new Set(['admin', ROLES.ADMIN, ROLES.RECEPCION]);
 let currentPage = 1;
 let knownTotalPages = null;
 // Cursor ANTES de cada página (1-based): pageCursors[1] = null (inicio)
@@ -167,7 +170,7 @@ const pageCursors = { 1: null };
     return Array.from(toks).slice(0,200); // límite de seguridad
   }
   function asReadonly(){
-  return !(role==="admin" || role==="administrador" || role==="editor" || role==="recepcion");
+  return !(role==="admin" || role===ROLES.ADMIN || role==="editor" || role===ROLES.RECEPCION);
 }
 // --- Helpers para confirmación bonita y seguridad de HTML ---
 function escapeHtml(s){
@@ -309,8 +312,8 @@ $selectAll.onchange = ()=>{
     // Carga rol (ajústalo a tu fuente: custom claims o colección usuarios)
     try{
       const u = await db.collection('usuarios').doc(user.uid).get();
-      role = u.exists && u.data().rol ? u.data().rol : "vista";
-    }catch(e){ role="vista"; }
+      role = u.exists && u.data().rol ? u.data().rol : ROLES.VISTA;
+    }catch(e){ role=ROLES.VISTA; }
     
 // --- Guard: acceso solo para admin/administrador/recepcion ---
 if (!ALLOWED_ROLES.has(role)) {

@@ -644,6 +644,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script>
@@ -757,7 +760,7 @@ function actualizarResumenPOC({ total = 0, activos = 0, incompletos = 0 } = {}) 
     let campoOrdenActual = "created_at"; // Orden por fecha de creación
     let direccionOrdenAsc = false;       // De más reciente a más antigua
     let filtroID = 0; // Control para cancelar búsquedas simultáneas
-    let rolActual = "vista";            // ← GLOBAL NUEVO
+    let rolActual = ROLES.VISTA;         // ← GLOBAL NUEVO
 
     // ✅ Centralized column index mapping (10-column compact table)
     const COL = {
@@ -778,7 +781,7 @@ function actualizarResumenPOC({ total = 0, activos = 0, incompletos = 0 } = {}) 
     let currentEditRow = null;
   
     function esSoloLecturaPOC() {       // ← TRUE para técnico y vista
-    return rolActual === "tecnico" || rolActual === "vista";
+    return rolActual === ROLES.TECNICO || rolActual === ROLES.VISTA;
   }
 
     document.addEventListener("DOMContentLoaded", function () {
@@ -789,10 +792,10 @@ function actualizarResumenPOC({ total = 0, activos = 0, incompletos = 0 } = {}) 
     }
 
     const snap = await db.collection("usuarios").doc(user.uid).get();
-    rolActual = snap.data()?.rol || "vista";
+    rolActual = snap.data()?.rol || ROLES.VISTA;
 
     // ✅ Solo estos roles pueden entrar a POC/index
-    const permitidos = ["administrador", "recepcion", "tecnico", "vista"];
+    const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA];
     if (!permitidos.includes(rolActual)) {
       alert("❌ No autorizado. Tu rol no tiene acceso a este módulo.");
       window.location.href = "/index.html";
@@ -2045,7 +2048,7 @@ function activarEdicionMasiva() {
     return;
   }
 
-  if (rolActual !== "administrador" && rolActual !== "recepcion") {
+  if (rolActual !== ROLES.ADMIN && rolActual !== ROLES.RECEPCION) {
     alert("❌ Solo administradores o recepción pueden usar edición masiva.");
     return;
   }
