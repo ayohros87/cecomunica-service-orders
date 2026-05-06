@@ -1,5 +1,13 @@
 # Changelog
 
+## [Phase 5b] — 2026-05-06
+
+### Refactor
+- Added `FMT.normalize(s)` to `public/js/core/formatting.js` — canonical diacritic-stripping + lowercase normalizer for text search
+- `contratos-index.js` — removed `getCurrentRole()` (2 call sites → `AUTH.getRole()`); removed local `fmt()` (5 call sites → `FMT.money()`)
+- `nuevo-contrato.js` — removed `round2()`, `fmt()`, `norm()`, `ITBMS_PORCENTAJE` (14 call sites → `FMT.round2`, `FMT.money`, `FMT.normalize`, `FMT.ITBMS_RATE`)
+- `vendedores-batch.js` — removed `normalizar()` (5 call sites → `FMT.normalize()`); added `core/formatting.js` + `core/auth.js` to `vendedores-batch.html`
+
 ## [Phase 5] — 2026-05-06
 
 ### Refactor
