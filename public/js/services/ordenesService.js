@@ -451,15 +451,68 @@ const OrdenesService = {
     return doc.exists ? doc.data() : null;
   },
 
-  /**
-   * Get order by ID
-   * @param {string} ordenId - Order ID
-   * @returns {Promise<Object>}
-   */
-  async getOrder(ordenId) {
+  async getConsumos(ordenId, { tipo, equipoId, orderByField } = {}) {
     const db = firebase.firestore();
-    const doc = await db.collection("ordenes_de_servicio").doc(ordenId).get();
-    return doc.exists ? { ordenId: doc.id, ...doc.data() } : null;
+    let q = db.collection("ordenes_de_servicio").doc(ordenId).collection("consumos");
+    if (tipo) q = q.where("tipo", "==", tipo);
+    if (equipoId) q = q.where("equipoId", "==", equipoId);
+    if (orderByField) q = q.orderBy(orderByField, "desc");
+    const snap = await q.get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  async getConsumo(ordenId, lineaId) {
+    const db = firebase.firestore();
+    const doc = await db.collection("ordenes_de_servicio").doc(ordenId).collection("consumos").doc(lineaId).get();
+    if (!doc.exists) return null;
+    return { id: doc.id, ...doc.data() };
+  },
+
+  async addConsumo(ordenId, data) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(ordenId).collection("consumos").add(data);
+  },
+
+  async updateConsumo(ordenId, lineaId, fields) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(ordenId).collection("consumos").doc(lineaId).update(fields);
+  },
+
+  async deleteConsumo(ordenId, lineaId) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(ordenId).collection("consumos").doc(lineaId).delete();
+  },
+
+  async updateOrder(id, fields) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(id).update(fields);
+  },
+
+  async mergeOrder(id, data) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(id).set(data, { merge: true });
+  },
+
+  async setOrder(id, data) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(id).set(data);
+  },
+
+  async listAll() {
+    const db = firebase.firestore();
+    const snap = await db.collection("ordenes_de_servicio").get();
+    return snap.docs.map(doc => ({ ordenId: doc.id, ...doc.data() }));
+  },
+
+  async filterByStatuses(statuses, orderField = "fecha_entrada") {
+    const db = firebase.firestore();
+    const snap = await db.collection("ordenes_de_servicio")
+      .where("estado_reparacion", "in", statuses)
+      .orderBy(orderField, "desc")
+      .get();
+    return snap.docs
+      .filter(doc => doc.data().eliminado !== true)
+      .map(doc => ({ ordenId: doc.id, ...doc.data() }));
   }
 };
 

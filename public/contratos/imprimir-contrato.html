@@ -11,6 +11,7 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script src="../js/services/contratosService.js"></script>
+<script src="../js/services/usuariosService.js"></script>
 <!-- QR simple (CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 
@@ -405,9 +406,9 @@ let vendedorInfo = { nombre: "Vendedor", cargo: "Vendedor", email: "" };
 
 if (data.creado_por_uid) {
   try {
-    const docUser = await db.collection("usuarios").doc(data.creado_por_uid).get();
-   if (docUser.exists) {
-  const u = docUser.data();
+    const docUser = await UsuariosService.getUsuario(data.creado_por_uid);
+   if (docUser) {
+  const u = docUser;
   vendedorInfo.nombre = u.nombre || u.Nombre || vendedorInfo.nombre; // acepta ambas variantes
   vendedorInfo.cargo  = u.cargo || "Vendedor";
   vendedorInfo.email  = u.email || "";
@@ -423,9 +424,9 @@ if (data.creado_por_uid) {
 let aprobadorInfo = null;
 if (data.aprobado_por_uid) {
   try {
-    const docApr = await db.collection("usuarios").doc(data.aprobado_por_uid).get();
-    if (docApr.exists) {
-      const u = docApr.data();
+    const docApr = await UsuariosService.getUsuario(data.aprobado_por_uid);
+    if (docApr) {
+      const u = docApr;
       aprobadorInfo = {
         nombre: u.nombre || "________",
         cargo:  u.cargo || (u.rol ? u.rol.charAt(0).toUpperCase() + u.rol.slice(1) : "Administrador"),

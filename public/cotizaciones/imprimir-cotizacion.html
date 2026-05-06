@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
 
   <style>
     body { background: #f5f7fa; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
@@ -138,9 +139,8 @@
     }
 
     async function cargarCotizacion(id) {
-      const doc = await db.collection("cotizaciones").doc(id).get();
-      if (!doc.exists) { alert("Cotización no encontrada"); return; }
-      const d = doc.data() || {};
+      const d = await CotizacionesService.getCotizacion(id);
+      if (!d) { alert("Cotización no encontrada"); return; }
 
       const setRow = (rowId, valueId, value) => {
         const row = document.getElementById(rowId);

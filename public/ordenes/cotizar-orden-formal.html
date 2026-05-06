@@ -142,6 +142,9 @@
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
 <script src="../js/firebase-init.js"></script>
+<script src="../js/services/empresaService.js"></script>
+<script src="../js/services/ordenesService.js"></script>
+<script src="../js/services/clientesService.js"></script>
 <script>
 const params = new URLSearchParams(location.search);
 const ordenId = params.get('id');
@@ -152,9 +155,8 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   // === Empresa (perfil + ITBMS) ===
   let itbms = 0.07;
   try{
-    const pf = await db.collection('empresa').doc('perfil').get();
-    if(pf.exists){
-      const ed = pf.data();
+    const ed = await EmpresaService.getDoc('perfil');
+    if(ed){
       byId('empresa_nombre').innerText = ed.nombre_legal || 'C COMUNICA, S.A.';
       byId('firma_empresa').innerText = ed.nombre_legal || 'C COMUNICA, S.A.';
       byId('empresa_slogan').innerText = ed.slogan || '';
@@ -163,16 +165,14 @@ firebase.auth().onAuthStateChanged(async (user)=>{
         <small>Tel: ${ed.telefono || '—'} · Email: ${ed.email || '—'}</small>
         <small>Dirección: ${ed.direccion || '—'}</small>`;
     }
-    const pr = await db.collection('empresa').doc('parametros').get();
-    if(pr.exists && typeof pr.data().itbms === 'number') itbms = pr.data().itbms;
+    const pr = await EmpresaService.getDoc('parametros');
+    if(pr && typeof pr.itbms === 'number') itbms = pr.itbms;
   }catch(e){ console.warn('empresa',e); }
   byId('itbms_pct').innerText = (itbms*100).toFixed(0);
 
   // === Orden ===
-  const oRef = db.collection('ordenes_de_servicio').doc(ordenId);
-  const o = await oRef.get();
-  if(!o.exists){ byId('head').innerText='Orden no encontrada'; return; }
-  const od = o.data();
+  const od = await OrdenesService.getOrder(ordenId);
+  if(!od){ byId('head').innerText='Orden no encontrada'; return; }
 
   // Encabezado
   const fecha = od.fecha_creacion?.toDate ? od.fecha_creacion.toDate().toISOString().slice(0,10) : '—';
@@ -184,9 +184,8 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   let clienteExtra = '';
   if(od.cliente_id){
     try{
-      const c = await db.collection('clientes').doc(od.cliente_id).get();
-      if(c.exists){
-        const cd = c.data();
+      const cd = await ClientesService.getCliente(od.cliente_id);
+      if(cd){
         clienteNombre = cd.nombre || clienteNombre;
         clienteExtra = [cd.representante, cd.telefono, cd.correo, cd.direccion].filter(Boolean).join(' · ');
       }
@@ -198,8 +197,7 @@ firebase.auth().onAuthStateChanged(async (user)=>{
     <div>Estado: <strong>${(od.estado_reparacion||'').toUpperCase()}</strong></div>`;
 
   // === Consumos cobrables (una sola lectura) ===
-  const consSnap = await oRef.collection('consumos').where('tipo','==','cobro').get();
-  const rows = consSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+  const rows = await OrdenesService.getConsumos(ordenId, { tipo: 'cobro' });
 
   // === Agrupar por equipo ===
   // Determina IDs de equipo (usa e.id o numero_de_serie)

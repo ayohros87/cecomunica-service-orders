@@ -15,24 +15,25 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/inventarioService.js"></script>
 
   <script>
     window.onload = async () => {
   const tabla = document.getElementById("tablaCorreo");
 
-  const modelosSnap = await db.collection("modelos").get();
+  const modelosList = await ModelosService.getModelos();
   const modelosMap = {};
-  modelosSnap.forEach(doc => modelosMap[doc.id] = doc.data());
+  modelosList.forEach(m => modelosMap[m.id] = m);
 
-  const inventarioSnap = await db.collection("inventario_actual").get();
-  if (inventarioSnap.empty) {
+  const inventario = await InventarioService.getInventarioActual();
+  if (inventario.length === 0) {
     tabla.innerHTML = "<tr><td colspan='9'>No hay datos</td></tr>";
     return;
   }
 
   const datos = [];
-  inventarioSnap.forEach(doc => {
-    const data = doc.data();
+  inventario.forEach(data => {
     const modelo = modelosMap[data.modelo_id] || {};
     datos.push({ modelo, data });
   });

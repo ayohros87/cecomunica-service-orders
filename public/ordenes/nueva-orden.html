@@ -14,6 +14,10 @@
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
   <script src="../js/services/mailService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -554,13 +558,12 @@
     }
 
     async function cargarClientes() {
-  const snap = await db.collection("clientes").where("deleted", "==", false).orderBy("nombre").get();
+  const { docs } = await ClientesService.listClientes({ limit: 2000 });
   clienteSelect.innerHTML = '<option value="">Seleccione un cliente</option>';
-  snap.forEach(doc => {
-    const d = doc.data();
+  docs.forEach(c => {
     const option = document.createElement("option");
-    option.value = doc.id;
-    option.textContent = d.nombre;
+    option.value = c.id;
+    option.textContent = c.nombre;
     clienteSelect.appendChild(option);
   });
   clienteSelect.addEventListener("change", async () => {
@@ -568,23 +571,17 @@
   if (!clienteId) return;
 
   try {
-    const cSnap = await db.collection("clientes").doc(clienteId).get();
-    if (cSnap.exists) {
-      const c = cSnap.data();
+    const c = await ClientesService.getCliente(clienteId);
+    if (c) {
       const vendSelect = document.getElementById("vendedor");
       vendSelect.innerHTML = '<option value="">Seleccione vendedor</option>';
 
-      // cargar lista de usuarios rol vendedor/administrador
-      const uSnap = await db.collection("usuarios")
-        .where("rol", "in", ["vendedor", "administrador"])
-        .get();
-
-      uSnap.forEach(d => {
-        const u = d.data();
+      const vendedores = await UsuariosService.getVendedores();
+      vendedores.forEach(v => {
         const opt = document.createElement("option");
-        opt.value = d.id;
-        opt.textContent = (u.nombre || u.email || d.id);
-        if (c.vendedor_asignado === d.id) opt.selected = true; // ✅ selecciona vendedor del cliente
+        opt.value = v.id;
+        opt.textContent = (v.nombre || v.email || v.id);
+        if (c.vendedor_asignado === v.id) opt.selected = true;
         vendSelect.appendChild(opt);
       });
     }
@@ -599,9 +596,9 @@
 
 
     async function cargarTiposDeServicio() {
-      const snap = await db.collection("empresa").doc("tipo_de_servicio").get();
-      if (snap.exists) {
-        const lista = snap.data().list || [];
+      const snap = await EmpresaService.getDoc("tipo_de_servicio");
+      if (snap) {
+        const lista = snap.list || [];
         lista.forEach(nombre => {
           const option = document.createElement("option");
           option.value = nombre;
@@ -629,10 +626,10 @@
     return;
   }
 
-  await db.collection("clientes").add({
+  await ClientesService.createCliente({
     nombre: nombreLimpio,
     fecha_creacion: new Date(),
-    deleted: false 
+    deleted: false
   });
 
   alert("✅ Cliente registrado.");
@@ -740,7 +737,7 @@
         }
 
       try {
-        await db.collection("ordenes_de_servicio").doc(id).set(data);
+        await OrdenesService.setOrder(id, data);
         
         // ✅ Enviar notificación al jefe de taller
 try {

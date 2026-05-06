@@ -10,6 +10,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
 
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
@@ -86,7 +89,6 @@
 <script>
 (function(){
   const auth = firebase.auth();
-  const db = firebase.firestore();
 
   const $ = (id)=>document.getElementById(id);
   const params = new URLSearchParams(location.search);
@@ -111,23 +113,19 @@
   });
 
   async function cargar(){
-    const snap = await db.collection('clientes').doc(id).get();
-    if(!snap.exists){ alert('Cliente no encontrado'); location.href='./index.html'; return; }
-    const c = snap.data();
-        // Cargar lista de vendedores
-    const snapVend = await db.collection('usuarios')
-      .where('rol', 'in', ['vendedor', 'administrador'])
-      .get();
+    const c = await ClientesService.getCliente(id);
+    if(!c){ alert('Cliente no encontrado'); location.href='./index.html'; return; }
+    // Cargar lista de vendedores
+    const vendedores = await UsuariosService.getVendedores();
     const $vend = document.getElementById('vendedor_asignado');
     $vend.innerHTML = '<option value="">-- Sin asignar --</option>';
-    snapVend.forEach(d => {
-      const data = d.data();
+    vendedores.forEach(d => {
       const opt = document.createElement('option');
       opt.value = d.id;
-      if (data.nombre) {
-        opt.textContent = `${data.nombre} (${data.email || ''})`;
+      if (d.nombre) {
+        opt.textContent = `${d.nombre} (${d.email || ''})`;
       } else {
-        opt.textContent = data.email || d.id;
+        opt.textContent = d.email || d.id;
       }
       if (c.vendedor_asignado === d.id) opt.selected = true;
       $vend.appendChild(opt);
@@ -181,12 +179,11 @@ $('guardar').onclick = async ()=> {
 
   try {
     if(id){
-      payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-      await db.collection('clientes').doc(id).update(payload);
+      await ClientesService.updateCliente(id, payload);
     } else {
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-      const ref = await db.collection('clientes').add(payload);
+      await ClientesService.createCliente(payload);
     }
     alert('Guardado');
     location.href = './index.html';

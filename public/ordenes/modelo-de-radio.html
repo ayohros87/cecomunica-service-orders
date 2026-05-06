@@ -68,6 +68,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
   <script>
    firebase.auth().onAuthStateChanged(async function(user) {
     if (!user) {
@@ -77,9 +79,9 @@
     }
 
     try {
-      const doc = await firebase.firestore().collection("usuarios").doc(user.uid).get();
+      const doc = await UsuariosService.getUsuario(user.uid);
 
-      if (!doc.exists || doc.data().rol !== "administrador") {
+      if (!doc || doc.rol !== "administrador") {
         alert("Acceso restringido solo a administradores.");
         window.location.href = "index.html";
         return;
@@ -107,18 +109,18 @@
       
       async function cargarModelos() {
       lista.innerHTML = "";
-      const snapshot = await db.collection("modelos").orderBy("modelo").get();
-      snapshot.forEach(doc => {
-        const modelo = doc.data();
+      const modelos = await ModelosService.getModelos();
+      modelos.sort((a, b) => (a.modelo || "").localeCompare(b.modelo || ""));
+      modelos.forEach(m => {
         const li = document.createElement("li");
         li.innerHTML = `
           <span>
-            <strong>${modelo.modelo}</strong> - ${modelo.marca || ''} / ${modelo.tipo || ''} / ${modelo.estado || ''}
+            <strong>${m.modelo}</strong> - ${m.marca || ''} / ${m.tipo || ''} / ${m.estado || ''}
 
           </span>
           <div class="actions">
-            <button onclick="editarModelo('${doc.id}')">✏️</button>
-            <button onclick="borrarModelo('${doc.id}')">🗑️</button>
+            <button onclick="editarModelo('${m.id}')">✏️</button>
+            <button onclick="borrarModelo('${m.id}')">🗑️</button>
           </div>`;
         lista.appendChild(li);
       });
@@ -126,14 +128,13 @@
 
 
       window.editarModelo = async (id) => {
-      const doc = await db.collection("modelos").doc(id).get();
-      if (!doc.exists) return alert("Modelo no encontrado");
+      const m = await ModelosService.getModelo(id);
+      if (!m) return alert("Modelo no encontrado");
 
-      const data = doc.data();
-      document.getElementById("nombre-modelo").value = data.modelo || "";
-      document.getElementById("marca-modelo").value = data.marca || "";
-      document.getElementById("tipo-modelo").value = data.tipo || "";
-document.getElementById("estado-modelo").value = data.estado || "";
+      document.getElementById("nombre-modelo").value = m.modelo || "";
+      document.getElementById("marca-modelo").value = m.marca || "";
+      document.getElementById("tipo-modelo").value = m.tipo || "";
+document.getElementById("estado-modelo").value = m.estado || "";
 
       editandoId = id;
     };
@@ -141,7 +142,7 @@ document.getElementById("estado-modelo").value = data.estado || "";
 
     window.borrarModelo = async (id) => {
     if (!confirm(`¿Eliminar modelo permanentemente?`)) return;
-    await db.collection("modelos").doc(id).delete();
+    await ModelosService.deleteModelo(id);
     await cargarModelos();
   };
 
@@ -156,22 +157,10 @@ document.getElementById("estado-modelo").value = data.estado || "";
   if (!modelo) return;
 
   if (editandoId) {
-    await db.collection("modelos").doc(editandoId).update({
-      modelo,
-      marca,
-      tipo,
-      estado,
-      actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await ModelosService.updateModelo(editandoId, { modelo, marca, tipo, estado });
     editandoId = null;
   } else {
-    await db.collection("modelos").add({
-      modelo,
-      marca,
-      tipo,
-      estado,
-      creado_en: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await ModelosService.addModelo({ modelo, marca, tipo, estado });
   }
 
   form.reset();

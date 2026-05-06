@@ -218,6 +218,12 @@ label { color: #1f2937; }
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
 
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+  <script src="../js/services/piezasService.js"></script>
+  <script src="../js/services/mailService.js"></script>
 
    <div class="header-card">
     <div id="infoOrden" class="resumen"></div>
@@ -397,22 +403,21 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   usuarioActual.email = user.email || '';
 
   try{
-    const u = await db.collection('usuarios').doc(user.uid).get();
-    rolUsuario = u.exists ? (u.data().rol || null) : null;
-    usuarioActual.nombre = (u.exists && u.data().nombre) ? u.data().nombre : (usuarioActual.email || 'Usuario');
+    const u = await UsuariosService.getUsuario(user.uid);
+    rolUsuario = u ? (u.rol || null) : null;
+    usuarioActual.nombre = (u && u.nombre) ? u.nombre : (usuarioActual.email || 'Usuario');
   }catch{}
   byId('chipUsuario').textContent = `Operando como: ${usuarioActual.nombre}`;
 
   // Parámetros
   try{
-    const p = await db.collection('empresa').doc('parametros').get();
-    if(p.exists && typeof p.data().itbms==='number') itbmsPct = p.data().itbms;
+    const p = await EmpresaService.getDoc('parametros');
+    if(p && typeof p.itbms==='number') itbmsPct = p.itbms;
   }catch{}
 
   // Orden
-  const oSnap = await db.collection('ordenes_de_servicio').doc(ordenId).get();
-  if(!oSnap.exists){ alert('Orden no encontrada'); return; }
-  ordenData = oSnap.data();
+  ordenData = await OrdenesService.getOrder(ordenId);
+  if(!ordenData){ alert('Orden no encontrada'); return; }
 
   // bloquear si cotización emitida
   const bloqueada = ordenData.cotizacion_emitida === true;
@@ -422,8 +427,8 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   let cliente = ordenData.cliente_nombre || ordenData.cliente || '—';
   if(ordenData.cliente_id){
     try{
-      const c = await db.collection('clientes').doc(ordenData.cliente_id).get();
-      if(c.exists) cliente = c.data().nombre || cliente;
+      const c = await ClientesService.getCliente(ordenData.cliente_id);
+      if(c) cliente = c.nombre || cliente;
     }catch{}
   }
   const fecha = ordenData.fecha_creacion?.toDate ? ordenData.fecha_creacion.toDate().toISOString().slice(0,10) : '—';
@@ -471,8 +476,7 @@ async function cargarInventarioConCache(){
       return;
     }
   }catch{}
-  const invSnap = await db.collection('inventario_piezas').where('activo','==',true).get();
-  inventario = invSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+  inventario = (await PiezasService.getPiezas()).filter(p => p.activo);
   // Índices
 inventarioById.clear();
 inventario.forEach(p => inventarioById.set(p.id, p));
@@ -496,16 +500,15 @@ function pintarChipTrabajo(estado){
 
 async function setTrabajoEstado(nuevo){
   try{
-    await db.collection('ordenes_de_servicio').doc(ordenId).set({ trabajo_estado:nuevo }, { merge:true });
+    await OrdenesService.mergeOrder(ordenId, { trabajo_estado:nuevo });
     pintarChipTrabajo(nuevo);
   }catch(e){ console.warn('setTrabajoEstado',e); }
 }
 async function ensureEnProgreso(){
   try{
-    const ref = db.collection('ordenes_de_servicio').doc(ordenId);
-    const s = await ref.get();
-    const cur = s.exists ? s.data().trabajo_estado : null;
-    if(cur !== 'COMPLETADO'){ await ref.set({ trabajo_estado:'EN_PROGRESO' }, { merge:true }); pintarChipTrabajo('EN_PROGRESO'); }
+    const s = await OrdenesService.getOrder(ordenId);
+    const cur = s ? s.trabajo_estado : null;
+    if(cur !== 'COMPLETADO'){ await OrdenesService.mergeOrder(ordenId, { trabajo_estado:'EN_PROGRESO' }); pintarChipTrabajo('EN_PROGRESO'); }
   }catch(e){ console.warn('ensureEnProgreso', e); }
 }
 
@@ -696,9 +699,8 @@ async function chipAddPieza(eid, piezaId){
     if (ordenData?.cotizacion_emitida === true) { alert('Orden bloqueada.'); return; }
 
     const piezaRef = db.collection('inventario_piezas').doc(piezaId);
-    const snap = await piezaRef.get();
-    if(!snap.exists) return;
-    const p = { id: piezaId, ...snap.data() };
+    const p = await PiezasService.getPieza(piezaId);
+    if(!p) return;
 
     const qty = 1;
     const tipo = 'cobro';
@@ -707,7 +709,7 @@ async function chipAddPieza(eid, piezaId){
     const sinControl = p.sin_control_inventario === true;
 
     // 1) Agregar línea de consumo
-    await db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').add({
+    await OrdenesService.addConsumo(ordenId, {
       equipoId: eid,
       pieza_id: piezaId,
       pieza_nombre: p.descripcion || p.nombre || ((p.marca||'')+' '+(p.modelo||'')),
@@ -851,15 +853,14 @@ document.addEventListener('change', async (e) => {
 
   const id = e.target.getAttribute('data-id');
   const nuevoTipo = e.target.value;
-  const ref = db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(id);
-  const snap = await ref.get(); if (!snap.exists) return;
-  const d = snap.data();
+  const d = await OrdenesService.getConsumo(ordenId, id);
+  if (!d) return;
 
   const qty = Math.max(1, Number(d.qty || 1));
   const precio = Number(d.precio_unit || 0);
   const nuevoSub = (nuevoTipo === 'cobro') ? (qty * precio) : 0;
 
-  await ref.update({ tipo:nuevoTipo, subtotal:nuevoSub, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+  await OrdenesService.updateConsumo(ordenId, id, { tipo:nuevoTipo, subtotal:nuevoSub, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
   e.target.setAttribute('data-prev', nuevoTipo);
 
   await ensureEnProgreso();
@@ -877,26 +878,24 @@ document.addEventListener('change', async (e) => {
   e.target.value = String(nuevaQty);
   e.target.setAttribute('data-prev', String(nuevaQty));
 
-  const ref = db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(id);
-  const snap = await ref.get(); if (!snap.exists) return;
-  const d = snap.data();
+  const d = await OrdenesService.getConsumo(ordenId, id);
+  if (!d) return;
 
   const precio = Number(d.precio_unit || 0);
   const nuevoSub = (d.tipo === 'cobro') ? (nuevaQty * precio) : 0;
 
-  await ref.update({ qty:nuevaQty, subtotal:nuevoSub, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+  await OrdenesService.updateConsumo(ordenId, id, { qty:nuevaQty, subtotal:nuevoSub, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
   await ensureEnProgreso();
 });
 
 async function editarPrecio(lineaId){
   if (ordenData?.cotizacion_emitida === true) { alert('Orden bloqueada.'); return; }
-  const ref = db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(lineaId);
-  const snap = await ref.get(); if(!snap.exists) return;
-  const d = snap.data();
+  const d = await OrdenesService.getConsumo(ordenId, lineaId);
+  if(!d) return;
   const nuevo = Number(prompt('Nuevo precio unitario (USD)', d.precio_unit));
   if(!isFinite(nuevo) || nuevo<0) return;
   const sub = (d.tipo==='cobro') ? (nuevo * Number(d.qty||0)) : 0;
-  await ref.update({
+  await OrdenesService.updateConsumo(ordenId, lineaId, {
     precio_unit: nuevo,
     subtotal: sub,
     precio_unit_override: true,
@@ -908,7 +907,7 @@ async function editarPrecio(lineaId){
 
 async function eliminarLinea(lineaId, equipoId){
   if(!confirm('¿Eliminar esta línea?')) return;
-  await db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(lineaId).delete();
+  await OrdenesService.deleteConsumo(ordenId, lineaId);
 }
 
 
@@ -1235,17 +1234,16 @@ async function confirmarAgregar(){
 
     // Confirma bandera "sin control" en Firestore
     const piezaRef = db.collection('inventario_piezas').doc(piezaSeleccionada.id);
-    const piezaSnap = await piezaRef.get();
-    if(!piezaSnap.exists){ toast('La pieza ya no existe','bad'); return; }
-    const piezaDB = piezaSnap.data() || {};
+    const piezaDB = await PiezasService.getPieza(piezaSeleccionada.id);
+    if(!piezaDB){ toast('La pieza ya no existe','bad'); return; }
     const sinControl = piezaDB.sin_control_inventario === true;
 
     // Inserta consumo
-    await db.collection('ordenes_de_servicio').doc(ordenIdOk).collection('consumos').add({
+    await OrdenesService.addConsumo(ordenIdOk, {
       equipoId: (typeof equipoSeleccionado!=='undefined' ? equipoSeleccionado : null),
       pieza_id: piezaSeleccionada.id,
-      pieza_nombre: piezaSeleccionada.descripcion 
-                    || piezaSeleccionada.nombre 
+      pieza_nombre: piezaSeleccionada.descripcion
+                    || piezaSeleccionada.nombre
                     || ((piezaSeleccionada.marca||'')+' '+(piezaSeleccionada.modelo||'')),
       sku: piezaSeleccionada.sku || '',
       qty,
@@ -1318,7 +1316,7 @@ async function confirmarServicio(){
   if(!desc || precio<0){ alert('Descripción y precio son requeridos'); return; }
 
   const subtotal = (tipo==='cobro') ? (qty * precio) : 0;
-  await db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').add({
+  await OrdenesService.addConsumo(ordenId, {
     equipoId: equipoSeleccionado,
     pieza_id: null,
     pieza_nombre: desc,
@@ -1337,12 +1335,10 @@ async function confirmarServicio(){
 
 // =================== Resumen general ===================
 async function renderResumen(){
-  const consSnap = await db.collection('ordenes_de_servicio').doc(ordenId)
-    .collection('consumos').where('tipo','==','cobro').get();
+  const consItems = await OrdenesService.getConsumos(ordenId, { tipo: 'cobro' });
 
   let subtotal = 0;
-  consSnap.forEach(d=>{
-    const line = d.data();
+  consItems.forEach(line=>{
     subtotal += Number(line.subtotal || (line.qty||0)*(line.precio_unit||0));
   });
   const itbms = +(subtotal*itbmsPct).toFixed(2);
@@ -1393,8 +1389,7 @@ async function completarCotizacion(){
     }
     if(!confirm('¿Deseas marcar la cotización como COMPLETADA? Esto bloqueará la edición.')) return;
 
-    const ref = db.collection('ordenes_de_servicio').doc(ordenId);
-await ref.set({
+    await OrdenesService.mergeOrder(ordenId, {
   cotizacion_emitida: true,
   cotizacion_emitida_en: firebase.firestore.FieldValue.serverTimestamp(),
   trabajo_estado: 'COMPLETADO',
@@ -1407,26 +1402,24 @@ await ref.set({
   }),
   // (opcional pero recomendado) registrar una marca de tiempo de servidor a nivel de documento
   updated_at: firebase.firestore.FieldValue.serverTimestamp()
-}, { merge: true });
+});
 
     // notifica por correo (si hubiera vendedor asignado)
     try{
-      const snap = await ref.get();
-      const d = snap.data() || {};
+      const d = (await OrdenesService.getOrder(ordenId)) || {};
       const vendedorUid = d.vendedor_asignado || '';
       let vendedorEmail = '';
       if(vendedorUid){
-        const uDoc = await db.collection('usuarios').doc(vendedorUid).get();
-        vendedorEmail = uDoc.exists ? (uDoc.data().email || '') : '';
+        const uDoc = await UsuariosService.getUsuario(vendedorUid);
+        vendedorEmail = uDoc ? (uDoc.email || '') : '';
       }
       const toList = ['atencionalcliente@cecomunica.com'].concat(vendedorEmail ? [vendedorEmail] : []);
       if(toList.length){
-        await db.collection('mail_queue').add({
+        await MailService.enqueue({
           to: toList.join(','),
           subject: `Cotización COMPLETADA – Orden ${ordenId}`,
           text: `La cotización de la orden ${ordenId} fue marcada como COMPLETADA.`,
           html: `<p>La cotización de la orden <strong>${ordenId}</strong> fue marcada como <strong>COMPLETADA</strong>.</p>`,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       }
     }catch(e){ console.warn('mail cotización',e); }
@@ -1447,8 +1440,7 @@ await ref.set({
 async function desbloquearCotizacion(){
   try{
     if(!confirm('¿Desbloquear la orden para continuar editando?')) return;
-    const ref = db.collection('ordenes_de_servicio').doc(ordenId);
-await ref.set({
+    await OrdenesService.mergeOrder(ordenId, {
   cotizacion_emitida: false,
   trabajo_estado: 'EN_PROGRESO',
   os_logs: firebase.firestore.FieldValue.arrayUnion({
@@ -1457,7 +1449,7 @@ await ref.set({
     at_ms: Date.now()  // <- evita serverTimestamp dentro de arrayUnion
   }),
   updated_at: firebase.firestore.FieldValue.serverTimestamp()
-}, { merge: true });
+});
 
     ordenData.cotizacion_emitida = false;
     document.body.classList.remove('solo-lectura');
@@ -1476,13 +1468,11 @@ await ref.set({
 // =================== Exportación a Excel (XLSX) ===================
 async function exportarCotizacion(){
   try{
-    const oRef = db.collection('ordenes_de_servicio').doc(ordenId);
-    const oSnap = await oRef.get(); if(!oSnap.exists) return alert('Orden no encontrada');
-    const od = oSnap.data();
+    const od = await OrdenesService.getOrder(ordenId);
+    if(!od) return alert('Orden no encontrada');
 
     // Consumos cobrables
-    const consSnap = await oRef.collection('consumos').where('tipo','==','cobro').get();
-    const rows = consSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+    const rows = await OrdenesService.getConsumos(ordenId, { tipo: 'cobro' });
 
     // Mapa de equipos visibles
     const equiposList = (Array.isArray(od.equipos) ? od.equipos.filter(e=>!e.eliminado) : []);

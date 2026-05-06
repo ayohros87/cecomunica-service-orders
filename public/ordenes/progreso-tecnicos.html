@@ -13,6 +13,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
 
   <style>
     .subtle { color: var(--muted); font-size: 12px; }
@@ -198,15 +200,13 @@ function aplicarModoSoloLectura() {
     }
 
     async function cargarUsuariosTecnicos(){
-      const snap = await db.collection('usuarios')
-        .where('rol','in',['tecnico','tecnico_operativo'])
-        .get();
+      const users = await UsuariosService.getUsuariosByRol(['tecnico', 'tecnico_operativo']);
 
-      cacheUsuarios = snap.docs.map(d => ({
-        uid: d.id,
-        nombre: d.data().nombre || '',
-        email : d.data().email || '',
-        rol   : d.data().rol
+      cacheUsuarios = users.map(u => ({
+        uid: u.id,
+        nombre: u.nombre || '',
+        email : u.email || '',
+        rol   : u.rol
       }));
     }
 
@@ -326,8 +326,8 @@ function getISOWeekKey(d) {
         return;
       }
       currentUser = user;
-      const uDoc = await db.collection('usuarios').doc(user.uid).get();
-      currentRole = uDoc.exists ? (uDoc.data().rol || '') : '';
+      const uDoc = await UsuariosService.getUsuario(user.uid);
+      currentRole = uDoc ? (uDoc.rol || '') : '';
 
       // Todos pueden ver (técnico ve sus propios números + ranking general sin datos sensibles)
       await cargarPantalla('mensual','');

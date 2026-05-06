@@ -16,6 +16,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
 </head>
 <body>
   <h2>Editar Equipos en Batch</h2>
@@ -45,11 +47,11 @@
     }
 
     async function cargarProveedores(selectId) {
-      const snap = await db.doc("empresa/proveedores").get();
+      const snap = await EmpresaService.getDoc("proveedores");
       const select = document.getElementById(selectId);
       select.innerHTML = '';
-      if (snap.exists) {
-        const lista = snap.data().list || [];
+      if (snap) {
+        const lista = snap.list || [];
         lista.forEach(op => {
           const option = new Option(op, op);
           select.appendChild(option);
@@ -72,10 +74,10 @@
 
       const resultados = [];
       for (const id of ids) {
-        const q1 = await db.collection("poc_devices").where("serial", "==", id).get();
-        const q2 = await db.collection("poc_devices").where("unit_id", "==", id).get();
-        q1.forEach(doc => resultados.push({ id: doc.id, data: doc.data() }));
-        q2.forEach(doc => resultados.push({ id: doc.id, data: doc.data() }));
+        const bySerial = await PocService.findByField("serial", id);
+        const byUnit = await PocService.findByField("unit_id", id);
+        bySerial.forEach(d => resultados.push({ id: d.id, data: d }));
+        byUnit.forEach(d => resultados.push({ id: d.id, data: d }));
       }
 
       if (resultados.length === 0) return alert("No se encontraron equipos.");
@@ -137,7 +139,7 @@
         const grupos = [...document.querySelectorAll(`#gruposContainer_${index} .grupo-input`)]
           .map(input => input.value.trim()).filter(g => g);
 
-        return db.collection("poc_devices").doc(eq.id).update({
+        return PocService.updatePocDevice(eq.id, {
           cliente: document.getElementById(`cliente_${index}`).value,
           ip: document.getElementById(`ip_${index}`).value,
           sim_number: simTel.sim,

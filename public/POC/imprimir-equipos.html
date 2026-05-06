@@ -184,6 +184,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
 </head>
 <body>
   <div class="toolbar">
@@ -239,8 +242,8 @@ async function cargarClientesPara(equipos) {
   clientesMap = {};
   await Promise.all(ids.map(async (cid) => {
     try {
-      const s = await db.collection("clientes").doc(cid).get();
-      if (s.exists) clientesMap[cid] = s.data().nombre || cid;
+      const c = await ClientesService.getCliente(cid);
+      if (c) clientesMap[cid] = c.nombre || cid;
     } catch (e) {/* opcional: console.warn(e); */}
   }));
 }
@@ -253,9 +256,8 @@ async function cargarModelosPara(equipos) {
   modelosMap = {};
   await Promise.all(ids.map(async (mid) => {
     try {
-      const s = await db.collection("modelos").doc(mid).get();
-      if (s.exists) {
-        const m = s.data() || {};
+      const m = await ModelosService.getModelo(mid);
+      if (m) {
         const label = `${(m.marca || "").toString().trim()} ${(m.modelo || "").toString().trim()}`.trim();
         modelosMap[mid] = label || m.modelo || m.marca || mid;
       }
@@ -290,9 +292,9 @@ function modeloDe(d) {
       const datos = [];
 
       for (const id of ids) {
-        const doc = await db.collection("poc_devices").doc(id).get();
-        if (doc.exists) {
-          datos.push({ id, ...doc.data() });
+        const doc = await PocService.getPocDevice(id);
+        if (doc) {
+          datos.push(doc);
         }
       }
 

@@ -11,6 +11,7 @@
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
+<script src="../js/services/modelosService.js"></script>
   <style>
   body {
     font-family: Arial, sans-serif;
@@ -266,11 +267,9 @@ async function cargarContrato() {
   }
 
   // 1) Cargar modelos primero (para poblar los <select>)
-  const snapModelos = await db.collection("modelos").orderBy("modelo").get();
-  modelosDisponibles = snapModelos.docs.map(doc => ({
-    modelo_id: doc.id,
-    modelo: doc.data().modelo
-  }));
+  const todosModelos = await ModelosService.getModelos();
+  todosModelos.sort((a, b) => (a.modelo || "").localeCompare(b.modelo || ""));
+  modelosDisponibles = todosModelos.map(m => ({ modelo_id: m.id, modelo: m.modelo }));
 
   // 2) Traer el contrato
   const c = await ContratosService.getContrato(contratoDocId);

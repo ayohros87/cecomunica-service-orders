@@ -182,6 +182,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/clientesService.js"></script>
 
 </head>
 <body>
@@ -450,14 +451,14 @@ if (!clienteId) {
 
   // 6) Guardar UNA sola vez (serverTimestamp)
   if (clienteId) {
-    await db.collection("clientes").doc(clienteId).update(cliente);
+    await ClientesService.updateCliente(clienteId, cliente);
   } else {
     cliente.created_at = ahoraSrv;
     cliente.created_by = user?.uid || null;
     cliente.vendedor_asignado = user?.uid || null;
     cliente.vendedor_email = user?.email || null;
-    cliente.deleted = false; 
-    const nuevoDoc = await db.collection("clientes").add(cliente);
+    cliente.deleted = false;
+    const nuevoClienteId = await ClientesService.createCliente(cliente);
 
     // Si es "guardar": redirige al contrato con el nuevo cliente_id
     mostrarMensaje("✅ Cliente guardado exitosamente", "green");
@@ -465,7 +466,7 @@ setTimeout(() => {
   if (params.has("from") && params.get("from") === "clientes") {
     window.location.href = "../clientes/index.html";
   } else {
-    window.location.href = `nuevo-contrato.html?cliente_id=${nuevoDoc.id}`;
+    window.location.href = `nuevo-contrato.html?cliente_id=${nuevoClienteId}`;
   }
 }, 800);
 
@@ -493,10 +494,10 @@ setTimeout(() => {
   if (clienteId) {
     document.getElementById("pageTitle").textContent = "🧾 Editar Cliente";
     
-    const doc = await db.collection("clientes").doc(clienteId).get();
-    if (!doc.exists) return;
+    const doc = await ClientesService.getCliente(clienteId);
+    if (!doc) return;
 
-    const d = doc.data();
+    const d = doc;
     document.getElementById("nombre").value = d.nombre || "";
     document.getElementById("ruc").value = d.ruc || "";
     document.getElementById("dv").value = d.dv || "";

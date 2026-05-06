@@ -10,6 +10,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/inventarioService.js"></script>
 
   <script>
     let modelos = [];
@@ -19,10 +23,10 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return window.location.href = "../login.html";
-      const userDoc = await db.collection("usuarios").doc(user.uid).get();
-      const rol = userDoc.exists ? userDoc.data().rol : null;
+      const userDoc = await UsuariosService.getUsuario(user.uid);
+      const rol = userDoc ? userDoc.rol : null;
 
-      if (!userDoc.exists || (rol !== "administrador" && rol !== "inventario")) {
+      if (!userDoc || (rol !== "administrador" && rol !== "inventario")) {
         document.body.innerHTML = "<h3 style='color:red; text-align:center;'>Acceso restringido a administradores</h3>";
         return;
       }
@@ -32,11 +36,8 @@
     });
 
     async function cargarModelos() {
-  const snapshot = await db.collection("modelos").get();
-
-  modelos = snapshot.docs
-    .map(doc => ({ id: doc.id, ...doc.data() }))
-    .filter(m => m.activo !== false); // Incluye todos los modelos que no fueron marcados como eliminados
+  const all = await ModelosService.getModelos();
+  modelos = all.filter(m => m.activo !== false); // Incluye todos los modelos que no fueron marcados como eliminados
 
   modelosFiltrados = [...modelos];
   renderizarTabla();
@@ -153,46 +154,21 @@ ordenados.forEach((modelo, index) => {
 }
 
     window.guardarSemana = async function () {
-    const timestamp = new Date();
-
-    const batch = db.batch();
-
+    const entries = [];
     for (let index = 0; index < modelos.length; index++) {
-  const modelo = modelos[index];
-  const cantidad = parseInt(document.getElementById("qty_" + index).value);
-
-  if (!isNaN(cantidad) && cantidad >= 0) {
-    // 1. Guardar histórico en inventario_semanal
-    const semanalRef = db.collection("ultimo_inventario").doc();
-    batch.set(semanalRef, {
-      modelo_id: modelo.id,
-      cantidad: cantidad,
-      timestamp: firebase.firestore.Timestamp.fromDate(timestamp)
-    });
-
-    // 2. Guardar inventario actual con penúltima actualización
-    const actualRef = db.collection("inventario_actual").doc(modelo.id);
-    const actualSnap = await actualRef.get();
-    const ultimaAnterior = actualSnap.exists ? actualSnap.data().ultima_actualizacion : null;
-
-    batch.set(actualRef, {
-        modelo_id: modelo.id,
-        cantidad: cantidad,
-        ultima_actualizacion: firebase.firestore.Timestamp.fromDate(timestamp),
-        penultima_actualizacion: ultimaAnterior ? firebase.firestore.Timestamp.fromDate(ultimaAnterior.toDate()) : null,
-        cantidad_anterior: actualSnap.exists ? actualSnap.data().cantidad : null
-      });
-  }
-}
-
-
+      const modelo = modelos[index];
+      const cantidad = parseInt(document.getElementById("qty_" + index).value);
+      if (!isNaN(cantidad) && cantidad >= 0) {
+        entries.push({ modeloId: modelo.id, cantidad });
+      }
+    }
     try {
-        await batch.commit();
-        alert("✅ Inventario actualizado correctamente");
-        window.location.href = "index.html";
+      await InventarioService.guardarInventario(entries);
+      alert("✅ Inventario actualizado correctamente");
+      window.location.href = "index.html";
     } catch (e) {
-        console.error("❌ Error al guardar:", e);
-        alert("Error al guardar inventario");
+      console.error("❌ Error al guardar:", e);
+      alert("Error al guardar inventario");
     }
     };
 

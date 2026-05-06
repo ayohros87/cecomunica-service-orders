@@ -185,6 +185,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/piezasService.js"></script>
 
 <style>
 .app-search input {
@@ -547,8 +550,8 @@ let rolActual = null;
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) return window.location.href = "../login.html";
   try {
-    const userDoc = await db.collection("usuarios").doc(user.uid).get();
-    const rol = userDoc.exists ? (userDoc.data().rol || null) : null;
+    const userDoc = await UsuariosService.getUsuario(user.uid);
+    const rol = userDoc ? (userDoc.rol || null) : null;
     rolActual = rol;
     loadUIPrefs();
 
@@ -915,15 +918,7 @@ const docData = {
 async function cargar() {
   showSkeleton();
   try {
-    // Preferimos ordenar por 'marca'; si no existe índice/campo en algunos docs, intentamos sin orden
-    let snap;
-    try {
-      snap = await db.collection("inventario_piezas").orderBy("marca").get();
-    } catch (e1) {
-      console.warn('orderBy("marca") falló, intento sin orden', e1);
-      snap = await db.collection("inventario_piezas").get();
-    }
-    piezas = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    piezas = await PiezasService.getPiezas();
   } catch (e) {
     console.error(e);
     toast('Error cargando piezas','bad');
@@ -1104,7 +1099,7 @@ async function eliminarPieza(id, nombre = '') {
   if (!conf) return;
 
   try {
-    await db.collection('inventario_piezas').doc(id).delete();
+    await PiezasService.deletePieza(id);
     toast('Pieza eliminada','ok');
     await cargar();
   } catch (err) {
@@ -1196,14 +1191,10 @@ async function guardarPieza(){
 
   try {
     if (piezaEditId === null){
-      await db.collection('inventario_piezas').add({
-        ...payload,
-        creado_por_uid: firebase.auth().currentUser.uid,
-        creado_en: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      await PiezasService.addPieza({ ...payload, creado_por_uid: firebase.auth().currentUser.uid });
       toast('Pieza creada','ok');
     } else {
-      await db.collection('inventario_piezas').doc(piezaEditId).update(payload);
+      await PiezasService.updatePieza(piezaEditId, payload);
       toast('Pieza actualizada','ok');
     }
 
@@ -1218,17 +1209,7 @@ async function guardarPieza(){
 
 async function ajustarStock(id, delta) {
   try {
-    const ref = db.collection('inventario_piezas').doc(id);
-    await db.runTransaction(async t => {
-      const doc = await t.get(ref);
-      if (!doc.exists) return;
-      const actual = Number(doc.data().cantidad || 0);
-      const nueva = Math.max(actual + delta, 0);
-      t.update(ref, {
-        cantidad: nueva,
-        actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
-      });
-    });
+    await PiezasService.ajustarDelta(id, delta);
     toast(delta > 0 ? 'Stock incrementado' : 'Stock reducido','ok');
     await cargar();
   } catch (err) {
@@ -1239,10 +1220,7 @@ async function ajustarStock(id, delta) {
 
 async function toggleActivo(id, estado) {
   try {
-    await db.collection('inventario_piezas').doc(id).update({
-      activo: !estado,
-      actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await PiezasService.updatePieza(id, { activo: !estado });
     toast(!estado ? 'Pieza activada' : 'Pieza desactivada','ok');
     await cargar();
   } catch (err) {
@@ -1256,7 +1234,7 @@ async function duplicar(id) {
   const pieza = piezas.find(x => x.id === id);
   if(!pieza) return;
   try {
-    await db.collection('inventario_piezas').add({
+    await PiezasService.addPieza({
       marca: pieza.marca || '',
       sku: pieza.sku || '',
       descripcion: pieza.descripcion || '',
@@ -1271,8 +1249,6 @@ async function duplicar(id) {
       notas: pieza.notas || '',
       activo: pieza.activo === true,
       creado_por_uid: firebase.auth().currentUser.uid,
-      creado_en: firebase.firestore.FieldValue.serverTimestamp(),
-      actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
     });
     toast('Pieza duplicada','ok');
     await cargar();

@@ -12,6 +12,8 @@
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
   <script src="../js/services/mailService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
 <link rel="stylesheet" href="../css/ceco-ui.css">
 <style>
 /* ===================================
@@ -1280,17 +1282,13 @@ function calcularTotal() {
 
 
 async function cargarClientes(limit = 25) {
-  const snap = await db.collection("clientes")
-  .where("deleted", "==", false)
-    .orderBy("nombre")
-    .limit(limit).get();
+  const { docs } = await ClientesService.listClientes({ limit });
 
   const items = [];
   listaClientes = {};
-  snap.forEach(doc => {
-    const d = doc.data();
-    listaClientes[doc.id] = d;
-    items.push({ id: doc.id, d });
+  docs.forEach(c => {
+    listaClientes[c.id] = c;
+    items.push({ id: c.id, d: c });
   });
   // Usa el renderer del combobox
   renderCombo(items);
@@ -1299,14 +1297,9 @@ async function cargarClientes(limit = 25) {
 let modelosDisponibles = [];
 
 async function cargarModelos() {
-  const snap = await db.collection("modelos").orderBy("modelo").get();
-  modelosDisponibles = [];
-  snap.forEach(doc => {
-    modelosDisponibles.push({
-      modelo_id: doc.id,
-      modelo: doc.data().modelo
-    });
-  });
+  const raw = await ModelosService.getModelos();
+  raw.sort((a, b) => (a.modelo || "").localeCompare(b.modelo || ""));
+  modelosDisponibles = raw.map(m => ({ modelo_id: m.id, modelo: m.modelo }));
 }
 
 
@@ -1318,10 +1311,10 @@ async function cargarModelos() {
       const params = new URLSearchParams(window.location.search);
      const preseleccionado = params.get("cliente_id");
       if (preseleccionado) {
-        const doc = await db.collection("clientes").doc(preseleccionado).get();
-        if(doc.exists){
-          listaClientes[preseleccionado] = doc.data();
-          selectCliente(preseleccionado, true); // ✅ así sí muestra nombre
+        const c = await ClientesService.getCliente(preseleccionado);
+        if(c){
+          listaClientes[preseleccionado] = c;
+          selectCliente(preseleccionado, true);
         }
       }
 
@@ -1342,9 +1335,9 @@ async function applyPrefillFromDuplicate() {
   const yaTraeCliente = !!params.get("cliente_id");
   if (!yaTraeCliente && draft.cliente_id) {
     // Asegura que esté en cache y selecciónalo
-    const doc = await db.collection("clientes").doc(draft.cliente_id).get();
-    if (doc.exists) {
-      listaClientes[draft.cliente_id] = doc.data();
+    const c = await ClientesService.getCliente(draft.cliente_id);
+    if (c) {
+      listaClientes[draft.cliente_id] = c;
       selectCliente(draft.cliente_id, true);
     }
   }
@@ -1651,11 +1644,10 @@ document.getElementById("btnConfirmPreview").addEventListener("click", async () 
 
     if (hidden.value) {
       // Si ya había uno seleccionado, vuelve a pintar su ficha por si cambió
-      const doc = await db.collection("clientes").doc(hidden.value).get();
-      if (doc.exists) {
-        listaClientes[doc.id] = doc.data();
-        // Vuelve a “seleccionar” para refrescar info
-        selectCliente(doc.id, true);
+      const c = await ClientesService.getCliente(hidden.value);
+      if (c) {
+        listaClientes[c.id] = c;
+        selectCliente(c.id, true);
       }
     } else if (q.length >= 2) {
       // Si el usuario estaba buscando texto, re-ejecuta la consulta
@@ -1853,29 +1845,27 @@ const doSearch = debounce(async (text)=>{
 
   // Query por el primer token
   const first = parts[0];
-  let snap = await db.collection("clientes")
-    .where("searchTokens","array-contains", first)
-    .limit(50).get();
+  const rawDocs = await ClientesService.searchByToken(first, { limit: 50 });
 
   // Arma lista y filtra AND local por los demás tokens
   const items = [];
   listaClientes = {};  // refrescamos cache con los que muestra el combo
 
-  snap.forEach(doc=>{
-    const d = doc.data();
+  rawDocs.forEach(c => {
+    const d = c;
     const hasTokens = Array.isArray(d.searchTokens) && d.searchTokens.length;
     const pass = hasTokens
       ? parts.every(t => d.searchTokens.includes(t))
       : parts.every(t => norm(d.nombre||"").includes(t));
     if(pass){
-      listaClientes[doc.id] = d;
-      items.push({ id: doc.id, d });
+      listaClientes[c.id] = d;
+      items.push({ id: c.id, d });
     }
   });
 
   // Fallback por nombre (legacy)
   if(items.length === 0){
-    snap = await db.collection("clientes")
+    const snap = await db.collection("clientes")
        .where("deleted", "==", false)
       .orderBy("nombre")
       .startAt(text).endAt(text + "\uf8ff")

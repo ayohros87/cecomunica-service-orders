@@ -81,48 +81,68 @@ const ClientesService = {
     return results;
   },
 
-  /**
-   * Create a new client
-   * @param {Object} clienteData - Client data
-   * @returns {Promise<string>} New client ID
-   */
   async createCliente(clienteData) {
     const db = firebase.firestore();
-    const docRef = await db.collection("clientes").add({
-      ...clienteData,
-      fecha_creacion: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    
+    const docRef = await db.collection("clientes").add(clienteData);
     return docRef.id;
   },
 
-  /**
-   * Update client data
-   * @param {string} clienteId - Client ID
-   * @param {Object} updates - Fields to update
-   * @returns {Promise<void>}
-   */
   async updateCliente(clienteId, updates) {
     const db = firebase.firestore();
-    await db.collection("clientes").doc(clienteId).update({
+    return db.collection("clientes").doc(clienteId).update({
       ...updates,
-      fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp()
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
   },
 
-  /**
-   * Soft delete client
-   * @param {string} clienteId - Client ID
-   * @returns {Promise<void>}
-   */
   async deleteCliente(clienteId) {
     const db = firebase.firestore();
-    await db.collection("clientes").doc(clienteId).update({
-      eliminado: true,
-      fecha_eliminacion: firebase.firestore.FieldValue.serverTimestamp()
+    return db.collection("clientes").doc(clienteId).update({
+      deleted: true,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
-  }
+  },
+
+  // Paginated list ordered by nombre, excluding deleted.
+  // Returns { docs, lastDoc }.
+  async listClientes({ onlyActive = false, lastDoc = null, limit = 20 } = {}) {
+    const db = firebase.firestore();
+    let q = db.collection("clientes")
+      .where("deleted", "==", false)
+      .orderBy("nombre")
+      .limit(limit);
+    if (onlyActive) q = q.where("activo", "==", true);
+    if (lastDoc) q = q.startAfter(lastDoc);
+    const snap = await q.get();
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return { docs, lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1] };
+  },
+
+  // Full-text search via searchTokens array-contains, excluding deleted.
+  async searchByToken(term, { onlyActive = false, limit = 20 } = {}) {
+    const db = firebase.firestore();
+    let q = db.collection("clientes")
+      .where("searchTokens", "array-contains", term.toLowerCase())
+      .where("deleted", "==", false)
+      .limit(limit);
+    if (onlyActive) q = q.where("activo", "==", true);
+    const snap = await q.get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
+  // Batch-update multiple clients (450 per batch to stay under Firestore limit).
+  async batchUpdate(ids, fields) {
+    const db = firebase.firestore();
+    const CHUNK = 450;
+    const update = { ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = db.batch();
+      for (const id of ids.slice(i, i + CHUNK)) {
+        batch.update(db.collection("clientes").doc(id), update);
+      }
+      await batch.commit();
+    }
+  },
 };
 
-// Export to window for global access
 window.ClientesService = ClientesService;

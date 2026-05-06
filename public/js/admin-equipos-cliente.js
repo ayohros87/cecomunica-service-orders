@@ -59,20 +59,19 @@
   }
 
   async function cargarClientesMap() {
-    const snap = await db.collection('clientes').get();
+    const { docs } = await ClientesService.listClientes({ limit: 2000 });
     const map = {};
-    snap.forEach((doc) => {
-      const data = doc.data() || {};
-      map[doc.id] = data.nombre || data.razon_social || '';
+    docs.forEach((c) => {
+      map[c.id] = c.nombre || c.razon_social || '';
     });
     state.clientesMap = map;
   }
 
   async function cargarTipos() {
     try {
-      const snap = await db.collection('empresa').doc('tipo_de_servicio').get();
-      if (!snap.exists) return;
-      const list = Array.isArray(snap.data()?.list) ? snap.data().list : [];
+      const snap = await EmpresaService.getDoc('tipo_de_servicio');
+      if (!snap) return;
+      const list = Array.isArray(snap.list) ? snap.list : [];
       refs.filtroTipo.innerHTML = '<option value="">Todos</option>';
       list.forEach((tipo) => {
         const option = document.createElement('option');
@@ -307,8 +306,8 @@
       }
 
       state.user = user;
-      const userDoc = await db.collection('usuarios').doc(user.uid).get();
-      const role = userDoc.exists ? (userDoc.data()?.rol || '') : '';
+      const userDoc = await UsuariosService.getUsuario(user.uid);
+      const role = userDoc ? (userDoc.rol || '') : '';
       state.role = role;
 
       if (role !== 'administrador') {

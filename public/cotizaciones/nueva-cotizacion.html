@@ -10,6 +10,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
 
   <style>
     .form-section { background: white; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
@@ -255,14 +260,13 @@
     }
 
     async function cargarClientes() {
-      const snap = await db.collection("clientes").get();
+      const raw = await ClientesService.loadClientes();
       clientesMap = {};
       clientesList = [];
-      snap.forEach(doc => {
-        const d = doc.data() || {};
-        clientesMap[doc.id] = d;
-        clientesList.push({ id: doc.id, nombre: d.nombre || doc.id, data: d });
-      });
+      for (const [id, d] of raw) {
+        clientesMap[id] = d;
+        clientesList.push({ id, nombre: d.nombre || id, data: d });
+      }
       renderClienteDropdown("");
     }
 
@@ -305,17 +309,16 @@
     }
 
     async function cargarModelos() {
-      const snap = await db.collection("modelos").get();
+      const modelos = await ModelosService.getModelos();
       modelosMap = {};
       const select = document.getElementById("modeloSelect");
       select.innerHTML = "<option value=\"\">Seleccione modelo...</option>";
 
       const lista = [];
-      snap.forEach(doc => {
-        const d = doc.data() || {};
-        const label = `${d.marca || ""} ${d.modelo || ""}`.trim() || doc.id;
-        modelosMap[doc.id] = d;
-        lista.push({ id: doc.id, label });
+      modelos.forEach(m => {
+        const label = `${m.marca || ""} ${m.modelo || ""}`.trim() || m.id;
+        modelosMap[m.id] = m;
+        lista.push({ id: m.id, label });
       });
 
       lista
@@ -441,16 +444,11 @@
       const start = new Date(y, now.getMonth(), now.getDate(), 0, 0, 0);
       const end = new Date(y, now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-      const snap = await db.collection("cotizaciones")
-        .where("fecha_creacion", ">=", start)
-        .where("fecha_creacion", "<=", end)
-        .orderBy("fecha_creacion", "desc")
-        .limit(20)
-        .get();
+      const cotizacionesHoy = await CotizacionesService.getCotizacionesPorFecha(start, end);
 
       let max = 0;
-      snap.forEach(doc => {
-        const id = doc.data()?.cotizacion_id || "";
+      cotizacionesHoy.forEach(c => {
+        const id = c.cotizacion_id || "";
         if (id.startsWith(prefix)) {
           const n = parseInt(id.replace(prefix, ""), 10);
           if (!isNaN(n)) max = Math.max(max, n);
@@ -503,7 +501,7 @@
         fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp()
       };
 
-      const ref = await db.collection("cotizaciones").add(data);
+      const ref = await CotizacionesService.addCotizacion(data);
       docId = ref.id;
       mostrarToast("✅ Cotización guardada");
     }
@@ -516,9 +514,8 @@
     async function cargarPerfilUsuario(user) {
       const perfil = { nombre: user?.displayName || user?.email || "", cel: "", cargo: "" };
       try {
-        const snap = await db.collection("usuarios").doc(user.uid).get();
-        if (snap.exists) {
-          const d = snap.data() || {};
+        const d = await UsuariosService.getUsuario(user.uid);
+        if (d) {
           perfil.nombre = d.nombre || d.name || perfil.nombre;
           perfil.cel = d.user_cel || d.cel || d.celular || "";
           perfil.cargo = d.cargo || d.puesto || d.rol_titulo || "";

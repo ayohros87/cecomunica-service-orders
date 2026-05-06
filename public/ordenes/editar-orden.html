@@ -12,6 +12,10 @@
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -663,8 +667,8 @@
     firebase.auth().onAuthStateChanged(async (user) => {
       if (user) {
         currentUser = user;
-        const userDoc = await db.collection("usuarios").doc(user.uid).get();
-        const rol = userDoc.exists ? userDoc.data().rol || "" : "";
+        const userDoc = await UsuariosService.getUsuario(user.uid);
+        const rol = userDoc ? userDoc.rol || "" : "";
         limitarEdicionPorRol(rol);
       } else {
         alert("No ha iniciado sesión. Redirigiendo al login...");
@@ -680,18 +684,16 @@
 
       document.getElementById("orden_id").value = ordenId;
       document.getElementById("orderIdDisplay").textContent = `Orden #${ordenId}`;
-      const docRef = db.collection("ordenes_de_servicio").doc(ordenId);
-      const docSnap = await docRef.get();
+      const d = await OrdenesService.getOrder(ordenId);
 
-      if (docSnap.exists) {
-        const d = docSnap.data();
-        window.ordenDataOriginal = d; // Guardar data original para detectar cambios de contrato
+      if (d) {
+        window.ordenDataOriginal = d;
         let nombreCliente = d.cliente_nombre || d.cliente || "";
         
         if (d.cliente_id) {
           try {
-            const cSnap = await db.collection("clientes").doc(d.cliente_id).get();
-            if (cSnap.exists) nombreCliente = cSnap.data().nombre || nombreCliente;
+            const cli = await ClientesService.getCliente(d.cliente_id);
+            if (cli) nombreCliente = cli.nombre || nombreCliente;
           } catch (e) { /* opcional: console.warn(e); */ }
         }
         
@@ -702,16 +704,13 @@
         // Cargar vendedores
         const vendSelect = document.getElementById("vendedor");
         vendSelect.innerHTML = '<option value="">Seleccione vendedor</option>';
-        const uSnap = await db.collection("usuarios")
-          .where("rol", "in", ["vendedor", "administrador"])
-          .get();
+        const vendedores = await UsuariosService.getVendedores();
 
-        uSnap.forEach(doc => {
-          const u = doc.data();
+        vendedores.forEach(u => {
           const opt = document.createElement("option");
-          opt.value = doc.id;
-          opt.textContent = (u.nombre || u.email || doc.id);
-          if (doc.id === (d.vendedor_asignado || "")) opt.selected = true;
+          opt.value = u.id;
+          opt.textContent = (u.nombre || u.email || u.id);
+          if (u.id === (d.vendedor_asignado || "")) opt.selected = true;
           vendSelect.appendChild(opt);
         });
 
@@ -840,8 +839,7 @@
 
       try {
         // Leer datos actuales para comparar contrato
-        const docSnap = await db.collection("ordenes_de_servicio").doc(ordenId).get();
-        const datosActuales = docSnap.exists ? docSnap.data() : {};
+        const datosActuales = (await OrdenesService.getOrder(ordenId)) || {};
         
         // Si antes tenía contrato pero ahora no (o cambió), eliminar caché anterior
         const contratoAnterior = datosActuales?.contrato;
@@ -854,7 +852,7 @@
           }
         }
         
-        await db.collection("ordenes_de_servicio").doc(ordenId).set(data, { merge: true });
+        await OrdenesService.mergeOrder(ordenId, data);
         
         // Sincronizar caché nuevo si aplica
         if (esProgramacion(tipoServicio) && data.contrato?.aplica) {
@@ -871,24 +869,21 @@
     async function cargarTecnicos() {
       const select = document.getElementById("tecnico");
       select.innerHTML = '<option value="">Por asignar</option>';
-      const snap = await db.collection("usuarios")
-        .where("rol", "in", ["tecnico", "tecnico_operativo"])
-        .get();
-      snap.forEach(doc => {
-        const u = doc.data();
+      const tecnicos = await UsuariosService.getUsuariosByRol(["tecnico", "tecnico_operativo"]);
+      tecnicos.forEach(u => {
         const opt = document.createElement("option");
-        opt.value = doc.id;
-        opt.textContent = u.nombre || u.email || doc.id;
+        opt.value = u.id;
+        opt.textContent = u.nombre || u.email || u.id;
         select.appendChild(opt);
       });
     }
 
     async function cargarEstados() {
-      const docSnap = await db.collection("empresa").doc("estado_de_reparacion").get();
+      const docSnap = await EmpresaService.getDoc("estado_de_reparacion");
       const select = document.getElementById("estado");
       select.innerHTML = "";
-      if (docSnap.exists) {
-        const lista = docSnap.data().list || [];
+      if (docSnap) {
+        const lista = docSnap.list || [];
         lista.forEach(nombre => {
           const option = document.createElement("option");
           option.value = nombre;
@@ -899,11 +894,11 @@
     }
 
     async function cargarTipos() {
-      const docSnap = await db.collection("empresa").doc("tipo_de_servicio").get();
+      const docSnap = await EmpresaService.getDoc("tipo_de_servicio");
       const select = document.getElementById("tipo");
       select.innerHTML = '<option value="">Seleccione tipo de servicio</option>';
-      if (docSnap.exists) {
-        const lista = docSnap.data().list || [];
+      if (docSnap) {
+        const lista = docSnap.list || [];
         lista.forEach(nombre => {
           const option = document.createElement("option");
           option.value = nombre;

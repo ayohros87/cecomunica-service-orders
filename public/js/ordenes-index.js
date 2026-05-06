@@ -1298,11 +1298,7 @@ window.generarNotaEntrega = function(ordenId) {
     return;
   }
 
-  const equipos = (orden.equipos || []).map(e => ({
-    serial: e.numero_de_serie,
-    modelo: e.modelo || "",
-    nombre: e.nombre || "-"
-  }));
+  const equipos = prepararEquiposParaNota(orden, false);
 
   const data = {
   numeroOrden: orden.ordenId || "",
@@ -1322,12 +1318,7 @@ window.generarNotaEntregaIntervenciones = function(ordenId) {
     return;
   }
 
-  const equipos = (orden.equipos || []).map(e => ({
-    serial: e.numero_de_serie,
-    modelo: e.modelo || "",
-    nombre: e.nombre || "-",
-    intervencion: e.trabajo_tecnico || ""
-  }));
+  const equipos = prepararEquiposParaNota(orden, true);
 
   const data = {
     numeroOrden: orden.ordenId || "",
@@ -1338,6 +1329,34 @@ window.generarNotaEntregaIntervenciones = function(ordenId) {
 
   localStorage.setItem("notaEntregaData", JSON.stringify(data));
   window.open(BASE + "nota-entrega-intervenciones.html", "_blank");
+}
+
+function prepararEquiposParaNota(orden, incluirIntervencion = false) {
+  const equipos = Array.isArray(orden?.equipos) ? orden.equipos : [];
+  const unicos = [];
+  const seen = new Set();
+
+  equipos.forEach((e) => {
+    if (!e || e.eliminado === true) return;
+
+    const serial = String(e.numero_de_serie || "").trim();
+    const modelo = String(e.modelo || "").trim();
+    const nombre = String(e.nombre || "-").trim() || "-";
+    const id = String(e.id || "").trim();
+
+    // Prioriza id técnico; si no existe, usa serial+modelo como llave de deduplicación.
+    const key = id ? `id:${id}` : `sm:${serial.toLowerCase()}|${modelo.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+
+    const item = { serial, modelo, nombre };
+    if (incluirIntervencion) {
+      item.intervencion = String(e.trabajo_tecnico || "").trim();
+    }
+    unicos.push(item);
+  });
+
+  return unicos;
 }
 
 
@@ -3118,10 +3137,32 @@ window.closeAlertModal = function() {
     },
     'imprimir-orden': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) {
-        window.open(BASE + `imprimir-orden.html?id=${ordenId}`, '_blank');
-        closeAllMenus();
+      if (!ordenId) return;
+      const orden = APP.state.orders.find(o => o.ordenId === ordenId);
+      if (orden) {
+        localStorage.setItem('imprimirOrdenData', JSON.stringify({
+          ordenId: orden.ordenId,
+          tipo_de_servicio: orden.tipo_de_servicio || '',
+          tecnico_asignado: orden.tecnico_asignado || '',
+          estado_reparacion: orden.estado_reparacion || '',
+          observaciones: orden.observaciones || '',
+          cliente: nombreClienteDe(orden),
+          fecha_creacion: orden.fecha_creacion?.toDate?.()?.toISOString?.() ?? null,
+          fecha_entrega: orden.fecha_entrega?.toDate?.()?.toISOString?.() ?? null,
+          equipos: (orden.equipos || []).filter(e => !e.eliminado).map(e => ({
+            numero_de_serie: e.numero_de_serie || '',
+            modelo: e.modelo || '',
+            bateria: !!e.bateria,
+            clip: !!e.clip,
+            cargador: !!e.cargador,
+            fuente: !!e.fuente,
+            antena: !!e.antena,
+            observaciones: e.observaciones || ''
+          }))
+        }));
       }
+      window.open(BASE + `imprimir-orden.html?id=${ordenId}`, '_blank');
+      closeAllMenus();
     },
     'gestionar-trabajo': (el) => {
       const ordenId = el.dataset.ordenId;

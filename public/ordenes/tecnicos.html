@@ -68,10 +68,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
-      const db = firebase.firestore();
-
       const lista = document.getElementById("lista-tecnicos");
       const form = document.getElementById("form-tecnico");
       const inputNombre = document.getElementById("nombre-tecnico");
@@ -79,10 +78,9 @@
 
     async function cargarTecnicos() {
   lista.innerHTML = "";
-  const docSnap = await db.collection("empresa").doc("tecnicos").get();
-  if (docSnap.exists) {
-    const data = docSnap.data();
-    const listaTecnicos = data.list || [];
+  const docSnap = await EmpresaService.getDoc("tecnicos");
+  if (docSnap) {
+    const listaTecnicos = docSnap.list || [];
     listaTecnicos.forEach(nombre => {
       const li = document.createElement("li");
       li.innerHTML = `
@@ -104,11 +102,9 @@
       };
 window.borrarTecnico = async (id) => {
   if (!confirm(`¿Eliminar técnico "${id}"?`)) return;
-  const docRef = db.collection("empresa").doc("tecnicos");
-  const docSnap = await docRef.get();
-  const data = docSnap.data();
-  const nuevaLista = (data.list || []).filter(n => n !== id);
-  await docRef.set({ list: nuevaLista });
+  const docSnap = await EmpresaService.getDoc("tecnicos");
+  const nuevaLista = ((docSnap && docSnap.list) || []).filter(n => n !== id);
+  await EmpresaService.setDoc("tecnicos", { list: nuevaLista });
   await cargarTecnicos();
 };
 
@@ -118,9 +114,8 @@ window.borrarTecnico = async (id) => {
   const nombre = inputNombre.value.trim();
   if (!nombre) return;
 
-  const docRef = db.collection("empresa").doc("tecnicos");
-  const docSnap = await docRef.get();
-  let lista = docSnap.exists ? docSnap.data().list || [] : [];
+  const docSnap = await EmpresaService.getDoc("tecnicos");
+  let lista = (docSnap && docSnap.list) || [];
 
   if (editandoId && editandoId !== nombre) {
     lista = lista.filter(n => n !== editandoId);
@@ -129,7 +124,7 @@ window.borrarTecnico = async (id) => {
     lista.push(nombre);
   }
 
-  await docRef.set({ list: lista });
+  await EmpresaService.setDoc("tecnicos", { list: lista });
 
   inputNombre.value = "";
   editandoId = null;

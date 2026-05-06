@@ -647,6 +647,11 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
   <script>
@@ -658,12 +663,11 @@
 
 async function cargarModelosMap() {
   try {
-    const snap = await db.collection("modelos").get();
+    const modelos = await ModelosService.getModelos();
     modelosMap = {};
-    snap.forEach(doc => {
-      const data = doc.data() || {};
-      const label = `${(data.marca || "").toString().trim()} ${(data.modelo || "").toString().trim()}`.trim();
-      modelosMap[doc.id] = label || data.modelo || data.marca || doc.id;
+    modelos.forEach(m => {
+      const label = `${(m.marca || "").toString().trim()} ${(m.modelo || "").toString().trim()}`.trim();
+      modelosMap[m.id] = label || m.modelo || m.marca || m.id;
     });
   } catch (e) {
     console.error("Error al cargar modelos:", e);
@@ -688,11 +692,10 @@ function obtenerModeloTexto(d = {}) {
 
 async function cargarClientesMap() {
   try {
-    const snap = await db.collection("clientes").get();
+    const raw = await ClientesService.loadClientes();
     clientesMap = {};
-    snap.forEach(doc => {
-      const n = (doc.data()?.nombre || "").trim();
-      clientesMap[doc.id] = n || doc.id;
+    raw.forEach((cliente, id) => {
+      clientesMap[id] = (cliente.nombre || "").trim() || id;
     });
   } catch (e) {
     console.error("Error al cargar clientes:", e);
@@ -721,11 +724,10 @@ function actualizarResumenPOC({ total = 0, activos = 0, incompletos = 0 } = {}) 
     let arr = [];
 
     // 1) Documento principal: empresa/operadores
-    const snap = await db.collection("empresa").doc("operadores").get();
-    if (snap.exists) {
-      const data = snap.data() || {};
-      if (Array.isArray(data.list)) arr = data.list;
-      else if (Array.isArray(data.operadores)) arr = data.operadores;
+    const snap = await EmpresaService.getOperadores();
+    if (snap) {
+      if (Array.isArray(snap.list)) arr = snap.list;
+      else if (Array.isArray(snap.operadores)) arr = snap.operadores;
     }
 
     // 2) Fallback: si está vacío, deduce operadores usados en poc_devices
@@ -791,8 +793,8 @@ function actualizarResumenPOC({ total = 0, activos = 0, incompletos = 0 } = {}) 
       return;
     }
 
-    const snap = await db.collection("usuarios").doc(user.uid).get();
-    rolActual = snap.data()?.rol || ROLES.VISTA;
+    const userDoc = await UsuariosService.getUsuario(user.uid);
+    rolActual = userDoc?.rol || ROLES.VISTA;
 
     // ✅ Solo estos roles pueden entrar a POC/index
     const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA];
@@ -903,9 +905,7 @@ function actualizarResumenPOC({ total = 0, activos = 0, incompletos = 0 } = {}) 
         .filter(g => g);
       
       const user = firebase.auth().currentUser;
-      const docRef = db.collection("poc_devices").doc(currentEditDocId);
-      const prevSnap = await docRef.get();
-      const prevData = prevSnap.data() || {};
+      const prevData = (await PocService.getPocDevice(currentEditDocId)) || {};
 
       const newData = {
         serial: document.getElementById('drawer-serial').value,
@@ -926,10 +926,10 @@ function actualizarResumenPOC({ total = 0, activos = 0, incompletos = 0 } = {}) 
       };
 
       // ✅ Update device
-      await docRef.update(newData);
+      await PocService.updatePocDevice(currentEditDocId, newData);
 
       // ✅ Log to poc_logs
-      await db.collection("poc_logs").add({
+      await PocService.addLog({
         equipo_id: currentEditDocId,
         fecha: firebase.firestore.FieldValue.serverTimestamp(),
         usuario: user?.email,
@@ -1103,7 +1103,7 @@ if (!esSoloLecturaPOC()) {        // ← solo si NO es técnico
 
   deleteBtn.onclick = () => {
     if (confirm("¿Seguro que quieres eliminar este equipo?")) {
-      db.collection("poc_devices").doc(doc.id).update({ deleted: true }).then(() => {
+      PocService.softDeletePocDevice(doc.id).then(() => {
         if (document.getElementById("filtroValor").value.trim()) { filtrarDispositivos(); } else { cargarDispositivos(true); }
       });
     }
@@ -1116,7 +1116,7 @@ if (!esSoloLecturaPOC()) {        // ← solo si NO es técnico
     restoreBtn.textContent = "♻️";
     restoreBtn.title = "Restaurar";
     restoreBtn.onclick = () => {
-      db.collection("poc_devices").doc(doc.id).update({ deleted: false }).then(() => {
+      PocService.restorePocDevice(doc.id).then(() => {
         if (document.getElementById("filtroValor").value.trim()) { filtrarDispositivos(); } else { cargarDispositivos(true); }
       });
     };
@@ -1301,7 +1301,7 @@ deleteBtn.title = "Eliminar equipo";
 
   deleteBtn.onclick = () => {
     if (confirm("¿Seguro que quieres eliminar este equipo?")) {
-      db.collection("poc_devices").doc(doc.id).update({ deleted: true }).then(() => {
+      PocService.softDeletePocDevice(doc.id).then(() => {
         if (document.getElementById("filtroValor").value.trim()) { filtrarDispositivos(); } else { cargarDispositivos(true); }
       });
     }
@@ -1315,7 +1315,7 @@ restoreBtn.textContent = "♻️";
 restoreBtn.title = "Restaurar";
 
     restoreBtn.onclick = () => {
-      db.collection("poc_devices").doc(doc.id).update({ deleted: false }).then(() => {
+      PocService.restorePocDevice(doc.id).then(() => {
         if (document.getElementById("filtroValor").value.trim()) { filtrarDispositivos(); } else { cargarDispositivos(true); }
       });
     };
@@ -1488,9 +1488,7 @@ async function procesarSIMSeleccionados() {
     if (!id) continue;
 
 const user = firebase.auth().currentUser;
-const docRef = db.collection("poc_devices").doc(id);
-const prevSnap = await docRef.get();
-const prevData = prevSnap.data() || {};
+const prevData = (await PocService.getPocDevice(id)) || {};
 
 const newData = {
   operador,
@@ -1502,10 +1500,10 @@ const newData = {
 };
 
 // ✅ Actualiza el radio
-await docRef.update(newData);
+await PocService.updatePocDevice(id, newData);
 
 // ✅ Guarda log en poc_logs
-await db.collection("poc_logs").add({
+await PocService.addLog({
   equipo_id: id,
   fecha: firebase.firestore.FieldValue.serverTimestamp(),
   usuario: user?.email,
@@ -1571,7 +1569,7 @@ async function exportarExcelSeleccionados() {
       return;
     }
 
-    const docs = await Promise.all(ids.map(id => db.collection("poc_devices").doc(id).get()));
+    const docs = await Promise.all(ids.map(id => PocService.getPocDevice(id)));
     const registros = [];
 
     // Helper fecha legible
@@ -1607,15 +1605,14 @@ async function exportarExcelSeleccionados() {
       ["updated_by_email", "Actualizado por"]
     ];
 
-    docs.forEach(snap => {
-      if (!snap.exists) return;
-      const d = snap.data() || {};
+    docs.forEach(d => {
+      if (!d) return;
 
       // Relacionados / derivados
       const clienteName = nombreClienteDe(d) || d.cliente || ""; // usa tu helper con clientesMap
       const gruposTxt = Array.isArray(d.grupos) ? d.grupos.join(", ") : (d.grupos || "");
       const fila = {
-        device_id: snap.id,
+        device_id: d.id,
         cliente_name: clienteName,
         cliente_id: d.cliente_id || "",
         operador: d.operador || "",
@@ -1786,7 +1783,7 @@ if (!esSoloLecturaPOC()) {
   deleteBtn.title = "Eliminar equipo";
   deleteBtn.onclick = () => {
     if (confirm("¿Eliminar este equipo?")) {
-      db.collection("poc_devices").doc(doc.id).update({ deleted: true }).then(() => mostrarTodo());
+      PocService.softDeletePocDevice(doc.id).then(() => mostrarTodo());
     }
   };
   actionCell.appendChild(deleteBtn);
@@ -1796,7 +1793,7 @@ if (!esSoloLecturaPOC()) {
   restoreBtn.textContent = "♻️";
   restoreBtn.title = "Restaurar";
   restoreBtn.onclick = () => {
-    db.collection("poc_devices").doc(doc.id).update({ deleted: false }).then(() => mostrarTodo());
+    PocService.restorePocDevice(doc.id).then(() => mostrarTodo());
   };
   actionCell.appendChild(restoreBtn);
 
@@ -1830,16 +1827,15 @@ function irAImpresion() {
   window.open(`imprimir-equipos.html${query}`, '_blank');
 }
 async function filtrarDuplicados(tipo) {
-  const snapshot = await db.collection("poc_devices").get();
+  const devices = await PocService.getPocDevices();
   const equipos = [];
   const soloActivos = document.getElementById("soloActivos")?.checked;
 
-  snapshot.forEach(doc => {
-    const d = doc.data();
+  devices.forEach(d => {
     if (d.deleted === true) return;
     if (soloActivos && !d.activo) return;
       equipos.push({
-    id: doc.id,
+    id: d.id,
     serial: d.serial ? String(d.serial) : "",
     sim: d.sim_number ? String(d.sim_number) : "",
     cliente: nombreClienteDe(d) || "",
@@ -1889,11 +1885,10 @@ async function buscarGruposInvalidos() {
   const resumenEl = document.getElementById("resumenEquipos");
   if (resumenEl) resumenEl.innerHTML = '<div class="loader" style="width:20px;height:20px;border-width:2px;"></div>';
 
-  const snapshot = await db.collection("poc_devices").get();
+  const devices = await PocService.getPocDevices();
   const invalidos = [];
 
-  snapshot.forEach(doc => {
-    const d = doc.data();
+  devices.forEach(d => {
     if (d.deleted === true) return;
     const grupos = d.grupos || [];
     const tieneInvalido = grupos.some(g => {
@@ -1902,7 +1897,7 @@ async function buscarGruposInvalidos() {
     });
     if (!tieneInvalido) return;
     invalidos.push({
-      id: doc.id,
+      id: d.id,
       serial: d.serial ? String(d.serial) : "",
       sim: d.sim_number ? String(d.sim_number) : "",
       cliente: nombreClienteDe(d) || "",
@@ -2001,7 +1996,7 @@ function mostrarResultadosFiltrados(lista) {
       btnEliminar.title = "Eliminar";
       btnEliminar.onclick = () => {
         if (confirm("¿Seguro que quieres eliminar este equipo?")) {
-          db.collection("poc_devices").doc(d.id).update({ deleted: true })
+          PocService.softDeletePocDevice(d.id)
             .then(() => cargarDispositivos(true));
         }
       };
@@ -2013,7 +2008,7 @@ function mostrarResultadosFiltrados(lista) {
         btnRestaurar.textContent = "♻️";
 
         btnRestaurar.onclick = () => {
-          db.collection("poc_devices").doc(d.id).update({ deleted: false })
+          PocService.restorePocDevice(d.id)
             .then(() => cargarDispositivos(true));
         };
         acciones.appendChild(btnRestaurar);
@@ -2177,14 +2172,12 @@ async function guardarEdicionMasiva() {
       updated_by_email: user?.email || null
     };
 
-    const docRef = db.collection("poc_devices").doc(id);
-    const prevSnap = await docRef.get();
-    const prevData = prevSnap.data() || {};
+    const prevData = (await PocService.getPocDevice(id)) || {};
 
-    await docRef.update(newData);
+    await PocService.updatePocDevice(id, newData);
 
     // Log en poc_logs
-    await db.collection("poc_logs").add({
+    await PocService.addLog({
       equipo_id: id,
       fecha: firebase.firestore.FieldValue.serverTimestamp(),
       usuario: user?.email,

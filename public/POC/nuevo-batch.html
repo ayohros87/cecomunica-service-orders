@@ -210,6 +210,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
 </head>
 <body>
   <div class="page-header">
@@ -280,24 +283,25 @@
   <script>
 
     async function cargarSelect(ruta, id) {
-      const snap = await db.doc(ruta).get();
+      const docId = ruta.split('/')[1];
+      const snap = await EmpresaService.getDoc(docId);
       const select = document.getElementById(id);
-      if (snap.exists) {
-        (snap.data().list || []).forEach(item => {
+      if (snap) {
+        (snap.list || []).forEach(item => {
           const option = new Option(item, item);
           select.appendChild(option);
         });
       }
     }
 async function cargarListaSelect(ruta, selectId) {
-  const ref = db.doc(ruta);
-  const snap = await ref.get();
+  const docId = ruta.split('/')[1];
+  const snap = await EmpresaService.getDoc(docId);
   const select = document.getElementById(selectId);
-  
+
   select.innerHTML = '<option value="" disabled selected>Seleccione...</option>';
 
-  if (snap.exists) {
-    const lista = snap.data().list || [];
+  if (snap) {
+    const lista = snap.list || [];
     lista.sort().forEach(item => {
       const option = document.createElement("option");
       option.value = item;
@@ -308,16 +312,12 @@ async function cargarListaSelect(ruta, selectId) {
 }
 
 async function mostrarUltimosUnitIDs() {
-  const snap = await db.collection("poc_devices")
-    .orderBy("created_at", "desc")
-    .limit(5)
-    .get();
+  const recientes = await PocService.getRecent(5);
 
   const ul = document.getElementById("ultimosUnitIDs");
   ul.innerHTML = "";
 
-  snap.forEach(doc => {
-    const d = doc.data();
+  recientes.forEach(d => {
     const item = document.createElement("li");
     item.textContent = `${d.unit_id || "(sin Unit ID)"} – ${d.radio_name || "(sin nombre)"}`;
     ul.appendChild(item);
@@ -329,12 +329,12 @@ async function mostrarUltimosUnitIDs() {
 async function agregarElemento(ruta, selectId, label) {
   const nuevo = prompt(`Nuevo ${label}:`);
   if (nuevo) {
-    const ref = db.doc(ruta);
-    const snap = await ref.get();
-    const lista = snap.exists ? (snap.data().list || []) : [];
+    const docId = ruta.split('/')[1];
+    const snap = await EmpresaService.getDoc(docId);
+    const lista = snap ? (snap.list || []) : [];
     if (!lista.includes(nuevo)) {
       lista.push(nuevo);
-      await ref.set({ list: lista });
+      await EmpresaService.setDoc(docId, { list: lista });
       const option = new Option(nuevo, nuevo);
       const select = document.getElementById(selectId);
       select.appendChild(option);
@@ -343,14 +343,13 @@ async function agregarElemento(ruta, selectId, label) {
   }
 }
 async function cargarClientes() {
-  const snapshot = await db.collection("clientes").where("deleted", "==", false).orderBy("nombre").get();
+  const { docs } = await ClientesService.listClientes({ limit: 2000 });
   const select = document.getElementById("cliente");
   select.innerHTML = '<option value="" disabled selected>Seleccione...</option>';
-  snapshot.forEach(doc => {
-    const data = doc.data();
+  docs.forEach(d => {
     const option = document.createElement("option");
-    option.value = doc.id;
-    option.textContent = data.nombre;
+    option.value = d.id;
+    option.textContent = d.nombre;
     select.appendChild(option);
   });
 }
@@ -467,7 +466,7 @@ document.getElementById("addCliente").onclick = async () => {
         activo: true,
         deleted: false
         };
-          await db.collection("poc_devices").add(data);
+          await PocService.addPocDevice(data);
         }
 
         alert("✅ Equipos creados correctamente.");
@@ -590,11 +589,12 @@ async function registrarCliente(nombreCliente) {
   if (!nombreCliente) return;
 
   const nombre = nombreCliente.trim();
+  const db = firebase.firestore();
   const snap = await db.collection("clientes").where("nombre", "==", nombre).limit(1).get();
 
   if (!snap.empty) return; // ya existe
 
-  await db.collection("clientes").add({
+  await ClientesService.createCliente({
     nombre,
     fecha_creacion: new Date()
   });

@@ -12,6 +12,10 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/mailService.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
 
   <style>
     body { margin:0; padding:0; font-family: system-ui, sans-serif; background:#f9fafb; }
@@ -154,16 +158,14 @@ async function guardarFirma() {
     const emailCliente = document.getElementById("clienteEmail").value.trim();
 
     // 5) Actualizar Firestore
-    const ref = db.collection("ordenes_de_servicio").doc(ordenId);
-    const snap = await ref.get();
-    const ordenData = snap.exists ? snap.data() : {};
+    const ordenData = (await OrdenesService.getOrder(ordenId)) || {};
 
     let nuevoEstado = "ENTREGADO AL CLIENTE";
 
     const fechaEntregaVal = document.getElementById("fechaEntrega").value;
     const fechaEntrega = fechaEntregaVal ? new Date(fechaEntregaVal) : null;
 
-    await ref.set({
+    await OrdenesService.mergeOrder(ordenId, {
     estado_reparacion: "ENTREGADO AL CLIENTE",
     fecha_entrega: firebase.firestore.FieldValue.serverTimestamp(),
     firma_url: urlFirma,
@@ -176,7 +178,7 @@ async function guardarFirma() {
         action: "ENTREGAR",
         by: user.uid || ""
     })
-    }, { merge: true });
+    });
 
 
 // 6) Enviar correo al cliente
@@ -185,7 +187,7 @@ if (emailCliente) {
   const tipo = ordenData.tipo_de_servicio || "—";
   const radios = (ordenData.equipos || []).filter(e => !e.eliminado).length;
 
-await db.collection("mail_queue").add({
+await MailService.enqueue({
   to: emailCliente,
   subject: `Orden ${ordenId} ENTREGADA AL CLIENTE`,
   text: `
@@ -210,7 +212,6 @@ Gracias por confiar en Cecomunica.
 </ul>
 <p>Gracias por confiar en <strong>Cecomunica</strong>.</p>
   `.trim(),
-  createdAt: firebase.firestore.FieldValue.serverTimestamp()
 });
 
   console.log("📧 Email de confirmación enviado al cliente:", emailCliente);
@@ -219,28 +220,26 @@ Gracias por confiar en Cecomunica.
 // 7) Enviar correo al vendedor asignado
 if (ordenData.vendedor_asignado) {
   try {
-    const vendSnap = await db.collection("usuarios").doc(ordenData.vendedor_asignado).get();
-    if (vendSnap.exists) {
-      const v = vendSnap.data();
+    const v = await UsuariosService.getUsuario(ordenData.vendedor_asignado);
+    if (v) {
       if (v.email) {
         const asunto = `Orden ${ordenId} ENTREGADA AL CLIENTE`;
-        await db.collection("mail_queue").add({
-        to: v.email,
-        subject: `Orden ${ordenId} ENTREGADA AL CLIENTE`,
-        text: `
+        await MailService.enqueue({
+          to: v.email,
+          subject: `Orden ${ordenId} ENTREGADA AL CLIENTE`,
+          text: `
         Estimado(a) ${v.nombre || "Vendedor"},
 
-        La Orden de Servicio ${ordenId} del cliente ${ordenData.cliente_nombre || "—"} 
+        La Orden de Servicio ${ordenId} del cliente ${ordenData.cliente_nombre || "—"}
         ha sido marcada como ENTREGADO AL CLIENTE.
 
         Puede coordinar la facturación o el seguimiento correspondiente.
         `.trim(),
-        html: `
+          html: `
         <p>Estimado(a) ${v.nombre || "Vendedor"},</p>
         <p>La <strong>Orden ${ordenId}</strong> del cliente <b>${ordenData.cliente_nombre || "—"}</b> ha sido marcada como <b>ENTREGADO AL CLIENTE</b>.</p>
         <p>Puede coordinar la facturación o el seguimiento correspondiente.</p>
         `.trim(),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         console.log("📧 Email de notificación enviado al vendedor:", v.email);
       }
@@ -272,14 +271,11 @@ if (ordenData.vendedor_asignado) {
     }
 
     async function cargarOrden(id) {
-  const ref = db.collection("ordenes_de_servicio").doc(id);
-  const snap = await ref.get();
-  if (!snap.exists) {
+  const o = await OrdenesService.getOrder(id);
+  if (!o) {
     alert("Orden no encontrada");
     return;
   }
-
-  const o = snap.data();
   document.getElementById("ordenCliente").textContent = o.cliente_nombre || "—";
   document.getElementById("ordenTipo").textContent = o.tipo_de_servicio || "—";
   document.getElementById("ordenTecnico").textContent = o.tecnico_asignado || "—";
@@ -288,10 +284,8 @@ if (ordenData.vendedor_asignado) {
 
   // Buscar email del cliente en la colección clientes
   if (o.cliente_id) {
-    const clienteSnap = await db.collection("clientes").doc(o.cliente_id).get();
-    if (clienteSnap.exists) {
-      document.getElementById("clienteEmail").value = clienteSnap.data().email || "";
-    }
+    const cli = await ClientesService.getCliente(o.cliente_id);
+    if (cli) document.getElementById("clienteEmail").value = cli.email || "";
   }
 }
 async function subirIdentificacion(ordenId) {

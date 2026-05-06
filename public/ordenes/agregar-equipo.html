@@ -52,6 +52,9 @@
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
   <script>
     const form = document.getElementById("formEquipos");
     const container = document.getElementById("equiposContainer");
@@ -61,14 +64,12 @@
     let contador = 0;
     
     async function cargarModelos() {
-  const snapshot = await db.collection("modelos").get();
-  modelos = snapshot.docs
-    .map(doc => ({
-      id: doc.id,
-      // Soporta `modelo` o `nombre`
-      nombre: (doc.data().modelo || doc.data().nombre || "(sin nombre)").trim()
+  const raw = await ModelosService.getModelos();
+  modelos = raw
+    .map(m => ({
+      id: m.id,
+      nombre: (m.modelo || m.nombre || "(sin nombre)").trim()
     }))
-    // Orden alfabético, sin distinguir mayúsculas/acentos
     .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
 }
 
@@ -142,10 +143,8 @@ const html = `
 // ===== SYNC CONTRATO CACHE =====
 async function syncContratoCacheFromOrden(ordenId) {
   try {
-    const ordenSnap = await db.collection("ordenes_de_servicio").doc(ordenId).get();
-    if (!ordenSnap.exists) return;
-
-    const orden = ordenSnap.data() || {};
+    const orden = await OrdenesService.getOrder(ordenId);
+    if (!orden) return;
     const c = orden.contrato || {};
 
     if (!c.aplica || !c.contrato_doc_id) return;
@@ -190,16 +189,15 @@ async function syncContratoCacheFromOrden(ordenId) {
   let guardados = 0;
   const nuevosEquipos = [];
 
-  const ordenRef = db.collection("ordenes_de_servicio").doc(document.getElementById("orden_id").value);
-  const ordenSnap = await ordenRef.get();
+  const ordenId = document.getElementById("orden_id").value;
+  const ordenData = await OrdenesService.getOrder(ordenId);
 
-  if (!ordenSnap.exists) {
+  if (!ordenData) {
     mensaje.style.color = "red";
     mensaje.textContent = "❌ No se encontró la orden";
     return;
   }
 
-  const ordenData = ordenSnap.data();
   const equiposExistentes = ordenData.equipos || [];
 
   for (let equipo of equipos) {
@@ -241,7 +239,7 @@ async function syncContratoCacheFromOrden(ordenId) {
     guardados++;
   }
 
-  await ordenRef.update({
+  await OrdenesService.updateOrder(ordenId, {
     equipos: [...equiposExistentes, ...nuevosEquipos]
   });
 
@@ -276,11 +274,9 @@ async function syncContratoCacheFromOrden(ordenId) {
   if (!ordenID) return;
 
   ordenInput.value = ordenID;
-  const ref = db.collection("ordenes_de_servicio").doc(ordenID);
-  const ordenSnap = await ref.get();
+  const data = await OrdenesService.getOrder(ordenID);
 
-  if (ordenSnap.exists) {
-    const data = ordenSnap.data();
+  if (data) {
     let nombreCliente = "";
 
     // 1) String directo
@@ -294,8 +290,8 @@ async function syncContratoCacheFromOrden(ordenId) {
     // 3) Referencia por ID (nuevo esquema)
     } else if (data.cliente_id) {
       try {
-        const cliSnap = await db.collection("clientes").doc(data.cliente_id).get();
-        if (cliSnap.exists) nombreCliente = cliSnap.data().nombre || "";
+        const cli = await ClientesService.getCliente(data.cliente_id);
+        if (cli) nombreCliente = cli.nombre || "";
       } catch (e) {
         console.error("Error cargando cliente:", e);
       }

@@ -513,6 +513,8 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="../js/firebase-init.js"></script>
+<script src="../js/core/roles.js"></script>
+<script src="../js/services/usuariosService.js"></script>
 <script>
 
 
@@ -523,8 +525,8 @@ firebase.auth().onAuthStateChanged(async user => {
     poblarDropdownModeloGlobal();
 
     
-    const doc = await db.collection("usuarios").doc(user.uid).get();
-    const rol = doc.exists ? doc.data().rol : null;
+    const userDoc = await UsuariosService.getUsuario(user.uid);
+    const rol = userDoc ? userDoc.rol : null;
 
     if (!["administrador", "vendedor", "recepcion"].includes(rol)) {
       toast("Acceso restringido.", "bad");

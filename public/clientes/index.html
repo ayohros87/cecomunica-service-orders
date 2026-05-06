@@ -13,6 +13,8 @@
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
   <script src="../js/core/auth.js"></script>
 
  <link rel="stylesheet" href="../css/ceco-ui.css">
@@ -122,18 +124,13 @@
   let listaVendedores = [];
 
 async function cargarVendedores() {
-  const snap = await db.collection('usuarios')
-    .where('rol', 'in', [ROLES.VENDEDOR, ROLES.ADMIN])
-    .get();
+  const snap = await UsuariosService.getVendedores();
 
-  listaVendedores = snap.docs.map(d => {
-    const data = d.data();
-    return {
-      id: d.id,
-      email: data.email || d.id,
-      nombre: data.nombre || null
-    };
-  });
+  listaVendedores = snap.map(d => ({
+    id: d.id,
+    email: d.email || d.id,
+    nombre: d.nombre || null,
+  }));
 }
 
 (function(){
@@ -311,8 +308,8 @@ $selectAll.onchange = ()=>{
 
     // Carga rol (ajústalo a tu fuente: custom claims o colección usuarios)
     try{
-      const u = await db.collection('usuarios').doc(user.uid).get();
-      role = u.exists && u.data().rol ? u.data().rol : ROLES.VISTA;
+      const u = await UsuariosService.getUsuario(user.uid);
+      role = u && u.rol ? u.rol : ROLES.VISTA;
     }catch(e){ role=ROLES.VISTA; }
     
 // --- Guard: acceso solo para admin/administrador/recepcion ---
@@ -356,27 +353,10 @@ function updateBulkBar(){
   $bulkCount.textContent = n;
   $bulkBar.style.display = (n>0 && !asReadonly()) ? 'block' : 'none';
 }
-async function runBatchedUpdates(ids, mutator){
-  const chunks = [];
-  const arr = Array.from(ids);
-  for(let i=0; i<arr.length; i+=450){ chunks.push(arr.slice(i, i+450)); }
-
-  for(const chunk of chunks){
-    const batch = db.batch();
-    const ts = firebase.firestore.FieldValue.serverTimestamp();
-    for(const id of chunk){
-      const ref = db.collection('clientes').doc(id);
-      const data = mutator({ ts, id });
-      batch.update(ref, data);
-    }
-    await batch.commit();
-  }
-}
-
 $bulkActivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
   if(!confirm(`Activar ${selectedIds.size} cliente(s)?`)) return;
-  await runBatchedUpdates(selectedIds, ({ts})=>({ activo:true, updatedAt: ts }));
+  await ClientesService.batchUpdate(Array.from(selectedIds), { activo: true });
   // refresco visual de las filas seleccionadas
   selectedIds.forEach(id=>{
     const selEl = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
@@ -395,7 +375,7 @@ if (selEl) {
 $bulkDesactivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
   if(!confirm(`Desactivar ${selectedIds.size} cliente(s)?`)) return;
-  await runBatchedUpdates(selectedIds, ({ts})=>({ activo:false, updatedAt: ts }));
+  await ClientesService.batchUpdate(Array.from(selectedIds), { activo: false });
   selectedIds.forEach(id=>{
     const selEl = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
 if (selEl) {
@@ -416,11 +396,10 @@ $bulkAddTag.onclick = async ()=>{
   const tag = $bulkTag.value.trim();
   if(!tag){ alert('Escribe un tag'); return; }
   const tagLower = tag.toLowerCase();
-  await runBatchedUpdates(selectedIds, ({ts})=>({
+  await ClientesService.batchUpdate(Array.from(selectedIds), {
     tags: firebase.firestore.FieldValue.arrayUnion(tag),
     searchTokens: firebase.firestore.FieldValue.arrayUnion(tagLower),
-    updatedAt: ts
-  }));
+  });
   alert(`Tag "${tag}" agregado`);
   $bulkTag.value = '';
 };
@@ -607,7 +586,7 @@ const onInlineUpdate = debounce(async (id, partial)=>{
     }
 
     // ruc / cedula_representante: se guardan tal cual, sin tokens (evita ruido)
-    await db.collection('clientes').doc(id).update(partial);
+    await ClientesService.updateCliente(id, partial);
   }catch(e){
     alert('No se pudo guardar: '+e.message);
   }
@@ -692,10 +671,9 @@ if (selectVend) {
   selectVend.addEventListener('change', async () => {
     const newId = selectVend.value;
     const vend = listaVendedores.find(v => v.id === newId);
-    await db.collection('clientes').doc(id).update({
+    await ClientesService.updateCliente(id, {
       vendedor_asignado: vend ? vend.id : null,
       vendedor_email: vend ? vend.email : null,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   });
 }
@@ -756,10 +734,7 @@ tr.querySelector('[data-delete]').onclick = async ()=>{
   if(!ok) return;
 
   try {
-    await db.collection('clientes').doc(id).update({
-      deleted: true,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await ClientesService.deleteCliente(id);
     tr.remove();
   } catch(e){
     alert('Error al eliminar: ' + e.message);

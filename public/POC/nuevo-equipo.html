@@ -34,6 +34,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
 </head>
 <body>
   <h2>Registrar Nuevo Equipo PoC</h2>
@@ -112,10 +114,11 @@
     }
 
     async function cargarListaSelect(path, selectId) {
-      const snap = await db.doc(path).get();
+      const docId = path.split('/')[1];
+      const snap = await EmpresaService.getDoc(docId);
       const select = document.getElementById(selectId);
-      if (snap.exists) {
-        const lista = snap.data().list || [];
+      if (snap) {
+        const lista = snap.list || [];
         lista.forEach(op => {
           const option = document.createElement("option");
           option.value = op;
@@ -188,28 +191,26 @@
         document.getElementById("addCliente").onclick = async () => {
           const nuevo = prompt("Nuevo cliente:");
           if (nuevo) {
-            const ref = db.doc("empresa/clientes");
-            const snap = await ref.get();
-            const lista = snap.exists ? snap.data().list || [] : [];
+            const snap = await EmpresaService.getDoc("clientes");
+            const lista = snap ? snap.list || [] : [];
             if (!lista.includes(nuevo)) {
               lista.push(nuevo);
-              await ref.set({ list: lista });
+              await EmpresaService.setDoc("clientes", { list: lista });
               const option = new Option(nuevo, nuevo);
               document.getElementById("cliente").appendChild(option);
               document.getElementById("cliente").value = nuevo;
             }
           }
         };
-          
+
         document.getElementById("addIP").onclick = async () => {
           const nuevo = prompt("Nueva IP:");
           if (nuevo) {
-            const ref = db.doc("empresa/IPs");
-            const snap = await ref.get();
-            const lista = snap.exists ? snap.data().list || [] : [];
+            const snap = await EmpresaService.getDoc("IPs");
+            const lista = snap ? snap.list || [] : [];
             if (!lista.includes(nuevo)) {
               lista.push(nuevo);
-              await ref.set({ list: lista });
+              await EmpresaService.setDoc("IPs", { list: lista });
               const option = new Option(nuevo, nuevo);
               document.getElementById("ip").appendChild(option);
               document.getElementById("ip").value = nuevo;
@@ -228,14 +229,14 @@
           const serial = document.getElementById("serial").value.trim();
 
           const checks = await Promise.all([
-            db.collection("poc_devices").where("sim_number", "==", sim).get(),
-            db.collection("poc_devices").where("sim_phone", "==", tel).get(),
-            db.collection("poc_devices").where("serial", "==", serial).get()
+            PocService.findByField("sim_number", sim),
+            PocService.findByField("sim_phone", tel),
+            PocService.findByField("serial", serial)
           ]);
 
-          if (checks[0].size > 0) return mostrarMensaje("⚠️ SIM ya registrado.", "rojo");
-          if (checks[1].size > 0) return mostrarMensaje("⚠️ Teléfono ya registrado.", "rojo");
-          if (checks[2].size > 0) return mostrarMensaje("⚠️ Serial ya registrado.", "rojo");
+          if (checks[0].length > 0) return mostrarMensaje("⚠️ SIM ya registrado.", "rojo");
+          if (checks[1].length > 0) return mostrarMensaje("⚠️ Teléfono ya registrado.", "rojo");
+          if (checks[2].length > 0) return mostrarMensaje("⚠️ Serial ya registrado.", "rojo");
 
           const grupos = [...document.querySelectorAll(".grupo-input")].map(i => i.value.trim()).filter(g => g);
           const setGrupos = new Set(grupos);
@@ -264,7 +265,7 @@
           };
 
           try {
-            await db.collection("poc_devices").add(data);
+            await PocService.addPocDevice(data);
             mostrarMensaje("✅ Equipo guardado exitosamente.");
             setTimeout(() => window.location.href = "index.html", 1000);
           } catch (error) {

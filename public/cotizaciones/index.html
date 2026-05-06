@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
 
   <style>
     html, body { margin: 0; padding: 0; }
@@ -202,26 +203,18 @@
         lastDoc = null;
       }
 
-      let query = db.collection("cotizaciones")
-        .orderBy("fecha_creacion", "desc")
-        .limit(30);
+      const { docs, lastDoc: newCursor } = await CotizacionesService.listCotizaciones({ lastDoc, limit: 30 });
 
-      if (lastDoc) {
-        query = query.startAfter(lastDoc);
-      }
-
-      const snap = await query.get();
-
-      if (!snap.empty) {
-        lastDoc = snap.docs[snap.docs.length - 1];
-        snap.forEach(doc => cotizaciones.push({ id: doc.id, ...doc.data() }));
+      if (docs.length > 0) {
+        lastDoc = newCursor;
+        cotizaciones.push(...docs);
       }
 
       aplicarFiltros();
 
       if (btn) {
         btn.disabled = false;
-        const hasMore = !snap.empty;
+        const hasMore = docs.length > 0;
         btn.style.display = hasMore ? "inline-block" : "none";
         const totalVisible = getFilteredCotizaciones().length;
         btn.textContent = `⬇️ Cargar más cotizaciones (${totalVisible})`;
@@ -368,16 +361,11 @@
       const start = new Date(y, now.getMonth(), now.getDate(), 0, 0, 0);
       const end = new Date(y, now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-      const snap = await db.collection("cotizaciones")
-        .where("fecha_creacion", ">=", start)
-        .where("fecha_creacion", "<=", end)
-        .orderBy("fecha_creacion", "desc")
-        .limit(20)
-        .get();
+      const cotizacionesHoy = await CotizacionesService.getCotizacionesPorFecha(start, end);
 
       let max = 0;
-      snap.forEach(doc => {
-        const id = doc.data()?.cotizacion_id || "";
+      cotizacionesHoy.forEach(c => {
+        const id = c.cotizacion_id || "";
         if (id.startsWith(prefix)) {
           const n = parseInt(id.replace(prefix, ""), 10);
           if (!isNaN(n)) max = Math.max(max, n);
@@ -389,9 +377,8 @@
 
     async function duplicarCotizacion(id) {
       if (!confirm("¿Duplicar esta cotización?")) return;
-      const doc = await db.collection("cotizaciones").doc(id).get();
-      if (!doc.exists) return;
-      const d = doc.data();
+      const d = await CotizacionesService.getCotizacion(id);
+      if (!d) return;
       const user = firebase.auth().currentUser;
       const cotizacion_id = await generarCotizacionIdSimple();
 
@@ -407,13 +394,13 @@
         vendedor_uid: user?.uid || null
       };
 
-      await db.collection("cotizaciones").add(nuevo);
+      await CotizacionesService.addCotizacion(nuevo);
       await cargarCotizaciones();
     }
 
     async function anularCotizacion(id) {
       if (!confirm("¿Anular esta cotización?")) return;
-      await db.collection("cotizaciones").doc(id).update({
+      await CotizacionesService.updateCotizacion(id, {
         estado: "anulada",
         fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp()
       });
@@ -422,7 +409,7 @@
 
     async function eliminarCotizacion(id) {
       if (!confirm("¿Eliminar (ocultar) esta cotización?")) return;
-      await db.collection("cotizaciones").doc(id).update({
+      await CotizacionesService.updateCotizacion(id, {
         deleted: true,
         fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp()
       });

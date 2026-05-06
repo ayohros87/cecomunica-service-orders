@@ -10,6 +10,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
 
   <!-- XLSX (exportación) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -410,9 +413,9 @@ tr.inactivo td{ opacity:.55; }
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return window.location.href = "../login.html";
       try{
-        const userDoc = await db.collection("usuarios").doc(user.uid).get();
-        const rol = userDoc.exists ? userDoc.data().rol : null;
-        if (!userDoc.exists || (rol !== "administrador" && rol !== "inventario")) {
+        const userDoc = await UsuariosService.getUsuario(user.uid);
+        const rol = userDoc ? userDoc.rol : null;
+        if (!userDoc || (rol !== "administrador" && rol !== "inventario")) {
           document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";
           return;
         }
@@ -451,8 +454,7 @@ tr.inactivo td{ opacity:.55; }
     async function cargarModelos(){
       showSkeleton();
       try{
-        const snapshot = await db.collection("modelos").get();
-        listaModelos = snapshot.docs.map(d=>({ id:d.id, ...d.data() }));
+        listaModelos = await ModelosService.getModelos();
       }catch(e){
         console.error(e); toast('Error cargando modelos','bad'); listaModelos=[];
       }
@@ -630,13 +632,10 @@ tr.inactivo td{ opacity:.55; }
 
       try{
         if (modeloEditId===null){
-          await db.collection('modelos').add({
-            ...payload,
-            creado_en: firebase.firestore.FieldValue.serverTimestamp()
-          });
+          await ModelosService.addModelo(payload);
           toast('Modelo creado','ok');
         } else {
-          await db.collection('modelos').doc(modeloEditId).update(payload);
+          await ModelosService.updateModelo(modeloEditId, payload);
           toast('Modelo actualizado','ok');
         }
         cerrarModal();
@@ -647,26 +646,20 @@ tr.inactivo td{ opacity:.55; }
     /* ===== Acciones estado ===== */
     async function desactivarModelo(id){
       try{
-        await db.collection('modelos').doc(id).update({
-          activo:false,
-          actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        await ModelosService.setActivo(id, false);
         toast('Modelo desactivado','ok'); await cargarModelos();
       }catch(e){ console.error(e); toast('Error','bad');}
     }
     async function activarModelo(id){
       try{
-        await db.collection('modelos').doc(id).update({
-          activo:true,
-          actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        await ModelosService.setActivo(id, true);
         toast('Modelo activado','ok'); await cargarModelos();
       }catch(e){ console.error(e); toast('Error','bad');}
     }
     async function eliminarDefinitivo(id){
       if(!confirm('¿Eliminar definitivamente este modelo? (borra solo el documento del modelo)')) return;
       try{
-        await db.collection('modelos').doc(id).delete();
+        await ModelosService.deleteModelo(id);
         toast('Modelo eliminado','ok'); await cargarModelos();
       }catch(e){ console.error(e); toast('Error al eliminar','bad');}
     }

@@ -28,6 +28,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
 
   <script>
     const tablaDiv = document.getElementById("tablaReporte");
@@ -48,12 +49,9 @@
 
       try {
         // Traer órdenes cuyo estado sea POR ASIGNAR o ASIGNADO
-        const snap = await db.collection("ordenes_de_servicio")
-          .where("estado_reparacion", "in", ["POR ASIGNAR", "ASIGNADO"])
-          .orderBy("fecha_entrada", "desc")
-          .get();
+        const ordenes = await OrdenesService.filterByStatuses(["POR ASIGNAR", "ASIGNADO"]);
 
-        if (snap.empty) {
+        if (!ordenes.length) {
           mensajeDiv.textContent = "No hay órdenes pendientes.";
           return;
         }
@@ -76,10 +74,7 @@
 
         let totalRadios = 0;
 
-        for (const doc of snap.docs) {
-          const data = doc.data();
-          if (data.eliminado === true) continue;
-
+        for (const data of ordenes) {
 // Usar lo que ya está guardado en la orden
 let nombreCliente = data.cliente_nombre || data.cliente || "No disponible";
 let vendedor = data.vendedor_email || "No disponible";
@@ -91,7 +86,7 @@ let vendedor = data.vendedor_email || "No disponible";
 
         tabla += `
           <tr>
-            <td>${doc.id}</td>
+            <td>${data.ordenId}</td>
             <td>${nombreCliente}</td>
             <td>${data.tipo_de_servicio || "-"}</td>
             <td>${data.estado_reparacion || "-"}</td>

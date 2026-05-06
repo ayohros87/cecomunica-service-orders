@@ -29,6 +29,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/piezasService.js"></script>
 
   <div class="card">
     <div id="infoOrden" class="resumen"></div>
@@ -82,16 +85,15 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   if(!user){ location.href = 'login.html'; return; }
 
   // Cargar orden
-  const oSnap = await db.collection('ordenes_de_servicio').doc(ordenId).get();
-  if(!oSnap.exists){ alert('Orden no encontrada'); return; }
-  ordenData = oSnap.data();
+  ordenData = await OrdenesService.getOrder(ordenId);
+  if(!ordenData){ alert('Orden no encontrada'); return; }
 
   // Nombre del cliente (si viene con cliente_id)
   let cliente = ordenData.cliente_nombre || ordenData.cliente || '—';
   if(ordenData.cliente_id){
     try{
-      const c = await db.collection('clientes').doc(ordenData.cliente_id).get();
-      if(c.exists) cliente = c.data().nombre || cliente;
+      const c = await ClientesService.getCliente(ordenData.cliente_id);
+      if(c) cliente = c.nombre || cliente;
     }catch{}
   }
 
@@ -106,8 +108,7 @@ firebase.auth().onAuthStateChanged(async (user)=>{
     `Creada <strong>${fecha}</strong> · Estado <strong>${(ordenData.estado_reparacion||'').toUpperCase()}</strong>`;
 
   // Cargar inventario activo
-  const invSnap = await db.collection('inventario_piezas').where('activo','==',true).get();
-  inventario = invSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+  inventario = (await PiezasService.getPiezas()).filter(p => p.activo);
 
   // Render equipos
   await renderEquiposYConsumos();
@@ -142,13 +143,9 @@ async function renderEquiposYConsumos(){
 
 async function cargarConsumosEquipo(equipoId){
   const zona = document.getElementById('consumos_'+equipoId);
-  const consSnap = await db.collection('ordenes_de_servicio').doc(ordenId)
-    .collection('consumos')
-    .where('equipoId','==',equipoId)
-    .orderBy('added_at','desc')
-    .get();
+  const consSnap = await OrdenesService.getConsumos(ordenId, { equipoId, orderByField: 'added_at' });
 
-  const items = consSnap.docs.map(d=>({ id:d.id, ...d.data() }));
+  const items = consSnap;
 
   if(items.length===0){
     zona.innerHTML = '<em>No hay piezas registradas.</em>';
@@ -226,7 +223,7 @@ async function confirmarAgregar(){
   const precio = Number(piezaSeleccionada.precio_venta||0);
   const subtotal = (tipo==='cobro') ? (qty * precio) : 0;
 
-  await db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').add({
+  await OrdenesService.addConsumo(ordenId, {
     equipoId: equipoSeleccionado,
     pieza_id: piezaSeleccionada.id,
     pieza_nombre: piezaSeleccionada.nombre,
@@ -246,21 +243,19 @@ async function confirmarAgregar(){
 
 async function eliminarLinea(lineaId, equipoId){
   if(!confirm('¿Eliminar esta línea?')) return;
-  await db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(lineaId).delete();
+  await OrdenesService.deleteConsumo(ordenId, lineaId);
   await cargarConsumosEquipo(equipoId);
 }
 
 async function editarLinea(lineaId){
-  const ref = db.collection('ordenes_de_servicio').doc(ordenId).collection('consumos').doc(lineaId);
-  const s = await ref.get();
-  if(!s.exists) return;
-  const d = s.data();
+  const d = await OrdenesService.getConsumo(ordenId, lineaId);
+  if(!d) return;
   const nuevaQty = parseInt(prompt('Cantidad', d.qty),10);
   if(!nuevaQty || nuevaQty<1) return;
   const nuevoTipo = prompt('Tipo (cobro/garantia/interno)', d.tipo||'cobro') || 'cobro';
   const nuevoSub = (nuevoTipo==='cobro') ? (nuevaQty * Number(d.precio_unit||0)) : 0;
 
-  await ref.update({ qty:nuevaQty, tipo:nuevoTipo, subtotal:nuevoSub });
+  await OrdenesService.updateConsumo(ordenId, lineaId, { qty:nuevaQty, tipo:nuevoTipo, subtotal:nuevoSub });
   await cargarConsumosEquipo(d.equipoId);
 }
 

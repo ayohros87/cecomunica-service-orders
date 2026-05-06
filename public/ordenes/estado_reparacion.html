@@ -66,6 +66,7 @@
   </style>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", async () => {
       const firebaseConfig = {
@@ -77,7 +78,6 @@
         appId: "1:615730883223:web:8cf1941241657bd08ad7d2"
       };
       firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
 
       const lista = document.getElementById("lista-estados");
       const form = document.getElementById("form-estado");
@@ -86,10 +86,9 @@
 
       async function cargarEstados() {
         lista.innerHTML = "";
-       const docSnap = await db.collection("empresa").doc("estado_de_reparacion").get();
-if (docSnap.exists) {
-  const data = docSnap.data();
-  const estados = data.list || [];
+       const docSnap = await EmpresaService.getDoc("estado_de_reparacion");
+if (docSnap) {
+  const estados = docSnap.list || [];
   estados.forEach(nombre => {
     const li = document.createElement("li");
     li.innerHTML = `
@@ -111,11 +110,9 @@ if (docSnap.exists) {
 
       window.borrarEstado = async (id) => {
         if (confirm(`¿Eliminar estado "${id}"?`)) {
-         const ref = db.collection("empresa").doc("estado_de_reparacion");
-          const snap = await ref.get();
-          const data = snap.data();
-          const nuevaLista = (data.list || []).filter(e => e !== id);
-          await ref.set({ list: nuevaLista });
+         const snap = await EmpresaService.getDoc("estado_de_reparacion");
+          const nuevaLista = ((snap && snap.list) || []).filter(e => e !== id);
+          await EmpresaService.setDoc("estado_de_reparacion", { list: nuevaLista });
 
           await cargarEstados();
         }
@@ -126,9 +123,8 @@ if (docSnap.exists) {
   const estado = inputEstado.value.trim();
   if (!estado) return;
 
-  const ref = db.collection("empresa").doc("estado_de_reparacion");
-  const snap = await ref.get();
-  let lista = snap.exists ? snap.data().list || [] : [];
+  const snap = await EmpresaService.getDoc("estado_de_reparacion");
+  let lista = (snap && snap.list) || [];
 
   if (editandoId && editandoId !== estado) {
     lista = lista.filter(e => e !== editandoId);
@@ -137,7 +133,7 @@ if (docSnap.exists) {
     lista.push(estado);
   }
 
-  await ref.set({ list: lista });
+  await EmpresaService.setDoc("estado_de_reparacion", { list: lista });
 
   inputEstado.value = "";
   editandoId = null;

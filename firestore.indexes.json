@@ -745,6 +745,20 @@
       ]
     },
     {
+      "collectionGroup": "analytics_piezas_modelo",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "modelo_norm",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usos_cobro",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "ultimo_inventario",
       "queryScope": "COLLECTION",
       "fields": [

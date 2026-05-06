@@ -1,5 +1,83 @@
 # Changelog
 
+## [Phase 4c] — 2026-05-06
+
+### Refactor
+- Migrated `ordenes/admin-equipos-cliente.html` + `js/admin-equipos-cliente.js` — role check + clientes map + empresa tipo_de_servicio → `UsuariosService.getUsuario`, `ClientesService.listClientes`, `EmpresaService.getDoc`; paginated server-scan loop left inline
+- Removed dead duplicate `getOrder` in `ordenesService.js` (second definition at line 459 had no `eliminado` filter and silently overrode the correct first definition)
+
+### Infrastructure
+- Added `analytics_piezas_modelo` composite index to `firestore.indexes.json` (`modelo_norm ASC, usos_cobro DESC`) — needed by the recommendations query in `trabajar-orden.html`
+
+## [Phase 4b] — 2026-05-06
+
+### Refactor
+- Expanded `public/js/services/ordenesService.js` — added `getConsumos`, `getConsumo`, `addConsumo`, `updateConsumo`, `deleteConsumo`, `updateOrder`, `mergeOrder`, `setOrder`, `listAll`, `filterByStatuses`
+- Expanded `public/js/services/piezasService.js` — added `getPieza(id)`
+- Migrated `contratos/imprimir-contrato.html` — `usuarios` get for `creado_por_uid` and `aprobado_por_uid` → `UsuariosService.getUsuario`
+- Migrated `contratos/editar-contrato.html` — `modelos` list → `ModelosService.getModelos`
+- Migrated `contratos/nuevo-contrato.html` — `clientes` list/get/search + `modelos` list → `ClientesService.listClientes`, `getCliente`, `searchByToken`; `ModelosService.getModelos`; legacy `startAt/endAt` fallback left inline
+- Migrated `contratos/nuevo-cliente.html` — `clientes` get/add/update → `ClientesService.getCliente`, `createCliente`, `updateCliente`; duplicate-check WHERE queries left inline
+- Migrated `ordenes/estado_reparacion.html` — `empresa` doc read/write → `EmpresaService.getDoc`, `setDoc`
+- Migrated `ordenes/tecnicos.html` — `empresa` doc read/write → `EmpresaService.getDoc`, `setDoc`
+- Migrated `ordenes/modelo-de-radio.html` — role check + modelos CRUD → `UsuariosService.getUsuario`; `ModelosService.getModelos`, `getModelo`, `updateModelo`, `deleteModelo`
+- Migrated `ordenes/imprimir-orden.html` — orden get + clientes get → `OrdenesService.getOrder`, `ClientesService.getCliente`
+- Migrated `ordenes/reporte-pendientes.html` — `WHERE estado_reparacion IN [...]` → `OrdenesService.filterByStatuses`
+- Migrated `ordenes/importar-exportar.html` — orden set + full collection export → `OrdenesService.setOrder`, `listAll`
+- Migrated `ordenes/agregar-equipo.html` — modelos list + orden get/update + clientes get → `ModelosService`, `OrdenesService`, `ClientesService`
+- Migrated `ordenes/firmar-entrega.html` — orden get/merge + usuarios get + clientes get → `OrdenesService.getOrder`, `mergeOrder`; `UsuariosService.getUsuario`; `ClientesService.getCliente`
+- Migrated `ordenes/cotizar-orden-formal.html` — empresa docs + orden + clientes + consumos → `EmpresaService`, `OrdenesService`, `ClientesService`
+- Migrated `ordenes/editar-orden.html` — role check + orden get/merge + clientes + vendedores + técnicos + empresa docs → all service calls; `getVendedores`, `getUsuariosByRol`, `EmpresaService.getDoc`
+- Migrated `ordenes/progreso-tecnicos.html` — role check + `WHERE rol IN [...]` → `UsuariosService.getUsuario`, `getUsuariosByRol`; `tecnico_stats` subcollection left inline
+- Migrated `ordenes/cotizar-orden.html` — orden + clientes + inventario + consumos CRUD → `OrdenesService`, `ClientesService`, `PiezasService`
+- Migrated `ordenes/nueva-orden.html` — clientes list/get/add + vendedores + empresa tipo_de_servicio + orden set → `ClientesService`, `UsuariosService`, `EmpresaService`, `OrdenesService`; order-numbering get and duplicate-check WHERE left inline
+- Migrated `ordenes/trabajar-orden.html` — role check + empresa parametros + orden get/merge + clientes get + inventario + consumos CRUD × 6 locations + completar/desbloquear cotización → all service calls; `onSnapshot` listener, `equipos_meta` subcollection, `analytics_piezas_modelo` transaction, paginated `!=` catalog query, and stock-decrement transactions left inline
+
+## [Phase 4] — 2026-05-05
+
+### Refactor
+- Created `public/js/services/cotizacionesService.js` — `getCotizacion`, `addCotizacion`, `updateCotizacion`, `getCotizacionesPorFecha`, `contarPorFecha`, `listCotizaciones`
+- Created `public/js/services/modelosService.js` — `getModelos`, `getModelo`, `addModelo`, `updateModelo`, `setActivo`, `deleteModelo`
+- Created `public/js/services/inventarioService.js` — `getInventarioActual`, `getHistorialModelo`, `guardarInventario`
+- Created `public/js/services/piezasService.js` — `getPiezas`, `addPieza`, `updatePieza`, `deletePieza`, `ajustarCantidad`, `ajustarDelta`, `importarPiezas`
+- Created `public/js/services/pocService.js` — `getPocDevices`, `getPocDevice`, `addPocDevice`, `updatePocDevice`, `softDeletePocDevice`, `restorePocDevice`, `addLog`, `findByField`, `getRecent`
+- Created `public/js/services/usuariosService.js` — `getUsuario`, `getUsuariosByRol`, `getVendedores`
+- Created `public/js/services/empresaService.js` — `getOperadores`, `getDoc`, `setDoc`
+- Expanded `public/js/services/clientesService.js` — added `updateCliente`, `deleteCliente`, `listClientes`, `searchByToken`, `batchUpdate`; fixed timestamp field names (`updatedAt`)
+- Migrated `cotizaciones/index.html` — list + ID-generation + get/add/update → `CotizacionesService`
+- Migrated `cotizaciones/imprimir-cotizacion.html` — get → `CotizacionesService.getCotizacion`
+- Migrated `cotizaciones/nueva-cotizacion.html` — clients/modelos/users/ID-gen/add → all service calls
+- Migrated `cotizaciones/editar-cotizacion.html` — same as nueva + update
+- Migrated `inventario/index.html` — usuarios/modelos/inventario calls → service calls
+- Migrated `inventario/modelos.html` — full CRUD → `ModelosService`
+- Migrated `inventario/cargar-inventario.html` — `guardarSemana` rewrites to `InventarioService.guardarInventario`
+- Migrated `inventario/piezas.html` — all CRUD → `PiezasService`; bulk import loop left inline (raw batch API)
+- Migrated `inventario/vista-correo.html` — modelos + inventario reads → service calls
+- Migrated `clientes/index.html` — role check, batchUpdate call sites, inline edit, vendor assign, delete → service calls; query builders left inline (return raw Firestore query objects)
+- Migrated `clientes/editar.html` — get/vendedores/update/add → service calls
+- Migrated `POC/editar-batch.html` — empresa doc read + search-by-field + update → `EmpresaService` / `PocService`
+- Migrated `POC/importar-poc.html` — import loop `.add()` + export `.get()` → `PocService`
+- Migrated `POC/nuevo-equipo.html` — empresa doc reads/writes + uniqueness checks + add → service calls
+- Migrated `POC/imprimir-equipos.html` — clientes/modelos/poc_devices gets → service calls
+- Migrated `POC/nuevo-batch.html` — empresa doc reads/writes + recent query + clients list + add → service calls
+- Migrated `POC/vendedores-batch.html` — role check → `UsuariosService.getUsuario`; cache-first queries left inline
+- Migrated `POC/index.html` — modelos map, clientes map, empresa/operadores, role check, drawer edit, SIM bulk update, export, delete/restore (×6 locations), duplicates scan, mass-edit save → service calls; complex `!=` compound queries left inline
+
+## [Phase 3] — 2026-05-05
+
+### Refactor
+- Created `public/js/services/contratosService.js` — service layer for the `contratos` collection; all Firestore I/O for contracts goes through `ContratosService`; mirrors the pattern of `ordenesService.js`; exports `getContrato`, `getByContratoId`, `updateContrato`, `addContrato`, `contarPorTipoYFecha`, `listContratos`, `listContratosFallback`, `getContratosActivosPorCliente`, `getContratosActivosAprobados`, `getOrdenesDeContrato`, `getOrdenesDeContratoCompleto`, `linkOrden`, `unlinkOrden`
+- Created `public/js/services/mailService.js` — service layer for the `mail_queue` collection; wraps `.add()` and automatically stamps `createdAt: serverTimestamp()`; callers no longer include `createdAt`
+- Migrated `contratos/imprimir-contrato.html` — `db.collection("contratos").where(...)` → `ContratosService.getByContratoId()`
+- Migrated `contratos/editar-contrato.html` — all get/update calls → `ContratosService.getContrato()` / `updateContrato()`; removed `contratoRef` intermediate variable
+- Migrated `contratos/nuevo-contrato.html` — count query, `.add()`, and `mail_queue` → `ContratosService.contarPorTipoYFecha()`, `addContrato()`, `MailService.enqueue()`
+- Migrated `ordenes/agregar-equipo.html` — subcollection set → `ContratosService.linkOrden({ merge: true })`
+- Migrated `ordenes/nueva-orden.html` — client contracts query + forEach + get + `mail_queue` → `ContratosService.getContratosActivosPorCliente()`, `getContrato()`, `MailService.enqueue()`; rewrote snapshot shim to iterate array directly
+- Migrated `ordenes/editar-orden.html` — dropdown query + subcollection link/unlink + get → service calls; same direct-array rewrite pattern
+- Migrated `ordenes/trabajar-orden.html` — `mail_queue` → `MailService.enqueue()`
+- Migrated `ordenes/firmar-entrega.html` — both `mail_queue` calls → `MailService.enqueue()`
+- Migrated `contratos/index.html` — all 22+ Firestore callsites replaced: `borrarContrato`, `marcarParaComision`, `quitarMarcaComision`, `cargarContratos` (paginated list + JS-side fallback loop), `subirFirmado` (background validation), `handleFileFirmado` (get + update in upload callback), `fetchEquiposPreviewHTML` (subcollection + ordenes_de_servicio lookup), `abrirModalEquiposContrato`, `abrirPanelTrabajoContrato`, `backfillContratoEquipos` (subcollection + per-order lookup + subcollection set), `iniciarBackfillTodosContratos`
+
 ## [Phase 2] — 2026-05-05
 
 ### Refactor

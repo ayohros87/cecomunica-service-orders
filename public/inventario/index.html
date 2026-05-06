@@ -365,14 +365,18 @@ th .sort {
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/inventarioService.js"></script>
 
 
 
   <script>
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return window.location.href = "../login.html";
-      const userDoc = await firebase.firestore().collection("usuarios").doc(user.uid).get();
-      const rol = userDoc.exists ? userDoc.data().rol : null;
+      const userDoc = await UsuariosService.getUsuario(user.uid);
+      const rol = userDoc ? userDoc.rol : null;
 
       if (rol !== "administrador" && rol !== "inventario") {
         document.body.innerHTML = '<div style="text-align:center; margin-top:100px; color:red;">Acceso restringido: área en construcción.</div>';
@@ -395,16 +399,14 @@ th .sort {
 
   try {
     // 1. Cargar todos los modelos una sola vez
-    const modelosSnapshot = await db.collection("modelos").get();
+    const modelosList = await ModelosService.getModelos();
     const modelosMap = {};
-    modelosSnapshot.forEach(doc => {
-      modelosMap[doc.id] = doc.data();
-    });
+    modelosList.forEach(m => { modelosMap[m.id] = m; });
 
     // 2. Cargar inventario_actual (con modelo_id como string)
-    const inventarioSnapshot = await db.collection("inventario_actual").get();
+    const inventario = await InventarioService.getInventarioActual();
 
-    if (inventarioSnapshot.empty) {
+    if (inventario.length === 0) {
       tabla.innerHTML = `
       <tr>
         <td colspan="10" style="text-align:center; padding: 20px; color: #666;">
@@ -418,8 +420,7 @@ th .sort {
 
     const datos = [];
 
-inventarioSnapshot.forEach(doc => {
-  const data = doc.data();
+inventario.forEach(data => {
   const modelo = modelosMap[data.modelo_id] || {};
   datos.push({ data, modelo });
 });
@@ -456,19 +457,15 @@ renderizarTabla(inventarioDatos);
 }
 
 async function verHistorico(modeloId) {
-  const snapshot = await db.collection("ultimo_inventario")
-    .where("modelo_id", "==", modeloId)
-    .orderBy("timestamp", "desc")
-    .get();
+  const historial = await InventarioService.getHistorialModelo(modeloId);
 
-  if (snapshot.empty) {
+  if (historial.length === 0) {
     alert("No hay registros históricos para este modelo.");
     return;
   }
 
   let resumen = `📜 Histórico del modelo: ${modeloId}\n\n`;
-  snapshot.forEach(doc => {
-    const data = doc.data();
+  historial.forEach(data => {
     const fecha = data.timestamp?.toDate().toLocaleString() || "-";
     resumen += `• ${fecha} → Cantidad: ${data.cantidad}\n`;
   });

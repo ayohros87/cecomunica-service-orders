@@ -38,6 +38,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/services/pocService.js"></script>
 </head>
 <body>
   <h2>📦 Importar Dispositivos POC</h2>
@@ -76,7 +77,6 @@ async function importarExcelAFirestore() {
   const sheet = workbook.Sheets["BD"];
   const jsonData = XLSX.utils.sheet_to_json(sheet);
 
-  const coleccion = db.collection("poc_devices");
   let contador = 0;
 
   for (let fila of jsonData) {
@@ -87,8 +87,7 @@ async function importarExcelAFirestore() {
       .map(k => fila[k].toString().trim())
       .filter(g => g.length > 0);
 
-    const docRef = coleccion.doc();
-    await docRef.set({
+    await PocService.addPocDevice({
       cliente: fila["CLIENTE"] || "",
       operador: fila["OPERADOR"] || "",
       sim_number: fila["# SIMCARD"] || "",
@@ -117,8 +116,7 @@ async function exportarDispositivos() {
   const estado = document.getElementById("estadoImportacion");
   estado.textContent = "⏳ Exportando dispositivos...";
   try {
-    const snapshot = await db.collection("poc_devices").get();
-    const datos = snapshot.docs.map(doc => doc.data());
+    const datos = await PocService.getPocDevices();
     const ws = XLSX.utils.json_to_sheet(datos);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Dispositivos");
