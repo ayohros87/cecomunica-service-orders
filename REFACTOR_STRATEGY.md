@@ -308,9 +308,101 @@ Build `contratosService.js` (mirror the pattern of `ordenesService.js`) and a `m
 
 Same pattern, lower priority pages. Done page-by-page; each migration is small and reviewable.
 
-### Phase 5 — Extract inline scripts (incremental, ongoing)
+### Phase 5 — Script decomposition (incremental, ongoing)
 
-Pick one large page per sprint (e.g. `contratos/index.html` first, then `nuevo-contrato.html`, then `POC/index.html`). Move its inline `<script>` into `js/pages/<name>.js`. Delete inline `<style>` blocks where they duplicate `ceco-ui.css`. Pages should drop to ≤300 lines of HTML.
+Phase 5 has four distinct sub-goals. They build on each other but each can ship independently.
+
+#### Phase 5a — Script extraction from HTML *(partially done — 2026-05-06)*
+
+Move inline `<script>` blocks out of HTML into `js/pages/<name>.js`, loaded with `<script src defer>`. Pages should reach ≤300 lines of HTML.
+
+**Done (6 files):**
+
+| File | Inline lines extracted | JS file |
+|---|---|---|
+| `contratos/index.html` | ~1 690 | `js/pages/contratos-index.js` |
+| `contratos/nuevo-contrato.html` | ~1 161 | `js/pages/nuevo-contrato.js` |
+| `POC/index.html` | ~1 600 | `js/pages/poc-index.js` |
+| `ordenes/trabajar-orden.html` | ~1 174 | `js/pages/trabajar-orden.js` |
+| `POC/vendedores-batch.html` | ~890 | `js/pages/vendedores-batch.js` |
+| `inventario/piezas.html` | ~751 | `js/pages/piezas.js` |
+
+**Remaining — Tier 1 (> 300 lines inline, extract next):**
+
+| File | Inline lines |
+|---|---|
+| `clientes/index.html` | 628 |
+| `ordenes/fotos-taller.html` | 535 |
+| `ordenes/editar-orden.html` | 471 |
+| `cotizaciones/editar-cotizacion.html` | 407 |
+| `contratos/imprimir-contrato.html` | 396 |
+| `ordenes/nueva-orden.html` | 390 |
+| `ordenes/agregar-equipo.html` | 354 |
+| `inventario/index.html` | 329 |
+| `cotizaciones/nueva-cotizacion.html` | 316 |
+| `inventario/modelos.html` | 314 |
+| `cotizaciones/index.html` | 269 |
+
+**Remaining — Tier 2 (150–300 lines, extract when touching the file anyway):**
+
+`ordenes/firmar-entrega.html` (249), `contratos/nuevo-cliente.html` (241), `ordenes/progreso-tecnicos.html` (221), `contratos/editar-contrato.html` (192), `POC/nuevo-batch.html` (192 + 126), `ordenes/importar-exportar.html` (191), `ordenes/cotizar-orden.html` (188), `ordenes/cotizar-orden-formal.html` (181), `POC/nuevo-equipo.html` (168), `ordenes/imprimir-orden.html` (161)
+
+**Remaining — Tier 3 (< 150 lines, leave inline):**
+
+`POC/editar-batch.html`, `clientes/editar.html`, `POC/imprimir-equipos.html`, `ordenes/modelo-de-radio.html`, `cotizaciones/imprimir-cotizacion.html`, `ordenes/reporte-pendientes.html`, `ordenes/estado_reparacion.html`, `POC/importar-poc.html`, `ordenes/tecnicos.html`, `inventario/vista-correo.html`, and 4 more small pages.
+
+---
+
+#### Phase 5b — Eliminate local duplicates of core utilities
+
+The extracted page scripts redefine utilities that already exist in `js/core/`. These local copies should be deleted and calls routed to the canonical modules. No new files needed — this is pure cleanup inside the `js/pages/` files.
+
+| Duplicate pattern | Files affected | Fix |
+|---|---|---|
+| Local `fmt(n)` / `fmtMoney(n)` | `contratos-index.js`, `nuevo-contrato.js`, `trabajar-orden.js` | Delete; use `FMT.money(n)` |
+| Local `round2(n)` | `contratos-index.js`, `nuevo-contrato.js` | Delete; use `FMT.round2(n)` |
+| Local `normalizar(s)` / `norm(s)` | `nuevo-contrato.js`, `vendedores-batch.js` | Add `FMT.normalize(s)` to `formatting.js`; replace local copies |
+| Local role checks (`rolActual === "administrador"`) | `contratos-index.js`, `poc-index.js` | Replace with `AUTH.is(ROLES.ADMIN)` |
+| Local `getCurrentRole()` | `contratos-index.js` | Delete; use `AUTH.getRole()` |
+
+---
+
+#### Phase 5c — Shared UI primitives
+
+Four different toast/notification implementations exist across the page scripts. Eight modal open/close pairs use identical patterns. Both can be replaced with a single module each.
+
+**`js/ui/toast.js`**
+
+Replaces: `mostrarMensaje()` in `contratos-index.js`, `showToast()` in `nuevo-contrato.js` and `trabajar-orden.js`, `toast()` in `vendedores-batch.js` and `piezas.js`.
+
+Single API: `Toast.show(message, type)` where `type` is `"ok" | "bad" | "warn" | "info"`. Auto-removes after configurable timeout. Exposes `Toast.persist(message, type)` for messages that require manual dismissal.
+
+**`js/ui/modal.js`**
+
+Replaces 8 modal open/close pairs across `contratos-index.js`, `nuevo-contrato.js`, `poc-index.js`, `trabajar-orden.js`, `piezas.js`. All use the same pattern: set `display`, optionally add `lock-scroll` to body, wire/unwire an Escape key handler.
+
+Single API: `Modal.open(id, options?)` / `Modal.close(id)`. Options: `{ lockScroll, onEscape }`.
+
+---
+
+#### Phase 5d — Domain logic extraction
+
+Business rules that have no DOM dependency and are currently duplicated or buried inside page scripts. Extracting them makes them testable and shared across pages.
+
+**`js/domain/totales.js`**
+
+Replaces: `resolverTotalesContrato()` in `contratos-index.js` and `recalcularTotalesContrato()` in `nuevo-contrato.js`. Both compute `subtotal → ITBMS → total` with a 7% fallback. One canonical function with the signature:
+
+```js
+// Returns { subtotal, itbms, total }
+ContractTotals.calculate(equipos, itbmsRate = FMT.ITBMS_RATE)
+```
+
+**`js/domain/scoring.js`**
+
+Extracts: `scorePieza(pieza, query)` and `filtrarPiezas(piezas, query)` from `trabajar-orden.js`. Pure ranking logic for the parts recommendation system — no DOM dependency, directly testable.
+
+**Target after 5b–5d:** Each `js/pages/` file shrinks by ~150–300 lines (mostly removed duplicates and extracted logic). The six existing page scripts should all reach ≤ 900 lines; the largest ones (`contratos-index.js`, `poc-index.js`) should reach ≤ 1 100 lines before any further structural split.
 
 ### Phase 6 — Backend modularization (1–2 weeks)
 
