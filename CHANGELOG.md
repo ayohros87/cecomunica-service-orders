@@ -1,5 +1,16 @@
 # Changelog
 
+## [Phase 5] — 2026-05-06
+
+### Refactor
+- Extracted inline `<script>` blocks from 5 large HTML pages into separate `public/js/pages/<name>.js` files, each referenced with `<script src defer>`
+  - `contratos/index.html` (~1690 lines) → `contratos-index.js`
+  - `contratos/nuevo-contrato.html` (~1161 lines) → `nuevo-contrato.js`
+  - `POC/index.html` (~1600 lines across 3 blocks) → `poc-index.js`
+  - `ordenes/trabajar-orden.html` (~1174 lines) → `trabajar-orden.js`
+  - `POC/vendedores-batch.html` (~890 lines across 2 blocks) → `vendedores-batch.js`
+  - `inventario/piezas.html` (~751 lines) → `piezas.js`
+
 ## [Phase 4c] — 2026-05-06
 
 ### Refactor
