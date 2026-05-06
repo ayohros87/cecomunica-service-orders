@@ -33,12 +33,6 @@ const CLIENTES_PAGE_SIZE = 500;
 let clientesCache = [];         // [{id, nombre, norm}]
 let clientesCargados = false;
 
-function normalizar(str) {
-  return (str || "")
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")   // quita acentos
-    .toLowerCase();
-}
 
 async function cargarClientesCache() {
   // 1) Intenta LS primero
@@ -66,7 +60,7 @@ async function cargarClientesCache() {
 
     snap.forEach(doc => {
       const nombre = (doc.data().nombre || "").toString();
-      clientesCache.push({ id: doc.id, nombre, norm: normalizar(nombre) });
+      clientesCache.push({ id: doc.id, nombre, norm: FMT.normalize(nombre) });
     });
 
     lastDoc = snap.docs[snap.docs.length - 1];
@@ -328,7 +322,7 @@ setStep('rev')    // ← estás “Revisando” el resultado
 
   // Intento de resolver el id por coincidencia exacta (normalizada) si no hay selección
   if (!cid && cn && Array.isArray(window.clientesCache) && window.clientesCache.length) {
-    const needle = normalizar(cn);
+    const needle = FMT.normalize(cn);
     const hit = window.clientesCache.find(c => c.norm === needle);
     if (hit) {
       cid = hit.id;
@@ -405,7 +399,7 @@ function sugerirClientes() {
       try { await cargarClientesCache(); } catch (e) { console.error(e); }
     }
 
-    const needle = normalizar(texto);
+    const needle = FMT.normalize(texto);
 
     // Buscar por subcadena en cualquier posición (case/acentos-insensible)
     let matches = clientesCache
@@ -465,7 +459,7 @@ async function buscarGruposCliente() {
   // Resolver exacto desde clientesCache si hace falta
   if (!clientesCargados) { try { await cargarClientesCache(); } catch(_){} }
   if (!window.clienteNombreSeleccionado && nombreExacto) {
-    const needle = normalizar(nombreExacto);
+    const needle = FMT.normalize(nombreExacto);
     const hit = (clientesCache || []).find(c => c.norm === needle);
     if (hit) {
       nombreExacto = hit.nombre;
@@ -479,7 +473,7 @@ async function buscarGruposCliente() {
     return;
   }
 
-  const cacheKey = window.clienteIDSeleccionado || normalizar(nombreExacto);
+  const cacheKey = window.clienteIDSeleccionado || FMT.normalize(nombreExacto);
   const lsKey = "grupos_id_" + cacheKey;
 
   // 1) Intenta RAM

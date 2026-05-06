@@ -5,16 +5,12 @@ const MIN_QUERY_INTERVAL_MS = 800;
 let isLoadingContratos = false;
 let lastQueryAt = 0;
 
-function getCurrentRole() {
-  return window.userRole || "vista";
-}
-
 function getPageLimit() {
-  return PAGE_LIMIT_BY_ROLE[getCurrentRole()] || 20;
+  return PAGE_LIMIT_BY_ROLE[AUTH.getRole()] || 20;
 }
 
 function getMaxRows() {
-  return MAX_ROWS_BY_ROLE[getCurrentRole()] || 120;
+  return MAX_ROWS_BY_ROLE[AUTH.getRole()] || 120;
 }
 
 function updateBtnCargarMasState(forceNoMore = false) {
@@ -59,7 +55,6 @@ document.getElementById('btnCargarMas').addEventListener('click', async () => {
 
   // === 💵 Totales con compatibilidad para contratos antiguos (fallback 7%) ===
   const round2 = FMT.round2;
-  function fmt(n){ return `$${round2(n).toFixed(2)}`; }
 
   // Recibe el documento del contrato (data) y devuelve totales normalizados.
   function resolverTotalesContrato(c){
@@ -373,7 +368,7 @@ const btnSolicitar = '';
     </td>
     <td>${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : "-"}</td>
     <td>${esc(mapaUsuarios[data.creado_por_uid] || "-")}</td>
-    <td>${fmt(tot.totalConITBMS)}</td>
+    <td>${FMT.money(tot.totalConITBMS)}</td>
     <td class="acciones">${accionesHtml}</td>
   `;
   return fila;
@@ -521,10 +516,10 @@ async function aprobarContrato(id) {
     <p><strong>Observaciones:</strong> ${esc(contratoPendiente.observaciones || "-")}</p>
 
     <div style="margin-top:8px; padding:8px; border:1px dashed var(--line); border-radius:8px; max-width:420px;">
-      <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${fmt(totModal.subtotal)}</strong></div>
-      <div style="display:flex; justify-content:space-between;"><span>${totModal.itbmsLabel}</span><strong>${fmt(totModal.itbmsMonto)}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${FMT.money(totModal.subtotal)}</strong></div>
+      <div style="display:flex; justify-content:space-between;"><span>${totModal.itbmsLabel}</span><strong>${FMT.money(totModal.itbmsMonto)}</strong></div>
       <div style="border-top:1px solid var(--line); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
-        <span>Total</span><strong>${fmt(totModal.totalConITBMS)}</strong>
+        <span>Total</span><strong>${FMT.money(totModal.totalConITBMS)}</strong>
       </div>
     </div>
   `;
@@ -1170,7 +1165,7 @@ function crearCardContratoMovil(data) {
   const puedeAprobar = esAdmin && data.estado === 'pendiente_aprobacion';
 
   const tot = resolverTotalesContrato(data);
-  const totalStr = fmt(tot.totalConITBMS);
+  const totalStr = FMT.money(tot.totalConITBMS);
 
   const estadoClase =
     data.estado === 'activo' ? 'estado-activo' :

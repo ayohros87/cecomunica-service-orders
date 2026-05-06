@@ -33,5 +33,10 @@ window.FMT = {
     const itbms = FMT.round2(subtotal * r);
     const total = FMT.round2(subtotal + itbms);
     return { subtotal: FMT.round2(subtotal), itbms, total, rate: r };
+  },
+
+  // Strip diacritics and lowercase — for text search normalization
+  normalize(s) {
+    return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
   }
 };

@@ -372,7 +372,7 @@ function agregarFilaEquipo() {
 function actualizarTotalDeFila(tr) {
   const cant = parseFloat(tr.querySelector(".input-cantidad")?.value || 0);
   const precio = parseFloat(tr.querySelector(".input-precio")?.value || 0);
-  const subtotal = round2(cant * precio);
+  const subtotal = FMT.round2(cant * precio);
   const celda = tr.querySelector(".totalFila");
   if (celda) celda.textContent = `$${subtotal.toFixed(2)}`;
 }
@@ -397,19 +397,6 @@ function toggleOtraDuracion(valor) {
   campo.style.display = valor === "Otro" ? "block" : "none";
 }
 
-// === ITBMS - Configuración ===
-// Si en el futuro cambia el porcentaje, solo toca aquí.
-const ITBMS_PORCENTAJE = 0.07;
-
-// Redondeo consistente a 2 decimales
-function round2(n) {
-  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-}
-
-function fmt(n) {
-  return `$${round2(n).toFixed(2)}`;
-}
-
 function calcularSubtotalDesdeFilas() {
   let subtotal = 0;
   document.querySelectorAll('.fila-equipo').forEach(row => {
@@ -417,7 +404,7 @@ function calcularSubtotalDesdeFilas() {
     const price = Number(row.querySelector('.input-precio')?.value || 0);
     subtotal += qty * price;
   });
-  return round2(subtotal);
+  return FMT.round2(subtotal);
 }
 
 
@@ -430,9 +417,9 @@ function recalcularTotalesContrato() {
   let totalConITBMS = subtotal;
 
   if (itbmsAplica) {
-    itbmsMonto = round2(subtotal * ITBMS_PORCENTAJE);
-    totalConITBMS = round2(subtotal + itbmsMonto);
-    document.getElementById('itbms_label').textContent = `ITBMS (${round2(ITBMS_PORCENTAJE * 100)}%)`;
+    itbmsMonto = FMT.round2(subtotal * FMT.ITBMS_RATE);
+    totalConITBMS = FMT.round2(subtotal + itbmsMonto);
+    document.getElementById('itbms_label').textContent = `ITBMS (${FMT.round2(FMT.ITBMS_RATE * 100)}%)`;
   } else {
     itbmsMonto = 0;
     totalConITBMS = subtotal;
@@ -440,9 +427,9 @@ function recalcularTotalesContrato() {
   }
 
   // Render en UI
-  document.getElementById('subtotal_view').textContent = fmt(subtotal);
-  document.getElementById('itbms_view').textContent = fmt(itbmsMonto);
-  document.getElementById('total_con_itbms_view').textContent = fmt(totalConITBMS);
+  document.getElementById('subtotal_view').textContent = FMT.money(subtotal);
+  document.getElementById('itbms_view').textContent = FMT.money(itbmsMonto);
+  document.getElementById('total_con_itbms_view').textContent = FMT.money(totalConITBMS);
 
   // Devuelve los valores por si el submit los necesita
   return { subtotal, itbmsAplica, itbmsMonto, totalConITBMS };
@@ -719,9 +706,9 @@ async function guardarContratoConfirmado(user) {
     // Totales persistidos
     subtotal: tot.subtotal,                           // number
     itbms_aplica: tot.itbmsAplica,                    // boolean
-    itbms_porcentaje: ITBMS_PORCENTAJE,               // number (0.07)
-    itbms_monto: round2(tot.itbmsMonto),              // number
-    total_con_itbms: round2(tot.totalConITBMS),       // number
+    itbms_porcentaje: FMT.ITBMS_RATE,               // number (0.07)
+    itbms_monto: FMT.round2(tot.itbmsMonto),              // number
+    total_con_itbms: FMT.round2(tot.totalConITBMS),       // number
 
     // Compatibilidad (total = subtotal histórico)
     total: tot.subtotal,
@@ -864,8 +851,7 @@ document.getElementById("btnConfirmPreview").addEventListener("click", async () 
 
 // ---------- Helpers ----------
 const debounce = (fn, ms=250)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; };
-function norm(s){ return (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
-function splitTokens(q){ return norm(q).split(/[^a-z0-9]+/).filter(Boolean); }
+function splitTokens(q){ return FMT.normalize(q).split(/[^a-z0-9]+/).filter(Boolean); }
 
 // ---------- Estado ----------
 let comboIdx = -1;               // índice seleccionado con teclado
@@ -1056,7 +1042,7 @@ const doSearch = debounce(async (text)=>{
     const hasTokens = Array.isArray(d.searchTokens) && d.searchTokens.length;
     const pass = hasTokens
       ? parts.every(t => d.searchTokens.includes(t))
-      : parts.every(t => norm(d.nombre||"").includes(t));
+      : parts.every(t => FMT.normalize(d.nombre||"").includes(t));
     if(pass){
       listaClientes[c.id] = d;
       items.push({ id: c.id, d });
@@ -1072,7 +1058,7 @@ const doSearch = debounce(async (text)=>{
       .limit(25).get();
     snap.forEach(doc=>{
       const d = doc.data();
-      if(norm(d.nombre||"").includes(norm(text))){
+      if(FMT.normalize(d.nombre||"").includes(FMT.normalize(text))){
         listaClientes[doc.id] = d;
         items.push({ id: doc.id, d });
       }
