@@ -29,7 +29,7 @@ function updateBtnCargarMasState(forceNoMore = false) {
 document.getElementById('btnCargarMas').addEventListener('click', async () => {
   if (isLoadingContratos) return;
   if (contratosCargados.length >= getMaxRows()) {
-    mostrarMensaje('⚠️ Límite de consulta alcanzado para tu rol.', 'orange');
+    Toast.show('⚠️ Límite de consulta alcanzado para tu rol.', 'warn');
     updateBtnCargarMasState(true);
     return;
   }
@@ -37,45 +37,6 @@ document.getElementById('btnCargarMas').addEventListener('click', async () => {
 });
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-  function mostrarMensaje(texto, color = "green", autoHideMs = 0) {
-    const el = document.getElementById("mensaje");
-    if (!el) return;
-    el.textContent = texto;
-    el.style.color = color;
-
-    if (autoHideMs > 0) {
-      const currentText = texto;
-      setTimeout(() => {
-        if (el.textContent === currentText) {
-          el.textContent = "";
-        }
-      }, autoHideMs);
-    }
-  }
-
-  // === 💵 Totales con compatibilidad para contratos antiguos (fallback 7%) ===
-  const round2 = FMT.round2;
-
-  // Recibe el documento del contrato (data) y devuelve totales normalizados.
-  function resolverTotalesContrato(c){
-    const tieneNuevos = typeof c.itbms_aplica !== 'undefined';
-    const subtotal = Number(c.subtotal ?? c.total ?? 0);
-    const itbmsPorc = Number(c.itbms_porcentaje ?? FMT.ITBMS_RATE);
-
-    let itbmsAplica, itbmsMonto, totalConITBMS;
-    if (tieneNuevos){
-      itbmsAplica = Boolean(c.itbms_aplica);
-      itbmsMonto = Number(c.itbms_monto ?? 0);
-      totalConITBMS = Number(c.total_con_itbms ?? subtotal + itbmsMonto);
-    } else {
-      // Fallback para contratos guardados antes (asumimos 7% histórico)
-      itbmsAplica = true;
-      itbmsMonto = round2(subtotal * itbmsPorc);
-      totalConITBMS = round2(subtotal + itbmsMonto);
-    }
-    const itbmsLabel = itbmsAplica ? `ITBMS (${round2(itbmsPorc*100)}%)` : 'ITBMS EXENTO';
-    return { subtotal, itbmsAplica, itbmsPorc, itbmsMonto, totalConITBMS, itbmsLabel };
-  }
 
     let contratoPendiente = null;
     let contratoIDPendiente = null;
@@ -149,14 +110,14 @@ auth.onAuthStateChanged(async user => {
             url.searchParams.delete("aprobar");
             window.history.replaceState({}, document.title, url.toString());
           } else {
-            mostrarMensaje("⚠️ El contrato indicado no existe o fue eliminado.", "orange");
+            Toast.show("⚠️ El contrato indicado no existe o fue eliminado.", 'warn');
           }
         } catch (e) {
           console.error(e);
-          mostrarMensaje("⚠️ No se pudo abrir el contrato para aprobación.", "orange");
+          Toast.show("⚠️ No se pudo abrir el contrato para aprobación.", 'warn');
         }
       } else {
-        mostrarMensaje("⚠️ Solo un administrador puede aprobar contratos.", "orange");
+        Toast.show("⚠️ Solo un administrador puede aprobar contratos.", 'warn');
       }
     }
   }
@@ -282,7 +243,7 @@ function crearFilaContrato(id, data) {
     : '';
 
   // Totales normalizados (con fallback)
-  const tot = resolverTotalesContrato(data);
+  const tot = ContractTotals.fromDoc(data);
 
   // Botones base
   const btnImprimir = data.contrato_id
@@ -421,7 +382,7 @@ if (!["activo","aprobado"].includes(c.estado)) {
 
     await ContratosService.updateContrato(id, update);
 
-    mostrarMensaje("✅ Contrato ANULADO correctamente.", "green");
+    Toast.show("✅ Contrato ANULADO correctamente.", 'ok');
     setTimeout(() => location.reload(), 1000);
   } catch (e) {
     console.error(e);
@@ -503,7 +464,7 @@ async function aprobarContrato(id) {
   }
 
   // Totales normalizados para el modal
-  const totModal = resolverTotalesContrato(contratoPendiente);
+  const totModal = ContractTotals.fromDoc(contratoPendiente);
 
   const detalles = `
     <p><strong>Contrato ID:</strong> ${esc(contratoPendiente.contrato_id)}</p>
@@ -567,7 +528,7 @@ async function confirmarAprobacion() {
   });
 
     cerrarOverlay();
-    mostrarMensaje("✅ Contrato aprobado. Enviando PDF por correo en segundo plano…", "green");
+    Toast.show("✅ Contrato aprobado. Enviando PDF por correo en segundo plano…", 'ok');
     setTimeout(() => location.reload(), 1200);
   } catch (e) {
     console.error(e);
@@ -623,7 +584,7 @@ if (["activo","aprobado","anulado"].includes(c.estado)) {
       deleted: true,
       fecha_modificacion: new Date()
     });
-    mostrarMensaje("✅ Contrato eliminado", "green");
+    Toast.show("✅ Contrato eliminado", 'ok');
     setTimeout(() => location.reload(), 1500);
 
   } catch (e) {
@@ -646,7 +607,7 @@ async function marcarParaComision(id) {
       fecha_modificacion: new Date()
     });
 
-    mostrarMensaje("💼 Marcado como listo para comisión.", "green");
+    Toast.show("💼 Marcado como listo para comisión.", 'ok');
     setTimeout(() => location.reload(), 600);
   } catch (e) {
     console.error(e);
@@ -669,7 +630,7 @@ async function quitarMarcaComision(id) {
       fecha_modificacion: new Date()
     });
 
-    mostrarMensaje("Etiqueta de comisión retirada.", "green");
+    Toast.show("Etiqueta de comisión retirada.", 'ok');
     setTimeout(() => location.reload(), 600);
   } catch (e) {
     console.error(e);
@@ -710,7 +671,7 @@ function comparable(v) {
 
 function getSortValue(row, key){
   if (key === 'total') {
-    const t = resolverTotalesContrato(row);
+    const t = ContractTotals.fromDoc(row);
     return t.totalConITBMS;
   }
   return row[key];
@@ -730,12 +691,12 @@ async function cargarContratos(reset = false) {
   if (isLoadingContratos) return;
 
   if (!reset && (now - lastQueryAt) < MIN_QUERY_INTERVAL_MS) {
-    mostrarMensaje("⚠️ Espera un momento antes de consultar de nuevo.", "orange", 2500);
+    Toast.show("⚠️ Espera un momento antes de consultar de nuevo.", 'warn', 2500);
     return;
   }
 
   if (!reset && contratosCargados.length >= getMaxRows()) {
-    mostrarMensaje("⚠️ Límite de consulta alcanzado para tu rol.", "orange");
+    Toast.show("⚠️ Límite de consulta alcanzado para tu rol.", 'warn');
     updateBtnCargarMasState(true);
     return;
   }
@@ -1046,18 +1007,18 @@ function subirFirmado(idDocContrato) {
   // Validar en segundo plano
   ContratosService.getContrato(idDocContrato).then(c => {
     if (!c) {
-      mostrarMensaje("❌ Contrato no encontrado.", "red");
+      Toast.show("❌ Contrato no encontrado.", 'bad', 5000);
       contratoParaFirma = null;
       return;
     }
     if (c.estado !== 'aprobado') {
-      mostrarMensaje("⚠️ Solo se pueden subir firmados a contratos APROBADOS.", "orange");
+      Toast.show("⚠️ Solo se pueden subir firmados a contratos APROBADOS.", 'warn');
       contratoParaFirma = null;
       return;
     }
   }).catch(err => {
     console.error(err);
-    mostrarMensaje("⚠️ No se pudo validar el estado.", "orange");
+    Toast.show("⚠️ No se pudo validar el estado.", 'warn');
     contratoParaFirma = null;
   });
 }
@@ -1131,7 +1092,7 @@ async function handleFileFirmado(e) {
       });
 
         document.getElementById('uploadStatus').style.display = 'none';
-        mostrarMensaje("✅ Contrato firmado subido y guardado.", "green");
+        Toast.show("✅ Contrato firmado subido y guardado.", 'ok');
         e.target.value = '';
         contratoParaFirma = null;
 
@@ -1150,7 +1111,7 @@ async function handleFileFirmado(e) {
 
 async function solicitarAprobacionPorCorreo(docId) {
   // Deshabilitado: los avisos se envían solo mediante mail_queue (con template).
-  mostrarMensaje("📨 Aviso de aprobación se envía automáticamente con plantilla.", "green");
+  Toast.show("📨 Aviso de aprobación se envía automáticamente con plantilla.", 'ok');
 }
 
 // Decide mobile view
@@ -1164,7 +1125,7 @@ function crearCardContratoMovil(data) {
   const editable = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
   const puedeAprobar = esAdmin && data.estado === 'pendiente_aprobacion';
 
-  const tot = resolverTotalesContrato(data);
+  const tot = ContractTotals.fromDoc(data);
   const totalStr = FMT.money(tot.totalConITBMS);
 
   const estadoClase =
@@ -1239,27 +1200,16 @@ function abrirOverlay() {
   const ov = document.getElementById('overlayAprobacion');
   const sheet = document.getElementById('sheetAprobacion');
   if (!ov || !sheet) return;
-
-  ov.style.display = 'flex';
-  document.body.classList.add('lock-scroll');
-
-  // Foco inicial
+  Modal.open('overlayAprobacion', { onEscape: false });
+  document.addEventListener('keydown', handleSheetKeydown);
   const first = ov.querySelector('.btn.ok') || ov.querySelector('button,[href],input,select,textarea');
   if (first) setTimeout(() => first.focus(), 0);
-
-  // ESC para cerrar
-  document.addEventListener('keydown', handleSheetKeydown);
-
-  // Swipe-down para cerrar en mobile
   initSwipeClose(sheet);
 }
 function cerrarOverlay() {
-  const ov = document.getElementById('overlayAprobacion');
-  const sheet = document.getElementById('sheetAprobacion');
-  if (!ov) return;
-  ov.style.display = 'none';
-  document.body.classList.remove('lock-scroll');
+  Modal.close('overlayAprobacion');
   document.removeEventListener('keydown', handleSheetKeydown);
+  const sheet = document.getElementById('sheetAprobacion');
   if (sheet) sheet.style.transform = 'translateY(0)';
 }
 function handleSheetKeydown(e){
@@ -1469,9 +1419,7 @@ async function abrirModalEquiposContrato(contratoDocId){
       </div>
     `;
 
-    // mostrar overlay
-    document.getElementById("overlayEquiposContrato").style.display = "flex";
-    document.body.classList.add("lock-scroll");
+    Modal.open('overlayEquiposContrato');
   } catch (error) {
     console.error("Error abriendo modal de equipos:", error);
     alert("Error al cargar equipos: " + error.message);
@@ -1479,8 +1427,7 @@ async function abrirModalEquiposContrato(contratoDocId){
 }
 
 function cerrarModalEquiposContrato(){
-  document.getElementById("overlayEquiposContrato").style.display = "none";
-  document.body.classList.remove("lock-scroll");
+  Modal.close('overlayEquiposContrato');
 }
 
 let __panelTrabajoRows = [];
@@ -1535,8 +1482,7 @@ async function abrirPanelTrabajoContrato(contratoDocId) {
       </div>
     `;
 
-    document.getElementById("overlayPanelTrabajo").style.display = "flex";
-    document.body.classList.add("lock-scroll");
+    Modal.open('overlayPanelTrabajo');
   } catch (error) {
     console.error("Error abriendo panel de trabajo:", error);
     alert("No se pudo abrir el panel de trabajo.");
@@ -1550,7 +1496,7 @@ async function copiarFilaPanelTrabajo(index) {
 
   try {
     await navigator.clipboard.writeText(texto);
-    mostrarMensaje("✅ Fila copiada al portapapeles.", "green");
+    Toast.show("✅ Fila copiada al portapapeles.", 'ok');
   } catch (e) {
     const ta = document.createElement("textarea");
     ta.value = texto;
@@ -1561,13 +1507,12 @@ async function copiarFilaPanelTrabajo(index) {
     ta.select();
     document.execCommand("copy");
     document.body.removeChild(ta);
-    mostrarMensaje("✅ Fila copiada al portapapeles.", "green");
+    Toast.show("✅ Fila copiada al portapapeles.", 'ok');
   }
 }
 
 function cerrarPanelTrabajo(){
-  document.getElementById("overlayPanelTrabajo").style.display = "none";
-  document.body.classList.remove("lock-scroll");
+  Modal.close('overlayPanelTrabajo');
 }
 
 // 🧹 Limpiar caché manualmente

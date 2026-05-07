@@ -782,23 +782,10 @@ function abrirSimModal() {
   });
 
   const modal = document.getElementById("simModal");
-  modal.style.display = "flex";
-  
-  // Click outside to close
-  modal.onclick = (e) => {
-    if (e.target === modal) cerrarSimModal();
-  };
-  
-  // ESC key to close
-  const handleEscape = (e) => {
-    if (e.key === "Escape") {
-      cerrarSimModal();
-      document.removeEventListener("keydown", handleEscape);
-    }
-  };
-  document.addEventListener("keydown", handleEscape);
-  
-  // Store handler for cleanup
+  Modal.open('simModal', { onEscape: false });
+  modal.onclick = (e) => { if (e.target === modal) cerrarSimModal(); };
+  const handleEscape = (e) => { if (e.key === 'Escape') cerrarSimModal(); };
+  document.addEventListener('keydown', handleEscape);
   modal._escapeHandler = handleEscape;
 }
 
@@ -858,7 +845,7 @@ actualizados++;
   alert(`✅ ${actualizados} radios actualizados.`);
   document.getElementById("simPasteArea").value = "";         // limpia textarea
   document.getElementById("operadorGlobal").selectedIndex = 0; // reinicia dropdown
-  document.getElementById("simModal").style.display = "none";  // oculta modal
+  cerrarSimModal();
   if (document.getElementById("filtroValor").value.trim()) {
   filtrarDispositivos();
 } else {
@@ -868,19 +855,13 @@ actualizados++;
 }
 function cerrarSimModal() {
   const modal = document.getElementById("simModal");
-  modal.style.display = "none";
-  
-  // Clean up escape key listener
+  Modal.close('simModal');
   if (modal._escapeHandler) {
     document.removeEventListener("keydown", modal._escapeHandler);
     modal._escapeHandler = null;
   }
-
-  // Clear textarea and reset dropdown
   document.getElementById("simPasteArea").value = "";
   document.getElementById("operadorGlobal").selectedIndex = 0;
-  const operadorSelect = document.getElementById("operadorGlobal");
-  if (operadorSelect) operadorSelect.selectedIndex = 0;
 }
 
 

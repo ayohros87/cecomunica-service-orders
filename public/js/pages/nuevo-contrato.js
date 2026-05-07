@@ -369,27 +369,12 @@ function calcularSubtotalDesdeFilas() {
 function recalcularTotalesContrato() {
   const subtotal = calcularSubtotalDesdeFilas();
   const itbmsAplica = (document.getElementById('itbms_aplica')?.value ?? 'true') === 'true';
-
-  let itbmsMonto = 0;
-  let totalConITBMS = subtotal;
-
-  if (itbmsAplica) {
-    itbmsMonto = FMT.round2(subtotal * FMT.ITBMS_RATE);
-    totalConITBMS = FMT.round2(subtotal + itbmsMonto);
-    document.getElementById('itbms_label').textContent = `ITBMS (${FMT.round2(FMT.ITBMS_RATE * 100)}%)`;
-  } else {
-    itbmsMonto = 0;
-    totalConITBMS = subtotal;
-    document.getElementById('itbms_label').textContent = 'ITBMS EXENTO';
-  }
-
-  // Render en UI
-  document.getElementById('subtotal_view').textContent = FMT.money(subtotal);
-  document.getElementById('itbms_view').textContent = FMT.money(itbmsMonto);
-  document.getElementById('total_con_itbms_view').textContent = FMT.money(totalConITBMS);
-
-  // Devuelve los valores por si el submit los necesita
-  return { subtotal, itbmsAplica, itbmsMonto, totalConITBMS };
+  const tot = ContractTotals.compute(subtotal, itbmsAplica);
+  document.getElementById('itbms_label').textContent = tot.itbmsLabel;
+  document.getElementById('subtotal_view').textContent = FMT.money(tot.subtotal);
+  document.getElementById('itbms_view').textContent = FMT.money(tot.itbmsMonto);
+  document.getElementById('total_con_itbms_view').textContent = FMT.money(tot.totalConITBMS);
+  return tot;
 }
 
 // Eventos que disparan el recálculo en vivo

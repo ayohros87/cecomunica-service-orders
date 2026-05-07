@@ -576,40 +576,12 @@ function pick(id){
   actualizarSubtotalPieza();
 }
 
-// Normaliza equipos_asociados a string
-function equiposAsociadosStr(p){
-  if(Array.isArray(p?.equipos_asociados)) return p.equipos_asociados.join(' ').toLowerCase();
-  return String(p?.equipos_asociados||'').toLowerCase();
-}
-
-// Scoring: SKU exacto >>> descripción >>> marca >>> equipos
-function scorePieza(p, q){
-  if(!q) return -Infinity;
-  const sku = String(p?.sku||'').toLowerCase();
-  const desc = String(p?.descripcion||p?.nombre||'').toLowerCase();
-  const marca = String(p?.marca||'').toLowerCase();
-  const equipos = equiposAsociadosStr(p);
-
-  if(sku === q) return 1000;                 // match exacto de SKU
-  let s = 0;
-  if(sku.includes(q)) s += 80;
-  if(desc.includes(q)) s += 60;
-  if(marca.includes(q)) s += 40;
-  if(equipos.includes(q)) s += 20;
-  return s;
-}
-
 function filtrarPiezas(v){
   const q = (v||'').trim().toLowerCase();
   const sug = byId('sugerencias');
   if(!q){ sug.innerHTML=''; return; }
 
-  // Busca en marca, sku, descripcion y equipos_asociados con score
-  const list = (inventario||[]).map(p => ({ p, s: scorePieza(p, q) }))
-    .filter(x => x.s > 0)
-    .sort((a,b)=> b.s - a.s)
-    .slice(0, 8)
-    .map(x => x.p);
+  const list = PiezaSearch.search(inventario, q);
 
   sug.innerHTML = list.map(p=>{
     const nombreMostrado = p.descripcion || p.nombre || ((p.marca||'')+' '+(p.modelo||''));
