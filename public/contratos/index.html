@@ -210,8 +210,8 @@ table tbody tr:hover {
     <div class="right resumen" id="resumenContratos">
       <div class="loader" style="width: 24px; height: 24px; border-width: 3px;"></div>
     </div>
-    <button id="btnBackfillEquipos" class="btn" style="display:none; margin-left:12px;" onclick="iniciarBackfillTodosContratos()" title="Solo para debugging - Cloud Functions sincronizan automáticamente">🔄 Re-sincronizar equipos (admin)</button>
-    <button class="btn secondary" style="display:none; margin-left:8px;" onclick="limpiarCacheEquipos()" title="Solo para debugging - Limpiar caché del navegador">🧹 Limpiar caché</button>
+    <button id="btnBackfillEquipos" class="btn" style="display:none; margin-left:12px;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan automáticamente">🔄 Re-sincronizar equipos (admin)</button>
+    <button class="btn secondary" style="display:none; margin-left:8px;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar caché del navegador">🧹 Limpiar caché</button>
   </div>
 </div>
 
@@ -223,15 +223,15 @@ table tbody tr:hover {
   <table>
     <thead>
       <tr id="encabezadoContratos">
-        <th class="sortable" onclick="ordenarPor('contrato_id')">ID</th>
-        <th class="sortable" onclick="ordenarPor('cliente_nombre')">Cliente</th>
+        <th class="sortable" onclick="ContratosLista.ordenarPor('contrato_id')">ID</th>
+        <th class="sortable" onclick="ContratosLista.ordenarPor('cliente_nombre')">Cliente</th>
         <th>Tipo</th>
         <th>Acción</th>
         <th>Equipos</th>
-        <th class="sortable" onclick="ordenarPor('estado')">Estado</th>
-        <th class="sortable" onclick="ordenarPor('fecha_creacion')">Fecha creación</th>
+        <th class="sortable" onclick="ContratosLista.ordenarPor('estado')">Estado</th>
+        <th class="sortable" onclick="ContratosLista.ordenarPor('fecha_creacion')">Fecha creación</th>
         <th>Creado por</th>
-        <th class="sortable" onclick="ordenarPor('total')">Total</th>
+        <th class="sortable" onclick="ContratosLista.ordenarPor('total')">Total</th>
         <th class="acciones">Acciones</th>
       </tr>
     </thead>
@@ -295,6 +295,11 @@ table tbody tr:hover {
 
   </div> <!-- app-wrap -->
 
+  <script src="../js/pages/contratos-state.js"></script>
+  <script src="../js/pages/contratos-approval.js"></script>
+  <script src="../js/pages/contratos-upload.js"></script>
+  <script src="../js/pages/contratos-equipos.js"></script>
+  <script src="../js/pages/contratos-list.js"></script>
   <script src="../js/pages/contratos-index.js" defer></script>
 
 <div id="overlayAprobacion" class="overlay" style="display:none;"
@@ -303,7 +308,7 @@ table tbody tr:hover {
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
       <h3 id="aprobacionTitulo" class="sheet-title">Aprobación de contrato</h3>
-      <button class="btn ghost close-x" onclick="cerrarOverlay()" aria-label="Cerrar">✕</button>
+      <button class="btn ghost close-x" onclick="ContratosAprobacion.cerrarOverlay()" aria-label="Cerrar">✕</button>
     </div>
 
     <div class="sheet-body">
@@ -331,8 +336,8 @@ table tbody tr:hover {
     </div>
 
     <div class="footer">
-      <button class="btn secondary" onclick="cancelarAprobacion()">❌ Cancelar</button>
-      <button class="btn ok" onclick="confirmarAprobacion()">✅ Aprobar Contrato</button>
+      <button class="btn secondary" onclick="ContratosAprobacion.cancelar()">❌ Cancelar</button>
+      <button class="btn ok" onclick="ContratosAprobacion.confirmar()">✅ Aprobar Contrato</button>
     </div>
   </div>
 </div>
@@ -342,13 +347,13 @@ table tbody tr:hover {
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
       <h3 class="sheet-title">🗂️ Panel de trabajo</h3>
-      <button class="btn ghost close-x" onclick="cerrarPanelTrabajo()" aria-label="Cerrar">✕</button>
+      <button class="btn ghost close-x" onclick="ContratosEquipos.cerrarPanel()" aria-label="Cerrar">✕</button>
     </div>
     <div class="sheet-body" id="panelTrabajoBody">
       <!-- Contenido dinámico -->
     </div>
     <div class="footer">
-      <button class="btn secondary" onclick="cerrarPanelTrabajo()">Cerrar</button>
+      <button class="btn secondary" onclick="ContratosEquipos.cerrarPanel()">Cerrar</button>
     </div>
   </div>
 </div>
@@ -359,13 +364,13 @@ table tbody tr:hover {
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
       <h3 class="sheet-title">📦 Equipos del contrato</h3>
-      <button class="btn ghost close-x" onclick="cerrarModalEquiposContrato()" aria-label="Cerrar">✕</button>
+      <button class="btn ghost close-x" onclick="ContratosEquipos.cerrarModal()" aria-label="Cerrar">✕</button>
     </div>
     <div class="sheet-body" id="modalEquiposBody">
       <!-- Contenido dinámico -->
     </div>
     <div class="footer">
-      <button class="btn secondary" onclick="cerrarModalEquiposContrato()">Cerrar</button>
+      <button class="btn secondary" onclick="ContratosEquipos.cerrarModal()">Cerrar</button>
     </div>
   </div>
 </div>
