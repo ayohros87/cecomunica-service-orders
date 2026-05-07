@@ -1,5 +1,15 @@
 # Changelog
 
+## [Phase 5c] — 2026-05-07
+
+### Refactor
+- Created `public/js/ui/toast.js` — `Toast.show(msg, type?, durationMs?)` and `Toast.persist(msg, type?)` → element; types `'ok' | 'bad' | 'warn' | ''`; auto-creates `.toast-wrap` container, re-uses `#toasts` if present
+- Created `public/js/ui/modal.js` — `Modal.open(id, opts?)` / `Modal.close(id)`; handles `display:flex/none`, body scroll lock, and Escape-key cleanup
+- Added `.toast.warn` CSS rule to `public/css/ceco-ui.css`
+- Removed local toast/showToast implementations from 6 page scripts and replaced all call sites with `Toast.show()` / `Toast.persist()`:
+  - `piezas.js` (21 calls), `inventario-modelos.js` (14 calls), `vendedores-batch.js` (11 calls), `nuevo-contrato.js` (7 calls, with type mapping `success→ok`, `error→bad`, `warning→warn`), `inventario-index.js` (3 calls), `nuevo-cliente.js` (1 call)
+- Replaced inline open/close modal wrappers with `Modal.open()` / `Modal.close()` in: `cotizar-orden.js`, `nuevo-contrato.js`, `trabajar-orden.js` (modalPieza + modalServicio), `piezas.js` (overlay + overlayBatch)
+
 ## [Phase 5b] — 2026-05-06
 
 ### Refactor
