@@ -654,6 +654,11 @@
   <script src="../js/services/empresaService.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="../js/ui/modal.js"></script>
+  <script src="../js/pages/poc-state.js" defer></script>
+  <script src="../js/pages/poc-edit.js" defer></script>
+  <script src="../js/pages/poc-bulk.js" defer></script>
+  <script src="../js/pages/poc-sim.js" defer></script>
+  <script src="../js/pages/poc-list.js" defer></script>
   <script src="../js/pages/poc-index.js" defer></script>
 
 </head>
@@ -674,13 +679,13 @@
   <div class="actions-toolbar">
     <div class="actions-group">
       <button id="btnBatch" class="btn primary" onclick="window.location.href='../POC/nuevo-batch.html'">📦 Batch</button>
-      <button id="btnSim" class="btn" onclick="abrirSimModal()">📲 SIM/Teléfono</button>
-      <button id="btnImprimir" class="btn" onclick="irAImpresion()">🖨️ Imprimir</button>
-      <button id="btnExportar" class="btn" onclick="exportarExcelSeleccionados()">📤 Exportar</button>
+      <button id="btnSim" class="btn" onclick="PocSim.abrir()">📲 SIM/Teléfono</button>
+      <button id="btnImprimir" class="btn" onclick="PocList.irAImpresion()">🖨️ Imprimir</button>
+      <button id="btnExportar" class="btn" onclick="PocList.exportarExcelSeleccionados()">📤 Exportar</button>
       <button id="btnImportar" class="btn" onclick="window.location.href='../POC/importar-poc.html'">📥 Importar</button>
-      <button id="btnEditarMasivo" class="btn" title="Máximo 10 equipos por edición masiva" onclick="activarEdicionMasiva()">✏️ Editar en masa</button>
-      <button id="btnGuardarMasivo" class="btn primary" onclick="guardarEdicionMasiva()" style="display:none;">💾 Guardar</button>
-      <button id="btnCancelarMasivo" class="btn secondary" onclick="cancelarEdicionMasiva()" style="display:none;">✕ Cancelar</button>
+      <button id="btnEditarMasivo" class="btn" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()">✏️ Editar en masa</button>
+      <button id="btnGuardarMasivo" class="btn primary" onclick="PocBulk.guardar()" style="display:none;">💾 Guardar</button>
+      <button id="btnCancelarMasivo" class="btn secondary" onclick="PocBulk.cancelar()" style="display:none;">✕ Cancelar</button>
     </div>
   </div>
 
@@ -702,10 +707,10 @@
       </select>
 
       <input type="text" id="filtroValor" placeholder="Escribe para filtrar..." style="flex: 1; min-width: 200px;" oninput="filtrarDispositivos()">
-      <button class="btn secondary" onclick="limpiarFiltro()">🔄 Limpiar</button>
+      <button class="btn secondary" onclick="PocList.limpiarFiltro()">🔄 Limpiar</button>
       
-      <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="manejarCambioActivos()"> ✅ Solo activos</label>
-      <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="manejarCambioIncompletos()"> ⚠️ Solo incompletos</label>
+      <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> ✅ Solo activos</label>
+      <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> ⚠️ Solo incompletos</label>
       
       <div class="resumen-badge" id="resumenEquipos">
         <div class="loader" style="width: 20px; height: 20px; border-width: 2px;"></div>
@@ -716,9 +721,9 @@
     
     <!-- Advanced Filters (Collapsed by default) -->
     <div class="search-advanced" id="advancedFilters" style="display: none;">
-      <button class="btn secondary" onclick="filtrarDuplicados('serial')">🔁 Seriales duplicados</button>
-      <button class="btn secondary" onclick="filtrarDuplicados('sim')">📱 SIMs duplicados</button>
-      <button class="btn secondary" onclick="buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'">⚠️ Grupos inválidos</button>
+      <button class="btn secondary" onclick="PocList.filtrarDuplicados('serial')">🔁 Seriales duplicados</button>
+      <button class="btn secondary" onclick="PocList.filtrarDuplicados('sim')">📱 SIMs duplicados</button>
+      <button class="btn secondary" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'">⚠️ Grupos inválidos</button>
       <span style="font-size: 12px; color: var(--muted); margin-left: auto;">💡 Click en encabezados de tabla para ordenar</span>
     </div>
   </div>
@@ -729,7 +734,7 @@
   <div class="modal">
     <div class="modal-header">
       <h3>📲 Actualizar SIM/Teléfono en Lote</h3>
-      <button class="modal-close" onclick="cerrarSimModal()">✕</button>
+      <button class="modal-close" onclick="PocSim.cerrar()">✕</button>
     </div>
 
     <div class="modal-body">
@@ -751,8 +756,8 @@
     </div>
 
     <div class="modal-footer">
-      <button class="btn secondary" onclick="cerrarSimModal()">✕ Cancelar</button>
-      <button class="btn primary" onclick="procesarSIMSeleccionados()">✅ Aplicar Cambios</button>
+      <button class="btn secondary" onclick="PocSim.cerrar()">✕ Cancelar</button>
+      <button class="btn primary" onclick="PocSim.procesar()">✅ Aplicar Cambios</button>
     </div>
   </div>
 </div>
@@ -761,13 +766,13 @@
   <table>
     <thead>
       <tr id="encabezadoTabla">
-        <th><input type="checkbox" onclick="toggleSeleccionMasiva(this)" class="check-all"></th>
-        <th class="sortable" onclick="ordenarPor('cliente')">Cliente</th>
+        <th><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all"></th>
+        <th class="sortable" onclick="PocList.ordenarPor('cliente')">Cliente</th>
         <th>Activo</th>
         <th>Serial</th>
         <th>IP</th>
-        <th class="sortable" onclick="ordenarPor('unit_id')">Unit ID</th>
-        <th class="sortable" onclick="ordenarPor('radio_name')">Nombre del Radio</th>
+        <th class="sortable" onclick="PocList.ordenarPor('unit_id')">Unit ID</th>
+        <th class="sortable" onclick="PocList.ordenarPor('radio_name')">Nombre del Radio</th>
         <th>Grupos</th>
         <th>SIM / Teléfono</th>
         <th>Acciones</th>
@@ -778,8 +783,8 @@
 </div>
 
 <div class="actions-toolbar" style="justify-content: center; margin-top: 16px;">
-  <button id="btnCargarMas" class="btn" onclick="cargarDispositivos()">⬇️ Cargar más equipos</button>
-  <button class="btn secondary" onclick="mostrarTodo()">📄 Mostrar todo</button>
+  <button id="btnCargarMas" class="btn" onclick="PocList.cargar()">⬇️ Cargar más equipos</button>
+  <button class="btn secondary" onclick="PocList.mostrarTodo()">📄 Mostrar todo</button>
 </div>
 
   </div> <!-- app-wrap -->
@@ -789,7 +794,7 @@
 <div id="editDrawer">
   <div class="drawer-header">
     <h3>✏️ Editar Equipo</h3>
-    <button class="drawer-close" onclick="closeEditDrawer()">&times;</button>
+    <button class="drawer-close" onclick="PocEdit.cerrar()">&times;</button>
   </div>
   <div class="drawer-body">
     <!-- Main Fields -->
@@ -868,8 +873,8 @@
     </div>
   </div>
   <div class="drawer-actions">
-    <button class="btn secondary" onclick="closeEditDrawer()">❌ Cancelar</button>
-    <button class="btn ok" onclick="saveDrawerChanges()">✔️ Guardar</button>
+    <button class="btn secondary" onclick="PocEdit.cerrar()">❌ Cancelar</button>
+    <button class="btn ok" onclick="PocEdit.guardar()">✔️ Guardar</button>
   </div>
 </div>
 
