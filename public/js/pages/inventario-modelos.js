@@ -8,14 +8,14 @@
     const hiddenCols = new Set(); // 'estado' | 'alto' | 'minimo' | 'activo'
 
     /* ===== Util ===== */
-    function toast(msg,type='ok',t=2400){ const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),t); }
+    function Toast.show(msg,type='ok',t=2400){ const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),t); }
     function debounce(fn, t=220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); } }
     function mapTipo(v){ return v==='P'?'Portátil':v==='B'?'Base':v==='C'?'Cámara':'-'; }
     function mapEstado(v){ return v==='N'?'Nuevo':v==='R'?'Reuso':'-'; }
 
     /* ===== Densidad & columnas ===== */
     function applyDensity(){ document.getElementById('wrapTabla')?.setAttribute('data-density', dense ? 'dense' : 'roomy'); }
-    function toggleDensity(){ dense=!dense; applyDensity(); toast(dense?'Vista compacta':'Vista cómoda','ok'); }
+    function toggleDensity(){ dense=!dense; applyDensity(); Toast.show(dense?'Vista compacta':'Vista cómoda','ok'); }
     function toggleCol(key, visible){ if(!visible) hiddenCols.add(key); else hiddenCols.delete(key); applyColumnVisibility(); }
     function applyColumnVisibility(){
       const map = { estado: '.col-estado', alto: '.col-alto', minimo: '.col-minimo', activo: '.col-activo' };
@@ -62,7 +62,7 @@
 
         await cargarModelos();
       }catch(e){
-        console.error(e); toast('Error validando usuario','bad');
+        console.error(e); Toast.show('Error validando usuario','bad');
       }
     });
 
@@ -72,7 +72,7 @@
       try{
         listaModelos = await ModelosService.getModelos();
       }catch(e){
-        console.error(e); toast('Error cargando modelos','bad'); listaModelos=[];
+        console.error(e); Toast.show('Error cargando modelos','bad'); listaModelos=[];
       }
       renderizarTablaModelos(listaModelos);
       actualizarResumen(listaModelos);
@@ -238,7 +238,7 @@
       const activo=document.getElementById('f-activo').checked;
       const notas=(document.getElementById('f-notas').value||'').trim();
 
-      if(!marca || !modelo){ toast('Marca y Modelo son requeridos','warn'); return; }
+      if(!marca || !modelo){ Toast.show('Marca y Modelo son requeridos','warn'); return; }
 
       const payload = {
         marca, modelo, tipo, estado, minimo,
@@ -249,35 +249,35 @@
       try{
         if (modeloEditId===null){
           await ModelosService.addModelo(payload);
-          toast('Modelo creado','ok');
+          Toast.show('Modelo creado','ok');
         } else {
           await ModelosService.updateModelo(modeloEditId, payload);
-          toast('Modelo actualizado','ok');
+          Toast.show('Modelo actualizado','ok');
         }
         cerrarModal();
         await cargarModelos();
-      }catch(e){ console.error(e); toast('Error al guardar','bad'); }
+      }catch(e){ console.error(e); Toast.show('Error al guardar','bad'); }
     }
 
     /* ===== Acciones estado ===== */
     async function desactivarModelo(id){
       try{
         await ModelosService.setActivo(id, false);
-        toast('Modelo desactivado','ok'); await cargarModelos();
-      }catch(e){ console.error(e); toast('Error','bad');}
+        Toast.show('Modelo desactivado','ok'); await cargarModelos();
+      }catch(e){ console.error(e); Toast.show('Error','bad');}
     }
     async function activarModelo(id){
       try{
         await ModelosService.setActivo(id, true);
-        toast('Modelo activado','ok'); await cargarModelos();
-      }catch(e){ console.error(e); toast('Error','bad');}
+        Toast.show('Modelo activado','ok'); await cargarModelos();
+      }catch(e){ console.error(e); Toast.show('Error','bad');}
     }
     async function eliminarDefinitivo(id){
       if(!confirm('¿Eliminar definitivamente este modelo? (borra solo el documento del modelo)')) return;
       try{
         await ModelosService.deleteModelo(id);
-        toast('Modelo eliminado','ok'); await cargarModelos();
-      }catch(e){ console.error(e); toast('Error al eliminar','bad');}
+        Toast.show('Modelo eliminado','ok'); await cargarModelos();
+      }catch(e){ console.error(e); Toast.show('Error al eliminar','bad');}
     }
 
     /* ===== Exportar Excel ===== */

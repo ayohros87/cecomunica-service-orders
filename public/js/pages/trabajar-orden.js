@@ -560,11 +560,11 @@ function abrirModal(eqId){
   byId('sugerencias').innerHTML = '';
   byId('qty').value = 1;
   byId('tipo').value = 'cobro';
-  byId('modalPieza').style.display='flex';
+  Modal.open('modalPieza');
   // ayuda subtotal
   actualizarSubtotalPieza();
 }
-function cerrarModal(){ byId('modalPieza').style.display='none'; }
+function cerrarModal(){ Modal.close('modalPieza'); }
 
 // ====== Modal: selección de pieza (búsqueda multi-campo) ======
 function pick(id){
@@ -926,10 +926,10 @@ function abrirModalServicio(eqId){
   byId('serv_qty').value = 1;
   byId('serv_precio').value = '';
   byId('serv_tipo').value = 'cobro';
-  byId('modalServicio').style.display='flex';
+  Modal.open('modalServicio');
   actualizarSubtotalServicio();
 }
-function cerrarModalServicio(){ byId('modalServicio').style.display='none'; }
+function cerrarModalServicio(){ Modal.close('modalServicio'); }
 byId('serv_qty').addEventListener('input', actualizarSubtotalServicio);
 byId('serv_precio').addEventListener('input', actualizarSubtotalServicio);
 byId('serv_tipo').addEventListener('change', actualizarSubtotalServicio);

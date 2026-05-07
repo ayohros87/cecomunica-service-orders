@@ -261,7 +261,7 @@ function exportarExcel() {
   XLSX.writeFile(wb, `Inventario_Cecomunica_${fecha}.xlsx`);
 }
 // ===== Toast
-function toast(msg, type='ok', t=2400){
+function Toast.show(msg, type='ok', t=2400){
   const el = document.createElement('div'); el.className = `toast ${type}`; el.textContent = msg;
   document.body.appendChild(el); setTimeout(()=>el.remove(), t);
 }
@@ -274,7 +274,7 @@ function applyDensity(){
 }
 function toggleDensity(){
   dense = !dense; applyDensity();
-  toast(dense ? 'Vista compacta' : 'Vista cómoda', 'ok');
+  Toast.show(dense ? 'Vista compacta' : 'Vista cómoda', 'ok');
 }
 
 // ===== Columnas ocultables
@@ -318,7 +318,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
 });
 function aplicarFiltroRapido(){
   const q = (document.getElementById('buscador')?.value || '').toLowerCase().trim();
-  if (!Array.isArray(inventarioDatos)){ toast('Inventario aún no cargado','warn'); return; }
+  if (!Array.isArray(inventarioDatos)){ Toast.show('Inventario aún no cargado','warn'); return; }
   const filtrados = inventarioDatos.filter(({modelo})=>{
     const marca = (modelo.marca||'').toLowerCase();
     const mod = (modelo.modelo||'').toLowerCase();

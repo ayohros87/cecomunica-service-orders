@@ -499,8 +499,9 @@ th.ordenado-desc::after {
   animation: slideInRight 0.3s ease;
   transition: var(--transition);
 }
-.toast.ok{ background:#065f46; } 
+.toast.ok{ background:#065f46; }
 .toast.bad{ background:#991b1b; }
+.toast.warn{ background:#92400e; }
 
 @keyframes slideInRight {
   from { transform: translateX(100px); opacity: 0; }

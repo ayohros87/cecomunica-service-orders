@@ -3,57 +3,14 @@
     let listaClientes = {};
 
 // =======================================
-// TOAST NOTIFICATION SYSTEM
-// =======================================
-function showToast(message, type = "info") {
-  let container = document.querySelector(".toast-container");
-  if (!container) {
-    container = document.createElement("div");
-    container.className = "toast-container";
-    document.body.appendChild(container);
-  }
-
-  const iconMap = {
-    success: "✅",
-    error: "❌",
-    warning: "⚠️",
-    info: "ℹ️"
-  };
-
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `
-    <span class="toast-icon">${iconMap[type] || "ℹ️"}</span>
-    <div class="toast-content">${message}</div>
-    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
-  `;
-
-  container.appendChild(toast);
-
-  // Auto-remove after 5 seconds
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    toast.style.transform = "translateX(400px)";
-    setTimeout(() => toast.remove(), 300);
-  }, 5000);
-}
-
-// =======================================
 // PREVIEW MODAL
 // =======================================
 let __previewDraft = null;
 let __guardando = false;
 let __currentUser = null;
 
-function openPreviewModal() {
-  document.getElementById("previewOverlay").style.display = "flex";
-  document.body.style.overflow = "hidden";
-}
-
-function closePreviewModal() {
-  document.getElementById("previewOverlay").style.display = "none";
-  document.body.style.overflow = "";
-}
+function openPreviewModal() { Modal.open("previewOverlay"); }
+function closePreviewModal() { Modal.close("previewOverlay"); }
 
 function buildContratoDraft() {
   const clienteId = document.getElementById("cliente").value;
@@ -624,7 +581,7 @@ async function guardarContratoConfirmado(user) {
   // 🚨 Validar cliente seleccionado
   const clienteId = document.getElementById("cliente").value;
   if (!clienteId) {
-    showToast("⚠️ Debe seleccionar un cliente antes de crear el contrato.", "warning");
+    Toast.show("⚠️ Debe seleccionar un cliente antes de crear el contrato.", 'warn');
     document.getElementById("clienteCombo").focus();
     return;
   }
@@ -769,11 +726,11 @@ async function guardarContratoConfirmado(user) {
       status: "queued"
     });
 
-    showToast("✅ Contrato guardado. Enviaremos el correo a ventas@cecomunica.com en segundo plano…", "success");
+    Toast.show("✅ Contrato guardado. Enviaremos el correo a ventas@cecomunica.com en segundo plano…", 'ok');
     setTimeout(() => { window.location.href = "index.html"; }, 1200);
   } catch (e) {
     console.warn("No se pudo encolar el correo:", e);
-    showToast("⚠️ Contrato guardado, pero no se pudo encolar el correo.", "warning");
+    Toast.show("⚠️ Contrato guardado, pero no se pudo encolar el correo.", 'warn');
     setTimeout(() => { window.location.href = "index.html"; }, 1800);
   }
 }
@@ -783,14 +740,14 @@ document.getElementById("formContrato").addEventListener("submit", async e => {
   // 🚨 Validar cliente seleccionado
   const clienteId = document.getElementById("cliente").value;
   if (!clienteId) {
-    showToast("⚠️ Debe seleccionar un cliente antes de crear el contrato.", "warning");
+    Toast.show("⚠️ Debe seleccionar un cliente antes de crear el contrato.", 'warn');
     document.getElementById("clienteCombo").focus();
     return;
   }
 
   const filas = [...document.querySelectorAll("#tablaEquipos tbody tr")];
   if (!filas.length) {
-    showToast("⚠️ Debe agregar al menos un equipo.", "warning");
+    Toast.show("⚠️ Debe agregar al menos un equipo.", 'warn');
     return;
   }
 
@@ -818,7 +775,7 @@ document.getElementById("btnConfirmPreview").addEventListener("click", async () 
     await guardarContratoConfirmado(__currentUser);
   } catch (err) {
     console.error(err);
-    showToast("❌ Error al guardar el contrato.", "error");
+    Toast.show("❌ Error al guardar el contrato.", 'bad');
     document.getElementById("btnConfirmPreview").disabled = false;
     document.getElementById("btnGuardar").disabled = false;
     __guardando = false;
@@ -1126,7 +1083,7 @@ document.addEventListener('click', (e)=>{
 $btnEditar.addEventListener('click', ()=>{
   const id = $hidden.value;
   if(!id) {
-    showToast("Seleccione un cliente para editar", "warning");
+    Toast.show("Seleccione un cliente para editar", 'warn');
     return;
   }
   window.open(`../contratos/nuevo-cliente.html?id=${id}&redirect=true`, "_blank");

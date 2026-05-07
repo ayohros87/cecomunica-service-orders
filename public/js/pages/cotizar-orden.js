@@ -117,9 +117,9 @@ function abrirModal(eqId){
   document.getElementById('sugerencias').innerHTML = '';
   document.getElementById('qty').value = 1;
   document.getElementById('tipo').value = 'cobro';
-  document.getElementById('modalPieza').style.display='flex';
+  Modal.open('modalPieza');
 }
-function cerrarModal(){ document.getElementById('modalPieza').style.display='none'; }
+function cerrarModal(){ Modal.close('modalPieza'); }
 
 document.getElementById('buscarPieza').addEventListener('input', (e)=>{
   const q = e.target.value.trim().toLowerCase();

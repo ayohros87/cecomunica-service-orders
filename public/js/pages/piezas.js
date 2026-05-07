@@ -63,21 +63,19 @@ if (btnBatch) {
 
   } catch (e) {
     console.error(e);
-    toast('Error al validar rol','bad');
+    Toast.show('Error al validar rol','bad');
   }
 });
 /* ========= Batch: modal control ========= */
 function abrirBatchModal(){
   if (rolActual !== 'administrador' && rolActual !== 'inventario') {
-    toast('Acceso restringido.','warn');
+    Toast.show('Acceso restringido.','warn');
     return;
   }
-  document.getElementById('overlayBatch').style.display = 'flex';
-  document.body.classList.add('lock-scroll');
+  Modal.open('overlayBatch');
 }
 function cerrarBatchModal(){
-  document.getElementById('overlayBatch').style.display = 'none';
-  document.body.classList.remove('lock-scroll');
+  Modal.close('overlayBatch');
 }
 
 /* ========= Batch: helpers ========= */
@@ -186,7 +184,7 @@ function toggleDensity(){
   document.body.classList.toggle('dense', dense); // puedes mantenerla, pero la clave es data-density
   saveUIPrefs();
   applyDensity();
-  toast(dense ? 'Vista compacta' : 'Vista cómoda', 'ok');
+  Toast.show(dense ? 'Vista compacta' : 'Vista cómoda', 'ok');
 }
 
 /* ===== Aplica visibilidad de columnas a <th> y <td> ===== */
@@ -201,7 +199,7 @@ function applyColumnVisibility(){
   });
 }
 
-function toast(msg, type='ok', t=2400){
+function Toast.show(msg, type='ok', t=2400){
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   el.textContent = msg;
@@ -254,7 +252,7 @@ document.getElementById('batch-file')?.addEventListener('change', async (e) => {
 /* ========= Batch: guardar ========= */
 async function guardarBatch(){
   if (rolActual !== 'administrador' && rolActual !== 'inventario') {
-    toast('Acceso restringido.','warn');
+    Toast.show('Acceso restringido.','warn');
     return;
   }
 
@@ -265,7 +263,7 @@ async function guardarBatch(){
 
   const rows = parseDelimited(raw);
   if (rows.length === 0){
-    toast('No hay datos para cargar','warn');
+    Toast.show('No hay datos para cargar','warn');
     return;
   }
 
@@ -400,7 +398,7 @@ const docData = {
   if (errores.length){
     console.warn('Errores en batch:', errores.slice(0,10));
   }
-  toast(`Insertadas: ${ok} · Errores: ${err}`, err ? 'warn' : 'ok');
+  Toast.show(`Insertadas: ${ok} · Errores: ${err}`, err ? 'warn' : 'ok');
 
   cerrarBatchModal();
   await cargar();
@@ -412,7 +410,7 @@ async function cargar() {
     piezas = await PiezasService.getPiezas();
   } catch (e) {
     console.error(e);
-    toast('Error cargando piezas','bad');
+    Toast.show('Error cargando piezas','bad');
     piezas = [];
   }
   render();
@@ -582,7 +580,7 @@ function limpiar(){
 /* ========= Eliminar ========= */
 async function eliminarPieza(id, nombre = '') {
   if (rolActual !== 'administrador') {
-    toast('Solo los administradores pueden eliminar piezas','warn');
+    Toast.show('Solo los administradores pueden eliminar piezas','warn');
     return;
   }
 
@@ -591,11 +589,11 @@ async function eliminarPieza(id, nombre = '') {
 
   try {
     await PiezasService.deletePieza(id);
-    toast('Pieza eliminada','ok');
+    Toast.show('Pieza eliminada','ok');
     await cargar();
   } catch (err) {
     console.error('Error eliminando pieza:', err);
-    toast('Error al eliminar la pieza','bad');
+    Toast.show('Error al eliminar la pieza','bad');
   }
 }
 
@@ -632,14 +630,12 @@ setVal('f-notas','');
       setVal('f-notas', pieza.notas || '');
     }
   }
-  document.getElementById('overlay').style.display = 'flex';
-  document.body.classList.add('lock-scroll');
+  Modal.open('overlay');
 }
 
 
 function cerrarModal(){
-  document.getElementById('overlay').style.display = 'none';
-  document.body.classList.remove('lock-scroll');
+  Modal.close('overlay');
   piezaEditId = null;
 }
 function setVal(id, val){ const el = document.getElementById(id); if (el) el.value = val; }
@@ -665,7 +661,7 @@ async function guardarPieza(){
     : [];
 
   if (!marca || precio <= 0){
-    toast('Marca y Precio son requeridos','warn');
+    Toast.show('Marca y Precio son requeridos','warn');
     return;
   }
 
@@ -683,10 +679,10 @@ async function guardarPieza(){
   try {
     if (piezaEditId === null){
       await PiezasService.addPieza({ ...payload, creado_por_uid: firebase.auth().currentUser.uid });
-      toast('Pieza creada','ok');
+      Toast.show('Pieza creada','ok');
     } else {
       await PiezasService.updatePieza(piezaEditId, payload);
-      toast('Pieza actualizada','ok');
+      Toast.show('Pieza actualizada','ok');
     }
 
     cerrarModal();
@@ -694,29 +690,29 @@ async function guardarPieza(){
 
   } catch (err) {
     console.error(err);
-    toast('Error al guardar la pieza','bad');
+    Toast.show('Error al guardar la pieza','bad');
   }
 }
 
 async function ajustarStock(id, delta) {
   try {
     await PiezasService.ajustarDelta(id, delta);
-    toast(delta > 0 ? 'Stock incrementado' : 'Stock reducido','ok');
+    Toast.show(delta > 0 ? 'Stock incrementado' : 'Stock reducido','ok');
     await cargar();
   } catch (err) {
     console.error(err);
-    toast('Error al ajustar stock','bad');
+    Toast.show('Error al ajustar stock','bad');
   }
 }
 
 async function toggleActivo(id, estado) {
   try {
     await PiezasService.updatePieza(id, { activo: !estado });
-    toast(!estado ? 'Pieza activada' : 'Pieza desactivada','ok');
+    Toast.show(!estado ? 'Pieza activada' : 'Pieza desactivada','ok');
     await cargar();
   } catch (err) {
     console.error(err);
-    toast('Error al cambiar estado','bad');
+    Toast.show('Error al cambiar estado','bad');
   }
 }
 
@@ -741,11 +737,11 @@ async function duplicar(id) {
       activo: pieza.activo === true,
       creado_por_uid: firebase.auth().currentUser.uid,
     });
-    toast('Pieza duplicada','ok');
+    Toast.show('Pieza duplicada','ok');
     await cargar();
   } catch (err) {
     console.error(err);
-    toast('Error al duplicar','bad');
+    Toast.show('Error al duplicar','bad');
   }
 }
 

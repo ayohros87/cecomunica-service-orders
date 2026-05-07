@@ -6,28 +6,13 @@
         return;
       }
 
-      // Toast notification system
-      function toast(msg, type = "") {
-        const box = document.getElementById("toasts");
-        if (!box) return;
-        const el = document.createElement("div");
-        el.className = "toast" + (type ? " " + type : "");
-        el.textContent = msg;
-        box.appendChild(el);
-        setTimeout(() => {
-          el.style.opacity = "0";
-          el.style.transform = "translateX(400px)";
-          setTimeout(() => el.remove(), 300);
-        }, 3200);
-      }
-
       function mostrarMensaje(texto, color = "green") {
         const msg = document.getElementById("mensaje");
         msg.textContent = texto;
         msg.style.color = color;
         msg.style.fontWeight = "bold";
         msg.style.marginTop = "10px";
-        toast(texto, color === "green" ? "ok" : "bad");
+        Toast.show(texto, color === "green" ? "ok" : "bad");
       }
 
 // Normaliza: minúsculas, sin acentos

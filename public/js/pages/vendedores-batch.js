@@ -11,7 +11,7 @@ firebase.auth().onAuthStateChanged(async user => {
     const rol = userDoc ? userDoc.rol : null;
 
     if (!["administrador", "vendedor", "recepcion"].includes(rol)) {
-      toast("Acceso restringido.", "bad");
+      Toast.show("Acceso restringido.", "bad");
       return (window.location.href = "../index.html");
     }
     
@@ -142,7 +142,7 @@ function poblarDropdownModeloGlobal() {
   const regexProhibidos = /[\\/#\[\]$]/;
 
   if (regexProhibidos.test(cliente)) {
-  toast("El nombre del cliente contiene caracteres no permitidos: / # [ ] $", "bad");
+  Toast.show("El nombre del cliente contiene caracteres no permitidos: / # [ ] $", "bad");
   return;
 }
 
@@ -700,7 +700,7 @@ function agregarGrupoPrompt(){
 // render inicial y oninput
 document.getElementById("grupoInput").addEventListener("input", renderGrupoChips);
 document.addEventListener("DOMContentLoaded", renderGrupoChips);
-function toast(msg, type=""){ // type: "", "ok", "bad"
+function Toast.show(msg, type=""){ // type: "", "ok", "bad"
   const box = document.getElementById("toasts");
   const el = document.createElement("div");
   el.className = "toast" + (type ? " "+type : "");
@@ -734,7 +734,7 @@ function saveDraft(){
     }))
   };
   localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  toast("Borrador guardado", "ok");
+  Toast.show("Borrador guardado", "ok");
 }
 
 function restoreDraft(){
@@ -770,7 +770,7 @@ function restoreDraft(){
         tr.querySelectorAll(".grupo").forEach((ch, idx) => ch.checked = !!(r.grupos||[])[idx]);
       });
       actualizarResumenBatch();
-      toast("Borrador restaurado", "ok");
+      Toast.show("Borrador restaurado", "ok");
     }
    }catch(e){ console.warn("No se pudo restaurar borrador", e); }
 }
@@ -778,7 +778,7 @@ function restoreDraft(){
 function clearDraft(){
   if (!DRAFT_KEY) return;
   localStorage.removeItem(DRAFT_KEY);
-  toast("Borrador eliminado", "warn");
+  Toast.show("Borrador eliminado", "warn");
 }
 
 // Botón guardar + atajo Ctrl+S
@@ -820,7 +820,7 @@ document.addEventListener("DOMContentLoaded", () => { setStep('prep'); restoreDr
 document.addEventListener("keydown", (e)=>{
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter"){
     e.preventDefault(); generarTabla();
-    toast("Tabla generada", "ok");
+    Toast.show("Tabla generada", "ok");
   }
 });
 
@@ -860,10 +860,10 @@ async function refrescarModelos() {
     // Guarda de nuevo en localStorage
     lsSet("cache_modelos_v1", modelosDisponibles);
 
-    toast("Lista de modelos actualizada ✅", "ok");
+    Toast.show("Lista de modelos actualizada ✅", "ok");
   } catch (e) {
     console.error("Error al refrescar modelos:", e);
-    toast("Error al refrescar modelos", "bad");
+    Toast.show("Error al refrescar modelos", "bad");
   }
 }
 async function refrescarClientes() {
@@ -871,10 +871,10 @@ async function refrescarClientes() {
     localStorage.removeItem("cache_clientes_v1");
     clientesCargados = false;
     await cargarClientesCache(); // reconstruye el cache desde Firestore
-    toast("Lista de clientes actualizada ✅", "ok");
+    Toast.show("Lista de clientes actualizada ✅", "ok");
   } catch (e) {
     console.error("Error al refrescar clientes:", e);
-    toast("Error al refrescar clientes", "bad");
+    Toast.show("Error al refrescar clientes", "bad");
   }
 }
 
