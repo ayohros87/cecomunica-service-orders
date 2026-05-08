@@ -683,7 +683,7 @@
 
           <div class="form-field">
             <label class="req">Duración del contrato</label>
-            <select id="duracion" required onchange="toggleOtraDuracion(this.value)">
+            <select id="duracion" required onchange="NCForm.toggleOtraDuracion(this.value)">
               <option value="">Seleccione…</option>
               <option value="12 meses">12 meses</option>
               <option value="18 meses">18 meses</option>
@@ -728,7 +728,7 @@
           </table>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn secondary" onclick="agregarFilaEquipo()">➕ Agregar Equipo</button>
+          <button type="button" class="btn secondary" onclick="NCForm.agregarFilaEquipo()">➕ Agregar Equipo</button>
         </div>
 
         <!-- === ITBMS Y TOTALES DEL CONTRATO === -->
@@ -790,6 +790,11 @@
 <script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
 
+  <script src="../js/pages/nc-state.js"       defer></script>
+  <script src="../js/pages/nc-form.js"        defer></script>
+  <script src="../js/pages/nc-combo.js"       defer></script>
+  <script src="../js/pages/nc-preview.js"     defer></script>
+  <script src="../js/pages/nc-guardar.js"     defer></script>
   <script src="../js/pages/nuevo-contrato.js" defer></script>
 </body>
 </html>
