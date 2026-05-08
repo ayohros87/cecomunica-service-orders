@@ -29,7 +29,9 @@ window.PocEdit = {
 
     const sel = document.getElementById('drawer-operador');
     sel.innerHTML = '<option value="">Seleccione...</option>';
-    (PocState.listaOperadores || []).forEach(op => {
+    const opList = [...(PocState.listaOperadores || [])];
+    if (data.operador && !opList.includes(data.operador)) opList.push(data.operador);
+    opList.forEach(op => {
       const opt = document.createElement('option');
       opt.value = op;
       opt.textContent = op;
@@ -51,42 +53,49 @@ window.PocEdit = {
 
   async guardar() {
     if (!this._docId) return;
+    const docId = this._docId;
+    const grupos = document.getElementById('drawer-grupos').value
+      .split(',').map(g => g.trim()).filter(Boolean);
+    const user   = firebase.auth().currentUser;
+    const newData = {
+      serial:      document.getElementById('drawer-serial').value,
+      unit_id:     document.getElementById('drawer-unit-id').value,
+      radio_name:  document.getElementById('drawer-radio-name').value,
+      modelo:      document.getElementById('drawer-modelo').value,
+      grupos,
+      activo:      document.getElementById('drawer-activo').checked,
+      sim_number:  document.getElementById('drawer-sim-number').value,
+      sim_phone:   document.getElementById('drawer-sim-phone').value,
+      operador:    document.getElementById('drawer-operador').value,
+      ip:          document.getElementById('drawer-ip').value,
+      gps:         document.getElementById('drawer-gps').checked,
+      notas:       document.getElementById('drawer-notas').value,
+      updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by:       user?.uid   || null,
+      updated_by_email: user?.email || null
+    };
+
     try {
-      const grupos = document.getElementById('drawer-grupos').value
-        .split(',').map(g => g.trim()).filter(Boolean);
-      const user    = firebase.auth().currentUser;
-      const prevData = (await PocService.getPocDevice(this._docId)) || {};
-      const newData  = {
-        serial:      document.getElementById('drawer-serial').value,
-        unit_id:     document.getElementById('drawer-unit-id').value,
-        radio_name:  document.getElementById('drawer-radio-name').value,
-        modelo:      document.getElementById('drawer-modelo').value,
-        grupos,
-        activo:      document.getElementById('drawer-activo').checked,
-        sim_number:  document.getElementById('drawer-sim-number').value,
-        sim_phone:   document.getElementById('drawer-sim-phone').value,
-        operador:    document.getElementById('drawer-operador').value,
-        ip:          document.getElementById('drawer-ip').value,
-        gps:         document.getElementById('drawer-gps').checked,
-        notas:       document.getElementById('drawer-notas').value,
-        updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
-        updated_by:       user?.uid   || null,
-        updated_by_email: user?.email || null
-      };
-      await PocService.updatePocDevice(this._docId, newData);
-      await PocService.addLog({
-        equipo_id: this._docId,
-        fecha:     firebase.firestore.FieldValue.serverTimestamp(),
-        usuario:   user?.email,
-        cambios:   { antes: prevData, despues: newData }
-      });
-      this.cerrar();
-      alert('✅ Cambios guardados');
-      PocList.refresh();
+      await PocService.updatePocDevice(docId, newData);
     } catch (err) {
       console.error('Error saving changes:', err);
       alert('❌ Error al guardar cambios: ' + err.message);
+      return;
     }
+
+    // Log is non-critical — don't let it block the success flow
+    PocService.getPocDevice(docId)
+      .then(prevData => PocService.addLog({
+        equipo_id: docId,
+        fecha:     firebase.firestore.FieldValue.serverTimestamp(),
+        usuario:   user?.email,
+        cambios:   { antes: prevData || {}, despues: newData }
+      }))
+      .catch(e => console.warn('poc_log write failed (non-critical):', e));
+
+    this.cerrar();
+    alert('✅ Cambios guardados');
+    PocList.refresh();
   },
 
   init() {
