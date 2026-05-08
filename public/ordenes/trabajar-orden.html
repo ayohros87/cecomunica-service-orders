@@ -57,7 +57,6 @@
     .solo-lectura button[data-role="agregar-pieza"],
     .solo-lectura button[data-action="eliminar-linea"],
     .solo-lectura button[data-action="editar-precio"]{ display:none }
-    .solo-lectura button[onclick^="abrirModal"]{ display:none }
 
     /* ===== Resumen fijo inferior ===== */
     #resumenWrap{
@@ -234,10 +233,10 @@ label { color: #1f2937; }
         <span id="chipUsuario" class="chip" title="Usuario actual">—</span>
       </div>
       <div class="right">
-        <button class="btn" title="Imprimir cotización" onclick="window.open('cotizar-orden-formal.html?id='+ordenId,'_blank')">🧾</button>
-        <button class="btn" id="btnExport" title="Exportar a Excel" onclick="exportarCotizacion()">⬇️</button>
-        <button class="btn ok" id="btnCompletarCot" title="Completar cotización" onclick="completarCotizacion()">✅</button>
-        <button class="btn" id="btnDesbloquearCot" title="Desbloquear edición" onclick="desbloquearCotizacion()" style="display:none;">🔓</button>
+        <button class="btn" title="Imprimir cotización" onclick="window.open('cotizar-orden-formal.html?id='+TO.ordenId,'_blank')">🧾</button>
+        <button class="btn" id="btnExport" title="Exportar a Excel" onclick="TOCotizacion.exportar()">⬇️</button>
+        <button class="btn ok" id="btnCompletarCot" title="Completar cotización" onclick="TOCotizacion.completar()">✅</button>
+        <button class="btn" id="btnDesbloquearCot" title="Desbloquear edición" onclick="TOCotizacion.desbloquear()" style="display:none;">🔓</button>
         <button class="btn" title="Volver" onclick="history.back()">⬅️</button>
       </div>
     </div>
@@ -310,8 +309,8 @@ label { color: #1f2937; }
 </div>
 
 <div class="acciones" style="justify-content:flex-end;margin-top:8px;">
-  <button class="btn" onclick="cerrarModal()">Cancelar</button>
-  <button class="btn ok" onclick="confirmarAgregar()">Agregar</button>
+  <button class="btn" onclick="TOPieza.cerrarModal()">Cancelar</button>
+  <button class="btn ok" onclick="TOPieza.confirmarAgregar()">Agregar</button>
 </div>
 
   </div>
@@ -348,8 +347,8 @@ label { color: #1f2937; }
 <div id="ayudaServicio" class="ayuda" style="margin-top:4px;">Cantidad: 1 · Precio: $0.00 · Subtotal: $0.00</div>
 
 <div class="acciones" style="justify-content:flex-end;margin-top:8px;">
-  <button class="btn" onclick="cerrarModalServicio()">Cancelar</button>
-  <button class="btn ok" onclick="confirmarServicio()">Agregar</button>
+  <button class="btn" onclick="TOServicio.cerrarModal()">Cancelar</button>
+  <button class="btn ok" onclick="TOServicio.confirmarServicio()">Agregar</button>
 </div>
 
   </div>
@@ -358,6 +357,11 @@ label { color: #1f2937; }
 <script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
 
+<script src="../js/pages/to-state.js" defer></script>
+<script src="../js/pages/to-cotizacion.js" defer></script>
+<script src="../js/pages/to-servicio.js" defer></script>
+<script src="../js/pages/to-equipos.js" defer></script>
+<script src="../js/pages/to-pieza.js" defer></script>
 <script src="../js/pages/trabajar-orden.js" defer></script>
 
 </body>
