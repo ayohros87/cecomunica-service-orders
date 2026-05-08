@@ -706,7 +706,7 @@
         <option value="notas">Notas</option>
       </select>
 
-      <input type="text" id="filtroValor" placeholder="Escribe para filtrar..." style="flex: 1; min-width: 200px;" oninput="filtrarDispositivos()">
+      <input type="text" id="filtroValor" placeholder="Escribe para filtrar..." style="flex: 1; min-width: 200px;" oninput="PocList.filtrar()">
       <button class="btn secondary" onclick="PocList.limpiarFiltro()">🔄 Limpiar</button>
       
       <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> ✅ Solo activos</label>
