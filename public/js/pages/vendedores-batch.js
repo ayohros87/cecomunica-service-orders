@@ -700,14 +700,6 @@ function agregarGrupoPrompt(){
 // render inicial y oninput
 document.getElementById("grupoInput").addEventListener("input", renderGrupoChips);
 document.addEventListener("DOMContentLoaded", renderGrupoChips);
-function Toast.show(msg, type=""){ // type: "", "ok", "bad"
-  const box = document.getElementById("toasts");
-  const el = document.createElement("div");
-  el.className = "toast" + (type ? " "+type : "");
-  el.textContent = msg;
-  box.appendChild(el);
-  setTimeout(()=>{ el.remove(); }, 3500);
-}
 
 // === Autosave borrador ===
 let DRAFT_KEY = null;
