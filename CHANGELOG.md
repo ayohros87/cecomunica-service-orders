@@ -1,5 +1,52 @@
 # Changelog
 
+## [Phase 5e] — 2026-05-08
+
+### Refactor
+- Split `contratos-index.js` into 5 focused namespace modules + thin coordinator:
+  - `contratos-state.js` — `window.CS` shared state, `esc()`, `maxRows()`
+  - `contratos-approval.js` — `window.ContratosAprobacion` (approve, commission, duplicate)
+  - `contratos-upload.js` — `window.ContratosFirmado` (signed-PDF upload flow)
+  - `contratos-equipos.js` — `window.ContratosEquipos` (equipment preview panel)
+  - `contratos-list.js` — `window.ContratosLista` (table/card render, filter, sort, CRUD actions)
+  - `contratos-index.js` rewritten as ~50-line auth coordinator
+- Split `poc-index.js` into 5 namespace modules + thin coordinator:
+  - `poc-state.js` — `window.PocState` (roles, model/operator lists, helpers)
+  - `poc-list.js` — `window.PocList` (table render, search, filter, sort, export)
+  - `poc-bulk.js` — `window.PocBulk` (mass inline edit with save/cancel)
+  - `poc-edit.js` — `window.PocEdit` (side-drawer single-device edit)
+  - `poc-sim.js` — `window.PocSim` (SIM bulk-update modal)
+  - `poc-index.js` rewritten as ~46-line auth coordinator
+- Split `trabajar-orden.js` into 5 namespace modules + thin coordinator:
+  - `to-state.js` — `window.TO` shared state (orden data, user, inventory cache)
+  - `to-cotizacion.js` — `window.TOCotizacion` (render totals, complete, unlock, export)
+  - `to-servicio.js` — `window.TOServicio` (labor line modal)
+  - `to-equipos.js` — `window.TOEquipos` (equipment accordion, consumo table, adjuntos)
+  - `to-pieza.js` — `window.TOPieza` (part search + catalog modal, stock decrement)
+  - `trabajar-orden.js` rewritten as ~89-line auth coordinator
+- Split `nuevo-contrato.js` (1 075 lines) into 5 namespace modules + thin coordinator:
+  - `nc-state.js` — `window.NC` shared state + `escapeHtml()`
+  - `nc-form.js` — `window.NCForm` (badges, equipment table rows, totals, renewal UI)
+  - `nc-combo.js` — `window.NCCombo` (client autocomplete, recents, keyboard nav)
+  - `nc-preview.js` — `window.NCPreview` (draft preview modal, confirm flow)
+  - `nc-guardar.js` — `window.NCGuardar` (data loading, prefill from duplicate, save + mail)
+  - `nuevo-contrato.js` rewritten as ~32-line auth coordinator
+- Refactored `vendedores-batch.js` (872 lines) into `window.VB` single namespace; merged dual `onAuthStateChanged` into one coordinator; all state variables moved from `window.*` globals into `VB.*`; updated 12 HTML inline handlers and all dynamic template-literal onclick strings to `VB.*`
+- Removed local `Toast.show` duplicate from `vendedores-batch.js` (leftover from Phase 5c)
+
+### Bug Fixes
+- POC search `oninput` still called stale global `filtrarDispositivos()` — migrated to `PocList.filtrar()`
+- POC bulk edit read `.expandir-btn` instead of `.expand-btn` — grupos were always truncated before saving, corrupting arrays with `"..."` entries
+- `PocEdit.guardar()` had two bugs: (1) `addLog` failure inside the same try-block blocked the success toast and left the drawer open; fixed to fire-and-forget; (2) unrecognized `operador` value not injected into select options, causing it to save as `""`
+
+## [Phase 5d] — 2026-05-07
+
+### Refactor
+- Created `public/js/domain/totales.js` — `ContractTotals.compute(subtotal, itbmsAplica)` and `ContractTotals.fromDoc(data)`; canonical contract totals replacing `resolverTotalesContrato()` in `contratos-index.js` and `recalcularTotalesContrato()` in `nuevo-contrato.js`
+- Created `public/js/domain/scoring.js` — `PiezaSearch.search(piezas, query, opts)`; extracted pure parts-search/ranking logic from `trabajar-orden.js`; no DOM dependency
+- Updated `contratos-index.js` and `nuevo-contrato.js` to use `ContractTotals`; updated `trabajar-orden.js` to use `PiezaSearch`
+- Completed Phase 5c for missed files: wired `Toast.show()` and `Modal.open/close()` in files that had been skipped in the initial 5c pass
+
 ## [Phase 5c] — 2026-05-07
 
 ### Refactor

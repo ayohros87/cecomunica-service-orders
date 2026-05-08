@@ -308,11 +308,11 @@ Build `contratosService.js` (mirror the pattern of `ordenesService.js`) and a `m
 
 Same pattern, lower priority pages. Done page-by-page; each migration is small and reviewable.
 
-### Phase 5 — Script decomposition (incremental, ongoing)
+### Phase 5 — Script decomposition *(complete through 5e — 2026-05-08)*
 
-Phase 5 has four distinct sub-goals. They build on each other but each can ship independently.
+Phase 5 has five distinct sub-goals, all completed. A Phase 5f for the remaining smaller page scripts is optional and lower-priority.
 
-#### Phase 5a — Script extraction from HTML *(partially done — 2026-05-06)*
+#### Phase 5a — Script extraction from HTML *(done — 2026-05-06)*
 
 Move inline `<script>` blocks out of HTML into `js/pages/<name>.js`, loaded with `<script src defer>`. Pages should reach ≤300 lines of HTML.
 
@@ -353,7 +353,7 @@ Move inline `<script>` blocks out of HTML into `js/pages/<name>.js`, loaded with
 
 ---
 
-#### Phase 5b — Eliminate local duplicates of core utilities
+#### Phase 5b — Eliminate local duplicates of core utilities *(done — 2026-05-06/08)*
 
 The extracted page scripts redefine utilities that already exist in `js/core/`. These local copies should be deleted and calls routed to the canonical modules. No new files needed — this is pure cleanup inside the `js/pages/` files.
 
@@ -367,7 +367,7 @@ The extracted page scripts redefine utilities that already exist in `js/core/`. 
 
 ---
 
-#### Phase 5c — Shared UI primitives
+#### Phase 5c — Shared UI primitives *(done — 2026-05-07)*
 
 Four different toast/notification implementations exist across the page scripts. Eight modal open/close pairs use identical patterns. Both can be replaced with a single module each.
 
@@ -385,7 +385,7 @@ Single API: `Modal.open(id, options?)` / `Modal.close(id)`. Options: `{ lockScro
 
 ---
 
-#### Phase 5d — Domain logic extraction
+#### Phase 5d — Domain logic extraction *(done — 2026-05-07)*
 
 Business rules that have no DOM dependency and are currently duplicated or buried inside page scripts. Extracting them makes them testable and shared across pages.
 
@@ -403,6 +403,35 @@ ContractTotals.calculate(equipos, itbmsRate = FMT.ITBMS_RATE)
 Extracts: `scorePieza(pieza, query)` and `filtrarPiezas(piezas, query)` from `trabajar-orden.js`. Pure ranking logic for the parts recommendation system — no DOM dependency, directly testable.
 
 **Target after 5b–5d:** Each `js/pages/` file shrinks by ~150–300 lines (mostly removed duplicates and extracted logic). The six existing page scripts should all reach ≤ 900 lines; the largest ones (`contratos-index.js`, `poc-index.js`) should reach ≤ 1 100 lines before any further structural split.
+
+---
+
+#### Phase 5e — Namespace split of large page scripts *(done — 2026-05-08)*
+
+Split the five largest extracted page scripts from global-function soup into proper `window.Namespace` objects so each file has a single responsibility and the global scope stays clean.
+
+**Done:**
+
+| Original file | Lines | Result |
+|---|---|---|
+| `contratos-index.js` | ~1 075 | `contratos-state.js` · `contratos-approval.js` · `contratos-upload.js` · `contratos-equipos.js` · `contratos-list.js` + thin coordinator |
+| `poc-index.js` | ~550 | `poc-state.js` · `poc-list.js` · `poc-bulk.js` · `poc-edit.js` · `poc-sim.js` + thin coordinator |
+| `trabajar-orden.js` | ~1 174 | `to-state.js` · `to-cotizacion.js` · `to-servicio.js` · `to-equipos.js` · `to-pieza.js` + ~89-line coordinator |
+| `nuevo-contrato.js` | 1 075 | `nc-state.js` · `nc-form.js` · `nc-combo.js` · `nc-preview.js` · `nc-guardar.js` + ~32-line coordinator |
+| `vendedores-batch.js` | 872 | `window.VB` single namespace + ~20-line coordinator |
+
+**Remaining (optional Phase 5f — lower priority):**
+
+| File | Lines | Notes |
+|---|---|---|
+| `piezas.js` | 747 | Still global functions; good candidate for `window.Piezas` |
+| `clientes-index.js` | 628 | Still global functions |
+| `fotos-taller.js` | 535 | Still global functions |
+| `editar-orden.js` | 471 | Still global functions |
+| `contratos-list.js` | 667 | Already a namespace (`ContratosLista`) — large but single-concern; leave as-is |
+| `poc-list.js` | 552 | Already a namespace (`PocList`) — leave as-is |
+
+---
 
 ### Phase 6 — Backend modularization (1–2 weeks)
 
