@@ -410,8 +410,8 @@ body {
     </div>
     <div class="topbar-right">
       <button class="btn" id="btnGuardarBorrador" title="Ctrl+S">Guardar borrador</button>
-      <button class="btn" id="btnClearDraft" onclick="clearDraft()">Borrar borrador</button>
-      <button class="btn secondary" onclick="limpiarTodo()">Limpiar</button>
+      <button class="btn" id="btnClearDraft" onclick="VB.clearDraft()">Borrar borrador</button>
+      <button class="btn secondary" onclick="VB.limpiarTodo()">Limpiar</button>
       <button class="btn" onclick="window.location.href='../index.html'">Menú</button>
     </div>
   </div>
@@ -429,9 +429,9 @@ body {
   <div class="form-field">
     <label class="req">Cliente</label>
     <div class="input-row">
-      <input type="text" id="clienteGlobal" placeholder="Nombre del cliente" oninput="sugerirClientes()" autocomplete="off">
-      <button class="btn btn-pill fit" onclick="buscarGruposCliente()">Buscar</button>
-      <button class="btn btn-pill fit" type="button" onclick="refrescarClientes()" title="Actualizar lista de clientes">Actualizar</button>
+      <input type="text" id="clienteGlobal" placeholder="Nombre del cliente" oninput="VB.sugerirClientes()" autocomplete="off">
+      <button class="btn btn-pill fit" onclick="VB.buscarGruposCliente()">Buscar</button>
+      <button class="btn btn-pill fit" type="button" onclick="VB.refrescarClientes()" title="Actualizar lista de clientes">Actualizar</button>
     </div>
     <div id="sugerenciasClientes" style="position:relative;"></div>
     <div class="form-hint">Escribe parte del nombre o selecciónalo de la lista. Si el navegador auto-completó, haz clic en Buscar para cargar los grupos.</div>
@@ -450,7 +450,7 @@ body {
     <label>Modelo (aplicar a todas las filas)</label>
     <div class="input-row">
       <select id="modeloGlobal" class="w-100"></select>
-      <button class="btn btn-pill fit" type="button" onclick="refrescarModelos()" title="Actualizar lista de modelos">Actualizar</button>
+      <button class="btn btn-pill fit" type="button" onclick="VB.refrescarModelos()" title="Actualizar lista de modelos">Actualizar</button>
     </div>
   </div>
 
@@ -466,8 +466,8 @@ body {
   </div>
 
   <div class="form-actions center">
-    <button class="btn primary" onclick="generarTabla()">Generar Tabla</button>
-    <button class="btn ghost" onclick="limpiarTodo()">Limpiar Todo</button>
+    <button class="btn primary" onclick="VB.generarTabla()">Generar Tabla</button>
+    <button class="btn ghost" onclick="VB.limpiarTodo()">Limpiar Todo</button>
   </div>
 </div>
 
@@ -495,11 +495,11 @@ body {
 <div class="action-card" id="actionCard" style="display:none;">
   <h3>Acciones Rápidas</h3>
   <div class="action-grid">
-    <button class="btn secondary" onclick="agregarFila()">Agregar Fila</button>
-    <button class="btn secondary" onclick="agregarGrupo()">Agregar Grupo</button>
-    <button class="btn primary" onclick="mostrarTablaResultado(); setStep('rev')">Revisar Resultado</button>
-    <button class="btn export" onclick="descargarExcel(); setStep('exp')">Descargar Excel</button>
-    <button class="btn ghost" onclick="descargarJSON(); setStep('exp')">Descargar JSON</button>
+    <button class="btn secondary" onclick="VB.agregarFila()">Agregar Fila</button>
+    <button class="btn secondary" onclick="VB.agregarGrupo()">Agregar Grupo</button>
+    <button class="btn primary" onclick="VB.mostrarTablaResultado()">Revisar Resultado</button>
+    <button class="btn export" onclick="VB.descargarExcel()">Descargar Excel</button>
+    <button class="btn ghost" onclick="VB.descargarJSON()">Descargar JSON</button>
   </div>
 </div>
 
