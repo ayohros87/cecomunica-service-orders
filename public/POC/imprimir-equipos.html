@@ -292,7 +292,7 @@ function modeloDe(d) {
       const datos = [];
 
       for (const id of ids) {
-        const doc = await PocService.getPocDevice(id);
+        const doc = await PocService.getPocDevice(id, { source: 'server' });
         if (doc) {
           datos.push(doc);
         }

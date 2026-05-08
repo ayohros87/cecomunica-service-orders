@@ -6,9 +6,9 @@ const PocService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
-  async getPocDevice(id) {
+  async getPocDevice(id, opts) {
     const db = firebase.firestore();
-    const doc = await db.collection('poc_devices').doc(id).get();
+    const doc = await db.collection('poc_devices').doc(id).get(opts);
     if (!doc.exists) return null;
     return { id: doc.id, ...doc.data() };
   },
