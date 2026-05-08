@@ -49,8 +49,8 @@ window.PocBulk = {
       celdas[COL.radio_name].innerHTML = `<input type="text" class="table-input" style="width:100%;" value="${radioOrig}">`;
 
       const celdaGrupos = celdas[COL.grupos];
-      const btnExp = celdaGrupos.querySelector('.expandir-btn');
-      let gruposOrig = btnExp?.title || celdaGrupos.textContent.replace('🔍','').replace('…','').trim();
+      const btnExp = celdaGrupos.querySelector('.expand-btn');
+      let gruposOrig = btnExp?.title || celdaGrupos.textContent.replace('🔍','').trim();
       celdaGrupos.setAttribute('data-original', celdaGrupos.innerHTML);
       celdaGrupos.innerHTML = `<input type="text" class="table-input" style="width:100%;" value="${gruposOrig}">`;
 
