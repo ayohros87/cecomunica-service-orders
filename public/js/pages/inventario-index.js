@@ -260,12 +260,6 @@ function exportarExcel() {
   const fecha = new Date().toISOString().split('T')[0];
   XLSX.writeFile(wb, `Inventario_Cecomunica_${fecha}.xlsx`);
 }
-// ===== Toast
-function Toast.show(msg, type='ok', t=2400){
-  const el = document.createElement('div'); el.className = `toast ${type}`; el.textContent = msg;
-  document.body.appendChild(el); setTimeout(()=>el.remove(), t);
-}
-
 // ===== Densidad
 let dense = false;
 function applyDensity(){
