@@ -4,7 +4,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
       const userDoc = await UsuariosService.getUsuario(user.uid);
       const rol = userDoc ? userDoc.rol : null;
 
-      if (rol !== "administrador" && rol !== "inventario") {
+      if (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO) {
         document.body.innerHTML = '<div style="text-align:center; margin-top:100px; color:red;">Acceso restringido: área en construcción.</div>';
         return;
       }

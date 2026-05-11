@@ -6,7 +6,7 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   if(!user){ location.href='login.html'; return; }
 
   // === Empresa (perfil + ITBMS) ===
-  let itbms = 0.07;
+  let itbms = FMT.ITBMS_RATE;
   try{
     const ed = await EmpresaService.getDoc('perfil');
     if(ed){

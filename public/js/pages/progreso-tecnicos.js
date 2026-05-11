@@ -6,7 +6,7 @@
 
 // 🔒 Restringir funciones interactivas si el usuario es técnico
 function aplicarModoSoloLectura() {
-  if (currentRole === 'tecnico' || currentRole === 'tecnico_operativo') {
+  if (currentRole === ROLES.TECNICO || currentRole === ROLES.TECNICO_OPERATIVO) {
     // Desactivar búsqueda y botones
     document.getElementById('buscarNombre').disabled = true;
     document.getElementById('selPeriodo').disabled = true;
@@ -46,7 +46,7 @@ function aplicarModoSoloLectura() {
 
     function canViewAll(role){
       // Admin y Recepción pueden ver todo; técnicos ven su propia fila + ranking sin info sensible
-      return role === 'administrador' || role === 'recepcion';
+      return role === ROLES.ADMIN || role === ROLES.RECEPCION;
     }
 
     function medalla(idx){
@@ -63,7 +63,7 @@ function aplicarModoSoloLectura() {
     }
 
     async function cargarUsuariosTecnicos(){
-      const users = await UsuariosService.getUsuariosByRol(['tecnico', 'tecnico_operativo']);
+      const users = await UsuariosService.getUsuariosByRol([ROLES.TECNICO, ROLES.TECNICO_OPERATIVO]);
 
       cacheUsuarios = users.map(u => ({
         uid: u.id,
@@ -163,7 +163,7 @@ function getISOWeekKey(d) {
       formatStamp();
 
       // Mis estadísticas (si soy técnico)
-      if (currentRole === 'tecnico' || currentRole === 'tecnico_operativo') {
+      if (currentRole === ROLES.TECNICO || currentRole === ROLES.TECNICO_OPERATIVO) {
         const mine = cacheProgreso[currentUser.uid] || {semanal:0,mensual:0,total:0};
         document.getElementById('misStatsWrap').style.display = 'flex';
         document.getElementById('miSemanal').textContent = mine.semanal || 0;

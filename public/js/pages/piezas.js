@@ -49,13 +49,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
 const btnBatch = document.getElementById('btnBatch');
 if (btnBatch) {
-  if (rol !== 'administrador' && rol !== 'inventario') {
+  if (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO) {
     btnBatch.style.display = 'none';
   }
 }
 
     // Solo administradores o personal de inventario
-    if (rol !== "administrador" && rol !== "inventario") {
+    if (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO) {
       document.body.innerHTML = '<div style="text-align:center; margin-top:100px; color:red;">Acceso restringido.</div>';
       return;
     }
@@ -69,7 +69,7 @@ if (btnBatch) {
 });
 /* ========= Batch: modal control ========= */
 function abrirBatchModal(){
-  if (rolActual !== 'administrador' && rolActual !== 'inventario') {
+  if (rolActual !== ROLES.ADMIN && rolActual !== ROLES.INVENTARIO) {
     Toast.show('Acceso restringido.','warn');
     return;
   }
@@ -245,7 +245,7 @@ document.getElementById('batch-file')?.addEventListener('change', async (e) => {
 
 /* ========= Batch: guardar ========= */
 async function guardarBatch(){
-  if (rolActual !== 'administrador' && rolActual !== 'inventario') {
+  if (rolActual !== ROLES.ADMIN && rolActual !== ROLES.INVENTARIO) {
     Toast.show('Acceso restringido.','warn');
     return;
   }
@@ -515,7 +515,7 @@ function render() {
         ? '<span class="badge completo">Activo</span>'
         : '<span class="badge">Inactivo</span>';
 
-    const disableEdicion = (rolActual !== 'administrador' && rolActual !== 'inventario');
+    const disableEdicion = (rolActual !== ROLES.ADMIN && rolActual !== ROLES.INVENTARIO);
 
     const equiposHtml = equipos.length
       ? equipos.slice(0,4).map(e => `<span class="chip" title="${e}">${e}</span>`).join(' ') + (equipos.length > 4 ? ` <span class="chip">+${equipos.length-4}</span>` : '')
@@ -546,7 +546,7 @@ function render() {
             <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="abrirModal('${p.id}')">✏️ Editar</button>
             <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="toggleActivo('${p.id}', ${!!p.activo})">${p.activo ? 'Desactivar' : 'Activar'}</button>
             <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="duplicar('${p.id}')">📄 Duplicar</button>
-            ${rolActual === 'administrador'
+            ${rolActual === ROLES.ADMIN
               ? `<button class="btn sm danger" onclick="eliminarPieza('${p.id}', '${(marca + (sku ? ' ' + sku : '')).replace(/"/g,'&quot;')}')">🗑️ Eliminar</button>`
               : ''
             }
@@ -573,7 +573,7 @@ function limpiar(){
 }
 /* ========= Eliminar ========= */
 async function eliminarPieza(id, nombre = '') {
-  if (rolActual !== 'administrador') {
+  if (rolActual !== ROLES.ADMIN) {
     Toast.show('Solo los administradores pueden eliminar piezas','warn');
     return;
   }

@@ -2,6 +2,8 @@ const fs   = require("fs");
 const path = require("path");
 const { db } = require("../lib/admin");
 
+const ITBMS_RATE = 0.07;
+
 async function attachVerificationFromMirror(contrato, fallbackDocId) {
   const verifSnap = await db.collection("verificaciones").doc(fallbackDocId).get();
 
@@ -72,7 +74,7 @@ function buildContractHtmlForPdf(contrato, vendedorInfo = {}, aprobadorInfo = {}
   html = html.replace("{{TABLA_EQUIPOS}}", `<tbody>${equiposRows}</tbody>`);
 
   const subtotal  = (contrato.equipos || []).reduce((acc, eq) => acc + (Number(eq.cantidad||0)*Number(eq.precio||0)), 0);
-  const itbms     = +(subtotal * 0.07).toFixed(2);
+  const itbms     = +(subtotal * ITBMS_RATE).toFixed(2);
   const totalCon  = +(subtotal + itbms).toFixed(2);
 
   html = html.replace("{{SUBTOTAL}}", subtotal.toFixed(2));

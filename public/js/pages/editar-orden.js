@@ -414,7 +414,7 @@
       document.getElementById("estado").disabled = true;
 
       // Tipo de servicio y observaciones editables solo para administrador/recepción
-      const puedeEditarDetalles = rol === "administrador" || rol === "recepcion";
+      const puedeEditarDetalles = rol === ROLES.ADMIN || rol === ROLES.RECEPCION;
       document.getElementById("tipo").disabled = !puedeEditarDetalles;
       document.getElementById("observaciones").readOnly = !puedeEditarDetalles;
     }

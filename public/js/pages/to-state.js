@@ -11,7 +11,7 @@ window.TO = {
   piezaSeleccionada:  null,
   rolUsuario:        null,
   usuarioActual:     { uid: null, email: null, nombre: null },
-  itbmsPct:          0.07,
+  itbmsPct:          FMT.ITBMS_RATE,
   unsubByEquipo:     new Map(),
 
   norm(x = '') {

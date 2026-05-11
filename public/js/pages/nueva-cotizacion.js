@@ -164,7 +164,7 @@
     function recalcularTotales() {
       items = items.map(it => ({ ...it, total: Number(it.cantidad || 0) * Number(it.precio_unitario || 0) }));
       const subtotal = items.reduce((acc, it) => acc + Number(it.total || 0), 0);
-      const itbms = subtotal * 0.07;
+      const itbms = subtotal * FMT.ITBMS_RATE;
       const total = subtotal + itbms;
       document.getElementById("subtotalTxt").textContent = money(subtotal);
       document.getElementById("itbmsTxt").textContent = money(itbms);
@@ -239,7 +239,7 @@
         cliente_direccion: cliente.direccion || null,
         items,
         subtotal: totales.subtotal,
-        itbms_rate: 0.07,
+        itbms_rate: FMT.ITBMS_RATE,
         itbms: totales.itbms,
         total: totales.total,
         validez_dias: Number(document.getElementById("validezDias").value || 30),
@@ -289,7 +289,7 @@
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) { location.href = "../login.html"; return; }
       verificarAccesoYAplicarVisibilidad(async (rol) => {
-        const permitidos = ["administrador", "vendedor"];
+        const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR];
         if (!permitidos.includes(rol)) {
           mostrarToast("Sin acceso");
           location.href = "../index.html";

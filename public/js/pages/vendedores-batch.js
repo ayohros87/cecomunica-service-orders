@@ -563,7 +563,7 @@ firebase.auth().onAuthStateChanged(async user => {
     VB.poblarDropdownModeloGlobal();
     const userDoc = await UsuariosService.getUsuario(user.uid);
     const rol     = userDoc ? userDoc.rol : null;
-    if (!['administrador', 'vendedor', 'recepcion'].includes(rol)) {
+    if (![ROLES.ADMIN, ROLES.VENDEDOR, ROLES.RECEPCION].includes(rol)) {
       Toast.show('Acceso restringido.', 'bad');
       window.location.href = '../index.html';
       return;

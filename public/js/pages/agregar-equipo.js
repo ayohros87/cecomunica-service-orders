@@ -123,6 +123,7 @@ const html = `
       id: crypto.randomUUID(),
       modelo_id: modeloInput?.value || "",
       modelo: modelos.find(m => m.id === modeloInput?.value)?.nombre || "",
+      serial: serieInput?.value.trim() || "",
       numero_de_serie: serieInput?.value.trim() || "",
       bateria: equipo.querySelector(".bateria")?.checked || false,
       clip: equipo.querySelector(".clip")?.checked || false,

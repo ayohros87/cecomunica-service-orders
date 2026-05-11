@@ -9,7 +9,7 @@
       const userDoc = await UsuariosService.getUsuario(user.uid);
       const rol = userDoc ? userDoc.rol : null;
 
-      if (!userDoc || (rol !== "administrador" && rol !== "inventario")) {
+      if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO)) {
         document.body.innerHTML = "<h3 style='color:red; text-align:center;'>Acceso restringido a administradores</h3>";
         return;
       }

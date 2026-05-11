@@ -364,7 +364,7 @@ function resolverTotalesParaImpresion(contrato) {
   const tieneCamposNuevos = typeof contrato.itbms_aplica !== 'undefined';
 
   const subtotal = Number(contrato.subtotal ?? contrato.total ?? 0);
-  const itbmsPorc = Number(contrato.itbms_porcentaje ?? 0.07);
+  const itbmsPorc = Number(contrato.itbms_porcentaje ?? FMT.ITBMS_RATE);
 
   let itbmsAplica, itbmsMonto, totalConITBMS;
 
