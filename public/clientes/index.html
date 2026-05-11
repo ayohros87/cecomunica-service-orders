@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/services/clientesService.js"></script>
@@ -28,13 +29,8 @@
 </style>
 </head>
 <body>
-  <div class="topbar">
-  <h1>Clientes</h1>
-  <div style="margin-left:auto; display:flex; gap:8px;">
-    <button onclick="location.href='../index.html'" class="btn-top">← Volver</button>
-    <button id="btnNuevo" class="btn-top">+ Nuevo cliente</button>
-  </div>
-</div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: 'Clientes', actions: [{ label: '+ Nuevo cliente', cls: 'primary', id: 'btnNuevo' }], back: { label: '← Volver', href: '../index.html' }, showHome: false, showLogout: false });</script>
 
 
 <div class="app-wrap">

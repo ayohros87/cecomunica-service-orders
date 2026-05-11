@@ -19,30 +19,6 @@
       min-height: 100vh;
     }
     
-    /* Unified Topbar */
-    .topbar {
-      background: white;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      padding: 12px 20px;
-      display: flex;
-      align-items: center;
-      border-bottom: 3px solid var(--brand);
-      width: 100%;
-      box-sizing: border-box;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    
-    .topbar h1 {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--text);
-      font-size: 1.5rem;
-      margin: 0;
-    }
-    
     /* Unified Content Area */
     .app-wrap {
       max-width: none;
@@ -644,6 +620,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
@@ -663,13 +640,8 @@
 
 </head>
 <body>
-  <div class="topbar">
-    <h1>📱 Equipos PoC</h1>
-    <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
-      <button class="btn-top" onclick="window.location.href='../index.html'">🏠 Menú principal</button>
-      <button class="btn danger" onclick="cerrarSesion()" style="background: var(--bad); border-color: var(--bad);">🚪 Salir</button>
-    </div>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '📱 Equipos PoC', showHome: true, homeHref: '../index.html', showLogout: true });</script>
   
   <div class="app-wrap">
 

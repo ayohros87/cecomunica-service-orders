@@ -12,14 +12,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="js/firebase-init.js"></script>
+  <script src="js/core/layout.js"></script>
 
 </head>
 <body>
-  <!-- Barra superior -->
-  <div class="topbar">
-    <h1>Cecomunica — Centro de Gestión</h1>
-    <button class="btn-top" onclick="cerrarSesion()">🚪 Salir</button>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: 'Cecomunica — Centro de Gestión', showHome: false, showLogout: true });</script>
 
   <div class="app-wrap">
     <!-- Herramientas -->

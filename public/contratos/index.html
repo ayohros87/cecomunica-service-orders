@@ -23,25 +23,6 @@ body {
   min-height: 100vh;
 }
 
-/* Unified Topbar */
-.topbar {
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  border-bottom: 3px solid var(--brand);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.topbar h1 {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--text);
-  font-size: 1.5rem;
-}
 
 /* Unified Content Area */
 .app-wrap {
@@ -159,6 +140,7 @@ table tbody tr:hover {
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
 <script src="../js/firebase-init.js"></script>
+<script src="../js/core/layout.js"></script>
 <script src="../js/core/roles.js"></script>
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
@@ -171,14 +153,8 @@ table tbody tr:hover {
 <script src="../js/ui/modal.js"></script>
 </head>
 <body>
-  <div class="topbar">
-    <h1 style="margin: 0; font-size: 1.5rem; font-weight: 700;">📄 Contratos</h1>
-    <div style="margin-left: auto; display: flex; gap: 10px; align-items: center;">
-      <button id="btnNuevoContrato" class="btn primary" onclick="location.href='nuevo-contrato.html'" style="font-size: 14px;">➕ Nuevo Contrato</button>
-      <button class="btn-top" onclick="window.location.href='../index.html'">🏠 Menú principal</button>
-      <button class="btn danger" onclick="cerrarSesion()" style="background: var(--bad); border-color: var(--bad);">🚪 Salir</button>
-    </div>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '📄 Contratos', actions: [{ label: '➕ Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
   
   <div class="app-wrap">
     <p id="mensaje" class="resumen" style="min-height: 20px; margin-bottom: 8px;"></p>
@@ -390,21 +366,6 @@ html, body {
 
 body {
   background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-}
-
-.topbar{
-  background: white;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  border-bottom: 3px solid var(--brand);
-
-  /* keep consistent with ceco-ui.css */
-  max-width: 1800px;
-  margin: 0 auto;
-  width: auto;
-  box-sizing: border-box;
 }
 
 .app-wrap{

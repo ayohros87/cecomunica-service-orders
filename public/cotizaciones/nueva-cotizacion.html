@@ -10,6 +10,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/cotizacionesService.js"></script>
   <script src="../js/services/clientesService.js"></script>
@@ -65,13 +66,8 @@
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <h1>🧾 Nueva Cotización</h1>
-    <div style="margin-left:auto; display:flex; gap:10px;">
-      <button class="btn-top" onclick="window.location.href='index.html'">⬅️ Volver</button>
-      <button class="btn danger" onclick="cerrarSesion()" style="background: var(--bad); border-color: var(--bad);">🚪 Salir</button>
-    </div>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '🧾 Nueva Cotización', back: { label: '⬅️ Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
 
   <div class="app-wrap">
     <div class="page-grid">

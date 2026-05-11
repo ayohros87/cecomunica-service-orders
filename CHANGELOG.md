@@ -1,5 +1,16 @@
 # Changelog
 
+## [Look & Feel — Phase 2: Shared topbar component] — 2026-05-11
+
+### Added
+- `public/js/core/layout.js` — `Layout.renderTopbar({ title, actions, back, showHome, homeHref, showLogout })` factory; writes canonical topbar HTML into a `<div id="topbar-mount">` placeholder, loaded synchronously so it runs before page scripts
+
+### Refactor
+- Migrated 7 pages to use `Layout.renderTopbar()` (replaced hand-written topbar HTML):
+  - `public/index.html`, `contratos/index.html`, `cotizaciones/index.html`, `cotizaciones/nueva-cotizacion.html`, `cotizaciones/editar-cotizacion.html`, `POC/index.html`, `clientes/index.html`
+- Removed duplicate inline `.topbar {}` CSS blocks from 4 complex-topbar pages that still manage their own topbar HTML (`inventario/index.html`, `inventario/piezas.html`, `POC/vendedores-batch.html`; `ordenes/index.html` had none)
+- All pages now inherit the canonical sticky topbar from `ceco-ui.css` — no page overrides the `.topbar` selector anymore
+
 ## [Look & Feel — Phase 1a: Token enforcement, priority pages] — 2026-05-11
 
 ### Style
