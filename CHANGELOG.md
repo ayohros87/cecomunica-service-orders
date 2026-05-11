@@ -12,7 +12,9 @@
 - `ordenes/fotos-taller.html`: remapped entire local `:root { --ft-* }` block to reference global tokens, so the page inherits the correct brand palette automatically
 - `inventario/index.html`: removed hardcoded fallback from `var(--warn, #f59e0b)` → `var(--warn)`
 - Files touched: `contratos/nuevo-contrato.html` (24 hits), `nuevo-cliente.html` (10), `editar-contrato.html` (3), `contratos/index.html` (4), `cotizaciones/index.html` (2), `editar-cotizacion.html` (1), `nueva-cotizacion.html` (1), `imprimir-cotizacion.html` (2), `ordenes/fotos-taller.html` (8), `trabajar-orden.html` (2), `editar-orden.html` (2), `nueva-orden.html` (1), `progreso-tecnicos.html` (1), `inventario/index.html` (3), `piezas.html` (1)
-- Remaining: `POC/` directory (5 files, 10 hits) deferred — lower traffic, next commit
+- `POC/index.html`, `imprimir-equipos.html`, `nuevo-batch.html`, `vendedores-batch.html`: same token sweep applied
+- `tools/` directory intentionally skipped (not in scope)
+- **Phase 1 complete** — zero remaining generic-blue hardcodes outside `tools/`
 
 ### Added
 - `REFACTOR_LOOK_FEEL.md` — seven-phase standardization plan
