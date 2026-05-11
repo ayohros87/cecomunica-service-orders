@@ -17,14 +17,14 @@
 
   <style>
     :root {
-      --ft-brand: #2563eb;
-      --ft-bg: #f3f6fb;
-      --ft-card: #ffffff;
-      --ft-text: #0f172a;
-      --ft-muted: #64748b;
-      --ft-line: #dbe4ee;
-      --ft-danger: #dc2626;
-      --ft-ok: #16a34a;
+      --ft-brand: var(--brand);
+      --ft-bg: var(--bg-page);
+      --ft-card: var(--card);
+      --ft-text: var(--text);
+      --ft-muted: var(--muted);
+      --ft-line: var(--line);
+      --ft-danger: var(--bad);
+      --ft-ok: var(--ok);
     }
 
     html, body {
@@ -86,7 +86,7 @@
 
     .ft-chip {
       background: #eef2ff;
-      color: #1e3a8a;
+      color: var(--navy);
       border: 1px solid #c7d2fe;
       padding: 4px 9px;
       border-radius: 999px;
@@ -132,7 +132,7 @@
       box-shadow: 0 4px 12px rgba(30, 64, 175, 0.25);
     }
 
-    .capture-btn.antes { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+    .capture-btn.antes { background: linear-gradient(135deg, var(--brand), var(--brand-hover)); }
     .capture-btn.despues { background: linear-gradient(135deg, #0ea5e9, #0284c7); }
     .capture-btn.detalle { background: linear-gradient(135deg, #14b8a6, #0f766e); }
 

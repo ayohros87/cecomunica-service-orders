@@ -177,7 +177,7 @@ label { color: #1f2937; }
   content:""; position:absolute; inset:0 auto 0 0; width:6px; border-radius:12px 0 0 12px;
 }
 #equiposWrap .fila-equipo:nth-child(odd)::before  { background:#0ea5a3; } /* teal brand */
-#equiposWrap .fila-equipo:nth-child(even)::before { background:#2563eb; } /* blue */
+#equiposWrap .fila-equipo:nth-child(even)::before { background:var(--brand-hover); } /* blue */
 
 /* Tono suave en encabezado del card según par/impar */
 #equiposWrap .fila-equipo:nth-child(odd) .hdr  { background:#f8fafc; }
@@ -190,7 +190,7 @@ label { color: #1f2937; }
 #equiposWrap .fila-equipo:nth-child(even) .consumos table { background:#ffffff; }
 
 .titulo strong:first-child {
-  color: #2563eb; /* azul suave */
+  color: var(--brand-hover); /* azul suave */
 }
 /* === Catálogo de piezas (modal) === */
 .cat-wrap { border:1px solid var(--line); border-radius:12px; padding:8px; background:#fff; max-height:320px; overflow:auto; }
