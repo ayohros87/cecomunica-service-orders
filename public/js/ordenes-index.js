@@ -141,10 +141,9 @@ async function cargarTiposDeServicioFiltros() {
   };
 
   try {
-    const snap = await db.collection("empresa").doc("tipo_de_servicio").get();
-    if (snap.exists) {
-      const lista = snap.data().list || [];
-      applyOptions(lista);
+    const doc = await EmpresaService.getDoc("tipo_de_servicio");
+    if (doc) {
+      applyOptions(doc.list || []);
       return;
     }
   } catch (e) {
@@ -1873,10 +1872,6 @@ window.editarCampoEquipo = async function(compuestoId, campo, valorActual = "") 
   try {
     await OrdenesService.updateEquipmentField(target.ordenId, target.equipoId, campo, valorLimpio);
 
-    if (typeof window.syncContratoCacheFromOrden === "function") {
-      await window.syncContratoCacheFromOrden(target.ordenId);
-    }
-
     const cacheOrden = APP.state.orders.find(o => o.ordenId === target.ordenId);
     if (cacheOrden && Array.isArray(cacheOrden.equipos)) {
       const i = cacheOrden.equipos.findIndex(eq => eq.id === target.equipoId);
@@ -1905,10 +1900,6 @@ window.eliminarEquipo = async function(e, compuestoId) {
 
   try {
     await OrdenesService.deleteEquipment(target.ordenId, target.equipoId);
-
-    if (typeof window.syncContratoCacheFromOrden === "function") {
-      await window.syncContratoCacheFromOrden(target.ordenId);
-    }
 
     const cacheOrden = APP.state.orders.find(o => o.ordenId === target.ordenId);
     if (cacheOrden && Array.isArray(cacheOrden.equipos)) {
@@ -2288,10 +2279,6 @@ window.guardarTrabajoEquipoModal = async function() {
         email
       });
 
-      if (typeof window.syncContratoCacheFromOrden === "function") {
-        await window.syncContratoCacheFromOrden(_trabajoOrdenId);
-      }
-
       if (cacheOrden) cacheOrden.equipos = equiposAll;
       refrescarEquiposDeOrden(_trabajoOrdenId);
       cerrarTrabajoEquipoModal();
@@ -2320,10 +2307,6 @@ window.guardarTrabajoEquipoModal = async function() {
       uid,
       email
     });
-    if (typeof window.syncContratoCacheFromOrden === "function") {
-      await window.syncContratoCacheFromOrden(_trabajoOrdenId);
-    }
-
     // Actualizar cache local
     const cache = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
     if (cache) cache.equipos = equiposAll;
@@ -2361,10 +2344,6 @@ async function setEquipoNoDisponible({ ordenId, equipoId, noDisponible, motivo }
       uid,
       email
     });
-
-    if (typeof window.syncContratoCacheFromOrden === "function") {
-      await window.syncContratoCacheFromOrden(ordenId);
-    }
 
     const cache = APP.state.orders.find(x => x.ordenId === ordenId);
     if (cache) cache.equipos = equiposAll;

@@ -1,3 +1,4 @@
+// @ts-nocheck
     const storage = firebase.storage();
     const firestore = firebase.firestore();
 
@@ -372,19 +373,17 @@
           ts: firebase.firestore.Timestamp.now()
         };
 
-        const orderRef = firestore.collection("ordenes_de_servicio").doc(state.ordenId);
-        await orderRef.update({
+        await OrdenesService.updateOrder(state.ordenId, {
           fotos_taller: firebase.firestore.FieldValue.arrayUnion(photoMeta),
           os_logs: firebase.firestore.FieldValue.arrayUnion(logEntry),
           fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp()
         });
 
-        const fresh = await orderRef.get();
-        const freshData = fresh.exists ? fresh.data() : {};
-        const freshFotos = normalizeFotos(freshData.fotos_taller || []);
+        const freshData = await OrdenesService.getOrder(state.ordenId);
+        const freshFotos = normalizeFotos((freshData && freshData.fotos_taller) || []);
         const count = freshFotos.filter(f => f.deleted !== true).length;
 
-        await orderRef.update({
+        await OrdenesService.updateOrder(state.ordenId, {
           fotos_taller_count: count,
           fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp()
         });
@@ -411,14 +410,12 @@
       if (!confirm("¿Marcar esta foto como eliminada?")) return;
 
       try {
-        const orderRef = firestore.collection("ordenes_de_servicio").doc(state.ordenId);
-        const snap = await orderRef.get();
-        if (!snap.exists) {
+        const data = await OrdenesService.getOrder(state.ordenId);
+        if (!data) {
           alert("La orden no existe.");
           return;
         }
 
-        const data = snap.data() || {};
         const fotos = normalizeFotos(data.fotos_taller || []);
         let found = false;
         let deletedTipo = "";
@@ -450,7 +447,7 @@
           ts: firebase.firestore.Timestamp.now()
         };
 
-        await orderRef.update({
+        await OrdenesService.updateOrder(state.ordenId, {
           fotos_taller: updatedFotos,
           fotos_taller_count: count,
           fotos_taller_updated_at: firebase.firestore.FieldValue.serverTimestamp(),
@@ -466,12 +463,8 @@
 
     async function loadUserRole(uid) {
       try {
-        const snap = await firestore.collection("usuarios").doc(uid).get();
-        if (snap.exists) {
-          state.userRole = (snap.data().rol || "").toString().trim().toLowerCase();
-        } else {
-          state.userRole = "";
-        }
+        const u = await UsuariosService.getUsuario(uid);
+        state.userRole = u ? (u.rol || "").toString().trim().toLowerCase() : "";
       } catch (err) {
         console.warn("No se pudo cargar rol:", err);
         state.userRole = "";
@@ -481,15 +474,13 @@
     async function loadOrder() {
       if (!state.ordenId) return;
 
-      const orderRef = firestore.collection("ordenes_de_servicio").doc(state.ordenId);
-      const snap = await orderRef.get();
-      if (!snap.exists) {
+      const data = await OrdenesService.getOrder(state.ordenId);
+      if (!data) {
         alert("Orden no encontrada.");
         window.location.href = "index.html";
         return;
       }
 
-      const data = snap.data() || {};
       state.orderDoc = data;
       state.fotos = normalizeFotos(data.fotos_taller || []);
       state.equiposActivos = (data.equipos || []).filter(e => e && e.eliminado !== true);

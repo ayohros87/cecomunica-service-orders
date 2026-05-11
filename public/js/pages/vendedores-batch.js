@@ -29,10 +29,9 @@ window.VB = {
     const cached = this.lsGet('cache_modelos_v1');
     if (cached) { this.modelosDisponibles = cached; return; }
     try {
-      let snap = await db.collection('modelos').get({ source: 'cache' });
-      if (snap.empty) snap = await db.collection('modelos').get();
-      this.modelosDisponibles = snap.docs
-        .map(d => { const m = d.data(); return { id: d.id, marca: m.marca || '', modelo: m.modelo || '', tipo: m.tipo || '', estado: m.estado || '', alto_movimiento: !!m.alto_movimiento, activo: m.activo !== false }; })
+      const lista = await ModelosService.getModelos();
+      this.modelosDisponibles = lista
+        .map(m => ({ id: m.id, marca: m.marca || '', modelo: m.modelo || '', tipo: m.tipo || '', estado: m.estado || '', alto_movimiento: !!m.alto_movimiento, activo: m.activo !== false }))
         .filter(m => m.activo)
         .sort((a, b) => {
           if (a.marca.toLowerCase() !== b.marca.toLowerCase()) return a.marca.toLowerCase().localeCompare(b.marca.toLowerCase());
@@ -54,9 +53,9 @@ window.VB = {
   async refrescarModelos() {
     localStorage.removeItem('cache_modelos_v1');
     try {
-      const snap = await db.collection('modelos').get({ source: 'server' });
-      this.modelosDisponibles = snap.docs
-        .map(d => { const m = d.data(); return { id: d.id, marca: m.marca || '', modelo: m.modelo || '', tipo: m.tipo || '', estado: m.estado || '', alto_movimiento: !!m.alto_movimiento, activo: m.activo !== false }; })
+      const lista = await ModelosService.getModelos({ source: 'server' });
+      this.modelosDisponibles = lista
+        .map(m => ({ id: m.id, marca: m.marca || '', modelo: m.modelo || '', tipo: m.tipo || '', estado: m.estado || '', alto_movimiento: !!m.alto_movimiento, activo: m.activo !== false }))
         .filter(m => m.activo)
         .sort((a, b) => {
           if (a.marca.toLowerCase() !== b.marca.toLowerCase()) return a.marca.toLowerCase().localeCompare(b.marca.toLowerCase());
@@ -73,22 +72,11 @@ window.VB = {
   async cargarClientesCache() {
     const cached = this.lsGet('cache_clientes_v1');
     if (cached && Array.isArray(cached) && cached.length) { this.clientesCache = cached; this.clientesCargados = true; return; }
-    this.clientesCache = [];
-    const PAGE = 500;
-    let baseQ = db.collection('clientes').where('deleted', '==', false).orderBy('nombre');
-    let lastDoc = null;
-    while (true) {
-      let q = lastDoc ? baseQ.startAfter(lastDoc).limit(PAGE) : baseQ.limit(PAGE);
-      let snap = await q.get({ source: 'cache' });
-      if (snap.empty) snap = await q.get();
-      if (snap.empty) break;
-      snap.forEach(doc => {
-        const nombre = (doc.data().nombre || '').toString();
-        this.clientesCache.push({ id: doc.id, nombre, norm: FMT.normalize(nombre) });
-      });
-      lastDoc = snap.docs[snap.docs.length - 1];
-      if (snap.size < PAGE) break;
-    }
+    const clientes = await ClientesService.getAllClientes();
+    this.clientesCache = clientes.map(c => {
+      const nombre = (c.nombre || '').toString();
+      return { id: c.id, nombre, norm: FMT.normalize(nombre) };
+    });
     this.lsSet('cache_clientes_v1', this.clientesCache);
     this.clientesCargados = true;
   },
@@ -180,17 +168,12 @@ window.VB = {
       return;
     }
     try {
-      let snap;
-      if (this.clienteIDSeleccionado) {
-        snap = await db.collection('poc_devices').where('cliente_id', '==', this.clienteIDSeleccionado).get({ source: 'cache' });
-        if (snap.empty) snap = await db.collection('poc_devices').where('cliente_id', '==', this.clienteIDSeleccionado).get();
-      } else {
-        snap = await db.collection('poc_devices').where('cliente', '==', nombreExacto).get({ source: 'cache' });
-        if (snap.empty) snap = await db.collection('poc_devices').where('cliente', '==', nombreExacto).get();
-      }
+      const devices = await PocService.getByCliente({
+        clienteId: this.clienteIDSeleccionado || null,
+        clienteNombre: this.clienteIDSeleccionado ? null : nombreExacto,
+      });
       const gruposSet = new Set();
-      snap.forEach(doc => {
-        const d = doc.data();
+      devices.forEach(d => {
         if (d.deleted === true) return;
         (d.grupos || []).forEach(g => { const v = (g || '').toString().trim(); if (v) gruposSet.add(v); });
       });

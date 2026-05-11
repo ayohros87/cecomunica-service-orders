@@ -1,3 +1,4 @@
+// @ts-nocheck
     let modelos = [];
     let modelosFiltrados = [];
     let ordenCampo = "alto_movimiento";

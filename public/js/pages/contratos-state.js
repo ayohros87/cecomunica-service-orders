@@ -28,10 +28,9 @@ window.CS = {
   async cargarUsuarios() {
     if (!this.currentUser?.uid) return;
     if (this.mapaUsuarios[this.currentUser.uid]) return;
-    const me = await db.collection('usuarios').doc(this.currentUser.uid).get();
-    if (me.exists) {
-      const u = me.data() || {};
-      this.mapaUsuarios[this.currentUser.uid] = u.nombre || u.email || this.currentUser.uid;
+    const me = await UsuariosService.getUsuario(this.currentUser.uid);
+    if (me) {
+      this.mapaUsuarios[this.currentUser.uid] = me.nombre || me.email || this.currentUser.uid;
     }
   },
 
@@ -43,11 +42,9 @@ window.CS = {
     const chunks = [];
     for (let i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
     for (const chunk of chunks) {
-      const snap = await db.collection('usuarios')
-        .where(firebase.firestore.FieldPath.documentId(), 'in', chunk).get();
-      snap.forEach(doc => {
-        const u = doc.data() || {};
-        map[doc.id] = u.nombre || u.email || doc.id;
+      const users = await UsuariosService.getUsuariosByIds(chunk);
+      users.forEach(u => {
+        map[u.id] = u.nombre || u.email || u.id;
       });
     }
   }

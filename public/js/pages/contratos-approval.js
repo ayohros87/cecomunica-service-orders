@@ -29,9 +29,8 @@ window.ContratosAprobacion = {
       elaborador = CS.mapaUsuarios[c.creado_por_uid] || '-';
       if (elaborador === '-') {
         try {
-          const userSnap = await db.collection('usuarios').doc(c.creado_por_uid).get();
-          if (userSnap.exists) {
-            const u = userSnap.data() || {};
+          const u = await UsuariosService.getUsuario(c.creado_por_uid);
+          if (u) {
             elaborador = u.nombre || u.email || c.creado_por_uid;
             CS.mapaUsuarios[c.creado_por_uid] = elaborador;
           }

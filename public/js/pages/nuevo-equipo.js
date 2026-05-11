@@ -1,3 +1,4 @@
+// @ts-nocheck
     const mensaje = document.getElementById("mensaje");
 
     function mostrarMensaje(texto, tipo = 'verde') {

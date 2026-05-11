@@ -22,8 +22,8 @@ function aplicarRestriccionesPorRol(rol) {
 auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = '/login.html'; return; }
   CS.currentUser = user;
-  const snap = await db.collection('usuarios').doc(user.uid).get();
-  const rol = snap.data()?.rol || 'vista';
+  const u = await UsuariosService.getUsuario(user.uid);
+  const rol = u?.rol || 'vista';
   window.userRole = rol;
 
   aplicarRestriccionesPorRol(rol);

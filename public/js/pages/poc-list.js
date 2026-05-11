@@ -148,29 +148,24 @@ window.PocList = {
     const campoOrden    = this._campoOrden || 'cliente';
     const direccionOrden = this._direccionAsc ? 'asc' : 'desc';
 
-    let query = db.collection('poc_devices')
-      .where('deleted', '!=', true)
-      .orderBy('deleted')
-      .orderBy(campoOrden, direccionOrden)
-      .limit(50);
-    if (this._lastDoc) query = query.startAfter(this._lastDoc);
-
-    query.get().then(snap => {
-      if (snap.empty) {
+    PocService.listPage({
+      sortField: campoOrden, sortAsc: this._direccionAsc,
+      cursorDoc: this._lastDoc || null, limit: 50,
+    }).then(({ docs, lastDoc }) => {
+      if (!docs.length) {
         this._noMasDatos = true;
         if (btnCargar) btnCargar.style.display = 'none';
         return;
       }
-      this._lastDoc = snap.docs[snap.docs.length - 1];
+      this._lastDoc = lastDoc;
       const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
 
-      snap.forEach(doc => {
-        const d = doc.data();
+      docs.forEach(d => {
         if (soloIncompletos) {
           const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           if (!crit.some(v => !v || v.trim?.() === '')) return;
         }
-        tbody.appendChild(this._buildRow(doc.id, d));
+        tbody.appendChild(this._buildRow(d.id, d));
       });
 
       const total = tbody.rows.length;
@@ -200,21 +195,14 @@ window.PocList = {
     const soloActivos     = document.getElementById('soloActivos')?.checked;
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
 
-    db.collection('poc_devices')
-      .where('deleted', '!=', true)
-      .orderBy('deleted')
-      .orderBy('created_at', 'desc')
-      .get()
-      .then(snap => {
+    PocService.getAll({ sortField: 'created_at', sortAsc: false }).then(docs => {
         if (ejecucionID !== this._filtroID) return;
         let total = 0, activos = 0, incompletos = 0;
 
-        snap.forEach(doc => {
-          const id = doc.id;
-          if (idsVistos.has(id)) return;
-          idsVistos.add(id);
+        docs.forEach(d => {
+          if (idsVistos.has(d.id)) return;
+          idsVistos.add(d.id);
 
-          const d             = doc.data();
           const nombreCliente = PocState.nombreClienteDe(d);
           const camposCrit    = [nombreCliente, d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           const algunoVacio   = camposCrit.some(v => !v || v.trim?.() === '');
@@ -235,7 +223,7 @@ window.PocList = {
             if (contenido.includes(valor)) {
               total++;
               if (d.activo) activos++;
-              tbody.appendChild(this._buildRow(doc.id, d));
+              tbody.appendChild(this._buildRow(d.id, d));
             }
           }
         });
@@ -293,21 +281,16 @@ window.PocList = {
     const soloActivos     = document.getElementById('soloActivos')?.checked;
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
 
-    let query = db.collection('poc_devices').where('deleted', '!=', true);
-    if (soloActivos) query = query.where('activo', '==', true);
-    query = query
-      .orderBy('deleted')
-      .orderBy(this._campoOrden, this._direccionAsc ? 'asc' : 'desc');
-
-    query.get().then(snap => {
-      snap.forEach(doc => {
-        const d = doc.data();
+    PocService.getAll({
+      sortField: this._campoOrden, sortAsc: this._direccionAsc,
+      onlyActivos: soloActivos,
+    }).then(docs => {
+      docs.forEach(d => {
         if (soloIncompletos) {
           const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           if (!crit.some(v => !v || v.trim?.() === '')) return;
         }
-        const row = this._buildRow(doc.id, d);
-        // mostrarTodo shows restore for all items
+        const row = this._buildRow(d.id, d);
         if (!PocState.esLectura()) {
           const ac = row.querySelector('td:last-child');
           if (ac && !ac.querySelector('button[title="Restaurar"]')) {
@@ -315,7 +298,7 @@ window.PocList = {
             restBtn.className = 'btn';
             restBtn.textContent = '♻️';
             restBtn.title = 'Restaurar';
-            restBtn.onclick = () => PocService.restorePocDevice(doc.id).then(() => this.mostrarTodo());
+            restBtn.onclick = () => PocService.restorePocDevice(d.id).then(() => this.mostrarTodo());
             ac.appendChild(restBtn);
           }
         }

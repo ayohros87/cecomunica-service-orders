@@ -1,3 +1,4 @@
+// @ts-nocheck
     (function ensureFirebaseInit(){
       function ok(){
         try { return firebase && firebase.apps && firebase.apps.length>0 && typeof db!=="undefined"; }

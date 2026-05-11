@@ -1,4 +1,4 @@
-// @ts-nocheck
+﻿// @ts-nocheck
 // nuevo-contrato client combobox — search, recents, keyboard navigation
 window.NCCombo = {
   idx:              -1,
@@ -155,16 +155,11 @@ window.NCCombo = {
       });
 
       if (items.length === 0) {
-        const snap = await db.collection('clientes')
-          .where('deleted', '==', false)
-          .orderBy('nombre')
-          .startAt(text).endAt(text + '')
-          .limit(25).get();
-        snap.forEach(doc => {
-          const d = doc.data();
+        const prefixDocs = await ClientesService.searchByPrefix(text, 25);
+        prefixDocs.forEach(d => {
           if (_norm(d.nombre || '').includes(_norm(text))) {
-            NC.listaClientes[doc.id] = d;
-            items.push({ id: doc.id, d });
+            NC.listaClientes[d.id] = d;
+            items.push({ id: d.id, d });
           }
         });
       }

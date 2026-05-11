@@ -1,3 +1,4 @@
+// @ts-nocheck
     const auth = firebase.auth();
 
     auth.onAuthStateChanged(user => {
@@ -110,28 +111,17 @@ if (cliente.dv && !/^\d{1,2}$/.test(cliente.dv)) {
   const clienteId = params.get("id");
 // 5) Unicidad (SOLO al crear)
 if (!clienteId) {
-  // Prioridad: RUC+DV si hay DV
   if (cliente.rucdv_norm && cliente.dv_norm) {
-    const dupRucDv = await db.collection("clientes")
-      .where("rucdv_norm", "==", cliente.rucdv_norm).limit(1).get();
-    if (!dupRucDv.empty) {
+    if (await ClientesService.existsByNorm("rucdv_norm", cliente.rucdv_norm)) {
       mostrarMensaje("❌ Ya existe un cliente con ese RUC + DV.", "red"); return;
     }
   }
-
-  // Compatibilidad: evitar duplicados por RUC base
   if (cliente.ruc_norm) {
-    const dupRuc = await db.collection("clientes")
-      .where("ruc_norm", "==", cliente.ruc_norm).limit(1).get();
-    if (!dupRuc.empty) {
+    if (await ClientesService.existsByNorm("ruc_norm", cliente.ruc_norm)) {
       mostrarMensaje("❌ Ya existe un cliente con ese RUC/Cédula.", "red"); return;
     }
   }
-
-  // Nombre único
-  const dupNom = await db.collection("clientes")
-    .where("nombre_norm", "==", cliente.nombre_norm).limit(1).get();
-  if (!dupNom.empty) {
+  if (await ClientesService.existsByNorm("nombre_norm", cliente.nombre_norm)) {
     mostrarMensaje("❌ Ya existe un cliente con ese nombre.", "red"); return;
   }
 }

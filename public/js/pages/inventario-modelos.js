@@ -1,3 +1,4 @@
+// @ts-nocheck
     /* ===== Estado global ===== */
     let showInactivos = true;
     let listaModelos = [];
@@ -8,7 +9,6 @@
     const hiddenCols = new Set(); // 'estado' | 'alto' | 'minimo' | 'activo'
 
     /* ===== Util ===== */
-    function Toast.show(msg,type='ok',t=2400){ const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; document.body.appendChild(el); setTimeout(()=>el.remove(),t); }
     function debounce(fn, t=220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); } }
     function mapTipo(v){ return v==='P'?'Portátil':v==='B'?'Base':v==='C'?'Cámara':'-'; }
     function mapEstado(v){ return v==='N'?'Nuevo':v==='R'?'Reuso':'-'; }

@@ -88,6 +88,50 @@ const PiezasService = {
       await batch.commit();
     }
   },
+
+  async getTopByModelo(modeloNorm, limit = 8) {
+    const db = firebase.firestore();
+    const snap = await db.collection('analytics_piezas_modelo')
+      .where('modelo_norm', '==', modeloNorm)
+      .orderBy('usos_cobro', 'desc')
+      .limit(limit)
+      .get();
+    return snap.docs.map(d => d.data());
+  },
+
+  // Paginated catalog fetch from Firestore (used when local inventory cache is bypassed).
+  async listCatalogPage({ marca = '', lastDoc = null, pageSize = 50 } = {}) {
+    const db = firebase.firestore();
+    const col = db.collection('inventario_piezas');
+    let q = marca
+      ? col.where('activo', '!=', false).where('marca', '==', marca).orderBy('sku').limit(pageSize)
+      : col.where('activo', '!=', false).orderBy('activo').orderBy('marca').orderBy('sku').limit(pageSize);
+    if (lastDoc) q = q.startAfter(lastDoc);
+    const snap = await q.get();
+    return {
+      docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
+      lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],
+    };
+  },
+
+  // Returns a new auto-ID document reference in the inventario_piezas collection.
+  newDocRef() {
+    return firebase.firestore().collection('inventario_piezas').doc();
+  },
+
+  async incrementarUsoAnalytics(modeloNorm, piezaId) {
+    if (!modeloNorm || !piezaId) return;
+    const db = firebase.firestore();
+    const ref = db.collection('analytics_piezas_modelo').doc(`${modeloNorm}::${piezaId}`);
+    return db.runTransaction(async t => {
+      const s = await t.get(ref);
+      if (!s.exists) {
+        t.set(ref, { modelo_norm: modeloNorm, pieza_id: piezaId, usos_cobro: 1, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+      } else {
+        t.update(ref, { usos_cobro: Number(s.data().usos_cobro || 0) + 1, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
+      }
+    });
+  },
 };
 
 window.PiezasService = PiezasService;

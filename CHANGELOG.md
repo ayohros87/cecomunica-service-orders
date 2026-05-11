@@ -1,5 +1,31 @@
 # Changelog
 
+## [Phase 4b] — 2026-05-11
+
+### Refactor
+- Completed migration of all remaining raw `db.collection()` calls from page scripts to the service layer (17 calls across 13 files + 1 in `ordenes-index.js`):
+  - `to-pieza.js`: `piezaRef` transaction → `PiezasService.ajustarDelta()`; `_cargarMasCatalogo()` → `PiezasService.listCatalogPage()`
+  - `fotos-taller.js`: order reads/writes → `OrdenesService.updateOrder()` / `.getOrder()`; user role read → `UsuariosService.getUsuario()`
+  - `trabajar-orden.js`: equipos_meta write → `OrdenesService.setEquipoMeta()`
+  - `progreso-tecnicos.js`: tecnico_stats reads → `UsuariosService.getTecnicoStats()`
+  - `poc-state.js`: unique operadores fallback → `PocService.getUniqueOperadores()`
+  - `contratos-state.js`: single + batch usuarios reads → `UsuariosService.getUsuario()` / `.getUsuariosByIds()`
+  - `contratos-index.js` and `contratos-approval.js`: single usuarios reads → `UsuariosService.getUsuario()`
+  - `nueva-orden.js`: order list for number generation → `OrdenesService.listAll()`; client name check → `ClientesService.existsByNorm()`
+  - `nuevo-batch.js`: client name check → `ClientesService.existsByNorm()`
+  - `nc-combo.js`: prefix search fallback → `ClientesService.searchByPrefix()`
+  - `piezas.js`: batch auto-ID ref → `PiezasService.newDocRef()`
+  - `importar-exportar.js`: Firestore UUID trick → `crypto.randomUUID()`
+  - `ordenes-index.js`: empresa service-type list → `EmpresaService.getDoc()`
+- New service methods added:
+  - `OrdenesService.setEquipoMeta(ordenId, equipoId, data, opts)`
+  - `PiezasService.listCatalogPage({ marca, lastDoc, pageSize })`
+  - `PiezasService.newDocRef()`
+  - `PocService.getUniqueOperadores(limit)`
+  - `ClientesService.searchByPrefix(text, limit)`
+  - `UsuariosService.getUsuariosByIds(ids)`
+  - `UsuariosService.getTecnicoStats(uid, { periodo, periodoKey })`
+
 ## [Phase 5e] — 2026-05-08
 
 ### Refactor

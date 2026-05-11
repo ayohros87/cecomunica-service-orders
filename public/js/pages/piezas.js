@@ -1,3 +1,4 @@
+// @ts-nocheck
   /* ===== Preferencias UI / Orden ===== */
 let sortKey = 'marca';
 let sortDir = 'asc'; // 'asc' | 'desc'
@@ -199,13 +200,6 @@ function applyColumnVisibility(){
   });
 }
 
-function Toast.show(msg, type='ok', t=2400){
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(()=>{ el.remove(); }, t);
-}
 
 /* CSV/TSV muy simple: separa por líneas, detecta separador (coma o tab), respeta encabezados. */
 function parseDelimited(text){
@@ -365,7 +359,7 @@ const docData = {
   actualizado_en: now
 };
 
-    const ref = db.collection('inventario_piezas').doc(); // id auto
+    const ref = PiezasService.newDocRef();
     batch.set(ref, docData);
     ops++;
 

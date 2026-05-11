@@ -71,26 +71,19 @@ window.TOEquipos = {
       self.renderRecsParaEquipo(eid);
 
       try {
-        const meta = await db.collection('ordenes_de_servicio').doc(TO.ordenId)
-          .collection('equipos_meta').doc(eid).get();
-        if (meta.exists) {
-          const m      = meta.data();
+        const meta = await OrdenesService.getEquipoMeta(TO.ordenId, eid);
+        if (meta) {
           const selInt = document.querySelector(`.inp-nota[data-scope="internas"][data-eid="${eid}"]`);
           const selCli = document.querySelector(`.inp-nota[data-scope="cliente"][data-eid="${eid}"]`);
-          if (selInt) selInt.value = m.notas_internas || '';
-          if (selCli) selCli.value = m.notas_cliente  || '';
+          if (selInt) selInt.value = meta.notas_internas || '';
+          if (selCli) selCli.value = meta.notas_cliente  || '';
         }
       } catch {}
 
-      const unsub = db.collection('ordenes_de_servicio').doc(TO.ordenId)
-        .collection('consumos')
-        .where('equipoId', '==', eid)
-        .orderBy('added_at', 'desc')
-        .onSnapshot(async snap => {
-          const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          await self.pintarTablaConsumos(eid, items);
-          await TOCotizacion.renderResumen();
-        });
+      const unsub = OrdenesService.subscribeConsumos(TO.ordenId, eid, async items => {
+        await self.pintarTablaConsumos(eid, items);
+        await TOCotizacion.renderResumen();
+      });
       TO.unsubByEquipo.set(eid, unsub);
     }));
   },
@@ -110,12 +103,8 @@ window.TOEquipos = {
 
     let topPiezas = [];
     try {
-      const q = await db.collection('analytics_piezas_modelo')
-        .where('modelo_norm', '==', mnorm)
-        .orderBy('usos_cobro', 'desc')
-        .limit(8)
-        .get();
-      topPiezas = q.docs.map(d => TO.inventarioById.get(d.data().pieza_id)).filter(Boolean);
+      const rows = await PiezasService.getTopByModelo(mnorm, 8);
+      topPiezas = rows.map(r => TO.inventarioById.get(r.pieza_id)).filter(Boolean);
     } catch {}
     self.pintarChips(`recs_top_${eid}`, topPiezas, eid);
   },
@@ -124,18 +113,7 @@ window.TOEquipos = {
     try {
       const eq    = TO.equiposById.get(eid) || {};
       const mnorm = TO.modeloNorm(eq.modelo || '', eq.marca || eq.fabricante || '');
-      if (!mnorm || !piezaId) return;
-
-      const docId = `${mnorm}::${piezaId}`;
-      const ref   = db.collection('analytics_piezas_modelo').doc(docId);
-      await db.runTransaction(async t => {
-        const s = await t.get(ref);
-        if (!s.exists) {
-          t.set(ref, { modelo_norm: mnorm, pieza_id: piezaId, usos_cobro: 1, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
-        } else {
-          t.update(ref, { usos_cobro: Number(s.data().usos_cobro || 0) + 1, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
-        }
-      });
+      await PiezasService.incrementarUsoAnalytics(mnorm, piezaId);
     } catch {}
   },
 
@@ -162,7 +140,6 @@ window.TOEquipos = {
     try {
       if (TO.ordenData?.cotizacion_emitida === true) { alert('Orden bloqueada.'); return; }
 
-      const piezaRef   = db.collection('inventario_piezas').doc(piezaId);
       const p          = await PiezasService.getPieza(piezaId);
       if (!p) return;
 
@@ -183,12 +160,7 @@ window.TOEquipos = {
       });
 
       if (!sinControl) {
-        await db.runTransaction(async t => {
-          const s = await t.get(piezaRef);
-          if (!s.exists) return;
-          const nueva = Math.max(Number(s.data().cantidad || 0) - qty, 0);
-          t.update(piezaRef, { cantidad: nueva, actualizado_en: firebase.firestore.FieldValue.serverTimestamp() });
-        });
+        await PiezasService.ajustarDelta(piezaId, -qty);
       }
 
       await TO.ensureEnProgreso();

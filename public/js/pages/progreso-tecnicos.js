@@ -1,3 +1,4 @@
+// @ts-nocheck
     let currentUser = null;
     let currentRole = null;
     let cacheUsuarios = []; // {uid, nombre, email, rol}
@@ -82,22 +83,14 @@ async function cargarProgresos(periodoSel = 'mensual') {
   const isoWeek = getISOWeekKey(now);
 
   // Lee total (doc raíz) + subcolección del periodo
-  const batch = [];
-  for (const u of cacheUsuarios) {
-    const statDoc = db.collection('tecnico_stats').doc(u.uid);
-    batch.push(Promise.all([
-      statDoc.get(),
-      (periodoSel === 'mensual' ? statDoc.collection('mensual').doc(yyyyMM).get()
-       : periodoSel === 'semanal' ? statDoc.collection('semanal').doc(isoWeek).get()
-       : Promise.resolve(null))
-    ]).then(([root, per]) => {
-      const total = root.exists ? (root.data().total || 0) : 0;
-      const mensual = (per && per.exists && periodoSel==='mensual') ? (per.data().count || 0) : 0;
-      const semanal = (per && per.exists && periodoSel==='semanal') ? (per.data().count || 0) : 0;
-      cacheProgreso[u.uid] = { total, mensual, semanal };
-    }));
-  }
-  await Promise.all(batch);
+  const periodKey = periodoSel === 'mensual' ? yyyyMM : periodoSel === 'semanal' ? isoWeek : null;
+  await Promise.all(cacheUsuarios.map(async u => {
+    const stats = await UsuariosService.getTecnicoStats(u.uid, {
+      periodo: periodKey ? periodoSel : null,
+      periodoKey: periodKey,
+    });
+    cacheProgreso[u.uid] = stats;
+  }));
 }
 
 function getISOWeekKey(d) {

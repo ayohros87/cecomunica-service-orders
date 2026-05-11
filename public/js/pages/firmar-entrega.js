@@ -1,3 +1,4 @@
+// @ts-nocheck
     const storage = firebase.storage();
 
     let ordenId = null;

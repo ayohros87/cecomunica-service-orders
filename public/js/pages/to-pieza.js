@@ -83,7 +83,6 @@ window.TOPieza = {
       const precio   = Number(TO.piezaSeleccionada?.precio_venta || 0);
       const subtotal = +((tipo === 'cobro' ? qty * precio : 0)).toFixed(2);
 
-      const piezaRef = db.collection('inventario_piezas').doc(TO.piezaSeleccionada.id);
       const piezaDB  = await PiezasService.getPieza(TO.piezaSeleccionada.id);
       if (!piezaDB) { Toast.show('La pieza ya no existe'); return; }
       const sinControl = piezaDB.sin_control_inventario === true;
@@ -101,12 +100,7 @@ window.TOPieza = {
       });
 
       if (!sinControl) {
-        await db.runTransaction(async t => {
-          const s = await t.get(piezaRef);
-          if (!s.exists) return;
-          const nueva = Math.max(Number(s.data().cantidad || 0) - qty, 0);
-          t.update(piezaRef, { cantidad: nueva, actualizado_en: firebase.firestore.FieldValue.serverTimestamp() });
-        });
+        await PiezasService.ajustarDelta(TO.piezaSeleccionada.id, -qty);
       }
 
       const sug = TO.byId('sugerencias'); if (sug) sug.innerHTML = '';
@@ -235,22 +229,15 @@ window.TOPieza = {
   },
 
   async _cargarMasCatalogo(reset) {
-    const col = db.collection('inventario_piezas');
-    let q = col.where('activo', '!=', false).orderBy('activo').orderBy('marca').orderBy('sku').limit(this._catState.pageSize);
-    if (this._catState.filtroMarca)
-      q = col.where('activo', '!=', false).where('marca', '==', this._catState.filtroMarca).orderBy('sku').limit(this._catState.pageSize);
-    if (this._catState.lastDoc) q = q.startAfter(this._catState.lastDoc);
-
-    const snap = await q.get();
-    const arr  = [];
-    snap.forEach(d => {
-      const p = { id: d.id, ...d.data() };
-      arr.push(p);
-      TO.inventarioById.set(p.id, p);
+    const { docs, lastDoc } = await PiezasService.listCatalogPage({
+      marca:    this._catState.filtroMarca || '',
+      lastDoc:  this._catState.lastDoc,
+      pageSize: this._catState.pageSize,
     });
-    this._catState.lastDoc = snap.docs.length ? snap.docs[snap.docs.length - 1] : this._catState.lastDoc;
-    if (reset) this._catState.buffer = arr;
-    else       this._catState.buffer = this._catState.buffer.concat(arr);
+    docs.forEach(p => TO.inventarioById.set(p.id, p));
+    if (lastDoc) this._catState.lastDoc = lastDoc;
+    if (reset) this._catState.buffer = docs;
+    else       this._catState.buffer = this._catState.buffer.concat(docs);
     this.renderCatalogo(false);
   },
 

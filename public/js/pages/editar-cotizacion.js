@@ -1,3 +1,4 @@
+// @ts-nocheck
     let clientesMap = {};
     let clientesList = [];
     let modelosMap = {};

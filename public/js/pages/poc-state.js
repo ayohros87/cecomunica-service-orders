@@ -84,14 +84,7 @@ window.PocState = {
         else if (Array.isArray(snap.operadores)) arr = snap.operadores;
       }
       if (!arr.length) {
-        const s2 = await db.collection('poc_devices')
-          .where('operador', '!=', null).limit(1000).get();
-        const set = new Set();
-        s2.forEach(doc => {
-          const v = (doc.data().operador || '').toString().trim();
-          if (v) set.add(v);
-        });
-        arr = Array.from(set);
+        arr = await PocService.getUniqueOperadores(1000);
       }
       this.listaOperadores = (arr || [])
         .map(v => v.toString().trim())

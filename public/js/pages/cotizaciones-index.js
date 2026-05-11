@@ -1,3 +1,4 @@
+// @ts-nocheck
     let cotizaciones = [];
     let lastDoc = null;
     let isLoading = false;

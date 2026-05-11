@@ -1,3 +1,4 @@
+// @ts-nocheck
     let currentUser = null;
     const form = document.getElementById("ordenForm");
     const mensaje = document.getElementById("mensaje");
@@ -25,49 +26,6 @@
     // Función para verificar si es tipo PROGRAMACION
     function esProgramacion(tipo) {
       return normalizarTipo(tipo) === "PROGRAMACION";
-    }
-    
-    // Función para sincronizar caché de contrato
-    async function syncContratoCacheFromOrden(ordenId, ordenData) {
-      // solo si tiene un contrato aplicable
-      const c = ordenData?.contrato;
-      if (!c?.aplica || !c?.contrato_doc_id) return;
-
-      // normalizar equipos
-      const equipos = Array.isArray(ordenData.equipos) ? ordenData.equipos : [];
-      const serials = equipos
-        .map(e => (e?.serial || e?.SERIAL || e?.numero_de_serie || "").toString().trim())
-        .filter(Boolean);
-
-      const cache = {
-        numero_orden: ordenId,
-        cliente_id: ordenData.cliente_id || null,
-        cliente_nombre: ordenData.cliente_nombre || null,
-        tipo_de_servicio: ordenData.tipo_de_servicio || null,
-        estado_reparacion: ordenData.estado_reparacion || null,
-        fecha_creacion: ordenData.fecha_creacion || null,
-        updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-
-        // mantener lista completa para modal detallado:
-        equipos: equipos.map(e => ({
-          serial: (e?.serial || e?.SERIAL || e?.numero_de_serie || "").toString().trim(),
-          modelo: e?.modelo || e?.MODEL || e?.modelo_nombre || "",
-          descripcion: e?.descripcion || e?.nombre || "",
-          unit_id: e?.unit_id || e?.unitId || "",
-          sim: e?.sim || e?.simcard || "",
-        })),
-
-        // ayudantes para hover:
-        equipos_count: equipos.length,
-        serials
-      };
-
-      try {
-        await ContratosService.linkOrden(c.contrato_doc_id, ordenId, cache, { merge: true });
-        console.log(`✅ Caché de contrato sincronizado para orden ${ordenId}`);
-      } catch (error) {
-        console.warn("⚠️ No se pudo sincronizar caché de contrato:", error);
-      }
     }
     
     // Función para eliminar caché de contrato si ya no aplica
@@ -400,11 +358,6 @@
         }
         
         await OrdenesService.mergeOrder(ordenId, data);
-        
-        // Sincronizar caché nuevo si aplica
-        if (esProgramacion(tipoServicio) && data.contrato?.aplica) {
-          await syncContratoCacheFromOrden(ordenId, { ...datosActuales, ...data });
-        }
         
         mostrarToast("✅ Orden actualizada correctamente", "ok");
         setTimeout(() => window.location.href = 'index.html', 1500);

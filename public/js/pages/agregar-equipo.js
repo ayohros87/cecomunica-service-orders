@@ -1,3 +1,4 @@
+// @ts-nocheck
     const form = document.getElementById("formEquipos");
     const container = document.getElementById("equiposContainer");
     const mensaje = document.getElementById("mensaje");
@@ -82,49 +83,6 @@ const html = `
       contador++;
     };
 
-// ===== SYNC CONTRATO CACHE =====
-async function syncContratoCacheFromOrden(ordenId) {
-  try {
-    const orden = await OrdenesService.getOrder(ordenId);
-    if (!orden) return;
-    const c = orden.contrato || {};
-
-    if (!c.aplica || !c.contrato_doc_id) return;
-
-    const equipos = Array.isArray(orden.equipos) 
-      ? orden.equipos.filter(e => !e.eliminado) 
-      : [];
-    const serials = equipos
-      .map(e => (e?.serial || e?.SERIAL || e?.numero_de_serie || "").toString().trim())
-      .filter(Boolean);
-
-    const cacheDoc = {
-      numero_orden: ordenId,
-      cliente_id: orden.cliente_id || null,
-      cliente_nombre: orden.cliente_nombre || null,
-      tipo_de_servicio: orden.tipo_de_servicio || null,
-      estado_reparacion: orden.estado_reparacion || null,
-      fecha_creacion: orden.fecha_creacion || null,
-      equipos: equipos.map(e => ({
-        serial: (e?.serial || e?.SERIAL || e?.numero_de_serie || "").toString().trim(),
-        modelo: e?.modelo || e?.MODEL || e?.modelo_nombre || "",
-        descripcion: e?.observaciones || e?.descripcion || e?.nombre || "",
-        unit_id: e?.unit_id || e?.unitId || "",
-        sim: e?.sim || e?.simcard || ""
-      })),
-      equipos_count: equipos.length,
-      serials,
-      updated_at: firebase.firestore.FieldValue.serverTimestamp()
-    };
-
-    await ContratosService.linkOrden(c.contrato_doc_id, ordenId, cacheDoc, { merge: true });
-    
-    console.log(`✅ Caché de contrato sincronizado para orden ${ordenId}`);
-  } catch (error) {
-    console.warn("⚠️ No se pudo sincronizar caché de contrato:", error);
-  }
-}
-
     form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const equipos = container.querySelectorAll("fieldset");
@@ -184,9 +142,6 @@ async function syncContratoCacheFromOrden(ordenId) {
   await OrdenesService.updateOrder(ordenId, {
     equipos: [...equiposExistentes, ...nuevosEquipos]
   });
-
-  // 🔄 Sync contrato cache
-  await syncContratoCacheFromOrden(document.getElementById("orden_id").value);
 
   mensaje.style.color = "green";
   const toast = document.createElement("div");

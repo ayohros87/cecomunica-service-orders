@@ -1,4 +1,4 @@
-
+// @ts-nocheck
     const form = document.getElementById("ordenForm");
     const mensaje = document.getElementById("mensaje");
     const clienteSelect = document.getElementById("cliente");
@@ -155,10 +155,10 @@
       const dd = String(fecha.getDate()).padStart(2, '0');
       const fechaBase = `${yyyy}${mm}${dd}`;
 
-      const snapshot = await db.collection("ordenes_de_servicio").get();
-      const existentes = snapshot.docs
-        .filter(doc => doc.id.startsWith(fechaBase))
-        .map(doc => parseInt(doc.id.slice(-2)))
+      const allOrders = await OrdenesService.listAll();
+      const existentes = allOrders
+        .filter(o => o.ordenId.startsWith(fechaBase))
+        .map(o => parseInt(o.ordenId.slice(-2)))
         .filter(num => !isNaN(num));
 
       const siguiente = existentes.length > 0 ? Math.max(...existentes) + 1 : 1;
@@ -227,9 +227,7 @@
     return;
   }
 
-  // Verificar si ya existe
-  const snap = await db.collection("clientes").where("nombre", "==", nombreLimpio).limit(1).get();
-  if (!snap.empty) {
+  if (await ClientesService.existsByNorm("nombre", nombreLimpio)) {
     alert("⚠️ Ya existe un cliente con ese nombre.");
     return;
   }

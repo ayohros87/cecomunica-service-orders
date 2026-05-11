@@ -1,3 +1,4 @@
+// @ts-nocheck
   let listaVendedores = [];
 
 async function cargarVendedores() {
@@ -12,8 +13,7 @@ async function cargarVendedores() {
 
 (function(){
   const auth = firebase.auth();
-  const db = firebase.firestore();
-  
+
 
   const PAGE_SIZE = 20;
   let lastDoc = null;
@@ -149,12 +149,12 @@ $btnTodo.onclick = async ()=>{
     let total = 0, pages = 0, MAX_PAGES = 500; // ~10k si PAGE_SIZE=20
 
     while(true){
-      const snap = await buildQuery(false).get();
-      if(snap.empty) break;
-      lastDoc = snap.docs[snap.docs.length-1];
-      for(const d of snap.docs){ renderRow(d.id, d.data()); total++; }
+      const { docs, lastDoc: cur, count } = await fetchPage(lastDoc);
+      if(!count) break;
+      lastDoc = cur;
+      for(const d of docs){ renderRow(d.id, d); total++; }
       pages++;
-      if(snap.size < PAGE_SIZE) break;
+      if(count < PAGE_SIZE) break;
       if(pages >= MAX_PAGES){
         alert('Se alcanzó el límite de seguridad. Filtra más la búsqueda.');
         break;
@@ -201,28 +201,13 @@ updateTotalPages();
 
   });
 
- function buildQuery(reset){
-  let q = db.collection('clientes').limit(PAGE_SIZE);
-
-  const term = $q.value.trim().toLowerCase();
-  if(term){
-    // si el cliente tiene searchTokens lo usará
-    q = db.collection('clientes')
-      .where('searchTokens','array-contains', term)
-      .where('deleted','==',false)
-      .limit(PAGE_SIZE);
-  } else {
-    q = db.collection('clientes')
-      .orderBy('nombre')
-      .where('deleted','==',false) // 🔹 excluir borrados
-      .limit(PAGE_SIZE);
-  }
-
-  if($soloActivos.checked){
-    q = q.where('activo','==',true);
-  }
-  if(!reset && lastDoc) q = q.startAfter(lastDoc);
-  return q;
+ async function fetchPage(cursorDoc){
+  return ClientesService.listClientesPage({
+    term: $q.value.trim().toLowerCase(),
+    onlyActive: $soloActivos.checked,
+    cursorDoc: cursorDoc ?? null,
+    limit: PAGE_SIZE,
+  });
 }
 
 function updateBulkBar(){
@@ -282,47 +267,13 @@ $bulkAddTag.onclick = async ()=>{
 };
 async function updateTotalPages(){
   try{
-    const term = $q.value.trim().toLowerCase();
-
-    // Construimos un query base SIN limit, con el mismo orden que usas para paginar
-    let base;
-    if (term) {
-      // Búsqueda: sin orderBy explícito (Firestore usa orden por __name__ implícito)
-      base = db.collection('clientes')
-               .where('searchTokens','array-contains', term) .where('deleted','==',false);
-    } else {
-      // Listado general: orden por nombre para poder usar startAfter
-      base = db.collection('clientes')
-               .orderBy('nombre') .where('deleted','==',false);
-    }
-    if ($soloActivos.checked) {
-      base = base.where('activo','==', true);
-    }
-
-    // Escaneo por lotes usando startAfter(lastDoc)
-    const STEP = 500;                 // tamaño del lote
-    const MAX_LOOPS = 200;            // tope de seguridad (~100k docs)
-    let total = 0;
-    let last = null;
-    let loops = 0;
-
-    while (true) {
-      let q = base.limit(STEP);
-      if (last) q = q.startAfter(last);
-
-      const snap = await q.get();
-      total += snap.size;
-
-      if (snap.empty || snap.size < STEP) break;
-      last = snap.docs[snap.docs.length - 1];
-      loops++;
-      if (loops >= MAX_LOOPS) break;   // evita barridos enormes por accidente
-    }
-
+    const total = await ClientesService.countClientes({
+      term: $q.value.trim().toLowerCase(),
+      onlyActive: $soloActivos.checked,
+    });
     knownTotalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     $pageTotal.textContent = `/ ${knownTotalPages}`;
     return knownTotalPages;
-
   } catch (e) {
     console.error("No se pudo calcular el total (fallback):", e);
     knownTotalPages = null;
@@ -339,26 +290,6 @@ function resetPagination(){
   if ($pageInput) $pageInput.value = 1;
   updateTotalPages();
 }
-function buildQueryWithCursor(cursorDoc){
-  let q;
-  const term = $q.value.trim().toLowerCase();
-  if(term){
-    q = db.collection('clientes')
-          .where('searchTokens','array-contains', term)
-          .where('deleted','==',false)
-          .limit(PAGE_SIZE);
-  } else {
-    q = db.collection('clientes')
-          .orderBy('nombre')
-          .where('deleted','==',false)
-          .limit(PAGE_SIZE);
-  }
-  if($soloActivos.checked){
-    q = q.where('activo','==',true);
-  }
-  if(cursorDoc){ q = q.startAfter(cursorDoc); }
-  return q;
-}
 let paging = false;
 async function gotoPage(target){
   if(paging) return;
@@ -373,35 +304,29 @@ async function gotoPage(target){
     if(!(target in pageCursors)){
       let cursor = pageCursors[maxKnown];
       for(let p=maxKnown; p<target; p++){
-        const snapBuild = await buildQueryWithCursor(cursor).get();
-        if(snapBuild.empty){
-          // No hay más páginas
-          if(p === maxKnown){
-            $tbody.innerHTML=''; 
-            $resumen.textContent='0 resultados';
-          }
+        const pg = await fetchPage(cursor);
+        if(!pg.count){
+          if(p === maxKnown){ $tbody.innerHTML=''; $resumen.textContent='0 resultados'; }
           alert('No hay más páginas.');
-          // Reactiva botones según estado actual
           $btnPrev.disabled = (currentPage<=1);
           $btnNext.disabled = true;
           paging = false;
           return;
         }
-        cursor = snapBuild.docs[snapBuild.docs.length-1];
+        cursor = pg.lastDoc;
         pageCursors[p+1] = cursor;
       }
     }
 
     // Traer la página solicitada
     const startCursor = pageCursors[target]; // null si target=1
-    const snap = await buildQueryWithCursor(startCursor).get();
+    const { docs, count } = await fetchPage(startCursor);
 
     // Limpiar y pintar
     $tbody.innerHTML = '';
     selectedIds.clear(); $selectAll.checked=false; updateBulkBar();
 
-    let count = 0;
-    snap.forEach(d => { renderRow(d.id, d.data()); count++; });
+    for(const d of docs){ renderRow(d.id, d); }
 
     currentPage = target;
     $pageInput.value = currentPage;
@@ -429,11 +354,11 @@ async function loadPage(reset){
     $tbody.innerHTML='';
     $resumen.textContent='Buscando…';
   }
-  const snap = await buildQuery(reset).get();
-  if(snap.docs.length>0){ lastDoc = snap.docs[snap.docs.length-1]; }
-  if(reset && snap.empty){ $resumen.textContent='0 resultados'; return; }
+  const { docs, lastDoc: cur, count } = await fetchPage(reset ? null : lastDoc);
+  if(cur) lastDoc = cur;
+  if(reset && !count){ $resumen.textContent='0 resultados'; return; }
 
-  for(const d of snap.docs){ renderRow(d.id, d.data()); }
+  for(const d of docs){ renderRow(d.id, d); }
   $resumen.textContent = `${document.querySelectorAll('#tbody tr').length} resultado(s)`;
   $selectAll.disabled = ($tbody.children.length === 0) || asReadonly();
 }

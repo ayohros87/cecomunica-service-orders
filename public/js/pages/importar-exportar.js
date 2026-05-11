@@ -1,3 +1,4 @@
+// @ts-nocheck
     function parseFechaExcel(value) {
       if (typeof value === 'number') {
         const fecha = new Date(Date.UTC(0, 0, value - 1));
@@ -59,7 +60,7 @@
                 else if (!Array.isArray(ordenes[id].equipos)) ordenes[id].equipos = [];
 
                 if (row.tipo === "equipo") {
-                  const equipoId = row.id || firebase.firestore().collection("_").doc().id;
+                  const equipoId = row.id || crypto.randomUUID();
                   const eq = {
                     id: equipoId,
                     numero_de_serie: row.numero_de_serie || "",

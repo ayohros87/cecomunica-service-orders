@@ -1,3 +1,4 @@
+// @ts-nocheck
     const params = new URLSearchParams(location.search);
     const contratoDocId = params.get("id");
     let modelosDisponibles = [];

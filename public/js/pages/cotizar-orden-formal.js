@@ -1,3 +1,4 @@
+// @ts-nocheck
 const params = new URLSearchParams(location.search);
 const ordenId = params.get('id');
 

@@ -1,4 +1,4 @@
-
+// @ts-nocheck
     async function cargarSelect(ruta, id) {
       const docId = ruta.split('/')[1];
       const snap = await EmpresaService.getDoc(docId);
@@ -305,10 +305,7 @@ async function registrarCliente(nombreCliente) {
   if (!nombreCliente) return;
 
   const nombre = nombreCliente.trim();
-  const db = firebase.firestore();
-  const snap = await db.collection("clientes").where("nombre", "==", nombre).limit(1).get();
-
-  if (!snap.empty) return; // ya existe
+  if (await ClientesService.existsByNorm("nombre", nombre)) return; // ya existe
 
   await ClientesService.createCliente({
     nombre,

@@ -130,6 +130,94 @@ const ClientesService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // Check for a duplicate by a normalised field. Returns true if a match exists.
+  async existsByNorm(field, value) {
+    const db = firebase.firestore();
+    const snap = await db.collection('clientes').where(field, '==', value).limit(1).get();
+    return !snap.empty;
+  },
+
+  // Parameterized page fetch — handles search-by-token and ordered list with cursor pagination.
+  // Returns { docs: [{id,...data}], lastDoc: FirestoreDoc|null, count: number }
+  async listClientesPage({ term = '', onlyActive = false, cursorDoc = null, limit = 20 } = {}) {
+    const db = firebase.firestore();
+    let q;
+    if (term) {
+      q = db.collection('clientes')
+        .where('searchTokens', 'array-contains', term)
+        .where('deleted', '==', false)
+        .limit(limit);
+    } else {
+      q = db.collection('clientes')
+        .orderBy('nombre')
+        .where('deleted', '==', false)
+        .limit(limit);
+    }
+    if (onlyActive) q = q.where('activo', '==', true);
+    if (cursorDoc) q = q.startAfter(cursorDoc);
+    const snap = await q.get();
+    return {
+      docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
+      lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],
+      count: snap.size,
+    };
+  },
+
+  // Count all matching clients via paginated scan (no data loaded).
+  async countClientes({ term = '', onlyActive = false } = {}) {
+    const db = firebase.firestore();
+    let base;
+    if (term) {
+      base = db.collection('clientes').where('searchTokens', 'array-contains', term).where('deleted', '==', false);
+    } else {
+      base = db.collection('clientes').orderBy('nombre').where('deleted', '==', false);
+    }
+    if (onlyActive) base = base.where('activo', '==', true);
+    let total = 0, last = null, loops = 0;
+    while (true) {
+      let q = base.limit(500);
+      if (last) q = q.startAfter(last);
+      const snap = await q.get();
+      total += snap.size;
+      if (snap.empty || snap.size < 500) break;
+      last = snap.docs[snap.docs.length - 1];
+      if (++loops >= 200) break;
+    }
+    return total;
+  },
+
+  // Full client list for autocomplete/local cache — cache-first then network, 500 per page.
+  async getAllClientes() {
+    const db = firebase.firestore();
+    const baseQ = db.collection('clientes').where('deleted', '==', false).orderBy('nombre');
+    const PAGE = 500;
+    let lastDoc = null;
+    const results = [];
+    while (true) {
+      let q = lastDoc ? baseQ.startAfter(lastDoc).limit(PAGE) : baseQ.limit(PAGE);
+      let snap = await q.get({ source: 'cache' });
+      if (snap.empty) snap = await q.get();
+      if (snap.empty) break;
+      snap.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
+      lastDoc = snap.docs[snap.docs.length - 1];
+      if (snap.size < PAGE) break;
+    }
+    return results;
+  },
+
+  // Prefix search on nombre using Firestore range query (fallback when token search returns empty).
+  async searchByPrefix(text, limit = 25) {
+    const db = firebase.firestore();
+    const snap = await db.collection('clientes')
+      .where('deleted', '==', false)
+      .orderBy('nombre')
+      .startAt(text)
+      .endAt(text + '')
+      .limit(limit)
+      .get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
   // Batch-update multiple clients (450 per batch to stay under Firestore limit).
   async batchUpdate(ids, fields) {
     const db = firebase.firestore();

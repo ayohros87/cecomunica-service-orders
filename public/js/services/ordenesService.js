@@ -513,7 +513,29 @@ const OrdenesService = {
     return snap.docs
       .filter(doc => doc.data().eliminado !== true)
       .map(doc => ({ ordenId: doc.id, ...doc.data() }));
-  }
+  },
+
+  async getEquipoMeta(ordenId, equipoId) {
+    const db = firebase.firestore();
+    const doc = await db.collection("ordenes_de_servicio").doc(ordenId)
+      .collection("equipos_meta").doc(equipoId).get();
+    return doc.exists ? { id: doc.id, ...doc.data() } : null;
+  },
+
+  subscribeConsumos(ordenId, equipoId, callback) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(ordenId)
+      .collection("consumos")
+      .where("equipoId", "==", equipoId)
+      .orderBy("added_at", "desc")
+      .onSnapshot(snap => callback(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+  },
+
+  async setEquipoMeta(ordenId, equipoId, data, opts = { merge: true }) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(ordenId)
+      .collection("equipos_meta").doc(equipoId).set(data, opts);
+  },
 };
 
 // Export to window for global access

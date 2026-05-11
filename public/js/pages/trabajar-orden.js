@@ -72,11 +72,10 @@ document.addEventListener('input', e => {
   const key      = equipoId + '_' + scope;
   clearTimeout(_notaTimers[key]);
   _notaTimers[key] = setTimeout(async () => {
-    await db.collection('ordenes_de_servicio').doc(TO.ordenId)
-      .collection('equipos_meta').doc(equipoId).set(
-        scope === 'internas' ? { notas_internas: val } : { notas_cliente: val },
-        { merge: true }
-      );
+    await OrdenesService.setEquipoMeta(TO.ordenId, equipoId,
+      scope === 'internas' ? { notas_internas: val } : { notas_cliente: val },
+      { merge: true }
+    );
     TO.showToast();
   }, 400);
 });

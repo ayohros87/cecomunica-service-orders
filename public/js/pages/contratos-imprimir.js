@@ -1,3 +1,4 @@
+// @ts-nocheck
     const params = new URLSearchParams(window.location.search);
     const contratoId = params.get("id");
 
