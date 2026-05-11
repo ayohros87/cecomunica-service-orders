@@ -1,4 +1,5 @@
-    firebase.auth().onAuthStateChanged(async (user) => {
+// @ts-nocheck
+firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return window.location.href = "../login.html";
       const userDoc = await UsuariosService.getUsuario(user.uid);
       const rol = userDoc ? userDoc.rol : null;
