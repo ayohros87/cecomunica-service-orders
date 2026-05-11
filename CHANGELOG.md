@@ -1,5 +1,23 @@
 # Changelog
 
+## [Look & Feel — Phase 1a: Token enforcement, priority pages] — 2026-05-11
+
+### Style
+- Replaced all hardcoded generic-blue values with Cecomunica design tokens across 15 HTML pages (contratos/, cotizaciones/, ordenes/, inventario/):
+  - `#3b82f6 / #2563eb / #1d4ed8` → `var(--brand) / var(--brand-hover) / var(--brand-2)` (Cecomunica signal blue)
+  - `#1e3a8a` → `var(--navy)`
+  - `#64748b` → `var(--muted)` · `#e2e8f0` → `var(--line)` · `#0f172a` → `var(--text)`
+  - `#f59e0b / #ef4444` → `var(--warn) / var(--bad)`
+  - All `rgba(59, 130, 246, …)` focus rings → `rgba(0, 145, 215, …)` (brand blue hue)
+- `ordenes/fotos-taller.html`: remapped entire local `:root { --ft-* }` block to reference global tokens, so the page inherits the correct brand palette automatically
+- `inventario/index.html`: removed hardcoded fallback from `var(--warn, #f59e0b)` → `var(--warn)`
+- Files touched: `contratos/nuevo-contrato.html` (24 hits), `nuevo-cliente.html` (10), `editar-contrato.html` (3), `contratos/index.html` (4), `cotizaciones/index.html` (2), `editar-cotizacion.html` (1), `nueva-cotizacion.html` (1), `imprimir-cotizacion.html` (2), `ordenes/fotos-taller.html` (8), `trabajar-orden.html` (2), `editar-orden.html` (2), `nueva-orden.html` (1), `progreso-tecnicos.html` (1), `inventario/index.html` (3), `piezas.html` (1)
+- Remaining: `POC/` directory (5 files, 10 hits) deferred — lower traffic, next commit
+
+### Added
+- `REFACTOR_LOOK_FEEL.md` — seven-phase standardization plan
+- `public/css/ceco-ui.css` aligned to Cecomunica Design System: brand blue `#0091D7`, Barlow + IBM Plex Sans fonts, naval-tint shadows, corporate radii (6/10/16 px), auth page navy gradient
+
 ## [Phase 6] — 2026-05-11
 
 ### Refactor
