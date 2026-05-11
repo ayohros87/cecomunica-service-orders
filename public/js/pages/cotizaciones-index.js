@@ -256,7 +256,7 @@
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) { location.href = "../login.html"; return; }
       verificarAccesoYAplicarVisibilidad(async (rol) => {
-        const permitidos = ["administrador", "vendedor"];
+        const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR];
         if (!permitidos.includes(rol)) {
           alert("Sin acceso");
           location.href = "../index.html";

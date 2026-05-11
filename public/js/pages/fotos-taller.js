@@ -251,7 +251,7 @@
     }
 
     function canSoftDelete() {
-      return String(state.userRole || "").toLowerCase() === "administrador";
+      return String(state.userRole || "").toLowerCase() === ROLES.ADMIN;
     }
 
     function renderGallery() {

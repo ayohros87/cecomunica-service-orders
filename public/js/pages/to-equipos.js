@@ -192,7 +192,7 @@ window.TOEquipos = {
     </tr></thead><tbody>`;
 
     let totalEquipo  = 0;
-    const puedeEditar = ['administrador', 'recepcion', 'inventario'].includes(TO.rolUsuario);
+    const puedeEditar = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.INVENTARIO].includes(TO.rolUsuario);
 
     data.forEach(it => {
       const sub = Number(it.subtotal || 0);
