@@ -1,5 +1,25 @@
 # Changelog
 
+## [Phase 6] — 2026-05-11
+
+### Refactor
+- Split `functions/index.js` (1 807 lines) into 12 focused modules under `functions/src/`:
+  - **`lib/admin.js`** — firebase-admin singleton + `db` reference
+  - **`lib/mail.js`** — `sendEmail()` wrapper over nodemailer + html-to-text
+  - **`domain/emailRenderer.js`** — `buildEmailFromBase()`, `buildBodyOrdenCompletada()`
+  - **`domain/pdfRenderer.js`** — `attachVerificationFromMirror()`, `buildContractHtmlForPdf()` (T&C text included)
+  - **`domain/contractCache.js`** — `getISOWeekKey()`, `recalcularCacheContrato()`
+  - **`http/sendMail.js`** — `sendMail` onRequest handler
+  - **`http/sendContractPdf.js`** — `sendContractPdf` onRequest handler (Puppeteer/Chromium PDF)
+  - **`triggers/contratos/onApproval.js`** — `onContratoActivado`, `onContratoActivadoSendPdf`
+  - **`triggers/contratos/onAnnulment.js`** — `onContratoAnuladoNotify`
+  - **`triggers/mail/onMailQueued.js`** — `onMailQueued`
+  - **`triggers/ordenes/onComplete.js`** — `onOrdenCompletada`
+  - **`triggers/ordenes/onWriteCacheSync.js`** — `onContratoOrdenWrite`, `onOrdenWriteSyncContratoCache`, `onOrdenHardDelete`
+- `functions/index.js` rewritten as a 16-line thin re-exporter; `admin.initializeApp()` runs before any `require('./src/...')` to preserve singleton ordering
+- All 10 Cloud Function export names unchanged (no trigger detachment on next deploy)
+- Template paths adjusted from `__dirname/templates/` → `__dirname/../../templates/` to account for new module depth
+
 ## [Phase 4b] — 2026-05-11
 
 ### Refactor
