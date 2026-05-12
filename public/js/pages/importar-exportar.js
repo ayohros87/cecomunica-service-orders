@@ -34,7 +34,7 @@
 
       importarXlsxBtn.addEventListener("click", async () => {
         status.textContent = "";
-        if (!archivoXlsx) return alert("Primero selecciona un archivo .xlsx");
+        if (!archivoXlsx) { Toast.show('Primero selecciona un archivo .xlsx', 'bad'); return; }
 
         status.textContent = "⏳ Importando archivo...";
         const reader = new FileReader();
@@ -109,7 +109,7 @@
           } catch (err) {
             console.error("Error al importar .xlsx:", err);
             status.textContent = "";
-            alert("Error durante la importación: " + (err.message || err));
+            Toast.show('Error durante la importación: ' + (err.message || err), 'bad');
           }
         };
         reader.readAsBinaryString(archivoXlsx);
@@ -128,7 +128,7 @@
           XLSX.writeFile(workbook, "ordenes_de_servicio.xlsx");
         } catch (error) {
           console.error("Error al exportar órdenes:", error);
-          alert("Error al exportar órdenes a Excel.");
+          Toast.show('Error al exportar órdenes a Excel.', 'bad');
         }
       });
 
@@ -145,7 +145,7 @@
           XLSX.writeFile(workbook, "equipos_de_servicio.xlsx");
         } catch (error) {
           console.error("Error al exportar equipos:", error);
-          alert("Error al exportar equipos a Excel.");
+          Toast.show('Error al exportar equipos a Excel.', 'bad');
         }
       });
 

@@ -4,7 +4,7 @@
 
 async function cargarContrato() {
   const data = await ContratosService.getByContratoId(contratoId);
-  if (!data) return alert("Contrato no encontrado");
+  if (!data) { Toast.show('Contrato no encontrado', 'bad'); return; }
 
   // --- declarar antes de usar ---
   let nombreVendedorResuelto = null;

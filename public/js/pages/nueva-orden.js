@@ -223,12 +223,12 @@
   const nombreLimpio = nombre.trim();
   const regexProhibidos = /[\\/\\.#[\]$]/;
   if (regexProhibidos.test(nombreLimpio)) {
-    alert("❌ El nombre contiene caracteres no permitidos: / . # [ ] $");
+    Toast.show('El nombre contiene caracteres no permitidos: / . # [ ] $', 'bad');
     return;
   }
 
   if (await ClientesService.existsByNorm("nombre", nombreLimpio)) {
-    alert("⚠️ Ya existe un cliente con ese nombre.");
+    Toast.show('Ya existe un cliente con ese nombre.', 'bad');
     return;
   }
 
@@ -238,7 +238,7 @@
     deleted: false
   });
 
-  alert("✅ Cliente registrado.");
+  Toast.show('Cliente registrado.', 'ok');
   await cargarClientes();
 
   // Seleccionar automáticamente
@@ -253,7 +253,7 @@
 
     firebase.auth().onAuthStateChanged(async user => {
       if (!user) {
-        alert("No ha iniciado sesión. Redirigiendo al login...");
+        Toast.show('No ha iniciado sesión. Redirigiendo al login...', 'bad');
         window.location.href = "../login.html";
       } else {
         window.currentUser = user;

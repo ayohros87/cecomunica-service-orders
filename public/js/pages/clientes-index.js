@@ -138,7 +138,7 @@ $pageInput.addEventListener('keydown', (e)=>{
 let loadingAll = false;
 $btnTodo.onclick = async ()=>{
   if(loadingAll) return;
-  if(!confirm('Cargar todos los resultados? Puede tardar si hay muchos registros.')) return;
+  if(!await Modal.confirm({ message: '¿Cargar todos los resultados? Puede tardar si hay muchos registros.' })) return;
 
   loadingAll = true;
   $btnTodo.disabled = true; $btnMas.disabled = true;
@@ -156,7 +156,7 @@ $btnTodo.onclick = async ()=>{
       pages++;
       if(count < PAGE_SIZE) break;
       if(pages >= MAX_PAGES){
-        alert('Se alcanzó el límite de seguridad. Filtra más la búsqueda.');
+        Toast.show('Se alcanzó el límite de seguridad. Filtra más la búsqueda.', 'warn');
         break;
       }
     }
@@ -191,8 +191,8 @@ $selectAll.onchange = ()=>{
     
 // --- Guard: acceso solo para admin/administrador/recepcion ---
 if (!ALLOWED_ROLES.has(role)) {
-  alert('Acceso denegado: no tienes permisos para ver Clientes.');
-  location.href = '../index.html'; // o a la página que prefieras
+  Toast.show('Acceso denegado: no tienes permisos para ver Clientes.', 'bad');
+  location.href = '../index.html';
   return;
 }
 await cargarVendedores();
@@ -217,52 +217,48 @@ function updateBulkBar(){
 }
 $bulkActivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
-  if(!confirm(`Activar ${selectedIds.size} cliente(s)?`)) return;
+  if(!await Modal.confirm({ message: `¿Activar ${selectedIds.size} cliente(s)?` })) return;
   await ClientesService.batchUpdate(Array.from(selectedIds), { activo: true });
-  // refresco visual de las filas seleccionadas
   selectedIds.forEach(id=>{
     const selEl = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
-if (selEl) {
-  const row = selEl.closest('tr');
-  if (row) {
-    const chkEl = row.querySelector('input[type="checkbox"][data-field="activo"]');
-    if (chkEl) chkEl.checked = true; // o = false en desactivar
-  }
-}
-
+    if (selEl) {
+      const row = selEl.closest('tr');
+      if (row) {
+        const chkEl = row.querySelector('input[type="checkbox"][data-field="activo"]');
+        if (chkEl) chkEl.checked = true;
+      }
+    }
   });
-  alert('Clientes activados');
+  Toast.show('Clientes activados', 'ok');
 };
 
 $bulkDesactivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
-  if(!confirm(`Desactivar ${selectedIds.size} cliente(s)?`)) return;
+  if(!await Modal.confirm({ message: `¿Desactivar ${selectedIds.size} cliente(s)?`, danger: true })) return;
   await ClientesService.batchUpdate(Array.from(selectedIds), { activo: false });
   selectedIds.forEach(id=>{
     const selEl = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
-if (selEl) {
-  const row = selEl.closest('tr');
-  if (row) {
-    const chkEl = row.querySelector('input[type="checkbox"][data-field="activo"]');
-   if (chkEl) chkEl.checked = false;
-
-  }
-}
-
+    if (selEl) {
+      const row = selEl.closest('tr');
+      if (row) {
+        const chkEl = row.querySelector('input[type="checkbox"][data-field="activo"]');
+        if (chkEl) chkEl.checked = false;
+      }
+    }
   });
-  alert('Clientes desactivados');
+  Toast.show('Clientes desactivados', 'ok');
 };
 
 $bulkAddTag.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;
   const tag = $bulkTag.value.trim();
-  if(!tag){ alert('Escribe un tag'); return; }
+  if(!tag){ Toast.show('Escribe un tag', 'warn'); return; }
   const tagLower = tag.toLowerCase();
   await ClientesService.batchUpdate(Array.from(selectedIds), {
     tags: firebase.firestore.FieldValue.arrayUnion(tag),
     searchTokens: firebase.firestore.FieldValue.arrayUnion(tagLower),
   });
-  alert(`Tag "${tag}" agregado`);
+  Toast.show(`Tag "${tag}" agregado`, 'ok');
   $bulkTag.value = '';
 };
 async function updateTotalPages(){
@@ -307,7 +303,7 @@ async function gotoPage(target){
         const pg = await fetchPage(cursor);
         if(!pg.count){
           if(p === maxKnown){ $tbody.innerHTML=''; $resumen.textContent='0 resultados'; }
-          alert('No hay más páginas.');
+          Toast.show('No hay más páginas.', 'warn');
           $btnPrev.disabled = (currentPage<=1);
           $btnNext.disabled = true;
           paging = false;
@@ -390,7 +386,7 @@ const onInlineUpdate = debounce(async (id, partial)=>{
     // ruc / cedula_representante: se guardan tal cual, sin tokens (evita ruido)
     await ClientesService.updateCliente(id, partial);
   }catch(e){
-    alert('No se pudo guardar: '+e.message);
+    Toast.show('No se pudo guardar: '+e.message, 'bad');
   }
 }, 700);
 function renderRow(id, c){
@@ -539,7 +535,7 @@ tr.querySelector('[data-delete]').onclick = async ()=>{
     await ClientesService.deleteCliente(id);
     tr.remove();
   } catch(e){
-    alert('Error al eliminar: ' + e.message);
+    Toast.show('Error al eliminar: ' + e.message, 'bad');
   }
 };
 

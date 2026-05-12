@@ -4,7 +4,7 @@
     let modelosDisponibles = [];
 async function cargarContrato() {
   if (!contratoDocId) {
-    alert("Falta el id del contrato.");
+    Toast.show('Falta el id del contrato.', 'bad');
     window.location.href = "index.html";
     return;
   }
@@ -17,14 +17,14 @@ async function cargarContrato() {
   // 2) Traer el contrato
   const c = await ContratosService.getContrato(contratoDocId);
   if (!c) {
-    alert("Contrato no encontrado.");
+    Toast.show('Contrato no encontrado.', 'bad');
     window.location.href = "index.html";
     return;
   }
 
   // 3) Bloquear edición si ya fue aprobado
   if (c.estado === "activo") {
-    alert("Este contrato ya fue aprobado y no se puede editar.");
+    Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad');
     window.location.href = `imprimir-contrato.html?id=${c.contrato_id || contratoDocId}`;
     return;
   }
@@ -169,7 +169,7 @@ await ContratosService.updateContrato(contratoDocId, {
   fecha_modificacion: new Date()
 });
 
-    alert("✅ Cambios guardados");
+    Toast.show('Cambios guardados', 'ok');
     location.href = "index.html";
   });
 

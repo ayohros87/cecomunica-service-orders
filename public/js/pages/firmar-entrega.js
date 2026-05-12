@@ -53,14 +53,14 @@
 
 async function guardarFirma() {
   try {
-    if (!ordenId) return alert("No se detectó la orden.");
+    if (!ordenId) { Toast.show('No se detectó la orden.', 'bad'); return; }
 
     const user = firebase.auth().currentUser;
-    if (!user) return alert("No hay usuario autenticado");
+    if (!user) { Toast.show('No hay usuario autenticado.', 'bad'); return; }
 
     // 1) Validar que la firma no esté vacía
     if (isCanvasVacio(canvas)) {
-      alert("⚠️ Debes ingresar una firma antes de confirmar.");
+      Toast.show('Debes ingresar una firma antes de confirmar.', 'bad');
       return;
     }
 
@@ -179,12 +179,12 @@ if (ordenData.vendedor_asignado) {
 }
 
     // 8) Finalizar
-    alert("✅ Firma, entrega y correos guardados correctamente");
+    Toast.show('Firma, entrega y correos guardados correctamente', 'ok');
     window.location.href = "index.html";
 
   } catch (e) {
     console.error("❌ Error al guardar firma:", e);
-    alert("Error al guardar la firma: " + e.message);
+    Toast.show('Error al guardar la firma: ' + e.message, 'bad');
   }
 }
 
@@ -202,7 +202,7 @@ if (ordenData.vendedor_asignado) {
     async function cargarOrden(id) {
   const o = await OrdenesService.getOrder(id);
   if (!o) {
-    alert("Orden no encontrada");
+    Toast.show('Orden no encontrada', 'bad');
     return;
   }
   document.getElementById("ordenCliente").textContent = o.cliente_nombre || "—";
@@ -238,7 +238,7 @@ async function subirIdentificacion(ordenId) {
     if (ordenId) {
       cargarOrden(ordenId);
     } else {
-      alert("No se detectó ID de orden en la URL.");
+      Toast.show('No se detectó ID de orden en la URL.', 'bad');
     }
   });
   document.getElementById("fotoIdentificacion").addEventListener("change", e => {

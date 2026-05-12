@@ -3,7 +3,7 @@
 window.TOServicio = {
 
   abrirModal(eqId) {
-    if (TO.ordenData?.cotizacion_emitida === true) { alert('Orden bloqueada.'); return; }
+    if (TO.ordenData?.cotizacion_emitida === true) { TO.showToast('Orden bloqueada.'); return; }
     TO.equipoSeleccionado        = eqId;
     TO.byId('serv_desc').value   = '';
     TO.byId('serv_qty').value    = 1;
@@ -30,12 +30,12 @@ window.TOServicio = {
   },
 
   async confirmarServicio() {
-    if (!TO.equipoSeleccionado) { alert('Equipo no válido'); return; }
+    if (!TO.equipoSeleccionado) { TO.showToast('Equipo no válido'); return; }
     const desc   = TO.byId('serv_desc').value.trim();
     const qty    = Math.max(1, parseInt(TO.byId('serv_qty').value || '1', 10));
     const precio = Number(TO.byId('serv_precio').value || 0);
     const tipo   = TO.byId('serv_tipo').value || 'cobro';
-    if (!desc || precio < 0) { alert('Descripción y precio son requeridos'); return; }
+    if (!desc || precio < 0) { TO.showToast('Descripción y precio son requeridos'); return; }
 
     const subtotal = (tipo === 'cobro') ? (qty * precio) : 0;
     await OrdenesService.addConsumo(TO.ordenId, {
@@ -51,7 +51,7 @@ window.TOServicio = {
 
     await TO.ensureEnProgreso();
     this.cerrarModal();
-    alert('✅ Servicio agregado');
+    TO.showToast('Servicio agregado');
   },
 
   init() {

@@ -3,11 +3,11 @@
 window.PocSim = {
   abrir() {
     if (PocState.esLectura()) {
-      alert('🔒 Modo lectura: el rol técnico no puede modificar SIM/Teléfono.');
+      Toast.show('Modo lectura: el rol técnico no puede modificar SIM/Teléfono.', 'bad');
       return;
     }
     const seleccionados = PocList.obtenerSeleccionados();
-    if (seleccionados.length === 0) { alert('Selecciona al menos un equipo.'); return; }
+    if (seleccionados.length === 0) { Toast.show('Selecciona al menos un equipo.', 'bad'); return; }
 
     const dropdown = document.getElementById('operadorGlobal');
     dropdown.innerHTML = '<option value="">— Selecciona operador —</option>';
@@ -39,13 +39,13 @@ window.PocSim = {
 
   async procesar() {
     if (PocState.esLectura()) {
-      alert('🔒 Modo lectura: el rol técnico no puede modificar SIM/Teléfono.');
+      Toast.show('Modo lectura: el rol técnico no puede modificar SIM/Teléfono.', 'bad');
       return;
     }
     const datos       = document.getElementById('simPasteArea').value.trim().split('\n');
     const seleccionados = PocList.obtenerSeleccionados();
     if (datos.length !== seleccionados.length) {
-      alert(`⚠️ Seleccionaste ${seleccionados.length} radios pero pegaste ${datos.length} líneas.`);
+      Toast.show(`Seleccionaste ${seleccionados.length} radios pero pegaste ${datos.length} líneas.`, 'bad');
       return;
     }
     const operador    = document.getElementById('operadorGlobal').value;
@@ -75,7 +75,7 @@ window.PocSim = {
       actualizados++;
     }
 
-    alert(`✅ ${actualizados} radios actualizados.`);
+    Toast.show(`${actualizados} radios actualizados.`, 'ok');
     this.cerrar();
     PocList.refresh();
   }

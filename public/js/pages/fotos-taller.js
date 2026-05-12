@@ -143,7 +143,7 @@
         return;
       }
       if (!/^image\//i.test(file.type || "")) {
-        alert("Selecciona una imagen válida.");
+        Toast.show('Selecciona una imagen válida.', 'bad');
         return;
       }
 
@@ -319,15 +319,15 @@
 
     async function uploadPendingPhoto() {
       if (!state.user) {
-        alert("Usuario no autenticado.");
+        Toast.show('Usuario no autenticado.', 'bad');
         return;
       }
       if (!state.ordenId) {
-        alert("No se detectó la orden.");
+        Toast.show('No se detectó la orden.', 'bad');
         return;
       }
       if (!state.pendingFile || !state.pendingTipo) {
-        alert("No hay imagen seleccionada.");
+        Toast.show('No hay imagen seleccionada.', 'bad');
         return;
       }
 
@@ -393,7 +393,7 @@
         await loadOrder();
       } catch (err) {
         console.error("Error al subir foto:", err);
-        alert("No se pudo subir la foto. Intenta de nuevo.");
+        Toast.show('No se pudo subir la foto. Intenta de nuevo.', 'bad');
         setStatus("Error al subir la foto.", true);
       } finally {
         btn.disabled = false;
@@ -404,15 +404,15 @@
     async function softDeletePhoto(photoId) {
       if (!photoId) return;
       if (!canSoftDelete()) {
-        alert("Solo un administrador puede eliminar fotos.");
+        Toast.show("Solo un administrador puede eliminar fotos.", 'bad');
         return;
       }
-      if (!confirm("¿Marcar esta foto como eliminada?")) return;
+      if (!await Modal.confirm({ message: "¿Marcar esta foto como eliminada?", danger: true })) return;
 
       try {
         const data = await OrdenesService.getOrder(state.ordenId);
         if (!data) {
-          alert("La orden no existe.");
+          Toast.show('La orden no existe.', 'bad');
           return;
         }
 
@@ -434,7 +434,7 @@
         });
 
         if (!found) {
-          alert("No se encontró la foto seleccionada.");
+          Toast.show('No se encontró la foto seleccionada.', 'bad');
           return;
         }
 
@@ -457,7 +457,7 @@
         await loadOrder();
       } catch (err) {
         console.error("Error eliminando foto:", err);
-        alert("No se pudo eliminar la foto.");
+        Toast.show('No se pudo eliminar la foto.', 'bad');
       }
     }
 
@@ -476,7 +476,7 @@
 
       const data = await OrdenesService.getOrder(state.ordenId);
       if (!data) {
-        alert("Orden no encontrada.");
+        Toast.show('Orden no encontrada.', 'bad');
         window.location.href = "index.html";
         return;
       }
@@ -499,14 +499,14 @@
 
       state.ordenId = getOrdenIdFromQuery();
       if (!state.ordenId) {
-        alert("Falta el parámetro ordenId en la URL.");
+        Toast.show('Falta el parámetro ordenId en la URL.', 'bad');
         window.location.href = "index.html";
         return;
       }
 
       firebase.auth().onAuthStateChanged(async (user) => {
         if (!user) {
-          alert("Debes iniciar sesión para usar esta función.");
+          Toast.show('Debes iniciar sesión para usar esta función.', 'bad');
           window.location.href = "../login.html";
           return;
         }
@@ -518,7 +518,7 @@
           await loadOrder();
         } catch (err) {
           console.error("Error cargando orden:", err);
-          alert("No se pudo cargar la orden.");
+          Toast.show('No se pudo cargar la orden.', 'bad');
         }
       });
     }

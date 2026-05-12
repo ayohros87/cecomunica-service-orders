@@ -8,7 +8,7 @@ function cerrarSesion() {
 
 function aplicarRestriccionesPorRol(rol) {
   if (rol !== ROLES.ADMIN && rol !== ROLES.VENDEDOR && rol !== ROLES.RECEPCION) {
-    alert('❌ No autorizado para ver Contratos.');
+    Toast.show('No autorizado para ver Contratos.', 'bad');
     window.location.href = '/index.html';
     return;
   }

@@ -263,7 +263,7 @@
 
       if (estadoActual === "emitida" && rolActual !== ROLES.ADMIN) {
         document.getElementById("wrapper").classList.add("locked");
-        alert("Esta cotización está emitida y no es editable.");
+        mostrarToast("Esta cotización está emitida y no es editable.");
       }
     }
 

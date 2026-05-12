@@ -213,7 +213,7 @@
     }
 
     async function duplicarCotizacion(id) {
-      if (!confirm("¿Duplicar esta cotización?")) return;
+      if (!await Modal.confirm({ message: "¿Duplicar esta cotización?" })) return;
       const d = await CotizacionesService.getCotizacion(id);
       if (!d) return;
       const user = firebase.auth().currentUser;
@@ -236,7 +236,7 @@
     }
 
     async function anularCotizacion(id) {
-      if (!confirm("¿Anular esta cotización?")) return;
+      if (!await Modal.confirm({ message: "¿Anular esta cotización?", danger: true })) return;
       await CotizacionesService.updateCotizacion(id, {
         estado: "anulada",
         fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp()
@@ -245,7 +245,7 @@
     }
 
     async function eliminarCotizacion(id) {
-      if (!confirm("¿Eliminar (ocultar) esta cotización?")) return;
+      if (!await Modal.confirm({ message: "¿Eliminar (ocultar) esta cotización?", danger: true })) return;
       await CotizacionesService.updateCotizacion(id, {
         deleted: true,
         fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp()
@@ -258,7 +258,7 @@
       verificarAccesoYAplicarVisibilidad(async (rol) => {
         const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR];
         if (!permitidos.includes(rol)) {
-          alert("Sin acceso");
+          Toast.show("Sin acceso", 'bad');
           location.href = "../index.html";
           return;
         }

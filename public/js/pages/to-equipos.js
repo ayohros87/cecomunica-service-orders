@@ -138,7 +138,7 @@ window.TOEquipos = {
 
   async chipAddPieza(eid, piezaId) {
     try {
-      if (TO.ordenData?.cotizacion_emitida === true) { alert('Orden bloqueada.'); return; }
+      if (TO.ordenData?.cotizacion_emitida === true) { TO.showToast('Orden bloqueada.'); return; }
 
       const p          = await PiezasService.getPieza(piezaId);
       if (!p) return;
@@ -241,7 +241,7 @@ window.TOEquipos = {
   },
 
   async editarPrecio(lineaId) {
-    if (TO.ordenData?.cotizacion_emitida === true) { alert('Orden bloqueada.'); return; }
+    if (TO.ordenData?.cotizacion_emitida === true) { TO.showToast('Orden bloqueada.'); return; }
     const d = await OrdenesService.getConsumo(TO.ordenId, lineaId);
     if (!d) return;
     const nuevo = Number(prompt('Nuevo precio unitario (USD)', d.precio_unit));
@@ -258,7 +258,7 @@ window.TOEquipos = {
   },
 
   async eliminarLinea(lineaId) {
-    if (!confirm('¿Eliminar esta línea?')) return;
+    if (!await Modal.confirm({ message: '¿Eliminar esta línea?', danger: true })) return;
     await OrdenesService.deleteConsumo(TO.ordenId, lineaId);
   },
 
@@ -266,14 +266,14 @@ window.TOEquipos = {
     const self = this;
     document.addEventListener('change', async e => {
       if (e.target.classList.contains('inp-archivo')) {
-        if (TO.ordenData?.cotizacion_emitida === true) { alert('Orden bloqueada.'); e.target.value = ''; return; }
+        if (TO.ordenData?.cotizacion_emitida === true) { TO.showToast('Orden bloqueada.'); e.target.value = ''; return; }
         const file = e.target.files?.[0]; if (!file) return;
         const equipoId = e.target.getAttribute('data-eid');
         const path = `ordenes/${TO.ordenId}/${equipoId}/${Date.now()}_${file.name}`;
         await firebase.storage().ref().child(path).put(file);
         await self.listarAdjuntos(equipoId);
         e.target.value = '';
-        alert('✅ Archivo subido');
+        TO.showToast('Archivo subido');
         return;
       }
 

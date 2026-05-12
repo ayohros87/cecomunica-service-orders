@@ -273,7 +273,7 @@
       }catch(e){ console.error(e); Toast.show('Error','bad');}
     }
     async function eliminarDefinitivo(id){
-      if(!confirm('¿Eliminar definitivamente este modelo? (borra solo el documento del modelo)')) return;
+      if(!await Modal.confirm({ message: '¿Eliminar definitivamente este modelo? (borra solo el documento del modelo)', danger: true })) return;
       try{
         await ModelosService.deleteModelo(id);
         Toast.show('Modelo eliminado','ok'); await cargarModelos();

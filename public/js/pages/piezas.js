@@ -578,8 +578,7 @@ async function eliminarPieza(id, nombre = '') {
     return;
   }
 
-  const conf = confirm(`¿Seguro que deseas eliminar la pieza "${nombre}"? Esta acción no se puede deshacer.`);
-  if (!conf) return;
+  if (!await Modal.confirm({ message: `¿Seguro que deseas eliminar la pieza "${nombre}"? Esta acción no se puede deshacer.`, danger: true })) return;
 
   try {
     await PiezasService.deletePieza(id);

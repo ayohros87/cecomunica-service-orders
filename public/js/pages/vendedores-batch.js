@@ -149,7 +149,7 @@ window.VB = {
         document.getElementById('clienteGlobal').value = hit.nombre;
       }
     }
-    if (!nombreExacto) { alert('Primero escribe el nombre del cliente.'); return; }
+    if (!nombreExacto) { Toast.show('Primero escribe el nombre del cliente.', 'bad'); return; }
 
     const cacheKey = this.clienteIDSeleccionado || FMT.normalize(nombreExacto);
     const lsKey    = 'grupos_id_' + cacheKey;
@@ -178,12 +178,12 @@ window.VB = {
         (d.grupos || []).forEach(g => { const v = (g || '').toString().trim(); if (v) gruposSet.add(v); });
       });
       const found = Array.from(gruposSet).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
-      if (!found.length) { alert('No se encontraron grupos para este cliente.'); return; }
+      if (!found.length) { Toast.show('No se encontraron grupos para este cliente.', 'bad'); return; }
       this.gruposClienteCache.set(cacheKey, found);
       this.lsSet(lsKey, found);
       document.getElementById('grupoInput').value = found.join(', ');
       this.renderGrupoChips(); this.actualizarResumenBatch(); this.feedbackGrupos(found.length);
-    } catch (e) { console.error('Error buscando grupos:', e); alert('Ocurrió un error al buscar los grupos.'); }
+    } catch (e) { console.error('Error buscando grupos:', e); Toast.show('Ocurrió un error al buscar los grupos.', 'bad'); }
   },
 
   feedbackGrupos(n) {
@@ -381,7 +381,7 @@ window.VB = {
       const hit    = this.clientesCache.find(c => c.norm === needle);
       if (hit) { cid = hit.id; cn = hit.nombre; }
     }
-    if (!cn) { alert('⚠️ Escribe el nombre del cliente o selecciónalo de la lista.'); return []; }
+    if (!cn) { Toast.show('Escribe el nombre del cliente o selecciónalo de la lista.', 'bad'); return []; }
     const datos = [];
     filas.forEach(fila => {
       const nombre   = (fila.querySelector('.nombre')?.value || '').trim();
@@ -447,7 +447,7 @@ window.VB = {
 
   descargarJSON() {
     const datos = this.generarJSON();
-    if (!datos.length) { alert('No hay datos para descargar.'); return; }
+    if (!datos.length) { Toast.show('No hay datos para descargar.', 'bad'); return; }
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');

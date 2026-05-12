@@ -10,7 +10,7 @@ window.ContratosAprobacion = {
     this._pendiente = await ContratosService.getContrato(id);
     if (!this._pendiente) {
       console.error('>>> [UI] Contrato no encontrado en Firestore. doc.id =', id);
-      return alert('Contrato no encontrado');
+      Toast.show('Contrato no encontrado', 'bad'); return;
     }
     this._pendienteId = id;
 
@@ -85,14 +85,14 @@ window.ContratosAprobacion = {
   },
 
   async confirmar() {
-    if (!this._pendienteId) { alert('No hay contrato seleccionado para aprobar.'); return; }
+    if (!this._pendienteId) { Toast.show('No hay contrato seleccionado para aprobar.', 'bad'); return; }
     const btn = document.querySelector('#overlayAprobacion .btn.ok');
     if (btn) btn.disabled = true;
     try {
       const c = await ContratosService.getContrato(this._pendienteId);
-      if (!c) return alert('Contrato no encontrado.');
-      if (c.estado === 'anulado') { alert("Este contrato fue ANULADO y no puede aprobarse."); return; }
-      if (c.estado !== 'pendiente_aprobacion') { alert("Solo se pueden aprobar contratos en 'Pendiente Aprobación'."); return; }
+      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
+      if (c.estado === 'anulado') { Toast.show("Este contrato fue ANULADO y no puede aprobarse.", 'bad'); return; }
+      if (c.estado !== 'pendiente_aprobacion') { Toast.show("Solo se pueden aprobar contratos en 'Pendiente Aprobación'.", 'bad'); return; }
 
       await ContratosService.updateContrato(this._pendienteId, {
         estado: 'aprobado',
@@ -105,7 +105,7 @@ window.ContratosAprobacion = {
       setTimeout(() => location.reload(), 1200);
     } catch (e) {
       console.error(e);
-      alert('No se pudo aprobar el contrato.');
+      Toast.show('No se pudo aprobar el contrato.', 'bad');
     } finally {
       if (btn) btn.disabled = false;
     }

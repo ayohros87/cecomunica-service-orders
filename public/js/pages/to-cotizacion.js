@@ -18,8 +18,8 @@ window.TOCotizacion = {
 
   async completar() {
     try {
-      if (TO.ordenData?.cotizacion_emitida === true) { alert('La cotización ya estaba completada.'); return; }
-      if (!confirm('¿Deseas marcar la cotización como COMPLETADA? Esto bloqueará la edición.')) return;
+      if (TO.ordenData?.cotizacion_emitida === true) { Toast.show('La cotización ya estaba completada.', 'warn'); return; }
+      if (!await Modal.confirm({ message: '¿Deseas marcar la cotización como COMPLETADA? Esto bloqueará la edición.' })) return;
 
       await OrdenesService.mergeOrder(TO.ordenId, {
         cotizacion_emitida:    true,
@@ -61,13 +61,13 @@ window.TOCotizacion = {
       if (b2) b2.style.display = 'inline-block';
       TO.pintarChipTrabajo('COMPLETADO');
 
-      alert('✅ Cotización completada. La orden quedó bloqueada para edición.');
-    } catch (e) { console.error(e); alert('No se pudo completar la cotización.'); }
+      Toast.show('Cotización completada. La orden quedó bloqueada para edición.', 'ok');
+    } catch (e) { console.error(e); Toast.show('No se pudo completar la cotización.', 'bad'); }
   },
 
   async desbloquear() {
     try {
-      if (!confirm('¿Desbloquear la orden para continuar editando?')) return;
+      if (!await Modal.confirm({ message: '¿Desbloquear la orden para continuar editando?' })) return;
       await OrdenesService.mergeOrder(TO.ordenId, {
         cotizacion_emitida: false,
         trabajo_estado:     'EN_PROGRESO',
@@ -88,14 +88,14 @@ window.TOCotizacion = {
       if (b2) b2.style.display = 'none';
       TO.pintarChipTrabajo('EN_PROGRESO');
 
-      alert('🔓 Orden desbloqueada. Puedes seguir trabajando.');
-    } catch (e) { console.error(e); alert('No se pudo desbloquear la orden.'); }
+      Toast.show('Orden desbloqueada. Puedes seguir trabajando.', 'ok');
+    } catch (e) { console.error(e); Toast.show('No se pudo desbloquear la orden.', 'bad'); }
   },
 
   async exportar() {
     try {
       const od = await OrdenesService.getOrder(TO.ordenId);
-      if (!od) return alert('Orden no encontrada');
+      if (!od) { Toast.show('Orden no encontrada', 'bad'); return; }
 
       const rows        = await OrdenesService.getConsumos(TO.ordenId, { tipo: 'cobro' });
       const equiposList = Array.isArray(od.equipos) ? od.equipos.filter(e => !e.eliminado) : [];
@@ -131,7 +131,7 @@ window.TOCotizacion = {
       const ws = XLSX.utils.json_to_sheet(data);
       XLSX.utils.book_append_sheet(wb, ws, 'Cotizacion');
       XLSX.writeFile(wb, `cotizacion_${TO.ordenId}.xlsx`);
-    } catch (e) { console.error(e); alert('No se pudo exportar.'); }
+    } catch (e) { console.error(e); Toast.show('No se pudo exportar.', 'bad'); }
   },
 
   toCSV(arr) {

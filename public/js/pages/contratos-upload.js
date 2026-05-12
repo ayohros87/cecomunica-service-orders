@@ -5,13 +5,13 @@ window.ContratosFirmado = {
 
   subir(idDocContrato) {
     if (!AUTH.is(ROLES.ADMIN) && !AUTH.is(ROLES.VENDEDOR)) {
-      alert('Solo administrador o vendedor pueden subir contratos firmados.');
+      Toast.show('Solo administrador o vendedor pueden subir contratos firmados.', 'bad');
       return;
     }
     this._contratoId = idDocContrato;
     const fileEl = document.getElementById('fileFirmado');
     if (!fileEl) {
-      alert('No se encontró el input de archivo (#fileFirmado).');
+      Toast.show('No se encontró el input de archivo (#fileFirmado).', 'bad');
       return;
     }
     fileEl.value = '';
@@ -59,7 +59,7 @@ window.ContratosFirmado = {
         },
         (err) => {
           console.error(err);
-          alert('❌ Error al subir el archivo: ' + err.message);
+          Toast.show('Error al subir el archivo: ' + err.message, 'bad');
           document.getElementById('uploadStatus').style.display = 'none';
           e.target.value = '';
           this._contratoId = null;
@@ -86,7 +86,7 @@ window.ContratosFirmado = {
       );
     } catch (err) {
       console.error(err);
-      alert('❌ No se pudo procesar el archivo: ' + err.message);
+      Toast.show('No se pudo procesar el archivo: ' + err.message, 'bad');
       document.getElementById('uploadStatus').style.display = 'none';
       e.target.value = '';
       this._contratoId = null;

@@ -21,7 +21,7 @@ firebase.auth().onAuthStateChanged(async user => {
   } catch {}
 
   TO.ordenData = await OrdenesService.getOrder(TO.ordenId);
-  if (!TO.ordenData) { alert('Orden no encontrada'); return; }
+  if (!TO.ordenData) { Toast.show('Orden no encontrada', 'bad'); return; }
 
   if (TO.ordenData.cotizacion_emitida === true) document.body.classList.add('solo-lectura');
 

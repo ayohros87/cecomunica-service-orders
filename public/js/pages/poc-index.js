@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA];
     if (!permitidos.includes(PocState.rolActual)) {
-      alert('❌ No autorizado. Tu rol no tiene acceso a este módulo.');
+      Toast.show('No autorizado. Tu rol no tiene acceso a este módulo.', 'bad');
       window.location.href = '/index.html';
       return;
     }

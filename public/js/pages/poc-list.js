@@ -112,8 +112,8 @@ window.PocList = {
       delBtn.className = 'btn danger';
       delBtn.textContent = '🗑️';
       delBtn.title = 'Eliminar equipo';
-      delBtn.onclick = () => {
-        if (confirm('¿Seguro que quieres eliminar este equipo?'))
+      delBtn.onclick = async () => {
+        if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
           PocService.softDeletePocDevice(docId).then(() => this.refresh());
       };
       actionCell.appendChild(delBtn);
@@ -363,8 +363,8 @@ window.PocList = {
 
         const btnElim = document.createElement('button');
         btnElim.className = 'btn danger'; btnElim.textContent = '🗑️'; btnElim.title = 'Eliminar';
-        btnElim.onclick = () => {
-          if (confirm('¿Seguro que quieres eliminar este equipo?'))
+        btnElim.onclick = async () => {
+          if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
             PocService.softDeletePocDevice(d.id).then(() => this.cargar(true));
         };
         acciones.appendChild(btnElim);
@@ -449,7 +449,7 @@ window.PocList = {
 
   irAImpresion() {
     const seleccionados = this.obtenerSeleccionados();
-    if (seleccionados.length === 0) { alert('Selecciona al menos un equipo para imprimir.'); return; }
+    if (seleccionados.length === 0) { Toast.show('Selecciona al menos un equipo para imprimir.', 'bad'); return; }
     const ids   = seleccionados.map(s => s.id);
     const query = `?ids=${encodeURIComponent(JSON.stringify(ids))}`;
     window.open(`imprimir-equipos.html${query}`, '_blank');
@@ -468,10 +468,10 @@ window.PocList = {
   async exportarExcelSeleccionados() {
     try {
       const seleccionados = this.obtenerSeleccionados();
-      if (!seleccionados.length) { alert('Selecciona al menos un equipo para exportar.'); return; }
+      if (!seleccionados.length) { Toast.show('Selecciona al menos un equipo para exportar.', 'bad'); return; }
       const ids = seleccionados.map(s => s.id).filter(Boolean);
       if (ids.length > 2000) {
-        alert(`Has seleccionado ${ids.length} equipos. Reduce la selección (máx. 2000) o exporta por partes.`);
+        Toast.show(`Has seleccionado ${ids.length} equipos. Reduce la selección (máx. 2000) o exporta por partes.`, 'bad');
         return;
       }
       const docs = await Promise.all(ids.map(id => PocService.getPocDevice(id)));
@@ -505,7 +505,7 @@ window.PocList = {
           updated_by_email: d.updated_by_email || ''
         });
       });
-      if (!registros.length) { alert('No se encontraron datos para exportar.'); return; }
+      if (!registros.length) { Toast.show('No se encontraron datos para exportar.', 'bad'); return; }
 
       const hoja = XLSX.utils.json_to_sheet(registros, { header: headers.map(h => h[0]) });
       headers.forEach(([key, titulo], idx) => {
@@ -520,7 +520,7 @@ window.PocList = {
       XLSX.writeFile(libro, `POC_equipos_seleccion_${stamp}.xlsx`);
     } catch (err) {
       console.error('Error exportando Excel:', err);
-      alert('Ocurrió un error al exportar. Revisa la consola.');
+      Toast.show('Ocurrió un error al exportar. Revisa la consola.', 'bad');
     }
   },
 

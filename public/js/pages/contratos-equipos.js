@@ -114,7 +114,7 @@ window.ContratosEquipos = {
       Modal.open('overlayEquiposContrato');
     } catch (err) {
       console.error('Error abriendo modal de equipos:', err);
-      alert('Error al cargar equipos: ' + err.message);
+      Toast.show('Error al cargar equipos: ' + err.message, 'bad');
     }
   },
 
@@ -125,7 +125,7 @@ window.ContratosEquipos = {
     const esc = CS.esc.bind(CS);
     try {
       const contrato = await ContratosService.getContrato(id);
-      if (!contrato) { alert('Contrato no encontrado.'); return; }
+      if (!contrato) { Toast.show('Contrato no encontrado.', 'bad'); return; }
       const contratoIdVisible = contrato.contrato_id || id;
       const equipos = Array.isArray(contrato.equipos) ? contrato.equipos : [];
       this._panelRows = equipos.map(eq => ({
@@ -163,7 +163,7 @@ window.ContratosEquipos = {
       Modal.open('overlayPanelTrabajo');
     } catch (err) {
       console.error('Error abriendo panel de trabajo:', err);
-      alert('No se pudo abrir el panel de trabajo.');
+      Toast.show('No se pudo abrir el panel de trabajo.', 'bad');
     }
   },
 
@@ -187,7 +187,7 @@ window.ContratosEquipos = {
   },
 
   cerrarPanel() { Modal.close('overlayPanelTrabajo'); },
-  limpiarCache() { this._cache.clear(); alert('✅ Caché de equipos limpiado.'); this.cargarIconos(); },
+  limpiarCache() { this._cache.clear(); Toast.show('Caché de equipos limpiado.', 'ok'); this.cargarIconos(); },
 
   // ── Backfill (admin only) ────────────────────────────────────────
   async _backfillContrato(id) {
@@ -222,20 +222,20 @@ window.ContratosEquipos = {
   },
 
   async backfillTodos() {
-    if (!AUTH.is(ROLES.ADMIN)) { alert('❌ Solo administradores pueden ejecutar esta acción.'); return; }
-    if (!confirm('🔄 Esta operación re-sincronizará los equipos de TODOS los contratos.\n\nPuede tardar varios segundos.\n\n¿Continuar?')) return;
+    if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo administradores pueden ejecutar esta acción.', 'bad'); return; }
+    if (!await Modal.confirm({ message: 'Esta operación re-sincronizará los equipos de TODOS los contratos. Puede tardar varios segundos. ¿Continuar?' })) return;
     const btn = document.getElementById('btnBackfillEquipos');
     if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Procesando...'; }
     try {
       const contratos = await ContratosService.getContratosActivosAprobados();
       let totalContratos = 0, totalOrdenes = 0;
       for (const c of contratos) { totalOrdenes += await this._backfillContrato(c.id); totalContratos++; }
-      alert(`✅ Backfill completado\n\nContratos procesados: ${totalContratos}\nÓrdenes actualizadas: ${totalOrdenes}`);
+      Toast.show(`Backfill completado. Contratos: ${totalContratos} | Órdenes: ${totalOrdenes}`, 'ok');
       this._cache.clear();
       await ContratosLista.cargar(true);
     } catch (err) {
       console.error('Error en backfill global:', err);
-      alert('❌ Error durante el backfill: ' + err.message);
+      Toast.show('Error durante el backfill: ' + err.message, 'bad');
     } finally {
       if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Re-sincronizar equipos (admin)'; }
     }

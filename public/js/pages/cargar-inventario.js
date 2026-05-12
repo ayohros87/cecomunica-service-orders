@@ -147,11 +147,11 @@ ordenados.forEach((modelo, index) => {
     }
     try {
       await InventarioService.guardarInventario(entries);
-      alert("✅ Inventario actualizado correctamente");
+      Toast.show('Inventario actualizado correctamente', 'ok');
       window.location.href = "index.html";
     } catch (e) {
       console.error("❌ Error al guardar:", e);
-      alert("Error al guardar inventario");
+      Toast.show('Error al guardar inventario', 'bad');
     }
     };
 

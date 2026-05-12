@@ -99,7 +99,7 @@ document.getElementById("addCliente").onclick = async () => {
   const regexProhibidos = /[\\/\\.#[\\]\\$]/;
 
   if (regexProhibidos.test(nombreLimpio)) {
-    alert("❌ El nombre contiene caracteres no permitidos: / . # [ ]");
+    Toast.show('El nombre contiene caracteres no permitidos: / . # [ ]', 'bad');
     return;
   }
 
@@ -115,7 +115,7 @@ document.getElementById("addCliente").onclick = async () => {
     }
   }
 
-  alert("✅ Cliente registrado y cargado.");
+  Toast.show('Cliente registrado y cargado.', 'ok');
 };
 
 
@@ -131,13 +131,12 @@ document.getElementById("addCliente").onclick = async () => {
         const unitIdInicial = parseInt(document.getElementById("unit_id_inicial").value.trim(), 10);
 
         if (isNaN(unitIdInicial)) {
-        alert("Debe ingresar un número válido para Unit ID inicial.");
-        return;
+          Toast.show('Debe ingresar un número válido para Unit ID inicial.', 'bad');
+          return;
         }
 
-
         if (seriales.length === 0) {
-          alert("Debe ingresar al menos un serial.");
+          Toast.show('Debe ingresar al menos un serial.', 'bad');
           return;
         }
 
@@ -146,7 +145,7 @@ document.getElementById("addCliente").onclick = async () => {
         await registrarCliente(document.getElementById("cliente").selectedOptions[0].textContent);
 
         if ((detallesBatch || []).length > 0 && detallesBatch.length !== seriales.length) {
-          alert(`❌ El archivo JSON tiene ${detallesBatch.length} filas pero ingresaste ${seriales.length} seriales. Deben coincidir para guardar modelo por equipo.`);
+          Toast.show(`El archivo JSON tiene ${detallesBatch.length} filas pero ingresaste ${seriales.length} seriales. Deben coincidir para guardar modelo por equipo.`, 'bad');
           return;
         }
 
@@ -156,7 +155,7 @@ document.getElementById("addCliente").onclick = async () => {
           .some(g => g === "🔍");
 
         if (gruposInvalidos) {
-          alert("❌ El archivo contiene un grupo inválido (🔍). Corrige el archivo antes de continuar.");
+          Toast.show('El archivo contiene un grupo inválido (🔍). Corrige el archivo antes de continuar.', 'bad');
           return;
         }
 
@@ -186,7 +185,7 @@ document.getElementById("addCliente").onclick = async () => {
           await PocService.addPocDevice(data);
         }
 
-        alert("✅ Equipos creados correctamente.");
+        Toast.show('Equipos creados correctamente.', 'ok');
         window.location.href = "index.html";
       });
     });
@@ -257,9 +256,7 @@ function cargarDesdeJSON(input) {
       const clienteNombreSeleccionado = clienteSelect.options[clienteSelect.selectedIndex]?.textContent || "";
 
       if (data.length > 0 && data[0].cliente_id && data[0].cliente_id !== clienteIdSeleccionado) {
-        alert("⚠️ El cliente seleccionado no coincide con el cliente del archivo JSON:\n\n" +
-              "Cliente seleccionado: " + clienteNombreSeleccionado + "\n" +
-              "Cliente en archivo: " + (data[0].cliente_nombre || "desconocido"));
+        Toast.show('El cliente seleccionado no coincide con el del archivo JSON. Verifica la selección.', 'bad');
         return;
       }
 
@@ -293,9 +290,9 @@ function cargarDesdeJSON(input) {
         </table>
       `;
       
-      alert("✅ Archivo cargado correctamente. Puedes continuar pegando los seriales y eligiendo el cliente correcto.");
+      Toast.show('Archivo cargado correctamente. Puedes continuar pegando los seriales y eligiendo el cliente correcto.', 'ok');
     } catch (err) {
-      alert("❌ Error al leer el archivo JSON: " + err);
+      Toast.show('Error al leer el archivo JSON: ' + err, 'bad');
     }
   };
   reader.readAsText(file);

@@ -427,7 +427,7 @@ window.confirmarAsignarTecnico = async function(ordenId) {
 };
 
 window.completarOrden = async function(ordenId) {
-  if (!confirm(`¿Marcar la orden ${ordenId} como completada?`)) return;
+  if (!await Modal.confirm({ message: `¿Marcar la orden ${ordenId} como completada?` })) return;
   
   try {
     await OrdenesService.completeOrder(ordenId);
@@ -447,7 +447,7 @@ window.completarOrden = async function(ordenId) {
 };
 
 window.entregarOrden = async function(ordenId) {
-  if (!confirm(`¿Entregar la orden ${ordenId} al cliente?`)) return;
+  if (!await Modal.confirm({ message: `¿Entregar la orden ${ordenId} al cliente?` })) return;
   
   try {
     await OrdenesService.deliverOrder(ordenId);
@@ -468,7 +468,7 @@ window.entregarOrden = async function(ordenId) {
 
 // ===== ELIMINAR ORDEN =====
 window.eliminarOrden = async function(ordenId) {
-  if (!confirm(`¿ELIMINAR la orden ${ordenId}? Esta acción no se puede deshacer.`)) return;
+  if (!await Modal.confirm({ message: `¿ELIMINAR la orden ${ordenId}? Esta acción no se puede deshacer.`, danger: true })) return;
   
   try {
     await OrdenesService.deleteOrder(ordenId);
@@ -1895,8 +1895,7 @@ window.eliminarEquipo = async function(e, compuestoId) {
     return;
   }
 
-  const ok = window.confirm("¿Eliminar este equipo de la orden?");
-  if (!ok) return;
+  if (!await Modal.confirm({ message: '¿Eliminar este equipo de la orden?', danger: true })) return;
 
   try {
     await OrdenesService.deleteEquipment(target.ordenId, target.equipoId);

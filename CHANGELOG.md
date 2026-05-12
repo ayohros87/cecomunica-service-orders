@@ -1,5 +1,22 @@
 # Changelog
 
+## [Look & Feel — Phase 4: Dialog & toast primitives] — 2026-05-12
+
+### Extended
+- `public/js/ui/modal.js` — added `Modal.confirm({ title, message, danger, confirmLabel, cancelLabel })` returning `Promise<boolean>`; supports click-outside, Escape, and Enter keyboard shortcuts
+
+### Replaced across ~25 JS files
+- All native `confirm()` calls → `await Modal.confirm()` (non-blocking, styled)
+- All `alert()` calls → `Toast.show(msg, type)` or `TO.showToast(msg)` as appropriate
+- Files updated: `ordenes-index.js`, `cotizar-orden.js`, `to-cotizacion.js`, `to-equipos.js`, `to-servicio.js`, `trabajar-orden.js`, `contratos-list.js`, `contratos-upload.js`, `contratos-imprimir.js`, `contratos-approval.js`, `contratos-equipos.js`, `cotizaciones-index.js`, `contratos-index.js`, `editar-contrato.js`, `editar-cotizacion.js`, `editar-orden.js`, `firmar-entrega.js`, `cargar-inventario.js`, `inventario-index.js`, `inventario-modelos.js`, `piezas.js`, `clientes-index.js`, `fotos-taller.js`, `importar-exportar.js`, `nueva-orden.js`, `poc-list.js`, `poc-bulk.js`, `poc-sim.js`, `poc-edit.js`, `poc-index.js`, `poc-list.js`, `vendedores-batch.js`, `nuevo-batch.js`
+
+### Added `toast.js` + `modal.js` to pages that were missing them
+- `ordenes/index.html`, `ordenes/fotos-taller.html`, `ordenes/firmar-entrega.html`, `ordenes/nueva-orden.html`, `ordenes/importar-exportar.html`, `contratos/editar-contrato.html`, `contratos/imprimir-contrato.html`, `inventario/cargar-inventario.html`, `POC/index.html`, `POC/nuevo-batch.html`
+
+### Deferred
+- `agregar-equipo.js`: 3 alerts tied to `prompt()` text-input flow — requires form modal (Phase 5+)
+- `inventario-index.js:verHistorico`: `alert(resumen)` displays multi-line data report — needs proper dialog component (Phase 5+)
+
 ## [Look & Feel — Phase 3: Typography hierarchy] — 2026-05-12
 
 ### Style (`public/css/ceco-ui.css`)

@@ -15,15 +15,15 @@ window.PocBulk = {
   },
 
   activar() {
-    if (this._modo) { alert('⚠️ Ya estás en modo edición masiva.'); return; }
+    if (this._modo) { Toast.show('Ya estás en modo edición masiva.', 'bad'); return; }
     if (PocState.rolActual !== ROLES.ADMIN && PocState.rolActual !== ROLES.RECEPCION) {
-      alert('❌ Solo administradores o recepción pueden usar edición masiva.');
+      Toast.show('Solo administradores o recepción pueden usar edición masiva.', 'bad');
       return;
     }
     const seleccionados = PocList.obtenerSeleccionados();
-    if (seleccionados.length === 0) { alert('Selecciona al menos un equipo.'); return; }
+    if (seleccionados.length === 0) { Toast.show('Selecciona al menos un equipo.', 'bad'); return; }
     if (seleccionados.length > 10) {
-      alert('⚠️ El máximo permitido es 10 equipos por edición masiva.');
+      Toast.show('El máximo permitido es 10 equipos por edición masiva.', 'bad');
       return;
     }
     this._modo = true;
@@ -74,12 +74,12 @@ window.PocBulk = {
 
   async guardar() {
     const seleccionados = PocList.obtenerSeleccionados();
-    if (seleccionados.length === 0) { alert('Selecciona al menos un equipo.'); return; }
+    if (seleccionados.length === 0) { Toast.show('Selecciona al menos un equipo.', 'bad'); return; }
     if (seleccionados.length > 10) {
-      alert('⚠️ No puedes guardar más de 10 equipos en una sola operación.');
+      Toast.show('No puedes guardar más de 10 equipos en una sola operación.', 'bad');
       return;
     }
-    if (!confirm(`⚠️ Vas a actualizar ${seleccionados.length} equipos. ¿Confirmas continuar?`)) return;
+    if (!await Modal.confirm({ message: `Vas a actualizar ${seleccionados.length} equipos. ¿Confirmas continuar?` })) return;
 
     const user = firebase.auth().currentUser;
     const COL  = PocState.COL;
@@ -116,7 +116,7 @@ window.PocBulk = {
       actualizados++;
     }
 
-    alert(`✅ ${actualizados} equipos actualizados.`);
+    Toast.show(`${actualizados} equipos actualizados.`, 'ok');
     this._resetButtons();
     this._modo = false;
     PocList.refresh();

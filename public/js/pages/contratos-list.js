@@ -445,15 +445,16 @@ window.ContratosLista = {
   async anular(id) {
     try {
       const c = await ContratosService.getContrato(id);
-      if (!c) return alert('Contrato no encontrado.');
-      if (!AUTH.is(ROLES.ADMIN)) return alert('Solo el administrador puede anular contratos.');
-      if (!['activo','aprobado'].includes(c.estado))
-        return alert('Solo se puede anular un contrato ACTIVO o APROBADO.');
+      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
+      if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo el administrador puede anular contratos.', 'bad'); return; }
+      if (!['activo','aprobado'].includes(c.estado)) {
+        Toast.show('Solo se puede anular un contrato ACTIVO o APROBADO.', 'bad'); return;
+      }
 
       const motivo = prompt('Motivo de anulación (ej: envío errado, datos incorrectos):');
       if (motivo === null) return;
       const motivoTrim = (motivo || '').trim();
-      if (!motivoTrim) return alert('Debes indicar un motivo.');
+      if (!motivoTrim) { Toast.show('Debes indicar un motivo.', 'bad'); return; }
 
       const update = {
         estado:           'anulado',
@@ -486,14 +487,14 @@ window.ContratosLista = {
       setTimeout(() => location.reload(), 1000);
     } catch (e) {
       console.error(e);
-      alert('No se pudo anular el contrato.');
+      Toast.show('No se pudo anular el contrato.', 'bad');
     }
   },
 
   async duplicar(id) {
     try {
       const c = await ContratosService.getContrato(id);
-      if (!c) return alert('Contrato no encontrado.');
+      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
 
       const draft = {
         cliente_id:                      c.cliente_id || '',
@@ -518,66 +519,70 @@ window.ContratosLista = {
       window.location.href = `nuevo-contrato.html${q}`;
     } catch (e) {
       console.error(e);
-      alert('No se pudo preparar el borrador para duplicar.');
+      Toast.show('No se pudo preparar el borrador para duplicar.', 'bad');
     }
   },
 
   async editar(id) {
     try {
       const c = await ContratosService.getContrato(id);
-      if (!c) return alert('Contrato no encontrado.');
-      if (c.estado === 'activo' || c.estado === 'aprobado')
-        return alert('Este contrato ya fue aprobado y no se puede editar.');
-      if (c.estado === 'anulado')
-        return alert("Este contrato fue ANULADO y no se puede editar. Usa 'Duplicar' para rehacerlo.");
+      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
+      if (c.estado === 'activo' || c.estado === 'aprobado') {
+        Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad'); return;
+      }
+      if (c.estado === 'anulado') {
+        Toast.show("Este contrato fue ANULADO y no se puede editar. Usa 'Duplicar' para rehacerlo.", 'bad'); return;
+      }
       window.location.href = `editar-contrato.html?id=${id}`;
     } catch (e) {
       console.error(e);
-      alert('No se pudo validar el estado del contrato.');
+      Toast.show('No se pudo validar el estado del contrato.', 'bad');
     }
   },
 
   async borrar(id) {
     try {
       const c = await ContratosService.getContrato(id);
-      if (!c) return alert('Contrato no encontrado.');
-      if (['activo','aprobado','anulado'].includes(c.estado))
-        return alert('Un contrato APROBADO/ACTIVO/ANULADO no se puede eliminar. Use ANULAR si corresponde.');
-      if (AUTH.is(ROLES.VENDEDOR) && c.creado_por_uid && c.creado_por_uid !== (firebase.auth().currentUser?.uid || ''))
-        return alert('Solo el creador o un administrador pueden eliminar este contrato.');
-      if (!confirm('¿Seguro que deseas eliminar este contrato?')) return;
+      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
+      if (['activo','aprobado','anulado'].includes(c.estado)) {
+        Toast.show('Un contrato APROBADO/ACTIVO/ANULADO no se puede eliminar. Use ANULAR si corresponde.', 'bad'); return;
+      }
+      if (AUTH.is(ROLES.VENDEDOR) && c.creado_por_uid && c.creado_por_uid !== (firebase.auth().currentUser?.uid || '')) {
+        Toast.show('Solo el creador o un administrador pueden eliminar este contrato.', 'bad'); return;
+      }
+      if (!await Modal.confirm({ message: '¿Seguro que deseas eliminar este contrato?', danger: true })) return;
 
       await ContratosService.updateContrato(id, { deleted: true, fecha_modificacion: new Date() });
-      Toast.show('✅ Contrato eliminado', 'ok');
+      Toast.show('Contrato eliminado', 'ok');
       setTimeout(() => location.reload(), 1500);
     } catch (e) {
       console.error(e);
-      alert('No se pudo eliminar el contrato.');
+      Toast.show('No se pudo eliminar el contrato.', 'bad');
     }
   },
 
   async marcarComision(id) {
     try {
-      if (!AUTH.is(ROLES.ADMIN)) return alert('Solo el administrador puede cambiar este estado.');
-      if (!confirm("¿Marcar este contrato como 'Listo para Comisión'?")) return;
+      if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo el administrador puede cambiar este estado.', 'bad'); return; }
+      if (!await Modal.confirm({ message: "¿Marcar este contrato como 'Listo para Comisión'?" })) return;
       await ContratosService.updateContrato(id, {
         listo_para_comision:  true,
         fecha_envio_comision: firebase.firestore.Timestamp.now(),
         enviado_por_uid:      firebase.auth().currentUser?.uid || null,
         fecha_modificacion:   new Date()
       });
-      Toast.show('💼 Marcado como listo para comisión.', 'ok');
+      Toast.show('Marcado como listo para comisión.', 'ok');
       setTimeout(() => location.reload(), 600);
     } catch (e) {
       console.error(e);
-      alert('No se pudo marcar como listo para comisión.');
+      Toast.show('No se pudo marcar como listo para comisión.', 'bad');
     }
   },
 
   async quitarComision(id) {
     try {
-      if (!AUTH.is(ROLES.ADMIN)) return alert('Solo el administrador puede cambiar este estado.');
-      if (!confirm("¿Quitar la marca de 'Listo para Comisión'?")) return;
+      if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo el administrador puede cambiar este estado.', 'bad'); return; }
+      if (!await Modal.confirm({ message: "¿Quitar la marca de 'Listo para Comisión'?" })) return;
       await ContratosService.updateContrato(id, {
         listo_para_comision:  false,
         fecha_envio_comision: null,
@@ -588,7 +593,7 @@ window.ContratosLista = {
       setTimeout(() => location.reload(), 600);
     } catch (e) {
       console.error(e);
-      alert('No se pudo quitar la marca de comisión.');
+      Toast.show('No se pudo quitar la marca de comisión.', 'bad');
     }
   },
 

@@ -86,7 +86,7 @@ async function verHistorico(modeloId) {
   const historial = await InventarioService.getHistorialModelo(modeloId);
 
   if (historial.length === 0) {
-    alert("No hay registros históricos para este modelo.");
+    Toast.show('No hay registros históricos para este modelo.', 'bad');
     return;
   }
 

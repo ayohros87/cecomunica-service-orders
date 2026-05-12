@@ -176,7 +176,7 @@
         const rol = userDoc ? userDoc.rol || "" : "";
         limitarEdicionPorRol(rol);
       } else {
-        alert("No ha iniciado sesión. Redirigiendo al login...");
+        mostrarToast("No ha iniciado sesión. Redirigiendo al login...", 'error');
         window.location.href = "../login.html";
       }
     });

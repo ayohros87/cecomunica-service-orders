@@ -11,7 +11,7 @@ firebase.auth().onAuthStateChanged(async (user)=>{
 
   // Cargar orden
   ordenData = await OrdenesService.getOrder(ordenId);
-  if(!ordenData){ alert('Orden no encontrada'); return; }
+  if(!ordenData){ Toast.show('Orden no encontrada', 'bad'); return; }
 
   // Nombre del cliente (si viene con cliente_id)
   let cliente = ordenData.cliente_nombre || ordenData.cliente || '—';
@@ -140,8 +140,8 @@ function pick(id){
 }
 
 async function confirmarAgregar(){
-  if(!equipoSeleccionado){ alert('Equipo no válido'); return; }
-  if(!piezaSeleccionada){ alert('Selecciona una pieza'); return; }
+  if(!equipoSeleccionado){ Toast.show('Equipo no válido', 'bad'); return; }
+  if(!piezaSeleccionada){ Toast.show('Selecciona una pieza', 'bad'); return; }
 
   const qty = Math.max(1, parseInt(document.getElementById('qty').value||'1',10));
   const tipo = document.getElementById('tipo').value || 'cobro';
@@ -163,11 +163,11 @@ async function confirmarAgregar(){
 
   cerrarModal();
   await cargarConsumosEquipo(equipoSeleccionado);
-  alert('✅ Pieza agregada');
+  Toast.show('Pieza agregada', 'ok');
 }
 
 async function eliminarLinea(lineaId, equipoId){
-  if(!confirm('¿Eliminar esta línea?')) return;
+  if(!await Modal.confirm({ message: '¿Eliminar esta línea?', danger: true })) return;
   await OrdenesService.deleteConsumo(ordenId, lineaId);
   await cargarConsumosEquipo(equipoId);
 }

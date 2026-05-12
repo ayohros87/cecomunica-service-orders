@@ -6,7 +6,7 @@ window.PocEdit = {
 
   abrir(row, docId, data) {
     if (PocState.esLectura()) {
-      alert('🔒 Modo lectura: el rol técnico no puede editar PoC.');
+      Toast.show('Modo lectura: el rol técnico no puede editar PoC.', 'bad');
       return;
     }
     this._docId = docId;
@@ -79,7 +79,7 @@ window.PocEdit = {
       await PocService.updatePocDevice(docId, newData);
     } catch (err) {
       console.error('Error saving changes:', err);
-      alert('❌ Error al guardar cambios: ' + err.message);
+      Toast.show('Error al guardar cambios: ' + err.message, 'bad');
       return;
     }
 
@@ -94,7 +94,7 @@ window.PocEdit = {
       .catch(e => console.warn('poc_log write failed (non-critical):', e));
 
     this.cerrar();
-    alert('✅ Cambios guardados');
+    Toast.show('Cambios guardados', 'ok');
     PocList.refresh();
   },
 
