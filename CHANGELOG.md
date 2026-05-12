@@ -1,5 +1,14 @@
 # Changelog
 
+## [Look & Feel — Phase 3: Typography hierarchy] — 2026-05-12
+
+### Style (`public/css/ceco-ui.css`)
+- Added `--font-display`, `--font-body`, `--font-mono` CSS variables to `:root`
+- `body { font-family }` now references `var(--font-body)` instead of a hardcoded string
+- Applied Barlow (`var(--font-display)`) to `.topbar-title`, `.topbar h1`, `.sheet-title`, and `.app-card .meta .t` — the three main structural heading sites
+- Updated `.mono` utility class to use `var(--font-mono)` (IBM Plex Mono) instead of `ui-monospace` fallback chain
+- Added `cc-*` typography utility classes: `cc-display-xl/l/m`, `cc-h1`–`cc-h4`, `cc-body-l/body/body-s`, `cc-caption`, `cc-eyebrow`, `cc-mono` — matches design system token names; purely additive, for new components going forward
+
 ## [Look & Feel — Phase 2: Shared topbar component] — 2026-05-11
 
 ### Added
