@@ -2,157 +2,113 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Administrar Técnicos - Cecomunica</title>
+  <title>Técnicos - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .top-buttons {
-      display: flex;
-      justify-content: space-between;
-      max-width: 600px;
-      margin: auto;
-      margin-bottom: 20px;
-    }
-    .top-buttons button {
-      padding: 10px 16px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    .form-section, .list-section {
-      max-width: 600px;
-      margin: auto;
-      margin-bottom: 30px;
-    }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 14px;
-    }
-    input {
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 12px;
-      font-size: 14px;
-      box-sizing: border-box;
-    }
-    button {
-      padding: 10px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    ul {
-      list-style: none;
-      padding: 0;
-    }
+    .form-section, .list-section { max-width: 600px; margin: 20px auto; }
+    ul { list-style: none; padding: 0; }
     li {
       background: #f9f9f9;
       margin-bottom: 10px;
       padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .actions button {
-      margin-left: 5px;
-    }
+    .actions { display: flex; gap: 6px; }
   </style>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/services/empresaService.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
       const lista = document.getElementById("lista-tecnicos");
       const form = document.getElementById("form-tecnico");
       const inputNombre = document.getElementById("nombre-tecnico");
       let editandoId = null;
 
-    async function cargarTecnicos() {
-  lista.innerHTML = "";
-  const docSnap = await EmpresaService.getDoc("tecnicos");
-  if (docSnap) {
-    const listaTecnicos = docSnap.list || [];
-    listaTecnicos.forEach(nombre => {
-      const li = document.createElement("li");
-      li.innerHTML = `
-        <span>${nombre}</span>
-        <div class="actions">
-          <button onclick="editarTecnico('${nombre}')"><i data-lucide="pencil"></i></button>
-          <button onclick="borrarTecnico('${nombre}')"><i data-lucide="trash-2"></i></button>
-        </div>`;
-      lista.appendChild(li);
-    });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-  }
-}
-
-
+      async function cargarTecnicos() {
+        lista.innerHTML = "";
+        const docSnap = await EmpresaService.getDoc("tecnicos");
+        if (docSnap) {
+          const listaTecnicos = docSnap.list || [];
+          listaTecnicos.forEach(nombre => {
+            const li = document.createElement("li");
+            li.innerHTML = `
+              <span>${nombre}</span>
+              <div class="actions">
+                <button class="btn sm" onclick="editarTecnico('${nombre}')"><i data-lucide="pencil"></i></button>
+                <button class="btn sm danger" onclick="borrarTecnico('${nombre}')"><i data-lucide="trash-2"></i></button>
+              </div>`;
+            lista.appendChild(li);
+          });
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+      }
 
       window.editarTecnico = async (id) => {
         inputNombre.value = id;
         editandoId = id;
       };
-window.borrarTecnico = async (id) => {
-  if (!confirm(`¿Eliminar técnico "${id}"?`)) return;
-  const docSnap = await EmpresaService.getDoc("tecnicos");
-  const nuevaLista = ((docSnap && docSnap.list) || []).filter(n => n !== id);
-  await EmpresaService.setDoc("tecnicos", { list: nuevaLista });
-  await cargarTecnicos();
-};
 
+      window.borrarTecnico = async (id) => {
+        if (!confirm(`¿Eliminar técnico "${id}"?`)) return;
+        const docSnap = await EmpresaService.getDoc("tecnicos");
+        const nuevaLista = ((docSnap && docSnap.list) || []).filter(n => n !== id);
+        await EmpresaService.setDoc("tecnicos", { list: nuevaLista });
+        await cargarTecnicos();
+      };
 
-    form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const nombre = inputNombre.value.trim();
-  if (!nombre) return;
-
-  const docSnap = await EmpresaService.getDoc("tecnicos");
-  let lista = (docSnap && docSnap.list) || [];
-
-  if (editandoId && editandoId !== nombre) {
-    lista = lista.filter(n => n !== editandoId);
-  }
-  if (!lista.includes(nombre)) {
-    lista.push(nombre);
-  }
-
-  await EmpresaService.setDoc("tecnicos", { list: lista });
-
-  inputNombre.value = "";
-  editandoId = null;
-  await cargarTecnicos();
-});
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const nombre = inputNombre.value.trim();
+        if (!nombre) return;
+        const docSnap = await EmpresaService.getDoc("tecnicos");
+        let lista = (docSnap && docSnap.list) || [];
+        if (editandoId && editandoId !== nombre) {
+          lista = lista.filter(n => n !== editandoId);
+        }
+        if (!lista.includes(nombre)) {
+          lista.push(nombre);
+        }
+        await EmpresaService.setDoc("tecnicos", { list: lista });
+        inputNombre.value = "";
+        editandoId = null;
+        await cargarTecnicos();
+      });
 
       await cargarTecnicos();
     });
   </script>
 </head>
 <body>
-  <h2><i data-lucide="users"></i> Administración de Técnicos</h2>
-  <div class="top-buttons">
-    <button onclick="window.location.href='config.html'"><i data-lucide="arrow-left"></i> Volver</button>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="users"></i> Técnicos', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'config.html' }, showHome: false, showLogout: true });</script>
 
   <div class="form-section">
-    <form id="form-tecnico">
-      <label for="nombre-tecnico">Nombre del Técnico:</label>
-      <input type="text" id="nombre-tecnico" required>
-      <button type="submit"><i data-lucide="save"></i> Guardar Técnico</button>
+    <form id="form-tecnico" class="card">
+      <div class="form-field">
+        <label for="nombre-tecnico">Nombre del Técnico</label>
+        <input type="text" id="nombre-tecnico" required placeholder="Ej. Juan Pérez">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary"><i data-lucide="save"></i> Guardar Técnico</button>
+      </div>
     </form>
   </div>
 
   <div class="list-section">
-    <h3>Lista de Técnicos:</h3>
+    <h3 class="cc-h4">Lista de Técnicos</h3>
     <ul id="lista-tecnicos"></ul>
   </div>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

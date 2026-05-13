@@ -15,16 +15,18 @@
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/empresaService.js"></script>
   <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/admin-equipos-cliente.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+    }
+  </script>
 </head>
 <body>
-  <div class="topbar">
-    <h1 class="topbar-title"><i data-lucide="shield"></i> Equipos por Cliente (Administrador)</h1>
-    <div class="topbar-actions">
-      <button class="btn secondary" id="btnVolverOrdenes"><i data-lucide="arrow-left"></i> Volver a órdenes</button>
-    </div>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="shield"></i> Equipos por Cliente (Administrador)', back: { label: '<i data-lucide="arrow-left"></i> Volver a órdenes', href: 'index.html' }, showHome: false, showLogout: true });</script>
 
   <div class="app-wrap" id="adminToolRoot">
     <div class="card" id="accesoDenegado" style="display:none; margin-bottom: 12px;">

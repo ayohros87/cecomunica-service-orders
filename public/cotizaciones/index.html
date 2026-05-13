@@ -21,7 +21,7 @@
     html, body { margin: 0; padding: 0; }
     body { background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%); min-height: 100vh; }
 
-    .app-wrap { max-width: none; margin: 0 auto; padding: 12px 20px; box-sizing: border-box; }
+    .app-wrap { padding: 12px 20px; }
 
     .card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 12px; }
 
@@ -76,7 +76,7 @@
   <div id="topbar-mount"></div>
   <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Cotizaciones', actions: [{ label: '<i data-lucide="plus"></i> Nueva Cotización', href: 'nueva-cotizacion.html', cls: 'primary' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
 
-  <div class="app-wrap">
+  <div class="app-wrap app-wrap--wide">
     <div class="card">
       <div class="toolbar">
         <div class="left filters">

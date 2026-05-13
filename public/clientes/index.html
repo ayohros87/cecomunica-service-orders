@@ -21,7 +21,6 @@
  <link rel="stylesheet" href="../css/ceco-ui.css">
  <style>
   /* Ancho completo para esta vista */
-  .topbar, .app-wrap { max-width: 100% !important; }
   /* Que las celdas de texto aprovechen el ancho */
   .table-wrap td input.table-input { width: 100%; }
   /* Permitir scroll horizontal si hay muchas columnas */
@@ -33,7 +32,7 @@
   <script>Layout.renderTopbar({ title: '<i data-lucide="users"></i> Clientes', actions: [{ label: '<i data-lucide="plus"></i> Nuevo cliente', cls: 'primary', id: 'btnNuevo' }], back: { label: '← Volver', href: '../index.html' }, showHome: false, showLogout: false });</script>
 
 
-<div class="app-wrap">
+<div class="app-wrap app-wrap--full">
   <div class="section">
     <div class="toolbar">
       <div class="app-search">

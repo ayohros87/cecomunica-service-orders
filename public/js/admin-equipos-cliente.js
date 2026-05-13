@@ -287,7 +287,7 @@
     refs.btnBuscar.addEventListener('click', buscar);
     refs.btnExportarExcel?.addEventListener('click', exportarExcel);
     refs.btnLimpiar.addEventListener('click', limpiar);
-    refs.btnVolver.addEventListener('click', () => {
+    refs.btnVolver?.addEventListener('click', () => {
       window.location.href = 'index.html';
     });
     refs.filtroCliente.addEventListener('keypress', (e) => {

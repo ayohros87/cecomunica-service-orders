@@ -31,7 +31,6 @@
     .totals .item { background: #f8fafc; padding: 8px 12px; border-radius: 8px; font-weight: 600; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .locked { opacity: 0.6; pointer-events: none; }
-    .app-wrap { max-width: 1280px; margin: 0 auto; }
     .page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
     .sidebar { position: sticky; top: 84px; }
     .card { background: white; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 10px; }
@@ -77,7 +76,7 @@
   <div id="topbar-mount"></div>
   <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Editar Cotización', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
 
-  <div class="app-wrap" id="wrapper">
+  <div class="app-wrap app-wrap--wide" id="wrapper">
     <div id="readonlyBanner" class="readonly-banner" style="display:none;">Emitida: solo lectura.</div>
     <div class="summary-bar">
       <div><strong>Cotización:</strong> <span id="sumCotizacionId">-</span></div>

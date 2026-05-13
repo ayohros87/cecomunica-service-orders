@@ -30,7 +30,6 @@
     .totals { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
     .totals .item { background: #f8fafc; padding: 8px 12px; border-radius: 8px; font-weight: 600; }
     .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-    .app-wrap { max-width: 1400px; margin: 0 auto; }
     .page-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
     .items-row { display: grid; grid-template-columns: 2fr 1fr 0.8fr 1fr 1.2fr auto; align-items: end; gap: 10px; }
     .sidebar { position: sticky; top: 84px; }
@@ -70,7 +69,7 @@
   <div id="topbar-mount"></div>
   <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Nueva Cotización', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
 
-  <div class="app-wrap">
+  <div class="app-wrap app-wrap--wide">
     <div class="page-grid">
       <main>
         <div class="form-section">

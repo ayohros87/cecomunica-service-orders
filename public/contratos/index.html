@@ -26,10 +26,7 @@ body {
 
 /* Unified Content Area */
 .app-wrap {
-  max-width: none;
-  margin: 0 auto;
   padding: 12px 20px;
-  box-sizing: border-box;
 }
 
 /* Unified Filter Cards */
@@ -157,7 +154,7 @@ table tbody tr:hover {
   <div id="topbar-mount"></div>
   <script>Layout.renderTopbar({ title: '<i data-lucide="file-text"></i> Contratos', actions: [{ label: '<i data-lucide="plus"></i> Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
   
-  <div class="app-wrap">
+  <div class="app-wrap app-wrap--wide">
     <p id="mensaje" class="resumen" style="min-height: 20px; margin-bottom: 8px;"></p>
     
 <div class="card">
@@ -370,10 +367,7 @@ body {
 }
 
 .app-wrap{
-  max-width: none;
-  margin: 0 auto;
   padding: 8px 20px 16px;
-  box-sizing: border-box;
 }
 
 /* Filter card improvements */

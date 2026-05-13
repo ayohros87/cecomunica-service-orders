@@ -261,8 +261,10 @@ th.ordenado-desc::after {
 
 .file { padding: 8px; border:1px dashed var(--line); border-radius:8px; background:#fff; }
 
-.table-wrap.compact table th, 
-.table-wrap.compact table td { padding:6px 8px; font-size: 13.5px; }
+.table-wrap.compact table th,
+.table-wrap.compact table td,
+.table-wrap--compact table th,
+.table-wrap--compact table td { padding:6px 8px; font-size: 13.5px; }
 /* Utilidades adicionales */
 .mono { font-family: var(--font-mono); }
 .w-100 { width: 100%; }
@@ -365,7 +367,13 @@ th.ordenado-desc::after {
   flex-wrap: wrap;
 }
 
-.app-wrap { max-width:1100px; margin:0 auto; padding:0 16px 32px; }
+.app-wrap           { max-width:1100px; margin:0 auto; padding:0 16px 32px; }
+.app-wrap--narrow   { max-width: 720px;  }
+.app-wrap--default  { max-width: 1100px; }
+.app-wrap--wide     { max-width: 1400px; }
+.app-wrap--full     { max-width: 100%;   }
+@media (max-width: 1024px) { .app-wrap { padding: 0 12px 24px; } }
+@media (max-width: 760px)  { .app-wrap { padding: 0 10px 20px; } }
 
 .app-tools {
   display:flex; gap:10px; align-items:center; justify-content:space-between;

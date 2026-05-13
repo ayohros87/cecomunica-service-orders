@@ -7,7 +7,7 @@
 
 </head>
 <body>
-  <h2>Agregar Equipos a Orden</h2>
+  <div id="topbar-mount"></div>
   <form id="formEquipos" class="card form">
   <div class="section form">
     <h3 class="form-title"><i data-lucide="clipboard"></i> Datos de la Orden</h3>
@@ -55,8 +55,15 @@
   <script src="../js/services/modelosService.js"></script>
   <script src="../js/services/ordenesService.js"></script>
   <script src="../js/services/clientesService.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/pages/agregar-equipo.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+    }
+    Layout.renderTopbar({ title: '<i data-lucide="monitor"></i> Agregar Equipos a Orden', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' }, showHome: false, showLogout: true });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
 </body>
 </html>

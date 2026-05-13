@@ -2,83 +2,48 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Administrar Estado de Reparación - Cecomunica</title>
+  <title>Estados de Reparación - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .top-buttons {
-      display: flex;
-      justify-content: space-between;
-      max-width: 600px;
-      margin: auto;
-      margin-bottom: 20px;
-    }
-    .top-buttons button {
-      padding: 10px 16px;
-      font-size: 14px;
-      cursor: pointer;
-    }
     .form-section, .list-section {
       max-width: 600px;
-      margin: auto;
-      margin-bottom: 30px;
+      margin: 20px auto;
     }
-    label {
-      display: block;
-      margin-bottom: 8px;
-      font-size: 14px;
-    }
-    input {
-      width: 100%;
-      padding: 8px;
-      margin-bottom: 12px;
-      font-size: 14px;
-      box-sizing: border-box;
-    }
-    button {
-      padding: 10px;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    ul {
-      list-style: none;
-      padding: 0;
-    }
+    ul { list-style: none; padding: 0; }
     li {
       background: #f9f9f9;
       margin-bottom: 10px;
       padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 5px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    .actions button {
-      margin-left: 5px;
-    }
+    .actions { display: flex; gap: 6px; }
   </style>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/services/empresaService.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+    }
+
     document.addEventListener("DOMContentLoaded", async () => {
-      const firebaseConfig = {
-        apiKey: "AIzaSyDN1ErV5svRGPtx5tCi_FU_Vei6Dl-J_ng",
-        authDomain: "cecomunica-service-orders.firebaseapp.com",
-        projectId: "cecomunica-service-orders",
-        storageBucket: "cecomunica-service-orders.firebasestorage.app",
-        messagingSenderId: "615730883223",
-        appId: "1:615730883223:web:8cf1941241657bd08ad7d2"
-      };
-      firebase.initializeApp(firebaseConfig);
+      if (!firebase.apps.length) {
+        firebase.initializeApp({
+          apiKey: "AIzaSyDN1ErV5svRGPtx5tCi_FU_Vei6Dl-J_ng",
+          authDomain: "cecomunica-service-orders.firebaseapp.com",
+          projectId: "cecomunica-service-orders",
+          storageBucket: "cecomunica-service-orders.firebasestorage.app",
+          messagingSenderId: "615730883223",
+          appId: "1:615730883223:web:8cf1941241657bd08ad7d2"
+        });
+      }
 
       const lista = document.getElementById("lista-estados");
       const form = document.getElementById("form-estado");
@@ -87,22 +52,21 @@
 
       async function cargarEstados() {
         lista.innerHTML = "";
-       const docSnap = await EmpresaService.getDoc("estado_de_reparacion");
-if (docSnap) {
-  const estados = docSnap.list || [];
-  estados.forEach(nombre => {
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <span>${nombre}</span>
-      <div class="actions">
-        <button onclick="editarEstado('${nombre}')"><i data-lucide="pencil"></i></button>
-        <button onclick="borrarEstado('${nombre}')"><i data-lucide="trash-2"></i></button>
-      </div>`;
-    lista.appendChild(li);
-  });
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-
+        const docSnap = await EmpresaService.getDoc("estado_de_reparacion");
+        if (docSnap) {
+          const estados = docSnap.list || [];
+          estados.forEach(nombre => {
+            const li = document.createElement("li");
+            li.innerHTML = `
+              <span>${nombre}</span>
+              <div class="actions">
+                <button class="btn sm" onclick="editarEstado('${nombre}')"><i data-lucide="pencil"></i></button>
+                <button class="btn sm danger" onclick="borrarEstado('${nombre}')"><i data-lucide="trash-2"></i></button>
+              </div>`;
+            lista.appendChild(li);
+          });
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
       }
 
       window.editarEstado = async (id) => {
@@ -112,57 +76,53 @@ if (docSnap) {
 
       window.borrarEstado = async (id) => {
         if (confirm(`¿Eliminar estado "${id}"?`)) {
-         const snap = await EmpresaService.getDoc("estado_de_reparacion");
+          const snap = await EmpresaService.getDoc("estado_de_reparacion");
           const nuevaLista = ((snap && snap.list) || []).filter(e => e !== id);
           await EmpresaService.setDoc("estado_de_reparacion", { list: nuevaLista });
-
           await cargarEstados();
         }
       };
 
-     form.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const estado = inputEstado.value.trim();
-  if (!estado) return;
-
-  const snap = await EmpresaService.getDoc("estado_de_reparacion");
-  let lista = (snap && snap.list) || [];
-
-  if (editandoId && editandoId !== estado) {
-    lista = lista.filter(e => e !== editandoId);
-  }
-  if (!lista.includes(estado)) {
-    lista.push(estado);
-  }
-
-  await EmpresaService.setDoc("estado_de_reparacion", { list: lista });
-
-  inputEstado.value = "";
-  editandoId = null;
-  await cargarEstados();
-});
-
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const estado = inputEstado.value.trim();
+        if (!estado) return;
+        const snap = await EmpresaService.getDoc("estado_de_reparacion");
+        let lista = (snap && snap.list) || [];
+        if (editandoId && editandoId !== estado) {
+          lista = lista.filter(e => e !== editandoId);
+        }
+        if (!lista.includes(estado)) {
+          lista.push(estado);
+        }
+        await EmpresaService.setDoc("estado_de_reparacion", { list: lista });
+        inputEstado.value = "";
+        editandoId = null;
+        await cargarEstados();
+      });
 
       await cargarEstados();
     });
   </script>
 </head>
 <body>
-  <h2><i data-lucide="wrench"></i> Administración de Estados de Reparación</h2>
-  <div class="top-buttons">
-    <button onclick="window.location.href='config.html'"><i data-lucide="arrow-left"></i> Volver</button>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="wrench"></i> Estados de Reparación', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'config.html' }, showHome: false, showLogout: true });</script>
 
   <div class="form-section">
-    <form id="form-estado">
-      <label for="nombre-estado">Nombre del Estado:</label>
-      <input type="text" id="nombre-estado" required>
-      <button type="submit"><i data-lucide="save"></i> Guardar Estado</button>
+    <form id="form-estado" class="card">
+      <div class="form-field">
+        <label for="nombre-estado">Nombre del Estado</label>
+        <input type="text" id="nombre-estado" required placeholder="Ej. En proceso">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary"><i data-lucide="save"></i> Guardar Estado</button>
+      </div>
     </form>
   </div>
 
   <div class="list-section">
-    <h3>Lista de Estados:</h3>
+    <h3 class="cc-h4">Lista de Estados</h3>
     <ul id="lista-estados"></ul>
   </div>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

@@ -16,10 +16,16 @@
   <script src="../js/services/ordenesService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/empresaService.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+    }
+  </script>
   <style>
     body {
       background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-      padding: 24px;
+      padding: 0 24px 24px;
       min-height: 100vh;
     }
     
@@ -348,8 +354,10 @@
   </style>
 </head>
 <body>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="pencil"></i> Editar Orden de Servicio', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
+
   <div class="page-header">
-    <h1><i data-lucide="pencil"></i> Editar Orden de Servicio</h1>
     <p>Modifique los datos de la orden seleccionada</p>
     <div class="order-id-badge" id="orderIdDisplay"></div>
   </div>

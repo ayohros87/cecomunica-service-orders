@@ -3,36 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Importar / Exportar Datos - Cecomunica</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .section {
-      max-width: 600px;
-      margin: auto;
-      margin-bottom: 30px;
-    }
-    .section label, .section input, .section button {
-      display: block;
-      width: 100%;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    button {
-      padding: 10px;
-      cursor: pointer;
-    }
-    #mensaje-status {
-      text-align: center;
-      margin-top: 10px;
-      font-weight: bold;
-    }
-  </style>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
@@ -41,29 +12,42 @@
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
-
   <script src="../js/pages/importar-exportar.js" defer></script>
+  <script src="../js/core/layout.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+    }
+  </script>
 </head>
 <body>
-  <h2><i data-lucide="package"></i> Importar / Exportar Datos</h2>
-  <div style="max-width: 600px; margin: auto; margin-bottom: 20px;">
-    <button onclick="window.location.href='config.html'"><i data-lucide="arrow-left"></i> Volver</button>
-  </div>
-  <div class="section">
-    <h3><i data-lucide="download"></i> Exportar a Excel:</h3>
-    <button id="exportar-ordenes-btn"><i data-lucide="file-text"></i> Exportar Órdenes</button>
-    <button id="exportar-equipos-btn"><i data-lucide="clipboard"></i> Exportar Equipos</button>
-    <button id="descargar-ejemplo-btn"><i data-lucide="download"></i> Descargar Plantilla de Ejemplo</button>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="package"></i> Importar / Exportar Datos', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'config.html' }, showHome: false, showLogout: true });</script>
+
+  <div class="app-wrap app-wrap--narrow">
+    <div class="card" style="margin-bottom: 16px;">
+      <h3 class="cc-h4"><i data-lucide="download"></i> Exportar a Excel</h3>
+      <div class="form-actions" style="flex-direction: column; align-items: stretch; gap: 8px;">
+        <button id="exportar-ordenes-btn" class="btn"><i data-lucide="file-text"></i> Exportar Órdenes</button>
+        <button id="exportar-equipos-btn" class="btn"><i data-lucide="clipboard"></i> Exportar Equipos</button>
+        <button id="descargar-ejemplo-btn" class="btn"><i data-lucide="download"></i> Descargar Plantilla de Ejemplo</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="cc-h4"><i data-lucide="upload"></i> Importar desde Excel (.xlsx)</h3>
+      <div class="form-field">
+        <label for="importar-xlsx-input">Selecciona archivo Excel</label>
+        <input type="file" id="importar-xlsx-input" accept=".xlsx">
+      </div>
+      <div class="form-actions">
+        <button id="importar-xlsx-btn" class="btn primary"><i data-lucide="upload"></i> Importar Archivo</button>
+      </div>
+      <div id="mensaje-status" style="margin-top: 10px; font-weight: bold; text-align: center;"></div>
+    </div>
   </div>
 
-  <div class="section">
-    <h3><i data-lucide="upload"></i> Importar desde Excel (.xlsx):</h3>
-    <label for="importar-xlsx-input">Selecciona archivo Excel:</label>
-    <input type="file" id="importar-xlsx-input" accept=".xlsx">
-    <button id="importar-xlsx-btn"><i data-lucide="upload"></i> Importar Archivo</button>
-    <div id="mensaje-status"></div>
-  </div>
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>
