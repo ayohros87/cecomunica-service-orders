@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -368,7 +368,7 @@ body {
   <div class="topbar">
     <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
     <div>
-      <h1><i data-lucide="package"></i> Ingreso de Equipos PoC â€” Vendedores</h1>
+      <h1><i data-lucide="package"></i> Ingreso de Equipos PoC — Vendedores</h1>
       <div style="margin-top: 4px;">
         <span style="font-size: 13px; color: #64748b; font-weight: 500;">Flujo:</span>
         <span class="stepper">
@@ -382,7 +382,7 @@ body {
       <button class="btn" id="btnGuardarBorrador" title="Ctrl+S">Guardar borrador</button>
       <button class="btn" id="btnClearDraft" onclick="VB.clearDraft()">Borrar borrador</button>
       <button class="btn secondary" onclick="VB.limpiarTodo()">Limpiar</button>
-      <button class="btn" onclick="window.location.href='../index.html'">MenÃº</button>
+      <button class="btn" onclick="window.location.href='../index.html'">Menú</button>
     </div>
   </div>
 
@@ -404,13 +404,13 @@ body {
       <button class="btn btn-pill fit" type="button" onclick="VB.refrescarClientes()" title="Actualizar lista de clientes">Actualizar</button>
     </div>
     <div id="sugerenciasClientes" style="position:relative;"></div>
-    <div class="form-hint">Escribe parte del nombre o selecciÃ³nalo de la lista. Si el navegador auto-completÃ³, haz clic en Buscar para cargar los grupos.</div>
+    <div class="form-hint">Escribe parte del nombre o selecciónalo de la lista. Si el navegador auto-completó, haz clic en Buscar para cargar los grupos.</div>
   </div>
 </div>
 
 <!-- STEP 2 HEADER -->
 <div class="section-header simple">
-  <h2>2. ConfiguraciÃ³n del Lote</h2>
+  <h2>2. Configuración del Lote</h2>
   <span class="badge pending" id="badgeLote">Pendiente</span>
 </div>
 
@@ -431,7 +431,7 @@ body {
   <div id="grupoChips" class="chips-editor"></div>
   
   <div class="form-field">
-    <label class="req">Lista de equipos (uno por lÃ­nea)</label>
+    <label class="req">Lista de equipos (uno por línea)</label>
     <textarea id="serialesPaste" class="mono" placeholder="Ej: Radio 1&#10;Radio 2&#10;Radio 3"></textarea>
   </div>
 
@@ -458,12 +458,12 @@ body {
 </div>
 
 <div class="section-header simple" id="exportSection" style="display:none;">
-  <h2>4. RevisiÃ³n y ExportaciÃ³n</h2>
+  <h2>4. Revisión y Exportación</h2>
   <span class="badge pending" id="badgeExport">Pendiente</span>
 </div>
 
 <div class="action-card" id="actionCard" style="display:none;">
-  <h3>Acciones RÃ¡pidas</h3>
+  <h3>Acciones Rápidas</h3>
   <div class="action-grid">
     <button class="btn secondary" onclick="VB.agregarFila()">Agregar Fila</button>
     <button class="btn secondary" onclick="VB.agregarGrupo()">Agregar Grupo</button>

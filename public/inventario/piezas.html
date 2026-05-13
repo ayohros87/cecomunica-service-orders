@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -239,7 +239,7 @@ body { background: #f8fafc; }
 /* Ajuste responsive */
 @media (max-width: 900px) {
   .topbar {
-    flex-wrap: wrap;           /* vuelve a permitir salto en pantallas pequeÃ±as */
+    flex-wrap: wrap;           /* vuelve a permitir salto en pantallas pequeñas */
     padding: 16px 24px;
   }
   .app-search input {
@@ -247,15 +247,15 @@ body { background: #f8fafc; }
     max-width: none;
   }
 }
-/* === AlineaciÃ³n correcta en columna Cant. === */
+/* === Alineación correcta en columna Cant. === */
 .table-wrap table td { vertical-align: middle; }
 
-/* Contenedor de cantidad + botones en una sola lÃ­nea */
+/* Contenedor de cantidad + botones en una sola línea */
 .table-wrap .table-actions {
   display: inline-flex;         /* evita que ocupe todo el ancho */
   align-items: center;
   gap: 8px;
-  flex-wrap: nowrap;            /* NO saltar de lÃ­nea */
+  flex-wrap: nowrap;            /* NO saltar de línea */
 }
 
 /* Badge bien centrada y con altura pareja con los botones */
@@ -263,19 +263,19 @@ body { background: #f8fafc; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 24px;                 /* ajÃºstalo a tu gusto: 24â€“28px */
+  height: 24px;                 /* ajústalo a tu gusto: 24–28px */
   line-height: 1;
   padding: 0 8px;
   border-radius: 999px;
   white-space: nowrap;
 }
 
-/* Botones pequeÃ±os alineados con la badge */
+/* Botones pequeños alineados con la badge */
 .table-wrap .btn.sm {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;                 /* que no â€œaplastenâ€ la badge */
+  height: 28px;                 /* que no “aplasten” la badge */
   line-height: 1;
   padding: 6px 10px;
   min-width: 28px;
@@ -305,32 +305,32 @@ body { background: #f8fafc; }
       <div class="menu" style="min-width:220px;">
         <label class="menu-item"><input type="checkbox" checked id="col-CHK-sku" onchange="toggleColumn('sku', this.checked)"> SKU</label>
         <label class="menu-item"><input type="checkbox" checked id="col-CHK-costo" onchange="toggleColumn('costo', this.checked)"> Costo</label>
-        <label class="menu-item"><input type="checkbox" checked id="col-CHK-ubicacion" onchange="toggleColumn('ubicacion', this.checked)"> UbicaciÃ³n</label>
+        <label class="menu-item"><input type="checkbox" checked id="col-CHK-ubicacion" onchange="toggleColumn('ubicacion', this.checked)"> Ubicación</label>
         <hr style="margin:6px 0;border:none;border-top:1px solid var(--line);">
-        <button class="btn sm w-full" onclick="toggleDensity()">â†•ï¸ Alternar densidad</button>
+        <button class="btn sm w-full" onclick="toggleDensity()">↕️ Alternar densidad</button>
       </div>
     </div>
   </div>
 </div>
 
-  <div class="app-wrap app-wrap--full">
+  <div class="app-wrap app-wrap--wide">
     <p id="resumen" class="resumen"></p>
 
     <div class="table-wrap compact mt-12">
       <table>
 <thead>
   <tr>
-    <th data-sort="marca" onclick="sortBy('marca')">Marca <span class="sort" id="s-marca">â†•</span></th>
-    <th class="col-sku" data-sort="sku" onclick="sortBy('sku')">SKU <span class="sort" id="s-sku">â†•</span></th>
-    <th data-sort="descripcion" onclick="sortBy('descripcion')">DescripciÃ³n <span class="sort" id="s-descripcion">â†•</span></th>
-    <th data-sort="precio_venta" onclick="sortBy('precio_venta')">Precio venta <span class="sort" id="s-precio_venta">â†•</span></th>
-    <th class="col-costo" data-sort="costo_unitario" onclick="sortBy('costo_unitario')">Costo <span class="sort" id="s-costo_unitario">â†•</span></th>
-    <th data-sort="cantidad" onclick="sortBy('cantidad')">Cant. <span class="sort" id="s-cantidad">â†•</span></th>
-    <th data-sort="minimo" onclick="sortBy('minimo')">MÃ­n. <span class="sort" id="s-minimo">â†•</span></th>
-    <th data-sort="unidad" onclick="sortBy('unidad')">Unidad <span class="sort" id="s-unidad">â†•</span></th>
-    <th class="col-ubicacion" data-sort="ubicacion" onclick="sortBy('ubicacion')">UbicaciÃ³n <span class="sort" id="s-ubicacion">â†•</span></th>
-    <th data-sort="equipos_asociados" onclick="sortBy('equipos_asociados')">Equipos asociados <span class="sort" id="s-equipos_asociados">â†•</span></th>
-    <th data-sort="activo" onclick="sortBy('activo')">Estado <span class="sort" id="s-activo">â†•</span></th>
+    <th data-sort="marca" onclick="sortBy('marca')">Marca <span class="sort" id="s-marca">↕</span></th>
+    <th class="col-sku" data-sort="sku" onclick="sortBy('sku')">SKU <span class="sort" id="s-sku">↕</span></th>
+    <th data-sort="descripcion" onclick="sortBy('descripcion')">Descripción <span class="sort" id="s-descripcion">↕</span></th>
+    <th data-sort="precio_venta" onclick="sortBy('precio_venta')">Precio venta <span class="sort" id="s-precio_venta">↕</span></th>
+    <th class="col-costo" data-sort="costo_unitario" onclick="sortBy('costo_unitario')">Costo <span class="sort" id="s-costo_unitario">↕</span></th>
+    <th data-sort="cantidad" onclick="sortBy('cantidad')">Cant. <span class="sort" id="s-cantidad">↕</span></th>
+    <th data-sort="minimo" onclick="sortBy('minimo')">Mín. <span class="sort" id="s-minimo">↕</span></th>
+    <th data-sort="unidad" onclick="sortBy('unidad')">Unidad <span class="sort" id="s-unidad">↕</span></th>
+    <th class="col-ubicacion" data-sort="ubicacion" onclick="sortBy('ubicacion')">Ubicación <span class="sort" id="s-ubicacion">↕</span></th>
+    <th data-sort="equipos_asociados" onclick="sortBy('equipos_asociados')">Equipos asociados <span class="sort" id="s-equipos_asociados">↕</span></th>
+    <th data-sort="activo" onclick="sortBy('activo')">Estado <span class="sort" id="s-activo">↕</span></th>
     <th>Inventario</th>
     <th class="actions">Acciones</th>
   </tr>
@@ -353,15 +353,15 @@ body { background: #f8fafc; }
       <div class="form-grid cols-2">
         <div class="form-field">
           <label class="req">Marca</label>
-          <input id="f-marca" placeholder="Ej. Hytera / Cecomunica / GenÃ©rico" />
+          <input id="f-marca" placeholder="Ej. Hytera / Cecomunica / Genérico" />
         </div>
         <div class="form-field">
           <label>SKU</label>
           <input id="f-sku" placeholder="SKU (opcional)" />
         </div>
         <div class="form-field">
-          <label>DescripciÃ³n</label>
-          <input id="f-descripcion" placeholder="DescripciÃ³n corta de la pieza" />
+          <label>Descripción</label>
+          <input id="f-descripcion" placeholder="Descripción corta de la pieza" />
         </div>
 
         <div class="form-field">
@@ -378,7 +378,7 @@ body { background: #f8fafc; }
           <input id="f-cantidad" type="number" step="1" placeholder="0" />
         </div>
         <div class="form-field">
-          <label>MÃ­nimo (alerta)</label>
+          <label>Mínimo (alerta)</label>
           <input id="f-minimo" type="number" step="1" placeholder="5" />
         </div>
 
@@ -387,7 +387,7 @@ body { background: #f8fafc; }
           <input id="f-unidad" placeholder="pieza, caja, metro..." />
         </div>
         <div class="form-field">
-          <label>UbicaciÃ³n</label>
+          <label>Ubicación</label>
           <input id="f-ubicacion" placeholder="Estante A3, Bodega 1..." />
         </div>
 
@@ -400,7 +400,7 @@ body { background: #f8fafc; }
         <div class="form-field">
           <label>Activo</label>
           <select id="f-activo">
-            <option value="true" selected>SÃ­</option>
+            <option value="true" selected>Sí</option>
             <option value="false">No</option>
           </select>
         </div>
@@ -408,9 +408,9 @@ body { background: #f8fafc; }
         <label>Control de inventario</label>
         <select id="f-sin-control">
           <option value="false" selected>Usar control de inventario</option>
-          <option value="true">Deshabilitar (cotizaciÃ³n ilimitada)</option>
+          <option value="true">Deshabilitar (cotización ilimitada)</option>
         </select>
-        <p class="muted" style="margin:4px 0 0;">Si deshabilitas el control, esta pieza podrÃ¡ agregarse ilimitadamente sin afectar el stock.</p>
+        <p class="muted" style="margin:4px 0 0;">Si deshabilitas el control, esta pieza podrá agregarse ilimitadamente sin afectar el stock.</p>
       </div>
         <div class="form-field">
           <label>Notas</label>
@@ -437,7 +437,7 @@ body { background: #f8fafc; }
     <div class="sheet-body">
       <p class="muted" style="margin-top:0;">
         Puedes <strong>pegar</strong> datos o <strong>subir un archivo</strong> CSV/TSV con encabezados.
-        <br>Encabezados soportados (mayÃºsc/minÃºsc indif.):
+        <br>Encabezados soportados (mayúsc/minúsc indif.):
         <code>marca, sku, descripcion, precio_venta, costo_unitario, cantidad, minimo, unidad, ubicacion, equipos_asociados, activo, notas</code>.
         <br><a href="javascript:void(0)" onclick="descargarPlantillaCSV()">Descargar plantilla CSV</a>
       </p>
@@ -446,8 +446,8 @@ body { background: #f8fafc; }
         <div class="form-field">
           <label class="req">Pegar datos (CSV/TSV)</label>
           <textarea id="batch-text" rows="10" placeholder="marca,sku,descripcion,precio_venta,costo_unitario,cantidad,minimo,unidad,ubicacion,equipos_asociados,activo,notas
-Hytera,CN-PD786-BAT,BaterÃ­a Li-Ion 2000mAh,35,21,10,3,pieza,Estante A3,Radio-123|Base-Oficina,true,
-GenÃ©rico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|Sucursal-Colon,true,carrete de 100m
+Hytera,CN-PD786-BAT,Batería Li-Ion 2000mAh,35,21,10,3,pieza,Estante A3,Radio-123|Base-Oficina,true,
+Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|Sucursal-Colon,true,carrete de 100m
 "></textarea>
 
         </div>
@@ -455,7 +455,7 @@ GenÃ©rico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5
         <div class="form-field">
           <label>Archivo CSV/TSV (opcional)</label>
           <input id="batch-file" type="file" accept=".csv,.tsv,.txt" />
-          <p class="muted">Si subes archivo, reemplaza el contenido del Ã¡rea de texto.</p>
+          <p class="muted">Si subes archivo, reemplaza el contenido del área de texto.</p>
         </div>
       </div>
 
@@ -463,8 +463,8 @@ GenÃ©rico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5
         <div class="form-field">
           <label>Valores por defecto (opcional)</label>
           <input id="def-unidad" placeholder="unidad por defecto (ej: pieza)" />
-          <input id="def-ubicacion" placeholder="ubicaciÃ³n por defecto (ej: Bodega 1)" />
-          <input id="def-minimo" type="number" step="1" placeholder="mÃ­nimo por defecto (ej: 5)" />
+          <input id="def-ubicacion" placeholder="ubicación por defecto (ej: Bodega 1)" />
+          <input id="def-minimo" type="number" step="1" placeholder="mínimo por defecto (ej: 5)" />
         </div>
 
         <div class="form-field">
@@ -473,8 +473,8 @@ GenÃ©rico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5
             <div>Reglas:</div>
             <ul>
               <li><strong>marca</strong> y <strong>precio_venta&gt;0</strong> son requeridos.</li>
-              <li><code>activo</code>: true/false, 1/0, sÃ­/no.</li>
-              <li>Faltantes se cubren con <em>valores por defecto</em> y/o vacÃ­os seguros.</li>
+              <li><code>activo</code>: true/false, 1/0, sí/no.</li>
+              <li>Faltantes se cubren con <em>valores por defecto</em> y/o vacíos seguros.</li>
             </ul>
           </div>
         </div>
