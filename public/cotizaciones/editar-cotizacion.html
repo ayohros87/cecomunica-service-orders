@@ -16,6 +16,7 @@
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/modelosService.js"></script>
   <script src="../js/services/usuariosService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
     .form-section { background: white; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
@@ -74,7 +75,7 @@
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '🧾 Editar Cotización', back: { label: '⬅️ Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Editar Cotización', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
 
   <div class="app-wrap" id="wrapper">
     <div id="readonlyBanner" class="readonly-banner" style="display:none;">Emitida: solo lectura.</div>
@@ -237,10 +238,10 @@
           <hr>
 
           <div class="actions">
-            <button class="btn primary" onclick="guardar('emitida')">✅ Emitir</button>
-            <button class="btn secondary" onclick="guardar('borrador')">💾 Guardar borrador</button>
-            <button class="btn secondary" onclick="imprimir()">🖨️ Imprimir</button>
-            <button class="btn secondary" onclick="duplicarCotizacion()">🧾 Duplicar</button>
+            <button class="btn primary" onclick="guardar('emitida')"><i data-lucide="check-circle"></i> Emitir</button>
+            <button class="btn secondary" onclick="guardar('borrador')"><i data-lucide="save"></i> Guardar borrador</button>
+            <button class="btn secondary" onclick="imprimir()"><i data-lucide="printer"></i> Imprimir</button>
+            <button class="btn secondary" onclick="duplicarCotizacion()"><i data-lucide="copy"></i> Duplicar</button>
           </div>
         </div>
       </aside>
@@ -248,5 +249,6 @@
   </div>
 
   <script src="../js/pages/editar-cotizacion.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

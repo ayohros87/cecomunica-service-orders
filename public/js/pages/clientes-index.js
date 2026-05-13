@@ -161,6 +161,7 @@ $btnTodo.onclick = async ()=>{
       }
     }
     $resumen.textContent = `${total} resultado(s) — todo cargado`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   } finally {
     loadingAll = false;
     $btnTodo.disabled = false; $btnMas.disabled = false;
@@ -323,6 +324,7 @@ async function gotoPage(target){
     selectedIds.clear(); $selectAll.checked=false; updateBulkBar();
 
     for(const d of docs){ renderRow(d.id, d); }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
     currentPage = target;
     $pageInput.value = currentPage;
@@ -355,6 +357,7 @@ async function loadPage(reset){
   if(reset && !count){ $resumen.textContent='0 resultados'; return; }
 
   for(const d of docs){ renderRow(d.id, d); }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
   $resumen.textContent = `${document.querySelectorAll('#tbody tr').length} resultado(s)`;
   $selectAll.disabled = ($tbody.children.length === 0) || asReadonly();
 }
@@ -443,8 +446,8 @@ function renderRow(id, c){
 
 <td class="actions" style="text-align:center">
   <div class="table-actions">
-    <button class="btn sm" data-edit ${ro?'disabled':''}>✏️ Editar</button>
-    <button class="btn sm danger" data-delete ${ro?'disabled':''}>🗑️ Eliminar</button>
+    <button class="btn sm" data-edit ${ro?'disabled':''}><i data-lucide="pencil"></i> Editar</button>
+    <button class="btn sm danger" data-delete ${ro?'disabled':''}><i data-lucide="trash-2"></i> Eliminar</button>
   </div>
 </td>
   `;

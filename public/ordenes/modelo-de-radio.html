@@ -64,6 +64,7 @@
       margin-left: 5px;
     }
   </style>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
@@ -119,11 +120,12 @@
 
           </span>
           <div class="actions">
-            <button onclick="editarModelo('${m.id}')">✏️</button>
-            <button onclick="borrarModelo('${m.id}')">🗑️</button>
+            <button onclick="editarModelo('${m.id}')"><i data-lucide="pencil"></i></button>
+            <button onclick="borrarModelo('${m.id}')"><i data-lucide="trash-2"></i></button>
           </div>`;
         lista.appendChild(li);
       });
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
 
@@ -174,9 +176,9 @@ document.getElementById("estado-modelo").value = m.estado || "";
   </script>
 </head>
 <body>
-  <h2>📡 Modelos de Radio</h2>
+  <h2><i data-lucide="radio"></i> Modelos de Radio</h2>
   <div class="top-buttons">
-    <button onclick="window.location.href='config.html'">⬅️ Volver</button>
+    <button onclick="window.location.href='config.html'"><i data-lucide="arrow-left"></i> Volver</button>
   </div>
 
   <div class="form-section">
@@ -193,7 +195,7 @@ document.getElementById("estado-modelo").value = m.estado || "";
       <label for="estado-modelo">Estado:</label>
       <input type="text" id="estado-modelo">
 
-      <button type="submit">💾 Guardar Modelo</button>
+      <button type="submit"><i data-lucide="save"></i> Guardar Modelo</button>
 
     </form>
   </div>
@@ -202,5 +204,6 @@ document.getElementById("estado-modelo").value = m.estado || "";
     <h3>Lista de Modelos:</h3>
     <ul id="lista-modelos"></ul>
   </div>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

@@ -39,24 +39,25 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/services/pocService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <h2>📦 Importar Dispositivos POC</h2>
+  <h2><i data-lucide="package"></i> Importar Dispositivos POC</h2>
   <div style="max-width: 600px; margin: auto; margin-bottom: 20px;">
-    <button onclick="window.location.href='index.html'">⬅️ Volver al Menú Principal</button>
+    <button onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Volver al Menú Principal</button>
   </div>
 
   <div class="section">
-    <h3>📥 Importar desde Excel (.xlsx):</h3>
+    <h3><i data-lucide="upload"></i> Importar desde Excel (.xlsx):</h3>
     <label for="archivoExcel">Selecciona archivo Excel:</label>
     <input type="file" id="archivoExcel" accept=".xlsx">
-    <button onclick="importarExcelAFirestore()">📤 Importar Dispositivos</button>
+    <button onclick="importarExcelAFirestore()"><i data-lucide="upload"></i> Importar Dispositivos</button>
     <div id="estadoImportacion"></div>
   </div>
 
   <div class="section">
-    <h3>⬇️ Exportar dispositivos actuales:</h3>
-    <button onclick="exportarDispositivos()">📄 Exportar a Excel</button>
+    <h3><i data-lucide="download"></i> Exportar dispositivos actuales:</h3>
+    <button onclick="exportarDispositivos()"><i data-lucide="file-text"></i> Exportar a Excel</button>
   </div>
 
 <script>
@@ -66,7 +67,7 @@ async function importarExcelAFirestore() {
   const estado = document.getElementById("estadoImportacion");
 
   if (!archivo) {
-    estado.textContent = "⚠️ Selecciona un archivo .xlsx";
+    estado.textContent = "Selecciona un archivo .xlsx";
     return;
   }
 
@@ -106,10 +107,10 @@ async function importarExcelAFirestore() {
     });
 
     contador++;
-    estado.textContent = `📦 Dispositivos importados: ${contador}`;
+    estado.textContent = `Dispositivos importados: ${contador}`;
   }
 
-  estado.textContent = `✅ Importación completada. Total: ${contador}`;
+  estado.textContent = `Importación completada. Total: ${contador}`;
 }
 
 async function exportarDispositivos() {
@@ -121,12 +122,13 @@ async function exportarDispositivos() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Dispositivos");
     XLSX.writeFile(wb, "poc_dispositivos.xlsx");
-    estado.textContent = "✅ Exportación completada.";
+    estado.textContent = "Exportación completada.";
   } catch (error) {
     console.error("Error al exportar:", error);
-    estado.textContent = "❌ Error al exportar.";
+    estado.textContent = "Error al exportar.";
   }
 }
 </script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

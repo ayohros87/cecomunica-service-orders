@@ -11,9 +11,10 @@ window.ContratosLista = {
     const reachedMax = CS.contratos.length >= CS.maxRows();
     const noMore = !!forceNoMore || !CS.lastDoc || reachedMax;
     btn.disabled = CS.isLoading || noMore;
-    if (reachedMax)    btn.textContent = '🔒 Límite de consulta alcanzado';
+    if (reachedMax)    btn.innerHTML = '<i data-lucide="lock"></i> Límite de consulta alcanzado';
     else if (noMore)   btn.textContent = 'Sin más resultados';
-    else               btn.textContent = CS.isLoading ? '⏳ Cargando...' : '⬇️ Cargar más contratos';
+    else               btn.innerHTML = CS.isLoading ? '<i data-lucide="loader"></i> Cargando...' : '<i data-lucide="chevron-down"></i> Cargar más contratos';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   limpiarTabla() {
@@ -47,54 +48,54 @@ window.ContratosLista = {
       'Inactivo';
 
     const iconoComision = data.listo_para_comision
-      ? `<span title="Listo para Comisión" aria-label="Listo para comisión" style="margin-left:6px;">✔️</span>`
+      ? `<span title="Listo para Comisión" aria-label="Listo para comisión" style="margin-left:6px;"><i data-lucide="check"></i></span>`
       : '';
 
     const tot = ContractTotals.fromDoc(data);
 
     const btnImprimir = data.contrato_id
-      ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Imprimir/Ver">🖨️</button>`
+      ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Imprimir/Ver"><i data-lucide="printer"></i></button>`
       : '';
     const btnEditar = editable
-      ? `<button class="btn" onclick="ContratosLista.editar('${id}')" title="Editar">✏️</button>`
+      ? `<button class="btn" onclick="ContratosLista.editar('${id}')" title="Editar"><i data-lucide="pencil"></i></button>`
       : '';
 
     let btnBorrar = '';
     if (!['activo','aprobado','anulado'].includes(data.estado) && (esAdmin || AUTH.is(ROLES.VENDEDOR))) {
-      btnBorrar = `<button class="btn danger" onclick="ContratosLista.borrar('${id}')" title="Eliminar">🗑️</button>`;
+      btnBorrar = `<button class="btn danger" onclick="ContratosLista.borrar('${id}')" title="Eliminar"><i data-lucide="trash-2"></i></button>`;
     }
 
     let bloqueFirmado = '';
     const puedeSubirFirmado = data.estado === 'aprobado' && puedeEditar;
     if (yaFirmado) {
-      bloqueFirmado = `<a class="btn" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado">📄</a>`;
+      bloqueFirmado = `<a class="btn" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado"><i data-lucide="file-text"></i></a>`;
       if (puedeSubirFirmado)
-        bloqueFirmado += ` <button class="btn" onclick="ContratosFirmado.subir('${id}')" title="Reemplazar firmado">🔁</button>`;
+        bloqueFirmado += ` <button class="btn" onclick="ContratosFirmado.subir('${id}')" title="Reemplazar firmado"><i data-lucide="refresh-cw"></i></button>`;
     } else if (puedeSubirFirmado) {
-      bloqueFirmado = `<button class="btn" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado">📤</button>`;
+      bloqueFirmado = `<button class="btn" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado"><i data-lucide="upload"></i></button>`;
     }
 
     const btnAnular = (['activo','aprobado'].includes(data.estado) && esAdmin)
-      ? `<button class="btn danger" onclick="ContratosLista.anular('${id}')" title="Anular contrato">🚫</button>`
+      ? `<button class="btn danger" onclick="ContratosLista.anular('${id}')" title="Anular contrato"><i data-lucide="ban"></i></button>`
       : '';
     const btnDuplicar = (puedeEditar && ['anulado','inactivo'].includes(data.estado))
-      ? `<button class="btn" onclick="ContratosLista.duplicar('${id}')" title="Duplicar contrato">📄</button>`
+      ? `<button class="btn" onclick="ContratosLista.duplicar('${id}')" title="Duplicar contrato"><i data-lucide="copy"></i></button>`
       : '';
     const btnComisionAgregar = esAdmin && !data.listo_para_comision
-      ? `<button class="btn" onclick="ContratosLista.marcarComision('${id}')" title="Marcar listo para comisión">💰</button>`
+      ? `<button class="btn" onclick="ContratosLista.marcarComision('${id}')" title="Marcar listo para comisión"><i data-lucide="dollar-sign"></i></button>`
       : '';
     const btnComisionQuitar = esAdmin && data.listo_para_comision
-      ? `<button class="btn danger" onclick="ContratosLista.quitarComision('${id}')" title="Quitar marca de comisión">🧹</button>`
+      ? `<button class="btn danger" onclick="ContratosLista.quitarComision('${id}')" title="Quitar marca de comisión"><i data-lucide="x-circle"></i></button>`
       : '';
 
     const accionesHtml = esRecepcion
-      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo">🗂️</button>` : ''}`
+      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}`
       : `${btnImprimir}
-         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo">🗂️</button>` : ''}
+         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}
          ${btnEditar}
          ${btnBorrar}
          ${bloqueFirmado}
-         ${esAdmin && data.estado === 'pendiente_aprobacion' ? `<button class="btn" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar">✅</button>` : ''}
+         ${esAdmin && data.estado === 'pendiente_aprobacion' ? `<button class="btn" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar"><i data-lucide="check-circle"></i></button>` : ''}
          ${btnComisionAgregar}
          ${btnComisionQuitar}
          ${btnAnular}
@@ -107,7 +108,7 @@ window.ContratosLista = {
       <td>${esc(data.cliente_nombre || '-')}</td>
       <td>${esc(data.tipo_contrato || '-')}</td>
       <td>${esc(data.accion || '-')}</td>
-      <td style="text-align:center;" data-contrato-equipos="${id}"><span style="opacity:0.3;">⏳</span></td>
+      <td style="text-align:center;" data-contrato-equipos="${id}"><span style="opacity:0.3;"><i data-lucide="loader"></i></span></td>
       <td class="estado-cell">
         <span class="estado ${estadoClase}">
           <span class="estado-dot" aria-hidden="true"></span>
@@ -150,26 +151,26 @@ window.ContratosLista = {
 
     let bloqueFirmado = '';
     if (data.firmado_url) {
-      bloqueFirmado = `<a class="btn" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado">📄</a>`;
+      bloqueFirmado = `<a class="btn" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado"><i data-lucide="file-text"></i></a>`;
       if (data.estado === 'aprobado' && puedeEditar)
-        bloqueFirmado += ` <button class="btn" onclick="ContratosFirmado.subir('${data.id}')" title="Reemplazar firmado">🔁</button>`;
+        bloqueFirmado += ` <button class="btn" onclick="ContratosFirmado.subir('${data.id}')" title="Reemplazar firmado"><i data-lucide="refresh-cw"></i></button>`;
     } else if (data.estado === 'aprobado' && puedeEditar) {
-      bloqueFirmado = `<button class="btn" onclick="ContratosFirmado.subir('${data.id}')" title="Subir firmado">📤</button>`;
+      bloqueFirmado = `<button class="btn" onclick="ContratosFirmado.subir('${data.id}')" title="Subir firmado"><i data-lucide="upload"></i></button>`;
     }
 
     const accionesMovilHtml = esRecepcion
-      ? `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir">🖨️ Ver</button>` : ''}
-         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo">🗂️ Panel</button>` : ''}`
-      : `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir">🖨️ Ver</button>` : ''}
-         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo">🗂️ Panel</button>` : ''}
-         ${editable ? `<button class="btn" onclick="ContratosLista.editar('${data.id}')" title="Editar">✏️ Editar</button>` : ''}
-         ${puedeAprobar ? `<button class="btn ok block" onclick="ContratosAprobacion.abrir('${data.id}')" title="Aprobar ahora">✅ Aprobar</button>` : ''}
+      ? `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir"><i data-lucide="printer"></i> Ver</button>` : ''}
+         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i> Panel</button>` : ''}`
+      : `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir"><i data-lucide="printer"></i> Ver</button>` : ''}
+         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i> Panel</button>` : ''}
+         ${editable ? `<button class="btn" onclick="ContratosLista.editar('${data.id}')" title="Editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
+         ${puedeAprobar ? `<button class="btn ok block" onclick="ContratosAprobacion.abrir('${data.id}')" title="Aprobar ahora"><i data-lucide="check-circle"></i> Aprobar</button>` : ''}
          ${bloqueFirmado}
          ${esAdmin && !data.listo_para_comision
-           ? `<button class="btn" onclick="ContratosLista.marcarComision('${data.id}')" title="Marcar listo para comisión">💰 Comisión</button>`
+           ? `<button class="btn" onclick="ContratosLista.marcarComision('${data.id}')" title="Marcar listo para comisión"><i data-lucide="dollar-sign"></i> Comisión</button>`
            : ''}
          ${esAdmin && data.listo_para_comision
-           ? `<button class="btn danger" onclick="ContratosLista.quitarComision('${data.id}')" title="Quitar marca de comisión">🧹 Quitar</button>`
+           ? `<button class="btn danger" onclick="ContratosLista.quitarComision('${data.id}')" title="Quitar marca de comisión"><i data-lucide="x-circle"></i> Quitar</button>`
            : ''}`;
 
     const card = document.createElement('div');
@@ -179,7 +180,7 @@ window.ContratosLista = {
         <div>
           <div class="t1">
             ${esc(data.contrato_id || '-')}
-            ${data.listo_para_comision ? '<span title="Listo para Comisión" aria-label="Listo para comisión" style="margin-left:6px;">✔️</span>' : ''}
+            ${data.listo_para_comision ? '<span title="Listo para Comisión" aria-label="Listo para comisión" style="margin-left:6px;"><i data-lucide="check"></i></span>' : ''}
           </div>
           <div class="t2">${esc(data.cliente_nombre || '-')}</div>
         </div>
@@ -367,6 +368,7 @@ window.ContratosLista = {
 
       ContratosEquipos.cargarIconos();
       this.updateBtnCargarMas(!CS.lastDoc);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     } finally {
       CS.isLoading = false;
       this.updateBtnCargarMas(false);
@@ -416,6 +418,7 @@ window.ContratosLista = {
       `;
     }
     this.updateBtnCargarMas(false);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   actualizarFlechitas() {

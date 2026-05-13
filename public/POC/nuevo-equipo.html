@@ -36,22 +36,23 @@
   <script src="../js/firebase-init.js"></script>
   <script src="../js/services/pocService.js"></script>
   <script src="../js/services/empresaService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <h2>Registrar Nuevo Equipo PoC</h2>
   <form id="equipoForm">
     <fieldset>
-      <legend>📦 Información del Equipo</legend>
+      <legend><i data-lucide="package"></i> Información del Equipo</legend>
       <label class="wrap-text"><span class="required">Cliente:</span>
         <div style="display: flex; gap: 10px; align-items: center;">
           <select id="cliente" required style="flex: 1;"></select>
-          <button type="button" id="addCliente" class="inline-button">➕</button>
+          <button type="button" id="addCliente" class="inline-button"><i data-lucide="plus"></i></button>
         </div>
       </label>
       <label class="wrap-text"><span class="required">Operador:</span>
         <div style="display: flex; gap: 10px; align-items: center;">
           <select id="operador" required style="flex: 1;"></select>
-          <button type="button" id="addOperador" class="inline-button">➕</button>
+          <button type="button" id="addOperador" class="inline-button"><i data-lucide="plus"></i></button>
         </div>
       </label>
       <label class="wrap-text"><span class="required"># SIMCARD:</span>
@@ -72,13 +73,13 @@
       <label class="wrap-text">IP:
         <div style="display: flex; gap: 10px; align-items: center;">
           <select id="ip" style="flex: 1;"></select>
-          <button type="button" id="addIP" class="inline-button">➕</button>
+          <button type="button" id="addIP" class="inline-button"><i data-lucide="plus"></i></button>
         </div>
       </label>
     </fieldset>
 
     <fieldset>
-      <legend>⚙️ Configuración y Estado</legend>
+      <legend><i data-lucide="settings"></i> Configuración y Estado</legend>
       <label class="wrap-text">GPS:
         <input type="checkbox" id="gps">
       </label>
@@ -87,24 +88,25 @@
       </label>
       <label class="wrap-text">Grupos:
         <div id="gruposContainer"></div>
-        <button type="button" id="addGrupo">➕ Agregar grupo</button>
+        <button type="button" id="addGrupo"><i data-lucide="plus"></i> Agregar grupo</button>
       </label>
     </fieldset>
 
     <fieldset>
-      <legend>📝 Notas</legend>
+      <legend><i data-lucide="file-text"></i> Notas</legend>
       <label class="wrap-text">Notas:
         <textarea id="notas" rows="3"></textarea>
       </label>
     </fieldset>
 
     <div style="display: flex; gap: 10px; margin-top: 20px;">
-      <button type="submit" style="flex: 1; padding: 10px; font-size: 16px;">💾 Guardar Equipo</button>
-      <button type="button" onclick="window.location.href='index.html'" style="flex: 1; padding: 10px; font-size: 16px;">⬅️ Cancelar y volver</button>
+      <button type="submit" style="flex: 1; padding: 10px; font-size: 16px;"><i data-lucide="save"></i> Guardar Equipo</button>
+      <button type="button" onclick="window.location.href='index.html'" style="flex: 1; padding: 10px; font-size: 16px;"><i data-lucide="arrow-left"></i> Cancelar y volver</button>
     </div>
   </form>
   <p id="mensaje"></p>
 
   <script src="../js/pages/nuevo-equipo.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

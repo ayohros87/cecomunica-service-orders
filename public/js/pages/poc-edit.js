@@ -3,6 +3,7 @@
 window.PocEdit = {
   _docId: null,
   _row:   null,
+  _data:  null,
 
   abrir(row, docId, data) {
     if (PocState.esLectura()) {
@@ -11,6 +12,7 @@ window.PocEdit = {
     }
     this._docId = docId;
     this._row   = row;
+    this._data  = data;
 
     document.querySelectorAll('tr.row-editing').forEach(r => r.classList.remove('row-editing'));
     row.classList.add('row-editing');
@@ -49,11 +51,14 @@ window.PocEdit = {
     if (this._row) this._row.classList.remove('row-editing');
     this._docId = null;
     this._row   = null;
+    this._data  = null;
   },
 
   async guardar() {
     if (!this._docId) return;
-    const docId = this._docId;
+    const docId       = this._docId;
+    const rowRef      = this._row;
+    const originalData = this._data;
     const grupos = document.getElementById('drawer-grupos').value
       .split(',').map(g => g.trim()).filter(Boolean);
     const user   = firebase.auth().currentUser;
@@ -84,18 +89,21 @@ window.PocEdit = {
     }
 
     // Log is non-critical — don't let it block the success flow
-    PocService.getPocDevice(docId)
-      .then(prevData => PocService.addLog({
-        equipo_id: docId,
-        fecha:     firebase.firestore.FieldValue.serverTimestamp(),
-        usuario:   user?.email,
-        cambios:   { antes: prevData || {}, despues: newData }
-      }))
-      .catch(e => console.warn('poc_log write failed (non-critical):', e));
+    PocService.addLog({
+      equipo_id: docId,
+      fecha:     firebase.firestore.FieldValue.serverTimestamp(),
+      usuario:   user?.email,
+      cambios:   { antes: originalData || {}, despues: newData }
+    }).catch(e => console.warn('poc_log write failed (non-critical):', e));
 
+    // Rebuild only the edited row using merged data — avoids full reload and
+    // Firestore query-cache staleness caused by enablePersistence.
+    const mergedData = { ...originalData, ...newData };
     this.cerrar();
     Toast.show('Cambios guardados', 'ok');
-    PocList.refresh();
+    const newRow = PocList._buildRow(docId, mergedData);
+    rowRef.replaceWith(newRow);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   init() {

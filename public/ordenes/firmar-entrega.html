@@ -18,6 +18,7 @@
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
     body { margin:0; padding:0; font-family: system-ui, sans-serif; background:#f9fafb; }
@@ -31,7 +32,7 @@
 </head>
 <body>
   <div class="card form">
-  <h2 class="form-title center">📲 Firma de Entrega</h2>
+  <h2 class="form-title center"><i data-lucide="pen-tool"></i> Firma de Entrega</h2>
 <div id="infoOrden" class="resumen">
   <p><strong>Cliente:</strong> <span id="ordenCliente">—</span></p>
   <p><strong>Tipo:</strong> <span id="ordenTipo">—</span></p>
@@ -42,35 +43,36 @@
 
 
 <div class="section form">
-  <h3 class="form-title">📧 Email del cliente</h3>
+  <h3 class="form-title"><i data-lucide="mail"></i> Email del cliente</h3>
   <input type="email" id="clienteEmail" class="table-input" placeholder="correo@ejemplo.com">
 </div>
 
 <div class="section form">
-  <h3 class="form-title">🪪 Identificación</h3>
+  <h3 class="form-title"><i data-lucide="credit-card"></i> Identificación</h3>
   <input type="file" id="fotoIdentificacion" accept="image/*" capture="environment" style="display:none">
   <button type="button" class="btn secondary" onclick="document.getElementById('fotoIdentificacion').click()">
-    📸 Tomar foto de la identificación
+    <i data-lucide="camera"></i> Tomar foto de la identificación
   </button>
   <p id="previewId" class="form-hint">Aún no se ha tomado foto</p>
 </div>
 
 <div class="section form" id="fechaEntregaSection" style="display:none">
-  <h3 class="form-title">📅 Fecha de Entrega</h3>
+  <h3 class="form-title"><i data-lucide="calendar"></i> Fecha de Entrega</h3>
   <input type="date" id="fechaEntrega" class="table-input">
 </div>
 
   <canvas id="firmaCanvas" class="firma-canvas"></canvas>
 
   <div class="form-actions center">
-    <button class="btn secondary btn-lg" onclick="limpiarFirma()">🧹 Limpiar</button>
-    <button class="btn primary btn-lg" onclick="guardarFirma()">✅ Confirmar</button>
-    <button class="btn danger" onclick="window.location.href='index.html'">❌ Cancelar</button>
+    <button class="btn secondary btn-lg" onclick="limpiarFirma()"><i data-lucide="eraser"></i> Limpiar</button>
+    <button class="btn primary btn-lg" onclick="guardarFirma()"><i data-lucide="check"></i> Confirmar</button>
+    <button class="btn danger" onclick="window.location.href='index.html'"><i data-lucide="x"></i> Cancelar</button>
   </div>
 
   <p id="mensaje" class="resumen center" style="margin-top:12px;"></p>
 </div>
 
   <script src="../js/pages/firmar-entrega.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

@@ -22,13 +22,14 @@
   </style>
 </head>
 <body>
-  <h2 style="margin:8px 0;">🧰 Trabajar Orden</h2>
+  <h2 style="margin:8px 0;"><i data-lucide="wrench"></i> Trabajar Orden</h2>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="../js/services/ordenesService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/piezasService.js"></script>
@@ -36,9 +37,9 @@
   <div class="card">
     <div id="infoOrden" class="resumen"></div>
     <div class="acciones">
-      <button class="btn" onclick="window.open('imprimir-orden.html?id='+ordenId,'_blank')">🖨️ Imprimir orden</button>
-      <button class="btn primary" onclick="irACotizar()">🧾 Previsualizar cotización</button>
-      <button class="btn" onclick="history.back()">⬅️ Volver</button>
+      <button class="btn" onclick="window.open('imprimir-orden.html?id='+ordenId,'_blank')"><i data-lucide="printer"></i> Imprimir orden</button>
+      <button class="btn primary" onclick="irACotizar()"><i data-lucide="receipt"></i> Previsualizar cotización</button>
+      <button class="btn" onclick="history.back()"><i data-lucide="arrow-left"></i> Volver</button>
     </div>
   </div>
 
@@ -76,5 +77,6 @@
 <script src="../js/ui/modal.js"></script>
 
 <script src="../js/pages/cotizar-orden.js" defer></script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

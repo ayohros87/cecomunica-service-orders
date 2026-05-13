@@ -53,7 +53,7 @@ async function renderEquiposYConsumos(){
           <div><small>Modelo: ${e.modelo || '-'}</small></div>
         </div>
         <div class="acciones">
-          <button class="btn" onclick="abrirModal('${e.id}')">➕ Agregar pieza</button>
+          <button class="btn" onclick="abrirModal('${e.id}')"><i data-lucide="plus"></i> Agregar pieza</button>
         </div>
       </div>
       <div class="consumos" id="consumos_${e.id}">
@@ -61,6 +61,7 @@ async function renderEquiposYConsumos(){
       </div>
     `;
     wrap.appendChild(div);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
     await cargarConsumosEquipo(e.id);
   }
@@ -98,8 +99,8 @@ async function cargarConsumosEquipo(equipoId){
         <td>${fmtMoney(it.precio_unit)}</td>
         <td>${fmtMoney(sub)}</td>
         <td>
-          <button class="btn" title="Editar" onclick="editarLinea('${it.id}')">✏️</button>
-          <button class="btn danger" title="Eliminar" onclick="eliminarLinea('${it.id}','${equipoId}')">🗑️</button>
+          <button class="btn" title="Editar" onclick="editarLinea('${it.id}')"><i data-lucide="pencil"></i></button>
+          <button class="btn danger" title="Eliminar" onclick="eliminarLinea('${it.id}','${equipoId}')"><i data-lucide="trash-2"></i></button>
         </td>
       </tr>`;
   });
@@ -107,6 +108,7 @@ async function cargarConsumosEquipo(equipoId){
   <div class="total-mini">Subtotal cobrado (equipo): ${fmtMoney(totalEquipo)}</div>`;
 
   zona.innerHTML = html;
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function fmtMoney(n){ n = Number(n||0); return '$'+n.toFixed(2); }

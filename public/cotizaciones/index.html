@@ -15,6 +15,7 @@
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/cotizacionesService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
     html, body { margin: 0; padding: 0; }
@@ -73,7 +74,7 @@
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '🧾 Cotizaciones', actions: [{ label: '➕ Nueva Cotización', href: 'nueva-cotizacion.html', cls: 'primary' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Cotizaciones', actions: [{ label: '<i data-lucide="plus"></i> Nueva Cotización', href: 'nueva-cotizacion.html', cls: 'primary' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
 
   <div class="app-wrap">
     <div class="card">
@@ -87,7 +88,7 @@
             <option value="enviada">Enviada</option>
             <option value="anulada">Anulada</option>
           </select>
-          <button class="btn" onclick="aplicarFiltros()">🔍 Aplicar</button>
+          <button class="btn" onclick="aplicarFiltros()"><i data-lucide="search"></i> Aplicar</button>
           <button class="btn" onclick="limpiarFiltros()">Limpiar</button>
           <label class="toggle-pill">
             <input type="checkbox" id="toggleEliminadas">
@@ -142,10 +143,11 @@
     <div id="listaCotizacionesMovil" class="cards-list"></div>
 
     <div style="margin:12px 0; text-align:center;">
-      <button class="btn" id="btnCargarMas">⬇️ Cargar más cotizaciones</button>
+      <button class="btn" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más cotizaciones</button>
     </div>
   </div>
 
   <script src="../js/pages/cotizaciones-index.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

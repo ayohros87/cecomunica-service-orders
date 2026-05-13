@@ -20,6 +20,7 @@
   <script src="../js/services/ordenesService.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <style>
     body {
       background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
@@ -306,7 +307,7 @@
 </head>
 <body>
   <div class="page-header">
-    <h1><span style="font-size: 36px;">📋</span> Crear Nueva Orden de Servicio</h1>
+    <h1><i data-lucide="clipboard"></i> Crear Nueva Orden de Servicio</h1>
     <p>Complete los datos para generar una nueva orden en el sistema</p>
   </div>
   
@@ -314,7 +315,7 @@
 
   <form id="ordenForm" class="card form">
   <div class="section form">
-    <h3 class="form-title">🧾 Información General</h3>
+    <h3 class="form-title"><i data-lucide="file-text"></i> Información General</h3>
     <div class="form-grid cols-2">
       <div class="form-field">
         <label class="req">Número de Orden</label>
@@ -327,7 +328,7 @@
           <select id="cliente" required>
             <option value="">Seleccione un cliente</option>
           </select>
-          <button type="button" id="crearCliente" class="btn btn-pill fit">➕</button>
+          <button type="button" id="crearCliente" class="btn btn-pill fit"><i data-lucide="plus"></i></button>
         </div>
       </div>
 
@@ -348,7 +349,7 @@
       <!-- Bloque de Contrato (solo para PROGRAMACION) -->
       <div id="contratoBlock" class="contrato-block" style="display: none; grid-column: 1 / -1;">
         <div class="contrato-hint">
-          <span>ℹ️</span>
+          <span><i data-lucide="info"></i></span>
           <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marque "No aplica" solo si corresponde.</span>
         </div>
         
@@ -374,7 +375,7 @@
   </div>
 
   <div class="section form">
-    <h3 class="form-title">📝 Observaciones</h3>
+    <h3 class="form-title"><i data-lucide="file-text"></i> Observaciones</h3>
     <div class="form-field">
       <label># Contrato / Observaciones</label>
       <textarea id="observaciones" rows="4"></textarea>
@@ -382,8 +383,8 @@
   </div>
 
   <div class="form-actions">
-    <button type="submit" class="btn primary">💾 Guardar Orden</button>
-    <button type="button" class="btn" onclick="window.location.href='index.html'">⬅️ Cancelar y volver</button>
+    <button type="submit" class="btn primary"><i data-lucide="save"></i> Guardar Orden</button>
+    <button type="button" class="btn" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar y volver</button>
   </div>
 
   </form>
@@ -392,5 +393,6 @@
   </div>
 
   <script src="../js/pages/nueva-orden.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

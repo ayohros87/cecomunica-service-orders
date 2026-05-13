@@ -16,12 +16,13 @@
   <script src="../js/services/empresaService.js"></script>
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/admin-equipos-cliente.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div class="topbar">
-    <h1 class="topbar-title">🛡️ Equipos por Cliente (Administrador)</h1>
+    <h1 class="topbar-title"><i data-lucide="shield"></i> Equipos por Cliente (Administrador)</h1>
     <div class="topbar-actions">
-      <button class="btn secondary" id="btnVolverOrdenes">⬅️ Volver a órdenes</button>
+      <button class="btn secondary" id="btnVolverOrdenes"><i data-lucide="arrow-left"></i> Volver a órdenes</button>
     </div>
   </div>
 
@@ -72,8 +73,8 @@
           <label class="check-inline"><input type="checkbox" id="incluirEquiposEliminados"> Incluir equipos eliminados</label>
         </div>
         <div class="right admin-actions">
-          <button class="btn primary" id="btnBuscarAdmin">🔎 Buscar</button>
-          <button class="btn secondary" id="btnExportarExcelAdmin" disabled>📥 Exportar Excel</button>
+          <button class="btn primary" id="btnBuscarAdmin"><i data-lucide="search"></i> Buscar</button>
+          <button class="btn secondary" id="btnExportarExcelAdmin" disabled><i data-lucide="download"></i> Exportar Excel</button>
           <button class="btn" id="btnLimpiarAdmin">Limpiar</button>
         </div>
       </div>
@@ -102,5 +103,6 @@
       </div>
     </div>
   </div>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

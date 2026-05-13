@@ -51,6 +51,7 @@ const Layout = (() => {
     const mount = document.getElementById('topbar-mount');
     if (mount) {
       mount.outerHTML = html;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
   }
 

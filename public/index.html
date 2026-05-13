@@ -13,7 +13,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="js/firebase-init.js"></script>
   <script src="js/core/layout.js"></script>
-
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div id="topbar-mount"></div>
@@ -26,7 +26,7 @@
         <input id="buscador" type="search" placeholder="Buscar módulo (ej: inventario, poc, órdenes)..." oninput="filtrarModulos()">
       </div>
       <div>
-        <button class="btn" onclick="window.location.href='perfil.html'">👤 Mi perfil</button>
+        <button class="btn" onclick="window.location.href='perfil.html'"><i data-lucide="user"></i> Mi perfil</button>
       </div>
     </div>
 
@@ -59,7 +59,7 @@
       <!-- Órdenes -->
       <div class="app-card" data-keywords="ordenes servicio reparaciones equipos tecnicos" data-mod="ordenes" data-visible="false"
            onclick="location.href='ordenes/index.html'">
-        <div class="ico">🛠️</div>
+        <div class="ico"><i data-lucide="settings-2"></i></div>
         <div class="meta">
           <div class="t">Órdenes de Servicio</div>
           <div class="s">Recepción, técnicos, estados y equipos</div>
@@ -69,7 +69,7 @@
       <!-- PoC -->
       <div class="app-card" data-keywords="poc base datos radios sim ip gps grupos" data-mod="poc" data-visible="false"
            onclick="location.href='POC/index.html'">
-        <div class="ico">📡</div>
+        <div class="ico"><i data-lucide="radio-tower"></i></div>
         <div class="meta">
           <div class="t">Base de Datos PoC</div>
           <div class="s">Radios, SIM, IP, grupos y notas</div>
@@ -79,7 +79,7 @@
       <!-- Inventario -->
       <div class="app-card" data-keywords="inventario radios stock modelos almacen" data-mod="inventario" data-visible="false"
            onclick="location.href='inventario/index.html'">
-        <div class="ico">📦</div>
+        <div class="ico"><i data-lucide="package"></i></div>
         <div class="meta">
           <div class="t">Inventario de Radios</div>
           <div class="s">Ingresos, salidas y existencias</div>
@@ -89,7 +89,7 @@
       <!-- Inventario de Piezas -->
       <div class="app-card" data-keywords="piezas repuestos stock inventario taller servicio" data-mod="piezas" data-visible="false"
            onclick="location.href='inventario/piezas.html'">
-        <div class="ico">🧩</div>
+        <div class="ico"><i data-lucide="puzzle"></i></div>
         <div class="meta">
           <div class="t">Inventario de Piezas</div>
           <div class="s">Repuestos y precios para servicio</div>
@@ -99,7 +99,7 @@
       <!-- Contratos -->
       <div class="app-card" data-keywords="contratos clientes facturacion vigencia" data-mod="contratos" data-visible="false"
            onclick="location.href='contratos/index.html'">
-        <div class="ico">📝</div>
+        <div class="ico"><i data-lucide="file-text"></i></div>
         <div class="meta">
           <div class="t">Contratos</div>
           <div class="s">Altas, renovaciones y estados</div>
@@ -109,7 +109,7 @@
       <!-- Cotizaciones -->
       <div class="app-card" data-keywords="cotizaciones ventas proformas ofertas clientes" data-mod="cotizaciones" data-visible="false"
            onclick="location.href='cotizaciones/index.html'">
-        <div class="ico">🧾</div>
+        <div class="ico"><i data-lucide="receipt"></i></div>
         <div class="meta">
           <div class="t">Cotizaciones</div>
           <div class="s">Crear, editar e imprimir</div>
@@ -119,7 +119,7 @@
 <!-- Clientes -->
 <div class="app-card" data-keywords="clientes ruc cedula contactos cuentas empresas" data-mod="clientes" data-visible="false"
      onclick="location.href='clientes/index.html'">
-  <div class="ico">👥</div>
+  <div class="ico"><i data-lucide="users"></i></div>
   <div class="meta">
     <div class="t">Clientes</div>
     <div class="s">Listado y edición masiva</div>
@@ -129,7 +129,7 @@
       <!-- Vendedores -->
       <div class="app-card" data-keywords="vendedores ventas carga batch equipos radios" data-mod="vendedores" data-visible="false"
            onclick="location.href='POC/vendedores-batch.html'">
-        <div class="ico">🧑‍💼</div>
+        <div class="ico"><i data-lucide="briefcase"></i></div>
         <div class="meta">
           <div class="t">Registro de Equipos (Ventas)</div>
           <div class="s">Carga rápida por vendedor</div>
@@ -164,9 +164,11 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
     // Ocultar skeletons y aplicar filtro
     document.querySelectorAll(".skeleton-card").forEach(el => el.style.display = "none");
-    
+
     // Aplica el filtro inicial del buscador (vacío) para mostrar lo visible
     (window.filtrarModulos || function(){})();
+
+    lucide.createIcons();
   });
 });
 
@@ -206,6 +208,7 @@ function cerrarSesion() {
     if (e.key === "q") go("cotizaciones");
     if (e.key === "x") go("piezas");
   });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 </script>
 </body>
 </html>

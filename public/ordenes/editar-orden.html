@@ -349,7 +349,7 @@
 </head>
 <body>
   <div class="page-header">
-    <h1><span style="font-size: 36px;">✏️</span> Editar Orden de Servicio</h1>
+    <h1><i data-lucide="pencil"></i> Editar Orden de Servicio</h1>
     <p>Modifique los datos de la orden seleccionada</p>
     <div class="order-id-badge" id="orderIdDisplay"></div>
   </div>
@@ -358,7 +358,7 @@
 
   <form id="ordenForm" class="card form">
     <div class="section form">
-      <h3 class="form-title">🧾 Información General</h3>
+      <h3 class="form-title"><i data-lucide="receipt"></i> Información General</h3>
       <div class="form-grid cols-2">
         <div class="form-field">
           <label class="req">Número de Orden</label>
@@ -387,7 +387,7 @@
         <!-- Bloque de Contrato (solo para PROGRAMACION) -->
         <div id="contratoBlock" class="contrato-block" style="display: none; grid-column: 1 / -1;">
           <div class="contrato-hint">
-            <span>ℹ️</span>
+            <i data-lucide="info"></i>
             <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marque "No aplica" solo si corresponde.</span>
           </div>
           
@@ -412,14 +412,14 @@
     </div>
 
     <div class="section form">
-      <h3 class="form-title">🛠️ Asignación y Estado</h3>
+      <h3 class="form-title"><i data-lucide="settings-2"></i> Asignación y Estado</h3>
       <div class="form-grid cols-2">
         <div class="form-field">
           <label>Técnico</label>
           <select id="tecnico" disabled>
             <option value="">Por asignar</option>
           </select>
-          <p class="form-hint">🔒 Solo se puede asignar desde el listado principal</p>
+          <p class="form-hint"><i data-lucide="lock"></i> Solo se puede asignar desde el listado principal</p>
         </div>
 
         <div class="form-field">
@@ -427,13 +427,13 @@
           <select id="estado" disabled>
             <option value="">Cargando estados...</option>
           </select>
-          <p class="form-hint">🔒 Se actualiza automáticamente según el flujo</p>
+          <p class="form-hint"><i data-lucide="lock"></i> Se actualiza automáticamente según el flujo</p>
         </div>
       </div>
     </div>
 
     <div class="section form">
-      <h3 class="form-title">📝 Observaciones</h3>
+      <h3 class="form-title"><i data-lucide="file-text"></i> Observaciones</h3>
       <div class="form-field">
         <label># Contrato / Observaciones</label>
         <textarea id="observaciones" rows="4"></textarea>
@@ -441,8 +441,8 @@
     </div>
 
     <div class="form-actions">
-      <button type="submit" class="btn primary">💾 Guardar Cambios</button>
-      <button type="button" class="btn" onclick="window.location.href='index.html'">⬅️ Cancelar y volver</button>
+      <button type="submit" class="btn primary"><i data-lucide="save"></i> Guardar Cambios</button>
+      <button type="button" class="btn" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar y volver</button>
     </div>
 
   </form>
@@ -451,5 +451,7 @@
   </div>
 
   <script src="../js/pages/editar-orden.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

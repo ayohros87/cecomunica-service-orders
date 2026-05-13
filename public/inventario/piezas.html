@@ -172,6 +172,7 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/piezasService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
 <style>
 .app-search input {
@@ -289,21 +290,21 @@ body { background: #f8fafc; }
 <body>
 <div class="topbar">
   <div class="topbar-left">
-    <h1>🧩 Inventario de Piezas</h1>
+    <h1><i data-lucide="layers"></i> Inventario de Piezas</h1>
     <div class="app-search">
       <input id="filtroNombre" placeholder="Buscar marca, SKU o equipo..." />
-      <button class="btn icon" onclick="filtrar()">🔍</button>
+      <button class="btn icon" onclick="filtrar()"><i data-lucide="search"></i></button>
     </div>
   </div>
 
   <div class="topbar-right">
-    <button class="btn" onclick="window.location.href='./index.html'">📦 Radios</button>
-    <button class="btn" onclick="window.location.href='../index.html'">🏠 Inicio</button>
-    <button id="btnNueva" class="btn ok" onclick="abrirModal()">➕ Nueva</button>
-    <button id="btnBatch" class="btn" onclick="abrirBatchModal()">📥 Lote</button>
+    <button class="btn" onclick="window.location.href='./index.html'"><i data-lucide="package"></i> Radios</button>
+    <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Inicio</button>
+    <button id="btnNueva" class="btn ok" onclick="abrirModal()"><i data-lucide="plus"></i> Nueva</button>
+    <button id="btnBatch" class="btn" onclick="abrirBatchModal()"><i data-lucide="download"></i> Lote</button>
 
     <div class="dropdown">
-      <button class="btn">⚙️ Vista</button>
+      <button class="btn"><i data-lucide="settings"></i> Vista</button>
       <div class="menu" style="min-width:220px;">
         <label class="menu-item"><input type="checkbox" checked id="col-CHK-sku" onchange="toggleColumn('sku', this.checked)"> SKU</label>
         <label class="menu-item"><input type="checkbox" checked id="col-CHK-costo" onchange="toggleColumn('costo', this.checked)"> Costo</label>
@@ -349,7 +350,7 @@ body { background: #f8fafc; }
     <div class="sheet-header">
       <span class="handle"></span>
       <h3 id="modalTitle" class="sheet-title">Nueva pieza</h3>
-      <button class="btn" onclick="cerrarModal()">✖</button>
+      <button class="btn" onclick="cerrarModal()"><i data-lucide="x"></i></button>
     </div>
     <div class="sheet-body">
       <div class="form-grid cols-2">
@@ -422,7 +423,7 @@ body { background: #f8fafc; }
     </div>
     <div class="footer">
       <button class="btn" onclick="cerrarModal()">Cancelar</button>
-      <button id="btnGuardar" class="btn primary" onclick="guardarPieza()">💾 Guardar</button>
+      <button id="btnGuardar" class="btn primary" onclick="guardarPieza()"><i data-lucide="save"></i> Guardar</button>
     </div>
   </div>
 </div>
@@ -433,7 +434,7 @@ body { background: #f8fafc; }
     <div class="sheet-header">
       <span class="handle"></span>
       <h3 class="sheet-title">Carga en lote (CSV/TSV)</h3>
-      <button class="btn" onclick="cerrarBatchModal()">✖</button>
+      <button class="btn" onclick="cerrarBatchModal()"><i data-lucide="x"></i></button>
     </div>
 
     <div class="sheet-body">
@@ -485,7 +486,7 @@ Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|S
 
     <div class="footer">
       <button class="btn" onclick="cerrarBatchModal()">Cancelar</button>
-      <button class="btn primary" onclick="guardarBatch()">🚀 Cargar</button>
+      <button class="btn primary" onclick="guardarBatch()"><i data-lucide="upload"></i> Cargar</button>
     </div>
   </div>
 </div>
@@ -494,5 +495,6 @@ Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|S
 <script src="../js/ui/modal.js"></script>
 
 <script src="../js/pages/piezas.js" defer></script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

@@ -24,26 +24,26 @@
     });
   }
 </script>
-
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
   <div class="left">
-    <h2 style="margin:8px 0;">⚙️ Configuración del Sistema</h2>
+    <h2 style="margin:8px 0;"><i data-lucide="settings"></i> Configuración del Sistema</h2>
   </div>
   <div class="right">
-    <button class="btn" onclick="window.location.href='./index.html'">⬅️ Volver</button>
-    <button class="btn danger" onclick="cerrarSesion()">🚪 Cerrar Sesión</button>
+    <button class="btn" onclick="window.location.href='./index.html'"><i data-lucide="arrow-left"></i> Volver</button>
+    <button class="btn danger" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar Sesión</button>
   </div>
 </div>
 
 
   <div class="card" style="max-width:700px; margin:16px auto;">
   <div class="form-grid cols-2">
-    <button class="btn w-100" onclick="window.location.href='importar-exportar.html'">📦 Importar / Exportar Datos</button>
+    <button class="btn w-100" onclick="window.location.href='importar-exportar.html'"><i data-lucide="package"></i> Importar / Exportar Datos</button>
   </div>
 </div>
 
-
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

@@ -183,14 +183,15 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/services/clientesService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
 </head>
 <body>
   <div class="page-wrap">
-    <h2 id="pageTitle">🧾 Registrar Nuevo Cliente</h2>
+    <h2 id="pageTitle"><i data-lucide="user-plus"></i> Registrar Nuevo Cliente</h2>
 
     <div class="top-actions">
-      <button type="button" class="btn ghost" onclick="volverAContrato()">⬅️ Volver</button>
+      <button type="button" class="btn ghost" onclick="volverAContrato()"><i data-lucide="arrow-left"></i> Volver</button>
     </div>
 
     <form id="formCliente">
@@ -198,7 +199,7 @@
            SECCIÓN 1: IDENTIFICACIÓN FISCAL
            ============================================ -->
       <div class="section-header">
-        <h3>📋 Identificación Fiscal</h3>
+        <h3><i data-lucide="clipboard"></i> Identificación Fiscal</h3>
       </div>
       <div class="section-shell">
         <div class="form-grid cols-2">
@@ -225,7 +226,7 @@
            SECCIÓN 2: CONTACTO
            ============================================ -->
       <div class="section-header">
-        <h3>📞 Contacto</h3>
+        <h3><i data-lucide="phone"></i> Contacto</h3>
       </div>
       <div class="section-shell">
         <div class="form-grid cols-2">
@@ -245,7 +246,7 @@
            SECCIÓN 3: REPRESENTANTE LEGAL
            ============================================ -->
       <div class="section-header">
-        <h3>👤 Representante Legal</h3>
+        <h3><i data-lucide="user"></i> Representante Legal</h3>
       </div>
       <div class="section-shell">
         <div class="form-grid cols-2">
@@ -265,7 +266,7 @@
            SECCIÓN 4: DIRECCIONES
            ============================================ -->
       <div class="section-header">
-        <h3>📍 Direcciones</h3>
+        <h3><i data-lucide="map-pin"></i> Direcciones</h3>
       </div>
       <div class="section-shell">
         <div class="form-grid cols-1">
@@ -283,7 +284,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn primary" data-accion="guardar">💾 Guardar</button>
+        <button type="submit" class="btn primary" data-accion="guardar"><i data-lucide="save"></i> Guardar</button>
         <button type="button" class="btn ghost" onclick="volverAContrato()">Cancelar</button>
       </div>
 
@@ -296,5 +297,6 @@
 <script src="../js/ui/toast.js"></script>
 
   <script src="../js/pages/nuevo-cliente.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

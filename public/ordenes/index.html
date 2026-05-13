@@ -19,22 +19,23 @@
 <script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
 <script src="../js/ordenes.state.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="../js/ordenes-index.js"></script>
 </head>
 <body>
   <div class="topbar" id="desktopTopbar">
-    <h1 class="topbar-title">📋 Órdenes de Servicio</h1>
+    <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
     <div class="topbar-actions">
-      <button class="btn primary" data-action="go-nueva-orden">➕ Crear nueva orden</button>
+      <button class="btn primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
       <div class="overflow-menu topbar-menu">
-        <button class="btn" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false">☰ Más</button>
+        <button class="btn" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="menu"></i> Más</button>
         <div class="overflow-menu-dropdown" id="topbar-menu">
-          <button class="overflow-menu-item" data-action="go-reporte-pendientes">⏳ Pendientes</button>
-          <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos">🏆 Progreso</button>
-          <button class="overflow-menu-item" data-action="go-config">⚙️ Config</button>
+          <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
+          <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
+          <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Config</button>
           <div class="overflow-menu-divider"></div>
-          <button class="overflow-menu-item" data-action="go-menu-principal">🏠 Menú principal</button>
-          <button class="overflow-menu-item danger" data-action="logout">🚺 Salir</button>
+          <button class="overflow-menu-item" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
+          <button class="overflow-menu-item danger" data-action="logout"><i data-lucide="log-out"></i> Salir</button>
         </div>
       </div>
     </div>
@@ -45,8 +46,8 @@
 <!-- MOBILE ONLY: Header -->
 <div id="mobileHeader">
   <div class="mh-top">
-    <div class="mh-title">📋 Órdenes de Servicio</div>
-    <button class="mh-filterBtn" type="button" data-action="mobile-open-filters">🎛️</button>
+    <div class="mh-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</div>
+    <button class="mh-filterBtn" type="button" data-action="mobile-open-filters"><i data-lucide="sliders-horizontal"></i></button>
   </div>
 
   <div class="mh-sub" id="mobileResumen">
@@ -59,8 +60,8 @@
   <!-- Búsqueda rápida -->
   <div class="toolbar">
     <div class="left" style="flex: 1;">
-      <input type="text" id="filtroRapido" placeholder="🔍 Buscar orden, cliente o serial..." class="input-compact" />
-      <button class="btn primary" data-action="filtrar-rapido">🔍 Buscar</button>
+      <input type="text" id="filtroRapido" placeholder="Buscar orden, cliente o serial..." class="input-compact" />
+      <button class="btn primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>
       <button class="btn secondary" data-action="limpiar-filtros">Limpiar</button>
       <button class="btn ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
         <span id="iconoAvanzados">▼</span> Avanzado
@@ -73,7 +74,7 @@
         <option value="ordenId">Número</option>
         <option value="cliente_nombre">Cliente</option>
       </select>
-      <button class="btn" title="Cambiar dirección" data-action="cambiar-direccion">⬆️⬇️</button>
+      <button class="btn" title="Cambiar dirección" data-action="cambiar-direccion"><i data-lucide="arrows-up-down"></i></button>
       <button class="btn ghost toggle-fecha-entrega-btn" id="btnToggleFechaEntrega" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
     </div>
   </div>
@@ -86,7 +87,7 @@
         <input type="text" id="filtroCliente" placeholder="Cliente" />
         <input type="text" id="filtroSerial" placeholder="Serial" />
         <button class="btn primary" data-action="filtrar">Buscar</button>
-        <button class="btn ghost" id="btnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;">🛡️ Equipos por cliente (Admin)</button>
+        <button class="btn ghost" id="btnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente (Admin)</button>
       </div>
     </div>
   </div>
@@ -163,26 +164,26 @@
 
  <div class="toolbar between mt-16">
   <div></div>
-  <button id="btnCargarMas" class="btn">⬇️ Cargar más órdenes</button>
+  <button id="btnCargarMas" class="btn"><i data-lucide="chevron-down"></i> Cargar más órdenes</button>
 </div>
 <!-- Modal Asignar Técnico -->
 <div id="modalAsignar" class="overlay hidden">
   <div class="modal modal-md">
     <div class="modal-header">
-      <h3 class="modal-title">🛠️ Asignar técnico</h3>
+      <h3 class="modal-title"><i data-lucide="wrench"></i> Asignar técnico</h3>
       <button class="btn ghost btn-close-modal" data-action="cerrar-modal-asignar">✕</button>
     </div>
     <div class="form-field">
       <label class="form-label">Selecciona un técnico</label>
       <select id="asignarTecnicoSelect" class="form-select-full" onchange="this.style.borderColor = this.value ? 'var(--brand)' : 'var(--line)'"></select>
       <p class="form-hint">
-        💡 El técnico recibirá una notificación por email
+        El técnico recibirá una notificación por email
       </p>
     </div>
     <div class="modal-footer">
       <button class="btn secondary" data-action="cerrar-modal-asignar">Cancelar</button>
       <button class="btn primary" data-action="confirmar-asignar-tecnico">
-        <span class="btn-icon-sm">✅</span> Asignar técnico
+        Asignar técnico
       </button>
     </div>
   </div>
@@ -193,17 +194,17 @@
 <!-- MOBILE ONLY: Bottom Nav -->
 <nav id="mobileBottomNav" aria-label="Mobile navigation">
   <button class="mnav-item" type="button" data-action="mobile-scroll-top">
-    <span class="mnav-ico">📋</span>
+    <span class="mnav-ico"><i data-lucide="clipboard-list"></i></span>
     <span class="mnav-label">Órdenes</span>
   </button>
 
   <button class="mnav-item mnav-primary" type="button" data-action="go-nueva-orden">
-    <span class="mnav-ico">➕</span>
+    <span class="mnav-ico"><i data-lucide="plus"></i></span>
     <span class="mnav-label">Nueva</span>
   </button>
 
   <button class="mnav-item" type="button" data-action="mobile-open-filters">
-    <span class="mnav-ico">🎛️</span>
+    <span class="mnav-ico"><i data-lucide="sliders-horizontal"></i></span>
     <span class="mnav-label">Filtros</span>
   </button>
 </nav>
@@ -259,7 +260,7 @@
         <button class="btn primary mfull" type="button" data-action="mobile-apply-advanced">Buscar</button>
       </div>
       <div class="mrow">
-        <button class="btn ghost mfull" id="mobileBtnAdminEquiposCliente" type="button" data-action="go-admin-equipos-cliente" style="display:none;">🛡️ Equipos por cliente (Admin)</button>
+        <button class="btn ghost mfull" id="mobileBtnAdminEquiposCliente" type="button" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente (Admin)</button>
       </div>
     </div>
 
@@ -272,7 +273,7 @@
           <option value="cliente_nombre">Cliente</option>
         </select>
 
-        <button class="btn msort" type="button" data-action="mobile-toggle-sort">⬆️⬇️</button>
+        <button class="btn msort" type="button" data-action="mobile-toggle-sort"><i data-lucide="arrows-up-down"></i></button>
       </div>
       <button class="btn ghost mfull toggle-fecha-entrega-btn" type="button" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
     </div>
@@ -281,11 +282,11 @@
     <div class="mdrawer-section">
       <label class="mlabel">Acciones</label>
       <div class="mmenu">
-        <button class="mmenu-item" type="button" data-action="go-reporte-pendientes">⏳ Pendientes</button>
-        <button class="mmenu-item" type="button" data-action="go-progreso-tecnicos">🏆 Progreso</button>
-        <button class="mmenu-item" type="button" data-action="go-config">⚙️ Config</button>
-        <button class="mmenu-item" type="button" data-action="go-menu-principal">🏠 Menú principal</button>
-        <button class="mmenu-item danger" type="button" data-action="logout">🚪 Salir</button>
+        <button class="mmenu-item" type="button" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
+        <button class="mmenu-item" type="button" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
+        <button class="mmenu-item" type="button" data-action="go-config"><i data-lucide="settings"></i> Config</button>
+        <button class="mmenu-item" type="button" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
+        <button class="mmenu-item danger" type="button" data-action="logout"><i data-lucide="log-out"></i> Salir</button>
       </div>
     </div>
   </div>
@@ -330,11 +331,12 @@
 
     <div class="modal-footer-mobile">
       <button class="btn secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
-      <button id="btnGuardarTrabajoEquipo" class="btn primary btn-full" data-action="guardar-trabajo-equipo">💾 Guardar</button>
+      <button id="btnGuardarTrabajoEquipo" class="btn primary btn-full" data-action="guardar-trabajo-equipo"><i data-lucide="save"></i> Guardar</button>
     </div>
   </div>
 </div>
 
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>
 

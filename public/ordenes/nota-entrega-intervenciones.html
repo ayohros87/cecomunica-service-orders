@@ -226,14 +226,15 @@
       }
     }
   </style>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div class="toolbar no-print">
     <button class="btn secondary" onclick="window.print()">
-      <span style="font-size: 16px;">🖨️</span> Imprimir
+      <i data-lucide="printer"></i> Imprimir
     </button>
     <button class="btn" onclick="window.close()">
-      <span style="font-size: 16px;">✕</span> Cerrar
+      <i data-lucide="x"></i> Cerrar
     </button>
   </div>
 
@@ -346,5 +347,6 @@
       `;
     }
   </script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

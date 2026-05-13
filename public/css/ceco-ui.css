@@ -931,3 +931,69 @@ td.acciones, td.flujo {
   color: var(--text);
   font-feature-settings: "tnum" 1;
 }
+
+/* ─── Lucide icons ─────────────────────────────────────────────── */
+i[data-lucide]                              { display: inline-block; }
+.lucide                                     { display: inline-block; vertical-align: -3px; flex-shrink: 0; color: inherit; }
+
+/* Sizing by context */
+.btn .lucide                                { width: 15px; height: 15px; vertical-align: -2px; }
+.topbar-title .lucide                       { width: 20px; height: 20px; vertical-align: -4px; }
+.form-title .lucide                         { width: 18px; height: 18px; vertical-align: -3px; }
+.app-card .ico .lucide                      { width: 38px; height: 38px; vertical-align: 0; }
+.overflow-menu-item .lucide,
+.mmenu-item .lucide                         { width: 15px; height: 15px; vertical-align: -2px; }
+.mnav-ico .lucide                           { width: 22px; height: 22px; vertical-align: 0; }
+.modal-title .lucide                        { width: 18px; height: 18px; vertical-align: -3px; }
+.sheet-title .lucide                        { width: 18px; height: 18px; vertical-align: -3px; }
+
+/* Semantic colors — per icon */
+.lucide-pencil        { color: #6366f1; }   /* indigo    — edit */
+.lucide-save          { color: #2563eb; }   /* blue      — save */
+.lucide-copy          { color: #7c3aed; }   /* violet    — duplicate */
+.lucide-rotate-ccw    { color: #0d9488; }   /* teal      — restore */
+.lucide-refresh-cw    { color: #0891b2; }   /* cyan      — reconnect */
+.lucide-trash-2       { color: #ef4444; }   /* red       — delete */
+.lucide-ban           { color: #f43f5e; }   /* rose      — annul */
+.lucide-log-out       { color: #ea580c; }   /* orange    — exit */
+.lucide-check         { color: #10b981; }   /* emerald   — confirm */
+.lucide-check-circle  { color: #16a34a; }   /* green     — active/ok */
+.lucide-plus          { color: #059669; }   /* emerald   — add */
+.lucide-dollar-sign   { color: #16a34a; }   /* green     — payment */
+.lucide-alert-triangle{ color: #d97706; }   /* amber     — warning */
+.lucide-alert-circle  { color: #f97316; }   /* orange    — error */
+.lucide-wrench        { color: #c2410c; }   /* orange-dk — repair */
+.lucide-lock          { color: #b45309; }   /* amber-dk  — locked */
+.lucide-home          { color: #0091D7; }   /* brand     — home */
+.lucide-user          { color: #4f46e5; }   /* indigo    — profile */
+.lucide-users         { color: #2563eb; }   /* blue      — users */
+.lucide-briefcase     { color: #7c3aed; }   /* violet    — vendors */
+.lucide-receipt       { color: #0f766e; }   /* teal      — quotes */
+.lucide-file-text     { color: #0369a1; }   /* sky       — contracts */
+.lucide-radio-tower   { color: #0e7490; }   /* cyan      — PoC */
+.lucide-smartphone    { color: #4338ca; }   /* indigo    — SIM */
+.lucide-package       { color: #c2410c; }   /* orange    — inventory */
+.lucide-puzzle        { color: #9333ea; }   /* purple    — accessories */
+.lucide-layers        { color: #7c3aed; }   /* violet    — batch */
+.lucide-upload        { color: #059669; }   /* emerald   — export */
+.lucide-download      { color: #0d9488; }   /* teal      — import */
+.lucide-folder-open   { color: #d97706; }   /* amber     — folder */
+.lucide-bar-chart-2   { color: #1d4ed8; }   /* blue      — chart */
+.lucide-info          { color: #0284c7; }   /* sky       — info */
+.lucide-search        { color: #0091D7; }   /* brand     — search */
+.lucide-printer       { color: #64748b; }   /* slate     — print */
+.lucide-loader        { color: #0091D7; }   /* brand     — loading */
+.lucide-list          { color: #64748b; }   /* slate     — list */
+.lucide-settings-2    { color: #64748b; }   /* slate     — settings */
+.lucide-arrow-up-down { color: #94a3b8; }   /* slate-lt  — sort */
+.lucide-chevron-down  { color: #94a3b8; }   /* slate-lt  — expand */
+.lucide-chevron-up    { color: #94a3b8; }   /* slate-lt  — collapse */
+.lucide-eye           { color: #94a3b8; }   /* slate-lt  — view */
+.lucide-eye-off       { color: #94a3b8; }   /* slate-lt  — hide */
+.lucide-x             { color: #94a3b8; }   /* slate-lt  — dismiss */
+.lucide-x-circle      { color: #94a3b8; }   /* slate-lt  — clear */
+
+/* Colored buttons: icons always white */
+.btn.primary .lucide,
+.btn.danger .lucide,
+.btn.ok .lucide                             { color: #fff; }

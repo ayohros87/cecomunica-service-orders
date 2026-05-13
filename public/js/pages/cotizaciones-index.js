@@ -32,7 +32,7 @@
       const btn = document.getElementById("btnCargarMas");
       if (btn) {
         btn.disabled = true;
-        btn.textContent = "⏳ Cargando...";
+        btn.innerHTML = '<i data-lucide="loader"></i> Cargando...';
       }
 
       if (esInicial) {
@@ -54,7 +54,8 @@
         const hasMore = docs.length > 0;
         btn.style.display = hasMore ? "inline-block" : "none";
         const totalVisible = getFilteredCotizaciones().length;
-        btn.textContent = `⬇️ Cargar más cotizaciones (${totalVisible})`;
+        btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más cotizaciones (${totalVisible})`;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
       }
       isLoading = false;
     }
@@ -78,7 +79,7 @@
       renderTabla(filtradas);
       actualizarResumenCotizaciones(filtradas, cotizaciones.length);
       const btn = document.getElementById("btnCargarMas");
-      if (btn) btn.textContent = `⬇️ Cargar más cotizaciones (${filtradas.length})`;
+      if (btn) { btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más cotizaciones (${filtradas.length})`; if (typeof lucide !== 'undefined') lucide.createIcons(); }
     }
 
     function limpiarFiltros() {
@@ -127,31 +128,31 @@
 
         const btnEditar = document.createElement("button");
         btnEditar.className = "btn";
-        btnEditar.textContent = "✏️ Editar";
+        btnEditar.innerHTML = '<i data-lucide="pencil"></i> Editar';
         btnEditar.onclick = () => location.href = `editar-cotizacion.html?id=${encodeURIComponent(c.id)}`;
         acciones.appendChild(btnEditar);
 
         const btnImprimir = document.createElement("button");
         btnImprimir.className = "btn";
-        btnImprimir.textContent = "🖨️ Imprimir";
+        btnImprimir.innerHTML = '<i data-lucide="printer"></i> Imprimir';
         btnImprimir.onclick = () => window.open(`imprimir-cotizacion.html?id=${encodeURIComponent(c.id)}`, "_blank");
         acciones.appendChild(btnImprimir);
 
         const btnDuplicar = document.createElement("button");
         btnDuplicar.className = "btn";
-        btnDuplicar.textContent = "🧾 Duplicar";
+        btnDuplicar.innerHTML = '<i data-lucide="copy"></i> Duplicar';
         btnDuplicar.onclick = () => duplicarCotizacion(c.id);
         acciones.appendChild(btnDuplicar);
 
         const btnAnular = document.createElement("button");
         btnAnular.className = "btn danger";
-        btnAnular.textContent = "⛔ Anular";
+        btnAnular.innerHTML = '<i data-lucide="ban"></i> Anular';
         btnAnular.onclick = () => anularCotizacion(c.id);
         acciones.appendChild(btnAnular);
 
         const btnEliminar = document.createElement("button");
         btnEliminar.className = "btn secondary";
-        btnEliminar.textContent = "🗑️ Eliminar";
+        btnEliminar.innerHTML = '<i data-lucide="trash-2"></i> Eliminar';
         btnEliminar.onclick = () => eliminarCotizacion(c.id);
         acciones.appendChild(btnEliminar);
 
@@ -169,16 +170,17 @@
             <div class="t2">${c.cliente_nombre || ""}</div>
             <div class="meta">${formatFecha(c.fecha_creacion)} · ${formatMoney(c.total)}</div>
             <div class="acciones">
-              <button class="btn" onclick="location.href='editar-cotizacion.html?id=${encodeURIComponent(c.id)}'">✏️ Editar</button>
-              <button class="btn" onclick="window.open('imprimir-cotizacion.html?id=${encodeURIComponent(c.id)}','_blank')">🖨️ Imprimir</button>
-              <button class="btn" onclick="duplicarCotizacion('${c.id}')">🧾 Duplicar</button>
-              <button class="btn danger" onclick="anularCotizacion('${c.id}')">⛔ Anular</button>
-              <button class="btn secondary" onclick="eliminarCotizacion('${c.id}')">🗑️ Eliminar</button>
+              <button class="btn" onclick="location.href='editar-cotizacion.html?id=${encodeURIComponent(c.id)}'"><i data-lucide="pencil"></i> Editar</button>
+              <button class="btn" onclick="window.open('imprimir-cotizacion.html?id=${encodeURIComponent(c.id)}','_blank')"><i data-lucide="printer"></i> Imprimir</button>
+              <button class="btn" onclick="duplicarCotizacion('${c.id}')"><i data-lucide="copy"></i> Duplicar</button>
+              <button class="btn danger" onclick="anularCotizacion('${c.id}')"><i data-lucide="ban"></i> Anular</button>
+              <button class="btn secondary" onclick="eliminarCotizacion('${c.id}')"><i data-lucide="trash-2"></i> Eliminar</button>
             </div>
           `;
           cards.appendChild(card);
         }
       });
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
     function actualizarResumenCotizaciones(lista, total) {

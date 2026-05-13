@@ -604,14 +604,14 @@
 </head>
 <body>
   <div class="page-wrap">
-    <h2>📃 Crear Nuevo Contrato</h2>
+    <h2><i data-lucide="file-plus"></i> Crear Nuevo Contrato</h2>
 
     <form id="formContrato">
       <!-- ============================================
            SECCIÓN 1: INFORMACIÓN DEL CLIENTE
            ============================================ -->
       <div class="section-header">
-        <h3>🧾 Información del Cliente</h3>
+        <h3><i data-lucide="user"></i> Información del Cliente</h3>
         <span class="badge pending" id="badgeCliente">Pendiente</span>
       </div>
       <div class="section-shell">
@@ -622,9 +622,9 @@
   <input id="cliente" type="hidden" required> <!-- aquí guardamos el cliente_id -->
   <div id="clienteList" class="combo-list" hidden></div>
   <div class="combo-actions">
-    <button type="button" class="btn btn-pill fit" onclick="window.open('../contratos/nuevo-cliente.html?redirect=true','_blank')">➕</button>
-    <button type="button" class="btn btn-pill fit" id="btnEditarCliente" disabled>✏️</button>
-    <button type="button" class="btn btn-pill fit" id="btnClearCliente" title="Limpiar selección">✖️</button>
+    <button type="button" class="btn btn-pill fit" onclick="window.open('../contratos/nuevo-cliente.html?redirect=true','_blank')"><i data-lucide="plus"></i></button>
+    <button type="button" class="btn btn-pill fit" id="btnEditarCliente" disabled><i data-lucide="pencil"></i></button>
+    <button type="button" class="btn btn-pill fit" id="btnClearCliente" title="Limpiar selección"><i data-lucide="x"></i></button>
   </div>
 </div>
 
@@ -636,7 +636,7 @@
            SECCIÓN 2: DETALLES DEL CONTRATO
            ============================================ -->
       <div class="section-header">
-        <h3>📄 Detalles del Contrato</h3>
+        <h3><i data-lucide="file-text"></i> Detalles del Contrato</h3>
         <span class="badge pending" id="badgeDetalles">Pendiente</span>
       </div>
       <div class="section-shell">
@@ -707,7 +707,7 @@
            SECCIÓN 3: EQUIPOS
            ============================================ -->
       <div class="section-header">
-        <h3>📦 Equipos</h3>
+        <h3><i data-lucide="package"></i> Equipos</h3>
         <span class="badge pending" id="badgeEquipos">Pendiente</span>
       </div>
       <div class="section-shell">
@@ -721,14 +721,14 @@
               <th>Cantidad</th>
               <th>Precio Unitario</th>
               <th>Total</th>
-              <th>❌</th>
+              <th>×</th>
             </tr>
           </thead>
             <tbody></tbody>
           </table>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn secondary" onclick="NCForm.agregarFilaEquipo()">➕ Agregar Equipo</button>
+          <button type="button" class="btn secondary" onclick="NCForm.agregarFilaEquipo()"><i data-lucide="plus"></i> Agregar Equipo</button>
         </div>
 
         <!-- === ITBMS Y TOTALES DEL CONTRATO === -->
@@ -760,7 +760,7 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn primary" id="btnGuardar">💾 Guardar Contrato</button>
+        <button type="submit" class="btn primary" id="btnGuardar"><i data-lucide="save"></i> Guardar Contrato</button>
         <button type="button" class="btn ghost" onclick="window.location.href='index.html'">Cancelar</button>
       </div>
 
@@ -789,6 +789,7 @@
 <script src="../js/domain/totales.js"></script>
 <script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <script src="../js/pages/nc-state.js"       defer></script>
   <script src="../js/pages/nc-form.js"        defer></script>
@@ -796,5 +797,6 @@
   <script src="../js/pages/nc-preview.js"     defer></script>
   <script src="../js/pages/nc-guardar.js"     defer></script>
   <script src="../js/pages/nuevo-contrato.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

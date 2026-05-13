@@ -215,17 +215,18 @@
   <script src="../js/services/empresaService.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div class="page-header">
-    <h1><span style="font-size: 36px;">📦</span> Registrar Nuevo Batch de Equipos PoC</h1>
+    <h1><i data-lucide="package"></i> Registrar Nuevo Batch de Equipos PoC</h1>
     <p>Carga múltiples equipos de forma rápida usando seriales consecutivos</p>
   </div>
   
   <div class="form-container">
   <form id="batchForm">
   <div class="section form">
-  <h3 class="form-title">🔢 Datos del Batch</h3>
+  <h3 class="form-title"><i data-lucide="hash"></i> Datos del Batch</h3>
   <div class="form-grid cols-2">
     <div class="form-field" style="grid-column:1/-1">
       <label class="req">Seriales (uno por línea)</label>
@@ -233,7 +234,7 @@
     </div>
 
     <div class="form-field">
-      <label>📂 Cargar archivo JSON del vendedor</label>
+      <label><i data-lucide="folder-open"></i> Cargar archivo JSON del vendedor</label>
       <input type="file" class="file" accept=".json" onchange="cargarDesdeJSON(this)">
       <div id="previewVendedor" class="form-hint"></div>
     </div>
@@ -250,13 +251,13 @@
 </div>
 
 <div class="section form">
-  <h3 class="form-title">📦 Datos Generales</h3>
+  <h3 class="form-title"><i data-lucide="package"></i> Datos Generales</h3>
   <div class="form-grid cols-2">
     <div class="form-field" style="grid-column:1/-1">
       <label class="req">Cliente</label>
       <div class="input-row">
         <select id="cliente" required></select>
-        <button type="button" id="addCliente" class="btn btn-pill fit">➕</button>
+        <button type="button" id="addCliente" class="btn btn-pill fit"><i data-lucide="plus"></i></button>
       </div>
     </div>
 
@@ -264,7 +265,7 @@
       <label class="req">IP</label>
       <div class="input-row">
         <select id="ip" required></select>
-        <button type="button" id="addIP" class="btn btn-pill fit">➕</button>
+        <button type="button" id="addIP" class="btn btn-pill fit"><i data-lucide="plus"></i></button>
       </div>
     </div>
 
@@ -276,12 +277,13 @@
 </div>
 
 <div class="form-actions">
-  <button type="submit" class="btn primary">💾 Crear Equipos</button>
-  <button type="button" class="btn" onclick="window.location.href='index.html'">⬅️ Cancelar</button>
+  <button type="submit" class="btn primary"><i data-lucide="save"></i> Crear Equipos</button>
+  <button type="button" class="btn" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
 </div>
 </form>
 </div>
 
   <script src="../js/pages/nuevo-batch.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

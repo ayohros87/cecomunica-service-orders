@@ -43,25 +43,27 @@
   <script src="../js/ui/modal.js"></script>
 
   <script src="../js/pages/importar-exportar.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <h2>📦 Importar / Exportar Datos</h2>
+  <h2><i data-lucide="package"></i> Importar / Exportar Datos</h2>
   <div style="max-width: 600px; margin: auto; margin-bottom: 20px;">
-    <button onclick="window.location.href='config.html'">⬅️ Volver</button>
+    <button onclick="window.location.href='config.html'"><i data-lucide="arrow-left"></i> Volver</button>
   </div>
   <div class="section">
-    <h3>⬇️ Exportar a Excel:</h3>
-    <button id="exportar-ordenes-btn">📄 Exportar Órdenes</button>
-    <button id="exportar-equipos-btn">📋 Exportar Equipos</button>
-    <button id="descargar-ejemplo-btn">📥 Descargar Plantilla de Ejemplo</button>
+    <h3><i data-lucide="download"></i> Exportar a Excel:</h3>
+    <button id="exportar-ordenes-btn"><i data-lucide="file-text"></i> Exportar Órdenes</button>
+    <button id="exportar-equipos-btn"><i data-lucide="clipboard"></i> Exportar Equipos</button>
+    <button id="descargar-ejemplo-btn"><i data-lucide="download"></i> Descargar Plantilla de Ejemplo</button>
   </div>
 
   <div class="section">
-    <h3>📥 Importar desde Excel (.xlsx):</h3>
+    <h3><i data-lucide="upload"></i> Importar desde Excel (.xlsx):</h3>
     <label for="importar-xlsx-input">Selecciona archivo Excel:</label>
     <input type="file" id="importar-xlsx-input" accept=".xlsx">
-    <button id="importar-xlsx-btn">📤 Importar Archivo</button>
+    <button id="importar-xlsx-btn"><i data-lucide="upload"></i> Importar Archivo</button>
     <div id="mensaje-status"></div>
   </div>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

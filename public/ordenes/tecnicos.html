@@ -64,6 +64,7 @@
       margin-left: 5px;
     }
   </style>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
@@ -86,11 +87,12 @@
       li.innerHTML = `
         <span>${nombre}</span>
         <div class="actions">
-          <button onclick="editarTecnico('${nombre}')">✏️</button>
-          <button onclick="borrarTecnico('${nombre}')">🗑️</button>
+          <button onclick="editarTecnico('${nombre}')"><i data-lucide="pencil"></i></button>
+          <button onclick="borrarTecnico('${nombre}')"><i data-lucide="trash-2"></i></button>
         </div>`;
       lista.appendChild(li);
     });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 }
 
@@ -136,16 +138,16 @@ window.borrarTecnico = async (id) => {
   </script>
 </head>
 <body>
-  <h2>👷 Administración de Técnicos</h2>
+  <h2><i data-lucide="users"></i> Administración de Técnicos</h2>
   <div class="top-buttons">
-    <button onclick="window.location.href='config.html'">⬅️ Volver</button>
+    <button onclick="window.location.href='config.html'"><i data-lucide="arrow-left"></i> Volver</button>
   </div>
 
   <div class="form-section">
     <form id="form-tecnico">
       <label for="nombre-tecnico">Nombre del Técnico:</label>
       <input type="text" id="nombre-tecnico" required>
-      <button type="submit">💾 Guardar Técnico</button>
+      <button type="submit"><i data-lucide="save"></i> Guardar Técnico</button>
     </form>
   </div>
 
@@ -153,5 +155,6 @@ window.borrarTecnico = async (id) => {
     <h3>Lista de Técnicos:</h3>
     <ul id="lista-tecnicos"></ul>
   </div>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

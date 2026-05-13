@@ -64,6 +64,7 @@
       margin-left: 5px;
     }
   </style>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/services/empresaService.js"></script>
@@ -94,11 +95,12 @@ if (docSnap) {
     li.innerHTML = `
       <span>${nombre}</span>
       <div class="actions">
-        <button onclick="editarEstado('${nombre}')">✏️</button>
-        <button onclick="borrarEstado('${nombre}')">🗑️</button>
+        <button onclick="editarEstado('${nombre}')"><i data-lucide="pencil"></i></button>
+        <button onclick="borrarEstado('${nombre}')"><i data-lucide="trash-2"></i></button>
       </div>`;
     lista.appendChild(li);
   });
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
       }
@@ -146,16 +148,16 @@ if (docSnap) {
   </script>
 </head>
 <body>
-  <h2>🔧 Administración de Estados de Reparación</h2>
+  <h2><i data-lucide="wrench"></i> Administración de Estados de Reparación</h2>
   <div class="top-buttons">
-    <button onclick="window.location.href='config.html'">⬅️ Volver</button>
+    <button onclick="window.location.href='config.html'"><i data-lucide="arrow-left"></i> Volver</button>
   </div>
 
   <div class="form-section">
     <form id="form-estado">
       <label for="nombre-estado">Nombre del Estado:</label>
       <input type="text" id="nombre-estado" required>
-      <button type="submit">💾 Guardar Estado</button>
+      <button type="submit"><i data-lucide="save"></i> Guardar Estado</button>
     </form>
   </div>
 
@@ -163,5 +165,6 @@ if (docSnap) {
     <h3>Lista de Estados:</h3>
     <ul id="lista-estados"></ul>
   </div>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

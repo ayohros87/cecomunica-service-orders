@@ -15,6 +15,7 @@
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/usuariosService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
     .subtle { color: var(--muted); font-size: 12px; }
@@ -78,14 +79,14 @@
   </style>
 </head>
 <body>
-  <h2 style="margin:8px 0;">📊 Progreso de Técnicos</h2>
+  <h2 style="margin:8px 0;"><i data-lucide="bar-chart-2"></i> Progreso de Técnicos</h2>
 
   <!-- Toolbar -->
   <div class="toolbar">
     <div class="left">
       <input id="buscarNombre" type="text" placeholder="Buscar técnico por nombre o correo" style="min-width:260px;">
-      <button class="btn primary" id="btnBuscar">🔍 Buscar</button>
-      <button class="btn secondary" id="btnLimpiar">❌ Limpiar</button>
+      <button class="btn primary" id="btnBuscar"><i data-lucide="search"></i> Buscar</button>
+      <button class="btn secondary" id="btnLimpiar"><i data-lucide="x"></i> Limpiar</button>
     </div>
     <div class="right">
       <label class="subtle">Periodo:</label>
@@ -95,8 +96,8 @@
         <option value="total">Total histórico</option>
       </select>
       <button class="btn" id="btnRefrescar">↻ Refrescar</button>
-      <button class="btn" onclick="window.location.href='index.html'">📋 Ir a Órdenes</button>
-      <button class="btn" onclick="window.location.href='../index.html'">🏠 Menú</button>
+      <button class="btn" onclick="window.location.href='index.html'"><i data-lucide="clipboard-list"></i> Ir a Órdenes</button>
+      <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú</button>
     </div>
   </div>
 
@@ -136,5 +137,6 @@
   </div>
 
   <script src="../js/pages/progreso-tecnicos.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

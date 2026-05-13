@@ -16,6 +16,7 @@
   <script src="../js/core/auth.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
     :root {
@@ -356,7 +357,7 @@
   <header class="ft-header">
     <div class="ft-header-top">
       <button class="ft-back" id="btnBack" type="button">← Volver</button>
-      <h1 class="ft-title">📸 Fotos de Taller</h1>
+      <h1 class="ft-title"><i data-lucide="camera"></i> Fotos de Taller</h1>
     </div>
 
     <div class="ft-order-meta">
@@ -372,9 +373,9 @@
     <section class="ft-card">
       <h2 class="ft-card-title">Captura rápida</h2>
       <div class="capture-grid">
-        <button class="capture-btn antes" type="button" data-tipo="antes">📸 Tomar foto Antes</button>
-        <button class="capture-btn despues" type="button" data-tipo="despues">📸 Tomar foto Después</button>
-        <button class="capture-btn detalle" type="button" data-tipo="detalle">📸 Tomar foto Detalle</button>
+        <button class="capture-btn antes" type="button" data-tipo="antes"><i data-lucide="camera"></i> Tomar foto Antes</button>
+        <button class="capture-btn despues" type="button" data-tipo="despues"><i data-lucide="camera"></i> Tomar foto Después</button>
+        <button class="capture-btn detalle" type="button" data-tipo="detalle"><i data-lucide="camera"></i> Tomar foto Detalle</button>
       </div>
 
       <input id="inputAntes" class="hidden-input" type="file" accept="image/*" capture="environment" data-tipo="antes">
@@ -439,5 +440,6 @@
   </div>
 
   <script src="../js/pages/fotos-taller.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

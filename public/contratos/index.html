@@ -151,10 +151,11 @@ table tbody tr:hover {
 <script src="../js/domain/totales.js"></script>
 <script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '📄 Contratos', actions: [{ label: '➕ Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="file-text"></i> Contratos', actions: [{ label: '<i data-lucide="plus"></i> Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
   
   <div class="app-wrap">
     <p id="mensaje" class="resumen" style="min-height: 20px; margin-bottom: 8px;"></p>
@@ -172,8 +173,8 @@ table tbody tr:hover {
       <option value="anulado">Anulado</option>
       <option value="inactivo">Inactivo</option>
     </select>
-      <button id="btnFiltrar" class="btn">🔍 Aplicar</button>
-      <button id="btnLimpiarBusqueda" class="btn secondary">🧹 Limpiar búsqueda</button>
+      <button id="btnFiltrar" class="btn"><i data-lucide="search"></i> Aplicar</button>
+      <button id="btnLimpiarBusqueda" class="btn secondary"><i data-lucide="x"></i> Limpiar búsqueda</button>
       <label style="margin-left:8px; font-size:14px;">
   <input type="checkbox" id="chkSoloPendientes">
   Solo pendientes
@@ -187,14 +188,14 @@ table tbody tr:hover {
     <div class="right resumen" id="resumenContratos">
       <div class="loader" style="width: 24px; height: 24px; border-width: 3px;"></div>
     </div>
-    <button id="btnBackfillEquipos" class="btn" style="display:none; margin-left:12px;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan automáticamente">🔄 Re-sincronizar equipos (admin)</button>
-    <button class="btn secondary" style="display:none; margin-left:8px;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar caché del navegador">🧹 Limpiar caché</button>
+    <button id="btnBackfillEquipos" class="btn" style="display:none; margin-left:12px;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan automáticamente"><i data-lucide="refresh-cw"></i> Re-sincronizar equipos (admin)</button>
+    <button class="btn secondary" style="display:none; margin-left:8px;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar caché del navegador"><i data-lucide="trash-2"></i> Limpiar caché</button>
   </div>
 </div>
 
 <input type="file" id="fileFirmado" accept="application/pdf,image/*" style="display:none">
 <div id="uploadStatus" style="display:none; margin:8px 0; font-size:14px;">
-  ⬆️ Subiendo contrato firmado… <strong id="uploadPct">0%</strong>
+  <i data-lucide="upload"></i> Subiendo contrato firmado… <strong id="uploadPct">0%</strong>
 </div>
 <div class="table-wrap mt-12">
   <table>
@@ -267,7 +268,7 @@ table tbody tr:hover {
 <div id="listaContratosMovil" class="cards-list" style="display:none"></div>
 
 <div style="margin:12px 0; text-align:center;">
-  <button class="btn" id="btnCargarMas">⬇️ Cargar más contratos</button>
+  <button class="btn" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más contratos</button>
 </div>
 
   </div> <!-- app-wrap -->
@@ -290,12 +291,12 @@ table tbody tr:hover {
 
     <div class="sheet-body">
       <fieldset style="border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:12px;">
-        <legend style="padding:0 10px; font-weight:bold;">📝 Detalles del Contrato</legend>
+        <legend style="padding:0 10px; font-weight:bold;"><i data-lucide="file-text"></i> Detalles del Contrato</legend>
         <div id="detallesContrato" style="font-size:15px;"></div>
       </fieldset>
 
       <fieldset style="border: 1px solid var(--line); border-radius: 8px; padding: 12px;">
-        <legend style="padding: 0 10px; font-weight: bold;">📦 Equipos Asociados</legend>
+        <legend style="padding: 0 10px; font-weight: bold;"><i data-lucide="package"></i> Equipos Asociados</legend>
         <div class="table-scroll">
           <table style="width:100%; border-collapse:collapse; font-size:14px; min-width:520px;">
             <thead style="background:#f5f5f5;">
@@ -313,8 +314,8 @@ table tbody tr:hover {
     </div>
 
     <div class="footer">
-      <button class="btn secondary" onclick="ContratosAprobacion.cancelar()">❌ Cancelar</button>
-      <button class="btn ok" onclick="ContratosAprobacion.confirmar()">✅ Aprobar Contrato</button>
+      <button class="btn secondary" onclick="ContratosAprobacion.cancelar()"><i data-lucide="x-circle"></i> Cancelar</button>
+      <button class="btn ok" onclick="ContratosAprobacion.confirmar()"><i data-lucide="check-circle"></i> Aprobar Contrato</button>
     </div>
   </div>
 </div>
@@ -323,7 +324,7 @@ table tbody tr:hover {
   <div class="modal" style="max-width: 980px;">
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
-      <h3 class="sheet-title">🗂️ Panel de trabajo</h3>
+      <h3 class="sheet-title"><i data-lucide="layout-dashboard"></i> Panel de trabajo</h3>
       <button class="btn ghost close-x" onclick="ContratosEquipos.cerrarPanel()" aria-label="Cerrar">✕</button>
     </div>
     <div class="sheet-body" id="panelTrabajoBody">
@@ -340,7 +341,7 @@ table tbody tr:hover {
   <div class="modal" style="max-width: 980px;">
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
-      <h3 class="sheet-title">📦 Equipos del contrato</h3>
+      <h3 class="sheet-title"><i data-lucide="package"></i> Equipos del contrato</h3>
       <button class="btn ghost close-x" onclick="ContratosEquipos.cerrarModal()" aria-label="Cerrar">✕</button>
     </div>
     <div class="sheet-body" id="modalEquiposBody">
@@ -652,6 +653,6 @@ td.estado-cell {
   }
 }
 </style>
-
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

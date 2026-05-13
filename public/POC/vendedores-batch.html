@@ -362,11 +362,12 @@ body {
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div class="topbar">
     <div>
-      <h1>📦 Ingreso de Equipos PoC — Vendedores</h1>
+      <h1><i data-lucide="package"></i> Ingreso de Equipos PoC — Vendedores</h1>
       <div style="margin-top: 4px;">
         <span style="font-size: 13px; color: #64748b; font-weight: 500;">Flujo:</span>
         <span class="stepper">
@@ -485,8 +486,12 @@ body {
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script src="../js/services/usuariosService.js"></script>
+<script src="../js/services/modelosService.js"></script>
+<script src="../js/services/clientesService.js"></script>
+<script src="../js/services/pocService.js"></script>
 <script src="../js/ui/toast.js"></script>
 <script src="../js/pages/vendedores-batch.js" defer></script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </div>
 </body>
 </html>

@@ -36,11 +36,11 @@ firebase.auth().onAuthStateChanged(async (user) => {
       tabla.innerHTML = `
       <tr>
         <td colspan="10" style="text-align:center; padding: 20px; color: #666;">
-          ⚠️ No se encontraron datos en el inventario actual.
+          <i data-lucide="alert-triangle"></i> No se encontraron datos en el inventario actual.
         </td>
       </tr>
     `;
-
+      if (typeof lucide !== 'undefined') lucide.createIcons();
       return;
     }
 
@@ -198,7 +198,9 @@ function renderizarTabla(datos) {
     const estadoTxt = modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-";
     const ua = data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-";
     const pa = data.penultima_actualizacion ? data.penultima_actualizacion.toDate().toLocaleString() : "-";
-    const am = modelo.alto_movimiento ? "✅" : "❌";
+    const am = modelo.alto_movimiento
+      ? '<span style="color:#10b981"><i data-lucide="check-circle"></i></span>'
+      : '<span style="color:#ef4444"><i data-lucide="x-circle"></i></span>';
 
     return `
       <tr>
@@ -211,9 +213,10 @@ function renderizarTabla(datos) {
         <td class="col-anterior">${data.cantidad_anterior ?? "-"}</td>
         <td>${ua}</td>
         <td class="col-penultima">${pa}</td>
-        <td><button class="btn" onclick="verHistorico('${data.modelo_id}')">📊 Histórico</button></td>
+        <td><button class="btn" onclick="verHistorico('${data.modelo_id}')"><i data-lucide="bar-chart-2"></i> Histórico</button></td>
       </tr>`;
   }).join('');
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 
   // Resumen
   const total = datos.length;
@@ -249,7 +252,7 @@ function exportarExcel() {
       modelo.modelo || "-",
       modelo.tipo === "P" ? "Portátil" : modelo.tipo === "C" ? "Cámara" : modelo.tipo === "B" ? "Base" : "-",
       modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-",
-      modelo.alto_movimiento ? "✅" : "❌",
+      modelo.alto_movimiento ? "Sí" : "No",
       data.cantidad ?? "-",
       data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-"
     ]);

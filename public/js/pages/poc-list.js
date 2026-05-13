@@ -49,7 +49,7 @@ window.PocList = {
     td.textContent = limitado;
     if (texto.length > 20 && (campo === 'grupos' || campo === 'notas')) {
       const btn = document.createElement('span');
-      btn.textContent = '🔍';
+      btn.innerHTML = '<i data-lucide="search"></i>';
       btn.className = 'expand-btn';
       btn.title = texto;
       td.appendChild(btn);
@@ -78,13 +78,17 @@ window.PocList = {
     // cliente (1)
     const tdCliente = document.createElement('td');
     tdCliente.innerHTML = algunoVacio
-      ? `<span style="color:red;" title="Falta completar campos obligatorios">❗</span> ${nombreCliente}`
+      ? `<span style="color:red;" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> ${nombreCliente}`
       : nombreCliente;
     row.appendChild(tdCliente);
 
     // activo (2)
-    const tdEstado = this.nuevaCelda(d.activo ? '🟢' : '🔴');
+    const tdEstado = document.createElement('td');
+    tdEstado.dataset.activo = d.activo ? 'true' : 'false';
     tdEstado.className = d.activo ? 'estado-activo' : 'estado-inactivo';
+    tdEstado.innerHTML = d.activo
+      ? '<span class="status-dot status-activo"></span>'
+      : '<span class="status-dot status-inactivo"></span>';
     row.appendChild(tdEstado);
 
     // serial (3), ip (4), unit_id (5), radio_name (6)
@@ -97,20 +101,22 @@ window.PocList = {
     row.appendChild(this.crearCeldaConExpansor((d.grupos || []).join(', '), 'grupos'));
 
     // sim_tel (8)
-    row.appendChild(this.nuevaCelda(`📱 ${d.sim_number || ''} / ${d.sim_phone || ''}`));
+    const tdSim = document.createElement('td');
+    tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${d.sim_number || ''} / ${d.sim_phone || ''}`;
+    row.appendChild(tdSim);
 
     // acciones (9)
     const actionCell = document.createElement('td');
     if (!PocState.esLectura()) {
       const editBtn = document.createElement('button');
       editBtn.className = 'btn';
-      editBtn.textContent = '✏️';
+      editBtn.innerHTML = '<i data-lucide="pencil"></i>';
       editBtn.onclick = () => PocEdit.abrir(row, docId, d);
       actionCell.appendChild(editBtn);
 
       const delBtn = document.createElement('button');
       delBtn.className = 'btn danger';
-      delBtn.textContent = '🗑️';
+      delBtn.innerHTML = '<i data-lucide="trash-2"></i>';
       delBtn.title = 'Eliminar equipo';
       delBtn.onclick = async () => {
         if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
@@ -121,7 +127,7 @@ window.PocList = {
       if (d.deleted) {
         const restBtn = document.createElement('button');
         restBtn.className = 'btn';
-        restBtn.textContent = '♻️';
+        restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
         restBtn.title = 'Restaurar';
         restBtn.onclick = () => PocService.restorePocDevice(docId).then(() => this.refresh());
         actionCell.appendChild(restBtn);
@@ -172,11 +178,12 @@ window.PocList = {
       const COL = PocState.COL;
       let activos = 0, incompletos = 0;
       [...tbody.rows].forEach(r => {
-        if (r.cells[COL.activo]?.textContent?.includes('🟢')) activos++;
-        if (r.cells[COL.cliente]?.innerHTML?.includes('❗'))   incompletos++;
+        if (r.cells[COL.activo]?.dataset.activo === 'true') activos++;
+        if (r.cells[COL.cliente]?.querySelector('[data-incomplete]')) incompletos++;
       });
       PocState.actualizarResumen({ total, activos, incompletos });
       this.actualizarFlechitas();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     });
   },
 
@@ -228,6 +235,7 @@ window.PocList = {
           }
         });
         PocState.actualizarResumen({ total, activos, incompletos });
+        if (typeof lucide !== 'undefined') lucide.createIcons();
       });
   },
 
@@ -296,7 +304,7 @@ window.PocList = {
           if (ac && !ac.querySelector('button[title="Restaurar"]')) {
             const restBtn = document.createElement('button');
             restBtn.className = 'btn';
-            restBtn.textContent = '♻️';
+            restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
             restBtn.title = 'Restaurar';
             restBtn.onclick = () => PocService.restorePocDevice(d.id).then(() => this.mostrarTodo());
             ac.appendChild(restBtn);
@@ -308,10 +316,11 @@ window.PocList = {
       const total = tbody.rows.length;
       let activos = 0;
       [...tbody.rows].forEach(r => {
-        if (r.cells[PocState.COL.activo]?.textContent?.includes('🟢')) activos++;
+        if (r.cells[PocState.COL.activo]?.dataset.activo === 'true') activos++;
       });
       document.getElementById('resumenEquipos').textContent =
         total > 0 ? `Mostrando: ${total} equipos (${activos} activos)` : 'No se encontraron resultados.';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     });
   },
 
@@ -336,12 +345,16 @@ window.PocList = {
       const algunoVacio = camposCrit.some(v => !v || v.trim?.() === '');
       const tdCliente = document.createElement('td');
       tdCliente.innerHTML = algunoVacio
-        ? `<span style="color:red;" title="Falta completar campos obligatorios">❗</span> ${d.cliente || ''}`
+        ? `<span style="color:red;" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> ${d.cliente || ''}`
         : (d.cliente || '');
       row.appendChild(tdCliente);
 
-      const tdEstado = this.nuevaCelda(d.activo ? '🟢' : '🔴');
+      const tdEstado = document.createElement('td');
+      tdEstado.dataset.activo = d.activo ? 'true' : 'false';
       tdEstado.className = d.activo ? 'estado-activo' : 'estado-inactivo';
+      tdEstado.innerHTML = d.activo
+        ? '<span class="status-dot status-activo"></span>'
+        : '<span class="status-dot status-inactivo"></span>';
       row.appendChild(tdEstado);
       if (d.activo) activos++;
 
@@ -352,17 +365,19 @@ window.PocList = {
       row.appendChild(this.crearCeldaConExpansor(
         Array.isArray(d.grupos) ? d.grupos.join(', ') : (d.grupos || ''), 'grupos'
       ));
-      row.appendChild(this.nuevaCelda(`📱 ${(d.sim || d.sim_number) || ''} / ${d.sim_phone || ''}`));
+      const tdSimF = document.createElement('td');
+      tdSimF.innerHTML = `<i data-lucide="smartphone"></i> ${(d.sim || d.sim_number) || ''} / ${d.sim_phone || ''}`;
+      row.appendChild(tdSimF);
 
       const acciones = document.createElement('td');
       if (!PocState.esLectura()) {
         const btnEditar = document.createElement('button');
-        btnEditar.className = 'btn'; btnEditar.textContent = '✏️';
+        btnEditar.className = 'btn'; btnEditar.innerHTML = '<i data-lucide="pencil"></i>';
         btnEditar.onclick = () => PocEdit.abrir(row, d.id, d);
         acciones.appendChild(btnEditar);
 
         const btnElim = document.createElement('button');
-        btnElim.className = 'btn danger'; btnElim.textContent = '🗑️'; btnElim.title = 'Eliminar';
+        btnElim.className = 'btn danger'; btnElim.innerHTML = '<i data-lucide="trash-2"></i>'; btnElim.title = 'Eliminar';
         btnElim.onclick = async () => {
           if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
             PocService.softDeletePocDevice(d.id).then(() => this.cargar(true));
@@ -371,7 +386,7 @@ window.PocList = {
 
         if (d.deleted) {
           const btnRest = document.createElement('button');
-          btnRest.className = 'btn'; btnRest.textContent = '♻️';
+          btnRest.className = 'btn'; btnRest.innerHTML = '<i data-lucide="rotate-ccw"></i>';
           btnRest.onclick = () => PocService.restorePocDevice(d.id).then(() => this.cargar(true));
           acciones.appendChild(btnRest);
         }
@@ -382,6 +397,7 @@ window.PocList = {
 
     document.getElementById('resumenEquipos').textContent =
       lista.length > 0 ? `Mostrando: ${lista.length} equipos (${activos} activos)` : 'No se encontraron resultados.';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   async filtrarDuplicados(tipo) {

@@ -614,6 +614,10 @@
   }
 }
 
+.status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+.status-activo  { background: #22c55e; }
+.status-inactivo { background: #ef4444; }
+
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -638,11 +642,12 @@
   <script src="../js/pages/poc-sim.js" defer></script>
   <script src="../js/pages/poc-list.js" defer></script>
   <script src="../js/pages/poc-index.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '📱 Equipos PoC', showHome: true, homeHref: '../index.html', showLogout: true });</script>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="radio-tower"></i> Equipos PoC', showHome: true, homeHref: '../index.html', showLogout: true });</script>
   
   <div class="app-wrap">
 
@@ -651,21 +656,21 @@
   <!-- Toolbar: Primary Actions -->
   <div class="actions-toolbar">
     <div class="actions-group">
-      <button id="btnBatch" class="btn primary" onclick="window.location.href='../POC/nuevo-batch.html'">📦 Batch</button>
-      <button id="btnSim" class="btn" onclick="PocSim.abrir()">📲 SIM/Teléfono</button>
-      <button id="btnImprimir" class="btn" onclick="PocList.irAImpresion()">🖨️ Imprimir</button>
-      <button id="btnExportar" class="btn" onclick="PocList.exportarExcelSeleccionados()">📤 Exportar</button>
-      <button id="btnImportar" class="btn" onclick="window.location.href='../POC/importar-poc.html'">📥 Importar</button>
-      <button id="btnEditarMasivo" class="btn" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()">✏️ Editar en masa</button>
-      <button id="btnGuardarMasivo" class="btn primary" onclick="PocBulk.guardar()" style="display:none;">💾 Guardar</button>
-      <button id="btnCancelarMasivo" class="btn secondary" onclick="PocBulk.cancelar()" style="display:none;">✕ Cancelar</button>
+      <button id="btnBatch" class="btn primary" onclick="window.location.href='../POC/nuevo-batch.html'"><i data-lucide="layers"></i> Batch</button>
+      <button id="btnSim" class="btn" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
+      <button id="btnImprimir" class="btn" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
+      <button id="btnExportar" class="btn" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar</button>
+      <button id="btnImportar" class="btn" onclick="window.location.href='../POC/importar-poc.html'"><i data-lucide="download"></i> Importar</button>
+      <button id="btnEditarMasivo" class="btn" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
+      <button id="btnGuardarMasivo" class="btn primary" onclick="PocBulk.guardar()" style="display:none;"><i data-lucide="save"></i> Guardar</button>
+      <button id="btnCancelarMasivo" class="btn secondary" onclick="PocBulk.cancelar()" style="display:none;">&times; Cancelar</button>
     </div>
   </div>
 
   <!-- Compact Search Bar -->
   <div class="search-bar">
     <div class="search-primary">
-      <label>🔍 Buscar:</label>
+      <label><i data-lucide="search"></i> Buscar:</label>
       <select id="filtroCampo" style="min-width: 120px;">
         <option value="cliente">Cliente</option>
         <option value="operador">Operador</option>
@@ -680,24 +685,24 @@
       </select>
 
       <input type="text" id="filtroValor" placeholder="Escribe para filtrar..." style="flex: 1; min-width: 200px;" oninput="PocList.filtrar()">
-      <button class="btn secondary" onclick="PocList.limpiarFiltro()">🔄 Limpiar</button>
-      
-      <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> ✅ Solo activos</label>
-      <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> ⚠️ Solo incompletos</label>
+      <button class="btn secondary" onclick="PocList.limpiarFiltro()"><i data-lucide="rotate-ccw"></i> Limpiar</button>
+
+      <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> <i data-lucide="check-circle"></i> Solo activos</label>
+      <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle"></i> Solo incompletos</label>
       
       <div class="resumen-badge" id="resumenEquipos">
         <div class="loader" style="width: 20px; height: 20px; border-width: 2px;"></div>
       </div>
       
-      <button class="btn secondary" onclick="toggleAdvancedFilters()" title="Ver opciones para corregir duplicados">🔁 Duplicados</button>
+      <button class="btn secondary" onclick="toggleAdvancedFilters()" title="Ver opciones para corregir duplicados"><i data-lucide="copy"></i> Duplicados</button>
     </div>
     
     <!-- Advanced Filters (Collapsed by default) -->
     <div class="search-advanced" id="advancedFilters" style="display: none;">
-      <button class="btn secondary" onclick="PocList.filtrarDuplicados('serial')">🔁 Seriales duplicados</button>
-      <button class="btn secondary" onclick="PocList.filtrarDuplicados('sim')">📱 SIMs duplicados</button>
-      <button class="btn secondary" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'">⚠️ Grupos inválidos</button>
-      <span style="font-size: 12px; color: var(--muted); margin-left: auto;">💡 Click en encabezados de tabla para ordenar</span>
+      <button class="btn secondary" onclick="PocList.filtrarDuplicados('serial')"><i data-lucide="copy"></i> Seriales duplicados</button>
+      <button class="btn secondary" onclick="PocList.filtrarDuplicados('sim')"><i data-lucide="smartphone"></i> SIMs duplicados</button>
+      <button class="btn secondary" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'"><i data-lucide="alert-triangle"></i> Grupos inválidos</button>
+      <span style="font-size: 12px; color: var(--muted); margin-left: auto;"><i data-lucide="info"></i> Click en encabezados de tabla para ordenar</span>
     </div>
   </div>
 </div>
@@ -706,31 +711,31 @@
 <div id="simModal" class="overlay" style="display:none;">
   <div class="modal">
     <div class="modal-header">
-      <h3>📲 Actualizar SIM/Teléfono en Lote</h3>
+      <h3><i data-lucide="smartphone"></i> Actualizar SIM/Teléfono en Lote</h3>
       <button class="modal-close" onclick="PocSim.cerrar()">✕</button>
     </div>
 
     <div class="modal-body">
       <div class="modal-field">
-        <label>📡 Operador</label>
+        <label>Operador</label>
         <select id="operadorGlobal">
           <option value="">Seleccione un operador...</option>
         </select>
       </div>
 
       <div class="modal-field">
-        <label>📋 Pega SIM y Teléfono (uno por línea)</label>
+        <label>Pega SIM y Teléfono (uno por línea)</label>
         <textarea id="simPasteArea" rows="10" placeholder="Pega aquí los datos..."></textarea>
         <div class="modal-hint">
-          💡 <strong>Formato esperado:</strong> <code>8953... [TAB] 6123-4567</code>
+          <i data-lucide="info"></i> <strong>Formato esperado:</strong> <code>8953... [TAB] 6123-4567</code>
           <br>Separa SIM y Teléfono con tabulador (TAB). Un equipo por línea.
         </div>
       </div>
     </div>
 
     <div class="modal-footer">
-      <button class="btn secondary" onclick="PocSim.cerrar()">✕ Cancelar</button>
-      <button class="btn primary" onclick="PocSim.procesar()">✅ Aplicar Cambios</button>
+      <button class="btn secondary" onclick="PocSim.cerrar()">&times; Cancelar</button>
+      <button class="btn primary" onclick="PocSim.procesar()"><i data-lucide="check"></i> Aplicar Cambios</button>
     </div>
   </div>
 </div>
@@ -756,8 +761,8 @@
 </div>
 
 <div class="actions-toolbar" style="justify-content: center; margin-top: 16px;">
-  <button id="btnCargarMas" class="btn" onclick="PocList.cargar()">⬇️ Cargar más equipos</button>
-  <button class="btn secondary" onclick="PocList.mostrarTodo()">📄 Mostrar todo</button>
+  <button id="btnCargarMas" class="btn" onclick="PocList.cargar()"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
+  <button class="btn secondary" onclick="PocList.mostrarTodo()"><i data-lucide="list"></i> Mostrar todo</button>
 </div>
 
   </div> <!-- app-wrap -->
@@ -766,7 +771,7 @@
 <div id="editDrawerOverlay"></div>
 <div id="editDrawer">
   <div class="drawer-header">
-    <h3>✏️ Editar Equipo</h3>
+    <h3><i data-lucide="pencil"></i> Editar Equipo</h3>
     <button class="drawer-close" onclick="PocEdit.cerrar()">&times;</button>
   </div>
   <div class="drawer-body">
@@ -846,10 +851,10 @@
     </div>
   </div>
   <div class="drawer-actions">
-    <button class="btn secondary" onclick="PocEdit.cerrar()">❌ Cancelar</button>
-    <button class="btn ok" onclick="PocEdit.guardar()">✔️ Guardar</button>
+    <button class="btn secondary" onclick="PocEdit.cerrar()"><i data-lucide="x"></i> Cancelar</button>
+    <button class="btn ok" onclick="PocEdit.guardar()"><i data-lucide="check"></i> Guardar</button>
   </div>
 </div>
-
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

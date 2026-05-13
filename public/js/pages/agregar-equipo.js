@@ -60,15 +60,16 @@ const html = `
     </div>
 
     <div class="form-actions" style="justify-content:flex-start">
-      <button type="button" class="btn danger" onclick="document.getElementById('${id}').remove()">🗑️ Eliminar equipo</button>
+      <button type="button" class="btn danger" onclick="document.getElementById('${id}').remove()"><i data-lucide="trash-2"></i> Eliminar equipo</button>
     </div>
   </fieldset>
 `;
 
 
       container.insertAdjacentHTML("beforeend", html);
-     
-  const fieldset = document.getElementById(id); 
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  const fieldset = document.getElementById(id);
   const serieInput = fieldset.querySelector(".serie");
   if (serieInput) serieInput.focus();
       const todosCheckbox = fieldset.querySelector(".todos-accesorios");
@@ -289,11 +290,12 @@ const html = `
       <textarea class="observaciones" rows="2">${observaciones}</textarea>
     </div>
 
-    <button type="button" onclick="document.getElementById('${id}').remove()" class="eliminar-boton">🗑️ Eliminar equipo</button>
+    <button type="button" onclick="document.getElementById('${id}').remove()" class="eliminar-boton"><i data-lucide="trash-2"></i> Eliminar equipo</button>
   </fieldset>
 `;
 
     container.insertAdjacentHTML("beforeend", html);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
     const fieldset = document.getElementById(id);
     const todosCheckbox = fieldset.querySelector(".todos-accesorios");
     if (todosCheckbox) {

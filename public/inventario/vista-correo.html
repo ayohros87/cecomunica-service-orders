@@ -74,7 +74,7 @@ datos.forEach(({ modelo, data }) => {
       <td>${modelo.modelo || "-"}</td>
       <td>${tipoTexto}</td>
       <td>${estadoTexto}</td>
-      <td>${modelo.alto_movimiento ? "✅" : "❌"}</td>
+      <td>${modelo.alto_movimiento ? "Sí" : "No"}</td>
       <td>${data.cantidad ?? "-"}</td>
       <td>${data.ultima_actualizacion?.toDate().toLocaleString() ?? "-"}</td>
     </tr>`;
@@ -83,9 +83,10 @@ datos.forEach(({ modelo, data }) => {
 };
 
   </script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <h2>📄 Inventario para envío por correo</h2>
+  <h2><i data-lucide="file-text"></i> Inventario para envío por correo</h2>
   <table>
     <thead>
       <tr>
@@ -100,5 +101,6 @@ datos.forEach(({ modelo, data }) => {
     </thead>
     <tbody id="tablaCorreo"></tbody>
   </table>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

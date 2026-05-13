@@ -187,11 +187,12 @@
   <script src="../js/services/pocService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/modelosService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div class="toolbar">
-    <button class="btn primary" onclick="window.print()">🖨️ Imprimir</button>
-    <button class="btn secondary" onclick="window.close()">✕ Cerrar</button>
+    <button class="btn primary" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
+    <button class="btn secondary" onclick="window.close()"><i data-lucide="x"></i> Cerrar</button>
   </div>
   
   <div class="print-page">
@@ -202,11 +203,11 @@
 
     <div class="info-section">
       <div class="info-item">
-        <span class="info-label">📅 Fecha de Impresión</span>
+        <span class="info-label"><i data-lucide="calendar"></i> Fecha de Impresión</span>
         <span class="info-value" id="fechaHoy"></span>
       </div>
       <div class="info-item">
-        <span class="info-label">📦 Total Equipos</span>
+        <span class="info-label"><i data-lucide="package"></i> Total Equipos</span>
         <span class="info-value" id="cantidadEquipos">0</span>
       </div>
     </div>
@@ -320,8 +321,8 @@ await cargarModelosPara(datos);
           <td>${d.serial || ""}</td>
           <td>${d.operador || ""}</td>
           <td>${d.ip || ""}</td>
-          <td>${d.gps ? "🛰️" : "⛔"}</td>
-          <td>${d.activo ? "🟢" : "🔴"}</td>
+          <td>${d.gps ? "Sí" : "No"}</td>
+          <td>${d.activo ? "Activo" : "Inactivo"}</td>
           <td>${d.unit_id || ""}</td>
           <td>${d.radio_name || ""}</td>
           <td>${modeloDe(d)}</td>
@@ -337,5 +338,6 @@ await cargarModelosPara(datos);
       else window.location.href = "/login.html";
     });
   </script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

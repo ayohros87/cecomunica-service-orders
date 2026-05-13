@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>📋 Reporte de Órdenes Pendientes</title>
+  <title>Reporte de Órdenes Pendientes</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
     h2 { margin-bottom: 10px; }
@@ -15,10 +15,10 @@
   </style>
 </head>
 <body>
-  <h2>⏳ Reporte de Órdenes Pendientes</h2>
+  <h2><i data-lucide="clock"></i> Reporte de Órdenes Pendientes</h2>
   <div class="toolbar">
-    <button onclick="window.print()">🖨️ Imprimir</button>
-    <button onclick="window.close()">❌ Cerrar</button>
+    <button onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
+    <button onclick="window.close()"><i data-lucide="x"></i> Cerrar</button>
   </div>
   <div id="mensaje"></div>
   <div id="tablaReporte"></div>
@@ -29,6 +29,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/services/ordenesService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <script>
     const tablaDiv = document.getElementById("tablaReporte");
@@ -115,5 +116,6 @@ let vendedor = data.vendedor_email || "No disponible";
       }
     }
   </script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

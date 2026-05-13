@@ -16,6 +16,7 @@
 
   <!-- XLSX (exportación) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
 <style>
 /* =========================
@@ -277,18 +278,18 @@ tr.inactivo td{ opacity:.55; }
   <!-- ===== TOPBAR ===== -->
   <div class="modelos-topbar">
     <div class="left">
-      <h1>📘 Modelos de Radios</h1>
+      <h1><i data-lucide="book-open"></i> Modelos de Radios</h1>
       <div class="app-search">
         <input id="q" placeholder="Buscar marca, modelo o tipo…" />
-        <button class="btn icon" onclick="aplicarFiltroRapido()">🔍</button>
+        <button class="btn icon" onclick="aplicarFiltroRapido()"><i data-lucide="search"></i></button>
       </div>
     </div>
     <div class="right">
-      <button class="btn" onclick="window.location.href='./index.html'">📦 Inventario</button>
-      <button class="btn" onclick="exportarExcel()">📥 Excel</button>
+      <button class="btn" onclick="window.location.href='./index.html'"><i data-lucide="package"></i> Inventario</button>
+      <button class="btn" onclick="exportarExcel()"><i data-lucide="download"></i> Excel</button>
 
       <div class="dropdown" id="ddVista">
-        <button class="btn" id="btnVista">⚙️ Vista</button>
+        <button class="btn" id="btnVista"><i data-lucide="settings"></i> Vista</button>
         <div class="menu">
           <label class="menu-item"><input type="checkbox" checked id="col-CHK-estado"> Columna “Estado”</label>
           <label class="menu-item"><input type="checkbox" checked id="col-CHK-alto"> Columna “Alto mov.”</label>
@@ -300,9 +301,9 @@ tr.inactivo td{ opacity:.55; }
         </div>
       </div>
 
-      <button class="btn ok" onclick="abrirModal()">➕ Nuevo</button>
-      <button class="btn" onclick="window.location.href='../index.html'">🏠 Menú</button>
-      <button class="btn danger" onclick="cerrarSesion()">🚪 Salir</button>
+      <button class="btn ok" onclick="abrirModal()"><i data-lucide="plus"></i> Nuevo</button>
+      <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú</button>
+      <button class="btn danger" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Salir</button>
     </div>
   </div>
 
@@ -322,7 +323,7 @@ tr.inactivo td{ opacity:.55; }
     <div class="modal">
       <div class="sheet-header">
         <h3 class="sheet-title" id="modalTitle">Nuevo modelo</h3>
-        <button class="btn" onclick="cerrarModal()">✖</button>
+        <button class="btn" onclick="cerrarModal()"><i data-lucide="x"></i></button>
       </div>
       <div class="sheet-body">
         <div class="form-grid">
@@ -376,12 +377,13 @@ tr.inactivo td{ opacity:.55; }
       </div>
       <div class="footer">
         <button class="btn" onclick="cerrarModal()">Cancelar</button>
-        <button class="btn primary" id="btnGuardar" onclick="guardarModelo()">💾 Guardar</button>
+        <button class="btn primary" id="btnGuardar" onclick="guardarModelo()"><i data-lucide="save"></i> Guardar</button>
       </div>
     </div>
   </div>
 <script src="../js/ui/toast.js"></script>
 
   <script src="../js/pages/inventario-modelos.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

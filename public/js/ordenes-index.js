@@ -519,17 +519,17 @@ window.guardarAccesoriosLote = async function(ordenId) {
       if (!accesoriosWrapper) return;
 
       const campos = [
-        { name: 'bateria', icon: '🔋' },
-        { name: 'clip', icon: '📎' },
-        { name: 'cargador', icon: '🔌' },
-        { name: 'fuente', icon: '⚡' },
-        { name: 'antena', icon: '📡' }
+        { name: 'bateria', icon: 'battery-full' },
+        { name: 'clip',    icon: 'paperclip' },
+        { name: 'cargador',icon: 'plug' },
+        { name: 'fuente',  icon: 'zap' },
+        { name: 'antena',  icon: 'radio-tower' }
       ];
 
-      // Leer estado de cada accesorio desde los iconos
+      // Leer estado de cada accesorio desde los atributos data-campo
       campos.forEach(campo => {
         const accesorioItem = Array.from(accesoriosWrapper.querySelectorAll('.accesorio-item'))
-          .find(item => item.querySelector('.icono')?.textContent === campo.icon);
+          .find(item => item.dataset.campo === campo.name);
 
         if (accesorioItem) {
           const isActivo = accesorioItem.classList.contains('activo');
@@ -614,7 +614,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   const estado = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
   const fotosTallerCount = Number(ordenData.fotos_taller_count || 0);
   const fotosBadge = fotosTallerCount > 0
-    ? `<span class="fotos-taller-badge" title="Fotos de taller">📸 ${fotosTallerCount}</span>`
+    ? `<span class="fotos-taller-badge" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
     : "";
 
   filaOrden.style.cursor = "pointer";
@@ -693,7 +693,7 @@ filaOrden.innerHTML = `
             <span class="separador">•</span>
             <!-- P) Indicador de progreso de intervenciones -->
             <div class="progreso-intervenciones-inline ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'}" data-orden-id="${ordenId}">
-              <span class="icon">🛠️</span>
+              <span class="icon"><i data-lucide="wrench"></i></span>
               <span class="progreso-valor">0/${equiposNormalizados.length}</span>
             </div>
             <!-- U) Badge de contradicción si orden cerrada con intervenciones pendientes -->
@@ -703,19 +703,19 @@ filaOrden.innerHTML = `
           <!-- Columna derecha: Acciones de EQUIPOS -->
           <div class="header-col-der">
             <button class="btn-header-compact" data-action="agregar-equipo" data-stop-propagation="true" data-orden-id="${ordenId}" title="Agregar equipo">
-              ➕
+              <i data-lucide="plus"></i>
             </button>
             <div class="overflow-menu mini-menu">
               <button class="btn-header-compact" data-action="toggle-order-actions" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">
                 ⋯
               </button>
               <div class="overflow-menu-dropdown" id="order-actions-${ordenId}">
-                <button class="overflow-menu-item" data-action="copiar-seriales" data-stop-propagation="true" data-orden-id="${ordenId}">📋 Copiar seriales</button>
-                <button class="overflow-menu-item" data-action="activar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}">🧰 Accesorios en lote</button>
+                <button class="overflow-menu-item" data-action="copiar-seriales" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="copy"></i> Copiar seriales</button>
+                <button class="overflow-menu-item" data-action="activar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Accesorios en lote</button>
               </div>
             </div>
             <button id="btnGuardarAccesorios_${ordenId}" class="btn-header-compact primary" data-action="guardar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}" style="display:none;" title="Guardar accesorios">
-              💾
+              <i data-lucide="save"></i>
             </button>
           </div>
         </div>
@@ -724,14 +724,14 @@ filaOrden.innerHTML = `
         <div class="accesorios-popover" id="popoverAccesorios_${ordenId}" style="display: none;">
           <div class="popover-content">
             <div class="popover-header-leyenda">
-              <div class="leyenda-titulo">📖 Leyenda de Accesorios</div>
+              <div class="leyenda-titulo">Leyenda de Accesorios</div>
               <button class="popover-close" data-action="close-popover" data-stop-propagation="true" data-orden-id="${ordenId}">×</button>
               <div class="leyenda-items-inline">
-                <span class="leyenda-item"><span class="icono">🔋</span> Batería</span>
-                <span class="leyenda-item"><span class="icono">📎</span> Clip</span>
-                <span class="leyenda-item"><span class="icono">🔌</span> Cargador</span>
-                <span class="leyenda-item"><span class="icono">⚡</span> Fuente</span>
-                <span class="leyenda-item"><span class="icono">📡</span> Antena</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="battery-full"></i></span> Batería</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="paperclip"></i></span> Clip</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="plug"></i></span> Cargador</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="zap"></i></span> Fuente</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="radio-tower"></i></span> Antena</span>
                 <span class="separador-leyenda">|</span>
                 <span class="estado-inline"><span class="indicador incluido"></span> Incluido</span>
                 <span class="estado-inline"><span class="indicador no-incluido"></span> No incluido</span>
@@ -744,7 +744,7 @@ filaOrden.innerHTML = `
         <!-- Y) Resumen operativo para órdenes cerradas -->
         <div class="resumen-operativo" data-orden-id="${ordenId}" style="display: ${ordenCerrada ? 'block' : 'none'};">
           <div class="resumen-header">
-            <span class="icon">📊</span>
+            <span class="icon"><i data-lucide="bar-chart-2"></i></span>
             <strong>Resumen de Cierre</strong>
           </div>
           <div class="resumen-contenido">
@@ -816,7 +816,7 @@ filaOrden.innerHTML = `
     const tecnicoDisplay = ordenData.tecnico_asignado || "Sin asignar";
     const tipoDisplay = ordenData.tipo_de_servicio || "—";
     const fotosBadgeMobile = fotosTallerCount > 0
-      ? `<span class="fotos-taller-badge mobile" title="Fotos de taller">📸 ${fotosTallerCount}</span>`
+      ? `<span class="fotos-taller-badge mobile" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
       : "";
 
     card.innerHTML = `
@@ -838,18 +838,18 @@ filaOrden.innerHTML = `
         }; font-size: 11px; padding: 6px 10px; border-radius: 16px; font-weight: 700;">${estadoCompacto(estadoDisplay)}</span>
       </div>
       <div class="row" style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">
-        <span>📅 Creado: ${formatFecha(ordenData.fecha_creacion)}</span>
-        <span class="fecha-entrega">📦 Entrega: ${formatFecha(ordenData.fecha_entrega)}</span>
+        <span>Creado: ${formatFecha(ordenData.fecha_creacion)}</span>
+        <span class="fecha-entrega">Entrega: ${formatFecha(ordenData.fecha_entrega)}</span>
       </div>
       <div class="acciones">
         <button class="btn secondary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
-          👁 Equipos
+          <i data-lucide="eye"></i> Equipos
         </button>
         <button class="btn secondary" data-action="go-fotos-taller" data-stop-propagation="true" data-orden-id="${ordenId}">
-          📸 Fotos
+          <i data-lucide="camera"></i> Fotos
         </button>
         <button class="btn primary" data-action="editar-orden" data-orden-id="${ordenId}" style="flex: 2;">
-          ✏️ Editar
+          <i data-lucide="pencil"></i> Editar
         </button>
         ${botonesFlujo(ordenId, estado, ordenData)}
       </div>
@@ -1002,15 +1002,15 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
                   ${noDisponible
                     ? `<div class="intervencion-badge no-disponible" title="Equipo no disponible para intervención">
                          <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
-                           <span class="icon">⛔</span>
+                           <span class="icon"><i data-lucide="ban"></i></span>
                            <span class="label">No disponible</span>
                          </button>
                        </div>`
                     : (tieneIntervencion
-                      ? `<div class="intervencion-badge activa" title="✓ Intervención registrada">
+                      ? `<div class="intervencion-badge activa" title="Intervención registrada">
                           <div class="intervencion-content">
                             <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
-                              <span class="icon">✅</span>
+                              <span class="icon"><i data-lucide="check-circle"></i></span>
                               <span class="label">Registrada</span>
                             </button>
                             <span class="intervencion-text" title="${escapeHtml(e.trabajo_tecnico || '')}">${escapeHtml(e.trabajo_tecnico || '')}</span>
@@ -1018,7 +1018,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
                          </div>`
                       : `<div class="intervencion-badge pendiente ${ordenCerrada ? 'historico' : 'activo'}" title="${ordenCerrada ? 'No se registró intervención (orden cerrada)' : 'Pendiente de intervención'}">
                            <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
-                             <span class="icon">${ordenCerrada ? '📝' : '⏳'}</span>
+                             <span class="icon">${ordenCerrada ? '<i data-lucide="file-text"></i>' : '<i data-lucide="clock"></i>'}</span>
                              <span class="label">${ordenCerrada ? 'No registrada' : 'Pendiente'}</span>
                            </button>
                          </div>`
@@ -1031,20 +1031,20 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
               <td class="col-accesorios">
                 <div class="accesorios-wrapper ${accesoriosCompleto ? 'completo' : 'incompleto'}">
                   <div class="accesorios-group">
-                    <span class="accesorio-item ${e.bateria ? 'activo' : 'inactivo'}" title="${e.bateria ? '✓ Batería incluida' : '✗ Batería NO incluida'}">
-                      <span class="icono">🔋</span>
+                    <span class="accesorio-item ${e.bateria ? 'activo' : 'inactivo'}" data-campo="bateria" title="${e.bateria ? 'Batería incluida' : 'Batería NO incluida'}">
+                      <span class="icono"><i data-lucide="battery-full"></i></span>
                     </span>
-                    <span class="accesorio-item ${e.clip ? 'activo' : 'inactivo'}" title="${e.clip ? '✓ Clip incluido' : '✗ Clip NO incluido'}">
-                      <span class="icono">📎</span>
+                    <span class="accesorio-item ${e.clip ? 'activo' : 'inactivo'}" data-campo="clip" title="${e.clip ? 'Clip incluido' : 'Clip NO incluido'}">
+                      <span class="icono"><i data-lucide="paperclip"></i></span>
                     </span>
-                    <span class="accesorio-item ${e.cargador ? 'activo' : 'inactivo'}" title="${e.cargador ? '✓ Cargador incluido' : '✗ Cargador NO incluido'}">
-                      <span class="icono">🔌</span>
+                    <span class="accesorio-item ${e.cargador ? 'activo' : 'inactivo'}" data-campo="cargador" title="${e.cargador ? 'Cargador incluido' : 'Cargador NO incluido'}">
+                      <span class="icono"><i data-lucide="plug"></i></span>
                     </span>
-                    <span class="accesorio-item ${e.fuente ? 'activo' : 'inactivo'}" title="${e.fuente ? '✓ Fuente incluida' : '✗ Fuente NO incluida'}">
-                      <span class="icono">⚡</span>
+                    <span class="accesorio-item ${e.fuente ? 'activo' : 'inactivo'}" data-campo="fuente" title="${e.fuente ? 'Fuente incluida' : 'Fuente NO incluida'}">
+                      <span class="icono"><i data-lucide="zap"></i></span>
                     </span>
-                    <span class="accesorio-item ${e.antena ? 'activo' : 'inactivo'}" title="${e.antena ? '✓ Antena incluida' : '✗ Antena NO incluida'}">
-                      <span class="icono">📡</span>
+                    <span class="accesorio-item ${e.antena ? 'activo' : 'inactivo'}" data-campo="antena" title="${e.antena ? 'Antena incluida' : 'Antena NO incluida'}">
+                      <span class="icono"><i data-lucide="radio-tower"></i></span>
                     </span>
                   </div>
                   <span class="completitud-badge">${accesoriosPresentes}/${accesoriosTotal}</span>
@@ -1062,7 +1062,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
               <!-- M) Acciones destructivas con menor peso visual -->
               <td class="col-acciones">
                 <button data-action="eliminar-equipo" data-id="${ordenId}_${e.id}" class="btn-eliminar-equipo" title="Eliminar equipo">
-                  🗑️
+                  <i data-lucide="trash-2"></i>
                 </button>
               </td>
             </tr>
@@ -1073,6 +1073,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
   }
   
   filaDetalle.setAttribute("data-equipos-loaded", "true");
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 // 🔄 Helper para refrescar solo los equipos de una orden expandida
@@ -1099,31 +1100,31 @@ function botonesFlujo(ordenId, estado, ordenData) {
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     if (estado === "POR ASIGNAR") {
-      html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">🛠️</span> Asignar</button>`;
+      html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
-      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">✅</span> Completar</button>`;
+      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
     } else if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
-      html += `<button class="btn" style="background:#8b5cf6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(139,92,246,0.3);" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">📲</span> Entregar</button>`;
+      html += `<button class="btn" style="background:#8b5cf6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(139,92,246,0.3);" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }
 
   else if (rol === ROLES.TECNICO) {
     if (estado === "POR ASIGNAR") {
-      html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">🛠️</span> Asignar</button>`;
+      html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
-      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">✅</span> Completar</button>`;
+      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
     }
   }
 
   else if (rol === ROLES.TECNICO_OPERATIVO) {
     if (estado === "ASIGNADO") {
-      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">✅</span> Completar</button>`;
+      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
     }
   }
 
   else if (rol === ROLES.VENDEDOR) {
     if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
-      html += `<button class="btn" style="background:#8b5cf6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(139,92,246,0.3);" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><span style="font-size: 16px;">📲</span> Entregar</button>`;
+      html += `<button class="btn" style="background:#8b5cf6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(139,92,246,0.3);" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }
 
@@ -1141,36 +1142,36 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
 
   // Build menu items array based on role
   let menuItems = [
-    { icon: "📸", label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+    { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(
-      { icon: "📜", label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: "📋", label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: "🖨️", label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: "🧰", label: trabajo === 'COMPLETADO' ? "✓ Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
-      { icon: "🧠", label: tieneNota ? "✓ Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' },
+      { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
+      { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' },
       { divider: true },
-      { icon: "✏️", label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
-      { icon: "🗑️", label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" }
+      { icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
+      { icon: '<i data-lucide="trash-2"></i>', label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" }
     );
   } else if (rol === ROLES.TECNICO || rol === ROLES.TECNICO_OPERATIVO) {
     menuItems.push(
-      { icon: "🖨️", label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: "🧰", label: trabajo === 'COMPLETADO' ? "✓ Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
-      { icon: "🧠", label: tieneNota ? "✓ Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
+      { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
     );
   } else if (rol === ROLES.VISTA) {
     menuItems.push(
-      { icon: "🖨️", label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
   } else if (rol === ROLES.VENDEDOR) {
     menuItems.push(
-      { icon: "📜", label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: "�", label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: "�🖨️", label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: "🧰", label: trabajo === 'COMPLETADO' ? "✓ Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' }
+      { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' }
     );
   }
 
@@ -1236,7 +1237,7 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
     ordersTable.innerHTML = "";
     APP.state.orders = [];
     APP.state.lastVisible = null;
-    APP.utils.mustGetEl("btnCargarMas").textContent = "⬇️ Cargar más órdenes (0)";
+    APP.utils.mustGetEl("btnCargarMas").innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
    APP.utils.mustGetEl("btnCargarMas").disabled = false;
     APP.utils.mustGetEl("btnCargarMas").style.display = "block";
   }
@@ -1268,7 +1269,7 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       ? applyActiveFiltersToOrders(APP.state.orders, filters).length
       : APP.state.orders.length;
 
-    document.getElementById("btnCargarMas").textContent = `⬇️ Cargar más órdenes (${totalVisible})`;
+    document.getElementById("btnCargarMas").innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${totalVisible})`;
 
     ordenarOrdenes(filteredNuevas).forEach(o => {
       const equipos = (o.equipos || [])
@@ -1279,7 +1280,7 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
       aplicarRestriccionesPorRol(APP.state.userRole);
     });
-
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
   } catch (error) {
     console.error("❌ Error al cargar órdenes:", error);
@@ -1449,6 +1450,7 @@ function renderOrdersList(list) {
 
   actualizarResumen(list);
   aplicarRestriccionesPorRol(APP.state.userRole);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function aplicarFiltrosCombinados() {
@@ -1458,7 +1460,7 @@ function aplicarFiltrosCombinados() {
     : APP.state.orders;
 
   const btn = document.getElementById("btnCargarMas");
-  if (btn) btn.textContent = `⬇️ Cargar más órdenes (${filtered.length})`;
+  if (btn) btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${filtered.length})`;
 
   renderOrdersList(filtered);
 }
@@ -1533,6 +1535,7 @@ window.filtrarOrdenes = async function () {
         );
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -1734,6 +1737,7 @@ window.filtrarRapido = async function() {
         );
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -2066,7 +2070,7 @@ window.abrirEquiposMobile = function(ordenId) {
   if (equipos.length === 0) {
     list.innerHTML = `
       <div class="equipos-empty">
-        <div class="equipos-empty-icon">📦</div>
+        <div class="equipos-empty-icon"><i data-lucide="package"></i></div>
         <div class="equipos-empty-text">No hay equipos asociados</div>
       </div>
     `;
@@ -2082,7 +2086,7 @@ window.abrirEquiposMobile = function(ordenId) {
       // 2-line clamp usando CSS inline simple
       const obsHtml = obs
         ? `<div class="equipo-obs clamp-2">${escapeHtml(obs)}</div>
-           <button class="btn ghost equipo-obs-more" data-action="ver-obs-completa" data-orden-id="${ordenId}" data-idx="${idx}">👁 Ver más</button>`
+           <button class="btn ghost equipo-obs-more" data-action="ver-obs-completa" data-orden-id="${ordenId}" data-idx="${idx}"><i data-lucide="eye"></i> Ver más</button>`
         : `<div class="equipo-obs equipo-obs--empty">Sin observaciones</div>`;
       
       // Trabajo tecnico display
@@ -2105,11 +2109,11 @@ window.abrirEquiposMobile = function(ordenId) {
         <div class="${cardClass}">
           <div class="equipo-card-header">
             <div class="equipo-card-info">
-              <div class="equipo-card-serial">📦 ${escapeHtml(serial)}</div>
+              <div class="equipo-card-serial"><i data-lucide="package"></i> ${escapeHtml(serial)}</div>
               <div class="equipo-card-model">Modelo: <span class="equipo-card-model-value">${escapeHtml(modelo)}</span></div>
             </div>
             ${noDisponible
-              ? '<div class="equipo-status-badge equipo-status-badge--warn">⛔ No disponible</div>'
+              ? '<div class="equipo-status-badge equipo-status-badge--warn"><i data-lucide="ban"></i> No disponible</div>'
               : (e.trabajo_tecnico ? '<div class="equipo-status-badge equipo-status-badge--ok">✓ OK</div>' : '')
             }
           </div>
@@ -2118,12 +2122,12 @@ window.abrirEquiposMobile = function(ordenId) {
           <div class="equipo-card-actions">
             <button class="btn ${e.trabajo_tecnico ? 'ok' : 'secondary'} equipo-card-action"
               data-action="abrir-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}">
-              ${e.trabajo_tecnico ? '✓ ' : ''}✍️ Intervención
+              <i data-lucide="${e.trabajo_tecnico ? 'check-circle' : 'pencil-line'}"></i> Intervención
             </button>
 
             <button class="btn ghost equipo-card-view"
               data-action="ver-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}" title="Ver comentario">
-              👁
+              <i data-lucide="eye"></i>
             </button>
           </div>
 
@@ -2133,6 +2137,7 @@ window.abrirEquiposMobile = function(ordenId) {
     }).join("");
   }
 
+  if (typeof lucide !== 'undefined') lucide.createIcons();
   if (modal) APP.utils.show(modal);
 };
 
@@ -2239,7 +2244,7 @@ window.verTrabajoEquipo = function(ordenId, idx) {
   const serial = (e.numero_de_serie || e.serial || e.SERIAL || "-").toString();
   
   showTextModal(
-    `🛠️ Intervención Técnica · ${serial}`,
+    `Intervención Técnica · ${serial}`,
     texto || (noDisponible ? `Equipo no disponible para intervención${motivo ? ` · ${motivo}` : ""}` : "Sin intervención registrada"),
     !texto && !noDisponible
   );
@@ -2257,7 +2262,8 @@ window.guardarTrabajoEquipoModal = async function() {
 
   try {
     btn.disabled = true;
-    btn.textContent = "⏳ Guardando...";
+    btn.innerHTML = '<i data-lucide="loader"></i> Guardando...';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
     const user = firebase.auth().currentUser;
     const uid = user?.uid || "";
@@ -2283,7 +2289,8 @@ window.guardarTrabajoEquipoModal = async function() {
       cerrarTrabajoEquipoModal();
       mostrarToast("⚠️ Equipo marcado como no disponible", "ok");
       btn.disabled = false;
-      btn.textContent = "💾 Guardar";
+      btn.innerHTML = '<i data-lucide="save"></i> Guardar';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
       return;
     }
 
@@ -2318,12 +2325,14 @@ window.guardarTrabajoEquipoModal = async function() {
     
     // Reset button state
     btn.disabled = false;
-    btn.textContent = "💾 Guardar";
+    btn.innerHTML = '<i data-lucide="save"></i> Guardar';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   } catch (e) {
     console.error("❌ Error guardando trabajo del equipo:", e);
     mostrarToast(`❌ Error al guardar: ${e?.message || e}`, "bad");
     btn.disabled = false;
-    btn.textContent = "💾 Guardar";
+    btn.innerHTML = '<i data-lucide="save"></i> Guardar';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 };
 
@@ -2405,7 +2414,7 @@ window.filtrarPorEstado = async function (estado) {
   // 3) Si no hay estado seleccionado, volver a la carga normal
   if (!estado) {
     if (btnCargarMas) {
-      btnCargarMas.textContent = "⬇️ Cargar más órdenes (0)";
+      btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
       btnCargarMas.disabled = false;
       APP.utils.show(btnCargarMas);
     }
@@ -2457,6 +2466,7 @@ window.filtrarPorEstado = async function (estado) {
               .sort((a, b) => String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || "")));
             renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
           });
+          if (typeof lucide !== 'undefined') lucide.createIcons();
         }
         
         actualizarResumen(resultados);
@@ -2739,13 +2749,13 @@ function createTextModal() {
     <div class="text-modal-content" data-stop-propagation="true">
       <div class="text-modal-header">
         <div class="text-modal-title" id="textModalTitle"></div>
-        <button class="text-modal-close" data-action="close-text-modal" aria-label="Cerrar">✕</button>
+        <button class="text-modal-close" data-action="close-text-modal" aria-label="Cerrar"><i data-lucide="x"></i></button>
       </div>
       <div class="text-modal-body">
         <div class="text-modal-text" id="textModalBody"></div>
       </div>
       <div class="text-modal-footer">
-        <button class="text-modal-btn secondary" data-action="copy-text-modal">📋 Copiar</button>
+        <button class="text-modal-btn secondary" data-action="copy-text-modal"><i data-lucide="copy"></i> Copiar</button>
         <button class="text-modal-btn primary" data-action="close-text-modal">Cerrar</button>
       </div>
     </div>
@@ -2764,6 +2774,7 @@ function createTextModal() {
   });
   
   document.body.appendChild(overlay);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
   textModalEl = overlay;
   return overlay;
 }
