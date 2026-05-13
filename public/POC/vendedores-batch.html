@@ -379,10 +379,11 @@ body {
       </div>
     </div>
     <div class="topbar-right">
-      <button class="btn" id="btnGuardarBorrador" title="Ctrl+S">Guardar borrador</button>
-      <button class="btn" id="btnClearDraft" onclick="VB.clearDraft()">Borrar borrador</button>
-      <button class="btn secondary" onclick="VB.limpiarTodo()">Limpiar</button>
-      <button class="btn" onclick="window.location.href='../index.html'">Menú</button>
+      <button class="btn" id="btnGuardarBorrador" title="Ctrl+S"><i data-lucide="save"></i> Guardar borrador</button>
+      <button class="btn" id="btnClearDraft" onclick="VB.clearDraft()"><i data-lucide="trash-2"></i> Borrar borrador</button>
+      <button class="btn secondary" onclick="VB.limpiarTodo()"><i data-lucide="rotate-ccw"></i> Limpiar</button>
+      <a href="../index.html" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>
+      <button class="btn ghost" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar sesión</button>
     </div>
   </div>
 
@@ -492,7 +493,11 @@ body {
 <script src="../js/services/pocService.js"></script>
 <script src="../js/ui/toast.js"></script>
 <script src="../js/pages/vendedores-batch.js" defer></script>
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
-</div>
+<script>
+  function cerrarSesion() {
+    firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+</script>
 </body>
 </html>
