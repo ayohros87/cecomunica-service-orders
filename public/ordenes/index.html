@@ -29,16 +29,16 @@
     <div class="topbar-actions">
       <button class="btn primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
       <div class="overflow-menu topbar-menu">
-        <button class="btn" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="menu"></i> Más</button>
+        <button class="btn ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
         <div class="overflow-menu-dropdown" id="topbar-menu">
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
           <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
-          <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Config</button>
-          <div class="overflow-menu-divider"></div>
-          <button class="overflow-menu-item" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
-          <button class="overflow-menu-item danger" data-action="logout"><i data-lucide="log-out"></i> Salir</button>
+          <button class="overflow-menu-item" id="topbarBtnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente</button>
+          <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Configuración</button>
         </div>
       </div>
+      <button class="btn ghost" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
+      <button class="btn ghost" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>
     </div>
   </div>
   

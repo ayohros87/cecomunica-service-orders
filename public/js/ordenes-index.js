@@ -310,6 +310,7 @@ function aplicarRestriccionesPorRol(rol) {
   const btnProgreso = document.getElementById("btnProgresoTecnicos");
   const btnAdminEquiposCliente = document.getElementById("btnAdminEquiposCliente");
   const mobileBtnAdminEquiposCliente = document.getElementById("mobileBtnAdminEquiposCliente");
+  const topbarBtnAdminEquiposCliente = document.getElementById("topbarBtnAdminEquiposCliente");
 
   // Ocultar botones según rol
   if ([ROLES.VENDEDOR, ROLES.VISTA].includes(normalizedRole)) {
@@ -336,6 +337,9 @@ function aplicarRestriccionesPorRol(rol) {
   }
   if (mobileBtnAdminEquiposCliente) {
     mobileBtnAdminEquiposCliente.style.display = isAdmin ? "inline-flex" : "none";
+  }
+  if (topbarBtnAdminEquiposCliente) {
+    topbarBtnAdminEquiposCliente.style.display = isAdmin ? "flex" : "none";
   }
 }
 
