@@ -73,6 +73,10 @@ table {
 
 table thead {
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  position: sticky;
+  top: 128px; /* approx. collapsed filter-card height */
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
 }
 
 table th {
@@ -87,9 +91,9 @@ table th {
 }
 
 table td {
-  padding: 8px 12px;
+  padding: 10px 14px;
   vertical-align: middle;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 table tbody tr {
@@ -98,6 +102,17 @@ table tbody tr {
 }
 
 table tbody tr:hover {
+  background: #f0f9ff;
+}
+
+/* Zebra stripe by order pair (rows 1+2 = white, rows 3+4 = tinted)
+   Each order occupies 2 rows: filaOrden + filaDetalle */
+table tbody tr:nth-child(4n+3),
+table tbody tr:nth-child(4n+4) {
+  background: #f8fafc;
+}
+table tbody tr:nth-child(4n+3):hover,
+table tbody tr:nth-child(4n+4):hover {
   background: #f0f9ff;
 }
 
@@ -657,10 +672,10 @@ body.hide-fecha-entrega .fecha-entrega {
 /* Estado Pill - Dominant Visual Element */
 .estado-pill {
   display: inline-block;
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-radius: 16px;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   text-align: center;
@@ -696,6 +711,30 @@ body.hide-fecha-entrega .fecha-entrega {
   color: #1f4d31;
   border-color: #bfe6cd;
 }
+
+/* Left-border status accent — td:first-child to work with border-collapse */
+tr[data-estado="POR ASIGNAR"] td:first-child  { border-left: 4px solid #ef4444; }
+tr[data-estado="ASIGNADO"] td:first-child      { border-left: 4px solid #f59e0b; }
+tr[data-estado*="COMPLETADO"] td:first-child   { border-left: 4px solid #3b82f6; }
+tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e; }
+
+/* Tipo de servicio chip */
+.tipo-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+}
+.tipo-chip--reparacion    { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
+.tipo-chip--programacion  { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+.tipo-chip--mantenimiento { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
+.tipo-chip--venta         { background: #faf5ff; color: #7c3aed; border-color: #e9d5ff; }
 
 /* Enhanced equipment table styling */
 .celda-modelo-editando {
@@ -910,9 +949,25 @@ tr.activo {
   background: #eff6ff;
 }
 
+.flecha {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  vertical-align: middle;
+}
+
 tr.activo .flecha {
   color: var(--brand);
-  font-weight: bold;
+  transform: rotate(90deg);
+}
+
+/* Advanced-filter toggle chevron */
+#iconoAvanzados {
+  display: inline-block;
+  transition: transform 0.2s ease;
+  vertical-align: middle;
+}
+#iconoAvanzados.open {
+  transform: rotate(180deg);
 }
 
 /* Main table layout */

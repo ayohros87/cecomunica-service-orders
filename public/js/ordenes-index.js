@@ -622,6 +622,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     : "";
 
   filaOrden.style.cursor = "pointer";
+  filaOrden.setAttribute('data-estado', estado);
 const trabajo = (ordenData.trabajo_estado)
   || (ordenData.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
 
@@ -631,8 +632,8 @@ const dotClass =
                                'dot';
 
 // ✅ Ícono de advertencia para órdenes sin equipos
-const iconoAdvertencia = sinEquipos 
-  ? '<span class="warn-icon" title="Orden sin equipos" style="color: #d97706; font-size: 16px; margin-left: 6px; font-weight: bold; cursor: help;">⚠️</span>' 
+const iconoAdvertencia = sinEquipos
+  ? '<i data-lucide="alert-triangle" class="warn-icon" title="Orden sin equipos" style="color:#d97706;width:15px;height:15px;margin-left:6px;cursor:help;vertical-align:middle;"></i>'
   : '';
 
 // ✅ Ícono de contrato para PROGRAMACIÓN
@@ -641,21 +642,21 @@ if (normalizarTipo(ordenData.tipo_de_servicio) === "PROGRAMACION") {
   if (ordenData.contrato) {
     if (ordenData.contrato.aplica === true) {
       const contratoNumero = ordenData.contrato.contrato_id || 'ID no disponible';
-      iconoContrato = `<span title="Contrato: ${contratoNumero}" style="color: #059669; font-size: 14px; margin-left: 4px; cursor: help;">🔗</span>`;
+      iconoContrato = `<i data-lucide="link" title="Contrato: ${contratoNumero}" style="color:#059669;width:15px;height:15px;margin-left:4px;cursor:help;vertical-align:middle;"></i>`;
     } else if (ordenData.contrato.aplica === false) {
       const motivoShort = ordenData.contrato.motivo_no_aplica || 'Sin motivo';
-      iconoContrato = `<span title="No aplica contrato: ${motivoShort}" style="color: #dc2626; font-size: 14px; margin-left: 4px; cursor: help;">🚫</span>`;
+      iconoContrato = `<i data-lucide="ban" title="No aplica contrato: ${motivoShort}" style="color:#dc2626;width:15px;height:15px;margin-left:4px;cursor:help;vertical-align:middle;"></i>`;
     }
   } else {
-    // Orden de PROGRAMACIÓN sin campo contrato (data vieja)
-    iconoContrato = '<span title="PROGRAMACIÓN sin contrato registrado" style="color: #f59e0b; font-size: 14px; margin-left: 4px; cursor: help;">⚠️</span>';
+    // Orden de PROGRAMACIÓN sin contrato registrado (data vieja)
+    iconoContrato = '<i data-lucide="alert-triangle" title="PROGRAMACIÓN sin contrato registrado" style="color:#f59e0b;width:15px;height:15px;margin-left:4px;cursor:help;vertical-align:middle;"></i>';
   }
 }
 
 filaOrden.innerHTML = `
   <td>
     <span class="${dotClass}"></span>
-    <span class="flecha">▶</span>
+    <i data-lucide="chevron-right" class="flecha"></i>
     ${ordenId}
     ${fotosBadge}
   </td>
@@ -666,7 +667,7 @@ filaOrden.innerHTML = `
     </div>
   </td>
   <td>${ordenData.tecnico_asignado || ""}</td>
-  <td>${ordenData.tipo_de_servicio || ""}</td>
+  <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
   <td><span class="estado-pill ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
   <td>${formatFecha(ordenData.fecha_creacion)}</td>
   <td class="col-fecha-entrega">${formatFecha(ordenData.fecha_entrega)}</td>
@@ -915,9 +916,10 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
       if (hayContradiccion) {
         contradiccionBadge.style.display = 'inline-flex';
         contradiccionBadge.innerHTML = `
-          <span class="badge-icon">⚠️</span>
+          <i data-lucide="alert-triangle" class="badge-icon" style="width:14px;height:14px;"></i>
           <span class="badge-text">Orden cerrada con ${pendientesIntervencion} intervención(es) pendiente(s)</span>
         `;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [contradiccionBadge] });
         contradiccionBadge.className = 'contradiccion-badge advertencia';
         contradiccionBadge.title = 'Esta orden fue entregada pero tiene equipos sin intervención registrada';
       } else {
@@ -1573,7 +1575,7 @@ window.gestionarNotasTecnicas = async function(ordenId) {
       <span class="notas-icon">🧠</span>
       <h3>Notas Técnicas - Orden ${ordenId}</h3>
     </div>
-    <button id="closeNotasModal" class="notas-close" type="button">✕</button>
+    <button id="closeNotasModal" class="notas-close" type="button"><i data-lucide="x"></i></button>
   `;
 
   const content = document.createElement("div");
@@ -1760,10 +1762,10 @@ window.toggleFiltrosAvanzados = function() {
   
   if (bloque.style.display === "none") {
     bloque.style.display = "block";
-    icono.textContent = "▲";
+    icono.classList.add('open');
   } else {
     bloque.style.display = "none";
-    icono.textContent = "▼";
+    icono.classList.remove('open');
   }
 };
 
@@ -1999,6 +2001,17 @@ function getEstadoClass(estado) {
   if (e === "COMPLETADO (EN OFICINA)") return "completado";
   if (e === "ENTREGADO AL CLIENTE") return "entregado";
   return "por-asignar";
+}
+
+function tipoChip(tipo) {
+  if (!tipo) return '';
+  const t = tipo.trim().toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const cls =
+    t.includes('REPAR')   ? 'tipo-chip--reparacion'   :
+    t.includes('PROGRAM')  ? 'tipo-chip--programacion'  :
+    t.includes('MANTEN')   ? 'tipo-chip--mantenimiento' :
+    t.includes('VENTA')    ? 'tipo-chip--venta'         : '';
+  return `<span class="tipo-chip ${cls}">${tipo.trim()}</span>`;
 }
 
 // Helper: Versión compacta de estados para píldoras

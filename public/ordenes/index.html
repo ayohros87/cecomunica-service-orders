@@ -65,7 +65,7 @@
       <button class="btn primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>
       <button class="btn secondary" data-action="limpiar-filtros">Limpiar</button>
       <button class="btn ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
-        <span id="iconoAvanzados">▼</span> Avanzado
+        <i data-lucide="chevron-down" id="iconoAvanzados"></i> Avanzado
       </button>
     </div>
 
@@ -75,7 +75,7 @@
         <option value="ordenId">Número</option>
         <option value="cliente_nombre">Cliente</option>
       </select>
-      <button class="btn" title="Cambiar dirección" data-action="cambiar-direccion"><i data-lucide="arrows-up-down"></i></button>
+      <button class="btn" title="Cambiar dirección" data-action="cambiar-direccion"><i data-lucide="arrow-up-down"></i></button>
       <button class="btn ghost toggle-fecha-entrega-btn" id="btnToggleFechaEntrega" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
     </div>
   </div>
@@ -172,7 +172,7 @@
   <div class="modal modal-md">
     <div class="modal-header">
       <h3 class="modal-title"><i data-lucide="wrench"></i> Asignar técnico</h3>
-      <button class="btn ghost btn-close-modal" data-action="cerrar-modal-asignar">✕</button>
+      <button class="btn ghost btn-close-modal" data-action="cerrar-modal-asignar"><i data-lucide="x"></i></button>
     </div>
     <div class="form-field">
       <label class="form-label">Selecciona un técnico</label>
@@ -217,7 +217,7 @@
       <div class="mdrawer-title">Filtros</div>
       <div class="mdrawer-actions">
         <button class="btn ghost" type="button" data-action="mobile-clear-all">Limpiar</button>
-        <button class="btn ghost" type="button" data-action="mobile-close-filters">✕</button>
+        <button class="btn ghost" type="button" data-action="mobile-close-filters"><i data-lucide="x"></i></button>
       </div>
     </div>
 
@@ -274,7 +274,7 @@
           <option value="cliente_nombre">Cliente</option>
         </select>
 
-        <button class="btn msort" type="button" data-action="mobile-toggle-sort"><i data-lucide="arrows-up-down"></i></button>
+        <button class="btn msort" type="button" data-action="mobile-toggle-sort"><i data-lucide="arrow-up-down"></i></button>
       </div>
       <button class="btn ghost mfull toggle-fecha-entrega-btn" type="button" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
     </div>
@@ -301,7 +301,7 @@
         <div id="equiposMobileTitle" class="modal-title-mobile">Equipos</div>
         <div id="equiposMobileSub" class="modal-subtitle"></div>
       </div>
-      <button class="btn ghost" data-action="cerrar-equipos-mobile">✕</button>
+      <button class="btn ghost" data-action="cerrar-equipos-mobile"><i data-lucide="x"></i></button>
     </div>
 
     <div id="equiposMobileList" class="d-grid gap-10 max-h-70"></div>
@@ -316,7 +316,7 @@
         <div id="trabajoEquipoTitle" class="modal-title-mobile">Intervención técnica</div>
         <div id="trabajoEquipoSub" class="modal-subtitle"></div>
       </div>
-      <button class="btn ghost" data-action="cerrar-trabajo-equipo">✕</button>
+      <button class="btn ghost" data-action="cerrar-trabajo-equipo"><i data-lucide="x"></i></button>
     </div>
 
     <textarea id="trabajoEquipoText" class="textarea-full"
