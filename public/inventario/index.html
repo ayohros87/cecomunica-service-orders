@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -359,6 +359,7 @@ th .sort {
 <body>
 <div class="topbar">
   <div class="topbar-left">
+    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
     <h1><i data-lucide="package"></i> Inventario de Radios</h1>
     <div class="app-search">
       <input id="buscador" placeholder="Buscar marca, modelo o tipo..." />
@@ -376,13 +377,13 @@ th .sort {
       <button class="btn"><i data-lucide="settings-2"></i> Vista</button>
       <div class="menu" style="min-width:220px;">
         <label class="menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Cant. anterior</label>
-        <label class="menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltima actualización</label>
+        <label class="menu-item"><input type="checkbox" checked id="col-CHK-penultima"> PenÃºltima actualizaciÃ³n</label>
         <hr style="margin:6px 0;border:none;border-top:1px solid var(--line);">
         <button class="btn sm" onclick="toggleDensity()"><i data-lucide="arrow-up-down"></i> Alternar densidad</button>
       </div>
     </div>
 
-    <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú</button>
+    <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> MenÃº</button>
     <button class="btn danger" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Salir</button>
   </div>
 </div>
@@ -390,7 +391,7 @@ th .sort {
   <div class="loader"></div>
 </div>
 
-<div class="app-wrap app-wrap--wide">
+<div class="app-wrap app-wrap--full">
   <p id="resumenInv" class="resumen"></p>
   <div class="table-wrap" id="wrapTabla" data-density="roomy">
     <table>

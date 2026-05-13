@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Imprimir Cotización</title>
+  <title>Imprimir CotizaciÃ³n</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -46,10 +46,11 @@
 </head>
 <body>
   <div class="topbar no-print">
-    <h1>🧾 Cotización</h1>
+    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
+    <h1>ðŸ§¾ CotizaciÃ³n</h1>
     <div style="margin-left:auto; display:flex; gap:10px;">
-      <button class="btn-top" onclick="window.location.href='index.html'">⬅️ Volver</button>
-      <button class="btn" onclick="window.print()">🖨️ Imprimir</button>
+      <button class="btn-top" onclick="window.location.href='index.html'">â¬…ï¸ Volver</button>
+      <button class="btn" onclick="window.print()">ðŸ–¨ï¸ Imprimir</button>
     </div>
   </div>
 
@@ -59,13 +60,13 @@
         <img src="../logo_cecomunica.png" alt="CECOMUNICA" class="empresa-logo">
         <div>
           <h2>C COMUNICA, S.A.</h2>
-          <div class="meta">RUC: 32977-27-249966 D.V. 39 · Tel: 279-5570 · cecomunica.com</div>
-          <div class="meta">Centro Comercial Bal Harbour, Galerías, Mezanine, oficina 5A</div>
-          <div class="meta">Vía Italia, Punta Paitilla, Panamá</div>
+          <div class="meta">RUC: 32977-27-249966 D.V. 39 Â· Tel: 279-5570 Â· cecomunica.com</div>
+          <div class="meta">Centro Comercial Bal Harbour, GalerÃ­as, Mezanine, oficina 5A</div>
+          <div class="meta">VÃ­a Italia, Punta Paitilla, PanamÃ¡</div>
         </div>
       </div>
       <div class="cot-box">
-        <div class="title">COTIZACIÓN</div>
+        <div class="title">COTIZACIÃ“N</div>
         <div><strong>ID:</strong> <span id="cotizacionId"></span></div>
         <div><strong>Fecha:</strong> <span id="fechaTexto"></span></div>
       </div>
@@ -76,7 +77,7 @@
       <div class="cliente-grid">
         <div id="clienteRucRow"><strong>RUC:</strong> <span id="clienteRuc"></span></div>
         <div id="clienteEmailRow"><strong>Email:</strong> <span id="clienteEmail"></span></div>
-        <div id="clienteDireccionRow"><strong>Dirección:</strong> <span id="clienteDireccion"></span></div>
+        <div id="clienteDireccionRow"><strong>DirecciÃ³n:</strong> <span id="clienteDireccion"></span></div>
         <div id="clienteRepresentanteRow"><strong>Representante:</strong> <span id="clienteRepresentante"></span></div>
       </div>
     </div>
@@ -86,7 +87,7 @@
         <tr>
           <th>#</th>
           <th>Cant</th>
-          <th>Descripción</th>
+          <th>DescripciÃ³n</th>
           <th class="text-right">P.Unit</th>
           <th class="text-right">Total</th>
         </tr>
@@ -140,7 +141,7 @@
 
     async function cargarCotizacion(id) {
       const d = await CotizacionesService.getCotizacion(id);
-      if (!d) { alert("Cotización no encontrada"); return; }
+      if (!d) { alert("CotizaciÃ³n no encontrada"); return; }
 
       const setRow = (rowId, valueId, value) => {
         const row = document.getElementById(rowId);
@@ -163,8 +164,8 @@
       (d.items || []).forEach((it, idx) => {
         const sufijo = it.modalidad === "alquiler" ? " / mes" : "";
         if (it.modalidad === "alquiler") tieneAlquiler = true;
-        const desc = `${it.modelo || ""} — ${it.descripcion || ""}`.trim();
-        const tipo = `${it.tipo || ""} · ${it.modalidad === "alquiler" ? "Alquiler" : "Venta"}`.trim();
+        const desc = `${it.modelo || ""} â€” ${it.descripcion || ""}`.trim();
+        const tipo = `${it.tipo || ""} Â· ${it.modalidad === "alquiler" ? "Alquiler" : "Venta"}`.trim();
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${idx + 1}</td>
@@ -184,7 +185,7 @@
       document.getElementById("bancoCuentaTxt").textContent = `${d.banco_tipo_cuenta || ""} - ${d.banco_numero || ""}`;
       document.getElementById("bancoTitularTxt").textContent = d.banco_titular || "";
 
-      document.getElementById("notaValidez").textContent = `Validez: ${d.validez_dias || 30} días.`;
+      document.getElementById("notaValidez").textContent = `Validez: ${d.validez_dias || 30} dÃ­as.`;
       document.getElementById("notaForma").textContent = `Forma de pago: ${d.forma_pago || "contado"}.`;
       const notaEntrega = document.getElementById("notaEntrega");
       if (d.tiempo_entrega) {
