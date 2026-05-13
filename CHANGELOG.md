@@ -1,5 +1,33 @@
 # Changelog
 
+## [Look & Feel — Phase 6: Nav standardization, container width tiers] — 2026-05-13
+
+### Added
+- `ceco-ui.css`: `.app-wrap--narrow` (720 px), `.app-wrap--default` (1100 px), `.app-wrap--wide` (1400 px), `.app-wrap--full` (100%) modifier classes for content width tiers; `@media` breakpoints for `.app-wrap` padding at 1024 px and 760 px; `.table-wrap--compact` alias for `.table-wrap.compact`
+- `layout.js`: `Layout.renderTopbarFor(mode, opts)` shortcut — four modes: `'index'`, `'edit'`, `'child'`, `'home'`; homeBtn and logoutBtn now render with Lucide icons; backBtn defaults to icon + "Volver" when caller omits `back.label`
+
+### Refactored
+- Container widths: replaced all inline `max-width` overrides with tier modifier classes across `cotizaciones/*`, `contratos/index.html`, `POC/index.html`, `clientes/index.html`, `inventario/*`
+- Topbar migration — the following pages now use `Layout.renderTopbar()` replacing custom navbars or no nav at all:
+  - `ordenes/config.html`, `ordenes/estado_reparacion.html`, `ordenes/tecnicos.html`, `ordenes/modelo-de-radio.html`, `ordenes/importar-exportar.html`
+  - `ordenes/editar-orden.html`, `ordenes/nueva-orden.html`, `ordenes/agregar-equipo.html`, `ordenes/admin-equipos-cliente.html`
+- `estado_reparacion.html`, `tecnicos.html`, `modelo-de-radio.html`, `importar-exportar.html`: migrated from old Arial-font layout to `ceco-ui.css` + proper auth + topbar
+- `admin-equipos-cliente.js`: `btnVolver` ref now optional-chained (element removed from HTML)
+
+## [Look & Feel — Phase 5: Iconography migration] — 2026-05-12
+
+### Replaced
+- Every emoji character across all HTML pages and dynamic JS template strings → `<i data-lucide="name">` elements
+- Boolean data cells (`activo`, GPS) → plain text ("Sí"/"No") where icon use would be semantically incorrect
+- Files updated: `ordenes/` (13 pages), `POC/` (7 pages), `inventario/` (5 pages), `clientes/index.html`, `contratos/` (5 pages), `cotizaciones/` (3 pages), `index.html`
+
+### Updated JS
+- `ordenes-index.js`, `agregar-equipo.js`, `clientes-index.js`, `contratos-list.js`, `cotizaciones-index.js`, `cotizar-orden.js`, `inventario-index.js`, `poc-edit.js`, `poc-list.js` — all dynamic DOM template strings updated to use `<i data-lucide>` + `lucide.createIcons()` call after each insertion
+
+### Added
+- Lucide CDN script tag to pages that were missing it; `lucide.createIcons()` added after every dynamic DOM insertion
+- `ceco-ui.css`: SVG sizing and stroke-width normalization rules for Lucide icons so they render at a consistent 16 px inline
+
 ## [Look & Feel — Phase 4: Dialog & toast primitives] — 2026-05-12
 
 ### Extended
