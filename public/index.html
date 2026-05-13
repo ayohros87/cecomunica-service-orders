@@ -17,16 +17,13 @@
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: 'Cecomunica — Centro de Gestión', showHome: false, showLogout: true });</script>
+  <script>Layout.renderTopbar({ title: 'Cecomunica — Centro de Gestión', showHome: false, showLogout: true, menu: [{ label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' }] });</script>
 
   <div class="app-wrap">
     <!-- Herramientas -->
     <div class="app-tools">
       <div class="app-search">
         <input id="buscador" type="search" placeholder="Buscar módulo (ej: inventario, poc, órdenes)..." oninput="filtrarModulos()">
-      </div>
-      <div>
-        <button class="btn" onclick="window.location.href='perfil.html'"><i data-lucide="user"></i> Mi perfil</button>
       </div>
     </div>
 

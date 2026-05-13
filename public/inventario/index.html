@@ -344,6 +344,7 @@ th .sort {
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/modelosService.js"></script>
@@ -368,30 +369,30 @@ th .sort {
   </div>
 
   <div class="topbar-right">
-    <button class="btn primary" onclick="window.location.href='./cargar-inventario.html'"><i data-lucide="plus"></i> Cargar</button>
-    <button class="btn" onclick="window.location.href='./modelos.html'"><i data-lucide="book-open"></i> Modelos</button>
-    <button class="btn" onclick="window.open('./vista-correo.html','_blank')"><i data-lucide="mail"></i> Vista correo</button>
-    <button class="btn" onclick="exportarExcel()"><i data-lucide="download"></i> Excel</button>
-
-    <div class="dropdown">
-      <button class="btn"><i data-lucide="settings-2"></i> Vista</button>
-      <div class="menu" style="min-width:220px;">
-        <label class="menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Cant. anterior</label>
-        <label class="menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltima actualización</label>
-        <hr style="margin:6px 0;border:none;border-top:1px solid var(--line);">
-        <button class="btn sm" onclick="toggleDensity()"><i data-lucide="arrow-up-down"></i> Alternar densidad</button>
+    <button class="btn primary" onclick="window.location.href='./cargar-inventario.html'"><i data-lucide="plus"></i> Cargar inventario</button>
+    <div class="overflow-menu topbar-menu" id="inv-menu-wrap">
+      <button class="btn ghost" id="inv-menu-btn" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+      <div class="overflow-menu-dropdown" id="inv-menu-dropdown">
+        <a href="./modelos.html" class="overflow-menu-item"><i data-lucide="book-open"></i> Modelos</a>
+        <a href="./piezas.html" class="overflow-menu-item"><i data-lucide="layers"></i> Piezas</a>
+        <a href="./vista-correo.html" target="_blank" class="overflow-menu-item"><i data-lucide="mail"></i> Vista correo</a>
+        <button class="overflow-menu-item" onclick="exportarExcel()"><i data-lucide="download"></i> Excel</button>
+        <div class="overflow-menu-divider"></div>
+        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Cant. anterior</label>
+        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltima actualización</label>
+        <div class="overflow-menu-divider"></div>
+        <button class="overflow-menu-item" onclick="toggleDensity()"><i data-lucide="arrow-up-down"></i> Alternar densidad</button>
       </div>
     </div>
-
-    <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú</button>
-    <button class="btn danger" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Salir</button>
+    <a href="../index.html" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>
+    <button class="btn ghost" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar sesión</button>
   </div>
 </div>
 <div id="loader" style="display:none;" class="loader-center">
   <div class="loader"></div>
 </div>
 
-<div class="app-wrap app-wrap--wide">
+<div class="app-wrap app-wrap--full">
   <p id="resumenInv" class="resumen"></p>
   <div class="table-wrap" id="wrapTabla" data-density="roomy">
     <table>
@@ -402,6 +403,12 @@ th .sort {
 </div>
 
   <p id="contadorInventario"></p>
-  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    Layout.wireMenuToggle('inv-menu-btn', 'inv-menu-dropdown');
+  </script>
 </body>
 </html>

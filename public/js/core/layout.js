@@ -19,6 +19,7 @@ const Layout = (() => {
       showHome   = true,
       homeHref   = '../index.html',
       showLogout = true,
+      menu       = [],
     } = opts;
 
     const btnHtml = (a) => {
@@ -29,9 +30,24 @@ const Layout = (() => {
       return `<button class="btn${cls}"${id}${click}>${a.label}</button>`;
     };
 
+    const menuItemHtml = (item) => {
+      if (item.divider) return '<div class="overflow-menu-divider"></div>';
+      const id      = item.id     ? ` id="${item.id}"`           : '';
+      const danger  = item.danger ? ' danger'                    : '';
+      const click   = item.onclick ? ` onclick="${item.onclick}"` : '';
+      if (item.href) return `<a href="${item.href}" class="overflow-menu-item${danger}"${id}>${item.label}</a>`;
+      return `<button class="overflow-menu-item${danger}"${id}${click}>${item.label}</button>`;
+    };
+
     const actionBtns = actions.map(btnHtml).join('');
     const backBtn    = back
       ? `<a href="${back.href}" class="btn ghost">${back.label || '<i data-lucide="arrow-left"></i> Volver'}</a>`
+      : '';
+    const menuBtn    = menu.length
+      ? `<div class="overflow-menu topbar-menu" id="__layout-menu-wrap">
+      <button class="btn ghost" id="__layout-menu-btn" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+      <div class="overflow-menu-dropdown" id="__layout-menu-dropdown">${menu.map(menuItemHtml).join('')}</div>
+    </div>`
       : '';
     const homeBtn    = showHome
       ? `<a href="${homeHref}" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>`
@@ -49,6 +65,7 @@ const Layout = (() => {
   <div class="topbar-right">
     ${actionBtns}
     ${backBtn}
+    ${menuBtn}
     ${homeBtn}
     ${logoutBtn}
   </div>
@@ -58,6 +75,7 @@ const Layout = (() => {
     if (mount) {
       mount.outerHTML = html;
       if (typeof lucide !== 'undefined') lucide.createIcons();
+      if (menu.length) _wireMenuToggle('__layout-menu-btn', '__layout-menu-dropdown');
     }
   }
 
@@ -77,5 +95,23 @@ const Layout = (() => {
     }
   }
 
-  return { renderTopbar, renderTopbarFor };
+  /* Wire up a toggle button + dropdown by element IDs */
+  function _wireMenuToggle(btnId, dropId) {
+    const btn  = document.getElementById(btnId);
+    const drop = document.getElementById(dropId);
+    if (!btn || !drop) return;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = drop.classList.toggle('open');
+      btn.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('click', (e) => {
+      if (!drop.contains(e.target) && e.target !== btn) {
+        drop.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  return { renderTopbar, renderTopbarFor, wireMenuToggle: _wireMenuToggle };
 })();

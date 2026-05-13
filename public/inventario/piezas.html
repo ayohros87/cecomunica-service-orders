@@ -165,6 +165,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/piezasService.js"></script>
@@ -295,25 +296,26 @@ body { background: #f8fafc; }
   </div>
 
   <div class="topbar-right">
-    <button class="btn" onclick="window.location.href='./index.html'"><i data-lucide="package"></i> Radios</button>
-    <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Inicio</button>
-    <button id="btnNueva" class="btn ok" onclick="abrirModal()"><i data-lucide="plus"></i> Nueva</button>
-    <button id="btnBatch" class="btn" onclick="abrirBatchModal()"><i data-lucide="download"></i> Lote</button>
-
-    <div class="dropdown">
-      <button class="btn"><i data-lucide="settings"></i> Vista</button>
-      <div class="menu" style="min-width:220px;">
-        <label class="menu-item"><input type="checkbox" checked id="col-CHK-sku" onchange="toggleColumn('sku', this.checked)"> SKU</label>
-        <label class="menu-item"><input type="checkbox" checked id="col-CHK-costo" onchange="toggleColumn('costo', this.checked)"> Costo</label>
-        <label class="menu-item"><input type="checkbox" checked id="col-CHK-ubicacion" onchange="toggleColumn('ubicacion', this.checked)"> Ubicación</label>
-        <hr style="margin:6px 0;border:none;border-top:1px solid var(--line);">
-        <button class="btn sm w-full" onclick="toggleDensity()">↕️ Alternar densidad</button>
+    <button id="btnNueva" class="btn primary" onclick="abrirModal()"><i data-lucide="plus"></i> Nueva pieza</button>
+    <div class="overflow-menu topbar-menu" id="piezas-menu-wrap">
+      <button class="btn ghost" id="piezas-menu-btn" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+      <div class="overflow-menu-dropdown" id="piezas-menu-dropdown">
+        <a href="./index.html" class="overflow-menu-item"><i data-lucide="package"></i> Radios</a>
+        <button class="overflow-menu-item" id="btnBatch" onclick="abrirBatchModal()"><i data-lucide="download"></i> Importar lote</button>
+        <div class="overflow-menu-divider"></div>
+        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-sku" onchange="toggleColumn('sku', this.checked)"> SKU</label>
+        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-costo" onchange="toggleColumn('costo', this.checked)"> Costo</label>
+        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-ubicacion" onchange="toggleColumn('ubicacion', this.checked)"> Ubicación</label>
+        <div class="overflow-menu-divider"></div>
+        <button class="overflow-menu-item" onclick="toggleDensity()"><i data-lucide="arrow-up-down"></i> Alternar densidad</button>
       </div>
     </div>
+    <a href="../index.html" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>
+    <button class="btn ghost" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar sesión</button>
   </div>
 </div>
 
-  <div class="app-wrap app-wrap--wide">
+  <div class="app-wrap app-wrap--full">
     <p id="resumen" class="resumen"></p>
 
     <div class="table-wrap compact mt-12">
@@ -488,10 +490,15 @@ Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|S
   </div>
 </div>
 <script src="../js/ui/toast.js"></script>
-<script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
 
 <script src="../js/pages/piezas.js" defer></script>
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+<script>
+  function cerrarSesion() {
+    firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  Layout.wireMenuToggle('piezas-menu-btn', 'piezas-menu-dropdown');
+</script>
 </body>
 </html>

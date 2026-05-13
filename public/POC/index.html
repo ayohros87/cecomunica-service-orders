@@ -644,7 +644,7 @@
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="radio-tower"></i> Equipos PoC', showHome: true, homeHref: '../index.html', showLogout: true });</script>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="radio-tower"></i> Equipos PoC', actions: [{ label: '<i data-lucide="plus"></i> Nuevo equipo', href: 'nuevo-batch.html', cls: 'primary', id: 'btnBatch' }], menu: [{ label: '<i data-lucide="download"></i> Importar', href: 'importar-poc.html', id: 'btnImportar' }, { label: '<i data-lucide="briefcase"></i> Vendedores (batch)', href: 'vendedores-batch.html' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
   
   <div class="app-wrap app-wrap--full">
 
@@ -653,11 +653,9 @@
   <!-- Toolbar: Primary Actions -->
   <div class="actions-toolbar">
     <div class="actions-group">
-      <button id="btnBatch" class="btn primary" onclick="window.location.href='../POC/nuevo-batch.html'"><i data-lucide="layers"></i> Batch</button>
       <button id="btnSim" class="btn" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
       <button id="btnImprimir" class="btn" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
       <button id="btnExportar" class="btn" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar</button>
-      <button id="btnImportar" class="btn" onclick="window.location.href='../POC/importar-poc.html'"><i data-lucide="download"></i> Importar</button>
       <button id="btnEditarMasivo" class="btn" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
       <button id="btnGuardarMasivo" class="btn primary" onclick="PocBulk.guardar()" style="display:none;"><i data-lucide="save"></i> Guardar</button>
       <button id="btnCancelarMasivo" class="btn secondary" onclick="PocBulk.cancelar()" style="display:none;">&times; Cancelar</button>

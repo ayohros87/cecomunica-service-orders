@@ -373,6 +373,49 @@ th.ordenado-desc::after {
   display: block;
 }
 
+/* ─── Overflow menu (topbar & inline) ──────────────────────────────── */
+.overflow-menu            { position: relative; display: inline-block; }
+.overflow-menu-dropdown   {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+  min-width: 200px;
+  z-index: 9000;
+  padding: 4px;
+  animation: menuSlideDown 0.15s ease;
+}
+.overflow-menu-dropdown.open { display: block; }
+@keyframes menuSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.overflow-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text);
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  transition: background 0.12s;
+}
+.overflow-menu-item:hover  { background: #f3f4f6; }
+.overflow-menu-item.danger { color: var(--bad); }
+.overflow-menu-item.danger:hover { background: #fee2e2; }
+.overflow-menu-divider     { height: 1px; background: var(--line); margin: 4px 2px; }
+.topbar-menu .overflow-menu-dropdown { min-width: 220px; }
+
 .app-wrap           { max-width:1100px; margin:0 auto; padding:0 16px 32px; }
 .app-wrap--narrow   { max-width: 720px;  }
 .app-wrap--default  { max-width: 1100px; }
