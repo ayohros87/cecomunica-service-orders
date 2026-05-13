@@ -1,5 +1,20 @@
 # Changelog
 
+## [Look & Feel — Phase 7: Unified topbar right-zone + Print page standardization] — 2026-05-13
+
+### Added
+- `public/css/print-base.css` — shared foundation for all `imprimir-*.html` pages: `.print-toolbar` (right-aligned, hidden on print), `.print-page` wrapper (white card on screen, flat on print), `.print-brand-header` (logo + company info + doc-type label), `.print-mono` utility class; canonical `@media print` block with `@page { size: letter; margin: 0.4in }`, `print-color-adjust`, and page-break rules
+- Overflow menu component in `ceco-ui.css` (`.overflow-menu`, `.overflow-menu-dropdown`, `.overflow-menu-item`, `.overflow-menu-divider`) using `.open` toggle class
+
+### Refactored (print pages)
+- `ordenes/imprimir-orden.html` — replaced text-only brand header with logo + `.print-brand-header`; replaced `.toolbar` with `.print-toolbar`; removed inline `@media print` and body/wrapper CSS now covered by `print-base.css`
+- `cotizaciones/imprimir-cotizacion.html` — replaced old `.topbar.no-print` (emoji buttons, `btn-top` class) with `.print-toolbar`; migrated buttons to `.btn.ghost` / `.btn.secondary` with Lucide icons; added Lucide CDN and `createIcons()` call; linked `print-base.css`
+- `contratos/imprimir-contrato.html` — added missing `ceco-ui.css` link; added `print-base.css`; replaced bare `<button>` with `.print-toolbar.no-print`; removed three duplicate `@media print` blocks; added `@page { size: A4 }` override (contracts use A4); updated `.mono` class to use `var(--font-mono)` token
+
+### Refactored (topbar — Phase 7a)
+- `layout.js` — added `menu: []` parameter; `menuItemHtml()` generates `.overflow-menu-item` elements; overflow menu wrapper with IDs `__layout-menu-*`; `_wireMenuToggle()` click-outside close; exports `wireMenuToggle` for pages with custom topbars
+- Unified three-zone right-side topbar (`[+ Primary CTA] [⋮ Más] [🏠 Menú principal] [🚪 Cerrar sesión]`) across all 9 main index pages: `index.html`, `ordenes/index.html`, `contratos/index.html`, `cotizaciones/index.html`, `clientes/index.html`, `POC/index.html`, `POC/vendedores-batch.html`, `inventario/index.html`, `inventario/piezas.html`
+
 ## [Look & Feel — Phase 6: Nav standardization, container width tiers] — 2026-05-13
 
 ### Added

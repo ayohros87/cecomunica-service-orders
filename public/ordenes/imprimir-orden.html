@@ -3,87 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Orden de Servicio - C COMUNICA</title>
+  <title>Orden de Servicio - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/print-base.css">
   <style>
-
-@media print {
-
-  /* Set real paper margins (not fake padding) */
-  @page {
-    size: letter;        /* If you use A4 instead, change to: size: A4; */
-    margin: 0.35in;      /* Adjust between 0.25in and 0.5in if needed */
-  }
-
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #fff !important;
-  }
-
-  .no-print { display: none !important; }
-
-  /* Make content use printable width */
-  .print-page {
-    box-shadow: none !important;
-    border: none !important;
-    border-radius: 0 !important;
-
-    padding: 0 !important;          /* IMPORTANT: remove the 1in padding */
-    width: 100% !important;
-    max-width: none !important;     /* IMPORTANT: allow full page width */
-    margin: 0 !important;
-  }
-
-  /* Optional: avoid weird scaling/spacing in tables */
-  table {
-    page-break-inside: auto;
-  }
-
-  tr, td, th {
-    page-break-inside: avoid;
-  }
-}
-
-    
-    body {
-      background: #f3f4f6;
-      padding: 20px;
-    }
-    
-    .print-page {
-      max-width: 900px;
-      margin: 0 auto;
-      background: white;
-      padding: 20px;
-      box-shadow: var(--shadow);
-      border-radius: 12px;
-      border: 1px solid var(--line);
-    }
-    
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid var(--brand);
-      padding-bottom: 4px;
-      margin-bottom: 8px;
-    }
-    
-    .header h1 {
-      margin: 0;
-      font-size: 13px;
-      color: var(--brand);
-      font-weight: 700;
-    }
-    
-    .header h2 {
-      margin: 0;
-      font-size: 13px;
-      color: var(--text);
-      font-weight: 600;
-    }
-    
     .info-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -92,27 +15,27 @@
       margin-bottom: 8px;
       border: 1px solid var(--line);
     }
-    
+
     .info-item {
       display: block;
       font-size: 10px;
       line-height: 1.5;
     }
-    
+
     .info-item.full {
       grid-column: 1 / -1;
     }
-    
+
     .info-label {
       font-weight: 700;
       color: var(--text);
     }
-    
+
     .info-value {
       font-weight: 400;
       color: var(--text);
     }
-    
+
     .section-title {
       font-size: 11px;
       font-weight: 600;
@@ -121,18 +44,18 @@
       padding-bottom: 2px;
       border-bottom: 1px solid var(--line);
     }
-    
+
     .equipos-table {
       width: 100%;
       border-collapse: collapse;
       margin: 4px 0;
       font-size: 10px;
     }
-    
+
     .equipos-table thead {
       background: #f8fafc;
     }
-    
+
     .equipos-table th {
       padding: 6px 4px;
       text-align: center;
@@ -143,21 +66,17 @@
       text-transform: uppercase;
       letter-spacing: 0.2px;
     }
-    
+
     .equipos-table td {
       padding: 5px 4px;
       text-align: center;
       border: 1px solid var(--line);
     }
-    
+
     .equipos-table tbody tr:nth-child(even) {
       background: #fafafa;
     }
-    
-    .equipos-table tbody tr:hover {
-      background: #f0f9ff;
-    }
-    
+
     .firma-section {
       margin-top: 20px;
       padding: 10px;
@@ -166,23 +85,23 @@
       gap: 40px;
       align-items: center;
     }
-    
+
     .firma-item {
       display: inline-block;
     }
-    
+
     .firma-label {
       font-weight: 700;
       margin-right: 4px;
     }
-    
+
     .firma-line {
       display: inline-block;
       border-bottom: 1px solid #000;
       width: 200px;
       height: 16px;
     }
-    
+
     .footer-info {
       margin-top: 12px;
       padding-top: 8px;
@@ -191,15 +110,7 @@
       color: var(--muted);
       text-align: center;
     }
-    
-    .toolbar {
-      max-width: 900px;
-      margin: 0 auto 20px auto;
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-    
+
     .alert-box {
       background: #fef3c7;
       border: 1px solid #fbbf24;
@@ -209,50 +120,42 @@
       font-size: 12px;
       color: #92400e;
     }
-    
+
     @media (max-width: 760px) {
-      .print-page {
-        padding: 20px;
-      }
-      
       .info-grid {
         grid-template-columns: 1fr;
-      }
-      
-      .firma-grid {
-        grid-template-columns: 1fr;
-        gap: 30px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="toolbar no-print">
+  <div class="print-toolbar no-print">
     <button class="btn secondary" onclick="window.print()">
       <i data-lucide="printer"></i> Imprimir
     </button>
-    <button class="btn" onclick="window.close()">
+    <button class="btn ghost" onclick="window.close()">
       <i data-lucide="x"></i> Cerrar
     </button>
   </div>
 
   <div class="print-page">
-    <div class="header">
-      <h1>C COMUNICA, S.A.</h1>
-      <h2 id="documentTitle">ORDEN DE SERVICIO</h2>
+    <div class="print-brand-header">
+      <img src="../logo_cecomunica.png" alt="CeComunica" class="brand-logo">
+      <div class="brand-info">
+        <strong>C COMUNICA, S.A.</strong>
+        RUC: 32977-27-249966 DV 39 · Tel: 279-5570<br>
+        CC. Bal Harbour, Via Italia, Paitilla, Panamá
+      </div>
+      <div class="brand-doc-type" id="documentTitle">Orden de Servicio</div>
     </div>
 
-    <div id="infoContainer">
-      <!-- La información se cargará aquí -->
-    </div>
+    <div id="infoContainer"></div>
 
     <h3 class="section-title">
       <span id="tituloEquipos">Equipos Asociados</span>
     </h3>
 
-    <div id="tablaContainer">
-      <!-- La tabla se cargará aquí -->
-    </div>
+    <div id="tablaContainer"></div>
 
     <div class="firma-section">
       <div class="firma-item">
@@ -267,11 +170,10 @@
 
     <div class="footer-info">
       <p>Documento generado: <span id="fechaGeneracion"></span></p>
-      <p>C COMUNICA, S.A. - Sistema de Órdenes de Servicio</p>
+      <p>C COMUNICA, S.A. — Sistema de Órdenes de Servicio</p>
     </div>
   </div>
 
-  <!-- Firebase Compat -->
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>

@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Imprimir Cotización</title>
+  <title>Imprimir Cotización - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/print-base.css">
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -13,18 +14,17 @@
   <script src="../js/services/cotizacionesService.js"></script>
 
   <style>
-    body { background: #f5f7fa; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    .print-wrap { background: white; max-width: 900px; margin: 20px auto; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); line-height: 1.35; }
-    .doc-header { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: start; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; }
+    .print-page { line-height: 1.35; }
+    .doc-header { display: grid; grid-template-columns: 1fr 260px; gap: 16px; align-items: start; border-bottom: 2px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 14px; }
     .empresa { display: flex; gap: 12px; align-items: flex-start; }
     .empresa-logo { width: 64px; height: 64px; object-fit: contain; }
-    .empresa h2 { margin: 0 0 4px; }
+    .empresa h2 { margin: 0 0 4px; font-family: var(--font-display); }
     .empresa .meta { font-size: 12px; color: #475569; }
     .cot-box { border: 1px solid #e5e7eb; border-radius: 4px; padding: 10px 12px; font-size: 12px; }
-    .cot-box .title { font-weight: 800; letter-spacing: .6px; margin-bottom: 6px; }
+    .cot-box .title { font-weight: 800; letter-spacing: .6px; margin-bottom: 6px; font-family: var(--font-display); }
     .cliente-card { margin-top: 14px; border: 1px solid #e5e7eb; border-radius: 4px; padding: 12px; background: #f8fafc; }
     .cliente-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; }
-    .cliente-nombre { font-size: 16px; font-weight: 800; margin-bottom: 6px; }
+    .cliente-nombre { font-size: 16px; font-weight: 800; margin-bottom: 6px; font-family: var(--font-display); }
     table { width: 100%; border-collapse: collapse; margin-top: 14px; border: 1px solid #d1d5db; }
     th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 10px; }
     th { background: #eef2f7; text-transform: uppercase; font-size: 11px; letter-spacing: .6px; border-bottom: 2px solid #cbd5e1; color: var(--text); }
@@ -35,26 +35,17 @@
     .totales td { border-bottom: 1px solid #e5e7eb; }
     .totales .grand { font-weight: 800; font-size: 16px; }
     .section { margin-top: 14px; font-size: 12px; }
-    .section h4 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #475569; }
+    .section h4 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #475569; font-family: var(--font-display); }
     .firma { margin-top: 16px; }
-    @media print {
-      @page { size: Letter; margin: 12mm; }
-      .no-print { display: none; }
-      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
   </style>
 </head>
 <body>
-  <div class="topbar no-print">
-    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
-    <h1 class="topbar-title"><i data-lucide="file-text"></i> Cotización</h1>
-    <div style="margin-left:auto; display:flex; gap:10px;">
-      <button class="btn-top" onclick="window.location.href='index.html'">⬅️ Volver</button>
-      <button class="btn" onclick="window.print()">🖨️ Imprimir</button>
-    </div>
+  <div class="print-toolbar no-print">
+    <a href="index.html" class="btn ghost"><i data-lucide="arrow-left"></i> Volver</a>
+    <button class="btn secondary" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
   </div>
 
-  <div class="print-wrap" id="printArea">
+  <div class="print-page" id="printArea">
     <div class="doc-header">
       <div class="empresa">
         <img src="../logo_cecomunica.png" alt="CECOMUNICA" class="empresa-logo">
@@ -130,7 +121,10 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
     function money(n) { return Number(n || 0).toLocaleString("es-PA", { style: "currency", currency: "USD" }); }
 
     function formatFechaLarga(ts) {
@@ -171,8 +165,8 @@
           <td>${idx + 1}</td>
           <td>${it.cantidad || 0}</td>
           <td>${desc}<br><span style="color:var(--muted); font-size:11px;">${tipo}</span></td>
-          <td class="text-right">${money(it.precio_unitario)}${sufijo}</td>
-          <td class="text-right">${money(it.total)}${sufijo}</td>
+          <td class="text-right print-mono">${money(it.precio_unitario)}${sufijo}</td>
+          <td class="text-right print-mono">${money(it.total)}${sufijo}</td>
         `;
         tbody.appendChild(tr);
       });

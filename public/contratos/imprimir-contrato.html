@@ -2,7 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Contrato</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contrato de Servicio - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/print-base.css">
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
@@ -19,9 +22,8 @@
 
   <style>
     body {
-  font-family: Arial, sans-serif;
-  margin: 10mm; /* margen reducido en impresión */
-  max-width: none;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
     h1, h2 { text-align: center; }
@@ -32,26 +34,11 @@
     .firmas { margin-top: 40px; display: flex; justify-content: space-between; }
     .firmas div { width: 45%; text-align: center; }
     .firmas hr { margin: 40px 0 10px; }
-    
-    @media print {
-  button { display: none; }
-  body { margin: 0mm !important; }
-}
-@media print {
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-}
 
+/* Override print-base page size: contracts use A4 */
 @page {
   size: A4;
-  margin: 5mm; /* o usa 0mm si lo quieres pegado al borde */
-}
-body {
-  font-family: Arial, sans-serif;
-  font-size: 13px;
-  line-height: 1.5;
+  margin: 5mm;
 }
 fieldset {
   border: 1px solid #ccc;
@@ -128,13 +115,15 @@ img.logo-centrado {
 .estado-aprobado-chip{ background:#e6ffea !important; color:#2e7d32; border-color:#bbf7d0; }
 .estado-pendiente-chip{ background:#fff8e1 !important; color:#9a3412; border-color:#f4e5c2; }
 .estado-inactivo-chip{ background:#fff0f0 !important; color:#7f1d1d; border-color:#f8d7da; }
-.mono{font-family: ui-monospace, Menlo, Consolas, monospace;}
+.mono{font-family: var(--font-mono, 'IBM Plex Mono', ui-monospace, Consolas, monospace);}
 
   </style>
 </head>
 <body>
-  <button onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
-  <div id="contenido">
+  <div class="print-toolbar no-print">
+    <button class="btn secondary" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
+  </div>
+  <div id="contenido" class="print-page">
 <!-- Encabezado corporativo -->
 <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
   <!-- Membrete alineado a la izquierda -->

@@ -1,0 +1,136 @@
+/*
+ * print-base.css — shared foundation for all imprimir-*.html pages
+ * Screen: centered document card with top-right toolbar
+ * Print:  full-bleed, flat, controls hidden
+ */
+
+/* === Screen layout === */
+
+body {
+  background: #f3f4f6;
+  padding: 20px;
+}
+
+/* Toolbar — right-aligned, hidden on print */
+.print-toolbar {
+  max-width: 900px;
+  margin: 0 auto 16px;
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* Document wrapper */
+.print-page {
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  padding: 28px 32px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  font-family: var(--font-body, 'IBM Plex Sans', system-ui, sans-serif);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text, #0e1418);
+}
+
+/* Headings use display font */
+.print-page h1,
+.print-page h2,
+.print-page h3 {
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+}
+
+/* Monospace: IDs, amounts, model numbers */
+.print-mono {
+  font-family: var(--font-mono, 'IBM Plex Mono', ui-monospace, Consolas, monospace);
+}
+
+/* === Brand header (logo + company info + doc-type label) === */
+
+.print-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  border-bottom: 2px solid var(--brand, #0091d7);
+}
+
+.print-brand-header .brand-logo {
+  height: 52px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.print-brand-header .brand-info {
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.print-brand-header .brand-info strong {
+  display: block;
+  font-size: 15px;
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-weight: 700;
+  color: var(--text, #0e1418);
+  margin-bottom: 2px;
+}
+
+.print-brand-header .brand-doc-type {
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--navy, #0b2a47);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* === Print media === */
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.4in;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-page {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr, td, th {
+    page-break-inside: avoid;
+  }
+}
