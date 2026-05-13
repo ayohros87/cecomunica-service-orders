@@ -633,7 +633,7 @@ const dotClass =
 
 // ✅ Ícono de advertencia para órdenes sin equipos
 const iconoAdvertencia = sinEquipos
-  ? '<i data-lucide="alert-triangle" class="warn-icon" title="Orden sin equipos" style="color:#d97706;width:15px;height:15px;margin-left:6px;cursor:help;vertical-align:middle;"></i>'
+  ? '<span title="Orden sin equipos" style="cursor:help;margin-left:6px;vertical-align:middle;"><i data-lucide="alert-triangle" class="warn-icon" style="color:#d97706;width:15px;height:15px;"></i></span>'
   : '';
 
 // ✅ Ícono de contrato para PROGRAMACIÓN
@@ -642,14 +642,14 @@ if (normalizarTipo(ordenData.tipo_de_servicio) === "PROGRAMACION") {
   if (ordenData.contrato) {
     if (ordenData.contrato.aplica === true) {
       const contratoNumero = ordenData.contrato.contrato_id || 'ID no disponible';
-      iconoContrato = `<i data-lucide="link" title="Contrato: ${contratoNumero}" style="color:#059669;width:15px;height:15px;margin-left:4px;cursor:help;vertical-align:middle;"></i>`;
+      iconoContrato = `<span title="Contrato: ${contratoNumero}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="link" style="color:#059669;width:15px;height:15px;"></i></span>`;
     } else if (ordenData.contrato.aplica === false) {
       const motivoShort = ordenData.contrato.motivo_no_aplica || 'Sin motivo';
-      iconoContrato = `<i data-lucide="ban" title="No aplica contrato: ${motivoShort}" style="color:#dc2626;width:15px;height:15px;margin-left:4px;cursor:help;vertical-align:middle;"></i>`;
+      iconoContrato = `<span title="No aplica contrato: ${motivoShort}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="ban" style="color:#dc2626;width:15px;height:15px;"></i></span>`;
     }
   } else {
     // Orden de PROGRAMACIÓN sin contrato registrado (data vieja)
-    iconoContrato = '<i data-lucide="alert-triangle" title="PROGRAMACIÓN sin contrato registrado" style="color:#f59e0b;width:15px;height:15px;margin-left:4px;cursor:help;vertical-align:middle;"></i>';
+    iconoContrato = '<span title="PROGRAMACIÓN sin contrato registrado" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="alert-triangle" style="color:#f59e0b;width:15px;height:15px;"></i></span>';
   }
 }
 
