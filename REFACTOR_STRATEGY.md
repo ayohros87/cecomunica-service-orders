@@ -134,9 +134,17 @@ The CF `extractCacheData` already documents the problem in code: it tries `seria
 
 `verify/index.html` is supposed to work without login (this is the entire reason `verificaciones` exists with `allow read: if true`). But it loads `firebase-init.js`, which calls `setPersistence(LOCAL)` and `enablePersistence`. It does not call `verificarAccesoYAplicarVisibilidad`, so it will not redirect, but unrelated browser-storage failures (Safari ITP, third-party cookie blocks) still affect a public page that has no need for auth at all.
 
-### 3.11 Secrets in repo
+### 3.11 Secrets handling *(resolved — pre-baseline)*
 
-[firebase config firma secret.txt](firebase%20config%20firma%20secret.txt) contains the plaintext `FIRMA_SECRET` (the HMAC key used to sign every contract verification URL). [api- sendgrid.txt](api-%20sendgrid.txt) likewise. Neither is in `.gitignore`. **If this repository is or ever becomes public, every existing contract verification can be forged.** Even in private repos, this is a credential-rotation concern — every contributor with read access has the signing key.
+The earlier audit flagged `firebase config firma secret.txt` and `api- sendgrid.txt` as plaintext-secret files tracked in the repo. **Both files were already gone before the `Phase 0: secure repo baseline` commit (2026-05-05)** and have never been part of this repo's tracked history. `.gitignore` covers `*.log`, Firebase cache, runtime data, and coverage output; no `.env` files exist.
+
+Live secret handling (verified 2026-05-14):
+
+- `FIRMA_SECRET` is read via `process.env.FIRMA_SECRET` in [functions/src/triggers/contratos/onApproval.js:10](functions/src/triggers/contratos/onApproval.js#L10) and the function declarations register `secrets: ["FIRMA_SECRET"]` so the Cloud Functions runtime injects it from Google Secret Manager.
+- `SENDGRID_API_KEY` follows the same pattern in [functions/src/http/sendContractPdf.js:24](functions/src/http/sendContractPdf.js#L24), [functions/src/http/sendMail.js:15](functions/src/http/sendMail.js#L15), [functions/src/triggers/contratos/onAnnulment.js:9](functions/src/triggers/contratos/onAnnulment.js#L9), and the approval trigger.
+- A fallback string `"MISSING_SECRET"` exists in `onApproval.js:10` to fail loudly if Secret Manager wiring breaks (it will produce an invalid HMAC, not a valid one signed with a guessable key).
+
+No remaining action item. Item retained for historical context only.
 
 ### 3.12 Roles are not centralized
 

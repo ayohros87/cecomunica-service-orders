@@ -1,7 +1,7 @@
 # Arquitectura del Sistema Cecomunica
 
-> **Nota:** Este documento describe el estado actual del sistema (post-refactor Phases 0–5, mayo 2026).
-> Para el plan de refactoring en curso ver `REFACTOR_STRATEGY.md`.
+> **Estado:** post-refactor Phases 0–5f y modularización del backend (verificado 2026-05-14).
+> Para el plan de refactoring ver `REFACTOR_STRATEGY.md`.
 > Para el historial de cambios ver `CHANGELOG.md`.
 
 ---
@@ -16,15 +16,17 @@
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | HTML5 + CSS3 + JavaScript Vanilla (sin build step) |
-| SDK cliente | Firebase SDK 10.10.0 (compat mode, desde `gstatic.com`) |
+| Frontend | HTML5 + CSS3 + JavaScript vanilla (sin build step) |
+| SDK cliente | Firebase SDK 10.10.0 (compat mode, cargado desde `gstatic.com`) |
+| Iconografía | Lucide (UMD desde unpkg) |
 | Hosting | Firebase Hosting (archivos estáticos desde `public/`) |
 | Base de datos | Cloud Firestore (modo compat) |
 | Almacenamiento | Firebase Storage |
-| Backend | Firebase Cloud Functions (Node.js 22) |
+| Backend | Firebase Cloud Functions (Node.js 22, estructura modular en `functions/src/`) |
 | PDF | Puppeteer Core 24.17.0 |
-| Email | Nodemailer + SendGrid |
+| Email | Nodemailer + SendGrid (vía Google Secret Manager) |
 | Excel | SheetJS 0.18.5 |
+| Secretos | Google Secret Manager (`FIRMA_SECRET`, `SENDGRID_API_KEY`) |
 
 ---
 
@@ -67,11 +69,15 @@ public/
     index.html                 ← verificación pública de contratos
   js/
     firebase-init.js           ← único init de Firebase
-    core/                      ← módulos compartidos
-    services/                  ← capa de servicios (Firestore)
+    core/                      ← módulos compartidos (auth, roles, formatting, layout)
+    services/                  ← capa de servicios (Firestore I/O)
+    domain/                    ← reglas de negocio puras (totales, scoring, normalización)
+    ui/                        ← primitivas UI compartidas (Toast, Modal)
     pages/                     ← scripts extraídos de páginas grandes
   css/
     ceco-ui.css                ← design system compartido
+    print-base.css             ← base para páginas imprimibles
+    ordenes-index.css          ← estilos de la página de órdenes
 ```
 
 ### 3.2 Orden de carga de scripts (por página)
@@ -94,6 +100,24 @@ Cada página carga scripts en este orden en el `<head>`:
 | `roles.js` | `window.ROLES` | Enum canónico de todos los roles del sistema |
 | `formatting.js` | `window.FMT` | `ITBMS_RATE`, `money()`, `round2()`, `date()`, `datetime()`, `calcITBMS()` |
 | `auth.js` | `window.AUTH` | `is()`, `isAny()`, `getRole()`, `getUser()`, `requireAccess()` |
+| `layout.js` | `window.Layout` | `renderTopbar()`, `renderTopbarFor()`, menú de overflow compartido |
+
+### 3.3a Módulos UI compartidos (`js/ui/`)
+
+| Archivo | API | Reemplaza |
+|---|---|---|
+| `toast.js` | `Toast.show(message, type)` | `mostrarToast()` y `showToast()` locales (legacy en algunas páginas) |
+| `modal.js` | `Modal.open(id)`, `Modal.close(id)`, `Modal.confirm({ message, danger })` | Patrones inline de open/close + Escape handler |
+
+### 3.3b Módulos de dominio (`js/domain/`)
+
+Reglas de negocio puras (sin DOM, sin Firestore). Extraídas en Phase 5d.
+
+| Archivo | API | Origen |
+|---|---|---|
+| `totales.js` | `ContractTotals.calculate(equipos, itbmsRate)` | Cálculo de subtotal/ITBMS/total |
+| `scoring.js` | `scorePieza()`, `filtrarPiezas()` | Ranking de piezas para recomendación |
+| `equipoNormalize.js` | Normalización de campos de equipo (serial, modelo) | Compartido entre frontend y CFs |
 
 ### 3.4 Capa de servicios (`js/services/`)
 
@@ -131,16 +155,30 @@ Las siguientes llamadas a `db.collection()` fuera de los servicios están intenc
 
 ### 3.6 Scripts de página (`js/pages/`)
 
-Páginas grandes con script extraído a archivo externo (cargado con `defer`):
+Páginas grandes con script extraído a archivo externo (cargado con `defer`).
 
-| Archivo JS | HTML de origen | Líneas aprox. |
+**Páginas con namespace dedicado** (Phase 5e — un coordinador + módulos por responsabilidad):
+
+| Coordinador | HTML de origen | Módulos |
 |---|---|---|
-| `contratos-index.js` | `contratos/index.html` | 1 690 |
-| `nuevo-contrato.js` | `contratos/nuevo-contrato.html` | 1 161 |
-| `poc-index.js` | `POC/index.html` | 1 600 |
-| `trabajar-orden.js` | `ordenes/trabajar-orden.html` | 1 174 |
-| `vendedores-batch.js` | `POC/vendedores-batch.html` | 890 |
-| `piezas.js` | `inventario/piezas.html` | 751 |
+| `contratos-index.js` | `contratos/index.html` | `contratos-state.js`, `contratos-approval.js`, `contratos-upload.js`, `contratos-equipos.js`, `contratos-list.js` |
+| `nuevo-contrato.js` | `contratos/nuevo-contrato.html` | `nc-state.js`, `nc-form.js`, `nc-combo.js`, `nc-preview.js`, `nc-guardar.js` |
+| `trabajar-orden.js` | `ordenes/trabajar-orden.html` | `to-state.js`, `to-cotizacion.js`, `to-servicio.js`, `to-equipos.js`, `to-pieza.js` |
+| `poc-index.js` | `POC/index.html` | `poc-state.js`, `poc-list.js`, `poc-bulk.js`, `poc-edit.js`, `poc-sim.js` |
+| `vendedores-batch.js` | `POC/vendedores-batch.html` | `window.VB` (namespace único) |
+| `ordenes-index.js` | `ordenes/index.html` | `ordenes-state.js`, `ordenes-data.js`, `ordenes-render.js`, `ordenes-filters.js`, `ordenes-flujo.js`, `ordenes-equipos.js`, `ordenes-notas.js`, `ordenes-ui.js`, `ordenes-events.js` *(Phase 5f, 2026-05-14)* |
+
+El coordinador es delgado (≤ 110 líneas); cada módulo expone sus funciones públicas en `window.*` y las dependencias cruzadas se resuelven por el orden de `<script>` en el HTML.
+
+**Páginas con script extraído pero global plano** (sin namespace dedicado):
+
+| Archivo JS | HTML de origen | Notas |
+|---|---|---|
+| `piezas.js` | `inventario/piezas.html` | Candidato a `window.Piezas` (Phase 5g, opcional) |
+| `clientes-index.js` | `clientes/index.html` | Candidato a namespace (Phase 5g) |
+| `fotos-taller.js` | `ordenes/fotos-taller.html` | Candidato a namespace (Phase 5g) |
+| `editar-orden.js` | `ordenes/editar-orden.html` | Candidato a namespace (Phase 5g) |
+| Otros menores | varios | Ver `REFACTOR_STRATEGY.md` §5a–5g para inventario completo |
 
 ---
 
@@ -208,29 +246,60 @@ Los campos `os_count`, `equipos_total`, `os_linked`, `os_serials_preview`, `os_h
 
 ## 6. Backend — Cloud Functions
 
-### 6.1 Funciones HTTP (sin callers frontend)
+### 6.1 Estructura modular
 
-| Función | Ruta | Estado |
-|---|---|---|
-| `sendMail` | `/api/sendMail` | Sin callers frontend activos |
-| `sendContractPdf` | protegida con `x-api-key` | Sin callers frontend activos |
+`functions/index.js` es un punto de entrada de 16 líneas que sólo re-exporta. La lógica vive en `functions/src/`:
 
-El canal de email activo es la colección `mail_queue` (ver §6.3).
+```
+functions/
+  index.js                                  ← re-exports
+  src/
+    http/
+      sendMail.js                           ← HTTP endpoint (sin callers frontend)
+      sendContractPdf.js                    ← HTTP endpoint protegido por x-api-key
+    triggers/
+      contratos/
+        onApproval.js                       ← onContratoActivado, onContratoActivadoSendPdf
+        onAnnulment.js                      ← onContratoAnuladoNotify
+      ordenes/
+        onComplete.js                       ← onOrdenCompletada
+        onWriteCacheSync.js                 ← onContratoOrdenWrite, onOrdenWriteSyncContratoCache, onOrdenHardDelete
+      mail/
+        onMailQueued.js                     ← onMailQueued
+    domain/
+      contractCache.js                      ← rebuildContractCache (idempotente)
+      pdfRenderer.js                        ← renderizado de contratos con Puppeteer
+      emailRenderer.js                      ← templates de body para mail_queue
+    lib/
+      admin.js                              ← admin.initializeApp() compartido
+      mail.js                               ← cliente SendGrid configurado
+```
 
-### 6.2 Triggers de Firestore
+### 6.2 Funciones HTTP
 
-| Función | Trigger | Responsabilidad |
-|---|---|---|
-| `onContratoActivado` | `onDocumentUpdated("contratos/{id}")` | Cuando `estado` pasa a `aprobado` o `activo`: genera `firma_codigo`, `firma_hash`, `firma_url`; sincroniza `verificaciones/{id}` |
-| `onContratoActivadoSendPdf` | `onDocumentUpdated("contratos/{id}")` | Mismo evento: genera PDF con Puppeteer y lo envía por email |
-| `onContratoAnuladoNotify` | `onDocumentUpdated("contratos/{id}")` | Cuando `estado` pasa a `anulado`: encola notificación en `mail_queue` |
-| `onContratoOrdenWrite` | `onDocumentWritten("contratos/{id}/ordenes/{oId}")` | Aplica deltas a `os_count` y `equipos_total` cuando cambia la subcol caché |
-| `onOrdenWriteSyncContratoCache` | `onDocumentWritten("ordenes_de_servicio/{id}")` | Sincroniza `os_linked`, `os_serials_preview`, `os_has_equipos`, `os_last_orden_id` en el contrato vinculado |
-| `onOrdenCompletada` | `onDocumentUpdated("ordenes_de_servicio/{id}")` | Cuando orden se completa: actualiza estadísticas de técnico; encola email de cierre |
-| `onOrdenHardDelete` | `onDocumentDeleted("ordenes_de_servicio/{id}")` | Hard-delete: elimina subcol caché y recalcula totales del contrato vinculado |
-| `onMailQueued` | `onDocumentCreated("mail_queue/{id}")` | Lee el documento encolado y envía el email vía SendGrid |
+| Función | Ruta | Estado | Secretos requeridos |
+|---|---|---|---|
+| `sendMail` | `/api/sendMail` | Sin callers frontend activos (canal histórico) | `SENDGRID_API_KEY` |
+| `sendContractPdf` | protegida con `x-api-key` | Sin callers frontend activos | `FIRMA_SECRET`, `SENDGRID_API_KEY` |
 
-### 6.3 Pipeline de email
+El canal de email activo desde el frontend es la colección `mail_queue` (ver §6.4).
+
+### 6.3 Triggers de Firestore
+
+| Función | Trigger | Responsabilidad | Secretos |
+|---|---|---|---|
+| `onContratoActivado` | `onDocumentUpdated("contratos/{id}")` | Cuando `estado` pasa a `aprobado` o `activo`: genera `firma_codigo`, `firma_hash`, `firma_url`; sincroniza `verificaciones/{id}` | `FIRMA_SECRET` |
+| `onContratoActivadoSendPdf` | `onDocumentUpdated("contratos/{id}")` | Mismo evento: genera PDF con Puppeteer y lo envía por email | `FIRMA_SECRET`, `SENDGRID_API_KEY` |
+| `onContratoAnuladoNotify` | `onDocumentUpdated("contratos/{id}")` | Cuando `estado` pasa a `anulado`: encola notificación en `mail_queue` | `SENDGRID_API_KEY` |
+| `onContratoOrdenWrite` | `onDocumentWritten("contratos/{id}/ordenes/{oId}")` | Aplica deltas a `os_count` y `equipos_total` cuando cambia la subcol caché | — |
+| `onOrdenWriteSyncContratoCache` | `onDocumentWritten("ordenes_de_servicio/{id}")` | Sincroniza `os_linked`, `os_serials_preview`, `os_has_equipos`, `os_last_orden_id` en el contrato vinculado | — |
+| `onOrdenCompletada` | `onDocumentUpdated("ordenes_de_servicio/{id}")` | Cuando orden se completa: actualiza estadísticas de técnico; encola email de cierre | — |
+| `onOrdenHardDelete` | `onDocumentDeleted("ordenes_de_servicio/{id}")` | Hard-delete: elimina subcol caché y recalcula totales del contrato vinculado | — |
+| `onMailQueued` | `onDocumentCreated("mail_queue/{id}")` | Lee el documento encolado y envía el email vía SendGrid | `SENDGRID_API_KEY` |
+
+Total: **2 endpoints HTTP + 8 triggers = 10 funciones** exportadas desde `functions/index.js`.
+
+### 6.4 Pipeline de email
 
 El único canal activo desde el frontend:
 
@@ -312,3 +381,52 @@ Estos elementos **no deben modificarse** sin una migración cuidadosa:
 5. **Schema de `mail_queue`** — un lector (CF), múltiples escritores; cambios deben ser aditivos
 6. **Nombres de Cloud Functions** — renombrar implica gap de trigger durante el deploy; coordinar en ventana de bajo tráfico
 7. **Template PDF** (`functions/templates/imprimir-contrato.html`) — documento legal entregado a clientes
+
+---
+
+## 11. Gestión de secretos
+
+Los secretos viven **exclusivamente en Google Secret Manager**, no en el repositorio.
+
+| Secreto | Uso | Funciones que lo declaran |
+|---|---|---|
+| `FIRMA_SECRET` | Clave HMAC-SHA256 para firmar URLs de verificación de contrato | `onContratoActivado`, `onContratoActivadoSendPdf`, `sendContractPdf` |
+| `SENDGRID_API_KEY` | Autenticación SendGrid para envío de emails | `onMailQueued`, `onContratoActivadoSendPdf`, `onContratoAnuladoNotify`, `sendMail`, `sendContractPdf` |
+
+**Patrón en código:**
+
+```js
+// functions/src/triggers/contratos/onApproval.js
+const HMAC_SECRET = process.env.FIRMA_SECRET || "MISSING_SECRET";
+
+exports.onContratoActivado = onDocumentUpdated(
+  {
+    document: "contratos/{docId}",
+    secrets: ["FIRMA_SECRET"]   // ← inyectado en runtime por el SDK de CFs
+  },
+  async (event) => { /* … */ }
+);
+```
+
+La cadena de fallback `"MISSING_SECRET"` está diseñada para fallar de forma ruidosa: si Secret Manager no inyecta el valor, el HMAC resultante no validará contra ninguna URL legítima en lugar de generar una firma con clave conocida.
+
+**Rotación:** actualizar la versión del secreto en Secret Manager y volver a desplegar las funciones (`firebase deploy --only functions`). Las versiones anteriores siguen activas mientras las nuevas se aprovisionan, por lo que no hay ventana de fallo.
+
+**Auditoría:** no hay archivos `.env`, `*.txt` con secretos, ni valores hardcodeados en el repositorio. `.gitignore` cubre logs y caches; no necesita reglas específicas de secretos porque ninguno es local.
+
+---
+
+## 12. Reglas de Firestore
+
+Versionadas en `firestore.rules`. Resumen:
+
+- **Base:** `allow read, write: if request.auth != null` — lectura/escritura autenticada por defecto
+- **`usuarios/{uid}`:** `read` autenticado, `write: if false` (sólo Admin SDK puede modificar roles)
+- **`contratos/{id}`:**
+  - `update` autenticado, **excepto** si toca campos propiedad de CF (`firma_*`, `os_*`, `tiene_os`, `fecha_aprobacion`) → bloqueado para frontend vía helper `touchesCFOwnedFields()`
+  - transición a `estado == "activo"` restringida a roles `administrador` / `gerente`
+  - `delete` restringido a `administrador` / `gerente`
+- **`contratos/{id}/ordenes/{ordenId}`:** subcol de caché; `read` autenticado, `write: if false` (sólo CF vía Admin SDK)
+- **`verificaciones/{docId}`:** `read: if true` (verificación pública sin auth), `write: if false`
+
+El Admin SDK usado por las Cloud Functions bypasea estas reglas, por eso `write: if false` no impide las escrituras del backend.
