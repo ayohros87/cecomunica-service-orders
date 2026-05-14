@@ -466,7 +466,7 @@ Split the five largest extracted page scripts from global-function soup into pro
 |---|---|---|
 | 1 | Move `js/ordenes.state.js` → `js/pages/ordenes-state.js`; update `<script src>` | **done — 2026-05-14** |
 | 2 | Extract pure formatters from `ordenes-index.js` into `ordenes-state.js` | **done — 2026-05-14** |
-| 3 | Extract `ordenes-data.js` | planned |
+| 3 | Extract `ordenes-data.js` | **done — 2026-05-14** |
 | 4 | Extract `ordenes-render.js` | planned |
 | 5 | Extract `ordenes-filters.js` | planned |
 | 6 | Extract `ordenes-flujo.js` | planned |
