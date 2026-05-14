@@ -308,9 +308,9 @@ Build `contratosService.js` (mirror the pattern of `ordenesService.js`) and a `m
 
 Same pattern, lower priority pages. Done page-by-page; each migration is small and reviewable.
 
-### Phase 5 — Script decomposition *(complete through 5e — 2026-05-08; 5f planned)*
+### Phase 5 — Script decomposition *(complete through 5f — 2026-05-14)*
 
-Phase 5 has five completed sub-goals (5a–5e) plus a planned **Phase 5f** that decomposes the last and largest monolithic page script, `ordenes-index.js`. A second optional pass (Phase 5g) for the remaining smaller files in `pages/` is still lower priority.
+Phase 5 has six completed sub-goals (5a–5f). A second optional pass (Phase 5g) for the remaining smaller files in `pages/` is still lower priority.
 
 #### Phase 5a — Script extraction from HTML *(done — 2026-05-06)*
 
@@ -433,9 +433,9 @@ Split the five largest extracted page scripts from global-function soup into pro
 
 ---
 
-#### Phase 5f — `ordenes-index.js` decomposition *(planned — started 2026-05-14)*
+#### Phase 5f — `ordenes-index.js` decomposition *(done — 2026-05-14)*
 
-`public/js/ordenes-index.js` is the last monolithic page script at **3,271 lines** — by far the biggest remaining file. It lives outside `pages/` (the file predates the Phase 5a convention) and has a companion state file at `public/js/ordenes.state.js` (163 lines) extracted earlier in Phase 9.
+`public/js/ordenes-index.js` was the last monolithic page script at **3,271 lines** — by far the biggest remaining file. It lived outside `pages/` (the file predated the Phase 5a convention) and had a companion state file at `public/js/ordenes.state.js` (163 lines) extracted earlier in Phase 9. Phase 5f decomposed it into 10 files in `public/js/pages/`, totaling 3,342 lines (slight net increase for headers and explicit `window.*` attachments).
 
 **Goals**
 
@@ -473,7 +473,7 @@ Split the five largest extracted page scripts from global-function soup into pro
 | 7 | Extract `ordenes-equipos.js` | **done — 2026-05-14** |
 | 8 | Extract `ordenes-notas.js` + `ordenes-ui.js` | **done — 2026-05-14** |
 | 9 | Extract `ordenes-events.js`; reduce `ordenes-index.js` to coordinator | **done — 2026-05-14** |
-| 10 | Browser smoke-test, `node -c` syntax-check each file, CHANGELOG entry | planned |
+| 10 | Browser smoke-test, `node -c` syntax-check each file, CHANGELOG entry | **partially done — 2026-05-14** (node -c on all 10 files OK; browser smoke-test pending) |
 
 **Risks & mitigations**
 

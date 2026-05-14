@@ -1,5 +1,29 @@
 # Changelog
 
+## [Refactor — Phase 5f: ordenes-index.js decomposition] — 2026-05-14
+
+### Restructured
+- Split the 3,271-line monolithic `public/js/ordenes-index.js` into 10 single-responsibility files under `public/js/pages/`:
+  - `ordenes-state.js` (227) — `APP`/`CONFIG`/utils + pure formatters (`formatFecha`, `normTxt`, `escapeHtml`, `nombreClienteDe`, `getEstadoClass`, `tipoChip`, `estadoCompacto`)
+  - `ordenes-data.js` (166) — Firestore reads (`cargarClientes`, `cargarOrdenesYEquipos`, `ordenarOrdenes`, etc.)
+  - `ordenes-render.js` (649) — row + equipo-table renderers, `botonesFlujo`, `botonesGestion`, `actualizarResumen`, `mostrarFeedbackEquipo`
+  - `ordenes-filters.js` (433) — filter logic + UI bindings (`getActiveFilters`, `aplicarFiltrosCombinados`, `filtrarOrdenes`, `filtrarRapido`, `filtrarPorEstado`, `cambiarOrden`, `aplicarRestriccionesPorRol`, etc.)
+  - `ordenes-flujo.js` (227) — order lifecycle (`abrirModalAsignarTecnico`, `completarOrden`, `entregarOrden`, `eliminarOrden`, `agregarEquipo`, `generar*NotaEntrega`, `copiarSeriales`)
+  - `ordenes-equipos.js` (585) — equipment CRUD + trabajo modal (`editarCampoEquipo`, `eliminarEquipo`, `guardarAccesoriosLote`, `abrirTrabajoEquipoModal`, `setEquipoNoDisponible`, etc.)
+  - `ordenes-notas.js` (155) — `gestionarNotasTecnicas` modal
+  - `ordenes-ui.js` (438) — `mostrarToast`, mobile drawer helpers, menu togglers, text/alert modals
+  - `ordenes-events.js` (353) — `initEventDelegation` IIFE + `ACTION_HANDLERS` map (~40 entries)
+  - `ordenes-index.js` (109) — thin coordinator: DOM listeners, auth + initial load, keyboard shortcuts, `pageshow` reload
+- Renamed `public/js/ordenes.state.js` → `public/js/pages/ordenes-state.js` and moved the coordinator from `public/js/ordenes-index.js` to `public/js/pages/ordenes-index.js`, matching the convention used by every other namespace split (contratos, trabajar-orden, nuevo-contrato).
+
+### Fixed
+- `obtenerIconoLapiz` is now a top-level function in `ordenes-render.js` instead of being declared inside the `DOMContentLoaded` callback. The original placement only worked because `renderEquiposTabla` happened to be reachable while the DOMContentLoaded closure was on the call stack; refactoring would have broken the lookup.
+
+### Notes
+- Pre-existing latent bugs preserved (out of scope for this refactor): `EmpresaService` is used in `cargarTiposDeServicioFiltros` but not loaded by `ordenes/index.html` (silently falls back to the hardcoded options list); `cambiarOrden` reads `document.getElementById("APP.state.sortField")` which can never resolve.
+- Script load order in `public/ordenes/index.html`: state → data → render → filters → flujo → equipos → notas → ui → events → coordinator.
+- Two `console.log` markers retained per-file (`[ordenes-state.js] State management initialized`, etc.) for load-order diagnostics.
+
 ## [Look & Feel — Phase 7: Unified topbar right-zone + Print page standardization] — 2026-05-13
 
 ### Added
