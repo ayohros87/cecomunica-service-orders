@@ -1,0 +1,438 @@
+// @ts-nocheck
+/* ========================================
+ * ORDENES UI - Page-local UI primitives
+ * Toast, mobile filter drawer, menu togglers, text/alert modals, and
+ * the order-completed progreso notification. These predate the shared
+ * js/ui/toast.js + js/ui/modal.js primitives; consolidating is a
+ * follow-up to Phase 5f.
+ * ======================================== */
+
+function mostrarToast(mensaje, tipo = 'ok') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast--${tipo}`;
+  toast.textContent = mensaje;
+  toast.classList.add('toast--show');
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.classList.add('toast--hide');
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+}
+
+function mostrarNotificacionProgreso(data) {
+  const box = document.createElement("div");
+  box.className = "notificacion-progreso";
+  box.innerHTML = `
+    <strong>🎯 ¡Orden completada!</strong><br>
+    <small>Semana: ${data.semanal} · Mes: ${data.mensual} · Total: ${data.total}</small>
+  `;
+  document.body.appendChild(box);
+
+  setTimeout(() => {
+    box.classList.add("fade-out");
+    setTimeout(() => box.remove(), 1000);
+  }, 3000);
+}
+
+// ===== MOBILE UI HELPERS (NO LOGIC CHANGES) =====
+function openMobileFilters() {
+  const b = document.getElementById('mobileDrawerBackdrop');
+  if (b) b.style.display = 'flex';
+
+  // sync mobile sort select with existing select
+  const real = document.getElementById('APP.state.sortField');
+  const mob = document.getElementById('mobileSortField');
+  if (real && mob) mob.value = real.value || 'ordenId';
+}
+
+function closeMobileFilters() {
+  const b = document.getElementById('mobileDrawerBackdrop');
+  if (b) b.style.display = 'none';
+}
+
+function mobileScrollTop() {
+  closeMobileFilters();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function mobileClearAll() {
+  // reuse existing clear
+  if (typeof limpiarFiltros === 'function') limpiarFiltros();
+
+  // clear mobile quick search UI
+  const q = document.getElementById('mobileQuickSearch');
+  if (q) q.value = '';
+
+  // clear chip active state
+  document.querySelectorAll('#mobileEstadoChips .mchip').forEach(c => c.classList.remove('active'));
+
+  closeMobileFilters();
+}
+
+function mobileApplyQuickSearch() {
+  const qRaw = (document.getElementById('mobileQuickSearch')?.value || '').trim();
+  const q = qRaw.toLowerCase();
+
+  const inOrden = document.getElementById('filtroOrden');
+  const inCliente = document.getElementById('filtroCliente');
+  const inSerial = document.getElementById('filtroSerial');
+
+  if (inOrden) inOrden.value = '';
+  if (inCliente) inCliente.value = '';
+  if (inSerial) inSerial.value = '';
+
+  if (!q) {
+    if (typeof filtrarOrdenes === 'function') filtrarOrdenes();
+    closeMobileFilters();
+    return;
+  }
+
+  const onlyDigits = /^\d+$/.test(q);
+  const hasSpace = /\s/.test(q);
+  const hasLetter = /[a-z]/i.test(q);
+  const hasDigit = /\d/.test(q);
+
+  if (onlyDigits) {
+    // Pure numbers -> order
+    if (inOrden) inOrden.value = qRaw;
+  } else if (hasSpace || (hasLetter && !hasDigit)) {
+    // Names / companies / phrases -> cliente
+    if (inCliente) inCliente.value = qRaw;
+  } else if (hasLetter && hasDigit && !hasSpace) {
+    // Mixed serial-like token
+    if (inSerial) inSerial.value = qRaw;
+  } else {
+    // Fallback
+    if (inCliente) inCliente.value = qRaw;
+  }
+
+  if (typeof filtrarOrdenes === 'function') filtrarOrdenes();
+  closeMobileFilters();
+}
+
+function mobileSyncSortField() {
+  const mob = document.getElementById('mobileSortField');
+  const real = document.getElementById('APP.state.sortField');
+  if (mob && real) {
+    real.value = mob.value;
+    if (typeof cambiarOrden === 'function') cambiarOrden();
+  }
+}
+
+function mobileToggleSortDir() {
+  if (typeof cambiarDireccionOrden === 'function') cambiarDireccionOrden();
+}
+
+// Chip click wiring
+document.addEventListener('click', (e) => {
+  const chip = e.target.closest('#mobileEstadoChips .mchip');
+  if (!chip) return;
+
+  const estado = chip.getAttribute('data-estado') || '';
+  const wasActive = chip.classList.contains('active');
+  const chips = document.querySelectorAll('#mobileEstadoChips .mchip');
+
+  chips.forEach(c => c.classList.remove('active'));
+
+  let finalEstado = estado;
+  if (wasActive) {
+    // toggle off -> Todos
+    finalEstado = '';
+    // also highlight Todos chip
+    const todos = document.querySelector('#mobileEstadoChips .mchip[data-estado=""]');
+    if (todos) todos.classList.add('active');
+  } else {
+    chip.classList.add('active');
+  }
+
+  // Sync existing select and call existing handler
+  const sel = document.getElementById('filtroEstado');
+  if (sel) sel.value = finalEstado;
+
+  if (typeof filtrarPorEstado === 'function') filtrarPorEstado(finalEstado);
+  closeMobileFilters();
+});
+
+// Allow Enter key to search from mobile quick search
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && document.activeElement?.id === 'mobileQuickSearch') {
+    e.preventDefault();
+    mobileApplyQuickSearch();
+  }
+});
+
+// Ensure callable from inline onclick
+window.openMobileFilters = openMobileFilters;
+window.closeMobileFilters = closeMobileFilters;
+window.mobileScrollTop = mobileScrollTop;
+window.mobileClearAll = mobileClearAll;
+window.mobileApplyQuickSearch = mobileApplyQuickSearch;
+window.mobileSyncSortField = mobileSyncSortField;
+window.mobileToggleSortDir = mobileToggleSortDir;
+
+// Overflow Menu Controls
+window.toggleOverflowMenu = function(ordenId) {
+  const menu = document.getElementById(`overflow-menu-${ordenId}`);
+  if (!menu) return;
+  const row = document.querySelector(`tr[data-orden-id="${ordenId}"]`);
+  
+  // Close all other menus first
+  document.querySelectorAll('.overflow-menu-dropdown.show').forEach(m => {
+    if (m.id !== `overflow-menu-${ordenId}`) {
+      m.classList.remove('show');
+    }
+  });
+  document.querySelectorAll('tr.menu-open').forEach(r => r.classList.remove('menu-open'));
+  
+  // Toggle this menu
+  menu.classList.toggle('show');
+  if (menu.classList.contains('show') && row) {
+    row.classList.add('menu-open');
+  }
+};
+
+window.toggleOrderActionsMenu = function(ordenId) {
+  const menu = document.getElementById(`order-actions-${ordenId}`);
+  if (!menu) return;
+
+  document.querySelectorAll('.overflow-menu-dropdown.show').forEach(m => {
+    if (m.id !== `order-actions-${ordenId}`) {
+      m.classList.remove('show');
+    }
+  });
+
+  menu.classList.toggle('show');
+};
+
+
+window.toggleTopbarMenu = function() {
+  const menu = document.getElementById('topbar-menu');
+  const btn = document.querySelector('[data-action="toggle-topbar-menu"]');
+  if (!menu) return;
+
+  document.querySelectorAll('.overflow-menu-dropdown.show').forEach(m => {
+    if (m.id !== 'topbar-menu') {
+      m.classList.remove('show');
+    }
+  });
+
+  menu.classList.toggle('show');
+  if (btn) btn.setAttribute('aria-expanded', menu.classList.contains('show') ? 'true' : 'false');
+};
+
+window.toggleResumenMenu = function() {
+  const menu = document.getElementById('resumen-menu');
+  const btn = document.querySelector('[data-action="toggle-resumen-menu"]');
+  if (!menu) return;
+
+  document.querySelectorAll('.overflow-menu-dropdown.show').forEach(m => {
+    if (m.id !== 'resumen-menu') {
+      m.classList.remove('show');
+    }
+  });
+
+  menu.classList.toggle('show');
+  if (btn) btn.setAttribute('aria-expanded', menu.classList.contains('show') ? 'true' : 'false');
+};
+
+window.closeAllMenus = function() {
+  document.querySelectorAll('.overflow-menu-dropdown.show').forEach(m => {
+    m.classList.remove('show');
+  });
+  const btn = document.querySelector('[data-action="toggle-topbar-menu"]');
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+  const resumenBtn = document.querySelector('[data-action="toggle-resumen-menu"]');
+  if (resumenBtn) resumenBtn.setAttribute('aria-expanded', 'false');
+  document.querySelectorAll('tr.menu-open').forEach(r => r.classList.remove('menu-open'));
+};
+
+// Close menus when clicking outside
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.overflow-menu')) {
+    closeAllMenus();
+  }
+});
+
+// Close menus on ESC key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeAllMenus();
+  }
+});
+
+// Text Display Modal System
+let textModalEl = null;
+
+function createTextModal() {
+  if (textModalEl) return textModalEl;
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'text-modal-overlay';
+  overlay.id = 'textModalOverlay';
+  
+  overlay.innerHTML = `
+    <div class="text-modal-content" data-stop-propagation="true">
+      <div class="text-modal-header">
+        <div class="text-modal-title" id="textModalTitle"></div>
+        <button class="text-modal-close" data-action="close-text-modal" aria-label="Cerrar"><i data-lucide="x"></i></button>
+      </div>
+      <div class="text-modal-body">
+        <div class="text-modal-text" id="textModalBody"></div>
+      </div>
+      <div class="text-modal-footer">
+        <button class="text-modal-btn secondary" data-action="copy-text-modal"><i data-lucide="copy"></i> Copiar</button>
+        <button class="text-modal-btn primary" data-action="close-text-modal">Cerrar</button>
+      </div>
+    </div>
+  `;
+  
+  // Close on overlay click
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeTextModal();
+  });
+  
+  // Close on ESC key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('show')) {
+      closeTextModal();
+    }
+  });
+  
+  document.body.appendChild(overlay);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+  textModalEl = overlay;
+  return overlay;
+}
+
+window.showTextModal = function(title, text, isEmpty = false) {
+  const modal = createTextModal();
+  const titleEl = document.getElementById('textModalTitle');
+  const bodyEl = document.getElementById('textModalBody');
+  
+  titleEl.innerHTML = escapeHtml(title);
+  
+  if (isEmpty || !text || text.trim() === '') {
+    bodyEl.innerHTML = '<div class="text-modal-empty">📭 Sin contenido para mostrar</div>';
+    bodyEl.dataset.text = '';
+  } else {
+    bodyEl.textContent = text;
+    bodyEl.dataset.text = text;
+  }
+  
+  modal.classList.add('show');
+  
+  // Prevent body scroll when modal is open
+  document.body.style.overflow = 'hidden';
+};
+
+window.closeTextModal = function() {
+  if (textModalEl) {
+    textModalEl.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+};
+
+window.copyTextModalContent = function() {
+  const bodyEl = document.getElementById('textModalBody');
+  const text = bodyEl?.dataset?.text || bodyEl?.textContent || '';
+  
+  if (!text || text.trim() === '') {
+    mostrarToast('⚠️ No hay contenido para copiar', 'bad');
+    return;
+  }
+  
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      mostrarToast('✅ Copiado al portapapeles', 'ok');
+    })
+    .catch(err => {
+      console.error('Error copying:', err);
+      mostrarToast('❌ Error al copiar', 'bad');
+    });
+};
+
+// Alert Modal System
+let alertModalEl = null;
+let alertModalTimer = null;
+
+function createAlertModal() {
+  if (alertModalEl) return alertModalEl;
+  
+  const overlay = document.createElement('div');
+  overlay.className = 'alert-modal-overlay';
+  overlay.id = 'alertModalOverlay';
+  
+  overlay.innerHTML = `
+    <div class="alert-modal-content" data-stop-propagation="true">
+      <div class="alert-modal-icon" id="alertModalIcon"></div>
+      <div class="alert-modal-message" id="alertModalMessage"></div>
+      <button class="alert-modal-button" data-action="close-alert-modal">Entendido</button>
+    </div>
+  `;
+  
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeAlertModal();
+  });
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('show')) {
+      closeAlertModal();
+    }
+  });
+  
+  document.body.appendChild(overlay);
+  alertModalEl = overlay;
+  return overlay;
+}
+
+window.showAlertModal = function(message, type = 'info', autoDismiss = false) {
+  const modal = createAlertModal();
+  const iconEl = document.getElementById('alertModalIcon');
+  const messageEl = document.getElementById('alertModalMessage');
+  
+  // Set icon based on type
+  const icons = {
+    success: '✅',
+    error: '❌',
+    warning: '⚠️',
+    info: 'ℹ️'
+  };
+  
+  iconEl.textContent = icons[type] || icons.info;
+  messageEl.textContent = message;
+  
+  // Remove previous type classes
+  modal.classList.remove('success', 'error', 'warning', 'info');
+  modal.classList.add(type);
+  modal.classList.add('show');
+  
+  // Clear existing timer
+  if (alertModalTimer) {
+    clearTimeout(alertModalTimer);
+    alertModalTimer = null;
+  }
+  
+  // Auto-dismiss for success messages
+  if (autoDismiss && type === 'success') {
+    alertModalTimer = setTimeout(() => {
+      closeAlertModal();
+    }, 2000);
+  }
+  
+  document.body.style.overflow = 'hidden';
+};
+
+window.closeAlertModal = function() {
+  if (alertModalEl) {
+    alertModalEl.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+  if (alertModalTimer) {
+    clearTimeout(alertModalTimer);
+    alertModalTimer = null;
+  }
+};
+
+console.log('[ordenes-ui.js] UI primitives ready');
