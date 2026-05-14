@@ -472,7 +472,7 @@ Split the five largest extracted page scripts from global-function soup into pro
 | 6 | Extract `ordenes-flujo.js` | **done — 2026-05-14** |
 | 7 | Extract `ordenes-equipos.js` | **done — 2026-05-14** |
 | 8 | Extract `ordenes-notas.js` + `ordenes-ui.js` | **done — 2026-05-14** |
-| 9 | Extract `ordenes-events.js`; reduce `ordenes-index.js` to coordinator | planned |
+| 9 | Extract `ordenes-events.js`; reduce `ordenes-index.js` to coordinator | **done — 2026-05-14** |
 | 10 | Browser smoke-test, `node -c` syntax-check each file, CHANGELOG entry | planned |
 
 **Risks & mitigations**
