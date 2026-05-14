@@ -308,9 +308,9 @@ Build `contratosService.js` (mirror the pattern of `ordenesService.js`) and a `m
 
 Same pattern, lower priority pages. Done page-by-page; each migration is small and reviewable.
 
-### Phase 5 — Script decomposition *(complete through 5e — 2026-05-08)*
+### Phase 5 — Script decomposition *(complete through 5e — 2026-05-08; 5f planned)*
 
-Phase 5 has five distinct sub-goals, all completed. A Phase 5f for the remaining smaller page scripts is optional and lower-priority.
+Phase 5 has five completed sub-goals (5a–5e) plus a planned **Phase 5f** that decomposes the last and largest monolithic page script, `ordenes-index.js`. A second optional pass (Phase 5g) for the remaining smaller files in `pages/` is still lower priority.
 
 #### Phase 5a — Script extraction from HTML *(done — 2026-05-06)*
 
@@ -420,7 +420,7 @@ Split the five largest extracted page scripts from global-function soup into pro
 | `nuevo-contrato.js` | 1 075 | `nc-state.js` · `nc-form.js` · `nc-combo.js` · `nc-preview.js` · `nc-guardar.js` + ~32-line coordinator |
 | `vendedores-batch.js` | 872 | `window.VB` single namespace + ~20-line coordinator |
 
-**Remaining (optional Phase 5f — lower priority):**
+**Remaining files in `pages/` (lower-priority cleanup — tracked as Phase 5g):**
 
 | File | Lines | Notes |
 |---|---|---|
@@ -430,6 +430,62 @@ Split the five largest extracted page scripts from global-function soup into pro
 | `editar-orden.js` | 471 | Still global functions |
 | `contratos-list.js` | 667 | Already a namespace (`ContratosLista`) — large but single-concern; leave as-is |
 | `poc-list.js` | 552 | Already a namespace (`PocList`) — leave as-is |
+
+---
+
+#### Phase 5f — `ordenes-index.js` decomposition *(planned — started 2026-05-14)*
+
+`public/js/ordenes-index.js` is the last monolithic page script at **3,271 lines** — by far the biggest remaining file. It lives outside `pages/` (the file predates the Phase 5a convention) and has a companion state file at `public/js/ordenes.state.js` (163 lines) extracted earlier in Phase 9.
+
+**Goals**
+
+1. Reduce `ordenes-index.js` to a ≤ 80-line coordinator inside `pages/`.
+2. Move its state companion into the same directory for consistency with every other namespace split.
+3. Match the file-naming convention used by the contratos / trabajar-orden / nuevo-contrato splits.
+
+**Target file layout** (all in `public/js/pages/`)
+
+| File | Responsibility | Est. LoC |
+|------|----------------|---:|
+| `ordenes-state.js` *(moved + extended from `js/ordenes.state.js`)* | `APP`, `CONFIG`, `APP.utils`, `BASE`, plus pure formatters (`formatFecha`, `escapeHtml`, `normTxt`, `getEstadoClass`, `tipoChip`, `estadoCompacto`, `nombreClienteDe`) | ~230 |
+| `ordenes-data.js` | Firestore reads: `cargarClientes`, `cargarTiposDeServicioFiltros`, `cargarTecnicosFiltros`, `cargarOrdenesYEquipos`, `ordenarOrdenes` | ~270 |
+| `ordenes-render.js` | Row + equipo-table renderers, `botonesFlujo`, `botonesGestion`, `refrescarEquiposDeOrden`, `mostrarFeedbackEquipo`, `actualizarResumen` | ~620 |
+| `ordenes-filters.js` | Filter/sort logic + filter UI bindings (`getActiveFilters`, `aplicarFiltrosCombinados`, `filtrarOrdenes`, `filtrarRapido`, `filtrarPorEstado`, `cambiarOrden`, `limpiarFiltros`, `toggleFiltrosAvanzados`, `aplicarRestriccionesPorRol`, `setFechaEntregaVisible`) | ~370 |
+| `ordenes-flujo.js` | State transitions: asignar / completar / entregar / eliminar, `agregarEquipo`, `copiarSeriales`, nota-de-entrega generators | ~320 |
+| `ordenes-equipos.js` | Equipment CRUD + trabajo modal: `editarCampoEquipo`, `eliminarEquipo`, `guardarAccesoriosLote`, `abrirEditorAccesorios`, mobile-equipos modal, `abrirTrabajoEquipoModal` & lifecycle, `setEquipoNoDisponible`, `verObsCompleta` | ~580 |
+| `ordenes-notas.js` | `gestionarNotasTecnicas` (notes modal) | ~150 |
+| `ordenes-ui.js` | Mobile UI helpers, menu togglers, page-local text/alert modals, `mostrarToast`, `mostrarNotificacionProgreso` | ~410 |
+| `ordenes-events.js` | The `initEventDelegation` IIFE + `ACTION_HANDLERS` map | ~340 |
+| `ordenes-index.js` *(thin coordinator)* | Page bootstrap: auth check, initial load, "Cargar más" wiring, `filtroRapido` listener, `pageshow` reload | ~70 |
+
+**HTML load order** in `public/ordenes/index.html` replaces the current 2-script block with 10 ordered `<script src>` tags (state → leaf modules → events → coordinator). Cross-module calls work via `window.*` attachments — same convention used by every Phase 5e split.
+
+**Phased execution** *(each step is independently revertible; commit after each)*
+
+| Step | Scope | Status |
+|---|---|---|
+| 1 | Move `js/ordenes.state.js` → `js/pages/ordenes-state.js`; update `<script src>` | planned |
+| 2 | Extract pure formatters from `ordenes-index.js` into `ordenes-state.js` | planned |
+| 3 | Extract `ordenes-data.js` | planned |
+| 4 | Extract `ordenes-render.js` | planned |
+| 5 | Extract `ordenes-filters.js` | planned |
+| 6 | Extract `ordenes-flujo.js` | planned |
+| 7 | Extract `ordenes-equipos.js` | planned |
+| 8 | Extract `ordenes-notas.js` + `ordenes-ui.js` | planned |
+| 9 | Extract `ordenes-events.js`; reduce `ordenes-index.js` to coordinator | planned |
+| 10 | Browser smoke-test, `node -c` syntax-check each file, CHANGELOG entry | planned |
+
+**Risks & mitigations**
+
+- *Function used by HTML inline handler / `data-action` not attached to `window.*` after move.* Grep every extracted function for `window.X =` and verify each is still on `window` after the move.
+- *Closure-captured module-level state* (`equipoEditandoId`, `_trabajoOrdenId`, `textModalEl`, `alertModalEl`) breaking when split across files. Co-locate the `let` declaration with its consumers — don't share via `window`.
+- *Script load order wrong.* Coordinator loads last; no module wraps work in `DOMContentLoaded`; matches existing convention.
+- *Big-bang merge conflicts.* Each step is a small commit — easy to rebase.
+
+**Out of scope for 5f** (follow-ups):
+
+- Phase 5b-style duplicate-elimination (e.g., this file's own `mostrarToast` vs. the shared `Toast.show`).
+- Promoting `showTextModal` / `showAlertModal` to `js/ui/` for reuse.
 
 ---
 
