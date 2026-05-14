@@ -1,0 +1,649 @@
+// @ts-nocheck
+/* ========================================
+ * ORDENES RENDER - Row + equipment table builders
+ * Pure DOM construction; does not read Firestore (callers pass data).
+ * ======================================== */
+
+function mostrarFeedbackEquipo(equipoId, tipo = 'success') {
+  const fila = document.querySelector(`tr[data-equipo-id="${equipoId}"]`);
+  if (!fila) return;
+
+  fila.classList.remove('feedback-success', 'feedback-update');
+  void fila.offsetWidth;
+  fila.classList.add(`feedback-${tipo}`);
+
+  setTimeout(() => {
+    fila.classList.remove(`feedback-${tipo}`);
+  }, 1200);
+}
+window.mostrarFeedbackEquipo = mostrarFeedbackEquipo;
+
+function obtenerIconoLapiz(id, campo, valorActual) {
+  return `
+    <button class="lapiz" data-action="editar-campo-equipo" data-id="${id}" data-campo="${campo}" data-valor="${valorActual}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="lapiz-icon" viewBox="0 0 24 24" width="16" height="16">
+        <path fill="#aaa" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 000-1.42l-2.34-2.34a1.003 1.003 0 00-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+      </svg>
+    </button>
+  `;
+}
+
+function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
+  const equiposNormalizados = Array.isArray(equipos) ? equipos : [];
+  const sinEquipos = equiposNormalizados.length === 0;
+
+  function normalizarTipo(tipo) {
+    return (tipo || "")
+      .trim()
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "");
+  }
+
+  const filaOrden = document.createElement("tr");
+  filaOrden.setAttribute("data-orden-id", ordenId);
+  const tieneNota = ordenData.nota_tecnica && ordenData.nota_tecnica.trim() !== "";
+  const estiloNota = tieneNota ? 'background-color: #d4edda;' : '';
+  const tooltipNota = tieneNota
+    ? ordenData.nota_tecnica.slice(0, 80).replace(/"/g, "'")
+    : 'Agregar nota técnica';
+  const estado = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
+  const fotosTallerCount = Number(ordenData.fotos_taller_count || 0);
+  const fotosBadge = fotosTallerCount > 0
+    ? `<span class="fotos-taller-badge" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
+    : "";
+
+  filaOrden.style.cursor = "pointer";
+  filaOrden.setAttribute('data-estado', estado);
+  const trabajo = (ordenData.trabajo_estado)
+    || (ordenData.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
+
+  const dotClass =
+    trabajo === 'COMPLETADO'  ? 'dot green'  :
+    trabajo === 'EN_PROGRESO' ? 'dot orange' :
+                                'dot';
+
+  const iconoAdvertencia = sinEquipos
+    ? '<span title="Orden sin equipos" style="cursor:help;margin-left:6px;vertical-align:middle;"><i data-lucide="alert-triangle" class="warn-icon" style="color:#d97706;width:15px;height:15px;"></i></span>'
+    : '';
+
+  let iconoContrato = '';
+  if (normalizarTipo(ordenData.tipo_de_servicio) === "PROGRAMACION") {
+    if (ordenData.contrato) {
+      if (ordenData.contrato.aplica === true) {
+        const contratoNumero = ordenData.contrato.contrato_id || 'ID no disponible';
+        iconoContrato = `<span title="Contrato: ${contratoNumero}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="link" style="color:#059669;width:15px;height:15px;"></i></span>`;
+      } else if (ordenData.contrato.aplica === false) {
+        const motivoShort = ordenData.contrato.motivo_no_aplica || 'Sin motivo';
+        iconoContrato = `<span title="No aplica contrato: ${motivoShort}" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="ban" style="color:#dc2626;width:15px;height:15px;"></i></span>`;
+      }
+    } else {
+      iconoContrato = '<span title="PROGRAMACIÓN sin contrato registrado" style="cursor:help;margin-left:4px;vertical-align:middle;"><i data-lucide="alert-triangle" style="color:#f59e0b;width:15px;height:15px;"></i></span>';
+    }
+  }
+
+  filaOrden.innerHTML = `
+    <td>
+      <span class="${dotClass}"></span>
+      <i data-lucide="chevron-right" class="flecha"></i>
+      ${ordenId}
+      ${fotosBadge}
+    </td>
+    <td class="client-name-cell">
+      <div class="cliente-cell">
+        <span class="cliente-text">${nombreClienteDe(ordenData)}</span>
+        <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}</span>
+      </div>
+    </td>
+    <td>${ordenData.tecnico_asignado || ""}</td>
+    <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
+    <td><span class="estado-pill ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
+    <td>${formatFecha(ordenData.fecha_creacion)}</td>
+    <td class="col-fecha-entrega">${formatFecha(ordenData.fecha_entrega)}</td>
+    <td class="acciones"><div class="acciones-wrap">${botonesFlujo(ordenId, estado, ordenData)}${botonesGestion(ordenId, estado, tooltipNota, estiloNota)}</div></td>
+  `;
+
+  const filaDetalle = document.createElement("tr");
+  filaDetalle.style.display = "none";
+  filaDetalle.classList.add("filaDetalle");
+  filaDetalle.setAttribute("data-orden-id", ordenId);
+  filaDetalle.setAttribute("data-equipos-loaded", "false");
+
+  const estadoUpper = estado.toUpperCase();
+  const ordenCerrada = estadoUpper.includes('ENTREGAD') || estadoUpper.includes('ENTREGADA');
+  const ordenActiva = estadoUpper === 'POR ASIGNAR' || estadoUpper === 'ASIGNADO' || estadoUpper.includes('EN OFICINA');
+
+  filaDetalle.innerHTML = `
+    <td colspan="8" class="orden-expandida-wrapper">
+      <div class="orden-expandida-card ${ordenCerrada ? 'orden-cerrada' : 'orden-activa'}">
+        <div class="orden-header-compacto">
+          <div class="header-col-izq header-line" title="Cliente: ${nombreClienteDe(ordenData)} · Técnico: ${ordenData.tecnico_asignado || 'Sin asignar'}">
+            <span class="orden-numero"><strong>Orden ${ordenId}</strong></span>
+            <span class="separador">•</span>
+            <span class="cliente-nombre">${nombreClienteDe(ordenData)}</span>
+            <span class="separador">•</span>
+            <div class="progreso-intervenciones-inline ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'}" data-orden-id="${ordenId}">
+              <span class="icon"><i data-lucide="wrench"></i></span>
+              <span class="progreso-valor">0/${equiposNormalizados.length}</span>
+            </div>
+            <span class="contradiccion-badge" data-orden-id="${ordenId}" style="display: none;"></span>
+          </div>
+
+          <div class="header-col-der">
+            <button class="btn-header-compact" data-action="agregar-equipo" data-stop-propagation="true" data-orden-id="${ordenId}" title="Agregar equipo">
+              <i data-lucide="plus"></i>
+            </button>
+            <div class="overflow-menu mini-menu">
+              <button class="btn-header-compact" data-action="toggle-order-actions" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">
+                ⋯
+              </button>
+              <div class="overflow-menu-dropdown" id="order-actions-${ordenId}">
+                <button class="overflow-menu-item" data-action="copiar-seriales" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="copy"></i> Copiar seriales</button>
+                <button class="overflow-menu-item" data-action="activar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Accesorios en lote</button>
+              </div>
+            </div>
+            <button id="btnGuardarAccesorios_${ordenId}" class="btn-header-compact primary" data-action="guardar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}" style="display:none;" title="Guardar accesorios">
+              <i data-lucide="save"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="accesorios-popover" id="popoverAccesorios_${ordenId}" style="display: none;">
+          <div class="popover-content">
+            <div class="popover-header-leyenda">
+              <div class="leyenda-titulo">Leyenda de Accesorios</div>
+              <button class="popover-close" data-action="close-popover" data-stop-propagation="true" data-orden-id="${ordenId}">×</button>
+              <div class="leyenda-items-inline">
+                <span class="leyenda-item"><span class="icono"><i data-lucide="battery-full"></i></span> Batería</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="paperclip"></i></span> Clip</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="plug"></i></span> Cargador</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="zap"></i></span> Fuente</span>
+                <span class="leyenda-item"><span class="icono"><i data-lucide="radio-tower"></i></span> Antena</span>
+                <span class="separador-leyenda">|</span>
+                <span class="estado-inline"><span class="indicador incluido"></span> Incluido</span>
+                <span class="estado-inline"><span class="indicador no-incluido"></span> No incluido</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="resumen-operativo" data-orden-id="${ordenId}" style="display: ${ordenCerrada ? 'block' : 'none'};">
+          <div class="resumen-header">
+            <span class="icon"><i data-lucide="bar-chart-2"></i></span>
+            <strong>Resumen de Cierre</strong>
+          </div>
+          <div class="resumen-contenido">
+            <div class="resumen-item">
+              <span class="label">Total equipos:</span>
+              <span class="valor resumen-equipos">0</span>
+            </div>
+            <div class="resumen-item">
+              <span class="label">Intervenciones:</span>
+              <span class="valor resumen-intervenciones">0/0</span>
+            </div>
+            <div class="resumen-item">
+              <span class="label">Accesorios completos:</span>
+              <span class="valor resumen-accesorios">0/0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="equipos-container">
+          <div style="padding: 20px; text-align: center; color: #666;">
+            <div class="loader" style="margin: 0 auto;"></div>
+            <p style="margin-top: 10px;">Cargando equipos...</p>
+          </div>
+        </div>
+      </div>
+    </td>
+  `;
+
+  filaOrden.addEventListener("click", (e) => {
+    const clickedInteractive = e.target.closest('button') ||
+                               e.target.closest('a') ||
+                               e.target.closest('.overflow-menu');
+
+    if (clickedInteractive) {
+      return;
+    }
+
+    filaOrden.classList.toggle("activo");
+    const wasHidden = filaDetalle.style.display === "none";
+    filaDetalle.style.display = wasHidden ? "table-row" : "none";
+
+    if (wasHidden && filaDetalle.getAttribute("data-equipos-loaded") === "false") {
+      renderEquiposTabla(ordenId, equiposNormalizados, filaDetalle);
+    }
+  });
+
+  contenedor.appendChild(filaOrden);
+  contenedor.appendChild(filaDetalle);
+
+  const clientText = filaOrden.querySelector('.cliente-text');
+  if (clientText && clientText.scrollWidth > clientText.offsetWidth) {
+    clientText.title = nombreClienteDe(ordenData);
+  }
+
+  // Render móvil como card
+  const cardsWrap = document.getElementById("ordersCards");
+  if (cardsWrap) {
+    const card = document.createElement("div");
+    card.className = "card-contrato";
+    card.setAttribute("data-orden-id", ordenId);
+
+    const estadoDisplay = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
+    const tecnicoDisplay = ordenData.tecnico_asignado || "Sin asignar";
+    const tipoDisplay = ordenData.tipo_de_servicio || "—";
+    const fotosBadgeMobile = fotosTallerCount > 0
+      ? `<span class="fotos-taller-badge mobile" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
+      : "";
+
+    card.innerHTML = `
+      <div class="row">
+        <div class="t1">Orden #${ordenId}</div>
+        ${fotosBadgeMobile}
+        <div class="t2">${nombreClienteDe(ordenData)}</div>
+      </div>
+      <div class="row" style="font-size: 13px; color: #6b7280; margin-bottom: 8px;">
+        <span>${tipoDisplay}</span>
+        <span style="font-weight: 600;">${tecnicoDisplay}</span>
+      </div>
+      <div class="row" style="margin-bottom: 12px;">
+        <span class="estado" style="background: ${
+          estadoDisplay === 'ENTREGADO AL CLIENTE' ? '#bbf7d0' :
+          estadoDisplay === 'COMPLETADO (EN OFICINA)' ? '#bfdbfe' :
+          estadoDisplay === 'ASIGNADO' ? '#fef3c7' :
+          '#fecaca'
+        }; font-size: 11px; padding: 6px 10px; border-radius: 16px; font-weight: 700;">${estadoCompacto(estadoDisplay)}</span>
+      </div>
+      <div class="row" style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">
+        <span>Creado: ${formatFecha(ordenData.fecha_creacion)}</span>
+        <span class="fecha-entrega">Entrega: ${formatFecha(ordenData.fecha_entrega)}</span>
+      </div>
+      <div class="acciones">
+        <button class="btn secondary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
+          <i data-lucide="eye"></i> Equipos
+        </button>
+        <button class="btn secondary" data-action="go-fotos-taller" data-stop-propagation="true" data-orden-id="${ordenId}">
+          <i data-lucide="camera"></i> Fotos
+        </button>
+        <button class="btn primary" data-action="editar-orden" data-orden-id="${ordenId}" style="flex: 2;">
+          <i data-lucide="pencil"></i> Editar
+        </button>
+        ${botonesFlujo(ordenId, estado, ordenData)}
+      </div>
+    `;
+
+    cardsWrap.appendChild(card);
+  }
+}
+window.renderizarOrdenYEquipos = renderizarOrdenYEquipos;
+
+// LAZY RENDER: Genera la tabla de equipos solo cuando se expande
+function renderEquiposTabla(ordenId, equipos, filaDetalle) {
+  const container = filaDetalle.querySelector('.equipos-container');
+  if (!container) return;
+
+  if (equipos.length === 0) {
+    container.innerHTML = '<em style="color: #666; padding: 20px; display: block;">No hay equipos asociados</em>';
+  } else {
+    const equiposConIntervencion = equipos.filter(e => (e.trabajo_tecnico || "").trim()).length;
+    const equiposNoDisponibles = equipos.filter(e => e.intervencion_no_disponible).length;
+    const equiposFinalizados = equiposConIntervencion + equiposNoDisponibles;
+    const progresoPercent = equipos.length ? Math.round((equiposFinalizados / equipos.length) * 100) : 0;
+
+    const equiposAccesoriosCompletos = equipos.filter(e => {
+      return e.bateria && e.clip && e.cargador && e.fuente && e.antena;
+    }).length;
+
+    const ordenData = APP.state.orders.find(o => o.ordenId === ordenId);
+    const estadoOrden = ordenData?.estado || '';
+    const estadoUpper = estadoOrden.toUpperCase();
+    const ordenCerrada = estadoUpper.includes('ENTREGAD') || estadoUpper.includes('ENTREGADA');
+
+    const pendientesIntervencion = Math.max(0, equipos.length - equiposFinalizados);
+    const hayContradiccion = ordenCerrada && pendientesIntervencion > 0;
+
+    const progresoIndicador = document.querySelector(`.progreso-intervenciones-inline[data-orden-id="${ordenId}"]`);
+    if (progresoIndicador) {
+      const valorEl = progresoIndicador.querySelector('.progreso-valor');
+      if (valorEl) valorEl.textContent = `Intervenidos ${equiposConIntervencion} / No disp ${equiposNoDisponibles}`;
+
+      progresoIndicador.classList.remove('completo', 'parcial', 'vacio');
+      if (progresoPercent === 100) {
+        progresoIndicador.classList.add('completo');
+      } else if (progresoPercent > 0) {
+        progresoIndicador.classList.add('parcial');
+      } else {
+        progresoIndicador.classList.add('vacio');
+      }
+    }
+
+    const contradiccionBadge = document.querySelector(`.contradiccion-badge[data-orden-id="${ordenId}"]`);
+    if (contradiccionBadge) {
+      if (hayContradiccion) {
+        contradiccionBadge.style.display = 'inline-flex';
+        contradiccionBadge.innerHTML = `
+          <i data-lucide="alert-triangle" class="badge-icon" style="width:14px;height:14px;"></i>
+          <span class="badge-text">Orden cerrada con ${pendientesIntervencion} intervención(es) pendiente(s)</span>
+        `;
+        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [contradiccionBadge] });
+        contradiccionBadge.className = 'contradiccion-badge advertencia';
+        contradiccionBadge.title = 'Esta orden fue entregada pero tiene equipos sin intervención registrada';
+      } else {
+        contradiccionBadge.style.display = 'none';
+      }
+    }
+
+    const resumenOperativo = document.querySelector(`.resumen-operativo[data-orden-id="${ordenId}"]`);
+    if (resumenOperativo && ordenCerrada) {
+      resumenOperativo.querySelector('.resumen-equipos').textContent = equipos.length;
+      resumenOperativo.querySelector('.resumen-intervenciones').textContent = `Intervenidos ${equiposConIntervencion} / No disp ${equiposNoDisponibles}`;
+      resumenOperativo.querySelector('.resumen-accesorios').textContent = `${equiposAccesoriosCompletos}/${equipos.length}`;
+
+      const itemIntervenciones = resumenOperativo.querySelector('.resumen-intervenciones').parentElement;
+      const itemAccesorios = resumenOperativo.querySelector('.resumen-accesorios').parentElement;
+
+      itemIntervenciones.classList.remove('completo', 'incompleto');
+      itemAccesorios.classList.remove('completo', 'incompleto');
+
+      if (equiposFinalizados === equipos.length) {
+        itemIntervenciones.classList.add('completo');
+      } else {
+        itemIntervenciones.classList.add('incompleto');
+      }
+
+      if (equiposAccesoriosCompletos === equipos.length) {
+        itemAccesorios.classList.add('completo');
+      } else {
+        itemAccesorios.classList.add('incompleto');
+      }
+    }
+
+    container.innerHTML = `
+      <table class="equipos-table">
+        <colgroup>
+          <col style="width: 8%;">
+          <col style="width: 8%;">
+          <col style="width: 26%;">
+          <col style="width: 18%;">
+          <col style="width: 32%;">
+          <col style="width: 8%;">
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="col-serie">Serie</th>
+            <th class="col-modelo">Modelo</th>
+            <th class="col-intervencion">Intervención</th>
+            <th class="col-accesorios">Accesorios</th>
+            <th class="col-observaciones">Observaciones</th>
+            <th class="col-acciones">⋯</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${equipos.map(e => {
+            const accesoriosPresentes = [e.bateria, e.clip, e.cargador, e.fuente, e.antena].filter(Boolean).length;
+            const accesoriosTotal = 5;
+            const accesoriosCompleto = accesoriosPresentes === accesoriosTotal;
+            const noDisponible = !!e.intervencion_no_disponible;
+            const motivoNoDisponible = (e.motivo_no_disponible || "").toString();
+            const tieneIntervencion = !!(e.trabajo_tecnico || "").trim();
+
+            return `
+            <tr data-equipo-id="${ordenId}_${e.id}" class="equipo-row ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'} ${noDisponible ? 'no-disponible' : ''}">
+              <td class="col-serie">
+                <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="numero_de_serie">
+                  <span class="valor valor-primario">${e.numero_de_serie || "-"}</span>
+                  ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'numero_de_serie', e.numero_de_serie || '')}
+                </div>
+              </td>
+
+              <td class="col-modelo">
+                <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="modelo">
+                  <span class="valor valor-primario">${e.modelo || "-"}</span>
+                  ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'modelo', e.modelo || '')}
+                </div>
+              </td>
+
+              <td class="col-intervencion">
+                <div class="intervencion-stack">
+                  ${noDisponible
+                    ? `<div class="intervencion-badge no-disponible" title="Equipo no disponible para intervención">
+                         <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
+                           <span class="icon"><i data-lucide="ban"></i></span>
+                           <span class="label">No disponible</span>
+                         </button>
+                       </div>`
+                    : (tieneIntervencion
+                      ? `<div class="intervencion-badge activa" title="Intervención registrada">
+                          <div class="intervencion-content">
+                            <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
+                              <span class="icon"><i data-lucide="check-circle"></i></span>
+                              <span class="label">Registrada</span>
+                            </button>
+                            <span class="intervencion-text" title="${escapeHtml(e.trabajo_tecnico || '')}">${escapeHtml(e.trabajo_tecnico || '')}</span>
+                          </div>
+                         </div>`
+                      : `<div class="intervencion-badge pendiente ${ordenCerrada ? 'historico' : 'activo'}" title="${ordenCerrada ? 'No se registró intervención (orden cerrada)' : 'Pendiente de intervención'}">
+                           <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
+                             <span class="icon">${ordenCerrada ? '<i data-lucide="file-text"></i>' : '<i data-lucide="clock"></i>'}</span>
+                             <span class="label">${ordenCerrada ? 'No registrada' : 'Pendiente'}</span>
+                           </button>
+                         </div>`
+                    )
+                  }
+                </div>
+              </td>
+
+              <td class="col-accesorios">
+                <div class="accesorios-wrapper ${accesoriosCompleto ? 'completo' : 'incompleto'}">
+                  <div class="accesorios-group">
+                    <span class="accesorio-item ${e.bateria ? 'activo' : 'inactivo'}" data-campo="bateria" title="${e.bateria ? 'Batería incluida' : 'Batería NO incluida'}">
+                      <span class="icono"><i data-lucide="battery-full"></i></span>
+                    </span>
+                    <span class="accesorio-item ${e.clip ? 'activo' : 'inactivo'}" data-campo="clip" title="${e.clip ? 'Clip incluido' : 'Clip NO incluido'}">
+                      <span class="icono"><i data-lucide="paperclip"></i></span>
+                    </span>
+                    <span class="accesorio-item ${e.cargador ? 'activo' : 'inactivo'}" data-campo="cargador" title="${e.cargador ? 'Cargador incluido' : 'Cargador NO incluido'}">
+                      <span class="icono"><i data-lucide="plug"></i></span>
+                    </span>
+                    <span class="accesorio-item ${e.fuente ? 'activo' : 'inactivo'}" data-campo="fuente" title="${e.fuente ? 'Fuente incluida' : 'Fuente NO incluida'}">
+                      <span class="icono"><i data-lucide="zap"></i></span>
+                    </span>
+                    <span class="accesorio-item ${e.antena ? 'activo' : 'inactivo'}" data-campo="antena" title="${e.antena ? 'Antena incluida' : 'Antena NO incluida'}">
+                      <span class="icono"><i data-lucide="radio-tower"></i></span>
+                    </span>
+                  </div>
+                  <span class="completitud-badge">${accesoriosPresentes}/${accesoriosTotal}</span>
+                </div>
+              </td>
+
+              <td class="col-observaciones">
+                <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="observaciones">
+                  <span class="valor" title="${e.observaciones || ''}">${e.observaciones || "-"}</span>
+                  ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'observaciones', e.observaciones || '')}
+                </div>
+              </td>
+
+              <td class="col-acciones">
+                <button data-action="eliminar-equipo" data-id="${ordenId}_${e.id}" class="btn-eliminar-equipo" title="Eliminar equipo">
+                  <i data-lucide="trash-2"></i>
+                </button>
+              </td>
+            </tr>
+          `}).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  filaDetalle.setAttribute("data-equipos-loaded", "true");
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function refrescarEquiposDeOrden(ordenId) {
+  const ordenData = APP.state.orders.find(o => o.ordenId === ordenId);
+  if (!ordenData) return;
+
+  const filaDetalle = document.querySelector(`tr.filaDetalle[data-orden-id="${ordenId}"]`);
+  if (!filaDetalle || filaDetalle.getAttribute("data-equipos-loaded") === "false") return;
+
+  const equipos = (ordenData.equipos || []).filter(e => !e.eliminado);
+  renderEquiposTabla(ordenId, equipos, filaDetalle);
+}
+window.refrescarEquiposDeOrden = refrescarEquiposDeOrden;
+
+function botonesFlujo(ordenId, estado, ordenData) {
+  const rol = APP.state.userRole || "";
+  let html = "";
+  const tipoServicio = (ordenData?.tipo_de_servicio || "").toUpperCase();
+
+  if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
+    if (estado === "POR ASIGNAR") {
+      html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+    } else if (estado === "ASIGNADO") {
+      html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+    } else if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
+      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+    }
+  }
+
+  else if (rol === ROLES.TECNICO) {
+    if (estado === "POR ASIGNAR") {
+      html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+    } else if (estado === "ASIGNADO") {
+      html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+    }
+  }
+
+  else if (rol === ROLES.TECNICO_OPERATIVO) {
+    if (estado === "ASIGNADO") {
+      html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+    }
+  }
+
+  else if (rol === ROLES.VENDEDOR) {
+    if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
+      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+    }
+  }
+
+  return html || "<em>-</em>";
+}
+window.botonesFlujo = botonesFlujo;
+
+function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
+  const rol = APP.state.userRole || "";
+  const estadoUpper = (estado || "").toUpperCase();
+
+  const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
+  const trabajo = (o.trabajo_estado) || (o.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
+  const tieneNota = o.nota_tecnica && o.nota_tecnica.trim() !== "";
+
+  let menuItems = [
+    { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+  ];
+
+  if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
+    menuItems.push(
+      { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
+      { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' },
+      { divider: true },
+      { icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
+      { icon: '<i data-lucide="trash-2"></i>', label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" }
+    );
+  } else if (rol === ROLES.TECNICO || rol === ROLES.TECNICO_OPERATIVO) {
+    menuItems.push(
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
+      { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
+    );
+  } else if (rol === ROLES.VISTA) {
+    menuItems.push(
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+    );
+  } else if (rol === ROLES.VENDEDOR) {
+    menuItems.push(
+      { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' }
+    );
+  }
+
+  if (menuItems.length === 0) return "<em>-</em>";
+
+  const dropdownHtml = menuItems.map(item => {
+    if (item.divider) {
+      return '<div class="overflow-menu-divider"></div>';
+    }
+    const disabled = item.class.includes('disabled');
+    const onclickAttr = disabled ? '' : `data-action="${item.action}" ${item.dataAttributes || ''}`;
+    return `<button class="overflow-menu-item ${item.class}" ${onclickAttr} ${disabled ? 'disabled' : ''} data-stop-propagation="true">
+      <span>${item.icon}</span>
+      <span>${item.label}</span>
+    </button>`;
+  }).join('');
+
+  return `
+    <div class="overflow-menu">
+      <button class="overflow-menu-btn" data-action="toggle-overflow-menu" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">
+        ⋯
+      </button>
+      <div class="overflow-menu-dropdown" id="overflow-menu-${ordenId}">
+        ${dropdownHtml}
+      </div>
+    </div>
+  `;
+}
+window.botonesGestion = botonesGestion;
+
+function actualizarResumen(lista) {
+  const el = document.getElementById("resumenOrdenes");
+  if (!el) return;
+  const total = (lista || []).length;
+
+  const porAsignar = (lista || []).filter(o =>
+    (o.estado_reparacion || "POR ASIGNAR").toUpperCase() === "POR ASIGNAR").length;
+
+  const asignado = (lista || []).filter(o =>
+    (o.estado_reparacion || "").toUpperCase() === "ASIGNADO").length;
+
+  const completadoOficina = (lista || []).filter(o =>
+    (o.estado_reparacion || "").toUpperCase() === "COMPLETADO (EN OFICINA)").length;
+
+  const entregadoCliente = (lista || []).filter(o =>
+    (o.estado_reparacion || "").toUpperCase() === "ENTREGADO AL CLIENTE").length;
+
+  const filtroEstadoSelect = document.getElementById("filtroEstado");
+  const estadoActivo = filtroEstadoSelect ? filtroEstadoSelect.value : "";
+  const estadoLabel = estadoActivo || "Todos";
+
+  el.innerHTML = `
+    <div class="overflow-menu resumen-menu-wrap">
+      <button class="btn ghost resumen-btn" data-action="toggle-resumen-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false">
+        Resumen: ${total} · ${estadoLabel}
+      </button>
+      <div class="overflow-menu-dropdown resumen-menu" id="resumen-menu">
+        <div class="resumen-total" data-action="limpiar-filtros" title="Ver todas las órdenes">Total: ${total}</div>
+        <div class="resumen-badges">
+          <span class="badge asignar ${estadoActivo === 'POR ASIGNAR' ? 'active' : ''}" title="Click para filtrar: POR ASIGNAR" data-action="filtrar-badge" data-estado="POR ASIGNAR">${porAsignar}</span>
+          <span class="badge asignado ${estadoActivo === 'ASIGNADO' ? 'active' : ''}" title="Click para filtrar: ASIGNADO" data-action="filtrar-badge" data-estado="ASIGNADO">${asignado}</span>
+          <span class="badge completo ${estadoActivo === 'COMPLETADO (EN OFICINA)' ? 'active' : ''}" title="Click para filtrar: COMPLETADO (EN OFICINA)" data-action="filtrar-badge" data-estado="COMPLETADO (EN OFICINA)">${completadoOficina}</span>
+          <span class="badge ${estadoActivo === 'ENTREGADO AL CLIENTE' ? 'active' : ''}" style="background:#bbf7d0;" title="Click para filtrar: ENTREGADO AL CLIENTE" data-action="filtrar-badge" data-estado="ENTREGADO AL CLIENTE">${entregadoCliente}</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // mirror to mobile header summary (compact text only)
+  const mh = document.getElementById("mobileResumen");
+  if (mh) {
+    mh.textContent = `Total: ${total} · ${estadoLabel}`;
+  }
+}
+
+console.log('[ordenes-render.js] Render helpers ready');
