@@ -62,11 +62,20 @@ window.PocEdit = {
     const grupos = document.getElementById('drawer-grupos').value
       .split(',').map(g => g.trim()).filter(Boolean);
     const user   = firebase.auth().currentUser;
+
+    // The modelo input is free-text but PocState.obtenerModeloTexto prefers
+    // modelosMap[modelo_id] over the literal modelo string. If the user
+    // changed the displayed text, the FK is now stale — clear it so the new
+    // literal becomes authoritative on the next render.
+    const newModeloText = (document.getElementById('drawer-modelo').value || '').trim();
+    const oldModeloText = (PocState.obtenerModeloTexto(originalData) || '').trim();
+    const modeloEditado = newModeloText !== oldModeloText;
+
     const newData = {
       serial:      document.getElementById('drawer-serial').value,
       unit_id:     document.getElementById('drawer-unit-id').value,
       radio_name:  document.getElementById('drawer-radio-name').value,
-      modelo:      document.getElementById('drawer-modelo').value,
+      modelo:      newModeloText,
       grupos,
       activo:      document.getElementById('drawer-activo').checked,
       sim_number:  document.getElementById('drawer-sim-number').value,
@@ -79,6 +88,10 @@ window.PocEdit = {
       updated_by:       user?.uid   || null,
       updated_by_email: user?.email || null
     };
+
+    if (modeloEditado) {
+      newData.modelo_id = firebase.firestore.FieldValue.delete();
+    }
 
     try {
       await PocService.updatePocDevice(docId, newData);
@@ -99,6 +112,14 @@ window.PocEdit = {
     // Rebuild only the edited row using merged data — avoids full reload and
     // Firestore query-cache staleness caused by enablePersistence.
     const mergedData = { ...originalData, ...newData };
+    if (modeloEditado) {
+      // Strip the FieldValue sentinel and every FK alias obtenerModeloTexto
+      // checks, otherwise the next pencil-open will resolve the stale FK.
+      delete mergedData.modelo_id;
+      delete mergedData.modeloId;
+      delete mergedData.model_id;
+      delete mergedData.modelId;
+    }
     this.cerrar();
     Toast.show('Cambios guardados', 'ok');
     const newRow = PocList._buildRow(docId, mergedData);
