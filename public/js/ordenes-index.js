@@ -1106,31 +1106,31 @@ function botonesFlujo(ordenId, estado, ordenData) {
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     if (estado === "POR ASIGNAR") {
-      html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+      html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
-      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+      html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
     } else if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
-      html += `<button class="btn" style="background:#8b5cf6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(139,92,246,0.3);" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }
 
   else if (rol === ROLES.TECNICO) {
     if (estado === "POR ASIGNAR") {
-      html += `<button class="btn" style="background:#3b82f6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(59,130,246,0.3);" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+      html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
-      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+      html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
     }
   }
 
   else if (rol === ROLES.TECNICO_OPERATIVO) {
     if (estado === "ASIGNADO") {
-      html += `<button class="btn" style="background:#10b981;color:white;font-weight:600;box-shadow:0 2px 8px rgba(16,185,129,0.3);" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+      html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
     }
   }
 
   else if (rol === ROLES.VENDEDOR) {
     if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
-      html += `<button class="btn" style="background:#8b5cf6;color:white;font-weight:600;box-shadow:0 2px 8px rgba(139,92,246,0.3);" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }
 

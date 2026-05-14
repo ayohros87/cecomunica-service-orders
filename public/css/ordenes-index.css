@@ -669,19 +669,18 @@ body.hide-fecha-entrega .fecha-entrega {
    PAGE-SPECIFIC STYLES
    ======================================== */
 
-/* Estado Pill - Dominant Visual Element */
+/* Estado Badge */
 .estado-pill {
   display: inline-block;
-  padding: 5px 10px;
-  border-radius: 16px;
+  padding: 4px 9px;
+  border-radius: 4px;
   font-weight: 600;
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   text-align: center;
   line-height: 1.2;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  border: 2px solid transparent;
+  border: 1px solid transparent;
   white-space: nowrap;
   max-width: 100%;
   overflow: hidden;
@@ -1062,11 +1061,31 @@ tr.activo .flecha {
   z-index: 4000;
 }
 
-/* Botón principal tiene jerarquía dominante */
-.acciones-wrap > .btn {
+/* Flujo action buttons — compact outline, no fill */
+.btn-flujo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 13px;
   font-weight: 600;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-radius: 4px;
+  border: 1.5px solid;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
 }
+.btn-flujo:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.10); }
+.btn-flujo--asignar   { color: #1d4ed8; border-color: #93c5fd; }
+.btn-flujo--asignar:hover   { background: #eff6ff; }
+.btn-flujo--completar { color: #065f46; border-color: #6ee7b7; }
+.btn-flujo--completar:hover { background: #ecfdf5; }
+.btn-flujo--entregar  { color: #5b21b6; border-color: #c4b5fd; }
+.btn-flujo--entregar:hover  { background: #f5f3ff; }
+.btn-flujo .lucide    { width: 14px; height: 14px; vertical-align: -2px; color: inherit; }
 
 /* Botón ⋯ es secundario (ghost) */
 .acciones-wrap > .overflow-menu {
