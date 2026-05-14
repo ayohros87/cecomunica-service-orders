@@ -79,14 +79,17 @@ Called in [ordenes-data.js:156](public/js/pages/ordenes-data.js), [ordenes-rende
 | QW7 | Add `aria-live="polite"` to `#resumenOrdenes` and `#mobileResumen` | render.js + html | 10 min | Announce filter changes |
 | QW8 | Keyboard handler for row expansion (Enter/Space) | ordenes-render.js | 20 min | Keyboard-only users |
 | QW9 | Move 17 inline `style="..."` attributes to CSS classes | ordenes/index.html | 1 hr | Maintainability |
-| QW10 | Replace status-pill light backgrounds (`#fde2e2`, `#f9f2d0`) with WCAG-AA-passing pairs | ordenes-index.css | 30 min | Contrast |
+| QW10 | Replace status-pill light backgrounds with the design-system AA pairs (see §4.5) | ordenes-index.css | 30 min | Contrast |
 | QW11 | Single skeleton-row component shown during initial load | new partial + JS | 2 hr | Perceived perf |
 | QW12 | Remove `console.log` markers (`[ordenes-state.js] …`) from production | 10 files | 5 min | Cleanliness |
 | QW13 | Use `APP.state.userId` instead of `firebase.auth().currentUser?.uid` | filters.js:83 | 1 min | Consistency |
 | QW14 | Intersection observer auto-load near bottom; keep button as fallback | new file | 2 hr | Modern UX |
 | QW15 | Empty-state UI: icon + "No hay órdenes con este filtro" + "Limpiar filtros" CTA | render.js | 30 min | UX polish |
+| QW16 | Adopt `--ring-focus` / `--ring-error` tokens; apply `:focus-visible { box-shadow: var(--ring-focus) }` globally | ceco-ui.css | 15 min | Visible focus for keyboard users |
 
 QW1–QW4 together remove ~400 lines of legacy code and visibly speed up the page.
+
+> **Prerequisite for QW10, §4.2, §4.3, §4.5, QW16:** the **Week 0 token bridge** in §6 lands `--sp-*`, `--radius-*`, `--fg-*`, `--ring-*` from the Cecomunica Design System into `ceco-ui.css` first. Otherwise these tickets reinvent values that the design system already publishes.
 
 ---
 
@@ -172,6 +175,27 @@ Replace the dual desktop-form + mobile-drawer with **chip filters** at the top:
 
 This collapses the ~250 px filter card to a ~50 px chip bar. Identical on mobile.
 
+**Component spec** — copied verbatim from `Cecomunica Design System/preview/components-badges.html`. Drop into `ceco-ui.css`:
+
+```css
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 12px;
+  border-radius: var(--radius-md);
+  font: 500 12px/1 var(--font-body);
+  background: #fff;
+  border: 1px solid var(--border-default);
+  color: var(--fg-1);
+}
+.chip.active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-press);
+}
+```
+
+Requires the Week-0 token bridge (`--radius-md`, `--border-default`, `--brand-soft`, `--brand-press`, `--fg-1`).
+
 ### 4.4 Typography
 
 System font stack is fine. You do not need a custom font. But:
@@ -181,7 +205,18 @@ System font stack is fine. You do not need a custom font. But:
 
 ### 4.5 Color contrast
 
-The light pastel `estado-pill` backgrounds (`#fde2e2`, `#f9f2d0`) with text colors `#92400e` / `#7a5b11` — verify with the WebAIM contrast checker. The amber-on-pink combinations are at the edge of AA.
+The current pastel `estado-pill` pairs (`#fde2e2` / `#92400e`, `#f9f2d0` / `#7a5b11`) sit at the edge of WCAG AA. The Cecomunica Design System already publishes an AA-safe replacement palette in [Cecomunica Design System/preview/components-badges.html](Cecomunica%20Design%20System/preview/components-badges.html). Adopt these exact pairs:
+
+| Estado actual | Background | Text | Dot color |
+|---|---|---|---|
+| `POR ASIGNAR` | `#FAE3E3` | `#8A1F1F` | `var(--status-critical)` `#D24545` |
+| `ASIGNADO` | `#FAF1DB` | `#7A5510` | `var(--status-warning)` `#E0A93A` |
+| `COMPLETADO (EN OFICINA)` | `var(--brand-soft)` `#E6F4FB` | `var(--brand-press)` `#001D2B` | `var(--brand)` `#0091D7` |
+| `ENTREGADO AL CLIENTE` | `#E6F4ED` | `#0F6E47` | `var(--status-online)` `#1FA56B` |
+
+Each pill renders as `[dot] LABEL` — the 6 px colored dot is part of the spec. Update both `.estado-pill.{por-asignar,asignado,completado,entregado}` in `ordenes-index.css` and the markup in `ordenes-render.js` to prepend `<span class="dot"></span>`.
+
+Verified AA: all four background/foreground pairs above pass WCAG AA at the 13 px / semibold weight used by the pill.
 
 ---
 
@@ -228,6 +263,56 @@ When you expand an order, the current view shows equipment. Add a third tab/sect
 ---
 
 ## 6. Prioritized roadmap
+
+**Week 0 — Token bridge from the design system** *(half day)*
+
+Before any visual or a11y work begins, land the missing design-system tokens in `public/css/ceco-ui.css`. The Cecomunica Design System ships a 124-token system in `Cecomunica Design System/colors_and_type.css`; the app currently uses a ~22-token flat subset. The redesign tickets (QW10, QW16, §4.2, §4.3, §4.4, §4.5) all reference layers the app doesn't have yet.
+
+Add (or alias) to `:root` in `ceco-ui.css`:
+
+```css
+/* Foreground hierarchy (currently only --text and --muted exist) */
+--fg-1: #0E1418;   /* primary text / headings */
+--fg-2: #2F3942;   /* body */
+--fg-3: #6B7884;   /* secondary, captions */
+--fg-4: #9AA7B4;   /* placeholder, disabled */
+
+/* Border scale (currently flat --line) */
+--border-subtle:  #EEF2F6;
+--border-default: #DDE4EB;
+--border-strong:  #6B7884;
+--border-brand:   var(--brand);
+
+/* Surfaces */
+--brand-soft:  #E6F4FB;
+--brand-press: #001D2B;
+
+/* Status palette (currently flat --ok/--warn/--bad) */
+--status-online:   #1FA56B;
+--status-warning:  #E0A93A;
+--status-critical: #D24545;
+
+/* Spacing scale on 4px base */
+--sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px;
+--sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px; --sp-16:64px;
+
+/* Radii */
+--radius-xs:2px; --radius-sm:4px; --radius-md:6px;
+--radius-lg:10px; --radius-xl:16px; --radius-pill:999px;
+
+/* Focus rings */
+--ring-focus: 0 0 0 3px rgba(0, 145, 215, 0.30);
+--ring-error: 0 0 0 3px rgba(210, 69, 69, 0.28);
+
+/* Motion */
+--ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+--dur-fast:    120ms;
+--dur-base:    200ms;
+```
+
+Keep existing flat tokens (`--text`, `--muted`, `--line`, `--ok`, `--warn`, `--bad`) as aliases for backward compatibility — every page already references them.
+
+No visual change is shipped this week. Token-adoption refactors of `ordenes-index.css` happen as part of the relevant later tickets (QW10, §4.2, §4.3, §4.5).
 
 **Week 1 — Stop the bleeding (P0)**
 1. Add `searchTokens` to order writes + migrate search to indexed query *(1 day + backfill)*
