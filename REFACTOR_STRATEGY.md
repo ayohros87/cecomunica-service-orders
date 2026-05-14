@@ -468,7 +468,7 @@ Split the five largest extracted page scripts from global-function soup into pro
 | 2 | Extract pure formatters from `ordenes-index.js` into `ordenes-state.js` | **done — 2026-05-14** |
 | 3 | Extract `ordenes-data.js` | **done — 2026-05-14** |
 | 4 | Extract `ordenes-render.js` | **done — 2026-05-14** |
-| 5 | Extract `ordenes-filters.js` | planned |
+| 5 | Extract `ordenes-filters.js` | **done — 2026-05-14** |
 | 6 | Extract `ordenes-flujo.js` | planned |
 | 7 | Extract `ordenes-equipos.js` | planned |
 | 8 | Extract `ordenes-notas.js` + `ordenes-ui.js` | planned |
