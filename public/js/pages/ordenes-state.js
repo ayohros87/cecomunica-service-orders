@@ -160,4 +160,68 @@ window.BASE = window.location.hostname === '127.0.0.1' || window.location.hostna
  */
 window.modelosDisponibles = [];
 
+/* ========================================
+ * Pure formatters
+ * No DOM access (except where noted) and no Firestore access.
+ * Top-level declarations are globally accessible to every page module.
+ * ======================================== */
+
+function formatFecha(ts) {
+  if (!ts) return "—";
+  try {
+    const d = ts.toDate();
+    return d.toISOString().slice(0, 10);
+  } catch {
+    return "—";
+  }
+}
+
+function normTxt(s) {
+  return (s || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+function escapeHtml(str) {
+  return (str || "").replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+  }[m]));
+}
+
+// Reads APP.state.clientesMap to resolve cliente_id → display name.
+function nombreClienteDe(orden) {
+  const id = orden.cliente_id || orden.clienteId;
+  return (id && APP.state.clientesMap[id]) || orden.cliente_nombre || orden.cliente || "—";
+}
+
+function getEstadoClass(estado) {
+  const e = (estado || "").toUpperCase();
+  if (e === "POR ASIGNAR") return "por-asignar";
+  if (e === "ASIGNADO") return "asignado";
+  if (e === "COMPLETADO (EN OFICINA)") return "completado";
+  if (e === "ENTREGADO AL CLIENTE") return "entregado";
+  return "por-asignar";
+}
+
+function tipoChip(tipo) {
+  if (!tipo) return '';
+  const t = tipo.trim().toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const cls =
+    t.includes('REPAR')   ? 'tipo-chip--reparacion'   :
+    t.includes('PROGRAM') ? 'tipo-chip--programacion' :
+    t.includes('MANTEN')  ? 'tipo-chip--mantenimiento' :
+    t.includes('VENTA')   ? 'tipo-chip--venta'        : '';
+  return `<span class="tipo-chip ${cls}">${tipo.trim()}</span>`;
+}
+
+function estadoCompacto(estado) {
+  const e = (estado || "").toUpperCase();
+  if (e === "COMPLETADO (EN OFICINA)") return "COMPLETADO";
+  if (e === "ENTREGADO AL CLIENTE") return "ENTREGADO";
+  return e;
+}
+
 console.log('[ordenes-state.js] State management initialized');

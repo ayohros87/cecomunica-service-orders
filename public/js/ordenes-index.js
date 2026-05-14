@@ -93,15 +93,7 @@ function mostrarFeedbackEquipo(equipoId, tipo = 'success') {
 // Exportar para uso global
 window.mostrarFeedbackEquipo = mostrarFeedbackEquipo;
 
-function formatFecha(ts) {
-  if (!ts) return "—";
-  try {
-    const d = ts.toDate();
-    return d.toISOString().slice(0,10);
-  } catch {
-    return "—";
-  }
-}
+// formatFecha → pages/ordenes-state.js
 
 function setFechaEntregaVisible(visible) {
   const body = document.body;
@@ -1367,14 +1359,7 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
 
 
 // Helper to normalize text (remove accents, lowercase, trim)
-function normTxt(s) {
-  return (s || "")
-    .toString()
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
+// normTxt \u2192 pages/ordenes-state.js
 
 function getActiveFilters() {
   const filtroOrden = normTxt(document.getElementById("filtroOrden")?.value || "");
@@ -1989,38 +1974,7 @@ window.activarModoAccesorios = function (ordenId) {
   }
 };
 
-function nombreClienteDe(orden) {
-  const id = orden.cliente_id || orden.clienteId;
-  return (id && APP.state.clientesMap[id]) || orden.cliente_nombre || orden.cliente || "—";
-}
-
-function getEstadoClass(estado) {
-  const e = (estado || "").toUpperCase();
-  if (e === "POR ASIGNAR") return "por-asignar";
-  if (e === "ASIGNADO") return "asignado";
-  if (e === "COMPLETADO (EN OFICINA)") return "completado";
-  if (e === "ENTREGADO AL CLIENTE") return "entregado";
-  return "por-asignar";
-}
-
-function tipoChip(tipo) {
-  if (!tipo) return '';
-  const t = tipo.trim().toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const cls =
-    t.includes('REPAR')   ? 'tipo-chip--reparacion'   :
-    t.includes('PROGRAM')  ? 'tipo-chip--programacion'  :
-    t.includes('MANTEN')   ? 'tipo-chip--mantenimiento' :
-    t.includes('VENTA')    ? 'tipo-chip--venta'         : '';
-  return `<span class="tipo-chip ${cls}">${tipo.trim()}</span>`;
-}
-
-// Helper: Versión compacta de estados para píldoras
-function estadoCompacto(estado) {
-  const e = (estado || "").toUpperCase();
-  if (e === "COMPLETADO (EN OFICINA)") return "COMPLETADO";
-  if (e === "ENTREGADO AL CLIENTE") return "ENTREGADO";
-  return e;
-}
+// nombreClienteDe, getEstadoClass, tipoChip, estadoCompacto → pages/ordenes-state.js
 
 function actualizarResumen(lista) {
   const el = document.getElementById("resumenOrdenes");
@@ -2404,12 +2358,7 @@ window.verObsCompleta = function(ordenId, idx) {
   );
 };
 
-function escapeHtml(str) {
-  return (str || "").replace(/[&<>"']/g, (m) => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[m]));
-}
-
+// escapeHtml → pages/ordenes-state.js
 
 window.filtrarPorEstado = async function (estado) {
   const ordersTable = document.getElementById("ordersTable");
