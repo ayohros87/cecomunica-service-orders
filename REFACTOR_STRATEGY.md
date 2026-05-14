@@ -26,7 +26,7 @@ It is not an SPA in any meaningful sense. Each `.html` file is a standalone page
 | [public/POC/vendedores-batch.html](public/POC/vendedores-batch.html) | 1409 |
 | [public/inventario/piezas.html](public/inventario/piezas.html) | 1287 |
 
-A partial service layer was introduced for the orders module ([public/js/services/ordenesService.js](public/js/services/ordenesService.js), [public/js/services/clientesService.js](public/js/services/clientesService.js), [public/js/ordenes-index.js](public/js/ordenes-index.js), [public/js/ordenes.state.js](public/js/ordenes.state.js)). It is currently used by `ordenes/index.html` only. Every other page still talks to Firestore directly: 188 raw `db.collection(...)` calls across 40 files.
+A partial service layer was introduced for the orders module ([public/js/services/ordenesService.js](public/js/services/ordenesService.js), [public/js/services/clientesService.js](public/js/services/clientesService.js), [public/js/ordenes-index.js](public/js/ordenes-index.js), [public/js/pages/ordenes-state.js](public/js/pages/ordenes-state.js)). It is currently used by `ordenes/index.html` only. Every other page still talks to Firestore directly: 188 raw `db.collection(...)` calls across 40 files.
 
 ### 1.3 The real data flow for a contract
 
@@ -49,7 +49,7 @@ Each transition fans out to multiple Cloud Functions:
 
 This is where the system is most fragile. Three independent paths can write to the contract's "summary fields" (`os_count`, `equipos_total`, `os_linked`, `os_serials_preview`, etc.):
 
-1. **Frontend cache writer** in [public/ordenes/nueva-orden.html:414](public/ordenes/nueva-orden.html#L414) (`syncContratoCacheFromOrden`) — still present despite being marked as deprecated by `CONFIG.enableContratoFallbackSync = false` in [public/js/ordenes.state.js:65](public/js/ordenes.state.js#L65).
+1. **Frontend cache writer** in [public/ordenes/nueva-orden.html:414](public/ordenes/nueva-orden.html#L414) (`syncContratoCacheFromOrden`) — still present despite being marked as deprecated by `CONFIG.enableContratoFallbackSync = false` in [public/js/pages/ordenes-state.js:55](public/js/pages/ordenes-state.js#L55).
 2. **`onOrdenWriteSyncContratoCache`** ([functions/index.js:1486](functions/index.js#L1486)) — fires on every order write and writes to both `contratos/{id}/ordenes/{orderId}` (cache subdoc) and the parent contract's summary fields (`os_linked`, `os_last_orden_id`, `os_serials_preview`, `os_has_equipos`, `os_equipos_count_last`).
 3. **`onContratoOrdenWrite`** ([functions/index.js:1166](functions/index.js#L1166)) — supposed to apply deltas to `os_count` and `equipos_total` whenever the cache subdoc changes.
 4. **`recalcularCacheContrato`** helper ([functions/index.js:1286](functions/index.js#L1286)) — full recompute, called on soft-delete, hard-delete, and contract-change.
@@ -104,7 +104,7 @@ This single trigger choice is the root cause of "phantom 📦 icons" the doc all
 
 ### 3.3 Frontend cache writer that "should be" deprecated still runs
 
-`CONFIG.enableContratoFallbackSync = false` is a flag in `ordenes.state.js`, but it is never checked. The `syncContratoCacheFromOrden` function in `nueva-orden.html` is unconditionally callable. Two clients writing the same cache fields means write order is undefined.
+`CONFIG.enableContratoFallbackSync = false` is a flag in `pages/ordenes-state.js`, but it is never checked. The `syncContratoCacheFromOrden` function in `nueva-orden.html` is unconditionally callable. Two clients writing the same cache fields means write order is undefined.
 
 ### 3.4 Service layer is half-built
 
@@ -140,7 +140,7 @@ The CF `extractCacheData` already documents the problem in code: it tries `seria
 
 ### 3.12 Roles are not centralized
 
-Role names are duplicated (and slightly different) in: per-page `verificarAccesoYAplicarVisibilidad` callbacks; the `visiblesPorRol` map in `index.html`; the `userRole()` helper in security rules; `OrdenesService.loadOrders` and `loadTechnicians`; and the `CONFIG.ROLES` enum in `ordenes.state.js`. The `ROLES` enum in `ordenes.state.js` is the most complete attempt, but it is not used outside the orders module.
+Role names are duplicated (and slightly different) in: per-page `verificarAccesoYAplicarVisibilidad` callbacks; the `visiblesPorRol` map in `index.html`; the `userRole()` helper in security rules; `OrdenesService.loadOrders` and `loadTechnicians`; and the `CONFIG.ROLES` enum in `pages/ordenes-state.js`. The `ROLES` enum in `pages/ordenes-state.js` is the most complete attempt, but it is not used outside the orders module.
 
 ### 3.13 Documentation that is stale, contradictory, or misleading
 
@@ -464,7 +464,7 @@ Split the five largest extracted page scripts from global-function soup into pro
 
 | Step | Scope | Status |
 |---|---|---|
-| 1 | Move `js/ordenes.state.js` → `js/pages/ordenes-state.js`; update `<script src>` | planned |
+| 1 | Move `js/ordenes.state.js` → `js/pages/ordenes-state.js`; update `<script src>` | **done — 2026-05-14** |
 | 2 | Extract pure formatters from `ordenes-index.js` into `ordenes-state.js` | planned |
 | 3 | Extract `ordenes-data.js` | planned |
 | 4 | Extract `ordenes-render.js` | planned |

@@ -1,7 +1,7 @@
 // @ts-nocheck
 /* ========================================
  * ORDENES STATE - Application State & Config
- * Extracted from ordenes-index.js
+ * Loaded first by ordenes/index.html before all other page modules.
  * ======================================== */
 
 /**
@@ -160,4 +160,4 @@ window.BASE = window.location.hostname === '127.0.0.1' || window.location.hostna
  */
 window.modelosDisponibles = [];
 
-console.log('[ordenes.state.js] State management initialized');
+console.log('[ordenes-state.js] State management initialized');

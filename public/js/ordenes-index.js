@@ -10,7 +10,7 @@
  *    - Added APP namespace for organizing functionality
  *    - Created CONFIG object for constants
  *    - Added utility helpers (mustGetEl, qs, qsa, logError)
- *    - **EXTRACTED to ordenes.state.js**
+ *    - **EXTRACTED to pages/ordenes-state.js**
  * 
  * ✅ Phase 1: External CSS/JS
  *    - Moved inline <style> to ../css/ordenes-index.css (~1300 lines)
@@ -43,14 +43,14 @@
  *    - Added: searchOrders(), filterByStatus(), updateTrabajoTecnico(), getUserData(), getOrder()
  * 
  * ✅ Phase 9: Module Extraction
- *    - APP, CONFIG, APP.utils → ordenes.state.js
+ *    - APP, CONFIG, APP.utils → pages/ordenes-state.js
  *    - Reduces this file from ~2600 to ~2400 lines
  * 
- * Dependencies: ordenes.state.js (APP, CONFIG), ordenesService.js, clientesService.js
+ * Dependencies: pages/ordenes-state.js (APP, CONFIG), ordenesService.js, clientesService.js
  * ======================================== */
 
 /* ========================================
-   APP namespace, CONFIG, and utils are defined in ordenes.state.js
+   APP namespace, CONFIG, and utils are defined in pages/ordenes-state.js
    This file extends APP with additional functionality
    ======================================== */
 
@@ -191,7 +191,7 @@ async function cargarTecnicosFiltros() {
   applyOptions(fromOrders);
 }
 
-// BASE and modelosDisponibles are defined in ordenes.state.js
+// BASE and modelosDisponibles are defined in pages/ordenes-state.js
 
 document.addEventListener("DOMContentLoaded", function () {
           function obtenerIconoLapiz(id, campo, valorActual) {
