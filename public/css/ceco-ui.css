@@ -82,6 +82,18 @@
 }
 
 *{box-sizing:border-box}
+
+/* Respect user motion preferences — disables animations and long
+   transitions for users who have it enabled in OS/browser settings. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 html,body{height:100%}
 body{
   margin:0; 
