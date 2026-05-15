@@ -149,16 +149,23 @@ body{
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0;
-  height: 0;
+  width: 200%;
+  /* aspect-ratio:1 + width:200% gives a circle large enough to
+     cover any reasonable button size without re-measuring. */
+  aspect-ratio: 1;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.3);
-  transform: translate(-50%, -50%);
-  transition: width 0.6s, height 0.6s;
+  /* Compositor-only animation — transform + opacity. The previous
+     implementation animated width/height which triggers layout. */
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  transition: transform 0.6s ease, opacity 0.6s ease;
+  pointer-events: none;
 }
 .btn:active::before {
-  width: 300px;
-  height: 300px;
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+  transition-duration: 0s;
 }
 .btn:hover{ background:#f8fafc; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
 .btn:active{ transform: translateY(0); }
