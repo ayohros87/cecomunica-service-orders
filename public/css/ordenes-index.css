@@ -45,7 +45,9 @@ body {
   box-sizing: border-box;
 }
 
-/* Unified Filter Cards */
+/* ======================================
+   FILTER CARDS
+   ====================================== */
 .card {
   background: white;
   border-radius: 8px;
@@ -54,7 +56,9 @@ body {
   margin-bottom: 12px;
 }
 
-/* Unified Table Styling */
+/* ======================================
+   ORDERS TABLE — layout + cells
+   ====================================== */
 .table-wrap {
   background: white;
   border-radius: 8px;
@@ -116,7 +120,9 @@ table tbody tr:nth-child(4n+4):hover {
   background: #f0f9ff;
 }
 
-/* Unified Button System */
+/* ======================================
+   BUTTONS (page-local overrides on top of ceco-ui .btn)
+   ====================================== */
 .btn {
   padding: 8px 16px;
   font-size: 13px;
@@ -313,7 +319,9 @@ table tbody tr:nth-child(4n+4):hover {
   gap: 6px;
 }
 
-/* Equipos (mobile) */
+/* ======================================
+   MOBILE EQUIPOS DRAWER
+   ====================================== */
 .equipos-empty {
   padding: 16px;
   border: 2px dashed #d1d5db;
@@ -494,7 +502,9 @@ table tbody tr:nth-child(4n+4):hover {
   font-style: italic;
 }
 
-/* Toast */
+/* ======================================
+   TOASTS
+   ====================================== */
 .toast {
   position: fixed;
   bottom: calc(var(--mobile-bottom-nav-height) + 16px + env(safe-area-inset-bottom));
@@ -535,7 +545,9 @@ table tbody tr:nth-child(4n+4):hover {
   animation: fadeOut 0.3s ease forwards;
 }
 
-/* Notas Técnicas Modal */
+/* ======================================
+   NOTAS TÉCNICAS MODAL
+   ====================================== */
 .notas-modal {
   position: fixed;
   inset: 0;
@@ -669,6 +681,9 @@ body.hide-fecha-entrega .fecha-entrega {
    PAGE-SPECIFIC STYLES
    ======================================== */
 
+/* ======================================
+   ESTADO BADGE + TIPO CHIP
+   ====================================== */
 /* Estado Badge */
 .estado-pill {
   display: inline-block;
@@ -735,6 +750,9 @@ tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e;
 .tipo-chip--mantenimiento { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
 .tipo-chip--venta         { background: #faf5ff; color: #7c3aed; border-color: #e9d5ff; }
 
+/* ======================================
+   EQUIPMENT TABLE (inside expanded row)
+   ====================================== */
 /* Enhanced equipment table styling */
 .celda-modelo-editando {
   background: #eff6ff !important;
@@ -1634,7 +1652,9 @@ tr.activo .flecha {
   border: 2px solid var(--brand);
 }
 
-/* Overflow Menu Styles */
+/* ======================================
+   OVERFLOW MENU
+   ====================================== */
 .overflow-menu {
   position: relative;
   display: inline-block;
@@ -1751,6 +1771,9 @@ tr.activo .flecha {
   margin: 4px 0;
 }
 
+/* ======================================
+   TEXT + ALERT MODALS (page-local)
+   ====================================== */
 /* Text Display Modal */
 .text-modal-overlay {
   position: fixed;
