@@ -78,7 +78,11 @@ table {
 table thead {
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
   position: sticky;
-  top: 128px; /* approx. collapsed filter-card height */
+  /* The filter card is sticky at top:0. The thead must stick below it.
+     --filter-card-h is set by ordenes-index.js on load + on resize via
+     a ResizeObserver on .filters-card-sticky. Fallback 128px covers
+     the brief window before JS runs. */
+  top: var(--filter-card-h, 128px);
   z-index: 10;
   box-shadow: 0 2px 4px rgba(0,0,0,0.06);
 }

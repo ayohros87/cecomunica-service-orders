@@ -11,8 +11,27 @@
  * ordenes-events.js (loaded in that order from ordenes/index.html).
  * ======================================== */
 
+// Measures .filters-card-sticky height and exposes it as
+// --filter-card-h so the orders-table thead can stick directly below
+// the filter card instead of using a hardcoded 128 px estimate.
+// Re-measured automatically when the card resizes (advanced filters
+// toggle, viewport change, content reflow).
+function syncFilterCardHeight() {
+  const card = document.querySelector('.filters-card-sticky');
+  if (!card) return;
+  const h = Math.ceil(card.getBoundingClientRect().height);
+  document.documentElement.style.setProperty('--filter-card-h', h + 'px');
+}
+
 document.addEventListener("DOMContentLoaded", function () {
   setFechaEntregaVisible(false);
+
+  // Initial measurement + observe future resizes.
+  syncFilterCardHeight();
+  const filterCard = document.querySelector('.filters-card-sticky');
+  if (filterCard && typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncFilterCardHeight).observe(filterCard);
+  }
 
   // Filter inputs re-apply combined filters on change
   const filtroEstadoEl = document.getElementById("filtroEstado");
