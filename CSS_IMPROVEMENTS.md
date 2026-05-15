@@ -2,11 +2,9 @@
 
 > **Scope:** the app-wide design-system stylesheet and the orders-page stylesheet.
 >
-> **Status:** strategy document, no work shipped from this list yet.
+> **Status (2026-05-15):** P0 + quick-wins + half-day batch + most of the one-day refactor shipped (commits `212f3af` through `10009fa`). What remains is in §13.
 >
-> **Sibling docs:** `ORDENES_INDEX_IMPROVEMENTS.md` covers the UX/architecture of the orders page (and includes the "Week 0 token bridge" that lands `--fg-*`, `--border-*`, `--sp-*`, `--radius-*`, `--ring-*` tokens). This doc is about the **CSS itself** — duplication, dead rules, hardcoded values, specificity, and structure.
->
-> **Last refreshed:** 2026-05-14.
+> **Sibling docs:** `ORDENES_INDEX_IMPROVEMENTS.md` covers the UX/architecture of the orders page (and includes the "Week 0 token bridge" that lands `--fg-*`, `--border-*`, `--sp-*`, `--radius-*`, `--ring-*` tokens — the bridge itself shipped here under commit `212f3af`). This doc is about the **CSS itself** — duplication, dead rules, hardcoded values, specificity, and structure.
 
 ---
 
@@ -277,47 +275,76 @@ The current feature-letter labels (J, K, L, M, O, P, U, V, X, Y) — comments li
 ## 10. Prioritized roadmap
 
 **Quick wins (≤ 2 hr total)**
-1. Add `prefers-reduced-motion` block to `ceco-ui.css` (§1.5) — 5 min
-2. Delete dead keyframes and the "Ya no se usa" block (§2) — 15 min
-3. Consolidate breakpoint to `768 px` (§1.3, §7.2) — 30 min
-4. Drop z-index `4000` to `15` after verifying stacking (§1.2) — 15 min
-5. Add `:focus-visible` global rule (§8) — 5 min (after Week-0 lands `--ring-focus`)
+1. ✅ Add `prefers-reduced-motion` block to `ceco-ui.css` — `cbe1a21`
+2. ✅ Delete dead/duplicate rules and the "Ya no se usa" block — `fb92b64`
+3. ✅ Consolidate breakpoint to `768 px` — `fb92b64`
+4. ✅ Drop z-index `4000` to `1100` with documented constraint — `fb92b64`
+5. ✅ Add `:focus-visible` global rule — `b9ef6c8`
 
 **Half-day batch**
-6. Replace the three duplicate focus-ring blocks in `ceco-ui.css` with one `--ring-focus` reference (§1.4) — depends on Week-0
-7. Delete `@keyframes` duplicated between the two files (§3) — 30 min
-8. Convert `transition: all` to explicit property lists (§6.1) — 1 hr
-9. Replace ripple width/height animation with transform (§6.2) — 30 min
-10. Strip `!important` from `.confirm-btn` / `.delete-btn` by adopting `.btn.primary.lg` / `.btn.danger.lg` (§5.1) — 1 hr
+6. ✅ Replace three duplicate focus-ring blocks with `--ring-focus` (became four after counting `.auth-input`) — `b9ef6c8`
+7. ✅ Delete `@keyframes` duplicated between the two files (spin, slideDown) — `fb92b64`
+8. ✅ Convert `transition: all 0.2s` to explicit property lists via redefined `--transition` — `0087f6d`
+9. ✅ Compositor-only ripple (transform/opacity) — `36cd1f4`
+10. ✅ Strip `!important` from dead `.btn-agregar-equipo` / `.boton-eliminar-equipo` and from `.estado-aprobado-chip` — `5216121`
 
 **One-day refactor**
-11. Add section headers to the unsectioned middle of `ordenes-index.css` (§9.2) — 2 hr
-12. Replace ID-as-style-hook selectors with classes (§5.2) — 3 hr (touches HTML + JS)
-13. Migrate hardcoded brand-blue rgba to derived tokens (§4) — 2 hr (depends on Week-0)
+11. ✅ Add section headers to the unsectioned middle of `ordenes-index.css` — `8936213`
+12. ✅ Replace ID-as-style-hook selectors with classes — `93ede01`
+13. ⏳ Migrate hardcoded brand-blue rgba to derived tokens (§4) — pending, see §13
 
 **Two-day refactor**
-14. Sticky thead offset → CSS custom property updated on resize (§1.1) — half day
-15. Promote toggle slider + filter-card patterns from page CSS to `ceco-ui.css` (§9.3) — full day
-16. Normalize naming convention to kebab-case (§9.4) — coordinated PR with HTML/JS
+14. ✅ Sticky thead offset → CSS custom property via ResizeObserver — `10009fa`
+15. ⏳ Promote toggle slider + filter-card patterns from page CSS to `ceco-ui.css` (§9.3) — pending, see §13
+16. ⏳ Normalize naming convention to kebab-case — deferred to Phase-5g (see §13)
 
 ---
 
-## 11. What to delete outright
+## 11. What was deleted outright
 
-- `--mobile-bottom-nav-height: 0px` (always-zero token)
-- `@keyframes pulse-opacity`, `modalSlideIn`, `highlight-success`, `highlight-update`
-- `.equipment-bar` rules ("Ya no se usa")
-- Duplicate `@keyframes slideDown` (two identical copies)
-- Duplicate `@keyframes spin`, `fadeOut`, `slideInRight` in the page file (keep base versions)
-- Commented-out blocks: `ordenes-index.css:1047` and the feature-letter comments throughout
-- Three near-identical focus-ring blocks in `ceco-ui.css` (replace with one `--ring-focus`)
+Shipped:
+
+- `.header-col-centro { display: none; /* Ya no se usa */ }` block (commit `fb92b64`)
+- `.btn-agregar-equipo` + `.boton-eliminar-equipo` blocks — 7× `!important` each, no element ever uses these classes (commit `5216121`)
+- Duplicate `@keyframes spin` (identical to ceco-ui's)
+- Duplicate `@keyframes slideDown` at line 2605 (identical to ceco-ui's)
+- Four near-identical focus-ring blocks in ceco-ui.css → consolidated to `var(--ring-focus)` (commit `b9ef6c8`)
+
+**Not deleted — audit was wrong:**
+
+| Item | Audit claim | Reality |
+|---|---|---|
+| `@keyframes pulse-opacity` | "No references" | Used at line 938 (`.warn-icon`) |
+| `@keyframes modalSlideIn` | "No references" | Used at lines 560 and 1815 |
+| `@keyframes highlight-success` / `highlight-update` | "No references" | Used at lines 3108 / 3112 (triggered by JS via `.feedback-*` classes) |
+| `@keyframes slideInRight` (page-local) | "Identical to ceco-ui" | Different — `translateX(12px)` vs `100px`, end opacity 1.0 vs 0.98. Page version is more refined. |
+| `@keyframes slideDown` at line 1716 | "Identical to ceco-ui" | Different — `translateY(-8px)` vs `-10px`. Subtle. |
+| `--mobile-bottom-nav-height: 0px` | "Always zero" | Overridden inside `@media (max-width: 768px)` to 64px; actively used in `calc()` expressions |
+
+Lesson: the original audit's `grep` was too narrow. Whenever it claimed something was unreferenced, the reality was that JS or a `@media` block was using it.
 
 ---
 
 ## 12. Honest bottom line
 
-`ceco-ui.css` is in good shape for a non-architected app — section headers exist, brand tokens are reused, button/badge systems are coherent. The cleanup is mostly polish.
+`ceco-ui.css` is in good shape for a non-architected app — section headers exist, brand tokens are reused, button/badge systems are coherent. The cleanup was mostly polish.
 
-`ordenes-index.css` is **fixable but neglected**. It absorbed every feature-branch's "just add a class" CSS for two years and the section labeling (J, K, L, M…) tells the story. None of it is broken — but maintenance cost on this page is currently 2× what it should be because finding "where is the estado pill defined" takes a grep. A weekend of focused work would cut the file by ~500 lines and restore navigability.
+`ordenes-index.css` was **fixable but neglected**. It absorbed every feature-branch's "just add a class" CSS for two years and the section labeling (J, K, L, M…) tells the story. The 2026-05-15 cleanup did not delete the feature-letter comments — that requires a coordinated pass that also touches JS class names — but the file gained proper section headers and dropped most of the duplicates, `!important` battles, and ID-as-styling-hook patterns.
 
-Neither file blocks any of the work in `ORDENES_INDEX_IMPROVEMENTS.md`. They just make it more annoying than it should be.
+Neither file blocks any of the work in `ORDENES_INDEX_IMPROVEMENTS.md`.
+
+---
+
+## 13. What remains for a future pass
+
+Out of the original roadmap, the following are **not yet done**:
+
+- **Hardcoded brand-blue rgba migration** (§4) — ~5 instances of `rgba(59, 130, 246, *)` in `ordenes-index.css` that should derive from `--brand` via `color-mix()`. Touches: `.tipo-chip--*`, `.btn-flujo--asignar` colors. ~1 hr.
+- **Tipo-chip palette tokens** (§4) — `--tipo-chip-{reparacion,programacion,mantenimiento,venta}` not yet defined. The Cecomunica Design System publishes the values; needs a one-shot token addition + replacement.
+- **`transition: all 0.3s`** still appears in 4 places (different duration from `var(--transition)`). Not strictly wrong but inconsistent.
+- **Feature-letter comments** in `ordenes-index.css` (J, K, L, M, O, P, U, V, X, Y) — not stripped. Mostly cosmetic; doing it cleanly means touching the JS `feedback-*` class names too. Defer to the Phase-5g "kebab-case rename" pass referenced in `REFACTOR_STRATEGY.md`.
+- **Promoting toggle slider + filter-card patterns to `ceco-ui.css`** (§9.3) — generic enough to share across `contratos/`, `cotizaciones/`, etc. but no immediate need.
+- **Imprimir-contrato.html chip overrides** still use `!important` to fight `#chipEstado` (an ID-as-styling-hook). Same pattern as Bundle E2 — separate page, deferred.
+- **Loader-border rgba** at `ceco-ui.css:1001` still hardcoded — different semantic (soft spinner ring) so kept; could derive from `--brand` later.
+
+None of these blocks any redesign work. They're the kind of polish that gets folded into other tickets when nearby code is touched.
