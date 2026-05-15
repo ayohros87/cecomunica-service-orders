@@ -478,7 +478,7 @@ th.ordenado-desc::after {
 .app-wrap--wide     { max-width: 1400px; }
 .app-wrap--full     { max-width: 100%;   }
 @media (max-width: 1024px) { .app-wrap { padding: 0 12px 24px; } }
-@media (max-width: 760px)  { .app-wrap { padding: 0 10px 20px; } }
+@media (max-width: 768px)  { .app-wrap { padding: 0 10px 20px; } }
 
 .app-tools {
   display:flex; gap:10px; align-items:center; justify-content:space-between;
@@ -730,7 +730,7 @@ th.actions, td.actions { white-space: nowrap; text-align: right; }
 .btn.block { width:100%; justify-content:center; }
 
 /* Responsive switch: hide table on small screens, show cards */
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .table-wrap { display:none; }
   .cards-list { display:grid; }
   .toolbar .left, .toolbar .right { gap:6px; flex-wrap:wrap; }
@@ -739,7 +739,7 @@ th.actions, td.actions { white-space: nowrap; text-align: right; }
 }
 #btnSoloPendientes.active { background: var(--brand); color:#fff; }
 #btnSoloPendientes { min-height: 44px; }
-@media (max-width:760px){
+@media (max-width:768px){
  
   .cards-list{ display:grid; grid-template-columns:1fr; gap:12px; }
   .card-contrato{
@@ -788,7 +788,7 @@ body.lock-scroll { overflow: hidden; height: 100vh; }
 }
 
 /* En móviles: estilo “sheet” pegado abajo */
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .overlay {
     align-items: flex-end; /* baja el modal al fondo */
     justify-content: center;
@@ -830,7 +830,7 @@ body.lock-scroll { overflow: hidden; height: 100vh; }
 }
 
 /* Ajustes móviles */
-@media (max-width:760px){
+@media (max-width:768px){
   .overlay .modal{
     width: 100vw;
     max-width: 100vw;
@@ -861,7 +861,7 @@ body.lock-scroll { overflow: hidden; height: 100vh; }
   -webkit-user-select: none;
   user-select: none;
 }
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .firma-canvas { min-height: 280px; }
 }
 td.acciones, td.flujo {

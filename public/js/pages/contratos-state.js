@@ -21,7 +21,7 @@ window.CS = {
   maxRows()   { return this.MAX_ROWS_BY_ROLE[AUTH.getRole()] || 120; },
 
   // ── DOM / formatting helpers ───────────────────────────────────
-  esMovil() { return window.matchMedia('(max-width:760px)').matches; },
+  esMovil() { return window.matchMedia('(max-width:768px)').matches; },
   esc(s)    { return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); },
 
   // ── User name resolution ───────────────────────────────────────

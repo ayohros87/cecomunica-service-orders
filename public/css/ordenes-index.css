@@ -1041,16 +1041,18 @@ tr.activo .flecha {
   text-align: right;
   overflow: visible;
   position: relative;
-  z-index: 4000;
+  /* Needs to outrank mobile drawer headers (z-index 1000) so the
+     overflow-menu dropdown spawned inside is visible. Stays below
+     toasts (9999) and modals (10000+). */
+  z-index: 1100;
 }
 
-/* ✅ IMPORTANTE: NO convertir th/td en flex (rompe la tabla) */
 .orders-table th.acciones,
 .orders-table td.acciones {
-  display: table-cell; /* fuerza comportamiento de celda */
+  display: table-cell; /* No convertir th/td en flex — rompe la tabla */
 }
 
-/* ✅ Wrapper para Acciones: botón principal + overflow menu */
+/* Wrapper for actions cell: main button + overflow menu */
 .acciones-wrap {
   display: inline-flex;
   align-items: center;
@@ -1058,7 +1060,7 @@ tr.activo .flecha {
   gap: 6px;
   flex-wrap: nowrap;
   position: relative;
-  z-index: 4000;
+  z-index: 1100; /* see comment on .orders-table th.acciones above */
 }
 
 /* Flujo action buttons — compact outline, no fill */
@@ -1154,10 +1156,7 @@ tr.activo .flecha {
   font-size: 16px !important;
 }
 
-/* Loading state animation */
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* @keyframes spin → defined in ceco-ui.css */
 
 @keyframes fadeOut {
   to { opacity: 0; transform: translateY(-10px); }
@@ -2236,10 +2235,6 @@ tr.activo:hover {
   flex-wrap: wrap;
 }
 
-.header-col-centro {
-  display: none; /* Ya no se usa */
-}
-
 .header-col-der {
   flex: 0 0 auto;
   gap: 8px;
@@ -2602,16 +2597,7 @@ tr.activo:hover {
   overflow: hidden !important;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+/* @keyframes slideDown → defined in ceco-ui.css (same definition) */
 
 .popover-content {
   padding: 0;
