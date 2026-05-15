@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
 <script src="../js/firebase-init.js"></script>
 <script src="../js/core/roles.js"></script>
 <script src="../js/core/formatting.js"></script>
@@ -17,6 +18,8 @@
 <script src="../js/services/clientesService.js"></script>
 <script src="../js/services/ordenesService.js"></script>
 <script src="../js/services/empresaService.js"></script>
+<script src="../js/services/usuariosService.js"></script>
+<script src="../js/services/mailService.js"></script>
 <script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
 <script src="../js/pages/ordenes-state.js"></script>
@@ -196,6 +199,121 @@
         Asignar técnico
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Modal Entrega de Equipos -->
+<div id="modalEntrega" class="overlay hidden">
+  <div class="modal" style="max-width:480px;">
+
+    <!-- Header -->
+    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <h3 class="modal-title" style="margin:0;font-size:16px;">
+        <i data-lucide="package-check"></i> Entrega — Orden <span id="entregaModalOrdenId"></span>
+      </h3>
+      <button class="btn ghost" data-action="cerrar-modal-entrega" style="flex-shrink:0;"><i data-lucide="x"></i></button>
+    </div>
+
+    <!-- Checkbox A: Item not received -->
+    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;margin-bottom:18px;">
+      <div style="display:flex;align-items:flex-start;gap:10px;min-height:44px;cursor:pointer;" onclick="document.getElementById('entregaNoRecibido').click()">
+        <input type="checkbox" id="entregaNoRecibido"
+               data-action="entrega-no-recibido-change"
+               style="width:20px;height:20px;accent-color:#d97706;flex-shrink:0;margin-top:2px;cursor:pointer;"
+               onclick="event.stopPropagation()">
+        <label for="entregaNoRecibido" style="font-weight:600;cursor:pointer;line-height:1.4;color:#92400e;font-size:14px;margin:0;">
+          El artículo <strong>NO</strong> fue recibido por el cliente
+        </label>
+      </div>
+      <div id="entregaNoRecibidoBloque" style="display:none;margin-top:12px;">
+        <div class="form-field" style="margin-bottom:10px;">
+          <label style="font-size:13px;color:#92400e;font-weight:600;">Motivo <span style="color:#b45309;">*</span></label>
+          <textarea id="entregaNoRecibidoMotivo" rows="2"
+                    placeholder="Explique por qué no fue recibido..."
+                    style="border-color:#fde68a;font-size:14px;"></textarea>
+        </div>
+        <div class="form-field">
+          <label style="font-size:13px;color:#92400e;font-weight:600;">¿Quién recibió / manejó los equipos? <span style="color:#b45309;">*</span></label>
+          <input type="text" id="entregaPersonaInterna"
+                 placeholder="Nombre del responsable interno"
+                 style="border-color:#fde68a;font-size:14px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Normal delivery block -->
+    <div id="entregaNormalBloque">
+
+      <!-- Receptor name -->
+      <div class="form-field" style="margin-bottom:14px;">
+        <label for="entregaReceptorNombre" style="font-size:13px;font-weight:600;">
+          Nombre de quien recibe <span style="color:var(--bad);">*</span>
+        </label>
+        <input type="text" id="entregaReceptorNombre"
+               placeholder="Nombre completo del receptor"
+               autocomplete="name" style="font-size:15px;">
+      </div>
+
+      <!-- Checkbox B: No ID + file input -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;align-items:flex-start;gap:10px;min-height:44px;cursor:pointer;margin-bottom:8px;" onclick="document.getElementById('entregaSinId').click()">
+          <input type="checkbox" id="entregaSinId"
+                 data-action="entrega-sin-id-change"
+                 style="width:20px;height:20px;accent-color:var(--brand);flex-shrink:0;margin-top:2px;cursor:pointer;"
+                 onclick="event.stopPropagation()">
+          <label for="entregaSinId" style="font-size:13px;cursor:pointer;line-height:1.4;margin:0;">
+            Cliente no desea proporcionar identificación
+          </label>
+        </div>
+
+        <!-- With ID: file upload -->
+        <div id="entregaConIdBloque">
+          <label style="font-size:13px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px;">
+            Foto de identificación <span style="font-weight:400;">(opcional)</span>
+          </label>
+          <input type="file" id="entregaFotoId"
+                 accept="image/*" capture="environment"
+                 class="file" style="width:100%;box-sizing:border-box;font-size:14px;"
+                 onchange="_entregaFotoIdChange(this)">
+          <div id="entregaPreviewId" style="margin-top:8px;"></div>
+        </div>
+
+        <!-- Without ID: reason -->
+        <div id="entregaSinIdBloque" style="display:none;">
+          <div class="form-field">
+            <label style="font-size:13px;font-weight:600;">
+              Motivo (no proporciona ID) <span style="color:var(--bad);">*</span>
+            </label>
+            <textarea id="entregaSinIdMotivo" rows="2"
+                      placeholder="Indique el motivo..." style="font-size:14px;"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signature canvas -->
+      <div style="margin-bottom:4px;">
+        <label style="font-size:13px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px;">
+          Firma del receptor <span style="color:var(--bad);">*</span>
+        </label>
+        <canvas id="entregaFirmaCanvas"
+                style="width:100%;height:200px;border:1px solid var(--line);border-radius:8px;background:#fff;display:block;touch-action:none;cursor:crosshair;"></canvas>
+        <button type="button" class="btn ghost"
+                style="margin-top:6px;font-size:12px;padding:4px 10px;"
+                data-action="limpiar-entrega-firma">
+          <i data-lucide="eraser"></i> Limpiar firma
+        </button>
+      </div>
+
+    </div><!-- /entregaNormalBloque -->
+
+    <!-- Footer -->
+    <div class="footer">
+      <button class="btn secondary" data-action="cerrar-modal-entrega">Cancelar</button>
+      <button class="btn primary" id="btnConfirmarEntrega" data-action="confirmar-entrega">
+        <i data-lucide="check"></i> Confirmar Entrega
+      </button>
+    </div>
+
   </div>
 </div>
 
