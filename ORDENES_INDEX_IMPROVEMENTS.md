@@ -2,9 +2,9 @@
 
 > **Scope:** the `public/ordenes/index.html` page and its supporting modules (`public/js/pages/ordenes-*.js`, `public/css/ordenes-index.css`) plus the services they depend on (`ordenesService.js`, `clientesService.js`).
 >
-> **Status:** strategy document, no work shipped from this list yet.
+> **Status:** strategy document. Some items from the CSS section were shipped 2026-05-15 (see `CSS_IMPROVEMENTS.md` §10). The Firestore/UX/architecture items are still outstanding.
 >
-> **Last refreshed:** 2026-05-14 (after Phase 5f decomposition).
+> **Last refreshed:** 2026-05-15.
 
 ---
 
@@ -120,6 +120,149 @@ Currently 50 fixed. Admin browses sequentially; técnico opens to their assigned
 ### 3.6 The `cambiarOrden` bug
 
 `document.getElementById("APP.state.sortField")` — literal-string ID lookup that can never match. The function throws on any call. Either it is never called (delete it) or someone is silently catching the error. Check for a sort-field `<select>` in the HTML; if none, delete.
+
+### 3.7 `ordenes-index.css` is 3,534 lines — bigger than typical, smaller than catastrophic
+
+**Bytes are fine, lines aren't.** Current state:
+
+| File | Lines | Raw | Gzipped (est.) |
+|---|---:|---:|---:|
+| `ordenes-index.css` | 3,534 | 67 KB | ~9–11 KB |
+| `ceco-ui.css` (shared) | 1,137 | 41 KB | ~6–7 KB |
+| **Total CSS per ordenes hit** | | **~108 KB** | **~16–18 KB** |
+
+For comparison: Bootstrap 5 ~25 KB gzipped, GitHub per-route ~50 KB gzipped, a Tailwind-built page ~20–30 KB gzipped. Over-the-wire size is **normal-to-low**. CSS parse time at this volume is single-digit milliseconds. The browser is fine.
+
+The problem is the **maintenance cost**. One page has 3× more CSS than the entire shared design system. The other page-CSS files are all small:
+
+```
+admin-equipos-cliente.css  →     91 lines
+print-base.css             →    136 lines
+ceco-ui.css                →  1,137 lines  (shared by every page)
+ordenes-index.css          →  3,534 lines  (one page)
+```
+
+Realistic target after a focused pass: **1,800–2,400 lines**. What's recoverable, in rough categories:
+
+| Source of bloat | Lines reclaimable |
+|---|---:|
+| Modal CSS that should live in `ceco-ui.css` (notas, text, alert, overflow menu) | ~400 |
+| 80+ hardcoded hex values that would collapse under the `--status-*` / `--brand-*` / tipo-chip tokens | ~150 |
+| 263 hardcoded `px` values vs. a `--sp-*` spacing scale (token bridge already in place) | ~150–200 |
+| Verbose formatting (one declaration per line on rules with 2 declarations) | ~200 |
+| Feature-letter labeled mini-rules (J–Y) that never got consolidated | ~300 |
+| Mobile-only CSS that could share with desktop via different selectors | ~150 |
+
+Total recoverable: **~1,200–1,400 lines without losing a single feature**.
+
+**When to do this:** *not* as a standalone refactor. The natural moment is **during the UX overhaul** (Week 3–4 below — chip filters, card-row hierarchy, status-pill palette). That work will:
+- Delete the legacy `.estado-pill` styles in favor of the design-system palette
+- Replace the filter card with a chip bar (smaller CSS)
+- Replace the table row layout with cards (different CSS, comparable size)
+- Touch many of the same selectors the cleanup would touch
+
+Doing token migration + structural cleanup *at the same time* as the redesign is much cheaper than doing them separately. As a standalone task it would be ~2 days; folded into the redesign it's ~half a day of incremental cleanup.
+
+**Anti-pattern check:** the file is hand-written. No build step, no PostCSS, no CSS-in-JS. Every line is a deliberate choice. None of it is generated boilerplate. The size is purely a function of history.
+
+---
+
+## 3a. Entrega signature flow (added 2026-05-15)
+
+The order delivery flow was just expanded into a custom modal with canvas signature capture, optional ID photo upload, and a "no recibido" branch. Implementation lives in [pages/ordenes-flujo.js:215-563](public/js/pages/ordenes-flujo.js#L215). The HTML modal is in `ordenes/index.html:203+`. **It is a substantial new feature with new infrastructure dependencies — and it adds its own technical debt.**
+
+### 3a.1 Missing script tags — *fixed 2026-05-15*
+
+The new code calls `firebase.storage()`, `MailService.enqueue()`, and `UsuariosService.getUsuario()`. None of those were loaded in `ordenes/index.html` until commit `e011110`. Same bug class as the `EmpresaService` issue (§3.5). **Pattern worth noting:** every time a service is added to the page modules, the HTML script-tag list needs a matching addition. Manual coordination is fragile. Once a build step exists, an `import` graph would catch this at build time.
+
+### 3a.2 Storage rules are not in the repo
+
+`storage.rules` does not exist alongside `firestore.rules`. The new flow writes to `ordenes_firmas/{ordenId}_firma_*.png` and `ordenes_identificacion/{ordenId}_id_*.{ext}`. Storage rules need to allow these writes for authenticated users (and ideally restrict deletes/reads to staff). **Action:** add `storage.rules` to the repo, deploy from there, mirror the §3.11 storage of `firestore.rules`. Required *before* anyone signs a delivery in production.
+
+### 3a.3 PII without retention policy
+
+The ID-photo upload to `ordenes_identificacion/` is a **photograph of a customer ID** — a clear PII class. There is no:
+- Retention policy (when do these get deleted?)
+- Access control beyond "any signed-in staff member"
+- Encryption-at-rest beyond Firebase Storage default
+- Audit log of who has viewed the photo
+- Notice to the customer that the image is being stored
+
+Panama doesn't have a GDPR-equivalent law (yet), but the company's clients in regulated sectors (ports, government) may demand a policy. **Action:** at minimum, document in a customer-visible doc that ID photos are stored and may be deleted on request. Ideally, add a CF that purges `ordenes_identificacion/` after N days from delivery.
+
+### 3a.4 Email body is built with unsanitized template literals
+
+[ordenes-flujo.js:404-447](public/js/pages/ordenes-flujo.js#L404) builds the email HTML via template strings inserting `receptorNombre`, `motivo`, `sinIdMotivo`, `personaInterna` — all user-controlled inputs — directly into HTML. If a malicious user types `<script>` or `<img src=x onerror=...>` in the receptor name, that injection lands in the email. SendGrid will strip script tags, but the more interesting attack is `<a href="phishing-url">Click here</a>` — clients will see a plausible-looking link in a legitimate-looking email from cecomunica.com.
+
+**Fix (30 min):** escape user inputs before insertion. Reuse the `escapeHtml` helper that already exists in `pages/ordenes-state.js`:
+
+```js
+const safe = v => escapeHtml(String(v || '—'));
+// then use ${safe(opts.receptorNombre)} everywhere instead of ${f(...)}
+```
+
+### 3a.5 Canvas signature is blurry on retina screens
+
+[ordenes-flujo.js:251-264](public/js/pages/ordenes-flujo.js#L251) — `_resizeCanvas` sets `canvas.width = canvas.clientWidth || 300` and `canvas.height = 200`, ignoring `window.devicePixelRatio`. On a retina screen with DPR 2, the canvas backing store is 300×200 but CSS-rendered at 600×400 → 2× blur. The PNG uploaded to Storage is also 300×200 — a low-resolution capture of the customer's signature.
+
+**Fix (15 min):**
+```js
+const dpr = window.devicePixelRatio || 1;
+canvas.width  = canvas.clientWidth * dpr;
+canvas.height = 200 * dpr;
+canvas.style.height = '200px';
+_ctx.scale(dpr, dpr);
+```
+Captures and stores at 2×–3× the pixel density. Same canvas surface, sharper signature.
+
+### 3a.6 No file size limit on ID photo upload
+
+[ordenes-flujo.js:505-512](public/js/pages/ordenes-flujo.js#L505) — accepts whatever file the user selects. A modern phone camera produces 4–6 MB JPEGs. Over 4G/3G that's a 10–30 second upload, with no progress indicator. Worse, after 1,000 deliveries `ordenes_identificacion/` is sitting on 4–6 GB of customer ID photos.
+
+**Fix (1 hr):** client-side resize before upload. Draw the image into a hidden canvas at max 1280×1280, export as `image/jpeg` quality 0.85. Cuts file size 10–20×. Pattern:
+
+```js
+async function compressImage(file, maxDim = 1280, quality = 0.85) {
+  const img = await createImageBitmap(file);
+  const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+  const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
+  const c = new OffscreenCanvas(w, h);
+  c.getContext('2d').drawImage(img, 0, 0, w, h);
+  return c.convertToBlob({ type: 'image/jpeg', quality });
+}
+```
+
+### 3a.7 SVG signature would be better than PNG
+
+PNG signatures are 5–20 KB per file. An SVG path (`<path d="M 10 20 L 11 22 ...">` captured during draw) would be 1–3 KB, **and** vector-perfect for legal/print purposes. Adopt this if the entrega flow becomes legally critical. ~3 hr of work — record the points during `start`/`move`/`end` instead of (or in addition to) rasterizing to canvas. Optional.
+
+### 3a.8 The flow is 350 lines in `ordenes-flujo.js`
+
+What was a 227-line module post-Phase-5f is now ~560 lines. Same growth pattern that produced the original 3,271-line monolith. **Suggestion:** when the entrega flow next needs a non-trivial addition (e.g. SVG signature, multi-signature, witness signatures), split into `pages/ordenes-entrega.js` following the Phase-5e convention. Coordinator in `ordenes-flujo.js` becomes a thin wrapper around `OrdenesEntrega.abrir(ordenId)`.
+
+### 3a.9 `os_logs` field added without schema documentation
+
+`firestore.FieldValue.arrayUnion({ action: 'ENTREGAR', by: user.uid })` writes to a new `os_logs` array on the order. Good audit-trail addition. **But:**
+- This field is not in `ARQUITECTURA_CECOMUNICA.md` §5
+- No CF reads/uses it yet
+- Other transitions (asignar, completar) don't write to it — only entrega does
+- Long arrays in Firestore have a 1 MiB per-doc limit; 1,000 deliveries × 50 bytes = manageable, but worth knowing
+
+**Action:** document `os_logs` in `ARQUITECTURA §5.2` and either (a) write it for every transition consistently, or (b) drop it and use a dedicated `os_audit` subcollection instead (no doc-size cap).
+
+### 3a.10 Duplicate timestamp fields
+
+The flow writes both `entrega_ts: serverTimestamp()` (always) and `fecha_entrega: serverTimestamp()` (normal branch only). Pick one. The order schema already has `fecha_entrega` used elsewhere (filter card "Mostrar fecha entrega" toggle), so prefer that; drop `entrega_ts` or rename for a different semantic. Easy 5-min cleanup.
+
+### 3a.11 No use of shared `Modal` API
+
+The flow opens its modal via `APP.utils.show(modal)` and registers a custom backdrop click handler. This bypasses the shared `Modal.open / Modal.close` API in `js/ui/modal.js`. The `Modal.confirm` flow shows that the integration exists — entrega just doesn't use it. **Consequence:** Escape-to-close isn't wired the same way as other modals; focus-trap logic (when added) won't apply uniformly. Promote to `Modal.open('modalEntrega', { onEscape })` after Modal gets a focus-trap feature.
+
+### 3a.12 The HTML email body could share a renderer with the CF-side
+
+`functions/src/domain/emailRenderer.js` exists (per `ARQUITECTURA §6.1`) and renders email bodies on the server. The frontend just built its own inline template literal in `_buildEmailHtml`. Two implementations of the same concept. The frontend version sits in 70+ lines of template literals; the CF version probably has shared formatting helpers.
+
+**Long-term:** move all email-body composition to the CF. The frontend's `MailService.enqueue` should send *structured data* (`type: 'nota_entrega'`, `data: { ... }`) and let `onMailQueued` render the HTML on the server using `emailRenderer.js`. Single source of truth for branding and i18n.
 
 ---
 
