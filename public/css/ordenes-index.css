@@ -950,12 +950,12 @@ tr.activo .flecha {
 }
 
 /* Advanced-filter toggle chevron */
-#iconoAvanzados {
+.icon-avanzado {
   display: inline-block;
   transition: transform 0.2s ease;
   vertical-align: middle;
 }
-#iconoAvanzados.open {
+.icon-avanzado.open {
   transform: rotate(180deg);
 }
 
@@ -1405,8 +1405,8 @@ tr.activo .flecha {
   }
   
   /* Hide desktop topbar and desktop filter card on mobile */
-  #desktopTopbar { display: none !important; }
-  #desktopFiltersCard { display: none !important; }
+  .topbar--desktop      { display: none; }
+  .filters-card--desktop { display: none; }
 
   /* Add space so content isn't hidden behind bottom nav */
   body { padding-bottom: calc(var(--mobile-bottom-nav-height) + env(safe-area-inset-bottom) + 16px); }
