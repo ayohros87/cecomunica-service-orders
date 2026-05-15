@@ -893,39 +893,11 @@ tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e;
 .filaDetalle table thead th:nth-child(6),
 .filaDetalle table tbody td:nth-child(6) { text-align: center; }
 
-.btn-agregar-equipo {
-  background: var(--ok) !important;
-  color: white !important;
-  border: none !important;
-  padding: 8px 16px !important;
-  border-radius: 10px !important;
-  font-weight: 500 !important;
-  transition: var(--transition) !important;
-  box-shadow: var(--shadow-sm) !important;
-}
-
-.btn-agregar-equipo:hover {
-  background: #059669 !important;
-  transform: translateY(-2px) !important;
-  box-shadow: var(--shadow-md) !important;
-}
-
-.boton-eliminar-equipo {
-  background: var(--bad) !important;
-  color: white !important;
-  border: none !important;
-  padding: 6px 12px !important;
-  border-radius: 8px !important;
-  cursor: pointer !important;
-  transition: var(--transition) !important;
-  font-size: 14px !important;
-}
-
-.boton-eliminar-equipo:hover {
-  background: #dc2626 !important;
-  transform: scale(1.1) !important;
-  box-shadow: var(--shadow-md) !important;
-}
+/* .btn-agregar-equipo / .boton-eliminar-equipo — removed. No element
+   in the current ordenes/index render uses these classes; only a
+   defensive querySelectorAll(".btn-agregar-equipo") in
+   aplicarRestriccionesPorRol still references the selector and is
+   harmless when empty. */
 
 /* Warning icon for orders without equipment */
 .warn-icon {

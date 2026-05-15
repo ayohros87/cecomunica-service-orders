@@ -180,7 +180,7 @@ body{
 }
 .chip:hover{ background:#f8fafc; transform: scale(1.05); }
 .chip.active{ border-color:var(--brand); color:var(--brand); font-weight:600; background:var(--chip); }
-.estado-aprobado-chip{ background:var(--soft-ok) !important; color:var(--ok); border-color:#a7f3d0; }
+.estado-aprobado-chip{ background:var(--soft-ok); color:var(--ok); border-color:#a7f3d0; }
 
 
 .badge{ padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; display:inline-block; transition: var(--transition); }
