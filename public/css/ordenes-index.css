@@ -122,7 +122,7 @@ table tbody tr:nth-child(4n+4):hover {
   font-size: 13px;
   font-weight: 500;
   border-radius: 8px;
-  transition: all 0.2s ease;
+  transition: var(--transition);
 }
 
 .input-compact {
@@ -204,7 +204,7 @@ table tbody tr:nth-child(4n+4):hover {
   background: #e2e8f0;
   border-radius: 999px;
   position: relative;
-  transition: all 0.2s ease;
+  transition: var(--transition);
 }
 
 .filter-toggle .toggle-slider::after {
@@ -216,7 +216,7 @@ table tbody tr:nth-child(4n+4):hover {
   position: absolute;
   top: 2px;
   left: 2px;
-  transition: all 0.2s ease;
+  transition: var(--transition);
   box-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 
@@ -594,7 +594,7 @@ table tbody tr:nth-child(4n+4):hover {
   color: var(--muted);
   padding: 4px 8px;
   border-radius: 6px;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 .notas-close:hover {
@@ -1186,7 +1186,7 @@ tr.activo .flecha {
     margin-bottom: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     border-left: 4px solid var(--brand);
-    transition: all 0.2s;
+    transition: var(--transition);
   }
   
   .card-contrato:active {
@@ -1335,7 +1335,7 @@ tr.activo .flecha {
     font-size: 12px;
     padding: 4px 8px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition);
   }
   
   .resumen .badge:hover {
@@ -1428,7 +1428,7 @@ tr.activo .flecha {
     background: #f8fafc;
     font-size: 18px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition);
   }
   
   .mh-filterBtn:active {
@@ -1488,7 +1488,7 @@ tr.activo .flecha {
     height: 100%;
     min-height: 44px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition);
   }
   .mnav-item:active {
     background: #f3f4f6;
@@ -1573,7 +1573,7 @@ tr.activo .flecha {
     min-height: 44px;
     font-size: 13px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition);
   }
   .mchip:active {
     transform: scale(0.95);
@@ -1597,7 +1597,7 @@ tr.activo .flecha {
     background: white;
     min-height: 44px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: var(--transition);
     font-size: 14px;
   }
   .mmenu-item:active {
@@ -1614,7 +1614,7 @@ tr.activo .flecha {
 /* Desktop summary badges - clickable */
 .resumen .badge {
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: var(--transition);
   user-select: none;
 }
 
@@ -1648,7 +1648,7 @@ tr.activo .flecha {
   font-size: 20px;
   color: #6b7280;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
   line-height: 1;
   min-width: 32px;
   text-align: center;
@@ -1813,7 +1813,7 @@ tr.activo .flecha {
   color: #6b7280;
   padding: 4px 8px;
   border-radius: 6px;
-  transition: all 0.2s;
+  transition: var(--transition);
   line-height: 1;
 }
 
@@ -1859,7 +1859,7 @@ tr.activo .flecha {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
   border: none;
 }
 
@@ -1946,7 +1946,7 @@ tr.activo .flecha {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
   min-width: 100px;
 }
 
@@ -2234,7 +2234,7 @@ tr.activo:hover {
   justify-content: center;
   cursor: pointer;
   font-size: 16px;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 .btn-header-action:hover {
@@ -2256,7 +2256,7 @@ tr.activo:hover {
   justify-content: center;
   cursor: pointer;
   font-size: 15px;
-  transition: all 0.2s;
+  transition: var(--transition);
   padding: 0;
 }
 
@@ -2490,7 +2490,7 @@ tr.activo:hover {
   padding: 4px 8px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
   font-size: 12px;
 }
 
@@ -2659,7 +2659,7 @@ tr.activo:hover {
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 .popover-close:hover {
@@ -2746,7 +2746,7 @@ tr.activo:hover {
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  transition: all 0.2s;
+  transition: var(--transition);
   font-size: 14px;
 }
 
@@ -2776,7 +2776,7 @@ tr.activo:hover {
 /* AB) Modo edición de accesorios */
 .accesorio-item.editable {
   cursor: pointer !important;
-  transition: all 0.2s;
+  transition: var(--transition);
   position: relative;
 }
 
@@ -2820,7 +2820,7 @@ tr.activo:hover {
   padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: var(--transition);
   font-size: 18px;
   color: #94a3b8;
   opacity: 0.5;
@@ -3391,7 +3391,7 @@ tr.activo:hover {
 
 /* X) Accesorios - Gradación de estados */
 .completitud-badge {
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 /* 5/5 - Completo */
@@ -3477,7 +3477,7 @@ tr.activo:hover {
   background: #f1f5f9;
   border-radius: 20px;
   font-weight: 700;
-  transition: all 0.2s;
+  transition: var(--transition);
   border: 2px solid transparent;
 }
 
@@ -3492,7 +3492,7 @@ tr.activo:hover {
   font-weight: 600;
   font-size: 13px;
   border: 2px solid transparent;
-  transition: all 0.2s;
+  transition: var(--transition);
 }
 
 .resumen-chips .badge:hover {
