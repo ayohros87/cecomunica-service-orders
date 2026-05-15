@@ -7,7 +7,7 @@
   --font-body:    "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --font-mono:    "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  /* Cecomunica brand palette */
+  /* Cecomunica brand palette (flat tokens — kept as aliases for back-compat) */
   --bg:#ffffff;
   --bg-page:#F7F9FB;
   --text:#0E1418;
@@ -26,6 +26,50 @@
   --card:#ffffff;
   --chip:#E6F4FB;
 
+  /* --- Token bridge from Cecomunica Design System (Phase 5f Week-0) --- */
+  /* Foreground hierarchy */
+  --fg-1: #0E1418;   /* primary text / headings */
+  --fg-2: #2F3942;   /* body */
+  --fg-3: #6B7884;   /* secondary, captions */
+  --fg-4: #9AA7B4;   /* placeholder, disabled */
+
+  /* Border scale */
+  --border-subtle:  #EEF2F6;
+  --border-default: #DDE4EB;
+  --border-strong:  #6B7884;
+  --border-brand:   var(--brand);
+
+  /* Brand surfaces */
+  --brand-soft:  #E6F4FB;
+  --brand-press: #001D2B;
+
+  /* Status palette (semantic) */
+  --status-online:   #1FA56B;
+  --status-warning:  #E0A93A;
+  --status-critical: #D24545;
+
+  /* Spacing scale on 4px base */
+  --sp-1:4px;  --sp-2:8px;  --sp-3:12px; --sp-4:16px; --sp-5:20px;
+  --sp-6:24px; --sp-8:32px; --sp-10:40px; --sp-12:48px; --sp-16:64px;
+
+  /* Radii */
+  --radius-xs:2px;
+  --radius-sm:4px;
+  --radius-md:6px;
+  --radius-lg:10px;
+  --radius-xl:16px;
+  --radius-pill:999px;
+
+  /* Focus rings (brand-derived) */
+  --ring-focus: 0 0 0 3px rgba(0, 145, 215, 0.30);
+  --ring-error: 0 0 0 3px rgba(210, 69, 69, 0.28);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
   /* Shadows — cool naval tint matches brand */
   --shadow-sm: 0 1px 2px rgba(6, 24, 41, 0.06), 0 1px 3px rgba(6, 24, 41, 0.08);
   --shadow: 0 1px 3px rgba(6, 24, 41, 0.08), 0 4px 12px rgba(6, 24, 41, 0.05);
@@ -33,7 +77,7 @@
   --shadow-lg: 0 12px 24px rgba(6, 24, 41, 0.08), 0 4px 8px rgba(6, 24, 41, 0.06);
   --shadow-xl: 0 24px 48px rgba(6, 24, 41, 0.12), 0 8px 16px rgba(6, 24, 41, 0.06);
 
-  /* Animation */
+  /* Animation (legacy alias — prefer explicit transitions on specific properties) */
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
