@@ -9,7 +9,7 @@
 window.guardarAccesoriosLote = async function(ordenId) {
   const filaDetalle = document.querySelector(`tr.filaDetalle[data-orden-id="${ordenId}"]`);
   if (!filaDetalle) {
-    mostrarToast("⚠️ Abre la orden primero para guardar accesorios", "bad");
+    Toast.show("⚠️ Abre la orden primero para guardar accesorios", "bad");
     return;
   }
 
@@ -64,7 +64,7 @@ window.guardarAccesoriosLote = async function(ordenId) {
         }
       }
 
-      mostrarToast("✅ Accesorios actualizados", "success");
+      Toast.show("✅ Accesorios actualizados", "ok");
     }
 
     // Remover modo edición
@@ -92,7 +92,7 @@ window.guardarAccesoriosLote = async function(ordenId) {
     }
   } catch (error) {
     console.error("Error guardando accesorios:", error);
-    mostrarToast("❌ Error al guardar", "error");
+    Toast.show("❌ Error al guardar", "bad");
   }
 };
 function resolverEquipoDesdeCompuesto(compuestoId) {
@@ -110,13 +110,13 @@ function resolverEquipoDesdeCompuesto(compuestoId) {
 window.editarCampoEquipo = async function(compuestoId, campo, valorActual = "") {
   const permitidos = new Set(["numero_de_serie", "modelo", "observaciones"]);
   if (!permitidos.has(campo)) {
-    mostrarToast("⚠️ Campo no editable", "bad");
+    Toast.show("⚠️ Campo no editable", "bad");
     return;
   }
 
   const target = resolverEquipoDesdeCompuesto(compuestoId);
   if (!target) {
-    mostrarToast("❌ Equipo no encontrado", "bad");
+    Toast.show("❌ Equipo no encontrado", "bad");
     return;
   }
 
@@ -124,12 +124,16 @@ window.editarCampoEquipo = async function(compuestoId, campo, valorActual = "") 
     ? "Número de serie"
     : (campo === "modelo" ? "Modelo" : "Observaciones");
 
-  const nuevoValor = window.prompt(`Editar ${etiqueta}:`, valorActual ?? "");
+  const nuevoValor = await Modal.prompt({
+    title: `Editar ${etiqueta}`,
+    defaultValue: valorActual ?? "",
+    multiline: campo === "observaciones"
+  });
   if (nuevoValor === null) return;
 
   const valorLimpio = String(nuevoValor).trim();
   if (campo !== "observaciones" && !valorLimpio) {
-    mostrarToast(`⚠️ ${etiqueta} no puede quedar vacío`, "bad");
+    Toast.show(`⚠️ ${etiqueta} no puede quedar vacío`, "bad");
     return;
   }
 
@@ -143,10 +147,10 @@ window.editarCampoEquipo = async function(compuestoId, campo, valorActual = "") 
     }
 
     refrescarEquiposDeOrden(target.ordenId);
-    mostrarToast("✅ Equipo actualizado", "ok");
+    Toast.show("✅ Equipo actualizado", "ok");
   } catch (e) {
     console.error("❌ Error al editar campo del equipo:", e);
-    mostrarToast(`❌ Error al actualizar: ${e?.message || e}`, "bad");
+    Toast.show(`❌ Error al actualizar: ${e?.message || e}`, "bad");
   }
 };
 
@@ -155,7 +159,7 @@ window.eliminarEquipo = async function(e, compuestoId) {
 
   const target = resolverEquipoDesdeCompuesto(compuestoId);
   if (!target) {
-    mostrarToast("❌ Equipo no encontrado", "bad");
+    Toast.show("❌ Equipo no encontrado", "bad");
     return;
   }
 
@@ -171,10 +175,10 @@ window.eliminarEquipo = async function(e, compuestoId) {
     }
 
     refrescarEquiposDeOrden(target.ordenId);
-    mostrarToast("✅ Equipo eliminado", "ok");
+    Toast.show("✅ Equipo eliminado", "ok");
   } catch (err) {
     console.error("❌ Error al eliminar equipo:", err);
-    showAlertModal("Error al eliminar equipo", "error");
+    Toast.show("Error al eliminar equipo", "bad");
   }
 };
 
@@ -199,7 +203,7 @@ window.activarModoAccesorios = function (ordenId) {
   const filaDetalle = document.querySelector(`tr.filaDetalle[data-orden-id="${ordenId}"]`);
   
   if (!filaDetalle) {
-    mostrarToast("⚠️ Abre la orden primero para editar accesorios", "bad");
+    Toast.show("⚠️ Abre la orden primero para editar accesorios", "bad");
     return;
   }
   
@@ -332,7 +336,7 @@ window.abrirEquiposMobile = function(ordenId) {
     }).join("");
   }
 
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  APP.utils.lucideRefresh(modal);
   if (modal) APP.utils.show(modal);
 };
 
@@ -348,7 +352,7 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   // Check permissions
   const rol = APP.state.userRole || "";
   if (![ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.ADMIN, ROLES.RECEPCION].includes(rol)) {
-    mostrarToast("Sin permisos para editar", "bad");
+    Toast.show("Sin permisos para editar", "bad");
     return;
   }
 
@@ -458,7 +462,7 @@ window.guardarTrabajoEquipoModal = async function() {
   try {
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader"></i> Guardando...';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    APP.utils.lucideRefresh(btn);
 
     const user = firebase.auth().currentUser;
     const uid = user?.uid || "";
@@ -482,10 +486,10 @@ window.guardarTrabajoEquipoModal = async function() {
       if (cacheOrden) cacheOrden.equipos = equiposAll;
       refrescarEquiposDeOrden(_trabajoOrdenId);
       cerrarTrabajoEquipoModal();
-      mostrarToast("⚠️ Equipo marcado como no disponible", "ok");
+      Toast.show("⚠️ Equipo marcado como no disponible", "ok");
       btn.disabled = false;
       btn.innerHTML = '<i data-lucide="save"></i> Guardar';
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      APP.utils.lucideRefresh(btn);
       return;
     }
 
@@ -516,18 +520,18 @@ window.guardarTrabajoEquipoModal = async function() {
     refrescarEquiposDeOrden(_trabajoOrdenId);
 
     cerrarTrabajoEquipoModal();
-    mostrarToast("✅ Intervención guardada", "ok");
+    Toast.show("✅ Intervención guardada", "ok");
     
     // Reset button state
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="save"></i> Guardar';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    APP.utils.lucideRefresh(btn);
   } catch (e) {
     console.error("❌ Error guardando trabajo del equipo:", e);
-    mostrarToast(`❌ Error al guardar: ${e?.message || e}`, "bad");
+    Toast.show(`❌ Error al guardar: ${e?.message || e}`, "bad");
     btn.disabled = false;
     btn.innerHTML = '<i data-lucide="save"></i> Guardar';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    APP.utils.lucideRefresh(btn);
   }
 };
 
@@ -558,10 +562,10 @@ async function setEquipoNoDisponible({ ordenId, equipoId, noDisponible, motivo }
       abrirEquiposMobile(ordenId);
     }
 
-    mostrarToast(noDisponible ? "⚠️ Equipo marcado como no disponible" : "✅ Equipo marcado como disponible", "ok");
+    Toast.show(noDisponible ? "⚠️ Equipo marcado como no disponible" : "✅ Equipo marcado como disponible", "ok");
   } catch (e) {
     console.error("❌ Error actualizando no disponible:", e);
-    mostrarToast("❌ Error al actualizar estado", "bad");
+    Toast.show("❌ Error al actualizar estado", "bad");
   }
 }
 
@@ -581,5 +585,3 @@ window.verObsCompleta = function(ordenId, idx) {
     !obs
   );
 };
-
-console.log('[ordenes-equipos.js] Equipment handlers ready');

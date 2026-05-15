@@ -73,7 +73,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (shouldDefaultMine) aplicarFiltrosCombinados();
     } catch (e) {
       console.error("Error obteniendo rol del usuario:", e);
-      showAlertModal("Error al verificar permisos. Por favor, recarga la página.", 'error');
+      Toast.show("Error al verificar permisos. Por favor, recarga la página.", 'bad');
       firebase.auth().signOut();
     }
   });

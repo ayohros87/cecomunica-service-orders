@@ -8,7 +8,7 @@
 window.gestionarNotasTecnicas = async function(ordenId) {
   const datos = await OrdenesService.getOrder(ordenId);
   if (!datos) {
-    showAlertModal("Orden no encontrada", 'error');
+    Toast.show("Orden no encontrada", 'bad');
     return;
   }
 
@@ -100,10 +100,10 @@ window.gestionarNotasTecnicas = async function(ordenId) {
       }
 
       document.body.removeChild(modal);
-      mostrarToast("✅ Nota técnica guardada exitosamente", "success");
+      Toast.show("✅ Nota técnica guardada exitosamente", "ok");
     } catch (error) {
       console.error("Error al guardar nota:", error);
-      mostrarToast("❌ Error al guardar la nota técnica", "error");
+      Toast.show("❌ Error al guardar la nota técnica", "bad");
       btnGuardar.disabled = false;
       btnGuardar.textContent = "Guardar nota";
     }
@@ -151,5 +151,3 @@ window.gestionarNotasTecnicas = async function(ordenId) {
     textarea.select();
   }, 100);
 };
-
-console.log('[ordenes-notas.js] Notas modal ready');

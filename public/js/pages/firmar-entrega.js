@@ -102,7 +102,6 @@ async function guardarFirma() {
     email_cliente_entrega: emailCliente,
     entrega_por_uid: user.uid,
     entrega_por_email: user.email,
-    entrega_ts: firebase.firestore.FieldValue.serverTimestamp(),
     os_logs: firebase.firestore.FieldValue.arrayUnion({
         action: "ENTREGAR",
         by: user.uid || ""

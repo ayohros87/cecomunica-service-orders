@@ -25,7 +25,7 @@
     'go-admin-equipos-cliente': () => {
       const currentRole = String(APP.state?.userRole || "").trim().toLowerCase();
       if (currentRole !== ROLES.ADMIN) {
-        mostrarToast('Solo administradores pueden acceder', 'bad');
+        Toast.show('Solo administradores pueden acceder', 'bad');
         return;
       }
       window.location.href = BASE + 'admin-equipos-cliente.html';
@@ -59,6 +59,11 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) confirmarAsignarTecnico(ordenId);
     },
+    'cerrar-modal-entrega': () => cerrarModalEntrega(),
+    'confirmar-entrega': () => confirmarEntrega(),
+    'limpiar-entrega-firma': () => limpiarEntregaFirma(),
+    'entrega-no-recibido-change': () => _toggleEntregaNoRecibido(),
+    'entrega-sin-id-change': () => _toggleEntregaSinId(),
     
     // Order actions
     'asignar-tecnico': (el) => {
@@ -199,8 +204,7 @@
     },
     'close-text-modal': () => closeTextModal(),
     'copy-text-modal': () => copyTextModalContent(),
-    'close-alert-modal': () => closeAlertModal(),
-    
+
     // Overflow menu
     'toggle-overflow-menu': (el) => {
       const ordenId = el.dataset.ordenId;

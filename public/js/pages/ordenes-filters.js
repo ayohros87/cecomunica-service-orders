@@ -80,7 +80,7 @@ function hasActiveFilters(filters) {
 }
 
 function esOrdenMia(order) {
-  const uid = APP.state.userId || firebase.auth().currentUser?.uid || null;
+  const uid = APP.state.userId;
   if (!uid) return false;
   return order?.tecnico_uid === uid || order?.vendedor_asignado === uid;
 }
@@ -135,7 +135,7 @@ function renderOrdersList(list) {
 
   actualizarResumen(list);
   aplicarRestriccionesPorRol(APP.state.userRole);
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  APP.utils.lucideRefresh([ordersTable, cardsWrap]);
 }
 
 function aplicarFiltrosCombinados() {
@@ -217,7 +217,7 @@ window.filtrarOrdenes = async function () {
         );
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    APP.utils.lucideRefresh(ordersTable);
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -267,7 +267,7 @@ window.filtrarRapido = async function () {
         );
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    APP.utils.lucideRefresh(ordersTable);
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -333,7 +333,9 @@ window.limpiarFiltros = function () {
 };
 
 window.cambiarOrden = function () {
-  APP.state.sortField = document.getElementById("APP.state.sortField").value;
+  const sel = document.getElementById("campoOrdenamiento");
+  if (!sel) return;
+  APP.state.sortField = sel.value;
   cargarOrdenesYEquipos();
 };
 
@@ -409,7 +411,7 @@ window.filtrarPorEstado = async function (estado) {
               .sort((a, b) => String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || "")));
             renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
           });
-          if (typeof lucide !== 'undefined') lucide.createIcons();
+          APP.utils.lucideRefresh(ordersTable);
         }
 
         actualizarResumen(resultados);
@@ -429,5 +431,3 @@ window.filtrarPorEstado = async function (estado) {
   actualizarResumen(resultados);
   if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol(APP.state.userRole);
 };
-
-console.log('[ordenes-filters.js] Filter helpers ready');

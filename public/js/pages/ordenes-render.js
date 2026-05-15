@@ -55,6 +55,11 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
 
   filaOrden.style.cursor = "pointer";
   filaOrden.setAttribute('data-estado', estado);
+  // Keyboard accessibility: row acts as a disclosure button.
+  filaOrden.setAttribute('tabindex', '0');
+  filaOrden.setAttribute('role', 'button');
+  filaOrden.setAttribute('aria-expanded', 'false');
+  filaOrden.setAttribute('aria-label', `Detalles de la orden ${ordenId}`);
   const trabajo = (ordenData.trabajo_estado)
     || (ordenData.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
 
@@ -198,22 +203,32 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     </td>
   `;
 
+  const toggleExpand = () => {
+    filaOrden.classList.toggle("activo");
+    const wasHidden = filaDetalle.style.display === "none";
+    filaDetalle.style.display = wasHidden ? "table-row" : "none";
+    filaOrden.setAttribute('aria-expanded', wasHidden ? 'true' : 'false');
+
+    if (wasHidden && filaDetalle.getAttribute("data-equipos-loaded") === "false") {
+      renderEquiposTabla(ordenId, equiposNormalizados, filaDetalle);
+    }
+  };
+
   filaOrden.addEventListener("click", (e) => {
     const clickedInteractive = e.target.closest('button') ||
                                e.target.closest('a') ||
                                e.target.closest('.overflow-menu');
 
-    if (clickedInteractive) {
-      return;
-    }
+    if (clickedInteractive) return;
+    toggleExpand();
+  });
 
-    filaOrden.classList.toggle("activo");
-    const wasHidden = filaDetalle.style.display === "none";
-    filaDetalle.style.display = wasHidden ? "table-row" : "none";
-
-    if (wasHidden && filaDetalle.getAttribute("data-equipos-loaded") === "false") {
-      renderEquiposTabla(ordenId, equiposNormalizados, filaDetalle);
-    }
+  filaOrden.addEventListener("keydown", (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    // Let nested interactive elements handle their own keyboard semantics.
+    if (e.target !== filaOrden) return;
+    e.preventDefault();
+    toggleExpand();
   });
 
   contenedor.appendChild(filaOrden);
@@ -327,7 +342,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
           <i data-lucide="alert-triangle" class="badge-icon" style="width:14px;height:14px;"></i>
           <span class="badge-text">Orden cerrada con ${pendientesIntervencion} intervención(es) pendiente(s)</span>
         `;
-        if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [contradiccionBadge] });
+        APP.utils.lucideRefresh(contradiccionBadge);
         contradiccionBadge.className = 'contradiccion-badge advertencia';
         contradiccionBadge.title = 'Esta orden fue entregada pero tiene equipos sin intervención registrada';
       } else {
@@ -478,7 +493,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
   }
 
   filaDetalle.setAttribute("data-equipos-loaded", "true");
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  APP.utils.lucideRefresh(filaDetalle);
 }
 
 function refrescarEquiposDeOrden(ordenId) {
@@ -645,5 +660,3 @@ function actualizarResumen(lista) {
     mh.textContent = `Total: ${total} · ${estadoLabel}`;
   }
 }
-
-console.log('[ordenes-render.js] Render helpers ready');

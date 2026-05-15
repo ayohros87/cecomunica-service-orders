@@ -116,12 +116,12 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
   }
 
   try {
-    const uid = firebase.auth().currentUser?.uid || null;
+    const uid = APP.state.userId || firebase.auth().currentUser?.uid || null;
     const { orders, lastSnapshot } = await OrdenesService.loadOrders({
       lastSnapshot: esCargaInicial ? null : APP.state.lastVisible,
       userRole: APP.state.userRole,
       userId: uid,
-      limit: 50
+      limit: CONFIG.pageLimit(APP.state.userRole)
     });
 
     if (orders.length === 0) {
@@ -153,7 +153,7 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
       aplicarRestriccionesPorRol(APP.state.userRole);
     });
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    APP.utils.lucideRefresh([ordersTable, document.getElementById("btnCargarMas")]);
 
   } catch (error) {
     console.error("❌ Error al cargar órdenes:", error);
@@ -162,5 +162,3 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
   const filters = getActiveFilters();
   actualizarResumen(hasActiveFilters(filters) ? applyActiveFiltersToOrders(APP.state.orders, filters) : APP.state.orders);
 };
-
-console.log('[ordenes-data.js] Firestore reads ready');

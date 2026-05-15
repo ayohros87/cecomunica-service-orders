@@ -1,5 +1,61 @@
 # Changelog
 
+## [Ordenes index improvements — batch 4] — 2026-05-15
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md`. A11y polish (QW6–QW8) + role-based page size (§3.4). QW16 (`:focus-visible` global) was already shipped in commit `b9ef6c8`.
+
+### Accessibility
+- Added `scope="col"` to the eight orders-table `<th>` cells in [public/ordenes/index.html:161-168](public/ordenes/index.html#L161) (`ORDENES_INDEX_IMPROVEMENTS.md` QW6). Screen readers now associate each cell with its column header correctly.
+- Wrapped `#resumenOrdenes` and `#mobileResumen` in [public/ordenes/index.html](public/ordenes/index.html) with `role="status" aria-live="polite" aria-atomic="true"` (`ORDENES_INDEX_IMPROVEMENTS.md` QW7). Filter changes that update the resumen counts ("12 órdenes — 4 por asignar") are now announced by screen readers without stealing focus.
+- Made the order row a keyboard-operable disclosure widget (`ORDENES_INDEX_IMPROVEMENTS.md` QW8). [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) now sets `tabindex="0"`, `role="button"`, `aria-expanded`, and `aria-label="Detalles de la orden {id}"` on each `<tr>`, and registers a `keydown` listener that treats Enter and Space as a row-toggle (ignoring nested interactive elements). `aria-expanded` flips with the expand/collapse. Click handler refactored to share a `toggleExpand()` helper with the keyboard path.
+
+### Performance / cost
+- Page size for the orders list is now role-based (`ORDENES_INDEX_IMPROVEMENTS.md` §3.4). `CONFIG.PAGE_SIZE: 30` in [public/js/pages/ordenes-state.js](public/js/pages/ordenes-state.js) replaced with `PAGE_LIMIT_BY_ROLE` + `pageLimit(role)` helper, mirroring the `contratos-state.js` pattern. Limits: administrador/gerente/recepcion 50, jefe_taller 40, vendedor/inventario/vista 30, tecnico/tecnico_operativo 15. [public/js/pages/ordenes-data.js](public/js/pages/ordenes-data.js) now passes `CONFIG.pageLimit(APP.state.userRole)` instead of the hardcoded `50`. Técnicos (who see only their assigned orders) no longer pay for 50 reads to populate a list of 5; administrators continue to get the wide window they need for browsing.
+- Same call site in `cargarOrdenesYEquipos` now prefers `APP.state.userId` over `firebase.auth().currentUser?.uid` (consistency with the same change in `esOrdenMia` from batch 3).
+
+## [Ordenes index improvements — batch 3] — 2026-05-15
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md`. Closes §3.6 sort bug, QW12, QW13.
+
+### Fixed
+- Repaired `cambiarOrden` and `mobileSyncSortField` — both read `document.getElementById("APP.state.sortField")` (string literal of the variable name) instead of the actual `<select id="campoOrdenamiento">` (`ORDENES_INDEX_IMPROVEMENTS.md` §3.6). Three call sites in [public/js/pages/ordenes-filters.js](public/js/pages/ordenes-filters.js) and [public/js/pages/ordenes-ui.js](public/js/pages/ordenes-ui.js) corrected. Desktop sort (top-of-page dropdown) and mobile-filters drawer sort now actually change `APP.state.sortField` and trigger a re-load. Bug was present since Phase 5f and earlier — silent fail because `cambiarOrden` threw `TypeError: Cannot read property 'value' of null` and the data-action delegate swallowed it.
+
+### Refactor
+- Dropped the defensive `firebase.auth().currentUser?.uid` fallback in `esOrdenMia` ([public/js/pages/ordenes-filters.js:82-86](public/js/pages/ordenes-filters.js#L82-L86)) — `APP.state.userId` is always set by the auth callback in `ordenes-index.js:55` before any filter runs, so the fallback was dead defensive code (`ORDENES_INDEX_IMPROVEMENTS.md` QW13).
+- Removed the eight per-file `console.log('[ordenes-*.js] … ready')` markers retained at the end of each ordenes-page module (`ORDENES_INDEX_IMPROVEMENTS.md` QW12). Markers were originally added during the Phase 5f decomposition to verify load order; that order is now stable and the markers were noise in the production console. Removed from `ordenes-state.js`, `ordenes-data.js`, `ordenes-render.js`, `ordenes-filters.js`, `ordenes-flujo.js`, `ordenes-equipos.js`, `ordenes-notas.js`, `ordenes-ui.js`.
+
+## [Ordenes index improvements — batch 2] — 2026-05-15
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md`. Closes §3a.10, §3a.9, and quick wins QW1–QW3.
+
+### Refactor
+- Removed the page-local `mostrarToast()` from [public/js/pages/ordenes-ui.js](public/js/pages/ordenes-ui.js); the ordenes page now uses the shared `Toast.show()` from `public/js/ui/toast.js` exclusively (`ORDENES_INDEX_IMPROVEMENTS.md` QW1). All 40+ call sites across `ordenes-ui.js`, `ordenes-notas.js`, `ordenes-equipos.js`, `ordenes-events.js`, `ordenes-flujo.js` migrated. Legacy `'success'`/`'error'` types remapped to the shared API's `'ok'`/`'bad'` (the local `.toast--success` rule never existed in CSS, so previous `'success'` toasts rendered colorless — the migration also fixes that latent bug). Toast styling now matches the rest of the app (dark backgrounds per `ceco-ui.css`). The `.toast--*` CSS rules in `ordenes-index.css:512-550` are now dead; flagged for the next CSS cleanup pass.
+- Removed `showAlertModal()` / `createAlertModal()` / `closeAlertModal()` and their module-level state from [public/js/pages/ordenes-ui.js](public/js/pages/ordenes-ui.js) (`ORDENES_INDEX_IMPROVEMENTS.md` QW2). All six call sites across `ordenes-equipos.js`, `ordenes-index.js`, `ordenes-notas.js`, `ordenes-flujo.js` migrated to `Toast.show(msg, 'bad'|'warn')` — every existing use was a notification ("Error al X", "Orden no encontrada", etc.), not a confirmation, so a toast is the right primitive. The `'close-alert-modal'` action handler in `ordenes-events.js:207` removed since the modal no longer exists. `showTextModal()` is intentionally retained: it's a specialized text-display modal with a Copy button and has no equivalent in the shared `Modal` API (would need a new `Modal.text()` method — deferred).
+- Replaced the synchronous `window.prompt()` in `editarCampoEquipo` (number-of-serie / modelo / observaciones inline edit) with a new `Modal.prompt()` (`ORDENES_INDEX_IMPROVEMENTS.md` QW3). Added `Modal.prompt({ title, message, defaultValue, placeholder, confirmLabel, cancelLabel, multiline })` → `Promise<string|null>` to [public/js/ui/modal.js](public/js/ui/modal.js): Enter confirms on single-line inputs, Escape/backdrop/Cancel resolves null, multiline mode uses a `<textarea>` and lets Enter insert newlines. The observaciones field now uses multiline. Removes the unstyled native `prompt()` dialog (no validation, no mobile Cancel-as-Escape) flagged in §4.1.
+
+### Fixed
+- `entrega_ts` removed from order delivery writes (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.10). Both [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) (custom modal flow) and [public/js/pages/firmar-entrega.js](public/js/pages/firmar-entrega.js) (legacy signature page) were writing both `entrega_ts` and `fecha_entrega` with `serverTimestamp()` — the former unused, the latter consumed by the orders-page "Mostrar fecha entrega" filter. The no-recibido branch previously skipped `fecha_entrega` entirely (despite still marking the order as `ENTREGADO AL CLIENTE`), so those orders were invisible to the date filter — now they get `fecha_entrega` too.
+
+### Docs
+- Documented `os_logs` array schema in [ARQUITECTURA_CECOMUNICA.md](ARQUITECTURA_CECOMUNICA.md) §5.4 (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.9). Records who writes (frontend only, today only on `ENTREGAR`), who reads (nothing yet — reserved for the future timeline view in §5.7), wire format (`{ action, by }` — no timestamp because Firestore disallows `serverTimestamp()` inside `arrayUnion`), and the 1 MiB doc-size cap implication. Notes the asymmetry that other transitions (`ASIGNAR`, `COMPLETAR`) don't write to `os_logs`.
+
+## [Ordenes index improvements — batch 1] — 2026-05-15
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md`. Closes Week-0 token bridge cleanup, the §3a entrega-flow security items, and §1.4 lucide scoping.
+
+### Security
+- Fixed XSS in `_buildEmailHtml` in [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.4). The local `f()` helper now routes every user-controlled value (`receptorNombre`, `motivo`, `sinIdMotivo`, `personaInterna`, equipo names/models/serials/trabajo, `cliente_nombre`, `tecnico_asignado`, `tipo_de_servicio`) through `escapeHtml`. The `firmaUrl` is also escaped when interpolated into the `<img src>` attribute. Defends against a malicious receptor name producing an `<a href="phishing-url">` link rendered inside a legitimate-looking cecomunica.com email.
+
+### Fixed
+- Entrega signature canvas no longer renders blurry on retina screens (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.5). `_resizeCanvas` in [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) now multiplies the canvas backing store by `devicePixelRatio` while keeping CSS size at 100% × 200 px, and uses `setTransform(dpr,0,0,dpr,0,0)` so repeated resize calls stay idempotent. `_clearCanvas` saves/restores the transform to clear the full backing store. The signature PNG uploaded to Storage is now 2×–3× the previous pixel density.
+- ID-photo uploads are now compressed client-side before hitting Storage (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.6). New `_prepareIdUpload(file)` in [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) resizes to ≤ 1280 px on the longest edge and re-encodes as JPEG q=0.85 via `OffscreenCanvas` (with `<canvas>` fallback for older Safari). Skipped for files < 200 KB or non-image MIME (PDF). Fails open: on any compression error, the original is uploaded. Cuts typical 4–6 MB phone-camera JPEGs down ~10–20×.
+
+### Performance
+- `lucide.createIcons()` no longer walks the whole document on every render of the orders page (`ORDENES_INDEX_IMPROVEMENTS.md` §1.4). New `APP.utils.lucideRefresh(scope)` helper in [public/js/pages/ordenes-state.js](public/js/pages/ordenes-state.js) takes a single element or an array of elements as the `nodes` scope. Scoped 12 call sites across `ordenes-data.js`, `ordenes-render.js`, `ordenes-filters.js`, `ordenes-flujo.js`, `ordenes-equipos.js`, `ordenes-ui.js` (table re-renders pass `[ordersTable, btnCargarMas]` or `[ordersTable, cardsWrap]`; expanded-row equipment table passes `filaDetalle`; button state updates pass the button itself; modal builds pass the modal root). The single bootstrap call in `ordenes/index.html` is left unscoped since it's a one-time page-load sweep.
+
+### Style
+- Back-compat tokens in [public/css/ceco-ui.css](public/css/ceco-ui.css) (`--text`, `--muted`, `--line`, `--ok`, `--warn`, `--bad`, `--chip`) converted from literal duplicates to true `var()` aliases of the design-system bridge tokens (`--fg-1`, `--fg-3`, `--border-default`, `--status-online/warning/critical`, `--brand-soft`). Closes the unfinished half of `ORDENES_INDEX_IMPROVEMENTS.md` §6 Week-0: every consumer of the flat names continues to resolve to the same color, but a future tweak to a design-system token now propagates automatically. Zero visual change.
+
 ## [Refactor — Phase 5f: ordenes-index.js decomposition] — 2026-05-14
 
 ### Restructured

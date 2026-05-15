@@ -7,25 +7,6 @@
   --font-body:    "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --font-mono:    "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  /* Cecomunica brand palette (flat tokens — kept as aliases for back-compat) */
-  --bg:#ffffff;
-  --bg-page:#F7F9FB;
-  --text:#0E1418;
-  --muted:#6B7884;
-  --line:#DDE4EB;
-  --brand:#0091D7;
-  --brand-hover:#0074AC;
-  --brand-2:#005781;
-  --navy:#0B2A47;
-  --ok:#1FA56B;
-  --warn:#E0A93A;
-  --bad:#D24545;
-  --soft-ok:#e4f7ef;
-  --soft-warn:#fdf4e1;
-  --soft-bad:#faeaea;
-  --card:#ffffff;
-  --chip:#E6F4FB;
-
   /* --- Token bridge from Cecomunica Design System (Phase 5f Week-0) --- */
   /* Foreground hierarchy */
   --fg-1: #0E1418;   /* primary text / headings */
@@ -47,6 +28,27 @@
   --status-online:   #1FA56B;
   --status-warning:  #E0A93A;
   --status-critical: #D24545;
+
+  /* Cecomunica brand palette (flat tokens — true var() aliases of the
+     bridge above, so updates to the design-system layer propagate
+     automatically. Every page references these names directly.) */
+  --bg:#ffffff;
+  --bg-page:#F7F9FB;
+  --text:        var(--fg-1);
+  --muted:       var(--fg-3);
+  --line:        var(--border-default);
+  --brand:#0091D7;
+  --brand-hover:#0074AC;
+  --brand-2:#005781;
+  --navy:#0B2A47;
+  --ok:          var(--status-online);
+  --warn:        var(--status-warning);
+  --bad:         var(--status-critical);
+  --soft-ok:#e4f7ef;
+  --soft-warn:#fdf4e1;
+  --soft-bad:#faeaea;
+  --card:#ffffff;
+  --chip:         var(--brand-soft);
 
   /* Spacing scale on 4px base */
   --sp-1:4px;  --sp-2:8px;  --sp-3:12px; --sp-4:16px; --sp-5:20px;

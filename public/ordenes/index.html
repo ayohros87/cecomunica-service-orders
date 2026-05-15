@@ -63,7 +63,7 @@
     <button class="mh-filterBtn" type="button" data-action="mobile-open-filters"><i data-lucide="sliders-horizontal"></i></button>
   </div>
 
-  <div class="mh-sub" id="mobileResumen">
+  <div class="mh-sub" id="mobileResumen" role="status" aria-live="polite" aria-atomic="true">
     <!-- we will mirror resumenOrdenes content here via JS -->
   </div>
 </div>
@@ -137,7 +137,7 @@
         <span class="toggle-slider"></span>
         <span class="toggle-label">Mis órdenes</span>
       </label>
-      <div id="resumenOrdenes"></div>
+      <div id="resumenOrdenes" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
   </div>
 </div>
@@ -158,14 +158,14 @@
   </colgroup>
  <thead>
   <tr>
-    <th>Número</th>
-    <th>Cliente</th>
-    <th>Técnico</th>
-    <th>Tipo</th>
-    <th>Estado</th>
-    <th>Fecha Creación</th>
-    <th class="col-fecha-entrega">Fecha Entrega</th>
-    <th>Acciones</th>
+    <th scope="col">Número</th>
+    <th scope="col">Cliente</th>
+    <th scope="col">Técnico</th>
+    <th scope="col">Tipo</th>
+    <th scope="col">Estado</th>
+    <th scope="col">Fecha Creación</th>
+    <th scope="col" class="col-fecha-entrega">Fecha Entrega</th>
+    <th scope="col">Acciones</th>
   </tr>
 </thead>
 

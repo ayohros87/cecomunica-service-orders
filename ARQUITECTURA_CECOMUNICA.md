@@ -106,8 +106,8 @@ Cada página carga scripts en este orden en el `<head>`:
 
 | Archivo | API | Reemplaza |
 |---|---|---|
-| `toast.js` | `Toast.show(message, type)` | `mostrarToast()` y `showToast()` locales (legacy en algunas páginas) |
-| `modal.js` | `Modal.open(id)`, `Modal.close(id)`, `Modal.confirm({ message, danger })` | Patrones inline de open/close + Escape handler |
+| `toast.js` | `Toast.show(message, type)` — tipos `'ok' \| 'bad' \| 'warn' \| ''` | `mostrarToast()` y `showToast()` locales (la página de órdenes ya está migrada; otras páginas mantienen su `mostrarToast` local hasta que se migren) |
+| `modal.js` | `Modal.open(id)`, `Modal.close(id)`, `Modal.confirm({ message, danger })` → `Promise<boolean>`, `Modal.prompt({ title, message, defaultValue, multiline })` → `Promise<string\|null>` | Patrones inline de open/close + Escape handler; reemplaza `window.prompt()` para edición inline de campos de equipo y similares |
 
 ### 3.3b Módulos de dominio (`js/domain/`)
 
@@ -241,6 +241,15 @@ El campo `usuarios/{uid}.rol` almacena el valor string.
 ### 5.3 Campos de caché en contratos
 
 Los campos `os_count`, `equipos_total`, `os_linked`, `os_serials_preview`, `os_has_equipos`, `tiene_os`, `os_last_orden_id`, `os_equipos_count_last` son escritos **exclusivamente por Cloud Functions** (ver §6.2). Las reglas de Firestore bloquean escrituras del frontend a estos campos.
+
+### 5.4 Audit log de órdenes — `os_logs`
+
+`ordenes_de_servicio/{id}.os_logs` es un array de auditoría escrito con `firebase.firestore.FieldValue.arrayUnion({ action, by })` cada vez que la orden cambia de estado.
+
+- **Quién escribe:** el frontend (en `ordenes-flujo.js` para entrega, `firmar-entrega.js` para la versión legacy). Hoy sólo la transición `ENTREGAR` deja huella; las transiciones `ASIGNAR` y `COMPLETAR` aún **no** escriben.
+- **Quién lee:** ninguna CF lo consume todavía. Se conserva para reconstruir la línea de tiempo en futuras vistas (`ORDENES_INDEX_IMPROVEMENTS.md` §5.7) y para auditoría manual.
+- **Forma:** `{ action: 'ENTREGAR' | 'ASIGNAR' | 'COMPLETAR' | …, by: <uid> }` — sin `ts` porque Firestore no permite `serverTimestamp()` dentro de `arrayUnion`. Si se requiere timestamp por entrada, migrar a una subcolección `ordenes_de_servicio/{id}/os_audit/{autoId}`.
+- **Límite:** Firestore tiene un cap de 1 MiB por documento. A ~50 bytes por entrada el techo práctico es ~20 000 acciones por orden — suficiente para el ciclo de vida típico pero a vigilar si en el futuro cada modificación de equipos se loguea aquí.
 
 ---
 

@@ -48,9 +48,24 @@ window.CONFIG = {
     ENTREGADO: 'ENTREGADO AL CLIENTE'
   },
   
-  // Pagination
-  PAGE_SIZE: 30,
-  
+  // Pagination — per-role page size. Técnicos see far fewer orders
+  // (only their assigned ones) so a small page reduces unused reads;
+  // admin/recepción/jefe_taller browse sequentially and benefit from 50.
+  PAGE_LIMIT_BY_ROLE: {
+    administrador:     50,
+    gerente:           50,
+    recepcion:         50,
+    jefe_taller:       40,
+    vendedor:          30,
+    inventario:        30,
+    tecnico:           15,
+    tecnico_operativo: 15,
+    vista:             30
+  },
+  pageLimit(role) {
+    return this.PAGE_LIMIT_BY_ROLE[role] || 30;
+  },
+
   // Feature flags
   enableContratoFallbackSync: false  // Deprecated - Cloud Function handles this now
 };
@@ -140,6 +155,22 @@ APP.utils = {
   toggle(el) {
     const element = typeof el === 'string' ? document.getElementById(el) : el;
     if (element) element.classList.toggle('hidden');
+  },
+
+  /**
+   * Render Lucide icons within a bounded scope instead of walking the
+   * whole document. Each unscoped `lucide.createIcons()` traverses every
+   * DOM node looking for `[data-lucide]`; on the orders page that fires
+   * 3+ times per render and is the source of the visible icon flicker.
+   * Pass the freshly-built container(s) so the sweep stays local.
+   * @param {HTMLElement|HTMLElement[]|null} scope - Container(s) to scope into.
+   *   Falsy → full-document fallback (use sparingly).
+   */
+  lucideRefresh(scope) {
+    if (typeof lucide === 'undefined') return;
+    const arr = Array.isArray(scope) ? scope.filter(Boolean) : (scope ? [scope] : null);
+    if (arr && arr.length) lucide.createIcons({ nodes: arr });
+    else                   lucide.createIcons();
   }
 };
 
@@ -223,5 +254,3 @@ function estadoCompacto(estado) {
   if (e === "ENTREGADO AL CLIENTE") return "ENTREGADO";
   return e;
 }
-
-console.log('[ordenes-state.js] State management initialized');

@@ -1,25 +1,10 @@
 // @ts-nocheck
 /* ========================================
  * ORDENES UI - Page-local UI primitives
- * Toast, mobile filter drawer, menu togglers, text/alert modals, and
- * the order-completed progreso notification. These predate the shared
- * js/ui/toast.js + js/ui/modal.js primitives; consolidating is a
- * follow-up to Phase 5f.
+ * Mobile filter drawer, menu togglers, text/alert modals, and the
+ * order-completed progreso notification. Toasts use the shared
+ * `Toast.show()` from `public/js/ui/toast.js` directly.
  * ======================================== */
-
-function mostrarToast(mensaje, tipo = 'ok') {
-  const toast = document.createElement('div');
-  toast.className = `toast toast--${tipo}`;
-  toast.textContent = mensaje;
-  toast.classList.add('toast--show');
-  
-  document.body.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.classList.add('toast--hide');
-    setTimeout(() => toast.remove(), 300);
-  }, 2500);
-}
 
 function mostrarNotificacionProgreso(data) {
   const box = document.createElement("div");
@@ -42,7 +27,7 @@ function openMobileFilters() {
   if (b) b.style.display = 'flex';
 
   // sync mobile sort select with existing select
-  const real = document.getElementById('APP.state.sortField');
+  const real = document.getElementById('campoOrdenamiento');
   const mob = document.getElementById('mobileSortField');
   if (real && mob) mob.value = real.value || 'ordenId';
 }
@@ -114,7 +99,7 @@ function mobileApplyQuickSearch() {
 
 function mobileSyncSortField() {
   const mob = document.getElementById('mobileSortField');
-  const real = document.getElementById('APP.state.sortField');
+  const real = document.getElementById('campoOrdenamiento');
   if (mob && real) {
     real.value = mob.value;
     if (typeof cambiarOrden === 'function') cambiarOrden();
@@ -301,7 +286,7 @@ function createTextModal() {
   });
   
   document.body.appendChild(overlay);
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  APP.utils.lucideRefresh(overlay);
   textModalEl = overlay;
   return overlay;
 }
@@ -339,100 +324,16 @@ window.copyTextModalContent = function() {
   const text = bodyEl?.dataset?.text || bodyEl?.textContent || '';
   
   if (!text || text.trim() === '') {
-    mostrarToast('⚠️ No hay contenido para copiar', 'bad');
+    Toast.show('⚠️ No hay contenido para copiar', 'bad');
     return;
   }
   
   navigator.clipboard.writeText(text)
     .then(() => {
-      mostrarToast('✅ Copiado al portapapeles', 'ok');
+      Toast.show('✅ Copiado al portapapeles', 'ok');
     })
     .catch(err => {
       console.error('Error copying:', err);
-      mostrarToast('❌ Error al copiar', 'bad');
+      Toast.show('❌ Error al copiar', 'bad');
     });
 };
-
-// Alert Modal System
-let alertModalEl = null;
-let alertModalTimer = null;
-
-function createAlertModal() {
-  if (alertModalEl) return alertModalEl;
-  
-  const overlay = document.createElement('div');
-  overlay.className = 'alert-modal-overlay';
-  overlay.id = 'alertModalOverlay';
-  
-  overlay.innerHTML = `
-    <div class="alert-modal-content" data-stop-propagation="true">
-      <div class="alert-modal-icon" id="alertModalIcon"></div>
-      <div class="alert-modal-message" id="alertModalMessage"></div>
-      <button class="alert-modal-button" data-action="close-alert-modal">Entendido</button>
-    </div>
-  `;
-  
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) closeAlertModal();
-  });
-  
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && overlay.classList.contains('show')) {
-      closeAlertModal();
-    }
-  });
-  
-  document.body.appendChild(overlay);
-  alertModalEl = overlay;
-  return overlay;
-}
-
-window.showAlertModal = function(message, type = 'info', autoDismiss = false) {
-  const modal = createAlertModal();
-  const iconEl = document.getElementById('alertModalIcon');
-  const messageEl = document.getElementById('alertModalMessage');
-  
-  // Set icon based on type
-  const icons = {
-    success: '✅',
-    error: '❌',
-    warning: '⚠️',
-    info: 'ℹ️'
-  };
-  
-  iconEl.textContent = icons[type] || icons.info;
-  messageEl.textContent = message;
-  
-  // Remove previous type classes
-  modal.classList.remove('success', 'error', 'warning', 'info');
-  modal.classList.add(type);
-  modal.classList.add('show');
-  
-  // Clear existing timer
-  if (alertModalTimer) {
-    clearTimeout(alertModalTimer);
-    alertModalTimer = null;
-  }
-  
-  // Auto-dismiss for success messages
-  if (autoDismiss && type === 'success') {
-    alertModalTimer = setTimeout(() => {
-      closeAlertModal();
-    }, 2000);
-  }
-  
-  document.body.style.overflow = 'hidden';
-};
-
-window.closeAlertModal = function() {
-  if (alertModalEl) {
-    alertModalEl.classList.remove('show');
-    document.body.style.overflow = '';
-  }
-  if (alertModalTimer) {
-    clearTimeout(alertModalTimer);
-    alertModalTimer = null;
-  }
-};
-
-console.log('[ordenes-ui.js] UI primitives ready');
