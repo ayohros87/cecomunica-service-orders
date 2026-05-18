@@ -128,49 +128,89 @@ Currently 50 fixed. Admin browses sequentially; técnico opens to their assigned
 
 `document.getElementById("APP.state.sortField")` — literal-string ID lookup that can never match. The function throws on any call. Either it is never called (delete it) or someone is silently catching the error. Check for a sort-field `<select>` in the HTML; if none, delete.
 
-### 3.7 `ordenes-index.css` is 3,534 lines — bigger than typical, smaller than catastrophic
+### 3.7 `ordenes-index.css` cleanup — *plan written 2026-05-18*
 
-**Bytes are fine, lines aren't.** Current state:
+**Baseline after the §4.2–§4.4 redesign**: 4,362 lines (up from 3,534 at original write; the redesign added ~330 lines of legit content). 360 hex literals, 817 `px` values, 716 single-`}` terminators, 42 modal rules, 21 `.overflow-menu-*` rules that partially duplicate `ceco-ui.css`.
 
-| File | Lines | Raw | Gzipped (est.) |
-|---|---:|---:|---:|
-| `ordenes-index.css` | 3,534 | 67 KB | ~9–11 KB |
-| `ceco-ui.css` (shared) | 1,137 | 41 KB | ~6–7 KB |
-| **Total CSS per ordenes hit** | | **~108 KB** | **~16–18 KB** |
-
-For comparison: Bootstrap 5 ~25 KB gzipped, GitHub per-route ~50 KB gzipped, a Tailwind-built page ~20–30 KB gzipped. Over-the-wire size is **normal-to-low**. CSS parse time at this volume is single-digit milliseconds. The browser is fine.
-
-The problem is the **maintenance cost**. One page has 3× more CSS than the entire shared design system. The other page-CSS files are all small:
+**Bytes are fine, lines aren't.** CSS parse time at this volume is single-digit milliseconds. The browser doesn't care. The **maintenance cost** is the problem — one page has more CSS than the entire shared design system:
 
 ```
 admin-equipos-cliente.css  →     91 lines
 print-base.css             →    136 lines
-ceco-ui.css                →  1,137 lines  (shared by every page)
-ordenes-index.css          →  3,534 lines  (one page)
+ceco-ui.css                →  1,139 lines  (shared by every page)
+ordenes-index.css          →  4,362 lines  (one page)
 ```
 
-Realistic target after a focused pass: **1,800–2,400 lines**. What's recoverable, in rough categories:
+**Target**: **2,600–2,800 lines** (–1,500 to –1,700, ≈35–40% reduction).
 
-| Source of bloat | Lines reclaimable |
-|---|---:|
-| Modal CSS that should live in `ceco-ui.css` (notas, text, alert, overflow menu) | ~400 |
-| 80+ hardcoded hex values that would collapse under the `--status-*` / `--brand-*` / tipo-chip tokens | ~150 |
-| 263 hardcoded `px` values vs. a `--sp-*` spacing scale (token bridge already in place) | ~150–200 |
-| Verbose formatting (one declaration per line on rules with 2 declarations) | ~200 |
-| Feature-letter labeled mini-rules (J–Y) that never got consolidated | ~300 |
-| Mobile-only CSS that could share with desktop via different selectors | ~150 |
+#### Cleanup buckets (ordered by execution)
 
-Total recoverable: **~1,200–1,400 lines without losing a single feature**.
+The order is chosen so each bucket simplifies the next: formatting first (smallest diffs after), then dead code (so we don't migrate doomed rules), then physical moves, then breakpoint dedupe, then the riskiest consolidation, then token migration, then docs.
 
-**When to do this:** *not* as a standalone refactor. The natural moment is **during the UX overhaul** (Week 3–4 below — chip filters, card-row hierarchy, status-pill palette). That work will:
-- Delete the legacy `.estado-pill` styles in favor of the design-system palette
-- Replace the filter card with a chip bar (smaller CSS)
-- Replace the table row layout with cards (different CSS, comparable size)
-- Touch many of the same selectors the cleanup would touch
+##### Bucket 5 — Verbose formatting collapse  *(~200 lines, risk: zero)*
+716 lines are bare `}` terminators. Collapse single-declaration and short two-declaration rules onto one line. Apply only when:
+- Single declaration, OR
+- Two declarations and total line length ≤ 100 chars.
 
-Doing token migration + structural cleanup *at the same time* as the redesign is much cheaper than doing them separately. As a standalone task it would be ~2 days; folded into the redesign it's ~half a day of incremental cleanup.
+Multi-declaration / shorthand-heavy rules stay multi-line for readability. Pure formatting, no semantic change.
 
-**Anti-pattern check:** the file is hand-written. No build step, no PostCSS, no CSS-in-JS. Every line is a deliberate choice. None of it is generated boilerplate. The size is purely a function of history.
+##### Bucket 2 — Dead-CSS sweep  *(~80–100 lines, risk: medium)*
+After QW1/QW2/QW9/QW16 and the §4.4 BEM extraction, rules target markup that no longer exists:
+- Old mobile card `<span class="estado">` inline-bg pattern — markup now uses `.estado-pill`.
+- `.btn-wrap` legacy wrappers — current render uses `.acciones-wrap`; the `btn-wrap` path is pre-Phase-5f leftover.
+- `// END OF PART 1/3` and similar carryover markers (already cited in §7 "What to cut").
+- `mostrarToast` residual styles — `.toast` lives in `ceco-ui.css` now.
+
+**Verification**: grep each candidate selector against `public/` before deleting.
+
+##### Bucket 1 — Move shared modal CSS to `ceco-ui.css`  *(~400 lines, risk: low)*
+Three blocks duplicate concepts already half-living in the shared file:
+- **`.text-modal-*`** (lines ~2182–2305, ~25 rules) — read-only text + copy-to-clipboard. Used by `showTextModal()` from `ordenes-equipos.js`. Move as-is.
+- **`.notas-modal-*`** (lines ~555+) — used by `gestionarNotasTecnicas`. Move as-is.
+- **`.alert-modal-*`** residuals — most callers migrated to `Modal.*` already; remaining styles fold into `ceco-ui.css`.
+- **`.overflow-menu-*` dedupe**: 21 rules here vs. 10 in `ceco-ui.css`. Promote ordenes-specific ones (dropdown positioning, item icons, divider) to the shared file. Other pages benefit silently.
+
+**Why it works**: only `ordenes/index.html` references these (verified via grep). Other pages already load `ceco-ui.css`, so they just get rules they don't use → harmless. Bytes-on-wire net change ≈ 0 (gzip dedupes); `ordenes-index.css` shrinks ~400 lines.
+
+##### Bucket 6 — Mobile/desktop dedupe  *(~120–150 lines, risk: medium)*
+Three `@media (max-width:768px)` blocks and two `@media (min-width:769px)` blocks. Many rules apply with identical values to both viewports (typography, colors, paddings on identical selectors). Pull commons up to the base rule; keep only true breakpoint-specific overrides inside `@media`.
+
+**Verification**: toggle DevTools responsive mode at 760 / 770 / 1024 and spot-check key elements (estado pill, equipos table, accesorios row, filter card).
+
+##### Bucket 3 — Feature-letter mini-rule consolidation  *(~300 lines, risk: medium-high)*
+The `/* J) */` … `/* Y) */` blocks (lines ~2569–3819) are leftover refactor markers from earlier work. Multiple letters touch the same selector group (3× `K)` for equipos-table density, 2× `V)`, 2× `Y)`). Defensible during the refactor; now noise.
+
+**Plan**: merge per-letter rules into single sections by selector family (`.equipos-table .col-*`, `.intervencion-*`, `.accesorios-*`, `.resumen-operativo`, etc.). Drop the letter labels. No behavior change.
+
+**Why it's risky**: two K) sections might rely on intentionally-conflicting cascade order. Verify each merge against rendered output by diffing computed styles in DevTools at key viewports.
+
+##### Bucket 4 — Token migration  *(~200 lines, risk: low)*
+- **Hexes → tokens** (360 literals): `#0091d7` → `var(--brand)`, `#1FA56B` → `var(--status-online)`, `#6b7280` → `var(--fg-3)`, `#e5e7eb` → `var(--border-default)`, etc. About 60% collapse cleanly; the rest are one-off colors (gradient stops, shadow tints) that stay literal.
+- **Spacing → `--sp-*`** (817 px values): 4/8/12/16/20/24/32/40/48/64 match the scale (`--sp-1`…`--sp-16`). Migrate exact matches; leave 6/10/14/18 etc. as literals.
+
+The line-count reclaim here is mostly indirect — token substitution doesn't shorten lines, but the *cleanup-while-touching* (folding adjacent identical declarations, inlining one-property rules left over from earlier buckets) does.
+
+##### Bucket 7 — Docs wrap-up
+- Update `CSS_IMPROVEMENTS.md` with what moved where and the rationale (e.g. "kept `.text-modal-*` as a separate primitive instead of folding into `Modal.*` — copy-to-clipboard UX is unique and a Modal.* refactor is its own ticket").
+- Refresh the line-count table at the top of this section with post-cleanup numbers.
+- Note any tokens added to `ceco-ui.css` during Bucket 4.
+
+#### Risk envelope and rollback
+
+- One commit per bucket. Any regression bisects to a single commit.
+- After each bucket: load `/ordenes/` in browser; toggle cards/table view; expand a row; open modals (nota técnica, asignar, entrega); apply + clear filters.
+- Comparison points: estado pills (color + dot), equipos table density, accesorios row, filter card padding, mobile drawer.
+
+#### Decisions baked into this plan
+
+- **Bytes-over-wire don't matter** — gzipped delta is in the low single-digit KB range. We're optimizing for maintainability, not bundle size.
+- **`ceco-ui.css` grows ~360 lines** (from 1,139 to ~1,500). Acceptable: every page loads it and the moved rules are widely usable.
+- **Token migration is partial by design** — full migration of every hex would require new tokens for one-off shades, which adds maintenance cost elsewhere. Migrate where a clean alias exists.
+- **No new build step.** All work stays compatible with the hand-written single-file approach. A future migration to PostCSS / Vite is a separate, larger conversation (§3.2).
+
+#### Anti-pattern check
+
+The file is hand-written. No build step, no PostCSS, no CSS-in-JS. Every line is a deliberate choice — none of it is generated boilerplate. The size is purely a function of history, and the cleanup is purely manual.
 
 ---
 
