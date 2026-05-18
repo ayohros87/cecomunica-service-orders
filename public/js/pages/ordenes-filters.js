@@ -265,8 +265,12 @@ function _applyURLToFilters() {
 }
 
 // Expose so ordenes-index.js can call before the initial data load.
+// Function declarations at script top level alias `window._applyURLToFilters`
+// to the same binding, so we must capture the original reference before
+// re-assigning — otherwise the wrapper recurses into itself.
+const _applyURLToFiltersInner = _applyURLToFilters;
 window._applyURLToFilters = function () {
-  const out = _applyURLToFilters();
+  const out = _applyURLToFiltersInner();
   if (typeof syncEstadoChipsFromSelect === 'function') syncEstadoChipsFromSelect();
   return out;
 };
