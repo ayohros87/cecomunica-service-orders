@@ -30,6 +30,7 @@
 <script src="../js/pages/ordenes-equipos.js"></script>
 <script src="../js/pages/ordenes-notas.js"></script>
 <script src="../js/pages/ordenes-ui.js"></script>
+<script src="../js/pages/ordenes-presets.js"></script>
 <script src="../js/pages/ordenes-events.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="../js/pages/ordenes-index.js"></script>
@@ -79,6 +80,13 @@
       <button class="btn ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
         <i data-lucide="chevron-down" class="icon-avanzado" id="iconoAvanzados"></i> Avanzado
       </button>
+      <div class="overflow-menu" id="presetsMenuWrap">
+        <button class="btn ghost" data-action="toggle-presets-menu" data-stop-propagation="true"
+                title="Filtros guardados" aria-haspopup="true" aria-expanded="false">
+          <i data-lucide="bookmark"></i> Presets
+        </button>
+        <div class="overflow-menu-dropdown" id="presetsMenu"></div>
+      </div>
     </div>
 
     <div class="right" style="display: flex; align-items: center; gap: 12px;">

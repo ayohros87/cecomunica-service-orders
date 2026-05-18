@@ -1,5 +1,25 @@
 # Changelog
 
+## [Ordenes index improvements — batch 17: presets + hover actions + PII retention] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §5.5 + §5.2 + §3a.3. §5.1 (bulk operations) marked out-of-scope per stakeholder feedback — orders are managed one at a time today.
+
+### Added
+- **Saved filter presets** (`ORDENES_INDEX_IMPROVEMENTS.md` §5.2). New `OrdenesPresets` API in [public/js/pages/ordenes-presets.js](public/js/pages/ordenes-presets.js) stores up to 20 named presets in `localStorage` (key `ordenes:filter-presets:v1`). Each preset captures the URL search string from §5.4, so save+load round-trips the full filter state including sort + soloMias. Markup adds a "Presets" dropdown to the filter toolbar; first item is "Guardar filtros actuales…" (prompts via `Modal.prompt`), followed by saved presets each with a load button and an inline × delete. Saving with an existing name updates that preset in-place. Wired four new data-action handlers in `ordenes-events.js` (`toggle-presets-menu`, `guardar-preset`, `cargar-preset`, `eliminar-preset`).
+- **PII retention Cloud Function** (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.3). New `purgePIIRetention` scheduled trigger in [functions/src/triggers/scheduled/purgePIIRetention.js](functions/src/triggers/scheduled/purgePIIRetention.js) runs daily at 03:00 America/Panama. Lists every object under `ordenes_identificacion/` + `entregas_identificacion/`; for any with `timeCreated > 90 days`, deletes the Storage object, parses the `ordenId` from the filename, and clears the order doc's `identificacion_url` while stamping `identificacion_purged_at: serverTimestamp()` + `identificacion_retention_days: 90` for audit. Signatures in `ordenes_firmas/` are deliberately not touched — legal-adjacent evidence of delivery. Registered in `functions/index.js`; total CF count 11 → 12 (2 HTTP + 10 triggers).
+
+### Style
+- **Hover-revealed quick actions** (`ORDENES_INDEX_IMPROVEMENTS.md` §5.5). `.acciones-wrap` inside `tr[data-orden-row]` now defaults to `opacity: 0.45` and jumps to `1` on `:hover`, `:focus-within`, or when the row is expanded (`.activo`). 120 ms transition. Touch devices (`@media (hover: none)`) keep full opacity since they have no hover state. Mobile cards layout is unaffected (different markup, no `.acciones-wrap` wrapper).
+
+### Decisions
+- **§5.1 bulk operations — not pursuing.** Updated [ORDENES_INDEX_IMPROVEMENTS.md](ORDENES_INDEX_IMPROVEMENTS.md) §5.1 to mark as out-of-scope. Operationally the team manages orders one at a time today; no current workflow benefits from bulk re-assign / print / export. Strikethrough preserved for context; re-evaluate if a sustained 10+/day batch flow appears.
+
+### Docs
+- [ARQUITECTURA_CECOMUNICA.md](ARQUITECTURA_CECOMUNICA.md) §5.5 (Storage table) extended with a retention column; §6.1 file tree adds the new `scheduled/` directory; §6.3 trigger table adds `purgePIIRetention` row.
+
+### Deploy
+- `firebase deploy --only functions:purgePIIRetention` — the scheduled trigger registers itself with Cloud Scheduler on first deploy. No backfill needed; runs nightly going forward.
+
 ## [Ordenes index improvements — batch 16: audit-log timeline] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §5.7 + the `os_logs` asymmetry noted in §3a.9.

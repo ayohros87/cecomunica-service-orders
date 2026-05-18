@@ -52,6 +52,12 @@
       const visible = document.body?.classList.contains('hide-fecha-entrega');
       setFechaEntregaVisible(visible);
     },
+
+    // Filter presets — ORDENES_INDEX_IMPROVEMENTS.md §5.2
+    'toggle-presets-menu': () => togglePresetsMenu(),
+    'guardar-preset': () => guardarPresetActual(),
+    'cargar-preset': (el) => cargarPreset(el.dataset.presetId),
+    'eliminar-preset': (el) => eliminarPreset(el.dataset.presetId),
     
     // Modal actions
     'cerrar-modal-asignar': () => cerrarModalAsignar(),

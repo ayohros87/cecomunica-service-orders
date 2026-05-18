@@ -264,7 +264,15 @@ Las reglas viven en `storage.rules` (en raíz, deployadas via `firebase deploy -
 | `ordenes_taller_fotos/{ordenId}/{file}` | Fotos de equipo en taller | `image/*` | 8 MiB | Sí |
 | `contratos_firmados/{file}` | PDFs de contratos firmados | `application/pdf` | 10 MiB | No |
 
-Rutas PII (`ordenes_firmas`, `ordenes_identificacion`, `entregas_identificacion`) deshabilitan delete y update desde el frontend — un Cloud Function de retención server-side puede purgar via admin SDK cuando aplique (ver `ORDENES_INDEX_IMPROVEMENTS.md` §3a.3 pendiente).
+Rutas PII (`ordenes_firmas`, `ordenes_identificacion`, `entregas_identificacion`) deshabilitan delete y update desde el frontend. La política de retención corre server-side:
+
+| Path | Retención | Purga |
+|---|---|---|
+| `ordenes_firmas/` | Indefinida | No se purga — evidencia legal de entrega |
+| `ordenes_identificacion/` | **90 días** desde upload | `purgePIIRetention` CF (ver §6.3) |
+| `entregas_identificacion/` (legacy) | **90 días** desde upload | `purgePIIRetention` CF (ver §6.3) |
+
+Al purgar una foto de ID, el CF también limpia `identificacion_url: null` en el doc de la orden y estampa `identificacion_purged_at: serverTimestamp()` + `identificacion_retention_days: 90` para que el audit trail registre la purga.
 
 ### 5.6 Búsqueda indexada de órdenes — `searchTokens`
 
@@ -300,6 +308,8 @@ functions/
         onWriteSearchTokens.js              ← onOrdenWriteSearchTokens
       mail/
         onMailQueued.js                     ← onMailQueued
+      scheduled/
+        purgePIIRetention.js                ← purgePIIRetention
     domain/
       contractCache.js                      ← rebuildContractCache (idempotente)
       pdfRenderer.js                        ← renderizado de contratos con Puppeteer
@@ -332,8 +342,9 @@ El canal de email activo desde el frontend es la colección `mail_queue` (ver §
 | `onOrdenHardDelete` | `onDocumentDeleted("ordenes_de_servicio/{id}")` | Hard-delete: elimina subcol caché y recalcula totales del contrato vinculado | — |
 | `onOrdenWriteSearchTokens` | `onDocumentWritten("ordenes_de_servicio/{id}")` | Mantiene el array `searchTokens` con tokens normalizados de orden ID, cliente, técnico, tipo de servicio y serials de equipos. Idempotente (compara tokens computados vs almacenados antes de escribir). Habilita la búsqueda indexada en `OrdenesService.searchOrders` — ver §5.6 | — |
 | `onMailQueued` | `onDocumentCreated("mail_queue/{id}")` | Lee el documento encolado y envía el email vía SendGrid | `SENDGRID_API_KEY` |
+| `purgePIIRetention` | `onSchedule("every day 03:00", TZ=America/Panama)` | Borra fotos de ID en `ordenes_identificacion/` y `entregas_identificacion/` con > 90 días desde upload. Limpia `identificacion_url`, estampa `identificacion_purged_at` en el doc de la orden — ver §5.5 | — |
 
-Total: **2 endpoints HTTP + 9 triggers = 11 funciones** exportadas desde `functions/index.js`.
+Total: **2 endpoints HTTP + 10 triggers (9 onDocument + 1 scheduled) = 12 funciones** exportadas desde `functions/index.js`.
 
 ### 6.4 Pipeline de email
 

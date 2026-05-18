@@ -374,15 +374,17 @@ Verified AA: all four background/foreground pairs above pass WCAG AA at the 13 p
 
 Drawn from the action-handlers inventory and the daily-use workflow.
 
-### 5.1 Bulk operations
+### 5.1 Bulk operations — *not pursuing (2026-05-18)*
 
-Right now everything is per-order. Add a checkbox column + bulk-actions toolbar:
-- Bulk re-assign to técnico
-- Bulk print
-- Bulk export CSV
-- Bulk archive
+> **Decision:** out of scope. Operationally these orders are handled one at a time — staff confirmed there's no current workflow where bulk re-assign / bulk print / bulk export would speed things up. Re-evaluate if a sustained 10+-orders/day batch flow ever appears.
 
-A recepción staff member assigning the day's incoming orders should not click "Asignar" 20 times.
+~~Right now everything is per-order. Add a checkbox column + bulk-actions toolbar:~~
+~~- Bulk re-assign to técnico~~
+~~- Bulk print~~
+~~- Bulk export CSV~~
+~~- Bulk archive~~
+
+~~A recepción staff member assigning the day's incoming orders should not click "Asignar" 20 times.~~
 
 ### 5.2 Saved filter presets
 

@@ -808,6 +808,65 @@ body.hide-fecha-entrega .fecha-entrega {
 .req--warn { color: #b45309; }
 
 /* ======================================
+   FILTER PRESETS — saved filter combinations
+   The Presets dropdown lives next to the Avanzado toggle in the
+   filter toolbar. ORDENES_INDEX_IMPROVEMENTS.md §5.2.
+   ====================================== */
+#presetsMenu {
+  min-width: 240px;
+}
+.preset-item {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px !important;
+}
+.preset-item--empty {
+  color: var(--fg-3);
+  font-style: italic;
+  font-size: 13px;
+  cursor: default;
+}
+.preset-load {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+}
+.preset-load .preset-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.preset-load i { width: 14px; height: 14px; flex: 0 0 auto; }
+.preset-delete {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--fg-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.preset-delete:hover {
+  background: #fee2e2;
+  color: var(--status-critical);
+}
+.preset-delete i { width: 12px; height: 12px; }
+
+/* ======================================
    TIMELINE — audit log in expanded row
    Vertical timeline derived from fecha_* timestamps on the order
    doc, rendered inside the expanded row between the resumen and
@@ -1411,6 +1470,26 @@ tr.activo .flecha {
 
 .acciones-wrap > .overflow-menu:hover {
   opacity: 1;
+}
+
+/* Quick actions on hover — ORDENES_INDEX_IMPROVEMENTS.md §5.5.
+   Actions are muted by default so they stop competing with the rest
+   of the row content, then jump to full opacity when the user hovers
+   (or focuses within) the row. Touch devices keep full opacity since
+   they have no hover state. */
+.orders-table tbody tr[data-orden-row] .acciones-wrap {
+  opacity: 0.45;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.orders-table tbody tr[data-orden-row]:hover .acciones-wrap,
+.orders-table tbody tr[data-orden-row]:focus-within .acciones-wrap,
+.orders-table tbody tr[data-orden-row].activo .acciones-wrap {
+  opacity: 1;
+}
+@media (hover: none) {
+  .orders-table tbody tr[data-orden-row] .acciones-wrap {
+    opacity: 1;
+  }
 }
 
 /* ✅ Flex solo dentro del wrapper de botones de flujo (legacy btn-wrap) */
