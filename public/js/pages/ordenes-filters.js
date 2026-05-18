@@ -121,7 +121,10 @@ function renderOrdersList(list) {
   if (cardsWrap) cardsWrap.innerHTML = "";
 
   if (!list || list.length === 0) {
-    if (ordersTable) ordersTable.innerHTML = "<tr><td colspan='9'>No se encontraron coincidencias</td></tr>";
+    renderEmptyState("No se encontraron coincidencias", {
+      icon: 'search-x',
+      sublabel: 'Probá ajustar los filtros o limpiar la búsqueda.'
+    });
     actualizarResumen([]);
     return;
   }
@@ -204,7 +207,10 @@ window.filtrarOrdenes = async function () {
       : resultados;
 
     if (resultados.length === 0) {
-      ordersTable.innerHTML = "<tr><td colspan='9'>No se encontraron coincidencias</td></tr>";
+      renderEmptyState("No se encontraron coincidencias", {
+        icon: 'search-x',
+        sublabel: 'Probá ajustar los filtros o limpiar la búsqueda.'
+      });
       return;
     }
 
@@ -220,7 +226,7 @@ window.filtrarOrdenes = async function () {
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
-    ordersTable.innerHTML = "<tr><td colspan='9' style='color:red;'>Error al filtrar datos</td></tr>";
+    renderEmptyState("Error al filtrar datos", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
   }
 
   actualizarResumen(resultados);
@@ -253,7 +259,10 @@ window.filtrarRapido = async function () {
     });
 
     if (resultados.length === 0) {
-      ordersTable.innerHTML = "<tr><td colspan='9'>No se encontraron coincidencias</td></tr>";
+      renderEmptyState("No se encontraron coincidencias", {
+        icon: 'search-x',
+        sublabel: 'Probá ajustar los filtros o limpiar la búsqueda.'
+      });
       return;
     }
 
@@ -269,7 +278,7 @@ window.filtrarRapido = async function () {
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
-    ordersTable.innerHTML = "<tr><td colspan='9' style='color:red;'>Error al filtrar datos</td></tr>";
+    renderEmptyState("Error al filtrar datos", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
   }
 
   actualizarResumen(resultados);
@@ -376,7 +385,7 @@ window.filtrarPorEstado = async function (estado) {
     resultados = await OrdenesService.filterByStatus(estado, 200);
 
     if (resultados.length === 0) {
-      ordersTable.innerHTML = "<tr><td colspan='8'>No hay órdenes con ese estado</td></tr>";
+      renderEmptyState("No hay órdenes con ese estado", { icon: 'search-x' });
       return;
     }
 
@@ -401,7 +410,7 @@ window.filtrarPorEstado = async function (estado) {
         resultados = await OrdenesService.filterByStatus(estado, 200);
 
         if (resultados.length === 0) {
-          ordersTable.innerHTML = "<tr><td colspan='8'>No hay órdenes con ese estado</td></tr>";
+          renderEmptyState("No hay órdenes con ese estado", { icon: 'search-x' });
         } else {
           ordenarOrdenes(resultados).forEach(o => {
             const equipos = (o.equipos || [])
@@ -421,7 +430,7 @@ window.filtrarPorEstado = async function (estado) {
       }
     }
 
-    ordersTable.innerHTML = "<tr><td colspan='8' style='color:red;'>Error al filtrar por estado</td></tr>";
+    renderEmptyState("Error al filtrar por estado", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
   } finally {
     if (loader) loader.style.display = "none";
   }

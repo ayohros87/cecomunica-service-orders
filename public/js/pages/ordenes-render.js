@@ -109,7 +109,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     </td>
     <td>${ordenData.tecnico_asignado || ""}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
-    <td><span class="estado-pill ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
+    <td><span class="estado-pill ${getEstadoClass(estado)}" title="${estado}"><span class="dot" aria-hidden="true"></span>${estadoCompacto(estado)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}</td>
     <td class="col-fecha-entrega">${formatFecha(ordenData.fecha_entrega)}</td>
     <td class="acciones"><div class="acciones-wrap">${botonesFlujo(ordenId, estado, ordenData)}${botonesGestion(ordenId, estado, tooltipNota, estiloNota)}</div></td>
@@ -669,6 +669,59 @@ function actualizarResumen(lista) {
     mh.textContent = `Total: ${total} · ${estadoLabel}`;
   }
 }
+
+/**
+ * Renders a friendly empty state in both `#ordersTable` and `#ordersCards`
+ * so the user sees the same message regardless of which layout the
+ * current breakpoint shows. The "Limpiar filtros" CTA only appears when
+ * the filter state is non-default — gated by `hasActiveFilters` from
+ * ordenes-filters.js.
+ *
+ * ORDENES_INDEX_IMPROVEMENTS.md QW15 + §4.1.
+ *
+ * @param {string} message - Headline shown to the user
+ * @param {Object} [opts]
+ * @param {string} [opts.icon='inbox'] - Lucide icon name
+ * @param {string} [opts.sublabel] - Optional secondary line
+ */
+function renderEmptyState(message, opts = {}) {
+  const icon = opts.icon || 'inbox';
+  const sublabel = opts.sublabel || '';
+  // hasActiveFilters lives in ordenes-filters.js; guard for evaluation
+  // order in case render is called before filters init.
+  let activeFilters = false;
+  try {
+    if (typeof getActiveFilters === 'function' && typeof hasActiveFilters === 'function') {
+      activeFilters = hasActiveFilters(getActiveFilters());
+    }
+  } catch { /* noop */ }
+
+  const ctaHtml = activeFilters
+    ? `<button class="btn secondary empty-state__cta" data-action="limpiar-filtros">
+         <i data-lucide="x"></i> Limpiar filtros
+       </button>`
+    : '';
+
+  const cardHtml = `
+    <div class="empty-state" role="status">
+      <div class="empty-state__icon" aria-hidden="true"><i data-lucide="${icon}"></i></div>
+      <p class="empty-state__msg">${message}</p>
+      ${sublabel ? `<p class="empty-state__sub">${sublabel}</p>` : ''}
+      ${ctaHtml}
+    </div>`;
+
+  const ordersTable = document.getElementById("ordersTable");
+  if (ordersTable) {
+    ordersTable.innerHTML = `<tr><td colspan="8" class="empty-state__cell">${cardHtml}</td></tr>`;
+  }
+  const ordersCards = document.getElementById("ordersCards");
+  if (ordersCards) {
+    ordersCards.innerHTML = cardHtml;
+  }
+
+  APP.utils.lucideRefresh([ordersTable, ordersCards]);
+}
+window.renderEmptyState = renderEmptyState;
 
 // ── Layout breakpoint listener ──────────────────────────────────────
 // When the user resizes across the 768px boundary, the active layout

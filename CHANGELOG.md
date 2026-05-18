@@ -1,5 +1,23 @@
 # Changelog
 
+## [Ordenes index improvements — batch 9: estado palette + empty state] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` Tier 2. Closes QW10, QW15, and confirms §3.5 already resolved.
+
+### Style
+- Repainted `.estado-pill` with the Cecomunica Design System AA-safe palette (`ORDENES_INDEX_IMPROVEMENTS.md` §4.5 / QW10). The four states now use verified WCAG-AA pairs at 13 px / semibold — POR ASIGNAR `#FAE3E3 / #8A1F1F`, ASIGNADO `#FAF1DB / #7A5510`, COMPLETADO `var(--brand-soft) / var(--brand-press)`, ENTREGADO `#E6F4ED / #0F6E47`. Pills now render as `[6px colored dot] LABEL`; the dot uses `var(--status-critical|warning|brand|status-online)` so a future token tweak propagates automatically. Pill markup in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) updated to prepend `<span class="dot" aria-hidden="true"></span>`.
+- Adopted `var(--radius-sm)` for the pill corner instead of the literal `4px`.
+
+### Added
+- `renderEmptyState(message, { icon, sublabel })` helper in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) renders into both `#ordersTable` and `#ordersCards` so the empty state survives the responsive layout swap shipped in batch 7. The "Limpiar filtros" CTA is gated on `hasActiveFilters(getActiveFilters())` so it only appears when filters are non-default.
+- `.empty-state` block styles in [public/css/ordenes-index.css](public/css/ordenes-index.css) using design-system tokens (`--sp-3/6/12`, `--fg-2/3/4`, `--border-subtle`). Includes an icon chip, headline, optional sublabel, and CTA slot.
+
+### Refactor
+- Replaced six inline `ordersTable.innerHTML = "<tr><td>...</td></tr>"` empty/error messages in [public/js/pages/ordenes-data.js](public/js/pages/ordenes-data.js) and [public/js/pages/ordenes-filters.js](public/js/pages/ordenes-filters.js) with `renderEmptyState()` calls. Mobile users now see the same message as desktop (previously the empty-state was rendered only into the hidden table).
+
+### Notes
+- `ORDENES_INDEX_IMPROVEMENTS.md` §3.5 (`EmpresaService` not loaded) was already fixed in commit `8a4de2b`; the dead-fallback branch in `cargarTiposDeServicioFiltros` is now a legitimate graceful-degradation path (returns hardcoded options when the `empresa/tipo_de_servicio` doc is missing or query fails) — kept intentionally.
+
 ## [Ordenes index improvements — batch 8: indexed search via searchTokens] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §1.1 — fourth and biggest Tier-1 item. Closes the remaining Firestore cost leak. Tier 1 is now complete.

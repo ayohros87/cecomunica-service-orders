@@ -154,7 +154,7 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
 
   } catch (error) {
     console.error("❌ Error al cargar órdenes:", error);
-    ordersTable.innerHTML = "<tr><td colspan='9' style='color:red;'>Error al cargar datos</td></tr>";
+    renderEmptyState("Error al cargar datos", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
   }
   const filters = getActiveFilters();
   actualizarResumen(hasActiveFilters(filters) ? applyActiveFiltersToOrders(APP.state.orders, filters) : APP.state.orders);
