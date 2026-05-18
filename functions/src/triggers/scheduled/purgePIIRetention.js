@@ -1,11 +1,24 @@
-const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 
 /**
- * purgePIIRetention — scheduled CF that purges customer ID photos
+ * purgePIIRetention — manual callable CF that purges customer ID photos
  * older than RETENTION_DAYS days. Closes the PII retention gap in
  * ORDENES_INDEX_IMPROVEMENTS.md §3a.3.
+ *
+ * Invocation (manual, admin-only):
+ *   firebase functions:shell  → purgePIIRetention({ dryRun: true })
+ *   or from a future admin button:
+ *     firebase.functions().httpsCallable('purgePIIRetention')({ dryRun: false })
+ *
+ * The function was originally written as an onSchedule cron. It was
+ * converted to onCall on 2026-05-18 so the company can review what
+ * would be deleted before any first run, and trigger purges explicitly.
+ * To revert to scheduled: replace the onCall wrapper with
+ *   onSchedule({ schedule: "every day 03:00", timeZone: "America/Panama",
+ *                region: "us-central1" }, async () => { ... })
+ * The inner logic is unchanged.
  *
  * Scope:
  *   - Storage paths: `ordenes_identificacion/` (current) and
@@ -18,9 +31,6 @@ const { admin, db } = require("../../lib/admin");
  *   2. Delete the Storage object.
  *   3. Clear `identificacion_url` on the order doc and stamp
  *      `identificacion_purged_at` so the audit trail records the purge.
- *
- * Cost: GCS object listing is ~$0.04 per 10k operations. Running once
- * a day with <10k objects in the namespace is ~free.
  *
  * Retention is hardcoded for now; bump RETENTION_DAYS as the policy
  * evolves. A future iteration can read from `empresa/pii_retention`
@@ -38,44 +48,67 @@ const PII_PREFIXES = ["ordenes_identificacion/", "entregas_identificacion/"];
  */
 function _parseOrdenId(fullPath) {
   const filename = fullPath.split("/").pop() || "";
-  // "_id_" appears only in the current path; legacy uses a single "_".
   if (filename.includes("_id_")) {
     return filename.split("_id_")[0] || null;
   }
-  // Legacy: split off the trailing _<ts>.<ext>
   const m = filename.match(/^(.+?)_\d+\.[^.]+$/);
   return m ? m[1] : null;
 }
 
-module.exports = onSchedule(
+module.exports = onCall(
   {
-    schedule: "every day 03:00",
-    timeZone: "America/Panama",
     region: "us-central1",
+    // Tight memory/timeout — listing + per-file metadata fetch is cheap.
+    memory: "256MiB",
+    timeoutSeconds: 540,
   },
-  async () => {
+  async (request) => {
+    // Auth: admin only. Reject anonymous and non-admin callers.
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const callerUid = request.auth.uid;
+    const userDoc = await db.collection("usuarios").doc(callerUid).get();
+    const rol = (userDoc.data() || {}).rol || "";
+    if (rol !== "admin") {
+      throw new HttpsError("permission-denied", "Admin role required.");
+    }
+
+    const dryRun = !!(request.data && request.data.dryRun);
+    const retentionDays = Number(request.data?.retentionDays) > 0
+      ? Number(request.data.retentionDays)
+      : RETENTION_DAYS;
+
     const bucket = admin.storage().bucket();
-    const cutoffMs = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+    const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
     const cutoffISO = new Date(cutoffMs).toISOString();
 
     let scanned = 0;
+    let candidates = 0;
     let deleted = 0;
     let docsCleared = 0;
     let errors = 0;
+    const sampleCandidates = [];
 
     for (const prefix of PII_PREFIXES) {
       const [files] = await bucket.getFiles({ prefix });
       for (const file of files) {
         scanned++;
         try {
-          // metadata.timeCreated is set by GCS at upload time and is
-          // immutable — exactly the right field for retention age.
           const [meta] = await file.getMetadata();
           const created = meta?.timeCreated;
           if (!created) continue;
           if (new Date(created).getTime() >= cutoffMs) continue;
 
+          candidates++;
           const ordenId = _parseOrdenId(file.name);
+
+          if (dryRun) {
+            if (sampleCandidates.length < 50) {
+              sampleCandidates.push({ file: file.name, ordenId, created });
+            }
+            continue;
+          }
 
           await file.delete();
           deleted++;
@@ -85,7 +118,8 @@ module.exports = onSchedule(
               await db.collection("ordenes_de_servicio").doc(ordenId).update({
                 identificacion_url: null,
                 identificacion_purged_at: admin.firestore.FieldValue.serverTimestamp(),
-                identificacion_retention_days: RETENTION_DAYS,
+                identificacion_purged_by: callerUid,
+                identificacion_retention_days: retentionDays,
               });
               docsCleared++;
             } catch (docErr) {
@@ -101,6 +135,7 @@ module.exports = onSchedule(
             file: file.name,
             ordenId,
             created,
+            invokedBy: callerUid,
           });
         } catch (err) {
           errors++;
@@ -112,13 +147,20 @@ module.exports = onSchedule(
       }
     }
 
-    logger.info("[purgePIIRetention] DONE", {
-      retentionDays: RETENTION_DAYS,
+    const result = {
+      retentionDays,
       cutoff: cutoffISO,
+      dryRun,
       scanned,
+      candidates,
       deleted,
       docsCleared,
       errors,
-    });
+      invokedBy: callerUid,
+      ...(dryRun ? { sample: sampleCandidates } : {}),
+    };
+
+    logger.info("[purgePIIRetention] DONE", result);
+    return result;
   }
 );

@@ -5,7 +5,7 @@
 > **Status (2026-05-18):**
 > - **Tier 1 P0 (§1.1, §1.2, §1.3, §3a.2) — shipped.** See `CHANGELOG.md` commits `2700b61`, `8d71a93`, `07cdae7`, `8b0ade6`. Search cost dropped from O(collection) to O(matches); `cargarClientes` removed; mobile/desktop layouts no longer both render; `storage.rules` in the repo.
 > - **Tier 2 quick wins (QW1–QW16) — shipped.** All sixteen items either landed or noted as already-resolved. Commits `69d685a` (QW1–8 + 12–13 + 16 batches), `95c933a` (QW10, QW15), `76b9b00` (QW9), `51c7071` (QW4, QW5), `a65ae7d` (QW11), `d0ed77f` (QW14).
-> - **§3a entrega-flow** — partially shipped: §3a.4 (email XSS), §3a.5 (retina canvas), §3a.6 (ID compression), §3a.9 (`os_logs` docs), §3a.10 (dup timestamps) all in `69d685a` / `2700b61`. Outstanding: §3a.3 (PII retention CF), §3a.7 (SVG signature, optional), §3a.8 (entrega split — defer until next feature), §3a.11 (entrega → `Modal.open`), §3a.12 (server-side email render).
+> - **§3a entrega-flow** — partially shipped: §3a.4 (email XSS), §3a.5 (retina canvas), §3a.6 (ID compression), §3a.9 (`os_logs` docs), §3a.10 (dup timestamps), §3a.11 (entrega → `Modal.open`), §3a.3 (PII retention CF, **manual-only**). §3a.7 (SVG signature) **not pursuing**. §3a.8 (entrega split — defer until next feature). §3a.12 (server-side email render) — in progress.
 > - **Tier 3 architecture** — open: §3.1 (`onSnapshot` live updates), §3.2 (modular Firebase SDK, gated on build step), §3.3 (`enablePersistence` verify), §3.5 already done in commit `8a4de2b`. §3.4 (page-size by role) shipped in `69d685a`. §3.6 (`cambiarOrden` bug) shipped in `69d685a`.
 > - **Tier 4 UX overhaul (§4.x, §5.x)** — not started.
 >
@@ -186,16 +186,20 @@ The new code calls `firebase.storage()`, `MailService.enqueue()`, and `UsuariosS
 
 `storage.rules` does not exist alongside `firestore.rules`. The new flow writes to `ordenes_firmas/{ordenId}_firma_*.png` and `ordenes_identificacion/{ordenId}_id_*.{ext}`. Storage rules need to allow these writes for authenticated users (and ideally restrict deletes/reads to staff). **Action:** add `storage.rules` to the repo, deploy from there, mirror the §3.11 storage of `firestore.rules`. Required *before* anyone signs a delivery in production.
 
-### 3a.3 PII without retention policy
+### 3a.3 PII without retention policy — *partially shipped 2026-05-18 (manual-only)*
+
+> **Status:** the retention infrastructure shipped as a callable `purgePIIRetention` CF (not scheduled). Purging is **manual** for now — an admin must invoke it explicitly. The function deletes `ordenes_identificacion/` and `entregas_identificacion/` files older than 90 days, clears `identificacion_url` on the order, and stamps `identificacion_purged_at`. Signatures are intentionally not purged (legal evidence).
+>
+> **Why manual:** the company wants to review what would be deleted before any first run, and prefers explicit triggering over a nightly cron until the retention policy is formally documented for clients. To convert back to a scheduled job, swap the `onCall` wrapper for the original `onSchedule("every day 03:00")` — the inner logic is unchanged.
 
 The ID-photo upload to `ordenes_identificacion/` is a **photograph of a customer ID** — a clear PII class. There is no:
-- Retention policy (when do these get deleted?)
+- ~~Retention policy (when do these get deleted?)~~ → 90-day default; manual purge.
 - Access control beyond "any signed-in staff member"
 - Encryption-at-rest beyond Firebase Storage default
 - Audit log of who has viewed the photo
 - Notice to the customer that the image is being stored
 
-Panama doesn't have a GDPR-equivalent law (yet), but the company's clients in regulated sectors (ports, government) may demand a policy. **Action:** at minimum, document in a customer-visible doc that ID photos are stored and may be deleted on request. Ideally, add a CF that purges `ordenes_identificacion/` after N days from delivery.
+Panama doesn't have a GDPR-equivalent law (yet), but the company's clients in regulated sectors (ports, government) may demand a policy. **Remaining action:** document in a customer-visible doc that ID photos are stored and may be deleted on request.
 
 ### 3a.4 Email body is built with unsanitized template literals
 
@@ -239,9 +243,11 @@ async function compressImage(file, maxDim = 1280, quality = 0.85) {
 }
 ```
 
-### 3a.7 SVG signature would be better than PNG
+### 3a.7 SVG signature would be better than PNG — *not pursuing (2026-05-18)*
 
-PNG signatures are 5–20 KB per file. An SVG path (`<path d="M 10 20 L 11 22 ...">` captured during draw) would be 1–3 KB, **and** vector-perfect for legal/print purposes. Adopt this if the entrega flow becomes legally critical. ~3 hr of work — record the points during `start`/`move`/`end` instead of (or in addition to) rasterizing to canvas. Optional.
+> **Decision:** not needed at this time. Current PNG capture (with DPR scaling from §3a.5) is sufficient for the company's operational use of entrega signatures. Re-evaluate only if the entrega flow becomes legally critical (e.g. notarized receipts, court-admissible delivery proof).
+
+~~PNG signatures are 5–20 KB per file. An SVG path (`<path d="M 10 20 L 11 22 ...">` captured during draw) would be 1–3 KB, **and** vector-perfect for legal/print purposes. Adopt this if the entrega flow becomes legally critical. ~3 hr of work — record the points during `start`/`move`/`end` instead of (or in addition to) rasterizing to canvas. Optional.~~
 
 ### 3a.8 The flow is 350 lines in `ordenes-flujo.js`
 

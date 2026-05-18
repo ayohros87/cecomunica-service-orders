@@ -1,5 +1,34 @@
 # Changelog
 
+## [Ordenes index improvements — batch 18: PII purge as manual callable + doc notes] — 2026-05-18
+
+> Driver: stakeholder feedback after batch 17 — want to review what would be deleted before any first run, and prefer explicit triggering over a nightly cron until retention policy is formally documented for clients. Also closes the SVG decision in §3a.7 (not pursuing).
+
+### Changed
+- **`purgePIIRetention` is now a callable HTTPS function, not a scheduled cron.** [functions/src/triggers/scheduled/purgePIIRetention.js](functions/src/triggers/scheduled/purgePIIRetention.js) swapped the `onSchedule("every day 03:00", TZ=America/Panama)` wrapper for `onCall`. Inner purge logic is unchanged. Admin-only — checks `usuarios/{caller.uid}.rol === 'admin'`, otherwise throws `permission-denied`. Accepts `{ dryRun: true }` (returns `candidates` + a `sample[]` of up to 50 paths without deleting) and `{ retentionDays: <n> }` to override the 90-day default for one-off invocations. When purging for real, also stamps `identificacion_purged_by: <caller-uid>` on the order doc for audit attribution.
+- Path remains under `triggers/scheduled/` to keep diff minimal; the file header explicitly documents both the callable wrapper and how to revert to a cron if needed. Trigger total recomputed as **2 HTTP + 1 callable + 9 Firestore triggers = 12 CFs**.
+
+### Decisions
+- **§3a.7 SVG signature — not pursuing.** Updated [ORDENES_INDEX_IMPROVEMENTS.md](ORDENES_INDEX_IMPROVEMENTS.md) §3a.7 with strikethrough + rationale: PNG capture with DPR scaling (§3a.5 shipped) is sufficient for current operational use. Re-evaluate only if entrega flow becomes legally critical.
+
+### Docs
+- [ARQUITECTURA_CECOMUNICA.md](ARQUITECTURA_CECOMUNICA.md) §5.5 retention table now flags purga as **manual**; new paragraph documents the invocation contract (`dryRun`, `retentionDays`, admin gate, `permission-denied` for non-admins).
+- §6.1 file-tree comment for `scheduled/purgePIIRetention.js` annotated as "callable manual, no cron".
+- §6.3 trigger row updated: trigger type now `onCall (callable HTTPS, admin-only)`, responsibility describes `dryRun`/`retentionDays`/`identificacion_purged_by` audit field.
+
+### How to invoke
+```js
+// dry run (preview without deleting)
+firebase.functions().httpsCallable('purgePIIRetention')({ dryRun: true })
+// real purge with default 90-day retention
+firebase.functions().httpsCallable('purgePIIRetention')({ dryRun: false })
+// override retention for one-off (e.g. compliance request)
+firebase.functions().httpsCallable('purgePIIRetention')({ dryRun: false, retentionDays: 30 })
+```
+
+### Deploy
+- `firebase deploy --only functions:purgePIIRetention` — replaces the previously-deployed scheduled version. Cloud Scheduler will drop its registration for the renamed trigger type automatically; verify via `firebase functions:list`.
+
 ## [Ordenes index improvements — batch 17: presets + hover actions + PII retention] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §5.5 + §5.2 + §3a.3. §5.1 (bulk operations) marked out-of-scope per stakeholder feedback — orders are managed one at a time today.

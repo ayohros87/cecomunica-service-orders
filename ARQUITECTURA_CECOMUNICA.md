@@ -269,10 +269,12 @@ Rutas PII (`ordenes_firmas`, `ordenes_identificacion`, `entregas_identificacion`
 | Path | Retención | Purga |
 |---|---|---|
 | `ordenes_firmas/` | Indefinida | No se purga — evidencia legal de entrega |
-| `ordenes_identificacion/` | **90 días** desde upload | `purgePIIRetention` CF (ver §6.3) |
-| `entregas_identificacion/` (legacy) | **90 días** desde upload | `purgePIIRetention` CF (ver §6.3) |
+| `ordenes_identificacion/` | **90 días** desde upload | `purgePIIRetention` CF — invocación **manual** (ver §6.3) |
+| `entregas_identificacion/` (legacy) | **90 días** desde upload | `purgePIIRetention` CF — invocación **manual** (ver §6.3) |
 
-Al purgar una foto de ID, el CF también limpia `identificacion_url: null` en el doc de la orden y estampa `identificacion_purged_at: serverTimestamp()` + `identificacion_retention_days: 90` para que el audit trail registre la purga.
+Al purgar una foto de ID, el CF también limpia `identificacion_url: null` en el doc de la orden y estampa `identificacion_purged_at: serverTimestamp()` + `identificacion_purged_by: <uid>` + `identificacion_retention_days: 90` para que el audit trail registre la purga.
+
+**Modo de invocación (2026-05-18):** la purga corre **bajo demanda**, no en cron. Un admin la dispara explícitamente vía `firebase.functions().httpsCallable('purgePIIRetention')({ dryRun: true })` para previsualizar, luego `{ dryRun: false }` para ejecutar. `dryRun` devuelve `candidates` + `sample[]` sin borrar nada. Sólo callers con `usuarios/{uid}.rol === 'admin'` pasan la verificación; cualquier otro caller recibe `permission-denied`.
 
 ### 5.6 Búsqueda indexada de órdenes — `searchTokens`
 
@@ -309,7 +311,7 @@ functions/
       mail/
         onMailQueued.js                     ← onMailQueued
       scheduled/
-        purgePIIRetention.js                ← purgePIIRetention
+        purgePIIRetention.js                ← purgePIIRetention (callable manual, no cron)
     domain/
       contractCache.js                      ← rebuildContractCache (idempotente)
       pdfRenderer.js                        ← renderizado de contratos con Puppeteer
@@ -342,9 +344,9 @@ El canal de email activo desde el frontend es la colección `mail_queue` (ver §
 | `onOrdenHardDelete` | `onDocumentDeleted("ordenes_de_servicio/{id}")` | Hard-delete: elimina subcol caché y recalcula totales del contrato vinculado | — |
 | `onOrdenWriteSearchTokens` | `onDocumentWritten("ordenes_de_servicio/{id}")` | Mantiene el array `searchTokens` con tokens normalizados de orden ID, cliente, técnico, tipo de servicio y serials de equipos. Idempotente (compara tokens computados vs almacenados antes de escribir). Habilita la búsqueda indexada en `OrdenesService.searchOrders` — ver §5.6 | — |
 | `onMailQueued` | `onDocumentCreated("mail_queue/{id}")` | Lee el documento encolado y envía el email vía SendGrid | `SENDGRID_API_KEY` |
-| `purgePIIRetention` | `onSchedule("every day 03:00", TZ=America/Panama)` | Borra fotos de ID en `ordenes_identificacion/` y `entregas_identificacion/` con > 90 días desde upload. Limpia `identificacion_url`, estampa `identificacion_purged_at` en el doc de la orden — ver §5.5 | — |
+| `purgePIIRetention` | `onCall` (callable HTTPS, admin-only) | Borra fotos de ID en `ordenes_identificacion/` y `entregas_identificacion/` con > 90 días desde upload (parametrizable vía `retentionDays`). Soporta `dryRun: true` para previsualizar. Limpia `identificacion_url`, estampa `identificacion_purged_at` + `identificacion_purged_by` en el doc de la orden — ver §5.5 | — |
 
-Total: **2 endpoints HTTP + 10 triggers (9 onDocument + 1 scheduled) = 12 funciones** exportadas desde `functions/index.js`.
+Total: **2 endpoints HTTP + 1 callable + 9 triggers Firestore = 12 funciones** exportadas desde `functions/index.js`.
 
 ### 6.4 Pipeline de email
 
