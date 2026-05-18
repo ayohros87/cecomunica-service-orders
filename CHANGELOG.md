@@ -1,5 +1,41 @@
 # Changelog
 
+## [Ordenes index improvements — batch 20: UX redesign §4.2 + §4.3 + §4.4] — 2026-05-18
+
+> Driver: Tier-4 UX overhaul from `ORDENES_INDEX_IMPROVEMENTS.md`. Three intertwined changes shipped together because they share selectors and styles — splitting would have meant double-touching the same CSS region. View toggle defaults to cards; users can revert to the legacy table via topbar (preference persisted in `localStorage`).
+
+### Added — §4.2 Card-style row
+- **Topbar view toggle** (`[grid][table]`) in [public/ordenes/index.html](public/ordenes/index.html). Action handlers `set-view-cards` / `set-view-table` in [public/js/pages/ordenes-events.js](public/js/pages/ordenes-events.js).
+- **`getOrdersView()` + `setOrdersView(mode)`** in [public/js/pages/ordenes-ui.js](public/js/pages/ordenes-ui.js) — reads/writes `ordenes:view-mode` (values: `cards` (default) | `table`) in localStorage and toggles `body.orders-view--cards` / `body.orders-view--table`. An IIFE at script-load applies the saved preference before first paint.
+- **CSS card layout** in [public/css/ordenes-index.css](public/css/ordenes-index.css) — gated by `@media (min-width: 769px)` so mobile keeps its own `#ordersCards` grid. The `<table>` markup is untouched; CSS flips each `tr[data-orden-row]` into a 3-col × 3-row grid: Row 1 = ID + Cliente + Estado pill, Row 2 = Tipo (muted, full-width), Row 3 = Técnico + Entrega (muted). Actions cell spans all 3 rows in col 3. Fecha creación hidden in cards (still visible in table). Expanded `tr.filaDetalle` becomes a panel flush under the active card via negative `margin-top`.
+
+### Added — §4.3 Chip filter bar
+- **`#estadoChipsBar`** in [public/ordenes/index.html](public/ordenes/index.html) — five chips (Todas + 4 estados) above the existing toolbar. Each chip shows a live count (`<span data-count="...">`). `role="tablist"` + `aria-selected` + ARIA tabs semantics. Mobile hides this bar (mobile already has `#mobileEstadoChips` in the drawer).
+- **`filtrarPorChipEstado(el)` + `syncEstadoChipsFromSelect()`** in [public/js/pages/ordenes-filters.js](public/js/pages/ordenes-filters.js). The chip handler mirrors the chosen estado into the now-hidden `<select id="filtroEstado">` and delegates to `filtrarPorEstado` — keeps `getActiveFilters()`, URL serializer, and presets working unchanged. `_applyURLToFilters` now also syncs chip state on URL/preset apply and `popstate`.
+- **Per-estado palette** on active chips matches the row `.estado-pill` palette (POR ASIGNAR critical-red, ASIGNADO warning-amber, COMPLETADO brand-blue, ENTREGADO online-green) so the active filter visually echoes the rows it surfaces.
+- **`actualizarResumen` rewritten** in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) — counts now come from the unfiltered `APP.state.orders` so chip counts reflect the dataset, not the current filter view. Filled into `[data-count="..."]` on the chip bar.
+
+### Added — §4.4 Typography hierarchy
+- **Desktop table tier system** in `ordenes-index.css` — `tbody td:nth-child(1)` (ID) and `(2)` (cliente) bold + `--fg-1` + 14 px; `(3)` técnico, `(4)` tipo, `(6)` fecha-creación, `(7)` fecha-entrega muted + `--fg-3` + 13 px. `thead th` uppercase-tracked + smaller. tabular-nums on the ID column and date columns.
+- **Mobile card BEM extraction** in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) — replaced 5+ inline `style=` attributes with `card-contrato__tier1` / `tier2` / `tier3` / `id` / `cliente` / `tipo` / `tecnico` classes. The mobile card now also surfaces the `estado-pill` (with dot) in the top-right of tier 1, matching the desktop card-view's pill placement.
+
+### Changed
+- Estado dropdown (`<select id="filtroEstado">`) is now visually hidden (`.filter-field--hidden`) but kept in the DOM as the canonical state holder.
+- Mobile cards no longer use the ad-hoc `<span class="estado">` with inline-style background; they use the shared `.estado-pill` palette like the desktop rows.
+
+### Files touched
+- HTML: `public/ordenes/index.html` (chip bar + view toggle + filtroEstado hide hook)
+- CSS: `public/css/ordenes-index.css` (~330 new lines; §4.2 + §4.3 + §4.4 blocks)
+- JS: `public/js/pages/ordenes-render.js` (mobile card markup + actualizarResumen)
+- JS: `public/js/pages/ordenes-filters.js` (chip handler + URL/popstate sync + limpiarFiltros chip reset)
+- JS: `public/js/pages/ordenes-events.js` (3 new action handlers)
+- JS: `public/js/pages/ordenes-ui.js` (`setOrdersView` + persistence + init)
+- Docs: `ORDENES_INDEX_IMPROVEMENTS.md` — §4.2 + §4.3 + §4.4 marked shipped; status block updated.
+
+### UX
+- Default first-load view is **cards** — denser visual scan, three-tier rhythm per row. Power users (admin/recepción doing bulk triage) can switch to **table** via the topbar toggle and the preference persists.
+- Chip bar makes estado the primary filter affordance — one click vs. open-dropdown-then-pick. Counts are visible at all times.
+
 ## [Ordenes index improvements — batch 19: server-side email render] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3a.12 — single source of truth for entrega email branding/i18n; eliminates the duplicate inline 70-line template literal that lived in the frontend.

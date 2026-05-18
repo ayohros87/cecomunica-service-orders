@@ -240,25 +240,27 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       ? `<span class="fotos-taller-badge mobile" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
       : "";
 
+    // Tier-1 row: Orden + Cliente + (later) Estado pill on the right.
+    // Tier-2 row: Tipo · Técnico — muted.
+    // Tier-3 row: timestamps — most muted.
+    // Hierarchy mirrors ORDENES_INDEX_IMPROVEMENTS §4.4.
     card.innerHTML = `
-      <div class="row">
-        <div class="t1">Orden #${ordenId}</div>
-        ${fotosBadgeMobile}
-        <div class="t2">${nombreClienteDe(ordenData)}</div>
+      <div class="card-contrato__tier1">
+        <div class="card-contrato__heading">
+          <span class="card-contrato__id">Orden #${ordenId}</span>
+          ${fotosBadgeMobile}
+        </div>
+        <div class="card-contrato__cliente">${nombreClienteDe(ordenData)}</div>
+        <span class="estado-pill ${getEstadoClass(estadoDisplay)}" title="${estadoDisplay}">
+          <span class="dot" aria-hidden="true"></span>${estadoCompacto(estadoDisplay)}
+        </span>
       </div>
-      <div class="row" style="font-size: 13px; color: #6b7280; margin-bottom: 8px;">
-        <span>${tipoDisplay}</span>
-        <span style="font-weight: 600;">${tecnicoDisplay}</span>
+      <div class="card-contrato__tier2">
+        <span class="card-contrato__tipo">${tipoDisplay}</span>
+        <span class="card-contrato__sep" aria-hidden="true">·</span>
+        <span class="card-contrato__tecnico">${tecnicoDisplay}</span>
       </div>
-      <div class="row" style="margin-bottom: 12px;">
-        <span class="estado" style="background: ${
-          estadoDisplay === 'ENTREGADO AL CLIENTE' ? '#bbf7d0' :
-          estadoDisplay === 'COMPLETADO (EN OFICINA)' ? '#bfdbfe' :
-          estadoDisplay === 'ASIGNADO' ? '#fef3c7' :
-          '#fecaca'
-        }; font-size: 11px; padding: 6px 10px; border-radius: 16px; font-weight: 700;">${estadoCompacto(estadoDisplay)}</span>
-      </div>
-      <div class="row" style="font-size: 12px; color: #9ca3af; margin-bottom: 12px;">
+      <div class="card-contrato__tier3">
         <span>Creado: ${formatFecha(ordenData.fecha_creacion)}</span>
         <span class="fecha-entrega">Entrega: ${formatFecha(ordenData.fecha_entrega)}</span>
       </div>
@@ -269,7 +271,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <button class="btn secondary" data-action="go-fotos-taller" data-stop-propagation="true" data-orden-id="${ordenId}">
           <i data-lucide="camera"></i> Fotos
         </button>
-        <button class="btn primary" data-action="editar-orden" data-orden-id="${ordenId}" style="flex: 2;">
+        <button class="btn primary card-contrato__editar" data-action="editar-orden" data-orden-id="${ordenId}">
           <i data-lucide="pencil"></i> Editar
         </button>
         ${botonesFlujo(ordenId, estado, ordenData)}
@@ -695,20 +697,30 @@ window.botonesGestion = botonesGestion;
 
 function actualizarResumen(lista) {
   const el = document.getElementById("resumenOrdenes");
-  if (!el) return;
+  // Count from APP.state.orders (unfiltered) so chip counts reflect the
+  // dataset, not the filtered view. The legacy resumen-button shows the
+  // filtered total so the user has both numbers.
+  const fullList = APP.state.orders || lista || [];
   const total = (lista || []).length;
 
-  const porAsignar = (lista || []).filter(o =>
-    (o.estado_reparacion || "POR ASIGNAR").toUpperCase() === "POR ASIGNAR").length;
+  const _statusOf = (o) => (o.estado_reparacion || "POR ASIGNAR").toUpperCase();
+  const porAsignar         = fullList.filter(o => _statusOf(o) === "POR ASIGNAR").length;
+  const asignado           = fullList.filter(o => _statusOf(o) === "ASIGNADO").length;
+  const completadoOficina  = fullList.filter(o => _statusOf(o) === "COMPLETADO (EN OFICINA)").length;
+  const entregadoCliente   = fullList.filter(o => _statusOf(o) === "ENTREGADO AL CLIENTE").length;
 
-  const asignado = (lista || []).filter(o =>
-    (o.estado_reparacion || "").toUpperCase() === "ASIGNADO").length;
+  // Pump counts into the §4.3 chip bar.
+  const chipCount = (key, n) => {
+    const span = document.querySelector(`#estadoChipsBar [data-count="${key}"]`);
+    if (span) span.textContent = String(n);
+  };
+  chipCount('all', fullList.length);
+  chipCount('POR ASIGNAR', porAsignar);
+  chipCount('ASIGNADO', asignado);
+  chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
+  chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
 
-  const completadoOficina = (lista || []).filter(o =>
-    (o.estado_reparacion || "").toUpperCase() === "COMPLETADO (EN OFICINA)").length;
-
-  const entregadoCliente = (lista || []).filter(o =>
-    (o.estado_reparacion || "").toUpperCase() === "ENTREGADO AL CLIENTE").length;
+  if (!el) return;
 
   const filtroEstadoSelect = document.getElementById("filtroEstado");
   const estadoActivo = filtroEstadoSelect ? filtroEstadoSelect.value : "";

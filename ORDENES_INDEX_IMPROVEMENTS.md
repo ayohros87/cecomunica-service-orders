@@ -7,7 +7,7 @@
 > - **Tier 2 quick wins (QW1–QW16) — shipped.** All sixteen items either landed or noted as already-resolved. Commits `69d685a` (QW1–8 + 12–13 + 16 batches), `95c933a` (QW10, QW15), `76b9b00` (QW9), `51c7071` (QW4, QW5), `a65ae7d` (QW11), `d0ed77f` (QW14).
 > - **§3a entrega-flow** — mostly shipped: §3a.4 (email XSS), §3a.5 (retina canvas), §3a.6 (ID compression), §3a.9 (`os_logs` docs), §3a.10 (dup timestamps), §3a.11 (entrega → `Modal.open`), §3a.3 (PII retention CF, **manual-only**), §3a.12 (server-side email render). §3a.7 (SVG signature) **not pursuing**. §3a.8 (entrega split) — defer until next entrega feature.
 > - **Tier 3 architecture** — open: §3.1 (`onSnapshot` live updates), §3.2 (modular Firebase SDK, gated on build step), §3.3 (`enablePersistence` verify), §3.5 already done in commit `8a4de2b`. §3.4 (page-size by role) shipped in `69d685a`. §3.6 (`cambiarOrden` bug) shipped in `69d685a`.
-> - **Tier 4 UX overhaul (§4.x, §5.x)** — not started.
+> - **Tier 4 UX overhaul (§4.x, §5.x)** — §4.2 (card-style row), §4.3 (chip filter bar), §4.4 (typography hierarchy) shipped 2026-05-18. Remaining: §4.1 (other "outdated" items), §5.3, §5.6, §5.7 (timeline already done).
 >
 > **Earlier CSS-only work:** the `212f3af` token-bridge commit and follow-ups documented in `CSS_IMPROVEMENTS.md` §10.
 >
@@ -295,7 +295,10 @@ The flow opens its modal via `APP.utils.show(modal)` and registers a custom back
 - **Tooltips on hover** with no mobile equivalent. Long-press should at minimum show the tooltip on touch.
 - **No keyboard shortcut palette.** Ctrl+K focuses search; add `?` to open a full cheatsheet. Power users (admin, recepción) will love it.
 
-### 4.2 Visual hierarchy — proposed row redesign
+### 4.2 Visual hierarchy — proposed row redesign — *shipped 2026-05-18*
+
+> **Status:** done. Default view is cards; topbar toggle (`[grid][table]`) flips between cards and the legacy table; preference persists in localStorage (`ordenes:view-mode`). Cards are CSS-only — the `<table>` markup stays for a11y/screen-reader semantics, but `body.orders-view--cards` overrides each `<tr>` into a 3×3 grid (ID + Cliente + Pill top row, Tipo full-width muted row, Técnico · Entrega muted row, Actions right-aligned spanning all rows). Fecha creación hidden in cards (still visible in table). Expanded equipos panel attaches flush under the active card. See [public/css/ordenes-index.css](public/css/ordenes-index.css) `body.orders-view--cards` block.
+
 
 Right now everything has equal weight. The table is dense, no rhythm, no anchor point. A staff member glancing at the page cannot immediately see "5 orders need attention."
 
@@ -313,7 +316,11 @@ Two-row card-style. Less density per row, much faster visual scan. Tested patter
 
 Keep the table as an opt-in for power users via a `Table | Cards` toggle in the topbar.
 
-### 4.3 Filter UX — chip filters
+### 4.3 Filter UX — chip filters — *shipped 2026-05-18*
+
+> **Status:** done. Estado chip bar (`#estadoChipsBar`) renders above the toolbar; click a chip to filter, click the active chip to clear. Each chip shows a count (filled by `actualizarResumen` from `APP.state.orders`, not the filtered view, so counts reflect the dataset). The legacy `<select id="filtroEstado">` is kept (visually hidden) so URL params, presets, and `getActiveFilters()` continue to work unchanged — the chip handler mirrors selections into the select. Active chip uses the estado palette (POR ASIGNAR red, ASIGNADO amber, COMPLETADO brand-blue, ENTREGADO green) to visually echo the row pills. Avanzado accordion + tipo/técnico/sort dropdowns retained (the spec called out Tipo/Técnico as still being dropdowns). Mobile already has its own chip drawer (`#mobileEstadoChips`); the new desktop bar is hidden on mobile to avoid duplication.
+
+
 
 Replace the dual desktop-form + mobile-drawer with **chip filters** at the top:
 
@@ -354,7 +361,11 @@ This collapses the ~250 px filter card to a ~50 px chip bar. Identical on mobile
 
 Requires the Week-0 token bridge (`--radius-md`, `--border-default`, `--brand-soft`, `--brand-press`, `--fg-1`).
 
-### 4.4 Typography
+### 4.4 Typography — *shipped 2026-05-18*
+
+> **Status:** done. Three-tier hierarchy on order rows in both table and card view. Desktop table targets by `td:nth-child` (cols 1+2 bold + primary fg, col 5 keeps pill weight, cols 3/4/6/7 muted + smaller); table header rows uppercase-tracked at fg-3. Mobile cards extracted inline styles into BEM (`.card-contrato__tier1/2/3`, `.card-contrato__id`, `.card-contrato__cliente`, etc.) and apply the same tier rules. tabular-nums on the order ID and date columns so digits line up.
+
+
 
 System font stack is fine. You do not need a custom font. But:
 - Order ID, client name, estado → **semibold, slightly larger**

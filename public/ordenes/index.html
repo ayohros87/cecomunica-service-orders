@@ -41,6 +41,15 @@
     <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
     <div class="topbar-actions">
       <button class="btn primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
+      <!-- §4.2 view toggle: cards (default) ↔ table -->
+      <div class="view-toggle" role="group" aria-label="Modo de vista">
+        <button type="button" class="view-toggle__btn" data-action="set-view-cards" data-view="cards" aria-pressed="true" title="Vista de tarjetas">
+          <i data-lucide="layout-grid"></i>
+        </button>
+        <button type="button" class="view-toggle__btn" data-action="set-view-table" data-view="table" aria-pressed="false" title="Vista de tabla">
+          <i data-lucide="table"></i>
+        </button>
+      </div>
       <div class="overflow-menu topbar-menu">
         <button class="btn ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
         <div class="overflow-menu-dropdown" id="topbar-menu">
@@ -71,6 +80,35 @@
 
 <!-- Tarjeta de filtros -->
 <div class="card filters-card-sticky filters-card--desktop" id="desktopFiltersCard">
+  <!-- Estado chip bar — primary filter scan, replaces the dropdown. ORDENES_INDEX_IMPROVEMENTS §4.3 -->
+  <div class="estado-chips-bar" id="estadoChipsBar" role="tablist" aria-label="Filtrar por estado">
+    <button type="button" class="estado-chip estado-chip--all active"
+            data-action="filtrar-estado-chip" data-estado=""
+            role="tab" aria-selected="true">
+      Todas <span class="estado-chip__count" data-count="all">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--por-asignar"
+            data-action="filtrar-estado-chip" data-estado="POR ASIGNAR"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--asignado"
+            data-action="filtrar-estado-chip" data-estado="ASIGNADO"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Asignado <span class="estado-chip__count" data-count="ASIGNADO">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--completado"
+            data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Completado <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--entregado"
+            data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
+    </button>
+  </div>
+
   <!-- Búsqueda rápida -->
   <div class="toolbar">
     <div class="left" style="flex: 1;">
@@ -122,9 +160,13 @@
           <option value="">Tipo (todos)</option>
         </select>
       </div>
-      <div class="filter-field">
+      <!-- Estado dropdown kept for URL/preset sync; visually replaced by
+           the chip bar above (ORDENES_INDEX_IMPROVEMENTS §4.3). The chip
+           handler mirrors its value here so getActiveFilters() still sees
+           the right value without code changes. -->
+      <div class="filter-field filter-field--hidden" aria-hidden="true">
         <label for="filtroEstado" class="form-label-bold">Estado</label>
-        <select id="filtroEstado" class="filter-select" data-action="filtrar-estado">
+        <select id="filtroEstado" class="filter-select" data-action="filtrar-estado" tabindex="-1">
           <option value="">Todos</option>
           <option value="POR ASIGNAR">POR ASIGNAR</option>
           <option value="ASIGNADO">ASIGNADO</option>

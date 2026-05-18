@@ -48,6 +48,9 @@
     'filtrar-tipo': () => aplicarFiltrosCombinados(),
     'filtrar-tecnico': () => aplicarFiltrosCombinados(),
     'filtrar-mias': () => aplicarFiltrosCombinados(),
+    'filtrar-estado-chip': (el) => filtrarPorChipEstado(el),
+    'set-view-cards': () => setOrdersView('cards'),
+    'set-view-table': () => setOrdersView('table'),
     'toggle-fecha-entrega': () => {
       const visible = document.body?.classList.contains('hide-fecha-entrega');
       setFechaEntregaVisible(visible);

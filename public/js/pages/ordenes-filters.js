@@ -265,12 +265,17 @@ function _applyURLToFilters() {
 }
 
 // Expose so ordenes-index.js can call before the initial data load.
-window._applyURLToFilters = _applyURLToFilters;
+window._applyURLToFilters = function () {
+  const out = _applyURLToFilters();
+  if (typeof syncEstadoChipsFromSelect === 'function') syncEstadoChipsFromSelect();
+  return out;
+};
 
 // Back/forward — re-apply URL state, then re-render.
 window.addEventListener('popstate', () => {
   if (_applyURLToFilters()) {
     if (typeof aplicarFiltrosCombinados === 'function') aplicarFiltrosCombinados();
+    if (typeof syncEstadoChipsFromSelect === 'function') syncEstadoChipsFromSelect();
   }
 });
 
@@ -453,6 +458,12 @@ window.limpiarFiltros = function () {
   if (mSoloMias) mSoloMias.checked = false;
 
   document.querySelectorAll('.resumen .badge.active').forEach(b => b.classList.remove('active'));
+  // Reset estado chip bar to "Todas".
+  document.querySelectorAll('#estadoChipsBar .estado-chip').forEach(chip => {
+    const isAll = !chip.dataset.estado;
+    chip.classList.toggle('active', isAll);
+    chip.setAttribute('aria-selected', isAll ? 'true' : 'false');
+  });
 
   const ordersTable = document.getElementById("ordersTable");
   const cardsWrap = document.getElementById("ordersCards");
@@ -475,6 +486,54 @@ window.cambiarDireccionOrden = function () {
   APP.state.sortAscending = !APP.state.sortAscending;
   _syncFiltersToURL();
   cargarOrdenesYEquipos();
+};
+
+/**
+ * Chip-bar handler — ORDENES_INDEX_IMPROVEMENTS §4.3.
+ *
+ * The estado chips replace the dropdown as the primary filter scan.
+ * Clicking a chip:
+ *   1. Mirrors its value into the (hidden) #filtroEstado select so the
+ *      rest of the filter pipeline (getActiveFilters, URL serializer,
+ *      presets) keeps working unchanged.
+ *   2. Updates `aria-selected` + `active` class on chips.
+ *   3. Delegates to filtrarPorEstado for the actual data refresh.
+ * Clicking the already-active chip clears the filter.
+ *
+ * @param {HTMLElement} el — the clicked chip button
+ */
+window.filtrarPorChipEstado = function (el) {
+  const estado = el.dataset.estado || '';
+  const wasActive = el.classList.contains('active');
+  const next = wasActive ? '' : estado;
+
+  // Mirror into the hidden select.
+  const sel = document.getElementById('filtroEstado');
+  if (sel) sel.value = next;
+
+  // Update chip ARIA state.
+  document.querySelectorAll('#estadoChipsBar .estado-chip').forEach(chip => {
+    const isActive = chip.dataset.estado === next;
+    chip.classList.toggle('active', isActive);
+    chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  filtrarPorEstado(next);
+};
+
+/**
+ * Reflect the current estado filter into chip-bar active state.
+ * Called after presets load / URL apply / popstate so the chips don't
+ * drift from the (hidden) select they mirror.
+ */
+window.syncEstadoChipsFromSelect = function () {
+  const sel = document.getElementById('filtroEstado');
+  const current = (sel?.value || '').toString();
+  document.querySelectorAll('#estadoChipsBar .estado-chip').forEach(chip => {
+    const isActive = (chip.dataset.estado || '') === current;
+    chip.classList.toggle('active', isActive);
+    chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
 };
 
 window.filtrarPorEstado = async function (estado) {

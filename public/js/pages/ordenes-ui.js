@@ -6,6 +6,42 @@
  * `Toast.show()` from `public/js/ui/toast.js` directly.
  * ======================================== */
 
+// ── Orders view mode (cards | table) — ORDENES_INDEX_IMPROVEMENTS §4.2 ──
+// Cards is the new default (2-tier scan, less density). Table is opt-in
+// for power users via the topbar toggle, persisted across sessions.
+const _ORDERS_VIEW_KEY = 'ordenes:view-mode';
+
+function getOrdersView() {
+  try {
+    const stored = localStorage.getItem(_ORDERS_VIEW_KEY);
+    return stored === 'table' ? 'table' : 'cards';
+  } catch {
+    return 'cards';
+  }
+}
+
+function setOrdersView(mode) {
+  const next = mode === 'table' ? 'table' : 'cards';
+  try { localStorage.setItem(_ORDERS_VIEW_KEY, next); } catch { /* private mode */ }
+  document.body.classList.toggle('orders-view--cards', next === 'cards');
+  document.body.classList.toggle('orders-view--table', next === 'table');
+  // Update toggle pressed state.
+  document.querySelectorAll('[data-action^="set-view-"]').forEach(btn => {
+    btn.setAttribute('aria-pressed', btn.dataset.view === next ? 'true' : 'false');
+  });
+}
+window.getOrdersView = getOrdersView;
+window.setOrdersView = setOrdersView;
+
+// Init on first script run — body class applied before render so the
+// first paint already reflects the preferred view.
+(function _initOrdersView() {
+  if (typeof document === 'undefined') return;
+  const apply = () => setOrdersView(getOrdersView());
+  if (document.body) apply();
+  else document.addEventListener('DOMContentLoaded', apply, { once: true });
+})();
+
 function mostrarNotificacionProgreso(data) {
   const box = document.createElement("div");
   box.className = "notificacion-progreso";
