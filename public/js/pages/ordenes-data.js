@@ -6,13 +6,6 @@
  * (rendering lives in ordenes-render.js, filter UI in ordenes-filters.js).
  * ======================================== */
 
-async function cargarClientes() {
-  const clientesData = await ClientesService.loadClientes();
-  clientesData.forEach((cliente, id) => {
-    APP.state.clientesMap[id] = cliente.nombre;
-  });
-}
-
 async function cargarTiposDeServicioFiltros() {
   const desktopSel = document.getElementById("filtroTipo");
   const mobileSel = document.getElementById("mobileFiltroTipo");

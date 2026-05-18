@@ -64,7 +64,6 @@ document.addEventListener("DOMContentLoaded", function () {
       }
 
       APP.utils.show("loader");
-      await cargarClientes();
       await cargarTiposDeServicioFiltros();
       await cargarTecnicosFiltros();
       await cargarOrdenesYEquipos();

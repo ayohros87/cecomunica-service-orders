@@ -242,16 +242,20 @@ const OrdenesService = {
   },
 
   /**
-   * Search orders by filters (orden, cliente, serial)
-   * Uses client-side filtering due to Firestore limitations
+   * Search orders by filters (orden, cliente, serial). Reads the
+   * full `ordenes_de_servicio` collection and filters client-side —
+   * a cost-curve issue tracked in ORDENES_INDEX_IMPROVEMENTS.md §1.1.
+   * Will be replaced by an indexed `searchTokens` array-contains query.
+   * Relies on the denormalized `cliente_nombre` field on each order
+   * (set by nueva-orden.js); no clientesMap lookup any more.
    * @param {Object} filters
    * @param {string} filters.filtroOrden - Order ID filter
    * @param {string} filters.filtroCliente - Client name filter
    * @param {string} filters.filtroSerial - Serial number filter
-   * @param {Object} filters.clientesMap - Map of client IDs to names
+   * @param {boolean} filters.quickSearch - true → OR logic, false → AND
    * @returns {Promise<Array>}
    */
-  async searchOrders({ filtroOrden = "", filtroCliente = "", filtroSerial = "", clientesMap = {}, quickSearch = false } = {}) {
+  async searchOrders({ filtroOrden = "", filtroCliente = "", filtroSerial = "", quickSearch = false } = {}) {
     const db = firebase.firestore();
     const snapshot = await db.collection("ordenes_de_servicio").get();
 
@@ -261,16 +265,13 @@ const OrdenesService = {
     const filtroSerialNorm = normTxt(filtroSerial);
 
     const resultados = [];
-    
+
     snapshot.forEach(doc => {
       const ordenId = normTxt(doc.id);
       const data = doc.data();
       if (data.eliminado === true) return;
 
-      const cliente = normTxt(
-        (data.cliente_id && clientesMap[data.cliente_id]) ||
-        data.cliente_nombre || data.cliente || ""
-      );
+      const cliente = normTxt(data.cliente_nombre || data.cliente || "");
 
       const equipos = data.equipos || [];
 

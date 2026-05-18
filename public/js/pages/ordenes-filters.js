@@ -195,7 +195,6 @@ window.filtrarOrdenes = async function () {
       filtroOrden,
       filtroCliente,
       filtroSerial,
-      clientesMap: APP.state.clientesMap,
       quickSearch: false
     });
 
@@ -250,7 +249,6 @@ window.filtrarRapido = async function () {
       filtroOrden: valor,
       filtroCliente: valor,
       filtroSerial: valor,
-      clientesMap: APP.state.clientesMap,
       quickSearch: true
     });
 

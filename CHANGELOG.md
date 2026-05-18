@@ -1,5 +1,21 @@
 # Changelog
 
+## [Ordenes index improvements — batch 6: cliente_nombre denorm] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §1.2 — second Tier-1 item. Closes one of the two Firestore cost leaks.
+
+### Refactor
+- Stopped reading the entire `clientes` collection on every page load. Every order now resolves its display name from the denormalized `orden.cliente_nombre` field (written by `nueva-orden.js` since the field landed) with `orden.cliente` as a legacy fallback. At 3k clientes × 30 page loads/day × 8 staff ≈ 720k reads/day eliminated.
+- Removed `cargarClientes()` from [public/js/pages/ordenes-data.js](public/js/pages/ordenes-data.js).
+- Removed `await cargarClientes()` from the page-load chain in [public/js/pages/ordenes-index.js](public/js/pages/ordenes-index.js).
+- Removed `APP.state.clientesMap` from [public/js/pages/ordenes-state.js](public/js/pages/ordenes-state.js).
+- Simplified `nombreClienteDe(orden)` from a 3-tier lookup (`clientesMap[id] || orden.cliente_nombre || orden.cliente || "—"`) to `orden.cliente_nombre || orden.cliente || "—"`.
+- Dropped the `clientesMap` parameter from `OrdenesService.searchOrders` and the two `ordenes-filters.js` call sites that passed it.
+
+### Notes
+- Trade-off: orders no longer reflect cliente-name renames retroactively. If a customer renames "Acme Inc" to "Acme Telecom", existing orders keep the old name. Acceptable for an audit-trail-friendly system; a CF that propagates name changes can be added later if needed.
+- Other pages (cotizaciones, POC, contratos) still use `ClientesService.loadClientes` and their own `clientesMap` patterns — out of scope for this change.
+
 ## [Ordenes index improvements — batch 5: storage.rules] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3a.2 — first Tier-1 deploy-blocker.

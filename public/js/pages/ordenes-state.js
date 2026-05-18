@@ -15,7 +15,6 @@ window.APP = {
     userRole: null,       // User role (replaces window.userRole)
     filters: {},          // Active filters
     lastVisible: null,    // Last document for pagination
-    clientesMap: {},      // Map of cliente ID to nombre
     sortField: 'ordenId', // Field to sort by
     sortAscending: false  // Sort direction
   },
@@ -222,10 +221,13 @@ function escapeHtml(str) {
   }[m]));
 }
 
-// Reads APP.state.clientesMap to resolve cliente_id → display name.
+// Denormalized: every order written by nueva-orden.js since the cliente_nombre
+// field landed has the name on the doc directly. `orden.cliente` is a legacy
+// fallback for pre-denormalization records. No cross-collection lookup needed —
+// stale-name trade-off (if the client renames itself, existing orders keep the
+// old name) is accepted; ORDENES_INDEX_IMPROVEMENTS.md §1.2.
 function nombreClienteDe(orden) {
-  const id = orden.cliente_id || orden.clienteId;
-  return (id && APP.state.clientesMap[id]) || orden.cliente_nombre || orden.cliente || "—";
+  return orden.cliente_nombre || orden.cliente || "—";
 }
 
 function getEstadoClass(estado) {
