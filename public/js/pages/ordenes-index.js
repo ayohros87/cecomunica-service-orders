@@ -69,9 +69,14 @@ document.addEventListener("DOMContentLoaded", function () {
       renderSkeletonRows(8);
       await cargarTiposDeServicioFiltros();
       await cargarTecnicosFiltros();
+      // Apply URL filter state AFTER the dropdowns have their options
+      // populated (so `<select>` values resolve correctly) but BEFORE
+      // the initial data load (so sort + soloMias take effect on the
+      // first render). ORDENES_INDEX_IMPROVEMENTS.md §5.4.
+      const hadUrlFilters = typeof _applyURLToFilters === 'function' && _applyURLToFilters();
       await cargarOrdenesYEquipos();
       aplicarRestriccionesPorRol(rol);
-      if (shouldDefaultMine) aplicarFiltrosCombinados();
+      if (shouldDefaultMine || hadUrlFilters) aplicarFiltrosCombinados();
     } catch (e) {
       console.error("Error obteniendo rol del usuario:", e);
       Toast.show("Error al verificar permisos. Por favor, recarga la página.", 'bad');

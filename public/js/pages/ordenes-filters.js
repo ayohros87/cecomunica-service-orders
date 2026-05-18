@@ -151,7 +151,105 @@ function aplicarFiltrosCombinados() {
   if (btn) btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${filtered.length})`;
 
   renderOrdersList(filtered);
+  _syncFiltersToURL();
 }
+
+// ── URL filter state ──────────────────────────────────────────────
+// Encodes the current filter + sort state into the page URL so:
+//   - refresh preserves filters
+//   - copy-paste-link to a colleague reproduces the same view
+//   - back/forward navigates filter history
+// ORDENES_INDEX_IMPROVEMENTS.md §5.4.
+//
+// Param keys are short to keep URLs scannable; mapping documented
+// inline below.
+const _URL_FILTER_KEYS = {
+  // url-key  →  DOM element id (advanced/persistent filters only;
+  // the quick-search input is ephemeral and intentionally not
+  // serialized).
+  orden:   'filtroOrden',
+  cliente: 'filtroCliente',
+  serial:  'filtroSerial',
+  tipo:    'filtroTipo',
+  estado:  'filtroEstado',
+  tecnico: 'filtroTecnico',
+  // booleans + sort live below
+};
+
+function _syncFiltersToURL() {
+  if (typeof history?.replaceState !== 'function') return;
+  const params = new URLSearchParams();
+  for (const [key, id] of Object.entries(_URL_FILTER_KEYS)) {
+    const el = document.getElementById(id);
+    const val = (el?.value ?? '').toString().trim();
+    if (val) params.set(key, val);
+  }
+  if (document.getElementById('toggleMisOrdenes')?.checked) params.set('mias', '1');
+  const sortField = APP.state.sortField;
+  if (sortField && sortField !== 'ordenId') params.set('sort', sortField);
+  if (APP.state.sortAscending) params.set('asc', '1');
+
+  const qs = params.toString();
+  const newUrl = qs
+    ? `${location.pathname}?${qs}${location.hash}`
+    : `${location.pathname}${location.hash}`;
+  // Skip if nothing changed — avoids cluttering history with no-ops.
+  if (newUrl === location.pathname + location.search + location.hash) return;
+  history.replaceState(null, '', newUrl);
+}
+
+function _applyURLToFilters() {
+  if (typeof URLSearchParams !== 'function') return false;
+  const params = new URLSearchParams(location.search);
+  if (params.toString() === '') return false;
+
+  let touched = false;
+  for (const [key, id] of Object.entries(_URL_FILTER_KEYS)) {
+    if (!params.has(key)) continue;
+    const el = document.getElementById(id);
+    if (el) { el.value = params.get(key); touched = true; }
+  }
+  if (params.get('mias') === '1') {
+    const t = document.getElementById('toggleMisOrdenes');
+    if (t) { t.checked = true; touched = true; }
+    const m = document.getElementById('mobileSoloMias');
+    if (m) m.checked = true;
+  }
+  if (params.has('sort')) {
+    APP.state.sortField = params.get('sort');
+    const sel = document.getElementById('campoOrdenamiento');
+    if (sel) sel.value = APP.state.sortField;
+    const mob = document.getElementById('mobileSortField');
+    if (mob) mob.value = APP.state.sortField;
+    touched = true;
+  }
+  APP.state.sortAscending = params.get('asc') === '1';
+
+  // Mirror desktop search fields to the mobile filter drawer so both
+  // stay in sync if the user opens it.
+  const mirror = (srcId, dstId) => {
+    const src = document.getElementById(srcId);
+    const dst = document.getElementById(dstId);
+    if (src && dst) dst.value = src.value;
+  };
+  mirror('filtroOrden',   'mobileFiltroOrden');
+  mirror('filtroCliente', 'mobileFiltroCliente');
+  mirror('filtroSerial',  'mobileFiltroSerial');
+  mirror('filtroTipo',    'mobileFiltroTipo');
+  mirror('filtroTecnico', 'mobileFiltroTecnico');
+
+  return touched;
+}
+
+// Expose so ordenes-index.js can call before the initial data load.
+window._applyURLToFilters = _applyURLToFilters;
+
+// Back/forward — re-apply URL state, then re-render.
+window.addEventListener('popstate', () => {
+  if (_applyURLToFilters()) {
+    if (typeof aplicarFiltrosCombinados === 'function') aplicarFiltrosCombinados();
+  }
+});
 
 function syncMobileAdvancedFiltersToDesktop() {
   const orden = document.getElementById("mobileFiltroOrden")?.value || "";
@@ -186,6 +284,8 @@ window.filtrarOrdenes = async function () {
 
   if (ordersTable) ordersTable.innerHTML = "";
   if (cardsWrap) cardsWrap.innerHTML = "";
+
+  _syncFiltersToURL();
 
   if (!filtroOrden && !filtroCliente && !filtroSerial && !filtroTipo) {
     cargarOrdenesYEquipos(true);
@@ -336,6 +436,7 @@ window.limpiarFiltros = function () {
   if (ordersTable) ordersTable.innerHTML = "";
   if (cardsWrap) cardsWrap.innerHTML = "";
 
+  _syncFiltersToURL();
   cargarOrdenesYEquipos(true);
 };
 
@@ -343,11 +444,13 @@ window.cambiarOrden = function () {
   const sel = document.getElementById("campoOrdenamiento");
   if (!sel) return;
   APP.state.sortField = sel.value;
+  _syncFiltersToURL();
   cargarOrdenesYEquipos();
 };
 
 window.cambiarDireccionOrden = function () {
   APP.state.sortAscending = !APP.state.sortAscending;
+  _syncFiltersToURL();
   cargarOrdenesYEquipos();
 };
 
@@ -360,6 +463,10 @@ window.filtrarPorEstado = async function (estado) {
   document.getElementById("filtroOrden").value = "";
   document.getElementById("filtroCliente").value = "";
   document.getElementById("filtroSerial").value = "";
+  // Keep #filtroEstado in sync so the URL serializer sees the active estado.
+  const filtroEstadoSel = document.getElementById("filtroEstado");
+  if (filtroEstadoSel) filtroEstadoSel.value = estado || "";
+  _syncFiltersToURL();
 
   if (ordersTable) ordersTable.innerHTML = "";
   if (cardsWrap) cardsWrap.innerHTML = "";

@@ -1,5 +1,23 @@
 # Changelog
 
+## [Ordenes index improvements — batch 14: URL state + entrega modal a11y + persistence check] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` Tier 3. Closes §3.3, §3a.11, and §5.4.
+
+### Added
+- **URL filter state** (`ORDENES_INDEX_IMPROVEMENTS.md` §5.4). Filters now serialize to the URL via `history.replaceState` so refresh preserves them, copy-paste-link reproduces the view, and back/forward navigates filter history. Implementation in [public/js/pages/ordenes-filters.js](public/js/pages/ordenes-filters.js):
+  - `_syncFiltersToURL()` encodes `#filtroOrden`, `#filtroCliente`, `#filtroSerial`, `#filtroTipo`, `#filtroEstado`, `#filtroTecnico`, `#toggleMisOrdenes`, plus `APP.state.sortField` and `sortAscending`. URL keys are full names (`orden`, `cliente`, `serial`, `tipo`, `estado`, `tecnico`, `mias`, `sort`, `asc`).
+  - `_applyURLToFilters()` reads the params, populates the DOM inputs, mirrors to mobile drawer counterparts, and returns whether anything was applied.
+  - Quick-search (`#filtroRapido`) intentionally NOT serialized — ephemeral by design.
+  - `popstate` listener re-applies URL state then calls `aplicarFiltrosCombinados`.
+- Hooked sync into `aplicarFiltrosCombinados`, `filtrarOrdenes`, `filtrarPorEstado`, `limpiarFiltros`, `cambiarOrden`, `cambiarDireccionOrden`. The page-load chain in [public/js/pages/ordenes-index.js](public/js/pages/ordenes-index.js) calls `_applyURLToFilters()` after the filter dropdowns are populated and before the initial data load, so sort + soloMias take effect on the first render.
+
+### Refactor
+- **Entrega modal now uses `Modal.open()`** (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.11). `abrirModalEntrega` / `cerrarModalEntrega` in [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) switched from `APP.utils.show/hide` to `Modal.open('modalEntrega')` / `Modal.close('modalEntrega')`. The focus-trap and Escape-to-close from QW5 now apply to the entrega flow too. ARIA attrs were already in place from batch 11. Backdrop-click handler is still wired separately since `Modal.open` doesn't cover that.
+
+### Verified
+- **`enablePersistence` is wired correctly** (`ORDENES_INDEX_IMPROVEMENTS.md` §3.3). [public/js/firebase-init.js:20](public/js/firebase-init.js#L20) calls `firebase.firestore().enablePersistence({ synchronizeTabs: true })` with a `.catch()` that logs `err.code`. Safari ITP and multi-tab failures surface to the console rather than failing silently. No code change needed.
+
 ## [Ordenes index improvements — Tier 1 + Tier 2 roll-up] — 2026-05-18
 
 Summary of the 13 atomic commits below that closed Tier 1 (P0 cost/blockers) and Tier 2 (QW quick wins) of `ORDENES_INDEX_IMPROVEMENTS.md`. Roll-up is informational — individual batch sections retain the per-commit detail.

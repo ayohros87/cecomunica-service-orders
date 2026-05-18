@@ -335,8 +335,10 @@ window.copiarSeriales = function (ordenId) {
 
     _reset();
 
-    const modal = document.getElementById('modalEntrega');
-    APP.utils.show(modal);
+    // Modal.open wires Escape, Tab focus-trap, and saves/restores focus.
+    // ARIA attrs (role=dialog, aria-modal, aria-labelledby) are on the
+    // HTML root in ordenes/index.html. ORDENES_INDEX_IMPROVEMENTS.md §3a.11.
+    Modal.open('modalEntrega');
 
     // Init / resize canvas after it becomes visible so clientWidth is correct
     requestAnimationFrame(() => {
@@ -347,12 +349,15 @@ window.copiarSeriales = function (ordenId) {
       }
     });
 
-    modal.onclick = e => { if (e.target === modal) cerrarModalEntrega(); };
+    // Backdrop click — Modal.open doesn't wire this, keep our own.
+    const modal = document.getElementById('modalEntrega');
+    if (modal) modal.onclick = e => { if (e.target === modal) cerrarModalEntrega(); };
   };
 
   window.cerrarModalEntrega = function () {
+    Modal.close('modalEntrega');
     const modal = document.getElementById('modalEntrega');
-    if (modal) APP.utils.hide(modal);
+    if (modal) modal.classList.add('hidden');  // preserve .hidden invariant
     _ordenId = null;
   };
 
