@@ -1,7 +1,7 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { admin, db }        = require("../../lib/admin");
 const { sendEmail }        = require("../../lib/mail");
-const { buildEmailFromBase } = require("../../domain/emailRenderer");
+const { buildEmailFromBase, renderByTemplate } = require("../../domain/emailRenderer");
 
 module.exports = onDocumentCreated(
   {
@@ -22,7 +22,13 @@ module.exports = onDocumentCreated(
         throw new Error("Faltan campos obligatorios: to/subject");
       }
 
-      let html = data.html;
+      // Render precedence:
+      //   1. data.template → server-side renderer (single source of truth
+      //      for branding; see ORDENES_INDEX_IMPROVEMENTS.md §3a.12).
+      //   2. data.html → caller-supplied HTML (legacy callers).
+      //   3. data.bodyContent + email-base wrapper (older pattern).
+      let html = renderByTemplate(data);
+      if (!html) html = data.html;
       if (!html && (data.bodyContent || data.preheader)) {
         html = buildEmailFromBase({
           preheader: data.preheader  || "",
@@ -31,7 +37,7 @@ module.exports = onDocumentCreated(
           ctaLabel:  data.ctaLabel || "Abrir",
         });
       }
-      if (!html) throw new Error("Falta 'html' o 'bodyContent'");
+      if (!html) throw new Error("Falta 'template', 'html' o 'bodyContent'");
 
       await sendEmail({
         to:          data.to,

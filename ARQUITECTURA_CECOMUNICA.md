@@ -358,6 +358,14 @@ página → mailService.enqueue(payload) → mail_queue/{docId} → onMailQueued
 
 `MailService.enqueue()` estampa `createdAt: serverTimestamp()` automáticamente. Los triggers del backend (`onContratoActivadoSendPdf`, `onOrdenCompletada`, `onContratoAnuladoNotify`) también escriben directamente en `mail_queue`.
 
+**Render precedence en `onMailQueued`** (de mayor a menor prioridad):
+
+1. `data.template` (recomendado) → `emailRenderer.renderByTemplate(data)` despacha al builder server-side y envuelve con `email-base.html`. Single source of truth para branding e i18n. Templates registrados: `nota_entrega` (entrega de orden, dos ramas: normal con receptor/firma/foto-ID o `noRecibido` con motivo/persona-interna). Payload: `{ template: 'nota_entrega', data: { ordenId, orden, opts } }` donde `orden` es el snapshot mínimo necesario (cliente, técnico, tipo, equipos filtrados) y `opts` describe la rama.
+2. `data.html` → caller-supplied (legacy callers como `onOrdenCompletada` que pre-renderiza).
+3. `data.bodyContent` + `data.preheader` → fragmento de body envuelto por `buildEmailFromBase`.
+
+Para añadir un nuevo template: añadir un `buildBody<Nombre>` en `functions/src/domain/emailRenderer.js` y registrarlo en el switch de `renderByTemplate`. El frontend enqueña `{ template: '<nombre>', data: {...} }`. Toda interpolación user-controlled DEBE pasar por `escapeHtml`.
+
 ---
 
 ## 7. Ciclo de vida de un Contrato

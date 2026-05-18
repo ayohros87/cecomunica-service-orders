@@ -5,7 +5,7 @@
 > **Status (2026-05-18):**
 > - **Tier 1 P0 (§1.1, §1.2, §1.3, §3a.2) — shipped.** See `CHANGELOG.md` commits `2700b61`, `8d71a93`, `07cdae7`, `8b0ade6`. Search cost dropped from O(collection) to O(matches); `cargarClientes` removed; mobile/desktop layouts no longer both render; `storage.rules` in the repo.
 > - **Tier 2 quick wins (QW1–QW16) — shipped.** All sixteen items either landed or noted as already-resolved. Commits `69d685a` (QW1–8 + 12–13 + 16 batches), `95c933a` (QW10, QW15), `76b9b00` (QW9), `51c7071` (QW4, QW5), `a65ae7d` (QW11), `d0ed77f` (QW14).
-> - **§3a entrega-flow** — partially shipped: §3a.4 (email XSS), §3a.5 (retina canvas), §3a.6 (ID compression), §3a.9 (`os_logs` docs), §3a.10 (dup timestamps), §3a.11 (entrega → `Modal.open`), §3a.3 (PII retention CF, **manual-only**). §3a.7 (SVG signature) **not pursuing**. §3a.8 (entrega split — defer until next feature). §3a.12 (server-side email render) — in progress.
+> - **§3a entrega-flow** — mostly shipped: §3a.4 (email XSS), §3a.5 (retina canvas), §3a.6 (ID compression), §3a.9 (`os_logs` docs), §3a.10 (dup timestamps), §3a.11 (entrega → `Modal.open`), §3a.3 (PII retention CF, **manual-only**), §3a.12 (server-side email render). §3a.7 (SVG signature) **not pursuing**. §3a.8 (entrega split) — defer until next entrega feature.
 > - **Tier 3 architecture** — open: §3.1 (`onSnapshot` live updates), §3.2 (modular Firebase SDK, gated on build step), §3.3 (`enablePersistence` verify), §3.5 already done in commit `8a4de2b`. §3.4 (page-size by role) shipped in `69d685a`. §3.6 (`cambiarOrden` bug) shipped in `69d685a`.
 > - **Tier 4 UX overhaul (§4.x, §5.x)** — not started.
 >
@@ -271,11 +271,13 @@ The flow writes both `entrega_ts: serverTimestamp()` (always) and `fecha_entrega
 
 The flow opens its modal via `APP.utils.show(modal)` and registers a custom backdrop click handler. This bypasses the shared `Modal.open / Modal.close` API in `js/ui/modal.js`. The `Modal.confirm` flow shows that the integration exists — entrega just doesn't use it. **Consequence:** Escape-to-close isn't wired the same way as other modals; focus-trap logic (when added) won't apply uniformly. Promote to `Modal.open('modalEntrega', { onEscape })` after Modal gets a focus-trap feature.
 
-### 3a.12 The HTML email body could share a renderer with the CF-side
+### 3a.12 The HTML email body could share a renderer with the CF-side — *shipped 2026-05-18*
 
-`functions/src/domain/emailRenderer.js` exists (per `ARQUITECTURA §6.1`) and renders email bodies on the server. The frontend just built its own inline template literal in `_buildEmailHtml`. Two implementations of the same concept. The frontend version sits in 70+ lines of template literals; the CF version probably has shared formatting helpers.
+> **Status:** done. `buildBodyNotaEntrega` lives in `functions/src/domain/emailRenderer.js` next to `buildBodyOrdenCompletada`. `onMailQueued` now dispatches on `data.template` via a new `renderByTemplate` helper; `nota_entrega` is the first registered template. The frontend's `confirmarEntrega` enqueues a structured `{ template: 'nota_entrega', data: { ordenId, orden, opts } }` payload — the old client-side `_buildEmailHtml` is removed. Frontend only ships a minimum-fields snapshot (`_ordenEmailSnapshot`) to avoid leaking the whole order doc into `mail_queue`. Server-side `escapeHtml` handles every interpolation. To add a future template (`nota_completado`, `recordatorio_visita`, …), add a `buildBody*` and register it in the `renderByTemplate` switch — see ARQUITECTURA §6.4 for the contract.
 
-**Long-term:** move all email-body composition to the CF. The frontend's `MailService.enqueue` should send *structured data* (`type: 'nota_entrega'`, `data: { ... }`) and let `onMailQueued` render the HTML on the server using `emailRenderer.js`. Single source of truth for branding and i18n.
+~~`functions/src/domain/emailRenderer.js` exists (per `ARQUITECTURA §6.1`) and renders email bodies on the server. The frontend just built its own inline template literal in `_buildEmailHtml`. Two implementations of the same concept. The frontend version sits in 70+ lines of template literals; the CF version probably has shared formatting helpers.~~
+
+~~**Long-term:** move all email-body composition to the CF. The frontend's `MailService.enqueue` should send *structured data* (`type: 'nota_entrega'`, `data: { ... }`) and let `onMailQueued` render the HTML on the server using `emailRenderer.js`. Single source of truth for branding and i18n.~~
 
 ---
 

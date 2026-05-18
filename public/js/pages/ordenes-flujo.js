@@ -407,85 +407,31 @@ window.copiarSeriales = function (ordenId) {
     }
   }
 
-  // ── Build email HTML body ───────────────────────────────────────
-  function _buildEmailHtml(orden, ordenId, opts) {
-    // Every interpolated value must pass through escapeHtml — receptorNombre,
-    // motivo, sinIdMotivo, personaInterna, equipo fields, cliente/tecnico names
-    // are all user-controlled and the email body is rendered as HTML by clients.
-    const f = v => (v == null || v === '') ? '—' : escapeHtml(String(v));
-    const today = new Date().toLocaleDateString('es-CR', { day: '2-digit', month: 'long', year: 'numeric' });
-    const equipos = (Array.isArray(orden?.equipos) ? orden.equipos : []).filter(e => !e.eliminado);
+  // Email HTML is now built server-side by
+  // `functions/src/domain/emailRenderer.js → buildBodyNotaEntrega`.
+  // The frontend enqueues a structured payload (`template` + `data`)
+  // and `onMailQueued` renders the final HTML via `renderByTemplate`.
+  // Single source of truth for branding (ORDENES_INDEX_IMPROVEMENTS §3a.12).
 
-    const rows = equipos.map(e => `
-      <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${f(e.nombre)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${f(e.modelo)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${f(e.numero_de_serie)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${f(e.trabajo_tecnico)}</td>
-      </tr>`).join('');
-
-    const equiposTable = equipos.length ? `
-      <h3 style="margin:18px 0 8px;font:600 15px Arial,sans-serif;color:#111827;">Equipos</h3>
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font:13px Arial,sans-serif;">
-        <thead>
-          <tr style="background:#f3f4f6;">
-            <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Nombre</th>
-            <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Modelo</th>
-            <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Serial</th>
-            <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Intervención</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>` : '';
-
-    const infoRows = (pairs) => pairs.map(([k, v]) =>
-      `<tr><td style="padding:5px 0;border-bottom:1px solid #eee;width:42%;"><strong>${k}</strong></td><td style="padding:5px 0;border-bottom:1px solid #eee;">${v}</td></tr>`
-    ).join('');
-
-    if (opts.noRecibido) {
-      return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:16px;">
-          <strong style="color:#92400e;">⚠️ Artículo NO recibido por el cliente</strong>
-        </div>
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font:14px Arial,sans-serif;margin-bottom:8px;">
-          ${infoRows([
-            ['Orden', ordenId],
-            ['Cliente', f(orden.cliente_nombre)],
-            ['Tipo', f(orden.tipo_de_servicio)],
-            ['Fecha', today],
-            ['Motivo', f(opts.motivo)],
-            ['Responsable interno', f(opts.personaInterna)]
-          ])}
-        </table>
-        ${equiposTable}
-      </div>`;
-    }
-
-    const sinIdNote = opts.sinId
-      ? `<p style="font-size:13px;color:#6b7280;margin:6px 0 0;"><em>* Cliente no proporcionó identificación. Motivo: ${f(opts.sinIdMotivo)}</em></p>`
-      : '';
-    const firmaImg = opts.firmaUrl
-      ? `<div style="margin-top:10px;"><p style="margin:0 0 4px;font-size:13px;color:#6b7280;font-weight:500;">Firma:</p><img src="${escapeHtml(String(opts.firmaUrl))}" alt="Firma" style="max-width:280px;border:1px solid #e5e7eb;border-radius:6px;display:block;"></div>`
-      : '';
-
-    return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font:14px Arial,sans-serif;margin-bottom:8px;">
-        ${infoRows([
-          ['Orden', ordenId],
-          ['Cliente', f(orden.cliente_nombre)],
-          ['Técnico', f(orden.tecnico_asignado)],
-          ['Tipo', f(orden.tipo_de_servicio)],
-          ['Fecha de entrega', today]
-        ])}
-      </table>
-      ${equiposTable}
-      <div style="margin-top:18px;padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
-        <p style="margin:0 0 4px;font-size:13px;color:#6b7280;font-weight:600;">Recibido por:</p>
-        <p style="margin:0;font-size:16px;font-weight:600;">${f(opts.receptorNombre)}</p>
-        ${sinIdNote}
-        ${firmaImg}
-      </div>
-    </div>`;
+  // Distill the order doc down to just the fields the entrega email
+  // needs. Mail queue docs are public to anyone with read on the
+  // collection, so we ship the minimum, not the whole order.
+  function _ordenEmailSnapshot(orden) {
+    if (!orden || typeof orden !== 'object') return {};
+    const equipos = (Array.isArray(orden.equipos) ? orden.equipos : [])
+      .filter(e => e && !e.eliminado)
+      .map(e => ({
+        nombre:          e.nombre || null,
+        modelo:          e.modelo || null,
+        numero_de_serie: e.numero_de_serie || e.SERIAL || e.serial || null,
+        trabajo_tecnico: e.trabajo_tecnico || null,
+      }));
+    return {
+      cliente_nombre:    orden.cliente_nombre    || null,
+      tecnico_asignado:  orden.tecnico_asignado  || null,
+      tipo_de_servicio:  orden.tipo_de_servicio  || null,
+      equipos,
+    };
   }
 
   // ── Submit ──────────────────────────────────────────────────────
@@ -570,13 +516,24 @@ window.copiarSeriales = function (ordenId) {
         orden.tecnico_uid      ? UsuariosService.getUsuario(orden.tecnico_uid).catch(() => null)           : Promise.resolve(null),
       ]);
 
-      const subject  = `Nota de Entrega — Orden ${ordenId}${noRecibido ? ' (No recibido)' : ''}`;
-      const htmlBody = _buildEmailHtml(orden, ordenId, emailOpts);
+      const subject = `Nota de Entrega — Orden ${ordenId}${noRecibido ? ' (No recibido)' : ''}`;
+      // Structured payload — onMailQueued renders the body via
+      // emailRenderer.renderByTemplate. fechaISO is included so the
+      // email reflects the moment the entrega was confirmed even if
+      // there's queue latency.
+      const mailPayload = {
+        template: 'nota_entrega',
+        data: {
+          ordenId,
+          orden: _ordenEmailSnapshot(orden),
+          opts:  { ...emailOpts, fechaISO: new Date().toISOString() },
+        },
+      };
 
       await Promise.allSettled([
-        clienteDoc?.email  ? MailService.enqueue({ to: clienteDoc.email,  subject, html: htmlBody }) : null,
-        vendedorDoc?.email ? MailService.enqueue({ to: vendedorDoc.email, subject, html: htmlBody }) : null,
-        tecnicoDoc?.email  ? MailService.enqueue({ to: tecnicoDoc.email,  subject, html: htmlBody }) : null,
+        clienteDoc?.email  ? MailService.enqueue({ to: clienteDoc.email,  subject, ...mailPayload }) : null,
+        vendedorDoc?.email ? MailService.enqueue({ to: vendedorDoc.email, subject, ...mailPayload }) : null,
+        tecnicoDoc?.email  ? MailService.enqueue({ to: tecnicoDoc.email,  subject, ...mailPayload }) : null,
       ].filter(Boolean));
 
       cerrarModalEntrega();

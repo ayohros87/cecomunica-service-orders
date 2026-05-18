@@ -1,5 +1,29 @@
 # Changelog
 
+## [Ordenes index improvements — batch 19: server-side email render] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3a.12 — single source of truth for entrega email branding/i18n; eliminates the duplicate inline 70-line template literal that lived in the frontend.
+
+### Added
+- **`buildBodyNotaEntrega({ orden, ordenId, opts })`** in [functions/src/domain/emailRenderer.js](functions/src/domain/emailRenderer.js). Renders the entrega email body server-side; two branches (normal delivery vs `noRecibido`) match the frontend behavior. Every interpolation goes through a new module-level `escapeHtml`. `fechaISO` from the caller is honored so the rendered date matches the moment the entrega was confirmed (not the moment the queue worker fires).
+- **`renderByTemplate(data)` dispatcher** in the same file. `onMailQueued` consults it first; returns `null` for unknown templates so legacy `html` / `bodyContent` paths still work. `nota_entrega` is the first registered template. Adding a new template = add a `buildBody*` + a case in the switch.
+
+### Changed
+- [functions/src/triggers/mail/onMailQueued.js](functions/src/triggers/mail/onMailQueued.js) — render precedence is now `template` → `html` → `bodyContent`. Error message updated.
+- [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) `confirmarEntrega` — enqueues `{ template: 'nota_entrega', data: { ordenId, orden, opts } }` instead of pre-built HTML. New private `_ordenEmailSnapshot(orden)` distills the order doc to the four fields the email needs (cliente_nombre, tecnico_asignado, tipo_de_servicio, filtered equipos) so `mail_queue` docs don't leak the whole order.
+- Deleted the local `_buildEmailHtml` (~90 lines of template literals) — single source of truth lives server-side now.
+
+### Docs
+- [ARQUITECTURA_CECOMUNICA.md](ARQUITECTURA_CECOMUNICA.md) §6.4 documents the `template` → `html` → `bodyContent` precedence and the contract for adding new templates.
+- [ORDENES_INDEX_IMPROVEMENTS.md](ORDENES_INDEX_IMPROVEMENTS.md) §3a.12 marked shipped; §3a entrega-flow status line updated.
+
+### Security
+- Server-side `escapeHtml` now owns all entrega-email escaping. The frontend was already escaping via `escapeHtml` from `ordenes-state.js`; moving to the CF removes the risk that a future caller bypasses the helper and ships raw user input into an email.
+
+### Deploy
+- `firebase deploy --only functions:onMailQueued` picks up the new renderer.
+- Frontend ships immediately on hosting deploy; no migration needed (existing `mail_queue` docs in flight still render via the legacy `html` field).
+
 ## [Ordenes index improvements — batch 18: PII purge as manual callable + doc notes] — 2026-05-18
 
 > Driver: stakeholder feedback after batch 17 — want to review what would be deleted before any first run, and prefer explicit triggering over a nightly cron until retention policy is formally documented for clients. Also closes the SVG decision in §3a.7 (not pursuing).
