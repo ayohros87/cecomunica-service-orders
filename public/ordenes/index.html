@@ -204,39 +204,39 @@
 
 <!-- Modal Entrega de Equipos -->
 <div id="modalEntrega" class="overlay hidden">
-  <div class="modal" style="max-width:480px;">
+  <div class="modal modal-entrega">
 
     <!-- Header -->
-    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <h3 class="modal-title" style="margin:0;font-size:16px;">
+    <div class="modal-header modal-entrega__header">
+      <h3 class="modal-title modal-entrega__title">
         <i data-lucide="package-check"></i> Entrega — Orden <span id="entregaModalOrdenId"></span>
       </h3>
-      <button class="btn ghost" data-action="cerrar-modal-entrega" style="flex-shrink:0;"><i data-lucide="x"></i></button>
+      <button class="btn ghost modal-entrega__close" data-action="cerrar-modal-entrega"><i data-lucide="x"></i></button>
     </div>
 
     <!-- Checkbox A: Item not received -->
-    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;margin-bottom:18px;">
-      <div style="display:flex;align-items:flex-start;gap:10px;min-height:44px;cursor:pointer;" onclick="document.getElementById('entregaNoRecibido').click()">
+    <div class="modal-entrega__alert">
+      <div class="modal-entrega__cb-row" onclick="document.getElementById('entregaNoRecibido').click()">
         <input type="checkbox" id="entregaNoRecibido"
+               class="modal-entrega__cb-input modal-entrega__cb-input--warn"
                data-action="entrega-no-recibido-change"
-               style="width:20px;height:20px;accent-color:#d97706;flex-shrink:0;margin-top:2px;cursor:pointer;"
                onclick="event.stopPropagation()">
-        <label for="entregaNoRecibido" style="font-weight:600;cursor:pointer;line-height:1.4;color:#92400e;font-size:14px;margin:0;">
+        <label for="entregaNoRecibido" class="modal-entrega__cb-label modal-entrega__cb-label--warn">
           El artículo <strong>NO</strong> fue recibido por el cliente
         </label>
       </div>
-      <div id="entregaNoRecibidoBloque" style="display:none;margin-top:12px;">
-        <div class="form-field" style="margin-bottom:10px;">
-          <label style="font-size:13px;color:#92400e;font-weight:600;">Motivo <span style="color:#b45309;">*</span></label>
+      <div id="entregaNoRecibidoBloque" class="modal-entrega__sub hidden">
+        <div class="form-field modal-entrega__field--tight">
+          <label class="modal-entrega__label--warn">Motivo <span class="req--warn">*</span></label>
           <textarea id="entregaNoRecibidoMotivo" rows="2"
                     placeholder="Explique por qué no fue recibido..."
-                    style="border-color:#fde68a;font-size:14px;"></textarea>
+                    class="modal-entrega__warn-input"></textarea>
         </div>
         <div class="form-field">
-          <label style="font-size:13px;color:#92400e;font-weight:600;">¿Quién recibió / manejó los equipos? <span style="color:#b45309;">*</span></label>
+          <label class="modal-entrega__label--warn">¿Quién recibió / manejó los equipos? <span class="req--warn">*</span></label>
           <input type="text" id="entregaPersonaInterna"
                  placeholder="Nombre del responsable interno"
-                 style="border-color:#fde68a;font-size:14px;">
+                 class="modal-entrega__warn-input">
         </div>
       </div>
     </div>
@@ -245,60 +245,58 @@
     <div id="entregaNormalBloque">
 
       <!-- Receptor name -->
-      <div class="form-field" style="margin-bottom:14px;">
-        <label for="entregaReceptorNombre" style="font-size:13px;font-weight:600;">
-          Nombre de quien recibe <span style="color:var(--bad);">*</span>
+      <div class="form-field modal-entrega__field--med">
+        <label for="entregaReceptorNombre" class="modal-entrega__label">
+          Nombre de quien recibe <span class="req">*</span>
         </label>
         <input type="text" id="entregaReceptorNombre"
                placeholder="Nombre completo del receptor"
-               autocomplete="name" style="font-size:15px;">
+               autocomplete="name" class="modal-entrega__nombre">
       </div>
 
       <!-- Checkbox B: No ID + file input -->
-      <div style="margin-bottom:14px;">
-        <div style="display:flex;align-items:flex-start;gap:10px;min-height:44px;cursor:pointer;margin-bottom:8px;" onclick="document.getElementById('entregaSinId').click()">
+      <div class="modal-entrega__alert--no-id">
+        <div class="modal-entrega__cb-row" onclick="document.getElementById('entregaSinId').click()">
           <input type="checkbox" id="entregaSinId"
+                 class="modal-entrega__cb-input modal-entrega__cb-input--brand"
                  data-action="entrega-sin-id-change"
-                 style="width:20px;height:20px;accent-color:var(--brand);flex-shrink:0;margin-top:2px;cursor:pointer;"
                  onclick="event.stopPropagation()">
-          <label for="entregaSinId" style="font-size:13px;cursor:pointer;line-height:1.4;margin:0;">
+          <label for="entregaSinId" class="modal-entrega__cb-label modal-entrega__cb-label--regular">
             Cliente no desea proporcionar identificación
           </label>
         </div>
 
         <!-- With ID: file upload -->
         <div id="entregaConIdBloque">
-          <label style="font-size:13px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px;">
-            Foto de identificación <span style="font-weight:400;">(opcional)</span>
+          <label class="modal-entrega__label--muted">
+            Foto de identificación <span class="modal-entrega__hint">(opcional)</span>
           </label>
           <input type="file" id="entregaFotoId"
                  accept="image/*" capture="environment"
-                 class="file" style="width:100%;box-sizing:border-box;font-size:14px;"
+                 class="file modal-entrega__file"
                  onchange="_entregaFotoIdChange(this)">
-          <div id="entregaPreviewId" style="margin-top:8px;"></div>
+          <div id="entregaPreviewId" class="modal-entrega__preview"></div>
         </div>
 
         <!-- Without ID: reason -->
-        <div id="entregaSinIdBloque" style="display:none;">
+        <div id="entregaSinIdBloque" class="hidden">
           <div class="form-field">
-            <label style="font-size:13px;font-weight:600;">
-              Motivo (no proporciona ID) <span style="color:var(--bad);">*</span>
+            <label class="modal-entrega__label">
+              Motivo (no proporciona ID) <span class="req">*</span>
             </label>
             <textarea id="entregaSinIdMotivo" rows="2"
-                      placeholder="Indique el motivo..." style="font-size:14px;"></textarea>
+                      placeholder="Indique el motivo..." class="modal-entrega__motivo-id"></textarea>
           </div>
         </div>
       </div>
 
       <!-- Signature canvas -->
-      <div style="margin-bottom:4px;">
-        <label style="font-size:13px;color:var(--muted);font-weight:500;display:block;margin-bottom:6px;">
-          Firma del receptor <span style="color:var(--bad);">*</span>
+      <div class="modal-entrega__sig-wrap">
+        <label class="modal-entrega__label--muted">
+          Firma del receptor <span class="req">*</span>
         </label>
-        <canvas id="entregaFirmaCanvas"
-                style="width:100%;height:200px;border:1px solid var(--line);border-radius:8px;background:#fff;display:block;touch-action:none;cursor:crosshair;"></canvas>
-        <button type="button" class="btn ghost"
-                style="margin-top:6px;font-size:12px;padding:4px 10px;"
+        <canvas id="entregaFirmaCanvas" class="modal-entrega__canvas"></canvas>
+        <button type="button" class="btn ghost modal-entrega__clear-btn"
                 data-action="limpiar-entrega-firma">
           <i data-lucide="eraser"></i> Limpiar firma
         </button>

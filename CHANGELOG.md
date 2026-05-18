@@ -1,5 +1,14 @@
 # Changelog
 
+## [Ordenes index improvements — batch 10: entrega modal CSS extraction] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW9 — biggest cluster of accreted inline styles.
+
+### Refactor
+- Extracted the entrega-modal inline-style cluster from [public/ordenes/index.html](public/ordenes/index.html) into a dedicated `.modal-entrega*` block in [public/css/ordenes-index.css](public/css/ordenes-index.css). 30+ inline `style="..."` attributes collapsed into ~15 BEM-style class names (`.modal-entrega__header`, `.modal-entrega__alert`, `.modal-entrega__cb-row`, `.modal-entrega__cb-input--warn|--brand`, `.modal-entrega__label--warn|--muted`, `.modal-entrega__warn-input`, `.modal-entrega__canvas`, `.modal-entrega__field--tight|--med`, etc.). Also introduces `.req` / `.req--warn` for the asterisk markers on required fields.
+- HTML now uses `class="hidden"` for the initially-hidden blocks (`entregaNoRecibidoBloque`, `entregaSinIdBloque`) instead of `style="display:none;"`. The JS toggle handlers (`_toggleEntregaNoRecibido`, `_toggleEntregaSinId`) continue to use `style.display = 'block'|'none'` which inline-overrides the class for subsequent show/hide.
+- Inline-style count in `ordenes/index.html` dropped from ~50 to 15. The remaining 15 are legitimate (column widths in `<col>`, JS-toggled `display:none`, minor `.toolbar` layout).
+
 ## [Ordenes index improvements — batch 9: estado palette + empty state] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` Tier 2. Closes QW10, QW15, and confirms §3.5 already resolved.
