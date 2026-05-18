@@ -146,7 +146,11 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
       aplicarRestriccionesPorRol(APP.state.userRole);
     });
-    APP.utils.lucideRefresh([ordersTable, document.getElementById("btnCargarMas")]);
+    APP.utils.lucideRefresh([
+      ordersTable,
+      document.getElementById("ordersCards"),
+      document.getElementById("btnCargarMas")
+    ]);
 
   } catch (error) {
     console.error("❌ Error al cargar órdenes:", error);

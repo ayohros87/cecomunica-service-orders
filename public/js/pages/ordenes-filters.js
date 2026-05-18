@@ -216,7 +216,7 @@ window.filtrarOrdenes = async function () {
         );
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
-    APP.utils.lucideRefresh(ordersTable);
+    APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -265,7 +265,7 @@ window.filtrarRapido = async function () {
         );
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
-    APP.utils.lucideRefresh(ordersTable);
+    APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -409,7 +409,7 @@ window.filtrarPorEstado = async function (estado) {
               .sort((a, b) => String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || "")));
             renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
           });
-          APP.utils.lucideRefresh(ordersTable);
+          APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
         }
 
         actualizarResumen(resultados);

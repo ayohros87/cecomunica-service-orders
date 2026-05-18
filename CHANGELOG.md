@@ -1,5 +1,18 @@
 # Changelog
 
+## [Ordenes index improvements — batch 7: responsive single-layout] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §1.3 — third Tier-1 item. Stops shipping both layouts simultaneously.
+
+### Performance
+- `renderizarOrdenYEquipos` in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) used to build **both** a desktop `<tr>` (+ `<tr>` detail row) and a `.card-contrato` for every order, with CSS hiding the inactive layout at the 768px breakpoint. At 50 orders that's 100 row-equivalents in the DOM, half invisible — noticeable on mid-range Android tablets and a waste of layout/paint budget on every render.
+- Branched on `APP.utils.isMobileLayout()` (new helper in [public/js/pages/ordenes-state.js](public/js/pages/ordenes-state.js) mirroring the `@media (max-width: 768px)` rule in `ordenes-index.css:1188`). Desktop branch builds only the table rows; mobile branch builds only the cards. Common pre-computation (`estado`, `fotosTallerCount`) hoisted above the branch.
+- Added a debounced (150 ms) `mql.addEventListener('change')` listener at the bottom of `ordenes-render.js` that re-renders via `aplicarFiltrosCombinados()` when the user crosses the breakpoint, so resize-driven layout swaps stay correct. Legacy `addListener` fallback included for older Safari.
+- Updated five `lucideRefresh` call sites in [public/js/pages/ordenes-data.js](public/js/pages/ordenes-data.js) and [public/js/pages/ordenes-filters.js](public/js/pages/ordenes-filters.js) to scope into both `ordersTable` and `ordersCards`, since icons now appear in only one of the two depending on layout.
+
+### Notes
+- Empty-state message (`<tr><td>No se encontraron coincidencias</td></tr>`) is still only written into `ordersTable`, which is hidden on mobile. Mobile users currently see an empty cards area instead of the message — pre-existing bug, addressed by QW15 (empty-state UI) in a future pass.
+
 ## [Ordenes index improvements — batch 6: cliente_nombre denorm] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §1.2 — second Tier-1 item. Closes one of the two Firestore cost leaks.

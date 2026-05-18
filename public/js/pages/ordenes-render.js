@@ -31,6 +31,11 @@ function obtenerIconoLapiz(id, campo, valorActual) {
 function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   const equiposNormalizados = Array.isArray(equipos) ? equipos : [];
   const sinEquipos = equiposNormalizados.length === 0;
+  // Render only the layout the user is currently looking at. A
+  // breakpoint-change listener at the bottom of this file triggers a
+  // re-render when the user crosses the 768px boundary, so swapping
+  // is correct even if the user resizes mid-session.
+  const isMobile = APP.utils.isMobileLayout();
 
   function normalizarTipo(tipo) {
     return (tipo || "")
@@ -40,6 +45,10 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       .replace(/[̀-ͯ]/g, "");
   }
 
+  const estado = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
+  const fotosTallerCount = Number(ordenData.fotos_taller_count || 0);
+
+  if (!isMobile) {
   const filaOrden = document.createElement("tr");
   filaOrden.setAttribute("data-orden-id", ordenId);
   const tieneNota = ordenData.nota_tecnica && ordenData.nota_tecnica.trim() !== "";
@@ -47,8 +56,6 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   const tooltipNota = tieneNota
     ? ordenData.nota_tecnica.slice(0, 80).replace(/"/g, "'")
     : 'Agregar nota técnica';
-  const estado = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
-  const fotosTallerCount = Number(ordenData.fotos_taller_count || 0);
   const fotosBadge = fotosTallerCount > 0
     ? `<span class="fotos-taller-badge" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
     : "";
@@ -238,10 +245,11 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   if (clientText && clientText.scrollWidth > clientText.offsetWidth) {
     clientText.title = nombreClienteDe(ordenData);
   }
+  } // ── end !isMobile (desktop layout) ──────────────────────────────────
 
-  // Render móvil como card
-  const cardsWrap = document.getElementById("ordersCards");
-  if (cardsWrap) {
+  if (isMobile) {
+    const cardsWrap = document.getElementById("ordersCards");
+    if (cardsWrap) {
     const card = document.createElement("div");
     card.className = "card-contrato";
     card.setAttribute("data-orden-id", ordenId);
@@ -289,7 +297,8 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       </div>
     `;
 
-    cardsWrap.appendChild(card);
+      cardsWrap.appendChild(card);
+    }
   }
 }
 window.renderizarOrdenYEquipos = renderizarOrdenYEquipos;
@@ -660,3 +669,35 @@ function actualizarResumen(lista) {
     mh.textContent = `Total: ${total} · ${estadoLabel}`;
   }
 }
+
+// ── Layout breakpoint listener ──────────────────────────────────────
+// When the user resizes across the 768px boundary, the active layout
+// changes (mobile cards ↔ desktop table). renderizarOrdenYEquipos only
+// builds the active layout; without this listener the inactive layout
+// would stay empty after a resize. Debounced 150ms because the change
+// event can fire multiple times during a resize drag in some browsers.
+(function watchLayoutBreakpoint() {
+  if (typeof window.matchMedia !== 'function') return;
+  const mql = window.matchMedia('(max-width: 768px)');
+  let debounceTimer = null;
+  let lastIsMobile = mql.matches;
+
+  const onChange = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const nowIsMobile = mql.matches;
+      if (nowIsMobile === lastIsMobile) return;
+      lastIsMobile = nowIsMobile;
+      if (typeof aplicarFiltrosCombinados === 'function') {
+        aplicarFiltrosCombinados();
+      }
+    }, 150);
+  };
+
+  // Modern + legacy listener registration.
+  if (typeof mql.addEventListener === 'function') {
+    mql.addEventListener('change', onChange);
+  } else if (typeof mql.addListener === 'function') {
+    mql.addListener(onChange);
+  }
+})();

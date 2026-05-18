@@ -157,6 +157,17 @@ APP.utils = {
   },
 
   /**
+   * Returns true when the orders page is in mobile-card layout. Mirror of
+   * the CSS @media (max-width: 768px) breakpoint that toggles .table-wrap
+   * off and .cards-list on (ordenes-index.css:1188). Used to skip building
+   * the inactive layout instead of shipping both DOM trees per order.
+   * @returns {boolean}
+   */
+  isMobileLayout() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  },
+
+  /**
    * Render Lucide icons within a bounded scope instead of walking the
    * whole document. Each unscoped `lucide.createIcons()` traverses every
    * DOM node looking for `[data-lucide]`; on the orders page that fires
