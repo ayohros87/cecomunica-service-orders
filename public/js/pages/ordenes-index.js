@@ -79,9 +79,38 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  APP.utils.mustGetEl("btnCargarMas").addEventListener("click", () => {
-    cargarOrdenesYEquipos(false);
-  });
+  // ── "Cargar más" auto-load via IntersectionObserver ──────────────
+  // The button stays as a manual fallback (e.g. when IO is unavailable
+  // or when the user explicitly clicks it). The observer fires before
+  // the user actually scrolls to the button so loading is invisible
+  // in normal use. ORDENES_INDEX_IMPROVEMENTS.md QW14.
+  const btnCargarMas = APP.utils.mustGetEl("btnCargarMas");
+  let _autoLoadInFlight = false;
+
+  const triggerLoadMore = () => {
+    if (_autoLoadInFlight) return;
+    if (btnCargarMas.disabled) return;
+    if (btnCargarMas.style.display === "none") return;
+    _autoLoadInFlight = true;
+    Promise.resolve(cargarOrdenesYEquipos(false))
+      .finally(() => { _autoLoadInFlight = false; });
+  };
+
+  btnCargarMas.addEventListener("click", triggerLoadMore);
+
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) triggerLoadMore();
+      }
+    }, {
+      // Pre-fetch slightly before the button is visible — feels more
+      // continuous to the user than waiting for true intersection.
+      rootMargin: "200px 0px 200px 0px",
+      threshold: 0,
+    });
+    io.observe(btnCargarMas);
+  }
 
   const filtroRapido = document.getElementById('filtroRapido');
   if (filtroRapido) {

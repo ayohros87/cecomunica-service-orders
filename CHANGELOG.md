@@ -1,5 +1,20 @@
 # Changelog
 
+## [Ordenes index improvements — batch 13: intersection-observer auto-load] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW14. Last item in the Tier-2 quick-win block.
+
+### Added
+- `#btnCargarMas` now triggers `cargarOrdenesYEquipos(false)` automatically when it scrolls within 200 px of the viewport (top or bottom). Implementation in [public/js/pages/ordenes-index.js](public/js/pages/ordenes-index.js) wraps the existing click handler with a single `triggerLoadMore()` function that gates on:
+  - `_autoLoadInFlight` flag — prevents double-fires while a load is mid-flight (the `IntersectionObserver` can fire repeatedly during scroll)
+  - `btnCargarMas.disabled` — respects the manual disable used when no more pages
+  - `btnCargarMas.style.display === "none"` — respects the hide used after a filtered search returns < page-size results
+- The button stays in the DOM as a manual fallback for environments without `IntersectionObserver` and for users who prefer explicit pagination. The IO is set up only when the API is available (it's universal in browsers from 2017+ but the guard is cheap).
+- `rootMargin: "200px 0px 200px 0px"` so the prefetch starts a bit before the button is actually visible — keeps the load invisible during normal scrolling.
+
+### Tier 2 closed
+All seven Tier-2 quick wins now shipped: QW4, QW5, QW9, QW10, QW11, QW14, QW15 (plus §3.5 noted as already-resolved). Five commits in this Tier-2 run: `95c933a`, `76b9b00`, `51c7071`, `a65ae7d`, plus this one.
+
 ## [Ordenes index improvements — batch 12: skeleton loader] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW11.
