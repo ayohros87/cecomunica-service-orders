@@ -1,5 +1,34 @@
 # Changelog
 
+## [Ordenes index improvements — batch 8: indexed search via searchTokens] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §1.1 — fourth and biggest Tier-1 item. Closes the remaining Firestore cost leak. Tier 1 is now complete.
+
+### Added
+- `functions/src/lib/searchTokens.js` — pure token computation. Builds the bag-of-tokens for an order from its ID + dash-separated parts, cliente_nombre words (≥ 2 chars), tecnico words, tipo_de_servicio words (≥ 3 chars), and each equipo serial plus its 4–8-char suffix tokens (for the common "last 4 digits" workflow). Normalization: lowercase → NFD → strip diacritics → non-alphanumerics to spaces → trim. Sorted output, capped at 200 tokens/doc.
+- `functions/src/triggers/ordenes/onWriteSearchTokens.js` — `onDocumentWritten("ordenes_de_servicio/{id}")` trigger. Computes tokens from the after-state, compares against the doc's existing `searchTokens` for idempotence (skips no-op writes that would otherwise recurse forever), updates with `{ searchTokens: newTokens }`. Skips soft-deleted orders.
+- `functions/backfill-search-tokens.js` — one-shot script to seed `searchTokens` on existing orders. Run with `--dry-run` to preview, no args to apply. Batches at 400 ops/commit. Idempotent (skips unchanged) so re-runs are safe.
+- Registered the new trigger in [functions/index.js](functions/index.js).
+
+### Changed
+- `OrdenesService.searchOrders` in [public/js/services/ordenesService.js](public/js/services/ordenesService.js) rewritten with two paths:
+  - **Primary:** `where('searchTokens', 'array-contains-any', queryTokens).limit(100)`. Capped at 10 query tokens (Firestore allows 30; conservative cap to bound read budget). Post-filter applies the same OR/AND semantics as the legacy scan, but matches against the doc's `searchTokens` set.
+  - **Fallback:** legacy full-collection scan with substring `includes()` logic. Triggers on (a) indexed query throwing (`failed-precondition`, missing index) or (b) zero results — covers the transition window before backfill completes.
+- Cost projection from the doc realized: 10k orders × 30 searches/day × 8 users ≈ 2.4M → ~12k reads/day once backfill is done. ~$45/mo → ~$0.20/mo for search alone.
+
+### Docs
+- [ARQUITECTURA_CECOMUNICA.md](ARQUITECTURA_CECOMUNICA.md) §5.6 documents the `searchTokens` schema, who writes/reads, normalization rules, and the cross-file sync requirement between the server lib and the frontend's embedded normalizer.
+- §6.1 file-tree updated to include `onWriteSearchTokens.js` and `lib/searchTokens.js`.
+- §6.3 trigger table adds the new function; total goes from 8 triggers to 9 (11 total CFs).
+
+### Deploy order
+1. Deploy CF: `firebase deploy --only functions:onOrdenWriteSearchTokens`. New orders get tokens automatically.
+2. Run backfill from `functions/` directory: `node backfill-search-tokens.js --dry-run` to preview, then `node backfill-search-tokens.js` to apply.
+3. Deploy frontend. Indexed query path activates; until backfill finishes, the zero-result fallback covers gaps so users see no regression.
+
+### Tier 1 closed
+With this batch, `ORDENES_INDEX_IMPROVEMENTS.md` Tier 1 is fully done: §1.1 (this), §1.2 (batch 6), §1.3 (batch 7), §3a.2 (batch 5).
+
 ## [Ordenes index improvements — batch 7: responsive single-layout] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §1.3 — third Tier-1 item. Stops shipping both layouts simultaneously.

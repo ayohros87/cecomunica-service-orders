@@ -266,6 +266,15 @@ Las reglas viven en `storage.rules` (en raíz, deployadas via `firebase deploy -
 
 Rutas PII (`ordenes_firmas`, `ordenes_identificacion`, `entregas_identificacion`) deshabilitan delete y update desde el frontend — un Cloud Function de retención server-side puede purgar via admin SDK cuando aplique (ver `ORDENES_INDEX_IMPROVEMENTS.md` §3a.3 pendiente).
 
+### 5.6 Búsqueda indexada de órdenes — `searchTokens`
+
+`ordenes_de_servicio/{id}.searchTokens` es un array de strings normalizados que habilita búsquedas via `where('searchTokens', 'array-contains-any', [...])` en lugar de un scan completo de la colección. Resuelve el problema de costo descrito en `ORDENES_INDEX_IMPROVEMENTS.md` §1.1.
+
+- **Quién escribe:** el Cloud Function `onOrdenWriteSearchTokens` (idempotente — compara tokens computados vs almacenados antes de escribir, evitando loop recursivo). Existing orders se siembran una sola vez via `functions/backfill-search-tokens.js`.
+- **Lógica de tokens:** ver `functions/src/lib/searchTokens.js` — orden ID + sus partes, palabras del cliente (≥2 chars), palabras del técnico (≥2 chars), palabras del tipo de servicio (≥3 chars), y serials de cada equipo más sus sufijos de 4–8 caracteres (para soportar "últimos 4 dígitos" típicos de techs). Cap de 200 tokens por documento.
+- **Quién lee:** `OrdenesService.searchOrders` en el frontend. Query indexada primero; si falla por índice ausente, o devuelve cero resultados (caso de transición pre-backfill), cae al scan completo como fallback.
+- **Normalización idéntica entre server y cliente:** lowercase → NFD → strip diacritics → no-alfanuméricos a espacios → trim. Cualquier divergencia entre la lib en `functions/` y el normalizador embebido en `ordenesService.js` produce falsos negativos — son dos implementaciones del mismo algoritmo, mantener sincronizadas.
+
 ---
 
 ## 6. Backend — Cloud Functions
@@ -288,6 +297,7 @@ functions/
       ordenes/
         onComplete.js                       ← onOrdenCompletada
         onWriteCacheSync.js                 ← onContratoOrdenWrite, onOrdenWriteSyncContratoCache, onOrdenHardDelete
+        onWriteSearchTokens.js              ← onOrdenWriteSearchTokens
       mail/
         onMailQueued.js                     ← onMailQueued
     domain/
@@ -297,6 +307,7 @@ functions/
     lib/
       admin.js                              ← admin.initializeApp() compartido
       mail.js                               ← cliente SendGrid configurado
+      searchTokens.js                       ← buildOrderSearchTokens (puro)
 ```
 
 ### 6.2 Funciones HTTP
@@ -319,9 +330,10 @@ El canal de email activo desde el frontend es la colección `mail_queue` (ver §
 | `onOrdenWriteSyncContratoCache` | `onDocumentWritten("ordenes_de_servicio/{id}")` | Sincroniza `os_linked`, `os_serials_preview`, `os_has_equipos`, `os_last_orden_id` en el contrato vinculado | — |
 | `onOrdenCompletada` | `onDocumentUpdated("ordenes_de_servicio/{id}")` | Cuando orden se completa: actualiza estadísticas de técnico; encola email de cierre | — |
 | `onOrdenHardDelete` | `onDocumentDeleted("ordenes_de_servicio/{id}")` | Hard-delete: elimina subcol caché y recalcula totales del contrato vinculado | — |
+| `onOrdenWriteSearchTokens` | `onDocumentWritten("ordenes_de_servicio/{id}")` | Mantiene el array `searchTokens` con tokens normalizados de orden ID, cliente, técnico, tipo de servicio y serials de equipos. Idempotente (compara tokens computados vs almacenados antes de escribir). Habilita la búsqueda indexada en `OrdenesService.searchOrders` — ver §5.6 | — |
 | `onMailQueued` | `onDocumentCreated("mail_queue/{id}")` | Lee el documento encolado y envía el email vía SendGrid | `SENDGRID_API_KEY` |
 
-Total: **2 endpoints HTTP + 8 triggers = 10 funciones** exportadas desde `functions/index.js`.
+Total: **2 endpoints HTTP + 9 triggers = 11 funciones** exportadas desde `functions/index.js`.
 
 ### 6.4 Pipeline de email
 

@@ -14,3 +14,4 @@ exports.onOrdenCompletada             = require("./src/triggers/ordenes/onComple
 exports.onContratoOrdenWrite          = onContratoOrdenWrite;
 exports.onOrdenWriteSyncContratoCache = onOrdenWriteSyncContratoCache;
 exports.onOrdenHardDelete             = onOrdenHardDelete;
+exports.onOrdenWriteSearchTokens      = require("./src/triggers/ordenes/onWriteSearchTokens");

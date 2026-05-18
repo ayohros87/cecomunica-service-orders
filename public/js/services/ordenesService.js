@@ -242,12 +242,25 @@ const OrdenesService = {
   },
 
   /**
-   * Search orders by filters (orden, cliente, serial). Reads the
-   * full `ordenes_de_servicio` collection and filters client-side —
-   * a cost-curve issue tracked in ORDENES_INDEX_IMPROVEMENTS.md §1.1.
-   * Will be replaced by an indexed `searchTokens` array-contains query.
-   * Relies on the denormalized `cliente_nombre` field on each order
-   * (set by nueva-orden.js); no clientesMap lookup any more.
+   * Search orders by filters (orden, cliente, serial).
+   *
+   * Primary path: `where('searchTokens', 'array-contains-any', [...])`.
+   * Tokens are maintained per-order by the `onOrdenWriteSearchTokens`
+   * Cloud Function (functions/src/triggers/ordenes/onWriteSearchTokens.js)
+   * and seeded for legacy orders by `functions/backfill-search-tokens.js`.
+   * ORDENES_INDEX_IMPROVEMENTS.md §1.1.
+   *
+   * Fallback path: full-collection scan with the legacy substring logic.
+   * Kicks in when the indexed query throws (failed-precondition / no
+   * index yet) OR returns zero results. The zero-result fallback covers
+   * the transition window before backfill completes — without it, users
+   * would see false-negative blanks during migration.
+   *
+   * Cost: indexed path is O(matching docs), bounded by limit(100).
+   * Scan fallback remains O(collection), so its trigger conditions
+   * matter — once backfill is done, zero-result fallbacks should be
+   * rare and reflect a true "no matches" state.
+   *
    * @param {Object} filters
    * @param {string} filters.filtroOrden - Order ID filter
    * @param {string} filters.filtroCliente - Client name filter
@@ -257,51 +270,106 @@ const OrdenesService = {
    */
   async searchOrders({ filtroOrden = "", filtroCliente = "", filtroSerial = "", quickSearch = false } = {}) {
     const db = firebase.firestore();
-    const snapshot = await db.collection("ordenes_de_servicio").get();
 
-    const normTxt = (str) => String(str || "").toLowerCase().trim();
-    const filtroOrdenNorm = normTxt(filtroOrden);
-    const filtroClienteNorm = normTxt(filtroCliente);
-    const filtroSerialNorm = normTxt(filtroSerial);
+    // Normalize: must mirror functions/src/lib/searchTokens.js so query
+    // tokens match what the CF/backfill writes.
+    const normalize = (s) => String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
 
-    const resultados = [];
+    const tokenSetOf = (s) => normalize(s).split(/\s+/).filter(w => w.length >= 2);
 
-    snapshot.forEach(doc => {
-      const ordenId = normTxt(doc.id);
-      const data = doc.data();
-      if (data.eliminado === true) return;
+    const ordenWords   = tokenSetOf(filtroOrden);
+    const clienteWords = tokenSetOf(filtroCliente);
+    const serialWords  = tokenSetOf(filtroSerial);
 
-      const cliente = normTxt(data.cliente_nombre || data.cliente || "");
+    const allQueryTokens = Array.from(new Set([...ordenWords, ...clienteWords, ...serialWords]));
+    if (allQueryTokens.length === 0) return [];
 
-      const equipos = data.equipos || [];
+    // array-contains-any caps at 30; cap at 10 ourselves to keep the
+    // read budget bounded even if a user types a long phrase.
+    const tokenArr = allQueryTokens.slice(0, 10);
 
-      const coincideOrden = filtroOrdenNorm ? ordenId.includes(filtroOrdenNorm) : false;
-      const coincideCliente = filtroClienteNorm ? cliente.includes(filtroClienteNorm) : false;
-      const coincideSerial = filtroSerialNorm
-        ? equipos.some(eq => {
-            const serial = normTxt(eq.numero_de_serie || eq.serial || eq.SERIAL || "");
-            return serial.includes(filtroSerialNorm);
-          })
-        : false;
+    // Post-filter shared by indexed + fallback paths. For the indexed
+    // path we re-check against searchTokens; for the fallback we use
+    // substring matching on the raw fields.
+    const buildMatch = ({ useTokens }) => (doc) => {
+      const data = doc.data ? doc.data() : doc;
+      if (data.eliminado === true) return null;
 
-      // Quick search mode: OR logic (any match)
+      let coincideOrden, coincideCliente, coincideSerial;
+
+      if (useTokens) {
+        const tokens = new Set(Array.isArray(data.searchTokens) ? data.searchTokens : []);
+        const anyIn = (arr) => arr.some(t => tokens.has(t));
+        coincideOrden   = ordenWords.length   ? anyIn(ordenWords)   : false;
+        coincideCliente = clienteWords.length ? anyIn(clienteWords) : false;
+        coincideSerial  = serialWords.length  ? anyIn(serialWords)  : false;
+      } else {
+        const ordenId = normalize(doc.id || data.ordenId || "");
+        const cliente = normalize(data.cliente_nombre || data.cliente || "");
+        const equipos = data.equipos || [];
+        const ordenNorm   = normalize(filtroOrden);
+        const clienteNorm = normalize(filtroCliente);
+        const serialNorm  = normalize(filtroSerial);
+
+        coincideOrden   = ordenNorm   ? ordenId.includes(ordenNorm)     : false;
+        coincideCliente = clienteNorm ? cliente.includes(clienteNorm)   : false;
+        coincideSerial  = serialNorm
+          ? equipos.some(eq => normalize(eq.numero_de_serie || eq.serial || eq.SERIAL || "").includes(serialNorm))
+          : false;
+      }
+
       if (quickSearch) {
         if (coincideOrden || coincideCliente || coincideSerial) {
-          resultados.push({ ordenId: doc.id, ...data });
+          return { ordenId: doc.id || data.ordenId, ...data };
         }
-      } 
-      // Advanced search mode: AND logic (all conditions must match)
-      else {
-        const pasaOrden = filtroOrdenNorm ? coincideOrden : true;
-        const pasaCliente = filtroClienteNorm ? coincideCliente : true;
-        const pasaSerial = filtroSerialNorm ? coincideSerial : true;
-        
-        if (pasaOrden && pasaCliente && pasaSerial) {
-          resultados.push({ ordenId: doc.id, ...data });
-        }
+        return null;
       }
-    });
+      const pasaOrden   = (useTokens ? ordenWords.length   : normalize(filtroOrden))   ? coincideOrden   : true;
+      const pasaCliente = (useTokens ? clienteWords.length : normalize(filtroCliente)) ? coincideCliente : true;
+      const pasaSerial  = (useTokens ? serialWords.length  : normalize(filtroSerial))  ? coincideSerial  : true;
+      if (pasaOrden && pasaCliente && pasaSerial) {
+        return { ordenId: doc.id || data.ordenId, ...data };
+      }
+      return null;
+    };
 
+    // ── Primary: indexed query ───────────────────────────────────
+    try {
+      const snap = await db.collection("ordenes_de_servicio")
+        .where("searchTokens", "array-contains-any", tokenArr)
+        .limit(100)
+        .get();
+
+      const matchIndexed = buildMatch({ useTokens: true });
+      const results = [];
+      snap.forEach(doc => {
+        const m = matchIndexed(doc);
+        if (m) results.push(m);
+      });
+
+      if (results.length > 0) return results;
+      // Zero results from the indexed query may mean either "truly no
+      // matches" or "tokens not yet backfilled". Fall through to scan
+      // so users don't see false negatives during migration.
+      console.debug("[searchOrders] indexed query returned 0; falling back to scan");
+    } catch (err) {
+      console.warn("[searchOrders] indexed query failed, falling back to scan:",
+        err?.code || err?.message);
+    }
+
+    // ── Fallback: full-collection scan ───────────────────────────
+    const snapshot = await db.collection("ordenes_de_servicio").get();
+    const matchScan = buildMatch({ useTokens: false });
+    const resultados = [];
+    snapshot.forEach(doc => {
+      const m = matchScan(doc);
+      if (m) resultados.push(m);
+    });
     return resultados;
   },
 
