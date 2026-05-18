@@ -1,5 +1,32 @@
 # Changelog
 
+## [Ordenes index improvements — batch 15: onSnapshot live updates] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3.1 — biggest Tier-3 UX win.
+
+### Added
+- **Live first-page updates via `onSnapshot`.** New `OrdenesService.subscribeFirstPage({ userRole, userId, limit, onUpdate, onError })` in [public/js/services/ordenesService.js](public/js/services/ordenesService.js) returns an unsubscribe function. Shares the role-filtered + `orderBy fecha_creacion desc` + `limit(pageLimit)` query construction with `loadOrders` via a new private `_buildOrdersQuery()` helper.
+- New `_iniciarSnapshotInicial()` / `_detenerSnapshotInicial()` pair in [public/js/pages/ordenes-data.js](public/js/pages/ordenes-data.js). Listener merges live results with previously-paginated entries (live wins on `ordenId` collision, older paginated orders past the first-page cursor are preserved). Calls `aplicarFiltrosCombinados()` on every snapshot fire so active filters still apply. Auto-stops on `pagehide`.
+
+### Changed
+- `cargarOrdenesYEquipos(true)` now delegates to `_iniciarSnapshotInicial()` — same public signature, but the initial load is now a live subscription instead of a one-shot read. `cargarOrdenesYEquipos(false)` (pagination via "Cargar más") remains a one-shot read past the cursor.
+- The `pageshow` handler in [public/js/pages/ordenes-index.js](public/js/pages/ordenes-index.js) re-establishes the subscription instead of forcing a manual reload — safer on Safari BFCache where the underlying connection may have dropped.
+- `renderOrdersList` in [public/js/pages/ordenes-filters.js](public/js/pages/ordenes-filters.js) now snapshots the set of currently-expanded `tr.activo` ordenIds before clearing and re-expands them after re-render. Without this, every snapshot fire would collapse any row the user had open mid-task.
+
+### Removed
+- Four `setTimeout(() => { APP.state.orders = []; APP.state.lastVisible = null; cargarOrdenesYEquipos(true); }, 1000)` blocks in [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) (after `assignTechnician`, `completeOrder`, `deleteOrder`, `confirmarEntrega`). The 1 s pause was code-smell waiting for CF triggers to settle — onSnapshot picks up the Firestore write within milliseconds, no manual reload needed.
+
+### UX impact
+- Lifecycle actions (asignar, completar, eliminar, entregar) reflect in the UI within milliseconds instead of after a 1 s pause.
+- Two staff members editing in different tabs now see each other's changes in real time.
+- No more stale-state-after-CF window where the user could click again before the reload finished.
+
+### Known limitation
+- `filtrarPorEstado` runs a bespoke one-shot query (`OrdenesService.filterByStatus`, limit 200) that can return more rows than the live first page. When the snapshot subsequently fires, the re-render falls back to `APP.state.orders` (first-page-sized) filtered client-side by `filtroEstado`. Users on this path may see fewer rows than the original badge-filter result. Fix is to either (a) make `filtrarPorEstado` write into `APP.state.orders` or (b) drop the bespoke path and rely on the first-page subscription + client filtering. Deferred — uncommon path in practice.
+
+### Cost note
+- Per the doc: snapshot listeners cost 1 read + 1 per change. Idle sessions are cheaper than the previous polling pattern; active sessions are roughly comparable. Net effect: roughly neutral or favorable in steady state.
+
 ## [Ordenes index improvements — batch 14: URL state + entrega modal a11y + persistence check] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` Tier 3. Closes §3.3, §3a.11, and §5.4.

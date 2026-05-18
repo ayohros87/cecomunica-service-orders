@@ -154,10 +154,14 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// Force reload on back-button navigation so freshly signed contracts/orders show up.
+// BFCache restore: re-establish the live snapshot listener. Firestore's
+// SDK usually keeps listeners alive across the restore, but on some
+// browsers (Safari especially) the connection drops and re-subscribing
+// is the safest path. ORDENES_INDEX_IMPROVEMENTS.md §3.1.
 window.addEventListener("pageshow", (event) => {
   if (event.persisted || performance.getEntriesByType("navigation")[0].type === "back_forward") {
-    console.log("♻️ Recargando órdenes tras regresar a la página...");
-    cargarOrdenesYEquipos(true);
+    if (typeof _iniciarSnapshotInicial === 'function') {
+      _iniciarSnapshotInicial();
+    }
   }
 });

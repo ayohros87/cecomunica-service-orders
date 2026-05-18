@@ -97,21 +97,95 @@ window.ordenarOrdenes = function (data) {
   });
 };
 
-window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
-  const ordersTable = APP.utils.mustGetEl("ordersTable");
-  if (esCargaInicial) {
-    ordersTable.innerHTML = "";
-    APP.state.orders = [];
-    APP.state.lastVisible = null;
-    APP.utils.mustGetEl("btnCargarMas").innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
-    APP.utils.mustGetEl("btnCargarMas").disabled = false;
-    APP.utils.mustGetEl("btnCargarMas").style.display = "block";
+// ── Snapshot subscription for the first page ────────────────────────
+// Live updates replace the previous one-shot read + setTimeout(1000)
+// reload pattern that waited on CF triggers to settle.
+// ORDENES_INDEX_IMPROVEMENTS.md §3.1.
+//
+// Older orders (past the first page, loaded via "Cargar más") are not
+// live — they're a static snapshot at the time of pagination. Active
+// workflow happens on recent orders which live in the first page.
+let _firstPageUnsubscribe = null;
+
+function _detenerSnapshotInicial() {
+  if (typeof _firstPageUnsubscribe === 'function') {
+    try { _firstPageUnsubscribe(); } catch (e) { console.warn("unsubscribe failed", e); }
   }
+  _firstPageUnsubscribe = null;
+}
+
+function _iniciarSnapshotInicial() {
+  _detenerSnapshotInicial();
+
+  const ordersTable = APP.utils.mustGetEl("ordersTable");
+  const btnCargarMas = APP.utils.mustGetEl("btnCargarMas");
+
+  // Reset paginated state — the live listener owns the first page now.
+  ordersTable.innerHTML = "";
+  APP.state.orders = [];
+  APP.state.lastVisible = null;
+  btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
+  btnCargarMas.disabled = false;
+  btnCargarMas.style.display = "block";
+
+  const uid = APP.state.userId || firebase.auth().currentUser?.uid || null;
+
+  _firstPageUnsubscribe = OrdenesService.subscribeFirstPage({
+    userRole: APP.state.userRole,
+    userId: uid,
+    limit: CONFIG.pageLimit(APP.state.userRole),
+    onUpdate: ({ orders, lastSnapshot }) => {
+      // Merge: live orders replace anything with the same ordenId in
+      // the cached state; paginated entries past the live cursor are
+      // preserved (they're a snapshot from a previous "Cargar más").
+      const liveIds = new Set(orders.map(o => o.ordenId));
+      const paginatedKept = (APP.state.orders || []).filter(o => !liveIds.has(o.ordenId));
+      APP.state.orders = [...orders, ...paginatedKept];
+      APP.state.lastVisible = lastSnapshot;
+
+      if (orders.length === 0 && paginatedKept.length === 0) {
+        btnCargarMas.style.display = "none";
+      } else {
+        btnCargarMas.style.display = "block";
+      }
+
+      if (typeof aplicarFiltrosCombinados === 'function') {
+        aplicarFiltrosCombinados();
+      }
+    },
+    onError: (err) => {
+      console.error("❌ Snapshot error:", err);
+      renderEmptyState("Error al cargar datos", {
+        icon: 'alert-triangle',
+        sublabel: 'Por favor, recarga la página.'
+      });
+    }
+  });
+
+  // Stop the listener when the tab is hidden permanently (closed/refresh).
+  // BFCache restore on Safari/Firefox keeps the listener alive; pageshow
+  // handler in ordenes-index.js handles re-establishing if needed.
+  window.addEventListener('pagehide', _detenerSnapshotInicial, { once: true });
+}
+
+window._iniciarSnapshotInicial = _iniciarSnapshotInicial;
+window._detenerSnapshotInicial = _detenerSnapshotInicial;
+
+window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
+  // Initial load: hand off to the live subscription. Subsequent calls
+  // (esCargaInicial=false) are pagination — one-shot reads past the
+  // cursor.
+  if (esCargaInicial) {
+    _iniciarSnapshotInicial();
+    return;
+  }
+
+  const ordersTable = APP.utils.mustGetEl("ordersTable");
 
   try {
     const uid = APP.state.userId || firebase.auth().currentUser?.uid || null;
     const { orders, lastSnapshot } = await OrdenesService.loadOrders({
-      lastSnapshot: esCargaInicial ? null : APP.state.lastVisible,
+      lastSnapshot: APP.state.lastVisible,
       userRole: APP.state.userRole,
       userId: uid,
       limit: CONFIG.pageLimit(APP.state.userRole)

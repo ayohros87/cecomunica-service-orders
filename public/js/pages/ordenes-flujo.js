@@ -73,12 +73,9 @@ window.confirmarAsignarTecnico = async function (ordenId) {
     Toast.show("✅ Técnico asignado correctamente", "ok");
 
     cerrarModalAsignar();
-
-    setTimeout(() => {
-      APP.state.orders = [];
-      APP.state.lastVisible = null;
-      cargarOrdenesYEquipos(true);
-    }, 1000);
+    // The live snapshot in ordenes-data.js picks up the Firestore write
+    // and re-renders within milliseconds — no manual reload needed.
+    // ORDENES_INDEX_IMPROVEMENTS.md §3.1.
   } catch (error) {
     console.error("Error asignando técnico:", error);
     Toast.show("❌ Error al asignar técnico", "bad");
@@ -92,12 +89,7 @@ window.completarOrden = async function (ordenId) {
     await OrdenesService.completeOrder(ordenId);
 
     Toast.show("✅ Orden completada", "ok");
-
-    setTimeout(() => {
-      APP.state.orders = [];
-      APP.state.lastVisible = null;
-      cargarOrdenesYEquipos(true);
-    }, 1000);
+    // Live snapshot picks up the change — no manual reload.
   } catch (error) {
     console.error("Error completando orden:", error);
     Toast.show("❌ Error al completar orden", "bad");
@@ -115,12 +107,7 @@ window.eliminarOrden = async function (ordenId) {
     await OrdenesService.deleteOrder(ordenId);
 
     Toast.show("✅ Orden eliminada", "ok");
-
-    setTimeout(() => {
-      APP.state.orders = [];
-      APP.state.lastVisible = null;
-      cargarOrdenesYEquipos(true);
-    }, 1000);
+    // Live snapshot picks up the eliminado:true write — no manual reload.
   } catch (error) {
     console.error("Error eliminando orden:", error);
     Toast.show("❌ Error al eliminar orden", "bad");
@@ -594,12 +581,8 @@ window.copiarSeriales = function (ordenId) {
 
       cerrarModalEntrega();
       Toast.show('✅ Entrega registrada correctamente', 'ok');
-
-      setTimeout(() => {
-        APP.state.orders = [];
-        APP.state.lastVisible = null;
-        cargarOrdenesYEquipos(true);
-      }, 1000);
+      // Live snapshot picks up the estado_reparacion + fecha_entrega
+      // write — no manual reload.
 
     } catch (err) {
       console.error('[confirmarEntrega]', err);

@@ -6,7 +6,76 @@
 
 const OrdenesService = {
   /**
-   * Load orders from Firestore with pagination
+   * Internal helper: builds the orders query with role-based filtering
+   * + orderBy. Used by both loadOrders (one-shot) and subscribeFirstPage
+   * (live). Kept in sync via this single source.
+   * @private
+   */
+  _buildOrdersQuery({ userRole = null, userId = null, limit = 50 }) {
+    const db = firebase.firestore();
+    let queryRef = db.collection("ordenes_de_servicio");
+
+    // Role-based filtering. Other roles see all orders and rely on
+    // client-side filters (soloMias toggle, etc).
+    if (userRole === "vendedor" && userId) {
+      queryRef = queryRef.where("vendedor_asignado", "==", userId);
+    } else if (userRole === "tecnico_operativo" && userId) {
+      queryRef = queryRef.where("tecnico_uid", "==", userId);
+    }
+
+    return queryRef.orderBy("fecha_creacion", "desc").limit(limit);
+  },
+
+  /**
+   * Subscribe to live updates on the first page of orders.
+   * Replaces the previous one-shot loadOrders + setTimeout(1000)
+   * reload pattern that waited on Cloud Functions to settle.
+   * ORDENES_INDEX_IMPROVEMENTS.md §3.1.
+   *
+   * The listener receives Firestore-pushed updates on:
+   *   - Order CREATE: a new doc enters the limit window, oldest drops
+   *   - Order UPDATE: any field change on a doc inside the window
+   *   - Order DELETE / soft-delete (eliminado=true): doc removed from list
+   *
+   * Older paginated orders (loaded via subsequent loadOrders calls
+   * past the cursor) are NOT live — they're a one-shot snapshot from
+   * "Cargar más". Recently-active orders typically live in the first
+   * page anyway, so this captures the bulk of the value.
+   *
+   * @param {Object} options
+   * @param {string} options.userRole
+   * @param {string} options.userId
+   * @param {number} options.limit
+   * @param {(payload: {orders: Array, lastSnapshot: firebase.firestore.DocumentSnapshot|null}) => void} options.onUpdate
+   * @param {(err: Error) => void} [options.onError]
+   * @returns {() => void} unsubscribe function — call when leaving the page
+   */
+  subscribeFirstPage({ userRole = null, userId = null, limit = 50, onUpdate, onError } = {}) {
+    const queryRef = this._buildOrdersQuery({ userRole, userId, limit });
+    return queryRef.onSnapshot(
+      snapshot => {
+        const orders = [];
+        let lastDoc = null;
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.eliminado !== true) {
+            orders.push({ ordenId: doc.id, ...data });
+          }
+          lastDoc = doc;
+        });
+        onUpdate?.({ orders, lastSnapshot: lastDoc });
+      },
+      err => {
+        console.error("[OrdenesService.subscribeFirstPage]", err);
+        onError?.(err);
+      }
+    );
+  },
+
+  /**
+   * Load orders from Firestore with pagination (one-shot read).
+   * Used for "Cargar más" past the first page; the first page itself
+   * runs via subscribeFirstPage for live updates.
    * @param {Object} options - Query options
    * @param {firebase.firestore.DocumentSnapshot} options.lastSnapshot - Last document for pagination
    * @param {string} options.userRole - User role for filtering
@@ -15,17 +84,7 @@ const OrdenesService = {
    * @returns {Promise<{orders: Array, lastSnapshot: firebase.firestore.DocumentSnapshot}>}
    */
   async loadOrders({ lastSnapshot = null, userRole = null, userId = null, limit = 50 } = {}) {
-    const db = firebase.firestore();
-    let queryRef = db.collection("ordenes_de_servicio");
-
-    // Apply role-based filtering
-    if (userRole === "vendedor" && userId) {
-      queryRef = queryRef.where("vendedor_asignado", "==", userId);
-    } else if (userRole === "tecnico_operativo" && userId) {
-      queryRef = queryRef.where("tecnico_uid", "==", userId);
-    }
-
-    queryRef = queryRef.orderBy("fecha_creacion", "desc").limit(limit);
+    let queryRef = this._buildOrdersQuery({ userRole, userId, limit });
 
     if (lastSnapshot) {
       queryRef = queryRef.startAfter(lastSnapshot);

@@ -117,6 +117,19 @@ function applyActiveFiltersToOrders(list, filters) {
 function renderOrdersList(list) {
   const ordersTable = document.getElementById("ordersTable");
   const cardsWrap = document.getElementById("ordersCards");
+
+  // Preserve expanded-row state across re-renders. Without this, a
+  // snapshot update on any order in the list would collapse every
+  // currently-expanded row — annoying during active workflow when
+  // staff have one open mid-task. ORDENES_INDEX_IMPROVEMENTS.md §3.1.
+  const expandedIds = ordersTable
+    ? new Set(
+        Array.from(ordersTable.querySelectorAll('tr.activo[data-orden-id]'))
+          .map(tr => tr.dataset.ordenId)
+          .filter(Boolean)
+      )
+    : new Set();
+
   if (ordersTable) ordersTable.innerHTML = "";
   if (cardsWrap) cardsWrap.innerHTML = "";
 
@@ -135,6 +148,16 @@ function renderOrdersList(list) {
       .sort((a, b) => String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || "")));
     renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
   });
+
+  // Re-expand rows that were open before the re-render.
+  if (expandedIds.size && ordersTable) {
+    for (const ordenId of expandedIds) {
+      const row = ordersTable.querySelector(`tr[data-orden-id="${ordenId}"]`);
+      if (row && !row.classList.contains('activo') && typeof _toggleOrdenRow === 'function') {
+        _toggleOrdenRow(row);
+      }
+    }
+  }
 
   actualizarResumen(list);
   aplicarRestriccionesPorRol(APP.state.userRole);
