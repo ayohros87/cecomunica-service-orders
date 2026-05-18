@@ -1,5 +1,23 @@
 # Changelog
 
+## [Ordenes index improvements — batch 16: audit-log timeline] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §5.7 + the `os_logs` asymmetry noted in §3a.9.
+
+### Added
+- **Audit-log timeline** in the expanded row in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js). New `_buildTimelineHTML(ordenData)` helper derives entries from the `fecha_*` timestamps the lifecycle handlers already write (`fecha_creacion`, `fecha_asignacion`, `fecha_completado`, `fecha_entrega`, `fecha_eliminacion`), sorts ascending, and renders a vertical timeline. Each entry shows the action, formatted date (`Mar 18 14:32`), and "by" line where available (`tecnico_asignado` for ASIGNAR, `completado_por_email` for COMPLETAR, `entrega_por_email` for ENTREGAR). Section title "Línea de tiempo" appears between the resumen-operativo block and the equipos table.
+- `formatFechaHora(ts)` in [public/js/pages/ordenes-state.js](public/js/pages/ordenes-state.js) — compact `DD Mmm HH:MM` formatter using `es-PA` locale. Falls back to date-only `formatFecha` when the timestamp can't be `.toDate()`'d (uncommitted serverTimestamp).
+- `.timeline-orden` block styles in [public/css/ordenes-index.css](public/css/ordenes-index.css). Vertical connector line with per-state dot colors that mirror the `.estado-pill` palette (warning amber for asignado/no-recibido, brand blue for completado, online green for entregado, critical red for eliminado).
+
+### Changed
+- **`os_logs` now covers all three transitions** (`ORDENES_INDEX_IMPROVEMENTS.md` §3a.9 — was previously asymmetric, only ENTREGAR wrote). `OrdenesService.assignTechnician` and `completeOrder` in [public/js/services/ordenesService.js](public/js/services/ordenesService.js) now append `{ action: 'ASIGNAR'|'COMPLETAR', by: <uid> }` entries via `arrayUnion`.
+- `completeOrder` additionally captures `completado_por_uid` and `completado_por_email` so the timeline can attribute the action — previously only the timestamp was recorded.
+- Updated [ARQUITECTURA_CECOMUNICA.md](ARQUITECTURA_CECOMUNICA.md) §5.4 to reflect the new symmetric audit coverage.
+
+### UX impact
+- Staff can now answer "when did this orden last move?" without leaving the page — the timeline lives inline in every expanded row.
+- Combined with §3.1 live updates, the timeline updates in real time as another user advances the orden through its states.
+
 ## [Ordenes index improvements — batch 15: onSnapshot live updates] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3.1 — biggest Tier-3 UX win.

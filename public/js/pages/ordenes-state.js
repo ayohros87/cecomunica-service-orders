@@ -217,6 +217,25 @@ function formatFecha(ts) {
   }
 }
 
+// Compact "Mar 18, 14:32" format for the audit timeline in the
+// expanded row. Falls back to the date-only formatFecha if the
+// Firestore timestamp can't be converted (e.g. unset / null).
+function formatFechaHora(ts) {
+  if (!ts) return "—";
+  try {
+    const d = ts.toDate();
+    return d.toLocaleString('es-PA', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).replace(',', '');
+  } catch {
+    return formatFecha(ts);
+  }
+}
+
 function normTxt(s) {
   return (s || "")
     .toString()

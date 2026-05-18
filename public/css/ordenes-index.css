@@ -808,6 +808,96 @@ body.hide-fecha-entrega .fecha-entrega {
 .req--warn { color: #b45309; }
 
 /* ======================================
+   TIMELINE — audit log in expanded row
+   Vertical timeline derived from fecha_* timestamps on the order
+   doc, rendered inside the expanded row between the resumen and
+   the equipos table. ORDENES_INDEX_IMPROVEMENTS.md §5.7.
+   ====================================== */
+.timeline-orden {
+  margin: var(--sp-3) 0 var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--sp-3);
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.timeline-header .icon i { width: 16px; height: 16px; }
+
+.timeline-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  padding-left: 6px;
+}
+/* Vertical connector line behind the dots */
+.timeline-entries::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: var(--border-default);
+  border-radius: 1px;
+}
+
+.timeline-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  position: relative;
+  z-index: 1;
+}
+.timeline-dot {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--border-default);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-3);
+}
+.timeline-dot i { width: 12px; height: 12px; }
+
+.timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.timeline-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-1);
+}
+.timeline-meta {
+  font-size: 12px;
+  color: var(--fg-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.timeline-by { font-style: italic; }
+
+/* Per-state dot colors — pick up the same semantic palette as
+   the .estado-pill so the timeline feels consistent. */
+.timeline-entry--asignado    .timeline-dot { border-color: var(--status-warning); color: var(--status-warning); }
+.timeline-entry--completado  .timeline-dot { border-color: var(--brand);          color: var(--brand); }
+.timeline-entry--entregado   .timeline-dot { border-color: var(--status-online);  color: var(--status-online); }
+.timeline-entry--no-recibido .timeline-dot { border-color: var(--status-warning); color: var(--status-warning); }
+.timeline-entry--eliminado   .timeline-dot { border-color: var(--status-critical);color: var(--status-critical); }
+
+/* ======================================
    SKELETON LOADER
    Rendered into #ordersTable + #ordersCards during initial load
    so the page has content-shaped placeholders instead of a bare

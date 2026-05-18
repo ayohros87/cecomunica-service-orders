@@ -246,8 +246,8 @@ Los campos `os_count`, `equipos_total`, `os_linked`, `os_serials_preview`, `os_h
 
 `ordenes_de_servicio/{id}.os_logs` es un array de auditoría escrito con `firebase.firestore.FieldValue.arrayUnion({ action, by })` cada vez que la orden cambia de estado.
 
-- **Quién escribe:** el frontend (en `ordenes-flujo.js` para entrega, `firmar-entrega.js` para la versión legacy). Hoy sólo la transición `ENTREGAR` deja huella; las transiciones `ASIGNAR` y `COMPLETAR` aún **no** escriben.
-- **Quién lee:** ninguna CF lo consume todavía. Se conserva para reconstruir la línea de tiempo en futuras vistas (`ORDENES_INDEX_IMPROVEMENTS.md` §5.7) y para auditoría manual.
+- **Quién escribe:** el frontend. `OrdenesService.assignTechnician`, `completeOrder` y la entrega (`ordenes-flujo.js` + `firmar-entrega.js`) anexan entradas para `ASIGNAR`, `COMPLETAR` y `ENTREGAR` respectivamente.
+- **Quién lee:** la línea de tiempo en la fila expandida (`ORDENES_INDEX_IMPROVEMENTS.md` §5.7). El timestamp se toma de los campos `fecha_*` dedicados ya que `arrayUnion` no admite `serverTimestamp()`; el `by` del array da el `uid` del autor.
 - **Forma:** `{ action: 'ENTREGAR' | 'ASIGNAR' | 'COMPLETAR' | …, by: <uid> }` — sin `ts` porque Firestore no permite `serverTimestamp()` dentro de `arrayUnion`. Si se requiere timestamp por entrada, migrar a una subcolección `ordenes_de_servicio/{id}/os_audit/{autoId}`.
 - **Límite:** Firestore tiene un cap de 1 MiB por documento. A ~50 bytes por entrada el techo práctico es ~20 000 acciones por orden — suficiente para el ciclo de vida típico pero a vigilar si en el futuro cada modificación de equipos se loguea aquí.
 

@@ -128,7 +128,8 @@ const OrdenesService = {
   },
 
   /**
-   * Assign technician to order
+   * Assign technician to order. Also appends an `os_logs` audit entry
+   * for the timeline view in the expanded row (§5.7).
    * @param {string} ordenId - Order ID
    * @param {string} tecnicoUid - Technician user ID
    * @param {string} tecnicoNombre - Technician name
@@ -136,24 +137,37 @@ const OrdenesService = {
    */
   async assignTechnician(ordenId, tecnicoUid, tecnicoNombre) {
     const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
       estado_reparacion: "ASIGNADO",
       tecnico_asignado: tecnicoNombre,
       tecnico_uid: tecnicoUid,
-      fecha_asignacion: firebase.firestore.FieldValue.serverTimestamp()
+      fecha_asignacion: firebase.firestore.FieldValue.serverTimestamp(),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'ASIGNAR',
+        by: user?.uid || ''
+      })
     });
   },
 
   /**
-   * Mark order as completed
+   * Mark order as completed. Captures `completado_por_email` so the
+   * timeline can attribute the action, and appends an `os_logs` entry.
    * @param {string} ordenId - Order ID
    * @returns {Promise<void>}
    */
   async completeOrder(ordenId) {
     const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
       estado_reparacion: "COMPLETADO (EN OFICINA)",
-      fecha_completado: firebase.firestore.FieldValue.serverTimestamp()
+      fecha_completado: firebase.firestore.FieldValue.serverTimestamp(),
+      completado_por_uid: user?.uid || '',
+      completado_por_email: user?.email || '',
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'COMPLETAR',
+        by: user?.uid || ''
+      })
     });
   },
 

@@ -200,6 +200,8 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
           </div>
         </div>
 
+        ${_buildTimelineHTML(ordenData)}
+
         <div class="equipos-container">
           <div style="padding: 20px; text-align: center; color: #666;">
             <div class="loader" style="margin: 0 auto;"></div>
@@ -279,6 +281,95 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   }
 }
 window.renderizarOrdenYEquipos = renderizarOrdenYEquipos;
+
+// Build the audit-log timeline HTML for an order.
+// Derives entries from the dedicated `fecha_*` timestamp fields the
+// lifecycle handlers already write. Where the order also has an
+// `entrega_por_email` (entrega flow) or `tecnico_asignado` (assign
+// flow), the "by" line surfaces who did the action. The `os_logs`
+// array carries `{ action, by }` but lacks per-entry timestamps
+// (Firestore disallows serverTimestamp() in arrayUnion); the fecha_*
+// fields give us both. ORDENES_INDEX_IMPROVEMENTS.md §5.7.
+function _buildTimelineHTML(ordenData) {
+  const safe = (s) => escapeHtml(String(s ?? ''));
+  const entries = [];
+
+  if (ordenData.fecha_creacion) {
+    entries.push({
+      icon: 'plus-circle',
+      label: 'Orden creada',
+      ts: ordenData.fecha_creacion,
+      by: ordenData.creado_por_email || ordenData.created_by_email || '',
+      kind: 'created'
+    });
+  }
+  if (ordenData.fecha_asignacion) {
+    entries.push({
+      icon: 'user-check',
+      label: 'Asignada a técnico',
+      ts: ordenData.fecha_asignacion,
+      by: ordenData.tecnico_asignado || '',
+      kind: 'asignado'
+    });
+  }
+  if (ordenData.fecha_completado) {
+    entries.push({
+      icon: 'check-circle',
+      label: 'Completada en oficina',
+      ts: ordenData.fecha_completado,
+      by: ordenData.completado_por_email || '',
+      kind: 'completado'
+    });
+  }
+  if (ordenData.fecha_entrega) {
+    entries.push({
+      icon: ordenData.no_recibido ? 'alert-triangle' : 'package-check',
+      label: ordenData.no_recibido ? 'Entrega NO recibida' : 'Entregada al cliente',
+      ts: ordenData.fecha_entrega,
+      by: ordenData.entrega_por_email || '',
+      kind: ordenData.no_recibido ? 'no-recibido' : 'entregado'
+    });
+  }
+  if (ordenData.fecha_eliminacion) {
+    entries.push({
+      icon: 'trash-2',
+      label: 'Eliminada',
+      ts: ordenData.fecha_eliminacion,
+      by: '',
+      kind: 'eliminado'
+    });
+  }
+
+  // Sort ascending by epoch — oldest at top, newest at bottom.
+  entries.sort((a, b) => {
+    const am = a.ts?.toMillis?.() ?? 0;
+    const bm = b.ts?.toMillis?.() ?? 0;
+    return am - bm;
+  });
+
+  if (entries.length === 0) return '';
+
+  const rowsHtml = entries.map(e => `
+    <div class="timeline-entry timeline-entry--${e.kind}">
+      <span class="timeline-dot"><i data-lucide="${e.icon}" aria-hidden="true"></i></span>
+      <div class="timeline-body">
+        <div class="timeline-label">${safe(e.label)}</div>
+        <div class="timeline-meta">
+          <span class="timeline-date">${safe(formatFechaHora(e.ts))}</span>
+          ${e.by ? `<span class="timeline-by">· ${safe(e.by)}</span>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="timeline-orden">
+      <div class="timeline-header">
+        <span class="icon"><i data-lucide="history"></i></span>
+        <strong>Línea de tiempo</strong>
+      </div>
+      <div class="timeline-entries">${rowsHtml}</div>
+    </div>`;
+}
 
 // LAZY RENDER: Genera la tabla de equipos solo cuando se expande
 function renderEquiposTabla(ordenId, equipos, filaDetalle) {
