@@ -7,19 +7,70 @@
 //   Modal.prompt(opts)        — programmatic text-input dialog, returns Promise<string|null>
 //     opts: { message, title?, defaultValue?, placeholder?, confirmLabel?, cancelLabel?, multiline? }
 //     null on cancel/Escape/backdrop; trimmed string on confirm.
+// Standard CSS selector for elements that participate in the Tab
+// sequence — used by the focus trap. Pulled out so Modal.open and the
+// programmatic confirm/prompt overlays share the same definition.
+const _FOCUSABLE_SEL = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function _focusableIn(root) {
+  return Array.from(root.querySelectorAll(_FOCUSABLE_SEL))
+    .filter(el => !el.hasAttribute('disabled')
+                && el.offsetParent !== null);  // skip hidden
+}
+
 window.Modal = {
   open(id, { onEscape = true } = {}) {
     const el = document.getElementById(id);
     if (!el) return;
     el.style.display = 'flex';
+    el.classList.remove('hidden');
     document.body.style.overflow = 'hidden';
-    if (onEscape) {
-      const handler = e => {
-        if (e.key === 'Escape') { this.close(id); }
-      };
-      el._modalEscHandler = handler;
-      document.addEventListener('keydown', handler);
-    }
+
+    // Track previously-focused element so we can restore on close.
+    el._previouslyFocused = document.activeElement;
+
+    // Initial focus on the first focusable element inside the modal.
+    // Defer to next frame so any display:none → flex transitions can
+    // settle before measuring offsetParent.
+    requestAnimationFrame(() => {
+      const focusables = _focusableIn(el);
+      if (focusables.length) focusables[0].focus();
+      else el.focus?.();
+    });
+
+    // Combined key handler: Escape closes, Tab/Shift+Tab wraps focus
+    // inside the modal so keyboard users can't tab out into the page
+    // behind. ORDENES_INDEX_IMPROVEMENTS.md QW5 a11y compliance.
+    const handler = (e) => {
+      if (onEscape && e.key === 'Escape') {
+        this.close(id);
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusables = _focusableIn(el);
+      if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusables[0];
+      const last  = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    el._modalKeyHandler = handler;
+    document.addEventListener('keydown', handler);
   },
 
   close(id) {
@@ -27,10 +78,14 @@ window.Modal = {
     if (!el) return;
     el.style.display = 'none';
     document.body.style.overflow = '';
-    if (el._modalEscHandler) {
-      document.removeEventListener('keydown', el._modalEscHandler);
-      delete el._modalEscHandler;
+    if (el._modalKeyHandler) {
+      document.removeEventListener('keydown', el._modalKeyHandler);
+      delete el._modalKeyHandler;
     }
+    // Restore focus to the element that was active before the modal opened.
+    const prev = el._previouslyFocused;
+    if (prev && typeof prev.focus === 'function') prev.focus();
+    delete el._previouslyFocused;
   },
 
   confirm({

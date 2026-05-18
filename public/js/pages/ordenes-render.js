@@ -210,33 +210,10 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     </td>
   `;
 
-  const toggleExpand = () => {
-    filaOrden.classList.toggle("activo");
-    const wasHidden = filaDetalle.style.display === "none";
-    filaDetalle.style.display = wasHidden ? "table-row" : "none";
-    filaOrden.setAttribute('aria-expanded', wasHidden ? 'true' : 'false');
-
-    if (wasHidden && filaDetalle.getAttribute("data-equipos-loaded") === "false") {
-      renderEquiposTabla(ordenId, equiposNormalizados, filaDetalle);
-    }
-  };
-
-  filaOrden.addEventListener("click", (e) => {
-    const clickedInteractive = e.target.closest('button') ||
-                               e.target.closest('a') ||
-                               e.target.closest('.overflow-menu');
-
-    if (clickedInteractive) return;
-    toggleExpand();
-  });
-
-  filaOrden.addEventListener("keydown", (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    // Let nested interactive elements handle their own keyboard semantics.
-    if (e.target !== filaOrden) return;
-    e.preventDefault();
-    toggleExpand();
-  });
+  // Row click/keydown handling is delegated at the table level — see
+  // the `initOrdenRowDelegation` IIFE at the bottom of this file.
+  // Marker attribute identifies rows that should toggle on click/Enter.
+  filaOrden.setAttribute("data-orden-row", "1");
 
   contenedor.appendChild(filaOrden);
   contenedor.appendChild(filaDetalle);
@@ -722,6 +699,54 @@ function renderEmptyState(message, opts = {}) {
   APP.utils.lucideRefresh([ordersTable, ordersCards]);
 }
 window.renderEmptyState = renderEmptyState;
+
+// ── Row expansion: one delegated listener for the entire table ──────
+// Replaces N per-row click + keydown listeners (50 rows × 2 = 100 listeners
+// at full page) with a single pair on #ordersTable. Toggle state lives in
+// the DOM (`data-equipos-loaded` + style.display); orden data is looked up
+// from APP.state.orders by `data-orden-id`. ORDENES_INDEX_IMPROVEMENTS.md QW4.
+function _toggleOrdenRow(filaOrden) {
+  const filaDetalle = filaOrden.nextElementSibling;
+  if (!filaDetalle || !filaDetalle.classList.contains('filaDetalle')) return;
+
+  filaOrden.classList.toggle('activo');
+  const wasHidden = filaDetalle.style.display === 'none';
+  filaDetalle.style.display = wasHidden ? 'table-row' : 'none';
+  filaOrden.setAttribute('aria-expanded', wasHidden ? 'true' : 'false');
+
+  if (wasHidden && filaDetalle.getAttribute('data-equipos-loaded') === 'false') {
+    const ordenId = filaOrden.dataset.ordenId;
+    const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId);
+    if (!orden) return;
+    const equipos = (orden.equipos || [])
+      .filter(e => !e.eliminado)
+      .sort((a, b) => String(a.numero_de_serie || '').localeCompare(String(b.numero_de_serie || '')));
+    renderEquiposTabla(ordenId, equipos, filaDetalle);
+  }
+}
+
+(function initOrdenRowDelegation() {
+  const ordersTable = document.getElementById('ordersTable');
+  if (!ordersTable) return;
+
+  ordersTable.addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-orden-row]');
+    if (!row) return;
+    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.overflow-menu')) return;
+    _toggleOrdenRow(row);
+  });
+
+  ordersTable.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const row = e.target.closest('tr[data-orden-row]');
+    if (!row) return;
+    // Only handle key events that fired on the row itself — let nested
+    // interactive elements keep their own keyboard semantics.
+    if (e.target !== row) return;
+    e.preventDefault();
+    _toggleOrdenRow(row);
+  });
+})();
 
 // ── Layout breakpoint listener ──────────────────────────────────────
 // When the user resizes across the 768px boundary, the active layout

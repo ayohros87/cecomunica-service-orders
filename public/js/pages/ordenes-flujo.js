@@ -42,16 +42,19 @@ window.abrirModalAsignarTecnico = function (ordenId) {
     }
   };
 
-  APP.utils.show(modal);
+  // Modal.open wires Escape, Tab focus-trap, and saves/restores
+  // focus on the previously-focused element. The `.hidden` class is
+  // removed inside open(). ORDENES_INDEX_IMPROVEMENTS.md QW5.
+  Modal.open("modalAsignar");
 };
 
 window.cerrarModalAsignar = function () {
   const modal = document.getElementById("modalAsignar");
-  if (modal) {
-    APP.utils.hide(modal);
-    const select = document.getElementById("asignarTecnicoSelect");
-    if (select) select.value = "";
-  }
+  if (!modal) return;
+  Modal.close("modalAsignar");
+  modal.classList.add("hidden");  // keep the .hidden class invariant
+  const select = document.getElementById("asignarTecnicoSelect");
+  if (select) select.value = "";
 };
 
 window.confirmarAsignarTecnico = async function (ordenId) {

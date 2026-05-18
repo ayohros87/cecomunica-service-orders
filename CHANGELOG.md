@@ -1,5 +1,20 @@
 # Changelog
 
+## [Ordenes index improvements — batch 11: event delegation + modal a11y] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW4 + QW5.
+
+### Performance
+- `renderizarOrdenYEquipos` in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) no longer registers per-row click + keydown listeners. With 50 orders that was 100 listeners; now there's a single delegated pair on `#ordersTable`. Rows carry `data-orden-row` as the selector marker; the handler resolves the orden via `data-orden-id` against `APP.state.orders` for the lazy-render of equipos. `_toggleOrdenRow(filaOrden)` extracted as a top-level function so the delegation IIFE can call it without re-creating per-row closures. ORDENES_INDEX_IMPROVEMENTS.md QW4.
+
+### Accessibility
+- `Modal.open` / `Modal.close` in [public/js/ui/modal.js](public/js/ui/modal.js) now implement a focus trap. On open: saves `document.activeElement`, focuses the first focusable inside the modal on the next frame; Tab/Shift+Tab wrap inside the modal so keyboard users can't tab out into the backdrop. On close: restores focus to the previously-focused element. Combined keydown handler also covers Escape (existing). ORDENES_INDEX_IMPROVEMENTS.md QW5.
+- `#modalAsignar` and `#modalEntrega` in [public/ordenes/index.html](public/ordenes/index.html) now have `role="dialog" aria-modal="true" aria-labelledby="<titleId>"`, and their close `×` buttons carry `aria-label="Cerrar"`. Title elements got matching ids (`modalAsignarTitle`, `modalEntregaTitle`).
+- `abrirModalAsignarTecnico` in [public/js/pages/ordenes-flujo.js](public/js/pages/ordenes-flujo.js) switched from `APP.utils.show(modal)` to `Modal.open("modalAsignar")` so the focus trap activates. `cerrarModalAsignar` mirrors with `Modal.close()`.
+
+### Notes
+- The entrega modal still uses `APP.utils.show()` for now — ORDENES_INDEX_IMPROVEMENTS.md §3a.11 calls out the migration to `Modal.open()` as a follow-up. ARIA attrs are in place so the migration is purely a JS swap when ready.
+
 ## [Ordenes index improvements — batch 10: entrega modal CSS extraction] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW9 — biggest cluster of accreted inline styles.

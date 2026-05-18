@@ -180,11 +180,11 @@
   <button id="btnCargarMas" class="btn"><i data-lucide="chevron-down"></i> Cargar más órdenes</button>
 </div>
 <!-- Modal Asignar Técnico -->
-<div id="modalAsignar" class="overlay hidden">
+<div id="modalAsignar" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalAsignarTitle">
   <div class="modal modal-md">
     <div class="modal-header">
-      <h3 class="modal-title"><i data-lucide="wrench"></i> Asignar técnico</h3>
-      <button class="btn ghost btn-close-modal" data-action="cerrar-modal-asignar"><i data-lucide="x"></i></button>
+      <h3 class="modal-title" id="modalAsignarTitle"><i data-lucide="wrench"></i> Asignar técnico</h3>
+      <button class="btn ghost btn-close-modal" data-action="cerrar-modal-asignar" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
     <div class="form-field">
       <label class="form-label">Selecciona un técnico</label>
@@ -203,15 +203,15 @@
 </div>
 
 <!-- Modal Entrega de Equipos -->
-<div id="modalEntrega" class="overlay hidden">
+<div id="modalEntrega" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalEntregaTitle">
   <div class="modal modal-entrega">
 
     <!-- Header -->
     <div class="modal-header modal-entrega__header">
-      <h3 class="modal-title modal-entrega__title">
+      <h3 class="modal-title modal-entrega__title" id="modalEntregaTitle">
         <i data-lucide="package-check"></i> Entrega — Orden <span id="entregaModalOrdenId"></span>
       </h3>
-      <button class="btn ghost modal-entrega__close" data-action="cerrar-modal-entrega"><i data-lucide="x"></i></button>
+      <button class="btn ghost modal-entrega__close" data-action="cerrar-modal-entrega" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
 
     <!-- Checkbox A: Item not received -->
