@@ -761,28 +761,27 @@ function _toggleOrdenRow(filaOrden) {
   }
 }
 
-(function initOrdenRowDelegation() {
-  const ordersTable = document.getElementById('ordersTable');
-  if (!ordersTable) return;
+// The script loads in <head> with no `defer`, so #ordersTable doesn't
+// exist yet when this file evaluates. Document-level delegation works
+// from any point in the page lifecycle and matches the existing pattern
+// used by the data-action delegation in ordenes-events.js.
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('tr[data-orden-row]');
+  if (!row) return;
+  if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.overflow-menu')) return;
+  _toggleOrdenRow(row);
+});
 
-  ordersTable.addEventListener('click', (e) => {
-    const row = e.target.closest('tr[data-orden-row]');
-    if (!row) return;
-    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.overflow-menu')) return;
-    _toggleOrdenRow(row);
-  });
-
-  ordersTable.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return;
-    const row = e.target.closest('tr[data-orden-row]');
-    if (!row) return;
-    // Only handle key events that fired on the row itself — let nested
-    // interactive elements keep their own keyboard semantics.
-    if (e.target !== row) return;
-    e.preventDefault();
-    _toggleOrdenRow(row);
-  });
-})();
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const row = e.target.closest('tr[data-orden-row]');
+  if (!row) return;
+  // Only handle key events that fired on the row itself — let nested
+  // interactive elements keep their own keyboard semantics.
+  if (e.target !== row) return;
+  e.preventDefault();
+  _toggleOrdenRow(row);
+});
 
 // ── Layout breakpoint listener ──────────────────────────────────────
 // When the user resizes across the 768px boundary, the active layout
