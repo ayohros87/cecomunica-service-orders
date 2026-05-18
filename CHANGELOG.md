@@ -1,5 +1,41 @@
 # Changelog
 
+## [Ordenes index improvements — Tier 1 + Tier 2 roll-up] — 2026-05-18
+
+Summary of the 13 atomic commits below that closed Tier 1 (P0 cost/blockers) and Tier 2 (QW quick wins) of `ORDENES_INDEX_IMPROVEMENTS.md`. Roll-up is informational — individual batch sections retain the per-commit detail.
+
+### Tier 1 — P0 cost & deploy-blockers (4 commits)
+| Commit | Item | Headline impact |
+|---|---|---|
+| `2700b61` `infra(storage)` | §3a.2 storage.rules | Deploy-blocker resolved; per-path allowlists for 6 Storage paths |
+| `8d71a93` `perf(ordenes)` | §1.2 `cliente_nombre` denorm | ~720k reads/day eliminated from `cargarClientes` |
+| `07cdae7` `perf(ordenes)` | §1.3 responsive single-layout | Halved DOM size on every render (mobile cards XOR desktop table) |
+| `8b0ade6` `perf(ordenes)` | §1.1 `searchTokens` indexed search | Search cost O(collection) → O(matches); ~2.4M → ~12k reads/day |
+
+### Tier 2 — Quick wins (5 commits, 16 QW items)
+| Commit | QW items |
+|---|---|
+| `69d685a` (earlier session, 4-batch wrapper) | QW1 toasts, QW2 modals, QW3 prompt→Modal.prompt, QW6 `<th scope>`, QW7 `aria-live`, QW8 keyboard row toggle, QW12 console.log markers, QW13 auth fallback, QW16 `:focus-visible` (verified shipped in `b9ef6c8`) |
+| `95c933a` `style(ordenes)` | QW10 estado-pill AA palette, QW15 empty-state UI |
+| `76b9b00` `refactor(ordenes)` | QW9 entrega-modal CSS extraction (50 → 15 inline styles) |
+| `51c7071` `perf+a11y(ordenes)` | QW4 row event delegation, QW5 modal focus trap |
+| `a65ae7d` `feat(ordenes)` | QW11 skeleton-row loader |
+| `d0ed77f` `feat(ordenes)` | QW14 IntersectionObserver auto-load |
+
+### Deploy order for Tier 1
+The cost-curve fixes are mostly safe to deploy in any order (the searchTokens fallback covers the migration window), but for cleanest activation:
+1. `firebase deploy --only storage` — needed before next entrega in prod
+2. `firebase deploy --only functions:onOrdenWriteSearchTokens`
+3. `cd functions && node backfill-search-tokens.js --dry-run`, then without `--dry-run`
+4. `firebase deploy --only hosting`
+
+### Still open
+- §3a.3 (PII retention CF), §3a.11 (entrega → `Modal.open`), §3a.12 (server-side email render).
+- Tier 3: §3.1 (`onSnapshot` live updates), §3.2 (modular Firebase SDK), §3.3 (`enablePersistence` verify), §5.4 (URL filter state — 2 h, high leverage).
+- Tier 4: §4.x card-style redesign, chip filter bar; §5.x bulk ops, saved filters, BarcodeDetector.
+
+---
+
 ## [Ordenes index improvements — batch 13: intersection-observer auto-load] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW14. Last item in the Tier-2 quick-win block.

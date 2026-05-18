@@ -2,9 +2,16 @@
 
 > **Scope:** the `public/ordenes/index.html` page and its supporting modules (`public/js/pages/ordenes-*.js`, `public/css/ordenes-index.css`) plus the services they depend on (`ordenesService.js`, `clientesService.js`).
 >
-> **Status:** strategy document. Some items from the CSS section were shipped 2026-05-15 (see `CSS_IMPROVEMENTS.md` §10). The Firestore/UX/architecture items are still outstanding.
+> **Status (2026-05-18):**
+> - **Tier 1 P0 (§1.1, §1.2, §1.3, §3a.2) — shipped.** See `CHANGELOG.md` commits `2700b61`, `8d71a93`, `07cdae7`, `8b0ade6`. Search cost dropped from O(collection) to O(matches); `cargarClientes` removed; mobile/desktop layouts no longer both render; `storage.rules` in the repo.
+> - **Tier 2 quick wins (QW1–QW16) — shipped.** All sixteen items either landed or noted as already-resolved. Commits `69d685a` (QW1–8 + 12–13 + 16 batches), `95c933a` (QW10, QW15), `76b9b00` (QW9), `51c7071` (QW4, QW5), `a65ae7d` (QW11), `d0ed77f` (QW14).
+> - **§3a entrega-flow** — partially shipped: §3a.4 (email XSS), §3a.5 (retina canvas), §3a.6 (ID compression), §3a.9 (`os_logs` docs), §3a.10 (dup timestamps) all in `69d685a` / `2700b61`. Outstanding: §3a.3 (PII retention CF), §3a.7 (SVG signature, optional), §3a.8 (entrega split — defer until next feature), §3a.11 (entrega → `Modal.open`), §3a.12 (server-side email render).
+> - **Tier 3 architecture** — open: §3.1 (`onSnapshot` live updates), §3.2 (modular Firebase SDK, gated on build step), §3.3 (`enablePersistence` verify), §3.5 already done in commit `8a4de2b`. §3.4 (page-size by role) shipped in `69d685a`. §3.6 (`cambiarOrden` bug) shipped in `69d685a`.
+> - **Tier 4 UX overhaul (§4.x, §5.x)** — not started.
 >
-> **Last refreshed:** 2026-05-15.
+> **Earlier CSS-only work:** the `212f3af` token-bridge commit and follow-ups documented in `CSS_IMPROVEMENTS.md` §10.
+>
+> **Last refreshed:** 2026-05-18.
 
 ---
 
