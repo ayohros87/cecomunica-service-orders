@@ -63,11 +63,13 @@ document.addEventListener("DOMContentLoaded", function () {
         if (mobileSoloMias) mobileSoloMias.checked = true;
       }
 
-      APP.utils.show("loader");
+      // Skeleton placeholders for perceived perf — replaced once
+      // cargarOrdenesYEquipos clears ordersTable + ordersCards.
+      // ORDENES_INDEX_IMPROVEMENTS.md QW11.
+      renderSkeletonRows(8);
       await cargarTiposDeServicioFiltros();
       await cargarTecnicosFiltros();
       await cargarOrdenesYEquipos();
-      APP.utils.hide("loader");
       aplicarRestriccionesPorRol(rol);
       if (shouldDefaultMine) aplicarFiltrosCombinados();
     } catch (e) {

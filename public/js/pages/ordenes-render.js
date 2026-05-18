@@ -648,6 +648,42 @@ function actualizarResumen(lista) {
 }
 
 /**
+ * Renders N skeleton rows into both `#ordersTable` and `#ordersCards`
+ * during initial load. Replaces the spinner-only loading state with
+ * a content-shaped placeholder — perceived perf bump per
+ * ORDENES_INDEX_IMPROVEMENTS.md QW11. The actual data load wipes
+ * `innerHTML` on both containers before rendering, so no explicit
+ * "remove skeleton" step is needed.
+ * @param {number} [count=8]
+ */
+function renderSkeletonRows(count = 8) {
+  const skeletonRow = `
+    <tr class="skeleton-row" aria-hidden="true">
+      <td><span class="skel skel--num"></span></td>
+      <td><span class="skel skel--md"></span></td>
+      <td><span class="skel skel--sm"></span></td>
+      <td><span class="skel skel--sm"></span></td>
+      <td><span class="skel skel--pill"></span></td>
+      <td><span class="skel skel--xs"></span></td>
+      <td class="col-fecha-entrega"><span class="skel skel--xs"></span></td>
+      <td><span class="skel skel--sm"></span></td>
+    </tr>`;
+  const skeletonCard = `
+    <div class="card-contrato skeleton-card" aria-hidden="true">
+      <div class="row"><span class="skel skel--md"></span><span class="skel skel--num"></span></div>
+      <div class="row"><span class="skel skel--sm"></span><span class="skel skel--sm"></span></div>
+      <div class="row"><span class="skel skel--pill"></span></div>
+      <div class="row"><span class="skel skel--xs"></span><span class="skel skel--xs"></span></div>
+    </div>`;
+
+  const ordersTable = document.getElementById("ordersTable");
+  const ordersCards = document.getElementById("ordersCards");
+  if (ordersTable) ordersTable.innerHTML = skeletonRow.repeat(count);
+  if (ordersCards) ordersCards.innerHTML = skeletonCard.repeat(count);
+}
+window.renderSkeletonRows = renderSkeletonRows;
+
+/**
  * Renders a friendly empty state in both `#ordersTable` and `#ordersCards`
  * so the user sees the same message regardless of which layout the
  * current breakpoint shows. The "Limpiar filtros" CTA only appears when

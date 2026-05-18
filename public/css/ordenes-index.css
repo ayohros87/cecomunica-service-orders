@@ -808,6 +808,55 @@ body.hide-fecha-entrega .fecha-entrega {
 .req--warn { color: #b45309; }
 
 /* ======================================
+   SKELETON LOADER
+   Rendered into #ordersTable + #ordersCards during initial load
+   so the page has content-shaped placeholders instead of a bare
+   spinner. ORDENES_INDEX_IMPROVEMENTS.md QW11.
+   ====================================== */
+@keyframes skel-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skel {
+  display: inline-block;
+  height: 12px;
+  border-radius: var(--radius-xs);
+  background: linear-gradient(
+    90deg,
+    var(--border-subtle) 0%,
+    var(--border-default) 50%,
+    var(--border-subtle) 100%
+  );
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s linear infinite;
+  vertical-align: middle;
+}
+.skel--xs   { width: 48px; }
+.skel--sm   { width: 84px; }
+.skel--md   { width: 140px; }
+.skel--num  { width: 64px; }
+.skel--pill { width: 80px; height: 18px; border-radius: var(--radius-pill); }
+
+.skeleton-row td { padding: 12px 8px; }
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+.skeleton-card .row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+/* Respect prefers-reduced-motion — disable shimmer animation. */
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; }
+}
+
+/* ======================================
    EMPTY STATE
    Rendered into both #ordersTable (as a colspan cell) and
    #ordersCards so the message survives the responsive layout

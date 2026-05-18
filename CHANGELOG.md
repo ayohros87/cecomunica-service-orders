@@ -1,5 +1,14 @@
 # Changelog
 
+## [Ordenes index improvements — batch 12: skeleton loader] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW11.
+
+### Added
+- `renderSkeletonRows(count)` in [public/js/pages/ordenes-render.js](public/js/pages/ordenes-render.js) writes content-shaped placeholder rows into both `#ordersTable` (8 `<tr>` with shimmering `<span class="skel">` cells) and `#ordersCards` (matching card divs). Replaces the spinner-only initial-load state. The real data load wipes `innerHTML` on both containers so no explicit "remove skeleton" step is needed.
+- `.skel` + `.skeleton-row` / `.skeleton-card` styles in [public/css/ordenes-index.css](public/css/ordenes-index.css) — design-system-token-driven shimmer animation (`--border-subtle` → `--border-default`) at 1.4 s linear infinite. Respects `prefers-reduced-motion: reduce` by disabling the animation.
+- Wired `renderSkeletonRows(8)` into the page-load chain in [public/js/pages/ordenes-index.js](public/js/pages/ordenes-index.js); dropped the now-unused `APP.utils.show("loader")` / `hide("loader")` calls. The `#loader` element in the HTML is still referenced by `filtrarPorEstado` so it stays for that path.
+
 ## [Ordenes index improvements — batch 11: event delegation + modal a11y] — 2026-05-18
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` QW4 + QW5.
