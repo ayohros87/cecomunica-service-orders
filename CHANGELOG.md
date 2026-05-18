@@ -1,5 +1,16 @@
 # Changelog
 
+## [Ordenes index improvements — batch 5: storage.rules] — 2026-05-18
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3a.2 — first Tier-1 deploy-blocker.
+
+### Infrastructure
+- Added [storage.rules](storage.rules) with per-path allowlists for the six Storage paths the app writes to: `ordenes_firmas/`, `ordenes_identificacion/`, `entregas_identificacion/` (legacy), `ordenes/{ordenId}/{equipoId}/`, `ordenes_taller_fotos/`, `contratos_firmados/`. All require an authenticated session; no public reads. Content-type checks and size caps per path. The three PII paths (signatures + ID photos) deny frontend `update` and `delete` — purges run server-side via admin SDK when a retention CF is added (§3a.3 still pending).
+- Wired `storage.rules` into [firebase.json](firebase.json) so `firebase deploy --only storage` picks it up alongside the existing `firestore` block.
+
+### Docs
+- Documented Storage paths and rules in [ARQUITECTURA_CECOMUNICA.md](ARQUITECTURA_CECOMUNICA.md) §5.5 (table with content-type, size cap, and frontend-delete column per path).
+
 ## [Ordenes index improvements — batch 4] — 2026-05-15
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md`. A11y polish (QW6–QW8) + role-based page size (§3.4). QW16 (`:focus-visible` global) was already shipped in commit `b9ef6c8`.

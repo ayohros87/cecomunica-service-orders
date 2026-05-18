@@ -251,6 +251,21 @@ Los campos `os_count`, `equipos_total`, `os_linked`, `os_serials_preview`, `os_h
 - **Forma:** `{ action: 'ENTREGAR' | 'ASIGNAR' | 'COMPLETAR' | …, by: <uid> }` — sin `ts` porque Firestore no permite `serverTimestamp()` dentro de `arrayUnion`. Si se requiere timestamp por entrada, migrar a una subcolección `ordenes_de_servicio/{id}/os_audit/{autoId}`.
 - **Límite:** Firestore tiene un cap de 1 MiB por documento. A ~50 bytes por entrada el techo práctico es ~20 000 acciones por orden — suficiente para el ciclo de vida típico pero a vigilar si en el futuro cada modificación de equipos se loguea aquí.
 
+### 5.5 Storage — paths y reglas
+
+Las reglas viven en `storage.rules` (en raíz, deployadas via `firebase deploy --only storage`). Todas las rutas requieren sesión autenticada; no hay reads públicos. Los Cloud Functions usan admin SDK y bypasean estas reglas — son el único camino para purgas server-side de PII.
+
+| Path | Contenido | Content-type | Tamaño máx | Delete frontend |
+|---|---|---|---:|:---:|
+| `ordenes_firmas/{file}` | Firma del receptor (entrega) | `image/png` | 1 MiB | No |
+| `ordenes_identificacion/{file}` | Foto ID del receptor (entrega — ruta nueva) | `image/*` | 6 MiB | No |
+| `entregas_identificacion/{file}` | Foto ID del receptor (entrega — ruta legacy de `firmar-entrega.html`) | `image/*` | 6 MiB | No |
+| `ordenes/{ordenId}/{equipoId}/{file}` | Adjuntos por equipo (trabajar-orden) | `image/*` o `application/pdf` | 10 MiB | Sí |
+| `ordenes_taller_fotos/{ordenId}/{file}` | Fotos de equipo en taller | `image/*` | 8 MiB | Sí |
+| `contratos_firmados/{file}` | PDFs de contratos firmados | `application/pdf` | 10 MiB | No |
+
+Rutas PII (`ordenes_firmas`, `ordenes_identificacion`, `entregas_identificacion`) deshabilitan delete y update desde el frontend — un Cloud Function de retención server-side puede purgar via admin SDK cuando aplique (ver `ORDENES_INDEX_IMPROVEMENTS.md` §3a.3 pendiente).
+
 ---
 
 ## 6. Backend — Cloud Functions

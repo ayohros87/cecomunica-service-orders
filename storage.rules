@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// Cecomunica Storage rules
+// -----------------------------------------------------------------------------
+// All app-managed paths require an authenticated session. Public reads are
+// never allowed because every path stores PII (customer signatures, ID photos,
+// signed contract PDFs, equipment service photos).
+//
+// Cloud Functions run via the admin SDK and bypass these rules; they are the
+// only path through which scheduled retention purges should delete objects on
+// PII paths.
+//
+// Mirrors the deploy convention used by firestore.rules: the file lives in the
+// repo and is deployed via `firebase deploy --only storage`.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Entrega flow: customer signature ─────────────────────────────────
+    // Captured client-side as PNG via canvas.toDataURL. Small (<200 KB).
+    // 1 MiB cap is generous — protects against runaway captures.
+    // No frontend delete: signatures are legal-adjacent evidence.
+    match /ordenes_firmas/{file} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 1 * 1024 * 1024
+                    && request.resource.contentType == 'image/png';
+      allow update, delete: if false;
+    }
+
+    // ── Entrega flow: customer ID photo (current path) ───────────────────
+    // Compressed client-side to ~200-500 KB JPEG; 6 MiB cap covers the
+    // fail-open case where compression skipped/failed.
+    // No frontend delete; PII retention purge runs server-side.
+    match /ordenes_identificacion/{file} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 6 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
+    // ── Entrega flow: customer ID photo (legacy firmar-entrega path) ────
+    // Same constraints; kept until the legacy firmar-entrega.html page is
+    // retired or migrated to the new path.
+    match /entregas_identificacion/{file} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 6 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
+    // ── Workshop attachments per equipo (trabajar-orden) ─────────────────
+    // Images + PDFs the tech uploads against a specific equipo. Delete is
+    // allowed so techs can remove a mistakenly uploaded file.
+    match /ordenes/{ordenId}/{equipoId}/{file} {
+      allow read:           if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.resource.size < 10 * 1024 * 1024
+                            && request.resource.contentType.matches('(image/.*|application/pdf)');
+      allow delete:         if request.auth != null;
+    }
+
+    // ── Workshop photos (fotos-taller) ──────────────────────────────────
+    // Equipment-condition photos taken in the taller. Images only.
+    match /ordenes_taller_fotos/{ordenId}/{file} {
+      allow read:           if request.auth != null;
+      allow create, update: if request.auth != null
+                            && request.resource.size < 8 * 1024 * 1024
+                            && request.resource.contentType.matches('image/.*');
+      allow delete:         if request.auth != null;
+    }
+
+    // ── Signed contract PDFs ────────────────────────────────────────────
+    // PDFs only, no frontend delete. Read-restricted to authenticated staff;
+    // public verification routes through the Cloud Function instead.
+    match /contratos_firmados/{file} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType == 'application/pdf';
+      allow update, delete: if false;
+    }
+
+    // Any other path is denied by default (no match block → no allow → deny).
+  }
+}
