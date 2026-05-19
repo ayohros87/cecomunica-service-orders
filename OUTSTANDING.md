@@ -4,7 +4,7 @@
 >
 > **How to read this:** every item below is open. If you see it here, it has not shipped. Items are grouped by area, ranked within each section by impact × cost. Effort estimates assume one person working uninterrupted.
 >
-> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii + Phase C shipped · §3.2 + §3.5 topbar/layout + nav modes shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.6 print IDs shipped · §3.8 shipped.
+> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii + Phase C + flat .btn.primary shipped · §3.2 + §3.5 topbar/layout + nav modes shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.6 print IDs shipped · §3.8 shipped.
 >
 > **Where to focus next (≈ priority, top → bottom):**
 > 1. **§5.1 minimum CI** — `node -c` syntax check + ESLint + `firebase deploy --only firestore:rules --dry-run`. Cheapest high-leverage hygiene step; the past few weeks shipped hundreds of edits with no automated guard. ~1 hour to wire up.
@@ -79,7 +79,14 @@ Hardcoded colors + off-spec radii — **shipped** in commits `2bb2de8`, `12393ab
 - **`--brand` semantics flipped (Phase C):** `--brand` now resolves to corporate navy `#0B2A47` and `--accent` carries the interactive cyan, matching the design-system tokens file. Backward-compat aliases (`--brand-hover`, `--brand-2`) remain pointing to navy. Visual diff at flip time was zero because every production callsite was already on `var(--accent)`.
 - **Radii:** 50+ hand-written values snapped to the token scale. Cards now use `--radius-lg` (10px), modals `--radius-xl` (16px), badges/pills `--radius-pill`.
 
-**Still open:** delete inline `<style>` blocks that simply redeclare base rules. Audit revealed 18 files extend `.btn.primary` / `.btn.secondary` / `.badge` etc. — but they're not pure redeclarations, they're *page-specific overrides* (custom gradients, secondary palettes, badge variants). Removing them safely needs a design call that's still open: should the "gradient primary button" become canonical in `ceco-ui.css`, or stay per-page? The §3.2 topbar work landed without redesigning canonical buttons, so this stays parked until someone says "yes, the gradient is the brand button now."
+**Inline `<style>` cleanup — `.btn.primary` strand shipped 2026-05-19:** the design call ("gradient or flat?") was resolved by consulting the design-system kit. `Cecomunica Design System/preview/components-buttons.html` and `ui_kits/app/app.css:197-208` both spec **flat** primary buttons (solid `var(--brand)`, one step darker on hover, translateY(1px) on press) and the README explicitly bans "playful gradients". Five inline `.btn.primary` overrides removed in `contratos/{nuevo-contrato,nuevo-cliente,index}.html`, `POC/{vendedores-batch,imprimir-equipos}.html`. Three of those were the gradient; two were already flat and just redundant. Pages now inherit the canonical from `ceco-ui.css:200`.
+
+**Still open — related drift discovered during the cleanup:**
+- `inventario/modelos.html` ships its own complete token system at the top of its `<style>` (`--primary: #0ea5a3` teal, `--ok`, `--bad`, `--shadow`, `--radius`, etc.) and its primary button renders **teal**, not cyan. Same teal as the email-template fix from §3.8. Needs a focused harmonization pass — delete the local token block and let it inherit `ceco-ui.css`.
+- `.btn.primary:not(:disabled):hover { animation: pulse 1.5s infinite; }` in `ordenes-index.css:1279` violates the design system's "Quiet by default. No bounces, no spring overshoots." A pulsing primary button is the opposite of quiet. Likely a debug/attention-grabbing leftover; verify before removing.
+- `.btn.secondary` / `.btn.ghost` / `.btn.danger` overrides in `contratos/{nuevo-contrato,nuevo-cliente}.html` and `POC/{vendedores-batch,imprimir-equipos}.html` use softer palettes (light bg + dark text instead of solid). Canonical `ceco-ui.css` doesn't perfectly match the design-system preview either, so this is a broader audit, not a one-line delete.
+- `.capture-btn.antes/.despues/.detalle` in `ordenes/fotos-taller.html:140-142` are color-coded gradient buttons (cyan/blue/teal). Not `.btn.primary` but still gradients — design call: keep as functional state indicators, or flatten?
+- `.order-id-badge` in `ordenes/editar-orden.html:57` uses a `linear-gradient(135deg, accent, accent-hover)`. Decorative ID label, not a button — but same "no playful gradients" rule applies.
 
 ### 3.2 Shared topbar/layout (Phase 2) — *largely shipped 2026-05-19*
 
