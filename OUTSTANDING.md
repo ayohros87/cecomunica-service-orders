@@ -4,7 +4,7 @@
 >
 > **How to read this:** every item below is open. If you see it here, it has not shipped. Items are grouped by area, ranked within each section by impact × cost. Effort estimates assume one person working uninterrupted.
 >
-> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.4 button icons shipped · §3.8 shipped.
+> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.8 shipped.
 
 ---
 
@@ -76,11 +76,16 @@ Hardcoded colors + off-spec radii — **shipped** in commits `2bb2de8`, `12393ab
 ### 3.2 Shared topbar/layout (Phase 2)
 Topbar is copy-pasted with subtle variations across 13 pages. Plan: `public/js/core/layout.js` exporting `Layout.renderTopbar({ title, actions, showHome })`. Replace every hand-written `<div class="topbar">…</div>` with a mount div + `Layout.renderTopbar()` call. Apply the same pattern to empty-state, skeleton-row, and "Cargar más" footer.
 
-### 3.3 Typography hierarchy (Phase 3)
-Barlow and IBM Plex Sans are imported by `ceco-ui.css` but no page applies them. Apply:
-- `--font-display` (Barlow 700) to topbar `h1`, section headers, modal titles, app-card labels
-- `--font-mono` (IBM Plex Mono) to SKUs, order IDs, contract IDs, money values, technical spec strings
-- Add `cc-*` utility classes (`cc-h1`, `cc-h2`, `cc-body`, `cc-eyebrow`, `cc-mono`) to `ceco-ui.css`
+### 3.3 Typography hierarchy (Phase 3) — *partly shipped 2026-05-19*
+
+**Shipped:**
+- The `cc-*` utility classes are present in `ceco-ui.css` (`cc-display-xl`/`l`/`m`, `cc-h1`–`cc-h4`, `cc-body-l`/`body`/`s`, `cc-caption`, `cc-eyebrow`, `cc-mono`).
+- Topbar `h1` / `.topbar-title` already uses `var(--font-display)` (Barlow). Confirmed in `ceco-ui.css:443`.
+- `.mono` utility now also enables `font-feature-settings: "tnum" 1` so numerical IDs align in columns.
+- A site-wide CSS rule (no per-page edits) applies the mono treatment to canonical identifier elements: `input[readonly]#orden_id` / `#contrato_id` / `#numero_de_serie`, `.numero-orden`, `.orden-id`, `.contrato-id`, `.contrato-numero`, `.serial-number`, and `[data-campo="numero_de_serie"] .valor-primario`.
+- `.orden-numero` in `ordenes-index.css` now also carries `var(--font-mono)`.
+
+**Still open:** apply `cc-eyebrow` + `cc-h1`/`cc-h2` to section/modal headers across pages (the "eyebrow + display heading + 1-sentence intro" pattern from the design system). This is per-page design work, not mechanical CSS — defer to the §3.2 topbar/layout pass where headers get redesigned anyway.
 
 ### 3.4 Iconography migration (Phase 5) — *partly shipped 2026-05-19*
 

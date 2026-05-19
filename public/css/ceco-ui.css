@@ -371,8 +371,24 @@ th.ordenado-desc::after {
 .table-wrap--compact table th,
 .table-wrap--compact table td { padding:6px 8px; font-size: 13.5px; }
 /* Utilidades adicionales */
-.mono { font-family: var(--font-mono); }
+.mono { font-family: var(--font-mono); font-feature-settings: "tnum" 1; }
 .w-100 { width: 100%; }
+
+/* §3.3 Typography — apply mono to canonical identifier elements without
+   needing per-page edits. Targets cover order numbers, contract IDs and
+   serial numbers as they appear today in lists, detail panels and forms. */
+input[readonly]#orden_id,
+input[readonly]#contrato_id,
+input[readonly]#numero_de_serie,
+.numero-orden,
+.orden-id,
+.contrato-id,
+.contrato-numero,
+.serial-number,
+[data-campo="numero_de_serie"] .valor-primario {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
 /* Alineación centrada para toolbars y acciones de formularios */
 .toolbar.center { justify-content: center !important; }
 .form-actions.center { justify-content: center !important; }

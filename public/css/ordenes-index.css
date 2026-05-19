@@ -1992,7 +1992,12 @@ tr.activo:hover { background: #f0f9ff !important; }
   color: var(--navy);
 }
 
-.orden-numero { font-size: 16px; color: var(--navy); }
+.orden-numero {
+  font-size: 16px;
+  color: var(--navy);
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
 
 .separador { color: var(--accent-line); font-weight: 300; }
 
