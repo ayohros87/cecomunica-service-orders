@@ -4,7 +4,7 @@
 >
 > **How to read this:** every item below is open. If you see it here, it has not shipped. Items are grouped by area, ranked within each section by impact × cost. Effort estimates assume one person working uninterrupted.
 >
-> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.8 shipped.
+> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.6 print IDs shipped · §3.8 shipped.
 
 ---
 
@@ -135,8 +135,16 @@ Container tiers — declared by class, no inline `max-width`:
 
 Plus: spacing roles (`--sp-2`/3/4/5/8 each assigned to a structural concept); responsive table modifiers (`--sticky`, `--compact`, `--cards`); breakpoint harmonization at 760 / 1024.
 
-### 3.6 Print pages standardization (Phase 7)
-`imprimir-orden.html`, `imprimir-cotizacion.html`, `imprimir-contrato.html` each have their own embedded styles. Extract a shared `public/css/print-base.css` (already exists, expand) with page margins, header/footer layout, brand band, font import. Apply Barlow to headings, IBM Plex Mono to technical IDs. Real logo asset in the print header.
+### 3.6 Print pages standardization (Phase 7) — *largely shipped, polish remains*
+
+**Already shipped in `print-base.css`:** `.print-page` wrapper, `.print-toolbar`, `.print-brand-header` (logo + company info + doc-type), Barlow on all `h1/h2/h3` inside `.print-page`, real `logo_cecomunica.png` asset in the print header (used by `imprimir-orden.html`), `@page { size: letter; margin: 0.4in }` defaults, `.no-print` for toolbar/UI chrome, `-webkit-print-color-adjust: exact` so brand colours render in print, `page-break-inside: avoid` on table rows.
+
+**Just shipped 2026-05-19:** `print-base.css` now also routes the canonical identifier elements (`#cotizacionId`, `#contrato_id`, `#contratoId`, `#numero_orden`, `#ordenId`, `.doc-id`) into IBM Plex Mono with tabular numerals — no template edits needed.
+
+**Still open (low priority — polish, not blocking):**
+- `imprimir-cotizacion.html` ships its own `.doc-header` / `.empresa` / `.empresa-logo` brand-header pattern that pre-dates `.print-brand-header`. Migrating it would let the three prints share one header component, but the visual change is non-trivial and needs a designer eye.
+- `imprimir-contrato.html` ships its own table/fieldset styles + an A4 `@page` override. The legal document uses these intentionally — leave alone unless redesigning.
+- Each `imprimir-*.html` still has its own inline `<style>` for page-specific layout (info-grid, equipos-table, etc.). Those are page-specific and not redundant with print-base.css.
 
 ### 3.7 `ordenes-index.css` follow-ups (from §3.7 cleanup)
 The 2026-05-19 cleanup shipped 4,362 → 3,315 lines but left:

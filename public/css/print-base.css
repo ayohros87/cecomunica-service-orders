@@ -43,9 +43,19 @@ body {
   font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
 }
 
-/* Monospace: IDs, amounts, model numbers */
-.print-mono {
+/* Monospace: IDs, amounts, model numbers. The class is an explicit opt-in;
+   the selector list also picks up the canonical identifier elements that
+   appear in the three imprimir-*.html pages so they get mono-typed without
+   touching each template. */
+.print-mono,
+.print-page #cotizacionId,
+.print-page #contratoId,
+.print-page #contrato_id,
+.print-page #numero_orden,
+.print-page #ordenId,
+.print-page .doc-id {
   font-family: var(--font-mono, 'IBM Plex Mono', ui-monospace, Consolas, monospace);
+  font-feature-settings: "tnum" 1;
 }
 
 /* === Brand header (logo + company info + doc-type label) === */
