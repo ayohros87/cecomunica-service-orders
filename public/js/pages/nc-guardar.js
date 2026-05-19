@@ -146,7 +146,12 @@ window.NCGuardar = {
       itbms_porcentaje: FMT.ITBMS_RATE,
       itbms_monto: FMT.round2(tot.itbmsMonto),
       total_con_itbms: FMT.round2(tot.totalConITBMS),
-      total: tot.subtotal,
+      // `total` historically equaled `subtotal` on contratos written by
+      // this page — a long-standing bug since the field was first added.
+      // Fixed 2026-05-19: write the post-ITBMS total so the name matches
+      // the value. Existing readers that fall back `subtotal ?? total`
+      // still work (subtotal is always written above for new contratos).
+      total: FMT.round2(tot.totalConITBMS),
       fecha_creacion: new Date(),
       fecha_modificacion: new Date(),
       deleted: false,

@@ -1,8 +1,7 @@
 const fs   = require("fs");
 const path = require("path");
 const { db } = require("../lib/admin");
-
-const ITBMS_RATE = 0.07;
+const { ITBMS_RATE } = require("../lib/constants");
 
 async function attachVerificationFromMirror(contrato, fallbackDocId) {
   const verifSnap = await db.collection("verificaciones").doc(fallbackDocId).get();

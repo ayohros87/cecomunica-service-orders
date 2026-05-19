@@ -63,10 +63,7 @@ window.CONFIG = {
   },
   pageLimit(role) {
     return this.PAGE_LIMIT_BY_ROLE[role] || 30;
-  },
-
-  // Feature flags
-  enableContratoFallbackSync: false  // Deprecated - Cloud Function handles this now
+  }
 };
 
 /**

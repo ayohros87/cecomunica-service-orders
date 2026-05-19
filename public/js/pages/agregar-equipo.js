@@ -120,11 +120,17 @@ const html = `
       continue;
     }
 
-    const nuevoEquipo = {
+    // Normalize via the shared EquipoNormalize helper so canonical
+    // field names (serial / modelo / observaciones) are guaranteed,
+    // regardless of which legacy alias an upstream snippet might use.
+    const nuevoEquipo = EquipoNormalize.normalize({
       id: crypto.randomUUID(),
       modelo_id: modeloInput?.value || "",
       modelo: modelos.find(m => m.id === modeloInput?.value)?.nombre || "",
       serial: serieInput?.value.trim() || "",
+      // numero_de_serie kept as a write-side alias for now — readers
+      // across the codebase still mix `serial` and `numero_de_serie`.
+      // Drop once those readers consolidate on `serial`.
       numero_de_serie: serieInput?.value.trim() || "",
       bateria: equipo.querySelector(".bateria")?.checked || false,
       clip: equipo.querySelector(".clip")?.checked || false,
@@ -132,7 +138,7 @@ const html = `
       fuente: equipo.querySelector(".fuente")?.checked || false,
       antena: equipo.querySelector(".antena")?.checked || false,
       observaciones: observacionesInput?.value.trim() || "sin observaciones"
-    };
+    });
 
     const equipoId = equipo.dataset.uuid || crypto.randomUUID();
     nuevoEquipo.id = equipoId;
