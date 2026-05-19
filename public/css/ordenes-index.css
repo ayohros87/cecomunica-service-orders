@@ -1658,12 +1658,6 @@ tr.activo .flecha { color: var(--brand); transform: rotate(90deg); }
    showTextModal API in ordenes-equipos.js still works unchanged. */
 
 /* Desktop: hide mobile nav/drawer */
-@media (min-width: 769px) {
-  #mobileHeader { display: none !important; }
-  #mobileBottomNav { display: none !important; }
-  #mobileDrawerBackdrop { display: none !important; }
-}
-
 /* ========================================
    PHASE 7: UTILITY CLASSES
    Extracted from inline styles
@@ -2741,6 +2735,10 @@ tr.activo:hover { background: #f0f9ff !important; }
     height: 24px;
     font-size: 12px;
   }
+
+  /* Mobile already has its own chip drawer (#mobileEstadoChips); hide
+     the desktop §4.3 estado chip bar to avoid duplicate filter surfaces. */
+  .estado-chips-bar { display: none; }
 }
 
 /* ========================================
@@ -3181,6 +3179,11 @@ tr.activo:hover { background: #f0f9ff !important; }
     margin-top: -10px;
   }
   body.orders-view--cards .orders-table tr.filaDetalle > td { display: block; padding: 0; }
+
+  /* Hide mobile-only chrome on desktop. */
+  #mobileHeader        { display: none !important; }
+  #mobileBottomNav     { display: none !important; }
+  #mobileDrawerBackdrop { display: none !important; }
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -3294,12 +3297,6 @@ tr.activo:hover { background: #f0f9ff !important; }
   clip: rect(0,0,0,0);
   white-space: nowrap;
   border: 0;
-}
-
-@media (max-width: 768px) {
-  /* Mobile already has its own chip drawer (mobileEstadoChips); hide
-     the desktop bar on mobile to avoid duplicate filter surfaces. */
-  .estado-chips-bar { display: none; }
 }
 
 /* ===== MEJORAS DE FILTROS ===== */
