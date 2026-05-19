@@ -21,11 +21,14 @@ window.ContratosEquipos = {
       const serials  = c.os_serials_preview || [];
 
       if (osLinked) {
-        const display = osCount > 1 ? `📦${osCount}` : '📦';
+        const display = osCount > 1
+          ? `<i data-lucide="package"></i> ${osCount}`
+          : `<i data-lucide="package"></i>`;
         celda.innerHTML = `<span class="equipos-peek" data-contrato-doc="${id}">${display}</span>`;
       } else {
-        celda.innerHTML = '<span style="opacity:0.3;" title="Sin órdenes asociadas">⬜</span>';
+        celda.innerHTML = '<span style="opacity:0.3;" title="Sin órdenes asociadas">—</span>';
       }
+      if (window.lucide) lucide.createIcons({ nodes: [celda] });
     });
   },
 
@@ -141,7 +144,7 @@ window.ContratosEquipos = {
           <td style="border:1px solid var(--line); padding:6px; text-align:right;">${row.cantidad}</td>
           <td style="border:1px solid var(--line); padding:6px; text-align:right;">$${row.precio.toFixed(2)}</td>
           <td style="border:1px solid var(--line); padding:6px; text-align:center;">
-            <button class="btn" onclick="ContratosEquipos.copiarFila(${idx})" title="Copiar fila">📋</button>
+            <button class="btn" onclick="ContratosEquipos.copiarFila(${idx})" aria-label="Copiar fila" title="Copiar fila"><i data-lucide="clipboard"></i></button>
           </td>
         </tr>`).join('');
       document.getElementById('panelTrabajoBody').innerHTML = `
@@ -160,6 +163,7 @@ window.ContratosEquipos = {
             <tbody>${rowsHtml || `<tr><td colspan="5" style="padding:10px; text-align:center;">No hay equipos en este contrato.</td></tr>`}</tbody>
           </table>
         </div>`;
+      if (window.lucide) lucide.createIcons({ nodes: [document.getElementById('panelTrabajoBody')] });
       Modal.open('overlayPanelTrabajo');
     } catch (err) {
       console.error('Error abriendo panel de trabajo:', err);
@@ -225,7 +229,11 @@ window.ContratosEquipos = {
     if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo administradores pueden ejecutar esta acción.', 'bad'); return; }
     if (!await Modal.confirm({ message: 'Esta operación re-sincronizará los equipos de TODOS los contratos. Puede tardar varios segundos. ¿Continuar?' })) return;
     const btn = document.getElementById('btnBackfillEquipos');
-    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Procesando...'; }
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader"></i> Procesando...';
+      if (window.lucide) lucide.createIcons({ nodes: [btn] });
+    }
     try {
       const contratos = await ContratosService.getContratosActivosAprobados();
       let totalContratos = 0, totalOrdenes = 0;
@@ -237,7 +245,11 @@ window.ContratosEquipos = {
       console.error('Error en backfill global:', err);
       Toast.show('Error durante el backfill: ' + err.message, 'bad');
     } finally {
-      if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Re-sincronizar equipos (admin)'; }
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="refresh-cw"></i> Re-sincronizar equipos (admin)';
+        if (window.lucide) lucide.createIcons({ nodes: [btn] });
+      }
     }
   },
 

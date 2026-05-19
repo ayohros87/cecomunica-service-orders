@@ -4,7 +4,7 @@
 >
 > **How to read this:** every item below is open. If you see it here, it has not shipped. Items are grouped by area, ranked within each section by impact × cost. Effort estimates assume one person working uninterrupted.
 >
-> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.8 shipped.
+> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.4 button icons shipped · §3.8 shipped.
 
 ---
 
@@ -82,8 +82,13 @@ Barlow and IBM Plex Sans are imported by `ceco-ui.css` but no page applies them.
 - `--font-mono` (IBM Plex Mono) to SKUs, order IDs, contract IDs, money values, technical spec strings
 - Add `cc-*` utility classes (`cc-h1`, `cc-h2`, `cc-body`, `cc-eyebrow`, `cc-mono`) to `ceco-ui.css`
 
-### 3.4 Iconography migration (Phase 5)
-Emoji-as-icon is used across the codebase. Replace with Lucide icons per the mapping below. Most time-intensive phase (1–2 hours per major section), low visual risk.
+### 3.4 Iconography migration (Phase 5) — *partly shipped 2026-05-19*
+
+**Shipped:** the emoji-as-button-icon callsites — what the design system explicitly bans. `login.html` (5: 📡 🛠️ 📦 📝 👁️ → `radio-tower`/`settings-2`/`package`/`file-text`/`eye`), `perfil.html` (2: 👤 🚪 → `user`/`log-out`), `piezas.js` (6 button icons in the inventory table), `to-equipos.js` (5 in the work-order panel), `contratos-equipos.js` (3 including the package-count badge). Each affected file also gained `lucide.createIcons({ nodes: [container] })` after the relevant render so dynamically-inserted icons hydrate.
+
+**Intentionally left:** emoji in toast messages (`Toast.show("✅ Saved")`), `console.log`/`console.error`, and the in-page "🎯 ¡Orden completada!" celebration notification. These are transient feedback, not persistent UI; ✅/❌/⚠️ as status markers in console + toast contexts is universally legible and not what the design system targets. The two ✅/❌ checkmark columns in `imprimir-orden.js`'s printable accessory table are also kept — printed-document context, not screen UI.
+
+Reference mapping (used elsewhere in the codebase already):
 
 | Emoji | Lucide | Usage |
 |---|---|---|
@@ -105,7 +110,7 @@ Emoji-as-icon is used across the codebase. Replace with Lucide icons per the map
 | 🛠️ | `settings-2` | Órdenes de Servicio |
 | 🟢🟡🔴 | `.dot.green/yellow/red` | Status dots (already in `ceco-ui.css`) |
 
-`textContent = "✏️ Editar"` → `innerHTML = '<i data-lucide="pencil"></i> Editar'`, then call `lucide.createIcons({ nodes: [element] })`.
+Pattern: `textContent = "✏️ Editar"` → `innerHTML = '<i data-lucide="pencil"></i> Editar'`, then call `lucide.createIcons({ nodes: [element] })`.
 
 ### 3.5 Navigation modes + container tiers (Phase 6)
 Today some pages show a back button, some "Menú principal", some both, some neither — ad-hoc. Container width varies (1100 / 1280 / none) by page improvisation. Four canonical patterns:

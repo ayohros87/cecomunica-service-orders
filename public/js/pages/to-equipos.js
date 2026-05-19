@@ -28,8 +28,8 @@ window.TOEquipos = {
               <option value="garantia">Garantía</option>
               <option value="interno">Interno</option>
             </select>
-            <button class="btn" data-role="agregar-pieza" onclick="TOPieza.abrirModal('${eid}')">🧩 Pieza</button>
-            <button class="btn ok" onclick="TOServicio.abrirModal('${eid}')">🔧 Servicio</button>
+            <button class="btn" data-role="agregar-pieza" onclick="TOPieza.abrirModal('${eid}')"><i data-lucide="puzzle"></i> Pieza</button>
+            <button class="btn ok" onclick="TOServicio.abrirModal('${eid}')"><i data-lucide="wrench"></i> Servicio</button>
           </div>
         </div>
 
@@ -61,13 +61,14 @@ window.TOEquipos = {
             <label><strong>Adjuntos</strong></label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <input type="file" accept="image/*" data-eid="${eid}" class="inp-archivo">
-              <button class="btn" onclick="TOEquipos.listarAdjuntos('${eid}')">🔄 Refrescar</button>
+              <button class="btn" onclick="TOEquipos.listarAdjuntos('${eid}')"><i data-lucide="refresh-cw"></i> Refrescar</button>
             </div>
             <div id="adj_${eid}" class="muted" style="margin-top:6px">Sin archivos.</div>
           </div>
         </div>
       `;
       wrap.appendChild(card);
+      if (window.lucide) lucide.createIcons({ nodes: [card] });
       self.renderRecsParaEquipo(eid);
 
       try {
@@ -215,8 +216,8 @@ window.TOEquipos = {
         <td>${TO.fmtMoney(it.precio_unit)}</td>
         <td>${TO.fmtMoney(sub)}</td>
         <td>
-          ${puedeEditar ? `<button class="btn" data-action="editar-precio" onclick="TOEquipos.editarPrecio('${it.id}')">✏️ Precio</button>` : ''}
-          <button class="btn danger" data-action="eliminar-linea" title="Eliminar" onclick="TOEquipos.eliminarLinea('${it.id}','${eid}')">🗑️</button>
+          ${puedeEditar ? `<button class="btn" data-action="editar-precio" onclick="TOEquipos.editarPrecio('${it.id}')"><i data-lucide="pencil"></i> Precio</button>` : ''}
+          <button class="btn danger" data-action="eliminar-linea" aria-label="Eliminar" title="Eliminar" onclick="TOEquipos.eliminarLinea('${it.id}','${eid}')"><i data-lucide="trash-2"></i></button>
         </td>
       </tr>`;
     });
@@ -224,6 +225,7 @@ window.TOEquipos = {
     html += `</tbody></table>
     <div class="total-mini">Subtotal cobrado (equipo): ${TO.fmtMoney(totalEquipo)}</div>`;
     zona.innerHTML = html;
+    if (window.lucide) lucide.createIcons({ nodes: [zona] });
   },
 
   async listarAdjuntos(equipoId) {
@@ -234,7 +236,8 @@ window.TOEquipos = {
       const first  = res.items.slice(0, 6);
       const urls   = await Promise.all(first.map(i => i.getDownloadURL()));
       const extras = res.items.length > 6 ? `<span class="muted"> +${res.items.length - 6} más</span>` : '';
-      TO.byId('adj_' + equipoId).innerHTML = urls.map(u => `<a href="${u}" target="_blank">📎</a>`).join(' · ') + extras;
+      TO.byId('adj_' + equipoId).innerHTML = urls.map(u => `<a href="${u}" target="_blank" aria-label="Adjunto"><i data-lucide="paperclip"></i></a>`).join(' · ') + extras;
+      if (window.lucide) lucide.createIcons({ nodes: [TO.byId('adj_' + equipoId)] });
     } catch {
       TO.byId('adj_' + equipoId).innerHTML = 'Sin archivos.';
     }

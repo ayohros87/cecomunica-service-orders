@@ -479,12 +479,13 @@ function render() {
             <div style="font-size:18px; margin-bottom:8px;">No hay piezas</div>
             <div class="muted" style="margin-bottom:14px;">Crea tu primera pieza o carga un archivo CSV.</div>
             <div class="btn-group">
-              <button class="btn ok" onclick="abrirModal()">➕ Nueva pieza</button>
-              <button class="btn" onclick="abrirBatchModal()">📥 Carga en lote</button>
+              <button class="btn ok" onclick="abrirModal()"><i data-lucide="plus"></i> Nueva pieza</button>
+              <button class="btn" onclick="abrirBatchModal()"><i data-lucide="download"></i> Carga en lote</button>
             </div>
           </div>
         </td>
       </tr>`;
+    if (window.lucide) lucide.createIcons({ nodes: [tb] });
     return;
   }
 
@@ -531,8 +532,8 @@ function render() {
         <td>
           <div class="table-actions">
             ${chipCant}
-            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', 1)">➕</button>
-            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', -1)">➖</button>
+            <button class="btn sm" aria-label="Sumar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', 1)"><i data-lucide="plus"></i></button>
+            <button class="btn sm" aria-label="Restar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', -1)"><i data-lucide="minus"></i></button>
           </div>
         </td>
         <td>${min}</td>
@@ -543,11 +544,11 @@ function render() {
         <td>${control}</td>
         <td class="actions">
           <div class="table-actions">
-            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="abrirModal('${p.id}')">✏️ Editar</button>
+            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="abrirModal('${p.id}')"><i data-lucide="pencil"></i> Editar</button>
             <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="toggleActivo('${p.id}', ${!!p.activo})">${p.activo ? 'Desactivar' : 'Activar'}</button>
-            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="duplicar('${p.id}')">📄 Duplicar</button>
+            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="duplicar('${p.id}')"><i data-lucide="copy"></i> Duplicar</button>
             ${rolActual === ROLES.ADMIN
-              ? `<button class="btn sm danger" onclick="eliminarPieza('${p.id}', '${(marca + (sku ? ' ' + sku : '')).replace(/"/g,'&quot;')}')">🗑️ Eliminar</button>`
+              ? `<button class="btn sm danger" onclick="eliminarPieza('${p.id}', '${(marca + (sku ? ' ' + sku : '')).replace(/"/g,'&quot;')}')"><i data-lucide="trash-2"></i> Eliminar</button>`
               : ''
             }
           </div>
@@ -557,6 +558,7 @@ function render() {
   }).join('');
   applyColumnVisibility();
   applyDensity();
+  if (window.lucide) lucide.createIcons({ nodes: [tb] });
 }
 
 
