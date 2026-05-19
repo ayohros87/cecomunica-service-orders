@@ -4,7 +4,15 @@
 >
 > **How to read this:** every item below is open. If you see it here, it has not shipped. Items are grouped by area, ranked within each section by impact × cost. Effort estimates assume one person working uninterrupted.
 >
-> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.2 + §3.5 topbar/layout + nav modes shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.6 print IDs shipped · §3.8 shipped.
+> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii + Phase C shipped · §3.2 + §3.5 topbar/layout + nav modes shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.6 print IDs shipped · §3.8 shipped.
+>
+> **Where to focus next (≈ priority, top → bottom):**
+> 1. **§5.1 minimum CI** — `node -c` syntax check + ESLint + `firebase deploy --only firestore:rules --dry-run`. Cheapest high-leverage hygiene step; the past few weeks shipped hundreds of edits with no automated guard. ~1 hour to wire up.
+> 2. **§2.5 `firebase-public.js` for `verify/index.html`** — affects external customers verifying signed contracts in Safari / third-party-cookie-blocked browsers. Small extraction (~30 min). Outage today is silent: it doesn't redirect, but `enablePersistence` and `setPersistence(LOCAL)` may fail behind ITP / private browsing.
+> 3. **§4.5 PII retention notice** — `purgePIIRetention` is still a manual callable because no customer-facing doc exists. Not a code task; blocks on legal / customer-comms.
+> 4. **§1.1 cache-pipeline consolidation** — passive. Fold into the next non-trivial backend touch; no action required now.
+>
+> Everything else in §3 is either shipped or parked on a design call. §2.3 (modular Firebase SDK), §2.4 (service worker), §2.8 (script decomposition), §2.10 (entrega-flow split), §3.7 (CSS media-query merge), §5.2 (observability dashboard) are all explicit "do when X" deferrals — they should NOT be picked up speculatively.
 
 ---
 
@@ -71,7 +79,7 @@ Hardcoded colors + off-spec radii — **shipped** in commits `2bb2de8`, `12393ab
 - **`--brand` semantics flipped (Phase C):** `--brand` now resolves to corporate navy `#0B2A47` and `--accent` carries the interactive cyan, matching the design-system tokens file. Backward-compat aliases (`--brand-hover`, `--brand-2`) remain pointing to navy. Visual diff at flip time was zero because every production callsite was already on `var(--accent)`.
 - **Radii:** 50+ hand-written values snapped to the token scale. Cards now use `--radius-lg` (10px), modals `--radius-xl` (16px), badges/pills `--radius-pill`.
 
-**Still open:** delete inline `<style>` blocks that simply redeclare base rules. Audit revealed 18 files extend `.btn.primary` / `.btn.secondary` / `.badge` etc. — but they're not pure redeclarations, they're *page-specific overrides* (custom gradients, secondary palettes, badge variants). Removing them safely requires a design call: should the "gradient primary button" become canonical in `ceco-ui.css`, or stay per-page? Defer to a focused pass when the topbar/layout work (§3.2) lands and the canonical button styles get revisited anyway.
+**Still open:** delete inline `<style>` blocks that simply redeclare base rules. Audit revealed 18 files extend `.btn.primary` / `.btn.secondary` / `.badge` etc. — but they're not pure redeclarations, they're *page-specific overrides* (custom gradients, secondary palettes, badge variants). Removing them safely needs a design call that's still open: should the "gradient primary button" become canonical in `ceco-ui.css`, or stay per-page? The §3.2 topbar work landed without redesigning canonical buttons, so this stays parked until someone says "yes, the gradient is the brand button now."
 
 ### 3.2 Shared topbar/layout (Phase 2) — *largely shipped 2026-05-19*
 
@@ -102,7 +110,7 @@ Hardcoded colors + off-spec radii — **shipped** in commits `2bb2de8`, `12393ab
 - A site-wide CSS rule (no per-page edits) applies the mono treatment to canonical identifier elements: `input[readonly]#orden_id` / `#contrato_id` / `#numero_de_serie`, `.numero-orden`, `.orden-id`, `.contrato-id`, `.contrato-numero`, `.serial-number`, and `[data-campo="numero_de_serie"] .valor-primario`.
 - `.orden-numero` in `ordenes-index.css` now also carries `var(--font-mono)`.
 
-**Still open:** apply `cc-eyebrow` + `cc-h1`/`cc-h2` to section/modal headers across pages (the "eyebrow + display heading + 1-sentence intro" pattern from the design system). This is per-page design work, not mechanical CSS — defer to the §3.2 topbar/layout pass where headers get redesigned anyway.
+**Still open:** apply `cc-eyebrow` + `cc-h1`/`cc-h2` to section/modal headers across pages (the "eyebrow + display heading + 1-sentence intro" pattern from the design system). §3.2 shipped without redesigning section headers; this remains per-page design work and is unblocked but not in motion.
 
 ### 3.4 Iconography migration (Phase 5) — *partly shipped 2026-05-19*
 
@@ -214,6 +222,7 @@ A small ops dashboard surfacing `mail_queue.status === "error"`, CF error rates,
 - `ORDENES_INDEX_IMPROVEMENTS.md` — folded in (most items shipped; outstanding moved here)
 - `REFACTOR_LOOK_FEEL.md` — folded in (none of the 7 phases have started; all here)
 - `REFACTOR_STRATEGY.md` — folded in (Phase 0 partially done; Phase 1+ here)
+- `CSS_IMPROVEMENTS.md` — now redundant. Everything its §13 listed is either shipped (token bridge in `212f3af`, P0 sticky-offset, focus-ring consolidation, motion preferences, the 4,362→3,315 cleanup) or tracked under §3.1 / §3.7 above. Safe to delete; left in place pending explicit OK so anyone with a bookmark still finds it.
 - Plus historical: `CONTRACT_SUMMARIES_OPTIMIZATION.md`, `DEEP_IMPROVEMENTS_ALL_PAGES.md`, etc. — also candidates for retirement once their items are verified shipped or moved here.
 
 ---
