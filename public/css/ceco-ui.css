@@ -36,10 +36,9 @@
      Design-system semantics (see `Cecomunica Design System/colors_and_type.css`):
        --brand  = corporate navy anchor (footers, headers, dark surfaces)
        --accent = signal cyan #0091D7 (primary buttons, links, focus, active)
-     Migration is in progress: --brand still resolves to cyan for
-     backward compatibility with the 21 files that haven't migrated yet.
-     New code MUST use --accent for interactive cyan. The --brand → navy
-     flip happens once every directory has migrated. */
+     Phase C complete: --brand now resolves to navy. No production code
+     consumes --brand directly anymore — only the alias chain below, kept
+     for any third-party or future code that still expects the old name. */
   --bg:#ffffff;
   --bg-page:#F7F9FB;
   --text:        var(--fg-1);
@@ -54,13 +53,15 @@
   --accent-soft-strong:#99D3EF;             /* design-system --blue-200 */
   --accent-line:#66BCE7;                    /* design-system --blue-300, accent border */
 
-  /* Backward-compat: --brand still maps to cyan until Phase C flip. */
-  --brand:        var(--accent);
-  --brand-hover:  var(--accent-hover);
-  --brand-2:      var(--accent-press);
   --navy:#0B2A47;
   --navy-hover:#0F3A5F;
   --navy-deep:#001D2B;
+
+  /* Phase C: --brand aliases now point to navy, matching the design-system
+     tokens file. The old cyan aliases remain available via --accent.        */
+  --brand:        var(--navy);
+  --brand-hover:  var(--navy-hover);
+  --brand-2:      var(--navy-deep);
 
   --ok:          var(--status-online);
   --warn:        var(--status-warning);
