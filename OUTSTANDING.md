@@ -8,23 +8,35 @@
 
 ---
 
-## 1. Backend correctness — fix first
+## 1. Backend correctness
 
-### 1.1 `onContratoOrdenWrite` is registered as `onDocumentUpdated` but branches on CREATE / DELETE
-The CREATE and DELETE branches are unreachable because `onDocumentUpdated` only fires on updates. Consequence: `os_count` and `equipos_total` drift on the parent contract until a soft-delete or cross-contract move forces `recalcularCacheContrato`. The existence of `os_dirty`, `backfill-contract-summaries.js`, and `rebuild-all-contratos-cache.js` is the workaround for this single bug.
+Audited 2026-05-19 against current code. Most of the original `§1` items shipped silently between the original write-up and now. What remains is narrower than the original doc made it sound.
 
-**Hotfix (1 line):** change `onDocumentUpdated` → `onDocumentWritten` in `functions/src/triggers/ordenes/onWriteCacheSync.js`. Then run `rebuild-all-contratos-cache.js` once to clear accumulated drift.
+### 1.1 Optional cache-pipeline rewrite *(quality-of-life, not a bug)*
+The cache trigger CREATE/UPDATE/DELETE bug from the original doc is **fixed** — `functions/src/triggers/ordenes/onWriteCacheSync.js:6` uses `onDocumentWritten` and the branches at lines 24/28/32 are all reachable. `os_count` and `equipos_total` no longer drift.
 
-**Real fix (3–5 days):** replace the four overlapping cache-write paths with one `onOrdenWritten` trigger that calls a single idempotent `rebuildContractCache(contratoId)`. Delete `onContratoOrdenWrite`, fold `recalcularCacheContrato` into the rebuild, lock down the cache subcollection in rules.
+What's still worth doing eventually: collapse the **two surviving cache-write paths** (`onContratoOrdenWrite` delta + `recalcularCacheContrato` full recompute) into one idempotent `rebuildContractCache(contratoId)`. Both write the same fields with no per-doc lock; concurrent firings can race. Today the delta path is correct in steady state, so this is hygiene, not a fix. 3–5 days when the next deeper backend touch happens anyway.
 
-### 1.2 Frontend cache writer still alive
-`syncContratoCacheFromOrden` in `public/ordenes/nueva-orden.html:414` writes the same cache subdoc the CF writes. `CONFIG.enableContratoFallbackSync = false` exists in `ordenes-state.js:55` but is **never checked**. Two writers, undefined write order. Delete the frontend writer; the CF is canonical.
+### 1.2 `nc-guardar.js:149` writes `total: tot.subtotal`
+Hard write bug. `public/js/pages/nc-guardar.js:149` does:
+```js
+total: tot.subtotal,                  // ← bug: this is subtotal, not total
+total_con_itbms: FMT.round2(tot.totalConITBMS),
+```
+Any consumer that reads `total` expecting the post-ITBMS value gets the subtotal instead. Fix is one character: `total: FMT.round2(tot.totalConITBMS)` (or drop the field — `total_con_itbms` is unambiguous). Audit consumers first: who reads `total` vs `total_con_itbms` vs `subtotal`?
 
-### 1.3 `total` vs `total_con_itbms` on contracts
-Contracts store both. `nuevo-contrato.html:1533` writes `total: tot.subtotal` (so `total` and `subtotal` are the same number) while `total_con_itbms` is the real total. Consumers reading `total` get the wrong value. ITBMS rate `0.07` is hard-coded in 10 places. Single canonical totals helper needed.
+### 1.3 `EquipoNormalize` helper exists but is unwired
+`public/js/domain/equipoNormalize.js` defines `EquipoNormalize.normalize(raw)` that maps `serial / SERIAL / numero_de_serie` → `serial`, `modelo / MODEL / modelo_nombre` → `modelo`, `observaciones / descripcion / nombre` → `observaciones`. But **zero callers** today (`grep EquipoNormalize public/js/ → 0 matches outside the file itself`). Writers still produce divergent field names; the CF in `onWriteCacheSync.js:104` still normalizes on read with the same fallback chain.
 
-### 1.4 Equipment field naming chaos
-Writers use `serial`, `SERIAL`, `numero_de_serie` interchangeably; ditto `modelo` / `MODEL` / `modelo_nombre`; ditto `descripcion` / `nombre` / `observaciones`. The CF normalizes on **read** via `extractCacheData` — the writers do not normalize on write. Move normalization to the write path inside the service layer so reads can trust the data.
+Wire it into the write path inside the services and the page scripts that write equipos. Highest-value callsites: anywhere that builds an `equipos[]` array before a Firestore write (`nueva-orden`, `editar-orden`, `agregar-equipo`, `trabajar-orden`, `nuevo-contrato`).
+
+### 1.4 Backend `pdfRenderer.js` has its own `ITBMS_RATE`
+`functions/src/domain/pdfRenderer.js:5` declares `const ITBMS_RATE = 0.07` instead of reading from a shared source. The frontend is fully centralized on `FMT.ITBMS_RATE`. If the rate ever changes, this is the only place the backend would need a code edit.
+
+Trivial: either move it into a shared `functions/src/lib/constants.js` (preferred — would be reused by other backend touchpoints), or read it from a Firestore config doc at startup.
+
+### 1.5 Dead `enableContratoFallbackSync` flag
+`public/js/pages/ordenes-state.js:69` still carries `enableContratoFallbackSync: false  // Deprecated - Cloud Function handles this now`. The function it guarded (`syncContratoCacheFromOrden`) is gone. The flag is harmless but misleading. Delete in any small cleanup pass.
 
 ---
 
