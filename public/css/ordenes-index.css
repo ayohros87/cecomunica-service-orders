@@ -434,33 +434,10 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
 /* ======================================
    TOASTS
    ====================================== */
-.toast {
-  position: fixed;
-  bottom: calc(var(--mobile-bottom-nav-height) + 16px + env(safe-area-inset-bottom));
-  right: 20px;
-  z-index: 9999;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
-  opacity: 0;
-  transform: translateX(12px);
-}
-
-.toast--ok { background: #16a34a; }
-
-.toast--error,
-.toast--danger { background: #dc2626; }
-
-.toast--bad { background: #dc2626; }
-
-.toast--warn { background: #f59e0b; }
-
-.toast--show { animation: slideInRight 0.3s ease forwards; }
-
-.toast--hide { animation: fadeOut 0.3s ease forwards; }
+/* Toast styling lives in ceco-ui.css (.toast / .toast.ok / .toast.bad
+   / .toast.warn) — that matches the Toast.show API in js/ui/toast.js
+   which renders class="toast ok|bad|warn". The old BEM variants
+   (.toast--ok / --show / --hide) had no JS callers. */
 
 /* ======================================
    NOTAS TÉCNICAS MODAL
@@ -1346,58 +1323,25 @@ tr.activo .flecha { color: var(--brand); transform: rotate(90deg); }
   .orders-table tbody tr[data-orden-row] .acciones-wrap { opacity: 1; }
 }
 
-/* ✅ Flex solo dentro del wrapper de botones de flujo (legacy btn-wrap) */
-.orders-table .btn-wrap {
-  display: flex;
-  gap: 4px;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: flex-start;
-}
+/* .btn-wrap legacy wrapper rules removed — current render uses
+   .acciones-wrap (see §5.5 hover-opacity block above). `.flujo` td
+   class no longer exists in render.js either. */
 
-/* botones */
-.orders-table .btn-wrap .btn {
+.acciones .btn {
   white-space: nowrap;
   font-size: 12px;
-  padding: 6px 10px;
+  padding: 6px 8px;
   min-width: auto;
   border-radius: 8px;
 }
-
-/* Icon-only buttons for actions */
-.orders-table td.acciones .btn-wrap .btn { padding: 6px 8px; }
-.orders-table td.acciones .btn-wrap .btn span { font-size: 16px !important; }
-
-.orders-table td.flujo .btn-wrap .btn { padding: 7px 12px; }
-.orders-table td.flujo .btn-wrap .btn span { font-size: 16px !important; }
-
-.flujo .btn, .acciones .btn {
-  white-space: nowrap;
-  font-size: 12px;
-  padding: 6px 10px;
-  min-width: auto;
-  border-radius: 8px;
-}
-
-/* Icon-only buttons for actions */
-.acciones .btn { padding: 6px 8px; }
 
 .acciones .btn span { font-size: 16px !important; }
 
-.flujo .btn { padding: 7px 12px; }
-
-.flujo .btn span { font-size: 16px !important; }
-
 /* @keyframes spin → defined in ceco-ui.css */
 
-@keyframes fadeOut {
-  to { opacity: 0; transform: translateY(-10px); }
-}
-
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: translateX(0); }
-}
+/* @keyframes fadeOut / slideInRight removed — only used by the dead
+   .toast--show / .toast--hide BEM variants. ceco-ui.css ships its own
+   slideInRight for the canonical .toast rule. */
 
 @keyframes modalSlideIn {
   from { opacity: 0; transform: scale(0.95) translateY(-20px); }
@@ -1449,37 +1393,16 @@ tr.activo .flecha { color: var(--brand); transform: rotate(90deg); }
   
   .card-contrato .row:last-child { margin-bottom: 0; }
   
-  .card-contrato .t1 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--brand);
-  }
-  
-  .card-contrato .t2 {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--text);
-    flex: 1;
-    text-align: left;
-    margin-top: 4px;
-    width: 100%;
-  }
-  
+  /* .card-contrato .t1/.t2/.estado removed — current mobile cards
+     use the BEM hierarchy (.card-contrato__id, __cliente, .estado-pill).
+     Skeleton cards still use bare .row inside .card-contrato; that rule
+     above stays. */
   .card-contrato .row:first-child {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
   }
-  
-  .card-contrato .estado {
-    background: var(--line);
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
-  }
-  
+
   .card-contrato .acciones {
     margin-top: 12px;
     display: flex;
@@ -1939,10 +1862,7 @@ tr.activo .flecha { color: var(--brand); transform: rotate(90deg); }
 
 .text-modal-overlay.show { display: flex; }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* @keyframes fadeIn lives in ceco-ui.css. */
 
 .text-modal-content {
   background: white;
@@ -2046,76 +1966,8 @@ tr.activo .flecha { color: var(--brand); transform: rotate(90deg); }
 
 .text-modal-btn.secondary:hover { background: #e5e7eb; }
 
-/* Alert Modal */
-.alert-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 10001;
-  padding: 20px;
-  animation: fadeIn 0.15s ease;
-}
-
-.alert-modal-overlay.show { display: flex; }
-
-.alert-modal-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.25);
-  max-width: 420px;
-  width: 100%;
-  padding: 24px;
-  animation: alertSlideIn 0.2s ease-out;
-  text-align: center;
-}
-
-@keyframes alertSlideIn {
-  from { opacity: 0; transform: translateY(-20px) scale(0.95); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.alert-modal-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  display: block;
-}
-
-.alert-modal-message {
-  font-size: 16px;
-  line-height: 1.5;
-  color: #374151;
-  margin-bottom: 20px;
-  font-weight: 500;
-}
-
-.alert-modal-button {
-  background: #3b82f6;
-  color: white;
-  border: none;
-  padding: 10px 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
-  min-width: 100px;
-}
-
-.alert-modal-button:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59,130,246,0.3);
-}
-
-.alert-modal-button:active { transform: translateY(0); }
-
-.alert-modal-overlay.success .alert-modal-icon { color: #10b981; }
-.alert-modal-overlay.error .alert-modal-icon { color: #ef4444; }
-.alert-modal-overlay.warning .alert-modal-icon { color: #f59e0b; }
-.alert-modal-overlay.info .alert-modal-icon { color: #3b82f6; }
+/* .alert-modal-* removed — callers migrated to Modal.alert (see
+   js/ui/modal.js). The @keyframes alertSlideIn was only used here. */
 
 /* Desktop: hide mobile nav/drawer */
 @media (min-width: 769px) {
@@ -3780,40 +3632,5 @@ tr.activo:hover { background: #f0f9ff !important; }
   transition: all 0.3s ease;
 }
 
-.filtros-avanzados.collapsed { display: none; }
-
-/* Resumen como chips mejorados */
-.resumen-chips {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.resumen-chips strong {
-  padding: 6px 12px;
-  background: #f1f5f9;
-  border-radius: 20px;
-  font-weight: 700;
-  transition: var(--transition);
-  border: 2px solid transparent;
-}
-
-.resumen-chips strong:hover { background: #e2e8f0; transform: scale(1.05); }
-
-.resumen-chips .badge {
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-weight: 600;
-  font-size: 13px;
-  border: 2px solid transparent;
-  transition: var(--transition);
-}
-
-.resumen-chips .badge:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-
-.resumen-chips .badge.active {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5);
-  border-color: var(--brand);
-  font-weight: 800;
-}
+/* .filtros-avanzados.collapsed + .resumen-chips removed — toggle code
+   uses inline style.display; .resumen-chips never appeared in markup. */
