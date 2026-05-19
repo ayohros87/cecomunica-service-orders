@@ -2906,12 +2906,12 @@ tr.activo:hover { background: #f0f9ff !important; }
    markup doesn't need new class names. Mobile cards have their own
    hierarchy via inline styles in renderizarOrdenYEquipos.
    ────────────────────────────────────────────────────────────────── */
-.orders-table tbody td { font-weight: 500; color: var(--fg-2, #2F3942); }
+.orders-table tbody td { font-weight: 500; color: var(--fg-2); }
 /* Tier 1: Orden number (col 1), Cliente (col 2) */
 .orders-table tbody td:nth-child(1),
 .orders-table tbody td:nth-child(2) {
   font-weight: 600;
-  color: var(--fg-1, #0E1418);
+  color: var(--fg-1);
   font-size: 14px;
 }
 /* Cliente needs a tiny boost over the order-id col so the name reads
@@ -2923,7 +2923,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 .orders-table tbody td:nth-child(4),
 .orders-table tbody td:nth-child(6),
 .orders-table tbody td:nth-child(7) {
-  color: var(--fg-3, #6B7884);
+  color: var(--fg-3);
   font-weight: 400;
   font-size: 13px;
 }
@@ -2934,7 +2934,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 .orders-table thead th {
   font-size: 12px;
   font-weight: 600;
-  color: var(--fg-3, #6B7884);
+  color: var(--fg-3);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -2963,14 +2963,14 @@ tr.activo:hover { background: #f0f9ff !important; }
 .card-contrato__id {
   font-weight: 700;
   font-size: 15px;
-  color: var(--fg-1, #0E1418);
+  color: var(--fg-1);
   letter-spacing: 0.01em;
 }
 .card-contrato__cliente {
   grid-column: 1;
   font-weight: 600;
   font-size: 14px;
-  color: var(--fg-1, #0E1418);
+  color: var(--fg-1);
 }
 .card-contrato__tier1 .estado-pill {
   grid-column: 2;
@@ -2984,18 +2984,18 @@ tr.activo:hover { background: #f0f9ff !important; }
   gap: 6px;
   margin-bottom: 8px;
   font-size: 13px;
-  color: var(--fg-3, #6B7884);
+  color: var(--fg-3);
 }
 .card-contrato__tipo,
 .card-contrato__tecnico { font-weight: 500; }
-.card-contrato__sep { color: var(--fg-4, #9AA7B4); }
+.card-contrato__sep { color: var(--fg-4); }
 .card-contrato__tier3 {
   display: flex;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 12px;
   font-size: 12px;
-  color: var(--fg-4, #9AA7B4);
+  color: var(--fg-4);
   font-variant-numeric: tabular-nums;
 }
 .card-contrato__editar { flex: 2; }
@@ -3010,7 +3010,7 @@ tr.activo:hover { background: #f0f9ff !important; }
    row right-aligned. Toggle in topbar persists in localStorage. */
 .view-toggle {
   display: inline-flex;
-  border: 1px solid var(--border-default, #DDE4EB);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md, 6px);
   overflow: hidden;
   background: #fff;
@@ -3020,14 +3020,14 @@ tr.activo:hover { background: #f0f9ff !important; }
   background: transparent;
   padding: 6px 10px;
   cursor: pointer;
-  color: var(--fg-3, #6B7884);
+  color: var(--fg-3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: background var(--dur-fast, 120ms) var(--ease-out, ease);
 }
-.view-toggle__btn:hover { background: var(--brand-soft, #E6F4FB); color: var(--fg-1, #0E1418); }
-.view-toggle__btn[aria-pressed="true"] { background: var(--brand, #0091D7); color: #fff; }
+.view-toggle__btn:hover { background: var(--brand-soft); color: var(--fg-1); }
+.view-toggle__btn[aria-pressed="true"] { background: var(--brand); color: #fff; }
 .view-toggle__btn .lucide { width: 16px; height: 16px; }
 
 /* Cards view (default) — only above mobile breakpoint; mobile keeps
@@ -3052,7 +3052,7 @@ tr.activo:hover { background: #f0f9ff !important; }
     row-gap: 4px;
     padding: 14px 18px;
     background: #fff;
-    border: 1px solid var(--border-default, #DDE4EB);
+    border: 1px solid var(--border-default);
     border-radius: 10px;
     cursor: pointer;
     transition: border-color var(--dur-fast, 120ms) var(--ease-out, ease),
@@ -3060,11 +3060,11 @@ tr.activo:hover { background: #f0f9ff !important; }
   }
   body.orders-view--cards .orders-table tbody tr[data-orden-row]:hover,
   body.orders-view--cards .orders-table tbody tr[data-orden-row]:focus-within {
-    border-color: var(--brand, #0091D7);
+    border-color: var(--brand);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
   body.orders-view--cards .orders-table tbody tr[data-orden-row].activo {
-    border-color: var(--brand, #0091D7);
+    border-color: var(--brand);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
     border-bottom: 0;
@@ -3086,14 +3086,14 @@ tr.activo:hover { background: #f0f9ff !important; }
     grid-row: 1; grid-column: 1;
     font-weight: 700;
     font-size: 14px;
-    color: var(--fg-1, #0E1418);
+    color: var(--fg-1);
     min-width: 0;
   }
   body.orders-view--cards tr[data-orden-row] td:nth-child(2) {
     grid-row: 1; grid-column: 2;
     font-weight: 600;
     font-size: 14px;
-    color: var(--fg-1, #0E1418);
+    color: var(--fg-1);
     min-width: 0;
   }
   body.orders-view--cards tr[data-orden-row] td:nth-child(2) .cliente-cell { min-width: 0; }
@@ -3111,7 +3111,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   body.orders-view--cards tr[data-orden-row] td:nth-child(4) {
     grid-row: 2; grid-column: 1 / span 2;
     font-size: 13px;
-    color: var(--fg-3, #6B7884);
+    color: var(--fg-3);
     font-weight: 400;
   }
   body.orders-view--cards tr[data-orden-row] td:nth-child(4) .tipo-chip {
@@ -3127,23 +3127,23 @@ tr.activo:hover { background: #f0f9ff !important; }
   body.orders-view--cards tr[data-orden-row] td:nth-child(3) {
     grid-row: 3; grid-column: 1;
     font-size: 13px;
-    color: var(--fg-3, #6B7884);
+    color: var(--fg-3);
     font-weight: 500;
   }
   body.orders-view--cards tr[data-orden-row] td:nth-child(3):not(:empty)::before {
     content: 'Técnico: ';
-    color: var(--fg-4, #9AA7B4);
+    color: var(--fg-4);
     font-weight: 400;
   }
   body.orders-view--cards tr[data-orden-row] td:nth-child(7) {
     grid-row: 3; grid-column: 2;
     font-size: 13px;
-    color: var(--fg-3, #6B7884);
+    color: var(--fg-3);
     font-variant-numeric: tabular-nums;
   }
   body.orders-view--cards tr[data-orden-row] td:nth-child(7):not(:empty)::before {
     content: 'Entrega: ';
-    color: var(--fg-4, #9AA7B4);
+    color: var(--fg-4);
     font-weight: 400;
   }
   /* Hide fecha creación in cards view — not in §4.2 spec. */
@@ -3166,7 +3166,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   body.orders-view--cards .orders-table tr.filaDetalle {
     display: block;
     background: #fff;
-    border: 1px solid var(--brand, #0091D7);
+    border: 1px solid var(--brand);
     border-top: 0;
     border-bottom-left-radius: 10px;
     border-bottom-right-radius: 10px;
@@ -3193,7 +3193,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   gap: 6px;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-subtle, #EEF2F6);
+  border-bottom: 1px solid var(--border-subtle);
 }
 .estado-chip {
   display: inline-flex;
@@ -3202,9 +3202,9 @@ tr.activo:hover { background: #f0f9ff !important; }
   height: 30px;
   padding: 0 12px;
   border-radius: var(--radius-pill, 999px);
-  border: 1px solid var(--border-default, #DDE4EB);
+  border: 1px solid var(--border-default);
   background: #fff;
-  color: var(--fg-2, #2F3942);
+  color: var(--fg-2);
   font: 500 13px/1 var(--font-body, "Inter", system-ui, sans-serif);
   cursor: pointer;
   transition: background var(--dur-fast, 120ms) var(--ease-out, ease),
@@ -3214,7 +3214,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   white-space: nowrap;
   user-select: none;
 }
-.estado-chip:hover { background: var(--brand-soft, #E6F4FB); border-color: var(--brand, #0091D7); }
+.estado-chip:hover { background: var(--brand-soft); border-color: var(--brand); }
 .estado-chip:focus-visible {
   outline: none;
   box-shadow: var(--ring-focus, 0 0 0 3px rgba(0, 145, 215, 0.30));
@@ -3243,40 +3243,40 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 /* Per-estado palette — active state fills with the matching status
    color so chip + estado-pill in the rows below visually correspond. */
-.estado-chip--por-asignar .dot { background: var(--status-critical, #D24545); }
-.estado-chip--asignado    .dot { background: var(--status-warning,  #E0A93A); }
-.estado-chip--completado  .dot { background: var(--brand,           #0091D7); }
-.estado-chip--entregado   .dot { background: var(--status-online,   #1FA56B); }
+.estado-chip--por-asignar .dot { background: var(--status-critical); }
+.estado-chip--asignado    .dot { background: var(--status-warning); }
+.estado-chip--completado  .dot { background: var(--brand); }
+.estado-chip--entregado   .dot { background: var(--status-online); }
 
 .estado-chip.active {
   font-weight: 600;
-  color: var(--fg-1, #0E1418);
+  color: var(--fg-1);
   border-width: 1.5px;
 }
 .estado-chip--all.active {
-  background: var(--fg-1, #0E1418);
+  background: var(--fg-1);
   color: #fff;
-  border-color: var(--fg-1, #0E1418);
+  border-color: var(--fg-1);
 }
 .estado-chip--all.active .estado-chip__count { background: rgba(255, 255, 255, 0.20); color: #fff; }
 .estado-chip--por-asignar.active {
   background: #FAE3E3;
-  border-color: var(--status-critical, #D24545);
+  border-color: var(--status-critical);
   color: #8A1F1F;
 }
 .estado-chip--asignado.active {
   background: #FAF1DB;
-  border-color: var(--status-warning, #E0A93A);
+  border-color: var(--status-warning);
   color: #7A5510;
 }
 .estado-chip--completado.active {
-  background: var(--brand-soft, #E6F4FB);
-  border-color: var(--brand, #0091D7);
-  color: var(--brand-press, #001D2B);
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-press);
 }
 .estado-chip--entregado.active {
   background: #E6F4ED;
-  border-color: var(--status-online, #1FA56B);
+  border-color: var(--status-online);
   color: #0F6E47;
 }
 
