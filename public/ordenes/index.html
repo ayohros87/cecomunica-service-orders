@@ -41,12 +41,12 @@
     <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
     <div class="topbar-actions">
       <button class="btn primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
-      <!-- §4.2 view toggle: cards (default) ↔ table -->
+      <!-- §4.2 view toggle: table (desktop default) ↔ cards (mobile default) -->
       <div class="view-toggle" role="group" aria-label="Modo de vista">
-        <button type="button" class="view-toggle__btn" data-action="set-view-cards" data-view="cards" aria-pressed="true" title="Vista de tarjetas">
+        <button type="button" class="view-toggle__btn" data-action="set-view-cards" data-view="cards" aria-pressed="false" title="Vista de tarjetas">
           <i data-lucide="layout-grid"></i>
         </button>
-        <button type="button" class="view-toggle__btn" data-action="set-view-table" data-view="table" aria-pressed="false" title="Vista de tabla">
+        <button type="button" class="view-toggle__btn" data-action="set-view-table" data-view="table" aria-pressed="true" title="Vista de tabla">
           <i data-lucide="table"></i>
         </button>
       </div>
@@ -71,6 +71,22 @@
   <div class="mh-top">
     <div class="mh-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</div>
     <button class="mh-filterBtn" type="button" data-action="mobile-open-filters"><i data-lucide="sliders-horizontal"></i></button>
+  </div>
+
+  <!-- §4.3 Live status badge cluster — mobile only -->
+  <div class="topbar-badges" id="topbarBadges" aria-label="Resumen de estados" aria-live="polite" aria-atomic="true">
+    <button class="topbar-badge topbar-badge--por-asignar" data-action="filtrar-badge" data-estado="POR ASIGNAR" title="Por asignar">
+      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbPorAsignar">0</span>
+    </button>
+    <button class="topbar-badge topbar-badge--asignado" data-action="filtrar-badge" data-estado="ASIGNADO" title="Asignado">
+      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbAsignado">0</span>
+    </button>
+    <button class="topbar-badge topbar-badge--completado" data-action="filtrar-badge" data-estado="COMPLETADO (EN OFICINA)" title="Completado en oficina">
+      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbCompletado">0</span>
+    </button>
+    <button class="topbar-badge topbar-badge--entregado" data-action="filtrar-badge" data-estado="ENTREGADO AL CLIENTE" title="Entregado al cliente">
+      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbEntregado">0</span>
+    </button>
   </div>
 
   <div class="mh-sub" id="mobileResumen" role="status" aria-live="polite" aria-atomic="true">
@@ -113,8 +129,8 @@
   <div class="toolbar">
     <div class="left" style="flex: 1;">
       <input type="text" id="filtroRapido" placeholder="Buscar orden, cliente o serial..." class="input-compact" />
-      <button class="btn primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>
-      <button class="btn secondary" data-action="limpiar-filtros">Limpiar</button>
+      <button class="btn primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>        <!-- §4.4 BarcodeDetector scan-to-search for field techs -->
+        <button class="btn ghost" id="btnScanSerial" data-action="scan-serial" title="Escanear serial con cámara" style="display:none;"><i data-lucide="scan-line"></i> Escanear</button>      <button class="btn secondary" data-action="limpiar-filtros">Limpiar</button>
       <button class="btn ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
         <i data-lucide="chevron-down" class="icon-avanzado" id="iconoAvanzados"></i> Avanzado
       </button>
@@ -238,7 +254,7 @@
     </div>
     <div class="form-field">
       <label class="form-label">Selecciona un técnico</label>
-      <select id="asignarTecnicoSelect" class="form-select-full" onchange="this.style.borderColor = this.value ? 'var(--brand)' : 'var(--line)'"></select>
+      <select id="asignarTecnicoSelect" class="form-select-full" onchange="this.style.borderColor = this.value ? 'var(--accent)' : 'var(--line)'"></select>
       <p class="form-hint">
         El técnico recibirá una notificación por email
       </p>

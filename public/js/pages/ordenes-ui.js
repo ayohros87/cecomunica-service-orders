@@ -7,16 +7,25 @@
  * ======================================== */
 
 // ── Orders view mode (cards | table) — ORDENES_INDEX_IMPROVEMENTS §4.2 ──
-// Cards is the new default (2-tier scan, less density). Table is opt-in
-// for power users via the topbar toggle, persisted across sessions.
+// Default is breakpoint-aware: desktop → table, mobile → cards.
+// Persisted per-device in localStorage so a user's explicit choice sticks.
 const _ORDERS_VIEW_KEY = 'ordenes:view-mode';
+
+function _defaultOrdersView() {
+  try {
+    return window.matchMedia('(max-width: 768px)').matches ? 'cards' : 'table';
+  } catch {
+    return 'table';
+  }
+}
 
 function getOrdersView() {
   try {
     const stored = localStorage.getItem(_ORDERS_VIEW_KEY);
-    return stored === 'table' ? 'table' : 'cards';
+    if (stored === 'table' || stored === 'cards') return stored;
+    return _defaultOrdersView();
   } catch {
-    return 'cards';
+    return _defaultOrdersView();
   }
 }
 

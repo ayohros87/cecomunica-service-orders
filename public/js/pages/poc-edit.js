@@ -56,75 +56,88 @@ window.PocEdit = {
 
   async guardar() {
     if (!this._docId) return;
-    const docId       = this._docId;
-    const rowRef      = this._row;
-    const originalData = this._data;
-    const grupos = document.getElementById('drawer-grupos').value
-      .split(',').map(g => g.trim()).filter(Boolean);
-    const user   = firebase.auth().currentUser;
-
-    // The modelo input is free-text but PocState.obtenerModeloTexto prefers
-    // modelosMap[modelo_id] over the literal modelo string. If the user
-    // changed the displayed text, the FK is now stale — clear it so the new
-    // literal becomes authoritative on the next render.
-    const newModeloText = (document.getElementById('drawer-modelo').value || '').trim();
-    const oldModeloText = (PocState.obtenerModeloTexto(originalData) || '').trim();
-    const modeloEditado = newModeloText !== oldModeloText;
-
-    const newData = {
-      serial:      document.getElementById('drawer-serial').value,
-      unit_id:     document.getElementById('drawer-unit-id').value,
-      radio_name:  document.getElementById('drawer-radio-name').value,
-      modelo:      newModeloText,
-      grupos,
-      activo:      document.getElementById('drawer-activo').checked,
-      sim_number:  document.getElementById('drawer-sim-number').value,
-      sim_phone:   document.getElementById('drawer-sim-phone').value,
-      operador:    document.getElementById('drawer-operador').value,
-      ip:          document.getElementById('drawer-ip').value,
-      gps:         document.getElementById('drawer-gps').checked,
-      notas:       document.getElementById('drawer-notas').value,
-      updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
-      updated_by:       user?.uid   || null,
-      updated_by_email: user?.email || null
-    };
-
-    if (modeloEditado) {
-      newData.modelo_id = firebase.firestore.FieldValue.delete();
-    }
-
     try {
-      await PocService.updatePocDevice(docId, newData);
+      const docId        = this._docId;
+      const rowRef       = this._row;
+      const originalData = this._data;
+      const grupos = document.getElementById('drawer-grupos').value
+        .split(',').map(g => g.trim()).filter(Boolean);
+      const user   = firebase.auth().currentUser;
+
+      // The modelo input is free-text but PocState.obtenerModeloTexto prefers
+      // modelosMap[modelo_id] over the literal modelo string. If the user
+      // changed the displayed text, the FK is now stale — clear it so the new
+      // literal becomes authoritative on the next render.
+      const newModeloText = (document.getElementById('drawer-modelo').value || '').trim();
+      const oldModeloText = (PocState.obtenerModeloTexto(originalData) || '').trim();
+      const modeloEditado = newModeloText !== oldModeloText;
+
+      // Fields sent to Firestore update() — FieldValue sentinels are valid here.
+      const updatePayload = {
+        serial:           document.getElementById('drawer-serial').value,
+        unit_id:          document.getElementById('drawer-unit-id').value,
+        radio_name:       document.getElementById('drawer-radio-name').value,
+        modelo:           newModeloText,
+        grupos,
+        activo:           document.getElementById('drawer-activo').checked,
+        sim_number:       document.getElementById('drawer-sim-number').value,
+        sim_phone:        document.getElementById('drawer-sim-phone').value,
+        operador:         document.getElementById('drawer-operador').value,
+        ip:               document.getElementById('drawer-ip').value,
+        gps:              document.getElementById('drawer-gps').checked,
+        notas:            document.getElementById('drawer-notas').value,
+        updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
+        updated_by:       user?.uid   || null,
+        updated_by_email: user?.email || null
+      };
+
+      // All field aliases that obtenerModeloTexto checks before falling back to
+      // the plain `modelo` field. If any of these survive in the document,
+      // they will shadow the new value we wrote to `modelo`.
+      const MODEL_ALIAS_KEYS = [
+        'modelo_id', 'modeloId', 'model_id', 'modelId',
+        'modelo_label', 'modeloLabel', 'Modelo',
+        'model_label', 'modelLabel', 'model'
+      ];
+
+      if (modeloEditado) {
+        // Delete every alias that exists in the document so none shadow the new `modelo`.
+        MODEL_ALIAS_KEYS.forEach(k => {
+          if (k in (originalData || {}) || k === 'modelo_id') {
+            updatePayload[k] = firebase.firestore.FieldValue.delete();
+          }
+        });
+      }
+
+      await PocService.updatePocDevice(docId, updatePayload);
+
+      // Clean snapshot for the UI row and audit log — strip FieldValue sentinels.
+      const FV = firebase.firestore.FieldValue;
+      const cleanFields = Object.fromEntries(
+        Object.entries(updatePayload).filter(([, v]) => !(v instanceof FV))
+      );
+
+      PocService.addLog({
+        equipo_id: docId,
+        fecha:     firebase.firestore.FieldValue.serverTimestamp(),
+        usuario:   user?.email,
+        cambios:   { antes: originalData || {}, despues: cleanFields }
+      }).catch(e => console.warn('poc_log write failed (non-critical):', e));
+
+      const mergedData = { ...originalData, ...cleanFields };
+      if (modeloEditado) {
+        MODEL_ALIAS_KEYS.forEach(k => delete mergedData[k]);
+      }
+
+      this.cerrar();
+      Toast.show('Cambios guardados', 'ok');
+      const newRow = PocList._buildRow(docId, mergedData);
+      rowRef.replaceWith(newRow);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (err) {
-      console.error('Error saving changes:', err);
-      Toast.show('Error al guardar cambios: ' + err.message, 'bad');
-      return;
+      console.error('Error en guardar():', err);
+      Toast.show('Error al guardar: ' + (err.message || err), 'bad');
     }
-
-    // Log is non-critical — don't let it block the success flow
-    PocService.addLog({
-      equipo_id: docId,
-      fecha:     firebase.firestore.FieldValue.serverTimestamp(),
-      usuario:   user?.email,
-      cambios:   { antes: originalData || {}, despues: newData }
-    }).catch(e => console.warn('poc_log write failed (non-critical):', e));
-
-    // Rebuild only the edited row using merged data — avoids full reload and
-    // Firestore query-cache staleness caused by enablePersistence.
-    const mergedData = { ...originalData, ...newData };
-    if (modeloEditado) {
-      // Strip the FieldValue sentinel and every FK alias obtenerModeloTexto
-      // checks, otherwise the next pencil-open will resolve the stale FK.
-      delete mergedData.modelo_id;
-      delete mergedData.modeloId;
-      delete mergedData.model_id;
-      delete mergedData.modelId;
-    }
-    this.cerrar();
-    Toast.show('Cambios guardados', 'ok');
-    const newRow = PocList._buildRow(docId, mergedData);
-    rowRef.replaceWith(newRow);
-    if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   init() {

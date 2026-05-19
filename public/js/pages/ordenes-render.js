@@ -720,6 +720,13 @@ function actualizarResumen(lista) {
   chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
   chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
 
+  // §4.3 topbar live badge cluster — same counts, different DOM target.
+  const setTb = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = String(n); };
+  setTb('tbPorAsignar', porAsignar);
+  setTb('tbAsignado', asignado);
+  setTb('tbCompletado', completadoOficina);
+  setTb('tbEntregado', entregadoCliente);
+
   if (!el) return;
 
   const filtroEstadoSelect = document.getElementById("filtroEstado");

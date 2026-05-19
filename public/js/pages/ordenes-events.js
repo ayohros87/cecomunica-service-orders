@@ -51,6 +51,8 @@
     'filtrar-estado-chip': (el) => filtrarPorChipEstado(el),
     'set-view-cards': () => setOrdersView('cards'),
     'set-view-table': () => setOrdersView('table'),
+    // §4.4 Barcode scan-to-search
+    'scan-serial': () => _scanSerial(),
     'toggle-fecha-entrega': () => {
       const visible = document.body?.classList.contains('hide-fecha-entrega');
       setFechaEntregaVisible(visible);
