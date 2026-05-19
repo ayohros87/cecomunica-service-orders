@@ -494,10 +494,38 @@ th.ordenado-desc::after {
   transition: background 0.12s;
 }
 .overflow-menu-item:hover  { background: #f3f4f6; }
+.overflow-menu-item:active { background: #e5e7eb; }
 .overflow-menu-item.danger { color: var(--bad); }
 .overflow-menu-item.danger:hover { background: #fee2e2; }
+.overflow-menu-item.disabled { opacity: 0.4; cursor: not-allowed; }
+.overflow-menu-item.disabled:hover { background: transparent; }
+.overflow-menu-item.highlighted { background: #d1fae5; font-weight: 600; }
+.overflow-menu-item.highlighted:hover { background: #a7f3d0; }
 .overflow-menu-divider     { height: 1px; background: var(--line); margin: 4px 2px; }
 .topbar-menu .overflow-menu-dropdown { min-width: 220px; }
+/* ".show" alias: some pages toggle the dropdown via .show instead of .open.
+   Keep both supported so ordenes/* and the layout.js menus share rules. */
+.overflow-menu-dropdown.show { display: block; }
+/* Compact icon-only menu trigger used by row-level overflow menus. */
+.overflow-menu-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 20px;
+  color: var(--fg-3, #6b7280);
+  cursor: pointer;
+  transition: var(--transition);
+  line-height: 1;
+  min-width: 32px;
+  text-align: center;
+}
+.overflow-menu-btn:hover {
+  background: #f3f4f6;
+  border-color: var(--border-default, #e5e7eb);
+  color: var(--fg-2, #374151);
+}
+.overflow-menu-btn:active { transform: scale(0.92); background: #e5e7eb; }
 
 .app-wrap           { max-width:1100px; margin:0 auto; padding:0 16px 32px; }
 .app-wrap--narrow   { max-width: 720px;  }
@@ -1137,3 +1165,186 @@ i[data-lucide]                              { display: inline-block; }
 .btn.primary .lucide,
 .btn.danger .lucide,
 .btn.ok .lucide                             { color: #fff; }
+
+/* ════════════════════════════════════════════════════════════════
+   NOTAS TÉCNICAS MODAL (extracted from ordenes-index.css 2026-05-19)
+   Used by ordenes/ordenes-notas.js → gestionarNotasTecnicas. The
+   markup is created in JS: .notas-modal > .notas-dialog > {header,
+   content, footer}. Keep in ceco-ui so taller/cotizaciones can reuse
+   the same dialog primitive in the future.
+   ════════════════════════════════════════════════════════════════ */
+.notas-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+}
+.notas-dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  max-width: 700px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.2s ease-out;
+}
+.notas-header {
+  padding: 20px 24px;
+  border-bottom: 2px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.notas-title { display: flex; align-items: center; gap: 10px; }
+.notas-title h3 { margin: 0; font-size: 16px; font-weight: 600; color: var(--text); }
+.notas-icon { font-size: 18px; opacity: 0.7; }
+.notas-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: var(--transition);
+}
+.notas-close:hover { background: #f3f4f6; }
+.notas-content { padding: 24px; flex: 1; overflow-y: auto; }
+.notas-label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.notas-textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 12px;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  resize: vertical;
+  transition: border-color 0.2s;
+  line-height: 1.6;
+}
+.notas-textarea:focus { outline: none; border-color: var(--brand); }
+.notas-charcount { margin-top: 8px; font-size: 12px; color: var(--muted); text-align: right; }
+.notas-footer {
+  padding: 16px 24px;
+  border-top: 2px solid var(--line);
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  background: #f8fafc;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   TEXT DISPLAY MODAL (extracted from ordenes-index.css 2026-05-19)
+   Used by ordenes-equipos.js → showTextModal(title, text). Read-only
+   text viewer with a copy-to-clipboard button. Separate from
+   Modal.alert because the copy UX is specific and the body scrolls.
+   ════════════════════════════════════════════════════════════════ */
+.text-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+.text-modal-overlay.show { display: flex; }
+.text-modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.25s ease-out;
+}
+.text-modal-header {
+  padding: 20px 24px;
+  border-bottom: 2px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-radius: 16px 16px 0 0;
+}
+.text-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+.text-modal-close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: var(--transition);
+  line-height: 1;
+}
+.text-modal-close:hover { background: #e5e7eb; color: #111827; }
+.text-modal-body { padding: 24px; overflow-y: auto; flex: 1; }
+.text-modal-text {
+  font-size: 15px;
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.text-modal-empty { text-align: center; padding: 40px 20px; color: #9ca3af; font-style: italic; }
+.text-modal-footer {
+  padding: 16px 24px;
+  border-top: 2px solid #e5e7eb;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  background: #f9fafb;
+  border-radius: 0 0 16px 16px;
+}
+.text-modal-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  border: none;
+}
+.text-modal-btn.primary { background: #3b82f6; color: white; }
+.text-modal-btn.primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+}
+.text-modal-btn.secondary { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+.text-modal-btn.secondary:hover { background: #e5e7eb; }
+
+/* Both modal blocks reference @keyframes modalSlideIn — define it here
+   so the modal primitives don't depend on ordenes-index.css being loaded. */
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-20px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
