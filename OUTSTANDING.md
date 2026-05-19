@@ -4,7 +4,7 @@
 >
 > **How to read this:** every item below is open. If you see it here, it has not shipped. Items are grouped by area, ranked within each section by impact × cost. Effort estimates assume one person working uninterrupted.
 >
-> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.6 print IDs shipped · §3.8 shipped.
+> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.2 + §3.5 topbar/layout + nav modes shipped · §3.3 mono IDs shipped · §3.4 button icons shipped · §3.6 print IDs shipped · §3.8 shipped.
 
 ---
 
@@ -73,8 +73,25 @@ Hardcoded colors + off-spec radii — **shipped** in commits `2bb2de8`, `12393ab
 
 **Still open:** delete inline `<style>` blocks that simply redeclare base rules. Audit revealed 18 files extend `.btn.primary` / `.btn.secondary` / `.badge` etc. — but they're not pure redeclarations, they're *page-specific overrides* (custom gradients, secondary palettes, badge variants). Removing them safely requires a design call: should the "gradient primary button" become canonical in `ceco-ui.css`, or stay per-page? Defer to a focused pass when the topbar/layout work (§3.2) lands and the canonical button styles get revisited anyway.
 
-### 3.2 Shared topbar/layout (Phase 2)
-Topbar is copy-pasted with subtle variations across 13 pages. Plan: `public/js/core/layout.js` exporting `Layout.renderTopbar({ title, actions, showHome })`. Replace every hand-written `<div class="topbar">…</div>` with a mount div + `Layout.renderTopbar()` call. Apply the same pattern to empty-state, skeleton-row, and "Cargar más" footer.
+### 3.2 Shared topbar/layout (Phase 2) — *largely shipped 2026-05-19*
+
+`public/js/core/layout.js` exports `Layout.renderTopbar({ title, leftSlot, actions, back, showHome, homeHref, showLogout, menu })` plus a `Layout.renderTopbarFor(mode, opts)` shortcut covering the four nav modes from §3.5 (`'index'` / `'edit'` / `'child'` / `'home'`). Mount points use `<div id="topbar-mount"></div>`. Auto-wires the overflow-menu toggle. Calls `lucide.createIcons()` after render.
+
+**API extensions added this session:**
+- `leftSlot: '<raw html>'` — content rendered after the title (inline search inputs, steppers)
+- `actions: [{ html, label, cls, id, dataAction, onclick, href, title, stopProp }]` — `html` is raw HTML pass-through for custom widgets (view-toggle, etc.)
+- `menu: [{ html, divider, ... }]` — `html` lets a menu item render arbitrary markup (e.g. `<label><input type="checkbox">...`)
+- `menuId` — used to scope auto-wire IDs when a page hosts multiple overflow menus
+
+**Pages now using Layout.renderTopbar (24 total):** index, ordenes/{editar-orden, nueva-orden, agregar-equipo, admin-equipos-cliente, importar-exportar, modelo-de-radio, tecnicos, estado_reparacion, config, cotizar-orden, trabajar-orden}, contratos/index, cotizaciones/{index, editar-cotizacion, nueva-cotizacion}, clientes/{index, editar}, inventario/{index, piezas}, POC/{index, vendedores-batch, importar-poc}, perfil.
+
+**Intentionally NOT migrated (working as-is, migration cost > benefit):**
+- `ordenes/index.html` — custom event delegation in `ordenes-events.js`, dedicated mobile header, view-toggle widget, badge cluster. Already works; migrating risks regressions in the highest-traffic page.
+- `inventario/modelos.html` — uses a page-specific `.modelos-topbar` design (different markup), not the standard `.topbar`.
+- `inventario/cargar-inventario.html` — uses a `.toolbar` pattern, not a topbar (it's a child workflow with an inline action bar).
+- Print pages (`imprimir-*.html`) — by spec, these use `.print-toolbar` not Layout.renderTopbar.
+
+**Still open:** the §3.2 spec also mentions empty-state, skeleton-row, and "Cargar más" footer components. Those are separate from the topbar and not yet extracted. Defer until a page needs the same empty-state twice — premature now.
 
 ### 3.3 Typography hierarchy (Phase 3) — *partly shipped 2026-05-19*
 
@@ -117,23 +134,28 @@ Reference mapping (used elsewhere in the codebase already):
 
 Pattern: `textContent = "✏️ Editar"` → `innerHTML = '<i data-lucide="pencil"></i> Editar'`, then call `lucide.createIcons({ nodes: [element] })`.
 
-### 3.5 Navigation modes + container tiers (Phase 6)
-Today some pages show a back button, some "Menú principal", some both, some neither — ad-hoc. Container width varies (1100 / 1280 / none) by page improvisation. Four canonical patterns:
+### 3.5 Navigation modes + container tiers (Phase 6) — *largely shipped 2026-05-19*
 
-| Mode | Pages | Topbar |
+**Nav modes:** `Layout.renderTopbarFor(mode, opts)` picks sensible defaults for the four canonical patterns. Consumers pass mode + page-specific opts:
+
+| Mode | Topbar defaults | Example callers |
 |---|---|---|
-| **Module index** | `ordenes/index`, `contratos/index`, etc. | `showHome: true`, `showLogout: true`, primary action. **No back.** |
-| **Detail / Edit** | `editar-orden`, `editar-cotizacion`, etc. | `back: 'Volver'`, `showHome: false` |
-| **Workflow child** | `cotizar-orden`, `firmar-entrega`, `fotos-taller` | `back: 'Volver a la orden'` |
-| **Print / utility** | `imprimir-orden`, `nota-entrega` | No `Layout.renderTopbar`. Standalone toolbar. |
+| `'index'`  | `showHome:true, showLogout:true` — primary action + overflow menu, no back | inventario/index, piezas, contratos/index, cotizaciones/index, POC/index, POC/vendedores-batch |
+| `'edit'`   | `back:{href:'index.html'}, showHome:false, showLogout:true` | editar-orden, nueva-orden, agregar-equipo, editar-cotizacion, perfil, clientes/editar |
+| `'child'`  | `back:{href:'…'}, showHome:false, showLogout:true` — back link explicit per workflow | trabajar-orden, cotizar-orden, importar-poc |
+| `'home'`   | `showHome:false, showLogout:true` — root home page | index.html |
 
-Container tiers — declared by class, no inline `max-width`:
+Print pages (`imprimir-*.html`) deliberately do NOT use `Layout.renderTopbar` — they use `.print-toolbar` with print/close buttons, per the §3.6 / §3.5 spec.
+
+**Container tiers:** all four already exist in `ceco-ui.css:568-572`:
 - `.app-wrap--narrow` 720px (forms, signatures)
-- `.app-wrap--default` 1100px (most pages)
-- `.app-wrap--wide` 1400px (`ordenes/index`, `POC/index`)
-- `.app-wrap--full` 100% (dashboards)
+- `.app-wrap--default` 1100px (most pages — also the default behaviour of `.app-wrap` alone)
+- `.app-wrap--wide` 1400px (intended for `ordenes/index`, `POC/index`)
+- `.app-wrap--full` 100% (dashboards, tabled pages that need to use the full viewport)
 
-Plus: spacing roles (`--sp-2`/3/4/5/8 each assigned to a structural concept); responsive table modifiers (`--sticky`, `--compact`, `--cards`); breakpoint harmonization at 760 / 1024.
+`ordenes/index.html` overrides `.app-wrap { max-width: none }` in `ordenes-index.css` — effectively `.app-wrap--full`. The spec says `--wide` but `--full` is more useful for a wide tabled view; preserving the existing behaviour.
+
+**Still open:** spacing role assignments (`--sp-2`/3/4/5/8 each assigned to a structural concept), responsive table modifiers (`--sticky`, `--compact`, `--cards`), breakpoint harmonization at 760/1024 — these are coherence/polish items, not blocking, and best done together with §3.7 when someone has time for a focused CSS pass.
 
 ### 3.6 Print pages standardization (Phase 7) — *largely shipped, polish remains*
 

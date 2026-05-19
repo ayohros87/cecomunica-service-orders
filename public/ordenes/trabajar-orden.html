@@ -209,8 +209,6 @@ label { color: #1f2937; }
 </head>
 
 <body>
-  <h2 style="margin:8px 0;"><i data-lucide="wrench"></i> Trabajar Orden</h2>
-
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -227,6 +225,15 @@ label { color: #1f2937; }
   <script src="../js/services/empresaService.js"></script>
   <script src="../js/services/piezasService.js"></script>
   <script src="../js/services/mailService.js"></script>
+  <script src="../js/core/layout.js"></script>
+
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbarFor('child', {
+      title: '<i data-lucide="wrench"></i> Trabajar Orden',
+      back:  { href: 'index.html' }
+    });
+  </script>
 
    <div class="header-card">
     <div id="infoOrden" class="resumen"></div>
@@ -241,7 +248,6 @@ label { color: #1f2937; }
         <button class="btn" id="btnExport" title="Exportar a Excel" onclick="TOCotizacion.exportar()"><i data-lucide="download"></i></button>
         <button class="btn ok" id="btnCompletarCot" title="Completar cotización" onclick="TOCotizacion.completar()"><i data-lucide="check"></i></button>
         <button class="btn" id="btnDesbloquearCot" title="Desbloquear edición" onclick="TOCotizacion.desbloquear()" style="display:none;"><i data-lucide="lock-open"></i></button>
-        <button class="btn" title="Volver" onclick="history.back()"><i data-lucide="arrow-left"></i></button>
       </div>
     </div>
   </div>

@@ -285,35 +285,33 @@ body { background: #f8fafc; }
 </style>
 </head>
 <body>
-<div class="topbar">
-  <div class="topbar-left">
-    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
-    <h1><i data-lucide="layers"></i> Inventario de Piezas</h1>
-    <div class="app-search">
-      <input id="filtroNombre" placeholder="Buscar marca, SKU o equipo..." />
-      <button class="btn icon" onclick="filtrar()"><i data-lucide="search"></i></button>
-    </div>
-  </div>
-
-  <div class="topbar-right">
-    <button id="btnNueva" class="btn primary" onclick="abrirModal()"><i data-lucide="plus"></i> Nueva pieza</button>
-    <div class="overflow-menu topbar-menu" id="piezas-menu-wrap">
-      <button class="btn ghost" id="piezas-menu-btn" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
-      <div class="overflow-menu-dropdown" id="piezas-menu-dropdown">
-        <a href="./index.html" class="overflow-menu-item"><i data-lucide="package"></i> Radios</a>
-        <button class="overflow-menu-item" id="btnBatch" onclick="abrirBatchModal()"><i data-lucide="download"></i> Importar lote</button>
-        <div class="overflow-menu-divider"></div>
-        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-sku" onchange="toggleColumn('sku', this.checked)"> SKU</label>
-        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-costo" onchange="toggleColumn('costo', this.checked)"> Costo</label>
-        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-ubicacion" onchange="toggleColumn('ubicacion', this.checked)"> Ubicación</label>
-        <div class="overflow-menu-divider"></div>
-        <button class="overflow-menu-item" onclick="toggleDensity()"><i data-lucide="arrow-up-down"></i> Alternar densidad</button>
-      </div>
-    </div>
-    <a href="../index.html" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>
-    <button class="btn ghost" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar sesión</button>
-  </div>
-</div>
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    title: '<i data-lucide="layers"></i> Inventario de Piezas',
+    leftSlot: `
+      <div class="app-search">
+        <input id="filtroNombre" placeholder="Buscar marca, SKU o equipo..." />
+        <button class="btn icon" onclick="filtrar()"><i data-lucide="search"></i></button>
+      </div>`,
+    actions: [
+      { id: 'btnNueva', cls: 'primary', onclick: 'abrirModal()',
+        label: '<i data-lucide="plus"></i> Nueva pieza' }
+    ],
+    menu: [
+      { href: './index.html', label: '<i data-lucide="package"></i> Radios' },
+      { id: 'btnBatch', onclick: 'abrirBatchModal()',
+        label: '<i data-lucide="download"></i> Importar lote' },
+      { divider: true },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-sku" onchange="toggleColumn(\'sku\', this.checked)"> SKU</label>' },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-costo" onchange="toggleColumn(\'costo\', this.checked)"> Costo</label>' },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-ubicacion" onchange="toggleColumn(\'ubicacion\', this.checked)"> Ubicación</label>' },
+      { divider: true },
+      { onclick: 'toggleDensity()',
+        label: '<i data-lucide="arrow-up-down"></i> Alternar densidad' }
+    ]
+  });
+</script>
 
   <div class="app-wrap app-wrap--full">
     <p id="resumen" class="resumen"></p>
@@ -498,7 +496,7 @@ Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|S
     firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
   }
   if (typeof lucide !== 'undefined') lucide.createIcons();
-  Layout.wireMenuToggle('piezas-menu-btn', 'piezas-menu-dropdown');
+  // Layout.renderTopbar auto-wires the overflow-menu toggle.
 </script>
 </body>
 </html>

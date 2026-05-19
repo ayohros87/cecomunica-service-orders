@@ -358,36 +358,33 @@ th .sort {
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-<div class="topbar">
-  <div class="topbar-left">
-    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
-    <h1><i data-lucide="package"></i> Inventario de Radios</h1>
-    <div class="app-search">
-      <input id="buscador" placeholder="Buscar marca, modelo o tipo..." />
-      <button class="btn icon" onclick="aplicarFiltroRapido()"><i data-lucide="search"></i></button>
-    </div>
-  </div>
-
-  <div class="topbar-right">
-    <button class="btn primary" onclick="window.location.href='./cargar-inventario.html'"><i data-lucide="plus"></i> Cargar inventario</button>
-    <div class="overflow-menu topbar-menu" id="inv-menu-wrap">
-      <button class="btn ghost" id="inv-menu-btn" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
-      <div class="overflow-menu-dropdown" id="inv-menu-dropdown">
-        <a href="./modelos.html" class="overflow-menu-item"><i data-lucide="book-open"></i> Modelos</a>
-        <a href="./piezas.html" class="overflow-menu-item"><i data-lucide="layers"></i> Piezas</a>
-        <a href="./vista-correo.html" target="_blank" class="overflow-menu-item"><i data-lucide="mail"></i> Vista correo</a>
-        <button class="overflow-menu-item" onclick="exportarExcel()"><i data-lucide="download"></i> Excel</button>
-        <div class="overflow-menu-divider"></div>
-        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Cant. anterior</label>
-        <label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltima actualización</label>
-        <div class="overflow-menu-divider"></div>
-        <button class="overflow-menu-item" onclick="toggleDensity()"><i data-lucide="arrow-up-down"></i> Alternar densidad</button>
-      </div>
-    </div>
-    <a href="../index.html" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>
-    <button class="btn ghost" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar sesión</button>
-  </div>
-</div>
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    title: '<i data-lucide="package"></i> Inventario de Radios',
+    leftSlot: `
+      <div class="app-search">
+        <input id="buscador" placeholder="Buscar marca, modelo o tipo..." />
+        <button class="btn icon" onclick="aplicarFiltroRapido()"><i data-lucide="search"></i></button>
+      </div>`,
+    actions: [
+      { label: '<i data-lucide="plus"></i> Cargar inventario',
+        cls: 'primary',
+        onclick: "window.location.href='./cargar-inventario.html'" }
+    ],
+    menu: [
+      { href: './modelos.html',      label: '<i data-lucide="book-open"></i> Modelos' },
+      { href: './piezas.html',       label: '<i data-lucide="layers"></i> Piezas' },
+      { html: '<a href="./vista-correo.html" target="_blank" class="overflow-menu-item"><i data-lucide="mail"></i> Vista correo</a>' },
+      { onclick: 'exportarExcel()',  label: '<i data-lucide="download"></i> Excel' },
+      { divider: true },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Cant. anterior</label>' },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltima actualización</label>' },
+      { divider: true },
+      { onclick: 'toggleDensity()', label: '<i data-lucide="arrow-up-down"></i> Alternar densidad' }
+    ]
+  });
+</script>
 <div id="loader" style="display:none;" class="loader-center">
   <div class="loader"></div>
 </div>
@@ -408,7 +405,7 @@ th .sort {
       firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
     }
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    Layout.wireMenuToggle('inv-menu-btn', 'inv-menu-dropdown');
+    // Layout.renderTopbar auto-wires the overflow-menu toggle.
   </script>
 </body>
 </html>

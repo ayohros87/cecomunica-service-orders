@@ -14,55 +14,68 @@ const Layout = (() => {
   function renderTopbar(opts = {}) {
     const {
       title      = '',
+      leftSlot   = '',         // raw HTML rendered after title (e.g. inline search)
       actions    = [],
       back       = null,
       showHome   = true,
       homeHref   = '../index.html',
       showLogout = true,
       menu       = [],
+      menuId     = 'topbar-menu',  // override if multiple menus on a page
     } = opts;
 
     const btnHtml = (a) => {
-      const id    = a.id     ? ` id="${a.id}"`          : '';
-      const cls   = a.cls    ? ` ${a.cls}`               : '';
-      const click = a.onclick ? ` onclick="${a.onclick}"` : '';
-      if (a.href) return `<a href="${a.href}" class="btn${cls}"${id}>${a.label}</a>`;
-      return `<button class="btn${cls}"${id}${click}>${a.label}</button>`;
+      if (a.html) return a.html;  // raw HTML pass-through (e.g. view-toggle widget)
+      const id    = a.id          ? ` id="${a.id}"`                         : '';
+      const cls   = a.cls         ? ` ${a.cls}`                             : '';
+      const data  = a.dataAction  ? ` data-action="${a.dataAction}"`        : '';
+      const stop  = a.stopProp    ? ` data-stop-propagation="true"`         : '';
+      const title = a.title       ? ` title="${a.title}"`                   : '';
+      const click = a.onclick     ? ` onclick="${a.onclick}"`               : '';
+      if (a.href) return `<a href="${a.href}" class="btn${cls}"${id}${data}${title}>${a.label}</a>`;
+      return `<button class="btn${cls}"${id}${data}${stop}${title}${click}>${a.label}</button>`;
     };
 
     const menuItemHtml = (item) => {
       if (item.divider) return '<div class="overflow-menu-divider"></div>';
-      const id      = item.id     ? ` id="${item.id}"`           : '';
-      const danger  = item.danger ? ' danger'                    : '';
-      const click   = item.onclick ? ` onclick="${item.onclick}"` : '';
-      if (item.href) return `<a href="${item.href}" class="overflow-menu-item${danger}"${id}>${item.label}</a>`;
-      return `<button class="overflow-menu-item${danger}"${id}${click}>${item.label}</button>`;
+      if (item.html)    return item.html;  // raw HTML (e.g. checkbox-labelled toggle)
+      const id      = item.id        ? ` id="${item.id}"`              : '';
+      const cls     = item.danger    ? ' danger'                       : '';
+      const data    = item.dataAction ? ` data-action="${item.dataAction}"` : '';
+      const click   = item.onclick   ? ` onclick="${item.onclick}"`    : '';
+      const style   = item.hidden    ? ' style="display:none;"'        : '';
+      if (item.href) return `<a href="${item.href}" class="overflow-menu-item${cls}"${id}${data}${style}>${item.label}</a>`;
+      return `<button class="overflow-menu-item${cls}"${id}${data}${click}${style}>${item.label}</button>`;
     };
 
     const actionBtns = actions.map(btnHtml).join('');
     const backBtn    = back
       ? `<a href="${back.href}" class="btn ghost">${back.label || '<i data-lucide="arrow-left"></i> Volver'}</a>`
       : '';
+    const menuWrapId = `__layout-menu-wrap-${menuId}`;
+    const menuBtnId  = `__layout-menu-btn-${menuId}`;
+    const menuDropId = `__layout-menu-dropdown-${menuId}`;
     const menuBtn    = menu.length
-      ? `<div class="overflow-menu topbar-menu" id="__layout-menu-wrap">
-      <button class="btn ghost" id="__layout-menu-btn" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
-      <div class="overflow-menu-dropdown" id="__layout-menu-dropdown">${menu.map(menuItemHtml).join('')}</div>
+      ? `<div class="overflow-menu topbar-menu" id="${menuWrapId}">
+      <button class="btn ghost" id="${menuBtnId}" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+      <div class="overflow-menu-dropdown" id="${menuDropId}">${menu.map(menuItemHtml).join('')}</div>
     </div>`
       : '';
     const homeBtn    = showHome
       ? `<a href="${homeHref}" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>`
       : '';
     const logoutBtn  = showLogout
-      ? `<button class="btn ghost" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar sesión</button>`
+      ? `<button class="btn ghost" onclick="cerrarSesion()" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>`
       : '';
 
     const html = `
 <div class="topbar">
   <div class="topbar-left">
     ${BRAND_MARK}
-    <span class="topbar-title">${title}</span>
+    <h1 class="topbar-title">${title}</h1>
+    ${leftSlot}
   </div>
-  <div class="topbar-right">
+  <div class="topbar-actions topbar-right">
     ${actionBtns}
     ${backBtn}
     ${menuBtn}
@@ -75,7 +88,7 @@ const Layout = (() => {
     if (mount) {
       mount.outerHTML = html;
       if (typeof lucide !== 'undefined') lucide.createIcons();
-      if (menu.length) _wireMenuToggle('__layout-menu-btn', '__layout-menu-dropdown');
+      if (menu.length) _wireMenuToggle(menuBtnId, menuDropId);
     }
   }
 

@@ -362,30 +362,33 @@ body {
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <div class="topbar">
-    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
-    <div>
-      <h1><i data-lucide="package"></i> Ingreso de Equipos PoC — Vendedores</h1>
-      <div style="margin-top: 4px;">
-        <span style="font-size: 13px; color: var(--muted); font-weight: 500;">Flujo:</span>
-        <span class="stepper">
-          <span class="step active" id="step-prep">Preparar</span>
-          <span class="step" id="step-rev">Revisar</span>
-          <span class="step" id="step-exp">Exportar</span>
-        </span>
-      </div>
-    </div>
-    <div class="topbar-right">
-      <button class="btn" id="btnGuardarBorrador" title="Ctrl+S"><i data-lucide="save"></i> Guardar borrador</button>
-      <button class="btn" id="btnClearDraft" onclick="VB.clearDraft()"><i data-lucide="trash-2"></i> Borrar borrador</button>
-      <button class="btn secondary" onclick="VB.limpiarTodo()"><i data-lucide="rotate-ccw"></i> Limpiar</button>
-      <a href="../index.html" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>
-      <button class="btn ghost" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Cerrar sesión</button>
-    </div>
-  </div>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbarFor('index', {
+      title: '<i data-lucide="package"></i> Ingreso de Equipos PoC — Vendedores',
+      leftSlot: `
+        <div style="margin-top: 4px;">
+          <span style="font-size: 13px; color: var(--muted); font-weight: 500;">Flujo:</span>
+          <span class="stepper">
+            <span class="step active" id="step-prep">Preparar</span>
+            <span class="step" id="step-rev">Revisar</span>
+            <span class="step" id="step-exp">Exportar</span>
+          </span>
+        </div>`,
+      actions: [
+        { id: 'btnGuardarBorrador', title: 'Ctrl+S',
+          label: '<i data-lucide="save"></i> Guardar borrador' },
+        { id: 'btnClearDraft', onclick: 'VB.clearDraft()',
+          label: '<i data-lucide="trash-2"></i> Borrar borrador' },
+        { cls: 'secondary', onclick: 'VB.limpiarTodo()',
+          label: '<i data-lucide="rotate-ccw"></i> Limpiar' }
+      ]
+    });
+  </script>
 
 <div class="app-wrap">
 
