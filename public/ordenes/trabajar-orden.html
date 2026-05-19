@@ -22,14 +22,14 @@
     .chip{ display:inline-block; padding:2px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; background:#fff }
 
     /* ===== Encabezado y acciones ===== */
-    .header-card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px; margin:8px 0; box-shadow: var(--shadow); }
+    .header-card{ background:#fff; border:1px solid var(--line); border-radius:var(--radius-lg); padding:12px; margin:8px 0; box-shadow: var(--shadow); }
     .estado-chip{ font-weight:600 }
     .estado-sin{ background:#eef2ff; border-color:#c7d2fe }
     .estado-prog{ background:#fff7ed; border-color:#fed7aa }
     .estado-ok{ background:#dcfce7; border-color:#86efac }
 
     /* ===== Fila equipo / acordeón ===== */
-    .fila-equipo{ border:1px solid var(--line); border-radius:12px; padding:0; margin:10px 0; background:#fff; overflow:hidden }
+    .fila-equipo{ border:1px solid var(--line); border-radius:var(--radius-lg); padding:0; margin:10px 0; background:#fff; overflow:hidden }
     .fila-equipo .hdr{ display:flex; justify-content:space-between; align-items:center; padding:12px 12px }
     .fila-equipo .hdr .titulo{ font-weight:600 }
     .fila-equipo .body{ padding:12px; display:block }
@@ -46,7 +46,7 @@
 
     /* ===== Modales ===== */
     .overlay{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50 }
-    .modal{ background:#fff; padding:16px; border-radius:12px; min-width:320px; max-width:540px; border:1px solid var(--line) }
+    .modal{ background:#fff; padding:16px; border-radius:var(--radius-xl); min-width:320px; max-width:540px; border:1px solid var(--line) }
     .form-field{ display:flex; flex-direction:column; margin:10px 0 }
     .ayuda{ font-size:12px; color:#6b7280 }
 
@@ -175,7 +175,7 @@ label { color: #1f2937; }
 
 /* Franja lateral sutil (mejora reconocimiento visual) */
 #equiposWrap .fila-equipo::before{
-  content:""; position:absolute; inset:0 auto 0 0; width:6px; border-radius:12px 0 0 12px;
+  content:""; position:absolute; inset:0 auto 0 0; width:6px; border-radius:var(--radius-lg) 0 0 var(--radius-lg);
 }
 #equiposWrap .fila-equipo:nth-child(odd)::before  { background:#0ea5a3; } /* teal brand */
 #equiposWrap .fila-equipo:nth-child(even)::before { background:var(--accent-hover); } /* blue */
@@ -194,7 +194,7 @@ label { color: #1f2937; }
   color: var(--accent-hover); /* azul suave */
 }
 /* === Catálogo de piezas (modal) === */
-.cat-wrap { border:1px solid var(--line); border-radius:12px; padding:8px; background:#fff; max-height:320px; overflow:auto; }
+.cat-wrap { border:1px solid var(--line); border-radius:var(--radius-lg); padding:8px; background:#fff; max-height:320px; overflow:auto; }
 .cat-table table{ width:100%; border-collapse:collapse; background:#fff; }
 .cat-table th, .cat-table td{ border:1px solid var(--line); padding:6px; text-align:left; font-size:12px; }
 .cat-table th{ background:#f8fafc; position:sticky; top:0; z-index:1; }

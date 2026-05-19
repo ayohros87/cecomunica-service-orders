@@ -317,7 +317,7 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
 .equipos-empty {
   padding: 16px;
   border: 2px dashed #d1d5db;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   text-align: center;
   color: #9ca3af;
 }
@@ -335,7 +335,7 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
 
 .equipo-card {
   border: 2px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   padding: 14px;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -374,7 +374,7 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
 
 .equipo-status-badge {
   padding: 4px 8px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
@@ -413,7 +413,7 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
 
 .equipo-card-view { min-height: 44px; padding: 0 14px; }
 
-.trabajo-card { margin-top: 12px; border-radius: 12px; }
+.trabajo-card { margin-top: 12px; border-radius: var(--radius-lg); }
 
 .trabajo-card--ok {
   font-size: 13px;
@@ -960,7 +960,7 @@ tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e;
   border-spacing: 0;
   width: 100%;
   box-shadow: var(--shadow);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   table-layout: fixed;
 }
@@ -1296,7 +1296,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   /* Mobile card styling */
   .card-contrato {
     background: white;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     padding: 16px;
     margin-bottom: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -1492,7 +1492,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   .mh-filterBtn {
     min-width: 44px;
     min-height: 44px;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--line);
     background: #f8fafc;
     font-size: 18px;
@@ -1605,7 +1605,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
     width: 100%;
     padding: 12px;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     font-size: 15px;
     box-sizing: border-box;
   }
@@ -1641,7 +1641,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
     width: 100%;
     text-align: left;
     padding: 12px;
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--line);
     background: white;
     min-height: 44px;
@@ -1781,7 +1781,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   min-height: 160px;
   padding: 12px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   font-size: 15px;
   box-sizing: border-box;
 }
@@ -1838,7 +1838,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 .orden-expandida-card {
   background: white;
   margin: 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   border: 2px solid var(--accent);
   overflow: visible;
