@@ -4,7 +4,7 @@
 >
 > **Status (2026-05-15):** P0 + quick-wins + half-day batch + most of the one-day refactor shipped (commits `212f3af` through `10009fa`). What remains is in §13.
 >
-> **Sibling docs:** `ORDENES_INDEX_IMPROVEMENTS.md` covers the UX/architecture of the orders page (and includes the "Week 0 token bridge" that lands `--fg-*`, `--border-*`, `--sp-*`, `--radius-*`, `--ring-*` tokens — the bridge itself shipped here under commit `212f3af`). This doc is about the **CSS itself** — duplication, dead rules, hardcoded values, specificity, and structure.
+> **Sibling docs:** `OUTSTANDING.md` is the canonical roadmap (orders-page UX/architecture items live there now). The "Week 0 token bridge" that lands `--fg-*`, `--border-*`, `--sp-*`, `--radius-*`, `--ring-*` tokens shipped in commit `212f3af`. This doc is about the **CSS itself** — duplication, dead rules, hardcoded values, specificity, and structure.
 
 ---
 
@@ -29,7 +29,7 @@ table thead {
 }
 ```
 
-The comment admits it is an estimate. Any change to filter-card height (e.g., adding a chip bar per `ORDENES_INDEX_IMPROVEMENTS.md` §4.3) breaks this. Two fixes possible:
+The comment admits it is an estimate. Any change to filter-card height (e.g., the §4.3 chip bar that shipped in `CHANGELOG.md` batch 20) breaks this. Two fixes possible:
 
 - **A:** measure the filter card on resize, set `--filter-card-h` as a CSS custom property on `body`, and reference `top: var(--filter-card-h)`. ~20 min JS.
 - **B:** restructure so the filter card is `position: sticky` *outside* the table's scroll container and the thead is `top: 0` inside it. Requires HTML change.
@@ -120,7 +120,7 @@ Estimated saving: ~150 lines from `ordenes-index.css`, ~30 lines from `ceco-ui.c
 
 ## 4. Hardcoded values that should be tokens
 
-`ORDENES_INDEX_IMPROVEMENTS.md` "Week 0" already proposes the token bridge (`--fg-*`, `--border-*`, `--sp-*`, `--radius-*`, `--ring-*`, `--brand-soft/press`, `--status-*`). That ticket plus this section gives the full picture.
+The token bridge (`--fg-*`, `--border-*`, `--sp-*`, `--radius-*`, `--ring-*`, `--brand-soft/press`, `--status-*`) shipped in commit `212f3af`. Outstanding: the broader `px → --sp-*` migration across the file (~340 values) — tracked in `OUTSTANDING.md` §3.7.
 
 **Hex colors in `ordenes-index.css` to migrate** (~80 instances total):
 
@@ -214,7 +214,7 @@ CSS doesn't allow `var()` in `@media` queries — so this is documentation, not 
 
 ## 8. Accessibility
 
-Covered in `ORDENES_INDEX_IMPROVEMENTS.md` QW5–QW8 and QW16. CSS-specific additions:
+A11y QW items (QW5–QW8, QW16: ARIA on modals, table `<th scope>`, `aria-live` resumen, Enter/Space row expansion, `:focus-visible` ring) shipped — see `CHANGELOG.md`. CSS-specific additions:
 
 - Add `:focus-visible` styling globally:
   ```css
@@ -331,7 +331,7 @@ Lesson: the original audit's `grep` was too narrow. Whenever it claimed somethin
 
 `ordenes-index.css` was **fixable but neglected**. It absorbed every feature-branch's "just add a class" CSS for two years and the section labeling (J, K, L, M…) tells the story. The 2026-05-15 cleanup did not delete the feature-letter comments — that requires a coordinated pass that also touches JS class names — but the file gained proper section headers and dropped most of the duplicates, `!important` battles, and ID-as-styling-hook patterns.
 
-Neither file blocks any of the work in `ORDENES_INDEX_IMPROVEMENTS.md`.
+Neither file blocks any of the outstanding work tracked in `OUTSTANDING.md`.
 
 ---
 
@@ -342,7 +342,7 @@ Out of the original roadmap, the following are **not yet done**:
 - **Hardcoded brand-blue rgba migration** (§4) — ~5 instances of `rgba(59, 130, 246, *)` in `ordenes-index.css` that should derive from `--brand` via `color-mix()`. Touches: `.tipo-chip--*`, `.btn-flujo--asignar` colors. ~1 hr.
 - **Tipo-chip palette tokens** (§4) — `--tipo-chip-{reparacion,programacion,mantenimiento,venta}` not yet defined. The Cecomunica Design System publishes the values; needs a one-shot token addition + replacement.
 - **`transition: all 0.3s`** still appears in 4 places (different duration from `var(--transition)`). Not strictly wrong but inconsistent.
-- **Feature-letter comments** in `ordenes-index.css` (J, K, L, M, O, P, U, V, X, Y) — not stripped. Mostly cosmetic; doing it cleanly means touching the JS `feedback-*` class names too. Defer to the Phase-5g "kebab-case rename" pass referenced in `REFACTOR_STRATEGY.md`.
+- **Feature-letter comments** in `ordenes-index.css` (J, K, L, M, O, P, U, V, X, Y) — stripped in commit `591ef89` (bucket 3 of the §3.7 CSS cleanup). The JS `feedback-*` class names were not touched.
 - **Promoting toggle slider + filter-card patterns to `ceco-ui.css`** (§9.3) — generic enough to share across `contratos/`, `cotizaciones/`, etc. but no immediate need.
 - **Imprimir-contrato.html chip overrides** still use `!important` to fight `#chipEstado` (an ID-as-styling-hook). Same pattern as Bundle E2 — separate page, deferred.
 - **Loader-border rgba** at `ceco-ui.css:1001` still hardcoded — different semantic (soft spinner ring) so kept; could derive from `--brand` later.

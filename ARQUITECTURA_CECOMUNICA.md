@@ -1,7 +1,7 @@
 # Arquitectura del Sistema Cecomunica
 
 > **Estado:** post-refactor Phases 0–5f y modularización del backend (verificado 2026-05-14).
-> Para el plan de refactoring ver `REFACTOR_STRATEGY.md`.
+> Para el plan de trabajo pendiente ver `OUTSTANDING.md`.
 > Para el historial de cambios ver `CHANGELOG.md`.
 
 ---
@@ -178,7 +178,7 @@ El coordinador es delgado (≤ 110 líneas); cada módulo expone sus funciones p
 | `clientes-index.js` | `clientes/index.html` | Candidato a namespace (Phase 5g) |
 | `fotos-taller.js` | `ordenes/fotos-taller.html` | Candidato a namespace (Phase 5g) |
 | `editar-orden.js` | `ordenes/editar-orden.html` | Candidato a namespace (Phase 5g) |
-| Otros menores | varios | Ver `REFACTOR_STRATEGY.md` §5a–5g para inventario completo |
+| Otros menores | varios | Ver `OUTSTANDING.md` §2.8 (Phase 5g) para inventario pendiente |
 
 ---
 
@@ -247,7 +247,7 @@ Los campos `os_count`, `equipos_total`, `os_linked`, `os_serials_preview`, `os_h
 `ordenes_de_servicio/{id}.os_logs` es un array de auditoría escrito con `firebase.firestore.FieldValue.arrayUnion({ action, by })` cada vez que la orden cambia de estado.
 
 - **Quién escribe:** el frontend. `OrdenesService.assignTechnician`, `completeOrder` y la entrega (`ordenes-flujo.js` + `firmar-entrega.js`) anexan entradas para `ASIGNAR`, `COMPLETAR` y `ENTREGAR` respectivamente.
-- **Quién lee:** la línea de tiempo en la fila expandida (`ORDENES_INDEX_IMPROVEMENTS.md` §5.7). El timestamp se toma de los campos `fecha_*` dedicados ya que `arrayUnion` no admite `serverTimestamp()`; el `by` del array da el `uid` del autor.
+- **Quién lee:** la línea de tiempo en la fila expandida (audit-log timeline shipped en `CHANGELOG.md` batch 16). El timestamp se toma de los campos `fecha_*` dedicados ya que `arrayUnion` no admite `serverTimestamp()`; el `by` del array da el `uid` del autor.
 - **Forma:** `{ action: 'ENTREGAR' | 'ASIGNAR' | 'COMPLETAR' | …, by: <uid> }` — sin `ts` porque Firestore no permite `serverTimestamp()` dentro de `arrayUnion`. Si se requiere timestamp por entrada, migrar a una subcolección `ordenes_de_servicio/{id}/os_audit/{autoId}`.
 - **Límite:** Firestore tiene un cap de 1 MiB por documento. A ~50 bytes por entrada el techo práctico es ~20 000 acciones por orden — suficiente para el ciclo de vida típico pero a vigilar si en el futuro cada modificación de equipos se loguea aquí.
 
@@ -278,7 +278,7 @@ Al purgar una foto de ID, el CF también limpia `identificacion_url: null` en el
 
 ### 5.6 Búsqueda indexada de órdenes — `searchTokens`
 
-`ordenes_de_servicio/{id}.searchTokens` es un array de strings normalizados que habilita búsquedas via `where('searchTokens', 'array-contains-any', [...])` en lugar de un scan completo de la colección. Resuelve el problema de costo descrito en `ORDENES_INDEX_IMPROVEMENTS.md` §1.1.
+`ordenes_de_servicio/{id}.searchTokens` es un array de strings normalizados que habilita búsquedas via `where('searchTokens', 'array-contains-any', [...])` en lugar de un scan completo de la colección. Resuelve el problema de costo del scan client-side (ver `CHANGELOG.md` Tier 1 P0 §1.1).
 
 - **Quién escribe:** el Cloud Function `onOrdenWriteSearchTokens` (idempotente — compara tokens computados vs almacenados antes de escribir, evitando loop recursivo). Existing orders se siembran una sola vez via `functions/backfill-search-tokens.js`.
 - **Lógica de tokens:** ver `functions/src/lib/searchTokens.js` — orden ID + sus partes, palabras del cliente (≥2 chars), palabras del técnico (≥2 chars), palabras del tipo de servicio (≥3 chars), y serials de cada equipo más sus sufijos de 4–8 caracteres (para soportar "últimos 4 dígitos" típicos de techs). Cap de 200 tokens por documento.
