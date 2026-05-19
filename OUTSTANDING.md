@@ -4,7 +4,7 @@
 >
 > **How to read this:** every item below is open. If you see it here, it has not shipped. Items are grouped by area, ranked within each section by impact × cost. Effort estimates assume one person working uninterrupted.
 >
-> **Last refreshed:** 2026-05-19.
+> **Last refreshed:** 2026-05-19 · §4.1–4.4 shipped · §2 audited · §3.1 colors+radii shipped · §3.8 shipped.
 
 ---
 
@@ -21,21 +21,11 @@ What's still worth doing eventually: collapse the **two surviving cache-write pa
 
 ## 2. Frontend architecture
 
-### 2.1 Service layer is half-built
-`ordenesService.js` and `clientesService.js` exist and are used by `ordenes/index.html` only. **188 raw `db.collection(...)` calls across 40 files** bypass them. There is no contract service, inventario service, piezas service, PoC service, cotizaciones service, mailService write-path, or usuarios service used everywhere it should be.
+### ~~2.1 Service layer is half-built~~ ✅ shipped 2026-05-19
+All 11 services exist and are wired in: `contratosService`, `mailService`, `cotizacionesService`, `inventarioService`, `piezasService`, `pocService`, `usuariosService`, `ordenesService`, `clientesService`, `empresaService`, `modelosService`. Raw `db.collection()` calls in page scripts and HTML are now zero — only the service files themselves and `firebase-init.js` (auth init) use them directly. The two remaining raw reads in `verify/index.html` and `verificar-contrato.html` are single `verificaciones` reads on a public collection; they are tracked under §2.5.
 
-Order of priority based on traffic and write-risk:
-1. `contratosService.js` — biggest single win, touches the cache pipeline
-2. `mailService.js` write wrapper around `mail_queue.add(...)` — five callsites today, each composing HTML by string concat
-3. `cotizacionesService.js`
-4. `inventarioService.js` + `piezasService.js`
-5. `pocService.js`
-6. Read paths fold in as pages migrate
-
-After this lands, no HTML file or page script contains `db.collection("contratos"|"mail_queue"|...)`.
-
-### 2.2 Role enum is not centralized
-At least eight role names in active use (`administrador`, `vendedor`, `tecnico`, `tecnico_operativo`, `recepcion`, `vista`, `inventario`, `jefe_taller`) and possibly more (`readonly`, `gerente` referenced in security rules). The `ROLES` enum in `ordenes-state.js` is the most complete attempt but is used only inside the orders module. `OrdenesService` distinguishes `tecnico` vs `tecnico_operativo`; most other pages don't. Build one `js/core/roles.js` with a canonical enum + `can(action, role)` predicate, then migrate consumers.
+### ~~2.2 Role enum is not centralized~~ ✅ shipped 2026-05-19
+`public/js/core/roles.js` exists with the canonical `window.ROLES` enum (all 9 roles) and `window.canRole(rol, accion)` predicate backed by a full `_PERMISOS` map. Pages load it via `<script src="/js/core/roles.js">` before their module scripts.
 
 ### 2.3 Compat → modular Firebase SDK
 ~900 KB of Firebase compat shipped today. Modular SDK + tree-shaking + a Vite/esbuild build would cut to ~250 KB. Real refactor (every `firebase.X()` call changes), but the service layer is the natural seam. **Do this only when a build step is being added for another reason.** Don't introduce a build step just for this.
@@ -46,21 +36,21 @@ Firestore SDK's `enablePersistence()` is wired in `firebase-init.js`. Verify it 
 ### 2.5 Public verification page uses authenticated init
 `verify/index.html` is supposed to work without login (the whole reason `verificaciones` has `allow read: if true`). But it loads `firebase-init.js` which calls `setPersistence(LOCAL)` and `enablePersistence`. It doesn't call the auth check, so it won't redirect — but unrelated browser-storage failures (Safari ITP, third-party cookie blocks) still affect a public page that has no need for auth. Fix: extract a minimal `firebase-public.js` for the verify page that initializes only Firestore.
 
-### 2.6 Duplicate `verify/firebase-init.js`
-`public/verify/firebase-init.js` is a byte-for-byte clone of `public/js/firebase-init.js`, but `verify/index.html` loads the absolute path `/js/firebase-init.js`. The duplicate is dead — delete it.
+### ~~2.6 Duplicate `verify/firebase-init.js`~~ ✅ shipped 2026-05-19
+`public/verify/firebase-init.js` deleted. `verify/index.html` correctly loads `/js/firebase-init.js`.
 
-### 2.7 Migration tools live in `public/`
-`public/contratos/migrar-contratos.html`, `migrar-cliente-nombre-lower.html`, `public/ordenes/migrar-fechas.html`, `public/clientes/fix-deleted-clientes.html` are deployed alongside the production app. Anyone with a session and the URL can run them. They perform bulk writes. Move to `tools/` outside `public/` (add to `firebase.json` `hosting.ignore`) so they still run locally for admins who need them.
+### ~~2.7 Migration tools live in `public/`~~ ✅ shipped 2026-05-19
+All migration tools are in `public/tools/` and `firebase.json` `hosting.ignore` already includes `"tools/**"`. They are excluded from the deployed bundle.
 
 ### 2.8 Phase 5g — finish script decomposition
 Page scripts that haven't been split into namespace files yet (lower priority since they're already <800 lines):
 
 | File | Lines | Notes |
 |---|---:|---|
-| `piezas.js` | ~747 | Good candidate for `window.Piezas` |
-| `clientes-index.js` | ~628 | Still global functions |
-| `fotos-taller.js` | ~535 | Still global functions |
-| `editar-orden.js` | ~471 | Still global functions |
+| `piezas.js` | 740 | Good candidate for `window.Piezas` |
+| `clientes-index.js` | 552 | Still global functions |
+| `fotos-taller.js` | 526 | Still global functions |
+| `editar-orden.js` | 424 | Still global functions |
 
 Plus HTML pages still carrying >300 lines of inline script (Tier 1 from Phase 5a): `clientes/index.html`, `ordenes/editar-orden.html`, `cotizaciones/editar-cotizacion.html`, `contratos/imprimir-contrato.html`, `ordenes/nueva-orden.html`, `ordenes/agregar-equipo.html`, `inventario/index.html`, `cotizaciones/nueva-cotizacion.html`, `inventario/modelos.html`.
 
@@ -74,12 +64,14 @@ The bug class hit four times so far: page-local code calls a service whose `<scr
 
 ## 3. CSS / design system
 
-### 3.1 Token enforcement across pages (Phase 1)
-Inline `<style>` blocks in 42 of 42 pages redeclare global rules. 14 files use hard-coded blues (`#3b82f6`, `#2563eb`) instead of `var(--brand)`. 23 files use off-spec border-radius (12/16/20 px). Plan:
-- Replace hardcoded color values: `#3b82f6` → `var(--brand)`, `#1e3a8a` → `var(--navy)`, `#0f172a` → `var(--text)`, `#64748b` → `var(--muted)`, `#e2e8f0` → `var(--line)`.
-- Correct radii inline: buttons/inputs → 6px, cards → 10px, modals → 16px.
-- Delete inline `<style>` blocks that just redeclare `ceco-ui.css` rules.
-- One PR per directory.
+### 3.1 Token enforcement across pages (Phase 1) — *mostly shipped 2026-05-19*
+
+Hardcoded colors + off-spec radii — **shipped** in commits `2bb2de8`, `12393ab`, `61b1782`:
+- **Colors:** 14 Tailwind-blue / cool-gray hex codes replaced with semantic tokens across 19 files. New token family added to `ceco-ui.css`: `--accent` / `--accent-hover` / `--accent-press` / `--accent-soft` / `--accent-soft-hov` / `--accent-soft-strong` / `--accent-line` / `--navy-hover` / `--navy-deep`. The Tailwind-violet-blue family was the original anchor — the migration intentionally shifts those surfaces to CeComunica cyan (`#0091D7`) so the app matches the design system.
+- **`--brand` semantics flipped (Phase C):** `--brand` now resolves to corporate navy `#0B2A47` and `--accent` carries the interactive cyan, matching the design-system tokens file. Backward-compat aliases (`--brand-hover`, `--brand-2`) remain pointing to navy. Visual diff at flip time was zero because every production callsite was already on `var(--accent)`.
+- **Radii:** 50+ hand-written values snapped to the token scale. Cards now use `--radius-lg` (10px), modals `--radius-xl` (16px), badges/pills `--radius-pill`.
+
+**Still open:** delete inline `<style>` blocks that simply redeclare base rules. Audit revealed 18 files extend `.btn.primary` / `.btn.secondary` / `.badge` etc. — but they're not pure redeclarations, they're *page-specific overrides* (custom gradients, secondary palettes, badge variants). Removing them safely requires a design call: should the "gradient primary button" become canonical in `ceco-ui.css`, or stay per-page? Defer to a focused pass when the topbar/layout work (§3.2) lands and the canonical button styles get revisited anyway.
 
 ### 3.2 Shared topbar/layout (Phase 2)
 Topbar is copy-pasted with subtle variations across 13 pages. Plan: `public/js/core/layout.js` exporting `Layout.renderTopbar({ title, actions, showHome })`. Replace every hand-written `<div class="topbar">…</div>` with a mount div + `Layout.renderTopbar()` call. Apply the same pattern to empty-state, skeleton-row, and "Cargar más" footer.
@@ -141,26 +133,28 @@ The 2026-05-19 cleanup shipped 4,362 → 3,315 lines but left:
 - **`@media (max-width:768px)` deep merge** — ~150–200 lines reclaimable from the two big blocks at lines ~1260 and ~2615. Needs a DevTools cascade audit at 760/770/1024 — not safe mechanically.
 - **`px → --sp-*` migration** — ~340 values match the spacing scale exactly. No line-count payoff; do as a focused pass when adding new spacing tokens or theming.
 
-### 3.8 Email template branding mismatch
-`functions/templates/email-base.html` uses teal `#0ea5a3` brand color throughout (header background, button color, footer link color) while the rest of the app uses Cecomunica blue `#0091D7` (`--brand`). Worth aligning if brand consistency in emails matters.
+### ~~3.8 Email template branding mismatch~~ ✅ shipped 2026-05-19
+`functions/templates/email-base.html` updated in commit `859d67b` — header band, CTA button (HTML + VML), button-hover state, dark-mode header/button overrides, and footer link colour all swapped from teal `#0ea5a3` to CeComunica brand cyan `#0091D7`.
 
 ---
 
 ## 4. UX polish
 
-### 4.1 Mobile tooltip equivalent
-Tooltips work on hover only. Long-press should show the tooltip on touch. Small effort.
+~~### 4.1 Mobile tooltip equivalent~~
+~~Tooltips work on hover only. Long-press should show the tooltip on touch. Small effort.~~
+**Shipped 2026-05-19** — `_initTouchTooltips()` in `ordenes-index.js`. 500 ms hold on any `[title]` element shows a floating tooltip; dismissed on `touchend`/`touchmove`/`touchcancel`.
 
-### 4.2 Keyboard shortcut palette
-Ctrl+K focuses search; `?` opens a cheatsheet (filters, navigation, common actions). Power-user feature — admins and recepción will use it daily.
+~~### 4.2 Keyboard shortcut palette~~
+~~Ctrl+K focuses search; `?` opens a cheatsheet (filters, navigation, common actions). Power-user feature — admins and recepción will use it daily.~~
+**Shipped 2026-05-19** — `?` key (non-input context) opens `_showShortcutsModal()` in `ordenes-index.js`. Modal lists Ctrl+K, ?, Esc, Enter shortcuts with `<kbd>` styling. Ctrl+K was already wired; Esc now checks for the shortcut modal before other overlays.
 
-### 4.3 Live counters in the topbar (`§5.3`)
-Replace "Resumen: 152 · Todos" button text with a small live badge cluster (POR ASIGNAR / ASIGNADO / COMPLETADO / ENTREGADO with counts). Counts are already live in the chip bar after the §4.3 redesign; topbar version is a 30-min wiring exercise.
+~~### 4.3 Live counters in the topbar (`§5.3`)~~
+~~Replace "Resumen: 152 · Todos" button text with a small live badge cluster (POR ASIGNAR / ASIGNADO / COMPLETADO / ENTREGADO with counts). Counts are already live in the chip bar after the §4.3 redesign; topbar version is a 30-min wiring exercise.~~
+**Shipped 2026-05-19** — `#topbarBadges` cluster added to `ordenes/index.html` topbar. `actualizarResumen` in `ordenes-render.js` now also updates `#tbPorAsignar` / `#tbAsignado` / `#tbCompletado` / `#tbEntregado`. Hidden at `≤900 px`. Clicking any badge triggers the existing `filtrar-badge` action.
 
-### 4.4 Serial-first scan workflow (`§5.6`)
-Most common workflow: tech scans a serial. Add:
-- Auto-focus the search input on page load when no filter is active.
-- "Scan" button next to search that opens the device camera (BarcodeDetector API, Chrome on Android). Reads the serial straight into the search field. Minimal effort, big value for techs.
+~~### 4.4 Serial-first scan workflow (`§5.6`)~~
+~~Most common workflow: tech scans a serial. Add auto-focus the search input on page load when no filter is active. "Scan" button next to search that opens the device camera (BarcodeDetector API, Chrome on Android). Reads the serial straight into the search field. Minimal effort, big value for techs.~~
+**Shipped 2026-05-19** — `_autofocusSearchIfIdle()` focuses `#filtroRapido` 300 ms after initial data render when no URL filter params are present. `#btnScanSerial` (hidden by default) revealed when `'BarcodeDetector' in window`; `_scanSerial()` opens a fullscreen camera overlay, reads on first barcode hit, inserts into `#filtroRapido`, and calls `filtrarRapido()`.
 
 ### 4.5 Customer-facing PII retention notice
 The `purgePIIRetention` CF is in place (manual-only) and clears `identificacion_url` after 90 days. Still missing: a customer-visible doc that ID photos are stored and may be deleted on request. Required if regulated-sector clients (ports, government) ever ask. Coordinate with whoever writes legal/customer comms.
