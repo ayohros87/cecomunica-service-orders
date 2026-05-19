@@ -26,7 +26,7 @@ body {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   margin-top: 12px;
 }
 
@@ -81,7 +81,7 @@ body {
 .table-scroll-hint {
   margin-top: 8px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--muted);
 }
 
 /* Unified Buttons */
@@ -115,7 +115,7 @@ body {
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   margin-bottom: 16px;
 }
 
@@ -138,17 +138,17 @@ body {
   padding: 6px 14px;
   border-radius: 999px;
   background: #e8eef5;
-  color: #64748b;
+  color: var(--muted);
   font-weight: 500;
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
   border: 1px solid #cbd5e1;
 }
 
 .stepper .step.active {
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   color: white;
   box-shadow: 0 4px 12px rgba(0, 145, 215, 0.35);
-  border: 1px solid var(--brand);
+  border: 1px solid var(--accent);
 }
 
 /* Section Headers */
@@ -159,10 +159,10 @@ body {
   margin: 20px 0 12px 0;
   padding: 12px 16px;
   background: #f8fafc;
-  border-left: 4px solid var(--brand);
+  border-left: 4px solid var(--accent);
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  border-left: 4px solid var(--brand);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
   box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
@@ -189,7 +189,7 @@ body {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   margin-top: 12px;
 }
 
@@ -243,7 +243,7 @@ body {
 
 .btn.ghost:hover {
   background: #f1f5f9;
-  border-color: var(--brand);
+  border-color: var(--accent);
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
@@ -260,7 +260,7 @@ body {
 .form-field select:focus,
 .form-field textarea:focus {
   background: white;
-  border-color: var(--brand);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
   outline: none;
 }
@@ -276,7 +276,7 @@ body {
 /* Section shell to match table sections */
 .section-shell {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
   padding: 16px;
@@ -296,7 +296,7 @@ body {
 
 /* Button hierarchy */
 .btn.primary {
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   color: #fff;
 }
 
@@ -308,7 +308,7 @@ body {
 }
 
 .btn.secondary:hover {
-  background: #e2e8f0;
+  background: var(--line);
 }
 
 .btn.export {
@@ -323,7 +323,7 @@ body {
   left: 0;
   right: 0;
   background: #fff;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 8px 20px rgba(0,0,0,0.08);
   padding: 6px;
@@ -353,7 +353,7 @@ body {
 
 .table-input:focus,
 .table-select:focus {
-  border-color: var(--brand);
+  border-color: var(--accent);
   background: #f0f7ff;
   outline: none;
   box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
@@ -370,7 +370,7 @@ body {
     <div>
       <h1><i data-lucide="package"></i> Ingreso de Equipos PoC — Vendedores</h1>
       <div style="margin-top: 4px;">
-        <span style="font-size: 13px; color: #64748b; font-weight: 500;">Flujo:</span>
+        <span style="font-size: 13px; color: var(--muted); font-weight: 500;">Flujo:</span>
         <span class="stepper">
           <span class="step active" id="step-prep">Preparar</span>
           <span class="step" id="step-rev">Revisar</span>

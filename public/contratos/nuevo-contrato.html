@@ -37,7 +37,7 @@
   gap: 12px;
   padding: 16px 20px;
   background: #f8fafc;
-  border-left: 4px solid var(--brand);
+  border-left: 4px solid var(--accent);
   border-radius: 8px 8px 0 0;
   margin-bottom: 0;
 }
@@ -55,7 +55,7 @@
   background: #f8fafc;
   border-radius: 6px;
   margin-bottom: 12px;
-  border-left: 3px solid var(--brand);
+  border-left: 3px solid var(--accent);
 }
 
 .section-header.simple h3 {
@@ -97,13 +97,13 @@
 }
 
 .badge.info {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--accent-soft-hov);
+  color: var(--navy);
 }
 
 /* Button Hierarchy */
 .btn.primary {
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-hover) 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   color: white;
   border: none;
   font-weight: 600;
@@ -111,7 +111,7 @@
 }
 
 .btn.primary:hover {
-  background: linear-gradient(135deg, var(--brand-hover) 0%, var(--brand-2) 100%);
+  background: linear-gradient(135deg, var(--accent-hover) 0%, var(--accent-press) 100%);
   box-shadow: 0 2px 6px rgba(0, 145, 215, 0.35);
 }
 
@@ -184,7 +184,7 @@
 
 @keyframes highlightRow {
   0%, 100% { background: #f8fafc; }
-  50% { background: #dbeafe; }
+  50% { background: var(--accent-soft-hov); }
 }
 
 #tablaEquipos tbody td {
@@ -206,8 +206,8 @@
 #tablaEquipos input:focus,
 #tablaEquipos select:focus {
   outline: none;
-  border-color: var(--brand);
-  background: #eff6ff;
+  border-color: var(--accent);
+  background: var(--accent-soft);
   box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
 }
 
@@ -284,7 +284,7 @@
 
 .totals-row select:focus {
   outline: none;
-  border-color: var(--brand);
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
 }
 
@@ -390,8 +390,8 @@
 }
 
 .combo-item.active {
-  background: #eff6ff;
-  border-left: 3px solid var(--brand);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
 }
 
 .combo-sub {
@@ -432,7 +432,7 @@
 
 .toast {
   background: white;
-  border-left: 4px solid var(--brand);
+  border-left: 4px solid var(--accent);
   border-radius: 8px;
   padding: 16px 20px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -467,7 +467,7 @@
 }
 
 .toast.info {
-  border-left-color: var(--brand);
+  border-left-color: var(--accent);
 }
 
 .toast-icon {
@@ -511,7 +511,7 @@
   margin-top: 12px;
   padding: 12px 16px;
   background: #f8fafc;
-  border-left: 3px solid var(--brand);
+  border-left: 3px solid var(--accent);
   border-radius: 6px;
   font-size: 14px;
   line-height: 1.8;
@@ -523,8 +523,8 @@
 }
 
 .renovacion-mode-box {
-  background: #eff6ff;
-  border: 2px solid var(--brand);
+  background: var(--accent-soft);
+  border: 2px solid var(--accent);
   border-radius: 10px;
   padding: 14px 16px;
 }
@@ -561,7 +561,7 @@
 .renovacion-suboption {
   margin-top: 10px;
   padding: 10px 12px;
-  border: 1px dashed #93c5fd;
+  border: 1px dashed var(--accent-line);
   border-radius: 8px;
   background: #f8fbff;
 }

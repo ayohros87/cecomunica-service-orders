@@ -165,7 +165,7 @@ window.NCGuardar = {
         `<li>${e.modelo} – ${e.cantidad} × $${Number(e.precio || 0).toFixed(2)}</li>`
       ).join('');
       const renovacionBanner = contrato.accion === 'Renovación'
-        ? `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #2563eb;border-radius:10px;background:#eff6ff;font:700 15px Arial,sans-serif;color:#1e3a8a;">Modalidad de renovación: ${contrato.renovacion_sin_equipo ? 'RENOVACIÓN SIN EQUIPO' : 'RENOVACIÓN CON EQUIPO'}</div>`
+        ? `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #0074AC;border-radius:10px;background:#E6F4FB;font:700 15px Arial,sans-serif;color:#0B2A47;">Modalidad de renovación: ${contrato.renovacion_sin_equipo ? 'RENOVACIÓN SIN EQUIPO' : 'RENOVACIÓN CON EQUIPO'}</div>`
         : '';
       const obsEsc = (contrato.observaciones || '-').replace(/[<>&]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]));
 
