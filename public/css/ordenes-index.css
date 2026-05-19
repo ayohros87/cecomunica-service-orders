@@ -1062,8 +1062,9 @@ tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e;
   50% { opacity: 0.6; }
 }
 
-/* Improved row expansion */
-tr.activo { background: #eff6ff; }
+/* tr.activo styling lives in the §J-O "MEJORAS VISUALES" block below
+   (uses !important + box-shadow). The duplicate that used to be here
+   was clobbered by the cascade. */
 
 .flecha {
   display: inline-block;
@@ -1785,10 +1786,10 @@ tr.activo .flecha { color: var(--brand); transform: rotate(90deg); }
 /* Hide initially */
 .hidden { display: none !important; }
 /* ========================================
-   J-O) MEJORAS VISUALES: ÓRDENES EXPANDIDAS
+   MEJORAS VISUALES: ÓRDENES EXPANDIDAS
    ======================================== */
 
-/* O) Modo foco - Orden expandida destacada */
+/* Modo foco - Orden expandida destacada */
 tr.activo {
   background: #f0f9ff !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
@@ -1798,7 +1799,7 @@ tr.activo {
 
 tr.activo:hover { background: #f0f9ff !important; }
 
-/* J) Wrapper de orden expandida con separación clara */
+/* Wrapper de orden expandida con separación clara */
 .orden-expandida-wrapper {
   background: #f8fafc !important;
   padding: 0 !important;
@@ -1818,7 +1819,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   z-index: 21;
 }
 
-/* J) Header compacto con info de orden */
+/* Header compacto con info de orden */
 .orden-header-compacto {
   background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
   padding: 12px 16px;
@@ -1970,10 +1971,10 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 .cliente-nombre, .tecnico-nombre { color: #1e40af; }
 
-/* N) Barra de acciones de equipos - OCULTA (movida al header) */
+/* Barra de acciones de equipos - OCULTA (movida al header) */
 .equipos-actions-bar { display: none; }
 
-/* K) Tabla de equipos - Menor densidad */
+/* Tabla de equipos - Menor densidad */
 .equipos-table {
   width: 100%;
   border-collapse: separate;
@@ -2040,14 +2041,14 @@ tr.activo:hover { background: #f0f9ff !important; }
   max-width: 100%;
 }
 
-/* K) Información primaria destacada */
+/* Información primaria destacada */
 .valor-primario {
   font-weight: 600;
   color: #1e293b;
   font-size: 15px;
 }
 
-/* L) Intervención como señal crítica */
+/* Intervención como señal crítica */
 .intervencion-badge { display: inline-block; }
 
 .intervencion-stack {
@@ -2150,7 +2151,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   background: linear-gradient(90deg, rgba(254, 226, 226, 0.7) 0%, rgba(255, 255, 255, 0.8) 60%);
 }
 
-/* K) Accesorios con menor peso visual */
+/* Accesorios con menor peso visual */
 
 /* Leyenda de accesorios (solo desktop) */
 /* Popover de leyenda de accesorios */
@@ -2394,7 +2395,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   opacity: 0.7;
 }
 
-/* M) Acciones destructivas con menor peso visual */
+/* Acciones destructivas con menor peso visual */
 .btn-eliminar-equipo {
   background: transparent;
   border: 1px solid transparent;
@@ -2424,10 +2425,10 @@ tr.activo:hover { background: #f0f9ff !important; }
 }
 
 /* ========================================
-   P-T) MEJORAS ADICIONALES: PROGRESO, FEEDBACK, COMPLETITUD
+   MEJORAS ADICIONALES: PROGRESO, FEEDBACK, COMPLETITUD
    ======================================== */
 
-/* S) Barra de acciones de ORDEN */
+/* Barra de acciones de ORDEN */
 .orden-actions-bar {
   display: flex;
   align-items: center;
@@ -2469,7 +2470,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   font-style: italic;
 }
 
-/* P) Progreso de intervenciones */
+/* Progreso de intervenciones */
 .equipos-header-group {
   display: flex;
   align-items: center;
@@ -2528,7 +2529,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 .progreso-intervenciones.vacio { border-color: #e2e8f0; background: #f8fafc; }
 
-/* P) Estado de intervención más claro */
+/* Estado de intervención más claro */
 .intervencion-badge.pendiente .btn-intervencion {
   background: white;
   color: #d97706;
@@ -2548,7 +2549,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   50% { box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.1); }
 }
 
-/* R) Accesorios - Completitud visual */
+/* Accesorios - Completitud visual */
 .accesorios-wrapper {
   display: flex;
   align-items: center;
@@ -2581,14 +2582,10 @@ tr.activo:hover { background: #f0f9ff !important; }
   color: #065f46;
   border: 1px solid #10b981;
 }
+/* .incompleto .completitud-badge is set further down (amber) — the
+   red palette that used to live here was always being overridden. */
 
-.accesorios-wrapper.incompleto .completitud-badge {
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #f87171;
-}
-
-/* Q) Feedback visual inmediato */
+/* Feedback visual inmediato */
 @keyframes highlight-success {
   0% { background: #d1fae5; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
   50% { background: #a7f3d0; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
@@ -2605,7 +2602,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 .equipo-row.feedback-update { animation: highlight-update 1.2s ease; }
 
-/* T) Reglas para mobile */
+/* Reglas para mobile */
 @media (max-width: 768px) {
   /* Orden expandida más compacta */
   .orden-expandida-card { margin: 8px; }
@@ -2636,7 +2633,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   .orden-actions-group button,
   .equipos-actions-group button { width: 100%; justify-content: center; }
   
-  /* T) Tabla de equipos - Priorizar info primaria */
+  /* Tabla de equipos - Priorizar info primaria */
   .equipos-table { display: block; overflow-x: auto; }
   
   .equipos-table thead { display: none; }
@@ -2656,7 +2653,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   
   .equipos-table td { display: block; padding: 0; }
   
-  /* T) Prioridad: Serie, Modelo, Intervención */
+  /* Prioridad: Serie, Modelo, Intervención */
   .col-serie { grid-column: 1 / 2; }
   
   .col-serie::before {
@@ -2693,7 +2690,7 @@ tr.activo:hover { background: #f0f9ff !important; }
     margin-bottom: 4px;
   }
   
-  /* T) Accesorios y Observaciones colapsados por defecto */
+  /* Accesorios y Observaciones colapsados por defecto */
   .col-accesorios,
   .col-observaciones { display: none; }
   
@@ -2742,10 +2739,10 @@ tr.activo:hover { background: #f0f9ff !important; }
 }
 
 /* ========================================
-   U-Y) CONTEXTO Y CONSISTENCIA VISUAL
+   CONTEXTO Y CONSISTENCIA VISUAL
    ======================================== */
 
-/* U) Badge de contradicción */
+/* Badge de contradicción */
 .contradiccion-badge {
   display: inline-flex;
   align-items: center;
@@ -2766,7 +2763,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 .contradiccion-badge .badge-icon { font-size: 11px; opacity: 0.7; }
 
-/* V) Contexto adaptativo para intervenciones */
+/* Contexto adaptativo para intervenciones */
 .intervencion-badge.pendiente.historico .btn-intervencion {
   background: #f1f5f9;
   color: #64748b;
@@ -2783,12 +2780,12 @@ tr.activo:hover { background: #f0f9ff !important; }
   animation: pulse-warning 2s infinite;
 }
 
-/* V) Contexto visual en filas de equipos */
+/* Contexto visual en filas de equipos */
 .equipo-row.contexto-historico { opacity: 0.85; }
 
 .equipo-row.contexto-activo { opacity: 1; }
 
-/* W) Orden cerrada - Reducir peso visual */
+/* Orden cerrada - Reducir peso visual */
 .orden-expandida-card.orden-cerrada { border-color: #94a3b8; }
 
 .orden-expandida-card.orden-cerrada .orden-header-compacto {
@@ -2798,12 +2795,12 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 .orden-expandida-card.orden-cerrada .orden-info-resumen { color: #475569; }
 
-/* V) Contexto en progreso de intervenciones */
+/* Contexto en progreso de intervenciones */
 .progreso-intervenciones.contexto-historico { opacity: 0.75; border-color: #cbd5e1; }
 
 .progreso-intervenciones.contexto-activo { opacity: 1; }
 
-/* Y) Resumen operativo */
+/* Resumen operativo */
 .resumen-operativo {
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-top: 2px solid #cbd5e1;
@@ -2851,7 +2848,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   color: #1e293b;
 }
 
-/* Y) Estados en resumen */
+/* Estados en resumen */
 .resumen-item.completo { border-color: #10b981; background: #d1fae5; }
 
 .resumen-item.completo .valor { color: #065f46; }
@@ -2860,17 +2857,14 @@ tr.activo:hover { background: #f0f9ff !important; }
 
 .resumen-item.incompleto .valor { color: #92400e; }
 
-/* X) Accesorios - Gradación de estados */
+/* Accesorios - gradación de estados.
+   Note: the original block here re-declared .completo / .incompleto
+   .completitud-badge with the same values (completo) or amber
+   (incompleto). The .incompleto one was clobbering the red default
+   above; we keep the amber override here because that's the
+   shipped behavior. */
 .completitud-badge { transition: var(--transition); }
 
-/* 5/5 - Completo */
-.accesorios-wrapper.completo .completitud-badge {
-  background: #d1fae5;
-  color: #065f46;
-  border: 1px solid #10b981;
-}
-
-/* 4/5 - Casi completo */
 .accesorios-wrapper.incompleto .completitud-badge {
   background: #fef3c7;
   color: #92400e;
