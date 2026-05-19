@@ -6,12 +6,12 @@
 > - **Tier 1 P0 (§1.1, §1.2, §1.3, §3a.2) — shipped.** See `CHANGELOG.md` commits `2700b61`, `8d71a93`, `07cdae7`, `8b0ade6`. Search cost dropped from O(collection) to O(matches); `cargarClientes` removed; mobile/desktop layouts no longer both render; `storage.rules` in the repo.
 > - **Tier 2 quick wins (QW1–QW16) — shipped.** All sixteen items either landed or noted as already-resolved. Commits `69d685a` (QW1–8 + 12–13 + 16 batches), `95c933a` (QW10, QW15), `76b9b00` (QW9), `51c7071` (QW4, QW5), `a65ae7d` (QW11), `d0ed77f` (QW14).
 > - **§3a entrega-flow** — mostly shipped: §3a.4 (email XSS), §3a.5 (retina canvas), §3a.6 (ID compression), §3a.9 (`os_logs` docs), §3a.10 (dup timestamps), §3a.11 (entrega → `Modal.open`), §3a.3 (PII retention CF, **manual-only**), §3a.12 (server-side email render). §3a.7 (SVG signature) **not pursuing**. §3a.8 (entrega split) — defer until next entrega feature.
-> - **Tier 3 architecture** — open: §3.1 (`onSnapshot` live updates), §3.2 (modular Firebase SDK, gated on build step), §3.3 (`enablePersistence` verify), §3.5 already done in commit `8a4de2b`. §3.4 (page-size by role) shipped in `69d685a`. §3.6 (`cambiarOrden` bug) shipped in `69d685a`.
+> - **Tier 3 architecture** — open: §3.2 (modular Firebase SDK, gated on build step), §3.3 (`enablePersistence` verify). §3.1 (`onSnapshot` live updates) shipped batch 15. §3.4 (page-size by role) shipped in `69d685a`. §3.5 already done in `8a4de2b`. §3.6 (`cambiarOrden` bug) shipped in `69d685a`. **§3.7 (CSS cleanup) — shipped 2026-05-19 in commits `ce20349 → 1a15a08`; 4,362 → 3,315 lines (-24%).**
 > - **Tier 4 UX overhaul (§4.x, §5.x)** — §4.2 (card-style row), §4.3 (chip filter bar), §4.4 (typography hierarchy) shipped 2026-05-18. Remaining: §4.1 (other "outdated" items), §5.3, §5.6, §5.7 (timeline already done).
 >
 > **Earlier CSS-only work:** the `212f3af` token-bridge commit and follow-ups documented in `CSS_IMPROVEMENTS.md` §10.
 >
-> **Last refreshed:** 2026-05-18.
+> **Last refreshed:** 2026-05-19.
 
 ---
 
@@ -128,9 +128,46 @@ Currently 50 fixed. Admin browses sequentially; técnico opens to their assigned
 
 `document.getElementById("APP.state.sortField")` — literal-string ID lookup that can never match. The function throws on any call. Either it is never called (delete it) or someone is silently catching the error. Check for a sort-field `<select>` in the HTML; if none, delete.
 
-### 3.7 `ordenes-index.css` cleanup — *plan written 2026-05-18*
+### 3.7 `ordenes-index.css` cleanup — *shipped 2026-05-19*
 
-**Baseline after the §4.2–§4.4 redesign**: 4,362 lines (up from 3,534 at original write; the redesign added ~330 lines of legit content). 360 hex literals, 817 `px` values, 716 single-`}` terminators, 42 modal rules, 21 `.overflow-menu-*` rules that partially duplicate `ceco-ui.css`.
+> **Result**: 4,362 → 3,315 lines (–1,047, –24%). All seven buckets executed in the planned order. Two buckets (3, 6) hit smaller-than-estimated yields because the duplication the original audit anticipated was mostly cascade layers, not redundant rules. Bucket 4 morphed from migration to fallback-drop because the §4.2–§4.4 redesign had already written `var(--token, #hex)` defensively — those fallbacks are now gone. The 1,047-line drop matches the lower end of the original 1,500–1,700 estimate; the gap is mostly Bucket 3's missing 250 lines, recoverable in a future focused refactor.
+>
+> | Bucket | Commit | Lines saved | Notes |
+> |---|---|---:|---|
+> | 5 — formatting collapse | `ce20349` | –542 | 135 single-decl + 91 two-decl rules onto one line. |
+> | 2 — dead CSS sweep | `46ec4cb` | –184 | `.toast--*`, `.btn-wrap`, `.alert-modal-*`, `.resumen-chips`, `.card-contrato .t1/.t2/.estado`. |
+> | 1 — modal extraction | `335d1b0` | –312 | `.notas-modal`, `.text-modal-*`, `.overflow-menu-*` moved to `ceco-ui.css` (+211 there). |
+> | 6 — mobile/desktop dedupe | `0b63a9a` | –3 | Standalone 5-line `@media` blocks merged. Cross-cascade merge skipped (too risky). |
+> | 3 — letter consolidation | `591ef89` | –6 | 4 dead-cascade duplicates removed; 22 letter-prefix labels stripped. |
+> | 4 — token fallback drop | `1a15a08` | 0 lines (–303 B) | 43 `var(--token, #hex)` → `var(--token)`. `px → --sp-*` deferred. |
+>
+> **Post-cleanup file landscape**:
+>
+> ```
+> admin-equipos-cliente.css  →     91 lines
+> print-base.css             →    136 lines
+> ceco-ui.css                →  1,350 lines  (+211 from bucket 1)
+> ordenes-index.css          →  3,315 lines  (-1,047 from baseline)
+> ```
+>
+> **Decisions / things to know for the next reader**:
+> - **Toast styling**: lives in `ceco-ui.css` (`.toast / .toast.ok / .toast.bad / .toast.warn`) matching the `Toast.show` API. Removed BEM `.toast--show / --hide` from this file — they had no callers and the unscoped `.toast` was setting `opacity: 0` with no recovery (latent visibility bug).
+> - **Modal primitives**: `.notas-modal` (used by `gestionarNotasTecnicas`) and `.text-modal-*` (used by `showTextModal`) live in `ceco-ui.css` now. Page-specific extensions stay here.
+> - **Overflow-menu**: `.show` and `.open` toggle classes both supported in `ceco-ui.css` since ordenes and `layout.js` menus use different conventions. `.overflow-menu-btn`, `.disabled`, `.highlighted` modifiers also live shared.
+> - **Cascade-clobbered rules removed**: `tr.activo { background: #eff6ff }`, redundant `.accesorios-wrapper.{completo,incompleto} .completitud-badge` blocks, `.accesorios-wrapper.incompleto::before { animation: pulse-warning 2s }`. The amber `.incompleto` palette is the shipped behavior — the original red was always overridden.
+> - **Token fallbacks dropped**: every `var(--token, #hex)` defensive pair was rewritten to `var(--token)`. The token system is reliable; the fallbacks were dead padding.
+> - **Letter-coded section headers stripped**: `/* J) Wrapper ... */` → `/* Wrapper ... */`, etc. Refactor archaeology that no longer maps to anything.
+>
+> **What's still open** (left for follow-up):
+> - **Bucket 3 deeper consolidation** (~250 lines remaining headroom). The two big `@media (max-width: 768px)` blocks at lines ~1260 and ~2615 contain different concerns but share many selector families. A careful merge would land another 100–200 lines but needs a DevTools-driven cascade audit, not a mechanical edit.
+> - **Bucket 4 `px → --sp-*` migration**. ~340 px values match the `--sp-*` scale exactly. No line-count payoff; do as a focused pass when adding new spacing tokens.
+> - **Two big `@media (max-width: 768px)` blocks** stay separate (cascade-dependent merge avoided).
+
+---
+
+#### Original baseline (kept for reference)
+
+**Baseline before cleanup**: 4,362 lines (up from 3,534 at original write; the §4.2–§4.4 redesign added ~330 lines of legit content). 360 hex literals, 817 `px` values, 716 single-`}` terminators, 42 modal rules, 21 `.overflow-menu-*` rules that partially duplicate `ceco-ui.css`.
 
 **Bytes are fine, lines aren't.** CSS parse time at this volume is single-digit milliseconds. The browser doesn't care. The **maintenance cost** is the problem — one page has more CSS than the entire shared design system:
 

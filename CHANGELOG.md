@@ -1,5 +1,39 @@
 # Changelog
 
+## [Ordenes index improvements — batch 21: §3.7 ordenes-index.css cleanup] — 2026-05-19
+
+> Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3.7 — the 4,362-line file was the maintenance hotspot. Cleanup ran in 7 ordered buckets with one commit per bucket so any regression bisects cleanly.
+
+### Result
+- `public/css/ordenes-index.css`: **4,362 → 3,315 lines (–1,047, –24%)**
+- `public/css/ceco-ui.css`: 1,139 → 1,350 lines (+211 from the modal extraction in bucket 1)
+
+### Per-bucket summary
+| Bucket | Commit | Lines | Highlights |
+|---|---|---:|---|
+| 5 — formatting collapse | `ce20349` | –542 | 135 single-decl + 91 two-decl rules onto one line. |
+| 2 — dead CSS sweep | `46ec4cb` | –184 | `.toast--*`, `.btn-wrap`, `.alert-modal-*`, `.resumen-chips`, `.card-contrato .t1/.t2/.estado`, duplicate `@keyframes fadeIn`. |
+| 1 — modal extraction | `335d1b0` | –312 | `.notas-modal`, `.text-modal-*`, `.overflow-menu-*` promoted to `ceco-ui.css`. |
+| 6 — mobile/desktop dedupe | `0b63a9a` | –3 | Standalone 5-line `@media` blocks merged into their siblings. |
+| 3 — letter consolidation | `591ef89` | –6 | 4 dead-cascade duplicates removed; 22 letter-prefix labels stripped. |
+| 4 — token fallback drop | `1a15a08` | 0 (–303 B) | 43 `var(--token, #hex)` → `var(--token)`. `px → --sp-*` deferred. |
+
+### Bugs incidentally fixed
+- **Toast visibility** — the deleted `.toast { opacity: 0 }` page-local rule was clobbering `ceco-ui.css`'s `.toast` animation final state. Toasts now use the canonical `.toast.ok` / `.toast.bad` styling.
+
+### Decisions documented in §3.7
+- Cross-cascade `@media` merge skipped (too risky for marginal gain).
+- `px → --sp-*` migration deferred — 340+ values, no line payoff, easier in a focused pass.
+- Letter-coded section headers stripped (`/* J) ... */` → `/* ... */`).
+- All `var(--token, #hex)` defensive fallbacks dropped — tokens are reliable now.
+
+### QA targets
+- Open `/ordenes/` — cards view, table view, both should render identically to pre-cleanup
+- Open *Notas técnicas* modal — same styling (extracted to `ceco-ui.css`)
+- Trigger a toast (e.g. asignar técnico) — visible, slides in via `ceco-ui.css` animation
+- Open the *Equipos / Copiar seriales* text modal — same styling
+- Open overflow menus (row `⋯`, topbar) — both `.open` and `.show` toggle classes supported now
+
 ## [Ordenes index improvements — batch 20: UX redesign §4.2 + §4.3 + §4.4] — 2026-05-18
 
 > Driver: Tier-4 UX overhaul from `ORDENES_INDEX_IMPROVEMENTS.md`. Three intertwined changes shipped together because they share selectors and styles — splitting would have meant double-touching the same CSS region. View toggle defaults to cards; users can revert to the legacy table via topbar (preference persisted in `localStorage`).
