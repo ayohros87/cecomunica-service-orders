@@ -29,7 +29,7 @@ window.TOEquipos = {
               <option value="interno">Interno</option>
             </select>
             <button class="btn" data-role="agregar-pieza" onclick="TOPieza.abrirModal('${eid}')"><i data-lucide="puzzle"></i> Pieza</button>
-            <button class="btn ok" onclick="TOServicio.abrirModal('${eid}')"><i data-lucide="wrench"></i> Servicio</button>
+            <button class="btn btn-accent" onclick="TOServicio.abrirModal('${eid}')"><i data-lucide="wrench"></i> Servicio</button>
           </div>
         </div>
 
@@ -217,7 +217,7 @@ window.TOEquipos = {
         <td>${TO.fmtMoney(sub)}</td>
         <td>
           ${puedeEditar ? `<button class="btn" data-action="editar-precio" onclick="TOEquipos.editarPrecio('${it.id}')"><i data-lucide="pencil"></i> Precio</button>` : ''}
-          <button class="btn danger" data-action="eliminar-linea" aria-label="Eliminar" title="Eliminar" onclick="TOEquipos.eliminarLinea('${it.id}','${eid}')"><i data-lucide="trash-2"></i></button>
+          <button class="btn btn-danger" data-action="eliminar-linea" aria-label="Eliminar" title="Eliminar" onclick="TOEquipos.eliminarLinea('${it.id}','${eid}')"><i data-lucide="trash-2"></i></button>
         </td>
       </tr>`;
     });

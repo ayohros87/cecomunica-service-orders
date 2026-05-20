@@ -265,13 +265,13 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <span class="fecha-entrega">Entrega: ${formatFecha(ordenData.fecha_entrega)}</span>
       </div>
       <div class="acciones">
-        <button class="btn secondary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
+        <button class="btn btn-secondary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
           <i data-lucide="eye"></i> Equipos
         </button>
-        <button class="btn secondary" data-action="go-fotos-taller" data-stop-propagation="true" data-orden-id="${ordenId}">
+        <button class="btn btn-secondary" data-action="go-fotos-taller" data-stop-propagation="true" data-orden-id="${ordenId}">
           <i data-lucide="camera"></i> Fotos
         </button>
-        <button class="btn primary card-contrato__editar" data-action="editar-orden" data-orden-id="${ordenId}">
+        <button class="btn btn-primary card-contrato__editar" data-action="editar-orden" data-orden-id="${ordenId}">
           <i data-lucide="pencil"></i> Editar
         </button>
         ${botonesFlujo(ordenId, estado, ordenData)}
@@ -735,7 +735,7 @@ function actualizarResumen(lista) {
 
   el.innerHTML = `
     <div class="overflow-menu resumen-menu-wrap">
-      <button class="btn ghost resumen-btn" data-action="toggle-resumen-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false">
+      <button class="btn btn-ghost resumen-btn" data-action="toggle-resumen-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false">
         Resumen: ${total} · ${estadoLabel}
       </button>
       <div class="overflow-menu-dropdown resumen-menu" id="resumen-menu">
@@ -820,7 +820,7 @@ function renderEmptyState(message, opts = {}) {
   } catch { /* noop */ }
 
   const ctaHtml = activeFilters
-    ? `<button class="btn secondary empty-state__cta" data-action="limpiar-filtros">
+    ? `<button class="btn btn-secondary empty-state__cta" data-action="limpiar-filtros">
          <i data-lucide="x"></i> Limpiar filtros
        </button>`
     : '';

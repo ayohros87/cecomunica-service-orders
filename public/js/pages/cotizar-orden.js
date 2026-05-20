@@ -100,7 +100,7 @@ async function cargarConsumosEquipo(equipoId){
         <td>${fmtMoney(sub)}</td>
         <td>
           <button class="btn" title="Editar" onclick="editarLinea('${it.id}')"><i data-lucide="pencil"></i></button>
-          <button class="btn danger" title="Eliminar" onclick="eliminarLinea('${it.id}','${equipoId}')"><i data-lucide="trash-2"></i></button>
+          <button class="btn btn-danger" title="Eliminar" onclick="eliminarLinea('${it.id}','${equipoId}')"><i data-lucide="trash-2"></i></button>
         </td>
       </tr>`;
   });

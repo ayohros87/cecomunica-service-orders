@@ -63,12 +63,12 @@ window.gestionarNotasTecnicas = async function(ordenId) {
   footer.className = "notas-footer";
 
   const btnCancelar = document.createElement("button");
-  btnCancelar.className = "btn secondary";
+  btnCancelar.className = "btn btn-secondary";
   btnCancelar.textContent = "Cancelar";
   btnCancelar.onclick = () => document.body.removeChild(modal);
 
   const btnGuardar = document.createElement("button");
-  btnGuardar.className = "btn primary";
+  btnGuardar.className = "btn btn-primary";
   btnGuardar.textContent = "Guardar nota";
   
   btnGuardar.onclick = async () => {

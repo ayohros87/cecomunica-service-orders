@@ -285,7 +285,7 @@ window.abrirEquiposMobile = function(ordenId) {
       // 2-line clamp usando CSS inline simple
       const obsHtml = obs
         ? `<div class="equipo-obs clamp-2">${escapeHtml(obs)}</div>
-           <button class="btn ghost equipo-obs-more" data-action="ver-obs-completa" data-orden-id="${ordenId}" data-idx="${idx}"><i data-lucide="eye"></i> Ver más</button>`
+           <button class="btn btn-ghost equipo-obs-more" data-action="ver-obs-completa" data-orden-id="${ordenId}" data-idx="${idx}"><i data-lucide="eye"></i> Ver más</button>`
         : `<div class="equipo-obs equipo-obs--empty">Sin observaciones</div>`;
       
       // Trabajo tecnico display
@@ -324,7 +324,7 @@ window.abrirEquiposMobile = function(ordenId) {
               <i data-lucide="${e.trabajo_tecnico ? 'check-circle' : 'pencil-line'}"></i> Intervención
             </button>
 
-            <button class="btn ghost equipo-card-view"
+            <button class="btn btn-ghost equipo-card-view"
               data-action="ver-trabajo-equipo" data-orden-id="${ordenId}" data-idx="${idx}" title="Ver comentario">
               <i data-lucide="eye"></i>
             </button>

@@ -108,8 +108,8 @@ window.Modal = {
             <p style="margin:0;font-size:15px;line-height:1.5;color:var(--text)">${message}</p>
           </div>
           <div class="footer">
-            <button class="btn ghost" data-action="cancel">${cancelLabel}</button>
-            <button class="btn ${danger ? 'danger' : 'primary'}" data-action="confirm">${confirmLabel}</button>
+            <button class="btn btn-ghost" data-action="cancel">${cancelLabel}</button>
+            <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" data-action="confirm">${confirmLabel}</button>
           </div>
         </div>`;
 
@@ -166,8 +166,8 @@ window.Modal = {
             ${fieldHtml}
           </div>
           <div class="footer">
-            <button class="btn ghost"   data-action="cancel">${esc(cancelLabel)}</button>
-            <button class="btn primary" data-action="confirm">${esc(confirmLabel)}</button>
+            <button class="btn btn-ghost"   data-action="cancel">${esc(cancelLabel)}</button>
+            <button class="btn btn-primary" data-action="confirm">${esc(confirmLabel)}</button>
           </div>
         </div>`;
 

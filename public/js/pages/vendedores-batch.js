@@ -287,7 +287,7 @@ window.VB = {
           ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${m.label}</option>`).join('')}
         </select>
       </td>
-      <td><button class="btn danger" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch();">❌</button></td>
+      <td><button class="btn btn-danger" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch();">❌</button></td>
     `;
     fila.dataset.cliente = cliente;
     document.getElementById('tablaEquipos').style.display = 'table';

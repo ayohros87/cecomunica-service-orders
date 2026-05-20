@@ -145,13 +145,13 @@
         acciones.appendChild(btnDuplicar);
 
         const btnAnular = document.createElement("button");
-        btnAnular.className = "btn danger";
+        btnAnular.className = "btn btn-danger";
         btnAnular.innerHTML = '<i data-lucide="ban"></i> Anular';
         btnAnular.onclick = () => anularCotizacion(c.id);
         acciones.appendChild(btnAnular);
 
         const btnEliminar = document.createElement("button");
-        btnEliminar.className = "btn secondary";
+        btnEliminar.className = "btn btn-secondary";
         btnEliminar.innerHTML = '<i data-lucide="trash-2"></i> Eliminar';
         btnEliminar.onclick = () => eliminarCotizacion(c.id);
         acciones.appendChild(btnEliminar);
@@ -173,8 +173,8 @@
               <button class="btn" onclick="location.href='editar-cotizacion.html?id=${encodeURIComponent(c.id)}'"><i data-lucide="pencil"></i> Editar</button>
               <button class="btn" onclick="window.open('imprimir-cotizacion.html?id=${encodeURIComponent(c.id)}','_blank')"><i data-lucide="printer"></i> Imprimir</button>
               <button class="btn" onclick="duplicarCotizacion('${c.id}')"><i data-lucide="copy"></i> Duplicar</button>
-              <button class="btn danger" onclick="anularCotizacion('${c.id}')"><i data-lucide="ban"></i> Anular</button>
-              <button class="btn secondary" onclick="eliminarCotizacion('${c.id}')"><i data-lucide="trash-2"></i> Eliminar</button>
+              <button class="btn btn-danger" onclick="anularCotizacion('${c.id}')"><i data-lucide="ban"></i> Anular</button>
+              <button class="btn btn-secondary" onclick="eliminarCotizacion('${c.id}')"><i data-lucide="trash-2"></i> Eliminar</button>
             </div>
           `;
           cards.appendChild(card);

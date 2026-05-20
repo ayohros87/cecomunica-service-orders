@@ -115,7 +115,7 @@ window.PocList = {
       actionCell.appendChild(editBtn);
 
       const delBtn = document.createElement('button');
-      delBtn.className = 'btn danger';
+      delBtn.className = 'btn btn-danger';
       delBtn.innerHTML = '<i data-lucide="trash-2"></i>';
       delBtn.title = 'Eliminar equipo';
       delBtn.onclick = async () => {
@@ -377,7 +377,7 @@ window.PocList = {
         acciones.appendChild(btnEditar);
 
         const btnElim = document.createElement('button');
-        btnElim.className = 'btn danger'; btnElim.innerHTML = '<i data-lucide="trash-2"></i>'; btnElim.title = 'Eliminar';
+        btnElim.className = 'btn btn-danger'; btnElim.innerHTML = '<i data-lucide="trash-2"></i>'; btnElim.title = 'Eliminar';
         btnElim.onclick = async () => {
           if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
             PocService.softDeletePocDevice(d.id).then(() => this.cargar(true));

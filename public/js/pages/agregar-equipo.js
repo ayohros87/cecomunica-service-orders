@@ -60,7 +60,7 @@ const html = `
     </div>
 
     <div class="form-actions" style="justify-content:flex-start">
-      <button type="button" class="btn danger" onclick="document.getElementById('${id}').remove()"><i data-lucide="trash-2"></i> Eliminar equipo</button>
+      <button type="button" class="btn btn-danger" onclick="document.getElementById('${id}').remove()"><i data-lucide="trash-2"></i> Eliminar equipo</button>
     </div>
   </fieldset>
 `;

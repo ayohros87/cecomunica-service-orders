@@ -156,7 +156,7 @@
           <td><input type="number" min="1" value="${it.cantidad}" data-idx="${idx}" data-field="cantidad"></td>
           <td><input type="number" min="0" step="0.01" value="${it.precio_unitario}" data-idx="${idx}" data-field="precio_unitario"></td>
           <td class="item-total" data-total="${idx}">${money(it.total)}${sufijo}</td>
-          <td><button class="btn secondary" title="Eliminar ítem" data-remove="${idx}">🗑️</button></td>
+          <td><button class="btn btn-secondary" title="Eliminar ítem" data-remove="${idx}">🗑️</button></td>
         `;
         tbody.appendChild(tr);
       });

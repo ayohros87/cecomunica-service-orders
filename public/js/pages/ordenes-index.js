@@ -243,7 +243,7 @@ async function _scanSerial() {
 
     const btnCancel = document.createElement('button');
     btnCancel.textContent = 'Cancelar';
-    btnCancel.className = 'btn ghost';
+    btnCancel.className = 'btn btn-ghost';
     btnCancel.style.background = '#fff';
 
     overlay.append(video, hint, btnCancel);

@@ -479,7 +479,7 @@ function render() {
             <div style="font-size:18px; margin-bottom:8px;">No hay piezas</div>
             <div class="muted" style="margin-bottom:14px;">Crea tu primera pieza o carga un archivo CSV.</div>
             <div class="btn-group">
-              <button class="btn ok" onclick="abrirModal()"><i data-lucide="plus"></i> Nueva pieza</button>
+              <button class="btn btn-accent" onclick="abrirModal()"><i data-lucide="plus"></i> Nueva pieza</button>
               <button class="btn" onclick="abrirBatchModal()"><i data-lucide="download"></i> Carga en lote</button>
             </div>
           </div>
