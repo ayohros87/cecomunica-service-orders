@@ -86,7 +86,7 @@ window.ContratosAprobacion = {
 
   async confirmar() {
     if (!this._pendienteId) { Toast.show('No hay contrato seleccionado para aprobar.', 'bad'); return; }
-    const btn = document.querySelector('#overlayAprobacion .btn.ok');
+    const btn = document.querySelector('#overlayAprobacion .btn-accent');
     if (btn) btn.disabled = true;
     try {
       const c = await ContratosService.getContrato(this._pendienteId);
@@ -118,7 +118,7 @@ window.ContratosAprobacion = {
     Modal.open('overlayAprobacion', { onEscape: false });
     this._boundKeydown = (e) => { if (e.key === 'Escape') this.cerrarOverlay(); };
     document.addEventListener('keydown', this._boundKeydown);
-    const first = ov.querySelector('.btn.ok') || ov.querySelector('button,[href],input,select,textarea');
+    const first = ov.querySelector('.btn-accent') || ov.querySelector('button,[href],input,select,textarea');
     if (first) setTimeout(() => first.focus(), 0);
     this._initSwipeClose(sheet);
   },

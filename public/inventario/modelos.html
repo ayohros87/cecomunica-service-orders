@@ -57,10 +57,10 @@ body{
 }
 .btn:hover{ box-shadow: var(--shadow); background:#fff; }
 .btn:active{ transform: translateY(1px); }
-.btn.primary{ background: var(--primary); border-color: var(--primary); color:#fff; }
-.btn.primary:hover{ background: var(--primary-2); }
-.btn.ok{ background:#e6f4ea; color:#1e7d32; border-color:#cde7d3; }
-.btn.danger{ background:#fde8e8; color:#b91c1c; border-color:#f5caca; }
+.btn-primary{ background: var(--primary); border-color: var(--primary); color:#fff; }
+.btn-primary:hover{ background: var(--primary-2); }
+.btn-accent{ background:#e6f4ea; color:#1e7d32; border-color:#cde7d3; }
+.btn-danger{ background:#fde8e8; color:#b91c1c; border-color:#f5caca; }
 .btn.icon{ padding:6px 8px; }
 .btn.sm{ padding:6px 10px; font-size:.92rem; border-radius:9px; }
 .btn-group{ display:inline-flex; gap:8px; }
@@ -301,9 +301,9 @@ tr.inactivo td{ opacity:.55; }
         </div>
       </div>
 
-      <button class="btn ok" onclick="abrirModal()"><i data-lucide="plus"></i> Nuevo</button>
+      <button class="btn btn-accent" onclick="abrirModal()"><i data-lucide="plus"></i> Nuevo</button>
       <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú</button>
-      <button class="btn danger" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Salir</button>
+      <button class="btn btn-danger" onclick="cerrarSesion()"><i data-lucide="log-out"></i> Salir</button>
     </div>
   </div>
 
@@ -377,7 +377,7 @@ tr.inactivo td{ opacity:.55; }
       </div>
       <div class="footer">
         <button class="btn" onclick="cerrarModal()">Cancelar</button>
-        <button class="btn primary" id="btnGuardar" onclick="guardarModelo()"><i data-lucide="save"></i> Guardar</button>
+        <button class="btn btn-primary" id="btnGuardar" onclick="guardarModelo()"><i data-lucide="save"></i> Guardar</button>
       </div>
     </div>
   </div>

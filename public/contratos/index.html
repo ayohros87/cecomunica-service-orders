@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -171,7 +171,7 @@ table tbody tr:hover {
       <option value="inactivo">Inactivo</option>
     </select>
       <button id="btnFiltrar" class="btn"><i data-lucide="search"></i> Aplicar</button>
-      <button id="btnLimpiarBusqueda" class="btn secondary"><i data-lucide="x"></i> Limpiar búsqueda</button>
+      <button id="btnLimpiarBusqueda" class="btn btn-secondary"><i data-lucide="x"></i> Limpiar búsqueda</button>
       <label style="margin-left:8px; font-size:14px;">
   <input type="checkbox" id="chkSoloPendientes">
   Solo pendientes
@@ -185,17 +185,17 @@ table tbody tr:hover {
     <div class="right resumen" id="resumenContratos">
       <div class="loader" style="width: 24px; height: 24px; border-width: 3px;"></div>
     </div>
-    <button id="btnBackfillEquipos" class="btn" style="display:none; margin-left:12px;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan automáticamente"><i data-lucide="refresh-cw"></i> Re-sincronizar equipos (admin)</button>
-    <button class="btn secondary" style="display:none; margin-left:8px;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar caché del navegador"><i data-lucide="trash-2"></i> Limpiar caché</button>
+    <button id="btnBackfillEquipos" class="btn" style="display:none; margin-left:12px;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan autom�ticamente"><i data-lucide="refresh-cw"></i> Re-sincronizar equipos (admin)</button>
+    <button class="btn btn-secondary" style="display:none; margin-left:8px;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar cach� del navegador"><i data-lucide="trash-2"></i> Limpiar cach�</button>
   </div>
 </div>
 
 <input type="file" id="fileFirmado" accept="application/pdf,image/*" style="display:none">
 <div id="uploadStatus" style="display:none; margin:8px 0; font-size:14px;">
-  <i data-lucide="upload"></i> Subiendo contrato firmado… <strong id="uploadPct">0%</strong>
+  <i data-lucide="upload"></i> Subiendo contrato firmado <strong id="uploadPct">0%</strong>
 </div>
-<div class="table-wrap mt-12">
-  <table>
+<div class="app-table-wrap mt-12">
+  <table class="app-table">
     <thead>
       <tr id="encabezadoContratos">
         <th class="sortable" onclick="ContratosLista.ordenarPor('contrato_id')">ID</th>
@@ -277,13 +277,13 @@ table tbody tr:hover {
   <script src="../js/pages/contratos-list.js"></script>
   <script src="../js/pages/contratos-index.js" defer></script>
 
-<div id="overlayAprobacion" class="overlay" style="display:none;"
+<div id="overlayAprobacion" class="modal-backdrop" style="display:none;"
      role="dialog" aria-modal="true" aria-labelledby="aprobacionTitulo">
-  <div class="modal" id="sheetAprobacion">
+  <div class="modal" id="sheetAprobacion">  
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
       <h3 id="aprobacionTitulo" class="sheet-title">Aprobación de contrato</h3>
-      <button class="btn ghost close-x" onclick="ContratosAprobacion.cerrarOverlay()" aria-label="Cerrar">✕</button>
+      <button class="btn btn-ghost close-x" onclick="ContratosAprobacion.cerrarOverlay()" aria-label="Cerrar">?</button>
     </div>
 
     <div class="sheet-body">
@@ -311,41 +311,41 @@ table tbody tr:hover {
     </div>
 
     <div class="footer">
-      <button class="btn secondary" onclick="ContratosAprobacion.cancelar()"><i data-lucide="x-circle"></i> Cancelar</button>
-      <button class="btn ok" onclick="ContratosAprobacion.confirmar()"><i data-lucide="check-circle"></i> Aprobar Contrato</button>
+      <button class="btn btn-secondary" onclick="ContratosAprobacion.cancelar()"><i data-lucide="x-circle"></i> Cancelar</button>
+      <button class="btn btn-accent" onclick="ContratosAprobacion.confirmar()"><i data-lucide="check-circle"></i> Aprobar Contrato</button>
     </div>
   </div>
 </div>
 
-<div id="overlayPanelTrabajo" class="overlay" style="display:none;" role="dialog" aria-modal="true">
+<div id="overlayPanelTrabajo" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
   <div class="modal" style="max-width: 980px;">
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
       <h3 class="sheet-title"><i data-lucide="layout-dashboard"></i> Panel de trabajo</h3>
-      <button class="btn ghost close-x" onclick="ContratosEquipos.cerrarPanel()" aria-label="Cerrar">✕</button>
+      <button class="btn btn-ghost close-x" onclick="ContratosEquipos.cerrarPanel()" aria-label="Cerrar">?</button>
     </div>
     <div class="sheet-body" id="panelTrabajoBody">
-      <!-- Contenido dinámico -->
+      <!-- Contenido din�mico -->
     </div>
     <div class="footer">
-      <button class="btn secondary" onclick="ContratosEquipos.cerrarPanel()">Cerrar</button>
+      <button class="btn btn-secondary" onclick="ContratosEquipos.cerrarPanel()">Cerrar</button>
     </div>
   </div>
 </div>
 
 <!-- Modal para equipos asociados al contrato -->
-<div id="overlayEquiposContrato" class="overlay" style="display:none;" role="dialog" aria-modal="true">
+<div id="overlayEquiposContrato" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
   <div class="modal" style="max-width: 980px;">
     <div class="sheet-header">
       <span class="handle" aria-hidden="true"></span>
       <h3 class="sheet-title"><i data-lucide="package"></i> Equipos del contrato</h3>
-      <button class="btn ghost close-x" onclick="ContratosEquipos.cerrarModal()" aria-label="Cerrar">✕</button>
+      <button class="btn btn-ghost close-x" onclick="ContratosEquipos.cerrarModal()" aria-label="Cerrar">?</button>
     </div>
     <div class="sheet-body" id="modalEquiposBody">
       <!-- Contenido dinámico -->
     </div>
     <div class="footer">
-      <button class="btn secondary" onclick="ContratosEquipos.cerrarModal()">Cerrar</button>
+      <button class="btn btn-secondary" onclick="ContratosEquipos.cerrarModal()">Cerrar</button>
     </div>
   </div>
 </div>
@@ -525,17 +525,17 @@ table td.acciones button.btn-icon {
   justify-content: center;
 }
 
-table td.acciones .btn.danger {
+table td.acciones .btn-danger {
   font-size: 14px;
 }
 
-/* ✅ Estado column: keep TD normal and center content */
+/* ? Estado column: keep TD normal and center content */
 td.estado-cell {
   text-align: center;
   vertical-align: middle;
 }
 
-/* ✅ Badge base (pill) */
+/* ? Badge base (pill) */
 .estado {
   display: inline-flex;
   align-items: center;
@@ -548,7 +548,7 @@ td.estado-cell {
   white-space: nowrap;
 }
 
-/* ✅ Status dot indicator */
+/* ? Status dot indicator */
 .estado-dot {
   width: 8px;
   height: 8px;
@@ -558,7 +558,7 @@ td.estado-cell {
   opacity: 0.6;
 }
 
-/* ✅ Badge variants */
+/* ? Badge variants */
 .estado-activo {
   background: #d1fae5;
   color: #065f46;

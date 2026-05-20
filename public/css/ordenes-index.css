@@ -1280,7 +1280,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   50% { box-shadow: 0 0 0 8px rgba(0, 145, 215, 0); }
 }
 
-.btn.primary:not(:disabled):hover { animation: pulse 1.5s infinite; }
+.btn-primary:not(:disabled):hover { animation: pulse 1.5s infinite; }
 
 /* ========================================
    MOBILE LAYOUT IMPROVEMENTS

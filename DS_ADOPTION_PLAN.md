@@ -425,8 +425,25 @@ The plan's original prescription ("wrap each page's main content in `<main class
 ### R4 — Migrate Toast.js to the new region/variant classes ✅ DONE (2026-05-20)
 `public/js/ui/toast.js` now mounts into `.toast-region` and maps the legacy `ok|bad|warn|''` type vocabulary to `toast-success|toast-error|toast-warning|toast-info` inside `_make()`. The 259 callers (`Toast.show(msg, 'ok'|'bad'|'warn')`) keep working — the API is unchanged, only the rendered class is. The two hardcoded `<div id="toasts" class="toast-wrap">` mounts in `contratos/nuevo-cliente.html` and `POC/vendedores-batch.html` were renamed to `toast-region`. Legacy `.toast-wrap` + `.toast.ok/.bad/.warn` CSS rules stay in `ceco-ui.css` for now (Phase 9 cleanup); they're shadowed by the new variant rules thanks to source order.
 
-### R5 — Finish modal migration (~30 min)
-Rename `#overlay` → `.modal-backdrop` in `public/clientes/index.html`, `inventario/piezas.html`, `inventario/modelos.html`, `js/pages/contratos-approval.js`, then delete the `#overlay` rule from `ceco-ui.css`.
+### R5 — Finish R1 side-effect cleanup ✅ DONE (2026-05-20, scope revised)
+The original R5 ("rename `#overlay` → `.modal-backdrop`") was mostly moot on inspection: every element with `id="overlay"` already carries `class="modal-backdrop"` (the id is a JS handle, the class is the styling hook), and `inventario/modelos.html` uses a self-contained `.modelos-overlay` system that doesn't conform to the DS modal pattern (left for Phase 9 to decide).
+
+The actually-broken thing was R1's downstream effect: page-local CSS rules and JS selectors targeting `.btn.{primary|ghost|danger|secondary|ok}` (compound) that no longer match anything since R1 migrated all element classes to `.btn-{variant}` (BEM).
+
+Fixes applied (8 files, ~14 selector rewrites):
+- `public/js/pages/contratos-approval.js:89, 121` — `.btn.ok` → `.btn-accent` (both query sites)
+- `public/contratos/nuevo-contrato.html:105-140` — `.btn.secondary/ghost/danger` → BEM
+- `public/contratos/nuevo-cliente.html:89-100` — `.btn.ghost` → BEM
+- `public/contratos/index.html:528` — `.btn.danger` → BEM
+- `public/inventario/modelos.html:60-63` — `.btn.primary/ok/danger` → BEM (`ok` → `accent`)
+- `public/POC/vendedores-batch.html:237-307` — `.btn.ghost/secondary` → BEM
+- `public/POC/imprimir-equipos.html:133-138` — `.btn.secondary` → BEM
+- `public/ordenes/cotizar-orden-formal.html:43` — `.btn.primary` → BEM
+- `public/css/ordenes-index.css:1283` — `.btn.primary:hover` animation → BEM
+
+Without these, page-local button colors (e.g. the page-specific danger/ghost shades on `nuevo-contrato.html`, the green `.btn.ok` on `modelos.html`, the pulse animation on primary buttons in `ordenes-index.css`) silently stopped applying.
+
+Modal CSS cleanup (delete `#overlay,` from `ceco-ui.css:511`) deferred to Phase 9 — verifying no element relies solely on `#overlay` styling first.
 
 ### R6 — Phase 6 form-kit completion (~2 h)
 Apply `.form-input/-select/-textarea/-section` to remaining form pages listed above. Add `.form-file-zone` rule and wire it into the photo-upload UIs in `fotos-taller.html` and `firmar-entrega.html`.
