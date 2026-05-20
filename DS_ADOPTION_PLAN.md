@@ -336,11 +336,13 @@ Last audited against the repo on 2026-05-20.
   - `.chip-estado` + 9 state classes ✅ in `ceco-ui.css:273-309`
   - State-render sites ✅ migrated by R2 (see below). Lossy app-state → DS-chip mapping applied per user decision.
   - Out of scope for this phase (and rightly so): count badges (`.badge.asignar/.asignado/.completo`), section-completion indicators (`.badge.pending` in nuevo-contrato/vendedores-batch), filter button chips (`.estado-chip--*` in ordenes/index.html), POC `<td>.estado-activo` cell-tints, print-stylesheet `.estado-*-chip` overrides. These use the legacy class names by design and are tracked separately under Phase 9 cleanup / Phase 8e print kit.
-- [~] Phase 4 — App shell partial
+- [x] Phase 4 — App shell (CSS complete; HTML migration intentionally narrow)
   - `layout.js` topbar emits both legacy (`topbar`, `topbar-left`, `topbar-actions`) and new (`app-topbar`, `app-topbar-logo`, `app-topbar-spacer`, `app-topbar-actions`) classes ✅
-  - `.app-topbar*` pass-through rules added in `ceco-ui.css:823-835` ✅
-  - **`.app-body` and `.app-page-header` rules: NOT in `ceco-ui.css`.** Plan §4b/4d not started. No HTML page wraps its main content in `<main class="app-body">` or uses `<div class="app-page-header">`.
-  - Only 26 of ~44 HTML pages mount `topbar-mount` (i.e. use `Layout.renderTopbar`). Remaining 18 pages keep hand-rolled headers (mostly print pages, POC pages, `tools/*`, `login.html`, `404.html`, `verificar-contrato.html`, `cotizar-orden-formal.html`).
+  - `.app-topbar*` pass-through rules in `ceco-ui.css:823-835` ✅
+  - `.app-body` and `.app-page-header` rules ✅ added in `ceco-ui.css` by R3 (with mobile breakpoint + `h1`/`h2`/`p`/`.app-page-header-actions` sub-rules).
+  - **Discovery during R3:** the app already moved page title + primary CTA into the topbar via `Layout.renderTopbar({ title, actions })`. That means the DS's `.app-page-header` (title + action row pattern) has no natural home in most pages — the equivalent already lives in the topbar. `.app-body` is functionally equivalent to the existing `.app-wrap` (centered + padded), but `.app-wrap` has a more flexible width-modifier system (`--narrow|default|wide|full`). Wholesale rename would lose that flexibility.
+  - Decision: keep `.app-wrap` as the layout primitive; `.app-body` is available for pages that want DS-spec 1440px sizing. `.app-page-header` is available for sub-section headers within complex pages. Pages get migrated piecemeal as they're touched for other reasons, not as a forced sweep.
+  - 26 of ~44 HTML pages mount `topbar-mount` (use `Layout.renderTopbar`). Remaining 18 are mostly print pages, POC pages, `tools/*`, `login.html`, `404.html`, `verificar-contrato.html`, `cotizar-orden-formal.html` — most reasonably stay bespoke (print pages especially).
 - [~] Phase 5 — Data table + filter bar
   - `.app-table-wrap` / `.app-table` / `.filter-bar` rules ✅ in `ceco-ui.css`
   - 13 HTML pages adopted (`contratos/index`, `contratos/nuevo-contrato`, `cotizaciones/*`, `POC/index`, `POC/vendedores-batch`, `ordenes/admin-equipos-cliente`, `ordenes/index`, `ordenes/progreso-tecnicos`, `inventario/cargar-inventario`, `inventario/index`, `clientes/index`)
@@ -411,10 +413,14 @@ Now-orphan CSS (delete in R9 / Phase 9 cleanup, NOT now in case any non-migrated
 - `public/css/ceco-ui.css:344-348` — `.card-contrato .estado-*` legacy selectors
 - The contratos print stylesheet's `.estado-*-chip` rules stay (Phase 8e print kit handles those).
 
-### R3 — Finish Phase 4 app shell (~2 h)
-- Add `.app-body` and `.app-page-header` rules to `ceco-ui.css` (pull from `Cecomunica Design System/ui_kits/app/app.css`).
-- Wrap each page's main content in `<main class="app-body">` and convert title-row markup to `.app-page-header`. Best done in batches of 5–6 pages per PR.
-- Decide which of the 18 unmounted pages should also adopt `Layout.renderTopbar` vs. stay bespoke (print pages and `login.html` reasonably stay bespoke).
+### R3 — Finish Phase 4 app shell ✅ DONE (2026-05-20, scope revised)
+Added `.app-body` and `.app-page-header` rules to `ceco-ui.css` (with mobile breakpoint, `h1`/`h2`/`p` sub-rules, and `.app-page-header-actions`).
+
+The plan's original prescription ("wrap each page's main content in `<main class="app-body">` and convert title-row markup to `.app-page-header`") turned out to be ill-fitted to the current codebase: the app already integrated the title+CTA pattern into the topbar via `Layout.renderTopbar({ title, actions })`, leaving most pages with no natural "title + action row" element to host. And `.app-wrap` is functionally equivalent to `.app-body` but has a `--narrow|default|wide|full` modifier system that wholesale rename would lose. So:
+
+- CSS rules ✅ available — pages can opt in.
+- Wholesale HTML migration not done by design.
+- Future page touches should adopt `.app-body` / `.app-page-header` opportunistically where they fit.
 
 ### R4 — Migrate Toast.js to the new region/variant classes (~45 min)
 Update `public/js/ui/Toast.js` to:
