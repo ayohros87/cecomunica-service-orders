@@ -109,7 +109,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     </td>
     <td>${ordenData.tecnico_asignado || ""}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
-    <td><span class="estado-pill ${getEstadoClass(estado)}" title="${estado}"><span class="dot" aria-hidden="true"></span>${estadoCompacto(estado)}</span></td>
+    <td><span class="chip-estado ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}</td>
     <td class="col-fecha-entrega">${formatFecha(ordenData.fecha_entrega)}</td>
     <td class="acciones"><div class="acciones-wrap">${botonesFlujo(ordenId, estado, ordenData)}${botonesGestion(ordenId, estado, tooltipNota, estiloNota)}</div></td>
@@ -251,9 +251,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
           ${fotosBadgeMobile}
         </div>
         <div class="card-contrato__cliente">${nombreClienteDe(ordenData)}</div>
-        <span class="estado-pill ${getEstadoClass(estadoDisplay)}" title="${estadoDisplay}">
-          <span class="dot" aria-hidden="true"></span>${estadoCompacto(estadoDisplay)}
-        </span>
+        <span class="chip-estado ${getEstadoClass(estadoDisplay)}" title="${estadoDisplay}">${estadoCompacto(estadoDisplay)}</span>
       </div>
       <div class="card-contrato__tier2">
         <span class="card-contrato__tipo">${tipoDisplay}</span>

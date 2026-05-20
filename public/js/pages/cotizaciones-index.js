@@ -7,12 +7,13 @@
 
     function estadoBadge(estado) {
       const map = {
-        borrador: "estado-borrador",
-        emitida: "estado-emitida",
-        enviada: "estado-enviada",
-        anulada: "estado-anulada"
+        borrador: "chip-recibida",
+        emitida:  "chip-cotizada",
+        enviada:  "chip-cotizada",
+        aprobada: "chip-aprobada",
+        anulada:  "chip-cancelada"
       };
-      return `<span class="badge ${map[estado] || ""}">${estado || ""}</span>`;
+      return `<span class="chip-estado ${map[estado] || "chip-recibida"}">${estado || ""}</span>`;
     }
 
     function formatFecha(ts) {

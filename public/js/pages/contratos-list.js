@@ -34,11 +34,11 @@ window.ContratosLista = {
     const yaFirmado       = !!data.firmado_url;
 
     const estadoClase =
-      data.estado === 'activo'               ? 'estado-activo'   :
-      data.estado === 'aprobado'             ? 'estado-aprobado' :
-      data.estado === 'pendiente_aprobacion' ? 'estado-pendiente':
-      data.estado === 'anulado'              ? 'estado-anulado'  :
-      'estado-inactivo';
+      data.estado === 'activo'               ? 'chip-reparacion'  :
+      data.estado === 'aprobado'             ? 'chip-aprobada'    :
+      data.estado === 'pendiente_aprobacion' ? 'chip-diagnostico' :
+      data.estado === 'anulado'              ? 'chip-cancelada'   :
+      'chip-espera';
 
     const estadoTexto =
       data.estado === 'pendiente_aprobacion' ? 'Pendiente Aprobación' :
@@ -110,10 +110,7 @@ window.ContratosLista = {
       <td>${esc(data.accion || '-')}</td>
       <td style="text-align:center;" data-contrato-equipos="${id}"><span style="opacity:0.3;"><i data-lucide="loader"></i></span></td>
       <td class="estado-cell">
-        <span class="estado ${estadoClase}">
-          <span class="estado-dot" aria-hidden="true"></span>
-          ${estadoTexto}
-        </span>
+        <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
       </td>
       <td>${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
       <td>${esc(CS.mapaUsuarios[data.creado_por_uid] || '-')}</td>
@@ -136,11 +133,11 @@ window.ContratosLista = {
     const totalStr = FMT.money(tot.totalConITBMS);
 
     const estadoClase =
-      data.estado === 'activo'               ? 'estado-activo'   :
-      data.estado === 'aprobado'             ? 'estado-aprobado' :
-      data.estado === 'pendiente_aprobacion' ? 'estado-pendiente':
-      data.estado === 'anulado'              ? 'estado-anulado'  :
-      'estado-inactivo';
+      data.estado === 'activo'               ? 'chip-reparacion'  :
+      data.estado === 'aprobado'             ? 'chip-aprobada'    :
+      data.estado === 'pendiente_aprobacion' ? 'chip-diagnostico' :
+      data.estado === 'anulado'              ? 'chip-cancelada'   :
+      'chip-espera';
 
     const estadoTexto =
       data.estado === 'pendiente_aprobacion' ? 'Pendiente' :
@@ -184,7 +181,7 @@ window.ContratosLista = {
           </div>
           <div class="t2">${esc(data.cliente_nombre || '-')}</div>
         </div>
-        <div class="${estadoClase}">${estadoTexto}</div>
+        <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
       </div>
       <div class="row">
         <div class="t2">${esc(data.tipo_contrato || '-')} · ${esc(data.accion || '-')}</div>

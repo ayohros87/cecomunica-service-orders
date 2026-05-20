@@ -78,7 +78,7 @@ body { background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%); min-height
 /* ======================================
    ORDERS TABLE — layout + cells
    ====================================== */
-.table-wrap {
+.app-table-wrap {
   background: white;
   border-radius: 8px;
   padding: 0;
@@ -96,13 +96,17 @@ table {
 
 table thead {
   background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+}
+
+/* Sticky header: each th sticks below the dynamic filter card height.
+   --filter-card-h is set by ordenes-index.js via ResizeObserver.
+   Fallback 128px covers the brief window before JS runs. */
+table thead th {
   position: sticky;
-  /* The filter card is sticky at top:0. The thead must stick below it.
-     --filter-card-h is set by ordenes-index.js on load + on resize via
-     a ResizeObserver on .filters-card-sticky. Fallback 128px covers
-     the brief window before JS runs. */
   top: var(--filter-card-h, 128px);
   z-index: 10;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
   box-shadow: 0 2px 4px rgba(0,0,0,0.06);
 }
 
@@ -3004,7 +3008,7 @@ tr.activo:hover { background: #f0f9ff !important; }
   font-size: 14px;
   color: var(--fg-1);
 }
-.card-contrato__tier1 .estado-pill {
+.card-contrato__tier1 .chip-estado {
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: start;

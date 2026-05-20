@@ -332,10 +332,10 @@ Last audited against the repo on 2026-05-20.
   - HTML files ✅ migrated (no `class="btn primary|ghost|danger|secondary|ok"` left in `.html`)
   - `.btn-primary/-secondary/-ghost/-danger/-accent/-sm/-lg` rules added in `ceco-ui.css:247-258`
   - JS renderers ✅ migrated by R1 (32 occurrences across 15 files: `modal.js`, `contratos-list.js`, `cotizaciones-index.js`, `agregar-equipo.js`, `cotizar-orden.js`, `editar/nueva-cotizacion.js`, `ordenes-render.js`, `ordenes-equipos.js`, `ordenes-notas.js`, `ordenes-index.js`, `piezas.js`, `poc-list.js`, `to-equipos.js`, `vendedores-batch.js`). Includes the dynamic interpolation in `modal.js:112` (`btn ${danger ? 'btn-danger' : 'btn-primary'}`).
-- [~] Phase 3 — Status chips: **CSS only — not migrated**
-  - `.chip-estado` + 9 state classes ✅ added in `ceco-ui.css:273-309`
-  - Zero HTML/JS uses `chip-estado*`. Old `.badge` / `.chip` / `estado-chip estado-sin` patterns still used in 15+ files (e.g. `public/ordenes/trabajar-orden.html:243`, all `js/pages/*-render.js` files, `js/pages/ordenes-render.js`, `cotizaciones-index.js`, `contratos-list.js`, `piezas.js`, `inventario-*.js`, `cotizar-orden*.js`, `poc-state.js`, etc.)
-  - **Real migration still required:** wherever an order/contract/cotización state is rendered, swap to `<span class="chip-estado chip-{recibida|diagnostico|cotizada|aprobada|reparacion|lista|entregada|cancelada|espera}">`
+- [x] Phase 3 — Status chips (state-display sites migrated by R2)
+  - `.chip-estado` + 9 state classes ✅ in `ceco-ui.css:273-309`
+  - State-render sites ✅ migrated by R2 (see below). Lossy app-state → DS-chip mapping applied per user decision.
+  - Out of scope for this phase (and rightly so): count badges (`.badge.asignar/.asignado/.completo`), section-completion indicators (`.badge.pending` in nuevo-contrato/vendedores-batch), filter button chips (`.estado-chip--*` in ordenes/index.html), POC `<td>.estado-activo` cell-tints, print-stylesheet `.estado-*-chip` overrides. These use the legacy class names by design and are tracked separately under Phase 9 cleanup / Phase 8e print kit.
 - [~] Phase 4 — App shell partial
   - `layout.js` topbar emits both legacy (`topbar`, `topbar-left`, `topbar-actions`) and new (`app-topbar`, `app-topbar-logo`, `app-topbar-spacer`, `app-topbar-actions`) classes ✅
   - `.app-topbar*` pass-through rules added in `ceco-ui.css:823-835` ✅
@@ -369,8 +369,47 @@ Ordered roughly by blast radius. Each item produces a self-contained PR.
 ### R1 — Restore button styling in JS renderers ✅ DONE (2026-05-20)
 The `.btn primary/ghost/danger/secondary/ok` compound selectors were removed prematurely. Fixed by find-and-replacing **32 occurrences across 15 JS files** (final count higher than the initial audit's 19; missed cases were single-quoted strings, `className =` assignments, compound classes with extra suffixes like `card-contrato__editar`, and the dynamic interpolation in `modal.js`). Mapping: `btn primary` → `btn btn-primary`, `ghost` → `btn-ghost`, `danger` → `btn-danger`, `secondary` → `btn-secondary`, `ok` → `btn-accent`.
 
-### R2 — Migrate `.badge` / `.chip` usages to `.chip-estado` (~3 h)
-Touch points: every `*-render.js` and HTML page that shows an order/contract/cotización/POC state. Build a small mapping helper (`stateToChipClass(estado) → 'chip-<key>'`) and apply at render time. After zero references remain, delete `.badge`, `.estado-aprobado-chip`, and the generic `.chip` color hacks.
+### R2 — Migrate state-display sites to `.chip-estado` ✅ DONE (2026-05-20)
+Scope clarification: the audit said "every `.badge`/`.chip` use" but the actual codebase has many distinct chip-like patterns (count badges, section-completion indicators, filter buttons, POC td-cell tints, print-only `-chip` suffixes). Only true state-display sites were migrated; the other patterns stay legacy and roll into Phase 9 cleanup.
+
+Lossy app-state → DS-chip mapping applied:
+
+| Domain | App state | DS chip |
+|---|---|---|
+| Órdenes | POR ASIGNAR | chip-recibida |
+| | ASIGNADO | chip-reparacion |
+| | COMPLETADO (EN OFICINA) | chip-lista |
+| | ENTREGADO AL CLIENTE | chip-entregada |
+| Contratos | pendiente_aprobacion | chip-diagnostico |
+| | activo | chip-reparacion |
+| | aprobado | chip-aprobada |
+| | anulado | chip-cancelada |
+| | inactivo / default | chip-espera |
+| Cotizaciones | borrador / default | chip-recibida |
+| | emitida / enviada | chip-cotizada |
+| | aprobada | chip-aprobada |
+| | anulada | chip-cancelada |
+| Trabajo interno | SIN INICIAR | chip-espera |
+| | EN_PROGRESO | chip-reparacion |
+| | COMPLETADO | chip-lista |
+
+Sites migrated (8 files):
+- `public/js/pages/ordenes-state.js:260-267` — `getEstadoClass()` now returns DS chip class names
+- `public/js/pages/ordenes-render.js:112` — desktop row markup → `<span class="chip-estado ${cls}">` (inner `.dot` span removed; `chip-estado::before` provides the dot)
+- `public/js/pages/ordenes-render.js:254-256` — mobile card markup, same shape
+- `public/js/pages/contratos-list.js:36-41, 113-115` — desktop estadoClase map + table-cell markup
+- `public/js/pages/contratos-list.js:138-143, 187` — mobile card map + markup
+- `public/js/pages/cotizaciones-index.js:8-17` — `estadoBadge()` returns `<span class="chip-estado chip-{state}">`; added `aprobada` to the map (was missing)
+- `public/js/pages/cotizar-orden-formal.js:33` — "Emitida" badge → `chip-estado chip-cotizada`
+- `public/js/pages/to-state.js:41-49` — `pintarChipTrabajo()` writes `chip-estado chip-{espera|reparacion|lista}` instead of `chip estado-chip estado-{sin|prog|ok}`
+- `public/ordenes/trabajar-orden.html:243` — initial chipTrabajo markup; also deleted the now-orphan inline `.estado-chip`/`.estado-sin/-prog/-ok` CSS at lines 26-29
+- `public/css/ordenes-index.css:3011` — re-targeted `.card-contrato__tier1 .estado-pill` grid-positioning rule to `.chip-estado` to preserve mobile card layout
+
+Now-orphan CSS (delete in R9 / Phase 9 cleanup, NOT now in case any non-migrated page still references them):
+- `public/css/ordenes-index.css:854-905` — `.estado-pill` + 4 state modifiers
+- `public/contratos/index.html:562-590` — `.estado-activo/--aprobado/--pendiente/--anulado/--inactivo/--vencido`
+- `public/css/ceco-ui.css:344-348` — `.card-contrato .estado-*` legacy selectors
+- The contratos print stylesheet's `.estado-*-chip` rules stay (Phase 8e print kit handles those).
 
 ### R3 — Finish Phase 4 app shell (~2 h)
 - Add `.app-body` and `.app-page-header` rules to `ceco-ui.css` (pull from `Cecomunica Design System/ui_kits/app/app.css`).

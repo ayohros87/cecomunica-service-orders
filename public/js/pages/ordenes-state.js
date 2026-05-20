@@ -259,11 +259,11 @@ function nombreClienteDe(orden) {
 
 function getEstadoClass(estado) {
   const e = (estado || "").toUpperCase();
-  if (e === "POR ASIGNAR") return "por-asignar";
-  if (e === "ASIGNADO") return "asignado";
-  if (e === "COMPLETADO (EN OFICINA)") return "completado";
-  if (e === "ENTREGADO AL CLIENTE") return "entregado";
-  return "por-asignar";
+  if (e === "POR ASIGNAR") return "chip-recibida";
+  if (e === "ASIGNADO") return "chip-reparacion";
+  if (e === "COMPLETADO (EN OFICINA)") return "chip-lista";
+  if (e === "ENTREGADO AL CLIENTE") return "chip-entregada";
+  return "chip-recibida";
 }
 
 function tipoChip(tipo) {

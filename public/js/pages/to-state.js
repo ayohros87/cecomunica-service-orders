@@ -41,10 +41,10 @@ window.TO = {
   pintarChipTrabajo(estado) {
     const chip = this.byId('chipTrabajo');
     if (!chip) return;
-    let label = 'SIN INICIAR', cls = 'estado-sin';
-    if (estado === 'EN_PROGRESO') { label = 'EN PROGRESO'; cls = 'estado-prog'; }
-    if (estado === 'COMPLETADO')  { label = 'COMPLETADO';  cls = 'estado-ok';  }
-    chip.className  = `chip estado-chip ${cls}`;
+    let label = 'SIN INICIAR', cls = 'chip-espera';
+    if (estado === 'EN_PROGRESO') { label = 'EN PROGRESO'; cls = 'chip-reparacion'; }
+    if (estado === 'COMPLETADO')  { label = 'COMPLETADO';  cls = 'chip-lista';      }
+    chip.className   = `chip-estado ${cls}`;
     chip.textContent = label;
   },
 

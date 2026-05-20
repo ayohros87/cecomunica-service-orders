@@ -30,7 +30,7 @@ firebase.auth().onAuthStateChanged(async (user)=>{
   // Encabezado
   const fecha = od.fecha_creacion?.toDate ? od.fecha_creacion.toDate().toISOString().slice(0,10) : '—';
   byId('head').innerHTML = `Orden <strong>${ordenId}</strong> · Fecha <strong>${fecha}</strong> ` +
-    (od.cotizacion_emitida ? `· <span class="badge">Emitida</span>` : '');
+    (od.cotizacion_emitida ? `· <span class="chip-estado chip-cotizada">Emitida</span>` : '');
 
   // Cliente
   let clienteNombre = od.cliente_nombre || od.cliente || '—';
