@@ -435,8 +435,8 @@ body {
   </div>
 
   <div class="form-actions center">
-    <button class="btn primary" onclick="VB.generarTabla()">Generar Tabla</button>
-    <button class="btn ghost" onclick="VB.limpiarTodo()">Limpiar Todo</button>
+    <button class="btn btn-primary" onclick="VB.generarTabla()">Generar Tabla</button>
+    <button class="btn btn-ghost" onclick="VB.limpiarTodo()">Limpiar Todo</button>
   </div>
 </div>
 
@@ -447,7 +447,7 @@ body {
 
 <div id="scrollHintEquipos" class="table-scroll-hint" style="display:none;">Si tienes muchos grupos, desliza horizontalmente el cuadro para ver y marcar todas las columnas.</div>
 
-  <div class="table-wrap" id="wrapTablaEquipos" style="display:none;">
+  <div class="app-table-wrap" id="wrapTablaEquipos" style="display:none;">
   <table id="tablaEquipos" class="table-sticky-first">
     <thead>
       <tr id="encabezadoTabla"></tr>
@@ -464,11 +464,11 @@ body {
 <div class="action-card" id="actionCard" style="display:none;">
   <h3>Acciones Rápidas</h3>
   <div class="action-grid">
-    <button class="btn secondary" onclick="VB.agregarFila()">Agregar Fila</button>
-    <button class="btn secondary" onclick="VB.agregarGrupo()">Agregar Grupo</button>
-    <button class="btn primary" onclick="VB.mostrarTablaResultado()">Revisar Resultado</button>
+    <button class="btn btn-secondary" onclick="VB.agregarFila()">Agregar Fila</button>
+    <button class="btn btn-secondary" onclick="VB.agregarGrupo()">Agregar Grupo</button>
+    <button class="btn btn-primary" onclick="VB.mostrarTablaResultado()">Revisar Resultado</button>
     <button class="btn export" onclick="VB.descargarExcel()">Descargar Excel</button>
-    <button class="btn ghost" onclick="VB.descargarJSON()">Descargar JSON</button>
+    <button class="btn btn-ghost" onclick="VB.descargarJSON()">Descargar JSON</button>
   </div>
 </div>
 
@@ -476,7 +476,7 @@ body {
     <!-- Resultado -->
     <div id="salida" style="margin-top: 30px;"></div>
   </div>
-<div id="toasts" class="toast-wrap"></div>
+<div id="toasts" class="toast-region"></div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>

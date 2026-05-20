@@ -352,9 +352,9 @@ Last audited against the repo on 2026-05-20.
   - Adopted in 11 HTML files: `nuevo-contrato`, `nuevo-cliente`, `editar-contrato`, `nueva/editar-cotizacion`, `ordenes/index`, `ordenes/tecnicos`, `ordenes/modelo-de-radio`, `ordenes/estado_reparacion`
   - Remaining form pages not migrated: `nueva-orden.html`, `editar-orden.html`, `agregar-equipo.html`, `nuevo-equipo.html`, `clientes/editar.html`, `firmar-entrega.html`, `cotizar-orden.html`, `inventario/*`, `POC/*`
   - `.form-file-zone` rule: not yet added
-- [~] Phase 7 — Modal + toast partial
-  - Modal: `.modal-backdrop` rules ✅ added, but 5 files still reference `#overlay` / `id="overlay"`: `public/clientes/index.html`, `public/inventario/piezas.html`, `public/inventario/modelos.html`, `public/js/pages/contratos-approval.js`, plus the legacy `#overlay` CSS rule
-  - Toast: `.toast-region` + variant rules ✅ added in `ceco-ui.css:1103+`, but **`Toast.js` was never updated** — runtime still emits `.toast.ok/.bad/.warn` into `.toast-wrap`. New variant classes are dead code until Toast.js is rewritten.
+- [~] Phase 7 — Modal + toast (toast done by R4; modal pending R5)
+  - Toast: ✅ done by R4 — `Toast.js` now maps `ok|bad|warn|''` → `toast-success|toast-error|toast-warning|toast-info` and mounts into `.toast-region`. The two hardcoded `<div id="toasts" class="toast-wrap">` mounts in `contratos/nuevo-cliente.html` and `POC/vendedores-batch.html` were renamed to `toast-region`. Legacy `.toast-wrap` + `.toast.ok/.bad/.warn` CSS rules left in place for Phase 9 cleanup.
+  - Modal: `.modal-backdrop` rules ✅ in CSS, but 4 files still reference `#overlay` / `id="overlay"`: `public/clientes/index.html`, `public/inventario/piezas.html`, `public/inventario/modelos.html`, `public/js/pages/contratos-approval.js`, plus the legacy `#overlay` CSS rule. R5 covers this.
 - [ ] Phase 8a — Tabs / accordion: **CSS not added.** No tab selectors in `ceco-ui.css`.
 - [x] Phase 8b — Stepper / timeline (`.stepper`, `.progress-bar-*`, `.kpi-card*` added)
 - [x] Phase 8c — Photo grid + lightbox (`.photo-grid`, `.lightbox*` added)
@@ -422,11 +422,8 @@ The plan's original prescription ("wrap each page's main content in `<main class
 - Wholesale HTML migration not done by design.
 - Future page touches should adopt `.app-body` / `.app-page-header` opportunistically where they fit.
 
-### R4 — Migrate Toast.js to the new region/variant classes (~45 min)
-Update `public/js/ui/Toast.js` to:
-- mount into `<div class="toast-region">` instead of `.toast-wrap`
-- emit `.toast.toast-success / .toast-error / .toast-warning / .toast-info` instead of `.toast.ok/.bad/.warn`
-- delete the legacy `.toast-wrap` + variant CSS rules after the JS lands.
+### R4 — Migrate Toast.js to the new region/variant classes ✅ DONE (2026-05-20)
+`public/js/ui/toast.js` now mounts into `.toast-region` and maps the legacy `ok|bad|warn|''` type vocabulary to `toast-success|toast-error|toast-warning|toast-info` inside `_make()`. The 259 callers (`Toast.show(msg, 'ok'|'bad'|'warn')`) keep working — the API is unchanged, only the rendered class is. The two hardcoded `<div id="toasts" class="toast-wrap">` mounts in `contratos/nuevo-cliente.html` and `POC/vendedores-batch.html` were renamed to `toast-region`. Legacy `.toast-wrap` + `.toast.ok/.bad/.warn` CSS rules stay in `ceco-ui.css` for now (Phase 9 cleanup); they're shadowed by the new variant rules thanks to source order.
 
 ### R5 — Finish modal migration (~30 min)
 Rename `#overlay` → `.modal-backdrop` in `public/clientes/index.html`, `inventario/piezas.html`, `inventario/modelos.html`, `js/pages/contratos-approval.js`, then delete the `#overlay` rule from `ceco-ui.css`.

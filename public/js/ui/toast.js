@@ -1,15 +1,24 @@
 // Shared floating-toast module — single source of truth
 // API: Toast.show(msg, type?, durationMs?)  Toast.persist(msg, type?) → element
-// type: 'ok' | 'bad' | 'warn' | '' (neutral dark)
+// type: 'ok' | 'bad' | 'warn' | '' (neutral)
+// Renders DS App Kit toast variants (toast-success | toast-error |
+// toast-warning | toast-info) into a .toast-region container.
 window.Toast = {
   _container: null,
+
+  _typeToVariant: {
+    ok:   'toast-success',
+    bad:  'toast-error',
+    warn: 'toast-warning',
+    '':   'toast-info',
+  },
 
   _getContainer() {
     if (!this._container || !document.contains(this._container)) {
       this._container = document.getElementById('toasts');
       if (!this._container) {
         this._container = document.createElement('div');
-        this._container.className = 'toast-wrap';
+        this._container.className = 'toast-region';
         document.body.appendChild(this._container);
       }
     }
@@ -17,8 +26,9 @@ window.Toast = {
   },
 
   _make(msg, type) {
+    const variant = this._typeToVariant[type] || 'toast-info';
     const el = document.createElement('div');
-    el.className = 'toast' + (type ? ' ' + type : '');
+    el.className = `toast ${variant}`;
     el.textContent = msg;
     return el;
   },

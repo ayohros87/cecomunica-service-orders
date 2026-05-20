@@ -178,7 +178,7 @@
     <h2 id="pageTitle"><i data-lucide="user-plus"></i> Registrar Nuevo Cliente</h2>
 
     <div class="top-actions">
-      <button type="button" class="btn ghost" onclick="volverAContrato()"><i data-lucide="arrow-left"></i> Volver</button>
+      <button type="button" class="btn btn-ghost" onclick="volverAContrato()"><i data-lucide="arrow-left"></i> Volver</button>
     </div>
 
     <form id="formCliente">
@@ -192,18 +192,18 @@
         <div class="form-grid cols-2">
           <div class="form-field" style="grid-column: 1/-1">
             <label class="req">Nombre del cliente</label>
-            <input type="text" id="nombre" required>
+            <input class="form-input" type="text" id="nombre" required>
           </div>
 
           <div class="form-field">
             <label class="req">RUC / Cédula</label>
-            <input type="text" id="ruc" required>
+            <input class="form-input" type="text" id="ruc" required>
             <div class="form-hint">Ej: 15567890 (sin DV)</div>
           </div>
 
           <div class="form-field">
             <label>DV</label>
-            <input type="text" id="dv" inputmode="numeric" pattern="\d{1,2}" maxlength="2" placeholder="Ej. 55" title="1-2 dígitos">
+            <input class="form-input" type="text" id="dv" inputmode="numeric" pattern="\d{1,2}" maxlength="2" placeholder="Ej. 55" title="1-2 dígitos">
             <div class="form-hint">Si aplica, ingresa 1–2 dígitos</div>
           </div>
         </div>
@@ -219,12 +219,12 @@
         <div class="form-grid cols-2">
           <div class="form-field">
             <label>Teléfono</label>
-            <input type="text" id="telefono">
+            <input class="form-input" type="text" id="telefono">
           </div>
 
           <div class="form-field">
             <label>Email</label>
-            <input type="email" id="email">
+            <input class="form-input" type="email" id="email">
           </div>
         </div>
       </div>
@@ -239,12 +239,12 @@
         <div class="form-grid cols-2">
           <div class="form-field">
             <label>Representante Legal</label>
-            <input type="text" id="representante">
+            <input class="form-input" type="text" id="representante">
           </div>
 
           <div class="form-field">
             <label>Cédula del Representante Legal</label>
-            <input type="text" id="representante_cedula">
+            <input class="form-input" type="text" id="representante_cedula">
           </div>
         </div>
       </div>
@@ -259,20 +259,20 @@
         <div class="form-grid cols-1">
           <div class="form-field">
             <label class="req">Dirección principal</label>
-            <input type="text" id="direccion" required>
+            <input class="form-input" type="text" id="direccion" required>
           </div>
 
           <div class="form-field">
             <label>Dirección de facturación</label>
-            <input type="text" id="direccion_facturacion">
+            <input class="form-input" type="text" id="direccion_facturacion">
             <div class="form-hint">Opcional. Si se deja vacío, se usa la dirección principal.</div>
           </div>
         </div>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn primary" data-accion="guardar"><i data-lucide="save"></i> Guardar</button>
-        <button type="button" class="btn ghost" onclick="volverAContrato()">Cancelar</button>
+        <button type="submit" class="btn btn-primary" data-accion="guardar"><i data-lucide="save"></i> Guardar</button>
+        <button type="button" class="btn btn-ghost" onclick="volverAContrato()">Cancelar</button>
       </div>
 
       <p id="mensaje" class="resumen"></p>
@@ -280,7 +280,7 @@
   </div>
 
   <!-- Toast Container -->
-  <div id="toasts" class="toast-wrap"></div>
+  <div id="toasts" class="toast-region"></div>
 <script src="../js/ui/toast.js"></script>
 
   <script src="../js/pages/nuevo-cliente.js" defer></script>
