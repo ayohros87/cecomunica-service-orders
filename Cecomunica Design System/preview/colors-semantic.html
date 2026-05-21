@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Semantic colors</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;font-family:var(--font-body);background:var(--surface-card)}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border-subtle)}
+  .cell{background:#fff;padding:18px 16px;display:flex;flex-direction:column;gap:10px}
+  .dot{width:14px;height:14px;border-radius:50%}
+  .label{font:600 11px/1 var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--fg-3)}
+  .name{font:600 14px/1.2 var(--font-body);color:var(--fg-1)}
+  .hex{font:500 11px/1 var(--font-mono);color:var(--fg-3)}
+  .head{font:600 11px/1 var(--font-body);letter-spacing:.1em;text-transform:uppercase;padding:12px 12px 8px;color:var(--fg-3)}
+</style></head>
+<body>
+<div class="head">Status · used as small dots / pills, never as headlines</div>
+<div class="grid">
+  <div class="cell"><div class="dot" style="background:var(--status-online)"></div><div class="name">Online</div><div class="hex">#1FA56B</div></div>
+  <div class="cell"><div class="dot" style="background:var(--status-warning)"></div><div class="name">Warning</div><div class="hex">#E0A93A</div></div>
+  <div class="cell"><div class="dot" style="background:var(--status-critical)"></div><div class="name">Critical</div><div class="hex">#D24545</div></div>
+  <div class="cell"><div class="dot" style="background:var(--status-info)"></div><div class="name">Info</div><div class="hex">#0091D7</div></div>
+</div>
+</body></html>

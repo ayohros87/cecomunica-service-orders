@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Status badges</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;background:var(--surface-card);font-family:var(--font-body);color:var(--fg-1)}
+  .wrap{padding:24px;display:flex;flex-direction:column;gap:14px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .label{font:600 10px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3);min-width:90px}
+
+  .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:999px;font:600 11px/1 var(--font-body);letter-spacing:.02em}
+  .pill .dot{width:6px;height:6px;border-radius:50%}
+  .p-online{background:#E6F4ED;color:#0F6E47}
+  .p-online .dot{background:var(--status-online)}
+  .p-warn{background:#FAF1DB;color:#7A5510}
+  .p-warn .dot{background:var(--status-warning)}
+  .p-crit{background:#FAE3E3;color:#8A1F1F}
+  .p-crit .dot{background:var(--status-critical)}
+  .p-info{background:var(--brand-soft);color:var(--brand-press)}
+  .p-info .dot{background:var(--brand)}
+  .p-neutral{background:var(--gray-100);color:var(--fg-2)}
+  .p-neutral .dot{background:var(--gray-500)}
+
+  .chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:var(--radius-md);font:500 12px/1 var(--font-body);background:#fff;border:1px solid var(--border-default);color:var(--fg-1)}
+  .chip.active{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-press)}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="row"><span class="label">Status</span>
+    <span class="pill p-online"><span class="dot"></span>Conectado</span>
+    <span class="pill p-warn"><span class="dot"></span>Señal débil</span>
+    <span class="pill p-crit"><span class="dot"></span>Fuera de línea</span>
+    <span class="pill p-info"><span class="dot"></span>En despliegue</span>
+    <span class="pill p-neutral"><span class="dot"></span>Inactivo</span>
+  </div>
+  <div class="row"><span class="label">Filter chips</span>
+    <span class="chip active">DMR</span>
+    <span class="chip">TETRA</span>
+    <span class="chip">PoC</span>
+    <span class="chip">IP67</span>
+    <span class="chip">MIL-STD-810G</span>
+  </div>
+</div>
+</body></html>

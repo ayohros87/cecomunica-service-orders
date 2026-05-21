@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Monogram CC — sistema completo</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* =========================================================
+     Refined palette for this concept
+     Deep navy as the brand anchor (was bright cyan-blue),
+     an electric "signal" cyan as the active/accent color.
+     Reads more mission-critical, less consumer-tech.
+     ========================================================= */
+  :root {
+    --m-ink:        #0A1219;     /* near-black */
+    --m-paper:      #F5F7FA;
+    --m-stone:      #E4E9EE;
+    --m-stone-2:    #C8D1DA;
+    --m-navy:       #0B2A47;     /* PRIMARY — deep navy */
+    --m-navy-2:     #143A5C;
+    --m-navy-3:     #1F4E7A;
+    --m-signal:     #00B4D8;     /* ACCENT — signal cyan */
+    --m-signal-2:   #5BD3EE;
+    --m-warmwhite:  #FBFBFB;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--m-paper); color: var(--m-ink); font-family: var(--font-body); }
+
+  .page { max-width: 1280px; margin: 0 auto; padding: 0 32px 96px; }
+
+  /* ============ HERO ============ */
+  .hero {
+    margin: 0 -32px 80px;
+    padding: 96px 64px 88px;
+    background: var(--m-navy);
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content:""; position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size: 56px 56px;
+    -webkit-mask-image: radial-gradient(ellipse at 75% 50%, #000 30%, transparent 80%);
+            mask-image: radial-gradient(ellipse at 75% 50%, #000 30%, transparent 80%);
+  }
+  .hero-inner { position:relative; max-width: 1200px; margin: 0 auto; display:grid; grid-template-columns: 1.2fr 1fr; gap: 64px; align-items: center; }
+  .hero-eb { font: 600 12px/1 var(--font-body); letter-spacing:.18em; text-transform:uppercase; color: var(--m-signal); margin-bottom: 16px; }
+  .hero h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(40px,5vw,60px); line-height: 1.04; letter-spacing:-0.02em; margin: 0 0 18px; }
+  .hero p { font-size: 17px; line-height: 1.6; color: rgba(255,255,255,.78); max-width: 56ch; margin: 0; }
+  .hero-mark { display:flex; justify-content:center; align-items:center; }
+
+  /* ============ Section primitives ============ */
+  .sec { margin-bottom: 88px; }
+  .sec-head { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid var(--m-stone-2); }
+  .sec-head h2 { font-family: var(--font-display); font-weight: 700; font-size: 32px; line-height: 1.15; letter-spacing:-0.015em; margin: 0 0 6px; color: var(--m-ink); }
+  .sec-head p { font-size: 15px; line-height: 1.55; color: #4A5560; margin: 0; max-width: 56ch; }
+  .sec-num { font: 700 12px/1 var(--font-mono); color: var(--m-signal); letter-spacing:.18em; margin-bottom: 10px; display:block; }
+
+  /* ============ Construction ============ */
+  .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .grid-3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+  .grid-4 { display:grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+
+  .panel { background: #fff; border: 1px solid var(--m-stone); border-radius: 12px; padding: 36px; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height: 240px; gap: 18px; position: relative; }
+  .panel.dark { background: var(--m-navy); color: #fff; border-color: transparent; }
+  .panel.ink  { background: var(--m-ink); color: #fff; border-color: transparent; }
+  .panel.paper{ background: var(--m-warmwhite); }
+  .panel-tag { position:absolute; top:14px; left:18px; font:600 10px/1 var(--font-body); letter-spacing:.14em; text-transform:uppercase; color: #6B7884; }
+  .panel.dark .panel-tag, .panel.ink .panel-tag { color: rgba(255,255,255,.5); }
+  .panel-cap { font: 500 12px/1.4 var(--font-mono); color: #6B7884; letter-spacing:.04em; text-align: center; }
+  .panel.dark .panel-cap, .panel.ink .panel-cap { color: rgba(255,255,255,.6); }
+
+  /* ============ Lockup styles ============ */
+  .wm { display:flex; flex-direction:column; line-height: 1; }
+  .wm-name { font-family: var(--font-display); font-weight: 800; letter-spacing:-0.025em; }
+  .wm-tag  { font-family: var(--font-body); font-weight: 500; letter-spacing:.06em; margin-top: 6px; opacity: .72; }
+
+  .lockup-h { display:flex; align-items:center; gap: 20px; }
+  .lockup-h .divider { width: 1px; height: 56px; background: currentColor; opacity: .15; }
+
+  .lockup-v { display:flex; flex-direction: column; align-items:center; gap: 18px; text-align: center; }
+
+  /* ============ Construction grid ============ */
+  .construction {
+    display:grid; grid-template-columns: 1fr 1fr; gap: 0;
+    border: 1px solid var(--m-stone); border-radius: 12px; overflow: hidden; background: #fff;
+  }
+  .construction-left { padding: 48px; background: var(--m-warmwhite); border-right: 1px solid var(--m-stone); position: relative; }
+  .construction-right { padding: 36px 40px; }
+  .construction-right h3 { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 0 0 12px; }
+  .construction-right p { font-size: 14px; line-height: 1.6; color: #4A5560; margin: 0 0 16px; max-width: 48ch; }
+  .construction-right ul { font-size: 14px; line-height: 1.7; color: #2F3942; padding-left: 18px; margin: 0; }
+  .construction-right code { font-family: var(--font-mono); font-size: 13px; background: var(--m-paper); padding: 2px 6px; border-radius: 3px; color: var(--m-navy); }
+
+  /* ============ Clear space ============ */
+  .clearspace-box { background: var(--m-warmwhite); border: 1px solid var(--m-stone); border-radius: 12px; padding: 64px; display:flex; align-items:center; justify-content:center; }
+
+  /* ============ Sizing ============ */
+  .sizes { display:flex; align-items:flex-end; gap: 36px; padding: 48px; background: var(--m-warmwhite); border:1px solid var(--m-stone); border-radius: 12px; }
+  .size-item { display:flex; flex-direction:column; align-items:center; gap: 12px; }
+  .size-item-cap { font: 500 11px/1 var(--font-mono); color: #6B7884; letter-spacing:.04em; }
+
+  /* ============ App icons ============ */
+  .icons-row { display:grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+  .icon-item { display:flex; flex-direction:column; align-items:center; gap: 10px; }
+  .icon-item-cap { font: 500 11px/1.2 var(--font-mono); color: #6B7884; letter-spacing:.04em; text-align:center; }
+  .icon-tile { border-radius: 18%; overflow: hidden; box-shadow: 0 2px 6px rgba(0,0,0,.08); border: 1px solid rgba(0,0,0,.04); }
+  .icon-tile-rect { border-radius: 6px; }
+
+  /* ============ Context mocks ============ */
+  .biz-card {
+    width: 100%; aspect-ratio: 1.75/1; background: #fff; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(11,42,71,.12), 0 2px 4px rgba(11,42,71,.06);
+    position: relative; overflow: hidden; display:flex; flex-direction:column; justify-content:space-between; padding: 32px;
+  }
+  .biz-card::before {
+    content:""; position:absolute; right:-30%; bottom:-50%; width:80%; height: 200%;
+    background: var(--m-navy); transform: rotate(-18deg); transform-origin: right top;
+  }
+  .biz-card::after {
+    content:""; position: absolute; bottom:0; left:0; right:0; height: 6px;
+    background: linear-gradient(90deg, var(--m-navy) 0%, var(--m-signal) 100%);
+  }
+  .biz-card > * { position: relative; z-index:1; }
+  .biz-card .info { display:flex; flex-direction:column; gap: 4px; }
+  .biz-card .info .nm { font-family: var(--font-display); font-weight:700; font-size: 18px; color: var(--m-ink); }
+  .biz-card .info .rl { font-size: 12px; color: #6B7884; }
+  .biz-card .info .ct { font: 500 11px/1.6 var(--font-mono); color: #4A5560; margin-top: 8px; }
+
+  .web-mock { background: #fff; border: 1px solid var(--m-stone); border-radius: 12px; overflow: hidden; }
+  .web-mock-bar { height: 28px; background: var(--m-paper); border-bottom: 1px solid var(--m-stone); display:flex; align-items:center; gap:6px; padding: 0 12px; }
+  .web-mock-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--m-stone-2); }
+  .web-mock-header { display:flex; align-items:center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--m-stone); background: #fff; }
+  .web-mock-nav { display:flex; gap: 22px; font: 500 13px/1 var(--font-body); color: #4A5560; }
+  .web-mock-nav span:first-child { color: var(--m-navy); font-weight: 600; }
+  .web-mock-cta { background: var(--m-navy); color: #fff; padding: 8px 14px; border-radius: 6px; font: 600 12px/1 var(--font-body); }
+  .web-mock-hero { padding: 56px 32px 64px; background: var(--m-navy); color: #fff; position: relative; overflow: hidden; }
+  .web-mock-hero::before {
+    content:""; position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size: 36px 36px;
+    -webkit-mask-image: radial-gradient(ellipse at 75% 50%, #000 30%, transparent 80%);
+            mask-image: radial-gradient(ellipse at 75% 50%, #000 30%, transparent 80%);
+  }
+  .web-mock-hero > * { position: relative; }
+  .web-mock-hero .eb { font:600 11px/1 var(--font-body); letter-spacing:.18em; text-transform:uppercase; color: var(--m-signal); }
+  .web-mock-hero h3 { font-family: var(--font-display); font-weight:700; font-size: 30px; line-height:1.1; letter-spacing:-0.015em; margin: 12px 0 10px; max-width: 24ch; }
+  .web-mock-hero p { font-size: 14px; line-height: 1.55; color: rgba(255,255,255,.75); margin:0; max-width: 50ch; }
+
+  /* ============ Avatar ============ */
+  .avatar { width: 96px; height: 96px; border-radius: 50%; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,.10); }
+
+  .footnote { padding: 24px 28px; background: var(--m-paper); border-radius: 12px; border:1px solid var(--m-stone); margin-top: 80px; }
+  .footnote h3 { font-family: var(--font-display); font-size: 18px; margin: 0 0 8px; color: var(--m-ink); }
+  .footnote p, .footnote ul { font-size: 14px; line-height: 1.65; color: #4A5560; margin: 0 0 8px; }
+  .footnote ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+
+<!-- ============ Reusable mark SVG (hidden, referenced via <use>) ============ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!--
+      The mark: a square tile. Two C-shapes carved from opposite sides
+      meet at the center, leaving a thin vertical channel between them
+      (the "signal"). The right C is the tinted accent — suggesting a
+      transmission echoing back. The mark is constructed on a strict
+      8x8 grid; every dimension is a multiple of 8 px at 64 px unit.
+    -->
+    <symbol id="cc-mark" viewBox="0 0 64 64">
+      <!-- Outer rounded tile -->
+      <rect x="0" y="0" width="64" height="64" rx="10" fill="var(--m-fill, #0B2A47)"/>
+      <!-- Left C (paper / ink color) -->
+      <path d="M30 14
+               H22
+               a14 14 0 0 0 0 36
+               H30"
+            stroke="var(--m-c1, #FFFFFF)" stroke-width="6"
+            fill="none" stroke-linecap="square"/>
+      <!-- Right C (signal accent), mirrored -->
+      <path d="M34 14
+               H42
+               a14 14 0 0 1 0 36
+               H34"
+            stroke="var(--m-c2, #00B4D8)" stroke-width="6"
+            fill="none" stroke-linecap="square"/>
+      <!-- Center channel node (small square indicating link) -->
+      <rect x="30" y="30" width="4" height="4" fill="var(--m-c2, #00B4D8)"/>
+    </symbol>
+
+    <!-- Mark without tile (for inverse / mono uses) -->
+    <symbol id="cc-mark-naked" viewBox="0 0 64 64">
+      <path d="M30 14 H22 a14 14 0 0 0 0 36 H30"
+            stroke="var(--m-c1, currentColor)" stroke-width="6"
+            fill="none" stroke-linecap="square"/>
+      <path d="M34 14 H42 a14 14 0 0 1 0 36 H34"
+            stroke="var(--m-c2, currentColor)" stroke-width="6"
+            fill="none" stroke-linecap="square"/>
+      <rect x="30" y="30" width="4" height="4" fill="var(--m-c2, currentColor)"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="page">
+
+  <!-- =========================================================
+       HERO
+       ========================================================= -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div>
+        <div class="hero-eb">Logo · Dirección 05 · Monogram CC</div>
+        <h1>Una marca corporativa, técnica, lista para licitación.</h1>
+        <p>Dos C entrelazadas, talladas en una placa cuadrada, separadas por un canal central — la idea es transmisión bidireccional, no decoración. Construida sobre cuadrícula estricta de 8 px. Funciona idéntica en monocromo, bordado, fax o favicon de 16 px.</p>
+      </div>
+      <div class="hero-mark">
+        <svg width="220" height="220" style="--m-fill:#fff; --m-c1:#0B2A47; --m-c2:#00B4D8;">
+          <use href="#cc-mark"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       1 · Mark on light + dark
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">01 · LA MARCA</span>
+        <h2>El monograma sobre claro y oscuro.</h2>
+        <p>La placa siempre porta la marca; cambia únicamente el contraste interior.</p>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="panel paper">
+        <span class="panel-tag">Sobre claro · primaria</span>
+        <svg width="160" height="160" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Placa navy · C blanca · canal cyan</div>
+      </div>
+      <div class="panel dark">
+        <span class="panel-tag">Sobre oscuro · inversa</span>
+        <svg width="160" height="160" style="--m-fill:#fff; --m-c1:#0B2A47; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Placa blanca · C navy · canal cyan</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       2 · Construction
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">02 · CONSTRUCCIÓN</span>
+        <h2>Cuadrícula 8×8 px. Sin curvas arbitrarias.</h2>
+        <p>Cada elemento mide múltiplos de 8. La marca está construida, no dibujada.</p>
+      </div>
+    </div>
+    <div class="construction">
+      <div class="construction-left">
+        <svg width="100%" viewBox="-8 -8 80 80" style="display:block">
+          <!-- Grid -->
+          <defs>
+            <pattern id="grid8" width="8" height="8" patternUnits="userSpaceOnUse">
+              <path d="M 8 0 L 0 0 0 8" fill="none" stroke="#C8D1DA" stroke-width="0.3"/>
+            </pattern>
+          </defs>
+          <rect x="-8" y="-8" width="80" height="80" fill="url(#grid8)"/>
+          <!-- Mark with structural overlays -->
+          <rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/>
+          <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="square"/>
+          <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/>
+          <rect x="30" y="30" width="4" height="4" fill="#00B4D8"/>
+          <!-- Construction guides -->
+          <line x1="32" y1="-4" x2="32" y2="68" stroke="#00B4D8" stroke-width="0.4" stroke-dasharray="1 1"/>
+          <line x1="-4" y1="32" x2="68" y2="32" stroke="#00B4D8" stroke-width="0.4" stroke-dasharray="1 1"/>
+          <circle cx="22" cy="32" r="14" fill="none" stroke="#00B4D8" stroke-width="0.4" stroke-dasharray="1 1"/>
+          <circle cx="42" cy="32" r="14" fill="none" stroke="#00B4D8" stroke-width="0.4" stroke-dasharray="1 1"/>
+        </svg>
+      </div>
+      <div class="construction-right">
+        <h3>Reglas de construcción</h3>
+        <ul>
+          <li>Placa <code>64×64</code> px con radio <code>10</code> px.</li>
+          <li>Cada arco de C tiene radio <code>14</code> px y trazo <code>6</code> px.</li>
+          <li>Canal central: separación <code>4</code> px exacta entre las dos C.</li>
+          <li>Nodo central: cuadrado <code>4×4</code> px en la mitad geométrica.</li>
+          <li>Los terminales son rectos (no redondeados) — lectura industrial, no orgánica.</li>
+          <li>Nunca ajustar proporciones a mano. Si necesita escalar, escale el SVG en bloque.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       3 · Lockups
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">03 · LOCKUPS</span>
+        <h2>Tres bloqueos oficiales.</h2>
+        <p>Horizontal para encabezados y firmas. Vertical para decks y collateral. Marca sola para favicons, redes sociales y aplicaciones.</p>
+      </div>
+    </div>
+
+    <div class="grid-3">
+      <!-- HORIZONTAL -->
+      <div class="panel paper">
+        <span class="panel-tag">Horizontal · primario</span>
+        <div class="lockup-h" style="color: var(--m-ink)">
+          <svg width="64" height="64" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <div class="divider"></div>
+          <div class="wm">
+            <span class="wm-name" style="font-size: 28px; color: var(--m-ink)">CECOMUNICA</span>
+            <span class="wm-tag" style="font-size: 11px; color: var(--m-navy)">Soluciones en Comunicaciones</span>
+          </div>
+        </div>
+        <div class="panel-cap">Para encabezados, sitio web, firma de correo</div>
+      </div>
+
+      <!-- STACKED -->
+      <div class="panel paper">
+        <span class="panel-tag">Vertical · stacked</span>
+        <div class="lockup-v">
+          <svg width="80" height="80" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <div class="wm" style="align-items:center">
+            <span class="wm-name" style="font-size: 22px; color: var(--m-ink)">CECOMUNICA</span>
+            <span class="wm-tag" style="font-size: 10px; color: var(--m-navy)">Soluciones en Comunicaciones</span>
+          </div>
+        </div>
+        <div class="panel-cap">Para decks, portada, papelería formal</div>
+      </div>
+
+      <!-- MARK ONLY -->
+      <div class="panel paper">
+        <span class="panel-tag">Marca sola</span>
+        <svg width="120" height="120" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Para favicon, app icon, avatar, watermark</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       4 · Color system
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">04 · PALETA</span>
+        <h2>Navy profundo con cyan de señal.</h2>
+        <p>Bajamos el azul brillante anterior hacia un navy enterprise serio; el cyan eléctrico se reserva para el "canal" — el momento activo de transmisión.</p>
+      </div>
+    </div>
+    <div class="grid-4">
+      <div class="panel" style="background:#0B2A47;color:#fff;border:0">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:32px;letter-spacing:-.01em">Navy</div>
+        <div class="panel-cap" style="color:rgba(255,255,255,.7)">#0B2A47<br/>Marca · placa · superficies oscuras</div>
+      </div>
+      <div class="panel" style="background:#00B4D8;color:#fff;border:0">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:32px;letter-spacing:-.01em">Signal</div>
+        <div class="panel-cap" style="color:rgba(255,255,255,.85)">#00B4D8<br/>Acento · canal · enlace · estados activos</div>
+      </div>
+      <div class="panel ink">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:32px;letter-spacing:-.01em">Ink</div>
+        <div class="panel-cap" style="color:rgba(255,255,255,.7)">#0A1219<br/>Texto · marca a un solo tono</div>
+      </div>
+      <div class="panel paper">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:32px;letter-spacing:-.01em;color:var(--m-ink)">Paper</div>
+        <div class="panel-cap">#F5F7FA<br/>Fondo · superficies claras</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       5 · Colorways for the mark
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">05 · VERSIONES DE LA MARCA</span>
+        <h2>Una marca, seis aplicaciones.</h2>
+        <p>Cuando hay color, full-color. Cuando no — un solo tono, knockout, o bordado en hilo único.</p>
+      </div>
+    </div>
+    <div class="grid-3">
+      <div class="panel paper"><span class="panel-tag">Primaria</span>
+        <svg width="120" height="120" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Full color sobre claro</div>
+      </div>
+      <div class="panel dark"><span class="panel-tag">Inversa</span>
+        <svg width="120" height="120" style="--m-fill:#fff; --m-c1:#0B2A47; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Full color sobre oscuro</div>
+      </div>
+      <div class="panel paper"><span class="panel-tag">Un tono · navy</span>
+        <svg width="120" height="120" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#fff;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Sin acento — impresión a una tinta</div>
+      </div>
+      <div class="panel paper"><span class="panel-tag">Un tono · ink</span>
+        <svg width="120" height="120" style="--m-fill:#0A1219; --m-c1:#fff; --m-c2:#fff;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Documentos legales, negro puro</div>
+      </div>
+      <div class="panel ink"><span class="panel-tag">Knockout blanco</span>
+        <svg width="120" height="120" style="--m-fill:#fff; --m-c1:#0A1219; --m-c2:#0A1219;"><use href="#cc-mark"/></svg>
+        <div class="panel-cap">Sobre fotografía oscura, full bleed</div>
+      </div>
+      <div class="panel paper"><span class="panel-tag">Sin placa</span>
+        <svg width="120" height="120" style="color:#0B2A47; --m-c1:#0B2A47; --m-c2:#00B4D8;"><use href="#cc-mark-naked"/></svg>
+        <div class="panel-cap">Cuando ya hay un fondo de marca</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       6 · Clear space + sizing
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">06 · ÁREA DE RESPETO Y ESCALA</span>
+        <h2>Espacio mínimo de "x", donde x = altura de la C.</h2>
+        <p>Tamaño mínimo en pantalla: 24 px. Mínimo en impresión: 8 mm.</p>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="clearspace-box">
+        <svg width="100%" viewBox="0 0 320 200" style="display:block;max-width:420px">
+          <!-- clear space rectangles -->
+          <rect x="40" y="40" width="240" height="120" fill="none" stroke="#C8D1DA" stroke-width="1" stroke-dasharray="4 4"/>
+          <rect x="80" y="60" width="160" height="80" fill="none" stroke="#C8D1DA" stroke-width="1" stroke-dasharray="2 2"/>
+          <!-- mark -->
+          <g transform="translate(96,68) scale(1.3)">
+            <rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/>
+            <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="square"/>
+            <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/>
+            <rect x="30" y="30" width="4" height="4" fill="#00B4D8"/>
+          </g>
+          <!-- "x" labels -->
+          <text x="60" y="106" font-family="IBM Plex Mono, monospace" font-size="10" fill="#6B7884">x</text>
+          <text x="246" y="106" font-family="IBM Plex Mono, monospace" font-size="10" fill="#6B7884">x</text>
+          <text x="158" y="55" font-family="IBM Plex Mono, monospace" font-size="10" fill="#6B7884">x</text>
+          <text x="158" y="158" font-family="IBM Plex Mono, monospace" font-size="10" fill="#6B7884">x</text>
+        </svg>
+      </div>
+      <div class="sizes">
+        <div class="size-item">
+          <svg width="16" height="16" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <span class="size-item-cap">16 px<br/>favicon</span>
+        </div>
+        <div class="size-item">
+          <svg width="24" height="24" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <span class="size-item-cap">24 px · mín</span>
+        </div>
+        <div class="size-item">
+          <svg width="40" height="40" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <span class="size-item-cap">40 px</span>
+        </div>
+        <div class="size-item">
+          <svg width="64" height="64" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <span class="size-item-cap">64 px · base</span>
+        </div>
+        <div class="size-item">
+          <svg width="96" height="96" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <span class="size-item-cap">96 px</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       7 · Digital applications
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">07 · APLICACIONES DIGITALES</span>
+        <h2>Favicons, app icons, avatares.</h2>
+        <p>El monograma fue diseñado para sobrevivir el redondeo brutal de iconos modernos.</p>
+      </div>
+    </div>
+    <div class="icons-row">
+      <div class="icon-item">
+        <div class="icon-tile" style="width:80px;height:80px;background:#0B2A47;display:flex;align-items:center;justify-content:center">
+          <svg width="56" height="56" style="--m-c1:#fff; --m-c2:#00B4D8;color:#fff"><use href="#cc-mark-naked"/></svg>
+        </div>
+        <span class="icon-item-cap">iOS · 80 px<br/>squircle</span>
+      </div>
+      <div class="icon-item">
+        <div class="icon-tile" style="width:80px;height:80px;background:linear-gradient(160deg,#143A5C,#0B2A47);display:flex;align-items:center;justify-content:center">
+          <svg width="56" height="56" style="--m-c1:#fff; --m-c2:#5BD3EE;color:#fff"><use href="#cc-mark-naked"/></svg>
+        </div>
+        <span class="icon-item-cap">iOS · gradient</span>
+      </div>
+      <div class="icon-item">
+        <div class="icon-tile" style="width:80px;height:80px;border-radius:50%;background:#0B2A47;display:flex;align-items:center;justify-content:center">
+          <svg width="50" height="50" style="--m-c1:#fff; --m-c2:#00B4D8;color:#fff"><use href="#cc-mark-naked"/></svg>
+        </div>
+        <span class="icon-item-cap">Android · adaptive</span>
+      </div>
+      <div class="icon-item">
+        <div class="icon-tile icon-tile-rect" style="width:32px;height:32px;background:#0B2A47;display:flex;align-items:center;justify-content:center">
+          <svg width="22" height="22" style="--m-c1:#fff; --m-c2:#00B4D8;color:#fff"><use href="#cc-mark-naked"/></svg>
+        </div>
+        <span class="icon-item-cap">Favicon · 32 px</span>
+      </div>
+      <div class="icon-item">
+        <div class="icon-tile" style="width:80px;height:80px;border-radius:50%;background:#fff;border:2px solid #E4E9EE;display:flex;align-items:center;justify-content:center">
+          <svg width="50" height="50" style="--m-c1:#0B2A47; --m-c2:#00B4D8;color:#0B2A47"><use href="#cc-mark-naked"/></svg>
+        </div>
+        <span class="icon-item-cap">Avatar · LinkedIn</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       8 · In context
+       ========================================================= -->
+  <section class="sec">
+    <div class="sec-head">
+      <div>
+        <span class="sec-num">08 · EN CONTEXTO</span>
+        <h2>Cómo se ve en la vida real.</h2>
+        <p>Tarjeta corporativa, encabezado del sitio, hero de marketing.</p>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom: 32px">
+      <!-- Business card -->
+      <div class="panel" style="padding: 32px">
+        <span class="panel-tag">Tarjeta · 90 × 50 mm</span>
+        <div class="biz-card">
+          <div style="display:flex;align-items:center;gap:12px">
+            <svg width="40" height="40" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+            <div class="wm">
+              <span class="wm-name" style="font-size:14px;color:var(--m-ink)">CECOMUNICA</span>
+              <span class="wm-tag" style="font-size:9px;color:var(--m-navy)">Soluciones en Comunicaciones</span>
+            </div>
+          </div>
+          <div class="info">
+            <span class="nm">Ing. Alberto E. Yohros</span>
+            <span class="rl">Gerente General</span>
+            <span class="ct">+507 279-5570 · +507 6151-5555<br/>alberto.yohros@cecomunica.com</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Avatar / social -->
+      <div class="panel paper">
+        <span class="panel-tag">Avatar · LinkedIn / X</span>
+        <div style="display:flex;gap:24px;align-items:center">
+          <div class="avatar" style="background:#0B2A47;display:flex;align-items:center;justify-content:center">
+            <svg width="60" height="60" style="--m-c1:#fff; --m-c2:#00B4D8;color:#fff"><use href="#cc-mark-naked"/></svg>
+          </div>
+          <div class="avatar" style="background:#fff;border:2px solid #E4E9EE;display:flex;align-items:center;justify-content:center">
+            <svg width="60" height="60" style="--m-c1:#0B2A47; --m-c2:#00B4D8;color:#0B2A47"><use href="#cc-mark-naked"/></svg>
+          </div>
+          <div class="avatar" style="background:linear-gradient(160deg,#143A5C,#0B2A47);display:flex;align-items:center;justify-content:center">
+            <svg width="60" height="60" style="--m-c1:#fff; --m-c2:#5BD3EE;color:#fff"><use href="#cc-mark-naked"/></svg>
+          </div>
+        </div>
+        <div class="panel-cap">Variantes según fondo del feed</div>
+      </div>
+    </div>
+
+    <!-- Website -->
+    <div class="web-mock">
+      <div class="web-mock-bar"><span></span><span></span><span></span></div>
+      <div class="web-mock-header">
+        <div style="display:flex;align-items:center;gap:12px">
+          <svg width="32" height="32" style="--m-fill:#0B2A47; --m-c1:#fff; --m-c2:#00B4D8;"><use href="#cc-mark"/></svg>
+          <span style="font-family:var(--font-display);font-weight:800;letter-spacing:-.02em;font-size:18px;color:var(--m-ink)">CECOMUNICA</span>
+        </div>
+        <div class="web-mock-nav">
+          <span>Inicio</span><span>Productos</span><span>Soluciones</span><span>Nosotros</span><span>Contacto</span>
+        </div>
+        <div class="web-mock-cta">Solicitar cotización</div>
+      </div>
+      <div class="web-mock-hero">
+        <div class="eb">Soluciones en comunicaciones</div>
+        <h3>Comunicaciones críticas, sin interrupciones.</h3>
+        <p>Redes TETRA, DMR y push-to-talk celular para puertos, gobierno e industria en Panamá y Centroamérica.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================
+       Footer note
+       ========================================================= -->
+  <div class="footnote">
+    <h3>¿Qué sigue?</h3>
+    <p>Si esta dirección le convence, lo siguiente:</p>
+    <ul>
+      <li>Exportar la marca a SVG / PNG / favicon en <code>assets/</code> y reemplazar el logo actual en el UI kit del sitio web.</li>
+      <li>Actualizar los tokens de <code>colors_and_type.css</code>: <code>--brand</code> de cyan-blue brillante a navy profundo, con el cyan reservado como <code>--accent</code>.</li>
+      <li>Producir guidelines completas (PDF brand book de 1 página).</li>
+      <li>Renderizar la versión inversa del wordmark "CECOMUNICA" en blanco para usos sobre fondo oscuro (algo que faltaba antes).</li>
+    </ul>
+    <p style="margin-top:14px"><strong>Avíseme</strong> si quiere ajustes (otro tono de cyan, otra forma del canal central, otra tipografía para el wordmark) y lo iteramos.</p>
+  </div>
+
+</div>
+
+</body>
+</html>

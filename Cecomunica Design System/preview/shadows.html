@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Shadows</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;background:var(--gray-50);font-family:var(--font-body)}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:18px;padding:32px 24px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .box{width:100%;aspect-ratio:1.4/1;background:#fff;border-radius:var(--radius-lg);border:1px solid var(--border-subtle)}
+  .name{font:600 11px/1 var(--font-body);color:var(--fg-1)}
+  .meta{font:500 10px/1.2 var(--font-mono);color:var(--fg-3);text-align:center}
+</style></head>
+<body>
+<div class="grid">
+  <div class="cell"><div class="box" style="box-shadow:var(--shadow-xs)"></div><div class="name">XS</div><div class="meta">resting</div></div>
+  <div class="cell"><div class="box" style="box-shadow:var(--shadow-sm)"></div><div class="name">SM</div><div class="meta">cards</div></div>
+  <div class="cell"><div class="box" style="box-shadow:var(--shadow-md)"></div><div class="name">MD</div><div class="meta">hover</div></div>
+  <div class="cell"><div class="box" style="box-shadow:var(--shadow-lg)"></div><div class="name">LG</div><div class="meta">menus / popovers</div></div>
+  <div class="cell"><div class="box" style="box-shadow:var(--shadow-xl)"></div><div class="name">XL</div><div class="meta">modals</div></div>
+</div>
+</body></html>

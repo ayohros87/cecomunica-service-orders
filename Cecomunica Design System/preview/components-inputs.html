@@ -1,0 +1,24 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Form inputs</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;background:var(--surface-card);font-family:var(--font-body);color:var(--fg-1)}
+  .wrap{padding:22px 24px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .lbl{font:600 12px/1 var(--font-body);color:var(--fg-1)}
+  .inp{font-family:var(--font-body);font-size:14px;height:40px;padding:0 12px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:#fff;color:var(--fg-1);outline:none;transition:border-color var(--dur-fast),box-shadow var(--dur-fast)}
+  .inp::placeholder{color:var(--fg-4)}
+  .inp.focus{border-color:var(--brand);box-shadow:var(--ring-focus)}
+  .inp.err{border-color:var(--status-critical);box-shadow:var(--ring-error)}
+  .help{font:500 11px/1.3 var(--font-body);color:var(--fg-3)}
+  .errmsg{font:500 11px/1.3 var(--font-body);color:var(--status-critical)}
+  textarea.inp{height:64px;padding:8px 12px;resize:none}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="field"><label class="lbl">Empresa</label><input class="inp" placeholder="Puerto de Balboa S.A."><span class="help">Razón social del cliente</span></div>
+  <div class="field"><label class="lbl">Correo corporativo</label><input class="inp focus" value="contacto@puerto.com.pa"><span class="help">Foco · borde brand + ring</span></div>
+  <div class="field"><label class="lbl">Cantidad de radios</label><input class="inp err" value="abc"><span class="errmsg">Ingrese un número entero</span></div>
+  <div class="field"><label class="lbl">Notas</label><textarea class="inp" placeholder="Cobertura requerida, vertical, etc."></textarea></div>
+</div>
+</body></html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Hero pattern</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;font-family:var(--font-body)}
+  .hero{position:relative;background:var(--gradient-hero);color:#fff;padding:32px 36px;min-height:200px;overflow:hidden;display:flex;flex-direction:column;justify-content:center;gap:14px}
+  .grid{position:absolute;inset:0;background-image:
+    linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size:32px 32px;mask-image:radial-gradient(ellipse at 70% 50%,#000 30%,transparent 80%)}
+  .dots{position:absolute;inset:0;background-image:radial-gradient(circle at center,rgba(120,200,255,.35) 1.2px,transparent 1.6px);background-size:18px 18px;mask-image:radial-gradient(ellipse at 80% 60%,#000 0%,transparent 50%);opacity:.55}
+  .body{position:relative;max-width:62%}
+  .eb{font:600 11px/1 var(--font-body);letter-spacing:.18em;text-transform:uppercase;color:var(--cyan-300)}
+  .h{font-family:var(--font-display);font-weight:700;font-size:40px;line-height:1.05;letter-spacing:-0.02em;margin:8px 0 6px}
+  .sub{font-size:14px;line-height:1.5;color:rgba(255,255,255,.78);max-width:520px}
+  .band{position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--gradient-brand-band)}
+</style></head>
+<body>
+<div class="hero">
+  <div class="grid"></div>
+  <div class="dots"></div>
+  <div class="body">
+    <div class="eb">Soluciones verticales</div>
+    <div class="h">Comunicaciones críticas, sin interrupciones.</div>
+    <div class="sub">Redes de radio TETRA y DMR, push‑to‑talk celular y telecom de misión crítica para puertos, gobierno e industria.</div>
+  </div>
+  <div class="band"></div>
+</div>
+</body></html>

@@ -1,0 +1,2523 @@
+/* =============================================================
+   Cecomunica App UI Kit — Shared styles
+   Operational / service-orders surface
+   Built on top of ../../colors_and_type.css
+   ============================================================= */
+
+/* ── Reset ─────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--fg-1);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button { font-family: inherit; cursor: pointer; }
+
+
+/* ── App shell ──────────────────────────────────────────────── */
+/*
+   Layout:
+   ┌──────────────────────────────────┐
+   │         .app-topbar              │  56 px, sticky
+   ├──────────────────────────────────┤
+   │ .app-body                        │
+   │   max-width 1440px, px 24–32     │
+   └──────────────────────────────────┘
+*/
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 56px;
+  background: var(--surface-card);
+  border-bottom: 2px solid var(--brand);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-6);
+  gap: var(--sp-4);
+}
+.app-topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  text-decoration: none;
+}
+.app-topbar-logo svg { display: block; }
+.app-topbar-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--fg-1);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.app-topbar-title i[data-lucide] { width: 18px; height: 18px; color: var(--accent); }
+.app-topbar-spacer { flex: 1; }
+.app-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.app-body {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: var(--sp-6) var(--sp-8);
+}
+
+/* Page header (title + action row) */
+.app-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+  flex-wrap: wrap;
+}
+.app-page-header h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  line-height: var(--lh-h2);
+  letter-spacing: var(--tr-h2);
+  color: var(--fg-1);
+  margin: 0;
+}
+.app-page-header p {
+  font-size: var(--fs-body-s);
+  color: var(--fg-3);
+  margin: 4px 0 0;
+}
+.app-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+/* Breadcrumbs */
+.app-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  margin-bottom: var(--sp-4);
+}
+.app-breadcrumbs a { color: var(--fg-3); }
+.app-breadcrumbs a:hover { color: var(--fg-1); }
+.app-breadcrumbs-sep { color: var(--fg-4); }
+.app-breadcrumbs-current { color: var(--fg-2); font-weight: 500; }
+
+/* Card (surface container) */
+.app-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-subtle);
+}
+.app-card-padded { padding: var(--sp-6); }
+
+/* Section label / dividers */
+.app-section-label {
+  font-size: var(--fs-eyebrow);
+  font-weight: 600;
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin: 0 0 var(--sp-4);
+}
+
+/* Toolbar row (filter bar inside card) */
+.app-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.app-toolbar-spacer { flex: 1; min-width: var(--sp-4); }
+
+
+/* ── Buttons ────────────────────────────────────────────────── */
+/*
+   Variants: .btn-primary  .btn-secondary  .btn-ghost
+             .btn-danger   .btn-icon (square)
+   Sizes:    default (36px)  .btn-sm (28px)  .btn-lg (44px)
+   States:   :hover  :active  :focus-visible  [disabled]  .btn--loading
+*/
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1;
+  height: 36px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+.btn:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.btn[disabled], .btn--loading { opacity: 0.55; pointer-events: none; }
+.btn i[data-lucide], .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+/* Sizes */
+.btn-sm { height: 28px; padding: 0 10px; font-size: 12px; gap: 4px; }
+.btn-sm i[data-lucide], .btn-sm svg { width: 13px; height: 13px; }
+.btn-lg { height: 44px; padding: 0 20px; font-size: 14px; }
+.btn-lg i[data-lucide], .btn-lg svg { width: 16px; height: 16px; }
+
+/* Icon-only (square) */
+.btn-icon { padding: 0; width: 36px; }
+.btn-icon.btn-sm { width: 28px; }
+.btn-icon.btn-lg { width: 44px; }
+
+/* Primary */
+.btn-primary {
+  background: var(--brand);
+  color: var(--fg-on-brand);
+  border-color: var(--navy-700);
+}
+.btn-primary:hover {
+  background: var(--brand-hover);
+  border-color: var(--navy-900);
+  color: var(--fg-on-brand);
+  text-decoration: none;
+}
+.btn-primary:active { transform: translateY(1px); }
+
+/* Secondary */
+.btn-secondary {
+  background: var(--surface-card);
+  color: var(--fg-1);
+  border-color: var(--border-default);
+}
+.btn-secondary:hover {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand-press);
+  text-decoration: none;
+}
+.btn-secondary:active { transform: translateY(1px); }
+
+/* Ghost */
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-2);
+  border-color: transparent;
+}
+.btn-ghost:hover {
+  background: var(--surface-sunken);
+  color: var(--fg-1);
+  text-decoration: none;
+}
+
+/* Danger */
+.btn-danger {
+  background: var(--surface-card);
+  color: var(--status-critical);
+  border-color: var(--status-critical);
+}
+.btn-danger:hover {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #991b1b;
+  text-decoration: none;
+}
+.btn-danger:active { transform: translateY(1px); }
+
+/* Accent (signal cyan) — use sparingly for "active/on" actions */
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--blue-600);
+}
+.btn-accent:hover {
+  background: var(--accent-hover);
+  color: #fff;
+  text-decoration: none;
+}
+
+/* Loading spinner overlay */
+.btn--loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn--loading .btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  position: absolute;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Button group */
+.btn-group {
+  display: inline-flex;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.btn-group .btn {
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+}
+.btn-group .btn:last-child { border-right: none; }
+.btn-group .btn.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+
+/* ── Status chips (order states) ────────────────────────────── */
+/*
+   Order workflow states for the service-order app.
+   Each chip is a pill badge — small, scannable at a glance.
+   Colors use the DS status palette + muted soft backgrounds.
+   Use .chip-estado on a <span> or <div>.
+*/
+
+/* Order-state token map */
+:root {
+  /* Recibida */
+  --chip-recibida-bg:  #EFF6FF;
+  --chip-recibida-fg:  #1D4ED8;
+  --chip-recibida-bd:  #BFDBFE;
+  /* En diagnóstico */
+  --chip-diag-bg:      #F5F3FF;
+  --chip-diag-fg:      #6D28D9;
+  --chip-diag-bd:      #DDD6FE;
+  /* Cotizada */
+  --chip-cotizada-bg:  #FFFBEB;
+  --chip-cotizada-fg:  #92400E;
+  --chip-cotizada-bd:  #FDE68A;
+  /* Aprobada */
+  --chip-aprobada-bg:  #ECFDF5;
+  --chip-aprobada-fg:  #065F46;
+  --chip-aprobada-bd:  #A7F3D0;
+  /* En reparación */
+  --chip-reparacion-bg: #FFF7ED;
+  --chip-reparacion-fg: #9A3412;
+  --chip-reparacion-bd: #FED7AA;
+  /* Lista para entrega */
+  --chip-lista-bg:     #F0FDF4;
+  --chip-lista-fg:     #166534;
+  --chip-lista-bd:     #BBF7D0;
+  /* Entregada */
+  --chip-entregada-bg: var(--gray-100);
+  --chip-entregada-fg: var(--gray-600);
+  --chip-entregada-bd: var(--gray-200);
+  /* Cancelada */
+  --chip-cancelada-bg: #FEF2F2;
+  --chip-cancelada-fg: #991B1B;
+  --chip-cancelada-bd: #FECACA;
+  /* En espera */
+  --chip-espera-bg:    #F8FAFC;
+  --chip-espera-fg:    var(--gray-600);
+  --chip-espera-bd:    var(--gray-300);
+}
+
+.chip-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  line-height: 20px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+}
+.chip-estado::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+/* No dot on neutral/delivered */
+.chip-estado.chip-entregada::before,
+.chip-estado.chip-cancelada::before,
+.chip-estado.chip-espera::before { display: none; }
+
+.chip-estado.chip-recibida   { background: var(--chip-recibida-bg);   color: var(--chip-recibida-fg);   border-color: var(--chip-recibida-bd); }
+.chip-estado.chip-diagnostico { background: var(--chip-diag-bg);      color: var(--chip-diag-fg);       border-color: var(--chip-diag-bd); }
+.chip-estado.chip-cotizada    { background: var(--chip-cotizada-bg);   color: var(--chip-cotizada-fg);   border-color: var(--chip-cotizada-bd); }
+.chip-estado.chip-aprobada    { background: var(--chip-aprobada-bg);   color: var(--chip-aprobada-fg);   border-color: var(--chip-aprobada-bd); }
+.chip-estado.chip-reparacion  { background: var(--chip-reparacion-bg); color: var(--chip-reparacion-fg); border-color: var(--chip-reparacion-bd); }
+.chip-estado.chip-lista       { background: var(--chip-lista-bg);      color: var(--chip-lista-fg);      border-color: var(--chip-lista-bd); }
+.chip-estado.chip-entregada   { background: var(--chip-entregada-bg);  color: var(--chip-entregada-fg);  border-color: var(--chip-entregada-bd); }
+.chip-estado.chip-cancelada   { background: var(--chip-cancelada-bg);  color: var(--chip-cancelada-fg);  border-color: var(--chip-cancelada-bd); }
+.chip-estado.chip-espera      { background: var(--chip-espera-bg);     color: var(--chip-espera-fg);     border-color: var(--chip-espera-bd); }
+
+/* Priority badges (used in table) */
+.chip-prioridad {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+.chip-prioridad.alta    { background: #FEF2F2; color: #991B1B; border-color: #FECACA; }
+.chip-prioridad.media   { background: #FFFBEB; color: #92400E; border-color: #FDE68A; }
+.chip-prioridad.normal  { background: var(--gray-100); color: var(--gray-600); border-color: var(--gray-200); }
+
+
+/* ── Data table ─────────────────────────────────────────────── */
+/*
+   Wrapper → .app-table-wrap
+   Table   → table.app-table
+   Supports: sortable headers, row hover, sticky header, empty state
+*/
+.app-table-wrap {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+table.app-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body-s);
+}
+
+/* Sticky header */
+table.app-table thead {
+  position: sticky;
+  top: 56px; /* topbar height */
+  z-index: 10;
+  background: var(--surface-sunken);
+}
+table.app-table thead tr {
+  border-bottom: 2px solid var(--border-default);
+}
+table.app-table th {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--fg-3);
+  padding: var(--sp-3) var(--sp-4);
+  vertical-align: middle;
+  white-space: nowrap;
+  user-select: none;
+}
+/* Sortable column header */
+th.sortable { cursor: pointer; }
+th.sortable:hover { color: var(--fg-1); }
+th.sortable .sort-icon {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  vertical-align: middle;
+  margin-left: 4px;
+  opacity: 0.35;
+}
+th.sortable.sort-asc .sort-icon,
+th.sortable.sort-desc .sort-icon { opacity: 1; color: var(--accent); }
+
+table.app-table tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+table.app-table tbody tr:last-child { border-bottom: none; }
+table.app-table tbody tr:hover { background: var(--brand-soft); cursor: pointer; }
+
+table.app-table td {
+  padding: var(--sp-3) var(--sp-4);
+  vertical-align: middle;
+  color: var(--fg-2);
+}
+table.app-table td.td-primary {
+  color: var(--fg-1);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono);
+}
+table.app-table td.td-muted { color: var(--fg-3); font-size: var(--fs-caption); }
+table.app-table .td-actions {
+  text-align: right;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+}
+table.app-table tbody tr:hover .td-actions { opacity: 1; }
+
+/* Pagination bar */
+.app-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.app-pagination {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.app-pagination-page {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-2);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+.app-pagination-page:hover { background: var(--surface-sunken); }
+.app-pagination-page.active {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+/* Empty state (inside table or standalone) */
+.app-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-16) var(--sp-6);
+  color: var(--fg-3);
+  text-align: center;
+}
+.app-empty-state svg { opacity: 0.35; }
+.app-empty-state p { font-size: var(--fs-body-s); max-width: 320px; margin: 0; }
+.app-empty-state strong { display: block; font-size: var(--fs-h4); color: var(--fg-2); margin-bottom: 4px; }
+
+/* Skeleton loader row */
+@keyframes shimmer {
+  from { background-position: -600px 0; }
+  to   { background-position:  600px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--gray-100) 25%,
+    var(--gray-200) 50%,
+    var(--gray-100) 75%);
+  background-size: 1200px 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+td .skeleton { height: 14px; width: 100%; }
+
+
+/* ── Form kit ───────────────────────────────────────────────── */
+/*
+   .form-field  — wrapper (label + control + hint/error)
+   .form-input  — text, email, tel, number, date, time, url
+   .form-select — native <select>
+   .form-textarea — <textarea>
+   .form-file   — file upload zone
+   Fieldset / section: .form-section
+   States: :focus  .has-error  [disabled]  .is-loading
+*/
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+.form-section + .form-section {
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-6);
+  border-top: 1px solid var(--border-subtle);
+}
+.form-section-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  font-weight: 700;
+  color: var(--fg-1);
+  margin: 0 0 var(--sp-1);
+}
+.form-section-desc {
+  font-size: var(--fs-body-s);
+  color: var(--fg-3);
+  margin: 0;
+}
+
+/* Grid helpers (2-col, 3-col) */
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }
+.form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--sp-4); }
+@media (max-width: 640px) {
+  .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; }
+}
+
+/* Field wrapper */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.form-field.span-2 { grid-column: span 2; }
+.form-field.span-3 { grid-column: span 3; }
+
+/* Label */
+.form-label {
+  font-size: var(--fs-body-s);
+  font-weight: 600;
+  color: var(--fg-2);
+  line-height: 1.3;
+}
+.form-label .req {
+  color: var(--status-critical);
+  margin-left: 2px;
+  font-weight: 700;
+}
+.form-label .optional {
+  font-weight: 400;
+  color: var(--fg-4);
+  font-size: var(--fs-caption);
+  margin-left: 4px;
+}
+
+/* Base control */
+.form-input,
+.form-select,
+.form-textarea {
+  font-family: var(--font-body);
+  font-size: var(--fs-body-s);
+  color: var(--fg-1);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 0 var(--sp-3);
+  height: 38px;
+  outline: none;
+  width: 100%;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-inset);
+}
+.form-input::placeholder { color: var(--fg-4); }
+.form-textarea {
+  height: auto;
+  min-height: 88px;
+  padding: var(--sp-2) var(--sp-3);
+  resize: vertical;
+}
+.form-select { padding-right: 36px; appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B7884' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+/* Focus */
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: var(--ring-focus);
+}
+
+/* Disabled */
+.form-input[disabled],
+.form-select[disabled],
+.form-textarea[disabled] {
+  background: var(--surface-sunken);
+  color: var(--fg-4);
+  cursor: not-allowed;
+}
+
+/* Error state */
+.form-field.has-error .form-input,
+.form-field.has-error .form-select,
+.form-field.has-error .form-textarea {
+  border-color: var(--status-critical);
+  box-shadow: var(--ring-error);
+}
+
+/* Hint / error message */
+.form-hint {
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  line-height: 1.4;
+}
+.form-error-msg {
+  font-size: var(--fs-caption);
+  color: var(--status-critical);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Input with prefix/suffix icon */
+.form-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.form-input-wrap .form-input { padding-left: 36px; }
+.form-input-wrap .form-input.has-suffix { padding-right: 36px; }
+.form-input-prefix, .form-input-suffix {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.form-input-prefix { left: 10px; }
+.form-input-suffix { right: 10px; }
+.form-input-prefix svg, .form-input-suffix svg { width: 16px; height: 16px; }
+
+/* Checkboxes / radios */
+.form-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  cursor: pointer;
+}
+.form-check input[type="checkbox"],
+.form-check input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--brand);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.form-check-label {
+  font-size: var(--fs-body-s);
+  color: var(--fg-2);
+  line-height: 1.4;
+}
+.form-check-desc {
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+}
+
+/* File upload zone */
+.form-file-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--sp-8) var(--sp-6);
+  text-align: center;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.form-file-zone:hover,
+.form-file-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--brand-soft);
+}
+.form-file-zone input[type="file"] { display: none; }
+.form-file-zone-icon { color: var(--fg-4); margin-bottom: var(--sp-2); }
+.form-file-zone-icon svg { width: 32px; height: 32px; }
+.form-file-zone p { font-size: var(--fs-body-s); color: var(--fg-3); margin: 0; }
+.form-file-zone strong { color: var(--accent); }
+.form-file-zone span { font-size: var(--fs-caption); color: var(--fg-4); }
+
+/* Form actions bar */
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--sp-2);
+}
+.form-actions-secondary { margin-left: auto; }
+
+
+/* ── Filter bar (above table) ───────────────────────────────── */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.filter-search {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+}
+.filter-search input {
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--sp-3) 0 34px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--fg-1);
+  background: var(--surface-sunken);
+  outline: none;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.filter-search input:focus {
+  border-color: var(--accent);
+  background: var(--surface-card);
+  box-shadow: var(--ring-focus);
+}
+.filter-search .search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-4);
+  pointer-events: none;
+}
+.filter-search .search-icon svg { width: 15px; height: 15px; }
+.filter-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.filter-chip {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+}
+.filter-chip:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+.filter-chip.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+
+/* ── Toast notifications ────────────────────────────────────── */
+.toast-region {
+  position: fixed;
+  bottom: var(--sp-6);
+  right: var(--sp-6);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  min-width: 280px;
+  max-width: 400px;
+  pointer-events: all;
+  animation: toast-in var(--dur-slow) var(--ease-out) both;
+}
+.toast.toast-success { border-left: 4px solid var(--status-online); }
+.toast.toast-error   { border-left: 4px solid var(--status-critical); }
+.toast.toast-warning { border-left: 4px solid var(--status-warning); }
+.toast.toast-info    { border-left: 4px solid var(--accent); }
+.toast-icon { margin-top: 1px; flex-shrink: 0; }
+.toast-icon svg { width: 16px; height: 16px; }
+.toast.toast-success .toast-icon { color: var(--status-online); }
+.toast.toast-error   .toast-icon { color: var(--status-critical); }
+.toast.toast-warning .toast-icon { color: var(--status-warning); }
+.toast.toast-info    .toast-icon { color: var(--accent); }
+.toast-body { flex: 1; }
+.toast-title { font-weight: 600; font-size: 13px; color: var(--fg-1); margin-bottom: 2px; }
+.toast-desc  { font-size: 12px; color: var(--fg-3); }
+.toast-close {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--fg-4);
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.toast-close:hover { color: var(--fg-1); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ── Modal / Dialog ─────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 24, 41, 0.45);
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-6);
+  animation: fade-in var(--dur-base) var(--ease-out) both;
+}
+.modal {
+  background: var(--surface-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  width: 100%;
+  max-width: 520px;
+  animation: slide-up var(--dur-slow) var(--ease-out) both;
+  overflow: hidden;
+}
+.modal-lg { max-width: 720px; }
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-5) var(--sp-6);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h4);
+  font-weight: 700;
+  color: var(--fg-1);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.modal-title svg, .modal-title i[data-lucide] { width: 18px; height: 18px; color: var(--accent); }
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--fg-3);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast);
+}
+.modal-close:hover { background: var(--surface-sunken); color: var(--fg-1); }
+.modal-body {
+  padding: var(--sp-6);
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+}
+@keyframes fade-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+
+/* ── Demo page chrome (kit-viewer only) ─────────────────────── */
+.demo-nav {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  background: var(--navy-900);
+  color: var(--fg-on-inverse);
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-6);
+  font-size: 12px;
+  border-bottom: 2px solid var(--accent);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.demo-nav::-webkit-scrollbar { display: none; }
+.demo-nav strong { font-family: var(--font-display); font-size: 15px; margin-right: var(--sp-4); }
+.demo-nav a { color: rgba(255,255,255,0.65); text-decoration: none; padding: 4px 8px; border-radius: var(--radius-sm); }
+.demo-nav a:hover { color: #fff; background: rgba(255,255,255,0.08); text-decoration: none; }
+.demo-nav a.active { color: #fff; background: rgba(0,180,216,0.2); }
+
+.demo-section {
+  padding: var(--sp-10) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.demo-section:last-child { border-bottom: none; }
+.demo-section-header {
+  margin-bottom: var(--sp-8);
+}
+.demo-section-header h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  color: var(--fg-1);
+  margin: 0 0 var(--sp-2);
+}
+.demo-section-header p {
+  font-size: var(--fs-body-s);
+  color: var(--fg-3);
+  max-width: 640px;
+  margin: 0;
+}
+.demo-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  display: block;
+  margin-bottom: var(--sp-2);
+}
+.demo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-5);
+}
+.demo-block {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-6);
+  margin-bottom: var(--sp-5);
+}
+.demo-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--sp-8);
+}
+
+
+/* ── Accordion ──────────────────────────────────────────────── */
+/*
+   Used in trabajar-orden (per-equipment panels), editar-orden
+   (detail sections), and any collapsible content block.
+
+   .accordion                 — container
+   .accordion-item            — individual panel
+   .accordion-trigger         — clickable header (button)
+   .accordion-body            — collapsible content
+   .accordion-item.open       — expanded state (JS toggles)
+*/
+.accordion { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+.accordion-item {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: box-shadow var(--dur-fast) var(--ease-out);
+}
+.accordion-item.open {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+.accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.accordion-trigger:hover { background: var(--surface-sunken); }
+.accordion-item.open .accordion-trigger { background: var(--surface-sunken); }
+
+.accordion-trigger-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.accordion-trigger-icon svg, .accordion-trigger-icon i[data-lucide] { width: 16px; height: 16px; }
+
+.accordion-trigger-text { flex: 1; }
+.accordion-trigger-title {
+  font-weight: 600;
+  font-size: var(--fs-body-s);
+  color: var(--fg-1);
+  display: block;
+  line-height: 1.3;
+}
+.accordion-trigger-meta {
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.accordion-trigger-chevron {
+  flex-shrink: 0;
+  color: var(--fg-3);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.accordion-trigger-chevron svg, .accordion-trigger-chevron i[data-lucide] { width: 16px; height: 16px; }
+.accordion-item.open .accordion-trigger-chevron { transform: rotate(180deg); }
+
+.accordion-body {
+  display: none;
+  padding: var(--sp-5);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+}
+.accordion-item.open .accordion-body { display: block; }
+
+
+/* ── Inline editable table rows ─────────────────────────────── */
+/*
+   Used in trabajar-orden (consumables/labor) and cotizar-orden
+   (quote line items). Add .editable to table.app-table.
+
+   Each data cell can contain a .td-input or .td-select instead
+   of plain text. The add-row and delete-row controls use existing
+   .btn classes.
+*/
+table.app-table.editable tbody tr { cursor: default; }
+table.app-table.editable tbody tr:hover { background: transparent; }
+
+.td-input,
+.td-select {
+  font-family: var(--font-body);
+  font-size: var(--fs-body-s);
+  color: var(--fg-1);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  width: 100%;
+  height: 30px;
+  outline: none;
+  transition: border-color var(--dur-fast), background var(--dur-fast), box-shadow var(--dur-fast);
+}
+.td-select { padding-right: 24px; appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236B7884' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+.td-input:hover,
+.td-select:hover { border-color: var(--border-default); background: var(--surface-card); }
+.td-input:focus,
+.td-select:focus { border-color: var(--accent); background: var(--surface-card); box-shadow: var(--ring-focus); }
+.td-input.td-mono { font-family: var(--font-mono); font-size: var(--fs-mono); }
+
+/* Add-row button row */
+.table-add-row {
+  padding: var(--sp-2) var(--sp-4);
+  border-top: 1px dashed var(--border-subtle);
+  display: flex;
+  align-items: center;
+}
+
+/* Row total (right-aligned amount cell) */
+.td-amount {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono);
+  font-weight: 600;
+  color: var(--fg-1);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Summary row at bottom of editable table */
+.table-summary-row td {
+  font-weight: 700;
+  background: var(--surface-sunken);
+  border-top: 2px solid var(--border-default);
+}
+
+
+/* ── Fixed footer summary strip ─────────────────────────────── */
+/*
+   Sticks to bottom of viewport. Used in trabajar-orden to show
+   running totals while the user scrolls through equipment panels.
+   Pair with `padding-bottom: 72px` on .app-body.
+*/
+.app-footer-strip {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 90;
+  height: 60px;
+  background: var(--surface-card);
+  border-top: 2px solid var(--brand);
+  box-shadow: 0 -2px 12px rgba(6, 24, 41, 0.08);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: 0 var(--sp-8);
+}
+.app-footer-strip-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.app-footer-strip-stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+.app-footer-strip-stat-value {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg-1);
+  line-height: 1;
+}
+.app-footer-strip-stat-value.value-highlight { color: var(--accent); }
+.app-footer-strip-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+.app-footer-strip-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+
+/* ── KPI stat cards + progress bar ──────────────────────────── */
+/*
+   Used in progreso-tecnicos (technician leaderboard), reporte-
+   pendientes (pending summary), and any dashboard summary row.
+*/
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--sp-4);
+}
+
+.kpi-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.kpi-card-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+.kpi-card-value {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--fg-1);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.kpi-card-value.kpi-ok     { color: var(--status-online); }
+.kpi-card-value.kpi-warn   { color: var(--status-warning); }
+.kpi-card-value.kpi-crit   { color: var(--status-critical); }
+.kpi-card-value.kpi-accent { color: var(--accent); }
+.kpi-card-sub {
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  margin-top: var(--sp-1);
+}
+.kpi-card-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--fs-caption);
+  font-weight: 600;
+}
+.kpi-card-trend.up   { color: var(--status-online); }
+.kpi-card-trend.down { color: var(--status-critical); }
+.kpi-card-trend svg, .kpi-card-trend i[data-lucide] { width: 12px; height: 12px; }
+
+/* Progress bar */
+.progress-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.progress-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+}
+.progress-bar-label strong { color: var(--fg-1); font-weight: 600; }
+.progress-bar-track {
+  height: 6px;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-xs);
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+.progress-bar-fill.fill-ok   { background: var(--status-online); }
+.progress-bar-fill.fill-warn { background: var(--status-warning); }
+.progress-bar-fill.fill-crit { background: var(--status-critical); }
+
+/* Leaderboard rank medal */
+.rank-medal {
+  font-size: 18px;
+  line-height: 1;
+  display: inline-block;
+  width: 28px;
+  text-align: center;
+}
+.rank-num {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg-3);
+  display: inline-block;
+  width: 28px;
+  text-align: center;
+}
+
+
+/* ── Photo grid + lightbox ───────────────────────────────────── */
+/*
+   Used in fotos-taller. Grid of thumbnails from Firebase Storage;
+   click opens lightbox overlay.
+*/
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--sp-2);
+}
+
+.photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-sunken);
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+}
+.photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.photo-thumb:hover img { transform: scale(1.04); }
+.photo-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 24, 41, 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast);
+}
+.photo-thumb:hover .photo-thumb-overlay { background: rgba(6, 24, 41, 0.35); }
+.photo-thumb-overlay svg { opacity: 0; color: #fff; transition: opacity var(--dur-fast); width: 24px; height: 24px; }
+.photo-thumb:hover .photo-thumb-overlay svg { opacity: 1; }
+
+.photo-thumb-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: rgba(210, 69, 69, 0.85);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.photo-thumb-delete svg { width: 12px; height: 12px; }
+.photo-thumb:hover .photo-thumb-delete { display: flex; }
+
+/* Add-photo tile (same grid, last child) */
+.photo-add-tile {
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  border: 2px dashed var(--border-default);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  cursor: pointer;
+  color: var(--fg-4);
+  font-size: var(--fs-caption);
+  transition: border-color var(--dur-fast), color var(--dur-fast), background var(--dur-fast);
+  background: var(--surface-card);
+}
+.photo-add-tile:hover { border-color: var(--accent); color: var(--accent); background: var(--brand-soft); }
+.photo-add-tile svg, .photo-add-tile i[data-lucide] { width: 24px; height: 24px; }
+
+/* Lightbox */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: rgba(6, 24, 41, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-8);
+  animation: fade-in var(--dur-base) var(--ease-out) both;
+}
+.lightbox-img {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: var(--radius-md);
+  object-fit: contain;
+  box-shadow: var(--shadow-xl);
+}
+.lightbox-close {
+  position: absolute;
+  top: var(--sp-5);
+  right: var(--sp-5);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.22); }
+.lightbox-close svg { width: 18px; height: 18px; }
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+.lightbox-nav:hover { background: rgba(255,255,255,0.22); }
+.lightbox-nav.prev { left: var(--sp-5); }
+.lightbox-nav.next { right: var(--sp-5); }
+.lightbox-nav svg { width: 18px; height: 18px; }
+.lightbox-caption {
+  position: absolute;
+  bottom: var(--sp-6);
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.7);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+
+/* ── Inline CRUD list ────────────────────────────────────────── */
+/*
+   Used in estado_reparacion, tecnicos, config — simple lists
+   where items can be added, renamed, and deleted without a modal.
+*/
+.crud-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-3);
+}
+.crud-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.crud-list-item:hover { border-color: var(--border-default); }
+.crud-list-item.editing { border-color: var(--accent); box-shadow: var(--ring-focus); }
+.crud-list-item-handle {
+  color: var(--fg-4);
+  cursor: grab;
+  flex-shrink: 0;
+}
+.crud-list-item-handle svg { width: 14px; height: 14px; }
+.crud-list-item-label {
+  flex: 1;
+  font-size: var(--fs-body-s);
+  color: var(--fg-1);
+}
+.crud-list-item-input {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: var(--fs-body-s);
+  color: var(--fg-1);
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 0;
+  display: none;
+}
+.crud-list-item.editing .crud-list-item-label { display: none; }
+.crud-list-item.editing .crud-list-item-input { display: block; }
+.crud-list-item-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-fast);
+}
+.crud-list-item:hover .crud-list-item-actions { opacity: 1; }
+
+.crud-list-add {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-top: var(--sp-1);
+}
+.crud-list-add .form-input { height: 34px; font-size: 13px; }
+
+
+/* ── Toggle / switch ────────────────────────────────────────── */
+/*
+   Used in config.html for settings. Drop-in replacement for a
+   checkbox — wraps <input type="checkbox"> with a visual track.
+   Accessible: the real input is visually hidden but focusable.
+*/
+.toggle-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  cursor: pointer;
+}
+.toggle-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 20px;
+  margin-top: 1px;
+}
+.toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border-default);
+  border-radius: var(--radius-xs);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.toggle-switch input:checked + .toggle-track { background: var(--accent); }
+.toggle-switch input:focus-visible + .toggle-track { box-shadow: var(--ring-focus); }
+.toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-xs);
+  transition: transform var(--dur-fast) var(--ease-out);
+  pointer-events: none;
+}
+.toggle-switch input:checked ~ .toggle-thumb { transform: translateX(16px); }
+.toggle-text { flex: 1; }
+.toggle-label {
+  font-size: var(--fs-body-s);
+  font-weight: 600;
+  color: var(--fg-1);
+  display: block;
+  line-height: 1.3;
+}
+.toggle-desc {
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  margin-top: 2px;
+}
+
+
+/* ── Signature pad ───────────────────────────────────────────── */
+/*
+   Used in firmar-entrega. Canvas wrapper with clear/confirm
+   controls and dark-on-white token.
+   The <canvas> itself is controlled by JS — these are just the
+   shell/chrome styles.
+*/
+.sig-pad {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.sig-pad-label {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--fg-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sig-pad-label svg, .sig-pad-label i[data-lucide] { width: 13px; height: 13px; }
+.sig-canvas {
+  display: block;
+  width: 100%;
+  height: 180px;
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none;
+}
+/* Visual guide line */
+.sig-canvas-wrap {
+  position: relative;
+}
+.sig-canvas-wrap::after {
+  content: "";
+  position: absolute;
+  bottom: 36px;
+  left: var(--sp-6);
+  right: var(--sp-6);
+  height: 1px;
+  background: var(--border-subtle);
+  pointer-events: none;
+}
+.sig-pad-toolbar {
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface-sunken);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sig-pad-toolbar .btn-clear { margin-right: auto; }
+/* Confirmation state */
+.sig-pad.confirmed .sig-canvas { cursor: not-allowed; opacity: 0.8; }
+.sig-pad.confirmed .sig-pad-label { background: #ECFDF5; color: var(--status-online); border-color: #A7F3D0; }
+
+
+/* ── Combobox / Typeahead ───────────────────────────────────── */
+/*
+   Used everywhere a live search over a Firestore collection is
+   needed: búsqueda de cliente (contratos), modelo de equipo (POC),
+   técnico (ordenes).
+
+   Pattern:
+     .combobox            — flex wrapper for input + quick-create buttons
+     .combo-input         — the visible text input
+     .combo-list          — absolute dropdown populated by JS
+     .combo-item          — each result row
+     .combo-item .combo-sub — secondary/helper text under the main label
+     .combo-item.active   — keyboard-highlighted or selected row
+     .combo-empty         — "sin resultados" state inside the list
+     .combo-actions       — row of icon-buttons (+ new, ✏ edit, ✕ clear)
+*/
+.combobox {
+  position: relative;
+  display: flex;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+.combobox .combo-input {
+  flex: 1;
+  /* inherits .form-input via class combo-input + form-input in HTML */
+}
+.combo-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 300;
+  scrollbar-width: thin;
+}
+.combo-list[hidden] { display: none; }
+.combo-item {
+  padding: var(--sp-3) var(--sp-4);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--dur-fast);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.combo-item:last-child { border-bottom: none; }
+.combo-item:hover { background: var(--surface-sunken); }
+.combo-item.active {
+  background: var(--brand-soft);
+  border-left: 3px solid var(--brand);
+  padding-left: calc(var(--sp-4) - 3px);
+}
+.combo-item-label {
+  font-size: var(--fs-body-s);
+  font-weight: 500;
+  color: var(--fg-1);
+}
+.combo-sub {
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  line-height: 1.3;
+}
+.combo-empty {
+  padding: var(--sp-5) var(--sp-4);
+  text-align: center;
+  color: var(--fg-4);
+  font-size: var(--fs-body-s);
+}
+.combo-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+/* Keyboard hint inside the list footer */
+.combo-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--surface-sunken);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 11px;
+  color: var(--fg-4);
+}
+.combo-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--surface-card);
+  color: var(--fg-2);
+}
+
+
+/* ── Section-badge readiness ────────────────────────────────── */
+/*
+   A status badge attached to a form section header that turns
+   green when all required fields in that section are filled.
+   Used in contratos/nuevo-contrato, cotizaciones/nueva-cotizacion,
+   ordenes/nueva-orden (long single-page forms).
+
+   .form-section-header       — flex row: title on left, badge on right
+   .section-readiness         — the badge itself
+   .section-readiness.pending — grey / incomplete
+   .section-readiness.ready   — green / complete
+*/
+.form-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface-sunken);
+  border-left: 4px solid var(--brand);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  margin-bottom: 0;
+}
+.form-section-header h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  color: var(--fg-1);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+}
+.form-section-header h3 svg,
+.form-section-header h3 i[data-lucide] { width: 18px; height: 18px; color: var(--brand); }
+
+.form-section-body {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  padding: var(--sp-6);
+}
+
+.section-readiness {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  white-space: nowrap;
+  transition: background var(--dur-base), color var(--dur-base);
+  flex-shrink: 0;
+}
+.section-readiness.pending {
+  background: var(--surface-sunken);
+  color: var(--fg-3);
+  border: 1px solid var(--border-default);
+}
+.section-readiness.ready {
+  background: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+}
+.section-readiness svg,
+.section-readiness i[data-lucide] { width: 12px; height: 12px; }
+
+
+/* ── Conditional disclosure ─────────────────────────────────── */
+/*
+   A panel revealed when a <select> or radio switches to a specific
+   value. Supports one level of nesting (sub-option inside the panel).
+   Used in contratos/nuevo-contrato (Renovación mode),
+   ordenes/nueva-orden (tipo de servicio), config (billing modes).
+
+   .disclosure-panel          — the hidden panel container
+   .disclosure-panel.visible  — JS toggles this class to show
+   .disclosure-sub            — nested level inside a disclosure-panel
+*/
+.disclosure-panel {
+  display: none;
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--brand-soft);
+  border: 2px solid var(--brand);
+  border-radius: var(--radius-md);
+  margin-top: var(--sp-3);
+  animation: fade-in var(--dur-fast) var(--ease-out);
+}
+.disclosure-panel.visible { display: block; }
+.disclosure-panel-title {
+  font-size: var(--fs-body-s);
+  font-weight: 700;
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+.disclosure-sub {
+  display: none;
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-default);
+}
+.disclosure-sub.visible { display: block; }
+
+
+/* ── Review-and-confirm overlay ─────────────────────────────── */
+/*
+   Full-screen overlay showing all form data as structured cards
+   before final save. Wider than a standard modal (max 980px).
+   Used in contratos, cotizaciones, ordenes.
+
+   .review-overlay            — fixed backdrop
+   .review-modal              — the white panel
+   .review-header / -body / -footer
+   .review-card               — one data group (cliente, equipo, totals…)
+   .review-grid               — 2-col dl grid inside a card
+   .review-table              — compact table for line items
+*/
+.review-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 24, 41, 0.65);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 800;
+  padding: var(--sp-6);
+  animation: fade-in var(--dur-fast) var(--ease-out);
+}
+.review-overlay.open { display: flex; }
+.review-modal {
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  max-width: 980px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  animation: slide-up var(--dur-base) var(--ease-out) both;
+}
+.review-header {
+  padding: var(--sp-4) var(--sp-6);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.review-header h3 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  color: var(--fg-1);
+  margin: 0;
+}
+.review-header-sub { font-size: var(--fs-caption); color: var(--fg-3); margin-top: 2px; }
+.review-body {
+  padding: var(--sp-5) var(--sp-6);
+  overflow-y: auto;
+  flex: 1;
+}
+.review-footer {
+  padding: var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+  flex-shrink: 0;
+  background: var(--surface-sunken);
+}
+.review-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4) var(--sp-5);
+  margin-bottom: var(--sp-4);
+}
+.review-card-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+  margin-bottom: var(--sp-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.review-card-title i[data-lucide], .review-card-title svg { width: 13px; height: 13px; }
+.review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2) var(--sp-5);
+}
+.review-grid dt { font-size: var(--fs-caption); color: var(--fg-3); margin-bottom: 1px; }
+.review-grid dd { font-size: var(--fs-body-s); font-weight: 500; color: var(--fg-1); margin: 0; }
+.review-table { width: 100%; border-collapse: collapse; font-size: var(--fs-body-s); }
+.review-table th {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg-3); text-align: left; padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1.5px solid var(--border-default); background: var(--surface-sunken);
+}
+.review-table td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--border-subtle); }
+.review-table tfoot td {
+  border-top: 2px solid var(--border-default); font-weight: 700; padding-top: var(--sp-3);
+}
+.review-totals { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
+.review-totals table { width: 260px; font-size: var(--fs-body-s); }
+.review-totals td { padding: 2px var(--sp-3); }
+.review-totals tr.total td { font-weight: 800; font-size: var(--fs-body); border-top: 2px solid var(--border-default); padding-top: var(--sp-2); }
+.review-totals td:last-child { text-align: right; font-family: var(--font-mono); }
+
+
+/* ── Side-sheet ─────────────────────────────────────────────── */
+/*
+   Slides in from the right edge; used for contextual actions
+   that need more space than a modal (contrato approval, client
+   detail, quick-edit panels).
+
+   .sheet-overlay             — fixed tinted backdrop
+   .sheet                     — the slide-in panel
+   .sheet.open                — JS adds this; triggers the transition
+   .sheet-header / -body / -footer
+   Sizes: default 480px, .sheet-lg 680px, .sheet-sm 360px
+*/
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 24, 41, 0.5);
+  z-index: 700;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+.sheet-overlay.open { opacity: 1; pointer-events: auto; }
+
+.sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 480px;
+  max-width: 100vw;
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  z-index: 701;
+  transform: translateX(100%);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sheet.open { transform: translateX(0); }
+.sheet-lg { width: 680px; }
+.sheet-sm { width: 360px; }
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+/* Drag handle (mobile cue) */
+.sheet-handle {
+  position: absolute;
+  top: var(--sp-3);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  background: var(--border-default);
+  border-radius: var(--radius-pill);
+}
+.sheet-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 700;
+  color: var(--fg-1);
+  margin: 0;
+  flex: 1;
+}
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-5);
+}
+.sheet-footer {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
+  padding: var(--sp-4) var(--sp-5);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+  flex-shrink: 0;
+}
+
+
+/* ── Split-pane form + sticky sidebar ───────────────────────── */
+/*
+   Two-column layout: wide main form area + narrower sticky sidebar
+   holding live totals and primary actions.
+   Used in cotizaciones/nueva-cotizacion, contratos/nuevo-contrato.
+   Collapses to single column at < 980px.
+
+   .split-pane                — grid wrapper
+   .split-main                — left: form sections
+   .split-sidebar             — right: sticky summary card
+   .summary-card              — the totals card inside the sidebar
+   .summary-totals-row        — label/value pair
+   .summary-totals-row.total  — larger final total
+*/
+.split-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--sp-5);
+  align-items: start;
+}
+@media (max-width: 980px) {
+  .split-pane { grid-template-columns: 1fr; }
+  .split-sidebar { position: static !important; }
+}
+.split-main { display: flex; flex-direction: column; gap: var(--sp-5); }
+.split-sidebar {
+  position: sticky;
+  top: calc(48px + var(--sp-4)); /* 48 = demo-nav height */
+}
+.summary-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.summary-card-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--fg-1);
+}
+.summary-totals-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--fs-body-s);
+  color: var(--fg-2);
+}
+.summary-totals-row span:last-child {
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono);
+  color: var(--fg-1);
+  font-weight: 500;
+}
+.summary-totals-row.muted { color: var(--fg-3); }
+.summary-totals-row.muted span:last-child { color: var(--fg-3); }
+.summary-totals-row.total {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  color: var(--fg-1);
+  padding-top: var(--sp-2);
+  border-top: 2px solid var(--border-default);
+}
+.summary-totals-row.total span:last-child {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.summary-card-divider { height: 1px; background: var(--border-subtle); margin: var(--sp-1) 0; }
+.summary-card-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+
+/* ── Details/summary collapsible with dynamic text ──────────── */
+/*
+   Native <details>/<summary> styled to match the kit.
+   The summary shows live-updated values from its child inputs
+   (e.g. firmante name, bank) so users can verify without expanding.
+
+   .details-block             — the <details> element
+   .details-block summary     — clickable header row
+   .details-summary-live      — <span> inside summary updated by JS
+   .details-body              — everything inside after <summary>
+*/
+.details-block {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.details-block summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--fs-body-s);
+  color: var(--fg-1);
+  list-style: none;
+  user-select: none;
+  transition: background var(--dur-fast);
+}
+.details-block summary::-webkit-details-marker { display: none; }
+.details-block summary::before {
+  content: "";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7884' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  flex-shrink: 0;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.details-block[open] summary::before { transform: rotate(90deg); }
+.details-block summary:hover { background: var(--surface-sunken); }
+.details-block[open] summary { border-bottom: 1px solid var(--border-subtle); }
+.details-summary-live {
+  font-weight: 400;
+  color: var(--fg-3);
+  font-size: var(--fs-caption);
+  margin-left: var(--sp-2);
+}
+.details-summary-live strong { color: var(--fg-2); font-weight: 600; }
+.details-body {
+  padding: var(--sp-5);
+}
+
+
+/* ── Bulk action bar ─────────────────────────────────────────── */
+/*
+   Hidden by default. Appears when ≥1 row checkbox is selected.
+   Lives above (or within) the filter bar.
+   Used in clientes/index, inventario/index, POC/index.
+
+   .bulk-bar                  — the bar itself (hidden by default)
+   .bulk-bar.visible          — shown when any row is checked
+   .bulk-count                — "N seleccionados" pill
+   .bulk-divider              — 1px vertical separator
+   .bulk-tag-input            — inline text input for tag assignment
+*/
+.bulk-bar {
+  display: none;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--brand-soft);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  animation: fade-in var(--dur-fast) var(--ease-out);
+}
+.bulk-bar.visible { display: flex; }
+.bulk-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 2px var(--sp-3);
+  background: var(--brand);
+  color: #fff;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.bulk-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-default);
+  flex-shrink: 0;
+}
+.bulk-tag-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 1;
+  min-width: 160px;
+}
+.bulk-tag-wrap .form-input { height: 32px; font-size: 12px; min-width: 140px; }
+
+
+/* ── Tag chips (inline per-row tags) ────────────────────────── */
+/*
+   Small colored chips rendered inside table cells for record tags.
+   Tags are stored as a string array in Firestore; the kit shows
+   the display pattern. Input is a comma-separated .form-input.
+
+   .tag-chip                  — individual tag pill
+   .tag-chip-remove           — ✕ button inside an editable chip
+*/
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px var(--sp-2);
+  border-radius: var(--radius-sm);
+  background: var(--brand-soft);
+  color: var(--brand);
+  border: 1px solid var(--border-default);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tag-chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--fg-3);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.tag-chip-remove:hover { color: var(--status-critical); }
+.tag-chip-remove svg { width: 10px; height: 10px; }
+/* Input variant (tags as editable comma-list) */
+.tag-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+
+
+/* ── QR verification stamp ──────────────────────────────────── */
+/*
+   Rendered on printed documents (contratos, facturas) to provide
+   tamper-evident authenticity. Works on screen too (pre-print view).
+   The QR canvas is injected by qrcode.js; this styles the shell.
+
+   .qr-stamp                  — outer dashed container
+   .qr-canvas-wrap            — square for the QR canvas/img
+   .qr-stamp-meta             — text block: title, ID, code, URL
+   .qr-stamp-code             — the short hash, shown in mono
+*/
+.qr-stamp {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+  border: 1.5px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.qr-canvas-wrap {
+  flex-shrink: 0;
+  width: 100px;
+  height: 100px;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.qr-canvas-wrap img,
+.qr-canvas-wrap canvas { width: 100%; height: 100%; display: block; }
+.qr-stamp-meta { flex: 1; font-size: 12px; line-height: 1.5; color: var(--fg-2); }
+.qr-stamp-meta strong { color: var(--fg-1); font-size: 13px; display: block; margin-bottom: 2px; }
+.qr-stamp-code {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: 0.05em;
+}
+.qr-stamp-url { font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); word-break: break-all; }
+.qr-stamp-note { font-size: 10px; color: var(--fg-4); margin-top: var(--sp-2); }
+
+
+/* ── Multi-party signature block ────────────────────────────── */
+/*
+   Three (or two) columns of electronic/handwritten signature slots.
+   Used in contratos/imprimir and any formal delivery document.
+
+   .multi-sig                 — flex row container
+   .multi-sig-col             — one signer column
+   .multi-sig-line            — the horizontal underline
+   .multi-sig-label           — "Firma del cliente" etc.
+   .multi-sig-name            — printed signer name
+   .multi-sig-role / -email   — role and email meta lines
+   .multi-sig-e               — green "✔ Firmado electrónicamente" block
+*/
+.multi-sig {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-6);
+  margin-top: var(--sp-8);
+}
+.multi-sig-col {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.multi-sig-space {
+  height: 56px; /* room for handwritten signature */
+  border-bottom: 1px solid var(--fg-1);
+  margin-bottom: var(--sp-2);
+}
+.multi-sig-label {
+  font-size: 9pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-3);
+}
+.multi-sig-name {
+  font-size: 11pt;
+  font-weight: 600;
+  color: var(--fg-1);
+}
+.multi-sig-role,
+.multi-sig-email {
+  font-size: 9pt;
+  color: var(--fg-3);
+}
+/* Electronic signature confirmation block */
+.multi-sig-e {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid #A7F3D0;
+  border-radius: var(--radius-sm);
+  background: #ECFDF5;
+  text-align: left;
+  font-size: 10pt;
+  font-style: italic;
+  color: #065F46;
+}
+.multi-sig-e .e-check {
+  font-weight: 700;
+  font-style: normal;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.multi-sig-e svg { width: 12px; height: 12px; }
+
+
+/* ── XLSX batch importer ─────────────────────────────────────── */
+/*
+   File-drop zone + import status feedback.
+   SheetJS runs client-side; no server round-trip.
+   Used in POC/importar-poc, inventario/cargar-inventario.
+
+   .importer-zone             — file drop target (extends .form-file-zone)
+   .importer-column-map       — shows expected → actual column mapping
+   .importer-col-row          — one mapping row
+   .importer-status           — live progress text block
+   .importer-status.running   — pulsing state
+   .importer-status.done      — success
+   .importer-status.error     — error
+*/
+.importer-zone {
+  /* Extends .form-file-zone — just overrides accept text */
+}
+.importer-column-map {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--sp-3);
+  font-size: var(--fs-caption);
+}
+.importer-col-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.importer-col-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  padding: 1px 6px;
+  color: var(--fg-2);
+  white-space: nowrap;
+}
+.importer-col-label {
+  color: var(--fg-3);
+}
+.importer-status {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body-s);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+  color: var(--fg-2);
+}
+.importer-status.running {
+  background: var(--brand-soft);
+  border-color: var(--border-default);
+  color: var(--brand);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.importer-status.done {
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+  color: #065F46;
+}
+.importer-status.error {
+  background: #FEF2F2;
+  border-color: #FECACA;
+  color: #991B1B;
+}
+.importer-status-icon svg { width: 16px; height: 16px; flex-shrink: 0; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+

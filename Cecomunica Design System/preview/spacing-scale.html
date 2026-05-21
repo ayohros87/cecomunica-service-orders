@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Spacing scale</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;background:var(--surface-card);color:var(--fg-1);font-family:var(--font-body)}
+  .wrap{padding:18px 22px;display:flex;flex-direction:column;gap:10px}
+  .row{display:grid;grid-template-columns:90px 70px 1fr;gap:12px;align-items:center}
+  .name{font:500 11px/1 var(--font-mono);color:var(--fg-1)}
+  .px{font:500 11px/1 var(--font-mono);color:var(--fg-3);text-align:right}
+  .bar{height:14px;background:var(--blue-500);border-radius:2px}
+  .head{font:600 11px/1 var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--fg-3);margin-bottom:4px}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="head">Spacing · 4 px base unit</div>
+  <div class="row"><span class="name">--sp-1</span><span class="px">4 px</span><div class="bar" style="width:4px"></div></div>
+  <div class="row"><span class="name">--sp-2</span><span class="px">8 px</span><div class="bar" style="width:8px"></div></div>
+  <div class="row"><span class="name">--sp-3</span><span class="px">12 px</span><div class="bar" style="width:12px"></div></div>
+  <div class="row"><span class="name">--sp-4</span><span class="px">16 px</span><div class="bar" style="width:16px"></div></div>
+  <div class="row"><span class="name">--sp-6</span><span class="px">24 px</span><div class="bar" style="width:24px"></div></div>
+  <div class="row"><span class="name">--sp-8</span><span class="px">32 px</span><div class="bar" style="width:32px"></div></div>
+  <div class="row"><span class="name">--sp-12</span><span class="px">48 px</span><div class="bar" style="width:48px"></div></div>
+  <div class="row"><span class="name">--sp-16</span><span class="px">64 px</span><div class="bar" style="width:64px"></div></div>
+  <div class="row"><span class="name">--sp-20</span><span class="px">80 px</span><div class="bar" style="width:80px"></div></div>
+  <div class="row"><span class="name">--sp-24</span><span class="px">96 px</span><div class="bar" style="width:96px"></div></div>
+</div>
+</body></html>

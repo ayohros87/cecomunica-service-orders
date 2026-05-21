@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Logo</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;font-family:var(--font-body);background:#fff;color:var(--fg-1)}
+  .wrap{display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:170px}
+  .panel{position:relative;display:flex;align-items:center;justify-content:center;gap:16px;padding:18px}
+  .light{background:#F5F7FA;border-right:1px solid var(--border-subtle)}
+  .dark{background:#0B2A47}
+  .label{position:absolute;top:10px;left:12px;font:600 10px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3)}
+  .label-d{color:rgba(255,255,255,.55)}
+  .panel img{height:64px;width:auto;display:block}
+  .wm{display:flex;flex-direction:column;line-height:1}
+  .wm .nm{font-family:var(--font-display);font-weight:800;letter-spacing:-.025em;font-size:24px}
+  .wm .tg{font-family:var(--font-body);font-weight:500;letter-spacing:.06em;font-size:9px;margin-top:5px}
+  .light .wm .nm{color:#0A1219}
+  .light .wm .tg{color:#0B2A47;opacity:.7}
+  .dark  .wm .nm{color:#fff}
+  .dark  .wm .tg{color:rgba(255,255,255,.6)}
+  .div{width:1px;height:48px;opacity:.18}
+  .light .div{background:#0A1219}
+  .dark .div{background:#fff}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="panel light">
+    <span class="label">Sobre claro · primaria</span>
+    <img src="../assets/logo-monogram-mark.svg" alt="">
+    <div class="div"></div>
+    <div class="wm"><span class="nm">CECOMUNICA</span><span class="tg">Soluciones en Comunicaciones</span></div>
+  </div>
+  <div class="panel dark">
+    <span class="label label-d">Sobre oscuro · inversa</span>
+    <img src="../assets/logo-monogram-mark-inverse.svg" alt="">
+    <div class="div"></div>
+    <div class="wm"><span class="nm">CECOMUNICA</span><span class="tg">Soluciones en Comunicaciones</span></div>
+  </div>
+</div>
+</body></html>

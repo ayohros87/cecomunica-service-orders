@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Cards</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;background:var(--gray-50);font-family:var(--font-body);color:var(--fg-1)}
+  .wrap{padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:#fff;border:1px solid var(--border-subtle);border-radius:var(--radius-lg);box-shadow:var(--shadow-xs);padding:20px;display:flex;flex-direction:column;gap:10px;transition:box-shadow var(--dur-base),border-color var(--dur-base)}
+  .card.hov{box-shadow:var(--shadow-md);border-color:var(--border-default)}
+  .iconbox{width:36px;height:36px;border-radius:var(--radius-sm);background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;justify-content:center;font:700 16px/1 var(--font-display)}
+  .ttl{font-family:var(--font-display);font-weight:700;font-size:18px;color:var(--fg-1);letter-spacing:-.005em}
+  .desc{font-size:13px;line-height:1.5;color:var(--fg-2)}
+  .meta{font:500 11px/1 var(--font-mono);color:var(--fg-3);letter-spacing:.04em;border-top:1px solid var(--border-subtle);padding-top:10px;margin-top:auto}
+  .label{position:absolute;top:8px;right:12px;font:600 9px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4)}
+  .card{position:relative}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <span class="label">Resting</span>
+    <div class="iconbox">R</div>
+    <div class="ttl">Hytera HP78X</div>
+    <div class="desc">Radio portátil DMR Tier II con GPS, Bluetooth e IP67. Diseñado para operaciones industriales pesadas.</div>
+    <div class="meta">DMR · 136–174 MHz · IP67</div>
+  </div>
+  <div class="card hov">
+    <span class="label">Hover</span>
+    <div class="iconbox">T</div>
+    <div class="ttl">Hytera PD78X</div>
+    <div class="desc">Radio profesional con encripción AES‑256, ideal para gobierno y seguridad pública.</div>
+    <div class="meta">DMR · AES‑256 · MIL‑STD‑810G</div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Print Kit — Cecomunica App UI</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ── Base reset ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: #000;
+  background: var(--surface-page);
+  line-height: 1.5;
+}
+
+/* ── Kit demo chrome (screen only) ────────────────────────── */
+@media screen {
+  .demo-page-shell {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  .demo-page-title {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--fg-1);
+    margin-bottom: 6px;
+  }
+  .demo-page-sub {
+    font-size: 13px;
+    color: var(--fg-3);
+    margin-bottom: 32px;
+  }
+  .demo-page-sep {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 40px 0;
+  }
+  .screen-hint {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--fg-3);
+    margin-bottom: 20px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .screen-hint strong { color: var(--fg-2); }
+  .print-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 24px;
+  }
+  .print-preview-btn:hover { background: var(--navy-700); }
+}
+
+/* ── @page setup ────────────────────────────────────────────── */
+@page {
+  size: Letter portrait;
+  margin: 18mm 16mm 20mm;
+
+  /* Running header: OS number left, date right */
+  @top-left   { content: "Cecomunica · Orden de Servicio"; font-family: "IBM Plex Sans", sans-serif; font-size: 8pt; color: #888; }
+  @top-right  { content: "Impreso: " date(now); font-family: "IBM Plex Mono", monospace; font-size: 8pt; color: #888; }
+
+  /* Running footer: brand left, page count right */
+  @bottom-left  { content: "cecomunica.com · Radios Hytera · Panamá"; font-family: "IBM Plex Sans", sans-serif; font-size: 7pt; color: #aaa; }
+  @bottom-right { content: "Pág. " counter(page) " de " counter(pages); font-family: "IBM Plex Mono", monospace; font-size: 8pt; color: #888; }
+}
+
+/* ── Print stylesheet ───────────────────────────────────────── */
+@media print {
+  /* Reset body to white */
+  body { background: #fff; color: #000; font-size: 11pt; }
+
+  /* Hide non-print chrome */
+  .no-print, .demo-page-shell > .demo-page-title,
+  .demo-page-shell > .demo-page-sub, .demo-page-shell > .screen-hint,
+  .demo-page-shell > .print-preview-btn, .demo-page-shell > .demo-page-sep,
+  .print-note { display: none !important; }
+
+  /* The printable document fills the page */
+  .print-doc {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  /* Page breaks */
+  .page-break-before { page-break-before: always; break-before: page; }
+  .page-break-after  { page-break-after: always;  break-after: page; }
+  .keep-together     { page-break-inside: avoid;  break-inside: avoid; }
+
+  /* Tables shouldn't split rows mid-page by default */
+  tr { page-break-inside: avoid; break-inside: avoid; }
+
+  /* Links: no underlines, show href */
+  a { text-decoration: none; color: inherit; }
+
+  /* Mono numbers in print */
+  .print-mono { font-family: "IBM Plex Mono", monospace; }
+}
+
+/* ── Print document styles (work on screen AND in print) ────── */
+
+/* Brand header band */
+.print-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 3px solid #0B2A47;
+  margin-bottom: 20px;
+}
+.print-header-logo {
+  font-family: var(--font-display);
+  font-size: 20pt;
+  font-weight: 800;
+  color: #0B2A47;
+  letter-spacing: -0.02em;
+}
+.print-header-logo span { color: #00B4D8; }
+.print-header-meta {
+  text-align: right;
+  font-size: 9pt;
+  color: #555;
+  line-height: 1.6;
+}
+.print-header-meta strong { color: #000; font-size: 11pt; font-family: "IBM Plex Mono", monospace; }
+
+/* OS title row */
+.print-os-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.print-os-title h1 {
+  font-family: var(--font-display);
+  font-size: 16pt;
+  font-weight: 800;
+  color: #0B2A47;
+}
+/* Status chip — print-safe (no custom props that rely on screen tokens) */
+.print-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  color: #333;
+}
+.print-chip-reparacion { background: #FFF3CD; border-color: #F59E0B; color: #92400E; }
+.print-chip-cotizada   { background: #E0F2FE; border-color: #0EA5E9; color: #0C4A6E; }
+.print-chip-aprobada   { background: #D1FAE5; border-color: #10B981; color: #064E3B; }
+.print-chip-entregada  { background: #F0FDF4; border-color: #22C55E; color: #14532D; }
+.print-chip-cancelada  { background: #FEE2E2; border-color: #EF4444; color: #7F1D1D; }
+
+/* Data grid (info table without table element) */
+.print-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+  margin-bottom: 16px;
+}
+.print-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.print-field dt {
+  font-size: 7.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 1px;
+}
+.print-field dd {
+  font-size: 10pt;
+  color: #000;
+  font-weight: 500;
+}
+.print-field dd.mono { font-family: "IBM Plex Mono", monospace; font-size: 9pt; }
+
+/* Section divider */
+.print-section-title {
+  font-family: var(--font-display);
+  font-size: 10pt;
+  font-weight: 700;
+  color: #0B2A47;
+  border-bottom: 1.5px solid #0B2A47;
+  padding-bottom: 3px;
+  margin: 18px 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Line items table */
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  margin-bottom: 12px;
+}
+.print-table th {
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1.5px solid #333;
+  background: #f7f7f7;
+}
+.print-table th.right { text-align: right; }
+.print-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e5e5;
+  vertical-align: top;
+}
+.print-table td.right { text-align: right; font-family: "IBM Plex Mono", monospace; font-size: 9pt; }
+.print-table tbody tr:last-child td { border-bottom: none; }
+
+/* Summary rows */
+.print-table tfoot tr.summary td {
+  border-top: 1.5px solid #ccc;
+  font-weight: 600;
+  font-size: 9pt;
+}
+.print-table tfoot tr.total-row td {
+  border-top: 2px solid #0B2A47;
+  font-weight: 700;
+  font-size: 11pt;
+  color: #0B2A47;
+}
+.print-table tfoot tr.total-row td.right { font-family: "IBM Plex Mono", monospace; }
+
+/* Signature block */
+.print-sig-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 32px;
+}
+.print-sig-block {
+  border-top: 1px solid #333;
+  padding-top: 6px;
+}
+.print-sig-label {
+  font-size: 8pt;
+  color: #666;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.print-sig-name {
+  font-size: 10pt;
+  font-weight: 500;
+  color: #000;
+  margin-top: 2px;
+}
+.print-sig-date {
+  font-size: 8pt;
+  color: #888;
+  font-family: "IBM Plex Mono", monospace;
+}
+/* Space for handwritten signature if not digital */
+.print-sig-space {
+  height: 48px;
+  border-bottom: 1px dashed #ccc;
+  margin-bottom: 6px;
+}
+
+/* Footer note */
+.print-footer-note {
+  margin-top: 24px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e5e5;
+  font-size: 7.5pt;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.6;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Screen chrome ─────────────────────────────────────────── -->
+<div class="demo-page-shell no-print">
+  <p class="demo-page-title">Print Kit · Orden de Servicio</p>
+  <p class="demo-page-sub">
+    Hoja de impresión para <code>imprimir-orden.html</code>. Todos los tokens son
+    sólidos (sin transparencias). El encabezado de marca y el bloque de firma funcionan tanto en
+    letra carta como en A4. Presiona el botón para ver el resultado real.
+  </p>
+  <button class="print-preview-btn" onclick="window.print()">
+    ↗ Abrir vista de impresión
+  </button>
+  <div class="screen-hint">
+    <strong>Nota:</strong> La barra de encabezado/pie de página
+    (<code>@top-left</code>, <code>@bottom-right</code>, etc.) solo se activa en impresoras
+    que soportan <strong>CSS Paged Media Level 3</strong>. En Chrome / Edge aparecen;
+    en Firefox se ignoran silenciosamente.
+  </div>
+  <div class="demo-page-sep"></div>
+</div>
+
+<!-- ── Printable document ────────────────────────────────────── -->
+<div class="print-doc demo-page-shell">
+
+  <!-- Header band -->
+  <div class="print-header keep-together">
+    <div class="print-header-logo">Ceco<span>munica</span></div>
+    <div class="print-header-meta">
+      <strong>OS-2025-0142</strong><br>
+      Emitida: 12 May 2025<br>
+      Técnico: Carlos Ríos
+    </div>
+  </div>
+
+  <!-- OS title + status -->
+  <div class="print-os-title keep-together">
+    <h1>Orden de Servicio</h1>
+    <span class="print-chip print-chip-reparacion">En reparación</span>
+    <span class="print-chip" style="margin-left:4px; background:#fee2e2; border-color:#ef4444; color:#7f1d1d;">Prioridad Alta</span>
+  </div>
+
+  <!-- Cliente + equipo info -->
+  <div class="print-grid keep-together">
+    <dl class="print-field">
+      <dt>Cliente</dt>
+      <dd>Autoridad del Canal de Panamá</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>Contacto</dt>
+      <dd>Juan Pérez · +507 6789-0001</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>Equipo</dt>
+      <dd>Hytera PD78X</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>N° de serie</dt>
+      <dd class="mono">SN-00421</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>Fecha de ingreso</dt>
+      <dd class="mono">12 May 2025</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>Fecha promesa</dt>
+      <dd class="mono">19 May 2025</dd>
+    </dl>
+  </div>
+
+  <!-- Falla reportada -->
+  <p class="print-section-title">Falla reportada</p>
+  <p style="font-size:10pt; color:#333; margin-bottom:6px;">
+    Cliente reporta que el equipo no transmite correctamente. El audio saliente presenta
+    cortes y distorsión durante la transmisión. Se entrega sin antena original.
+  </p>
+
+  <!-- Diagnóstico -->
+  <p class="print-section-title">Diagnóstico</p>
+  <p style="font-size:10pt; color:#333; margin-bottom:6px;">
+    Micrófono interno dañado (circuito de cápsula abierto). Conector de batería con oxidación
+    severa por humedad. Antena original perdida — reemplazar por compatible.
+  </p>
+
+  <!-- Accesorios recibidos -->
+  <p class="print-section-title">Accesorios recibidos</p>
+  <div class="print-grid cols-3 keep-together" style="margin-bottom:4px;">
+    <dl class="print-field">
+      <dt>Batería</dt><dd>✓ Incluida</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>Antena</dt><dd>✗ No incluida</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>Cargador</dt><dd>✓ Incluido</dd>
+    </dl>
+    <dl class="print-field">
+      <dt>Clip de cinturón</dt><dd>✗ No incluido</dd>
+    </dl>
+  </div>
+
+  <!-- Líneas de cotización -->
+  <p class="print-section-title">Detalle de trabajos y repuestos</p>
+  <table class="print-table keep-together">
+    <thead>
+      <tr>
+        <th style="width:44%;">Descripción</th>
+        <th style="width:10%;">Cant.</th>
+        <th class="right" style="width:16%;">P. Unit.</th>
+        <th class="right" style="width:14%;">Desc.</th>
+        <th class="right" style="width:16%;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Micrófono interno Hytera PD78X</td>
+        <td>1</td>
+        <td class="right">$45.00</td>
+        <td class="right">—</td>
+        <td class="right">$45.00</td>
+      </tr>
+      <tr>
+        <td>Conector batería (soldadura + limpieza)</td>
+        <td>1</td>
+        <td class="right">$18.00</td>
+        <td class="right">—</td>
+        <td class="right">$18.00</td>
+      </tr>
+      <tr>
+        <td>Antena compatible PD-series (400–470 MHz)</td>
+        <td>1</td>
+        <td class="right">$22.00</td>
+        <td class="right">—</td>
+        <td class="right">$22.00</td>
+      </tr>
+      <tr>
+        <td>Mano de obra — diagnóstico y reparación</td>
+        <td>2 h</td>
+        <td class="right">$35.00</td>
+        <td class="right">10%</td>
+        <td class="right">$63.00</td>
+      </tr>
+      <tr>
+        <td>Programación de canales y frecuencias</td>
+        <td>1</td>
+        <td class="right">$25.00</td>
+        <td class="right">—</td>
+        <td class="right">$25.00</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr class="summary">
+        <td colspan="4" style="text-align:right;">Subtotal</td>
+        <td class="right">$173.00</td>
+      </tr>
+      <tr class="summary">
+        <td colspan="4" style="text-align:right;">ITBMS 7%</td>
+        <td class="right">$12.11</td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="4" style="text-align:right;">TOTAL</td>
+        <td class="right">$185.11</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Términos -->
+  <p style="font-size:8pt; color:#888; margin-top:4px; margin-bottom:0;">
+    * Los precios incluyen ITBMS. Garantía de 30 días en repuestos instalados por Cecomunica.
+    El equipo no retirado en 60 días de la fecha de finalización podrá ser dado de baja.
+  </p>
+
+  <!-- Signatures -->
+  <div class="print-sig-grid keep-together">
+    <div class="print-sig-block">
+      <div class="print-sig-space"></div>
+      <div class="print-sig-label">Firma del cliente</div>
+      <div class="print-sig-name">Juan Pérez</div>
+      <div class="print-sig-date">Cédula: 8-123-4567 · Fecha: _____ / _____ / _____</div>
+    </div>
+    <div class="print-sig-block">
+      <div class="print-sig-space"></div>
+      <div class="print-sig-label">Técnico responsable</div>
+      <div class="print-sig-name">Carlos Ríos</div>
+      <div class="print-sig-date">Cecomunica S.A. · Técnico certificado Hytera</div>
+    </div>
+  </div>
+
+  <!-- Footer note -->
+  <div class="print-footer-note">
+    Cecomunica S.A. · Radios Hytera Panamá · Tel. +507 XXX-XXXX · contacto@cecomunica.com · cecomunica.com<br>
+    Documento generado automáticamente por el sistema de órdenes Cecomunica. Este documento no es una factura.
+  </div>
+
+</div>
+
+</body>
+</html>

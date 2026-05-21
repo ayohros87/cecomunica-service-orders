@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Buttons</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;background:var(--surface-card);font-family:var(--font-body);color:var(--fg-1)}
+  .wrap{padding:24px;display:flex;flex-direction:column;gap:14px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .label{font:600 10px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3);min-width:84px}
+  .btn{font-family:var(--font-body);font-weight:600;font-size:14px;line-height:1;padding:0 18px;height:40px;border-radius:var(--radius-md);border:1px solid transparent;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all var(--dur-fast) var(--ease-out)}
+  .btn-primary{background:var(--brand);color:#fff;border-color:var(--blue-600)}
+  .btn-primary.hov{background:var(--brand-hover);border-color:var(--blue-700)}
+  .btn-primary.prs{background:var(--brand-press);transform:translateY(1px)}
+  .btn-secondary{background:#fff;color:var(--fg-1);border-color:var(--border-default)}
+  .btn-secondary.hov{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-press)}
+  .btn-ghost{background:transparent;color:var(--brand);border-color:transparent}
+  .btn-ghost.hov{background:var(--brand-soft)}
+  .btn-danger{background:var(--status-critical);color:#fff;border-color:#a83737}
+  .btn-sm{height:32px;padding:0 12px;font-size:13px}
+  .btn-lg{height:48px;padding:0 22px;font-size:15px}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="row"><span class="label">Primary</span>
+    <button class="btn btn-primary">Solicitar cotización</button>
+    <button class="btn btn-primary hov">Hover</button>
+    <button class="btn btn-primary prs">Pressed</button>
+    <button class="btn btn-primary" disabled style="opacity:.45;cursor:not-allowed">Disabled</button>
+  </div>
+  <div class="row"><span class="label">Secondary</span>
+    <button class="btn btn-secondary">Hablar con un ingeniero</button>
+    <button class="btn btn-secondary hov">Hover</button>
+    <button class="btn btn-ghost">Ver ficha técnica</button>
+    <button class="btn btn-danger">Reportar falla</button>
+  </div>
+  <div class="row"><span class="label">Sizes</span>
+    <button class="btn btn-primary btn-sm">SM · 32</button>
+    <button class="btn btn-primary">MD · 40</button>
+    <button class="btn btn-primary btn-lg">LG · 48</button>
+  </div>
+</div>
+</body></html>

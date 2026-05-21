@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Soluciones en Comunicaciones</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="components/Header.jsx"></script>
+<script type="text/babel" src="components/Hero.jsx"></script>
+<script type="text/babel" src="components/ProductCard.jsx"></script>
+<script type="text/babel" src="components/VerticalCard.jsx"></script>
+<script type="text/babel" src="components/CTABand.jsx"></script>
+<script type="text/babel" src="components/Footer.jsx"></script>
+<script type="text/babel" src="components/ContactForm.jsx"></script>
+
+<script type="text/babel">
+const PRODUCTS = [
+  { name: "Hytera HP78X", model: "HP78X-U1 · 400–470 MHz", family: "Radio portátil DMR", badge: "Nuevo",
+    specs: ["DMR Tier II", "IP67 · MIL-STD-810G", "Bluetooth · GPS", "Hasta 16 horas de uso"] },
+  { name: "Hytera PD78X",  model: "PD78X-U2 · 400–470 MHz", family: "Radio portátil DMR Tier III",
+    specs: ["Encripción AES-256", "Roaming entre sitios", "IP67", "Hasta 1024 canales"] },
+  { name: "Hytera MD78X",  model: "MD78X · 136–174 MHz", family: "Radio móvil vehicular",
+    specs: ["50 W de potencia", "DMR Tier II/III", "Pantalla a color", "GPS integrado"] },
+  { name: "Hytera PNC560", model: "PNC560 · 4G LTE", family: "Push-to-Talk celular",
+    specs: ["Cobertura nacional", "Android 11", "IP68", "Cámara 13MP"] },
+  { name: "Hytera VM780",  model: "VM780 · Body Camera", family: "Cámara corporal",
+    specs: ["Grabación 1080p", "Pre/post-evento", "IP68 · 12 horas", "Cifrado AES-256"] },
+  { name: "Hytera RD98X",  model: "RD98X · Repetidor", family: "Infraestructura DMR",
+    specs: ["DMR Tier II/III", "Modo IP Multi-Sitio", "Cobertura extendida", "Redundancia activa"] },
+];
+
+const VERTICALS = [
+  { icon: "ship", title: "Puertos y marítimo",
+    body: "Comunicación crítica para terminales, autoridades portuarias y operaciones de carga 24/7.",
+    kpis: [{ value: "99.9%", label: "Disponibilidad" }, { value: "24/7", label: "Soporte" }] },
+  { icon: "factory", title: "Industria y logística",
+    body: "Radios robustos para manufactura, minería, distribución y centros logísticos.",
+    kpis: [{ value: "IP67", label: "Resistencia" }, { value: "MIL-STD", label: "Certificación" }] },
+  { icon: "shield-check", title: "Gobierno y seguridad",
+    body: "Redes TETRA y DMR Tier III con encripción end-to-end para agencias públicas.",
+    kpis: [{ value: "AES-256", label: "Encripción" }, { value: "TETRA", label: "Estándar" }] },
+  { icon: "radio-tower", title: "Infraestructura crítica",
+    body: "Diseño y mantenimiento de redes para utilities, energía y transporte.",
+    kpis: [{ value: "Nacional", label: "Cobertura" }, { value: "SLA", label: "Operacional" }] },
+];
+
+function HomeView({ setRoute }) {
+  return (
+    <>
+      <Hero setRoute={setRoute} />
+
+      <section className="section">
+        <div className="cc-container">
+          <div className="section-head">
+            <span className="cc-eyebrow">Soluciones verticales</span>
+            <h2>Diseñadas para entornos donde la radio no puede fallar.</h2>
+            <p>Implementaciones llave en mano para los sectores que dependen de comunicación
+               continua: puertos, gobierno, industria y operadores de infraestructura crítica.</p>
+          </div>
+          <div className="vert-grid">
+            {VERTICALS.map((v, i) => <VerticalCard key={i} {...v} />)}
+          </div>
+        </div>
+      </section>
+
+      <section className="section" style={{paddingTop: 0}}>
+        <div className="cc-container">
+          <div className="section-head">
+            <span className="cc-eyebrow">Portafolio Hytera</span>
+            <h2>Equipos profesionales, instalados y soportados localmente.</h2>
+            <p>Distribuimos la gama profesional de Hytera con stock en Panamá,
+               garantía local e ingenieros certificados para programación e integración.</p>
+          </div>
+          <div className="prod-grid">
+            {PRODUCTS.slice(0, 3).map((p, i) => <ProductCard key={i} {...p} />)}
+          </div>
+        </div>
+      </section>
+
+      <CTABand setRoute={setRoute} />
+    </>
+  );
+}
+
+function ProductsView() {
+  const [filter, setFilter] = React.useState("Todos");
+  const filters = ["Todos", "Portátil", "Móvil", "PoC", "Body cam", "Infraestructura"];
+  return (
+    <>
+      <div className="page-head">
+        <div className="cc-container">
+          <span className="cc-eyebrow">Productos</span>
+          <h1>Equipos Hytera disponibles en Panamá</h1>
+          <p>Stock local, garantía oficial y programación a medida según vertical.</p>
+        </div>
+      </div>
+      <div className="cc-container">
+        <div className="products-toolbar">
+          {filters.map(f => (
+            <button key={f}
+                    onClick={() => setFilter(f)}
+                    className={"toolbar-chip" + (filter === f ? " is-active" : "")}>{f}</button>
+          ))}
+        </div>
+      </div>
+      <section className="section" style={{paddingTop: 32}}>
+        <div className="cc-container">
+          <div className="prod-grid">
+            {PRODUCTS.map((p, i) => <ProductCard key={i} {...p} />)}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function ContactView() {
+  return (
+    <>
+      <div className="page-head">
+        <div className="cc-container">
+          <span className="cc-eyebrow">Contacto</span>
+          <h1>Hablemos de su despliegue</h1>
+          <p>Un ingeniero le contestará en menos de 24 horas hábiles con una propuesta inicial.</p>
+        </div>
+      </div>
+      <div className="cc-container">
+        <div className="contact-grid">
+          <ContactForm />
+          <aside className="contact-side">
+            <h3>Oficina principal</h3>
+            <div className="ftr-contact">
+              <div><i data-lucide="map-pin"></i><span>Plaza Bal Harbour<br/>Vía Italia, Punta Paitilla<br/>Panamá</span></div>
+              <div><i data-lucide="phone"></i><span>279-5570 · 6151-5555</span></div>
+              <div><i data-lucide="mail"></i><span>info@cecomunica.com</span></div>
+            </div>
+            <hr/>
+            <h3>Soporte técnico</h3>
+            <div className="ftr-contact">
+              <div><i data-lucide="headphones"></i><span>Línea 24/7 para clientes con SLA activo</span></div>
+              <div><i data-lucide="life-buoy"></i><span>soporte@cecomunica.com</span></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function VerticalsView({ setRoute }) {
+  return (
+    <>
+      <div className="page-head">
+        <div className="cc-container">
+          <span className="cc-eyebrow">Soluciones</span>
+          <h1>Implementaciones por vertical</h1>
+          <p>Cada sector tiene su régimen operacional. Diseñamos la red para coincidir con él.</p>
+        </div>
+      </div>
+      <section className="section">
+        <div className="cc-container">
+          <div className="vert-grid">
+            {VERTICALS.map((v, i) => <VerticalCard key={i} {...v} />)}
+          </div>
+        </div>
+      </section>
+      <CTABand setRoute={setRoute} />
+    </>
+  );
+}
+
+function AboutView({ setRoute }) {
+  return (
+    <>
+      <div className="page-head">
+        <div className="cc-container">
+          <span className="cc-eyebrow">Nosotros</span>
+          <h1>Integradores de comunicaciones críticas en Panamá</h1>
+          <p>Operamos desde Punta Paitilla con cobertura nacional en despliegue, mantenimiento y soporte 24/7.</p>
+        </div>
+      </div>
+      <section className="section">
+        <div className="cc-container">
+          <div className="vert-grid" style={{gridTemplateColumns: "repeat(3, 1fr)"}}>
+            <div className="vert-card">
+              <div className="vert-icon"><i data-lucide="shield-check"></i></div>
+              <h3 className="vert-title">Integrador autorizado</h3>
+              <p className="vert-body">Distribuidor oficial Hytera con ingenieros certificados de fábrica.</p>
+            </div>
+            <div className="vert-card">
+              <div className="vert-icon"><i data-lucide="map-pin"></i></div>
+              <h3 className="vert-title">Cobertura nacional</h3>
+              <p className="vert-body">Despliegue en Panamá y Centroamérica desde sede en Punta Paitilla.</p>
+            </div>
+            <div className="vert-card">
+              <div className="vert-icon"><i data-lucide="headphones"></i></div>
+              <h3 className="vert-title">Soporte 24/7</h3>
+              <p className="vert-body">Mesa técnica con SLA para clientes en operación continua.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      <CTABand setRoute={setRoute} />
+    </>
+  );
+}
+
+function App() {
+  const [route, setRoute] = React.useState("home");
+  React.useEffect(() => { window.lucide && window.lucide.createIcons(); });
+  React.useEffect(() => { window.scrollTo(0, 0); }, [route]);
+
+  let view;
+  if (route === "products") view = <ProductsView />;
+  else if (route === "verticals") view = <VerticalsView setRoute={setRoute} />;
+  else if (route === "about") view = <AboutView setRoute={setRoute} />;
+  else if (route === "contact") view = <ContactView />;
+  else view = <HomeView setRoute={setRoute} />;
+
+  return (
+    <>
+      <Header route={route} setRoute={setRoute} />
+      <main>{view}</main>
+      <Footer />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

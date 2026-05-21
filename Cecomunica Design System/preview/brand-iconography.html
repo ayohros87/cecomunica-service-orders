@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Iconography</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  html,body{margin:0;padding:0;background:var(--surface-card);font-family:var(--font-body);color:var(--fg-1)}
+  .wrap{padding:18px 22px}
+  .head{font:600 11px/1 var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--fg-3);margin-bottom:14px}
+  .grid{display:grid;grid-template-columns:repeat(8,1fr);gap:14px}
+  .ic{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .ic svg{width:24px;height:24px;stroke:var(--fg-1);stroke-width:1.75}
+  .nm{font:500 10px/1.1 var(--font-mono);color:var(--fg-3);text-align:center}
+  .footnote{font:500 11px/1.3 var(--font-body);color:var(--fg-3);margin-top:14px;border-top:1px solid var(--border-subtle);padding-top:10px}
+  .footnote b{color:var(--fg-1)}
+</style></head>
+<body>
+<div class="wrap">
+  <div class="head">Lucide · stroke 1.75 · used as icon vocabulary</div>
+  <div class="grid">
+    <div class="ic"><i data-lucide="radio"></i><span class="nm">radio</span></div>
+    <div class="ic"><i data-lucide="radio-tower"></i><span class="nm">radio-tower</span></div>
+    <div class="ic"><i data-lucide="signal"></i><span class="nm">signal</span></div>
+    <div class="ic"><i data-lucide="wifi"></i><span class="nm">wifi</span></div>
+    <div class="ic"><i data-lucide="shield-check"></i><span class="nm">shield-check</span></div>
+    <div class="ic"><i data-lucide="lock"></i><span class="nm">lock</span></div>
+    <div class="ic"><i data-lucide="headphones"></i><span class="nm">headphones</span></div>
+    <div class="ic"><i data-lucide="life-buoy"></i><span class="nm">life-buoy</span></div>
+    <div class="ic"><i data-lucide="ship"></i><span class="nm">ship</span></div>
+    <div class="ic"><i data-lucide="truck"></i><span class="nm">truck</span></div>
+    <div class="ic"><i data-lucide="factory"></i><span class="nm">factory</span></div>
+    <div class="ic"><i data-lucide="map-pin"></i><span class="nm">map-pin</span></div>
+    <div class="ic"><i data-lucide="phone"></i><span class="nm">phone</span></div>
+    <div class="ic"><i data-lucide="mail"></i><span class="nm">mail</span></div>
+    <div class="ic"><i data-lucide="file-text"></i><span class="nm">file-text</span></div>
+    <div class="ic"><i data-lucide="waves"></i><span class="nm">waves</span></div>
+  </div>
+  <div class="footnote"><b>Substitution flag.</b> Cecomunica did not provide an icon set; Lucide stands in. Stroke weight & line caps match the icons used on the business card.</div>
+</div>
+<script>lucide.createIcons();</script>
+</body></html>

@@ -1,0 +1,82 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Business card</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html,body{margin:0;padding:0;font-family:var(--font-body);color:var(--fg-1);background:#EEF2F6}
+  .stage{padding:22px;display:flex;align-items:center;justify-content:center}
+  .card{
+    width:520px;aspect-ratio:1.75/1;background:#fff;border-radius:8px;
+    box-shadow:0 8px 24px rgba(11,42,71,.16),0 2px 4px rgba(11,42,71,.06);
+    position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:26px 28px;
+  }
+  .card::before{content:"";position:absolute;right:-28%;bottom:-55%;width:78%;height:200%;background:#0B2A47;transform:rotate(-18deg);transform-origin:right top}
+  .card::after{content:"";position:absolute;bottom:0;left:0;right:0;height:6px;background:linear-gradient(90deg,#0B2A47 0%,#00B4D8 100%)}
+  .card>*{position:relative;z-index:1}
+  .top{display:flex;align-items:center;gap:12px}
+  .top img{width:40px;height:40px;display:block}
+  .wm{display:flex;flex-direction:column;line-height:1}
+  .wm .nm{font-family:var(--font-display);font-weight:800;letter-spacing:-.02em;font-size:15px;color:#0A1219}
+  .wm .tg{font-family:var(--font-body);font-weight:500;letter-spacing:.06em;font-size:9px;margin-top:4px;color:#0B2A47;opacity:.7}
+  .info{display:flex;flex-direction:column;gap:3px}
+  .nm2{font-family:var(--font-display);font-weight:700;font-size:18px;color:#0A1219}
+  .role{font-size:12px;color:#6B7884}
+  .ct{font:500 11px/1.6 var(--font-mono);color:#4A5560;margin-top:6px}
+  .label{position:absolute;top:10px;right:14px;font:600 10px/1 var(--font-body);letter-spacing:.12em;text-transform:uppercase;color:var(--fg-4);z-index:2}
+@media print {
+  @page {
+    size: letter;
+    margin: 12mm;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .stage {
+    padding: 0;
+    display: block;
+  }
+
+  .card {
+    width: 520px;
+    height: auto;
+    aspect-ratio: 1.75 / 1;
+    border-radius: 8px;
+    box-shadow: none;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .card::before,
+  .card::after {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .label {
+    display: none;
+  }
+}
+</style></head>
+<body>
+<div class="stage">
+  <div class="card">
+    <span class="label">Tarjeta · 90 × 50 mm</span>
+    <div class="top">
+      <img src="../assets/logo-monogram-mark.svg" alt="">
+      <div class="wm"><span class="nm">CECOMUNICA</span><span class="tg">Soluciones en Comunicaciones</span></div>
+    </div>
+    <div class="info">
+      <span class="nm2">Ing. Alberto E. Yohros</span>
+      <span class="role">Gerente General</span>
+      <span class="ct">CC Bal Harbour, Via Italia, Punta Paitilla<br/>+507 279-5570 · +507 6151-5555<br/>alberto.yohros@cecomunica.com · www.cecomunica.com</span>
+    </div>
+  </div>
+</div>
+</body></html>
