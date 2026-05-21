@@ -343,10 +343,10 @@ Last audited against the repo on 2026-05-20.
   - **Discovery during R3:** the app already moved page title + primary CTA into the topbar via `Layout.renderTopbar({ title, actions })`. That means the DS's `.app-page-header` (title + action row pattern) has no natural home in most pages — the equivalent already lives in the topbar. `.app-body` is functionally equivalent to the existing `.app-wrap` (centered + padded), but `.app-wrap` has a more flexible width-modifier system (`--narrow|default|wide|full`). Wholesale rename would lose that flexibility.
   - Decision: keep `.app-wrap` as the layout primitive; `.app-body` is available for pages that want DS-spec 1440px sizing. `.app-page-header` is available for sub-section headers within complex pages. Pages get migrated piecemeal as they're touched for other reasons, not as a forced sweep.
   - 26 of ~44 HTML pages mount `topbar-mount` (use `Layout.renderTopbar`). Remaining 18 are mostly print pages, POC pages, `tools/*`, `login.html`, `404.html`, `verificar-contrato.html`, `cotizar-orden-formal.html` — most reasonably stay bespoke (print pages especially).
-- [~] Phase 5 — Data table + filter bar
+- [x] Phase 5 — Data table + filter bar (done as far as makes sense; see R7)
   - `.app-table-wrap` / `.app-table` / `.filter-bar` rules ✅ in `ceco-ui.css`
   - 13 HTML pages adopted (`contratos/index`, `contratos/nuevo-contrato`, `cotizaciones/*`, `POC/index`, `POC/vendedores-batch`, `ordenes/admin-equipos-cliente`, `ordenes/index`, `ordenes/progreso-tecnicos`, `inventario/cargar-inventario`, `inventario/index`, `clientes/index`)
-  - Pending: `ordenes/index.html` full migration; `inventario/piezas.html` + `inventario/modelos.html` skipped (complex attribute selectors)
+  - **R7 finding:** `ordenes/index.html` wrap is migrated (line 213); the inner `<table class="orders-table">` is intentionally not — `.orders-table` carries substantial page-specific styling (sticky `acciones` column, z-index hierarchy for inline menus) that `table.app-table` (higher specificity) would silently override on dual-class. A full migration would mean re-implementing all those behaviors as `.app-table` extensions — a refactor beyond Phase 5's scope. `inventario/piezas.html` + `modelos.html` density tables use `[data-density="dense|roomy"]` attribute selectors on `.table-wrap`; renaming buys no real adoption (page-local would still win due to source order). Conclusion: leave these as-is until either page is refactored for unrelated reasons.
 - [x] Phase 6 — Form kit (done by R6, scope clarified)
   - `.form-input/-select/-textarea/-section/-section-title` rules ✅ in `ceco-ui.css`
   - `.form-file-zone` + sub-rules (`-icon`, `:hover`, `.drag-over`, hidden `input[type="file"]`) ✅ added by R6
@@ -454,8 +454,12 @@ Actual R6 fixes:
 - `public/ordenes/firmar-entrega.html` — 3 inputs migrated from misused `.table-input` (table-cell styling) to `<div class="form-field"><input class="form-input">`.
 - `public/ordenes/importar-exportar.html` — XLSX file input wrapped in `<label class="form-file-zone">` with icon + drop-target text. The `fotos-taller`/`firmar-entrega` photo-capture UIs intentionally use mobile button-triggered capture (not drag-drop zones), so file-zone doesn't fit there.
 
-### R7 — Phase 5 table completion (~1 h)
-Finish `ordenes/index.html` `.app-table-wrap` migration and decide on `inventario/piezas.html` + `modelos.html` (likely need a manual rewrite of their attribute-selector-heavy table rules).
+### R7 — Phase 5 table completion ✅ DONE (2026-05-20, scope = "verify, accept reality")
+On inspection there's no productive migration left in scope:
+- `ordenes/index.html` wrap is already migrated (`.app-table-wrap` at line 213). The inner `<table class="orders-table">` carries page-specific custom styling (sticky `acciones` column, z-index hierarchy for inline menus) that the higher-specificity `table.app-table` rules would silently override on dual-class — genuine regression risk. Migrating cleanly would require re-implementing all of `.orders-table` as `.app-table` extensions: that's a substantial standalone refactor, not a Phase 5 mop-up.
+- `inventario/piezas.html` + `modelos.html` use page-local `.table-wrap` rules with `[data-density="dense|roomy"]` attribute selectors. Renaming buys no real DS adoption (page-local rules would still win due to source order) and porting the density attribute selectors is pure churn.
+
+Decision: leave these alone until either page is refactored for unrelated reasons. Update Phase 5 tracking line to reflect this is the honest end-state, not an outstanding item.
 
 ### R8 — Phase 8 missing components (~half day)
 - Tabs: extract `.tabs / .tab-list / .tab-button / .tab-panel` from `ui_kits/app/app.css`, wire into `trabajar-orden.html`.
