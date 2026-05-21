@@ -689,6 +689,37 @@ th.ordenado-desc::after {
   gap: 4px;
 }
 
+/* File upload zone — DS App Kit pattern. Wraps a hidden <input type="file">
+   and provides a dashed-border drop target. Pages that want drag-drop
+   support listen for dragover/drop and toggle .drag-over on this element. */
+.form-file-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--sp-8) var(--sp-6);
+  text-align: center;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.form-file-zone:hover,
+.form-file-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--brand-soft);
+}
+.form-file-zone input[type="file"] { display: none; }
+.form-file-zone-icon { color: var(--fg-4); margin-bottom: var(--sp-2); }
+.form-file-zone-icon svg { width: 32px; height: 32px; }
+.form-file-zone p { font-size: var(--fs-body-s); color: var(--fg-3); margin: 0; }
+.form-file-zone strong { color: var(--accent); }
+.form-file-zone span { font-size: var(--fs-caption); color: var(--fg-4); }
+
 .table-wrap.compact table th,
 .table-wrap.compact table td,
 .table-wrap--compact table th,

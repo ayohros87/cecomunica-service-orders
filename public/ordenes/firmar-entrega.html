@@ -44,13 +44,15 @@
 
 <div class="section form">
   <h3 class="form-title"><i data-lucide="mail"></i> Email del cliente</h3>
-  <input type="email" id="clienteEmail" class="table-input" placeholder="correo@ejemplo.com">
+  <div class="form-field">
+    <input type="email" id="clienteEmail" class="form-input" placeholder="correo@ejemplo.com">
+  </div>
 </div>
 
 <div class="section form">
   <h3 class="form-title"><i data-lucide="credit-card"></i> Identificación</h3>
   <input type="file" id="fotoIdentificacion" accept="image/*" capture="environment" style="display:none">
-  <button type="button" class="btn secondary" onclick="document.getElementById('fotoIdentificacion').click()">
+  <button type="button" class="btn btn-secondary" onclick="document.getElementById('fotoIdentificacion').click()">
     <i data-lucide="camera"></i> Tomar foto de la identificación
   </button>
   <p id="previewId" class="form-hint">Aún no se ha tomado foto</p>
@@ -58,15 +60,17 @@
 
 <div class="section form" id="fechaEntregaSection" style="display:none">
   <h3 class="form-title"><i data-lucide="calendar"></i> Fecha de Entrega</h3>
-  <input type="date" id="fechaEntrega" class="table-input">
+  <div class="form-field">
+    <input type="date" id="fechaEntrega" class="form-input">
+  </div>
 </div>
 
   <canvas id="firmaCanvas" class="firma-canvas"></canvas>
 
   <div class="form-actions center">
-    <button class="btn secondary btn-lg" onclick="limpiarFirma()"><i data-lucide="eraser"></i> Limpiar</button>
-    <button class="btn primary btn-lg" onclick="guardarFirma()"><i data-lucide="check"></i> Confirmar</button>
-    <button class="btn danger" onclick="window.location.href='index.html'"><i data-lucide="x"></i> Cancelar</button>
+    <button class="btn btn-secondary btn-lg" onclick="limpiarFirma()"><i data-lucide="eraser"></i> Limpiar</button>
+    <button class="btn btn-primary btn-lg" onclick="guardarFirma()"><i data-lucide="check"></i> Confirmar</button>
+    <button class="btn btn-danger" onclick="window.location.href='index.html'"><i data-lucide="x"></i> Cancelar</button>
   </div>
 
   <p id="mensaje" class="resumen center" style="margin-top:12px;"></p>

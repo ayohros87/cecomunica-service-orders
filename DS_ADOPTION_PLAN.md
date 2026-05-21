@@ -347,11 +347,12 @@ Last audited against the repo on 2026-05-20.
   - `.app-table-wrap` / `.app-table` / `.filter-bar` rules ✅ in `ceco-ui.css`
   - 13 HTML pages adopted (`contratos/index`, `contratos/nuevo-contrato`, `cotizaciones/*`, `POC/index`, `POC/vendedores-batch`, `ordenes/admin-equipos-cliente`, `ordenes/index`, `ordenes/progreso-tecnicos`, `inventario/cargar-inventario`, `inventario/index`, `clientes/index`)
   - Pending: `ordenes/index.html` full migration; `inventario/piezas.html` + `inventario/modelos.html` skipped (complex attribute selectors)
-- [~] Phase 6 — Form kit
+- [x] Phase 6 — Form kit (done by R6, scope clarified)
   - `.form-input/-select/-textarea/-section/-section-title` rules ✅ in `ceco-ui.css`
-  - Adopted in 11 HTML files: `nuevo-contrato`, `nuevo-cliente`, `editar-contrato`, `nueva/editar-cotizacion`, `ordenes/index`, `ordenes/tecnicos`, `ordenes/modelo-de-radio`, `ordenes/estado_reparacion`
-  - Remaining form pages not migrated: `nueva-orden.html`, `editar-orden.html`, `agregar-equipo.html`, `nuevo-equipo.html`, `clientes/editar.html`, `firmar-entrega.html`, `cotizar-orden.html`, `inventario/*`, `POC/*`
-  - `.form-file-zone` rule: not yet added
+  - `.form-file-zone` + sub-rules (`-icon`, `:hover`, `.drag-over`, hidden `input[type="file"]`) ✅ added by R6
+  - **R6 discovery:** the original audit count of "0 form-* classes" in remaining form pages was misleading. Those pages overwhelmingly use `<div class="form-field">` wrappers (`nueva-orden`: all wrapped; `editar-orden`: 9/10; `agregar-equipo`: 3/3; `cotizar-orden`: 3/3; `clientes/editar`: 10/10). The `.form-field input/select/textarea` cascade rules in `ceco-ui.css:582-595` style descendants without needing per-element classes. Forcing per-element `.form-input` would be redundant churn with no visual change. The wrapper pattern is functionally DS-conformant.
+  - `firmar-entrega.html` fixed: 3 inputs that misused `.table-input` (table-cell styling) on standalone form fields migrated to `<div class="form-field"><input class="form-input">` pattern (commit by R6).
+  - `importar-exportar.html` upgraded: XLSX file input wrapped in `.form-file-zone` drag-drop target (the natural fit; `fotos-taller`/`firmar-entrega` use mobile button-triggered capture which doesn't fit a visible drop zone).
 - [~] Phase 7 — Modal + toast (toast done by R4; modal pending R5)
   - Toast: ✅ done by R4 — `Toast.js` now maps `ok|bad|warn|''` → `toast-success|toast-error|toast-warning|toast-info` and mounts into `.toast-region`. The two hardcoded `<div id="toasts" class="toast-wrap">` mounts in `contratos/nuevo-cliente.html` and `POC/vendedores-batch.html` were renamed to `toast-region`. Legacy `.toast-wrap` + `.toast.ok/.bad/.warn` CSS rules left in place for Phase 9 cleanup.
   - Modal: `.modal-backdrop` rules ✅ in CSS, but 4 files still reference `#overlay` / `id="overlay"`: `public/clientes/index.html`, `public/inventario/piezas.html`, `public/inventario/modelos.html`, `public/js/pages/contratos-approval.js`, plus the legacy `#overlay` CSS rule. R5 covers this.
@@ -445,8 +446,13 @@ Without these, page-local button colors (e.g. the page-specific danger/ghost sha
 
 Modal CSS cleanup (delete `#overlay,` from `ceco-ui.css:511`) deferred to Phase 9 — verifying no element relies solely on `#overlay` styling first.
 
-### R6 — Phase 6 form-kit completion (~2 h)
-Apply `.form-input/-select/-textarea/-section` to remaining form pages listed above. Add `.form-file-zone` rule and wire it into the photo-upload UIs in `fotos-taller.html` and `firmar-entrega.html`.
+### R6 — Phase 6 form-kit completion ✅ DONE (2026-05-20, scope revised)
+The plan's prescription "apply `.form-input` to remaining form pages" turned out to be misguided: remaining form pages (`nueva-orden`, `editar-orden`, `agregar-equipo`, `cotizar-orden`, `clientes/editar`) overwhelmingly use `<div class="form-field">` wrappers, and the `.form-field input/select/textarea` cascade in `ceco-ui.css:582-595` already styles them. Forcing per-element classes is redundant.
+
+Actual R6 fixes:
+- `.form-file-zone` CSS + sub-rules (`-icon`, `:hover`, `.drag-over`, hidden file input) added to `ceco-ui.css` from the DS App Kit.
+- `public/ordenes/firmar-entrega.html` — 3 inputs migrated from misused `.table-input` (table-cell styling) to `<div class="form-field"><input class="form-input">`.
+- `public/ordenes/importar-exportar.html` — XLSX file input wrapped in `<label class="form-file-zone">` with icon + drop-target text. The `fotos-taller`/`firmar-entrega` photo-capture UIs intentionally use mobile button-triggered capture (not drag-drop zones), so file-zone doesn't fit there.
 
 ### R7 — Phase 5 table completion (~1 h)
 Finish `ordenes/index.html` `.app-table-wrap` migration and decide on `inventario/piezas.html` + `modelos.html` (likely need a manual rewrite of their attribute-selector-heavy table rules).
