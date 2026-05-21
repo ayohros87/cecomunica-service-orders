@@ -20,11 +20,11 @@
 
  <link rel="stylesheet" href="../css/ceco-ui.css">
  <style>
-  /* Ancho completo para esta vista */
-  /* Que las celdas de texto aprovechen el ancho */
-  .table-wrap td input.table-input { width: 100%; }
-  /* Permitir scroll horizontal si hay muchas columnas */
-  .table-wrap { overflow-x: auto; }
+  .app-table-wrap td input.table-input { width: 100%; }
+  .app-table-wrap { overflow-x: auto; }
+  /* compact variant: tighter cell padding */
+  .app-table-wrap table.app-table th,
+  .app-table-wrap table.app-table td { padding: var(--sp-2) var(--sp-3); }
 </style>
 </head>
 <body>
@@ -43,7 +43,7 @@
         </label>
       </div>
       <div class="input-row fit">
-        <button id="btnBuscar" class="btn primary">Buscar</button>
+        <button id="btnBuscar" class="btn btn-primary">Buscar</button>
         <button id="btnLimpiar" class="btn">Limpiar</button>
       </div>
     </div>
@@ -52,14 +52,14 @@
 <div id="bulkBar" class="muted" style="display:none; margin-top:8px">
   <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
     <div><strong id="bulkCount">0</strong> seleccionado(s)</div>
-    <button id="bulkActivar" class="btn ok">Activar</button>
-    <button id="bulkDesactivar" class="btn danger">Desactivar</button>
+    <button id="bulkActivar" class="btn btn-accent">Activar</button>
+    <button id="bulkDesactivar" class="btn btn-danger">Desactivar</button>
     <input id="bulkTag" class="table-input sm" type="text" placeholder="Agregar tag…">
     <button id="bulkAddTag" class="btn">Agregar tag</button>
   </div>
 </div>
-  <div class="table-wrap compact">
-    <table id="tabla">
+  <div class="app-table-wrap">
+    <table id="tabla" class="app-table">
 <thead>
   <tr>
     <th style="width:34px; text-align:center">
@@ -102,15 +102,19 @@
 </div>
 </div>
 <!-- Modal de confirmación genérico -->
-<div id="overlay" class="overlay">
-  <div class="modal" id="confirmModal" role="dialog" aria-modal="true">
-    <h3 id="confirmTitle" style="margin-top:0">Confirmar eliminación</h3>
-    <div class="alert">Vas a <strong>eliminar (soft-delete)</strong> este cliente. No se pierde información,
-      pero dejará de mostrarse en listados.</div>
-    <p id="confirmMsg" class="resumen" style="margin:8px 0 0 0"></p>
-    <div class="footer">
-      <button class="btn" id="btnCancel">Cancelar</button>
-      <button class="btn danger" id="btnOk">Eliminar</button>
+<div id="overlay" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
+  <div class="modal" id="confirmModal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="confirmTitle">Confirmar eliminación</h3>
+    </div>
+    <div class="modal-body">
+      <div class="alert">Vas a <strong>eliminar (soft-delete)</strong> este cliente. No se pierde información,
+        pero dejará de mostrarse en listados.</div>
+      <p id="confirmMsg" class="resumen" style="margin:8px 0 0"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btnCancel">Cancelar</button>
+      <button class="btn btn-danger" id="btnOk">Eliminar</button>
     </div>
   </div>
 </div>

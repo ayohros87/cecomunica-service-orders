@@ -1,6 +1,6 @@
 # Arquitectura del Sistema Cecomunica
 
-> **Estado:** post-refactor Phases 0–5f y modularización del backend (verificado 2026-05-14).
+> **Estado:** post-refactor Phases 0–5f + capa de servicios completa + migración Phase 6 (Layout.renderTopbar) en 24 páginas (verificado 2026-05-19).
 > Para el plan de trabajo pendiente ver `OUTSTANDING.md`.
 > Para el historial de cambios ver `CHANGELOG.md`.
 
@@ -100,7 +100,7 @@ Cada página carga scripts en este orden en el `<head>`:
 | `roles.js` | `window.ROLES` | Enum canónico de todos los roles del sistema |
 | `formatting.js` | `window.FMT` | `ITBMS_RATE`, `money()`, `round2()`, `date()`, `datetime()`, `calcITBMS()` |
 | `auth.js` | `window.AUTH` | `is()`, `isAny()`, `getRole()`, `getUser()`, `requireAccess()` |
-| `layout.js` | `window.Layout` | `renderTopbar()`, `renderTopbarFor()`, menú de overflow compartido |
+| `layout.js` | `window.Layout` | `renderTopbar(opts)` (configuración total) + `renderTopbarFor(mode, opts)` shortcut con defaults por modo de navegación (`'index'` / `'edit'` / `'child'` / `'home'`, ver §3.5 nav modes); menú de overflow compartido auto-wired |
 
 ### 3.3a Módulos UI compartidos (`js/ui/`)
 
@@ -137,21 +137,19 @@ Cada servicio encapsula todo el I/O de Firestore para su colección. Las página
 | `usuariosService.js` | `usuarios` | `getUsuario`, `getUsuariosByRol`, `getVendedores` |
 | `empresaService.js` | `empresa` | `getOperadores`, `getDoc`, `setDoc` |
 
-### 3.5 Excepciones documentadas: llamadas inline a Firestore
+### 3.5 Llamadas directas a Firestore — estado consolidado (2026-05-19)
 
-Las siguientes llamadas a `db.collection()` fuera de los servicios están intencionalmente fuera de la capa de servicios por complejidad o por ser patrones heredados en proceso de migración:
+La migración de páginas a la capa de servicios está completa. `db.collection()` ya **no aparece** en ningún script de `public/js/pages/` ni en bloques inline de los `*.html` desplegados. Las únicas referencias que quedan en el repo son intencionales:
 
-| Archivo | Motivo |
+| Ubicación | Motivo |
 |---|---|
-| `js/pages/nuevo-contrato.js` | Fallback `startAt/endAt` para búsqueda de clientes (patrón legacy) |
-| `js/pages/contratos-index.js` | 4 llamadas a `usuarios` (cargarUsuarios, auth, aprobarContrato) |
-| `js/pages/poc-index.js` | 4 llamadas: fallback operadores + queries compuestas con `!=` |
-| `js/pages/trabajar-orden.js` | 8 llamadas: `onSnapshot`, subcol `equipos_meta`, transacciones de stock, query paginada con `!=` |
-| `js/pages/vendedores-batch.js` | 8 llamadas: queries cache-first con índices compuestos |
-| `js/pages/piezas.js` | 1 llamada: loop de import masivo con batch API crudo |
-| `contratos/nuevo-cliente.html` | 3 llamadas: queries de unicidad (duplicate-check WHERE) |
-| `ordenes/nueva-orden.html` | 2 llamadas: numeración de orden + duplicate-check WHERE |
-| `clientes/index.html` | 7 llamadas: query builders que retornan objetos Firestore crudos |
+| `public/js/services/*.js` (11 archivos) | Implementación de los servicios — único lugar legítimo |
+| `public/js/firebase-init.js` | Bootstrap de la app (auth + persistencia) |
+| `public/verify/index.html` | Lectura pública (sin auth) de `verificaciones/{id}` — ver §7.3 |
+| `public/verificar-contrato.html` | Misma lectura pública, página alternativa heredada |
+| `public/tools/*.html` | Migradores one-off; excluidos del deploy vía `firebase.json` → `hosting.ignore: ["tools/**"]` |
+
+Las dos páginas de verificación pública leen `verificaciones` directamente porque cargan en contexto anónimo (sin Firestore listeners ni servicios); su única operación es un `.doc(id).get()`. Una extracción a `firebase-public.js` está pendiente en `OUTSTANDING.md §2.5` (motivo: ITP de Safari afecta `setPersistence(LOCAL)` y `enablePersistence` que hoy se cargan sin necesidad en estas páginas).
 
 ### 3.6 Scripts de página (`js/pages/`)
 

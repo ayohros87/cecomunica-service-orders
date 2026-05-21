@@ -92,7 +92,7 @@
           <div class="grid-2">
             <div class="cliente-search">
               <label>Buscar cliente</label>
-              <input type="text" id="clienteBuscar" placeholder="Buscar cliente...">
+              <input class="form-input" type="text" id="clienteBuscar" placeholder="Buscar cliente...">
               <div id="clienteDropdown" class="cliente-dropdown"></div>
               <input type="hidden" id="clienteId">
             </div>
@@ -110,22 +110,22 @@
           <div class="grid-3" style="grid-template-columns: 2fr 1fr 0.8fr 1fr auto; align-items: end; gap: 10px;">
             <div>
               <label>Modelo</label>
-              <select id="modeloSelect"></select>
+              <select class="form-select" id="modeloSelect"></select>
             </div>
             <div>
               <label>Modalidad</label>
-              <select id="modeloModalidad">
+              <select class="form-select" id="modeloModalidad">
                 <option value="venta">Venta</option>
                 <option value="alquiler">Alquiler</option>
               </select>
             </div>
             <div>
               <label>Cantidad</label>
-              <input type="number" id="modeloCantidad" min="1" value="1">
+              <input class="form-input" type="number" id="modeloCantidad" min="1" value="1">
             </div>
             <div>
               <label>Precio</label>
-              <input type="number" id="modeloPrecio" min="0" step="0.01" value="0">
+              <input class="form-input" type="number" id="modeloPrecio" min="0" step="0.01" value="0">
               <div id="modeloPrecioHint" class="hint"></div>
             </div>
             <div>
@@ -134,11 +134,11 @@
           </div>
           <div style="margin-top:6px;">
             <label>Descripción (opcional)</label>
-            <input type="text" id="modeloDescripcion" placeholder="Descripción">
+            <input class="form-input" type="text" id="modeloDescripcion" placeholder="Descripción">
           </div>
 
-          <div class="table-wrap" style="margin-top: 12px;">
-            <table class="items-table">
+          <div class="app-table-wrap" style="margin-top: 12px;">
+            <table class="items-table app-table editable">
               <thead>
                 <tr>
                   <th>Tipo</th>
@@ -161,42 +161,42 @@
             <div class="grid-2">
               <div>
                 <label>Firmado por (nombre)</label>
-                <input type="text" id="firmadoNombre" value="">
+                <input class="form-input" type="text" id="firmadoNombre" value="">
               </div>
               <div>
                 <label>Cargo</label>
-                <input type="text" id="firmadoCargo" value="Asistente Ejecutiva">
+                <input class="form-input" type="text" id="firmadoCargo" value="Asistente Ejecutiva">
               </div>
             </div>
             <div class="grid-2" style="margin-top:10px;">
               <div>
                 <label>Teléfono</label>
-                <input type="text" id="firmadoTel" value="279-5570">
+                <input class="form-input" type="text" id="firmadoTel" value="279-5570">
               </div>
               <div>
                 <label>Celular</label>
-                <input type="text" id="firmadoCel" value="">
+                <input class="form-input" type="text" id="firmadoCel" value="">
               </div>
             </div>
 
             <div class="grid-2" style="margin-top:10px;">
               <div>
                 <label>Banco</label>
-                <input type="text" id="bancoNombre" value="Banistmo" disabled>
+                <input class="form-input" type="text" id="bancoNombre" value="Banistmo" disabled>
               </div>
               <div>
                 <label>Tipo de cuenta</label>
-                <input type="text" id="bancoTipo" value="Cuenta corriente" disabled>
+                <input class="form-input" type="text" id="bancoTipo" value="Cuenta corriente" disabled>
               </div>
             </div>
             <div class="grid-2" style="margin-top:10px;">
               <div>
                 <label>Número de cuenta</label>
-                <input type="text" id="bancoNumero" value="0101081314" disabled>
+                <input class="form-input" type="text" id="bancoNumero" value="0101081314" disabled>
               </div>
               <div>
                 <label>Titular</label>
-                <input type="text" id="bancoTitular" value="C COMUNICA, S.A." disabled>
+                <input class="form-input" type="text" id="bancoTitular" value="C COMUNICA, S.A." disabled>
               </div>
             </div>
           </div>
@@ -215,11 +215,11 @@
 
           <div>
             <label>Validez (días)</label>
-            <input type="number" id="validezDias" min="1" value="30">
+            <input class="form-input" type="number" id="validezDias" min="1" value="30">
           </div>
           <div style="margin-top:10px;">
             <label>Forma de pago</label>
-            <select id="formaPago">
+            <select class="form-select" id="formaPago">
               <option value="contado">Contado</option>
               <option value="credito">Crédito</option>
               <option value="otro">Otro</option>
@@ -227,20 +227,20 @@
           </div>
           <div style="margin-top:10px;">
             <label>Tiempo de entrega</label>
-            <input type="text" id="tiempoEntrega" placeholder="Ej: 3-5 días hábiles">
+            <input class="form-input" type="text" id="tiempoEntrega" placeholder="Ej: 3-5 días hábiles">
           </div>
           <div style="margin-top:10px;">
             <label>Notas</label>
-            <textarea id="notas" rows="3"></textarea>
+            <textarea class="form-textarea" id="notas" rows="3"></textarea>
           </div>
 
           <hr>
 
           <div class="actions">
-            <button class="btn primary" onclick="guardar('emitida')"><i data-lucide="check-circle"></i> Emitir</button>
-            <button class="btn secondary" onclick="guardar('borrador')"><i data-lucide="save"></i> Guardar borrador</button>
-            <button class="btn secondary" onclick="imprimir()"><i data-lucide="printer"></i> Imprimir</button>
-            <button class="btn secondary" onclick="duplicarCotizacion()"><i data-lucide="copy"></i> Duplicar</button>
+            <button class="btn btn-primary" onclick="guardar('emitida')"><i data-lucide="check-circle"></i> Emitir</button>
+            <button class="btn btn-secondary" onclick="guardar('borrador')"><i data-lucide="save"></i> Guardar borrador</button>
+            <button class="btn btn-secondary" onclick="imprimir()"><i data-lucide="printer"></i> Imprimir</button>
+            <button class="btn btn-secondary" onclick="duplicarCotizacion()"><i data-lucide="copy"></i> Duplicar</button>
           </div>
         </div>
       </aside>

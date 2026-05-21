@@ -25,7 +25,7 @@
     <h2 style="margin:8px 0;"><i data-lucide="calendar"></i> Cargar Inventario</h2>
   </div>
   <div class="right">
-    <button class="btn primary" onclick="guardarSemana()"><i data-lucide="save"></i> Guardar inventario</button>
+    <button class="btn btn-primary" onclick="guardarSemana()"><i data-lucide="save"></i> Guardar inventario</button>
     <button class="btn" onclick="window.location.href='./index.html'"><i data-lucide="package"></i> Ver Inventario</button>
     <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú principal</button>
   </div>
@@ -36,13 +36,13 @@
       <input type="text" id="filtroMarca" placeholder="Buscar por marca">
       <input type="text" id="filtroModelo" placeholder="Buscar por modelo">
       <button class="btn" onclick="filtrar()"><i data-lucide="search"></i> Buscar</button>
-      <button class="btn secondary" onclick="limpiarFiltro()"><i data-lucide="refresh-cw"></i> Limpiar</button>
+      <button class="btn btn-secondary" onclick="limpiarFiltro()"><i data-lucide="refresh-cw"></i> Limpiar</button>
     </div>
     <div class="right resumen" id="resumenCargar">Cargando modelos…</div>
   </div>
 </div>
-<div class="table-wrap mt-12">
-  <table>
+<div class="app-table-wrap mt-12">
+  <table class="app-table">
     <thead id="headerModelos"></thead>
     <tbody id="tablaModelos"></tbody>
   </table>

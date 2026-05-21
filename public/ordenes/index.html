@@ -40,7 +40,7 @@
     <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
     <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
     <div class="topbar-actions">
-      <button class="btn primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
+      <button class="btn btn-primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
       <!-- §4.2 view toggle: table (desktop default) ↔ cards (mobile default) -->
       <div class="view-toggle" role="group" aria-label="Modo de vista">
         <button type="button" class="view-toggle__btn" data-action="set-view-cards" data-view="cards" aria-pressed="false" title="Vista de tarjetas">
@@ -51,7 +51,7 @@
         </button>
       </div>
       <div class="overflow-menu topbar-menu">
-        <button class="btn ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+        <button class="btn btn-ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
         <div class="overflow-menu-dropdown" id="topbar-menu">
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
           <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
@@ -59,8 +59,8 @@
           <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Configuración</button>
         </div>
       </div>
-      <button class="btn ghost" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
-      <button class="btn ghost" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>
+      <button class="btn btn-ghost" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
+      <button class="btn btn-ghost" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>
     </div>
   </div>
   
@@ -129,13 +129,13 @@
   <div class="toolbar">
     <div class="left" style="flex: 1;">
       <input type="text" id="filtroRapido" placeholder="Buscar orden, cliente o serial..." class="input-compact" />
-      <button class="btn primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>        <!-- §4.4 BarcodeDetector scan-to-search for field techs -->
-        <button class="btn ghost" id="btnScanSerial" data-action="scan-serial" title="Escanear serial con cámara" style="display:none;"><i data-lucide="scan-line"></i> Escanear</button>      <button class="btn secondary" data-action="limpiar-filtros">Limpiar</button>
-      <button class="btn ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
+      <button class="btn btn-primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>        <!-- §4.4 BarcodeDetector scan-to-search for field techs -->
+        <button class="btn btn-ghost" id="btnScanSerial" data-action="scan-serial" title="Escanear serial con cámara" style="display:none;"><i data-lucide="scan-line"></i> Escanear</button>      <button class="btn btn-secondary" data-action="limpiar-filtros">Limpiar</button>
+      <button class="btn btn-ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
         <i data-lucide="chevron-down" class="icon-avanzado" id="iconoAvanzados"></i> Avanzado
       </button>
       <div class="overflow-menu" id="presetsMenuWrap">
-        <button class="btn ghost" data-action="toggle-presets-menu" data-stop-propagation="true"
+        <button class="btn btn-ghost" data-action="toggle-presets-menu" data-stop-propagation="true"
                 title="Filtros guardados" aria-haspopup="true" aria-expanded="false">
           <i data-lucide="bookmark"></i> Presets
         </button>
@@ -150,7 +150,7 @@
         <option value="cliente_nombre">Cliente</option>
       </select>
       <button class="btn" title="Cambiar dirección" data-action="cambiar-direccion"><i data-lucide="arrow-up-down"></i></button>
-      <button class="btn ghost toggle-fecha-entrega-btn" id="btnToggleFechaEntrega" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
+      <button class="btn btn-ghost toggle-fecha-entrega-btn" id="btnToggleFechaEntrega" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
     </div>
   </div>
 
@@ -161,8 +161,8 @@
         <input type="text" id="filtroOrden" placeholder="Orden" />
         <input type="text" id="filtroCliente" placeholder="Cliente" />
         <input type="text" id="filtroSerial" placeholder="Serial" />
-        <button class="btn primary" data-action="filtrar">Buscar</button>
-        <button class="btn ghost" id="btnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente (Admin)</button>
+        <button class="btn btn-primary" data-action="filtrar">Buscar</button>
+        <button class="btn btn-ghost" id="btnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente (Admin)</button>
       </div>
     </div>
   </div>
@@ -210,7 +210,7 @@
 <div id="loader" class="loader-center hidden">
   <div class="loader"></div>
 </div>
-  <div class="table-wrap mt-12">
+  <div class="app-table-wrap mt-12">
   <table class="orders-table">
   <colgroup>
   <col style="width: 11%;">   <!-- Número -->
@@ -250,7 +250,7 @@
   <div class="modal modal-md">
     <div class="modal-header">
       <h3 class="modal-title" id="modalAsignarTitle"><i data-lucide="wrench"></i> Asignar técnico</h3>
-      <button class="btn ghost btn-close-modal" data-action="cerrar-modal-asignar" aria-label="Cerrar"><i data-lucide="x"></i></button>
+      <button class="btn btn-ghost btn-close-modal" data-action="cerrar-modal-asignar" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
     <div class="form-field">
       <label class="form-label">Selecciona un técnico</label>
@@ -260,8 +260,8 @@
       </p>
     </div>
     <div class="modal-footer">
-      <button class="btn secondary" data-action="cerrar-modal-asignar">Cancelar</button>
-      <button class="btn primary" data-action="confirmar-asignar-tecnico">
+      <button class="btn btn-secondary" data-action="cerrar-modal-asignar">Cancelar</button>
+      <button class="btn btn-primary" data-action="confirmar-asignar-tecnico">
         Asignar técnico
       </button>
     </div>
@@ -277,7 +277,7 @@
       <h3 class="modal-title modal-entrega__title" id="modalEntregaTitle">
         <i data-lucide="package-check"></i> Entrega — Orden <span id="entregaModalOrdenId"></span>
       </h3>
-      <button class="btn ghost modal-entrega__close" data-action="cerrar-modal-entrega" aria-label="Cerrar"><i data-lucide="x"></i></button>
+      <button class="btn btn-ghost modal-entrega__close" data-action="cerrar-modal-entrega" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
 
     <!-- Checkbox A: Item not received -->
@@ -362,7 +362,7 @@
           Firma del receptor <span class="req">*</span>
         </label>
         <canvas id="entregaFirmaCanvas" class="modal-entrega__canvas"></canvas>
-        <button type="button" class="btn ghost modal-entrega__clear-btn"
+        <button type="button" class="btn btn-ghost modal-entrega__clear-btn"
                 data-action="limpiar-entrega-firma">
           <i data-lucide="eraser"></i> Limpiar firma
         </button>
@@ -372,8 +372,8 @@
 
     <!-- Footer -->
     <div class="footer">
-      <button class="btn secondary" data-action="cerrar-modal-entrega">Cancelar</button>
-      <button class="btn primary" id="btnConfirmarEntrega" data-action="confirmar-entrega">
+      <button class="btn btn-secondary" data-action="cerrar-modal-entrega">Cancelar</button>
+      <button class="btn btn-primary" id="btnConfirmarEntrega" data-action="confirmar-entrega">
         <i data-lucide="check"></i> Confirmar Entrega
       </button>
     </div>
@@ -407,8 +407,8 @@
     <div class="mdrawer-head">
       <div class="mdrawer-title">Filtros</div>
       <div class="mdrawer-actions">
-        <button class="btn ghost" type="button" data-action="mobile-clear-all">Limpiar</button>
-        <button class="btn ghost" type="button" data-action="mobile-close-filters"><i data-lucide="x"></i></button>
+        <button class="btn btn-ghost" type="button" data-action="mobile-clear-all">Limpiar</button>
+        <button class="btn btn-ghost" type="button" data-action="mobile-close-filters"><i data-lucide="x"></i></button>
       </div>
     </div>
 
@@ -417,7 +417,7 @@
       <label class="mlabel">Buscar</label>
       <input id="mobileQuickSearch" class="minput" type="text" placeholder="Orden / Cliente / Serial…" />
       <div class="mrow">
-        <button class="btn primary mfull" type="button" data-action="mobile-apply-search">Buscar</button>
+        <button class="btn btn-primary mfull" type="button" data-action="mobile-apply-search">Buscar</button>
       </div>
     </div>
 
@@ -449,10 +449,10 @@
         <span>Ver solo mis órdenes</span>
       </label>
       <div class="mrow">
-        <button class="btn primary mfull" type="button" data-action="mobile-apply-advanced">Buscar</button>
+        <button class="btn btn-primary mfull" type="button" data-action="mobile-apply-advanced">Buscar</button>
       </div>
       <div class="mrow">
-        <button class="btn ghost mfull" id="mobileBtnAdminEquiposCliente" type="button" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente (Admin)</button>
+        <button class="btn btn-ghost mfull" id="mobileBtnAdminEquiposCliente" type="button" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente (Admin)</button>
       </div>
     </div>
 
@@ -467,7 +467,7 @@
 
         <button class="btn msort" type="button" data-action="mobile-toggle-sort"><i data-lucide="arrow-up-down"></i></button>
       </div>
-      <button class="btn ghost mfull toggle-fecha-entrega-btn" type="button" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
+      <button class="btn btn-ghost mfull toggle-fecha-entrega-btn" type="button" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
     </div>
 
     <!-- Move secondary actions here (mobile) -->
@@ -492,7 +492,7 @@
         <div id="equiposMobileTitle" class="modal-title-mobile">Equipos</div>
         <div id="equiposMobileSub" class="modal-subtitle"></div>
       </div>
-      <button class="btn ghost" data-action="cerrar-equipos-mobile"><i data-lucide="x"></i></button>
+      <button class="btn btn-ghost" data-action="cerrar-equipos-mobile"><i data-lucide="x"></i></button>
     </div>
 
     <div id="equiposMobileList" class="d-grid gap-10 max-h-70"></div>
@@ -507,7 +507,7 @@
         <div id="trabajoEquipoTitle" class="modal-title-mobile">Intervención técnica</div>
         <div id="trabajoEquipoSub" class="modal-subtitle"></div>
       </div>
-      <button class="btn ghost" data-action="cerrar-trabajo-equipo"><i data-lucide="x"></i></button>
+      <button class="btn btn-ghost" data-action="cerrar-trabajo-equipo"><i data-lucide="x"></i></button>
     </div>
 
     <textarea id="trabajoEquipoText" class="textarea-full"
@@ -522,8 +522,8 @@
     </div>
 
     <div class="modal-footer-mobile">
-      <button class="btn secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
-      <button id="btnGuardarTrabajoEquipo" class="btn primary btn-full" data-action="guardar-trabajo-equipo"><i data-lucide="save"></i> Guardar</button>
+      <button class="btn btn-secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
+      <button id="btnGuardarTrabajoEquipo" class="btn btn-primary btn-full" data-action="guardar-trabajo-equipo"><i data-lucide="save"></i> Guardar</button>
     </div>
   </div>
 </div>

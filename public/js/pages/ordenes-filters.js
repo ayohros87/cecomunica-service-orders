@@ -6,6 +6,19 @@
  * orders, and re-render via ordenes-render.js.
  * ======================================== */
 
+// Merge fresh orders into APP.state.orders by ordenId — fresh entries
+// (e.g. from searchOrders) overwrite stale cache, untouched entries are
+// preserved. Mirrors the merge pattern in ordenes-data.js for the live
+// listener. Required so the delegated expand handler in ordenes-render.js
+// can resolve orders that were surfaced by search but lived outside the
+// initial page slice.
+function _mergeIntoOrdersCache(fresh) {
+  if (!Array.isArray(fresh) || fresh.length === 0) return;
+  const freshIds = new Set(fresh.map(o => o.ordenId));
+  const kept = (APP.state.orders || []).filter(o => !freshIds.has(o.ordenId));
+  APP.state.orders = [...fresh, ...kept];
+}
+
 function setFechaEntregaVisible(visible) {
   const body = document.body;
   if (!body) return;
@@ -338,6 +351,12 @@ window.filtrarOrdenes = async function () {
       ? applyActiveFiltersToOrders(resultados, filters)
       : resultados;
 
+    // Search results may include orders outside the live-listener slice
+    // (older orders matched by client / serial). Merge into APP.state.orders
+    // so the delegated row-expand handler can resolve them — otherwise the
+    // expand spinner hangs silently. See ordenes-render.js:_toggleOrdenRow.
+    _mergeIntoOrdersCache(resultados);
+
     if (resultados.length === 0) {
       renderEmptyState("No se encontraron coincidencias", {
         icon: 'search-x',
@@ -389,6 +408,8 @@ window.filtrarRapido = async function () {
       filtroSerial: valor,
       quickSearch: true
     });
+
+    _mergeIntoOrdersCache(resultados);
 
     if (resultados.length === 0) {
       renderEmptyState("No se encontraron coincidencias", {

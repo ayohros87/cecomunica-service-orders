@@ -162,7 +162,7 @@
     <legend><i data-lucide="user"></i> Información del Cliente</legend>
     <!-- mantenemos el campo como read-only para edición -->
     <label>Cliente:
-      <input type="text" id="cliente_nombre" disabled>
+      <input class="form-input" type="text" id="cliente_nombre" disabled>
     </label>
   </fieldset>
 
@@ -170,7 +170,7 @@
     <legend><i data-lucide="file-text"></i> Detalles del Contrato</legend>
 
     <label>Tipo de contrato:
-      <select id="tipo_contrato" required>
+      <select class="form-select" id="tipo_contrato" required>
         <option value="ALQ">Alquiler</option>
         <option value="PROP">Propio</option>
         <option value="REEMP">Reemplazo</option>
@@ -179,7 +179,7 @@
     </label>
 
     <label>Tipo de acción:
-      <select id="accion" required>
+      <select class="form-select" id="accion" required>
         <option value="Nuevo">Nuevo</option>
         <option value="Renovación">Renovación</option>
         <option value="Adición">Adición</option>
@@ -201,7 +201,7 @@
     </div>
 
 <label>Duración del contrato:
-  <select id="duracion" required onchange="toggleOtraDuracion(this.value)">
+  <select class="form-select" id="duracion" required onchange="toggleOtraDuracion(this.value)">
     <option value="">Seleccione…</option>
     <option value="12 meses">12 meses</option>
     <option value="18 meses">18 meses</option>
@@ -211,11 +211,11 @@
 
 <label id="otraDuracionLabel" style="display:none;">
   Especificar duración (meses)
-  <input type="number" id="otra_duracion" min="1" placeholder="Ej. 24">
+  <input class="form-input" type="number" id="otra_duracion" min="1" placeholder="Ej. 24">
 </label>
 
     <label>Estado:
-  <select id="estado" disabled>
+  <select class="form-select" id="estado" disabled>
     <option value="activo">Activo</option>
     <option value="pendiente_aprobacion">Pendiente Aprobación</option>
     <option value="vencido">Vencido</option>
@@ -224,7 +224,7 @@
 
 
     <label>Observaciones:
-      <textarea id="observaciones"></textarea>
+      <textarea class="form-textarea" id="observaciones"></textarea>
     </label>
   </fieldset>
 

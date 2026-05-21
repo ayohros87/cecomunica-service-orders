@@ -13,6 +13,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/usuariosService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -79,14 +80,17 @@
   </style>
 </head>
 <body>
-  <h2 style="margin:8px 0;"><i data-lucide="bar-chart-2"></i> Progreso de Técnicos</h2>
+  <div id="topbar-mount"></div>
+  <script>Layout.renderTopbar({ title: '<i data-lucide="trophy"></i> Progreso de Técnicos', showHome: true, homeHref: '../index.html', showLogout: true });</script>
+
+  <div class="app-wrap">
 
   <!-- Toolbar -->
   <div class="toolbar">
     <div class="left">
       <input id="buscarNombre" type="text" placeholder="Buscar técnico por nombre o correo" style="min-width:260px;">
-      <button class="btn primary" id="btnBuscar"><i data-lucide="search"></i> Buscar</button>
-      <button class="btn secondary" id="btnLimpiar"><i data-lucide="x"></i> Limpiar</button>
+      <button class="btn btn-primary" id="btnBuscar"><i data-lucide="search"></i> Buscar</button>
+      <button class="btn btn-secondary" id="btnLimpiar"><i data-lucide="x"></i> Limpiar</button>
     </div>
     <div class="right">
       <label class="subtle">Periodo:</label>
@@ -113,15 +117,24 @@
   </div>
 
   <!-- Tus propias estadísticas (si es técnico) -->
-  <div id="misStatsWrap" class="self-stats" style="display:none; margin-top:12px;">
-    <div class="self-card"><strong>Mi Semanal:</strong> <span id="miSemanal">0</span></div>
-    <div class="self-card"><strong>Mi Mensual:</strong> <span id="miMensual">0</span></div>
-    <div class="self-card"><strong>Mi Total:</strong> <span id="miTotal">0</span></div>
+  <div id="misStatsWrap" class="kpi-grid" style="display:none; margin-top:12px;">
+    <div class="kpi-card">
+      <div class="kpi-card-label">Mi Semanal</div>
+      <div class="kpi-card-value kpi-accent" id="miSemanal">0</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-card-label">Mi Mensual</div>
+      <div class="kpi-card-value" id="miMensual">0</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-card-label">Mi Total</div>
+      <div class="kpi-card-value kpi-ok" id="miTotal">0</div>
+    </div>
   </div>
 
   <!-- Tabla ranking -->
-  <div class="table-wrap mt-12">
-    <table class="tbl" style="width:100%;">
+  <div class="app-table-wrap mt-12">
+    <table class="tbl app-table" style="width:100%;">
       <thead>
         <tr>
           <th>#</th>
@@ -135,6 +148,8 @@
       <tbody id="tbodyRanking"></tbody>
     </table>
   </div>
+
+  </div><!-- /.app-wrap -->
 
   <script src="../js/pages/progreso-tecnicos.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

@@ -45,14 +45,14 @@
     <div id="infoOrden" class="resumen"></div>
     <div class="acciones">
       <button class="btn" onclick="window.open('imprimir-orden.html?id='+ordenId,'_blank')"><i data-lucide="printer"></i> Imprimir orden</button>
-      <button class="btn primary" onclick="irACotizar()"><i data-lucide="receipt"></i> Previsualizar cotización</button>
+      <button class="btn btn-primary" onclick="irACotizar()"><i data-lucide="receipt"></i> Previsualizar cotización</button>
     </div>
   </div>
 
   <div id="equiposWrap"></div>
 
   <!-- Modal Agregar Pieza -->
-  <div id="modalPieza" class="overlay">
+  <div id="modalPieza" class="modal-backdrop">
     <div class="modal">
       <h3 style="margin:0 0 8px 0;">Agregar pieza utilizada</h3>
       <div class="form-field">
@@ -75,7 +75,7 @@
 
       <div class="acciones" style="justify-content:flex-end;margin-top:8px;">
         <button class="btn" onclick="cerrarModal()">Cancelar</button>
-        <button class="btn ok" onclick="confirmarAgregar()">Agregar</button>
+        <button class="btn btn-accent" onclick="confirmarAgregar()">Agregar</button>
       </div>
     </div>
   </div>

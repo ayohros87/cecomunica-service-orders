@@ -50,41 +50,42 @@ const Layout = (() => {
 
     const actionBtns = actions.map(btnHtml).join('');
     const backBtn    = back
-      ? `<a href="${back.href}" class="btn ghost">${back.label || '<i data-lucide="arrow-left"></i> Volver'}</a>`
+      ? `<a href="${back.href}" class="btn btn-ghost">${back.label || '<i data-lucide="arrow-left"></i> Volver'}</a>`
       : '';
     const menuWrapId = `__layout-menu-wrap-${menuId}`;
     const menuBtnId  = `__layout-menu-btn-${menuId}`;
     const menuDropId = `__layout-menu-dropdown-${menuId}`;
     const menuBtn    = menu.length
       ? `<div class="overflow-menu topbar-menu" id="${menuWrapId}">
-      <button class="btn ghost" id="${menuBtnId}" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+      <button class="btn btn-ghost" id="${menuBtnId}" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
       <div class="overflow-menu-dropdown" id="${menuDropId}">${menu.map(menuItemHtml).join('')}</div>
     </div>`
       : '';
     const homeBtn    = showHome
-      ? `<a href="${homeHref}" class="btn ghost"><i data-lucide="home"></i> Menú principal</a>`
+      ? `<a href="${homeHref}" class="btn btn-ghost"><i data-lucide="home"></i> Menú principal</a>`
       : '';
     const logoutBtn  = showLogout
-      ? `<button class="btn ghost" onclick="cerrarSesion()" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>`
+      ? `<button class="btn btn-ghost" onclick="cerrarSesion()" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>`
       : '';
 
     const html = `
-<div class="topbar">
-  <div class="topbar-left">
+<header class="topbar app-topbar">
+  <div class="topbar-left app-topbar-logo">
     ${BRAND_MARK}
-    <h1 class="topbar-title">${title}</h1>
+    <h1 class="topbar-title app-topbar-title">${title}</h1>
     ${leftSlot}
   </div>
-  <div class="topbar-actions topbar-right">
+  <span class="app-topbar-spacer"></span>
+  <div class="topbar-actions topbar-right app-topbar-actions">
     ${actionBtns}
     ${backBtn}
     ${menuBtn}
     ${homeBtn}
     ${logoutBtn}
   </div>
-</div>`;
+</header>`;
 
-    const mount = document.getElementById('topbar-mount');
+    const mount = document.getElementById('topbar-mount') || document.getElementById('app-topbar-mount');
     if (mount) {
       mount.outerHTML = html;
       if (typeof lucide !== 'undefined') lucide.createIcons();
