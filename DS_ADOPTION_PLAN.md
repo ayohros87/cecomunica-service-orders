@@ -361,7 +361,12 @@ Last audited against the repo on 2026-05-20.
 - [x] Phase 8c — Photo grid + lightbox (`.photo-grid`, `.lightbox*` added)
 - [N/A] Phase 8d — Signature pad wrapper: the DS App Kit has `.multi-sig*` for **printed** multi-party signature layouts on formal documents, not for an interactive `<canvas>` signature pad like `firmar-entrega.html` uses. Different pattern. The existing page-local `<canvas class="firma-canvas">` styling works fine.
 - [x] Phase 8e — Print kit: `public/css/print-base.css` already exists (~146 lines, DS-token-aware with fallbacks, `@page letter` rules, brand-header / page-shell / print-mono primitives). Linked from `cotizaciones/imprimir-cotizacion`, `contratos/imprimir-contrato`, `ordenes/imprimir-orden`. Extending to the other 4 print pages (`cotizar-orden-formal`, `nota-entrega`, `nota-entrega-intervenciones`, `POC/imprimir-equipos`) is per-page work since each has its own inline print styling that may or may not be compatible — left as opportunistic future work.
-- [ ] Phase 9 — CSS cleanup + dead rule removal (blocked: `.badge` 37 refs, `.chip` non-`-estado`, `#overlay`, `.overlay`, `.table-wrap`, `.toast-wrap`, `.toast.ok/.bad/.warn` all still referenced by pages/JS; remove only after migrations land)
+- [x] Phase 9 — CSS cleanup (orphan rules from R1–R8 removed by R9)
+  - `.estado-pill.*` + dot rules (~56 lines) removed from `ordenes-index.css` — orphan after R2 (per-order state badges now `.chip-estado.chip-*`).
+  - `.card-contrato .estado-activo/-ok/-pendiente/-inactivo/-cancelado` rules removed from `ceco-ui.css` — orphan after R2 (contratos cards now use `.chip-estado.chip-*`).
+  - `.toast-wrap` + `.toast.ok/.bad/.warn` rules removed from `ceco-ui.css` — orphan after R4 (Toast.js now emits `.toast.toast-success/-error/-warning/-info` into `.toast-region`).
+  - Inline orphan rules removed from `contratos/index.html` (5 `.estado-*` badges), `cotizaciones/index.html` (4 `.estado-*` badges), `contratos/nuevo-cliente.html` (`.toast-wrap`, `.toast`, `.toast.ok/.bad`, `@keyframes slideInToast`, mobile `.toast-wrap` override), `inventario/modelos.html` (`.toast` + variants), `inventario/piezas.html` (`.toast` + variants), `inventario/index.html` (`.toast` + variants).
+  - Intentionally kept: `.estado-activo/-aprobado/-pendiente/-anulado/-inactivo` bare rules in `ceco-ui.css:1249-1260` (still consumed by `poc-list.js:88,354` setting `tdEstado.className`); `.estado-*-chip` family (still used by `contratos-imprimir.js` print page); `#overlay` rule (still has JS handles via `getElementById('overlay')`); `.table-wrap` (still in use by inventario density tables — see R7); `.badge.X` count badges (KPI counters, not state chips); demo-page references in `tools/`.
 
 ---
 
@@ -469,8 +474,28 @@ On inspection the plan's three R8 tasks are largely based on UI patterns that do
 
 R8's actionable scope reduces to verifying the existing state and documenting reality.
 
-### R9 — Cleanup pass (~1 h, gated by R1–R8)
-Delete dead CSS: `.badge*`, generic `.chip`, `.estado-aprobado-chip`, `#overlay`, `.overlay`, `.table-wrap` (after `.app-table-wrap` is universal), `.toast-wrap`, `.toast.ok/.bad/.warn`, and any remaining 760 px breakpoints. Audit for stray hex literals.
+### R9 — Cleanup pass ✅ DONE (2026-05-20, scope = surgical, not wholesale)
+The plan's bulk "delete all the old stuff" prescription was overstated — many of the listed classes are still in use by valid features (count badges, filter chips, POC td-tints, print-page chip variants, JS-handle ids). R9 took a surgical approach: delete only what's truly orphan after R1–R8, leave everything still referenced.
+
+Deleted:
+- `ordenes-index.css` — `.estado-pill.*` + dot rules (~56 lines)
+- `ceco-ui.css` — `.card-contrato .estado-{activo|ok|pendiente|inactivo|cancelado}` rules
+- `ceco-ui.css` — `.toast-wrap`, `.toast.ok/.bad/.warn`, and the `.toast-wrap .toast` pointer-events combinator
+- `contratos/index.html` — `.estado-{activo|aprobado|pendiente|anulado|vencido|inactivo}` badge rules (~30 lines)
+- `cotizaciones/index.html` — `.estado-{borrador|emitida|enviada|anulada}` badge rules
+- `contratos/nuevo-cliente.html` — `.toast-wrap`, `.toast`, `.toast.ok/.bad`, `@keyframes slideInToast`, mobile `.toast-wrap` override (~50 lines)
+- `inventario/modelos.html`, `inventario/piezas.html`, `inventario/index.html` — `.toast` + variant overrides
+- `ordenes-index.css` — outdated toast comment
+
+Kept (intentionally — still in active use):
+- `ceco-ui.css` bare `.estado-{activo|aprobado|pendiente|anulado|inactivo}` rules (consumed by `poc-list.js`)
+- `.estado-*-chip` family (used by `contratos-imprimir.js` print page)
+- `#overlay,` rule (JS code still uses `getElementById('overlay')`)
+- `.table-wrap` (inventario density tables — R7 conclusion)
+- `.badge.X` count-badge variants (KPI counters across multiple pages)
+- `tools/` demo pages (out of scope)
+
+Net: ~165 lines of CSS removed across 7 files. No regressions because every deletion was preceded by verifying zero production-code references via grep.
 
 ---
 

@@ -307,21 +307,7 @@ th .sort {
 }
 
 /* === TOASTS === */
-.toast {
-  position: fixed;
-  right: 16px;
-  bottom: 16px;
-  background: #111;
-  color: #fff;
-  padding: 10px 14px;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-  z-index: 9999;
-  opacity: 0.96;
-}
-.toast.ok { background: var(--ok, #2e7d32); }
-.toast.warn { background: var(--warn); color: #111; }
-.toast.bad { background: var(--bad, #c62828); }
+/* Toast styles retired by R4 — page uses the DS .toast-region rules in ceco-ui.css. */
 
 /* === RESPONSIVE === */
 @media (max-width: 900px) {
@@ -391,8 +377,8 @@ th .sort {
 
 <div class="app-wrap app-wrap--full">
   <p id="resumenInv" class="resumen"></p>
-  <div class="table-wrap" id="wrapTabla" data-density="roomy">
-    <table>
+  <div class="app-table-wrap" id="wrapTabla" data-density="roomy">
+    <table class="app-table">
       <thead id="headerInventario"></thead>
       <tbody id="inventarioTable"></tbody>
     </table>

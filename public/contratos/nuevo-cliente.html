@@ -99,49 +99,8 @@
       color: #475569;
     }
 
-    /* Toast System */
-    .toast-wrap {
-      position: fixed;
-      right: 20px;
-      bottom: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      z-index: 9999;
-      max-width: 400px;
-    }
-
-    .toast {
-      background: var(--text);
-      color: #fff;
-      padding: 14px 16px;
-      border-radius: 10px;
-      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.20);
-      font-size: 14px;
-      line-height: 1.5;
-      animation: slideInToast 0.3s ease;
-    }
-
-    @keyframes slideInToast {
-      from {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    .toast.ok {
-      background: #166534;
-      border-left: 4px solid #22c55e;
-    }
-
-    .toast.bad {
-      background: #991b1b;
-      border-left: 4px solid var(--bad);
-    }
+    /* Toast system retired by R4 — page now relies on the DS .toast-region +
+       .toast.toast-success/-error/-warning/-info rules in ceco-ui.css. */
 
     #mensaje {
       margin-top: 16px;
@@ -154,12 +113,6 @@
     @media (max-width: 768px) {
       .page-wrap {
         padding: 12px;
-      }
-
-      .toast-wrap {
-        left: 12px;
-        right: 12px;
-        max-width: none;
       }
     }
   </style>

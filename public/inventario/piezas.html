@@ -137,11 +137,7 @@
   /* Skeleton */
   .skeleton { background: linear-gradient(90deg, #f2f4f7 25%, #e9edf3 37%, #f2f4f7 63%); background-size: 400% 100%; animation: shimmer 1.2s ease-in-out infinite; height: 12px; border-radius: 4px; }
   @keyframes shimmer { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
-  /* Toast */
-  .toast { position: fixed; right: 16px; bottom: 16px; background:#111; color:#fff; padding:10px 14px; border-radius:10px; box-shadow: var(--shadow); z-index:9999; opacity:.96; }
-  .toast.ok{ background: var(--ok,#2e7d32); }
-  .toast.warn{ background: var(--warn,#f59e0b); color:#111; }
-  .toast.bad{ background: var(--bad,#c62828); }
+  /* Toast styles retired by R4 — page uses the DS .toast-region rules in ceco-ui.css. */
     /* Mejora modo denso */
   .dense .table-wrap.compact table { font-size: 12.5px; }
   .dense th, .dense td { padding: 6px 8px; }
@@ -342,7 +338,7 @@ body { background: #f8fafc; }
     </div>
   </div>
 
- <div id="overlay" class="overlay">
+ <div id="overlay" class="modal-backdrop">
   <div class="modal">
     <div class="sheet-header">
       <span class="handle"></span>
@@ -420,13 +416,13 @@ body { background: #f8fafc; }
     </div>
     <div class="footer">
       <button class="btn" onclick="cerrarModal()">Cancelar</button>
-      <button id="btnGuardar" class="btn primary" onclick="guardarPieza()"><i data-lucide="save"></i> Guardar</button>
+      <button id="btnGuardar" class="btn btn-primary" onclick="guardarPieza()"><i data-lucide="save"></i> Guardar</button>
     </div>
   </div>
 </div>
 
 <!-- Overlay / Modal Batch -->
-<div id="overlayBatch" class="overlay" style="display:none;">
+<div id="overlayBatch" class="modal-backdrop" style="display:none;">
   <div class="modal">
     <div class="sheet-header">
       <span class="handle"></span>
@@ -483,7 +479,7 @@ Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|S
 
     <div class="footer">
       <button class="btn" onclick="cerrarBatchModal()">Cancelar</button>
-      <button class="btn primary" onclick="guardarBatch()"><i data-lucide="upload"></i> Cargar</button>
+      <button class="btn btn-primary" onclick="guardarBatch()"><i data-lucide="upload"></i> Cargar</button>
     </div>
   </div>
 </div>

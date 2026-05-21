@@ -340,13 +340,9 @@ body{
 }
 
 
-/* Estados dentro de cards móviles */
-.card-contrato .estado-activo { background:transparent; color:#059669; font-weight:600; }
-.card-contrato .estado-ok{background:var(--soft-ok);color:var(--ok);font-weight:600;padding:2px 8px;border-radius:8px;align-self:flex-start}
-.card-contrato .estado-pendiente { background:transparent; color:#b45309; font-weight:600; }
-.card-contrato .estado-inactivo { background:transparent; color:var(--muted); font-weight:600; }
-.card-contrato .estado-cancelado { background:transparent; color:var(--bad); font-weight:600; }
-
+/* Contratos card state styling is now handled by .chip-estado.chip-* from
+   the DS chip system (see R2 / Phase 3) — the old .card-contrato .estado-*
+   descendant rules that lived here were orphan and were removed by R9. */
 
 /* ====== Resumen ====== */
 .resumen{ font-size:13px; color:var(--muted); }
@@ -1172,20 +1168,19 @@ input[readonly]#numero_de_serie,
 }
 .chip-x button{ border:0; background:transparent; cursor:pointer; font-size:14px; line-height:1; }
 
-/* Toasts */
-.toast-wrap{ position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:10px; z-index:999; }
-.toast{
-  background:var(--text); color:#fff; padding:12px 16px; border-radius:8px;
-  box-shadow:var(--shadow-xl); font-size:14px; opacity:.98;
+/* Toasts — DS App Kit. Toast.js maps the public ok|bad|warn|'' type
+   argument to toast-success/-error/-warning/-info variant classes and
+   mounts into a .toast-region container. The legacy .toast-wrap +
+   .toast.ok/.bad/.warn rules were retired by R9. */
+.toast {
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  font-size: var(--fs-body-s);
+  opacity: 0.98;
   animation: slideInRight 0.3s ease;
   transition: var(--transition);
 }
-.toast.ok{ background:#065f46; }
-.toast.bad{ background:#991b1b; }
-.toast.warn{ background:#92400e; }
-
-/* DS toast system (Phase 7 — DS adoption)
-   .toast-region replaces .toast-wrap; new variant classes alongside old. */
 .toast-region {
   position: fixed;
   bottom: var(--sp-6);
@@ -1196,8 +1191,7 @@ input[readonly]#numero_de_serie,
   gap: var(--sp-2);
   pointer-events: none;
 }
-.toast-region .toast,
-.toast-wrap .toast {
+.toast-region .toast {
   pointer-events: all;
   min-width: 280px;
   max-width: 400px;

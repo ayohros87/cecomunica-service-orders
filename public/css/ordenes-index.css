@@ -465,10 +465,9 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
 /* ======================================
    TOASTS
    ====================================== */
-/* Toast styling lives in ceco-ui.css (.toast / .toast.ok / .toast.bad
-   / .toast.warn) — that matches the Toast.show API in js/ui/toast.js
-   which renders class="toast ok|bad|warn". The old BEM variants
-   (.toast--ok / --show / --hide) had no JS callers. */
+/* Toast styling lives in ceco-ui.css. Post-R4, Toast.js maps the legacy
+   ok|bad|warn|'' type vocabulary to .toast-success / .toast-error /
+   .toast-warning / .toast-info variant classes (DS App Kit). */
 
 /* Notas técnicas modal CSS moved to ceco-ui.css (bucket 1, 2026-05-19). */
 
@@ -847,64 +846,9 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
 /* ======================================
    ESTADO BADGE + TIPO CHIP
    ====================================== */
-/* Estado Badge — Cecomunica Design System AA-safe palette.
-   Each pill renders as [dot] LABEL; the 6px colored dot is part of
-   the spec per ORDENES_INDEX_IMPROVEMENTS.md §4.5 / QW10.
-   Verified WCAG AA at 13px / semibold for all four pairs. */
-.estado-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 9px;
-  border-radius: var(--radius-sm);
-  font-weight: 600;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  line-height: 1.2;
-  border: 1px solid transparent;
-  white-space: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.estado-pill .dot {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.estado-pill.por-asignar {
-  background: #FAE3E3;
-  color: #8A1F1F;
-  border-color: #F1C9C9;
-}
-.estado-pill.por-asignar .dot { background: var(--status-critical); }
-
-.estado-pill.asignado {
-  background: #FAF1DB;
-  color: #7A5510;
-  border-color: #ECDDB0;
-}
-.estado-pill.asignado .dot { background: var(--status-warning); }
-
-.estado-pill.completado {
-  background: var(--accent-soft);
-  color: var(--accent-press);
-  border-color: #C5E3F0;
-}
-.estado-pill.completado .dot { background: var(--accent); }
-
-.estado-pill.entregado {
-  background: #E6F4ED;
-  color: #0F6E47;
-  border-color: #C7E4D5;
-}
-.estado-pill.entregado .dot { background: var(--status-online); }
-
-/* Left-border status accent — td:first-child to work with border-collapse */
+/* Left-border status accent — td:first-child to work with border-collapse.
+   The .estado-pill rules previously here were retired by R2 (chip migration);
+   per-order state badges now use .chip-estado.chip-{state} from ceco-ui.css. */
 tr[data-estado="POR ASIGNAR"] td:first-child  { border-left: 4px solid #ef4444; }
 tr[data-estado="ASIGNADO"] td:first-child      { border-left: 4px solid #f59e0b; }
 tr[data-estado*="COMPLETADO"] td:first-child   { border-left: 4px solid var(--accent); }
