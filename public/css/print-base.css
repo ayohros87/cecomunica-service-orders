@@ -144,3 +144,368 @@ body {
     page-break-inside: avoid;
   }
 }
+
+
+/* ─────────────────────────────────────────────────────────────
+   DS print kit — promoted from ui_kits/app/print-demo*.html
+   Work on screen AND in print. Shared across imprimir-orden,
+   imprimir-cotizacion and imprimir-contrato.
+   ───────────────────────────────────────────────────────────── */
+
+/* Brand header band */
+.print-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 3px solid var(--navy, #0B2A47);
+}
+.print-header-brand {
+  flex: 1;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #555;
+}
+.print-header-brand strong {
+  display: block;
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--navy, #0B2A47);
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+.print-header-logo {
+  flex: 0 0 auto;
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy, #0B2A47);
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+.print-header-logo span { color: var(--accent, #00B4D8); }
+.print-header-logo img { height: 52px; width: auto; object-fit: contain; }
+.print-header-meta {
+  text-align: right;
+  font-size: 11px;
+  color: #555;
+  line-height: 1.6;
+}
+.print-header-meta strong { color: #000; font-size: 13px; font-family: var(--font-mono, 'IBM Plex Mono', monospace); }
+.print-header-doc-type {
+  flex: 0 0 auto;
+  border: 1.5px solid var(--navy, #0B2A47);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--navy, #0B2A47);
+}
+
+/* Document title (uppercase, centered, navy) */
+.print-doc-title {
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--navy, #0B2A47);
+  text-align: center;
+  margin: 8px 0 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* OS-style title row (left-aligned + chips) */
+.print-os-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.print-os-title h1 {
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--navy, #0B2A47);
+  margin: 0;
+}
+
+/* Summary row (ID + chips bar) */
+.print-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+.print-summary-id { font-size: 11px; color: #555; }
+.print-summary-id strong {
+  display: block;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 15px;
+  color: var(--navy, #0B2A47);
+  margin-top: 2px;
+}
+
+/* Status / type chips */
+.print-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.print-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  color: #333;
+}
+.print-chip-reparacion { background: #FFF3CD; border-color: #F59E0B; color: #92400E; }
+.print-chip-cotizada   { background: #E0F2FE; border-color: #0EA5E9; color: #0C4A6E; }
+.print-chip-aprobada,
+.print-chip-aprobado   { background: #D1FAE5; border-color: #10B981; color: #064E3B; }
+.print-chip-entregada,
+.print-chip-activo     { background: #F0FDF4; border-color: #22C55E; color: #14532D; }
+.print-chip-pendiente  { background: #FEF3C7; border-color: #F59E0B; color: #92400E; }
+.print-chip-inactivo,
+.print-chip-cancelada,
+.print-chip-vencido    { background: #FEE2E2; border-color: #EF4444; color: #7F1D1D; }
+
+/* Section divider */
+.print-section-title {
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy, #0B2A47);
+  border-bottom: 1.5px solid var(--navy, #0B2A47);
+  padding-bottom: 3px;
+  margin: 18px 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Data grid (info table without table element) */
+.print-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+  margin-bottom: 12px;
+}
+.print-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.print-field dt {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 1px;
+}
+.print-field dd {
+  font-size: 12px;
+  color: #000;
+  font-weight: 500;
+  margin: 0;
+}
+.print-field dd.mono { font-family: var(--font-mono, 'IBM Plex Mono', monospace); font-size: 11px; }
+.print-field.span-2 { grid-column: 1 / -1; }
+
+/* Line items table */
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.print-table th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1.5px solid #333;
+  background: #f7f7f7;
+}
+.print-table th.right { text-align: right; }
+.print-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e5e5;
+  vertical-align: top;
+}
+.print-table td.right { text-align: right; font-family: var(--font-mono, 'IBM Plex Mono', monospace); font-size: 11px; }
+.print-table tbody tr:last-child td { border-bottom: none; }
+.print-table tfoot tr.summary td {
+  border-top: 1.5px solid #ccc;
+  font-weight: 600;
+  font-size: 11px;
+  padding: 5px 8px;
+}
+.print-table tfoot tr.total-row td {
+  border-top: 2px solid var(--navy, #0B2A47);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--navy, #0B2A47);
+  padding: 6px 8px;
+}
+.print-table tfoot tr.total-row td.right { font-family: var(--font-mono, 'IBM Plex Mono', monospace); }
+
+/* Observations + totals row */
+.print-obs-totals {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+  margin-top: 6px;
+}
+.print-obs { font-size: 12px; }
+.print-obs-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  margin-bottom: 4px;
+}
+.print-obs-body {
+  border: 1px solid #ddd;
+  background: #fafafa;
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-height: 60px;
+  white-space: pre-wrap;
+}
+
+/* Signature block — 2 cols default, .cols-3 for contracts */
+.print-sig-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 32px;
+}
+.print-sig-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+.print-sig-block { padding-top: 4px; }
+.print-sig-space {
+  height: 44px;
+  border-bottom: 1px solid #333;
+  margin-bottom: 6px;
+}
+.print-sig-label {
+  font-size: 10px;
+  color: #666;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+.print-sig-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #000;
+  margin-top: 2px;
+  text-align: center;
+}
+.print-sig-date {
+  font-size: 10px;
+  color: #888;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  text-align: center;
+}
+.print-sig-electronic {
+  font-size: 10px;
+  font-style: italic;
+  color: #2e7d32;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* QR / verification block */
+.print-verification {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px dashed #888;
+  border-radius: 6px;
+  margin-top: 18px;
+}
+.print-verification-qr {
+  width: 96px;
+  height: 96px;
+  background: #fff;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #888;
+  flex-shrink: 0;
+}
+.print-verification-body { font-size: 11px; line-height: 1.45; }
+.print-verification-body strong { display: block; margin-bottom: 4px; font-size: 12px; color: #000; }
+.print-verification-body .mono { font-family: var(--font-mono, 'IBM Plex Mono', monospace); font-weight: 700; }
+
+/* Terms & Conditions (typically page 2) */
+.print-terms-title {
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy, #0B2A47);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+.print-terms-body {
+  font-size: 10px;
+  line-height: 1.35;
+  column-count: 2;
+  column-gap: 14px;
+  text-align: justify;
+  white-space: pre-wrap;
+}
+
+/* Final acceptance block (under terms) */
+.print-acceptance { margin-top: 28px; text-align: center; }
+.print-acceptance-title {
+  font-family: var(--font-display, 'Barlow', system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--navy, #0B2A47);
+  margin-bottom: 10px;
+}
+.print-acceptance-text {
+  font-size: 12px;
+  max-width: 540px;
+  margin: 0 auto 28px;
+  text-align: justify;
+  line-height: 1.5;
+}
+.print-acceptance .print-sig-block { max-width: 300px; margin: 0 auto; }
+
+/* Footer (small legal/branding line at bottom) */
+.print-footer-note {
+  margin-top: 24px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e5e5;
+  font-size: 9px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* Pagination utilities */
+.keep-together     { page-break-inside: avoid; break-inside: avoid; }
+.page-break-before { page-break-before: always; break-before: page; }
+.page-break-after  { page-break-after: always;  break-after: page; }

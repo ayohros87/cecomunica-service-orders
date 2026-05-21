@@ -7,319 +7,195 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <link rel="stylesheet" href="../css/print-base.css">
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-<script src="../js/firebase-init.js"></script>
-<script src="../js/core/roles.js"></script>
-<script src="../js/core/formatting.js"></script>
-<script src="../js/core/auth.js"></script>
-<script src="../js/services/contratosService.js"></script>
-<script src="../js/services/usuariosService.js"></script>
-<script src="../js/ui/toast.js"></script>
-<!-- QR simple (CDN) -->
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
-    body {
-  font-size: 13px;
-  line-height: 1.5;
-}
+    /* Contracts use A4 (longer than orders) — override print-base letter @page */
+    @page { size: A4 portrait; margin: 5mm; }
 
-    h1, h2 { text-align: center; }
-    .seccion { margin-bottom: 20px; }
-    .label { font-weight: bold; display: inline-block; width: 140px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #333; padding: 6px; text-align: left; }
-    .firmas { margin-top: 40px; display: flex; justify-content: space-between; }
-    .firmas div { width: 45%; text-align: center; }
-    .firmas hr { margin: 40px 0 10px; }
+    /* JS-assigned chip color modifiers — map to kit print-chip palette */
+    #chipEstado.estado-activo-chip,
+    #chipEstado.estado-aprobado-chip { background:#D1FAE5; border-color:#10B981; color:#064E3B; }
+    #chipEstado.estado-pendiente-chip { background:#FEF3C7; border-color:#F59E0B; color:#92400E; }
+    #chipEstado.estado-inactivo-chip,
+    #chipEstado.estado-cancelado-chip { background:#FEE2E2; border-color:#EF4444; color:#7F1D1D; }
 
-/* Override print-base page size: contracts use A4 */
-@page {
-  size: A4;
-  margin: 5mm;
-}
-fieldset {
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-top: 20px;
-  background: #fafafa;
-}
-legend {
-  font-weight: bold;
-  font-size: 15px;
-  padding: 0 4px;
-}
-th {
-  background-color: #f4f4f4;
-}
-td:nth-child(5), td:nth-child(6) {
-  text-align: right;
-}
-/* Título sin línea negra; el separador será un <hr> aparte */
-h1 {
-  font-size: 20px;
-  border: none;
-  padding: 0;
-  margin: 12px 0 16px;
-}
+    /* Electronic-signature stamp (injected by JS into firma blocks) */
+    .firma-electronica {
+      font-size: 11px;
+      font-style: italic;
+      color: #2e7d32;
+      padding-top: 6px;
+      margin-top: 6px;
+      text-align: center;
+      line-height: 1.45;
+    }
 
-/* Tamaño controlado del logo */
-img.logo-centrado {
-  height: 65px;      /* tamaño intermedio, más balanceado */
-  max-width: 220px;
-  object-fit: contain;
-}
-@media print {
-  img.logo-centrado {
-    height: 60px;
-    max-width: 200px;
-  }
-}
-
-
-/* Línea separadora debajo del encabezado */
-.hr-encabezado {
-  border: 0;
-  border-top: 2px solid #000;
-  margin: 6px 0 0;
-}
-
-.firmas div {
-  border-top: 1px solid #000;
-  padding-top: 6px;
-  margin-top: 40px;
-  font-size: 12px;
-}
-@media screen {
-  #contenido {
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    padding: 24px;
-    background: white;
-    margin: auto;
-    max-width: 800px;
-  }
-}
-.firma-electronica {
-  font-size: 12px;
-  font-style: italic;
-  color: #2e7d32;
-  border-top: 1px solid #000;
-  padding-top: 6px;
-  margin-top: 6px;
-}
-#chipEstado{ background:#fff; }
-.estado-activo-chip{ background:#ecfdf5 !important; color:#065f46; border-color:#bbf7d0; }
-.estado-aprobado-chip{ background:#e6ffea !important; color:#2e7d32; border-color:#bbf7d0; }
-.estado-pendiente-chip{ background:#fff8e1 !important; color:#9a3412; border-color:#f4e5c2; }
-.estado-inactivo-chip{ background:#fff0f0 !important; color:#7f1d1d; border-color:#f8d7da; }
-.mono{font-family: var(--font-mono, 'IBM Plex Mono', ui-monospace, Consolas, monospace);}
-
+    .mono { font-family: var(--font-mono, 'IBM Plex Mono', ui-monospace, Consolas, monospace); }
   </style>
 </head>
 <body>
   <div class="print-toolbar no-print">
     <button class="btn btn-secondary" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
   </div>
+
   <div id="contenido" class="print-page">
-<!-- Encabezado corporativo -->
-<div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
-  <!-- Membrete alineado a la izquierda -->
-  <div style="flex:1; text-align:left;">
-    <div style="font-size:18px; font-weight:800;">C COMUNICA, S.A.</div>
-    <div style="font-size:12px; color:#555;">RUC 32977-27-249966 DV 39 · Panamá</div>
-    <div style="font-size:12px; color:#555;">CC. Bal Harbour, Piso 1, oficina 5A, Via Italia, Paitilla</div>
-    <div style="font-size:12px; color:#555;">ventas@cecomunica.com · +507 279-5570</div>
-  </div>
 
-  <!-- Logo centrado (tamaño controlado por CSS) -->
-  <div style="flex:1; text-align:center;">
-    <img src="../logo_cecomunica.png" alt="Logo Cecomunica" class="logo-centrado">
-  </div>
+    <!-- Page 1 -->
 
-  <!-- Badge de tipo a la derecha -->
-  <div id="tipoContratoBadge" style="border:1px solid #111; padding:6px 10px; border-radius:8px; font-size:13px; font-weight:700;">
-    <!-- Se llena por JS -->
-  </div>
-</div>
-
-<!-- Línea negra separadora del encabezado -->
-<hr class="hr-encabezado">
-
-<!-- Título debajo de la línea negra -->
-<h1 style="text-align:center; margin-top:12px;">CONTRATO DE SERVICIO DE COMUNICACIÓN</h1>
-
-    <!-- Resumen del contrato (más formal) -->
-<section id="resumenContrato" style="border:1px solid #ddd; border-radius:10px; padding:14px; margin-top:14px;">
-
-
-  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-    <div style="font-size:14px;">
-      <div style="font-weight:700; letter-spacing:.3px;">Contrato</div>
-      <div class="mono" style="font-size:18px;">ID: <span id="contrato_id"></span></div>
+    <!-- Brand header -->
+    <div class="print-header keep-together">
+      <div class="print-header-brand">
+        <strong>C COMUNICA, S.A.</strong>
+        RUC 32977-27-249966 DV 39 · Panamá<br>
+        CC. Bal Harbour, Piso 1, oficina 5A, Vía Italia, Paitilla<br>
+        ventas@cecomunica.com · +507 279-5570
+      </div>
+      <div class="print-header-logo">
+        <img src="../logo_cecomunica.png" alt="Logo Cecomunica" style="height:60px;">
+      </div>
+      <div id="tipoContratoBadge" class="print-header-doc-type">Tipo: —</div>
     </div>
-    <div class="chips" style="display:flex; gap:6px; flex-wrap:wrap;">
-      <span id="chipAccion" style="padding:4px 10px; border:1px solid #111; border-radius:999px; font-weight:700; font-size:12px;">—</span>
-      <span id="chipDuracion" style="padding:4px 10px; border:1px solid #111; border-radius:999px; font-weight:700; font-size:12px;">—</span>
-      <span id="chipEstado" style="padding:4px 10px; border:1px solid #111; border-radius:999px; font-weight:700; font-size:12px;">—</span>
-    </div>
-  </div>
 
-  <div style="display:grid; grid-template-columns:1fr; gap:12px; margin-top:12px;">
-    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:12px; background:#fafafa;">
-      <div style="font-weight:700; margin-bottom:6px;"><i data-lucide="user"></i> Ficha del Cliente</div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-        <div><span style="color:#6b7280;">Cliente</span><br><strong id="cliente_nombre"></strong></div>
-        <div><span style="color:#6b7280;">RUC / DV</span><br><strong id="cliente_ruc"></strong></div>
-        <div><span style="color:#6b7280;">Representante</span><br><strong id="cliente_representante"></strong></div>
-        <div><span style="color:#6b7280;">Teléfono</span><br><strong id="cliente_telefono"></strong></div>
-        <div style="grid-column:1 / -1;">
-          <span style="color:#6b7280;">Dirección</span><br>
-          <div id="cliente_direccion"></div>
-        </div>
+    <h1 class="print-doc-title">Contrato de Servicio de Comunicación</h1>
+
+    <!-- Summary row: contract ID + chips -->
+    <div class="print-summary-row keep-together">
+      <div class="print-summary-id">
+        Contrato
+        <strong>ID: <span id="contrato_id">—</span></strong>
+      </div>
+      <div class="print-chips">
+        <span id="chipAccion" class="print-chip">—</span>
+        <span id="chipDuracion" class="print-chip">—</span>
+        <span id="chipEstado" class="print-chip">—</span>
       </div>
     </div>
-  </div>
-</section>
 
+    <!-- Ficha del cliente -->
+    <p class="print-section-title"><i data-lucide="user"></i> Ficha del cliente</p>
+    <div class="print-grid keep-together">
+      <dl class="print-field"><dt>Cliente</dt><dd id="cliente_nombre">—</dd></dl>
+      <dl class="print-field"><dt>RUC / DV</dt><dd class="mono" id="cliente_ruc">—</dd></dl>
+      <dl class="print-field"><dt>Representante</dt><dd id="cliente_representante">—</dd></dl>
+      <dl class="print-field"><dt>Teléfono</dt><dd class="mono" id="cliente_telefono">—</dd></dl>
+      <dl class="print-field span-2"><dt>Dirección</dt><dd id="cliente_direccion">—</dd></dl>
+    </div>
 
-    <h2>Equipos</h2>
-    <table>
-      <thead style="background:#f0f0f0;">
-  <tr>
-    <th>No.</th>
-    <th>Descripción</th>
-    <th>Modelo</th>
-    <th>Cantidad</th>
-    <th>Precio Unitario</th>
-    <th>Total</th>
-  </tr>
-</thead>
-
+    <!-- Equipos -->
+    <p class="print-section-title"><i data-lucide="package"></i> Equipos contratados</p>
+    <table class="print-table">
+      <thead>
+        <tr>
+          <th style="width:6%;">No.</th>
+          <th style="width:32%;">Descripción</th>
+          <th style="width:20%;">Modelo</th>
+          <th style="width:10%;" class="right">Cant.</th>
+          <th style="width:16%;" class="right">P. Unit.</th>
+          <th style="width:16%;" class="right">Total</th>
+        </tr>
+      </thead>
       <tbody id="tablaEquipos"></tbody>
     </table>
-   <!-- Contenedor de observaciones + totales -->
-<div style="display:flex; justify-content:space-between; margin-top:12px; gap:20px; align-items:flex-start;">
-  <!-- Observaciones -->
-  <div style="flex:1; font-size:13px;">
-    <strong>Observaciones:</strong>
-    <div id="observaciones" style="min-height:50px; border:1px solid #ccc; padding:6px; border-radius:4px; background:#fafafa; margin-top:4px;"></div>
-  </div>
 
-  <!-- Totales -->
-  <div>
-<!-- == TOTALES (IMPRESIÓN) == -->
-<table class="tabla-totales" style="margin-top:12px; width:100%; border-collapse:collapse">
-  <tr>
-    <td style="padding:6px 8px;">Subtotal</td>
-    <td id="imp_subtotal" style="padding:6px 8px; text-align:right;">$0.00</td>
-  </tr>
-  <tr>
-    <td id="imp_itbms_label" style="padding:6px 8px;">ITBMS (7%)</td>
-    <td id="imp_itbms" style="padding:6px 8px; text-align:right;">$0.00</td>
-  </tr>
-  <tr>
-    <th style="padding:8px 8px; border-top:1px solid #e5e7eb;">Total</th>
-    <th id="imp_total" style="padding:8px 8px; text-align:right; border-top:1px solid #e5e7eb;">$0.00</th>
-  </tr>
-</table>
-<!-- == /TOTALES (IMPRESIÓN) == -->
-
-  </div>
-</div>
-
-
-<div style="margin-top: 50px;">
-  <div style="display: flex; justify-content: space-between; margin-bottom: 60px; gap:12px;">
-    <!-- Firma Cliente -->
-    <div style="width: 32%; text-align: center;">
-      <hr style="margin-bottom: 6px;">
-      <div id="firmaClienteLabel">Firma del Cliente</div>
-      <div>Representante Legal: <span id="nombreRepresentante">____________________</span></div>
-      <div>Cédula del Representante: <span id="rucRepresentante">________________</span></div>
-      <div class="fecha-cliente-manual">Fecha: _____ / _____ / ______</div>
+    <!-- Observaciones + totales -->
+    <div class="print-obs-totals">
+      <div class="print-obs">
+        <div class="print-obs-title">Observaciones</div>
+        <div class="print-obs-body" id="observaciones">—</div>
+      </div>
+      <table class="print-table" style="margin:0;">
+        <tbody>
+          <tr><td>Subtotal</td><td id="imp_subtotal" class="right">$0.00</td></tr>
+          <tr><td id="imp_itbms_label">ITBMS (7%)</td><td id="imp_itbms" class="right">$0.00</td></tr>
+        </tbody>
+        <tfoot>
+          <tr class="total-row"><td>TOTAL</td><td id="imp_total" class="right">$0.00</td></tr>
+        </tfoot>
+      </table>
     </div>
 
-    <!-- Firma Cecomunica (Aprobador) -->
-    <div id="firmaCecomunica" style="width: 32%; text-align: center;">
-      <hr style="margin-bottom: 6px;">
-      <div>Firma C COMUNICA, S.A.</div>
-      <!-- La info (nombre, cargo, email y fecha) se inyecta en la firma electrónica -->
+    <!-- Firmas (3 columnas: cliente + Cecomunica + vendedor) -->
+    <div class="print-sig-grid cols-3 keep-together">
+      <!-- Firma Cliente (manuscrita) -->
+      <div class="print-sig-block">
+        <div class="print-sig-space"></div>
+        <div class="print-sig-label" id="firmaClienteLabel">Firma del cliente</div>
+        <div class="print-sig-name">Representante: <span id="nombreRepresentante">________________</span></div>
+        <div class="print-sig-name">Cédula: <span id="rucRepresentante">________________</span></div>
+        <div class="print-sig-date fecha-cliente-manual">Fecha: ___ / ___ / ______</div>
+      </div>
+
+      <!-- Firma Cecomunica (aprobador) -->
+      <div class="print-sig-block" id="firmaCecomunica">
+        <div class="print-sig-space"></div>
+        <div class="print-sig-label">Firma C COMUNICA, S.A.</div>
+        <div class="print-sig-date fecha-aprobacion"></div>
+      </div>
+
+      <!-- Firma Vendedor (elaborador) -->
+      <div class="print-sig-block" id="firmaVendedor">
+        <div class="print-sig-space"></div>
+        <div class="print-sig-label">Firma del vendedor</div>
+        <div class="print-sig-date fecha-vendedor"></div>
+      </div>
     </div>
 
-    <!-- Firma Vendedor (Elaborador) -->
-    <div id="firmaVendedor" style="width: 32%; text-align: center;">
-      <hr style="margin-bottom: 6px;">
-      <div>Firma del Vendedor</div>
-      <!-- La info (nombre, cargo y fecha) se inyecta en la firma electrónica -->
+    <!-- Verificación con QR -->
+    <div id="verificacionContrato" class="print-verification keep-together">
+      <div id="qrVerificacion" class="print-verification-qr">[ QR ]</div>
+      <div class="print-verification-body">
+        <strong>Verificación oficial Cecomunica</strong>
+        Contrato: <span id="verifContratoId" class="mono">—</span><br>
+        Código: <span id="verifCodigo" class="mono">—</span><br>
+        URL: <span id="verifUrl" class="mono">—</span><br>
+        <span style="color:#666;">Documento válido solo si el código y la URL coinciden con el portal de verificación.</span>
+      </div>
     </div>
+
+    <p style="font-size:11px; margin-top:14px; text-align:justify;">
+      El suscrito declara conocer y aceptar la totalidad de los términos y condiciones del presente contrato, los cuales se anexan en página aparte.
+    </p>
+
+
+    <!-- Page 2 — Términos y condiciones -->
+    <div class="page-break-before" id="terminosCondiciones">
+      <h2 class="print-terms-title">Términos y Condiciones</h2>
+      <div id="contenidoCondiciones" class="print-terms-body"></div>
+
+      <div id="firmaCondicionesFinal" class="print-acceptance keep-together">
+        <p class="print-acceptance-title">Firma de aceptación</p>
+        <p class="print-acceptance-text">
+          El suscrito, <strong><span id="firmaNombreCliente">__________________</span></strong>,
+          representante de la empresa <strong><span id="firmaClienteEmpresa">__________________</span></strong>,
+          declara que ha leído y aceptado íntegramente los términos y condiciones del presente contrato,
+          firmando en señal de conformidad.
+        </p>
+        <div class="print-sig-block">
+          <div class="print-sig-space"></div>
+          <div class="print-sig-label">Firma del cliente</div>
+          <div class="print-sig-date">Fecha: ___ / ___ / ______</div>
+        </div>
+      </div>
+
+      <div class="print-footer-note">
+        C COMUNICA, S.A. · Radios Hytera Panamá · ventas@cecomunica.com · +507 279-5570 · cecomunica.com
+      </div>
+    </div>
+
   </div>
 
-  <!-- Bloque de verificación y autenticidad -->
-<div id="verificacionContrato" style="margin-top:18px; padding:10px; border:1px dashed #888; border-radius:8px; display:flex; align-items:center; gap:14px;">
-  <div>
-    <div id="qrVerificacion" style="width:100px; height:100px; background:#fff;"></div>
-  </div>
-  <div style="font-size:12px; line-height:1.35;">
-    <div><strong>Verificación oficial Cecomunica</strong></div>
-    <div>Contrato: <span id="verifContratoId"></span></div>
-    <div>Código: <span id="verifCodigo" class="mono" style="font-weight:700;"></span></div>
-    <div>URL: <span id="verifUrl" class="mono"></span></div>
-    <div style="margin-top:6px; color:#444;">Documento válido solo si el código y la URL coinciden con el portal de verificación.</div>
-  </div>
-</div>
-
-
-  <p style="font-size: 13px; margin-top: 30px;">
-    El suscrito declara conocer y aceptar la totalidad de los términos y condiciones del presente contrato.
-  </p>
-</div>
-
-
-  <p style="font-size: 13px; margin-top: 30px;">
-    El suscrito, con la firma puesta al pie de este documento, declara tener conocimiento de todos los términos y condiciones descritos en el presente contrato y lo acepta en su totalidad sin reserva ni limitación.
-  </p>
-</div>
-
-
-  </div>
   <script src="../js/pages/contratos-imprimir.js" defer></script>
-<div id="terminosCondiciones" style="page-break-before: always; margin-top:40px;">
-  <h2 style="text-align:center;">TÉRMINOS Y CONDICIONES</h2>
-  <div id="contenidoCondiciones" style="
-    font-size: 9px;
-    line-height: 1.25;
-    column-count: 2;
-    column-gap: 16px;
-    text-align: justify;
-    white-space: pre-wrap;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  "></div>
-</div>
-
-<!-- 👇 Aquí va el bloque de firma, ahora DESPUÉS de los términos -->
-<div id="firmaCondicionesFinal" style="margin-top: 40px; text-align:center;">
-  <h3>FIRMA DE ACEPTACIÓN</h3>
-  <p style="font-size:13px; text-align:justify; max-width:700px; margin: 0 auto 20px;">
-    El suscrito, <strong><span id="firmaNombreCliente">__________________</span></strong>,
-    representante de la empresa <strong><span id="firmaClienteEmpresa">__________________</span></strong>,
-    declara que ha leído y aceptado íntegramente los términos y condiciones del presente contrato, firmando en señal de conformidad.
-  </p>
-  <div style="margin-top: 50px;">
-    <hr style="width: 300px; margin: 0 auto 6px;">
-    <div>Firma del Cliente</div>
-    <div style="margin-top:6px;">Fecha: _____ / _____ / ______</div>
-  </div>
-</div>
-
-
-
-</div>
-
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

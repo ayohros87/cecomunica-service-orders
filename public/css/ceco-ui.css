@@ -2269,3 +2269,29 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 }
 .filter-chip:hover  { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
 .filter-chip.active { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+/* ── Breadcrumbs (kit-promoted) ─────────────────────────────── */
+.app-breadcrumbs {
+  display: flex; align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-caption);
+  color: var(--fg-3);
+  margin-bottom: var(--sp-4);
+}
+.app-breadcrumbs a { color: var(--fg-3); text-decoration: none; }
+.app-breadcrumbs a:hover { color: var(--fg-1); }
+.app-breadcrumbs-sep { color: var(--fg-4); display: inline-flex; align-items: center; }
+.app-breadcrumbs-current { color: var(--fg-2); font-weight: 500; }
+
+/* ── Passive surface container (kit-promoted) ───────────────────
+   `.app-card` in this file is the clickable nav card used on index
+   pages. `.ds-card` is the kit's passive surface — used to wrap
+   form sections, tables, etc. They are intentionally different
+   classes so the nav-card semantics don't leak into forms. */
+.ds-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+.ds-card-padded { padding: var(--sp-6); }

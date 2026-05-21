@@ -93,9 +93,9 @@ if (data.estado === "activo" && data.fecha_aprobacion) {
       <td>${i+1}</td>
       <td>${desc}</td>
       <td>${eq.modelo || ""}</td>
-      <td>${cantidad}</td>
-      <td>$${precio.toFixed(2)}</td>
-      <td>$${filaTotal.toFixed(2)}</td>
+      <td class="right">${cantidad}</td>
+      <td class="right">$${precio.toFixed(2)}</td>
+      <td class="right">$${filaTotal.toFixed(2)}</td>
     `;
     tbody.appendChild(tr);
   });

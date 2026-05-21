@@ -40,6 +40,10 @@
   <a href="#qr-stamp">QR Stamp</a>
   <a href="#multi-sig">Multi Firma</a>
   <a href="#xlsx-importer">Importador</a>
+  <a href="#contrato-editar">Contrato · Editar</a>
+  <a href="#contrato-print">Contrato · Imprimir</a>
+  <a href="#poc-list">POC · Lista</a>
+  <a href="#poc-batch">POC · Batch</a>
 </nav>
 
 
@@ -2094,6 +2098,294 @@
 </section>
 
 
+<!-- ── 25 · Contrato — Editar (worked example) ───────────────── -->
+<section class="demo-section" id="contrato-editar">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Contrato · Editar (ejemplo aplicado)</h2>
+    <p>Ejemplo completo que combina <code>app-topbar</code>, <code>app-page-header</code>,
+       <code>summary-card</code>, <code>form-section</code>, <code>disclosure-panel</code>,
+       <code>app-table.editable</code> y <code>app-footer-strip</code> para el flujo de
+       edición de contratos. Sirve como referencia 1:1 para
+       <code>public/contratos/editar-contrato.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <!-- Topbar mock -->
+    <div class="app-topbar" style="position:relative; top:auto;">
+      <a href="#" class="app-topbar-logo" aria-label="CeComunica">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+      </a>
+      <span class="app-topbar-title"><i data-lucide="file-text"></i> Editar Contrato</span>
+      <div class="app-topbar-spacer"></div>
+      <div class="app-topbar-actions">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="arrow-left"></i> Volver</button>
+        <button class="btn btn-ghost btn-sm"><i data-lucide="home"></i> Menú principal</button>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px 24px;">
+      <nav class="app-breadcrumbs" aria-label="Breadcrumb">
+        <a href="#">Contratos</a>
+        <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+        <span class="app-breadcrumbs-current">CT-2025-0042</span>
+      </nav>
+
+      <div class="app-page-header">
+        <div>
+          <h1>Editar Contrato</h1>
+          <p>CT-2025-0042 · Autoridad del Canal · Última modificación 12 May 2025</p>
+        </div>
+        <div class="app-page-header-actions">
+          <span class="chip-estado chip-cotizada">Pendiente Aprobación</span>
+        </div>
+      </div>
+
+      <form onsubmit="return false;" novalidate>
+
+        <!-- Sección 1: Cliente -->
+        <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+          <div class="form-section" style="border:none; padding:0; margin:0;">
+            <div>
+              <p class="form-section-title"><i data-lucide="building-2" style="width:16px;height:16px;"></i> Cliente</p>
+              <p class="form-section-desc">Cliente vinculado al contrato. Para cambiarlo, edite la ficha del cliente.</p>
+            </div>
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label class="form-label" for="ct-cliente">Cliente</label>
+                <input class="form-input" id="ct-cliente" type="text" value="Autoridad del Canal de Panamá" disabled>
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="ct-cliente-ruc">RUC / DV</label>
+                <input class="form-input" id="ct-cliente-ruc" type="text" value="123-4567-890123 DV 45" disabled style="font-family:var(--font-mono);">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección 2: Detalles del contrato -->
+        <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+          <div class="form-section" style="border:none; padding:0; margin:0;">
+            <div>
+              <p class="form-section-title"><i data-lucide="file-text" style="width:16px;height:16px;"></i> Detalles del contrato</p>
+              <p class="form-section-desc">Tipo, acción, duración y estado del contrato.</p>
+            </div>
+            <div class="form-grid-3">
+              <div class="form-field">
+                <label class="form-label" for="ct-tipo">Tipo de contrato <span class="req">*</span></label>
+                <select class="form-select" id="ct-tipo">
+                  <option value="ALQ" selected>Alquiler</option>
+                  <option value="PROP">Propio</option>
+                  <option value="REEMP">Reemplazo</option>
+                  <option value="DEMO">Demo</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="ct-accion">Tipo de acción <span class="req">*</span></label>
+                <select class="form-select" id="ct-accion" onchange="demoContratoDisclosure(this.value)">
+                  <option value="Nuevo" selected>Nuevo</option>
+                  <option value="Renovación">Renovación</option>
+                  <option value="Adición">Adición</option>
+                  <option value="No Aplica">No Aplica</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="ct-duracion">Duración <span class="req">*</span></label>
+                <select class="form-select" id="ct-duracion" onchange="demoContratoDuracion(this.value)">
+                  <option value="">Seleccione…</option>
+                  <option value="12 meses" selected>12 meses</option>
+                  <option value="18 meses">18 meses</option>
+                  <option value="Otro">Otro (especificar)</option>
+                </select>
+              </div>
+              <div class="form-field" id="ct-otra-duracion-wrap" style="display:none;">
+                <label class="form-label" for="ct-otra-duracion">Especificar duración (meses)</label>
+                <input class="form-input" id="ct-otra-duracion" type="number" min="1" placeholder="24">
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="ct-estado">Estado</label>
+                <select class="form-select" id="ct-estado" disabled>
+                  <option value="activo">Activo</option>
+                  <option value="pendiente_aprobacion" selected>Pendiente Aprobación</option>
+                  <option value="vencido">Vencido</option>
+                </select>
+                <span class="form-hint">El estado se cambia desde la pantalla de aprobación.</span>
+              </div>
+            </div>
+
+            <!-- Disclosure: Renovación -->
+            <div class="disclosure-panel" id="ct-disc-renovacion" style="margin-top:var(--sp-4);">
+              <div class="disclosure-panel-title">
+                <span><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Modalidad de renovación</span>
+                <span class="chip-prioridad media" id="ct-renovacion-badge">Renovación con equipo</span>
+              </div>
+              <label class="form-check" style="margin-top:var(--sp-2);">
+                <input type="checkbox" id="ct-renovacion-sin-equipo" onchange="demoContratoSubDisclosure()">
+                <span>
+                  <span class="form-check-label">Marcar si es renovación sin equipo</span>
+                  <span class="form-check-desc form-hint">El cliente conserva los equipos del contrato anterior.</span>
+                </span>
+              </label>
+              <div class="disclosure-sub" id="ct-disc-refurbished">
+                <label class="form-check" style="margin-top:var(--sp-2);">
+                  <input type="checkbox" id="ct-renovacion-refurbished">
+                  <span>
+                    <span class="form-check-label">¿El contrato lleva refurbished de batería, antena, clip y piezas?</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="form-field" style="margin-top:var(--sp-4);">
+              <label class="form-label" for="ct-observaciones">Observaciones</label>
+              <textarea class="form-input form-textarea" id="ct-observaciones" rows="3"
+                placeholder="Notas internas, requisitos especiales, fechas críticas…"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección 3: Equipos -->
+        <div class="app-card" style="margin-bottom:80px;">
+          <div style="padding:var(--sp-5) var(--sp-5) var(--sp-3);">
+            <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="package" style="width:16px;height:16px;"></i> Equipos contratados</p>
+            <p class="form-section-desc" style="margin-bottom:0;">Modelos incluidos, cantidad y precio unitario.</p>
+          </div>
+          <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
+            <table class="app-table editable" aria-label="Equipos del contrato">
+              <thead>
+                <tr>
+                  <th style="width:22%;">Modelo</th>
+                  <th>Descripción</th>
+                  <th style="width:80px;">Cant.</th>
+                  <th style="width:120px;">P. Unit.</th>
+                  <th style="width:120px; text-align:right;">Total</th>
+                  <th style="width:48px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <select class="td-select" aria-label="Modelo">
+                      <option selected>Hytera PD78X</option>
+                      <option>Hytera HP78X</option>
+                      <option>Hytera MD78X</option>
+                    </select>
+                  </td>
+                  <td><input class="td-input" type="text" value="Equipos de Comunicación" aria-label="Descripción"></td>
+                  <td><input class="td-input td-mono" type="number" min="1" value="5" aria-label="Cantidad"></td>
+                  <td><input class="td-input td-mono" type="number" step="0.01" value="185.00" aria-label="Precio"></td>
+                  <td class="td-amount">$925.00</td>
+                  <td class="td-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <select class="td-select" aria-label="Modelo">
+                      <option>Hytera PD78X</option>
+                      <option>Hytera HP78X</option>
+                      <option selected>Hytera MD78X</option>
+                    </select>
+                  </td>
+                  <td><input class="td-input" type="text" value="Radio móvil vehicular" aria-label="Descripción"></td>
+                  <td><input class="td-input td-mono" type="number" min="1" value="2" aria-label="Cantidad"></td>
+                  <td><input class="td-input td-mono" type="number" step="0.01" value="520.00" aria-label="Precio"></td>
+                  <td class="td-amount">$1,040.00</td>
+                  <td class="td-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+                  </td>
+                </tr>
+                <tr class="table-summary-row">
+                  <td colspan="4" style="text-align:right; font-size:14px; color:var(--fg-1);">Total</td>
+                  <td class="td-amount" style="font-size:16px; color:var(--accent);">$1,965.00</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-add-row">
+            <button class="btn btn-ghost btn-sm"><i data-lucide="plus"></i> Agregar equipo</button>
+          </div>
+        </div>
+
+      </form>
+
+      <!-- Footer strip (sticky in real page) -->
+      <div style="background: var(--surface-card); border-top: 2px solid var(--brand);
+                  display:flex; align-items:center; gap:var(--sp-6); padding:0 var(--sp-6);
+                  height:60px; box-shadow: 0 -2px 12px rgba(6,24,41,.08);
+                  margin: 0 -24px -24px; border-radius: 0 0 8px 8px;">
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Equipos</span>
+          <span class="app-footer-strip-stat-value">2 modelos · 7 unid.</span>
+        </div>
+        <div class="app-footer-strip-divider"></div>
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Total</span>
+          <span class="app-footer-strip-stat-value value-highlight">$1,965.00</span>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:var(--sp-2); align-items:center;">
+          <button class="btn btn-ghost btn-sm">Cancelar</button>
+          <button class="btn btn-primary"><i data-lucide="save"></i> Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 26 · Contrato — Impresión ─────────────────────────────── -->
+<section class="demo-section" id="contrato-print">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Contrato · Impresión</h2>
+    <p>Plantilla de impresión A4 para contratos. Usa las mismas clases <code>.print-*</code>
+       que <code>print-demo.html</code> (órdenes), con <code>.print-sig-grid.cols-3</code> para
+       las tres firmas requeridas en contratos (cliente, Cecomunica, vendedor) y un quiebre
+       de página <code>.page-break-before</code> para los términos y condiciones.
+       Se promueven a <code>public/css/print-base.css</code> para que
+       <code>imprimir-contrato.html</code> las use directamente.</p>
+  </div>
+
+  <div class="demo-block" style="display:flex; gap:var(--sp-4); align-items:center;">
+    <a class="btn btn-primary" href="print-demo-contrato.html" target="_blank">
+      <i data-lucide="external-link"></i> Abrir plantilla de impresión
+    </a>
+    <span style="font-size:13px; color:var(--fg-3);">
+      Abre <code>print-demo-contrato.html</code> en una pestaña nueva — usar el botón
+      <em>↗ Abrir vista de impresión</em> dentro para probar el resultado real.
+    </span>
+  </div>
+
+  <span class="demo-label" style="margin-top:var(--sp-5);">Clases promovidas a <code>print-base.css</code></span>
+  <div class="demo-block" style="font-size:13px; color:var(--fg-2);">
+    <ul style="margin:0; padding-left:20px; line-height:1.7;">
+      <li><code>.print-header</code>, <code>.print-header-logo</code>, <code>.print-header-brand</code>, <code>.print-header-doc-type</code> — encabezado con logo + datos de empresa + badge de tipo</li>
+      <li><code>.print-doc-title</code> — título del documento (uppercase, navy, centered)</li>
+      <li><code>.print-summary-row</code>, <code>.print-summary-id</code>, <code>.print-chips</code>, <code>.print-chip</code> — fila resumen con ID + chips de estado</li>
+      <li><code>.print-section-title</code> — separador de secciones (navy, uppercase)</li>
+      <li><code>.print-grid</code>, <code>.print-field</code> (con <code>dt</code>/<code>dd</code>) — pares clave/valor en cuadrícula</li>
+      <li><code>.print-table</code> — tabla de líneas con <code>tfoot</code> para subtotal/ITBMS/Total</li>
+      <li><code>.print-obs-totals</code>, <code>.print-obs</code> — bloque de observaciones + totales</li>
+      <li><code>.print-sig-grid</code> + <code>.cols-3</code> — filas de firmas (2 o 3 columnas)</li>
+      <li><code>.print-sig-block</code>, <code>.print-sig-space</code>, <code>.print-sig-label</code>, <code>.print-sig-name</code>, <code>.print-sig-date</code>, <code>.print-sig-electronic</code></li>
+      <li><code>.print-verification</code>, <code>.print-verification-qr</code>, <code>.print-verification-body</code> — bloque QR + códigos de verificación</li>
+      <li><code>.print-terms-title</code>, <code>.print-terms-body</code> — términos en página aparte (dos columnas, justificado)</li>
+      <li><code>.print-acceptance</code> — bloque de aceptación final con firma única</li>
+      <li><code>.print-footer-note</code> — texto legal/branding al pie</li>
+      <li><code>.keep-together</code>, <code>.page-break-before</code>, <code>.page-break-after</code> — utilidades de paginación</li>
+    </ul>
+  </div>
+</div>
+</section>
+
 
 <!-- ─── Scripts ──────────────────────────────────────────── -->
 <script>
@@ -2428,6 +2720,38 @@ function demoImporterState(state) {
 }
 function demoImporter(input) {
   if (input.files && input.files[0]) demoImporterState('running');
+}
+
+// ── Contrato — disclosure / sub-disclosure / duracion ───────────
+function demoContratoDisclosure(accion) {
+  const panel = document.getElementById('ct-disc-renovacion');
+  const checkbox = document.getElementById('ct-renovacion-sin-equipo');
+  if (!panel || !checkbox) return;
+  const visible = accion === 'Renovación';
+  panel.classList.toggle('visible', visible);
+  if (!visible) {
+    checkbox.checked = false;
+    demoContratoSubDisclosure();
+  }
+  demoContratoRefreshBadge();
+}
+function demoContratoSubDisclosure() {
+  const sub = document.getElementById('ct-disc-refurbished');
+  const cb = document.getElementById('ct-renovacion-sin-equipo');
+  if (sub) sub.classList.toggle('visible', !!cb?.checked);
+  demoContratoRefreshBadge();
+}
+function demoContratoRefreshBadge() {
+  const badge = document.getElementById('ct-renovacion-badge');
+  const accion = document.getElementById('ct-accion')?.value;
+  const sinEquipo = document.getElementById('ct-renovacion-sin-equipo')?.checked;
+  if (!badge) return;
+  if (accion !== 'Renovación') { badge.textContent = 'Renovación con equipo'; return; }
+  badge.textContent = sinEquipo ? 'Renovación sin equipo' : 'Renovación con equipo';
+}
+function demoContratoDuracion(val) {
+  const wrap = document.getElementById('ct-otra-duracion-wrap');
+  if (wrap) wrap.style.display = val === 'Otro' ? '' : 'none';
 }
 </script>
 </body>

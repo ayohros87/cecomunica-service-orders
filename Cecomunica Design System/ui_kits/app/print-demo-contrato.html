@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Print Kit — Cecomunica · Contrato</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ── Base reset ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: #000;
+  background: var(--surface-page);
+  line-height: 1.5;
+}
+
+/* ── Kit demo chrome (screen only) ────────────────────────── */
+@media screen {
+  .demo-page-shell {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+  .demo-page-title {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--fg-1);
+    margin-bottom: 6px;
+  }
+  .demo-page-sub {
+    font-size: 13px;
+    color: var(--fg-3);
+    margin-bottom: 32px;
+  }
+  .demo-page-sep {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: 40px 0;
+  }
+  .screen-hint {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--fg-3);
+    margin-bottom: 20px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .screen-hint strong { color: var(--fg-2); }
+  .print-preview-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--brand);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 24px;
+  }
+  .print-preview-btn:hover { background: var(--navy-700); }
+}
+
+/* ── @page setup (A4 for contracts) ─────────────────────────── */
+@page {
+  size: A4 portrait;
+  margin: 14mm 14mm 16mm;
+
+  @top-left   { content: "Cecomunica · Contrato de Servicio"; font-family: "IBM Plex Sans", sans-serif; font-size: 8pt; color: #888; }
+  @top-right  { content: "Impreso: " date(now); font-family: "IBM Plex Mono", monospace; font-size: 8pt; color: #888; }
+  @bottom-left  { content: "cecomunica.com · Radios Hytera · Panamá"; font-family: "IBM Plex Sans", sans-serif; font-size: 7pt; color: #aaa; }
+  @bottom-right { content: "Pág. " counter(page) " de " counter(pages); font-family: "IBM Plex Mono", monospace; font-size: 8pt; color: #888; }
+}
+
+/* ── Print stylesheet ───────────────────────────────────────── */
+@media print {
+  body { background: #fff; color: #000; font-size: 10.5pt; }
+  .no-print,
+  .demo-page-shell > .demo-page-title,
+  .demo-page-shell > .demo-page-sub,
+  .demo-page-shell > .screen-hint,
+  .demo-page-shell > .print-preview-btn,
+  .demo-page-shell > .demo-page-sep { display: none !important; }
+  .print-doc { margin: 0; padding: 0; background: #fff; }
+  .page-break-before { page-break-before: always; break-before: page; }
+  .page-break-after  { page-break-after: always;  break-after: page; }
+  .keep-together     { page-break-inside: avoid;  break-inside: avoid; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  a  { text-decoration: none; color: inherit; }
+  .print-mono { font-family: "IBM Plex Mono", monospace; }
+}
+
+/* ── Print document styles (work on screen AND in print) ────── */
+
+.print-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 3px solid #0B2A47;
+  margin-bottom: 14px;
+}
+.print-header-brand {
+  flex: 1;
+  font-size: 9pt;
+  color: #555;
+  line-height: 1.55;
+}
+.print-header-brand strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 13pt;
+  font-weight: 800;
+  color: #0B2A47;
+  letter-spacing: -0.01em;
+  margin-bottom: 2px;
+}
+.print-header-logo {
+  flex: 0 0 auto;
+  font-family: var(--font-display);
+  font-size: 22pt;
+  font-weight: 800;
+  color: #0B2A47;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+.print-header-logo span { color: #00B4D8; }
+.print-header-doc-type {
+  flex: 0 0 auto;
+  border: 1.5px solid #0B2A47;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 9pt;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0B2A47;
+}
+
+/* Doc title */
+.print-doc-title {
+  font-family: var(--font-display);
+  font-size: 16pt;
+  font-weight: 800;
+  color: #0B2A47;
+  text-align: center;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Summary row: ID + chips */
+.print-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  margin-bottom: 14px;
+}
+.print-summary-id {
+  font-size: 9pt;
+  color: #555;
+}
+.print-summary-id strong {
+  display: block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 13pt;
+  color: #0B2A47;
+  margin-top: 2px;
+}
+.print-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.print-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  color: #333;
+}
+.print-chip-aprobado  { background: #D1FAE5; border-color: #10B981; color: #064E3B; }
+.print-chip-pendiente { background: #FEF3C7; border-color: #F59E0B; color: #92400E; }
+.print-chip-inactivo  { background: #FEE2E2; border-color: #EF4444; color: #7F1D1D; }
+
+/* Section title */
+.print-section-title {
+  font-family: var(--font-display);
+  font-size: 10pt;
+  font-weight: 700;
+  color: #0B2A47;
+  border-bottom: 1.5px solid #0B2A47;
+  padding-bottom: 3px;
+  margin: 14px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Data grid */
+.print-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+  margin-bottom: 12px;
+}
+.print-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.print-field dt {
+  font-size: 7.5pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 1px;
+}
+.print-field dd {
+  font-size: 10pt;
+  color: #000;
+  font-weight: 500;
+}
+.print-field dd.mono { font-family: "IBM Plex Mono", monospace; font-size: 9.5pt; }
+.print-field.span-2 { grid-column: 1 / -1; }
+
+/* Equipos table */
+.print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9.5pt;
+  margin-bottom: 8px;
+}
+.print-table th {
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1.5px solid #333;
+  background: #f7f7f7;
+}
+.print-table th.right { text-align: right; }
+.print-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #e5e5e5;
+  vertical-align: top;
+}
+.print-table td.right { text-align: right; font-family: "IBM Plex Mono", monospace; font-size: 9pt; }
+.print-table tbody tr:last-child td { border-bottom: none; }
+.print-table tfoot tr.summary td {
+  border-top: 1.5px solid #ccc;
+  font-weight: 600;
+  font-size: 9pt;
+  padding: 5px 8px;
+}
+.print-table tfoot tr.total-row td {
+  border-top: 2px solid #0B2A47;
+  font-weight: 700;
+  font-size: 11pt;
+  color: #0B2A47;
+  padding: 6px 8px;
+}
+.print-table tfoot tr.total-row td.right { font-family: "IBM Plex Mono", monospace; }
+
+/* Observations + totals row */
+.print-obs-totals {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+  margin-top: 6px;
+}
+.print-obs {
+  font-size: 9.5pt;
+}
+.print-obs-title {
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+  margin-bottom: 4px;
+}
+.print-obs-body {
+  border: 1px solid #ddd;
+  background: #fafafa;
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-height: 60px;
+  white-space: pre-wrap;
+}
+
+/* Signatures — three column for contracts */
+.print-sig-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 36px;
+}
+.print-sig-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+.print-sig-block { padding-top: 4px; }
+.print-sig-space {
+  height: 44px;
+  border-bottom: 1px solid #333;
+  margin-bottom: 6px;
+}
+.print-sig-label {
+  font-size: 8pt;
+  color: #666;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+.print-sig-name {
+  font-size: 10pt;
+  font-weight: 600;
+  color: #000;
+  margin-top: 2px;
+  text-align: center;
+}
+.print-sig-date {
+  font-size: 8pt;
+  color: #888;
+  font-family: "IBM Plex Mono", monospace;
+  text-align: center;
+}
+.print-sig-electronic {
+  font-size: 8pt;
+  font-style: italic;
+  color: #2e7d32;
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* QR / verification block */
+.print-verification {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px dashed #888;
+  border-radius: 6px;
+  margin-top: 18px;
+}
+.print-verification-qr {
+  width: 96px;
+  height: 96px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7pt;
+  color: #888;
+  flex-shrink: 0;
+}
+.print-verification-body { font-size: 9pt; line-height: 1.45; }
+.print-verification-body strong { display: block; margin-bottom: 4px; font-size: 9.5pt; color: #000; }
+.print-verification-body .mono { font-family: "IBM Plex Mono", monospace; font-weight: 700; }
+
+/* Terms (page 2) */
+.print-terms-title {
+  font-family: var(--font-display);
+  font-size: 13pt;
+  font-weight: 800;
+  color: #0B2A47;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+.print-terms-body {
+  font-size: 8.5pt;
+  line-height: 1.35;
+  column-count: 2;
+  column-gap: 14px;
+  text-align: justify;
+  white-space: pre-wrap;
+}
+
+.print-acceptance {
+  margin-top: 28px;
+  text-align: center;
+}
+.print-acceptance-title {
+  font-family: var(--font-display);
+  font-size: 11pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0B2A47;
+  margin-bottom: 10px;
+}
+.print-acceptance-text {
+  font-size: 9.5pt;
+  max-width: 540px;
+  margin: 0 auto 28px;
+  text-align: justify;
+  line-height: 1.5;
+}
+.print-acceptance .print-sig-block { max-width: 300px; margin: 0 auto; }
+
+.print-footer-note {
+  margin-top: 18px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e5e5;
+  font-size: 7.5pt;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.5;
+}
+</style>
+</head>
+<body>
+
+<!-- ── Screen chrome ─────────────────────────────────────────── -->
+<div class="demo-page-shell no-print">
+  <p class="demo-page-title">Print Kit · Contrato de Servicio</p>
+  <p class="demo-page-sub">
+    Hoja de impresión para <code>contratos/imprimir-contrato.html</code>. Tamaño A4
+    (los contratos son más largos que las órdenes — 2 páginas mínimo con términos).
+    Las clases <code>.print-*</code> son las mismas que el kit de orden, con un
+    <code>.print-sig-grid.cols-3</code> para incluir las tres firmas: cliente,
+    Cecomunica (aprobador) y vendedor (elaborador).
+  </p>
+  <button class="print-preview-btn" onclick="window.print()">↗ Abrir vista de impresión</button>
+  <div class="screen-hint">
+    <strong>Nota:</strong> el bloque de verificación con QR aparece al pie de la
+    primera página; los términos y condiciones siempre se imprimen en página
+    aparte (<code>.page-break-before</code>).
+  </div>
+  <div class="demo-page-sep"></div>
+</div>
+
+<!-- ── Printable document — Page 1 ───────────────────────────── -->
+<div class="print-doc demo-page-shell">
+
+  <!-- Brand header -->
+  <div class="print-header keep-together">
+    <div class="print-header-brand">
+      <strong>C COMUNICA, S.A.</strong>
+      RUC 32977-27-249966 DV 39 · Panamá<br>
+      CC. Bal Harbour, Piso 1, of. 5A, Vía Italia, Paitilla<br>
+      ventas@cecomunica.com · +507 279-5570
+    </div>
+    <div class="print-header-logo">Ceco<span>munica</span></div>
+    <div class="print-header-doc-type">Alquiler</div>
+  </div>
+
+  <!-- Doc title -->
+  <h1 class="print-doc-title">Contrato de Servicio de Comunicación</h1>
+
+  <!-- Summary row -->
+  <div class="print-summary-row keep-together">
+    <div class="print-summary-id">
+      Contrato
+      <strong>CT-2025-0142</strong>
+    </div>
+    <div class="print-chips">
+      <span class="print-chip">Nuevo</span>
+      <span class="print-chip">12 meses</span>
+      <span class="print-chip print-chip-aprobado">Activo</span>
+    </div>
+  </div>
+
+  <!-- Cliente -->
+  <p class="print-section-title">Ficha del cliente</p>
+  <div class="print-grid keep-together">
+    <dl class="print-field"><dt>Cliente</dt><dd>Autoridad del Canal de Panamá</dd></dl>
+    <dl class="print-field"><dt>RUC / DV</dt><dd class="mono">123-4567-890123 DV 45</dd></dl>
+    <dl class="print-field"><dt>Representante legal</dt><dd>Juan Pérez Méndez</dd></dl>
+    <dl class="print-field"><dt>Teléfono</dt><dd class="mono">+507 6789-0001</dd></dl>
+    <dl class="print-field span-2"><dt>Dirección</dt><dd>Edif. Administración ACP, Corozal Oeste, Ciudad de Panamá, Panamá</dd></dl>
+  </div>
+
+  <!-- Equipos -->
+  <p class="print-section-title">Equipos contratados</p>
+  <table class="print-table keep-together">
+    <thead>
+      <tr>
+        <th style="width:6%;">No.</th>
+        <th style="width:32%;">Descripción</th>
+        <th style="width:20%;">Modelo</th>
+        <th style="width:10%;" class="right">Cant.</th>
+        <th style="width:16%;" class="right">P. Unit.</th>
+        <th style="width:16%;" class="right">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Radio portátil DMR Tier III</td><td>Hytera PD78X</td><td class="right">5</td><td class="right">$185.00</td><td class="right">$925.00</td></tr>
+      <tr><td>2</td><td>Radio móvil vehicular</td><td>Hytera MD78X</td><td class="right">2</td><td class="right">$520.00</td><td class="right">$1,040.00</td></tr>
+      <tr><td>3</td><td>Repetidor digital DMR</td><td>Hytera RD98X</td><td class="right">1</td><td class="right">$1,850.00</td><td class="right">$1,850.00</td></tr>
+    </tbody>
+    <tfoot>
+      <tr class="summary"><td colspan="5" style="text-align:right;">Subtotal</td><td class="right">$3,815.00</td></tr>
+      <tr class="summary"><td colspan="5" style="text-align:right;">ITBMS 7%</td><td class="right">$267.05</td></tr>
+      <tr class="total-row"><td colspan="5" style="text-align:right;">TOTAL</td><td class="right">$4,082.05</td></tr>
+    </tfoot>
+  </table>
+
+  <!-- Observaciones + totales -->
+  <div class="print-obs-totals">
+    <div class="print-obs">
+      <div class="print-obs-title">Observaciones</div>
+      <div class="print-obs-body">Equipos a instalar en planta operativa Corozal. Servicio de mantenimiento preventivo trimestral incluido durante la vigencia del contrato.</div>
+    </div>
+    <div></div>
+  </div>
+
+  <!-- Signatures (3 cols for contracts) -->
+  <div class="print-sig-grid cols-3 keep-together">
+    <div class="print-sig-block">
+      <div class="print-sig-space"></div>
+      <div class="print-sig-label">Firma del cliente</div>
+      <div class="print-sig-name">Juan Pérez Méndez</div>
+      <div class="print-sig-date">Cédula: 8-123-4567</div>
+      <div class="print-sig-date">Fecha: ___ / ___ / ______</div>
+    </div>
+    <div class="print-sig-block">
+      <div class="print-sig-space"></div>
+      <div class="print-sig-label">Firma C COMUNICA, S.A.</div>
+      <div class="print-sig-name">Ana María Rodríguez</div>
+      <div class="print-sig-date">Gerente Comercial</div>
+      <div class="print-sig-electronic">✓ Firma electrónica verificada</div>
+    </div>
+    <div class="print-sig-block">
+      <div class="print-sig-space"></div>
+      <div class="print-sig-label">Firma del vendedor</div>
+      <div class="print-sig-name">Carlos Ríos</div>
+      <div class="print-sig-date">Ejecutivo de Ventas</div>
+      <div class="print-sig-electronic">✓ Firma electrónica verificada</div>
+    </div>
+  </div>
+
+  <!-- Verification block -->
+  <div class="print-verification keep-together">
+    <div class="print-verification-qr">[ QR ]</div>
+    <div class="print-verification-body">
+      <strong>Verificación oficial Cecomunica</strong>
+      Contrato: <span class="mono">CT-2025-0142</span><br>
+      Código: <span class="mono">8K3F-9X2W-7BNA</span><br>
+      URL: <span class="mono">cecomunica.com/v/CT-2025-0142</span><br>
+      <span style="color:#666;">Documento válido solo si el código y la URL coinciden con el portal de verificación.</span>
+    </div>
+  </div>
+
+  <p style="font-size:9.5pt; margin-top:14px; text-align:justify;">
+    El suscrito declara conocer y aceptar la totalidad de los términos y condiciones del presente contrato, los cuales se anexan en página aparte.
+  </p>
+
+  <!-- ── Page 2 — Terms & Conditions ───────────────────────────── -->
+  <div class="page-break-before">
+    <h2 class="print-terms-title">Términos y Condiciones</h2>
+    <div class="print-terms-body">PRIMERA — OBJETO DEL CONTRATO. El presente contrato tiene por objeto regular las condiciones bajo las cuales C COMUNICA, S.A. (en adelante "CECOMUNICA") proporciona al cliente los equipos de comunicación detallados en la tabla de la primera página de este documento.
+
+SEGUNDA — VIGENCIA. Este contrato tendrá una vigencia de doce (12) meses contados a partir de la fecha de firma. Cualquier renovación deberá ser acordada por escrito y firmada por ambas partes con al menos treinta (30) días de antelación al vencimiento.
+
+TERCERA — PRECIO Y FORMA DE PAGO. El cliente se obliga a pagar mensualmente la suma total indicada en la primera página, dentro de los primeros cinco (5) días hábiles de cada mes. El incumplimiento del pago facultará a CECOMUNICA a suspender el servicio.
+
+CUARTA — USO Y CUIDADO DEL EQUIPO. El cliente se compromete a hacer uso adecuado del equipo, conforme a las especificaciones del fabricante. El uso indebido, modificaciones no autorizadas o daños por negligencia serán cubiertos económicamente por el cliente.
+
+QUINTA — GARANTÍA Y MANTENIMIENTO. CECOMUNICA garantiza el correcto funcionamiento de los equipos contratados durante toda la vigencia del contrato, así como un servicio de mantenimiento preventivo trimestral sin cargo adicional.
+
+SEXTA — TERMINACIÓN. Cualquiera de las partes podrá dar por terminado el presente contrato comunicando su decisión por escrito con al menos treinta (30) días de anticipación. En caso de terminación anticipada por causa imputable al cliente, este deberá pagar las mensualidades pendientes hasta el final de la vigencia.
+
+SÉPTIMA — DEVOLUCIÓN DE EQUIPOS. Al finalizar este contrato, el cliente se obliga a devolver los equipos en las mismas condiciones en que los recibió, salvo el desgaste normal por uso. En caso de no devolución, deberá pagar el valor de reposición del equipo, calculado al precio comercial vigente al momento de la terminación del contrato.
+
+OCTAVA — CONFIDENCIALIDAD. Las partes se comprometen a mantener absoluta reserva sobre cualquier información que se intercambien en virtud de este contrato.
+
+NOVENA — JURISDICCIÓN Y LEY APLICABLE. Este contrato se rige por las leyes de la República de Panamá. Cualquier controversia será resuelta por los tribunales ordinarios de la Ciudad de Panamá, con expresa renuncia al fuero de domicilio.
+
+DÉCIMA — DOMICILIO Y NOTIFICACIONES. Para efectos de cualquier notificación, las partes señalan como domicilio los indicados en la primera página de este contrato.</div>
+
+    <!-- Final acceptance signature -->
+    <div class="print-acceptance keep-together">
+      <p class="print-acceptance-title">Firma de aceptación</p>
+      <p class="print-acceptance-text">
+        El suscrito, <strong>Juan Pérez Méndez</strong>, representante legal de la empresa
+        <strong>Autoridad del Canal de Panamá</strong>, declara que ha leído y aceptado
+        íntegramente los términos y condiciones del presente contrato, firmando en señal
+        de conformidad.
+      </p>
+      <div class="print-sig-block">
+        <div class="print-sig-space"></div>
+        <div class="print-sig-label">Firma del cliente</div>
+        <div class="print-sig-date">Fecha: ___ / ___ / ______</div>
+      </div>
+    </div>
+
+    <div class="print-footer-note">
+      C COMUNICA, S.A. · Radios Hytera Panamá · ventas@cecomunica.com · +507 279-5570 · cecomunica.com
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -2,264 +2,221 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Editar Contrato</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editar Contrato - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
-<script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
   <style>
-  body {
-    font-family: Arial, sans-serif;
-    background-color: #f9f9f9;
-    margin: 0;
-    padding: 30px;
-  }
-
-  h2 {
-    text-align: center;
-    color: #333;
-  }
-
-  form {
-    max-width: 960px;
-    margin: 20px auto;
-    background-color: #ffffff;
-    padding: 24px;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
-  }
-
-  fieldset {
-    border: 1px solid #ccc;
-    padding: 16px 20px;
-    margin-bottom: 24px;
-    border-radius: 8px;
-    background-color: #fdfdfd;
-  }
-
-  legend {
-    font-weight: bold;
-    font-size: 16px;
-    padding: 0 8px;
-    color: #222;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 16px;
-    font-size: 14px;
-    color: #444;
-  }
-
-  input, select, textarea {
-    padding: 10px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 14px;
-    box-sizing: border-box;
-    margin-top: 4px;
-  }
-
-  textarea {
-    resize: vertical;
-    min-height: 60px;
-  }
-
-  button {
-    padding: 10px 16px;
-    font-size: 14px;
-    margin-top: 10px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    background-color: #007bff;
-    color: white;
-  }
-
-  button:hover {
-    background-color: #0056b3;
-  }
-
-  .inline-btn { margin-left: 8px; }
-  .flex { display: flex; gap: 10px; }
-  .align-end { display:flex; justify-content:flex-end; }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 12px;
-    background-color: white;
-    border-radius: 6px;
-    overflow: hidden;
-  }
-
-  th, td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    font-size: 14px;
-  }
-
-  th {
-    background-color: #f4f4f4;
-    text-align: left;
-  }
-
-  .total {
-    font-weight: bold;
-    text-align: right;
-    margin-top: 10px;
-    font-size: 16px;
-  }
-
-  #mensaje {
-    margin-top: 10px;
-    font-weight: bold;
-  }
-
-  .renovacion-box {
-    background: var(--accent-soft);
-    border: 2px solid var(--accent);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin-top: 8px;
-  }
-
-  .renovacion-box .title {
-    margin: 0 0 8px 0;
-    color: var(--navy);
-    font-size: 14px;
-    font-weight: 700;
-  }
-
-  .renovacion-badge {
-    display: inline-block;
-    background: var(--accent-soft-hov);
-    color: var(--navy);
-    border: 1px solid var(--accent-line);
-    border-radius: 999px;
-    padding: 2px 10px;
-    font-size: 12px;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-</style>
-
+    /* Page-specific tweaks — kit classes do the heavy lifting */
+    .ct-summary-bar {
+      display: flex; gap: var(--sp-4); align-items: center; flex-wrap: wrap;
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: var(--sp-4);
+      font-size: 13px;
+    }
+    .ct-summary-bar > span { color: var(--fg-3); }
+    .ct-summary-bar strong { color: var(--fg-1); font-family: var(--font-mono); }
+    /* Reserve space for the sticky footer-strip */
+    .app-body { padding-bottom: 84px; }
+    /* Renovación badge color follows accent (matches kit example) */
+    #renovacionBadge.chip-prioridad { background: var(--accent-soft); color: var(--navy); border-color: var(--accent-line); }
+  </style>
 </head>
 <body>
-  <h2>Editar Contrato</h2>
-<form id="formEditar">
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="file-text"></i> Editar Contrato',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
+      showHome: true,
+      homeHref: '../index.html',
+      showLogout: true
+    });
+  </script>
 
-  <fieldset>
-    <legend><i data-lucide="user"></i> Información del Cliente</legend>
-    <!-- mantenemos el campo como read-only para edición -->
-    <label>Cliente:
-      <input class="form-input" type="text" id="cliente_nombre" disabled>
-    </label>
-  </fieldset>
+  <div class="app-wrap app-wrap--wide app-body">
 
-  <fieldset>
-    <legend><i data-lucide="file-text"></i> Detalles del Contrato</legend>
+    <nav class="app-breadcrumbs" aria-label="Breadcrumb">
+      <a href="../index.html">Inicio</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <a href="index.html">Contratos</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <span class="app-breadcrumbs-current" id="bc-contrato-id">—</span>
+    </nav>
 
-    <label>Tipo de contrato:
-      <select class="form-select" id="tipo_contrato" required>
-        <option value="ALQ">Alquiler</option>
-        <option value="PROP">Propio</option>
-        <option value="REEMP">Reemplazo</option>
-        <option value="DEMO">Demo</option>
-      </select>
-    </label>
-
-    <label>Tipo de acción:
-      <select class="form-select" id="accion" required>
-        <option value="Nuevo">Nuevo</option>
-        <option value="Renovación">Renovación</option>
-        <option value="Adición">Adición</option>
-        <option value="No Aplica">No Aplica</option>
-      </select>
-    </label>
-
-    <div id="renovacionBox" class="renovacion-box" style="display:none;">
-      <p class="title">Modalidad de renovación</p>
-      <div id="renovacionBadge" class="renovacion-badge">Renovación con equipo</div>
-      <label>
-        <input type="checkbox" id="renovacion_sin_equipo">
-        Marcar si es renovación sin equipo
-      </label>
-      <label id="renovacionRefurbishedWrap" style="display:none; margin-top:8px;">
-        <input type="checkbox" id="renovacion_refurbished_componentes">
-        ¿El contrato lleva refurbished de batería, antena, clip y piezas?
-      </label>
+    <div class="app-page-header">
+      <div>
+        <h1>Editar Contrato</h1>
+        <p id="ph-subtitle">Modifique los datos del contrato y guarde los cambios.</p>
+      </div>
+      <div class="app-page-header-actions">
+        <span id="ph-estado-chip" class="chip-estado chip-cotizada">Pendiente Aprobación</span>
+      </div>
     </div>
 
-<label>Duración del contrato:
-  <select class="form-select" id="duracion" required onchange="toggleOtraDuracion(this.value)">
-    <option value="">Seleccione…</option>
-    <option value="12 meses">12 meses</option>
-    <option value="18 meses">18 meses</option>
-    <option value="Otro">Otro (especificar)</option>
-  </select>
-</label>
+    <form id="formEditar" onsubmit="return false;" novalidate>
 
-<label id="otraDuracionLabel" style="display:none;">
-  Especificar duración (meses)
-  <input class="form-input" type="number" id="otra_duracion" min="1" placeholder="Ej. 24">
-</label>
+      <!-- Sección 1: Cliente -->
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-section" style="border:none; padding:0; margin:0;">
+          <div>
+            <p class="form-section-title"><i data-lucide="building-2" style="width:16px;height:16px;"></i> Cliente</p>
+            <p class="form-section-desc">Cliente vinculado al contrato. Para cambiarlo, edite la ficha del cliente.</p>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-field">
+              <label class="form-label" for="cliente_nombre">Cliente</label>
+              <input class="form-input" type="text" id="cliente_nombre" disabled>
+            </div>
+          </div>
+        </div>
+      </div>
 
-    <label>Estado:
-  <select class="form-select" id="estado" disabled>
-    <option value="activo">Activo</option>
-    <option value="pendiente_aprobacion">Pendiente Aprobación</option>
-    <option value="vencido">Vencido</option>
-  </select>
-</label>
+      <!-- Sección 2: Detalles del contrato -->
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-section" style="border:none; padding:0; margin:0;">
+          <div>
+            <p class="form-section-title"><i data-lucide="file-text" style="width:16px;height:16px;"></i> Detalles del contrato</p>
+            <p class="form-section-desc">Tipo, acción, duración y estado del contrato.</p>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-field">
+              <label class="form-label" for="tipo_contrato">Tipo de contrato <span class="req">*</span></label>
+              <select class="form-select" id="tipo_contrato" required>
+                <option value="ALQ">Alquiler</option>
+                <option value="PROP">Propio</option>
+                <option value="REEMP">Reemplazo</option>
+                <option value="DEMO">Demo</option>
+              </select>
+            </div>
 
+            <div class="form-field">
+              <label class="form-label" for="accion">Tipo de acción <span class="req">*</span></label>
+              <select class="form-select" id="accion" required>
+                <option value="Nuevo">Nuevo</option>
+                <option value="Renovación">Renovación</option>
+                <option value="Adición">Adición</option>
+                <option value="No Aplica">No Aplica</option>
+              </select>
+            </div>
 
-    <label>Observaciones:
-      <textarea class="form-textarea" id="observaciones"></textarea>
-    </label>
-  </fieldset>
+            <div class="form-field">
+              <label class="form-label" for="duracion">Duración del contrato <span class="req">*</span></label>
+              <select class="form-select" id="duracion" required onchange="toggleOtraDuracion(this.value)">
+                <option value="">Seleccione…</option>
+                <option value="12 meses">12 meses</option>
+                <option value="18 meses">18 meses</option>
+                <option value="Otro">Otro (especificar)</option>
+              </select>
+            </div>
 
-  <fieldset>
-    <legend><i data-lucide="package"></i> Equipos</legend>
-    <table>
-     <thead>
-      <tr>
-        <th>Modelo</th>
-        <th>Descripción</th>
-        <th>Cantidad</th>
-        <th>Precio Unitario</th>
-        <th>Total</th>
-        <th>×</th>
-      </tr>
-    </thead>
-      <tbody id="tablaEquipos"></tbody>
-    </table>
-    <div class="align-end">
-      <button type="button" onclick="agregarEquipo()"><i data-lucide="plus"></i> Agregar Equipo</button>
-    </div>
-    <div class="total">Total: $<span id="total">0.00</span></div>
-  </fieldset>
+            <div class="form-field" id="otraDuracionLabel" style="display:none;">
+              <label class="form-label" for="otra_duracion">Especificar duración (meses)</label>
+              <input class="form-input" type="number" id="otra_duracion" min="1" placeholder="24" style="font-family:var(--font-mono);">
+            </div>
 
-  <div class="flex">
-    <button type="submit"><i data-lucide="save"></i> Guardar Cambios</button>
-    <button type="button" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
+            <div class="form-field">
+              <label class="form-label" for="estado">Estado</label>
+              <select class="form-select" id="estado" disabled>
+                <option value="activo">Activo</option>
+                <option value="pendiente_aprobacion">Pendiente Aprobación</option>
+                <option value="vencido">Vencido</option>
+              </select>
+              <span class="form-hint">El estado se gestiona desde la aprobación.</span>
+            </div>
+          </div>
+
+          <!-- Disclosure: Renovación -->
+          <div class="disclosure-panel" id="renovacionBox" style="margin-top:var(--sp-4);">
+            <div class="disclosure-panel-title">
+              <span><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Modalidad de renovación</span>
+              <span id="renovacionBadge" class="chip-prioridad media">Renovación con equipo</span>
+            </div>
+            <label class="form-check" style="margin-top:var(--sp-2);">
+              <input type="checkbox" id="renovacion_sin_equipo">
+              <span>
+                <span class="form-check-label">Marcar si es renovación sin equipo</span>
+                <span class="form-check-desc form-hint">El cliente conserva los equipos del contrato anterior.</span>
+              </span>
+            </label>
+            <div class="disclosure-sub" id="renovacionRefurbishedWrap">
+              <label class="form-check" style="margin-top:var(--sp-2);">
+                <input type="checkbox" id="renovacion_refurbished_componentes">
+                <span>
+                  <span class="form-check-label">¿El contrato lleva refurbished de batería, antena, clip y piezas?</span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-field" style="margin-top:var(--sp-4);">
+            <label class="form-label" for="observaciones">Observaciones</label>
+            <textarea class="form-input form-textarea" id="observaciones" rows="3"
+              placeholder="Notas internas, requisitos especiales, fechas críticas…"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección 3: Equipos -->
+      <div class="ds-card" style="margin-bottom:var(--sp-4);">
+        <div style="padding:var(--sp-5) var(--sp-5) var(--sp-3);">
+          <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="package" style="width:16px;height:16px;"></i> Equipos contratados</p>
+          <p class="form-section-desc" style="margin-bottom:0;">Modelos incluidos en el contrato, con cantidad y precio unitario.</p>
+        </div>
+        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
+          <table class="app-table editable" aria-label="Equipos del contrato">
+            <thead>
+              <tr>
+                <th style="width:22%;">Modelo</th>
+                <th>Descripción</th>
+                <th style="width:80px;">Cant.</th>
+                <th style="width:120px;">P. Unit.</th>
+                <th style="width:120px; text-align:right;">Total</th>
+                <th style="width:48px;"></th>
+              </tr>
+            </thead>
+            <tbody id="tablaEquipos"></tbody>
+          </table>
+        </div>
+        <div class="table-add-row">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="agregarEquipo()"><i data-lucide="plus"></i> Agregar equipo</button>
+        </div>
+      </div>
+
+      <p id="mensaje" role="status" aria-live="polite" style="font-weight:600; margin: var(--sp-2) 0;"></p>
+
+    </form>
   </div>
 
-  <p id="mensaje"></p>
-</form>
-
+  <!-- Sticky footer strip: total + actions -->
+  <div class="app-footer-strip">
+    <div class="app-footer-strip-stat">
+      <span class="app-footer-strip-stat-label">Total contrato</span>
+      <span class="app-footer-strip-stat-value value-highlight">$<span id="total">0.00</span></span>
+    </div>
+    <div class="app-footer-strip-actions" style="margin-left:auto;">
+      <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
+      <button type="submit" form="formEditar" class="btn btn-primary"><i data-lucide="save"></i> Guardar cambios</button>
+    </div>
+  </div>
 
   <script src="../js/pages/editar-contrato.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
-
 </body>
 </html>
