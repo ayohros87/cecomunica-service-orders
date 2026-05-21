@@ -419,7 +419,10 @@ table.app-table .td-actions {
 }
 table.app-table tbody tr:hover .td-actions { opacity: 1; }
 
-/* Filter bar — sits above the table inside .app-table-wrap */
+/* Filter bar — sits above the table inside .ds-card / .app-table-wrap.
+   `.filter-bar` is the kit-canonical name; `.app-filter-bar` is an alias
+   kept for any pages already using it. */
+.filter-bar,
 .app-filter-bar {
   display: flex;
   align-items: center;
@@ -428,6 +431,51 @@ table.app-table tbody tr:hover .td-actions { opacity: 1; }
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--border-subtle);
 }
+
+/* Search field with an icon prefix — drops into a .filter-bar */
+.filter-search {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  max-width: 360px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 34px;
+  padding: 0 var(--sp-2) 0 32px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast), background var(--dur-fast);
+}
+.filter-search:focus-within {
+  border-color: var(--accent);
+  background: var(--surface-card);
+  box-shadow: var(--ring-focus);
+}
+.filter-search input[type="search"],
+.filter-search input[type="text"] {
+  flex: 1;
+  height: 100%;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--fg-1);
+  outline: none;
+  min-width: 0;
+}
+.filter-search .search-icon {
+  position: absolute;
+  left: 9px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-4);
+  pointer-events: none;
+  display: flex;
+}
+.filter-search .search-icon svg,
+.filter-search .search-icon i[data-lucide] { width: 15px; height: 15px; }
 
 /* Pagination */
 .app-table-footer {

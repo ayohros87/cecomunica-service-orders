@@ -53,49 +53,52 @@ window.ContratosLista = {
 
     const tot = ContractTotals.fromDoc(data);
 
+    const ICON_BTN     = 'btn btn-ghost btn-icon btn-sm';
+    const ICON_BTN_DEL = 'btn btn-danger btn-icon btn-sm';
+
     const btnImprimir = data.contrato_id
-      ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Imprimir/Ver"><i data-lucide="printer"></i></button>`
+      ? `<button class="${ICON_BTN}" onclick="ContratosLista.ver('${data.contrato_id}')" title="Imprimir/Ver" aria-label="Imprimir/Ver"><i data-lucide="printer"></i></button>`
       : '';
     const btnEditar = editable
-      ? `<button class="btn" onclick="ContratosLista.editar('${id}')" title="Editar"><i data-lucide="pencil"></i></button>`
+      ? `<button class="${ICON_BTN}" onclick="ContratosLista.editar('${id}')" title="Editar" aria-label="Editar"><i data-lucide="pencil"></i></button>`
       : '';
 
     let btnBorrar = '';
     if (!['activo','aprobado','anulado'].includes(data.estado) && (esAdmin || AUTH.is(ROLES.VENDEDOR))) {
-      btnBorrar = `<button class="btn btn-danger" onclick="ContratosLista.borrar('${id}')" title="Eliminar"><i data-lucide="trash-2"></i></button>`;
+      btnBorrar = `<button class="${ICON_BTN_DEL}" onclick="ContratosLista.borrar('${id}')" title="Eliminar" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>`;
     }
 
     let bloqueFirmado = '';
     const puedeSubirFirmado = data.estado === 'aprobado' && puedeEditar;
     if (yaFirmado) {
-      bloqueFirmado = `<a class="btn" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado"><i data-lucide="file-text"></i></a>`;
+      bloqueFirmado = `<a class="${ICON_BTN}" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado" aria-label="Ver firmado"><i data-lucide="file-text"></i></a>`;
       if (puedeSubirFirmado)
-        bloqueFirmado += ` <button class="btn" onclick="ContratosFirmado.subir('${id}')" title="Reemplazar firmado"><i data-lucide="refresh-cw"></i></button>`;
+        bloqueFirmado += ` <button class="${ICON_BTN}" onclick="ContratosFirmado.subir('${id}')" title="Reemplazar firmado" aria-label="Reemplazar firmado"><i data-lucide="refresh-cw"></i></button>`;
     } else if (puedeSubirFirmado) {
-      bloqueFirmado = `<button class="btn" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado"><i data-lucide="upload"></i></button>`;
+      bloqueFirmado = `<button class="${ICON_BTN}" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado" aria-label="Subir firmado"><i data-lucide="upload"></i></button>`;
     }
 
     const btnAnular = (['activo','aprobado'].includes(data.estado) && esAdmin)
-      ? `<button class="btn btn-danger" onclick="ContratosLista.anular('${id}')" title="Anular contrato"><i data-lucide="ban"></i></button>`
+      ? `<button class="${ICON_BTN_DEL}" onclick="ContratosLista.anular('${id}')" title="Anular contrato" aria-label="Anular"><i data-lucide="ban"></i></button>`
       : '';
     const btnDuplicar = (puedeEditar && ['anulado','inactivo'].includes(data.estado))
-      ? `<button class="btn" onclick="ContratosLista.duplicar('${id}')" title="Duplicar contrato"><i data-lucide="copy"></i></button>`
+      ? `<button class="${ICON_BTN}" onclick="ContratosLista.duplicar('${id}')" title="Duplicar contrato" aria-label="Duplicar"><i data-lucide="copy"></i></button>`
       : '';
     const btnComisionAgregar = esAdmin && !data.listo_para_comision
-      ? `<button class="btn" onclick="ContratosLista.marcarComision('${id}')" title="Marcar listo para comisión"><i data-lucide="dollar-sign"></i></button>`
+      ? `<button class="${ICON_BTN}" onclick="ContratosLista.marcarComision('${id}')" title="Marcar listo para comisión" aria-label="Marcar comisión"><i data-lucide="dollar-sign"></i></button>`
       : '';
     const btnComisionQuitar = esAdmin && data.listo_para_comision
-      ? `<button class="btn btn-danger" onclick="ContratosLista.quitarComision('${id}')" title="Quitar marca de comisión"><i data-lucide="x-circle"></i></button>`
+      ? `<button class="${ICON_BTN_DEL}" onclick="ContratosLista.quitarComision('${id}')" title="Quitar marca de comisión" aria-label="Quitar comisión"><i data-lucide="x-circle"></i></button>`
       : '';
 
     const accionesHtml = esRecepcion
-      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}`
+      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}`
       : `${btnImprimir}
-         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}
+         ${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}
          ${btnEditar}
          ${btnBorrar}
          ${bloqueFirmado}
-         ${esAdmin && data.estado === 'pendiente_aprobacion' ? `<button class="btn" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar"><i data-lucide="check-circle"></i></button>` : ''}
+         ${esAdmin && data.estado === 'pendiente_aprobacion' ? `<button class="${ICON_BTN}" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar" aria-label="Aprobar"><i data-lucide="check-circle"></i></button>` : ''}
          ${btnComisionAgregar}
          ${btnComisionQuitar}
          ${btnAnular}
@@ -331,7 +334,7 @@ window.ContratosLista = {
       let pendientes = 0, aprobados = 0, activos = 0;
 
       if (CS.esMovil()) {
-        const wrap = document.querySelector('.table-wrap');
+        const wrap = document.querySelector('.app-table-wrap');
         if (wrap) wrap.style.display = 'none';
         if (listaMovil) listaMovil.style.display = 'grid';
         filtrados.forEach(data => {
@@ -341,7 +344,7 @@ window.ContratosLista = {
           if (listaMovil) listaMovil.appendChild(this.crearCard(data));
         });
       } else {
-        const wrap = document.querySelector('.table-wrap');
+        const wrap = document.querySelector('.app-table-wrap');
         if (wrap) wrap.style.display = '';
         if (listaMovil) listaMovil.style.display = 'none';
         filtrados.forEach(data => {
@@ -383,7 +386,7 @@ window.ContratosLista = {
     let pendientes = 0, aprobados = 0, activos = 0;
 
     if (CS.esMovil()) {
-      const wrap = document.querySelector('.table-wrap');
+      const wrap = document.querySelector('.app-table-wrap');
       if (wrap) wrap.style.display = 'none';
       if (listaMovil) listaMovil.style.display = 'grid';
       filtrados.forEach(data => {
@@ -393,7 +396,7 @@ window.ContratosLista = {
         if (listaMovil) listaMovil.appendChild(this.crearCard(data));
       });
     } else {
-      const wrap = document.querySelector('.table-wrap');
+      const wrap = document.querySelector('.app-table-wrap');
       if (wrap) wrap.style.display = '';
       if (listaMovil) listaMovil.style.display = 'none';
       filtrados.forEach(data => {

@@ -4,271 +4,282 @@
   <meta charset="UTF-8" />
   <title>Contratos – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0ea5a3">
+  <meta name="theme-color" content="#0B2A47">
 
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
-<style>
-/* ========================================
-   UNIFIED DESIGN SYSTEM
-   ======================================== */
+  <style>
+    /* Page-local — kit primitives handle the rest */
 
-html, body {
-  margin: 0;
-  padding: 0;
-}
+    /* Hidden estado select drives filter-chips (preserves JS contract) */
+    #filtroEstado { display: none; }
 
-body {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-  min-height: 100vh;
-}
+    /* Resumen / counts inside the table footer */
+    #resumenContratos {
+      display: flex; gap: var(--sp-3); align-items: center;
+      font-size: 13px; color: var(--fg-3); flex-wrap: wrap;
+    }
+    #resumenContratos strong { color: var(--fg-1); font-weight: 700; }
+    #resumenContratos .badge {
+      padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      border: 1px solid var(--border-subtle);
+      background: var(--surface-card); color: var(--fg-2);
+    }
+    #resumenContratos .badge.pendiente { background: var(--chip-diag-bg);     color: var(--chip-diag-fg);     border-color: var(--chip-diag-bd); }
+    #resumenContratos .badge.aprobado  { background: var(--chip-aprobada-bg); color: var(--chip-aprobada-fg); border-color: var(--chip-aprobada-bd); }
+    #resumenContratos .badge.completo  { background: var(--chip-lista-bg);    color: var(--chip-lista-fg);    border-color: var(--chip-lista-bd); }
 
+    /* Action column — keep buttons inline and visible always (high density) */
+    .app-table td.acciones {
+      white-space: nowrap;
+      text-align: right;
+    }
+    .app-table td.acciones .btn { margin-left: var(--sp-1); }
 
-/* Unified Content Area */
-.app-wrap {
-  padding: 12px 20px;
-}
+    /* Equipos peek icon (inline emoji-style in table) */
+    .equipos-peek {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: background var(--dur-fast);
+    }
+    .equipos-peek:hover { background: var(--accent-soft); }
 
-/* Unified Filter Cards */
-.card {
-  background: white;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  margin-bottom: 12px;
-}
+    /* Floating tooltip for equipos peek */
+    #equiposTooltip {
+      position: fixed; z-index: 9999;
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      padding: var(--sp-3);
+      max-width: 420px;
+      pointer-events: none;
+      font-size: 13px;
+    }
+    #equiposTooltip .tooltip-line { margin: 4px 0; line-height: 1.4; }
 
-/* Unified Table Styling */
-.table-wrap {
-  background: white;
-  border-radius: 8px;
-  padding: 0;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  overflow: hidden;
-  width: 100%;
-  margin-top: 12px;
-}
+    /* Toggle pill — same pattern as POC list */
+    .toggle-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 11px;
+      background: var(--surface-sunken);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-pill);
+      font-size: 12px; font-weight: 500; color: var(--fg-2);
+      cursor: pointer;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+      white-space: nowrap;
+    }
+    .toggle-pill:hover { border-color: var(--accent); color: var(--accent); }
+    .toggle-pill input[type="checkbox"] { cursor: pointer; margin: 0; }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: auto;
-}
+    /* Upload status banner above the card when uploading a signed PDF */
+    #uploadStatus {
+      display: none;
+      margin-bottom: var(--sp-3);
+      padding: var(--sp-2) var(--sp-3);
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      border-radius: var(--radius-md);
+      font-size: 13px; color: var(--navy);
+    }
+  </style>
 
-table thead {
-  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-}
-
-table th {
-  font-weight: 600;
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 12px 16px;
-  color: var(--text);
-  vertical-align: middle;
-  border-bottom: 2px solid var(--line);
-}
-
-table td {
-  padding: 10px 16px;
-  vertical-align: middle;
-  font-size: 16px;
-}
-
-table tbody tr {
-  transition: background 0.15s;
-  border-bottom: 1px solid var(--line);
-}
-
-table tbody tr:hover {
-  background: #f0f9ff;
-}
-
-/* Unified Button System */
-.btn {
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-}
-
-/* Equipos peek icon */
-.equipos-peek {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  font-size: 18px;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.equipos-peek:hover {
-  background: #f0f9ff;
-  transform: scale(1.1);
-}
-
-/* Tooltip floating */
-#equiposTooltip {
-  position: fixed;
-  z-index: 9999;
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.12);
-  padding: 12px;
-  max-width: 420px;
-  pointer-events: none;
-}
-
-#equiposTooltip .tooltip-line {
-  font-size: 13px;
-  margin: 4px 0;
-  line-height: 1.4;
-}
-</style>
-
-<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
-<script src="../js/firebase-init.js"></script>
-<script src="../js/core/layout.js"></script>
-<script src="../js/core/roles.js"></script>
-<script src="../js/core/formatting.js"></script>
-<script src="../js/core/auth.js"></script>
-<script src="../js/services/contratosService.js"></script>
-<script src="../js/services/usuariosService.js"></script>
-<script src="../js/services/mailService.js"></script>
-<script src="../js/services/ordenesService.js"></script>
-<script src="../js/domain/totales.js"></script>
-<script src="../js/ui/toast.js"></script>
-<script src="../js/ui/modal.js"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/mailService.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/domain/totales.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="file-text"></i> Contratos', actions: [{ label: '<i data-lucide="plus"></i> Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
-  
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="file-text"></i> Contratos',
+      actions: [{ label: '<i data-lucide="plus"></i> Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
   <div class="app-wrap app-wrap--full">
-    <p id="mensaje" class="resumen" style="min-height: 20px; margin-bottom: 8px;"></p>
-    
-<div class="card">
-  <div class="toolbar">
-    <div class="left" id="filtros">
-      <input type="text" id="filtroCliente" placeholder="Filtrar por cliente">
-    <select id="filtroEstado">
-      <option value="">Todos</option>
-      <option value="pendiente_aprobacion">Pendiente Aprobación</option>
-      <option value="aprobado">Aprobado</option>
-      <option value="activo">Activo</option>
-      <option value="vencido">Vencido</option>
-      <option value="anulado">Anulado</option>
-      <option value="inactivo">Inactivo</option>
-    </select>
-      <button id="btnFiltrar" class="btn"><i data-lucide="search"></i> Aplicar</button>
-      <button id="btnLimpiarBusqueda" class="btn btn-secondary"><i data-lucide="x"></i> Limpiar búsqueda</button>
-      <label style="margin-left:8px; font-size:14px;">
-  <input type="checkbox" id="chkSoloPendientes">
-  Solo pendientes
-</label>
-      <label style="margin-left:8px; font-size:14px;">
-  <input type="checkbox" id="chkMostrarInactivos">
-  Mostrar inactivos/anulados
-</label>
 
+    <p id="mensaje" class="resumen" style="min-height:20px; margin-bottom:var(--sp-2);"></p>
+
+    <!-- Upload status banner (shown when uploading a signed PDF) -->
+    <input type="file" id="fileFirmado" accept="application/pdf,image/*" style="display:none">
+    <div id="uploadStatus">
+      <i data-lucide="upload"></i> Subiendo contrato firmado <strong id="uploadPct">0%</strong>
     </div>
-    <div class="right resumen" id="resumenContratos">
-      <div class="loader" style="width: 24px; height: 24px; border-width: 3px;"></div>
-    </div>
-    <button id="btnBackfillEquipos" class="btn" style="display:none; margin-left:12px;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan autom�ticamente"><i data-lucide="refresh-cw"></i> Re-sincronizar equipos (admin)</button>
-    <button class="btn btn-secondary" style="display:none; margin-left:8px;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar cach� del navegador"><i data-lucide="trash-2"></i> Limpiar cach�</button>
-  </div>
-</div>
 
-<input type="file" id="fileFirmado" accept="application/pdf,image/*" style="display:none">
-<div id="uploadStatus" style="display:none; margin:8px 0; font-size:14px;">
-  <i data-lucide="upload"></i> Subiendo contrato firmado <strong id="uploadPct">0%</strong>
-</div>
-<div class="app-table-wrap mt-12">
-  <table class="app-table">
-    <thead>
-      <tr id="encabezadoContratos">
-        <th class="sortable" onclick="ContratosLista.ordenarPor('contrato_id')">ID</th>
-        <th class="sortable" onclick="ContratosLista.ordenarPor('cliente_nombre')">Cliente</th>
-        <th>Tipo</th>
-        <th>Acción</th>
-        <th>Equipos</th>
-        <th class="sortable" onclick="ContratosLista.ordenarPor('estado')">Estado</th>
-        <th class="sortable" onclick="ContratosLista.ordenarPor('fecha_creacion')">Fecha creación</th>
-        <th>Creado por</th>
-        <th class="sortable" onclick="ContratosLista.ordenarPor('total')">Total</th>
-        <th class="acciones">Acciones</th>
-      </tr>
-    </thead>
-    <tbody id="tablaContratos">
-      <!-- Skeleton loader rows -->
-      <tr class="skeleton-row">
-        <td colspan="10" style="padding: 0; border: none;">
-          <div class="skeleton-table-row">
-            <div class="skeleton-cell" style="width: 8%;"></div>
-            <div class="skeleton-cell" style="width: 20%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 15%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 10%;"></div>
-            <div class="skeleton-cell" style="width: 8%;"></div>
-            <div class="skeleton-cell" style="width: 8%;"></div>
-          </div>
-        </td>
-      </tr>
-      <tr class="skeleton-row">
-        <td colspan="9" style="padding: 0; border: none;">
-          <div class="skeleton-table-row">
-            <div class="skeleton-cell" style="width: 8%;"></div>
-            <div class="skeleton-cell" style="width: 20%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 15%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 10%;"></div>
-            <div class="skeleton-cell" style="width: 8%;"></div>
-            <div class="skeleton-cell" style="width: 8%;"></div>
-          </div>
-        </td>
-      </tr>
-      <tr class="skeleton-row">
-        <td colspan="9" style="padding: 0; border: none;">
-          <div class="skeleton-table-row">
-            <div class="skeleton-cell" style="width: 8%;"></div>
-            <div class="skeleton-cell" style="width: 20%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 15%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 12%;"></div>
-            <div class="skeleton-cell" style="width: 10%;"></div>
-            <div class="skeleton-cell" style="width: 8%;"></div>
-            <div class="skeleton-cell" style="width: 8%;"></div>
-          </div>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+    <!-- Card containing filter bar + table + footer (kit data-table pattern) -->
+    <div class="ds-card">
 
-<!-- Mobile cards (shown only on small screens) -->
-<div id="listaContratosMovil" class="cards-list" style="display:none"></div>
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" id="filtroCliente" placeholder="Buscar por cliente…" aria-label="Buscar por cliente" style="border:none;">
+        </div>
 
-<div style="margin:12px 0; text-align:center;">
-  <button class="btn" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más contratos</button>
-</div>
+        <!-- Hidden select preserves JS contract; chips below drive its value -->
+        <select id="filtroEstado">
+          <option value="">Todos</option>
+          <option value="pendiente_aprobacion">Pendiente Aprobación</option>
+          <option value="aprobado">Aprobado</option>
+          <option value="activo">Activo</option>
+          <option value="vencido">Vencido</option>
+          <option value="anulado">Anulado</option>
+          <option value="inactivo">Inactivo</option>
+        </select>
 
-  </div> <!-- app-wrap -->
+        <div class="filter-chips" id="filtroEstadoChips" role="tablist" aria-label="Filtrar por estado">
+          <button type="button" class="filter-chip active" data-estado="">Todos</button>
+          <button type="button" class="filter-chip" data-estado="pendiente_aprobacion">Pendiente</button>
+          <button type="button" class="filter-chip" data-estado="aprobado">Aprobado</button>
+          <button type="button" class="filter-chip" data-estado="activo">Activo</button>
+          <button type="button" class="filter-chip" data-estado="vencido">Vencido</button>
+          <button type="button" class="filter-chip" data-estado="anulado">Anulado</button>
+        </div>
+
+        <div style="flex:1;"></div>
+
+        <label class="toggle-pill"><input type="checkbox" id="chkSoloPendientes"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Solo pendientes</label>
+        <label class="toggle-pill"><input type="checkbox" id="chkMostrarInactivos"> <i data-lucide="archive" style="width:14px;height:14px;"></i> Mostrar inactivos</label>
+
+        <button id="btnLimpiarBusqueda" class="btn btn-ghost btn-sm" aria-label="Limpiar búsqueda"><i data-lucide="rotate-ccw"></i> Limpiar</button>
+        <button id="btnBackfillEquipos" class="btn btn-ghost btn-sm" style="display:none;" onclick="ContratosEquipos.backfillTodos()" title="Solo para debugging - Cloud Functions sincronizan automáticamente"><i data-lucide="refresh-cw"></i> Re-sincronizar</button>
+        <button class="btn btn-ghost btn-icon btn-sm" style="display:none;" onclick="ContratosEquipos.limpiarCache()" title="Solo para debugging - Limpiar caché del navegador" aria-label="Limpiar caché"><i data-lucide="trash-2"></i></button>
+      </div>
+
+      <!-- Table -->
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table" aria-label="Lista de contratos">
+          <thead>
+            <tr id="encabezadoContratos">
+              <th class="sortable" onclick="ContratosLista.ordenarPor('contrato_id')" style="width:120px;">ID</th>
+              <th class="sortable" onclick="ContratosLista.ordenarPor('cliente_nombre')">Cliente</th>
+              <th>Tipo</th>
+              <th>Acción</th>
+              <th style="width:60px; text-align:center;">Equipos</th>
+              <th class="sortable" onclick="ContratosLista.ordenarPor('estado')" style="width:140px;">Estado</th>
+              <th class="sortable" onclick="ContratosLista.ordenarPor('fecha_creacion')" style="width:110px;">Fecha</th>
+              <th>Creado por</th>
+              <th class="sortable" onclick="ContratosLista.ordenarPor('total')" style="width:110px; text-align:right;">Total</th>
+              <th class="acciones" style="width:200px; text-align:right;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tablaContratos">
+            <!-- Skeleton rows (replaced when data loads) -->
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:160px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td></td>
+            </tr>
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:140px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td></td>
+            </tr>
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:180px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mobile cards list (toggled by JS) -->
+      <div id="listaContratosMovil" class="cards-list" style="display:none"></div>
+
+      <!-- Table footer: count summary + load more -->
+      <div class="app-table-footer">
+        <div id="resumenContratos">
+          <div class="loader" style="width:18px; height:18px; border-width:2px;"></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más contratos</button>
+      </div>
+
+    </div><!-- /.ds-card -->
+
+  </div><!-- /.app-wrap -->
+
+  <!-- Filter-chip wiring: chips drive the hidden #filtroEstado select.
+       Setting .value + dispatching 'change' lets contratos-list.js stay
+       agnostic of the chip UI. -->
+  <script>
+    (function wireEstadoChips() {
+      const chips = document.querySelectorAll('#filtroEstadoChips .filter-chip');
+      const sel   = document.getElementById('filtroEstado');
+      const chkPnd = document.getElementById('chkSoloPendientes');
+      const chkIna = document.getElementById('chkMostrarInactivos');
+
+      function activate(estado) {
+        chips.forEach(c => c.classList.toggle('active', c.dataset.estado === estado));
+      }
+
+      chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          const estado = chip.dataset.estado;
+          if (!sel) return;
+          sel.value = estado;
+          activate(estado);
+          // Keep checkbox shortcut in sync
+          if (chkPnd) chkPnd.checked = (estado === 'pendiente_aprobacion');
+          // Trigger reload — contratos-list.js doesn't listen to #filtroEstado
+          if (window.ContratosLista?.cargar) ContratosLista.cargar(true);
+        });
+      });
+
+      // Mirror programmatic select changes back to chip state
+      sel?.addEventListener('change', () => activate(sel.value || ''));
+
+      // contratos-list.js sets sel.value when chkSoloPendientes changes but
+      // doesn't dispatch 'change' on the select — mirror chip state here.
+      chkPnd?.addEventListener('change', () => {
+        activate(chkPnd.checked ? 'pendiente_aprobacion' : '');
+      });
+
+      // Initial sync from the hidden select
+      activate(sel?.value || '');
+    })();
+  </script>
 
   <script src="../js/pages/contratos-state.js"></script>
   <script src="../js/pages/contratos-approval.js"></script>
@@ -277,338 +288,71 @@ table tbody tr:hover {
   <script src="../js/pages/contratos-list.js"></script>
   <script src="../js/pages/contratos-index.js" defer></script>
 
-<div id="overlayAprobacion" class="modal-backdrop" style="display:none;"
-     role="dialog" aria-modal="true" aria-labelledby="aprobacionTitulo">
-  <div class="modal" id="sheetAprobacion">  
-    <div class="sheet-header">
-      <span class="handle" aria-hidden="true"></span>
-      <h3 id="aprobacionTitulo" class="sheet-title">Aprobación de contrato</h3>
-      <button class="btn btn-ghost close-x" onclick="ContratosAprobacion.cerrarOverlay()" aria-label="Cerrar">?</button>
-    </div>
-
-    <div class="sheet-body">
-      <fieldset style="border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:12px;">
-        <legend style="padding:0 10px; font-weight:bold;"><i data-lucide="file-text"></i> Detalles del Contrato</legend>
-        <div id="detallesContrato" style="font-size:15px;"></div>
-      </fieldset>
-
-      <fieldset style="border: 1px solid var(--line); border-radius: 8px; padding: 12px;">
-        <legend style="padding: 0 10px; font-weight: bold;"><i data-lucide="package"></i> Equipos Asociados</legend>
-        <div class="table-scroll">
-          <table style="width:100%; border-collapse:collapse; font-size:14px; min-width:520px;">
-            <thead style="background:#f5f5f5;">
-              <tr>
-                <th style="border:1px solid var(--line); padding:6px;">Modelo</th>
-                <th style="border:1px solid var(--line); padding:6px;">Cantidad</th>
-                <th style="border:1px solid var(--line); padding:6px;">Precio</th>
-                <th style="border:1px solid var(--line); padding:6px;">Total</th>
-              </tr>
-            </thead>
-            <tbody id="tablaEquiposAprobacion"></tbody>
-          </table>
-        </div>
-      </fieldset>
-    </div>
-
-    <div class="footer">
-      <button class="btn btn-secondary" onclick="ContratosAprobacion.cancelar()"><i data-lucide="x-circle"></i> Cancelar</button>
-      <button class="btn btn-accent" onclick="ContratosAprobacion.confirmar()"><i data-lucide="check-circle"></i> Aprobar Contrato</button>
+  <!-- Aprobación overlay -->
+  <div id="overlayAprobacion" class="modal-backdrop" style="display:none;"
+       role="dialog" aria-modal="true" aria-labelledby="aprobacionTitulo">
+    <div class="modal modal-lg" id="sheetAprobacion">
+      <div class="modal-header">
+        <h3 id="aprobacionTitulo" class="modal-title"><i data-lucide="check-circle"></i> Aprobación de contrato</h3>
+        <button class="modal-close" onclick="ContratosAprobacion.cerrarOverlay()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-4); margin-bottom:var(--sp-3);">
+          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="file-text"></i> Detalles del Contrato</legend>
+          <div id="detallesContrato" style="font-size:14px;"></div>
+        </fieldset>
+        <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3);">
+          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="package"></i> Equipos Asociados</legend>
+          <div class="table-scroll">
+            <table class="app-table" style="font-size:13px; min-width:520px;">
+              <thead>
+                <tr>
+                  <th>Modelo</th>
+                  <th>Cantidad</th>
+                  <th>Precio</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="tablaEquiposAprobacion"></tbody>
+            </table>
+          </div>
+        </fieldset>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="ContratosAprobacion.cancelar()"><i data-lucide="x-circle"></i> Cancelar</button>
+        <button class="btn btn-primary" onclick="ContratosAprobacion.confirmar()"><i data-lucide="check-circle"></i> Aprobar Contrato</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div id="overlayPanelTrabajo" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
-  <div class="modal" style="max-width: 980px;">
-    <div class="sheet-header">
-      <span class="handle" aria-hidden="true"></span>
-      <h3 class="sheet-title"><i data-lucide="layout-dashboard"></i> Panel de trabajo</h3>
-      <button class="btn btn-ghost close-x" onclick="ContratosEquipos.cerrarPanel()" aria-label="Cerrar">?</button>
-    </div>
-    <div class="sheet-body" id="panelTrabajoBody">
-      <!-- Contenido din�mico -->
-    </div>
-    <div class="footer">
-      <button class="btn btn-secondary" onclick="ContratosEquipos.cerrarPanel()">Cerrar</button>
+  <!-- Panel de trabajo overlay -->
+  <div id="overlayPanelTrabajo" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="layout-dashboard"></i> Panel de trabajo</h3>
+        <button class="modal-close" onclick="ContratosEquipos.cerrarPanel()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body" id="panelTrabajoBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="ContratosEquipos.cerrarPanel()">Cerrar</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Modal para equipos asociados al contrato -->
-<div id="overlayEquiposContrato" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
-  <div class="modal" style="max-width: 980px;">
-    <div class="sheet-header">
-      <span class="handle" aria-hidden="true"></span>
-      <h3 class="sheet-title"><i data-lucide="package"></i> Equipos del contrato</h3>
-      <button class="btn btn-ghost close-x" onclick="ContratosEquipos.cerrarModal()" aria-label="Cerrar">?</button>
-    </div>
-    <div class="sheet-body" id="modalEquiposBody">
-      <!-- Contenido dinámico -->
-    </div>
-    <div class="footer">
-      <button class="btn btn-secondary" onclick="ContratosEquipos.cerrarModal()">Cerrar</button>
+  <!-- Equipos asociados overlay -->
+  <div id="overlayEquiposContrato" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="package"></i> Equipos del contrato</h3>
+        <button class="modal-close" onclick="ContratosEquipos.cerrarModal()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body" id="modalEquiposBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="ContratosEquipos.cerrarModal()">Cerrar</button>
+      </div>
     </div>
   </div>
-</div>
 
-
-<style>
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-html, body {
-  margin: 0;
-  padding: 0;
-}
-
-body {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-}
-
-.app-wrap{
-  padding: 8px 20px 16px;
-}
-
-/* Filter card improvements */
-.card {
-  background: white;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  margin-bottom: 12px;
-}
-
-.toolbar {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 0;
-}
-
-.toolbar .left {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  flex: 1;
-}
-
-#filtros {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-#filtros input,
-#filtros select {
-  border: 2px solid var(--line);
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 14px;
-  transition: all 0.2s;
-  min-width: 160px;
-  height: 36px;
-}
-
-#filtros input:focus,
-#filtros select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-  outline: none;
-}
-
-#filtros label {
-  font-size: 13px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-  color: var(--text);
-  height: 36px;
-  padding: 0 8px;
-  margin: 0;
-}
-
-#filtros label input[type="checkbox"] {
-  margin: 0;
-  min-width: auto;
-  height: auto;
-}
-
-.resumen {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-/* Table improvements */
-.table-wrap {
-  background: white;
-  border-radius: 8px;
-  padding: 0;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  overflow: hidden;
-  width: 100%;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: auto;
-}
-
-table thead {
-  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-}
-
-table th {
-  font-weight: 600;
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 12px 16px;
-  color: var(--text);
-  vertical-align: middle;
-  border-bottom: 2px solid var(--line);
-}
-
-table th.sortable {
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.2s;
-}
-
-table th.sortable:hover {
-  background: var(--line);
-}
-
-table td {
-  padding: 10px 16px;
-  vertical-align: middle;
-  font-size: 16px;
-  height: 50px;
-}
-
-table tbody tr {
-  transition: background 0.15s;
-  border-bottom: 1px solid var(--line);
-}
-
-table tbody tr:hover {
-  background: #f0f9ff;
-}
-
-/* Compact action buttons */
-table td.acciones {
-  padding: 6px;
-}
-
-table td.acciones button {
-  padding: 6px 10px;
-  font-size: 16px;
-  min-width: auto;
-  border-radius: 6px;
-  margin: 0 2px;
-}
-
-table td.acciones button.btn-icon {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-table td.acciones .btn-danger {
-  font-size: 14px;
-}
-
-/* ? Estado column: keep TD normal and center content */
-td.estado-cell {
-  text-align: center;
-  vertical-align: middle;
-}
-
-/* ? Badge base (pill) */
-.estado {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-/* ? Status dot indicator */
-.estado-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  margin-right: 8px;
-  background: currentColor;
-  opacity: 0.6;
-}
-
-/* Contratos state badges retired by R2 — page now uses .chip-estado.chip-*
-   from the DS chip system in ceco-ui.css. */
-
-/* Summary badges */
-.resumen span {
-  padding: 4px 10px;
-  border-radius: var(--radius-lg);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-/* Button improvements */
-.btn {
-  padding: 6px 14px;
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 8px;
-  transition: all 0.2s;
-  height: 36px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-/* Reduce overall spacing */
-.mt-12 {
-  margin-top: 12px !important;
-}
-
-@media (max-width: 1024px) {
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  #filtros {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  #filtros input,
-  #filtros select {
-    width: 100%;
-  }
-}
-</style>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

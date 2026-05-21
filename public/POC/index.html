@@ -7,16 +7,16 @@
   <style>
     /* Page-local — kit primitives handle the rest */
 
-    /* Sticky controls (toolbar + filter bar) under the topbar */
+    /* Sticky action toolbar that pins under the topbar */
     .poc-sticky-controls {
       position: sticky;
       top: 61px;
       z-index: 50;
       background: var(--surface-page);
-      padding-top: var(--sp-2);
-      margin-bottom: var(--sp-3);
+      padding: var(--sp-2) 0;
+      margin-bottom: var(--sp-2);
     }
-    .poc-toolbar { margin-bottom: var(--sp-2); }
+    .poc-toolbar { margin: 0; }
 
     /* Row "being edited" highlight (set by JS during bulk edit) */
     tr.row-editing { background: #e0f2fe !important; box-shadow: inset 3px 0 0 var(--accent); }
@@ -157,10 +157,8 @@
 
   <div class="app-wrap app-wrap--full">
 
-    <!-- Sticky controls -->
+    <!-- Primary actions toolbar (sticky above the card) -->
     <div class="poc-sticky-controls">
-
-      <!-- Primary actions toolbar -->
       <div class="app-toolbar poc-toolbar">
         <button id="btnSim" class="btn btn-secondary btn-sm" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
         <button id="btnImprimir" class="btn btn-secondary btn-sm" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
@@ -169,6 +167,10 @@
         <button id="btnGuardarMasivo" class="btn btn-primary btn-sm" onclick="PocBulk.guardar()" style="display:none;"><i data-lucide="save"></i> Guardar</button>
         <button id="btnCancelarMasivo" class="btn btn-ghost btn-sm" onclick="PocBulk.cancelar()" style="display:none;"><i data-lucide="x"></i> Cancelar</button>
       </div>
+    </div>
+
+    <!-- Card containing filter bar + table + footer (kit data-table pattern) -->
+    <div class="ds-card">
 
       <!-- Filter bar -->
       <div class="filter-bar">
@@ -193,24 +195,53 @@
         <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Solo activos</label>
         <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
 
-        <div class="resumen-badge" id="resumenEquipos">
-          <div class="loader" style="width:18px; height:18px; border-width:2px;"></div>
-        </div>
-
         <div style="flex:1;"></div>
 
         <button class="btn btn-ghost btn-sm" onclick="toggleAdvancedFilters()" title="Ver opciones para corregir duplicados"><i data-lucide="copy"></i> Duplicados</button>
       </div>
 
       <!-- Advanced filters (collapsed by default) -->
-      <div id="advancedFilters" class="app-toolbar" style="display:none; margin-top:var(--sp-2);">
+      <div id="advancedFilters" class="app-toolbar" style="display:none; padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--border-subtle);">
         <button class="btn btn-secondary btn-sm" onclick="PocList.filtrarDuplicados('serial')"><i data-lucide="copy"></i> Seriales duplicados</button>
         <button class="btn btn-secondary btn-sm" onclick="PocList.filtrarDuplicados('sim')"><i data-lucide="smartphone"></i> SIMs duplicados</button>
         <button class="btn btn-secondary btn-sm" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'"><i data-lucide="alert-triangle"></i> Grupos inválidos</button>
         <div class="app-toolbar-spacer"></div>
         <span style="font-size:12px; color:var(--fg-3);"><i data-lucide="info" style="width:12px;height:12px;"></i> Click en encabezados de tabla para ordenar</span>
       </div>
-    </div>
+
+      <!-- Devices table -->
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table" aria-label="Equipos PoC">
+          <thead>
+            <tr id="encabezadoTabla">
+              <th style="width:36px;"><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all" aria-label="Seleccionar todos"></th>
+              <th class="sortable" onclick="PocList.ordenarPor('cliente')">Cliente</th>
+              <th>Activo</th>
+              <th>Serial</th>
+              <th>IP</th>
+              <th class="sortable" onclick="PocList.ordenarPor('unit_id')">Unit ID</th>
+              <th class="sortable" onclick="PocList.ordenarPor('radio_name')">Nombre del Radio</th>
+              <th>Grupos</th>
+              <th>SIM / Teléfono</th>
+              <th style="width:120px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="devicesTable"></tbody>
+        </table>
+      </div>
+
+      <!-- Footer: count + load more -->
+      <div class="app-table-footer">
+        <div class="resumen-badge" id="resumenEquipos">
+          <div class="loader" style="width:18px; height:18px; border-width:2px;"></div>
+        </div>
+        <div style="display:flex; gap:var(--sp-2);">
+          <button id="btnCargarMas" class="btn btn-ghost btn-sm" onclick="PocList.cargar()"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
+          <button class="btn btn-secondary btn-sm" onclick="PocList.mostrarTodo()"><i data-lucide="list"></i> Mostrar todo</button>
+        </div>
+      </div>
+
+    </div><!-- /.ds-card -->
 
     <!-- SIM/Teléfono modal -->
     <div id="simModal" class="modal-backdrop" style="display:none;">
@@ -243,32 +274,6 @@
           <button class="btn btn-primary" onclick="PocSim.procesar()"><i data-lucide="check"></i> Aplicar cambios</button>
         </div>
       </div>
-    </div>
-
-    <!-- Devices table -->
-    <div class="app-table-wrap">
-      <table class="app-table" aria-label="Equipos PoC">
-        <thead>
-          <tr id="encabezadoTabla">
-            <th style="width:36px;"><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all" aria-label="Seleccionar todos"></th>
-            <th class="sortable" onclick="PocList.ordenarPor('cliente')">Cliente</th>
-            <th>Activo</th>
-            <th>Serial</th>
-            <th>IP</th>
-            <th class="sortable" onclick="PocList.ordenarPor('unit_id')">Unit ID</th>
-            <th class="sortable" onclick="PocList.ordenarPor('radio_name')">Nombre del Radio</th>
-            <th>Grupos</th>
-            <th>SIM / Teléfono</th>
-            <th style="width:120px;">Acciones</th>
-          </tr>
-        </thead>
-        <tbody id="devicesTable"></tbody>
-      </table>
-    </div>
-
-    <div class="app-toolbar" style="justify-content:center; margin-top:var(--sp-4);">
-      <button id="btnCargarMas" class="btn btn-secondary btn-sm" onclick="PocList.cargar()"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
-      <button class="btn btn-ghost btn-sm" onclick="PocList.mostrarTodo()"><i data-lucide="list"></i> Mostrar todo</button>
     </div>
 
   </div><!-- /.app-wrap -->
