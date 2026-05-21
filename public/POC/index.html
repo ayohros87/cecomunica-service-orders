@@ -5,616 +5,116 @@
   <title>Equipos PoC - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <style>
-    /* ========================================
-       UNIFIED DESIGN SYSTEM
-       ======================================== */
-    
-    html, body {
-      margin: 0;
-      padding: 0;
-    }
-    
-    body {
-      background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-      min-height: 100vh;
-    }
-    
-    /* Unified Content Area */
-    .app-wrap {
-      padding: 12px 20px;
-    }
-    
-    /* Sticky toolbar + search bar */
-    .sticky-controls {
+    /* Page-local — kit primitives handle the rest */
+
+    /* Sticky controls (toolbar + filter bar) under the topbar */
+    .poc-sticky-controls {
       position: sticky;
       top: 61px;
       z-index: 50;
-      background: #f5f7fa;
-      padding-top: 2px;
+      background: var(--surface-page);
+      padding-top: var(--sp-2);
+      margin-bottom: var(--sp-3);
     }
-    
-    /* Compact Search Bar */
-    .search-bar {
-      background: white;
-      border-radius: 8px;
-      padding: 10px 16px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-      margin-bottom: 12px;
-    }
-    
-    .search-primary {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-    
-    .search-primary label {
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--text);
-      white-space: nowrap;
-    }
-    
-    .search-primary select,
-    .search-primary input[type="text"] {
-      border: 2px solid var(--line);
-      border-radius: 6px;
-      padding: 8px 12px;
-      font-size: 14px;
-      transition: all 0.2s;
-    }
-    
-    .search-primary select:focus,
-    .search-primary input[type="text"]:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-      outline: none;
-    }
-    
-    .toggle-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: #f1f5f9;
-      border-radius: var(--radius-pill);
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s;
-      white-space: nowrap;
-    }
-    
-    .toggle-pill:hover {
-      background: var(--line);
-    }
-    
-    .toggle-pill input[type="checkbox"] {
-      cursor: pointer;
-    }
-    
-    .search-advanced {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding-top: 10px;
-      margin-top: 10px;
-      border-top: 1px solid var(--line);
-      flex-wrap: wrap;
-    }
-    
-    .btn-icon {
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 16px;
-      cursor: pointer;
-      padding: 6px 10px;
-      border-radius: 4px;
-      transition: all 0.2s;
-    }
-    
-    .btn-icon:hover {
-      background: #f1f5f9;
-      color: var(--text);
-    }
-    
+    .poc-toolbar { margin-bottom: var(--sp-2); }
+
+    /* Row "being edited" highlight (set by JS during bulk edit) */
+    tr.row-editing { background: #e0f2fe !important; box-shadow: inset 3px 0 0 var(--accent); }
+
+    /* Status dot used in the Activo column */
+    .status-dot       { display:inline-block; width:12px; height:12px; border-radius:50%; }
+    .status-activo    { background:#22c55e; }
+    .status-inactivo  { background:#ef4444; }
+
+    /* Resumen badge (count of devices) */
     .resumen-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 16px;
-      font-size: 14px;
-      font-weight: 600;
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:13px; font-weight:500; color: var(--fg-3);
     }
-    
-    .resumen-badge strong {
-      font-size: 24px;
-      color: var(--accent);
-    }
-    
-    .actions-toolbar {
-      background: white;
-      border-radius: 8px;
-      padding: 10px 16px;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    
-    .actions-group {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    
-    .table-wrap {
-      background: white;
-      border-radius: 8px;
-      padding: 0;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-      overflow: hidden;
-      margin-bottom: 12px;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    
-    table thead {
-      background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    }
-    
-    table th {
-      font-weight: 600;
-      font-size: 14px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 12px 16px;
-      white-space: nowrap;
-      color: var(--text);
-      border-bottom: 2px solid var(--line);
-    }
-    
-    table th.sortable {
-      cursor: pointer;
-      user-select: none;
-      transition: background 0.2s;
-    }
-    
-    table th.sortable:hover {
-      background: var(--line);
-    }
-    
-    table td {
-      padding: 10px 16px;
-      font-size: 16px;
-      vertical-align: middle;
-      border-bottom: 1px solid var(--line);
-    }
-    
-    table tbody tr {
-      transition: background 0.15s;
-    }
-    
-    table tbody tr:hover {
-      background: #f0f9ff;
-    }
+    .resumen-badge strong { font-size:18px; color: var(--accent); font-weight:700; }
 
-    .ip-domain {
-      display: block;
-      font-size: 10px;
-      color: var(--muted);
-      opacity: 0.85;
-      letter-spacing: 0.2px;
-      line-height: 1.1;
-    }
-    
-    /* Highlight row being edited */
-    tr.row-editing {
-      background: #e0f2fe !important;
-      box-shadow: inset 3px 0 0 var(--accent);
-    }
-    
-    .nowrap {
+    /* Toggle pill — kit doesn't have a true "pill checkbox" component yet */
+    .toggle-pill {
+      display:inline-flex; align-items:center; gap:6px;
+      padding: 5px 11px;
+      background: var(--surface-sunken);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-pill);
+      font-size: 12px; font-weight: 500; color: var(--fg-2);
+      cursor: pointer;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
       white-space: nowrap;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
     }
-    
-    .badge {
-      padding: 4px 10px;
-      border-radius: var(--radius-lg);
-      font-size: 12px;
-      font-weight: 600;
+    .toggle-pill:hover { border-color: var(--accent); color: var(--accent); }
+    .toggle-pill input[type="checkbox"] { cursor:pointer; margin:0; }
+
+    /* Secondary domain suffix shown under the IP host */
+    .ip-domain { display:block; font-size:10px; color:var(--fg-3); opacity:.85; letter-spacing:.2px; line-height:1.1; }
+
+    /* Devices table row action cell — keep the action buttons on one line */
+    #devicesTable td:last-child { white-space: nowrap; }
+    #devicesTable td:last-child .btn { margin-left: var(--sp-1); }
+
+    /* ── Edit Drawer — slide-in panel from the right ──────────── */
+    /* Uses the kit's "sheet" intent but with a fixed 500px width and
+       a sticky branded header/footer. Kept page-local because no other
+       page in the project uses this exact pattern yet. */
+    #editDrawerOverlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 9998;
+      display: none;
+      cursor: pointer;
     }
-    
-    .badge.completo {
-      background: #d4edda;
-      color: #155724;
-    }
-    
-    .badge.asignado {
-      background: #fff3cd;
-      color: #856404;
-    }
-    
-    /* Estado badges in table */
-    td.estado-activo,
-    td.estado-inactivo {
-      padding: 8px !important;
-      text-align: center;
-      vertical-align: middle;
-    }
-    
-    td.estado-activo {
-      background: transparent !important;
-    }
-    
-    td.estado-inactivo {
-      background: transparent !important;
-    }
-    
-    /* Modal Styling */
-    .overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    #editDrawerOverlay.active { display: block; }
+
+    #editDrawer {
+      position: fixed; top: 0; right: -500px;
+      width: 500px; max-width: 90vw;
+      height: 100vh;
+      background: var(--surface-card);
+      box-shadow: -4px 0 20px rgba(0,0,0,0.15);
       z-index: 9999;
-      padding: 20px;
-      backdrop-filter: blur(4px);
-    }
-    
-    .modal {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-      max-width: 600px;
-      width: 100%;
-      max-height: 90vh;
       overflow-y: auto;
-      animation: modalSlideIn 0.2s ease-out;
+      transition: right var(--dur-base) var(--ease-out);
+      display: flex; flex-direction: column;
     }
-    
-    @keyframes modalSlideIn {
-      from {
-        opacity: 0;
-        transform: scale(0.95) translateY(-20px);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-      }
+    #editDrawer.active { right: 0; }
+
+    .drawer-header {
+      background: var(--brand);
+      color: #fff;
+      padding: var(--sp-4) var(--sp-5);
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 1;
     }
-    
-    .modal-header {
-      padding: 24px 28px;
-      border-bottom: 2px solid var(--line);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+    .drawer-header h3 {
+      margin: 0; font-size: 16px; font-weight: 600;
+      display: flex; align-items: center; gap: var(--sp-2);
     }
-    
-    .modal-header h3 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .drawer-close {
+      background: transparent; border: none; color: #fff;
+      font-size: 24px; cursor: pointer;
+      width: 32px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: var(--radius-sm);
+      transition: background var(--dur-fast);
     }
-    
-    .modal-close {
-      background: transparent;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      color: var(--muted);
-      padding: 4px 8px;
-      border-radius: 6px;
-      transition: all 0.2s;
+    .drawer-close:hover { background: rgba(255,255,255,0.15); }
+
+    .drawer-body { padding: var(--sp-5); flex: 1; }
+    .drawer-actions {
+      padding: var(--sp-3) var(--sp-5);
+      background: var(--surface-sunken);
+      border-top: 1px solid var(--border-subtle);
+      display: flex; gap: var(--sp-2);
+      position: sticky; bottom: 0;
     }
-    
-    .modal-close:hover {
-      background: #f3f4f6;
-      color: var(--text);
+    .drawer-actions .btn { flex: 1; }
+
+    @media (max-width: 768px) {
+      #editDrawer { width: 100vw; max-width: 100vw; right: -100vw; }
     }
-    
-    .modal-body {
-      padding: 24px 28px;
-    }
-    
-    .modal-field {
-      margin-bottom: 20px;
-    }
-    
-    .modal-field label {
-      display: block;
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-    
-    .modal-field select,
-    .modal-field textarea {
-      width: 100%;
-      border: 2px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 14px;
-      transition: all 0.2s;
-      font-family: inherit;
-    }
-    
-    .modal-field select:focus,
-    .modal-field textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-      outline: none;
-    }
-    
-    .modal-field textarea {
-      font-family: 'Courier New', monospace;
-      resize: vertical;
-    }
-    
-    .modal-hint {
-      margin-top: 8px;
-      padding: 12px;
-      background: #f0f9ff;
-      border-left: 3px solid var(--accent);
-      border-radius: 6px;
-      font-size: 12px;
-      color: var(--navy);
-    }
-    
-    .modal-hint code {
-      background: white;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: 600;
-      color: #dc2626;
-    }
-    
-    .modal-footer {
-      padding: 16px 28px;
-      border-top: 2px solid var(--line);
-      background: #f8fafc;
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-      border-radius: 0 0 16px 16px;
-    }
-    
-    .modal-footer .btn {
-      padding: 10px 20px;
-      font-weight: 600;
-    }
-    
-    @media (max-width: 1024px) {
-      .actions-toolbar {
-        flex-direction: column;
-        align-items: stretch;
-      }
-      
-      .actions-group {
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-      
-      .search-bar .search-primary {
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-      
-      .search-primary label:first-child {
-        width: 100%;
-        margin-bottom: 4px;
-      }
-      
-      .toggle-pill {
-        font-size: 12px;
-        padding: 4px 10px;
-      }
-    }
-    /* Fix double-height rows caused by action buttons */
-#devicesTable td:last-child {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-/* Edit Drawer */
-#editDrawerOverlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 9998;
-  display: none;
-  cursor: pointer;
-}
-
-#editDrawerOverlay.active {
-  display: block;
-}
-
-#editDrawer {
-  position: fixed;
-  top: 0;
-  right: -500px;
-  width: 500px;
-  max-width: 90vw;
-  height: 100vh;
-  background: white;
-  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
-  z-index: 9999;
-  overflow-y: auto;
-  transition: right 0.3s ease;
-}
-
-#editDrawer.active {
-  right: 0;
-}
-
-.drawer-header {
-  background: var(--accent);
-  color: white;
-  padding: 20px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.drawer-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.drawer-close {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 28px;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: background 0.2s;
-}
-
-.drawer-close:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.drawer-body {
-  padding: 24px;
-}
-
-.drawer-section {
-  margin-bottom: 24px;
-}
-
-.drawer-section-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--line);
-}
-
-.drawer-field {
-  margin-bottom: 16px;
-}
-
-.drawer-field label {
-  display: block;
-  font-weight: 600;
-  font-size: 13px;
-  color: #475569;
-  margin-bottom: 6px;
-}
-
-.drawer-field input[type="text"],
-.drawer-field select,
-.drawer-field textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border: 2px solid var(--line);
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border-color 0.2s;
-}
-
-.drawer-field input[type="text"]:focus,
-.drawer-field select:focus,
-.drawer-field textarea:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-
-.drawer-field textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.drawer-field-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.drawer-field-checkbox input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-}
-
-.drawer-field-checkbox label {
-  margin: 0;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.drawer-actions {
-  padding: 16px 24px;
-  background: #f8fafc;
-  border-top: 1px solid var(--line);
-  display: flex;
-  gap: 12px;
-  position: sticky;
-  bottom: 0;
-}
-
-.drawer-actions .btn {
-  flex: 1;
-  padding: 12px;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-@media (max-width: 768px) {
-  #editDrawer {
-    width: 100vw;
-    max-width: 100vw;
-    right: -100vw;
-  }
-}
-
-.status-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
-.status-activo  { background: #22c55e; }
-.status-inactivo { background: #ef4444; }
-
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -640,216 +140,215 @@
   <script src="../js/pages/poc-list.js" defer></script>
   <script src="../js/pages/poc-index.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="radio-tower"></i> Equipos PoC', actions: [{ label: '<i data-lucide="plus"></i> Nuevo equipo', href: 'nuevo-batch.html', cls: 'primary', id: 'btnBatch' }], menu: [{ label: '<i data-lucide="download"></i> Importar', href: 'importar-poc.html', id: 'btnImportar' }, { label: '<i data-lucide="briefcase"></i> Vendedores (batch)', href: 'vendedores-batch.html' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
-  
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="radio-tower"></i> Equipos PoC',
+      actions: [{ label: '<i data-lucide="plus"></i> Nuevo equipo', href: 'nuevo-batch.html', cls: 'primary', id: 'btnBatch' }],
+      menu: [
+        { label: '<i data-lucide="download"></i> Importar', href: 'importar-poc.html', id: 'btnImportar' },
+        { label: '<i data-lucide="briefcase"></i> Vendedores (batch)', href: 'vendedores-batch.html' }
+      ],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
   <div class="app-wrap app-wrap--full">
 
-<!-- Sticky Controls Container -->
-<div class="sticky-controls">
-  <!-- Toolbar: Primary Actions -->
-  <div class="actions-toolbar">
-    <div class="actions-group">
-      <button id="btnSim" class="btn" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
-      <button id="btnImprimir" class="btn" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
-      <button id="btnExportar" class="btn" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar</button>
-      <button id="btnEditarMasivo" class="btn" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
-      <button id="btnGuardarMasivo" class="btn btn-primary" onclick="PocBulk.guardar()" style="display:none;"><i data-lucide="save"></i> Guardar</button>
-      <button id="btnCancelarMasivo" class="btn btn-secondary" onclick="PocBulk.cancelar()" style="display:none;">&times; Cancelar</button>
-    </div>
-  </div>
+    <!-- Sticky controls -->
+    <div class="poc-sticky-controls">
 
-  <!-- Compact Search Bar -->
-  <div class="search-bar">
-    <div class="search-primary">
-      <label><i data-lucide="search"></i> Buscar:</label>
-      <select id="filtroCampo" style="min-width: 120px;">
-        <option value="cliente">Cliente</option>
-        <option value="operador">Operador</option>
-        <option value="serial">Serial</option>
-        <option value="unit_id">Unit ID</option>
-        <option value="sim_number">SIM</option>
-        <option value="sim_phone">Teléfono</option>
-        <option value="ip">IP</option>
-        <option value="radio_name">Nombre del Radio</option>
-        <option value="grupos">Grupo</option>
-        <option value="notas">Notas</option>
-      </select>
-
-      <input type="text" id="filtroValor" placeholder="Escribe para filtrar..." style="flex: 1; min-width: 200px;" oninput="PocList.filtrar()">
-      <button class="btn btn-secondary" onclick="PocList.limpiarFiltro()"><i data-lucide="rotate-ccw"></i> Limpiar</button>
-
-      <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> <i data-lucide="check-circle"></i> Solo activos</label>
-      <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle"></i> Solo incompletos</label>
-      
-      <div class="resumen-badge" id="resumenEquipos">
-        <div class="loader" style="width: 20px; height: 20px; border-width: 2px;"></div>
-      </div>
-      
-      <button class="btn btn-secondary" onclick="toggleAdvancedFilters()" title="Ver opciones para corregir duplicados"><i data-lucide="copy"></i> Duplicados</button>
-    </div>
-    
-    <!-- Advanced Filters (Collapsed by default) -->
-    <div class="search-advanced" id="advancedFilters" style="display: none;">
-      <button class="btn btn-secondary" onclick="PocList.filtrarDuplicados('serial')"><i data-lucide="copy"></i> Seriales duplicados</button>
-      <button class="btn btn-secondary" onclick="PocList.filtrarDuplicados('sim')"><i data-lucide="smartphone"></i> SIMs duplicados</button>
-      <button class="btn btn-secondary" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'"><i data-lucide="alert-triangle"></i> Grupos inválidos</button>
-      <span style="font-size: 12px; color: var(--muted); margin-left: auto;"><i data-lucide="info"></i> Click en encabezados de tabla para ordenar</span>
-    </div>
-  </div>
-</div>
-
-<!-- Modal SIM/Teléfono -->
-<div id="simModal" class="modal-backdrop" style="display:none;">
-  <div class="modal">
-    <div class="modal-header">
-      <h3><i data-lucide="smartphone"></i> Actualizar SIM/Teléfono en Lote</h3>
-      <button class="modal-close" onclick="PocSim.cerrar()">✕</button>
-    </div>
-
-    <div class="modal-body">
-      <div class="modal-field">
-        <label>Operador</label>
-        <select id="operadorGlobal">
-          <option value="">Seleccione un operador...</option>
-        </select>
+      <!-- Primary actions toolbar -->
+      <div class="app-toolbar poc-toolbar">
+        <button id="btnSim" class="btn btn-secondary btn-sm" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
+        <button id="btnImprimir" class="btn btn-secondary btn-sm" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
+        <button id="btnExportar" class="btn btn-secondary btn-sm" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar</button>
+        <button id="btnEditarMasivo" class="btn btn-secondary btn-sm" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
+        <button id="btnGuardarMasivo" class="btn btn-primary btn-sm" onclick="PocBulk.guardar()" style="display:none;"><i data-lucide="save"></i> Guardar</button>
+        <button id="btnCancelarMasivo" class="btn btn-ghost btn-sm" onclick="PocBulk.cancelar()" style="display:none;"><i data-lucide="x"></i> Cancelar</button>
       </div>
 
-      <div class="modal-field">
-        <label>Pega SIM y Teléfono (uno por línea)</label>
-        <textarea id="simPasteArea" rows="10" placeholder="Pega aquí los datos..."></textarea>
-        <div class="modal-hint">
-          <i data-lucide="info"></i> <strong>Formato esperado:</strong> <code>8953... [TAB] 6123-4567</code>
-          <br>Separa SIM y Teléfono con tabulador (TAB). Un equipo por línea.
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <select id="filtroCampo" aria-label="Campo a filtrar" style="min-width:130px; border:none; background:transparent; padding-right:var(--sp-1); font-size:13px; font-weight:500; color:var(--fg-2); cursor:pointer;">
+            <option value="cliente">Cliente</option>
+            <option value="operador">Operador</option>
+            <option value="serial">Serial</option>
+            <option value="unit_id">Unit ID</option>
+            <option value="sim_number">SIM</option>
+            <option value="sim_phone">Teléfono</option>
+            <option value="ip">IP</option>
+            <option value="radio_name">Nombre del Radio</option>
+            <option value="grupos">Grupo</option>
+            <option value="notas">Notas</option>
+          </select>
+          <input type="search" id="filtroValor" placeholder="Escribe para filtrar…" aria-label="Buscar equipos" oninput="PocList.filtrar()" style="border:none; flex:1;">
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="PocList.limpiarFiltro()" aria-label="Limpiar filtro"><i data-lucide="rotate-ccw"></i></button>
+        </div>
+
+        <label class="toggle-pill"><input type="checkbox" id="soloActivos" onchange="PocList.manejarCambioActivos()"> <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Solo activos</label>
+        <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
+
+        <div class="resumen-badge" id="resumenEquipos">
+          <div class="loader" style="width:18px; height:18px; border-width:2px;"></div>
+        </div>
+
+        <div style="flex:1;"></div>
+
+        <button class="btn btn-ghost btn-sm" onclick="toggleAdvancedFilters()" title="Ver opciones para corregir duplicados"><i data-lucide="copy"></i> Duplicados</button>
+      </div>
+
+      <!-- Advanced filters (collapsed by default) -->
+      <div id="advancedFilters" class="app-toolbar" style="display:none; margin-top:var(--sp-2);">
+        <button class="btn btn-secondary btn-sm" onclick="PocList.filtrarDuplicados('serial')"><i data-lucide="copy"></i> Seriales duplicados</button>
+        <button class="btn btn-secondary btn-sm" onclick="PocList.filtrarDuplicados('sim')"><i data-lucide="smartphone"></i> SIMs duplicados</button>
+        <button class="btn btn-secondary btn-sm" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'"><i data-lucide="alert-triangle"></i> Grupos inválidos</button>
+        <div class="app-toolbar-spacer"></div>
+        <span style="font-size:12px; color:var(--fg-3);"><i data-lucide="info" style="width:12px;height:12px;"></i> Click en encabezados de tabla para ordenar</span>
+      </div>
+    </div>
+
+    <!-- SIM/Teléfono modal -->
+    <div id="simModal" class="modal-backdrop" style="display:none;">
+      <div class="modal">
+        <div class="modal-header">
+          <h3 class="modal-title"><i data-lucide="smartphone"></i> Actualizar SIM/Teléfono en Lote</h3>
+          <button class="modal-close" onclick="PocSim.cerrar()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label class="form-label" for="operadorGlobal">Operador</label>
+            <select class="form-select" id="operadorGlobal">
+              <option value="">Seleccione un operador…</option>
+            </select>
+          </div>
+          <div class="form-field" style="margin-top:var(--sp-4);">
+            <label class="form-label" for="simPasteArea">Pega SIM y Teléfono (uno por línea)</label>
+            <textarea class="form-input form-textarea" id="simPasteArea" rows="10"
+              style="font-family:var(--font-mono); font-size:13px;"
+              placeholder="8953…  6123-4567"></textarea>
+            <span class="form-hint" style="display:block; margin-top:var(--sp-2); padding:var(--sp-2) var(--sp-3); background:var(--accent-soft); border-left:3px solid var(--accent); border-radius:var(--radius-sm);">
+              <i data-lucide="info" style="width:12px;height:12px;"></i>
+              <strong style="color:var(--navy);">Formato esperado:</strong>
+              <code>8953... [TAB] 6123-4567</code> — separa SIM y Teléfono con tabulador (TAB). Un equipo por línea.
+            </span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="PocSim.cerrar()"><i data-lucide="x"></i> Cancelar</button>
+          <button class="btn btn-primary" onclick="PocSim.procesar()"><i data-lucide="check"></i> Aplicar cambios</button>
         </div>
       </div>
     </div>
 
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="PocSim.cerrar()">&times; Cancelar</button>
-      <button class="btn btn-primary" onclick="PocSim.procesar()"><i data-lucide="check"></i> Aplicar Cambios</button>
+    <!-- Devices table -->
+    <div class="app-table-wrap">
+      <table class="app-table" aria-label="Equipos PoC">
+        <thead>
+          <tr id="encabezadoTabla">
+            <th style="width:36px;"><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all" aria-label="Seleccionar todos"></th>
+            <th class="sortable" onclick="PocList.ordenarPor('cliente')">Cliente</th>
+            <th>Activo</th>
+            <th>Serial</th>
+            <th>IP</th>
+            <th class="sortable" onclick="PocList.ordenarPor('unit_id')">Unit ID</th>
+            <th class="sortable" onclick="PocList.ordenarPor('radio_name')">Nombre del Radio</th>
+            <th>Grupos</th>
+            <th>SIM / Teléfono</th>
+            <th style="width:120px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="devicesTable"></tbody>
+      </table>
+    </div>
+
+    <div class="app-toolbar" style="justify-content:center; margin-top:var(--sp-4);">
+      <button id="btnCargarMas" class="btn btn-secondary btn-sm" onclick="PocList.cargar()"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
+      <button class="btn btn-ghost btn-sm" onclick="PocList.mostrarTodo()"><i data-lucide="list"></i> Mostrar todo</button>
+    </div>
+
+  </div><!-- /.app-wrap -->
+
+  <!-- Edit drawer (sheet) -->
+  <div id="editDrawerOverlay" onclick="PocEdit.cerrar()"></div>
+  <div id="editDrawer" role="dialog" aria-modal="true" aria-labelledby="editDrawerTitle">
+    <div class="drawer-header">
+      <h3 id="editDrawerTitle"><i data-lucide="pencil" style="width:18px;height:18px;"></i> Editar equipo</h3>
+      <button class="drawer-close" onclick="PocEdit.cerrar()" aria-label="Cerrar">&times;</button>
+    </div>
+    <div class="drawer-body">
+
+      <div class="form-section">
+        <div><p class="form-section-title">Información principal</p></div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-serial">Serial</label>
+          <input class="form-input" id="drawer-serial" type="text" style="font-family:var(--font-mono);">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-unit-id">Unit ID</label>
+          <input class="form-input" id="drawer-unit-id" type="text" style="font-family:var(--font-mono);">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-radio-name">Nombre del radio</label>
+          <input class="form-input" id="drawer-radio-name" type="text">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-modelo">Modelo</label>
+          <input class="form-input" id="drawer-modelo" type="text">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-grupos">Grupos <span class="optional">(separados por coma)</span></label>
+          <input class="form-input" id="drawer-grupos" type="text" placeholder="grupo1, grupo2, grupo3">
+        </div>
+        <label class="form-check">
+          <input type="checkbox" id="drawer-activo">
+          <span><span class="form-check-label">Activo</span></span>
+        </label>
+      </div>
+
+      <div class="form-section">
+        <div><p class="form-section-title">SIM y teléfono</p></div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-sim-number">Número SIM</label>
+          <input class="form-input" id="drawer-sim-number" type="text" placeholder="ICCID" style="font-family:var(--font-mono);">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-sim-phone">Teléfono</label>
+          <input class="form-input" id="drawer-sim-phone" type="text" placeholder="Número telefónico" style="font-family:var(--font-mono);">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div><p class="form-section-title">Información adicional</p></div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-operador">Operador</label>
+          <select class="form-select" id="drawer-operador"></select>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="drawer-ip">IP</label>
+          <input class="form-input" id="drawer-ip" type="text" placeholder="192.168.x.x" style="font-family:var(--font-mono);">
+        </div>
+        <label class="form-check">
+          <input type="checkbox" id="drawer-gps">
+          <span><span class="form-check-label">GPS habilitado</span></span>
+        </label>
+        <div class="form-field">
+          <label class="form-label" for="drawer-notas">Notas</label>
+          <textarea class="form-input form-textarea" id="drawer-notas" placeholder="Observaciones o comentarios"></textarea>
+        </div>
+      </div>
+
+    </div>
+    <div class="drawer-actions">
+      <button class="btn btn-ghost" onclick="PocEdit.cerrar()"><i data-lucide="x"></i> Cancelar</button>
+      <button class="btn btn-primary" onclick="PocEdit.guardar()"><i data-lucide="check"></i> Guardar</button>
     </div>
   </div>
-</div>
 
-  <div class="app-table-wrap mt-12">
-  <table>
-    <thead>
-      <tr id="encabezadoTabla">
-        <th><input type="checkbox" onclick="PocList.toggleSeleccionMasiva(this)" class="check-all"></th>
-        <th class="sortable" onclick="PocList.ordenarPor('cliente')">Cliente</th>
-        <th>Activo</th>
-        <th>Serial</th>
-        <th>IP</th>
-        <th class="sortable" onclick="PocList.ordenarPor('unit_id')">Unit ID</th>
-        <th class="sortable" onclick="PocList.ordenarPor('radio_name')">Nombre del Radio</th>
-        <th>Grupos</th>
-        <th>SIM / Teléfono</th>
-        <th>Acciones</th>
-      </tr>
-    </thead>
-    <tbody id="devicesTable"></tbody>
-  </table>
-</div>
-
-<div class="actions-toolbar" style="justify-content: center; margin-top: 16px;">
-  <button id="btnCargarMas" class="btn" onclick="PocList.cargar()"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
-  <button class="btn btn-secondary" onclick="PocList.mostrarTodo()"><i data-lucide="list"></i> Mostrar todo</button>
-</div>
-
-  </div> <!-- app-wrap -->
-
-<!-- Edit Drawer -->
-<div id="editDrawerOverlay"></div>
-<div id="editDrawer">
-  <div class="drawer-header">
-    <h3><i data-lucide="pencil"></i> Editar Equipo</h3>
-    <button class="drawer-close" onclick="PocEdit.cerrar()">&times;</button>
-  </div>
-  <div class="drawer-body">
-    <!-- Main Fields -->
-    <div class="drawer-section">
-      <div class="drawer-section-title">Información Principal</div>
-      
-      <div class="drawer-field">
-        <label>Serial</label>
-        <input type="text" id="drawer-serial" class="w-100">
-      </div>
-      
-      <div class="drawer-field">
-        <label>Unit ID</label>
-        <input type="text" id="drawer-unit-id" class="w-100">
-      </div>
-      
-      <div class="drawer-field">
-        <label>Nombre del Radio</label>
-        <input type="text" id="drawer-radio-name" class="w-100">
-      </div>
-
-      <div class="drawer-field">
-        <label>Modelo</label>
-        <input type="text" id="drawer-modelo" class="w-100">
-      </div>
-      
-      <div class="drawer-field">
-        <label>Grupos (separados por coma)</label>
-        <input type="text" id="drawer-grupos" class="w-100" placeholder="grupo1, grupo2, grupo3">
-      </div>
-      
-      <div class="drawer-field-checkbox">
-        <input type="checkbox" id="drawer-activo">
-        <label for="drawer-activo">Activo</label>
-      </div>
-    </div>
-    
-    <!-- SIM/Teléfono -->
-    <div class="drawer-section">
-      <div class="drawer-section-title">SIM y Teléfono</div>
-      
-      <div class="drawer-field">
-        <label>Número SIM</label>
-        <input type="text" id="drawer-sim-number" class="w-100" placeholder="ICCID">
-      </div>
-      
-      <div class="drawer-field">
-        <label>Teléfono</label>
-        <input type="text" id="drawer-sim-phone" class="w-100" placeholder="Número telefónico">
-      </div>
-    </div>
-    
-    <!-- Hidden Fields -->
-    <div class="drawer-section">
-      <div class="drawer-section-title">Información Adicional</div>
-      
-      <div class="drawer-field">
-        <label>Operador</label>
-        <select id="drawer-operador" class="w-100"></select>
-      </div>
-      
-      <div class="drawer-field">
-        <label>IP</label>
-        <input type="text" id="drawer-ip" class="w-100" placeholder="192.168.x.x">
-      </div>
-      
-      <div class="drawer-field-checkbox">
-        <input type="checkbox" id="drawer-gps">
-        <label for="drawer-gps">GPS Habilitado</label>
-      </div>
-      
-      <div class="drawer-field">
-        <label>Notas</label>
-        <textarea id="drawer-notas" class="w-100" placeholder="Observaciones o comentarios"></textarea>
-      </div>
-    </div>
-  </div>
-  <div class="drawer-actions">
-    <button class="btn btn-secondary" onclick="PocEdit.cerrar()"><i data-lucide="x"></i> Cancelar</button>
-    <button class="btn btn-accent" onclick="PocEdit.guardar()"><i data-lucide="check"></i> Guardar</button>
-  </div>
-</div>
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

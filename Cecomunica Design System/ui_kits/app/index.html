@@ -2387,6 +2387,256 @@
 </section>
 
 
+<!-- ── 27 · POC — Lista (worked example) ─────────────────────── -->
+<section class="demo-section" id="poc-list">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>POC · Lista (ejemplo aplicado)</h2>
+    <p>Inventario de equipos PoC: filtros sticky, toggles de "solo activos / solo incompletos",
+       búsqueda por campo, badge de resumen, edición masiva con <code>bulk-bar</code>,
+       <code>app-table</code> con encabezados ordenables, y <code>.sheet</code> de edición a
+       la derecha. Referencia 1:1 para <code>public/POC/index.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <!-- Sticky controls: toolbar + search -->
+    <div style="background: var(--surface-page); padding: var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-2); border-bottom: 1px solid var(--border-subtle);">
+      <!-- Action toolbar -->
+      <div class="app-toolbar" style="background:var(--surface-card); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); border:1px solid var(--border-subtle);">
+        <button class="btn btn-secondary btn-sm"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="upload"></i> Exportar</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="pencil"></i> Editar en masa</button>
+        <div class="app-toolbar-spacer"></div>
+        <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nuevo equipo</button>
+      </div>
+
+      <!-- Filter bar (search + chips + toggles) -->
+      <div class="filter-bar" style="background:var(--surface-card); border:1px solid var(--border-subtle);">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" placeholder="Cliente, serial, unit ID, IP…" aria-label="Buscar equipos">
+        </div>
+        <div class="filter-chips">
+          <button class="filter-chip active" type="button">Todos</button>
+          <button class="filter-chip" type="button">Solo activos</button>
+          <button class="filter-chip" type="button">Incompletos</button>
+        </div>
+        <div style="flex:1;"></div>
+        <span style="font-size:13px; color:var(--fg-3);">
+          <strong style="color:var(--accent); font-size:18px;">1,247</strong> equipos
+        </span>
+        <button class="btn btn-ghost btn-sm"><i data-lucide="copy"></i> Duplicados</button>
+      </div>
+    </div>
+
+    <!-- Bulk-edit bar (shown when rows selected) -->
+    <div class="bulk-bar visible" style="position:relative; margin:0;">
+      <span class="bulk-count">3 equipos seleccionados</span>
+      <span class="bulk-divider"></span>
+      <button class="btn btn-secondary btn-sm"><i data-lucide="save"></i> Guardar cambios</button>
+      <button class="btn btn-ghost btn-sm">Cancelar</button>
+    </div>
+
+    <!-- Table -->
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+      <table class="app-table" aria-label="Equipos PoC">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" aria-label="Seleccionar todos"></th>
+            <th class="sortable sort-asc">Cliente <svg class="sort-icon" viewBox="0 0 8 10" width="8" height="10"><path d="M4 0L7 4H1L4 0z" fill="currentColor"/><path d="M4 10L1 6H7L4 10z" fill="currentColor" opacity=".3"/></svg></th>
+            <th>Activo</th>
+            <th>Serial</th>
+            <th>IP</th>
+            <th class="sortable">Unit ID</th>
+            <th>Nombre del Radio</th>
+            <th>Grupos</th>
+            <th>SIM / Teléfono</th>
+            <th style="width:80px; text-align:right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="checkbox" checked aria-label="Seleccionar fila"></td>
+            <td><strong>Autoridad del Canal</strong></td>
+            <td><span class="status-dot status-activo" title="Activo"></span></td>
+            <td class="td-mono">HYT-PNC-00421</td>
+            <td class="td-mono">10.20.30.41</td>
+            <td class="td-mono td-primary">5001</td>
+            <td>Canal-01</td>
+            <td><span class="td-muted">operaciones, supervisión</span></td>
+            <td class="td-mono">8953··· · 6789-0001</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" aria-label="Seleccionar fila"></td>
+            <td><strong>Manzanillo Intl.</strong></td>
+            <td><span class="status-dot status-activo" title="Activo"></span></td>
+            <td class="td-mono">HYT-PNC-00389</td>
+            <td class="td-mono">10.20.30.42</td>
+            <td class="td-mono td-primary">5002</td>
+            <td>MIT-Grua-03</td>
+            <td><span class="td-muted">portuario</span></td>
+            <td class="td-mono">8953··· · 6789-0002</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" checked aria-label="Seleccionar fila"></td>
+            <td><strong>Grupo Assa Abloy</strong></td>
+            <td><span class="status-dot status-inactivo" title="Inactivo"></span></td>
+            <td class="td-mono">HYT-PNC-00502</td>
+            <td class="td-mono">10.20.30.43</td>
+            <td class="td-mono td-primary">5003</td>
+            <td>Assa-MV-01</td>
+            <td><span class="td-muted">—</span></td>
+            <td class="td-mono">— · —</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" aria-label="Seleccionar fila"></td>
+            <td><strong>Policía Nacional</strong></td>
+            <td><span class="status-dot status-activo" title="Activo"></span></td>
+            <td class="td-mono">HYT-PNC-00451</td>
+            <td class="td-mono">10.20.30.44</td>
+            <td class="td-mono td-primary">5004</td>
+            <td>PNC-Mov-12</td>
+            <td><span class="td-muted">tránsito, fuerza</span></td>
+            <td class="td-mono">8953··· · 6789-0004</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="app-table-footer">
+      <span>Mostrando <strong>1–4</strong> de <strong>1,247</strong> equipos</span>
+      <div style="display:flex; gap:var(--sp-2);">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="chevron-down"></i> Cargar más</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="list"></i> Mostrar todo</button>
+      </div>
+    </div>
+
+  </div>
+
+  <span class="demo-label" style="margin-top:var(--sp-5);">Notas sobre el ejemplo de POC list</span>
+  <div class="demo-block" style="font-size:13px; color:var(--fg-2);">
+    <ul style="margin:0; padding-left:20px; line-height:1.7;">
+      <li>Indicador <code>.status-dot.status-activo/inactivo</code>: punto de 12px (verde / rojo).</li>
+      <li>Edición individual: <code>.sheet</code> de 500px desde la derecha (ver demo Side Sheet).</li>
+      <li>Edición masiva: la barra superior cambia los botones a "Guardar" / "Cancelar" y la primer columna habilita inputs <code>td-input</code> en línea.</li>
+      <li>Búsqueda con <code>filter-bar</code> +  <code>filter-search</code> + <code>filter-chips</code> + <code>filter-chip</code>.</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 28 · POC — Nuevo batch (worked example) ──────────────── -->
+<section class="demo-section" id="poc-batch">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>POC · Nuevo batch (ejemplo aplicado)</h2>
+    <p>Formulario para registrar múltiples equipos PoC con seriales consecutivos. Usa
+       <code>form-section</code> + <code>form-grid-2</code> + <code>form-input</code> /
+       <code>form-textarea</code> con la variante mono para el bloque de seriales, y un
+       <code>form-file-zone</code> para cargar el JSON del vendedor.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div class="ds-card ds-card-padded" style="border-radius:0; border:none; box-shadow:none;">
+      <form onsubmit="return false;" novalidate>
+
+        <!-- Sección 1: Datos del batch -->
+        <div class="form-section">
+          <div>
+            <p class="form-section-title"><i data-lucide="hash" style="width:16px;height:16px;"></i> Datos del batch</p>
+            <p class="form-section-desc">Liste los seriales (uno por línea) y el Unit ID inicial. Los demás se incrementan automáticamente.</p>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-field span-2" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-seriales">Seriales <span class="req">*</span></label>
+              <textarea class="form-input form-textarea" id="pb-seriales" rows="8"
+                style="font-family:var(--font-mono); font-size:13px;"
+                placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
+              <span class="form-hint">Un serial por línea. Líneas en blanco se ignoran.</span>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" for="pb-json">Cargar JSON del vendedor <span class="optional">(opcional)</span></label>
+              <label class="form-file-zone" style="padding:var(--sp-3) var(--sp-4); min-height:auto;">
+                <input type="file" id="pb-json" accept=".json">
+                <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:24px;height:24px;"></i></div>
+                <p style="margin:0; font-size:13px;"><strong>Arrastra el JSON</strong> o haz clic</p>
+              </label>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" for="pb-uid">Unit ID inicial <span class="req">*</span></label>
+              <input class="form-input" id="pb-uid" type="number" placeholder="5001" style="font-family:var(--font-mono);">
+              <span class="form-hint">Últimos asignados: 4998, 4999, 5000.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección 2: Datos generales -->
+        <div class="form-section">
+          <div>
+            <p class="form-section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Datos generales</p>
+            <p class="form-section-desc">Se aplican a todos los equipos del batch.</p>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-cliente">Cliente <span class="req">*</span></label>
+              <div style="display:flex; gap:var(--sp-2);">
+                <select class="form-select" id="pb-cliente" style="flex:1;">
+                  <option>Autoridad del Canal de Panamá</option>
+                  <option>Manzanillo Intl. Terminal</option>
+                  <option>Grupo Assa Abloy</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Crear cliente"><i data-lucide="plus"></i></button>
+              </div>
+            </div>
+
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-ip">IP <span class="req">*</span></label>
+              <div style="display:flex; gap:var(--sp-2);">
+                <select class="form-select" id="pb-ip" style="flex:1;">
+                  <option>10.20.30.0/24 — Producción</option>
+                  <option>10.20.40.0/24 — Pre-producción</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Crear bloque IP"><i data-lucide="plus"></i></button>
+              </div>
+            </div>
+
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-notas">Notas <span class="optional">(opcional)</span></label>
+              <textarea class="form-input form-textarea" id="pb-notas" rows="3"
+                placeholder="Lote PNC-Q2-2025, instalación coordinada con TI del cliente…"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Crear equipos</button>
+          <button type="button" class="btn btn-ghost">Cancelar</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+</section>
+
+
 <!-- ─── Scripts ──────────────────────────────────────────── -->
 <script>
 lucide.createIcons();

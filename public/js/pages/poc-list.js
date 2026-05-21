@@ -107,17 +107,21 @@ window.PocList = {
 
     // acciones (9)
     const actionCell = document.createElement('td');
+    actionCell.style.whiteSpace = 'nowrap';
     if (!PocState.esLectura()) {
       const editBtn = document.createElement('button');
-      editBtn.className = 'btn';
+      editBtn.className = 'btn btn-ghost btn-icon btn-sm';
+      editBtn.title = 'Editar equipo';
+      editBtn.setAttribute('aria-label', 'Editar equipo');
       editBtn.innerHTML = '<i data-lucide="pencil"></i>';
       editBtn.onclick = () => PocEdit.abrir(row, docId, d);
       actionCell.appendChild(editBtn);
 
       const delBtn = document.createElement('button');
-      delBtn.className = 'btn btn-danger';
-      delBtn.innerHTML = '<i data-lucide="trash-2"></i>';
+      delBtn.className = 'btn btn-danger btn-icon btn-sm';
       delBtn.title = 'Eliminar equipo';
+      delBtn.setAttribute('aria-label', 'Eliminar equipo');
+      delBtn.innerHTML = '<i data-lucide="trash-2"></i>';
       delBtn.onclick = async () => {
         if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
           PocService.softDeletePocDevice(docId).then(() => this.refresh());
@@ -126,9 +130,10 @@ window.PocList = {
 
       if (d.deleted) {
         const restBtn = document.createElement('button');
-        restBtn.className = 'btn';
-        restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
+        restBtn.className = 'btn btn-ghost btn-icon btn-sm';
         restBtn.title = 'Restaurar';
+        restBtn.setAttribute('aria-label', 'Restaurar equipo');
+        restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
         restBtn.onclick = () => PocService.restorePocDevice(docId).then(() => this.refresh());
         actionCell.appendChild(restBtn);
       }
@@ -303,9 +308,10 @@ window.PocList = {
           const ac = row.querySelector('td:last-child');
           if (ac && !ac.querySelector('button[title="Restaurar"]')) {
             const restBtn = document.createElement('button');
-            restBtn.className = 'btn';
-            restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
+            restBtn.className = 'btn btn-ghost btn-icon btn-sm';
             restBtn.title = 'Restaurar';
+            restBtn.setAttribute('aria-label', 'Restaurar equipo');
+            restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
             restBtn.onclick = () => PocService.restorePocDevice(d.id).then(() => this.mostrarTodo());
             ac.appendChild(restBtn);
           }
@@ -370,14 +376,21 @@ window.PocList = {
       row.appendChild(tdSimF);
 
       const acciones = document.createElement('td');
+      acciones.style.whiteSpace = 'nowrap';
       if (!PocState.esLectura()) {
         const btnEditar = document.createElement('button');
-        btnEditar.className = 'btn'; btnEditar.innerHTML = '<i data-lucide="pencil"></i>';
+        btnEditar.className = 'btn btn-ghost btn-icon btn-sm';
+        btnEditar.title = 'Editar equipo';
+        btnEditar.setAttribute('aria-label', 'Editar equipo');
+        btnEditar.innerHTML = '<i data-lucide="pencil"></i>';
         btnEditar.onclick = () => PocEdit.abrir(row, d.id, d);
         acciones.appendChild(btnEditar);
 
         const btnElim = document.createElement('button');
-        btnElim.className = 'btn btn-danger'; btnElim.innerHTML = '<i data-lucide="trash-2"></i>'; btnElim.title = 'Eliminar';
+        btnElim.className = 'btn btn-danger btn-icon btn-sm';
+        btnElim.title = 'Eliminar';
+        btnElim.setAttribute('aria-label', 'Eliminar equipo');
+        btnElim.innerHTML = '<i data-lucide="trash-2"></i>';
         btnElim.onclick = async () => {
           if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
             PocService.softDeletePocDevice(d.id).then(() => this.cargar(true));
@@ -386,7 +399,10 @@ window.PocList = {
 
         if (d.deleted) {
           const btnRest = document.createElement('button');
-          btnRest.className = 'btn'; btnRest.innerHTML = '<i data-lucide="rotate-ccw"></i>';
+          btnRest.className = 'btn btn-ghost btn-icon btn-sm';
+          btnRest.title = 'Restaurar';
+          btnRest.setAttribute('aria-label', 'Restaurar equipo');
+          btnRest.innerHTML = '<i data-lucide="rotate-ccw"></i>';
           btnRest.onclick = () => PocService.restorePocDevice(d.id).then(() => this.cargar(true));
           acciones.appendChild(btnRest);
         }

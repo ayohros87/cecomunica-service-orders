@@ -2,214 +2,34 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Nuevo Batch de Equipos PoC - Cecomunica</title>
-<link rel="stylesheet" href="../css/ceco-ui.css">
+  <title>Nuevo batch de equipos PoC - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
   <style>
-    body {
-      background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-      padding: 24px;
-      min-height: 100vh;
-    }
-    
-    .page-header {
-      max-width: 1000px;
-      margin: 0 auto 32px auto;
-      text-align: center;
-    }
-    
-    .page-header h1 {
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--text);
-      margin: 0 0 8px 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-    }
-    
-    .page-header p {
-      color: var(--muted);
-      font-size: 14px;
-      margin: 0;
-    }
-    
-    .form-container {
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-    
-    #batchForm {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-      overflow: hidden;
-    }
-    
-    .section.form {
-      padding: 32px;
-      border-bottom: 2px solid var(--line);
-    }
-    
-    .section.form:last-of-type {
-      border-bottom: none;
-    }
-    
-    .form-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--text);
-      margin: 0 0 24px 0;
-      padding-bottom: 12px;
-      border-bottom: 3px solid var(--accent);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .form-field label {
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--text);
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    
-    .form-field input,
-    .form-field select,
-    .form-field textarea {
-      border: 2px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 14px;
-      transition: all 0.2s;
-      background: white;
-    }
-    
-    .form-field input:focus,
-    .form-field select:focus,
-    .form-field textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-      outline: none;
-    }
-    
-    .form-field textarea.mono {
-      font-family: 'Courier New', monospace;
-      min-height: 180px;
-    }
-    
-    .form-hint {
+    /* Page-local — kit primitives handle the rest */
+    .ultimos-uid { list-style: none; padding: 0; margin: var(--sp-1) 0 0; }
+    .ultimos-uid li { font-size: 11px; color: var(--fg-3); padding: 2px 0; font-family: var(--font-mono); }
+
+    /* Vendor JSON preview block (rendered by JS into #previewVendedor) */
+    #previewVendedor {
+      margin-top: var(--sp-2);
+      padding: var(--sp-3);
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      border-radius: var(--radius-md);
       font-size: 12px;
-      color: var(--muted);
-      margin-top: 6px;
+      color: var(--navy);
     }
-    
-    .form-hint ul {
-      list-style: none;
-      padding: 0;
-      margin: 4px 0;
-    }
-    
-    .form-hint li {
-      padding: 4px 0;
-      font-size: 11px;
-      color: var(--muted);
-    }
-    
-    .input-row {
-      display: flex;
-      gap: 8px;
-    }
-    
-    .input-row select {
-      flex: 1;
-    }
-    
-    .btn-pill {
-      width: 44px;
-      height: 44px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      border-radius: 8px;
-    }
-    
-    .form-actions {
-      padding: 24px 32px;
-      background: #f8fafc;
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-      border-top: 2px solid var(--line);
-    }
-    
-    .form-actions .btn {
-      font-size: 15px;
-      padding: 12px 24px;
-      font-weight: 600;
-    }
-    
-    .file-preview {
-      margin-top: 16px;
-      padding: 16px;
-      background: #f0f9ff;
-      border: 2px solid var(--accent);
-      border-radius: 8px;
-    }
-    
-    .file-preview table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-      font-size: 12px;
-    }
-    
-    .file-preview th {
-      background: white;
-      padding: 8px;
-      text-align: left;
-      font-weight: 600;
-      border-bottom: 2px solid var(--line);
-    }
-    
-    .file-preview td {
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--line);
-    }
-    
-    @media (max-width: 768px) {
-      body {
-        padding: 12px;
-      }
-      
-      .page-header h1 {
-        font-size: 24px;
-      }
-      
-      .section.form {
-        padding: 20px;
-      }
-      
-      .form-actions {
-        padding: 16px 20px;
-        flex-direction: column;
-      }
-      
-      .form-actions .btn {
-        width: 100%;
-      }
-    }
+    #previewVendedor:empty { display: none; }
+    #previewVendedor table { width: 100%; border-collapse: collapse; margin-top: var(--sp-2); font-size: 12px; }
+    #previewVendedor th { background: var(--surface-card); padding: var(--sp-2); text-align: left; font-weight: 600; border-bottom: 1px solid var(--border-default); }
+    #previewVendedor td { padding: var(--sp-1) var(--sp-2); border-bottom: 1px solid var(--border-subtle); }
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/services/pocService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/empresaService.js"></script>
@@ -218,70 +38,116 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <div class="page-header">
-    <h1><i data-lucide="package"></i> Registrar Nuevo Batch de Equipos PoC</h1>
-    <p>Carga múltiples equipos de forma rápida usando seriales consecutivos</p>
-  </div>
-  
-  <div class="form-container">
-  <form id="batchForm">
-  <div class="section form">
-  <h3 class="form-title"><i data-lucide="hash"></i> Datos del Batch</h3>
-  <div class="form-grid cols-2">
-    <div class="form-field" style="grid-column:1/-1">
-      <label class="req">Seriales (uno por línea)</label>
-      <textarea id="seriales" required class="mono"></textarea>
-    </div>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="package"></i> Nuevo batch de equipos PoC',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
 
-    <div class="form-field">
-      <label><i data-lucide="folder-open"></i> Cargar archivo JSON del vendedor</label>
-      <input type="file" class="file" accept=".json" onchange="cargarDesdeJSON(this)">
-      <div id="previewVendedor" class="form-hint"></div>
-    </div>
+  <div class="app-wrap app-wrap--default">
 
-    <div class="form-field">
-      <label class="req">Unit ID Inicial</label>
-      <input type="number" id="unit_id_inicial" required placeholder="Ejemplo: 5001">
-      <div class="form-hint">
-        Últimos Unit IDs asignados:
-        <ul id="ultimosUnitIDs" style="margin-top:6px;"></ul>
-      </div>
-    </div>
-  </div>
-</div>
+    <nav class="app-breadcrumbs" aria-label="Breadcrumb">
+      <a href="../index.html">Inicio</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <a href="index.html">Equipos PoC</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <span class="app-breadcrumbs-current">Nuevo batch</span>
+    </nav>
 
-<div class="section form">
-  <h3 class="form-title"><i data-lucide="package"></i> Datos Generales</h3>
-  <div class="form-grid cols-2">
-    <div class="form-field" style="grid-column:1/-1">
-      <label class="req">Cliente</label>
-      <div class="input-row">
-        <select id="cliente" required></select>
-        <button type="button" id="addCliente" class="btn btn-pill fit"><i data-lucide="plus"></i></button>
+    <div class="app-page-header">
+      <div>
+        <h1>Nuevo batch de equipos PoC</h1>
+        <p>Carga múltiples equipos de forma rápida usando seriales consecutivos.</p>
       </div>
     </div>
 
-    <div class="form-field" style="grid-column:1/-1">
-      <label class="req">IP</label>
-      <div class="input-row">
-        <select id="ip" required></select>
-        <button type="button" id="addIP" class="btn btn-pill fit"><i data-lucide="plus"></i></button>
+    <form id="batchForm">
+
+      <!-- Sección 1: Datos del batch -->
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-section" style="border:none; padding:0; margin:0;">
+          <div>
+            <p class="form-section-title"><i data-lucide="hash" style="width:16px;height:16px;"></i> Datos del batch</p>
+            <p class="form-section-desc">Liste los seriales (uno por línea) y el Unit ID inicial. Los demás se incrementan automáticamente.</p>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="seriales">Seriales <span class="req">*</span></label>
+              <textarea class="form-input form-textarea" id="seriales" required rows="8"
+                style="font-family:var(--font-mono); font-size:13px;"
+                placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
+              <span class="form-hint">Un serial por línea. Líneas en blanco se ignoran.</span>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" for="vendorJson">Cargar archivo JSON del vendedor <span class="optional">(opcional)</span></label>
+              <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo JSON" style="padding:var(--sp-3) var(--sp-4); min-height:auto;">
+                <input type="file" id="vendorJson" accept=".json" onchange="cargarDesdeJSON(this)">
+                <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:24px;height:24px;"></i></div>
+                <p style="margin:0; font-size:13px;"><strong>Arrastra el JSON</strong> o haz clic</p>
+              </label>
+              <div id="previewVendedor"></div>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" for="unit_id_inicial">Unit ID inicial <span class="req">*</span></label>
+              <input class="form-input" id="unit_id_inicial" type="number" required placeholder="Ejemplo: 5001"
+                style="font-family:var(--font-mono);">
+              <span class="form-hint">
+                Últimos Unit IDs asignados:
+                <ul class="ultimos-uid" id="ultimosUnitIDs"></ul>
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="form-field" style="grid-column:1/-1">
-      <label>Notas</label>
-      <textarea id="notas"></textarea>
-    </div>
-  </div>
-</div>
+      <!-- Sección 2: Datos generales -->
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-section" style="border:none; padding:0; margin:0;">
+          <div>
+            <p class="form-section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Datos generales</p>
+            <p class="form-section-desc">Se aplican a todos los equipos del batch.</p>
+          </div>
 
-<div class="form-actions">
-  <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Crear Equipos</button>
-  <button type="button" class="btn" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
-</div>
-</form>
-</div>
+          <div class="form-grid-2">
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="cliente">Cliente <span class="req">*</span></label>
+              <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
+                <select class="form-select" id="cliente" required style="flex:1;"></select>
+                <button type="button" id="addCliente" class="btn btn-secondary btn-icon" aria-label="Crear cliente"><i data-lucide="plus"></i></button>
+              </div>
+            </div>
+
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="ip">IP <span class="req">*</span></label>
+              <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
+                <select class="form-select" id="ip" required style="flex:1;"></select>
+                <button type="button" id="addIP" class="btn btn-secondary btn-icon" aria-label="Crear bloque IP"><i data-lucide="plus"></i></button>
+              </div>
+            </div>
+
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="notas">Notas <span class="optional">(opcional)</span></label>
+              <textarea class="form-input form-textarea" id="notas" rows="3"
+                placeholder="Lote, instalación coordinada con TI del cliente…"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Crear equipos</button>
+        <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
+      </div>
+
+    </form>
+
+  </div><!-- /.app-wrap -->
 
   <script src="../js/pages/nuevo-batch.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
