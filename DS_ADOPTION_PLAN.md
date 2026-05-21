@@ -356,11 +356,11 @@ Last audited against the repo on 2026-05-20.
 - [~] Phase 7 — Modal + toast (toast done by R4; modal pending R5)
   - Toast: ✅ done by R4 — `Toast.js` now maps `ok|bad|warn|''` → `toast-success|toast-error|toast-warning|toast-info` and mounts into `.toast-region`. The two hardcoded `<div id="toasts" class="toast-wrap">` mounts in `contratos/nuevo-cliente.html` and `POC/vendedores-batch.html` were renamed to `toast-region`. Legacy `.toast-wrap` + `.toast.ok/.bad/.warn` CSS rules left in place for Phase 9 cleanup.
   - Modal: `.modal-backdrop` rules ✅ in CSS, but 4 files still reference `#overlay` / `id="overlay"`: `public/clientes/index.html`, `public/inventario/piezas.html`, `public/inventario/modelos.html`, `public/js/pages/contratos-approval.js`, plus the legacy `#overlay` CSS rule. R5 covers this.
-- [ ] Phase 8a — Tabs / accordion: **CSS not added.** No tab selectors in `ceco-ui.css`.
+- [N/A] Phase 8a — Tabs / accordion: no tabbed UI exists in `trabajar-orden.html` (single-page form with chip status, equipos list, modal). The plan envisioned Equipo/Cliente/Intervenciones/Fotos/Cotización tabs that don't exist. The DS App Kit's `app.css` doesn't ship a `.tabs` rule either. Adding tab CSS without a consumer is yagni.
 - [x] Phase 8b — Stepper / timeline (`.stepper`, `.progress-bar-*`, `.kpi-card*` added)
 - [x] Phase 8c — Photo grid + lightbox (`.photo-grid`, `.lightbox*` added)
-- [ ] Phase 8d — Signature pad wrapper: **CSS not added.** No `.signature-pad` rules.
-- [~] Phase 8e — Print kit (tokens available; dedicated `print.css` still TODO)
+- [N/A] Phase 8d — Signature pad wrapper: the DS App Kit has `.multi-sig*` for **printed** multi-party signature layouts on formal documents, not for an interactive `<canvas>` signature pad like `firmar-entrega.html` uses. Different pattern. The existing page-local `<canvas class="firma-canvas">` styling works fine.
+- [x] Phase 8e — Print kit: `public/css/print-base.css` already exists (~146 lines, DS-token-aware with fallbacks, `@page letter` rules, brand-header / page-shell / print-mono primitives). Linked from `cotizaciones/imprimir-cotizacion`, `contratos/imprimir-contrato`, `ordenes/imprimir-orden`. Extending to the other 4 print pages (`cotizar-orden-formal`, `nota-entrega`, `nota-entrega-intervenciones`, `POC/imprimir-equipos`) is per-page work since each has its own inline print styling that may or may not be compatible — left as opportunistic future work.
 - [ ] Phase 9 — CSS cleanup + dead rule removal (blocked: `.badge` 37 refs, `.chip` non-`-estado`, `#overlay`, `.overlay`, `.table-wrap`, `.toast-wrap`, `.toast.ok/.bad/.warn` all still referenced by pages/JS; remove only after migrations land)
 
 ---
@@ -461,10 +461,13 @@ On inspection there's no productive migration left in scope:
 
 Decision: leave these alone until either page is refactored for unrelated reasons. Update Phase 5 tracking line to reflect this is the honest end-state, not an outstanding item.
 
-### R8 — Phase 8 missing components (~half day)
-- Tabs: extract `.tabs / .tab-list / .tab-button / .tab-panel` from `ui_kits/app/app.css`, wire into `trabajar-orden.html`.
-- Signature pad: add `.signature-pad-wrap` + `.signature-pad-actions` rules, refactor `firmar-entrega.html` canvas wrapper.
-- Print kit: build `public/css/print.css` consuming DS tokens, link from `imprimir-orden.html` / `imprimir-contrato.html` / `nota-entrega*.html`.
+### R8 — Phase 8 missing components ✅ DONE (2026-05-20, mostly N/A)
+On inspection the plan's three R8 tasks are largely based on UI patterns that don't exist in the codebase or aren't provided by the DS:
+- **Tabs:** `trabajar-orden.html` has no tabbed UI to wire into. It's a single-page form with chip status, equipos list, and a "Agregar pieza" modal. The plan envisioned Equipo/Cliente/Intervenciones/Fotos/Cotización tabs that don't exist. The DS App Kit's `app.css` also doesn't actually ship a `.tabs` rule (grep confirms). YAGNI to add tab CSS without a consumer.
+- **Signature pad:** The DS provides `.multi-sig*` rules for **printed** multi-party signature layouts on formal documents — not for an interactive `<canvas>` signature pad like `firmar-entrega.html` uses. Different pattern. Page-local canvas styling works fine.
+- **Print kit:** `public/css/print-base.css` already exists, ~146 lines, DS-token-aware. Linked from 3 of 7 print pages. The remaining 4 (`cotizar-orden-formal`, `nota-entrega`, `nota-entrega-intervenciones`, `POC/imprimir-equipos`) have their own inline print styling; opt-in to `print-base.css` is per-page judgement and left as opportunistic future work.
+
+R8's actionable scope reduces to verifying the existing state and documenting reality.
 
 ### R9 — Cleanup pass (~1 h, gated by R1–R8)
 Delete dead CSS: `.badge*`, generic `.chip`, `.estado-aprobado-chip`, `#overlay`, `.overlay`, `.table-wrap` (after `.app-table-wrap` is universal), `.toast-wrap`, `.toast.ok/.bad/.warn`, and any remaining 760 px breakpoints. Audit for stray hex literals.
