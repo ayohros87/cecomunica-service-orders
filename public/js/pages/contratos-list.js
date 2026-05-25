@@ -34,8 +34,8 @@ window.ContratosLista = {
     const yaFirmado       = !!data.firmado_url;
 
     const estadoClase =
-      data.estado === 'activo'               ? 'chip-reparacion'  :
-      data.estado === 'aprobado'             ? 'chip-aprobada'    :
+      data.estado === 'activo'               ? 'chip-aprobada'    :  // verde
+      data.estado === 'aprobado'             ? 'chip-recibida'    :  // azul
       data.estado === 'pendiente_aprobacion' ? 'chip-diagnostico' :
       data.estado === 'anulado'              ? 'chip-cancelada'   :
       'chip-espera';
@@ -136,8 +136,8 @@ window.ContratosLista = {
     const totalStr = FMT.money(tot.totalConITBMS);
 
     const estadoClase =
-      data.estado === 'activo'               ? 'chip-reparacion'  :
-      data.estado === 'aprobado'             ? 'chip-aprobada'    :
+      data.estado === 'activo'               ? 'chip-aprobada'    :  // verde
+      data.estado === 'aprobado'             ? 'chip-recibida'    :  // azul
       data.estado === 'pendiente_aprobacion' ? 'chip-diagnostico' :
       data.estado === 'anulado'              ? 'chip-cancelada'   :
       'chip-espera';
