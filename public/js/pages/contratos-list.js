@@ -260,7 +260,9 @@ window.ContratosLista = {
       const clienteSearchLower = clienteSearch.toLowerCase();
       const matchesCliente     = c => {
         if (!clienteSearchLower) return true;
-        return String(c?.cliente_nombre_lower || c?.cliente_nombre || '').toLowerCase().includes(clienteSearchLower);
+        const nombre = String(c?.cliente_nombre_lower || c?.cliente_nombre || '').toLowerCase();
+        const cid    = String(c?.contrato_id || '').toLowerCase();
+        return nombre.includes(clienteSearchLower) || cid.includes(clienteSearchLower);
       };
 
       if (reset) {
@@ -315,6 +317,23 @@ window.ContratosLista = {
           fallbackPages++;
         }
         if (fallbackPages > 0) CS.lastDoc = fallbackLastDoc;
+      }
+
+      // Safety net: exact contract-ID lookup so any contract is findable by
+      // its ID even when it lives beyond the fallback's page reach. Only
+      // attempted for ID-like input (has a digit or hyphen) that isn't
+      // already loaded.
+      const yaCargadoPorId = CS.contratos.some(
+        c => String(c?.contrato_id || '').toLowerCase() === clienteSearchLower
+      );
+      if (clienteSearchLower && !yaCargadoPorId && /[\d-]/.test(clienteSearch)) {
+        try {
+          const exacto = await ContratosService.getByContratoId(clienteSearch)
+                      || await ContratosService.getByContratoId(clienteSearch.toUpperCase());
+          if (exacto && !exacto.deleted && !CS.contratos.some(c => c.id === exacto.id)) {
+            CS.contratos.unshift(exacto);
+          }
+        } catch (_) { /* not a valid ID — ignore */ }
       }
 
       if (CS.contratos.length > maxRows) {
