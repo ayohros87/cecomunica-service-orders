@@ -87,7 +87,7 @@ window.PocList = {
     // activo (2)
     const tdEstado = document.createElement('td');
     tdEstado.dataset.activo = d.activo ? 'true' : 'false';
-    tdEstado.className = d.activo ? 'estado-activo' : 'estado-inactivo';
+    tdEstado.className = 'poc-estado-cell';
     tdEstado.innerHTML = d.activo
       ? '<span class="status-dot status-activo"></span>'
       : '<span class="status-dot status-inactivo"></span>';
@@ -359,7 +359,7 @@ window.PocList = {
 
       const tdEstado = document.createElement('td');
       tdEstado.dataset.activo = d.activo ? 'true' : 'false';
-      tdEstado.className = d.activo ? 'estado-activo' : 'estado-inactivo';
+      tdEstado.className = 'poc-estado-cell';
       tdEstado.innerHTML = d.activo
         ? '<span class="status-dot status-activo"></span>'
         : '<span class="status-dot status-inactivo"></span>';
