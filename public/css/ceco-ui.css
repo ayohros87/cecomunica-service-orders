@@ -909,6 +909,13 @@ input[readonly]#numero_de_serie,
 .app-topbar-spacer { flex: 1; min-width: 0; }
 .app-topbar-actions { /* inherits .topbar-actions rules above */ }
 
+/* Topbar overflow ("Más") menu: vertical 3-dots; label hidden on mobile so
+   the button is icon-only and leaves room for the page title. */
+@media (max-width: 640px) {
+  .topbar-menu-label { display: none; }
+  .btn-topbar-menu { padding-left: 8px; padding-right: 8px; gap: 0; }
+}
+
 /* Main content wrapper (DS App Kit canonical). Existing pages use
    .app-wrap with width modifiers; .app-body is additive for pages that
    want the DS-spec 1440px max-width with --sp-6/--sp-8 padding. */

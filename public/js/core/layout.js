@@ -57,7 +57,7 @@ const Layout = (() => {
     const menuDropId = `__layout-menu-dropdown-${menuId}`;
     const menuBtn    = menu.length
       ? `<div class="overflow-menu topbar-menu" id="${menuWrapId}">
-      <button class="btn btn-ghost" id="${menuBtnId}" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+      <button class="btn btn-ghost btn-topbar-menu" id="${menuBtnId}" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false" aria-label="Más opciones"><i data-lucide="more-vertical"></i> <span class="topbar-menu-label">Más</span></button>
       <div class="overflow-menu-dropdown" id="${menuDropId}">${menu.map(menuItemHtml).join('')}</div>
     </div>`
       : '';
