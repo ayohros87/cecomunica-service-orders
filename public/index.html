@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Cecomunica - Plataforma</title>
 <link rel="stylesheet" href="css/ceco-ui.css">
+  <style>
+    /* En móvil: el título es solo "Cecomunica" (sin el sufijo largo que
+       se desbordaba bajo los botones de acción del topbar). */
+    @media (max-width: 640px) {
+      .brand-suffix { display: none; }
+      .app-topbar-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    }
+  </style>
 
 
   <!-- Firebase -->
@@ -17,7 +25,7 @@
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: 'Cecomunica — Centro de Gestión', showHome: false, showLogout: true, menu: [{ label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' }] });</script>
+  <script>Layout.renderTopbar({ title: 'Cecomunica<span class="brand-suffix"> — Centro de Gestión</span>', showHome: false, showLogout: true, menu: [{ label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' }] });</script>
 
   <div class="app-wrap">
     <!-- Herramientas -->
