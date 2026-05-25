@@ -49,6 +49,10 @@
     .toggle-pill:hover { border-color: var(--accent); color: var(--accent); }
     .toggle-pill input[type="checkbox"] { cursor:pointer; margin:0; }
 
+    /* Dropdown caret — rotates when the menu is open (signals "opens a menu") */
+    .menu-caret { width:14px; height:14px; transition: transform var(--dur-fast) var(--ease-out); }
+    [aria-expanded="true"] > .menu-caret { transform: rotate(180deg); }
+
     /* Secondary domain suffix shown under the IP host */
     .ip-domain { display:block; font-size:10px; color:var(--fg-3); opacity:.85; letter-spacing:.2px; line-height:1.1; }
 
@@ -163,10 +167,19 @@
       <div class="app-toolbar poc-toolbar">
         <button id="btnSim" class="btn btn-secondary btn-sm" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
         <button id="btnImprimir" class="btn btn-secondary btn-sm" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
-        <button id="btnExportar" class="btn btn-secondary btn-sm" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar</button>
         <button id="btnEditarMasivo" class="btn btn-secondary btn-sm" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
         <button id="btnGuardarMasivo" class="btn btn-primary btn-sm" onclick="PocBulk.guardar()" style="display:none;"><i data-lucide="save"></i> Guardar</button>
         <button id="btnCancelarMasivo" class="btn btn-ghost btn-sm" onclick="PocBulk.cancelar()" style="display:none;"><i data-lucide="x"></i> Cancelar</button>
+
+        <!-- Acciones secundarias -->
+        <div class="overflow-menu" id="pocMasWrap">
+          <button class="btn btn-secondary btn-sm" id="pocMasBtn" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false">
+            <i data-lucide="more-horizontal"></i> Más <i data-lucide="chevron-down" class="menu-caret"></i>
+          </button>
+          <div class="overflow-menu-dropdown" id="pocMasDrop">
+            <button id="btnExportar" class="overflow-menu-item" onclick="PocList.exportarExcelSeleccionados()"><i data-lucide="upload"></i> Exportar a Excel</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -198,16 +211,17 @@
 
         <div style="flex:1;"></div>
 
-        <button class="btn btn-ghost btn-sm" onclick="toggleAdvancedFilters()" title="Ver opciones para corregir duplicados"><i data-lucide="copy"></i> Duplicados</button>
-      </div>
-
-      <!-- Advanced filters (collapsed by default) -->
-      <div id="advancedFilters" class="app-toolbar" style="display:none; padding:var(--sp-2) var(--sp-3); border-bottom:1px solid var(--border-subtle);">
-        <button class="btn btn-secondary btn-sm" onclick="PocList.filtrarDuplicados('serial')"><i data-lucide="copy"></i> Seriales duplicados</button>
-        <button class="btn btn-secondary btn-sm" onclick="PocList.filtrarDuplicados('sim')"><i data-lucide="smartphone"></i> SIMs duplicados</button>
-        <button class="btn btn-secondary btn-sm" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'"><i data-lucide="alert-triangle"></i> Grupos inválidos</button>
-        <div class="app-toolbar-spacer"></div>
-        <span style="font-size:12px; color:var(--fg-3);"><i data-lucide="info" style="width:12px;height:12px;"></i> Click en encabezados de tabla para ordenar</span>
+        <!-- Herramientas de duplicados / datos (menú desplegable) -->
+        <div class="overflow-menu" id="pocDupWrap">
+          <button class="btn btn-ghost btn-sm" id="pocDupBtn" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false" title="Herramientas para encontrar y corregir datos duplicados o inválidos">
+            <i data-lucide="copy"></i> Duplicados <i data-lucide="chevron-down" class="menu-caret"></i>
+          </button>
+          <div class="overflow-menu-dropdown" id="pocDupDrop">
+            <button class="overflow-menu-item" onclick="PocList.filtrarDuplicados('serial')"><i data-lucide="copy"></i> Seriales duplicados</button>
+            <button class="overflow-menu-item" onclick="PocList.filtrarDuplicados('sim')"><i data-lucide="smartphone"></i> SIMs duplicados</button>
+            <button class="overflow-menu-item" onclick="PocList.buscarGruposInvalidos()" title="Busca equipos cuyo campo grupos contiene '...' o '🔍'"><i data-lucide="alert-triangle"></i> Grupos inválidos</button>
+          </div>
+        </div>
       </div>
 
       <!-- Devices table -->
@@ -355,6 +369,14 @@
     </div>
   </div>
 
-  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    // Wire the header "Más" and filter-bar "Duplicados" dropdowns
+    // (toggle + click-outside-to-close + aria-expanded) via the shared helper.
+    if (window.Layout?.wireMenuToggle) {
+      Layout.wireMenuToggle('pocMasBtn', 'pocMasDrop');
+      Layout.wireMenuToggle('pocDupBtn', 'pocDupDrop');
+    }
+  </script>
 </body>
 </html>

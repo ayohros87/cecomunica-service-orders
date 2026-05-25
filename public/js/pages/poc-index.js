@@ -6,11 +6,6 @@ function cerrarSesion() {
     .catch(() => { window.location.href = '/login.html'; });
 }
 
-function toggleAdvancedFilters() {
-  const el = document.getElementById('advancedFilters');
-  if (el) el.style.display = el.style.display === 'none' ? 'flex' : 'none';
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { window.location.href = '/login.html'; return; }
