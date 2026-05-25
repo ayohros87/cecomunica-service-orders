@@ -15,14 +15,16 @@ window.PocList = {
   },
 
   // ── Cell builders ───────────────────────────────────────────────
-  nuevaCelda(texto) {
+  nuevaCelda(texto, className = '') {
     const td = document.createElement('td');
+    if (className) td.className = className;
     td.textContent = texto || '';
     return td;
   },
 
   crearCeldaIp(ip) {
     const td  = document.createElement('td');
+    td.className = 'td-mono';
     const val = String(ip || '').trim();
     if (!val) return td;
     const dominio = '.cecomunica.net';
@@ -78,8 +80,8 @@ window.PocList = {
     // cliente (1)
     const tdCliente = document.createElement('td');
     tdCliente.innerHTML = algunoVacio
-      ? `<span style="color:red;" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> ${nombreCliente}`
-      : nombreCliente;
+      ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${nombreCliente}</strong>`
+      : `<strong>${nombreCliente}</strong>`;
     row.appendChild(tdCliente);
 
     // activo (2)
@@ -92,9 +94,9 @@ window.PocList = {
     row.appendChild(tdEstado);
 
     // serial (3), ip (4), unit_id (5), radio_name (6)
-    row.appendChild(this.nuevaCelda(d.serial));
+    row.appendChild(this.nuevaCelda(d.serial, 'td-mono'));
     row.appendChild(this.crearCeldaIp(d.ip));
-    row.appendChild(this.nuevaCelda(d.unit_id));
+    row.appendChild(this.nuevaCelda(d.unit_id, 'td-mono td-primary'));
     row.appendChild(this.nuevaCelda(d.radio_name));
 
     // grupos (7)
@@ -351,8 +353,8 @@ window.PocList = {
       const algunoVacio = camposCrit.some(v => !v || v.trim?.() === '');
       const tdCliente = document.createElement('td');
       tdCliente.innerHTML = algunoVacio
-        ? `<span style="color:red;" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> ${d.cliente || ''}`
-        : (d.cliente || '');
+        ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${d.cliente || ''}</strong>`
+        : `<strong>${d.cliente || ''}</strong>`;
       row.appendChild(tdCliente);
 
       const tdEstado = document.createElement('td');
@@ -364,9 +366,9 @@ window.PocList = {
       row.appendChild(tdEstado);
       if (d.activo) activos++;
 
-      row.appendChild(this.nuevaCelda(d.serial));
+      row.appendChild(this.nuevaCelda(d.serial, 'td-mono'));
       row.appendChild(this.crearCeldaIp(d.ip));
-      row.appendChild(this.nuevaCelda(d.unit_id));
+      row.appendChild(this.nuevaCelda(d.unit_id, 'td-mono td-primary'));
       row.appendChild(this.nuevaCelda(d.radio_name));
       row.appendChild(this.crearCeldaConExpansor(
         Array.isArray(d.grupos) ? d.grupos.join(', ') : (d.grupos || ''), 'grupos'

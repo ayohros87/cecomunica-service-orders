@@ -107,17 +107,17 @@ window.ContratosLista = {
     const fila = document.createElement('tr');
     fila.setAttribute('data-contrato-doc-id', id);
     fila.innerHTML = `
-      <td>${data.contrato_id || '-'} ${iconoComision}</td>
-      <td>${esc(data.cliente_nombre || '-')}</td>
+      <td class="td-primary">${data.contrato_id || '-'} ${iconoComision}</td>
+      <td><strong style="color:var(--fg-1); font-weight:600;">${esc(data.cliente_nombre || '-')}</strong></td>
       <td>${esc(data.tipo_contrato || '-')}</td>
       <td>${esc(data.accion || '-')}</td>
       <td style="text-align:center;" data-contrato-equipos="${id}"><span style="opacity:0.3;"><i data-lucide="loader"></i></span></td>
       <td class="estado-cell">
         <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
       </td>
-      <td>${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
-      <td>${esc(CS.mapaUsuarios[data.creado_por_uid] || '-')}</td>
-      <td>${FMT.money(tot.totalConITBMS)}</td>
+      <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
+      <td class="td-muted">${esc(CS.mapaUsuarios[data.creado_por_uid] || '-')}</td>
+      <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">${FMT.money(tot.totalConITBMS)}</td>
       <td class="acciones">${accionesHtml}</td>
     `;
     return fila;

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview — Listas (contratos / POC) vs kit data-table</title>
+<link rel="stylesheet" href="../css/ceco-ui.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  body { background: var(--surface-page); padding: 24px; }
+  .pv-wrap { max-width: 1400px; margin: 0 auto; }
+  .pv-h { font-family: var(--font-display); font-weight: 800; color: var(--fg-1); margin: 28px 0 12px; font-size: 18px; }
+  .pv-note { font-size: 13px; color: var(--fg-3); margin-bottom: 16px; }
+  /* mirror the page-local bits the real pages keep */
+  .status-dot { display:inline-block; width:12px; height:12px; border-radius:50%; }
+  .status-activo { background:#22c55e; } .status-inactivo { background:#ef4444; }
+  .toggle-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; background:var(--surface-sunken); border:1px solid var(--border-default); border-radius:var(--radius-pill); font-size:12px; font-weight:500; color:var(--fg-2); }
+  #resumenContratos { display:flex; gap:var(--sp-3); align-items:center; font-size:13px; color:var(--fg-3); }
+  #resumenContratos strong { color:var(--fg-1); font-weight:700; }
+  #resumenContratos .badge { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid var(--border-subtle); }
+  .app-table td.acciones { white-space:nowrap; text-align:right; }
+  .app-table td.acciones .btn { margin-left: var(--sp-1); }
+  .resumen-badge { display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--fg-3); }
+  .resumen-badge strong { font-size:18px; color:var(--accent); font-weight:700; }
+</style>
+</head>
+<body>
+<div class="pv-wrap">
+
+  <p class="pv-note">Vista estática (sin Firebase) para comparar la estructura real de las listas con la demo
+     <code>#data-table</code> del kit. Usa <code>ceco-ui.css</code> de producción y el mismo marcado que generan
+     <code>contratos-list.js</code> y <code>poc-list.js</code>.</p>
+
+  <!-- ── Contratos ─────────────────────────────────────────── -->
+  <h2 class="pv-h">Contratos · index</h2>
+  <div class="ds-card">
+    <div class="filter-bar">
+      <div class="filter-search">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input type="search" placeholder="Buscar por cliente…" style="border:none;">
+      </div>
+      <div class="filter-chips">
+        <button class="filter-chip active">Todos</button>
+        <button class="filter-chip">Pendiente</button>
+        <button class="filter-chip">Aprobado</button>
+        <button class="filter-chip">Activo</button>
+        <button class="filter-chip">Vencido</button>
+        <button class="filter-chip">Anulado</button>
+      </div>
+      <div style="flex:1;"></div>
+      <label class="toggle-pill"><input type="checkbox"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Solo pendientes</label>
+      <button class="btn btn-ghost btn-sm"><i data-lucide="rotate-ccw"></i> Limpiar</button>
+    </div>
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th class="sortable" style="width:120px;">ID</th>
+            <th class="sortable">Cliente</th>
+            <th>Tipo</th>
+            <th>Acción</th>
+            <th style="width:60px; text-align:center;">Equipos</th>
+            <th class="sortable" style="width:140px;">Estado</th>
+            <th class="sortable" style="width:110px;">Fecha</th>
+            <th>Creado por</th>
+            <th class="sortable" style="width:110px; text-align:right;">Total</th>
+            <th class="acciones" style="width:160px; text-align:right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-primary">CT-2025-0142</td>
+            <td><strong style="color:var(--fg-1); font-weight:600;">Autoridad del Canal de Panamá</strong></td>
+            <td>Alquiler</td>
+            <td>Nuevo</td>
+            <td style="text-align:center;">8</td>
+            <td><span class="chip-estado chip-aprobada">Activo</span></td>
+            <td class="td-muted">12/05/2025</td>
+            <td class="td-muted">Carlos Ríos</td>
+            <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">$4,082.05</td>
+            <td class="acciones">
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="printer"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="folder-open"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-primary">CT-2025-0141</td>
+            <td><strong style="color:var(--fg-1); font-weight:600;">Manzanillo Intl. Terminal</strong></td>
+            <td>Propio</td>
+            <td>Renovación</td>
+            <td style="text-align:center;">3</td>
+            <td><span class="chip-estado chip-diagnostico">Pendiente Aprobación</span></td>
+            <td class="td-muted">11/05/2025</td>
+            <td class="td-muted">María Torres</td>
+            <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">$1,560.00</td>
+            <td class="acciones">
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="printer"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="check-circle"></i></button>
+              <button class="btn btn-danger btn-icon btn-sm"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-primary">CT-2025-0140</td>
+            <td><strong style="color:var(--fg-1); font-weight:600;">Grupo Assa Abloy</strong></td>
+            <td>Demo</td>
+            <td>Adición</td>
+            <td style="text-align:center;">1</td>
+            <td><span class="chip-estado chip-cancelada">Anulado</span></td>
+            <td class="td-muted">10/05/2025</td>
+            <td class="td-muted">Luis Herrera</td>
+            <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">$520.00</td>
+            <td class="acciones">
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="printer"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="copy"></i></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="app-table-footer">
+      <div id="resumenContratos">
+        <strong>3</strong> contratos ·
+        <span class="badge" style="background:var(--chip-diag-bg); color:var(--chip-diag-fg); border-color:var(--chip-diag-bd);">1</span>
+        <span class="badge" style="background:var(--chip-aprobada-bg); color:var(--chip-aprobada-fg); border-color:var(--chip-aprobada-bd);">0</span>
+        <span class="badge" style="background:var(--chip-lista-bg); color:var(--chip-lista-fg); border-color:var(--chip-lista-bd);">1</span>
+      </div>
+      <button class="btn btn-ghost btn-sm"><i data-lucide="chevron-down"></i> Cargar más contratos</button>
+    </div>
+  </div>
+
+  <!-- ── POC ───────────────────────────────────────────────── -->
+  <h2 class="pv-h">POC · index</h2>
+  <div class="app-toolbar" style="margin-bottom:var(--sp-2);">
+    <button class="btn btn-secondary btn-sm"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
+    <button class="btn btn-secondary btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+    <button class="btn btn-secondary btn-sm"><i data-lucide="upload"></i> Exportar</button>
+    <button class="btn btn-secondary btn-sm"><i data-lucide="pencil"></i> Editar en masa</button>
+  </div>
+  <div class="ds-card">
+    <div class="filter-bar">
+      <div class="filter-search">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input type="search" placeholder="Escribe para filtrar…" style="border:none;">
+      </div>
+      <label class="toggle-pill"><input type="checkbox"> <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Solo activos</label>
+      <label class="toggle-pill"><input type="checkbox"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
+      <div style="flex:1;"></div>
+      <button class="btn btn-ghost btn-sm"><i data-lucide="copy"></i> Duplicados</button>
+    </div>
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox"></th>
+            <th class="sortable">Cliente</th>
+            <th>Activo</th>
+            <th>Serial</th>
+            <th>IP</th>
+            <th class="sortable">Unit ID</th>
+            <th class="sortable">Nombre del Radio</th>
+            <th>Grupos</th>
+            <th>SIM / Teléfono</th>
+            <th style="width:110px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><strong>Autoridad del Canal</strong></td>
+            <td><span class="status-dot status-activo"></span></td>
+            <td class="td-mono">HYT-PNC-00421</td>
+            <td class="td-mono">10.20.30.41</td>
+            <td class="td-mono td-primary">5001</td>
+            <td>Canal-01</td>
+            <td>operaciones, supervisión</td>
+            <td><i data-lucide="smartphone" style="width:14px;height:14px;"></i> 8953… / 6789-0001</td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-danger btn-icon btn-sm"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input type="checkbox"></td>
+            <td><strong>Grupo Assa Abloy</strong></td>
+            <td><span class="status-dot status-inactivo"></span></td>
+            <td class="td-mono">HYT-PNC-00502</td>
+            <td class="td-mono">10.20.30.43</td>
+            <td class="td-mono td-primary">5003</td>
+            <td>Assa-MV-01</td>
+            <td>—</td>
+            <td><i data-lucide="smartphone" style="width:14px;height:14px;"></i> — / —</td>
+            <td style="white-space:nowrap;">
+              <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-danger btn-icon btn-sm"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="app-table-footer">
+      <div class="resumen-badge"><strong>1,247</strong> equipos</div>
+      <div style="display:flex; gap:var(--sp-2);">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="list"></i> Mostrar todo</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>lucide.createIcons();</script>
+</body>
+</html>
