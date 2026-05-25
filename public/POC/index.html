@@ -373,10 +373,23 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
     // Wire the header "Más" and filter-bar "Duplicados" dropdowns
     // (toggle + click-outside-to-close + aria-expanded) via the shared helper.
-    if (window.Layout?.wireMenuToggle) {
+    // NB: `Layout` is a top-level const in layout.js, so it is NOT a property
+    // of window — reference it directly, not via window.Layout.
+    if (typeof Layout !== 'undefined' && Layout.wireMenuToggle) {
       Layout.wireMenuToggle('pocMasBtn', 'pocMasDrop');
       Layout.wireMenuToggle('pocDupBtn', 'pocDupDrop');
     }
+    // Close the dropdown after choosing an option
+    ['pocMasDrop', 'pocDupDrop'].forEach(id => {
+      const drop = document.getElementById(id);
+      if (!drop) return;
+      drop.querySelectorAll('.overflow-menu-item').forEach(item => {
+        item.addEventListener('click', () => {
+          drop.classList.remove('open');
+          drop.parentElement?.querySelector('[aria-haspopup]')?.setAttribute('aria-expanded', 'false');
+        });
+      });
+    });
   </script>
 </body>
 </html>
