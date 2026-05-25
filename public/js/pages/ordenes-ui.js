@@ -69,7 +69,9 @@ function mostrarNotificacionProgreso(data) {
 // ===== MOBILE UI HELPERS (NO LOGIC CHANGES) =====
 function openMobileFilters() {
   const b = document.getElementById('mobileDrawerBackdrop');
-  if (b) b.style.display = 'flex';
+  // Toggle the .hidden class (not inline style): ordenes-index.css defines
+  // `.hidden { display:none !important }`, which inline style can't override.
+  if (b) { b.style.removeProperty('display'); b.classList.remove('hidden'); }
 
   // sync mobile sort select with existing select
   const real = document.getElementById('campoOrdenamiento');
@@ -79,7 +81,7 @@ function openMobileFilters() {
 
 function closeMobileFilters() {
   const b = document.getElementById('mobileDrawerBackdrop');
-  if (b) b.style.display = 'none';
+  if (b) { b.style.removeProperty('display'); b.classList.add('hidden'); }
 }
 
 function mobileScrollTop() {

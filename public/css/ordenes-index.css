@@ -1437,19 +1437,6 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
     color: var(--text);
   }
 
-  .mh-filterBtn {
-    min-width: 44px;
-    min-height: 44px;
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--line);
-    background: #f8fafc;
-    font-size: 18px;
-    cursor: pointer;
-    transition: var(--transition);
-  }
-  
-  .mh-filterBtn:active { background: var(--line); transform: scale(0.95); }
-
   .mh-sub {
     margin-top: 8px;
     font-size: 12px;
