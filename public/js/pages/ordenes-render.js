@@ -240,26 +240,25 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       ? `<span class="fotos-taller-badge mobile" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
       : "";
 
-    // Tier-1 row: Orden + Cliente + (later) Estado pill on the right.
-    // Tier-2 row: Tipo · Técnico — muted.
-    // Tier-3 row: timestamps — most muted.
-    // Hierarchy mirrors ORDENES_INDEX_IMPROVEMENTS §4.4.
+    // Cliente-primero hierarchy (v3 — ui_kits/app-mobile design note v3):
+    //   Tier 1  client (anchor, bold) + estado chip aligned to it
+    //   Tier 2  #orden · tipo · técnico        — one muted meta line
+    //   Tier 3  Inicio date                    + foto badge
     card.innerHTML = `
       <div class="card-contrato__tier1">
-        <div class="card-contrato__heading">
-          <span class="card-contrato__id">Orden #${ordenId}</span>
-          ${fotosBadgeMobile}
-        </div>
         <div class="card-contrato__cliente">${nombreClienteDe(ordenData)}</div>
         <span class="chip-estado ${getEstadoClass(estadoDisplay)}" title="${estadoDisplay}">${estadoCompacto(estadoDisplay)}</span>
       </div>
       <div class="card-contrato__tier2">
+        <span class="card-contrato__ord">#${ordenId}</span>
+        <span class="card-contrato__sep" aria-hidden="true">·</span>
         <span class="card-contrato__tipo">${tipoDisplay}</span>
         <span class="card-contrato__sep" aria-hidden="true">·</span>
         <span class="card-contrato__tecnico">${tecnicoDisplay}</span>
       </div>
       <div class="card-contrato__tier3">
         <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}</span>
+        ${fotosBadgeMobile}
       </div>
       <div class="acciones">
         <button class="btn btn-secondary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
