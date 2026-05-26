@@ -1949,20 +1949,28 @@ tr.activo:hover { background: #f0f9ff !important; }
   margin: 0;
 }
 
-/* Normal flow — no sticky. The equipos table is nested inside
-   the orders-table expand row, sharing a scroll context with
-   .orden-header-compacto (sticky z:30) and the outer orders-table
-   thead (sticky). Sticky-on-thead inside that nest was rendering
-   the thead BELOW the tbody in some browser/viewport combos
-   (header showed up at the bottom of the panel, blocking the
-   intervención cell). The .equipos-container max-height fits
-   most orders without internal scroll anyway. */
 .equipos-table thead {
   background: #f8fafc;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
-/* `.equipos-table thead::after` removed — th already has
-   border-bottom: 2px solid var(--line) which draws the divider. */
+/* Override the GLOBAL `table thead th { position: sticky; top:
+   var(--filter-card-h, 128px) }` (ordenes-index.css line 105).
+   That global rule pins every <th> of every table to top: 128px
+   of its scroll ancestor — designed for the outer orders-table
+   thead to sit below the filter card. But it also matches the
+   th cells of the equipos table nested in the expand row, where
+   the scroll ancestor is the short .equipos-container — so the
+   "sticky at top: 128px" pinned the th cells BELOW the tbody
+   (and on long lists, they got hidden behind the outer thead's
+   own sticky cells). Render the equipos thead in normal flow
+   instead. */
+.equipos-table thead th {
+  position: static;
+  top: auto;
+  z-index: auto;
+  box-shadow: none;
+  background: #f8fafc;
+}
 
 .equipos-table th {
   padding: 10px 12px;
