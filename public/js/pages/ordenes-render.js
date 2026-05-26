@@ -259,8 +259,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <span class="card-contrato__tecnico">${tecnicoDisplay}</span>
       </div>
       <div class="card-contrato__tier3">
-        <span>Creado: ${formatFecha(ordenData.fecha_creacion)}</span>
-        <span class="fecha-entrega">Entrega: ${formatFecha(ordenData.fecha_entrega)}</span>
+        <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}</span>
       </div>
       <div class="acciones">
         <button class="btn btn-secondary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
