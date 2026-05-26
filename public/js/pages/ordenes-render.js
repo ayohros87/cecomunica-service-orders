@@ -234,6 +234,9 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     card.setAttribute("data-orden-id", ordenId);
 
     const estadoDisplay = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
+    // Drive the per-estado left-rail color (mirrors the desktop
+    // table's tr[data-estado=*] rules so cards and rows match).
+    card.setAttribute("data-estado", estadoDisplay);
     const tecnicoDisplay = ordenData.tecnico_asignado || "Sin asignar";
     const tipoDisplay = ordenData.tipo_de_servicio || "—";
     const fotosBadgeMobile = fotosTallerCount > 0
