@@ -73,19 +73,35 @@
     <!-- Filtros se abren desde la barra inferior (#mobileBottomNav) -->
   </div>
 
-  <!-- §4.3 Live status badge cluster — mobile only -->
-  <div class="topbar-badges" id="topbarBadges" aria-label="Resumen de estados" aria-live="polite" aria-atomic="true">
-    <button class="topbar-badge topbar-badge--por-asignar" data-action="filtrar-badge" data-estado="POR ASIGNAR" title="Por asignar">
-      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbPorAsignar">0</span>
+  <!-- Single estado filter — chip bar with live counts. Replaces both
+       the old .topbar-badges cluster (mobile) and serves as the mobile
+       equivalent of #estadoChipsBar (desktop). Same class + data-action
+       so the existing handlers in ordenes-filters.js handle both. -->
+  <div class="estado-chips-bar" id="estadoChipsBarMobile" role="tablist" aria-label="Filtrar por estado">
+    <button type="button" class="estado-chip estado-chip--all active"
+            data-action="filtrar-estado-chip" data-estado=""
+            role="tab" aria-selected="true">
+      Todas <span class="estado-chip__count" data-count="all">0</span>
     </button>
-    <button class="topbar-badge topbar-badge--asignado" data-action="filtrar-badge" data-estado="ASIGNADO" title="Asignado">
-      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbAsignado">0</span>
+    <button type="button" class="estado-chip estado-chip--por-asignar"
+            data-action="filtrar-estado-chip" data-estado="POR ASIGNAR"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
     </button>
-    <button class="topbar-badge topbar-badge--completado" data-action="filtrar-badge" data-estado="COMPLETADO (EN OFICINA)" title="Completado en oficina">
-      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbCompletado">0</span>
+    <button type="button" class="estado-chip estado-chip--asignado"
+            data-action="filtrar-estado-chip" data-estado="ASIGNADO"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Asignado <span class="estado-chip__count" data-count="ASIGNADO">0</span>
     </button>
-    <button class="topbar-badge topbar-badge--entregado" data-action="filtrar-badge" data-estado="ENTREGADO AL CLIENTE" title="Entregado al cliente">
-      <span class="dot" aria-hidden="true"></span><span class="topbar-badge__count" id="tbEntregado">0</span>
+    <button type="button" class="estado-chip estado-chip--completado"
+            data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Completado <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--entregado"
+            data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
     </button>
   </div>
 
@@ -421,17 +437,8 @@
       </div>
     </div>
 
-    <!-- Estado chips -->
-    <div class="mdrawer-section">
-      <label class="mlabel">Estado</label>
-      <div class="mchips" id="mobileEstadoChips">
-        <button type="button" class="mchip" data-estado="">Todos</button>
-        <button type="button" class="mchip" data-estado="POR ASIGNAR">POR ASIGNAR</button>
-        <button type="button" class="mchip" data-estado="ASIGNADO">ASIGNADO</button>
-        <button type="button" class="mchip" data-estado="COMPLETADO (EN OFICINA)">COMPLETADO</button>
-        <button type="button" class="mchip" data-estado="ENTREGADO AL CLIENTE">ENTREGADO</button>
-      </div>
-    </div>
+    <!-- Estado chips moved out of drawer to the sticky chip bar in
+         #mobileHeader (no more duplicate estado filter). -->
 
     <div class="mdrawer-section">
       <label class="mlabel">Filtros avanzados</label>

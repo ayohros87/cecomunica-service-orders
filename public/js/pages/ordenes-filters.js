@@ -484,7 +484,7 @@ window.limpiarFiltros = function () {
 
   document.querySelectorAll('.resumen .badge.active').forEach(b => b.classList.remove('active'));
   // Reset estado chip bar to "Todas".
-  document.querySelectorAll('#estadoChipsBar .estado-chip').forEach(chip => {
+  document.querySelectorAll('.estado-chips-bar .estado-chip').forEach(chip => {
     const isAll = !chip.dataset.estado;
     chip.classList.toggle('active', isAll);
     chip.setAttribute('aria-selected', isAll ? 'true' : 'false');
@@ -537,7 +537,7 @@ window.filtrarPorChipEstado = function (el) {
   if (sel) sel.value = next;
 
   // Update chip ARIA state.
-  document.querySelectorAll('#estadoChipsBar .estado-chip').forEach(chip => {
+  document.querySelectorAll('.estado-chips-bar .estado-chip').forEach(chip => {
     const isActive = chip.dataset.estado === next;
     chip.classList.toggle('active', isActive);
     chip.setAttribute('aria-selected', isActive ? 'true' : 'false');
@@ -554,7 +554,7 @@ window.filtrarPorChipEstado = function (el) {
 window.syncEstadoChipsFromSelect = function () {
   const sel = document.getElementById('filtroEstado');
   const current = (sel?.value || '').toString();
-  document.querySelectorAll('#estadoChipsBar .estado-chip').forEach(chip => {
+  document.querySelectorAll('.estado-chips-bar .estado-chip').forEach(chip => {
     const isActive = (chip.dataset.estado || '') === current;
     chip.classList.toggle('active', isActive);
     chip.setAttribute('aria-selected', isActive ? 'true' : 'false');

@@ -29,32 +29,11 @@ body { background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%); min-height
   font-weight: 600;
 }
 
-/* ── §4.3 Topbar live badge cluster ─────────────────────────── */
-.topbar-badges {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.topbar-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  background: #f1f5f9;
-  color: var(--text, #0f172a);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity .15s;
-}
-.topbar-badge:hover { opacity: .75; }
-.topbar-badge .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.topbar-badge--por-asignar .dot { background: #f59e0b; }
-.topbar-badge--asignado    .dot { background: #3b82f6; }
-.topbar-badge--completado  .dot { background: #8b5cf6; }
-.topbar-badge--entregado   .dot { background: #22c55e; }
+/* The §4.3 topbar live badge cluster (.topbar-badges) was a SECOND
+   estado filter shown in #mobileHeader on top of the bottom-sheet
+   drawer's own estado chips. Phase 4 of the mobile redesign collapses
+   both into a single sticky chip bar (#estadoChipsBarMobile, same
+   markup as the desktop #estadoChipsBar). The badge styles lived here. */
 
 /* Unified Content Area */
 .app-wrap {
@@ -2741,9 +2720,29 @@ tr.activo:hover { background: #f0f9ff !important; }
     font-size: 12px;
   }
 
-  /* Mobile already has its own chip drawer (#mobileEstadoChips); hide
-     the desktop §4.3 estado chip bar to avoid duplicate filter surfaces. */
-  .estado-chips-bar { display: none; }
+  /* Hide the desktop estado chip bar on mobile. The mobile version
+     (#estadoChipsBarMobile) lives inside #mobileHeader. */
+  #estadoChipsBar { display: none; }
+
+  /* Mobile chip bar: bleed to header edges + horizontal scroll so all
+     5 chips fit on narrow screens without wrapping. */
+  #estadoChipsBarMobile {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    margin: 8px -12px 0;
+    padding: 2px 12px 6px;
+    border-bottom: 0;
+    scroll-snap-type: x proximity;
+  }
+  #estadoChipsBarMobile::-webkit-scrollbar { display: none; }
+  #estadoChipsBarMobile .estado-chip {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    height: 32px;
+  }
 }
 
 /* ========================================

@@ -729,23 +729,23 @@ function actualizarResumen(lista) {
   const completadoOficina  = fullList.filter(o => _statusOf(o) === "COMPLETADO (EN OFICINA)").length;
   const entregadoCliente   = fullList.filter(o => _statusOf(o) === "ENTREGADO AL CLIENTE").length;
 
-  // Pump counts into the §4.3 chip bar.
+  // Pump counts into BOTH estado chip bars (desktop #estadoChipsBar
+   // and mobile #estadoChipsBarMobile). Selecting by .class instead
+   // of #id keeps a single source of truth and both stay in sync.
   const chipCount = (key, n) => {
-    const span = document.querySelector(`#estadoChipsBar [data-count="${key}"]`);
-    if (span) span.textContent = String(n);
+    document
+      .querySelectorAll(`.estado-chips-bar [data-count="${key}"]`)
+      .forEach(span => { span.textContent = String(n); });
   };
   chipCount('all', fullList.length);
   chipCount('POR ASIGNAR', porAsignar);
   chipCount('ASIGNADO', asignado);
   chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
   chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
-
-  // §4.3 topbar live badge cluster — same counts, different DOM target.
-  const setTb = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = String(n); };
-  setTb('tbPorAsignar', porAsignar);
-  setTb('tbAsignado', asignado);
-  setTb('tbCompletado', completadoOficina);
-  setTb('tbEntregado', entregadoCliente);
+  // (The old #mobileHeader .topbar-badges cluster — tbPorAsignar /
+  // tbAsignado / tbCompletado / tbEntregado — was a duplicate estado
+  // filter and is gone. Its counts now live in the mobile chip bar
+  // above, populated by chipCount().)
 
   if (!el) return;
 
