@@ -1278,9 +1278,10 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
     margin-top: 12px;
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    align-items: stretch;
+    flex-wrap: nowrap;
   }
-  
+
   .card-contrato .acciones .btn {
     flex: 1;
     min-height: 44px;
@@ -1289,6 +1290,40 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
     align-items: center;
     font-size: 14px;
     padding: 12px 16px;
+  }
+
+  /* Flujo button (Asignar/Completar/Entregar) — match the row height
+     of the other action buttons on mobile (desktop keeps its compact
+     outline look). */
+  .card-contrato .acciones .btn-flujo {
+    flex: 1;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 14px;
+    border-radius: 8px;
+    justify-content: center;
+  }
+  .card-contrato .acciones .btn-flujo .lucide {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* Overflow ··· trigger (botonesGestion) — fixed-width icon button
+     sized for touch. Override the desktop opacity:0.7 mute since on
+     mobile this is the only access path to Fotos/Notas/Imprimir/
+     Editar/Eliminar (no quick-buttons for those anymore). */
+  .card-contrato .acciones .overflow-menu {
+    flex: 0 0 44px;
+    opacity: 1;
+  }
+  .card-contrato .acciones .overflow-menu-btn {
+    width: 100%;
+    min-height: 44px;
+    font-size: 22px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: white;
+    padding: 0;
   }
   
   /* Sticky toolbar on mobile */
@@ -2976,6 +3011,32 @@ tr.activo:hover { background: #f0f9ff !important; }
   color: var(--fg-4);
   font-variant-numeric: tabular-nums;
 }
+
+/* Per-orden intervención progress (aggregate of per-equipo
+   trabajo_tecnico + intervencion_no_disponible). Lets a tech scan
+   how many equipos still need work without expanding the order.
+   Grey 0/m · amber partial · green m/m. */
+.card-contrato__progreso {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.card-contrato__progreso::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  flex-shrink: 0;
+}
+.card-contrato__progreso--progress         { color: #92400e; }
+.card-contrato__progreso--progress::before { background: #f59e0b; }
+.card-contrato__progreso--done             { color: #065f46; }
+.card-contrato__progreso--done::before     { background: #22c55e; }
 .card-contrato__editar { flex: 2; }
 
 /* ──────────────────────────────────────────────────────────────────

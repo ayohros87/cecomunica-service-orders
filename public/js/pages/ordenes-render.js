@@ -240,10 +240,38 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       ? `<span class="fotos-taller-badge mobile" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
       : "";
 
-    // Cliente-primero hierarchy (v3 — ui_kits/app-mobile design note v3):
-    //   Tier 1  client (anchor, bold) + estado chip aligned to it
-    //   Tier 2  #orden · tipo · técnico        — one muted meta line
-    //   Tier 3  Inicio date                    + foto badge
+    // Intervención progress for the card (per-equipo aggregate) —
+    // mirrors the per-orden count rendered into the expand panel by
+    // renderEquiposTabla (lines 380-384) so techs can scan progress
+    // without expanding the order. Same source-of-truth fields:
+    // trabajo_tecnico (filled) + intervencion_no_disponible.
+    const eqConIntervencion = equiposNormalizados.filter(e => (e.trabajo_tecnico || "").trim()).length;
+    const eqNoDisponibles   = equiposNormalizados.filter(e => e.intervencion_no_disponible).length;
+    const interHechas       = eqConIntervencion + eqNoDisponibles;
+    const totalEquipos      = equiposNormalizados.length;
+    const progresoCls = totalEquipos === 0           ? ""
+                      : interHechas === totalEquipos ? "card-contrato__progreso--done"
+                      : interHechas > 0              ? "card-contrato__progreso--progress"
+                      : "";
+    const progresoHtml = totalEquipos > 0
+      ? `<span class="card-contrato__progreso ${progresoCls}">Intervenciones ${interHechas}/${totalEquipos}</span>`
+      : "";
+
+    // botonesFlujo returns `<em>-</em>` when the user's role/order
+    // state has no flujo action. That stray <em> in the mobile flex
+    // acciones row would render as a literal "-" between buttons.
+    // Suppress it on mobile.
+    const flujoRaw  = botonesFlujo(ordenId, estado, ordenData);
+    const flujoHtml = flujoRaw === "<em>-</em>" ? "" : flujoRaw;
+
+    // Cliente-primero hierarchy (v3 — ui_kits/app-mobile design notes
+    // v3/v5/v6). Actions reflect the technician's real flow on mobile:
+    //   Tier 1   client (anchor, bold) + estado chip aligned to it
+    //   Tier 2   #orden · tipo · técnico (· foto badge if any)
+    //   Tier 3   Inicio date            + intervención progress n/m
+    //   Actions  Equipos (gateway to per-equipo intervención)
+    //          + Flujo (state-advance)
+    //          + ··· overflow (Fotos, Notas, Imprimir, Editar, Eliminar)
     card.innerHTML = `
       <div class="card-contrato__tier1">
         <div class="card-contrato__cliente">${nombreClienteDe(ordenData)}</div>
@@ -255,22 +283,18 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <span class="card-contrato__tipo">${tipoDisplay}</span>
         <span class="card-contrato__sep" aria-hidden="true">·</span>
         <span class="card-contrato__tecnico">${tecnicoDisplay}</span>
+        ${fotosBadgeMobile}
       </div>
       <div class="card-contrato__tier3">
         <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}</span>
-        ${fotosBadgeMobile}
+        ${progresoHtml}
       </div>
       <div class="acciones">
-        <button class="btn btn-secondary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
-          <i data-lucide="eye"></i> Equipos
+        <button class="btn btn-primary" data-action="abrir-equipos-mobile" data-stop-propagation="true" data-orden-id="${ordenId}">
+          <i data-lucide="package"></i> Equipos
         </button>
-        <button class="btn btn-secondary" data-action="go-fotos-taller" data-stop-propagation="true" data-orden-id="${ordenId}">
-          <i data-lucide="camera"></i> Fotos
-        </button>
-        <button class="btn btn-primary card-contrato__editar" data-action="editar-orden" data-orden-id="${ordenId}">
-          <i data-lucide="pencil"></i> Editar
-        </button>
-        ${botonesFlujo(ordenId, estado, ordenData)}
+        ${flujoHtml}
+        ${botonesGestion(ordenId, estado)}
       </div>
     `;
 
