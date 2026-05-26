@@ -1949,23 +1949,20 @@ tr.activo:hover { background: #f0f9ff !important; }
   margin: 0;
 }
 
+/* Normal flow — no sticky. The equipos table is nested inside
+   the orders-table expand row, sharing a scroll context with
+   .orden-header-compacto (sticky z:30) and the outer orders-table
+   thead (sticky). Sticky-on-thead inside that nest was rendering
+   the thead BELOW the tbody in some browser/viewport combos
+   (header showed up at the bottom of the panel, blocking the
+   intervención cell). The .equipos-container max-height fits
+   most orders without internal scroll anyway. */
 .equipos-table thead {
   background: #f8fafc;
-  position: sticky;
-  top: 0;              /* ✅ clave: dentro del scroll de .equipos-container */
-  z-index: 5;          /* suficiente dentro del contenedor */
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
-
-.equipos-table thead::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--line);
-}
+/* `.equipos-table thead::after` removed — th already has
+   border-bottom: 2px solid var(--line) which draws the divider. */
 
 .equipos-table th {
   padding: 10px 12px;
