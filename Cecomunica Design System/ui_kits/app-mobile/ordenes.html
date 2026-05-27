@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Órdenes (Mobile)</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="../app/app.css">
+<link rel="stylesheet" href="mobile.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>Mobile · Órdenes</strong>
+  <a href="#pantalla-ordenes">Lista</a>
+  <a href="#pantalla-filtros">Filtros</a>
+  <a href="#pantalla-equipos">Equipos · Intervención</a>
+</nav>
+
+
+<header class="mk-hero">
+  <span class="mk-tag">App UI Kit · Mobile</span>
+  <h1>Órdenes de Servicio — Móvil</h1>
+  <p>Superficie táctil para el flujo de reparaciones en teléfono. Un único filtro de estado
+     (sticky, con conteos) y la búsqueda integrada en el app bar para no robar espacio a la lista.
+     Cada pantalla está envuelta en un <code style="color:rgba(255,255,255,.9);">.m-frame</code>
+     (bezel de teléfono) sólo para previsualizar en monitor.</p>
+</header>
+
+
+<div class="mk-wrap">
+
+  <!-- ════════════════════════════════════════════════════════
+       SCREEN 1 · Lista de órdenes (full screen demo)
+       ════════════════════════════════════════════════════════ -->
+  <section class="mk-section" id="pantalla-ordenes">
+    <h2>Pantalla · Lista de Órdenes</h2>
+    <p class="mk-desc">App bar con búsqueda integrada (toca la lupa), un solo filtro de estado sticky
+       con conteos, tarjetas de orden, FAB y barra de navegación inferior. Sin filtros duplicados ni
+       fila de búsqueda fija.</p>
+
+    <div class="mk-screens">
+      <div>
+        <div class="m-frame">
+          <!-- App bar with toggle search -->
+          <div class="m-appbar" id="appbar1">
+            <a class="m-appbar-logo" href="#" aria-label="CeComunica">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true">
+                <rect width="40" height="40" rx="8" fill="#0B2A47"/>
+                <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+                <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#0091D7" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+                <rect x="18.5" y="18.5" width="3" height="3" fill="#0091D7"/>
+              </svg>
+            </a>
+            <span class="m-appbar-title"><i data-lucide="clipboard-list"></i><span>Órdenes</span></span>
+            <button class="m-appbar-btn" aria-label="Buscar" onclick="document.getElementById('appbar1').classList.add('searching')"><i data-lucide="search"></i></button>
+            <div class="m-appbar-search">
+              <button class="m-appbar-btn m-appbar-back" aria-label="Cerrar búsqueda" onclick="document.getElementById('appbar1').classList.remove('searching')"><i data-lucide="chevron-left"></i></button>
+              <input type="text" placeholder="Orden, cliente o serial…" autocomplete="off">
+              <button class="m-appbar-btn" aria-label="Escanear serial"><i data-lucide="scan-line"></i></button>
+            </div>
+          </div>
+
+          <div class="m-screen">
+            <div class="m-filterbar">
+              <div class="m-chiprow">
+                <button class="m-chip active">Todas <span class="m-chip-count">142</span></button>
+                <button class="m-chip">Por asignar <span class="m-chip-count">12</span></button>
+                <button class="m-chip">Asignado <span class="m-chip-count">28</span></button>
+                <button class="m-chip">Completado <span class="m-chip-count">9</span></button>
+                <button class="m-chip">Entregado <span class="m-chip-count">93</span></button>
+              </div>
+            </div>
+
+            <div class="m-content">
+              <p class="m-list-meta">Actualizado hace 2 min</p>
+
+              <div class="m-list">
+                <!-- Card: ASIGNADO · 1 de 3 equipos intervenidos -->
+                <article class="m-order-card" data-estado="ASIGNADO">
+                  <div class="m-order-card__top">
+                    <div class="m-order-card__client">Seguridad Panamá Corp.</div>
+                    <span class="chip-estado chip-reparacion" title="ASIGNADO">Asignado</span>
+                  </div>
+                  <div class="m-order-card__meta">
+                    <span class="ord">#1039</span><span class="sep">·</span>
+                    <span>Instalación</span><span class="sep">·</span>
+                    <span>J. Méndez</span>
+                  </div>
+                  <div class="m-order-card__date">
+                    <span>Inicio: 21 may</span>
+                    <span class="m-work m-work--progress">Intervenciones 1/3</span>
+                  </div>
+                  <div class="m-order-card__actions">
+                    <button class="btn btn-primary m-cta"><i data-lucide="package"></i> Equipos</button>
+                    <button class="btn btn-secondary m-cta"><i data-lucide="check-circle"></i> Completar</button>
+                    <button class="btn btn-secondary btn-icon m-more" aria-label="Más acciones"><i data-lucide="more-horizontal"></i></button>
+                  </div>
+                </article>
+
+                <!-- Card: ASIGNADO · 0 de 2 equipos intervenidos -->
+                <article class="m-order-card" data-estado="ASIGNADO">
+                  <div class="m-order-card__top">
+                    <div class="m-order-card__client">Radios del Istmo, S.A.</div>
+                    <span class="chip-estado chip-reparacion" title="ASIGNADO">Asignado</span>
+                  </div>
+                  <div class="m-order-card__meta">
+                    <span class="ord">#1042</span><span class="sep">·</span>
+                    <span>Reparación</span><span class="sep">·</span>
+                    <span>A. Yohros</span>
+                  </div>
+                  <div class="m-order-card__date">
+                    <span>Inicio: 24 may</span>
+                    <span class="m-work">Intervenciones 0/2</span>
+                  </div>
+                  <div class="m-order-card__actions">
+                    <button class="btn btn-primary m-cta"><i data-lucide="package"></i> Equipos</button>
+                    <button class="btn btn-secondary m-cta"><i data-lucide="check-circle"></i> Completar</button>
+                    <button class="btn btn-secondary btn-icon m-more" aria-label="Más acciones"><i data-lucide="more-horizontal"></i></button>
+                  </div>
+                </article>
+
+                <!-- Card: COMPLETADO · 3 de 3 equipos intervenidos -->
+                <article class="m-order-card" data-estado="COMPLETADO (EN OFICINA)">
+                  <div class="m-order-card__top">
+                    <div class="m-order-card__client">Transporte Colón Express</div>
+                    <span class="chip-estado chip-lista" title="COMPLETADO (EN OFICINA)">Completado</span>
+                  </div>
+                  <div class="m-order-card__meta">
+                    <span class="ord">#1031</span><span class="sep">·</span>
+                    <span>Reparación</span><span class="sep">·</span>
+                    <span>A. Yohros</span>
+                  </div>
+                  <div class="m-order-card__date">
+                    <span>Inicio: 20 may</span>
+                    <span class="m-work m-work--done">Intervenciones 3/3</span>
+                  </div>
+                  <div class="m-order-card__actions">
+                    <button class="btn btn-secondary m-cta"><i data-lucide="package"></i> Equipos</button>
+                    <button class="btn btn-primary m-cta"><i data-lucide="send"></i> Entregar</button>
+                    <button class="btn btn-secondary btn-icon m-more" aria-label="Más acciones"><i data-lucide="more-horizontal"></i></button>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <button class="m-fab"><i data-lucide="plus"></i> Nueva</button>
+
+            <nav class="m-bottomnav">
+              <button class="m-bottomnav__item active">
+                <i data-lucide="clipboard-list"></i>
+                <span class="m-bottomnav__label">Órdenes</span>
+              </button>
+              <button class="m-bottomnav__item m-bottomnav__item--primary">
+                <i data-lucide="plus-circle"></i>
+                <span class="m-bottomnav__label">Nueva</span>
+              </button>
+              <button class="m-bottomnav__item">
+                <i data-lucide="sliders-horizontal"></i>
+                <span class="m-bottomnav__label">Filtros</span>
+              </button>
+            </nav>
+          </div>
+        </div>
+        <p class="mk-screen-label">Lista de órdenes · estado por defecto</p>
+        <p class="mk-hint">↑ toca la lupa para abrir la búsqueda</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SCREEN 2 · Filtros avanzados (bottom sheet abierto)
+       ════════════════════════════════════════════════════════ -->
+  <section class="mk-section" id="pantalla-filtros">
+    <h2>Pantalla · Filtros avanzados (Bottom Sheet)</h2>
+    <p class="mk-desc">La pestaña «Filtros» abre el sheet solo para lo que no cabe en la barra: tipo,
+       técnico, «mis órdenes» y orden. El estado se filtra arriba (chips) y la búsqueda en el app bar,
+       así no se duplica nada.</p>
+
+    <div class="mk-screens">
+      <div>
+        <div class="m-frame">
+          <div class="m-appbar">
+            <a class="m-appbar-logo" href="#" aria-label="CeComunica">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true">
+                <rect width="40" height="40" rx="8" fill="#0B2A47"/>
+                <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+                <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#0091D7" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+                <rect x="18.5" y="18.5" width="3" height="3" fill="#0091D7"/>
+              </svg>
+            </a>
+            <span class="m-appbar-title"><i data-lucide="clipboard-list"></i><span>Órdenes</span></span>
+            <button class="m-appbar-btn" aria-label="Buscar"><i data-lucide="search"></i></button>
+          </div>
+          <div class="m-screen">
+            <div class="m-filterbar" style="opacity:.5; filter:blur(1px);">
+              <div class="m-chiprow">
+                <button class="m-chip active">Todas <span class="m-chip-count">142</span></button>
+                <button class="m-chip">Por asignar <span class="m-chip-count">12</span></button>
+                <button class="m-chip">Asignado <span class="m-chip-count">28</span></button>
+              </div>
+            </div>
+            <div class="m-content" style="filter:blur(1px); opacity:.5;">
+              <div class="m-list">
+                <article class="m-order-card" data-estado="ASIGNADO" style="height:120px;"></article>
+                <article class="m-order-card" data-estado="POR ASIGNAR" style="height:120px;"></article>
+              </div>
+            </div>
+
+            <div class="m-sheet-backdrop open">
+              <div class="m-sheet">
+                <div class="m-sheet__handle"></div>
+                <div class="m-sheet__head">
+                  <h3 class="m-sheet__title">Filtros avanzados</h3>
+                  <button class="btn btn-ghost btn-sm">Limpiar</button>
+                </div>
+                <div class="m-sheet__body">
+                  <div class="m-sheet__section">
+                    <label class="m-sheet__label">Tipo de servicio</label>
+                    <div class="form-field">
+                      <select class="form-select">
+                        <option>Todos</option>
+                        <option>Reparación</option>
+                        <option>Instalación</option>
+                        <option>Mantenimiento</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="m-sheet__section">
+                    <label class="m-sheet__label">Técnico</label>
+                    <div class="form-field">
+                      <select class="form-select">
+                        <option>Todos</option>
+                        <option>A. Yohros</option>
+                        <option>J. Méndez</option>
+                      </select>
+                    </div>
+                    <label class="form-check" style="margin-top:12px;">
+                      <input type="checkbox">
+                      <span class="form-check-label">Ver solo mis órdenes</span>
+                    </label>
+                  </div>
+
+                  <div class="m-sheet__section">
+                    <label class="m-sheet__label">Ordenar por</label>
+                    <div class="m-segment">
+                      <button class="m-segment__btn active">Número</button>
+                      <button class="m-segment__btn">Cliente</button>
+                      <button class="m-segment__btn"><i data-lucide="arrow-up-down"></i></button>
+                    </div>
+                  </div>
+                </div>
+                <div class="m-sheet__footer">
+                  <button class="btn btn-secondary">Cancelar</button>
+                  <button class="btn btn-primary"><i data-lucide="check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mk-screen-label">Bottom sheet · solo filtros avanzados</p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ════════════════════════════════════════════════════════
+       SCREEN 3 · Equipos de la orden (intervenciones por equipo)
+       ════════════════════════════════════════════════════════ -->
+  <section class="mk-section" id="pantalla-equipos">
+    <h2>Pantalla · Equipos de la orden (intervenciones)</h2>
+    <p class="mk-desc">El botón <strong>Equipos</strong> de la tarjeta abre este sheet. Las intervenciones
+       son <strong>por equipo</strong>: cada equipo tiene su propio estado (✓ hecha / pendiente / no
+       disponible) y su botón <strong>Intervención</strong>, que abre el editor de la derecha.</p>
+
+    <div class="mk-screens">
+      <!-- Frame A: equipos list sheet -->
+      <div>
+        <div class="m-frame">
+          <div class="m-appbar">
+            <button class="m-appbar-btn m-appbar-back" aria-label="Volver"><i data-lucide="chevron-left"></i></button>
+            <span class="m-appbar-title"><span>Orden #1039</span></span>
+            <button class="m-appbar-btn" aria-label="Más"><i data-lucide="more-vertical"></i></button>
+          </div>
+          <div class="m-screen">
+            <div class="m-content" style="filter:blur(1px); opacity:.45;">
+              <div class="m-list">
+                <article class="m-order-card" data-estado="ASIGNADO" style="height:120px;"></article>
+              </div>
+            </div>
+            <div class="m-sheet-backdrop open">
+              <div class="m-sheet" style="max-height:92%;">
+                <div class="m-sheet__handle"></div>
+                <div class="m-sheet__head">
+                  <div>
+                    <h3 class="m-sheet__title">Equipos</h3>
+                    <div style="font-size:var(--fs-caption); color:var(--fg-3); margin-top:2px;">Seguridad Panamá Corp · 3 equipos</div>
+                  </div>
+                  <button class="m-appbar-btn" aria-label="Cerrar"><i data-lucide="x"></i></button>
+                </div>
+                <div class="m-sheet__body">
+                  <div class="m-list">
+                    <article class="m-equipo m-equipo--ok">
+                      <div class="m-equipo__head">
+                        <div>
+                          <div class="m-equipo__serial"><i data-lucide="package"></i> SN-44128</div>
+                          <div class="m-equipo__model">Modelo: Motorola DGP-8550e</div>
+                        </div>
+                        <span class="m-equipo__status m-equipo__status--ok"><i data-lucide="check-circle"></i> Hecha</span>
+                      </div>
+                      <div class="m-equipo__work">Se reemplazó antena y se recalibró potencia de salida a 4W. Prueba de cobertura OK.</div>
+                      <div class="m-equipo__actions">
+                        <button class="btn btn-secondary"><i data-lucide="check-circle"></i> Ver intervención</button>
+                      </div>
+                    </article>
+
+                    <article class="m-equipo m-equipo--pending">
+                      <div class="m-equipo__head">
+                        <div>
+                          <div class="m-equipo__serial"><i data-lucide="package"></i> SN-44131</div>
+                          <div class="m-equipo__model">Modelo: Motorola DGP-8550e</div>
+                        </div>
+                        <span class="m-equipo__status m-equipo__status--pending"><i data-lucide="circle-dashed"></i> Pendiente</span>
+                      </div>
+                      <div class="m-equipo__actions">
+                        <button class="btn btn-primary"><i data-lucide="pencil-line"></i> Intervención</button>
+                      </div>
+                    </article>
+
+                    <article class="m-equipo m-equipo--na">
+                      <div class="m-equipo__head">
+                        <div>
+                          <div class="m-equipo__serial"><i data-lucide="package"></i> SN-44140</div>
+                          <div class="m-equipo__model">Modelo: Kenwood NX-1300</div>
+                        </div>
+                        <span class="m-equipo__status m-equipo__status--na"><i data-lucide="slash"></i> No disponible</span>
+                      </div>
+                      <div class="m-equipo__work">No disponible: el cliente no entregó el equipo en taller.</div>
+                      <div class="m-equipo__actions">
+                        <button class="btn btn-secondary"><i data-lucide="pencil-line"></i> Intervención</button>
+                      </div>
+                    </article>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mk-screen-label">Equipos de la orden · estado de intervención por equipo</p>
+      </div>
+
+      <!-- Frame B: intervención editor sheet -->
+      <div>
+        <div class="m-frame">
+          <div class="m-appbar">
+            <button class="m-appbar-btn m-appbar-back" aria-label="Volver"><i data-lucide="chevron-left"></i></button>
+            <span class="m-appbar-title"><span>Orden #1039</span></span>
+            <button class="m-appbar-btn" aria-label="Más"><i data-lucide="more-vertical"></i></button>
+          </div>
+          <div class="m-screen">
+            <div class="m-content" style="filter:blur(1px); opacity:.45;">
+              <div class="m-list">
+                <article class="m-equipo m-equipo--pending" style="height:90px;"></article>
+              </div>
+            </div>
+            <div class="m-sheet-backdrop open">
+              <div class="m-sheet">
+                <div class="m-sheet__handle"></div>
+                <div class="m-sheet__head">
+                  <div>
+                    <h3 class="m-sheet__title">Intervención técnica</h3>
+                    <div style="font-size:var(--fs-caption); color:var(--fg-3); margin-top:2px;">SN-44131 · Motorola DGP-8550e</div>
+                  </div>
+                  <button class="m-appbar-btn" aria-label="Cerrar"><i data-lucide="x"></i></button>
+                </div>
+                <div class="m-sheet__body">
+                  <div class="form-field">
+                    <label class="form-label">Describe la intervención realizada</label>
+                    <textarea class="form-textarea" rows="5" placeholder="Describe la intervención técnica realizada…"></textarea>
+                  </div>
+                  <label class="form-check" style="margin-top:14px;">
+                    <input type="checkbox">
+                    <span class="form-check-label">Equipo no disponible para intervención</span>
+                  </label>
+                  <div class="form-field" style="margin-top:10px;">
+                    <input class="form-input" type="text" placeholder="Motivo (libre)">
+                  </div>
+                </div>
+                <div class="m-sheet__footer">
+                  <button class="btn btn-secondary">Cancelar</button>
+                  <button class="btn btn-primary"><i data-lucide="save"></i> Guardar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mk-screen-label">Editor de intervención · por equipo</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

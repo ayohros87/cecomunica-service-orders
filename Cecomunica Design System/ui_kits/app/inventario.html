@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Inventario</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>Inventario</strong>
+  <a href="#applied-radios">Radios</a>
+  <a href="#applied-modelos">Modelos</a>
+  <a href="#applied-piezas">Piezas</a>
+  <a href="#applied-cargar">Cargar</a>
+</nav>
+
+
+<!-- ─── 1 · APPLIED · Inventario de Radios ────────────────── -->
+<section class="demo-section" id="applied-radios">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Inventario de Radios · Lista (ejemplo aplicado)</h2>
+    <p>Pantalla 1:1 para <code>public/inventario/index.html</code>: tabla densa con KPI strip
+       arriba (stock total, en taller, asignados, baja stock), filtros por modelo + estado +
+       ubicación, y dropdown desktop con opciones de export / movimiento masivo. 1:1 con la página
+       de producción.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <div class="app-topbar" style="position:relative; top:auto;">
+      <a href="#" class="app-topbar-logo" aria-label="CeComunica">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+      </a>
+      <span class="app-topbar-title"><i data-lucide="package"></i> Inventario de Radios</span>
+      <div class="app-topbar-spacer"></div>
+      <div class="app-topbar-actions">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="home"></i> Inicio</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="upload"></i> Cargar</button>
+        <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nuevo radio</button>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px 24px;">
+      <div class="app-page-header">
+        <div>
+          <h1>Inventario de Radios</h1>
+          <p>2,134 equipos · 12 modelos · Actualizado hace 6 min</p>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="kpi-grid" style="margin-bottom:var(--sp-5);">
+        <div class="kpi-card">
+          <span class="kpi-card-label">Stock total</span>
+          <span class="kpi-card-value">2,134</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Disponibles</span>
+          <span class="kpi-card-value kpi-ok">1,872</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">En taller</span>
+          <span class="kpi-card-value kpi-accent">42</span>
+          <span class="kpi-card-sub">Pruebas / reparación</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Asignados</span>
+          <span class="kpi-card-value">220</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Baja stock</span>
+          <span class="kpi-card-value kpi-warn">3 modelos</span>
+          <span class="kpi-card-sub">&lt; 10 unidades</span>
+        </div>
+      </div>
+
+      <div class="app-card">
+        <div class="filter-bar">
+          <div class="filter-search">
+            <span class="search-icon"><i data-lucide="search"></i></span>
+            <input type="search" placeholder="Serial, modelo, ubicación…" aria-label="Buscar equipos">
+          </div>
+          <div class="form-field" style="margin:0; min-width:170px;">
+            <select class="form-select">
+              <option value="">Todos los modelos</option>
+              <option>Hytera PD78X</option>
+              <option>Hytera HP78X</option>
+              <option>Motorola DGP-8550e</option>
+              <option>Kenwood NX-1300</option>
+            </select>
+          </div>
+          <div class="filter-chips">
+            <button class="filter-chip active">Todos</button>
+            <button class="filter-chip">Disponible</button>
+            <button class="filter-chip">En taller</button>
+            <button class="filter-chip">Asignado</button>
+          </div>
+          <div style="flex:1;"></div>
+          <div class="dropdown">
+            <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">
+              <i data-lucide="sliders-horizontal"></i> Acciones <i data-lucide="chevron-down" style="width:14px;height:14px;"></i>
+            </button>
+            <div class="dropdown-menu">
+              <div class="dropdown-label">Movimiento</div>
+              <button class="dropdown-item"><i data-lucide="arrow-right-from-line"></i> Salida masiva</button>
+              <button class="dropdown-item"><i data-lucide="arrow-left-to-line"></i> Ingreso masivo</button>
+              <button class="dropdown-item"><i data-lucide="repeat"></i> Reubicar</button>
+              <div class="dropdown-divider"></div>
+              <div class="dropdown-label">Exportar</div>
+              <button class="dropdown-item"><i data-lucide="file-spreadsheet"></i> Excel completo</button>
+              <button class="dropdown-item"><i data-lucide="file-text"></i> PDF resumen</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="app-table-wrap" style="border:none; border-radius:0; box-shadow:none;">
+          <table class="app-table" aria-label="Inventario de radios">
+            <thead>
+              <tr>
+                <th class="sortable sort-asc">Serial</th>
+                <th>Modelo</th>
+                <th>Marca</th>
+                <th>Ubicación</th>
+                <th>Estado</th>
+                <th>Asignado a</th>
+                <th class="sortable">Última actualización</th>
+                <th style="width:80px; text-align:right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="td-primary td-mono">HYT-00421</td>
+                <td>PD78X</td>
+                <td>Hytera</td>
+                <td>Almacén A · Estante 3</td>
+                <td><span class="chip-estado chip-aprobada">Disponible</span></td>
+                <td class="td-muted">—</td>
+                <td class="td-muted">12 May 2025</td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Mover"><i data-lucide="move"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td class="td-primary td-mono">HYT-00389</td>
+                <td>HP78X</td>
+                <td>Hytera</td>
+                <td>Taller · Banco 2</td>
+                <td><span class="chip-estado chip-reparacion">En taller</span></td>
+                <td>OS-2025-0141</td>
+                <td class="td-muted">11 May 2025</td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Mover"><i data-lucide="move"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td class="td-primary td-mono">MOT-DGP-00121</td>
+                <td>DGP-8550e</td>
+                <td>Motorola</td>
+                <td>Cliente · Manzanillo Intl.</td>
+                <td><span class="chip-estado chip-entregada">Asignado</span></td>
+                <td>CT-2025-0048</td>
+                <td class="td-muted">8 May 2025</td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Devolver"><i data-lucide="rotate-ccw"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td class="td-primary td-mono">KW-NX-00078</td>
+                <td>NX-1300</td>
+                <td>Kenwood</td>
+                <td>Almacén B · Estante 1</td>
+                <td><span class="chip-estado chip-aprobada">Disponible</span></td>
+                <td class="td-muted">—</td>
+                <td class="td-muted">5 May 2025</td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Mover"><i data-lucide="move"></i></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="app-table-footer">
+          <span>Mostrando <strong>1–4</strong> de <strong>2,134</strong> equipos</span>
+          <div class="pager-input">
+            <span>Página</span>
+            <input type="number" min="1" value="1">
+            <span class="pager-input-total">/ 427</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 2 · APPLIED · Modelos ─────────────────────────────── -->
+<section class="demo-section" id="applied-modelos">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Inventario · Modelos (ejemplo aplicado)</h2>
+    <p>Catálogo maestro de modelos: especificaciones técnicas, precio referencial, foto y total
+       de unidades en stock. Es la fuente de verdad de los selectores de modelo en órdenes,
+       contratos, cotizaciones y POC. 1:1 con <code>public/inventario/modelos.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+    <div class="app-page-header">
+      <div>
+        <h1>Modelos de Radio</h1>
+        <p>12 modelos activos · 3 con stock bajo</p>
+      </div>
+      <div class="app-page-header-actions">
+        <button class="btn btn-primary"><i data-lucide="plus"></i> Nuevo modelo</button>
+      </div>
+    </div>
+
+    <div class="app-card">
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table">
+          <thead>
+            <tr>
+              <th style="width:60px;"></th>
+              <th>Modelo</th>
+              <th>Marca</th>
+              <th>Categoría</th>
+              <th>Especificaciones</th>
+              <th style="text-align:right;">Stock</th>
+              <th style="text-align:right;">P. lista</th>
+              <th style="width:80px; text-align:right;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><div style="width:40px;height:40px;background:var(--surface-sunken);border-radius:var(--radius-sm);display:grid;place-items:center;"><i data-lucide="radio" style="color:var(--fg-3);"></i></div></td>
+              <td class="td-primary">PD78X</td>
+              <td>Hytera</td>
+              <td>Portátil DMR</td>
+              <td class="td-muted">DMR Tier III · 1024 canales · IP67</td>
+              <td class="td-amount">428</td>
+              <td class="td-amount">$185.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td><div style="width:40px;height:40px;background:var(--surface-sunken);border-radius:var(--radius-sm);display:grid;place-items:center;"><i data-lucide="cpu" style="color:var(--fg-3);"></i></div></td>
+              <td class="td-primary">HP78X</td>
+              <td>Hytera</td>
+              <td>Portátil DMR</td>
+              <td class="td-muted">DMR · GPS · Bluetooth · IP67</td>
+              <td class="td-amount">312</td>
+              <td class="td-amount">$210.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td><div style="width:40px;height:40px;background:var(--surface-sunken);border-radius:var(--radius-sm);display:grid;place-items:center;"><i data-lucide="truck" style="color:var(--fg-3);"></i></div></td>
+              <td class="td-primary">MD78X</td>
+              <td>Hytera</td>
+              <td>Móvil vehicular</td>
+              <td class="td-muted">25W · GPS · pantalla a color</td>
+              <td class="td-amount kpi-warn">7</td>
+              <td class="td-amount">$520.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td><div style="width:40px;height:40px;background:var(--surface-sunken);border-radius:var(--radius-sm);display:grid;place-items:center;"><i data-lucide="smartphone" style="color:var(--fg-3);"></i></div></td>
+              <td class="td-primary">PNC560</td>
+              <td>Hytera</td>
+              <td>PoC 4G LTE</td>
+              <td class="td-muted">Android 10 · pantalla touch · GPS</td>
+              <td class="td-amount">847</td>
+              <td class="td-amount">$340.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 3 · APPLIED · Piezas ──────────────────────────────── -->
+<section class="demo-section" id="applied-piezas">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Inventario · Piezas (ejemplo aplicado)</h2>
+    <p>Catálogo de repuestos para servicio técnico. Cada pieza tiene SKU, descripción, modelos
+       compatibles, stock y precio (taller / venta). Es la fuente de verdad de las líneas de
+       cotización de servicio. 1:1 con <code>public/inventario/piezas.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+    <div class="app-page-header">
+      <div>
+        <h1>Inventario de Piezas</h1>
+        <p>248 piezas · 14 con stock bajo</p>
+      </div>
+      <div class="app-page-header-actions">
+        <button class="btn btn-secondary"><i data-lucide="upload"></i> Importar XLSX</button>
+        <button class="btn btn-primary"><i data-lucide="plus"></i> Nueva pieza</button>
+      </div>
+    </div>
+
+    <div class="app-card">
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" placeholder="SKU, descripción, modelo compatible…">
+        </div>
+        <label class="toggle-pill is-on">
+          <input type="checkbox" checked>
+          Solo con stock
+        </label>
+        <label class="toggle-pill">
+          <input type="checkbox">
+          Stock bajo (&lt;5)
+        </label>
+      </div>
+
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table editable">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Descripción</th>
+              <th>Compatibles</th>
+              <th style="text-align:right;">Stock</th>
+              <th style="text-align:right;">P. taller</th>
+              <th style="text-align:right;">P. venta</th>
+              <th style="width:80px; text-align:right;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-primary td-mono">HYT-MIC-001</td>
+              <td>Micrófono interno Hytera PD78X</td>
+              <td class="td-muted">PD78X · HP78X</td>
+              <td class="td-amount">42</td>
+              <td class="td-amount">$25.00</td>
+              <td class="td-amount">$45.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-primary td-mono">HYT-BAT-PD78</td>
+              <td>Batería Li-Ion 2000mAh PD78X</td>
+              <td class="td-muted">PD78X</td>
+              <td class="td-amount kpi-warn">3</td>
+              <td class="td-amount">$38.00</td>
+              <td class="td-amount">$72.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-primary td-mono">UNI-ANT-UHF1</td>
+              <td>Antena UHF 5cm SMA-Female</td>
+              <td class="td-muted">PD78X · HP78X · DGP-8550e</td>
+              <td class="td-amount">156</td>
+              <td class="td-amount">$8.50</td>
+              <td class="td-amount">$15.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-primary td-mono">UNI-CLIP-BELT</td>
+              <td>Clip de cinturón universal</td>
+              <td class="td-muted">Mayoría portátiles Hytera</td>
+              <td class="td-amount">312</td>
+              <td class="td-amount">$2.50</td>
+              <td class="td-amount">$6.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 4 · APPLIED · Cargar inventario ───────────────────── -->
+<section class="demo-section" id="applied-cargar">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Inventario · Cargar (ejemplo aplicado)</h2>
+    <p>Importador XLSX para alta masiva de equipos. Usa el patrón del <code>xlsx-importer</code> de
+       foundations + alert-banner para resultado de la última carga.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+    <div class="app-page-header">
+      <div>
+        <h1>Cargar Inventario</h1>
+        <p>Sube un Excel con seriales, modelos y ubicación.</p>
+      </div>
+    </div>
+
+    <div class="alert-banner alert-success">
+      <span class="alert-banner-icon"><i data-lucide="check-circle"></i></span>
+      <div class="alert-banner-body">
+        <strong>Última carga: 14 May 2025 09:42</strong>
+        Se importaron <strong>247</strong> equipos correctamente. <strong>3</strong> con advertencias
+        (modelo no encontrado) — descarga el reporte para revisarlos.
+      </div>
+      <button class="btn btn-ghost btn-sm">Ver reporte</button>
+    </div>
+
+    <div class="app-card app-card-padded" style="max-width:680px;">
+      <div class="form-section" style="border:none; padding:0; margin:0;">
+        <div>
+          <p class="form-section-title"><i data-lucide="file-spreadsheet"></i> Archivo Excel</p>
+          <p class="form-section-desc">Plantilla disponible en el botón "Descargar plantilla".</p>
+        </div>
+
+        <label class="form-file-zone" tabindex="0" role="button" style="border-style:dashed;">
+          <input type="file" accept=".xlsx,.xls" style="display:none;">
+          <div class="form-file-zone-icon"><i data-lucide="file-spreadsheet" style="width:32px;height:32px;"></i></div>
+          <p><strong>Arrastra tu archivo Excel aquí</strong> o haz clic para seleccionar</p>
+          <span>XLSX, XLS · máx. 10 MB · hasta 5,000 filas</span>
+        </label>
+
+        <p class="demo-label" style="margin-top:var(--sp-4);">Columnas esperadas</p>
+        <div class="importer-column-map">
+          <div class="importer-col-row"><span class="importer-col-name">serial</span><span class="importer-col-label">→ N.° de serie único</span></div>
+          <div class="importer-col-row"><span class="importer-col-name">modelo</span><span class="importer-col-label">→ Modelo (debe existir en catálogo)</span></div>
+          <div class="importer-col-row"><span class="importer-col-name">marca</span><span class="importer-col-label">→ Marca (auto si modelo está en catálogo)</span></div>
+          <div class="importer-col-row"><span class="importer-col-name">ubicacion</span><span class="importer-col-label">→ Almacén · Estante · Bin</span></div>
+          <div class="importer-col-row"><span class="importer-col-name">estado_inicial</span><span class="importer-col-label">→ disponible | taller | asignado</span></div>
+        </div>
+
+        <div class="form-actions" style="margin-top:var(--sp-4);">
+          <button class="btn btn-secondary"><i data-lucide="download"></i> Descargar plantilla</button>
+          <button class="btn btn-primary" disabled><i data-lucide="upload"></i> Cargar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+
+<script src="app-demo.js"></script>
+</body>
+</html>

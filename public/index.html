@@ -39,8 +39,8 @@
     </div>
 
     <!-- Grid de módulos -->
-    <div id="gridModulos" class="app-grid">
-      
+    <div id="gridModulos" class="module-grid">
+
       <!-- Skeleton loaders (mostrados mientras carga) -->
       <div class="skeleton-card" id="skeleton1">
         <div class="skeleton-icon"></div>
@@ -63,86 +63,93 @@
           <div class="skeleton-line subtitle"></div>
         </div>
       </div>
-      
+
       <!-- Órdenes -->
-      <div class="app-card" data-keywords="ordenes servicio reparaciones equipos tecnicos" data-mod="ordenes" data-visible="false"
-           onclick="location.href='ordenes/index.html'">
-        <div class="ico"><i data-lucide="settings-2"></i></div>
-        <div class="meta">
-          <div class="t">Órdenes de Servicio</div>
-          <div class="s">Recepción, técnicos, estados y equipos</div>
-        </div>
-      </div>
+      <a class="module-card" data-keywords="ordenes servicio reparaciones equipos tecnicos" data-mod="ordenes" data-visible="false"
+         href="ordenes/index.html">
+        <span class="module-card-icon"><i data-lucide="settings-2"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Órdenes de Servicio</span>
+          <span class="module-card-sub">Recepción, técnicos, estados y equipos</span>
+        </span>
+        <span class="module-card-shortcut">O</span>
+      </a>
 
       <!-- PoC -->
-      <div class="app-card" data-keywords="poc base datos radios sim ip gps grupos" data-mod="poc" data-visible="false"
-           onclick="location.href='POC/index.html'">
-        <div class="ico"><i data-lucide="radio-tower"></i></div>
-        <div class="meta">
-          <div class="t">Base de Datos PoC</div>
-          <div class="s">Radios, SIM, IP, grupos y notas</div>
-        </div>
-      </div>
+      <a class="module-card" data-keywords="poc base datos radios sim ip gps grupos" data-mod="poc" data-visible="false"
+         href="POC/index.html">
+        <span class="module-card-icon"><i data-lucide="radio-tower"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Base de Datos PoC</span>
+          <span class="module-card-sub">Radios, SIM, IP, grupos y notas</span>
+        </span>
+        <span class="module-card-shortcut">P</span>
+      </a>
 
       <!-- Inventario -->
-      <div class="app-card" data-keywords="inventario radios stock modelos almacen" data-mod="inventario" data-visible="false"
-           onclick="location.href='inventario/index.html'">
-        <div class="ico"><i data-lucide="package"></i></div>
-        <div class="meta">
-          <div class="t">Inventario de Radios</div>
-          <div class="s">Ingresos, salidas y existencias</div>
-        </div>
-      </div>
+      <a class="module-card" data-keywords="inventario radios stock modelos almacen" data-mod="inventario" data-visible="false"
+         href="inventario/index.html">
+        <span class="module-card-icon"><i data-lucide="package"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Inventario de Radios</span>
+          <span class="module-card-sub">Ingresos, salidas y existencias</span>
+        </span>
+        <span class="module-card-shortcut">I</span>
+      </a>
 
       <!-- Inventario de Piezas -->
-      <div class="app-card" data-keywords="piezas repuestos stock inventario taller servicio" data-mod="piezas" data-visible="false"
-           onclick="location.href='inventario/piezas.html'">
-        <div class="ico"><i data-lucide="puzzle"></i></div>
-        <div class="meta">
-          <div class="t">Inventario de Piezas</div>
-          <div class="s">Repuestos y precios para servicio</div>
-        </div>
-      </div>
+      <a class="module-card" data-keywords="piezas repuestos stock inventario taller servicio" data-mod="piezas" data-visible="false"
+         href="inventario/piezas.html">
+        <span class="module-card-icon"><i data-lucide="puzzle"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Inventario de Piezas</span>
+          <span class="module-card-sub">Repuestos y precios para servicio</span>
+        </span>
+        <span class="module-card-shortcut">X</span>
+      </a>
 
       <!-- Contratos -->
-      <div class="app-card" data-keywords="contratos clientes facturacion vigencia" data-mod="contratos" data-visible="false"
-           onclick="location.href='contratos/index.html'">
-        <div class="ico"><i data-lucide="file-text"></i></div>
-        <div class="meta">
-          <div class="t">Contratos</div>
-          <div class="s">Altas, renovaciones y estados</div>
-        </div>
-      </div>
+      <a class="module-card" data-keywords="contratos clientes facturacion vigencia" data-mod="contratos" data-visible="false"
+         href="contratos/index.html">
+        <span class="module-card-icon"><i data-lucide="file-text"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Contratos</span>
+          <span class="module-card-sub">Altas, renovaciones y estados</span>
+        </span>
+        <span class="module-card-shortcut">C</span>
+      </a>
 
       <!-- Cotizaciones -->
-      <div class="app-card" data-keywords="cotizaciones ventas proformas ofertas clientes" data-mod="cotizaciones" data-visible="false"
-           onclick="location.href='cotizaciones/index.html'">
-        <div class="ico"><i data-lucide="receipt"></i></div>
-        <div class="meta">
-          <div class="t">Cotizaciones</div>
-          <div class="s">Crear, editar e imprimir</div>
-        </div>
-      </div>
+      <a class="module-card" data-keywords="cotizaciones ventas proformas ofertas clientes" data-mod="cotizaciones" data-visible="false"
+         href="cotizaciones/index.html">
+        <span class="module-card-icon"><i data-lucide="receipt"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Cotizaciones</span>
+          <span class="module-card-sub">Crear, editar e imprimir</span>
+        </span>
+        <span class="module-card-shortcut">Q</span>
+      </a>
 
-<!-- Clientes -->
-<div class="app-card" data-keywords="clientes ruc cedula contactos cuentas empresas" data-mod="clientes" data-visible="false"
-     onclick="location.href='clientes/index.html'">
-  <div class="ico"><i data-lucide="users"></i></div>
-  <div class="meta">
-    <div class="t">Clientes</div>
-    <div class="s">Listado y edición masiva</div>
-  </div>
-</div>
+      <!-- Clientes -->
+      <a class="module-card" data-keywords="clientes ruc cedula contactos cuentas empresas" data-mod="clientes" data-visible="false"
+         href="clientes/index.html">
+        <span class="module-card-icon"><i data-lucide="users"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Clientes</span>
+          <span class="module-card-sub">Listado y edición masiva</span>
+        </span>
+      </a>
 
       <!-- Vendedores -->
-      <div class="app-card" data-keywords="vendedores ventas carga batch equipos radios" data-mod="vendedores" data-visible="false"
-           onclick="location.href='POC/vendedores-batch.html'">
-        <div class="ico"><i data-lucide="briefcase"></i></div>
-        <div class="meta">
-          <div class="t">Registro de Equipos (Ventas)</div>
-          <div class="s">Carga rápida por vendedor</div>
-        </div>
-      </div>
+      <a class="module-card" data-keywords="vendedores ventas carga batch equipos radios" data-mod="vendedores" data-visible="false"
+         href="POC/vendedores-batch.html">
+        <span class="module-card-icon"><i data-lucide="briefcase"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Registro de Equipos (Ventas)</span>
+          <span class="module-card-sub">Carga rápida por vendedor</span>
+        </span>
+        <span class="module-card-shortcut">V</span>
+      </a>
     </div>
   </div>
 
@@ -165,7 +172,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
 
     const visibles = new Set(visiblesPorRol[rol] || []);
-    document.querySelectorAll("#gridModulos .app-card").forEach(card => {
+    document.querySelectorAll("#gridModulos .module-card").forEach(card => {
       const mod = card.getAttribute("data-mod");
       card.setAttribute("data-visible", visibles.has(mod) ? "true" : "false");
     });
@@ -188,7 +195,7 @@ function cerrarSesion() {
     // === BUSCADOR DE MÓDULOS ===
     function filtrarModulos() {
       const q = (document.getElementById("buscador").value || "").toLowerCase().trim();
-      const cards = Array.from(document.querySelectorAll("#gridModulos .app-card"));
+      const cards = Array.from(document.querySelectorAll("#gridModulos .module-card"));
 
       cards.forEach(card => {
         // Respeta visibilidad por rol
@@ -196,7 +203,7 @@ function cerrarSesion() {
 
         if (!q) { card.style.display = ""; return; }
         const keys = (card.getAttribute("data-keywords") || "").toLowerCase();
-        const titulo = (card.querySelector(".meta .t")?.textContent || "").toLowerCase();
+        const titulo = (card.querySelector(".module-card-title")?.textContent || "").toLowerCase();
         card.style.display = (keys.includes(q) || titulo.includes(q)) ? "" : "none";
       });
     }
@@ -205,7 +212,7 @@ function cerrarSesion() {
   document.addEventListener("keydown", (e) => {
     if (["INPUT","TEXTAREA"].includes((e.target.tagName||""))) return;
     const go = (sel) => {
-      const el = document.querySelector(`.app-card[data-mod='${sel}'][data-visible='true']`);
+      const el = document.querySelector(`.module-card[data-mod='${sel}'][data-visible='true']`);
       if (el) el.click();
     };
     if (e.key === "o") go("ordenes");

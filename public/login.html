@@ -16,74 +16,79 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <div class="auth-hero">
-    <div class="auth-grid">
-      <!-- Panel de marca -->
-      <section class="auth-brand">
-        <div class="logo">
-          <div class="circle">C</div>
-          <div>
-            <h2>Cecomunica</h2>
-            <div>Centro de Gestión</div>
-          </div>
+  <div class="auth-shell">
+    <!-- Panel de marca -->
+    <section class="auth-brand">
+      <div class="auth-brand-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
+          <rect width="40" height="40" rx="8" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+        <div>
+          <h2>Cecomunica</h2>
+          <div>Centro de Gestión</div>
         </div>
-        <p>Comunicación corporativa y gubernamental en una sola plataforma.</p>
-        <ul class="auth-bullets">
-          <li><i data-lucide="radio-tower"></i> PoC y DMR — gestión centralizada</li>
-          <li><i data-lucide="settings-2"></i> Órdenes de servicio y técnicos</li>
-          <li><i data-lucide="package"></i> Inventario y modelos</li>
-          <li><i data-lucide="file-text"></i> Contratos y clientes</li>
-        </ul>
-      </section>
+      </div>
+      <p>Comunicación corporativa y gubernamental en una sola plataforma.</p>
+      <ul class="auth-bullets">
+        <li><i data-lucide="radio-tower"></i> PoC y DMR — gestión centralizada</li>
+        <li><i data-lucide="settings-2"></i> Órdenes de servicio y técnicos</li>
+        <li><i data-lucide="package"></i> Inventario y modelos</li>
+        <li><i data-lucide="file-text"></i> Contratos y clientes</li>
+      </ul>
+    </section>
 
-      <!-- Tarjeta de autenticación -->
+    <!-- Wrap del formulario (centra la tarjeta) -->
+    <div class="auth-form-wrap">
       <section class="auth-card">
-        <h2 class="auth-title">Inicia sesión</h2>
+        <h2>Inicia sesión</h2>
         <p class="auth-sub">Usa tu correo de Cecomunica para continuar.</p>
 
-        <div id="msg" class="alert" style="display:none;"></div>
+        <div id="msg" class="alert-banner alert-error" style="display:none;">
+          <span class="alert-banner-icon"><i data-lucide="alert-triangle"></i></span>
+          <div class="alert-banner-body" id="msgBody"></div>
+        </div>
 
         <form id="formLogin" novalidate>
-          <div class="auth-field">
-            <label for="email">Correo</label>
-            <input class="auth-input" type="email" id="email" autocomplete="username" required />
+          <div class="form-field">
+            <label class="form-label" for="email">Correo</label>
+            <input class="form-input" type="email" id="email" autocomplete="username" required />
           </div>
 
-          <div class="auth-field">
-            <label for="password">Contraseña</label>
-            <div class="input-with-toggle">
-              <input class="auth-input" type="password" id="password" autocomplete="current-password" required />
-              <button type="button" class="toggle" aria-label="Mostrar/Ocultar" onclick="togglePass()"><i data-lucide="eye" id="iconPass"></i></button>
+          <div class="form-field">
+            <label class="form-label" for="password">Contraseña</label>
+            <div class="auth-input-toggle">
+              <input class="form-input" type="password" id="password" autocomplete="current-password" required />
+              <button type="button" aria-label="Mostrar/Ocultar" onclick="togglePass()"><i data-lucide="eye" id="iconPass"></i></button>
             </div>
           </div>
 
-          <div class="auth-footer">
-            <label class="auth-remember">
-              <input type="checkbox" id="remember" /> Mantener sesión
+          <div class="auth-footer-row">
+            <label class="form-check" style="margin:0;">
+              <input type="checkbox" id="remember" />
+              <span><span class="form-check-label" style="font-size:13px;">Mantener sesión</span></span>
             </label>
-            <a class="auth-link" href="#" onclick="mostrarReset(event)">¿Olvidaste tu contraseña?</a>
+            <a href="#" onclick="mostrarReset(event)">¿Olvidaste tu contraseña?</a>
           </div>
 
-          <div class="auth-actions">
-            <button id="btnLogin" type="submit" class="btn btn-primary btn-lg grow">Iniciar sesión</button>
-          </div>
+          <button id="btnLogin" type="submit" class="btn btn-primary btn-lg" style="width:100%;">Iniciar sesión</button>
         </form>
 
-        <div class="divider"><span>opciones</span></div>
+        <div class="auth-divider"><span>opciones</span></div>
 
-        <div class="auth-actions">
-          <button class="btn btn-lg grow" onclick="window.location.href='mailto:soporte@cecomunica.com'"><i data-lucide="mail"></i> Contactar soporte</button>
-        </div>
+        <button class="btn btn-secondary btn-lg" style="width:100%;" onclick="window.location.href='mailto:soporte@cecomunica.com'"><i data-lucide="mail"></i> Contactar soporte</button>
 
         <!-- Reset -->
-        <form id="formReset" style="display:none; margin-top:10px;">
-          <div class="auth-field">
-            <label for="reset-email">Restablecer contraseña</label>
-            <input class="auth-input" type="email" id="reset-email" placeholder="tu@correo.com" required />
+        <form id="formReset" style="display:none; margin-top:16px;">
+          <div class="form-field">
+            <label class="form-label" for="reset-email">Restablecer contraseña</label>
+            <input class="form-input" type="email" id="reset-email" placeholder="tu@correo.com" required />
           </div>
-          <div class="auth-actions">
-            <button type="button" class="btn btn-lg" onclick="cancelarReset()">Cancelar</button>
-            <button id="btnReset" type="submit" class="btn btn-lg">Enviar correo</button>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-secondary btn-lg" style="flex:1;" onclick="cancelarReset()">Cancelar</button>
+            <button id="btnReset" type="submit" class="btn btn-primary btn-lg" style="flex:1;">Enviar correo</button>
           </div>
         </form>
       </section>
@@ -131,9 +136,15 @@
   }
   function showMsg(text, ok=false){
     const m = document.getElementById('msg');
-    m.className = ok ? 'alert ok' : 'alert';
-    m.textContent = text;
-    m.style.display = 'block';
+    const body = document.getElementById('msgBody');
+    m.className = ok ? 'alert-banner alert-success' : 'alert-banner alert-error';
+    const ico = m.querySelector('.alert-banner-icon i');
+    if (ico) {
+      ico.setAttribute('data-lucide', ok ? 'check-circle' : 'alert-triangle');
+      if (window.lucide) lucide.createIcons({ nodes: [m.querySelector('.alert-banner-icon')] });
+    }
+    body.textContent = text;
+    m.style.display = '';
   }
   function mapAuthError(errCode){
     const map = {

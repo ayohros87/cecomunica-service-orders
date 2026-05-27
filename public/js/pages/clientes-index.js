@@ -214,7 +214,7 @@ updateTotalPages();
 function updateBulkBar(){
   const n = selectedIds.size;
   $bulkCount.textContent = n;
-  $bulkBar.style.display = (n>0 && !asReadonly()) ? 'block' : 'none';
+  $bulkBar.classList.toggle('visible', n>0 && !asReadonly());
 }
 $bulkActivar.onclick = async ()=>{
   if(asReadonly() || selectedIds.size===0) return;

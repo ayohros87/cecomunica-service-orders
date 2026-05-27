@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Clientes</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>Clientes</strong>
+  <a href="#applied-list">Lista</a>
+  <a href="#applied-edit">Editar</a>
+</nav>
+
+
+<!-- ─── 1 · APPLIED · Lista ───────────────────────────────── -->
+<section class="demo-section" id="applied-list">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Clientes · Lista (ejemplo aplicado)</h2>
+    <p>Pantalla 1:1 para <code>public/clientes/index.html</code>: tabla de alta densidad con
+       <code>app-table.compact</code>, edición en línea (toggle activo, tags), selección masiva
+       con bulk-bar contextual y paginador con input numérico. Soporta búsqueda + filtro "solo
+       activos" con <code>.toggle-pill</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <div class="app-topbar" style="position:relative; top:auto;">
+      <a href="#" class="app-topbar-logo" aria-label="CeComunica">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+      </a>
+      <span class="app-topbar-title"><i data-lucide="users"></i> Clientes</span>
+      <div class="app-topbar-spacer"></div>
+      <div class="app-topbar-actions">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="home"></i> Inicio</button>
+        <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nuevo cliente</button>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px 24px;">
+      <div class="app-page-header">
+        <div>
+          <h1>Clientes</h1>
+          <p>1,247 clientes · 1,098 activos · Actualizado hace 4 min</p>
+        </div>
+      </div>
+
+      <div class="app-card">
+        <div class="filter-bar">
+          <div class="filter-search">
+            <span class="search-icon"><i data-lucide="search"></i></span>
+            <input type="search" placeholder="Buscar por nombre, RUC, representante…" aria-label="Buscar clientes">
+          </div>
+          <label class="toggle-pill is-on">
+            <input type="checkbox" checked>
+            Solo activos
+          </label>
+          <label class="toggle-pill">
+            <input type="checkbox">
+            Con tags
+          </label>
+          <div style="flex:1;"></div>
+          <div class="dropdown">
+            <button class="btn btn-secondary btn-sm" onclick="this.nextElementSibling.classList.toggle('open')">
+              <i data-lucide="download"></i> Exportar <i data-lucide="chevron-down" style="width:14px;height:14px;"></i>
+            </button>
+            <div class="dropdown-menu">
+              <button class="dropdown-item"><i data-lucide="file-spreadsheet"></i> Excel</button>
+              <button class="dropdown-item"><i data-lucide="file-text"></i> PDF</button>
+              <button class="dropdown-item"><i data-lucide="copy"></i> Copiar a portapapeles</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bulk bar (visible when rows selected) -->
+        <div class="bulk-bar visible" style="position:relative; margin:0;">
+          <span class="bulk-count">3 clientes seleccionados</span>
+          <span class="bulk-divider"></span>
+          <button class="btn btn-secondary btn-sm"><i data-lucide="power"></i> Activar</button>
+          <button class="btn btn-danger-ghost btn-sm"><i data-lucide="power-off"></i> Desactivar</button>
+          <div class="bulk-divider"></div>
+          <div class="bulk-tag-wrap">
+            <label class="form-label" style="margin:0; white-space:nowrap;">Tag:</label>
+            <input class="form-input" placeholder="ej: vip" style="height:32px;">
+            <button class="btn btn-secondary btn-sm"><i data-lucide="tag"></i> Agregar</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto;">Limpiar</button>
+        </div>
+
+        <!-- Compact table -->
+        <div class="app-table-wrap" style="border:none; border-radius:0; box-shadow:none;">
+          <table class="app-table compact" aria-label="Clientes">
+            <thead>
+              <tr>
+                <th style="width:34px;"><input type="checkbox" aria-label="Seleccionar todos"></th>
+                <th class="sortable sort-asc">Nombre</th>
+                <th>RUC</th>
+                <th>Representante</th>
+                <th>Teléfono</th>
+                <th>Email</th>
+                <th>Vendedor</th>
+                <th>Tags</th>
+                <th>Activo</th>
+                <th style="width:60px; text-align:right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><input type="checkbox" checked></td>
+                <td class="td-primary">Portafolio Digital S.A.</td>
+                <td class="td-mono">888-888-888 · 42</td>
+                <td>Rosa Murillo</td>
+                <td class="td-mono">+507 6000-0000</td>
+                <td class="td-muted">rosa@portafolio.com</td>
+                <td>Pedro Vargas</td>
+                <td><span class="tag-chip">vip</span> <span class="tag-chip">factura-mensual</span></td>
+                <td>
+                  <span class="toggle-switch" style="transform:scale(0.85);">
+                    <input type="checkbox" checked>
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </span>
+                </td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" checked></td>
+                <td class="td-primary">Manzanillo Intl. Terminal</td>
+                <td class="td-mono">123-456-789 · 12</td>
+                <td>Ana López</td>
+                <td class="td-mono">+507 6789-0002</td>
+                <td class="td-muted">ana.lopez@manzanillo.com</td>
+                <td>María Fernández</td>
+                <td><span class="tag-chip">puerto</span></td>
+                <td>
+                  <span class="toggle-switch" style="transform:scale(0.85);">
+                    <input type="checkbox" checked>
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </span>
+                </td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" checked></td>
+                <td class="td-primary">Soluciones Omega Corp</td>
+                <td class="td-mono">777-777-777 · 31</td>
+                <td>Luis Castillo</td>
+                <td class="td-mono">+507 6789-0003</td>
+                <td class="td-muted">luis.castillo@omega.com</td>
+                <td>—</td>
+                <td><span class="tag-chip">doc-incompleto</span></td>
+                <td>
+                  <span class="toggle-switch" style="transform:scale(0.85);">
+                    <input type="checkbox" checked>
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </span>
+                </td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox"></td>
+                <td class="td-primary">Radio Chiriquí S.A.</td>
+                <td class="td-mono">666-555-444 · 08</td>
+                <td>Ana González</td>
+                <td class="td-mono">+507 6700-0001</td>
+                <td class="td-muted">contacto@radiochiriqui.pa</td>
+                <td>Pedro Vargas</td>
+                <td><span class="tag-chip">renovar</span></td>
+                <td>
+                  <span class="toggle-switch" style="transform:scale(0.85);">
+                    <input type="checkbox">
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </span>
+                </td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td><input type="checkbox"></td>
+                <td class="td-primary">Tech Panama Pty Ltd</td>
+                <td class="td-mono">123-456-789 · 99</td>
+                <td>Carlos Ramos</td>
+                <td class="td-mono">+507 6789-0005</td>
+                <td class="td-muted">c.ramos@techpa.com</td>
+                <td>María Fernández</td>
+                <td>—</td>
+                <td>
+                  <span class="toggle-switch" style="transform:scale(0.85);">
+                    <input type="checkbox" checked>
+                    <span class="toggle-track"></span>
+                    <span class="toggle-thumb"></span>
+                  </span>
+                </td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer with pager input -->
+        <div class="app-table-footer">
+          <span style="font-size:13px; color:var(--fg-3);">Mostrando <strong>1–5</strong> de <strong>1,247</strong></span>
+          <div style="display:flex; gap:var(--sp-3); align-items:center;">
+            <button class="btn btn-secondary btn-sm"><i data-lucide="chevron-left" style="width:14px;height:14px;"></i> Anterior</button>
+            <div class="pager-input">
+              <span>Página</span>
+              <input type="number" min="1" value="1">
+              <span class="pager-input-total">/ 250</span>
+            </div>
+            <button class="btn btn-secondary btn-sm">Siguiente <i data-lucide="chevron-right" style="width:14px;height:14px;"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 2 · APPLIED · Editar cliente ──────────────────────── -->
+<section class="demo-section" id="applied-edit">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Clientes · Editar (ejemplo aplicado)</h2>
+    <p>Ficha de cliente: secciones de identidad (legal), contacto principal, vendedor asignado y
+       observaciones. Mantiene el patrón <code>form-section-header</code> con readiness y
+       <code>form-grid-2</code>. Sidebar con resumen + acciones (sumar a orden, ver historial).</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+
+    <nav class="app-breadcrumbs">
+      <a href="#">Clientes</a>
+      <span class="app-breadcrumbs-sep"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <span class="app-breadcrumbs-current">Portafolio Digital S.A.</span>
+    </nav>
+
+    <div class="app-page-header">
+      <div>
+        <h1>Portafolio Digital S.A.</h1>
+        <p>RUC 888-888-888 DV 42 · Cliente desde 2022 · 14 contratos · 87 órdenes</p>
+      </div>
+      <div class="app-page-header-actions">
+        <span class="tag-chip">vip</span>
+        <span class="tag-chip">factura-mensual</span>
+      </div>
+    </div>
+
+    <div class="split-pane">
+      <div class="split-main">
+        <div>
+          <div class="form-section-header">
+            <h3><i data-lucide="building-2"></i> Identidad legal</h3>
+            <span class="section-readiness ready"><i data-lucide="check"></i> Listo</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid">
+              <div class="form-field">
+                <label class="form-label">Razón social <span class="form-required">*</span></label>
+                <input class="form-input" value="Portafolio Digital S.A.">
+              </div>
+              <div class="form-field">
+                <label class="form-label">RUC</label>
+                <input class="form-input" value="888-888-888" style="font-family:var(--font-mono);">
+              </div>
+              <div class="form-field">
+                <label class="form-label">DV</label>
+                <input class="form-input" value="42" style="font-family:var(--font-mono);">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Cédula representante legal</label>
+                <input class="form-input" value="8-123-4567" style="font-family:var(--font-mono);">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="form-section-header">
+            <h3><i data-lucide="user"></i> Contacto principal</h3>
+            <span class="section-readiness ready"><i data-lucide="check"></i> Listo</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid">
+              <div class="form-field">
+                <label class="form-label">Representante</label>
+                <input class="form-input" value="Rosa Murillo">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Teléfono</label>
+                <input class="form-input" value="+507 6000-0000" style="font-family:var(--font-mono);">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Email</label>
+                <input class="form-input" value="rosa.murillo@portafolio.com">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Dirección</label>
+                <input class="form-input" value="Av. Balboa, Torre Banco General, Piso 14">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="form-section-header">
+            <h3><i data-lucide="briefcase"></i> Asignación</h3>
+            <span class="section-readiness pending"><i data-lucide="clock"></i> Sin vendedor</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid">
+              <div class="form-field">
+                <label class="form-label">Vendedor responsable</label>
+                <select class="form-select">
+                  <option value="">— Sin asignar —</option>
+                  <option selected>Pedro Vargas</option>
+                  <option>María Fernández</option>
+                  <option>Luis Herrera</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Tags</label>
+                <input class="form-input" value="vip, factura-mensual">
+                <span class="form-hint">Separa con comas.</span>
+              </div>
+              <div class="form-field" style="grid-column:1/-1;">
+                <label class="form-label">Observaciones</label>
+                <textarea class="form-input form-textarea" rows="3">Cliente preferente — envío de cotizaciones por correo confirmado. Facturación mensual cierra día 25.</textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="split-sidebar">
+        <div class="summary-card">
+          <div class="summary-card-title">Resumen</div>
+          <div class="summary-card-divider"></div>
+          <div class="summary-totals-row"><span>Contratos activos</span><strong>3</strong></div>
+          <div class="summary-totals-row muted"><span>Órdenes este año</span><span>14</span></div>
+          <div class="summary-totals-row muted"><span>Equipos en taller</span><span>2</span></div>
+          <div class="summary-totals-row total"><span>Facturación 2025</span><span>$18,420</span></div>
+          <div class="summary-card-divider"></div>
+          <div class="summary-card-actions">
+            <button class="btn btn-primary" style="width:100%;"><i data-lucide="save"></i> Guardar</button>
+            <button class="btn btn-secondary" style="width:100%;"><i data-lucide="plus"></i> Nueva orden</button>
+            <button class="btn btn-ghost" style="width:100%;"><i data-lucide="history"></i> Ver historial</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+
+<script src="app-demo.js"></script>
+</body>
+</html>

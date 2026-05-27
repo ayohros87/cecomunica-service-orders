@@ -1,9 +1,7 @@
 # App UI Kit — CeComunica
 
-Operational surface kit for the **service-orders / repair workflow** app
-(`public/ordenes/*.html`). Companion to `ui_kits/website/` (marketing site).
-
-Built entirely on top of `../../colors_and_type.css`. No additional token files needed.
+Operational surface kit for the CeComunica platform. Built entirely on top of
+`../../colors_and_type.css`. No additional token files needed.
 
 ---
 
@@ -11,25 +9,56 @@ Built entirely on top of `../../colors_and_type.css`. No additional token files 
 
 ```
 ui_kits/app/
-├── index.html   ← clickable demo (all components on one page)
-├── app.css      ← all app-kit styles (imports tokens from ../../colors_and_type.css)
-└── README.md    ← this file
+├── index.html               ← portal landing (7 area cards)
+├── foundations.html         ← generic components (buttons, forms, modals, dropdowns, tooltips, banners…)
+├── ordenes.html             ← Órdenes de Servicio kit + applied examples
+├── poc.html                 ← PoC inventory kit
+├── contratos.html           ← Contratos kit (list / new / edit / print / verify)
+├── cotizaciones.html        ← Cotizaciones kit (list / new / edit / print)
+├── clientes.html            ← Clientes kit (list with bulk / edit)
+├── inventario.html          ← Inventario kit (radios / modelos / piezas / cargar)
+├── print-demo.html          ← print-base.css preview (orden / cotización)
+├── print-demo-contrato.html ← print-base.css preview (contrato)
+├── app.css                  ← all app-kit styles
+├── app-demo.js              ← shared demo-page JS
+└── README.md                ← this file
 ```
 
 ---
 
-## Components included
+## Areas
 
-| Component | Section in demo | Key classes |
-|-----------|----------------|-------------|
-| **App shell** — topbar, breadcrumbs, page header | `#app-shell` | `.app-topbar`, `.app-breadcrumbs`, `.app-page-header` |
-| **Buttons** — 5 variants × 3 sizes, icon, loading, group | `#buttons` | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-accent` |
-| **Status chips** — 9 order states + priority | `#chips` | `.chip-estado`, `.chip-prioridad` |
-| **Data table** — sortable, sticky header, filter bar, pagination, skeleton | `#data-table` | `.app-table-wrap`, `table.app-table`, `.filter-bar`, `.app-table-footer` |
-| **Form kit** — inputs, selects, textarea, file upload, checkboxes, sections, error states | `#forms` | `.form-field`, `.form-input`, `.form-select`, `.form-textarea`, `.form-file-zone` |
-| **Modal / dialog** — confirm + content variants | `#modals` | `.modal-backdrop`, `.modal` |
-| **Toasts** — success, error, warning, info | `#toasts` | `.toast-region`, `.toast` |
-| **Empty / loading / error states** — skeletons, empty, error | `#empty` | `.app-empty-state`, `.skeleton` |
+| Area | File | Highlights |
+|------|------|------------|
+| **Foundations** | `foundations.html` | Buttons · Forms · Modals · Toasts · Empty · KPI · CRUD · Toggle · Combobox · Readiness · Disclosure · Review · Side sheet · Split pane · Details · Bulk bar · XLSX import · **Module grid (home)** · **Auth shell (login)** · **Toggle pill** · **Dropdown** · **Banner / alert** · **Floating tooltip** · **Pager input** · **Responsive cards** · **Empty-state hint** · **Page-header centered** |
+| **Órdenes** | `ordenes.html` | Shell · Chips · Tabla · Acordeón · Editable · Footer strip · Galería · Firma · **Aplicado · Lista · Trabajar · Nueva · Progreso de Técnicos · Configuración** |
+| **PoC** | `poc.html` | Lista · Batch · **Vendedores rápido · Imprimir equipos** |
+| **Contratos** | `contratos.html` | QR · Multi-firma · **Lista · Nuevo · Editar · Imprimir · Verificar (público)** |
+| **Cotizaciones** | `cotizaciones.html` | Chips · **Lista · Nueva · Editar · Imprimir** |
+| **Clientes** | `clientes.html` | **Lista densa con bulk · Editar (ficha)** |
+| **Inventario** | `inventario.html` | **Radios · Modelos · Piezas · Cargar (XLSX)** |
+
+Each area page has its own intra-page nav and a "← Portal" link back to
+`index.html`. The portal has no nav — just 7 cards.
+
+---
+
+## New primitives (R3)
+
+Available in `app.css`, demoed in `foundations.html`:
+
+| Primitive | Class | Use case |
+|-----------|-------|----------|
+| Module grid | `.module-grid` / `.module-card` | Home / launcher with per-role visibility |
+| Auth shell | `.auth-shell` / `.auth-brand` / `.auth-card` | Login + reset password |
+| Toggle pill | `.toggle-pill` | Compact inline filter switch |
+| Dropdown menu | `.dropdown` / `.dropdown-menu` / `.dropdown-item` | Desktop action overflow |
+| Floating tooltip | `.tooltip-floating` | Hover preview (e.g. equipos en tabla de contratos) |
+| Alert banner | `.alert-banner` (+ success / warning / error) | In-flow status above a page or form |
+| Page header centered | `.page-header-centered` | Long-form pages (nueva orden, cotización, contrato) |
+| Pager input | `.pager-input` | "Página N / total" for huge tables |
+| Responsive cards | `.responsive-table-wrap` / `.responsive-cards` / `.responsive-card` | Table → card stack below 900px |
+| Empty-state hint | `.empty-state-hint` | "Sin resultados / Prueba con menos filtros" |
 
 ---
 
@@ -46,16 +75,6 @@ ui_kits/app/
 | Entregada | `.chip-estado.chip-entregada` |
 | Cancelada | `.chip-estado.chip-cancelada` |
 | En espera | `.chip-estado.chip-espera` |
-
----
-
-## Planned additions (next iteration)
-
-- [ ] Tabs / accordion — order detail sections (Equipo, Cliente, Intervenciones, Fotos, Cotización)
-- [ ] Stepper / timeline — repair progress (`estado_reparacion`, `trabajar-orden`)
-- [ ] Photo grid + lightbox — `fotos-taller`
-- [ ] Signature pad pattern — `firmar-entrega`
-- [ ] Print stylesheet kit — `imprimir-orden`, `nota-entrega`
 
 ---
 
@@ -83,5 +102,7 @@ Lucide icons (same CDN as the website kit):
 Recommended app-side icon allowlist: `clipboard-list`, `wrench`, `camera`, `pen-tool`,
 `printer`, `qr-code`, `truck`, `user-check`, `clipboard`, `wifi-off`, `search`,
 `sliders-horizontal`, `refresh-cw`, `more-horizontal`, `chevron-left`, `chevron-right`,
-`chevron-right`, `alert-triangle`, `check-circle`, `x-circle`, `info`, `save`,
-`log-out`, `settings`, `trophy`, `shield`, `home`, `building-2`, `phone`, `mail`.
+`alert-triangle`, `check-circle`, `x-circle`, `info`, `save`, `log-out`, `settings`,
+`trophy`, `shield`, `home`, `building-2`, `phone`, `mail`, `smartphone`, `file-text`,
+`layers`, `receipt`, `users`, `package`, `puzzle`, `briefcase`, `radio-tower`,
+`scan-line`, `shield-check`.

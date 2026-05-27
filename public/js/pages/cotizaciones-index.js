@@ -98,84 +98,88 @@
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td colspan="6">
-            <div class="empty-state">
-              <div class="title">No hay cotizaciones para mostrar</div>
-              <div class="hint">Prueba ajustando los filtros o crea una nueva cotización.</div>
+            <div class="empty-state-hint">
+              <div class="empty-state-hint-icon"><i data-lucide="receipt"></i></div>
+              <p class="title">No hay cotizaciones para mostrar</p>
+              <p class="hint">Prueba ajustando los filtros o crea una nueva cotización.</p>
             </div>
           </td>
         `;
         tbody.appendChild(tr);
         if (cards) {
           const empty = document.createElement("div");
-          empty.className = "empty-state";
-          empty.innerHTML = `<div class="title">No hay cotizaciones para mostrar</div><div class="hint">Prueba ajustando los filtros o crea una nueva cotización.</div>`;
+          empty.className = "empty-state-hint";
+          empty.innerHTML = `<div class="empty-state-hint-icon"><i data-lucide="receipt"></i></div><p class="title">No hay cotizaciones para mostrar</p><p class="hint">Prueba ajustando los filtros o crea una nueva cotización.</p>`;
           cards.appendChild(empty);
         }
+        if (typeof lucide !== 'undefined') lucide.createIcons();
         return;
       }
       lista.forEach(c => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td>${c.cotizacion_id || ""}</td>
+          <td class="td-primary">${c.cotizacion_id || ""}</td>
           <td>${c.cliente_nombre || ""}</td>
-          <td>${formatFecha(c.fecha_creacion)}</td>
+          <td class="td-muted">${formatFecha(c.fecha_creacion)}</td>
           <td>${estadoBadge(c.estado || "borrador")}</td>
-          <td>${formatMoney(c.total)}</td>
-          <td></td>
+          <td class="td-amount">${formatMoney(c.total)}</td>
+          <td class="td-actions"></td>
         `;
 
-        const acciones = document.createElement("div");
-        acciones.className = "actions";
+        const tdActions = tr.lastElementChild;
 
         const btnEditar = document.createElement("button");
-        btnEditar.className = "btn";
+        btnEditar.className = "btn btn-ghost btn-sm";
         btnEditar.innerHTML = '<i data-lucide="pencil"></i> Editar';
         btnEditar.onclick = () => location.href = `editar-cotizacion.html?id=${encodeURIComponent(c.id)}`;
-        acciones.appendChild(btnEditar);
+        tdActions.appendChild(btnEditar);
 
         const btnImprimir = document.createElement("button");
-        btnImprimir.className = "btn";
+        btnImprimir.className = "btn btn-ghost btn-sm";
         btnImprimir.innerHTML = '<i data-lucide="printer"></i> Imprimir';
         btnImprimir.onclick = () => window.open(`imprimir-cotizacion.html?id=${encodeURIComponent(c.id)}`, "_blank");
-        acciones.appendChild(btnImprimir);
+        tdActions.appendChild(btnImprimir);
 
         const btnDuplicar = document.createElement("button");
-        btnDuplicar.className = "btn";
+        btnDuplicar.className = "btn btn-ghost btn-sm";
         btnDuplicar.innerHTML = '<i data-lucide="copy"></i> Duplicar';
         btnDuplicar.onclick = () => duplicarCotizacion(c.id);
-        acciones.appendChild(btnDuplicar);
+        tdActions.appendChild(btnDuplicar);
 
         const btnAnular = document.createElement("button");
-        btnAnular.className = "btn btn-danger";
+        btnAnular.className = "btn btn-danger-ghost btn-sm";
         btnAnular.innerHTML = '<i data-lucide="ban"></i> Anular';
         btnAnular.onclick = () => anularCotizacion(c.id);
-        acciones.appendChild(btnAnular);
+        tdActions.appendChild(btnAnular);
 
         const btnEliminar = document.createElement("button");
-        btnEliminar.className = "btn btn-secondary";
+        btnEliminar.className = "btn btn-ghost btn-sm";
         btnEliminar.innerHTML = '<i data-lucide="trash-2"></i> Eliminar';
         btnEliminar.onclick = () => eliminarCotizacion(c.id);
-        acciones.appendChild(btnEliminar);
+        tdActions.appendChild(btnEliminar);
 
-        tr.lastElementChild.appendChild(acciones);
         tbody.appendChild(tr);
 
         if (cards) {
           const card = document.createElement("div");
-          card.className = "card-cotizacion";
+          card.className = "responsive-card";
           card.innerHTML = `
-            <div class="row">
-              <div class="t1">${c.cotizacion_id || ""}</div>
-              <div>${estadoBadge(c.estado || "borrador")}</div>
+            <div class="responsive-card-top">
+              <div>
+                <div class="responsive-card-title">${c.cliente_nombre || "—"}</div>
+                <div class="responsive-card-sub">${c.cotizacion_id || ""} · ${formatFecha(c.fecha_creacion)}</div>
+              </div>
+              ${estadoBadge(c.estado || "borrador")}
             </div>
-            <div class="t2">${c.cliente_nombre || ""}</div>
-            <div class="meta">${formatFecha(c.fecha_creacion)} · ${formatMoney(c.total)}</div>
-            <div class="acciones">
-              <button class="btn" onclick="location.href='editar-cotizacion.html?id=${encodeURIComponent(c.id)}'"><i data-lucide="pencil"></i> Editar</button>
-              <button class="btn" onclick="window.open('imprimir-cotizacion.html?id=${encodeURIComponent(c.id)}','_blank')"><i data-lucide="printer"></i> Imprimir</button>
-              <button class="btn" onclick="duplicarCotizacion('${c.id}')"><i data-lucide="copy"></i> Duplicar</button>
-              <button class="btn btn-danger" onclick="anularCotizacion('${c.id}')"><i data-lucide="ban"></i> Anular</button>
-              <button class="btn btn-secondary" onclick="eliminarCotizacion('${c.id}')"><i data-lucide="trash-2"></i> Eliminar</button>
+            <div class="responsive-card-meta">
+              <strong style="color:var(--fg-1); font-size:14px;">${formatMoney(c.total)}</strong>
+            </div>
+            <div class="responsive-card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="location.href='editar-cotizacion.html?id=${encodeURIComponent(c.id)}'"><i data-lucide="pencil"></i> Editar</button>
+              <button class="btn btn-secondary btn-sm" onclick="window.open('imprimir-cotizacion.html?id=${encodeURIComponent(c.id)}','_blank')"><i data-lucide="printer"></i> Imprimir</button>
+              <button class="btn btn-secondary btn-sm" onclick="duplicarCotizacion('${c.id}')"><i data-lucide="copy"></i> Duplicar</button>
+              <button class="btn btn-danger-ghost btn-sm" onclick="anularCotizacion('${c.id}')"><i data-lucide="ban"></i> Anular</button>
+              <button class="btn btn-ghost btn-sm" onclick="eliminarCotizacion('${c.id}')"><i data-lucide="trash-2"></i> Eliminar</button>
             </div>
           `;
           cards.appendChild(card);

@@ -18,109 +18,111 @@
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/core/auth.js"></script>
 
- <link rel="stylesheet" href="../css/ceco-ui.css">
- <style>
-  .app-table-wrap td input.table-input { width: 100%; }
-  .app-table-wrap { overflow-x: auto; }
-  /* compact variant: tighter cell padding */
-  .app-table-wrap table.app-table th,
-  .app-table-wrap table.app-table td { padding: var(--sp-2) var(--sp-3); }
-</style>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
 </head>
 <body>
   <div id="topbar-mount"></div>
   <script>Layout.renderTopbar({ title: '<i data-lucide="users"></i> Clientes', actions: [{ label: '<i data-lucide="plus"></i> Nuevo cliente', cls: 'primary', id: 'btnNuevo' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
 
+  <div class="app-wrap app-wrap--full">
 
-<div class="app-wrap app-wrap--full">
-  <div class="section">
-    <div class="toolbar">
-      <div class="app-search">
-        <input id="q" type="text" placeholder="Buscar por nombre o representante..." class="table-input sm"/>
-        <label class="input-row fit">
-          <input type="checkbox" id="soloActivos" />
-          <span class="form-hint">Solo activos</span>
+    <div class="app-card">
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input id="q" type="search" placeholder="Buscar por nombre o representante…" aria-label="Buscar clientes">
+        </div>
+        <label class="toggle-pill">
+          <input type="checkbox" id="soloActivos">
+          Solo activos
         </label>
+        <button id="btnBuscar" class="btn btn-primary btn-sm"><i data-lucide="search"></i> Buscar</button>
+        <button id="btnLimpiar" class="btn btn-ghost btn-sm">Limpiar</button>
+        <div style="flex:1;"></div>
+        <span id="resumen" class="resumen">0 resultados</span>
       </div>
-      <div class="input-row fit">
-        <button id="btnBuscar" class="btn btn-primary">Buscar</button>
-        <button id="btnLimpiar" class="btn">Limpiar</button>
+
+      <!-- Bulk-bar contextual (visible cuando hay selección) -->
+      <div id="bulkBar" class="bulk-bar" style="margin:0;">
+        <span class="bulk-count"><strong id="bulkCount">0</strong> seleccionado(s)</span>
+        <div class="bulk-divider"></div>
+        <button id="bulkActivar" class="btn btn-secondary btn-sm"><i data-lucide="power"></i> Activar</button>
+        <button id="bulkDesactivar" class="btn btn-danger-ghost btn-sm"><i data-lucide="power-off"></i> Desactivar</button>
+        <div class="bulk-divider"></div>
+        <div class="bulk-tag-wrap">
+          <label class="form-label" style="margin:0; white-space:nowrap;">Tag:</label>
+          <input id="bulkTag" class="form-input" type="text" placeholder="vip, factura-mensual…" style="height:32px;">
+          <button id="bulkAddTag" class="btn btn-secondary btn-sm"><i data-lucide="tag"></i> Agregar</button>
+        </div>
+      </div>
+
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table id="tabla" class="app-table compact">
+          <thead>
+            <tr>
+              <th style="width:34px; text-align:center"><input id="selectAll" type="checkbox"></th>
+              <th style="width:16%">Nombre</th>
+              <th style="width:12%">RUC</th>
+              <th style="width:8%">DV</th>
+              <th style="width:14%">Representante</th>
+              <th style="width:12%">Cédula Rep. Legal</th>
+              <th style="width:12%">Teléfono</th>
+              <th style="width:16%">Email</th>
+              <th style="width:16%">Dirección</th>
+              <th style="width:14%">Vendedor</th>
+              <th style="width:10%">Tags</th>
+              <th style="width:8%">Activo</th>
+              <th class="actions" style="width:60px; text-align:center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="app-table-footer">
+        <div style="display:flex; gap:var(--sp-2); align-items:center;">
+          <button id="btnMas" class="btn btn-ghost btn-sm"><i data-lucide="chevron-down"></i> Cargar más</button>
+          <button id="btnTodo" class="btn btn-secondary btn-sm"><i data-lucide="list"></i> Mostrar todo</button>
+        </div>
+        <div id="pagerBar" style="display:flex; gap:var(--sp-3); align-items:center;">
+          <button id="btnPrev" class="btn btn-secondary btn-sm"><i data-lucide="chevron-left" style="width:14px;height:14px;"></i> Anterior</button>
+          <div class="pager-input">
+            <span>Página</span>
+            <input id="pageInput" type="number" min="1" value="1">
+            <span id="pageTotal" class="pager-input-total">/ —</span>
+          </div>
+          <button id="btnNext" class="btn btn-secondary btn-sm">Siguiente <i data-lucide="chevron-right" style="width:14px;height:14px;"></i></button>
+        </div>
       </div>
     </div>
-    <div id="resumen" class="resumen">0 resultados</div>
-  </div>
-<div id="bulkBar" class="muted" style="display:none; margin-top:8px">
-  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-    <div><strong id="bulkCount">0</strong> seleccionado(s)</div>
-    <button id="bulkActivar" class="btn btn-accent">Activar</button>
-    <button id="bulkDesactivar" class="btn btn-danger">Desactivar</button>
-    <input id="bulkTag" class="table-input sm" type="text" placeholder="Agregar tag…">
-    <button id="bulkAddTag" class="btn">Agregar tag</button>
-  </div>
-</div>
-  <div class="app-table-wrap">
-    <table id="tabla" class="app-table">
-<thead>
-  <tr>
-    <th style="width:34px; text-align:center">
-      <input id="selectAll" type="checkbox">
-    </th>
-    <th style="width:16%">Nombre</th>
-    <th style="width:12%">RUC</th>
-    <th style="width:8%">DV</th>
-    <th style="width:14%">Representante</th>
-    <th style="width:12%">Cédula Rep. Legal</th>
-    <th style="width:12%">Teléfono</th>
-    <th style="width:16%">Email</th>
-    <th style="width:16%">Dirección</th>
-    <th style="width:14%">Vendedor</th>
-    <th style="width:10%">Tags</th>
-    <th style="width:8%">Activo</th>
-    <th class="actions" style="width:60px; text-align:center">Acciones</th>
-  </tr>
-</thead>
 
-
-
-      <tbody id="tbody"></tbody>
-    </table>
   </div>
 
-    <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
-    <button id="btnMas" class="btn">Cargar más</button>
-    <button id="btnTodo" class="btn">Mostrar todo</button>
-    </div>
-<!-- Paginador por páginas -->
-<div id="pagerBar" class="toolbar center" style="margin-top:12px">
-  <button id="btnPrev" class="btn">← Anterior</button>
-  <div class="input-row fit">
-    <span>Página</span>
-    <input id="pageInput" type="number" min="1" class="table-input sm" style="width:80px">
-    <span id="pageTotal" class="resumen">/ —</span>
-  </div>
-  <button id="btnNext" class="btn">Siguiente →</button>
-</div>
-</div>
-<!-- Modal de confirmación genérico -->
-<div id="overlay" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
-  <div class="modal" id="confirmModal">
-    <div class="modal-header">
-      <h3 class="modal-title" id="confirmTitle">Confirmar eliminación</h3>
-    </div>
-    <div class="modal-body">
-      <div class="alert">Vas a <strong>eliminar (soft-delete)</strong> este cliente. No se pierde información,
-        pero dejará de mostrarse en listados.</div>
-      <p id="confirmMsg" class="resumen" style="margin:8px 0 0"></p>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" id="btnCancel">Cancelar</button>
-      <button class="btn btn-danger" id="btnOk">Eliminar</button>
+  <!-- Modal de confirmación de eliminación -->
+  <div id="overlay" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal" id="confirmModal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="confirmTitle">Confirmar eliminación</h3>
+      </div>
+      <div class="modal-body">
+        <div class="alert-banner alert-warning">
+          <span class="alert-banner-icon"><i data-lucide="alert-triangle"></i></span>
+          <div class="alert-banner-body">
+            Vas a <strong>eliminar (soft-delete)</strong> este cliente. No se pierde información,
+            pero dejará de mostrarse en listados.
+          </div>
+        </div>
+        <p id="confirmMsg" class="resumen" style="margin:8px 0 0"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancel">Cancelar</button>
+        <button class="btn btn-danger" id="btnOk">Eliminar</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-<script src="../js/pages/clientes-index.js" defer></script>
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="../js/pages/clientes-index.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

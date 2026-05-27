@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Inventario PoC</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>PoC</strong>
+  <a href="#poc-list">Lista</a>
+  <a href="#poc-batch">Nuevo batch</a>
+  <a href="#poc-vendedores">Vendedores</a>
+  <a href="#poc-imprimir">Imprimir</a>
+</nav>
+
+
+<!-- ── 1 · POC · Lista ────────────────────────────────────── -->
+<section class="demo-section" id="poc-list">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>POC · Lista (ejemplo aplicado)</h2>
+    <p>Inventario de equipos PoC: filtros sticky, toggles de "solo activos / solo incompletos",
+       búsqueda por campo, badge de resumen, edición masiva con <code>bulk-bar</code>,
+       <code>app-table</code> con encabezados ordenables, y <code>.sheet</code> de edición a
+       la derecha. Referencia 1:1 para <code>public/POC/index.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <!-- Sticky controls: toolbar + search -->
+    <div style="background: var(--surface-page); padding: var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap:var(--sp-2); border-bottom: 1px solid var(--border-subtle);">
+      <div class="app-toolbar" style="background:var(--surface-card); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-md); border:1px solid var(--border-subtle);">
+        <button class="btn btn-secondary btn-sm"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="upload"></i> Exportar</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="pencil"></i> Editar en masa</button>
+        <div class="app-toolbar-spacer"></div>
+        <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nuevo equipo</button>
+      </div>
+
+      <div class="filter-bar" style="background:var(--surface-card); border:1px solid var(--border-subtle);">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" placeholder="Cliente, serial, unit ID, IP…" aria-label="Buscar equipos">
+        </div>
+        <div class="filter-chips">
+          <button class="filter-chip active" type="button">Todos</button>
+          <button class="filter-chip" type="button">Solo activos</button>
+          <button class="filter-chip" type="button">Incompletos</button>
+        </div>
+        <div style="flex:1;"></div>
+        <span style="font-size:13px; color:var(--fg-3);">
+          <strong style="color:var(--accent); font-size:18px;">1,247</strong> equipos
+        </span>
+        <button class="btn btn-ghost btn-sm"><i data-lucide="copy"></i> Duplicados</button>
+      </div>
+    </div>
+
+    <!-- Bulk-edit bar (shown when rows selected) -->
+    <div class="bulk-bar visible" style="position:relative; margin:0;">
+      <span class="bulk-count">3 equipos seleccionados</span>
+      <span class="bulk-divider"></span>
+      <button class="btn btn-secondary btn-sm"><i data-lucide="save"></i> Guardar cambios</button>
+      <button class="btn btn-ghost btn-sm">Cancelar</button>
+    </div>
+
+    <!-- Table -->
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+      <table class="app-table" aria-label="Equipos PoC">
+        <thead>
+          <tr>
+            <th style="width:36px;"><input type="checkbox" aria-label="Seleccionar todos"></th>
+            <th class="sortable sort-asc">Cliente <svg class="sort-icon" viewBox="0 0 8 10" width="8" height="10"><path d="M4 0L7 4H1L4 0z" fill="currentColor"/><path d="M4 10L1 6H7L4 10z" fill="currentColor" opacity=".3"/></svg></th>
+            <th>Activo</th>
+            <th>Serial</th>
+            <th>IP</th>
+            <th class="sortable">Unit ID</th>
+            <th>Nombre del Radio</th>
+            <th>Grupos</th>
+            <th>SIM / Teléfono</th>
+            <th style="width:80px; text-align:right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input type="checkbox" checked aria-label="Seleccionar fila"></td>
+            <td><strong>Autoridad del Canal</strong></td>
+            <td><span class="status-dot status-activo" title="Activo"></span></td>
+            <td class="td-mono">HYT-PNC-00421</td>
+            <td class="td-mono">10.20.30.41</td>
+            <td class="td-mono td-primary">5001</td>
+            <td>Canal-01</td>
+            <td><span class="td-muted">operaciones, supervisión</span></td>
+            <td class="td-mono">8953··· · 6789-0001</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" aria-label="Seleccionar fila"></td>
+            <td><strong>Manzanillo Intl.</strong></td>
+            <td><span class="status-dot status-activo" title="Activo"></span></td>
+            <td class="td-mono">HYT-PNC-00389</td>
+            <td class="td-mono">10.20.30.42</td>
+            <td class="td-mono td-primary">5002</td>
+            <td>MIT-Grua-03</td>
+            <td><span class="td-muted">portuario</span></td>
+            <td class="td-mono">8953··· · 6789-0002</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" checked aria-label="Seleccionar fila"></td>
+            <td><strong>Grupo Assa Abloy</strong></td>
+            <td><span class="status-dot status-inactivo" title="Inactivo"></span></td>
+            <td class="td-mono">HYT-PNC-00502</td>
+            <td class="td-mono">10.20.30.43</td>
+            <td class="td-mono td-primary">5003</td>
+            <td>Assa-MV-01</td>
+            <td><span class="td-muted">—</span></td>
+            <td class="td-mono">— · —</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" aria-label="Seleccionar fila"></td>
+            <td><strong>Policía Nacional</strong></td>
+            <td><span class="status-dot status-activo" title="Activo"></span></td>
+            <td class="td-mono">HYT-PNC-00451</td>
+            <td class="td-mono">10.20.30.44</td>
+            <td class="td-mono td-primary">5004</td>
+            <td>PNC-Mov-12</td>
+            <td><span class="td-muted">tránsito, fuerza</span></td>
+            <td class="td-mono">8953··· · 6789-0004</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="app-table-footer">
+      <span>Mostrando <strong>1–4</strong> de <strong>1,247</strong> equipos</span>
+      <div style="display:flex; gap:var(--sp-2);">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="chevron-down"></i> Cargar más</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="list"></i> Mostrar todo</button>
+      </div>
+    </div>
+
+  </div>
+
+  <span class="demo-label" style="margin-top:var(--sp-5);">Notas</span>
+  <div class="demo-block" style="font-size:13px; color:var(--fg-2);">
+    <ul style="margin:0; padding-left:20px; line-height:1.7;">
+      <li>Indicador <code>.status-dot.status-activo/inactivo</code>: punto de 12px (verde / rojo).</li>
+      <li>Edición individual: <code>.sheet</code> de 500px desde la derecha (ver Side Sheet en Foundations).</li>
+      <li>Edición masiva: la barra superior cambia los botones a "Guardar" / "Cancelar" y la primera columna habilita inputs <code>td-input</code> en línea.</li>
+      <li>Búsqueda con <code>filter-bar</code> + <code>filter-search</code> + <code>filter-chips</code>.</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 2 · POC · Nuevo batch ──────────────────────────────── -->
+<section class="demo-section" id="poc-batch">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>POC · Nuevo batch (ejemplo aplicado)</h2>
+    <p>Formulario para registrar múltiples equipos PoC con seriales consecutivos. Usa
+       <code>form-section</code> + <code>form-grid-2</code> + <code>form-input</code> /
+       <code>form-textarea</code> con la variante mono para el bloque de seriales, y un
+       <code>form-file-zone</code> para cargar el JSON del vendedor.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div class="ds-card ds-card-padded" style="border-radius:0; border:none; box-shadow:none;">
+      <form onsubmit="return false;" novalidate>
+
+        <div class="form-section">
+          <div>
+            <p class="form-section-title"><i data-lucide="hash" style="width:16px;height:16px;"></i> Datos del batch</p>
+            <p class="form-section-desc">Liste los seriales (uno por línea) y el Unit ID inicial. Los demás se incrementan automáticamente.</p>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-field span-2" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-seriales">Seriales <span class="req">*</span></label>
+              <textarea class="form-input form-textarea" id="pb-seriales" rows="8"
+                style="font-family:var(--font-mono); font-size:13px;"
+                placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
+              <span class="form-hint">Un serial por línea. Líneas en blanco se ignoran.</span>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" for="pb-json">Cargar JSON del vendedor <span class="optional">(opcional)</span></label>
+              <label class="form-file-zone" style="padding:var(--sp-3) var(--sp-4); min-height:auto;">
+                <input type="file" id="pb-json" accept=".json">
+                <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:24px;height:24px;"></i></div>
+                <p style="margin:0; font-size:13px;"><strong>Arrastra el JSON</strong> o haz clic</p>
+              </label>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" for="pb-uid">Unit ID inicial <span class="req">*</span></label>
+              <input class="form-input" id="pb-uid" type="number" placeholder="5001" style="font-family:var(--font-mono);">
+              <span class="form-hint">Últimos asignados: 4998, 4999, 5000.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div>
+            <p class="form-section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Datos generales</p>
+            <p class="form-section-desc">Se aplican a todos los equipos del batch.</p>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-cliente">Cliente <span class="req">*</span></label>
+              <div style="display:flex; gap:var(--sp-2);">
+                <select class="form-select" id="pb-cliente" style="flex:1;">
+                  <option>Autoridad del Canal de Panamá</option>
+                  <option>Manzanillo Intl. Terminal</option>
+                  <option>Grupo Assa Abloy</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Crear cliente"><i data-lucide="plus"></i></button>
+              </div>
+            </div>
+
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-ip">IP <span class="req">*</span></label>
+              <div style="display:flex; gap:var(--sp-2);">
+                <select class="form-select" id="pb-ip" style="flex:1;">
+                  <option>10.20.30.0/24 — Producción</option>
+                  <option>10.20.40.0/24 — Pre-producción</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-icon" aria-label="Crear bloque IP"><i data-lucide="plus"></i></button>
+              </div>
+            </div>
+
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="pb-notas">Notas <span class="optional">(opcional)</span></label>
+              <textarea class="form-input form-textarea" id="pb-notas" rows="3"
+                placeholder="Lote PNC-Q2-2025, instalación coordinada con TI del cliente…"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Crear equipos</button>
+          <button type="button" class="btn btn-ghost">Cancelar</button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 3 · POC · Vendedores batch ─────────────────────────── -->
+<section class="demo-section" id="poc-vendedores">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>POC · Vendedores batch (ejemplo aplicado)</h2>
+    <p>Carga rápida por vendedor: variante simplificada del batch con vendedor preseleccionado,
+       cliente bloqueado al primer escaneo, y autocompletado de IP. 1:1 con
+       <code>public/POC/vendedores-batch.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+    <div class="app-page-header">
+      <div>
+        <h1><i data-lucide="briefcase" style="display:inline; vertical-align:middle;"></i> Registro de Equipos (Ventas)</h1>
+        <p>Carga rápida por vendedor · Pedro Vargas · Lote PNC-Q2-2025</p>
+      </div>
+    </div>
+
+    <div class="alert-banner alert-success">
+      <span class="alert-banner-icon"><i data-lucide="zap"></i></span>
+      <div class="alert-banner-body">
+        <strong>Modo escaneo rápido activado</strong>
+        Pasa los seriales uno por uno con el lector — el sistema asigna Unit ID automático y los
+        agrupa por cliente.
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:var(--sp-4); max-width:1100px;">
+      <!-- Form -->
+      <div class="app-card app-card-padded">
+        <div class="form-section" style="border:none; padding:0; margin:0;">
+          <div>
+            <p class="form-section-title"><i data-lucide="scan-line" style="width:16px;height:16px;"></i> Escanear seriales</p>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-field" style="grid-column:1/-1;">
+              <label class="form-label">Cliente <span class="req">*</span></label>
+              <select class="form-select">
+                <option selected>Manzanillo Intl. Terminal</option>
+                <option>Autoridad del Canal</option>
+                <option>Grupo Assa Abloy</option>
+              </select>
+            </div>
+            <div class="form-field" style="grid-column:1/-1;">
+              <label class="form-label">Próximo serial</label>
+              <div class="form-input-wrap">
+                <span class="form-input-prefix"><i data-lucide="scan-line" style="width:15px;height:15px;"></i></span>
+                <input class="form-input" type="text" placeholder="Escanea el serial aquí…" style="font-family:var(--font-mono); font-size:15px;" autofocus>
+              </div>
+              <span class="form-hint">El cursor permanece aquí — escanea uno tras otro.</span>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Bloque IP</label>
+              <select class="form-select">
+                <option selected>10.20.30.0/24 — Producción</option>
+                <option>10.20.40.0/24 — Pre-producción</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Unit ID inicial</label>
+              <input class="form-input" type="number" value="5028" style="font-family:var(--font-mono);">
+            </div>
+          </div>
+
+          <p class="demo-label" style="margin-top:var(--sp-5); margin-bottom:var(--sp-2);">Capturados en este lote</p>
+          <div style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); max-height:240px; overflow-y:auto;">
+            <table class="app-table compact" style="margin:0;">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Serial</th>
+                  <th>IP</th>
+                  <th>Unit ID</th>
+                  <th style="width:36px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="td-muted">1</td>
+                  <td class="td-mono td-primary">HYT-PNC-00500</td>
+                  <td class="td-mono">10.20.30.28</td>
+                  <td class="td-mono">5028</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="x"></i></button></td>
+                </tr>
+                <tr>
+                  <td class="td-muted">2</td>
+                  <td class="td-mono td-primary">HYT-PNC-00501</td>
+                  <td class="td-mono">10.20.30.29</td>
+                  <td class="td-mono">5029</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="x"></i></button></td>
+                </tr>
+                <tr>
+                  <td class="td-muted">3</td>
+                  <td class="td-mono td-primary">HYT-PNC-00502</td>
+                  <td class="td-mono">10.20.30.30</td>
+                  <td class="td-mono">5030</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="x"></i></button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <div>
+        <div class="summary-card">
+          <div class="summary-card-title">Resumen del lote</div>
+          <div class="summary-card-divider"></div>
+          <div class="summary-totals-row"><span>Capturados</span><strong>3</strong></div>
+          <div class="summary-totals-row muted"><span>Cliente</span><span>Manzanillo</span></div>
+          <div class="summary-totals-row muted"><span>Vendedor</span><span>P. Vargas</span></div>
+          <div class="summary-totals-row total"><span>Próximo UID</span><span>5031</span></div>
+          <div class="summary-card-divider"></div>
+          <div class="summary-card-actions">
+            <button class="btn btn-primary" style="width:100%;"><i data-lucide="save"></i> Crear 3 equipos</button>
+            <button class="btn btn-secondary" style="width:100%;"><i data-lucide="x"></i> Vaciar lote</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 4 · POC · Imprimir equipos ─────────────────────────── -->
+<section class="demo-section" id="poc-imprimir">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>POC · Imprimir equipos (ejemplo aplicado)</h2>
+    <p>Selector de columnas + plantilla de impresión optimizada para etiquetas o reportes de
+       distribución. 1:1 con <code>public/POC/imprimir-equipos.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+    <div class="app-page-header">
+      <div>
+        <h1>Imprimir equipos</h1>
+        <p>Selecciona columnas y el formato de impresión. Vista previa antes de enviar a la impresora.</p>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1.6fr; gap:var(--sp-5);">
+
+      <!-- Column picker -->
+      <div class="app-card app-card-padded">
+        <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="list-checks"></i> Columnas</p>
+        <div style="display:flex; flex-direction:column; gap:var(--sp-2);">
+          <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">Cliente</span></span></label>
+          <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">Serial</span></span></label>
+          <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">IP</span></span></label>
+          <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">Unit ID</span></span></label>
+          <label class="form-check"><input type="checkbox"><span><span class="form-check-label">Nombre del radio</span></span></label>
+          <label class="form-check"><input type="checkbox"><span><span class="form-check-label">Grupos</span></span></label>
+          <label class="form-check"><input type="checkbox"><span><span class="form-check-label">SIM / Teléfono</span></span></label>
+          <label class="form-check"><input type="checkbox"><span><span class="form-check-label">Notas</span></span></label>
+        </div>
+
+        <p class="form-section-title" style="margin:var(--sp-5) 0 var(--sp-3);"><i data-lucide="layout"></i> Formato</p>
+        <div class="btn-group" style="width:100%;">
+          <button class="btn btn-secondary active" style="flex:1;">Tabla</button>
+          <button class="btn btn-secondary" style="flex:1;">Etiquetas</button>
+        </div>
+
+        <div class="form-actions" style="margin-top:var(--sp-4);">
+          <button class="btn btn-primary"><i data-lucide="printer"></i> Imprimir</button>
+          <button class="btn btn-ghost">Cancelar</button>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div>
+        <p class="demo-label" style="margin-bottom:var(--sp-2);">Vista previa</p>
+        <div style="background:#fff; border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-5); box-shadow:var(--shadow-sm);">
+          <h3 style="font-family:var(--font-display); font-size:18px; margin:0 0 4px;">Equipos PoC — Manzanillo Intl.</h3>
+          <p style="font-size:12px; color:var(--fg-3); margin:0 0 var(--sp-4);">Generado 27 May 2026 · 1,247 equipos · Página 1/24</p>
+          <table class="app-table compact" style="margin:0;">
+            <thead>
+              <tr><th>Cliente</th><th>Serial</th><th>IP</th><th>Unit ID</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Manzanillo Intl.</td><td class="td-mono">HYT-PNC-00389</td><td class="td-mono">10.20.30.42</td><td class="td-mono">5002</td></tr>
+              <tr><td>Manzanillo Intl.</td><td class="td-mono">HYT-PNC-00390</td><td class="td-mono">10.20.30.43</td><td class="td-mono">5003</td></tr>
+              <tr><td>Manzanillo Intl.</td><td class="td-mono">HYT-PNC-00391</td><td class="td-mono">10.20.30.44</td><td class="td-mono">5004</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── Toast region (live) ──────────────────────────────── -->
+<div class="toast-region" id="toast-region" aria-live="polite" aria-label="Notificaciones"></div>
+
+<script src="app-demo.js"></script>
+</body>
+</html>

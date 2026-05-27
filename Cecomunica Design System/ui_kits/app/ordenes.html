@@ -1,0 +1,1522 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Órdenes de Servicio</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>Órdenes</strong>
+  <a href="#app-shell">Shell</a>
+  <a href="#chips">Chips estado</a>
+  <a href="#data-table">Tabla</a>
+  <a href="#accordion">Acordeón</a>
+  <a href="#editable-table">Cotización</a>
+  <a href="#footer-strip">Footer strip</a>
+  <a href="#photo-grid">Galería</a>
+  <a href="#signature">Firma</a>
+  <a href="#applied-list">Aplicado · Lista</a>
+  <a href="#applied-work">Aplicado · Trabajar</a>
+  <a href="#applied-new">Aplicado · Nueva</a>
+  <a href="#applied-progress">Aplicado · Progreso</a>
+  <a href="#applied-config">Aplicado · Config</a>
+</nav>
+
+
+<!-- ─── 1 · App Shell ─────────────────────────────────────── -->
+<section class="demo-section" id="app-shell">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>App Shell</h2>
+    <p>Topbar sticky con logo, título de página, acciones y breadcrumbs. La topbar usa el
+       borde inferior de <code>--brand</code> (navy) como ancla visual.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div class="app-topbar" style="position:relative; top:auto;">
+      <a href="#" class="app-topbar-logo" aria-label="CeComunica">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+      </a>
+      <span class="app-topbar-title">
+        <i data-lucide="clipboard-list"></i>
+        Órdenes de Servicio
+      </span>
+      <div class="app-topbar-spacer"></div>
+      <div class="app-topbar-actions">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="home"></i> Inicio</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="user"></i> Técnico</button>
+        <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nueva orden</button>
+      </div>
+    </div>
+
+    <div style="padding: 20px 24px 0;">
+      <nav class="app-breadcrumbs" aria-label="Breadcrumb">
+        <a href="#">Inicio</a>
+        <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+        <span class="app-breadcrumbs-current">Órdenes de Servicio</span>
+      </nav>
+      <div class="app-page-header">
+        <div>
+          <h1>Órdenes de Servicio</h1>
+          <p>142 órdenes activas · Actualizado hace 2 min</p>
+        </div>
+        <div class="app-page-header-actions">
+          <button class="btn btn-ghost"><i data-lucide="download"></i> Exportar</button>
+          <button class="btn btn-primary"><i data-lucide="plus"></i> Nueva orden</button>
+        </div>
+      </div>
+    </div>
+    <div style="height:16px;"></div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 2 · Chips de estado ───────────────────────────────── -->
+<section class="demo-section" id="chips">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Chips de estado</h2>
+    <p>Ocho estados del flujo de órdenes de servicio, más prioridad. Los colores provienen de la
+       paleta de status tokens restringida — sin colores de marca fuertes que compitan con la UI.</p>
+  </div>
+
+  <span class="demo-label">Estados de orden — flujo completo</span>
+  <div class="demo-row">
+    <span class="chip-estado chip-recibida">Recibida</span>
+    <span class="chip-estado chip-diagnostico">En diagnóstico</span>
+    <span class="chip-estado chip-cotizada">Cotizada</span>
+    <span class="chip-estado chip-aprobada">Aprobada</span>
+    <span class="chip-estado chip-reparacion">En reparación</span>
+    <span class="chip-estado chip-lista">Lista p/ entrega</span>
+    <span class="chip-estado chip-entregada">Entregada</span>
+    <span class="chip-estado chip-cancelada">Cancelada</span>
+    <span class="chip-estado chip-espera">En espera</span>
+  </div>
+
+  <span class="demo-label">Prioridad</span>
+  <div class="demo-row">
+    <span class="chip-prioridad alta">Alta</span>
+    <span class="chip-prioridad media">Media</span>
+    <span class="chip-prioridad normal">Normal</span>
+  </div>
+
+  <span class="demo-label">Uso en tabla</span>
+  <div class="demo-block" style="padding:16px 20px;">
+    <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; font-size:13px; align-items:center;">
+      <span style="font-weight:600; color:var(--fg-3); font-size:11px; text-transform:uppercase; letter-spacing:.06em;">Equipo</span>
+      <span style="font-weight:600; color:var(--fg-3); font-size:11px; text-transform:uppercase; letter-spacing:.06em;">Estado</span>
+      <span style="font-weight:600; color:var(--fg-3); font-size:11px; text-transform:uppercase; letter-spacing:.06em;">Prioridad</span>
+
+      <span>Hytera PD78X · <span style="font-family:var(--font-mono); font-size:12px; color:var(--fg-3);">SN-00421</span></span>
+      <span class="chip-estado chip-reparacion">En reparación</span>
+      <span class="chip-prioridad alta">Alta</span>
+
+      <span>Hytera HP78X · <span style="font-family:var(--font-mono); font-size:12px; color:var(--fg-3);">SN-00389</span></span>
+      <span class="chip-estado chip-diagnostico">En diagnóstico</span>
+      <span class="chip-prioridad media">Media</span>
+
+      <span>Hytera MD78X · <span style="font-family:var(--font-mono); font-size:12px; color:var(--fg-3);">SN-00502</span></span>
+      <span class="chip-estado chip-cotizada">Cotizada</span>
+      <span class="chip-prioridad normal">Normal</span>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 3 · Tabla de órdenes ──────────────────────────────── -->
+<section class="demo-section" id="data-table">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Tabla de órdenes</h2>
+    <p>Encabezados ordenables, hover en fila, acciones en hover, barra de filtros, paginación y
+       estado vacío. El encabezado es sticky debajo del topbar.</p>
+  </div>
+
+  <div class="app-card">
+    <div class="filter-bar">
+      <div class="filter-search">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input type="search" placeholder="Buscar por OS, cliente, equipo…" aria-label="Buscar órdenes">
+      </div>
+      <div class="filter-chips">
+        <button class="filter-chip active" type="button">Todas</button>
+        <button class="filter-chip" type="button">Recibidas</button>
+        <button class="filter-chip" type="button">En reparación</button>
+        <button class="filter-chip" type="button">Cotizadas</button>
+        <button class="filter-chip" type="button">Entregadas</button>
+      </div>
+      <div style="flex:1;"></div>
+      <button class="btn btn-ghost btn-sm"><i data-lucide="sliders-horizontal"></i> Filtros</button>
+      <button class="btn btn-ghost btn-sm btn-icon" aria-label="Refrescar"><i data-lucide="refresh-cw"></i></button>
+    </div>
+
+    <div class="app-table-wrap" style="border:none; border-radius:0; box-shadow:none;">
+      <table class="app-table" aria-label="Órdenes de servicio">
+        <thead>
+          <tr>
+            <th class="sortable sort-asc" style="width:120px;">
+              N° OS <svg class="sort-icon" viewBox="0 0 8 10" width="8" height="10"><path d="M4 0L7 4H1L4 0z" fill="currentColor"/><path d="M4 10L1 6H7L4 10z" fill="currentColor" opacity=".3"/></svg>
+            </th>
+            <th>Cliente</th>
+            <th>Equipo / Modelo</th>
+            <th class="sortable">
+              Fecha entrada <svg class="sort-icon" viewBox="0 0 8 10" width="8" height="10"><path d="M4 0L7 4H1L4 0z" fill="currentColor" opacity=".3"/><path d="M4 10L1 6H7L4 10z" fill="currentColor"/></svg>
+            </th>
+            <th>Técnico</th>
+            <th>Estado</th>
+            <th>Prioridad</th>
+            <th style="width:80px; text-align:right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-primary">OS-2025-0142</td>
+            <td>
+              <span style="font-weight:500; color:var(--fg-1);">Autoridad del Canal</span><br>
+              <span class="td-muted">Juan Pérez · +507 6789-0001</span>
+            </td>
+            <td>
+              Hytera PD78X<br>
+              <span class="td-muted">SN-00421 · DMR Tier III</span>
+            </td>
+            <td class="td-muted">12 May 2025</td>
+            <td style="font-size:13px;">Carlos Ríos</td>
+            <td><span class="chip-estado chip-reparacion">En reparación</span></td>
+            <td><span class="chip-prioridad alta">Alta</span></td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver orden"><i data-lucide="eye"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-primary">OS-2025-0141</td>
+            <td>
+              <span style="font-weight:500; color:var(--fg-1);">Manzanillo Intl. Terminal</span><br>
+              <span class="td-muted">Ana López · +507 6789-0002</span>
+            </td>
+            <td>
+              Hytera HP78X<br>
+              <span class="td-muted">SN-00389 · IP67</span>
+            </td>
+            <td class="td-muted">11 May 2025</td>
+            <td style="font-size:13px;">María Torres</td>
+            <td><span class="chip-estado chip-cotizada">Cotizada</span></td>
+            <td><span class="chip-prioridad media">Media</span></td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver orden"><i data-lucide="eye"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-primary">OS-2025-0140</td>
+            <td>
+              <span style="font-weight:500; color:var(--fg-1);">Grupo Assa Abloy</span><br>
+              <span class="td-muted">Pedro Mora · +507 6789-0003</span>
+            </td>
+            <td>
+              Hytera MD78X<br>
+              <span class="td-muted">SN-00502 · Móvil vehicular</span>
+            </td>
+            <td class="td-muted">10 May 2025</td>
+            <td style="font-size:13px;">—</td>
+            <td><span class="chip-estado chip-recibida">Recibida</span></td>
+            <td><span class="chip-prioridad normal">Normal</span></td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver orden"><i data-lucide="eye"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-primary">OS-2025-0139</td>
+            <td>
+              <span style="font-weight:500; color:var(--fg-1);">Policía Nacional</span><br>
+              <span class="td-muted">Luis Vega · +507 6789-0004</span>
+            </td>
+            <td>
+              Hytera PNC560<br>
+              <span class="td-muted">SN-00451 · 4G LTE PoC</span>
+            </td>
+            <td class="td-muted">9 May 2025</td>
+            <td style="font-size:13px;">Carlos Ríos</td>
+            <td><span class="chip-estado chip-aprobada">Aprobada</span></td>
+            <td><span class="chip-prioridad alta">Alta</span></td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver orden"><i data-lucide="eye"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td class="td-primary">OS-2025-0138</td>
+            <td>
+              <span style="font-weight:500; color:var(--fg-1);">Copa Airlines</span><br>
+              <span class="td-muted">Sandra Gil · +507 6789-0005</span>
+            </td>
+            <td>
+              Hytera VM780<br>
+              <span class="td-muted">SN-00311 · Body Camera</span>
+            </td>
+            <td class="td-muted">7 May 2025</td>
+            <td style="font-size:13px;">María Torres</td>
+            <td><span class="chip-estado chip-entregada">Entregada</span></td>
+            <td><span class="chip-prioridad normal">Normal</span></td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver orden"><i data-lucide="eye"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+            </td>
+          </tr>
+          <tr aria-hidden="true">
+            <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:140px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:90px; border-radius:999px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:50px; border-radius:999px;">&nbsp;</span></td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="app-table-footer">
+      <span>Mostrando <strong>1–6</strong> de <strong>142</strong> órdenes</span>
+      <nav class="app-pagination" aria-label="Paginación">
+        <button class="app-pagination-page btn-ghost btn" aria-label="Anterior"><i data-lucide="chevron-left" style="width:14px;height:14px;"></i></button>
+        <button class="app-pagination-page active">1</button>
+        <button class="app-pagination-page">2</button>
+        <button class="app-pagination-page">3</button>
+        <span style="color:var(--fg-4); padding:0 4px; font-size:13px;">…</span>
+        <button class="app-pagination-page">24</button>
+        <button class="app-pagination-page btn-ghost btn" aria-label="Siguiente"><i data-lucide="chevron-right" style="width:14px;height:14px;"></i></button>
+      </nav>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 4 · Acordeón equipos ──────────────────────────────── -->
+<section class="demo-section" id="accordion">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Acordeón de equipos</h2>
+    <p>Usado en <em>trabajar-orden</em> para agrupar información por equipo. Cada panel puede contener
+       una tabla, un formulario, o cualquier contenido compuesto.</p>
+  </div>
+
+  <div class="accordion">
+    <div class="accordion-item open">
+      <button class="accordion-trigger" aria-expanded="true" aria-controls="acc-1-body">
+        <span class="accordion-trigger-icon"><i data-lucide="radio"></i></span>
+        <span class="accordion-trigger-text">
+          <span class="accordion-trigger-title">Hytera PD78X — SN-00421</span>
+          <span class="accordion-trigger-meta">
+            <span class="chip-estado chip-reparacion">En reparación</span>
+            Carlos Ríos · Ingresó 12 May 2025
+          </span>
+        </span>
+        <span class="accordion-trigger-chevron"><i data-lucide="chevron-down"></i></span>
+      </button>
+      <div class="accordion-body" id="acc-1-body">
+        <div class="form-grid-2" style="max-width:640px;">
+          <div class="form-field">
+            <label class="form-label" for="ac-falla-1">Falla diagnosticada</label>
+            <textarea class="form-input form-textarea" id="ac-falla-1" rows="2">Micrófono dañado. Conector de batería oxidado.</textarea>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ac-solucion-1">Solución aplicada</label>
+            <textarea class="form-input form-textarea" id="ac-solucion-1" rows="2" placeholder="Describa los trabajos realizados…"></textarea>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ac-estado-1">Estado del equipo</label>
+            <select class="form-select" id="ac-estado-1">
+              <option>En diagnóstico</option>
+              <option selected>En reparación</option>
+              <option>Lista p/ entrega</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ac-tecnico-1">Técnico responsable</label>
+            <select class="form-select" id="ac-tecnico-1">
+              <option>María Torres</option>
+              <option selected>Carlos Ríos</option>
+              <option>Luis Herrera</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions" style="margin-top: var(--sp-4);">
+          <button class="btn btn-primary btn-sm"><i data-lucide="save"></i> Guardar cambios</button>
+          <button class="btn btn-ghost btn-sm">Descartar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-trigger" aria-expanded="false" aria-controls="acc-2-body">
+        <span class="accordion-trigger-icon"><i data-lucide="radio"></i></span>
+        <span class="accordion-trigger-text">
+          <span class="accordion-trigger-title">Hytera HP78X — SN-00389</span>
+          <span class="accordion-trigger-meta">
+            <span class="chip-estado chip-cotizada">Cotizada</span>
+            María Torres · Ingresó 11 May 2025
+          </span>
+        </span>
+        <span class="accordion-trigger-chevron"><i data-lucide="chevron-down"></i></span>
+      </button>
+      <div class="accordion-body" id="acc-2-body" style="display:none;">
+        <p style="font-size:13px; color:var(--fg-3); margin:0;">Panel secundario — clic en el encabezado para expandir.</p>
+      </div>
+    </div>
+
+    <div class="accordion-item">
+      <button class="accordion-trigger" aria-expanded="false" aria-controls="acc-3-body">
+        <span class="accordion-trigger-icon"><i data-lucide="radio"></i></span>
+        <span class="accordion-trigger-text">
+          <span class="accordion-trigger-title">Hytera MD78X — SN-00502</span>
+          <span class="accordion-trigger-meta">
+            <span class="chip-estado chip-lista">Lista p/ entrega</span>
+            Luis Herrera · Ingresó 10 May 2025
+          </span>
+        </span>
+        <span class="accordion-trigger-chevron"><i data-lucide="chevron-down"></i></span>
+      </button>
+      <div class="accordion-body" id="acc-3-body" style="display:none;">
+        <p style="font-size:13px; color:var(--fg-3); margin:0;">Panel terciario — clic en el encabezado para expandir.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 5 · Tabla editable (líneas cotización) ───────────── -->
+<section class="demo-section" id="editable-table">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Tabla editable — líneas de cotización</h2>
+    <p>Usado en <em>trabajar-orden</em> para consumibles y mano de obra, y en <em>cotizar-orden</em>
+       para ítems de presupuesto. Las celdas son inputs nativos con bordes activados al enfocar.</p>
+  </div>
+
+  <div class="app-card" style="overflow:visible;">
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
+      <table class="app-table editable" aria-label="Líneas de cotización">
+        <thead>
+          <tr>
+            <th style="width:40%;">Descripción / repuesto</th>
+            <th style="width:80px;">Cantidad</th>
+            <th style="width:120px;">Precio unit.</th>
+            <th style="width:110px;">Descuento %</th>
+            <th style="width:120px; text-align:right;">Total</th>
+            <th style="width:48px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><input class="td-input" value="Micrófono interno Hytera PD78X" type="text" aria-label="Descripción"></td>
+            <td><input class="td-input td-mono" value="1" type="number" min="1" aria-label="Cantidad" style="width:60px;"></td>
+            <td><input class="td-input td-mono" value="45.00" type="number" step="0.01" aria-label="Precio unitario"></td>
+            <td><input class="td-input td-mono" value="0" type="number" min="0" max="100" aria-label="Descuento"></td>
+            <td class="td-amount">$45.00</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar fila"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><input class="td-input" value="Conector batería (soldadura)" type="text" aria-label="Descripción"></td>
+            <td><input class="td-input td-mono" value="1" type="number" min="1" aria-label="Cantidad" style="width:60px;"></td>
+            <td><input class="td-input td-mono" value="18.00" type="number" step="0.01" aria-label="Precio unitario"></td>
+            <td><input class="td-input td-mono" value="0" type="number" min="0" max="100" aria-label="Descuento"></td>
+            <td class="td-amount">$18.00</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar fila"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+          <tr>
+            <td><select class="td-select" aria-label="Tipo">
+              <option>Mano de obra</option>
+              <option selected>Diagnóstico</option>
+              <option>Programación</option>
+            </select></td>
+            <td><input class="td-input td-mono" value="2" type="number" min="1" aria-label="Horas" style="width:60px;"></td>
+            <td><input class="td-input td-mono" value="35.00" type="number" step="0.01" aria-label="Precio por hora"></td>
+            <td><input class="td-input td-mono" value="10" type="number" min="0" max="100" aria-label="Descuento"></td>
+            <td class="td-amount">$63.00</td>
+            <td class="td-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar fila"><i data-lucide="trash-2"></i></button>
+            </td>
+          </tr>
+          <tr class="table-summary-row">
+            <td colspan="4" style="text-align:right; font-size:12px; color:var(--fg-3); font-weight:400;">Subtotal</td>
+            <td class="td-amount" style="font-weight:400;">$126.00</td>
+            <td></td>
+          </tr>
+          <tr class="table-summary-row">
+            <td colspan="4" style="text-align:right; font-size:12px; color:var(--fg-3); font-weight:400;">ITBMS 7%</td>
+            <td class="td-amount" style="font-weight:400; color:var(--fg-3);">$8.82</td>
+            <td></td>
+          </tr>
+          <tr class="table-summary-row">
+            <td colspan="4" style="text-align:right; font-size:14px; color:var(--fg-1);">Total</td>
+            <td class="td-amount" style="font-size:16px; color:var(--accent);">$134.82</td>
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-add-row">
+      <button class="btn btn-ghost btn-sm"><i data-lucide="plus"></i> Agregar línea</button>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 6 · Footer strip ─────────────────────────────────── -->
+<section class="demo-section" id="footer-strip">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Barra de resumen fija (footer strip)</h2>
+    <p>Se fija en la parte inferior de la ventana mientras el usuario recorre los paneles de
+       <em>trabajar-orden</em>. Muestra totales acumulados y acciones de guardado.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div style="background: var(--surface-card); border-top: 2px solid var(--brand);
+                display:flex; align-items:center; gap:var(--sp-8); padding:0 var(--sp-8);
+                height:60px; box-shadow: 0 -2px 12px rgba(6,24,41,.08);">
+      <div class="app-footer-strip-stat">
+        <span class="app-footer-strip-stat-label">Repuestos</span>
+        <span class="app-footer-strip-stat-value">$63.00</span>
+      </div>
+      <div class="app-footer-strip-divider"></div>
+      <div class="app-footer-strip-stat">
+        <span class="app-footer-strip-stat-label">Mano de obra</span>
+        <span class="app-footer-strip-stat-value">$63.00</span>
+      </div>
+      <div class="app-footer-strip-divider"></div>
+      <div class="app-footer-strip-stat">
+        <span class="app-footer-strip-stat-label">Subtotal</span>
+        <span class="app-footer-strip-stat-value">$126.00</span>
+      </div>
+      <div class="app-footer-strip-divider"></div>
+      <div class="app-footer-strip-stat">
+        <span class="app-footer-strip-stat-label">Total c/ ITBMS</span>
+        <span class="app-footer-strip-stat-value value-highlight">$134.82</span>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:var(--sp-2); align-items:center;">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="eye"></i> Vista previa</button>
+        <button class="btn btn-primary"><i data-lucide="save"></i> Guardar cotización</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="demo-label" style="margin-top:var(--sp-4);">Nota de implementación</p>
+  <div class="demo-block" style="background:var(--surface-sunken);">
+    <p style="font-size:13px; color:var(--fg-2); margin:0; font-family:var(--font-mono);">
+      Usar <code>.app-footer-strip</code> con <code>position:fixed; bottom:0;</code>.
+      Añadir <code>padding-bottom:72px</code> al contenedor de scroll (<code>.app-body</code>)
+      para que el contenido no quede oculto debajo de la barra.
+    </p>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 7 · Photo grid ───────────────────────────────────── -->
+<section class="demo-section" id="photo-grid">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Galería de fotos</h2>
+    <p>Usado en <em>fotos-taller</em>: thumbnails de Firebase Storage con lightbox al hacer clic.
+       Cada thumbnail muestra el botón de eliminar al hover. El último tile es el botón de agregar.</p>
+  </div>
+
+  <div class="app-card app-card-padded">
+    <div class="photo-grid" id="photo-grid-demo">
+
+      <div class="photo-thumb" onclick="openLightbox(0)" tabindex="0" role="button" aria-label="Ver foto 1">
+        <div style="width:100%;height:100%;background:var(--navy-700);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="radio" style="width:32px;height:32px;color:rgba(255,255,255,.4);"></i>
+        </div>
+        <div class="photo-thumb-overlay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+        <button class="photo-thumb-delete" aria-label="Eliminar foto 1" onclick="event.stopPropagation()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+      </div>
+
+      <div class="photo-thumb" onclick="openLightbox(1)" tabindex="0" role="button" aria-label="Ver foto 2">
+        <div style="width:100%;height:100%;background:var(--navy-600);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="cpu" style="width:32px;height:32px;color:rgba(255,255,255,.4);"></i>
+        </div>
+        <div class="photo-thumb-overlay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+        <button class="photo-thumb-delete" aria-label="Eliminar foto 2" onclick="event.stopPropagation()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+      </div>
+
+      <div class="photo-thumb" onclick="openLightbox(2)" tabindex="0" role="button" aria-label="Ver foto 3">
+        <div style="width:100%;height:100%;background:var(--navy-500);display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="battery" style="width:32px;height:32px;color:rgba(255,255,255,.4);"></i>
+        </div>
+        <div class="photo-thumb-overlay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+        <button class="photo-thumb-delete" aria-label="Eliminar foto 3" onclick="event.stopPropagation()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+      </div>
+
+      <div class="photo-thumb" onclick="openLightbox(3)" tabindex="0" role="button" aria-label="Ver foto 4">
+        <div style="width:100%;height:100%;background:#1a4a6e;display:flex;align-items:center;justify-content:center;">
+          <i data-lucide="wrench" style="width:32px;height:32px;color:rgba(255,255,255,.4);"></i>
+        </div>
+        <div class="photo-thumb-overlay"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></div>
+        <button class="photo-thumb-delete" aria-label="Eliminar foto 4" onclick="event.stopPropagation()"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg></button>
+      </div>
+
+      <label class="photo-add-tile" tabindex="0" aria-label="Agregar foto">
+        <input type="file" accept="image/*" multiple style="display:none;">
+        <i data-lucide="plus"></i>
+        <span>Agregar foto</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="lightbox" id="lightbox" style="display:none;" onclick="if(event.target===this)closeLightbox()" role="dialog" aria-modal="true" aria-label="Vista ampliada de foto">
+    <button class="lightbox-close" onclick="closeLightbox()" aria-label="Cerrar">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <button class="lightbox-nav prev" onclick="lightboxNav(-1)" aria-label="Anterior">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div id="lightbox-content" style="display:flex;align-items:center;justify-content:center; max-width:80vw; max-height:80vh; background:var(--navy-700); border-radius:var(--radius-md); padding:40px;">
+      <i data-lucide="image" style="width:64px;height:64px;color:rgba(255,255,255,.3);"></i>
+    </div>
+    <button class="lightbox-nav next" onclick="lightboxNav(1)" aria-label="Siguiente">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <div class="lightbox-caption" id="lightbox-caption">Foto 1 de 4</div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 8 · Firma digital ────────────────────────────────── -->
+<section class="demo-section" id="signature">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Panel de firma digital</h2>
+    <p>Usado en <em>firmar-entrega</em>. El cliente dibuja su firma sobre un canvas; el técnico
+       confirma. Incluye botón de limpiar, estado "firmado" y captura de cédula.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:560px;">
+    <p class="form-section-title" style="margin-bottom:var(--sp-3);">Firma de recibido</p>
+    <p style="font-size:13px; color:var(--fg-3); margin-bottom:var(--sp-4);">
+      El cliente firma a continuación para confirmar la entrega del equipo <strong>Hytera PD78X — SN-00421</strong>.
+    </p>
+
+    <div class="sig-pad" id="sig-pad-demo" style="margin-bottom:var(--sp-3);">
+      <div class="sig-pad-label">
+        <i data-lucide="pen-line"></i> Firma del cliente
+      </div>
+      <div class="sig-canvas-wrap">
+        <canvas class="sig-canvas" id="sig-canvas" width="480" height="180" aria-label="Área de firma" tabindex="0"></canvas>
+      </div>
+      <div class="sig-pad-toolbar">
+        <button class="btn btn-ghost btn-sm btn-clear" onclick="clearSig()" aria-label="Limpiar firma">
+          <i data-lucide="eraser"></i> Limpiar
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="confirmSig()" id="sig-confirm-btn">
+          <i data-lucide="check"></i> Confirmar firma
+        </button>
+      </div>
+    </div>
+
+    <div class="sig-pad confirmed" style="margin-bottom:var(--sp-3);">
+      <div class="sig-pad-label">
+        <i data-lucide="check-circle"></i> Firma confirmada — Juan Pérez · 12 May 2025 14:32
+      </div>
+      <div class="sig-canvas-wrap">
+        <div style="width:100%; height:60px; background:#fff; display:flex; align-items:center; justify-content:center;">
+          <span style="font-family:var(--font-display); font-size:28px; color:var(--navy-700); opacity:.6; font-style:italic;">Juan Pérez</span>
+        </div>
+      </div>
+      <div class="sig-pad-toolbar" style="justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm" disabled>
+          <i data-lucide="lock"></i> Firmado
+        </button>
+      </div>
+    </div>
+
+    <p class="form-section-title" style="margin-bottom:var(--sp-3);">Foto de identificación</p>
+    <label class="form-file-zone" style="aspect-ratio:unset; padding:var(--sp-5);" tabindex="0" role="button" aria-label="Capturar foto de cédula">
+      <input type="file" accept="image/*" capture="environment">
+      <div class="form-file-zone-icon"><i data-lucide="camera" style="width:28px;height:28px;"></i></div>
+      <p><strong>Capturar foto de cédula</strong> o haz clic para seleccionar</p>
+      <span>JPG, PNG · cédula de identidad del receptor</span>
+    </label>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 9 · APPLIED · Órdenes · Lista ──────────────────────── -->
+<section class="demo-section" id="applied-list">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Órdenes · Lista (ejemplo aplicado)</h2>
+    <p>Combinación 1:1 de los componentes para la pantalla <code>public/ordenes/index.html</code>:
+       <code>app-topbar</code> + <code>app-page-header</code> + KPI strip +
+       <code>filter-bar</code> + <code>app-table</code> con chips de estado y
+       paginación. Sirve de referencia para el layout completo.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <!-- Topbar -->
+    <div class="app-topbar" style="position:relative; top:auto;">
+      <a href="#" class="app-topbar-logo" aria-label="CeComunica">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+      </a>
+      <span class="app-topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</span>
+      <div class="app-topbar-spacer"></div>
+      <div class="app-topbar-actions">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="home"></i> Inicio</button>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="user"></i> Técnico</button>
+        <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nueva orden</button>
+      </div>
+    </div>
+
+    <div style="padding: 20px 24px 24px;">
+      <div class="app-page-header">
+        <div>
+          <h1>Órdenes de Servicio</h1>
+          <p>142 órdenes activas · Actualizado hace 2 min</p>
+        </div>
+        <div class="app-page-header-actions">
+          <button class="btn btn-ghost"><i data-lucide="download"></i> Exportar</button>
+          <button class="btn btn-primary"><i data-lucide="plus"></i> Nueva orden</button>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="kpi-grid" style="margin-bottom:var(--sp-5);">
+        <div class="kpi-card">
+          <span class="kpi-card-label">Activas</span>
+          <span class="kpi-card-value">142</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">En reparación</span>
+          <span class="kpi-card-value kpi-accent">34</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Cotizadas</span>
+          <span class="kpi-card-value">28</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Entregadas hoy</span>
+          <span class="kpi-card-value kpi-ok">7</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Pendientes &gt;5d</span>
+          <span class="kpi-card-value kpi-warn">18</span>
+        </div>
+      </div>
+
+      <div class="app-card">
+        <div class="filter-bar">
+          <div class="filter-search">
+            <span class="search-icon"><i data-lucide="search"></i></span>
+            <input type="search" placeholder="Buscar por OS, cliente, equipo, SN…" aria-label="Buscar órdenes">
+          </div>
+          <div class="filter-chips">
+            <button class="filter-chip active" type="button">Todas <span style="opacity:.5;">142</span></button>
+            <button class="filter-chip" type="button">Recibidas <span style="opacity:.5;">12</span></button>
+            <button class="filter-chip" type="button">En reparación <span style="opacity:.5;">34</span></button>
+            <button class="filter-chip" type="button">Cotizadas <span style="opacity:.5;">28</span></button>
+            <button class="filter-chip" type="button">Lista entrega <span style="opacity:.5;">9</span></button>
+          </div>
+          <div style="flex:1;"></div>
+          <button class="btn btn-ghost btn-sm"><i data-lucide="sliders-horizontal"></i> Filtros</button>
+        </div>
+
+        <div class="app-table-wrap" style="border:none; border-radius:0; box-shadow:none;">
+          <table class="app-table" aria-label="Órdenes de servicio">
+            <thead>
+              <tr>
+                <th class="sortable sort-asc" style="width:120px;">N° OS <svg class="sort-icon" viewBox="0 0 8 10" width="8" height="10"><path d="M4 0L7 4H1L4 0z" fill="currentColor"/><path d="M4 10L1 6H7L4 10z" fill="currentColor" opacity=".3"/></svg></th>
+                <th>Cliente</th>
+                <th>Equipo</th>
+                <th class="sortable">Fecha entrada</th>
+                <th>Técnico</th>
+                <th>Estado</th>
+                <th>Prioridad</th>
+                <th style="width:80px; text-align:right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="td-primary">OS-2025-0142</td>
+                <td><span style="font-weight:500;">Autoridad del Canal</span><br><span class="td-muted">Juan Pérez</span></td>
+                <td>Hytera PD78X<br><span class="td-muted">SN-00421</span></td>
+                <td class="td-muted">12 May 2025</td>
+                <td style="font-size:13px;">Carlos Ríos</td>
+                <td><span class="chip-estado chip-reparacion">En reparación</span></td>
+                <td><span class="chip-prioridad alta">Alta</span></td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td class="td-primary">OS-2025-0141</td>
+                <td><span style="font-weight:500;">Manzanillo Intl.</span><br><span class="td-muted">Ana López</span></td>
+                <td>Hytera HP78X<br><span class="td-muted">SN-00389</span></td>
+                <td class="td-muted">11 May 2025</td>
+                <td style="font-size:13px;">María Torres</td>
+                <td><span class="chip-estado chip-cotizada">Cotizada</span></td>
+                <td><span class="chip-prioridad media">Media</span></td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td class="td-primary">OS-2025-0140</td>
+                <td><span style="font-weight:500;">Grupo Assa Abloy</span><br><span class="td-muted">Pedro Mora</span></td>
+                <td>Hytera MD78X<br><span class="td-muted">SN-00502</span></td>
+                <td class="td-muted">10 May 2025</td>
+                <td style="font-size:13px;">—</td>
+                <td><span class="chip-estado chip-recibida">Recibida</span></td>
+                <td><span class="chip-prioridad normal">Normal</span></td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td class="td-primary">OS-2025-0139</td>
+                <td><span style="font-weight:500;">Policía Nacional</span><br><span class="td-muted">Luis Vega</span></td>
+                <td>Hytera PNC560<br><span class="td-muted">SN-00451</span></td>
+                <td class="td-muted">9 May 2025</td>
+                <td style="font-size:13px;">Carlos Ríos</td>
+                <td><span class="chip-estado chip-aprobada">Aprobada</span></td>
+                <td><span class="chip-prioridad alta">Alta</span></td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                </td>
+              </tr>
+              <tr>
+                <td class="td-primary">OS-2025-0138</td>
+                <td><span style="font-weight:500;">Copa Airlines</span><br><span class="td-muted">Sandra Gil</span></td>
+                <td>Hytera VM780<br><span class="td-muted">SN-00311</span></td>
+                <td class="td-muted">7 May 2025</td>
+                <td style="font-size:13px;">María Torres</td>
+                <td><span class="chip-estado chip-entregada">Entregada</span></td>
+                <td><span class="chip-prioridad normal">Normal</span></td>
+                <td class="td-actions">
+                  <button class="btn btn-ghost btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="app-table-footer">
+          <span>Mostrando <strong>1–5</strong> de <strong>142</strong> órdenes</span>
+          <nav class="app-pagination" aria-label="Paginación">
+            <button class="app-pagination-page btn-ghost btn" aria-label="Anterior"><i data-lucide="chevron-left" style="width:14px;height:14px;"></i></button>
+            <button class="app-pagination-page active">1</button>
+            <button class="app-pagination-page">2</button>
+            <button class="app-pagination-page">3</button>
+            <span style="color:var(--fg-4); padding:0 4px; font-size:13px;">…</span>
+            <button class="app-pagination-page">24</button>
+            <button class="app-pagination-page btn-ghost btn" aria-label="Siguiente"><i data-lucide="chevron-right" style="width:14px;height:14px;"></i></button>
+          </nav>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 10 · APPLIED · Órdenes · Trabajar ──────────────────── -->
+<section class="demo-section" id="applied-work">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Órdenes · Trabajar (ejemplo aplicado)</h2>
+    <p>Combinación de los componentes para la pantalla <code>public/ordenes/trabajar-orden.html</code>:
+       shell + datos del cliente + <code>accordion</code> por equipo (con tabla editable de cotización
+       embebida) + <code>app-footer-strip</code> sticky con totales.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <!-- Topbar -->
+    <div class="app-topbar" style="position:relative; top:auto;">
+      <a href="#" class="app-topbar-logo" aria-label="CeComunica">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+      </a>
+      <span class="app-topbar-title"><i data-lucide="wrench"></i> Trabajar OS-2025-0142</span>
+      <div class="app-topbar-spacer"></div>
+      <div class="app-topbar-actions">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="arrow-left"></i> Volver</button>
+      </div>
+    </div>
+
+    <div style="padding: 20px 24px 24px;">
+      <nav class="app-breadcrumbs" aria-label="Breadcrumb">
+        <a href="#">Órdenes</a>
+        <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+        <span class="app-breadcrumbs-current">OS-2025-0142 · Trabajar</span>
+      </nav>
+
+      <div class="app-page-header">
+        <div>
+          <h1>OS-2025-0142</h1>
+          <p>Autoridad del Canal · Juan Pérez · 3 equipos · Ingresó 12 May 2025</p>
+        </div>
+        <div class="app-page-header-actions">
+          <span class="chip-estado chip-reparacion">En reparación</span>
+          <span class="chip-prioridad alta">Alta</span>
+        </div>
+      </div>
+
+      <!-- Resumen cliente -->
+      <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-section" style="border:none; padding:0; margin:0;">
+          <div>
+            <p class="form-section-title"><i data-lucide="building-2" style="width:16px;height:16px;"></i> Cliente</p>
+          </div>
+          <div class="form-grid-3">
+            <div class="form-field">
+              <label class="form-label">Cliente</label>
+              <input class="form-input" value="Autoridad del Canal de Panamá" disabled>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Contacto</label>
+              <input class="form-input" value="Juan Pérez" disabled>
+            </div>
+            <div class="form-field">
+              <label class="form-label">Teléfono</label>
+              <input class="form-input" value="+507 6789-0001" disabled style="font-family:var(--font-mono);">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Acordeón equipos -->
+      <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="layers" style="width:16px;height:16px;"></i> Equipos en intervención</p>
+
+      <div class="accordion" style="margin-bottom:80px;">
+        <div class="accordion-item open">
+          <button class="accordion-trigger" aria-expanded="true" aria-controls="appw-acc-1">
+            <span class="accordion-trigger-icon"><i data-lucide="radio"></i></span>
+            <span class="accordion-trigger-text">
+              <span class="accordion-trigger-title">Hytera PD78X — SN-00421</span>
+              <span class="accordion-trigger-meta">
+                <span class="chip-estado chip-reparacion">En reparación</span>
+                Carlos Ríos · $134.82 acumulado
+              </span>
+            </span>
+            <span class="accordion-trigger-chevron"><i data-lucide="chevron-down"></i></span>
+          </button>
+          <div class="accordion-body" id="appw-acc-1">
+            <div class="form-grid-2" style="margin-bottom:var(--sp-4);">
+              <div class="form-field">
+                <label class="form-label">Falla diagnosticada</label>
+                <textarea class="form-input form-textarea" rows="2">Micrófono dañado. Conector de batería oxidado.</textarea>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Solución aplicada</label>
+                <textarea class="form-input form-textarea" rows="2">Reemplazo de micrófono interno y limpieza de contactos.</textarea>
+              </div>
+            </div>
+
+            <p class="demo-label" style="margin-bottom:var(--sp-2);">Líneas de cotización</p>
+            <table class="app-table editable" style="margin-bottom:var(--sp-2);">
+              <thead>
+                <tr>
+                  <th style="width:50%;">Descripción</th>
+                  <th style="width:80px;">Cant.</th>
+                  <th style="width:120px;">P. Unit.</th>
+                  <th style="width:120px; text-align:right;">Total</th>
+                  <th style="width:48px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input class="td-input" type="text" value="Micrófono interno Hytera PD78X"></td>
+                  <td><input class="td-input td-mono" type="number" value="1" style="width:60px;"></td>
+                  <td><input class="td-input td-mono" type="number" value="45.00" step="0.01"></td>
+                  <td class="td-amount">$45.00</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button></td>
+                </tr>
+                <tr>
+                  <td><select class="td-select"><option>Diagnóstico</option><option selected>Mano de obra</option></select></td>
+                  <td><input class="td-input td-mono" type="number" value="2" style="width:60px;"></td>
+                  <td><input class="td-input td-mono" type="number" value="35.00" step="0.01"></td>
+                  <td class="td-amount">$70.00</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="table-add-row" style="border-radius:0; border-bottom:none;">
+              <button class="btn btn-ghost btn-sm"><i data-lucide="plus"></i> Agregar línea</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false" aria-controls="appw-acc-2">
+            <span class="accordion-trigger-icon"><i data-lucide="radio"></i></span>
+            <span class="accordion-trigger-text">
+              <span class="accordion-trigger-title">Hytera HP78X — SN-00389</span>
+              <span class="accordion-trigger-meta">
+                <span class="chip-estado chip-cotizada">Cotizada</span>
+                María Torres · $215.00 acumulado
+              </span>
+            </span>
+            <span class="accordion-trigger-chevron"><i data-lucide="chevron-down"></i></span>
+          </button>
+          <div class="accordion-body" id="appw-acc-2" style="display:none;">
+            <p style="font-size:13px; color:var(--fg-3); margin:0;">Clic para expandir.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false" aria-controls="appw-acc-3">
+            <span class="accordion-trigger-icon"><i data-lucide="radio"></i></span>
+            <span class="accordion-trigger-text">
+              <span class="accordion-trigger-title">Hytera MD78X — SN-00502</span>
+              <span class="accordion-trigger-meta">
+                <span class="chip-estado chip-lista">Lista p/ entrega</span>
+                Luis Herrera · $89.00 acumulado
+              </span>
+            </span>
+            <span class="accordion-trigger-chevron"><i data-lucide="chevron-down"></i></span>
+          </button>
+          <div class="accordion-body" id="appw-acc-3" style="display:none;">
+            <p style="font-size:13px; color:var(--fg-3); margin:0;">Clic para expandir.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer strip sticky-style -->
+      <div style="background: var(--surface-card); border-top: 2px solid var(--brand);
+                  display:flex; align-items:center; gap:var(--sp-6); padding:0 var(--sp-6);
+                  height:60px; box-shadow: 0 -2px 12px rgba(6,24,41,.08);
+                  margin: 0 -24px -24px; border-radius: 0 0 8px 8px;">
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Equipos</span>
+          <span class="app-footer-strip-stat-value">3</span>
+        </div>
+        <div class="app-footer-strip-divider"></div>
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Subtotal</span>
+          <span class="app-footer-strip-stat-value">$415.71</span>
+        </div>
+        <div class="app-footer-strip-divider"></div>
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Total c/ ITBMS</span>
+          <span class="app-footer-strip-stat-value value-highlight">$444.81</span>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:var(--sp-2); align-items:center;">
+          <button class="btn btn-ghost btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+          <button class="btn btn-secondary btn-sm"><i data-lucide="eye"></i> Vista previa</button>
+          <button class="btn btn-primary"><i data-lucide="save"></i> Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 11 · APPLIED · Nueva orden ─────────────────────────── -->
+<section class="demo-section" id="applied-new">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Órdenes · Nueva (ejemplo aplicado)</h2>
+    <p>Formulario centrado para crear una orden. Usa <code>.page-header-centered</code>,
+       4 secciones (cliente / equipo / asignación / fotos) con readiness por sección, y un
+       <code>form-file-zone</code> para fotos al ingreso. 1:1 con
+       <code>public/ordenes/nueva-orden.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div style="padding:0 24px;">
+      <div class="page-header-centered">
+        <div class="page-header-icon"><i data-lucide="clipboard-list"></i></div>
+        <h1>Nueva Orden de Servicio</h1>
+        <p>Registra el equipo recibido y la falla reportada por el cliente. Las fotos al ingreso
+           documentan el estado físico.</p>
+      </div>
+
+      <form onsubmit="return false;" novalidate style="max-width:900px; margin:0 auto var(--sp-8);">
+
+        <!-- Cliente -->
+        <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+          <div class="form-section-header">
+            <h3><i data-lucide="building-2"></i> Cliente</h3>
+            <span class="section-readiness pending"><i data-lucide="clock"></i> Pendiente</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label class="form-label">Cliente <span class="req">*</span></label>
+                <div class="combobox">
+                  <input class="form-input" type="text" placeholder="Buscar cliente…">
+                  <div class="combo-actions">
+                    <button class="btn btn-secondary btn-icon btn-sm" aria-label="Nuevo cliente"><i data-lucide="user-plus"></i></button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Contacto</label>
+                <input class="form-input" type="text" placeholder="Nombre del contacto">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Teléfono</label>
+                <div class="form-input-wrap">
+                  <span class="form-input-prefix"><i data-lucide="phone" style="width:15px;height:15px;"></i></span>
+                  <input class="form-input" type="tel" placeholder="+507 6789-0000">
+                </div>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Correo electrónico</label>
+                <div class="form-input-wrap">
+                  <span class="form-input-prefix"><i data-lucide="mail" style="width:15px;height:15px;"></i></span>
+                  <input class="form-input" type="email" placeholder="cliente@empresa.com">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Equipo -->
+        <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+          <div class="form-section-header">
+            <h3><i data-lucide="radio"></i> Equipo recibido</h3>
+            <span class="section-readiness pending"><i data-lucide="clock"></i> Pendiente</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid-3">
+              <div class="form-field">
+                <label class="form-label">Marca</label>
+                <select class="form-select">
+                  <option>Seleccionar…</option>
+                  <option selected>Hytera</option>
+                  <option>Motorola</option>
+                  <option>Kenwood</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Modelo <span class="req">*</span></label>
+                <input class="form-input" type="text" placeholder="PD78X">
+              </div>
+              <div class="form-field">
+                <label class="form-label">N° de serie</label>
+                <input class="form-input" type="text" placeholder="SN-00421" style="font-family:var(--font-mono);">
+              </div>
+              <div class="form-field" style="grid-column:1/-1;">
+                <label class="form-label">Falla reportada <span class="req">*</span></label>
+                <textarea class="form-input form-textarea" placeholder="Describa el problema observado por el cliente…"></textarea>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Prioridad</label>
+                <select class="form-select">
+                  <option value="normal" selected>Normal</option>
+                  <option value="media">Media</option>
+                  <option value="alta">Alta</option>
+                </select>
+              </div>
+              <div class="form-field" style="grid-column:span 2;">
+                <label class="form-label">Accesorios incluidos</label>
+                <div style="display:flex; gap:18px; flex-wrap:wrap;">
+                  <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">Batería</span></span></label>
+                  <label class="form-check"><input type="checkbox"><span><span class="form-check-label">Antena</span></span></label>
+                  <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">Cargador</span></span></label>
+                  <label class="form-check"><input type="checkbox"><span><span class="form-check-label">Clip</span></span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Asignación -->
+        <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+          <div class="form-section-header">
+            <h3><i data-lucide="user-check"></i> Asignación</h3>
+            <span class="section-readiness ready"><i data-lucide="check"></i> Opcional</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label class="form-label">Técnico asignado</label>
+                <select class="form-select">
+                  <option value="">Sin asignar</option>
+                  <option>Carlos Ríos</option>
+                  <option>María Torres</option>
+                  <option>Luis Herrera</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Fecha promesa</label>
+                <input class="form-input" type="date">
+              </div>
+            </div>
+            <label class="form-check" style="margin-top:var(--sp-3);">
+              <input type="checkbox">
+              <span>
+                <span class="form-check-label">Notificar al cliente por correo al guardar</span>
+                <span class="form-check-desc form-hint">Se enviará un resumen de la orden al correo registrado.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Fotos -->
+        <div class="app-card app-card-padded">
+          <div class="form-section-header">
+            <h3><i data-lucide="camera"></i> Fotos al ingreso</h3>
+            <span class="section-readiness pending"><i data-lucide="clock"></i> Recomendado</span>
+          </div>
+          <div class="form-section-body">
+            <label class="form-file-zone" tabindex="0" role="button">
+              <input type="file" accept="image/*" multiple>
+              <div class="form-file-zone-icon"><i data-lucide="camera" style="width:32px;height:32px;"></i></div>
+              <p><strong>Arrastra las fotos aquí</strong> o haz clic para seleccionar</p>
+              <span>JPG, PNG, WEBP · máx. 10 MB c/u</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="save"></i> Crear orden</button>
+          <button type="button" class="btn btn-secondary">Vista previa</button>
+          <div class="form-actions-secondary">
+            <button type="button" class="btn btn-ghost">Cancelar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 12 · APPLIED · Progreso de técnicos ────────────────── -->
+<section class="demo-section" id="applied-progress">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Órdenes · Progreso de Técnicos (ejemplo aplicado)</h2>
+    <p>Dashboard operacional para gerencia: selector de periodo, KPI strip, banner del usuario actual,
+       y tabla de clasificación de técnicos con barras de progreso. 1:1 con
+       <code>public/ordenes/progreso-tecnicos.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+    <div class="app-page-header">
+      <div>
+        <h1><i data-lucide="trophy" style="display:inline; vertical-align:middle;"></i> Progreso de Técnicos</h1>
+        <p>Indicadores de desempeño · Mensual · 1–31 May 2025</p>
+      </div>
+      <div class="app-page-header-actions">
+        <div class="btn-group">
+          <button class="btn btn-secondary btn-sm">Semanal</button>
+          <button class="btn btn-secondary btn-sm active">Mensual</button>
+          <button class="btn btn-secondary btn-sm">Total</button>
+        </div>
+        <button class="btn btn-ghost btn-sm"><i data-lucide="download"></i> Exportar</button>
+      </div>
+    </div>
+
+    <div class="alert-banner">
+      <span class="alert-banner-icon"><i data-lucide="user"></i></span>
+      <div class="alert-banner-body">
+        <strong>Tu desempeño · Carlos Ríos</strong>
+        38 órdenes completadas este mes. Vas <strong>5% sobre meta</strong> 🎉
+      </div>
+    </div>
+
+    <div class="kpi-grid" style="margin-bottom:var(--sp-5);">
+      <div class="kpi-card">
+        <span class="kpi-card-label">Órdenes cerradas (mes)</span>
+        <span class="kpi-card-value">95</span>
+        <span class="kpi-card-trend up"><i data-lucide="trending-up"></i> +18% vs. abril</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Tiempo promedio</span>
+        <span class="kpi-card-value kpi-accent">2.4d</span>
+        <span class="kpi-card-sub">Recepción → entrega</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Satisfacción</span>
+        <span class="kpi-card-value kpi-ok">94%</span>
+        <span class="kpi-card-sub">Encuestas tras entrega</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Re-trabajos</span>
+        <span class="kpi-card-value kpi-warn">3</span>
+        <span class="kpi-card-sub">Volvieron a taller</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Ticket promedio</span>
+        <span class="kpi-card-value">$118</span>
+      </div>
+    </div>
+
+    <div class="app-card">
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" placeholder="Buscar técnico…">
+        </div>
+        <div style="flex:1;"></div>
+        <span style="font-size:13px; color:var(--fg-3);">Meta mensual: <strong style="color:var(--fg-1);">40 órdenes</strong></span>
+      </div>
+
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table">
+          <thead>
+            <tr>
+              <th style="width:48px;">#</th>
+              <th>Técnico</th>
+              <th>Completadas</th>
+              <th style="width:240px;">Progreso (meta 40)</th>
+              <th style="text-align:right;">T. medio</th>
+              <th style="text-align:right;">Ticket prom.</th>
+              <th style="text-align:right;">Satisfacción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="rank-medal">🥇</span></td>
+              <td style="font-weight:600;">Carlos Ríos</td>
+              <td class="td-primary">38</td>
+              <td>
+                <div class="progress-bar-wrap">
+                  <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>38 / 40</strong></div>
+                  <div class="progress-bar-track"><div class="progress-bar-fill fill-ok" style="width:95%;"></div></div>
+                </div>
+              </td>
+              <td class="td-amount">2.1d</td>
+              <td class="td-amount">$124</td>
+              <td class="td-amount">96%</td>
+            </tr>
+            <tr>
+              <td><span class="rank-medal">🥈</span></td>
+              <td style="font-weight:600;">María Torres</td>
+              <td class="td-primary">31</td>
+              <td>
+                <div class="progress-bar-wrap">
+                  <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>31 / 40</strong></div>
+                  <div class="progress-bar-track"><div class="progress-bar-fill" style="width:78%;"></div></div>
+                </div>
+              </td>
+              <td class="td-amount">2.6d</td>
+              <td class="td-amount">$118</td>
+              <td class="td-amount">94%</td>
+            </tr>
+            <tr>
+              <td><span class="rank-medal">🥉</span></td>
+              <td style="font-weight:600;">Luis Herrera</td>
+              <td class="td-primary">19</td>
+              <td>
+                <div class="progress-bar-wrap">
+                  <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>19 / 40</strong></div>
+                  <div class="progress-bar-track"><div class="progress-bar-fill fill-warn" style="width:48%;"></div></div>
+                </div>
+              </td>
+              <td class="td-amount">3.1d</td>
+              <td class="td-amount">$105</td>
+              <td class="td-amount">91%</td>
+            </tr>
+            <tr>
+              <td><span class="rank-num">4</span></td>
+              <td style="font-weight:600;">Ana Quirós</td>
+              <td class="td-primary">7</td>
+              <td>
+                <div class="progress-bar-wrap">
+                  <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>7 / 40</strong></div>
+                  <div class="progress-bar-track"><div class="progress-bar-fill fill-crit" style="width:18%;"></div></div>
+                </div>
+              </td>
+              <td class="td-amount">3.8d</td>
+              <td class="td-amount">$97</td>
+              <td class="td-amount">88%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 13 · APPLIED · Config (admin) ──────────────────────── -->
+<section class="demo-section" id="applied-config">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Órdenes · Configuración (ejemplo aplicado)</h2>
+    <p>Pantalla de configuración: toggles del sistema (notificaciones, ITBMS, integraciones),
+       listas CRUD para estados de reparación y técnicos. 1:1 con
+       <code>public/ordenes/config.html</code> + <code>estado_reparacion.html</code> +
+       <code>tecnicos.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+    <div class="app-page-header">
+      <div>
+        <h1>Configuración</h1>
+        <p>Preferencias del sistema y listas administrables</p>
+      </div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-4);">
+
+      <!-- Toggles -->
+      <div class="app-card app-card-padded">
+        <p class="form-section-title" style="margin-bottom:var(--sp-4);"><i data-lucide="settings"></i> Preferencias</p>
+
+        <div style="display:flex; flex-direction:column; gap:var(--sp-4);">
+          <label class="toggle-wrap">
+            <span class="toggle-switch">
+              <input type="checkbox" checked>
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-text">
+              <span class="toggle-label">Notificaciones por correo</span>
+              <span class="toggle-desc">Enviar resumen al cliente al crear o actualizar una orden.</span>
+            </span>
+          </label>
+
+          <label class="toggle-wrap">
+            <span class="toggle-switch">
+              <input type="checkbox" checked>
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-text">
+              <span class="toggle-label">ITBMS automático (7%)</span>
+              <span class="toggle-desc">Aplicar el impuesto sobre la transferencia de bienes muebles a cada cotización.</span>
+            </span>
+          </label>
+
+          <label class="toggle-wrap">
+            <span class="toggle-switch">
+              <input type="checkbox">
+              <span class="toggle-track"></span>
+              <span class="toggle-thumb"></span>
+            </span>
+            <span class="toggle-text">
+              <span class="toggle-label">Modo de mantenimiento</span>
+              <span class="toggle-desc">Bloquea el acceso de técnicos mientras se realizan actualizaciones.</span>
+            </span>
+          </label>
+
+          <label class="toggle-wrap">
+            <span class="toggle-switch">
+              <input type="checkbox" disabled>
+              <span class="toggle-track" style="opacity:.4;"></span>
+              <span class="toggle-thumb" style="opacity:.5;"></span>
+            </span>
+            <span class="toggle-text" style="opacity:.5;">
+              <span class="toggle-label">Integración con Alegra (próximamente)</span>
+              <span class="toggle-desc">Sincronizar cotizaciones aprobadas con facturación.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Estados CRUD -->
+      <div class="app-card app-card-padded">
+        <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="list-ordered"></i> Estados de reparación</p>
+        <p class="form-section-desc" style="margin-bottom:var(--sp-3);">Reordena arrastrando. Cada estado puede personalizarse pero los chips de color están fijos por el sistema.</p>
+
+        <div class="crud-list">
+          <div class="crud-list-item">
+            <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+            <span class="chip-estado chip-recibida" style="flex-shrink:0;">●</span>
+            <span class="crud-list-item-label">Recibida</span>
+            <div class="crud-list-item-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+            </div>
+          </div>
+          <div class="crud-list-item">
+            <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+            <span class="chip-estado chip-diagnostico" style="flex-shrink:0;">●</span>
+            <span class="crud-list-item-label">En diagnóstico</span>
+            <div class="crud-list-item-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+            </div>
+          </div>
+          <div class="crud-list-item">
+            <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+            <span class="chip-estado chip-reparacion" style="flex-shrink:0;">●</span>
+            <span class="crud-list-item-label">En reparación</span>
+            <div class="crud-list-item-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+            </div>
+          </div>
+          <div class="crud-list-item">
+            <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+            <span class="chip-estado chip-lista" style="flex-shrink:0;">●</span>
+            <span class="crud-list-item-label">Lista p/ entrega</span>
+            <div class="crud-list-item-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+            </div>
+          </div>
+          <div class="crud-list-item">
+            <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+            <span class="chip-estado chip-entregada" style="flex-shrink:0;">●</span>
+            <span class="crud-list-item-label">Entregada</span>
+            <div class="crud-list-item-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="crud-list-add">
+          <input class="form-input" type="text" placeholder="Nuevo estado…">
+          <button class="btn btn-secondary"><i data-lucide="plus"></i> Agregar</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── Toast region (live) ──────────────────────────────── -->
+<div class="toast-region" id="toast-region" aria-live="polite" aria-label="Notificaciones"></div>
+
+<script src="app-demo.js"></script>
+</body>
+</html>

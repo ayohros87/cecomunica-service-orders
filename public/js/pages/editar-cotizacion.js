@@ -12,10 +12,11 @@
     function money(n) { return Number(n || 0).toLocaleString("es-PA", { style: "currency", currency: "USD" }); }
 
     function mostrarToast(mensaje) {
+      const region = document.getElementById("toast-region") || document.body;
       const t = document.createElement("div");
-      t.className = "toast";
+      t.className = "toast toast-info";
       t.textContent = mensaje;
-      document.body.appendChild(t);
+      region.appendChild(t);
       requestAnimationFrame(() => t.classList.add("show"));
       setTimeout(() => {
         t.classList.remove("show");

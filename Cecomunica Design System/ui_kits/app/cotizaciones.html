@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Cotizaciones</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>Cotizaciones</strong>
+  <a href="#chips">Estados</a>
+  <a href="#applied-list">Lista</a>
+  <a href="#applied-new">Nueva</a>
+  <a href="#applied-edit">Editar</a>
+  <a href="#applied-print">Imprimir</a>
+</nav>
+
+
+<!-- ─── 1 · Chips de estado (cotización) ──────────────────── -->
+<section class="demo-section" id="chips">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Chips de estado · Cotización</h2>
+    <p>Cuatro estados del flujo de cotizaciones, reutilizando los <code>.chip-estado</code>
+       definidos por el sistema base.</p>
+  </div>
+
+  <div class="demo-row">
+    <span class="chip-estado chip-recibida">Borrador</span>
+    <span class="chip-estado chip-cotizada">Emitida</span>
+    <span class="chip-estado chip-aprobada">Aprobada</span>
+    <span class="chip-estado chip-entregada">Enviada</span>
+    <span class="chip-estado chip-cancelada">Anulada</span>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 2 · APPLIED · Lista ───────────────────────────────── -->
+<section class="demo-section" id="applied-list">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Cotizaciones · Lista (ejemplo aplicado)</h2>
+    <p>Pantalla 1:1 para <code>public/cotizaciones/index.html</code>: shell + toolbar con filtros
+       (búsqueda + select de estado + toggle pill "mostrar eliminadas") + tabla con paginación
+       "cargar más". Muestra el patrón <strong>responsive cards fallback</strong> que cae a tarjetas
+       debajo de 900px.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+
+    <!-- Topbar -->
+    <div class="app-topbar" style="position:relative; top:auto;">
+      <a href="#" class="app-topbar-logo" aria-label="CeComunica">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="32" height="32" aria-hidden="true">
+          <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+          <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+          <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+        </svg>
+      </a>
+      <span class="app-topbar-title"><i data-lucide="receipt"></i> Cotizaciones</span>
+      <div class="app-topbar-spacer"></div>
+      <div class="app-topbar-actions">
+        <button class="btn btn-ghost btn-sm"><i data-lucide="home"></i> Inicio</button>
+        <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Nueva cotización</button>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px 24px;">
+      <div class="app-page-header">
+        <div>
+          <h1>Cotizaciones</h1>
+          <p>78 cotizaciones · Actualizado hace 1 min</p>
+        </div>
+      </div>
+
+      <div class="app-card">
+        <div class="filter-bar">
+          <div class="filter-search">
+            <span class="search-icon"><i data-lucide="search"></i></span>
+            <input type="search" placeholder="Filtrar por cliente o ID…" aria-label="Buscar cotizaciones">
+          </div>
+          <div class="form-field" style="margin:0; min-width:160px;">
+            <select class="form-select">
+              <option value="">Todos los estados</option>
+              <option>Borrador</option>
+              <option selected>Emitida</option>
+              <option>Aprobada</option>
+              <option>Enviada</option>
+              <option>Anulada</option>
+            </select>
+          </div>
+          <div style="flex:1;"></div>
+          <label class="toggle-pill">
+            <input type="checkbox">
+            Mostrar eliminadas
+          </label>
+          <button class="btn btn-ghost btn-sm btn-icon" aria-label="Refrescar"><i data-lucide="refresh-cw"></i></button>
+        </div>
+
+        <!-- Desktop table -->
+        <div class="responsive-table-wrap">
+          <div class="app-table-wrap" style="border:none; border-radius:0; box-shadow:none;">
+            <table class="app-table" aria-label="Cotizaciones">
+              <thead>
+                <tr>
+                  <th class="sortable sort-asc" style="width:140px;">
+                    ID <svg class="sort-icon" viewBox="0 0 8 10" width="8" height="10"><path d="M4 0L7 4H1L4 0z" fill="currentColor"/><path d="M4 10L1 6H7L4 10z" fill="currentColor" opacity=".3"/></svg>
+                  </th>
+                  <th>Cliente</th>
+                  <th class="sortable">Fecha</th>
+                  <th>Estado</th>
+                  <th class="sortable" style="text-align:right;">Total</th>
+                  <th style="width:120px; text-align:right;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="td-primary">COT-2025-0042</td>
+                  <td>Portafolio Digital S.A.</td>
+                  <td class="td-muted">12 May 2025</td>
+                  <td><span class="chip-estado chip-cotizada">Emitida</span></td>
+                  <td class="td-amount">$2,273.75</td>
+                  <td class="td-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="td-primary">COT-2025-0041</td>
+                  <td>Manzanillo Intl.</td>
+                  <td class="td-muted">11 May 2025</td>
+                  <td><span class="chip-estado chip-aprobada">Aprobada</span></td>
+                  <td class="td-amount">$1,560.00</td>
+                  <td class="td-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="td-primary">COT-2025-0040</td>
+                  <td>Grupo Assa Abloy</td>
+                  <td class="td-muted">10 May 2025</td>
+                  <td><span class="chip-estado chip-recibida">Borrador</span></td>
+                  <td class="td-amount">$890.50</td>
+                  <td class="td-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="td-primary">COT-2025-0039</td>
+                  <td>Copa Airlines</td>
+                  <td class="td-muted">9 May 2025</td>
+                  <td><span class="chip-estado chip-entregada">Enviada</span></td>
+                  <td class="td-amount">$4,127.30</td>
+                  <td class="td-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="td-primary">COT-2025-0038</td>
+                  <td>Policía Nacional</td>
+                  <td class="td-muted">7 May 2025</td>
+                  <td><span class="chip-estado chip-cancelada">Anulada</span></td>
+                  <td class="td-amount" style="color:var(--fg-4); text-decoration:line-through;">$675.00</td>
+                  <td class="td-actions">
+                    <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mobile fallback -->
+        <div class="responsive-cards" style="padding:var(--sp-3);">
+          <div class="responsive-card">
+            <div class="responsive-card-top">
+              <div>
+                <div class="responsive-card-title">Portafolio Digital S.A.</div>
+                <div class="responsive-card-sub">COT-2025-0042 · 12 May 2025</div>
+              </div>
+              <span class="chip-estado chip-cotizada">Emitida</span>
+            </div>
+            <div class="responsive-card-meta">
+              <span><strong style="color:var(--fg-1);">$2,273.75</strong></span>
+            </div>
+            <div class="responsive-card-actions">
+              <button class="btn btn-secondary btn-sm"><i data-lucide="eye"></i> Ver</button>
+              <button class="btn btn-secondary btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+              <button class="btn btn-secondary btn-sm"><i data-lucide="pencil"></i> Editar</button>
+            </div>
+          </div>
+          <div class="responsive-card">
+            <div class="responsive-card-top">
+              <div>
+                <div class="responsive-card-title">Manzanillo Intl.</div>
+                <div class="responsive-card-sub">COT-2025-0041 · 11 May 2025</div>
+              </div>
+              <span class="chip-estado chip-aprobada">Aprobada</span>
+            </div>
+            <div class="responsive-card-meta">
+              <span><strong style="color:var(--fg-1);">$1,560.00</strong></span>
+            </div>
+            <div class="responsive-card-actions">
+              <button class="btn btn-secondary btn-sm"><i data-lucide="eye"></i> Ver</button>
+              <button class="btn btn-secondary btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="app-table-footer">
+          <span>Mostrando <strong>1–5</strong> de <strong>78</strong> cotizaciones</span>
+          <button class="btn btn-secondary btn-sm"><i data-lucide="chevron-down"></i> Cargar más</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 3 · APPLIED · Nueva cotización ────────────────────── -->
+<section class="demo-section" id="applied-new">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Cotizaciones · Nueva (ejemplo aplicado)</h2>
+    <p>Formulario centrado con <code>.page-header-centered</code>, secciones colapsables para
+       cliente / equipos / términos, y una tabla editable de líneas con totales calculados.
+       Sticky footer strip con resumen + acciones. 1:1 con
+       <code>public/cotizaciones/nueva-cotizacion.html</code>.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div style="padding:0 24px;">
+      <div class="page-header-centered">
+        <div class="page-header-icon"><i data-lucide="receipt"></i></div>
+        <h1>Nueva Cotización</h1>
+        <p>Completa los datos del cliente, agrega las líneas del presupuesto y guarda como borrador
+           o emite directamente al cliente.</p>
+      </div>
+
+      <form onsubmit="return false;" novalidate style="max-width:900px; margin:0 auto;">
+
+        <!-- Sección 1: Cliente -->
+        <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+          <div class="form-section-header">
+            <h3><i data-lucide="building-2"></i> Cliente</h3>
+            <span class="section-readiness pending"><i data-lucide="clock"></i> Pendiente</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label class="form-label">Cliente <span class="req">*</span></label>
+                <div class="combobox">
+                  <input class="form-input" type="text" placeholder="Buscar por nombre o RUC…">
+                  <div class="combo-actions">
+                    <button class="btn btn-secondary btn-icon btn-sm" aria-label="Nuevo cliente"><i data-lucide="user-plus"></i></button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-field">
+                <label class="form-label">Contacto</label>
+                <input class="form-input" type="text" placeholder="Nombre del contacto">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección 2: Líneas -->
+        <div class="app-card" style="margin-bottom:var(--sp-4);">
+          <div style="padding:var(--sp-5) var(--sp-5) var(--sp-3); display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="list" style="width:16px;height:16px;"></i> Líneas del presupuesto</p>
+              <p class="form-section-desc" style="margin-bottom:0;">Equipos, servicios y mano de obra.</p>
+            </div>
+            <span class="section-readiness ready"><i data-lucide="check"></i> 3 líneas</span>
+          </div>
+          <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
+            <table class="app-table editable">
+              <thead>
+                <tr>
+                  <th style="width:40%;">Descripción</th>
+                  <th style="width:80px;">Cant.</th>
+                  <th style="width:120px;">P. Unit.</th>
+                  <th style="width:110px;">Desc. %</th>
+                  <th style="width:130px; text-align:right;">Total</th>
+                  <th style="width:48px;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><input class="td-input" type="text" value="Radio Hytera PD78X" aria-label="Descripción"></td>
+                  <td><input class="td-input td-mono" type="number" min="1" value="5" style="width:60px;"></td>
+                  <td><input class="td-input td-mono" type="number" step="0.01" value="185.00"></td>
+                  <td><input class="td-input td-mono" type="number" min="0" max="100" value="0"></td>
+                  <td class="td-amount">$925.00</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button></td>
+                </tr>
+                <tr>
+                  <td><input class="td-input" type="text" value="Repetidor Motorola SLR5100"></td>
+                  <td><input class="td-input td-mono" type="number" min="1" value="1" style="width:60px;"></td>
+                  <td><input class="td-input td-mono" type="number" step="0.01" value="1200.00"></td>
+                  <td><input class="td-input td-mono" type="number" min="0" max="100" value="0"></td>
+                  <td class="td-amount">$1,200.00</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button></td>
+                </tr>
+                <tr>
+                  <td><select class="td-select"><option selected>Instalación y programación</option><option>Mantenimiento</option></select></td>
+                  <td><input class="td-input td-mono" type="number" min="1" value="8" style="width:60px;"></td>
+                  <td><input class="td-input td-mono" type="number" step="0.01" value="45.00"></td>
+                  <td><input class="td-input td-mono" type="number" min="0" max="100" value="10"></td>
+                  <td class="td-amount">$324.00</td>
+                  <td class="td-actions"><button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button></td>
+                </tr>
+                <tr class="table-summary-row">
+                  <td colspan="4" style="text-align:right; color:var(--fg-3); font-weight:400;">Subtotal</td>
+                  <td class="td-amount" style="font-weight:400;">$2,449.00</td>
+                  <td></td>
+                </tr>
+                <tr class="table-summary-row">
+                  <td colspan="4" style="text-align:right; color:var(--fg-3); font-weight:400;">ITBMS 7%</td>
+                  <td class="td-amount" style="font-weight:400; color:var(--fg-3);">$171.43</td>
+                  <td></td>
+                </tr>
+                <tr class="table-summary-row">
+                  <td colspan="4" style="text-align:right; font-size:14px;">Total</td>
+                  <td class="td-amount" style="font-size:16px; color:var(--accent);">$2,620.43</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-add-row">
+            <button class="btn btn-ghost btn-sm"><i data-lucide="plus"></i> Agregar línea</button>
+          </div>
+        </div>
+
+        <!-- Sección 3: Términos -->
+        <div class="app-card app-card-padded" style="margin-bottom:80px;">
+          <div class="form-section-header">
+            <h3><i data-lucide="credit-card"></i> Términos y condiciones</h3>
+            <span class="section-readiness ready"><i data-lucide="check"></i> Listo</span>
+          </div>
+          <div class="form-section-body">
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label class="form-label">Validez (días)</label>
+                <input class="form-input" type="number" value="30">
+              </div>
+              <div class="form-field">
+                <label class="form-label">Modalidad de pago</label>
+                <select class="form-select">
+                  <option>Contado</option>
+                  <option selected>30 días</option>
+                  <option>50% adelanto · 50% entrega</option>
+                </select>
+              </div>
+              <div class="form-field" style="grid-column:1/-1;">
+                <label class="form-label">Notas al cliente</label>
+                <textarea class="form-input form-textarea" rows="3" placeholder="Condiciones especiales, garantía, plazos…"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </form>
+
+      <!-- Footer strip -->
+      <div style="background: var(--surface-card); border-top: 2px solid var(--brand);
+                  display:flex; align-items:center; gap:var(--sp-6); padding:0 var(--sp-6);
+                  height:60px; box-shadow: 0 -2px 12px rgba(6,24,41,.08);
+                  margin: 0 -24px -24px; border-radius: 0 0 8px 8px;">
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Líneas</span>
+          <span class="app-footer-strip-stat-value">3</span>
+        </div>
+        <div class="app-footer-strip-divider"></div>
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Subtotal</span>
+          <span class="app-footer-strip-stat-value">$2,449.00</span>
+        </div>
+        <div class="app-footer-strip-divider"></div>
+        <div class="app-footer-strip-stat">
+          <span class="app-footer-strip-stat-label">Total c/ ITBMS</span>
+          <span class="app-footer-strip-stat-value value-highlight">$2,620.43</span>
+        </div>
+        <div style="margin-left:auto; display:flex; gap:var(--sp-2); align-items:center;">
+          <button class="btn btn-ghost btn-sm">Cancelar</button>
+          <button class="btn btn-secondary"><i data-lucide="save"></i> Guardar borrador</button>
+          <button class="btn btn-primary"><i data-lucide="send"></i> Emitir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 4 · APPLIED · Editar cotización ───────────────────── -->
+<section class="demo-section" id="applied-edit">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Cotizaciones · Editar (ejemplo aplicado)</h2>
+    <p>Variante de Nueva con: encabezado lateral (no centrado), banner de estado, breadcrumb a la
+       lista, y bloqueo de campos si la cotización está aprobada/enviada.</p>
+  </div>
+
+  <div class="demo-block" style="padding:20px 24px;">
+
+    <nav class="app-breadcrumbs">
+      <a href="#">Cotizaciones</a>
+      <span class="app-breadcrumbs-sep"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <span class="app-breadcrumbs-current">COT-2025-0041</span>
+    </nav>
+
+    <div class="app-page-header">
+      <div>
+        <h1>Editar Cotización</h1>
+        <p>COT-2025-0041 · Manzanillo Intl. · Última edición 11 May 2025</p>
+      </div>
+      <div class="app-page-header-actions">
+        <span class="chip-estado chip-aprobada">Aprobada</span>
+      </div>
+    </div>
+
+    <div class="alert-banner">
+      <span class="alert-banner-icon"><i data-lucide="info"></i></span>
+      <div class="alert-banner-body">
+        <strong>Modo lectura</strong>
+        Esta cotización está aprobada y no se puede modificar. Para cambiar precios, créala como
+        nueva versión.
+      </div>
+    </div>
+
+    <div class="app-card app-card-padded">
+      <p style="font-size:13px; color:var(--fg-3); margin:0;">
+        Vista de detalle con los mismos componentes que <strong>Nueva</strong> pero todos los inputs
+        en estado <code>disabled</code> y la footer-strip oculta o reducida a "Volver / Duplicar".
+      </p>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 5 · APPLIED · Imprimir cotización ─────────────────── -->
+<section class="demo-section" id="applied-print">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Cotizaciones · Imprimir</h2>
+    <p>Plantilla A4 reutiliza las clases <code>.print-*</code> del kit de impresión (compartidas con
+       contratos / órdenes). Se diferencia por el badge <code>.print-header-doc-type</code> ("COTIZACIÓN"),
+       el detalle de validez en la fila resumen, y la firma única del vendedor.</p>
+  </div>
+
+  <div class="demo-block" style="display:flex; gap:var(--sp-4); align-items:center;">
+    <a class="btn btn-primary" href="print-demo.html" target="_blank">
+      <i data-lucide="external-link"></i> Abrir plantilla de impresión
+    </a>
+    <span style="font-size:13px; color:var(--fg-3);">
+      Reutiliza la misma plantilla base que órdenes y contratos. Diferencias documentadas en
+      <code>print-base.css</code>.
+    </span>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── Toast region ──────────────────────────────────────── -->
+<div class="toast-region" id="toast-region" aria-live="polite"></div>
+
+<script src="app-demo.js"></script>
+</body>
+</html>

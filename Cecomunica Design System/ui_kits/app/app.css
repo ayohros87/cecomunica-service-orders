@@ -2521,3 +2521,613 @@ table.app-table.editable tbody tr:hover { background: transparent; }
   50%       { opacity: 0.6; }
 }
 
+
+/* ── Kit portal (landing index.html) ────────────────────────────
+   Hero + 4 cards linking to each area kit.
+   ───────────────────────────────────────────────────────────── */
+.kit-portal-hero {
+  background: linear-gradient(180deg, var(--navy-900) 0%, var(--navy-800) 100%);
+  color: var(--fg-on-inverse);
+  padding: var(--sp-10) var(--sp-8) var(--sp-12);
+  border-bottom: 4px solid var(--accent);
+}
+.kit-portal-hero-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.kit-portal-hero-mark {
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.06);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3);
+}
+.kit-portal-hero h1 {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  margin: 0 0 var(--sp-2);
+  letter-spacing: -0.01em;
+}
+.kit-portal-hero p {
+  font-size: 15px;
+  color: rgba(255,255,255,0.72);
+  max-width: 640px;
+  line-height: 1.5;
+  margin: 0;
+}
+.kit-portal-grid {
+  max-width: 1100px;
+  margin: -48px auto var(--sp-12);
+  padding: 0 var(--sp-8);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-5);
+}
+.kit-portal-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-6) var(--sp-6) var(--sp-5);
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.kit-portal-card:hover {
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--accent);
+}
+.kit-portal-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: rgba(0,180,216,0.10);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+.kit-portal-card-icon svg { width: 22px; height: 22px; }
+.kit-portal-card h2 {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--fg-1);
+}
+.kit-portal-card p {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin: 0;
+  line-height: 1.55;
+  flex: 1;
+}
+.kit-portal-card-meta {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.kit-portal-card-meta strong {
+  color: var(--accent);
+  font-weight: 700;
+}
+.kit-portal-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand);
+}
+.kit-portal-card-cta svg { width: 14px; height: 14px; }
+
+@media (max-width: 760px) {
+  .kit-portal-hero-inner { flex-direction: column; align-items: flex-start; text-align: left; }
+  .kit-portal-hero h1 { font-size: 28px; }
+  .kit-portal-grid { grid-template-columns: 1fr; margin-top: -32px; }
+}
+
+/* ── Toggle pill (compact inline switch)  ──────────────────────
+   Used in clientes / contratos / POC where a checkbox lives next
+   to a filter chip and we need something tighter than .toggle-switch.
+   ────────────────────────────────────────────────────────────── */
+.toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+  white-space: nowrap;
+}
+.toggle-pill:hover { border-color: var(--accent); color: var(--accent); }
+.toggle-pill input[type="checkbox"] { cursor: pointer; margin: 0; }
+.toggle-pill.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-deep, var(--accent));
+}
+
+
+/* ── Dropdown menu (desktop overflow / sort / actions) ─────────
+   For "···" buttons or "Vista ▾" selectors on desktop tables.
+   ────────────────────────────────────────────────────────────── */
+.dropdown { position: relative; display: inline-block; }
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  min-width: 220px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  animation: dropdown-in 0.14s ease;
+}
+.dropdown.open .dropdown-menu,
+.dropdown-menu.open { display: block; }
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  width: 100%;
+  font-size: 13px;
+  color: var(--fg-1);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+.dropdown-item:hover { background: var(--surface-sunken); }
+.dropdown-item svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--fg-3); }
+.dropdown-item.danger { color: var(--status-critical); }
+.dropdown-item.danger svg { color: var(--status-critical); }
+.dropdown-item:disabled { opacity: 0.5; cursor: not-allowed; }
+.dropdown-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
+}
+.dropdown-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-4);
+  padding: 8px 10px 4px;
+}
+
+
+/* ── Floating tooltip (hover preview) ──────────────────────────
+   Lightweight tooltip with rich content. Position via JS by setting
+   inline `top` / `left`. Use `.tooltip-arrow` for the pointer.
+   ────────────────────────────────────────────────────────────── */
+.tooltip-floating {
+  position: fixed;
+  z-index: 9999;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-3) var(--sp-4);
+  max-width: 420px;
+  pointer-events: none;
+  font-size: 13px;
+  color: var(--fg-1);
+  animation: tooltip-in 0.12s ease;
+}
+@keyframes tooltip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.tooltip-floating .tooltip-line { margin: 4px 0; line-height: 1.4; }
+.tooltip-floating .tooltip-line strong { color: var(--fg-1); margin-right: 4px; }
+.tooltip-floating .tooltip-line.muted { color: var(--fg-3); font-size: 12px; }
+
+
+/* ── In-flow alert / banner (non-toast) ────────────────────────
+   Used at the top of a page or above a form to announce status.
+   Stays in the document flow — does NOT auto-dismiss like toasts.
+   ────────────────────────────────────────────────────────────── */
+.alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--accent-soft, rgba(0,180,216,0.08));
+  border: 1px solid var(--accent-line, rgba(0,180,216,0.3));
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--fg-1);
+  margin-bottom: var(--sp-4);
+}
+.alert-banner.alert-success { background: #ECFDF5; border-color: #A7F3D0; color: #065F46; }
+.alert-banner.alert-warning { background: #FFFBEB; border-color: #FDE68A; color: #92400E; }
+.alert-banner.alert-error   { background: #FEF2F2; border-color: #FECACA; color: #991B1B; }
+.alert-banner-icon { flex-shrink: 0; padding-top: 1px; }
+.alert-banner-icon svg { width: 18px; height: 18px; }
+.alert-banner-body { flex: 1; }
+.alert-banner-body strong { display: block; margin-bottom: 2px; }
+.alert-banner-close {
+  background: none;
+  border: 0;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+.alert-banner-close:hover { opacity: 1; background: rgba(0,0,0,0.05); }
+
+
+/* ── Centered page-header with big icon ────────────────────────
+   For long single-form pages (nueva-orden, nueva-cotización…).
+   Different from .app-page-header (which is left-aligned, in-shell).
+   ────────────────────────────────────────────────────────────── */
+.page-header-centered {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto var(--sp-8);
+  padding: var(--sp-8) var(--sp-4) 0;
+}
+.page-header-centered .page-header-icon {
+  width: 56px;
+  height: 56px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft, rgba(0,180,216,0.10));
+  color: var(--accent);
+  margin-bottom: var(--sp-3);
+}
+.page-header-centered .page-header-icon svg { width: 28px; height: 28px; }
+.page-header-centered h1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--fg-1);
+  margin: 0 0 var(--sp-2);
+}
+.page-header-centered p {
+  font-size: 14px;
+  color: var(--fg-3);
+  margin: 0;
+  line-height: 1.55;
+}
+
+
+/* ── Pager with input ("Página X / Y") ─────────────────────────
+   Alternative to numbered pagination for very large tables where
+   typing a page number is faster than clicking.
+   ────────────────────────────────────────────────────────────── */
+.pager-input {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.pager-input input {
+  width: 64px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--surface-card);
+}
+.pager-input input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,180,216,0.12);
+}
+.pager-input .pager-input-total { color: var(--fg-4); }
+
+
+/* ── Responsive cards fallback ─────────────────────────────────
+   Pattern: a desktop table inside .responsive-table-wrap collapses
+   to a stack of .responsive-card below the breakpoint.
+   ────────────────────────────────────────────────────────────── */
+.responsive-cards { display: none; flex-direction: column; gap: var(--sp-2); }
+.responsive-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  box-shadow: var(--shadow-sm);
+}
+.responsive-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin-bottom: 4px;
+}
+.responsive-card-title { font-weight: 600; color: var(--fg-1); font-size: 14px; }
+.responsive-card-sub { font-size: 13px; color: var(--fg-3); }
+.responsive-card-meta {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: 12px;
+  color: var(--fg-3);
+  margin-top: var(--sp-2);
+  flex-wrap: wrap;
+}
+.responsive-card-actions {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  flex-wrap: wrap;
+}
+@media (max-width: 900px) {
+  .responsive-table-wrap { display: none; }
+  .responsive-cards { display: flex; }
+}
+
+
+/* ── Module grid (home launcher) ───────────────────────────────
+   Used by public/index.html as the role-aware module launcher.
+   ────────────────────────────────────────────────────────────── */
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--sp-4);
+}
+.module-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-5);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+.module-card:hover {
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent);
+}
+.module-card-icon {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft, rgba(0,180,216,0.10));
+  color: var(--accent);
+}
+.module-card-icon svg { width: 24px; height: 24px; }
+.module-card-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.module-card-title { font-weight: 600; color: var(--fg-1); font-size: 15px; }
+.module-card-sub { font-size: 12px; color: var(--fg-3); }
+.module-card-shortcut {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--fg-4);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+
+/* ── Auth shell (login / reset password) ───────────────────────
+   Split layout: brand panel on the left, form card on the right.
+   Stacks vertically below 760px.
+   ────────────────────────────────────────────────────────────── */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  background: linear-gradient(135deg, var(--navy-900) 0%, var(--navy-800) 100%);
+}
+.auth-brand {
+  padding: var(--sp-10) var(--sp-10);
+  color: var(--fg-on-inverse);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-4);
+  max-width: 560px;
+  margin: 0 auto;
+}
+.auth-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+.auth-brand-logo h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+.auth-brand-logo div { font-size: 13px; color: rgba(255,255,255,0.65); }
+.auth-brand p {
+  font-size: 15px;
+  color: rgba(255,255,255,0.78);
+  line-height: 1.55;
+  max-width: 460px;
+  margin: 0;
+}
+.auth-bullets {
+  list-style: none;
+  padding: 0;
+  margin: var(--sp-3) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.auth-bullets li {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+}
+.auth-bullets li svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+.auth-form-wrap {
+  background: var(--surface-page);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-8);
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface-card);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-8);
+  box-shadow: var(--shadow-lg);
+}
+.auth-card h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--fg-1);
+  margin: 0 0 var(--sp-2);
+}
+.auth-card .auth-sub {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin: 0 0 var(--sp-5);
+}
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0;
+  color: var(--fg-4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.auth-input-toggle {
+  position: relative;
+}
+.auth-input-toggle .form-input { padding-right: 40px; }
+.auth-input-toggle button {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: 0;
+  padding: 6px;
+  color: var(--fg-3);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.auth-input-toggle button:hover { color: var(--accent); background: var(--surface-sunken); }
+.auth-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: var(--sp-4) 0;
+  font-size: 13px;
+}
+.auth-footer-row a { color: var(--accent); }
+@media (max-width: 760px) {
+  .auth-shell { grid-template-columns: 1fr; min-height: auto; }
+  .auth-brand { padding: var(--sp-6) var(--sp-5); text-align: left; }
+  .auth-brand-logo { justify-content: flex-start; }
+  .auth-form-wrap { padding: var(--sp-5); }
+  .auth-card { box-shadow: var(--shadow-md); padding: var(--sp-6); }
+}
+
+
+/* ── Empty state with hint ─────────────────────────────────────
+   Variant of .app-empty-state with extra muted hint below the
+   primary message — for "Sin resultados / Prueba con menos filtros".
+   ────────────────────────────────────────────────────────────── */
+.empty-state-hint {
+  padding: var(--sp-8) var(--sp-5);
+  text-align: center;
+  color: var(--fg-3);
+}
+.empty-state-hint-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  margin-bottom: var(--sp-3);
+}
+.empty-state-hint-icon svg { width: 28px; height: 28px; color: var(--fg-4); }
+.empty-state-hint .title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg-1);
+  margin: 0 0 4px;
+}
+.empty-state-hint .hint {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin: 0 0 var(--sp-4);
+}
+
+
+/* Demo-nav grouping (used by area pages) */
+.demo-nav-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: var(--sp-3);
+  margin-right: var(--sp-1);
+  border-right: 1px solid rgba(255,255,255,0.18);
+}
+.demo-nav-group:last-of-type { border-right: none; padding-right: 0; }
+.demo-nav-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255,255,255,0.55);
+  font-size: 11px;
+}
+.demo-nav-home:hover { color: #fff; }
+.demo-nav-home svg { width: 12px; height: 12px; }
+

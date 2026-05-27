@@ -1,0 +1,1745 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Foundations</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="app.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>Foundations</strong>
+  <a href="#buttons">Botones</a>
+  <a href="#forms">Formularios</a>
+  <a href="#modals">Modales</a>
+  <a href="#toasts">Toasts</a>
+  <a href="#empty">Estados</a>
+  <a href="#kpi">KPI</a>
+  <a href="#crud-list">Lista CRUD</a>
+  <a href="#toggle">Toggle</a>
+  <a href="#combobox">Combobox</a>
+  <a href="#section-badge">Sec. Readiness</a>
+  <a href="#disclosure">Disclosure</a>
+  <a href="#review-overlay">Revisión</a>
+  <a href="#side-sheet">Side Sheet</a>
+  <a href="#split-pane">Split Pane</a>
+  <a href="#details-block">Details</a>
+  <a href="#bulk-bar">Bulk Bar</a>
+  <a href="#xlsx-importer">Importador</a>
+  <a href="#module-grid">Module grid</a>
+  <a href="#auth-shell">Auth shell</a>
+  <a href="#toggle-pill">Toggle pill</a>
+  <a href="#dropdown">Dropdown</a>
+  <a href="#banner">Banner</a>
+  <a href="#tooltip">Tooltip</a>
+  <a href="#pager-input">Pager input</a>
+  <a href="#responsive-cards">Responsive</a>
+  <a href="#empty-hint">Empty hint</a>
+  <a href="#page-header-centered">Page header</a>
+</nav>
+
+
+<!-- ─── 1 · Buttons ──────────────────────────────────────── -->
+<section class="demo-section" id="buttons">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Botones</h2>
+    <p>Cinco variantes (primario, secundario, ghost, peligro, acento), tres tamaños, estado de carga
+       y botones de ícono. Nunca usar <code>btn-accent</code> junto con <code>btn-primary</code> en la misma barra.</p>
+  </div>
+
+  <span class="demo-label">Variantes — tamaño normal</span>
+  <div class="demo-row">
+    <button class="btn btn-primary"><i data-lucide="plus"></i> Primario</button>
+    <button class="btn btn-secondary"><i data-lucide="pencil"></i> Secundario</button>
+    <button class="btn btn-ghost"><i data-lucide="eye"></i> Ghost</button>
+    <button class="btn btn-danger"><i data-lucide="trash-2"></i> Peligro</button>
+    <button class="btn btn-accent"><i data-lucide="zap"></i> Acento</button>
+  </div>
+
+  <span class="demo-label">Tamaños</span>
+  <div class="demo-row" style="align-items:center;">
+    <button class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Pequeño</button>
+    <button class="btn btn-primary">Normal</button>
+    <button class="btn btn-primary btn-lg">Grande</button>
+  </div>
+
+  <span class="demo-label">Ícono solo</span>
+  <div class="demo-row">
+    <button class="btn btn-secondary btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+    <button class="btn btn-secondary btn-icon" aria-label="Buscar"><i data-lucide="search"></i></button>
+    <button class="btn btn-secondary btn-icon btn-lg" aria-label="Configurar"><i data-lucide="settings"></i></button>
+    <button class="btn btn-ghost btn-icon" aria-label="Más opciones"><i data-lucide="more-horizontal"></i></button>
+    <button class="btn btn-danger btn-icon" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+  </div>
+
+  <span class="demo-label">Estado cargando</span>
+  <div class="demo-row">
+    <button class="btn btn-primary btn--loading">
+      <span class="btn-spinner"></span>
+      Guardando…
+    </button>
+    <button class="btn btn-secondary btn--loading">Procesando…</button>
+    <button class="btn btn-primary" disabled>Deshabilitado</button>
+  </div>
+
+  <span class="demo-label">Grupo de botones</span>
+  <div class="demo-row">
+    <div class="btn-group">
+      <button class="btn btn-secondary active">Semana</button>
+      <button class="btn btn-secondary">Mes</button>
+      <button class="btn btn-secondary">Año</button>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-secondary btn-icon" aria-label="Vista lista"><i data-lucide="list"></i></button>
+      <button class="btn btn-secondary btn-icon active" aria-label="Vista tabla"><i data-lucide="layout-grid"></i></button>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 2 · Forms ────────────────────────────────────────── -->
+<section class="demo-section" id="forms">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Formularios</h2>
+    <p>Kit completo: input, select, textarea, date, file upload, checkboxes, estados de error y
+       fieldsets con sección.</p>
+  </div>
+
+  <div class="app-card app-card-padded">
+    <form onsubmit="return false;" novalidate>
+
+      <div class="form-section">
+        <div>
+          <p class="form-section-title">Datos del cliente</p>
+          <p class="form-section-desc">Empresa o persona que entrega el equipo para reparación.</p>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="f-cliente">Cliente <span class="req">*</span></label>
+            <div class="form-input-wrap">
+              <span class="form-input-prefix"><i data-lucide="building-2" style="width:15px;height:15px;"></i></span>
+              <input class="form-input" id="f-cliente" type="text" placeholder="Autoridad del Canal de Panamá" required>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="f-contacto">Contacto <span class="optional">(opcional)</span></label>
+            <input class="form-input" id="f-contacto" type="text" placeholder="Nombre del contacto">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="f-tel">Teléfono</label>
+            <div class="form-input-wrap">
+              <span class="form-input-prefix"><i data-lucide="phone" style="width:15px;height:15px;"></i></span>
+              <input class="form-input" id="f-tel" type="tel" placeholder="+507 6789-0000">
+            </div>
+          </div>
+          <div class="form-field has-error">
+            <label class="form-label" for="f-email">Correo electrónico <span class="req">*</span></label>
+            <div class="form-input-wrap">
+              <span class="form-input-prefix"><i data-lucide="mail" style="width:15px;height:15px;"></i></span>
+              <input class="form-input" id="f-email" type="email" value="juan@autoridad" aria-invalid="true" aria-describedby="f-email-err">
+            </div>
+            <span class="form-error-msg" id="f-email-err">
+              <i data-lucide="alert-circle" style="width:12px;height:12px;"></i>
+              Ingrese un correo electrónico válido.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div>
+          <p class="form-section-title">Subir archivos</p>
+          <p class="form-section-desc">Drag & drop o clic para seleccionar.</p>
+        </div>
+        <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir fotos">
+          <input type="file" accept="image/*" multiple>
+          <div class="form-file-zone-icon"><i data-lucide="camera" style="width:32px;height:32px;"></i></div>
+          <p><strong>Arrastra los archivos aquí</strong> o haz clic para seleccionar</p>
+          <span>JPG, PNG, WEBP · máx. 10 MB c/u</span>
+        </label>
+      </div>
+
+      <div class="form-section">
+        <div>
+          <p class="form-section-title">Checkboxes y selects</p>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="f-marca">Select</label>
+            <select class="form-select" id="f-marca">
+              <option value="">Seleccionar…</option>
+              <option selected>Hytera</option>
+              <option>Motorola</option>
+              <option>Kenwood</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="f-fecha">Fecha</label>
+            <input class="form-input" id="f-fecha" type="date">
+          </div>
+        </div>
+        <fieldset style="border:none; margin:0; padding:0;">
+          <legend class="form-label" style="margin-bottom:8px;">Checkboxes</legend>
+          <div style="display:flex; gap:24px; flex-wrap:wrap;">
+            <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">Batería</span></span></label>
+            <label class="form-check"><input type="checkbox"><span><span class="form-check-label">Antena</span></span></label>
+            <label class="form-check"><input type="checkbox" checked><span><span class="form-check-label">Cargador</span></span></label>
+            <label class="form-check"><input type="checkbox"><span><span class="form-check-label">Clip</span></span></label>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="save"></i> Guardar</button>
+        <button type="button" class="btn btn-secondary">Vista previa</button>
+        <div class="form-actions-secondary">
+          <button type="button" class="btn btn-ghost">Cancelar</button>
+        </div>
+      </div>
+
+    </form>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 3 · Modals ───────────────────────────────────────── -->
+<section class="demo-section" id="modals">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Modales y diálogos</h2>
+    <p>Modal de confirmación (destructivo), modal de contenido y modal grande con formulario.</p>
+  </div>
+
+  <div class="demo-row">
+    <button class="btn btn-secondary" onclick="document.getElementById('modal-confirm').style.display='flex'">
+      <i data-lucide="alert-triangle"></i> Confirmación
+    </button>
+    <button class="btn btn-secondary" onclick="document.getElementById('modal-info').style.display='flex'">
+      <i data-lucide="info"></i> Información
+    </button>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden; position:relative; min-height:220px; background: rgba(6,24,41,.06);">
+    <div style="display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div class="modal" style="position:relative; box-shadow: var(--shadow-lg);">
+        <div class="modal-header">
+          <h2 class="modal-title">
+            <i data-lucide="alert-triangle" style="color:var(--status-critical);"></i>
+            Confirmar acción
+          </h2>
+          <button class="modal-close" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:14px; color:var(--fg-2); margin:0;">
+            ¿Está seguro de que desea continuar? Esta acción no se puede deshacer.
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost">Volver</button>
+          <button class="btn btn-danger"><i data-lucide="x-circle"></i> Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-confirm" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i data-lucide="alert-triangle" style="color:var(--status-critical);"></i>
+          Confirmar acción
+        </h2>
+        <button class="modal-close" aria-label="Cerrar" onclick="document.getElementById('modal-confirm').style.display='none'">
+          <i data-lucide="x" style="width:18px;height:18px;"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:14px; color:var(--fg-2); margin:0;">
+          ¿Está seguro? Esta acción no se puede deshacer.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-confirm').style.display='none'">Volver</button>
+        <button class="btn btn-danger" onclick="document.getElementById('modal-confirm').style.display='none'">
+          <i data-lucide="x-circle"></i> Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-info" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2 class="modal-title">
+          <i data-lucide="clipboard-list"></i> Detalle
+        </h2>
+        <button class="modal-close" aria-label="Cerrar" onclick="document.getElementById('modal-info').style.display='none'">
+          <i data-lucide="x" style="width:18px;height:18px;"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <dl style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px; margin:0;">
+          <div><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0; font-weight:500;">Manzanillo Intl.</dd></div>
+          <div><dt style="color:var(--fg-3); margin-bottom:2px;">Estado</dt><dd style="margin:0;">Activo</dd></div>
+        </dl>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-info').style.display='none'">Cerrar</button>
+        <button class="btn btn-primary"><i data-lucide="pencil"></i> Editar</button>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 4 · Toasts ───────────────────────────────────────── -->
+<section class="demo-section" id="toasts">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Toasts / notificaciones</h2>
+    <p>Confirmaciones, errores y advertencias. Aparecen en la esquina inferior derecha.</p>
+  </div>
+
+  <div class="demo-row">
+    <button class="btn btn-secondary" onclick="showToast('success')"><i data-lucide="check-circle"></i> Éxito</button>
+    <button class="btn btn-secondary" onclick="showToast('error')"><i data-lucide="x-circle"></i> Error</button>
+    <button class="btn btn-secondary" onclick="showToast('warning')"><i data-lucide="alert-triangle"></i> Advertencia</button>
+    <button class="btn btn-secondary" onclick="showToast('info')"><i data-lucide="info"></i> Información</button>
+  </div>
+
+  <div class="demo-block" style="display:flex; flex-direction:column; gap:12px;">
+    <div class="toast toast-success" style="position:relative; animation:none; min-width:0; max-width:none;">
+      <div class="toast-icon"><i data-lucide="check-circle" style="width:16px;height:16px;"></i></div>
+      <div class="toast-body">
+        <div class="toast-title">Operación completada</div>
+        <div class="toast-desc">Los cambios se guardaron correctamente.</div>
+      </div>
+      <button class="toast-close" aria-label="Cerrar"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+    <div class="toast toast-error" style="position:relative; animation:none; min-width:0; max-width:none;">
+      <div class="toast-icon"><i data-lucide="x-circle" style="width:16px;height:16px;"></i></div>
+      <div class="toast-body">
+        <div class="toast-title">Error al guardar</div>
+        <div class="toast-desc">No se pudo conectar con el servidor.</div>
+      </div>
+      <button class="toast-close" aria-label="Cerrar"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+    <div class="toast toast-warning" style="position:relative; animation:none; min-width:0; max-width:none;">
+      <div class="toast-icon"><i data-lucide="alert-triangle" style="width:16px;height:16px;"></i></div>
+      <div class="toast-body">
+        <div class="toast-title">Pendiente de revisión</div>
+        <div class="toast-desc">Hay 3 registros que requieren atención.</div>
+      </div>
+      <button class="toast-close" aria-label="Cerrar"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+    <div class="toast toast-info" style="position:relative; animation:none; min-width:0; max-width:none;">
+      <div class="toast-icon"><i data-lucide="info" style="width:16px;height:16px;"></i></div>
+      <div class="toast-body">
+        <div class="toast-title">Sincronización</div>
+        <div class="toast-desc">142 registros actualizados desde Firestore.</div>
+      </div>
+      <button class="toast-close" aria-label="Cerrar"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 5 · Empty / loading / error states ──────────────── -->
+<section class="demo-section" id="empty">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Estados vacíos, carga y error</h2>
+    <p>Tres estados que debe manejar cada lista o tabla.</p>
+  </div>
+
+  <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:16px;">
+    <div class="app-card">
+      <div class="app-empty-state">
+        <i data-lucide="clipboard" style="width:48px;height:48px;"></i>
+        <div>
+          <strong>Sin resultados</strong>
+          <p>No hay datos que coincidan con los filtros aplicados.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="x"></i> Limpiar filtros</button>
+      </div>
+    </div>
+
+    <div class="app-card app-card-padded">
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="skeleton" style="width:36px; height:36px; border-radius:50%;"></span>
+          <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+            <span class="skeleton" style="width:60%; height:14px;"></span>
+            <span class="skeleton" style="width:40%; height:12px;"></span>
+          </div>
+        </div>
+        <span class="skeleton" style="width:100%; height:12px;"></span>
+        <span class="skeleton" style="width:85%; height:12px;"></span>
+        <span class="skeleton" style="width:70%; height:12px;"></span>
+        <div style="display:flex; gap:8px; margin-top:4px;">
+          <span class="skeleton" style="width:80px; height:24px; border-radius:999px;"></span>
+          <span class="skeleton" style="width:60px; height:24px; border-radius:999px;"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-card">
+      <div class="app-empty-state">
+        <i data-lucide="wifi-off" style="width:48px;height:48px; color:var(--status-critical);"></i>
+        <div>
+          <strong style="color:var(--status-critical);">Error de conexión</strong>
+          <p>No se pudieron cargar los datos. Verifique su conexión.</p>
+        </div>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="refresh-cw"></i> Reintentar</button>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 6 · KPI / métricas ──────────────────────────────── -->
+<section class="demo-section" id="kpi">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>KPI / tarjetas de métricas</h2>
+    <p>Indicadores de desempeño y resúmenes operacionales. Incluye variantes por umbral y barra de progreso.</p>
+  </div>
+
+  <span class="demo-label">Tarjetas KPI</span>
+  <div class="kpi-grid" style="margin-bottom:var(--sp-5);">
+    <div class="kpi-card">
+      <span class="kpi-card-label">Órdenes activas</span>
+      <span class="kpi-card-value">142</span>
+      <span class="kpi-card-trend up"><i data-lucide="trending-up"></i> +8 esta semana</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Entregadas hoy</span>
+      <span class="kpi-card-value kpi-ok">7</span>
+      <span class="kpi-card-sub">Meta diaria: 10</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Pendientes &gt;5 días</span>
+      <span class="kpi-card-value kpi-warn">18</span>
+      <span class="kpi-card-trend down"><i data-lucide="trending-down"></i> +3 vs. semana ant.</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">En espera cliente</span>
+      <span class="kpi-card-value kpi-crit">6</span>
+      <span class="kpi-card-sub">Requieren seguimiento</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Ticket promedio</span>
+      <span class="kpi-card-value kpi-accent">$118</span>
+      <span class="kpi-card-sub">Últimos 30 días</span>
+    </div>
+  </div>
+
+  <span class="demo-label">Tabla con barras de progreso</span>
+  <div class="app-card">
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th style="width:48px;">#</th>
+            <th>Técnico</th>
+            <th>Completadas</th>
+            <th style="width:240px;">Progreso (meta 40)</th>
+            <th style="width:100px; text-align:right;">Ticket prom.</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="rank-medal">🥇</span></td>
+            <td style="font-weight:600;">Carlos Ríos</td>
+            <td class="td-primary">38</td>
+            <td>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>38 / 40</strong></div>
+                <div class="progress-bar-track"><div class="progress-bar-fill fill-ok" style="width:95%;"></div></div>
+              </div>
+            </td>
+            <td class="td-amount">$124</td>
+          </tr>
+          <tr>
+            <td><span class="rank-medal">🥈</span></td>
+            <td style="font-weight:600;">María Torres</td>
+            <td class="td-primary">31</td>
+            <td>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>31 / 40</strong></div>
+                <div class="progress-bar-track"><div class="progress-bar-fill" style="width:78%;"></div></div>
+              </div>
+            </td>
+            <td class="td-amount">$118</td>
+          </tr>
+          <tr>
+            <td><span class="rank-medal">🥉</span></td>
+            <td style="font-weight:600;">Luis Herrera</td>
+            <td class="td-primary">19</td>
+            <td>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>19 / 40</strong></div>
+                <div class="progress-bar-track"><div class="progress-bar-fill fill-warn" style="width:48%;"></div></div>
+              </div>
+            </td>
+            <td class="td-amount">$105</td>
+          </tr>
+          <tr>
+            <td><span class="rank-num">4</span></td>
+            <td style="font-weight:600;">Ana Quirós</td>
+            <td class="td-primary">7</td>
+            <td>
+              <div class="progress-bar-wrap">
+                <div class="progress-bar-label"><span style="color:var(--fg-3);">0</span><strong>7 / 40</strong></div>
+                <div class="progress-bar-track"><div class="progress-bar-fill fill-crit" style="width:18%;"></div></div>
+              </div>
+            </td>
+            <td class="td-amount">$97</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 7 · CRUD list ───────────────────────────────────── -->
+<section class="demo-section" id="crud-list">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Lista CRUD en línea</h2>
+    <p>Para listas administrables: agregar, editar en línea y eliminar sin abrir un modal.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:560px;">
+    <p class="form-section-title" style="margin-bottom:var(--sp-3);">Estados configurables</p>
+
+    <div class="crud-list" id="crud-list-demo">
+      <div class="crud-list-item">
+        <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+        <span class="crud-list-item-label">Activo</span>
+        <input class="crud-list-item-input" value="Activo" aria-label="Editar nombre">
+        <div class="crud-list-item-actions">
+          <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar" onclick="editCrudItem(this)"><i data-lucide="pencil"></i></button>
+          <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>
+      <div class="crud-list-item">
+        <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+        <span class="crud-list-item-label">Pendiente</span>
+        <input class="crud-list-item-input" value="Pendiente" aria-label="Editar nombre">
+        <div class="crud-list-item-actions">
+          <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar" onclick="editCrudItem(this)"><i data-lucide="pencil"></i></button>
+          <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>
+      <div class="crud-list-item">
+        <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
+        <span class="crud-list-item-label">Cerrado</span>
+        <input class="crud-list-item-input" value="Cerrado" aria-label="Editar nombre">
+        <div class="crud-list-item-actions">
+          <button class="btn btn-ghost btn-icon btn-sm" aria-label="Editar" onclick="editCrudItem(this)"><i data-lucide="pencil"></i></button>
+          <button class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="crud-list-add">
+      <input class="form-input" id="crud-new-item" type="text" placeholder="Nombre del nuevo estado…">
+      <button class="btn btn-secondary" onclick="addCrudItem()"><i data-lucide="plus"></i> Agregar</button>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── 8 · Toggle / switch ─────────────────────────────── -->
+<section class="demo-section" id="toggle">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Toggle / interruptor</h2>
+    <p>Reemplaza el checkbox nativo con un track visual — el input real permanece enfocable y accesible.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:560px; display:flex; flex-direction:column; gap:var(--sp-5);">
+    <label class="toggle-wrap">
+      <span class="toggle-switch">
+        <input type="checkbox" checked>
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </span>
+      <span class="toggle-text">
+        <span class="toggle-label">Notificaciones por correo</span>
+        <span class="toggle-desc">Enviar resumen al cliente al crear o actualizar un registro.</span>
+      </span>
+    </label>
+
+    <label class="toggle-wrap">
+      <span class="toggle-switch">
+        <input type="checkbox">
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </span>
+      <span class="toggle-text">
+        <span class="toggle-label">Modo de mantenimiento</span>
+        <span class="toggle-desc">Bloquea el acceso de técnicos mientras se realizan actualizaciones.</span>
+      </span>
+    </label>
+
+    <label class="toggle-wrap">
+      <span class="toggle-switch">
+        <input type="checkbox" checked>
+        <span class="toggle-track"></span>
+        <span class="toggle-thumb"></span>
+      </span>
+      <span class="toggle-text">
+        <span class="toggle-label">ITBMS automático (7%)</span>
+        <span class="toggle-desc">Aplicar el impuesto a cada cotización.</span>
+      </span>
+    </label>
+
+    <label class="toggle-wrap">
+      <span class="toggle-switch">
+        <input type="checkbox" disabled>
+        <span class="toggle-track" style="opacity:.4;"></span>
+        <span class="toggle-thumb" style="opacity:.5;"></span>
+      </span>
+      <span class="toggle-text" style="opacity:.5;">
+        <span class="toggle-label">Integración con Alegra (próximamente)</span>
+        <span class="toggle-desc">Sincronizar cotizaciones aprobadas con facturación.</span>
+      </span>
+    </label>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 9 · Combobox / Typeahead ──────────────────────────── -->
+<section class="demo-section" id="combobox">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Combobox / Typeahead</h2>
+    <p>Búsqueda en tiempo real sobre colecciones Firestore. Soporta texto secundario por resultado,
+       navegación con teclado, estado vacío y acciones rápidas.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:520px;">
+    <div class="form-field">
+      <label class="form-label" for="combo-demo-input">Buscar cliente</label>
+      <div class="combobox" id="combobox-demo">
+        <input id="combo-demo-input" class="form-input" type="text" placeholder="Escribe nombre, RUC o empresa…"
+               autocomplete="off" aria-autocomplete="list" aria-haspopup="listbox"
+               oninput="demoComboFilter(this.value)" onfocus="demoComboFilter(this.value)">
+        <div class="combo-actions">
+          <button class="btn btn-secondary btn-icon btn-sm" title="Nuevo cliente" aria-label="Crear nuevo cliente"
+                  onclick="showToast('success')">
+            <i data-lucide="user-plus"></i>
+          </button>
+          <button class="btn btn-ghost btn-icon btn-sm" title="Limpiar" aria-label="Limpiar selección"
+                  onclick="document.getElementById('combo-demo-input').value='';document.getElementById('combo-list-demo').hidden=true">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+        <div class="combo-list" id="combo-list-demo" role="listbox" hidden></div>
+      </div>
+    </div>
+
+    <p style="font-size:11px; color:var(--fg-4); margin-top:var(--sp-2);">
+      <kbd>↑↓</kbd> navegar &nbsp; <kbd>Enter</kbd> seleccionar &nbsp; <kbd>Esc</kbd> cerrar
+    </p>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 10 · Section readiness badge ──────────────────────── -->
+<section class="demo-section" id="section-badge">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Sección con indicador de completitud</h2>
+    <p>Cada bloque de un formulario largo lleva un badge que cambia a verde cuando todos sus campos
+       requeridos están completos.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:660px; display:flex; flex-direction:column; gap:var(--sp-3);">
+    <div>
+      <div class="form-section-header">
+        <h3><i data-lucide="building-2"></i> Datos del cliente</h3>
+        <span class="section-readiness pending"><i data-lucide="clock"></i> Pendiente</span>
+      </div>
+      <div class="form-section-body">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Razón social <span class="form-required">*</span></label>
+            <input class="form-input" placeholder="Empresa S.A.">
+          </div>
+          <div class="form-field">
+            <label class="form-label">RUC <span class="form-required">*</span></label>
+            <input class="form-input" placeholder="888-888-888">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="form-section-header">
+        <h3><i data-lucide="map-pin"></i> Dirección de servicio</h3>
+        <span class="section-readiness ready"><i data-lucide="check"></i> Listo</span>
+      </div>
+      <div class="form-section-body">
+        <div class="form-field">
+          <label class="form-label">Dirección</label>
+          <input class="form-input" value="Ciudad de Panamá, Av. Balboa 12, Piso 3">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 11 · Conditional disclosure ───────────────────────── -->
+<section class="demo-section" id="disclosure">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Disclosure condicional</h2>
+    <p>Panel que aparece/desaparece en función del valor de un <code>&lt;select&gt;</code>.
+       Soporta anidamiento. Animado con CSS.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:540px;">
+    <div class="form-field">
+      <label class="form-label" for="disc-select">Tipo de contrato</label>
+      <select class="form-select" id="disc-select" onchange="demoDisclosure(this.value)">
+        <option value="">— Seleccione —</option>
+        <option value="nuevo">Nuevo</option>
+        <option value="renovacion">Renovación</option>
+        <option value="traslado">Traslado</option>
+      </select>
+    </div>
+
+    <div class="disclosure-panel" id="disc-panel-renovacion">
+      <div class="disclosure-panel-title">
+        <span><i data-lucide="refresh-cw"></i> Datos del contrato anterior</span>
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-label">N.° contrato anterior <span class="form-required">*</span></label>
+          <input class="form-input" placeholder="CT-2023-0042">
+        </div>
+        <div class="form-field">
+          <label class="form-label">Fecha de vencimiento</label>
+          <input class="form-input" type="date">
+        </div>
+      </div>
+      <div class="form-field" style="margin-top:var(--sp-3);">
+        <label class="form-label" for="disc-sub-sel">¿Cambia de plan?</label>
+        <select class="form-select" id="disc-sub-sel" onchange="demoSubDisclosure(this.value)">
+          <option value="no">No, mismo plan</option>
+          <option value="si">Sí, actualizar plan</option>
+        </select>
+      </div>
+      <div class="disclosure-sub" id="disc-sub-panel">
+        <div class="form-field">
+          <label class="form-label">Nuevo plan <span class="form-required">*</span></label>
+          <select class="form-select"><option>Básico</option><option>Premium</option><option>Enterprise</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="disclosure-panel" id="disc-panel-traslado">
+      <div class="disclosure-panel-title">
+        <span><i data-lucide="truck"></i> Dirección de traslado</span>
+      </div>
+      <div class="form-field">
+        <label class="form-label">Nueva dirección <span class="form-required">*</span></label>
+        <input class="form-input" placeholder="Calle, piso, edificio…">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 12 · Review-and-confirm overlay ───────────────────── -->
+<section class="demo-section" id="review-overlay">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Overlay de revisión y confirmación</h2>
+    <p>Modal ancho que muestra todos los datos del formulario antes del guardado final.</p>
+  </div>
+
+  <div class="demo-block">
+    <button class="btn btn-primary" onclick="document.getElementById('review-demo').classList.add('open')">
+      <i data-lucide="eye"></i> Ver resumen antes de guardar
+    </button>
+  </div>
+
+  <div class="review-overlay" id="review-demo" onclick="if(event.target===this) this.classList.remove('open')">
+    <div class="review-modal" role="dialog" aria-modal="true">
+      <div class="review-header">
+        <div>
+          <h3>Revisión del contrato</h3>
+          <div class="review-header-sub">Verifique todos los datos antes de confirmar.</div>
+        </div>
+        <button class="btn btn-ghost btn-icon" aria-label="Cerrar" onclick="document.getElementById('review-demo').classList.remove('open')">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="review-body">
+        <div class="review-card">
+          <div class="review-card-title"><i data-lucide="building-2"></i> Cliente</div>
+          <div class="review-grid">
+            <div><dt>Razón social</dt><dd>Portafolio Digital S.A.</dd></div>
+            <div><dt>RUC</dt><dd>888-888-888 DV 42</dd></div>
+            <div><dt>Contacto</dt><dd>Rosa Murillo</dd></div>
+            <div><dt>Teléfono</dt><dd>+507 6000-0000</dd></div>
+          </div>
+        </div>
+        <div class="review-card">
+          <div class="review-card-title"><i data-lucide="radio"></i> Equipos contratados</div>
+          <table class="review-table">
+            <thead><tr><th>Descripción</th><th>Cant.</th><th>Precio unit.</th><th>Total</th></tr></thead>
+            <tbody>
+              <tr><td>Radio Hytera PD78X</td><td>5</td><td style="font-family:var(--font-mono)">$185.00</td><td style="font-family:var(--font-mono)">$925.00</td></tr>
+              <tr><td>Repetidor Motorola SLR5100</td><td>1</td><td style="font-family:var(--font-mono)">$1,200.00</td><td style="font-family:var(--font-mono)">$1,200.00</td></tr>
+            </tbody>
+          </table>
+          <div class="review-totals">
+            <table>
+              <tr><td>Subtotal</td><td>$2,125.00</td></tr>
+              <tr><td>ITBMS (7%)</td><td>$148.75</td></tr>
+              <tr class="total"><td>Total</td><td>$2,273.75</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="review-footer">
+        <button class="btn btn-secondary" onclick="document.getElementById('review-demo').classList.remove('open')">
+          <i data-lucide="arrow-left"></i> Volver a editar
+        </button>
+        <button class="btn btn-primary" onclick="document.getElementById('review-demo').classList.remove('open'); showToast('success')">
+          <i data-lucide="save"></i> Confirmar y guardar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 13 · Side-sheet ───────────────────────────────────── -->
+<section class="demo-section" id="side-sheet">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Side sheet (panel lateral)</h2>
+    <p>Se desliza desde el borde derecho. Para acciones contextuales con más espacio que un modal centrado.</p>
+  </div>
+
+  <div class="demo-block" style="display:flex; gap:var(--sp-3);">
+    <button class="btn btn-primary" onclick="demoSheetOpen('sheet-demo-main')">
+      <i data-lucide="panel-right-open"></i> Abrir side sheet (480px)
+    </button>
+    <button class="btn btn-secondary" onclick="demoSheetOpen('sheet-demo-lg')">
+      Abrir grande (680px)
+    </button>
+  </div>
+
+  <div class="sheet-overlay" id="sheet-overlay-main" onclick="demoSheetClose('sheet-demo-main')"></div>
+  <div class="sheet" id="sheet-demo-main" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h2 class="sheet-title">Aprobación de contrato</h2>
+      <button class="btn btn-ghost btn-icon" aria-label="Cerrar" onclick="demoSheetClose('sheet-demo-main')">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="review-card">
+        <div class="review-card-title"><i data-lucide="file-text"></i> CT-2025-0048</div>
+        <div class="review-grid">
+          <div><dt>Cliente</dt><dd>Portafolio Digital S.A.</dd></div>
+          <div><dt>Monto</dt><dd style="font-family:var(--font-mono)">$2,273.75/mes</dd></div>
+          <div><dt>Inicio</dt><dd>1 jun 2025</dd></div>
+          <div><dt>Vencimiento</dt><dd>31 may 2026</dd></div>
+        </div>
+      </div>
+      <div class="form-field" style="margin-top:var(--sp-4);">
+        <label class="form-label" for="sheet-obs">Observaciones (opcional)</label>
+        <textarea class="form-textarea" id="sheet-obs" rows="4" placeholder="Notas del revisor…"></textarea>
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn btn-danger-ghost" onclick="demoSheetClose('sheet-demo-main'); showToast('error')">
+        <i data-lucide="x-circle"></i> Rechazar
+      </button>
+      <button class="btn btn-secondary" onclick="demoSheetClose('sheet-demo-main')">Cancelar</button>
+      <button class="btn btn-primary" onclick="demoSheetClose('sheet-demo-main'); showToast('success')">
+        <i data-lucide="check-circle"></i> Aprobar
+      </button>
+    </div>
+  </div>
+
+  <div class="sheet-overlay" id="sheet-overlay-lg" onclick="demoSheetClose('sheet-demo-lg')"></div>
+  <div class="sheet sheet-lg" id="sheet-demo-lg" role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h2 class="sheet-title">Detalle de cliente — Portafolio Digital S.A.</h2>
+      <button class="btn btn-ghost btn-icon" aria-label="Cerrar" onclick="demoSheetClose('sheet-demo-lg')">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="sheet-body">
+      <div class="form-grid" style="gap:var(--sp-4);">
+        <div class="form-field"><label class="form-label">Razón social</label><input class="form-input" value="Portafolio Digital S.A." readonly></div>
+        <div class="form-field"><label class="form-label">RUC</label><input class="form-input" value="888-888-888 DV 42" readonly></div>
+        <div class="form-field"><label class="form-label">Contacto principal</label><input class="form-input" value="Rosa Murillo" readonly></div>
+        <div class="form-field"><label class="form-label">Teléfono</label><input class="form-input" value="+507 6000-0000" readonly></div>
+      </div>
+    </div>
+    <div class="sheet-footer">
+      <button class="btn btn-secondary" onclick="demoSheetClose('sheet-demo-lg')">Cerrar</button>
+      <button class="btn btn-primary" onclick="demoSheetClose('sheet-demo-lg'); showToast('success')">
+        <i data-lucide="save"></i> Guardar cambios
+      </button>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 14 · Split-pane ───────────────────────────────────── -->
+<section class="demo-section" id="split-pane">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Split pane con sidebar de resumen</h2>
+    <p>Formulario en columna principal + sidebar fija con totales y acción principal.
+       Se vuelve estático en pantallas &lt;980px.</p>
+  </div>
+
+  <div class="split-pane">
+    <div class="split-main">
+      <div>
+        <div class="form-section-header">
+          <h3><i data-lucide="building-2"></i> Cliente</h3>
+          <span class="section-readiness pending"><i data-lucide="clock"></i> Pendiente</span>
+        </div>
+        <div class="form-section-body">
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="form-label">Empresa <span class="form-required">*</span></label>
+              <input class="form-input" placeholder="Buscar cliente…">
+            </div>
+            <div class="form-field">
+              <label class="form-label">Contacto</label>
+              <input class="form-input" placeholder="Nombre del contacto">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="form-section-header">
+          <h3><i data-lucide="radio"></i> Equipos y servicios</h3>
+          <span class="section-readiness ready"><i data-lucide="check"></i> Listo</span>
+        </div>
+        <div class="form-section-body">
+          <table class="inline-table" style="width:100%;">
+            <thead><tr><th>Descripción</th><th>Cant.</th><th>Precio unit.</th><th>Total</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="td-primary">Radio Hytera PD78X</td>
+                <td class="td-input"><input type="number" class="form-input" value="5" style="width:64px;"></td>
+                <td class="td-amount">$185.00</td>
+                <td class="td-amount">$925.00</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-sidebar">
+      <div class="summary-card">
+        <div class="summary-card-title">Resumen de cotización</div>
+        <div class="summary-card-divider"></div>
+        <div class="summary-totals-row"><span>Subtotal</span><span>$925.00</span></div>
+        <div class="summary-totals-row muted"><span>ITBMS (7%)</span><span>$64.75</span></div>
+        <div class="summary-totals-row total"><span>Total</span><span>$989.75</span></div>
+        <div class="summary-card-divider"></div>
+        <div class="summary-card-actions">
+          <button class="btn btn-primary" style="width:100%;" onclick="showToast('success')">
+            <i data-lucide="save"></i> Guardar cotización
+          </button>
+          <button class="btn btn-secondary" style="width:100%;">
+            <i data-lucide="eye"></i> Vista previa
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 15 · Details collapsible ──────────────────────────── -->
+<section class="demo-section" id="details-block">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Details colapsable con resumen dinámico</h2>
+    <p>HTML nativo <code>&lt;details&gt;</code>/<code>&lt;summary&gt;</code> estilizado. JS actualiza el
+       texto del summary con los valores seleccionados, para que el estado colapsado sea informativo.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:600px; display:flex; flex-direction:column; gap:var(--sp-3);">
+    <details class="details-block" open>
+      <summary>
+        <i data-lucide="user-check" style="width:16px;height:16px;flex-shrink:0;"></i>
+        Firmante autorizado
+        <span class="details-summary-live" id="det-live-1">&nbsp;— completar datos</span>
+      </summary>
+      <div class="details-body">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Nombre completo <span class="form-required">*</span></label>
+            <input class="form-input" id="det-nombre" placeholder="Rosa Murillo" oninput="updateDetailsSummary()">
+          </div>
+          <div class="form-field">
+            <label class="form-label">Cargo</label>
+            <input class="form-input" id="det-cargo" placeholder="Gerente General" oninput="updateDetailsSummary()">
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="details-block">
+      <summary>
+        <i data-lucide="credit-card" style="width:16px;height:16px;flex-shrink:0;"></i>
+        Condiciones de pago
+        <span class="details-summary-live">&nbsp;— Mensual · B/. 989.75</span>
+      </summary>
+      <div class="details-body">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="form-label">Modalidad</label>
+            <select class="form-select"><option>Mensual</option><option>Trimestral</option><option>Anual</option></select>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Día de corte</label>
+            <input class="form-input" type="number" value="1" min="1" max="28">
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 16 · Bulk action bar ──────────────────────────────── -->
+<section class="demo-section" id="bulk-bar">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Barra de acciones masivas</h2>
+    <p>Aparece cuando se seleccionan filas de la tabla. Muestra conteo, acciones de lote y etiquetado.</p>
+  </div>
+
+  <div class="demo-block">
+    <div class="bulk-bar" id="bulk-bar-demo" style="margin-bottom:var(--sp-3);">
+      <span class="bulk-count" id="bulk-count">0 seleccionados</span>
+      <div class="bulk-divider"></div>
+      <button class="btn btn-secondary btn-sm" onclick="showToast('info')">
+        <i data-lucide="tag"></i> Asignar etiqueta
+      </button>
+      <button class="btn btn-secondary btn-sm" onclick="showToast('info')">
+        <i data-lucide="file-down"></i> Exportar
+      </button>
+      <button class="btn btn-danger-ghost btn-sm" onclick="showToast('error')">
+        <i data-lucide="trash-2"></i> Eliminar
+      </button>
+      <div class="bulk-divider"></div>
+      <div class="bulk-tag-wrap">
+        <label class="form-label" style="margin:0; white-space:nowrap;">Etiquetar:</label>
+        <input class="form-input" placeholder="Ej: vip, pendiente-doc…" style="height:32px;">
+      </div>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="bulkClearAll()">Limpiar selección</button>
+    </div>
+
+    <div class="table-wrap" style="max-height:260px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;"><input type="checkbox" id="bulk-select-all" onchange="bulkSelectAll(this)"></th>
+            <th>Cliente</th>
+            <th>Estado</th>
+            <th>Etiquetas</th>
+          </tr>
+        </thead>
+        <tbody id="bulk-table-body">
+          <tr>
+            <td><input type="checkbox" class="bulk-row-check" onchange="bulkUpdateCount()"></td>
+            <td class="td-primary">Portafolio Digital S.A.</td>
+            <td><span class="status-chip active">Activo</span></td>
+            <td><span class="tag-chip">vip</span> <span class="tag-chip">factura-mensual</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="bulk-row-check" onchange="bulkUpdateCount()"></td>
+            <td class="td-primary">Soluciones Omega</td>
+            <td><span class="status-chip pending">Pendiente</span></td>
+            <td><span class="tag-chip">doc-incompleto</span></td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="bulk-row-check" onchange="bulkUpdateCount()"></td>
+            <td class="td-primary">Tech Pty Ltd</td>
+            <td><span class="status-chip active">Activo</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><input type="checkbox" class="bulk-row-check" onchange="bulkUpdateCount()"></td>
+            <td class="td-primary">Radio Chiriquí</td>
+            <td><span class="status-chip inactive">Inactivo</span></td>
+            <td><span class="tag-chip">renovar</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 17 · XLSX batch importer ──────────────────────────── -->
+<section class="demo-section" id="xlsx-importer">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Importador XLSX por lotes</h2>
+    <p>Drop zone para archivos <code>.xlsx</code>. SheetJS parsea en el cliente; el mapa de columnas
+       muestra la correspondencia esperada. El estado progresa de
+       <em>Listo</em> → <em>Procesando</em> → <em>Completado / Error</em>.</p>
+  </div>
+
+  <div class="demo-block" style="max-width:580px; display:flex; flex-direction:column; gap:var(--sp-4);">
+    <label class="form-file-zone" tabindex="0" role="button" style="border-style:dashed;">
+      <input type="file" accept=".xlsx,.xls" style="display:none;" onchange="demoImporter(this)">
+      <div class="form-file-zone-icon"><i data-lucide="file-spreadsheet" style="width:32px;height:32px;"></i></div>
+      <p><strong>Arrastra tu archivo Excel aquí</strong> o haz clic para seleccionar</p>
+      <span>XLSX, XLS · máx. 10 MB · hasta 5,000 filas</span>
+    </label>
+
+    <div>
+      <p style="font-size:var(--fs-caption); font-weight:700; color:var(--fg-3); text-transform:uppercase; letter-spacing:.05em; margin-bottom:var(--sp-2);">Columnas esperadas</p>
+      <div class="importer-column-map">
+        <div class="importer-col-row"><span class="importer-col-name">serial</span><span class="importer-col-label">→ N.° de serie del equipo</span></div>
+        <div class="importer-col-row"><span class="importer-col-name">modelo</span><span class="importer-col-label">→ Modelo / referencia</span></div>
+        <div class="importer-col-row"><span class="importer-col-name">cliente</span><span class="importer-col-label">→ Nombre del cliente</span></div>
+        <div class="importer-col-row"><span class="importer-col-name">fecha_asignacion</span><span class="importer-col-label">→ Fecha de asignación (YYYY-MM-DD)</span></div>
+        <div class="importer-col-row"><span class="importer-col-name">estado</span><span class="importer-col-label">→ activo | inactivo | mantenimiento</span></div>
+      </div>
+    </div>
+
+    <div class="importer-status" id="importer-status-demo">
+      <span class="importer-status-icon"><i data-lucide="upload"></i></span>
+      Seleccione un archivo para comenzar
+    </div>
+
+    <div class="demo-row">
+      <button class="btn btn-secondary btn-sm" onclick="demoImporterState('running')">Simular procesando</button>
+      <button class="btn btn-secondary btn-sm" onclick="demoImporterState('done')">Simular completado</button>
+      <button class="btn btn-secondary btn-sm" onclick="demoImporterState('error')">Simular error</button>
+      <button class="btn btn-ghost btn-sm" onclick="demoImporterState('')">Resetear</button>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 18 · Module grid (home launcher) ───────────────────── -->
+<section class="demo-section" id="module-grid">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Module grid (home launcher)</h2>
+    <p>Grilla de tarjetas para el dashboard inicial. Cada <code>.module-card</code> apunta a un área
+       del sistema. La visibilidad se controla con un atributo <code>data-rol</code> y un filtro JS
+       que oculta lo que el rol no puede ver. <code>.module-grid</code> / <code>.module-card</code></p>
+  </div>
+
+  <div class="demo-block">
+    <div class="module-grid">
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="settings-2"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Órdenes de Servicio</span>
+          <span class="module-card-sub">Recepción, técnicos, estados y equipos</span>
+        </span>
+        <span class="module-card-shortcut">O</span>
+      </a>
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="radio-tower"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Base de Datos PoC</span>
+          <span class="module-card-sub">Radios, SIM, IP, grupos y notas</span>
+        </span>
+        <span class="module-card-shortcut">P</span>
+      </a>
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="package"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Inventario de Radios</span>
+          <span class="module-card-sub">Ingresos, salidas y existencias</span>
+        </span>
+        <span class="module-card-shortcut">I</span>
+      </a>
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="puzzle"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Inventario de Piezas</span>
+          <span class="module-card-sub">Repuestos y precios para servicio</span>
+        </span>
+        <span class="module-card-shortcut">X</span>
+      </a>
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="file-text"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Contratos</span>
+          <span class="module-card-sub">Altas, renovaciones y estados</span>
+        </span>
+        <span class="module-card-shortcut">C</span>
+      </a>
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="receipt"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Cotizaciones</span>
+          <span class="module-card-sub">Crear, editar e imprimir</span>
+        </span>
+        <span class="module-card-shortcut">Q</span>
+      </a>
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="users"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Clientes</span>
+          <span class="module-card-sub">Listado y edición masiva</span>
+        </span>
+      </a>
+      <a class="module-card" href="#">
+        <span class="module-card-icon"><i data-lucide="briefcase"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Registro de Equipos (Ventas)</span>
+          <span class="module-card-sub">Carga rápida por vendedor</span>
+        </span>
+        <span class="module-card-shortcut">V</span>
+      </a>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 19 · Auth shell (login / reset) ────────────────────── -->
+<section class="demo-section" id="auth-shell">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Auth shell (login / reset)</h2>
+    <p>Layout de autenticación: panel de marca a la izquierda (navy + viñetas) + tarjeta de
+       formulario a la derecha. Stacks debajo de 760px. Incluye toggle de visibilidad de contraseña
+       y divisor para acciones secundarias. <code>.auth-shell</code> / <code>.auth-brand</code> /
+       <code>.auth-card</code></p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div class="auth-shell" style="min-height:540px;">
+      <section class="auth-brand">
+        <div class="auth-brand-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="48" height="48" aria-hidden="true">
+            <rect width="40" height="40" rx="8" fill="#0B2A47"/>
+            <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+            <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+            <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+          </svg>
+          <div>
+            <h2>Cecomunica</h2>
+            <div>Centro de Gestión</div>
+          </div>
+        </div>
+        <p>Comunicación corporativa y gubernamental en una sola plataforma.</p>
+        <ul class="auth-bullets">
+          <li><i data-lucide="radio-tower"></i> PoC y DMR — gestión centralizada</li>
+          <li><i data-lucide="settings-2"></i> Órdenes de servicio y técnicos</li>
+          <li><i data-lucide="package"></i> Inventario y modelos</li>
+          <li><i data-lucide="file-text"></i> Contratos y clientes</li>
+        </ul>
+      </section>
+
+      <div class="auth-form-wrap">
+        <div class="auth-card">
+          <h2>Inicia sesión</h2>
+          <p class="auth-sub">Usa tu correo de Cecomunica para continuar.</p>
+
+          <form onsubmit="return false;" novalidate>
+            <div class="form-field">
+              <label class="form-label" for="auth-email">Correo</label>
+              <input class="form-input" id="auth-email" type="email" autocomplete="username">
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="auth-pass">Contraseña</label>
+              <div class="auth-input-toggle">
+                <input class="form-input" id="auth-pass" type="password" autocomplete="current-password">
+                <button type="button" aria-label="Mostrar/Ocultar contraseña"><i data-lucide="eye"></i></button>
+              </div>
+            </div>
+            <div class="auth-footer-row">
+              <label class="form-check" style="margin:0;">
+                <input type="checkbox">
+                <span><span class="form-check-label" style="font-size:13px;">Mantener sesión</span></span>
+              </label>
+              <a href="#">¿Olvidaste tu contraseña?</a>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg" style="width:100%;">Iniciar sesión</button>
+          </form>
+
+          <div class="auth-divider"><span>opciones</span></div>
+
+          <button class="btn btn-secondary btn-lg" style="width:100%;">
+            <i data-lucide="mail"></i> Contactar soporte
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 20 · Toggle pill (compact) ─────────────────────────── -->
+<section class="demo-section" id="toggle-pill">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Toggle pill (compacto)</h2>
+    <p>Variante compacta para banderas de filtro en línea junto a chips de búsqueda. Usado en
+       clientes (Solo activos), contratos (Mostrar vencidos), POC (Solo incompletos).
+       Distinto al <code>.toggle-switch</code> de configuración. <code>.toggle-pill</code></p>
+  </div>
+
+  <div class="demo-block">
+    <div style="display:flex; gap:var(--sp-3); flex-wrap:wrap; align-items:center;">
+      <label class="toggle-pill is-on">
+        <input type="checkbox" checked>
+        Solo activos
+      </label>
+      <label class="toggle-pill">
+        <input type="checkbox">
+        Mostrar eliminados
+      </label>
+      <label class="toggle-pill">
+        <input type="checkbox">
+        Solo incompletos
+      </label>
+      <label class="toggle-pill is-on">
+        <input type="checkbox" checked>
+        Solo mis órdenes
+      </label>
+    </div>
+  </div>
+
+  <p class="demo-label" style="margin-top:var(--sp-4);">En una toolbar</p>
+  <div class="demo-block">
+    <div class="filter-bar">
+      <div class="filter-search">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input type="search" placeholder="Buscar…" aria-label="Buscar">
+      </div>
+      <div style="flex:1;"></div>
+      <label class="toggle-pill is-on">
+        <input type="checkbox" checked>
+        Solo activos
+      </label>
+      <label class="toggle-pill">
+        <input type="checkbox">
+        Eliminados
+      </label>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 21 · Dropdown menu ─────────────────────────────────── -->
+<section class="demo-section" id="dropdown">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Dropdown menu</h2>
+    <p>Menú flotante para acciones secundarias en la tabla desktop. Se ancla al botón disparador y
+       aparece debajo. Para ordenar, agrupar, exportar, o sobre-acciones de fila.
+       <code>.dropdown</code> / <code>.dropdown-menu</code> / <code>.dropdown-item</code></p>
+  </div>
+
+  <div class="demo-block">
+    <div style="display:flex; gap:var(--sp-4); align-items:flex-start; flex-wrap:wrap;">
+
+      <!-- Closed -->
+      <div class="dropdown">
+        <button class="btn btn-secondary" onclick="this.nextElementSibling.classList.toggle('open')">
+          <i data-lucide="sliders-horizontal"></i> Más opciones <i data-lucide="chevron-down" style="width:14px;height:14px;"></i>
+        </button>
+        <div class="dropdown-menu">
+          <div class="dropdown-label">Vista</div>
+          <button class="dropdown-item"><i data-lucide="layout-grid"></i> Tarjetas</button>
+          <button class="dropdown-item"><i data-lucide="table"></i> Tabla</button>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-label">Exportar</div>
+          <button class="dropdown-item"><i data-lucide="file-spreadsheet"></i> Excel (XLSX)</button>
+          <button class="dropdown-item"><i data-lucide="file-text"></i> PDF</button>
+          <button class="dropdown-item"><i data-lucide="copy"></i> Copiar URL</button>
+        </div>
+      </div>
+
+      <!-- Open in place (for the demo) -->
+      <div class="dropdown" style="position:relative;">
+        <button class="btn btn-secondary">
+          <i data-lucide="more-horizontal"></i> Acciones de fila
+        </button>
+        <div class="dropdown-menu open" style="position:relative; top:6px;">
+          <button class="dropdown-item"><i data-lucide="eye"></i> Ver detalle</button>
+          <button class="dropdown-item"><i data-lucide="pencil"></i> Editar</button>
+          <button class="dropdown-item"><i data-lucide="copy"></i> Duplicar</button>
+          <button class="dropdown-item"><i data-lucide="printer"></i> Imprimir</button>
+          <div class="dropdown-divider"></div>
+          <button class="dropdown-item danger"><i data-lucide="trash-2"></i> Eliminar</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 22 · Banner / alert (in-flow) ──────────────────────── -->
+<section class="demo-section" id="banner">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Banner / alert en flujo</h2>
+    <p>Aviso permanente al inicio de una sección o página. A diferencia del <code>toast</code> no
+       se auto-cierra — el usuario lo descarta o queda hasta que cambie el estado.
+       <code>.alert-banner</code> + <code>.alert-success</code> / <code>.alert-warning</code> /
+       <code>.alert-error</code></p>
+  </div>
+
+  <div class="demo-block" style="display:flex; flex-direction:column; gap:var(--sp-3);">
+    <div class="alert-banner">
+      <span class="alert-banner-icon"><i data-lucide="info"></i></span>
+      <div class="alert-banner-body">
+        <strong>Modo lectura</strong>
+        Este contrato está cerrado. Para editar, créalo como renovación.
+      </div>
+      <button class="alert-banner-close" aria-label="Cerrar"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+
+    <div class="alert-banner alert-success">
+      <span class="alert-banner-icon"><i data-lucide="check-circle"></i></span>
+      <div class="alert-banner-body">
+        <strong>Cambios guardados</strong>
+        Se actualizaron 3 órdenes y se notificó a 2 clientes por correo.
+      </div>
+      <button class="alert-banner-close" aria-label="Cerrar"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+
+    <div class="alert-banner alert-warning">
+      <span class="alert-banner-icon"><i data-lucide="alert-triangle"></i></span>
+      <div class="alert-banner-body">
+        <strong>Datos pendientes</strong>
+        Faltan los seriales en 12 equipos. La factura no puede emitirse hasta completarlos.
+      </div>
+    </div>
+
+    <div class="alert-banner alert-error">
+      <span class="alert-banner-icon"><i data-lucide="x-circle"></i></span>
+      <div class="alert-banner-body">
+        <strong>No se pudo guardar</strong>
+        Hubo un error al subir el PDF firmado. Verifica tu conexión y reintenta.
+      </div>
+      <button class="alert-banner-close" aria-label="Cerrar"><i data-lucide="x" style="width:14px;height:14px;"></i></button>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 23 · Floating tooltip ──────────────────────────────── -->
+<section class="demo-section" id="tooltip">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Floating tooltip (preview)</h2>
+    <p>Tooltip rico con varias líneas que se ancla en posición absoluta vía JS. Usado en la tabla de
+       contratos para mostrar los equipos al hacer hover sobre un icono peek. No interfiere con el
+       cursor (<code>pointer-events: none</code>). <code>.tooltip-floating</code></p>
+  </div>
+
+  <div class="demo-block" style="position:relative; padding:var(--sp-8); min-height:240px;">
+    <p style="font-size:13px; color:var(--fg-3); margin:0 0 var(--sp-4);">
+      Pasa el cursor sobre el icono <i data-lucide="eye" style="width:14px;height:14px; vertical-align:middle;"></i>
+      en la celda para ver el tooltip:
+    </p>
+    <table class="app-table" style="margin:0;">
+      <thead>
+        <tr><th>Contrato</th><th>Cliente</th><th>Equipos</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="td-primary">CT-2025-0048</td>
+          <td>Portafolio Digital S.A.</td>
+          <td>
+            <span style="display:inline-flex; align-items:center; gap:6px;">
+              <strong>7</strong>
+              <span class="dropdown" style="position:relative;">
+                <span class="equipos-peek-trigger" style="display:inline-grid; place-items:center; width:24px; height:24px; border-radius:var(--radius-sm); background:var(--surface-sunken); cursor:default;">
+                  <i data-lucide="eye" style="width:14px;height:14px; color:var(--fg-3);"></i>
+                </span>
+                <div class="tooltip-floating" style="position:absolute; left:30px; top:0; box-shadow:var(--shadow-lg);">
+                  <div class="tooltip-line"><strong>Hytera PD78X</strong> · 5 unidades</div>
+                  <div class="tooltip-line"><strong>Motorola SLR5100</strong> · 1 unidad</div>
+                  <div class="tooltip-line"><strong>Antena Larsen 150MHz</strong> · 1 unidad</div>
+                  <div class="tooltip-line muted">Total: $2,273.75/mes</div>
+                </div>
+              </span>
+            </span>
+          </td>
+          <td><span class="chip-estado chip-aprobada">Aprobado</span></td>
+        </tr>
+        <tr>
+          <td class="td-primary">CT-2025-0047</td>
+          <td>Manzanillo Intl.</td>
+          <td>3</td>
+          <td><span class="chip-estado chip-cotizada">Pendiente</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="demo-label" style="margin-top:var(--sp-4);">Implementación</p>
+  <div class="demo-block" style="font-size:13px; color:var(--fg-2);">
+    <p style="margin:0 0 var(--sp-2);">
+      En producción se renderiza el tooltip como un nodo único (<code>#equiposTooltip</code>) a nivel
+      de <code>body</code>, y al <code>mouseenter</code> del trigger se le calcula posición con
+      <code>getBoundingClientRect</code>. <code>mouseleave</code> lo oculta.
+    </p>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 24 · Pager with input ──────────────────────────────── -->
+<section class="demo-section" id="pager-input">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Pager con input</h2>
+    <p>Para tablas muy largas (clientes, POC) donde tipear el número de página es más rápido que
+       hacer clic. Complemento — no reemplaza la paginación numerada del kit base.
+       <code>.pager-input</code></p>
+  </div>
+
+  <div class="demo-block">
+    <div style="display:flex; gap:var(--sp-4); align-items:center; flex-wrap:wrap; justify-content:space-between;">
+      <span style="font-size:13px; color:var(--fg-3);">Mostrando <strong>241–260</strong> de <strong>1,247</strong> registros</span>
+      <div style="display:flex; gap:var(--sp-3); align-items:center;">
+        <button class="btn btn-secondary btn-sm"><i data-lucide="chevron-left" style="width:14px;height:14px;"></i> Anterior</button>
+        <div class="pager-input">
+          <span>Página</span>
+          <input type="number" min="1" value="13">
+          <span class="pager-input-total">/ 63</span>
+        </div>
+        <button class="btn btn-secondary btn-sm">Siguiente <i data-lucide="chevron-right" style="width:14px;height:14px;"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <p class="demo-label" style="margin-top:var(--sp-4);">Con "Cargar más" y "Mostrar todo"</p>
+  <div class="demo-block">
+    <div style="display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap;">
+      <button class="btn btn-ghost"><i data-lucide="chevron-down"></i> Cargar más</button>
+      <button class="btn btn-secondary"><i data-lucide="list"></i> Mostrar todo</button>
+      <div style="flex:1;"></div>
+      <div class="pager-input">
+        <span>Página</span>
+        <input type="number" min="1" value="1">
+        <span class="pager-input-total">/ —</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 25 · Responsive cards fallback ─────────────────────── -->
+<section class="demo-section" id="responsive-cards">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Responsive cards fallback</h2>
+    <p>Patrón estándar para tablas largas: en escritorio (≥900px) se muestra como
+       <code>.app-table</code>; debajo de 900px se reemplaza por <code>.responsive-card</code> con
+       título + sub + meta + acciones. Mismo dato, mejor scanneable en móvil.</p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <!-- Desktop table -->
+    <div class="responsive-table-wrap">
+      <div class="app-table-wrap" style="border:none; border-radius:0; box-shadow:none;">
+        <table class="app-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Cliente</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th>Total</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-primary">COT-2025-0042</td>
+              <td>Portafolio Digital S.A.</td>
+              <td class="td-muted">12 May 2025</td>
+              <td><span class="chip-estado chip-cotizada">Emitida</span></td>
+              <td class="td-amount">$2,273.75</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-primary">COT-2025-0041</td>
+              <td>Manzanillo Intl.</td>
+              <td class="td-muted">11 May 2025</td>
+              <td><span class="chip-estado chip-aprobada">Aprobada</span></td>
+              <td class="td-amount">$1,560.00</td>
+              <td class="td-actions">
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Ver"><i data-lucide="eye"></i></button>
+                <button class="btn btn-ghost btn-icon btn-sm" aria-label="Imprimir"><i data-lucide="printer"></i></button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Mobile cards fallback -->
+    <div class="responsive-cards" style="padding:var(--sp-3);">
+      <div class="responsive-card">
+        <div class="responsive-card-top">
+          <div>
+            <div class="responsive-card-title">Portafolio Digital S.A.</div>
+            <div class="responsive-card-sub">COT-2025-0042 · 12 May 2025</div>
+          </div>
+          <span class="chip-estado chip-cotizada">Emitida</span>
+        </div>
+        <div class="responsive-card-meta">
+          <span><strong style="color:var(--fg-1);">$2,273.75</strong></span>
+        </div>
+        <div class="responsive-card-actions">
+          <button class="btn btn-secondary btn-sm"><i data-lucide="eye"></i> Ver</button>
+          <button class="btn btn-secondary btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+        </div>
+      </div>
+      <div class="responsive-card">
+        <div class="responsive-card-top">
+          <div>
+            <div class="responsive-card-title">Manzanillo Intl.</div>
+            <div class="responsive-card-sub">COT-2025-0041 · 11 May 2025</div>
+          </div>
+          <span class="chip-estado chip-aprobada">Aprobada</span>
+        </div>
+        <div class="responsive-card-meta">
+          <span><strong style="color:var(--fg-1);">$1,560.00</strong></span>
+        </div>
+        <div class="responsive-card-actions">
+          <button class="btn btn-secondary btn-sm"><i data-lucide="eye"></i> Ver</button>
+          <button class="btn btn-secondary btn-sm"><i data-lucide="printer"></i> Imprimir</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="demo-label" style="margin-top:var(--sp-4);">Cómo usar</p>
+  <div class="demo-block" style="font-size:13px; color:var(--fg-2);">
+    <p style="margin:0;">
+      Envuelve la tabla en <code>.responsive-table-wrap</code> y duplica los mismos datos como una
+      lista de <code>.responsive-card</code> dentro de <code>.responsive-cards</code>. El CSS hace
+      el swap automático en <code>@media (max-width: 900px)</code>. En producción suele renderizarse
+      una sola vez vía JS y el snippet HTML elige la representación.
+    </p>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 26 · Empty state con hint ──────────────────────────── -->
+<section class="demo-section" id="empty-hint">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Empty state con hint</h2>
+    <p>Variante de <code>.app-empty-state</code> con icono circular, título y línea muted de
+       sugerencia. Para listas vacías por filtros (no por carga inicial).
+       <code>.empty-state-hint</code></p>
+  </div>
+
+  <div class="demo-block" style="display:grid; grid-template-columns:repeat(2,1fr); gap:var(--sp-4);">
+    <div class="app-card">
+      <div class="empty-state-hint">
+        <div class="empty-state-hint-icon"><i data-lucide="filter-x"></i></div>
+        <p class="title">No hay resultados</p>
+        <p class="hint">Prueba con menos filtros o cambia el rango de fechas.</p>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="x"></i> Limpiar filtros</button>
+      </div>
+    </div>
+    <div class="app-card">
+      <div class="empty-state-hint">
+        <div class="empty-state-hint-icon"><i data-lucide="search-x"></i></div>
+        <p class="title">Sin coincidencias</p>
+        <p class="hint">Verifica la búsqueda — escribe el nombre, RUC o el N.° de orden completo.</p>
+        <button class="btn btn-ghost btn-sm"><i data-lucide="refresh-cw"></i> Reintentar</button>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ── 27 · Centered page header ──────────────────────────── -->
+<section class="demo-section" id="page-header-centered">
+<div class="demo-container">
+  <div class="demo-section-header">
+    <h2>Page header centrado</h2>
+    <p>Encabezado centrado con icono grande para páginas de un solo formulario largo (nueva orden,
+       nueva cotización, nuevo contrato). Diferente al <code>.app-page-header</code> que es de lista.
+       <code>.page-header-centered</code></p>
+  </div>
+
+  <div class="demo-block" style="padding:0; overflow:hidden;">
+    <div class="page-header-centered">
+      <div class="page-header-icon"><i data-lucide="receipt"></i></div>
+      <h1>Nueva Cotización</h1>
+      <p>Completa los datos del cliente, agrega los ítems del presupuesto y guarda como borrador
+         o emite directamente al cliente.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<!-- ─── Toast region (live) ──────────────────────────────── -->
+<div class="toast-region" id="toast-region" aria-live="polite" aria-label="Notificaciones"></div>
+
+<script src="app-demo.js"></script>
+</body>
+</html>

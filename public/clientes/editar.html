@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Editar cliente – Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -17,7 +18,6 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <script src="../js/core/layout.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
 </head>
 <body>
 <div id="topbar-mount"></div>
@@ -29,66 +29,86 @@
 </script>
 
 <div class="app-wrap app-wrap--default">
-<div class="form section">
-  <h2 class="form-title">Datos del cliente</h2>
 
-  <div class="form-grid cols-2">
-    <div class="form-field">
-      <label class="req">Nombre</label>
-      <input id="nombre" type="text" placeholder="Ej: Constructora XYZ" />
-      <div class="form-hint">Campo obligatorio</div>
+  <div class="app-card app-card-padded">
+    <div class="form-section-header">
+      <h3><i data-lucide="building-2"></i> Datos del cliente</h3>
     </div>
+    <div class="form-section-body">
+      <div class="form-grid-2">
 
-    <div class="form-field">
-      <label>Representante</label>
-      <input id="representante" type="text" placeholder="Nombre del representante legal" />
-    </div>
-   <div class="form-field">
-      <label>Cedula del Representante</label>
-      <input id="cedula_representante" type="text" placeholder="Cedula del representante legal" />
-    </div>
-    <div class="form-field">
-      <label>RUC</label>
-      <input id="ruc" type="text" placeholder="RUC / NIT" />
-    </div>
+        <div class="form-field">
+          <label class="form-label" for="nombre">Nombre <span class="req">*</span></label>
+          <input class="form-input" id="nombre" type="text" placeholder="Ej: Constructora XYZ" required>
+          <span class="form-hint">Campo obligatorio.</span>
+        </div>
 
-    <div class="form-field">
-      <label>Teléfono</label>
-      <input id="telefono" type="tel" placeholder="+507 ..." />
-    </div>
+        <div class="form-field">
+          <label class="form-label" for="representante">Representante</label>
+          <input class="form-input" id="representante" type="text" placeholder="Nombre del representante legal">
+        </div>
 
-    <div class="form-field">
-      <label>Email</label>
-      <input id="email" type="email" placeholder="correo@empresa.com" />
-    </div>
+        <div class="form-field">
+          <label class="form-label" for="cedula_representante">Cédula del representante</label>
+          <input class="form-input" id="cedula_representante" type="text" placeholder="Cédula del representante legal">
+        </div>
 
-    <div class="form-field">
-      <label>Activo</label>
-      <div class="input-row">
-        <input id="activo" type="checkbox" checked />
-        <span class="form-hint">Marcar si el cliente está activo</span>
+        <div class="form-field">
+          <label class="form-label" for="ruc">RUC</label>
+          <input class="form-input" id="ruc" type="text" placeholder="RUC / NIT" style="font-family:var(--font-mono);">
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="telefono">Teléfono</label>
+          <div class="form-input-wrap">
+            <span class="form-input-prefix"><i data-lucide="phone" style="width:15px;height:15px;"></i></span>
+            <input class="form-input" id="telefono" type="tel" placeholder="+507 ...">
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="email">Email</label>
+          <div class="form-input-wrap">
+            <span class="form-input-prefix"><i data-lucide="mail" style="width:15px;height:15px;"></i></span>
+            <input class="form-input" id="email" type="email" placeholder="correo@empresa.com">
+          </div>
+        </div>
+
+        <div class="form-field" style="grid-column: 1 / -1;">
+          <label class="form-label" for="direccion">Dirección</label>
+          <textarea class="form-input form-textarea" id="direccion" rows="3" placeholder="Dirección fiscal / de facturación"></textarea>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="vendedor_asignado">Vendedor asignado</label>
+          <select class="form-select" id="vendedor_asignado"></select>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Estado</label>
+          <label class="form-check">
+            <input id="activo" type="checkbox" checked>
+            <span>
+              <span class="form-check-label">Cliente activo</span>
+              <span class="form-check-desc form-hint">Desmarcar para ocultar de listados.</span>
+            </span>
+          </label>
+        </div>
+
+        <div class="form-field" style="grid-column: 1 / -1;">
+          <label class="form-label" for="tags">Tags <span class="optional">(separados por coma)</span></label>
+          <input class="form-input" id="tags" type="text" placeholder="educacion, escuela, gobierno">
+          <span class="form-hint">Usa palabras clave para mejorar la búsqueda.</span>
+        </div>
       </div>
-    </div>
-
-    <div class="form-field" style="grid-column: 1 / -1;">
-      <label>Dirección</label>
-      <textarea id="direccion" rows="3" placeholder="Dirección fiscal / de facturación"></textarea>
-    </div>
-    <div class="form-field">
-      <label>Vendedor asignado</label>
-      <select id="vendedor_asignado"></select>
-    </div>
-    <div class="form-field" style="grid-column: 1 / -1;">
-      <label>Tags (separados por coma)</label>
-      <input id="tags" type="text" placeholder="educacion, escuela, gobierno" />
-      <div class="form-hint">Usa palabras clave para mejorar la búsqueda</div>
     </div>
   </div>
 
   <div class="form-actions">
-    <button id="guardar" class="btn btn-primary">Guardar</button>
+    <button id="guardar" class="btn btn-primary btn-lg"><i data-lucide="save"></i> Guardar</button>
+    <button type="button" class="btn btn-ghost" onclick="location.href='./index.html'">Cancelar</button>
   </div>
-</div>
+
 </div>
 
 
@@ -104,7 +124,7 @@
     if(!text) return [];
     const parts = text
       .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .normalize("NFD").replace(/[̀-ͯ]/g,"")
       .split(/[^a-z0-9]+/).filter(Boolean);
     const toks = new Set();
     for(const p of parts){
@@ -116,6 +136,7 @@
   auth.onAuthStateChanged(async (user)=>{
     if(!user){ location.href = '../index.html'; return; }
     if(id){ await cargar(); }
+    if (window.lucide) lucide.createIcons();
   });
 
   async function cargar(){
@@ -124,7 +145,7 @@
     // Cargar lista de vendedores
     const vendedores = await UsuariosService.getVendedores();
     const $vend = document.getElementById('vendedor_asignado');
-    $vend.innerHTML = '<option value="">-- Sin asignar --</option>';
+    $vend.innerHTML = '<option value="">— Sin asignar —</option>';
     vendedores.forEach(d => {
       const opt = document.createElement('option');
       opt.value = d.id;

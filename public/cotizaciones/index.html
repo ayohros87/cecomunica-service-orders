@@ -16,133 +16,90 @@
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/cotizacionesService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
-  <style>
-    html, body { margin: 0; padding: 0; }
-    body { background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%); min-height: 100vh; }
-
-    .app-wrap { padding: 12px 20px; }
-
-    .card { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 12px; }
-
-    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .toolbar .left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .toolbar .right { display: flex; align-items: center; gap: 10px; }
-
-    .filters input, .filters select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; }
-
-    .app-table-wrap { background: white; border-radius: 8px; padding: 0; box-shadow: 0 2px 12px rgba(0,0,0,0.06); overflow: hidden; width: 100%; margin-top: 12px; }
-    table { width: 100%; border-collapse: collapse; table-layout: auto; }
-    table thead { background: linear-gradient(135deg, #f8fafc, #f1f5f9); }
-    table th { font-weight: 600; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; padding: 12px 16px; color: var(--text); vertical-align: middle; border-bottom: 2px solid var(--line); }
-    table td { padding: 10px 16px; vertical-align: middle; font-size: 16px; }
-    table tbody tr { transition: background 0.15s; border-bottom: 1px solid var(--line); }
-    table tbody tr:hover { background: #f0f9ff; }
-
-    .btn { padding: 8px 16px; font-size: 14px; font-weight: 600; border-radius: 8px; transition: all 0.2s ease; }
-    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .badge { padding: 4px 8px; border-radius: var(--radius-pill); font-size: 12px; font-weight: 600; }
-    /* Cotización state badges retired by R2 — page now uses .chip-estado.chip-*
-       from the DS chip system in ceco-ui.css. */
-
-    .toggle-pill { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
-
-    .empty-state { padding: 22px; text-align: center; color: var(--muted); }
-    .empty-state .title { font-weight: 700; margin-bottom: 6px; }
-    .empty-state .hint { font-size: 13px; }
-
-    .cards-list { display: none; }
-    .card-cotizacion { background: white; border-radius: 10px; padding: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 10px; border: 1px solid var(--line); }
-    .card-cotizacion .row { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .card-cotizacion .t1 { font-weight: 700; font-size: 15px; }
-    .card-cotizacion .t2 { color: var(--muted); font-size: 13px; }
-    .card-cotizacion .meta { font-size: 13px; color: #475569; margin-top: 6px; }
-    .card-cotizacion .acciones { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-
-    .skeleton-row { background: transparent; }
-    .skeleton-table-row { display: flex; gap: 10px; padding: 14px; }
-    .skeleton-cell { height: 14px; background: #e5e7eb; border-radius: 6px; animation: pulse 1.2s ease-in-out infinite; }
-    @keyframes pulse { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
-
-    @media (max-width: 900px) {
-      .app-table-wrap { display: none; }
-      .cards-list { display: block; }
-    }
-  </style>
 </head>
 <body>
   <div id="topbar-mount"></div>
   <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Cotizaciones', actions: [{ label: '<i data-lucide="plus"></i> Nueva Cotización', href: 'nueva-cotizacion.html', cls: 'primary' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
 
   <div class="app-wrap app-wrap--wide">
-    <div class="card">
-      <div class="toolbar">
-        <div class="left filters">
-          <input id="filtroTexto" type="text" placeholder="Filtrar por cliente o ID">
-          <select id="filtroEstado">
+
+    <div class="app-card">
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input id="filtroTexto" type="search" placeholder="Filtrar por cliente o ID…" aria-label="Buscar cotizaciones">
+        </div>
+        <div class="form-field" style="margin:0; min-width:160px;">
+          <select id="filtroEstado" class="form-select">
             <option value="">Todos los estados</option>
             <option value="borrador">Borrador</option>
             <option value="emitida">Emitida</option>
             <option value="enviada">Enviada</option>
             <option value="anulada">Anulada</option>
           </select>
-          <button class="btn" onclick="aplicarFiltros()"><i data-lucide="search"></i> Aplicar</button>
-          <button class="btn" onclick="limpiarFiltros()">Limpiar</button>
-          <label class="toggle-pill">
-            <input type="checkbox" id="toggleEliminadas">
-            Mostrar eliminadas
-          </label>
         </div>
-        <div class="right resumen" id="resumenCotizaciones"></div>
+        <button class="btn btn-secondary btn-sm" onclick="aplicarFiltros()"><i data-lucide="search"></i> Aplicar</button>
+        <button class="btn btn-ghost btn-sm" onclick="limpiarFiltros()">Limpiar</button>
+        <div style="flex:1;"></div>
+        <label class="toggle-pill">
+          <input type="checkbox" id="toggleEliminadas">
+          Mostrar eliminadas
+        </label>
+        <span id="resumenCotizaciones" style="font-size:13px; color:var(--fg-3);"></span>
+      </div>
+
+      <!-- Desktop table -->
+      <div class="responsive-table-wrap">
+        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+          <table class="app-table" aria-label="Cotizaciones">
+            <thead>
+              <tr>
+                <th style="width:140px;">ID</th>
+                <th>Cliente</th>
+                <th>Fecha</th>
+                <th>Estado</th>
+                <th style="text-align:right;">Total</th>
+                <th style="text-align:right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tablaCotizaciones">
+              <tr class="skeleton-row">
+                <td colspan="6" style="padding: 0; border: none;">
+                  <div class="skeleton-table-row">
+                    <div class="skeleton-cell" style="width: 14%;"></div>
+                    <div class="skeleton-cell" style="width: 26%;"></div>
+                    <div class="skeleton-cell" style="width: 18%;"></div>
+                    <div class="skeleton-cell" style="width: 16%;"></div>
+                    <div class="skeleton-cell" style="width: 16%;"></div>
+                    <div class="skeleton-cell" style="width: 10%;"></div>
+                  </div>
+                </td>
+              </tr>
+              <tr class="skeleton-row">
+                <td colspan="6" style="padding: 0; border: none;">
+                  <div class="skeleton-table-row">
+                    <div class="skeleton-cell" style="width: 12%;"></div>
+                    <div class="skeleton-cell" style="width: 30%;"></div>
+                    <div class="skeleton-cell" style="width: 16%;"></div>
+                    <div class="skeleton-cell" style="width: 16%;"></div>
+                    <div class="skeleton-cell" style="width: 16%;"></div>
+                    <div class="skeleton-cell" style="width: 10%;"></div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mobile cards fallback (responsive-card del kit) -->
+      <div id="listaCotizacionesMovil" class="responsive-cards" style="padding:var(--sp-3);"></div>
+
+      <div class="app-table-footer">
+        <button class="btn btn-secondary btn-sm" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más cotizaciones</button>
       </div>
     </div>
 
-    <div class="app-table-wrap">
-      <table class="app-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Cliente</th>
-            <th>Fecha</th>
-            <th>Estado</th>
-            <th>Total</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody id="tablaCotizaciones">
-          <tr class="skeleton-row">
-            <td colspan="6" style="padding: 0; border: none;">
-              <div class="skeleton-table-row">
-                <div class="skeleton-cell" style="width: 14%;"></div>
-                <div class="skeleton-cell" style="width: 26%;"></div>
-                <div class="skeleton-cell" style="width: 18%;"></div>
-                <div class="skeleton-cell" style="width: 16%;"></div>
-                <div class="skeleton-cell" style="width: 16%;"></div>
-                <div class="skeleton-cell" style="width: 10%;"></div>
-              </div>
-            </td>
-          </tr>
-          <tr class="skeleton-row">
-            <td colspan="6" style="padding: 0; border: none;">
-              <div class="skeleton-table-row">
-                <div class="skeleton-cell" style="width: 12%;"></div>
-                <div class="skeleton-cell" style="width: 30%;"></div>
-                <div class="skeleton-cell" style="width: 16%;"></div>
-                <div class="skeleton-cell" style="width: 16%;"></div>
-                <div class="skeleton-cell" style="width: 16%;"></div>
-                <div class="skeleton-cell" style="width: 10%;"></div>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div id="listaCotizacionesMovil" class="cards-list"></div>
-
-    <div style="margin:12px 0; text-align:center;">
-      <button class="btn" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más cotizaciones</button>
-    </div>
   </div>
 
   <script src="../js/pages/cotizaciones-index.js" defer></script>

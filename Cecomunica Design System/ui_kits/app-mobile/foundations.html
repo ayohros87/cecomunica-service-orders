@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Mobile Foundations</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="../app/app.css">
+<link rel="stylesheet" href="mobile.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<!-- ─── Demo nav ──────────────────────────────────────────── -->
+<nav class="demo-nav">
+  <a class="demo-nav-home" href="index.html"><i data-lucide="arrow-left"></i> Portal</a>
+  <strong>Mobile · Foundations</strong>
+  <a href="#appbar">App bar</a>
+  <a href="#order-card">Tarjeta</a>
+  <a href="#filterbar">Filtro estado</a>
+  <a href="#nav">Nav · FAB</a>
+  <a href="#sheet">Bottom sheet</a>
+  <a href="#segment">Segmented</a>
+  <a href="#states">Vacío · Carga</a>
+</nav>
+
+
+<header class="mk-hero">
+  <span class="mk-tag">App UI Kit · Mobile</span>
+  <h1>Componentes móviles</h1>
+  <p>Galería de los bloques reutilizables del kit móvil. Cada uno se compone con
+     <code style="color:rgba(255,255,255,.9);">.m-*</code> y sigue las reglas táctiles del
+     namespace (44px hit targets, 16px input font, safe-area insets).</p>
+</header>
+
+
+<div class="mk-wrap">
+
+  <section class="mk-section" id="appbar">
+    <h2>App bar + búsqueda</h2>
+    <p class="mk-desc">Barra superior sticky con ancla de marca (borde navy). La búsqueda se expande
+       sobre el app bar al tocar la lupa — cero espacio cuando está inactiva.
+       <code>.m-appbar</code> / <code>.m-appbar-search</code></p>
+    <div class="mk-gallery">
+      <div class="mk-card">
+        <h3>Lista (búsqueda cerrada)</h3>
+        <p>Logo + título + lupa. <code>.m-appbar-title</code></p>
+        <div class="mk-demoarea">
+          <div class="m-appbar" style="position:relative;" id="appbarDemo">
+            <a class="m-appbar-logo" href="#" aria-label="CeComunica">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="8" fill="#0B2A47"/><path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/><path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#0091D7" stroke-width="3.5" fill="none" stroke-linecap="square"/><rect x="18.5" y="18.5" width="3" height="3" fill="#0091D7"/></svg>
+            </a>
+            <span class="m-appbar-title"><i data-lucide="clipboard-list"></i><span>Órdenes</span></span>
+            <button class="m-appbar-btn" aria-label="Buscar" onclick="document.getElementById('appbarDemo').classList.add('searching')"><i data-lucide="search"></i></button>
+            <div class="m-appbar-search">
+              <button class="m-appbar-btn m-appbar-back" aria-label="Cerrar" onclick="document.getElementById('appbarDemo').classList.remove('searching')"><i data-lucide="chevron-left"></i></button>
+              <input type="text" placeholder="Orden, cliente o serial…" autocomplete="off">
+              <button class="m-appbar-btn" aria-label="Escanear"><i data-lucide="scan-line"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mk-card">
+        <h3>Búsqueda abierta</h3>
+        <p>Estado <code>.searching</code> — regreso + input + escanear.</p>
+        <div class="mk-demoarea">
+          <div class="m-appbar searching" style="position:relative;">
+            <a class="m-appbar-logo" href="#"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#0B2A47"/></svg></a>
+            <span class="m-appbar-title"><span>Órdenes</span></span>
+            <button class="m-appbar-btn"><i data-lucide="search"></i></button>
+            <div class="m-appbar-search">
+              <button class="m-appbar-btn m-appbar-back" aria-label="Cerrar"><i data-lucide="chevron-left"></i></button>
+              <input type="text" placeholder="Orden, cliente o serial…" autocomplete="off">
+              <button class="m-appbar-btn" aria-label="Escanear"><i data-lucide="scan-line"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="mk-card">
+        <h3>Detalle</h3>
+        <p>Regreso + título largo truncado. <code>.m-appbar-back</code></p>
+        <div class="mk-demoarea">
+          <div class="m-appbar" style="position:static;">
+            <button class="m-appbar-btn m-appbar-back" aria-label="Volver"><i data-lucide="chevron-left"></i></button>
+            <span class="m-appbar-title"><span>Orden #1042 · Radios del Istmo</span></span>
+            <button class="m-appbar-btn" aria-label="Más"><i data-lucide="more-vertical"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="mk-section" id="order-card">
+    <h2>Tarjeta de orden</h2>
+    <p class="mk-desc">Ítem primario de la lista en móvil. Cliente como ancla con el chip de estado alineado,
+       una línea muted (#orden · tipo · técnico), fecha + progreso de intervenciones por equipo, y las
+       dos funciones que más usan los técnicos: <strong>Equipos</strong> (puerta a las intervenciones,
+       que son por equipo) + <strong>Flujo</strong>, con menú <code>···</code> para el resto.</p>
+    <div class="mk-gallery">
+      <div class="mk-card">
+        <h3>Por asignar</h3>
+        <div class="mk-demoarea">
+          <article class="m-order-card" data-estado="POR ASIGNAR">
+            <div class="m-order-card__top">
+              <div class="m-order-card__client">Radios del Istmo, S.A.</div>
+              <span class="chip-estado chip-recibida">Por asignar</span>
+            </div>
+            <div class="m-order-card__meta">
+              <span class="ord">#1042</span><span class="sep">·</span>
+              <span>Reparación</span><span class="sep">·</span>
+              <span class="tech-none">Sin asignar</span>
+            </div>
+            <div class="m-order-card__date">
+              <span>Inicio: 24 may</span>
+              <span class="m-foto-badge"><i data-lucide="camera"></i> 3</span>
+            </div>
+            <div class="m-order-card__actions">
+              <button class="btn btn-primary m-cta"><i data-lucide="user-check"></i> Asignar técnico</button>
+              <button class="btn btn-secondary btn-icon m-more" aria-label="Más acciones"><i data-lucide="more-horizontal"></i></button>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="mk-card">
+        <h3>Asignado · 1/3 intervenciones</h3>
+        <div class="mk-demoarea">
+          <article class="m-order-card" data-estado="ASIGNADO">
+            <div class="m-order-card__top">
+              <div class="m-order-card__client">Seguridad Panamá Corp.</div>
+              <span class="chip-estado chip-reparacion">Asignado</span>
+            </div>
+            <div class="m-order-card__meta">
+              <span class="ord">#1039</span><span class="sep">·</span>
+              <span>Instalación</span><span class="sep">·</span>
+              <span>J. Méndez</span>
+            </div>
+            <div class="m-order-card__date">
+              <span>Inicio: 21 may</span>
+              <span class="m-work m-work--progress">Intervenciones 1/3</span>
+            </div>
+            <div class="m-order-card__actions">
+              <button class="btn btn-primary m-cta"><i data-lucide="package"></i> Equipos</button>
+              <button class="btn btn-secondary m-cta"><i data-lucide="check-circle"></i> Completar</button>
+              <button class="btn btn-secondary btn-icon m-more" aria-label="Más acciones"><i data-lucide="more-horizontal"></i></button>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div class="mk-card">
+        <h3>Entregado · 2/2 intervenciones</h3>
+        <div class="mk-demoarea">
+          <article class="m-order-card" data-estado="ENTREGADO AL CLIENTE">
+            <div class="m-order-card__top">
+              <div class="m-order-card__client">Minera Cerro Quema</div>
+              <span class="chip-estado chip-entregada">Entregado</span>
+            </div>
+            <div class="m-order-card__meta">
+              <span class="ord">#1018</span><span class="sep">·</span>
+              <span>Mantenimiento</span><span class="sep">·</span>
+              <span>A. Yohros</span>
+            </div>
+            <div class="m-order-card__date">
+              <span>Inicio: 12 may</span>
+              <span class="m-work m-work--done">Intervenciones 2/2</span>
+            </div>
+            <div class="m-order-card__actions">
+              <button class="btn btn-secondary m-cta"><i data-lucide="package"></i> Equipos</button>
+              <button class="btn btn-secondary btn-icon m-more" aria-label="Más acciones"><i data-lucide="more-horizontal"></i></button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="mk-section" id="filterbar">
+    <h2>Filtro de estado (único)</h2>
+    <p class="mk-desc">El único filtro de flujo: barra sticky de chips con conteos vivos. Reemplaza al
+       antiguo cluster de conteos — un solo control hace el trabajo de dos.
+       <code>.m-filterbar</code> / <code>.m-chiprow</code> / <code>.m-chip</code></p>
+    <div class="mk-card">
+      <div class="mk-demoarea" style="padding:0; overflow:hidden;">
+        <div class="m-filterbar" style="position:static;">
+          <div class="m-chiprow">
+            <button class="m-chip active">Todas <span class="m-chip-count">142</span></button>
+            <button class="m-chip">Por asignar <span class="m-chip-count">12</span></button>
+            <button class="m-chip">Asignado <span class="m-chip-count">28</span></button>
+            <button class="m-chip">Completado <span class="m-chip-count">9</span></button>
+            <button class="m-chip">Entregado <span class="m-chip-count">93</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="mk-section" id="nav">
+    <h2>Bottom nav + FAB</h2>
+    <p class="mk-desc">Navegación inferior fija (3 destinos) y botón de acción flotante para «Nueva orden».
+       <code>.m-bottomnav</code> / <code>.m-fab</code></p>
+    <div class="mk-gallery">
+      <div class="mk-card">
+        <h3>Bottom nav</h3>
+        <div class="mk-demoarea" style="position:relative; height:80px; padding:0;">
+          <nav class="m-bottomnav" style="position:absolute;">
+            <button class="m-bottomnav__item active"><i data-lucide="clipboard-list"></i><span class="m-bottomnav__label">Órdenes</span></button>
+            <button class="m-bottomnav__item m-bottomnav__item--primary"><i data-lucide="plus-circle"></i><span class="m-bottomnav__label">Nueva</span></button>
+            <button class="m-bottomnav__item"><i data-lucide="sliders-horizontal"></i><span class="m-bottomnav__label">Filtros</span></button>
+          </nav>
+        </div>
+      </div>
+      <div class="mk-card">
+        <h3>FAB</h3>
+        <p>Extendido y redondo. <code>.m-fab</code> / <code>.m-fab--round</code></p>
+        <div class="mk-demoarea" style="display:flex; gap:16px; align-items:center;">
+          <button class="m-fab" style="position:static;"><i data-lucide="plus"></i> Nueva</button>
+          <button class="m-fab m-fab--round" style="position:static;"><i data-lucide="plus"></i></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="mk-section" id="sheet">
+    <h2>Bottom sheet · menú de acciones (overflow)</h2>
+    <p class="mk-desc">El <code>···</code> de la tarjeta abre este sheet con las acciones secundarias
+       (las dos principales —Equipos y Flujo— ya están en la tarjeta). Refleja
+       <code>botonesGestion()</code> de producción. <code>.m-sheet</code> / <code>.m-menu</code></p>
+    <div class="mk-card">
+      <div class="mk-demoarea" style="padding:0; overflow:hidden; border-radius:var(--radius-md);">
+        <div class="m-sheet" style="transform:none; max-height:none; border-radius:0;">
+          <div class="m-sheet__handle"></div>
+          <div class="m-sheet__head">
+            <h3 class="m-sheet__title">Orden #1039 · acciones</h3>
+            <button class="btn btn-ghost btn-icon btn-sm"><i data-lucide="x"></i></button>
+          </div>
+          <div class="m-sheet__body">
+            <div class="m-menu">
+              <button class="m-menu-item"><i data-lucide="camera"></i> Fotos de taller</button>
+              <button class="m-menu-item"><i data-lucide="file-text"></i> Notas técnicas</button>
+              <button class="m-menu-item"><i data-lucide="printer"></i> Imprimir orden</button>
+              <button class="m-menu-item"><i data-lucide="clipboard-list"></i> Nota de entrega</button>
+              <div class="m-menu-divider"></div>
+              <button class="m-menu-item" disabled><i data-lucide="pencil"></i> Editar orden</button>
+              <button class="m-menu-item danger"><i data-lucide="trash-2"></i> Eliminar orden</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="mk-section" id="segment">
+    <h2>Segmented control + barra de acción</h2>
+    <p class="mk-desc">Conmutador segmentado (tabs / vista) y barra de acción inferior fija para pantallas
+       de detalle. <code>.m-segment</code> / <code>.m-actionbar</code></p>
+    <div class="mk-gallery">
+      <div class="mk-card">
+        <h3>Segmented</h3>
+        <div class="mk-demoarea">
+          <div class="m-segment">
+            <button class="m-segment__btn active"><i data-lucide="layout-grid"></i> Tarjetas</button>
+            <button class="m-segment__btn"><i data-lucide="table"></i> Tabla</button>
+          </div>
+        </div>
+      </div>
+      <div class="mk-card">
+        <h3>Action bar</h3>
+        <div class="mk-demoarea" style="position:relative; height:88px; padding:0;">
+          <div class="m-actionbar" style="position:absolute;">
+            <button class="btn btn-secondary btn-icon"><i data-lucide="printer"></i></button>
+            <button class="btn btn-primary"><i data-lucide="save"></i> Guardar orden</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="mk-section" id="states">
+    <h2>Estado vacío y carga</h2>
+    <p class="mk-desc">Estado sin resultados y tarjetas skeleton mientras carga.
+       <code>.m-empty</code> / <code>.m-order-card.is-skeleton</code></p>
+    <div class="mk-gallery">
+      <div class="mk-card">
+        <h3>Vacío</h3>
+        <div class="mk-demoarea">
+          <div class="m-empty">
+            <i data-lucide="clipboard-list"></i>
+            <strong>Sin órdenes</strong>
+            <p>No hay órdenes que coincidan con los filtros actuales.</p>
+            <button class="btn btn-secondary btn-sm">Limpiar filtros</button>
+          </div>
+        </div>
+      </div>
+      <div class="mk-card">
+        <h3>Carga</h3>
+        <div class="mk-demoarea">
+          <article class="m-order-card is-skeleton">
+            <span class="sk w-40"></span>
+            <span class="sk w-70"></span>
+            <span class="sk w-55"></span>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

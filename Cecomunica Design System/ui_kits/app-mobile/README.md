@@ -14,10 +14,16 @@ components — buttons, chips, forms, modals, toasts). This kit only adds the
 
 ```
 ui_kits/app-mobile/
-├── index.html   ← phone-frame demo (2 full screens + component gallery)
-├── mobile.css   ← mobile shell styles (.m-* namespace)
-└── README.md    ← this file
+├── index.html        ← portal landing (4 area cards; PoC + Contratos pending)
+├── foundations.html  ← mobile component gallery (.m-* primitives)
+├── ordenes.html      ← applied screens (Lista · Filtros · Equipos + Intervención)
+├── mobile.css        ← mobile shell styles (.m-* namespace) + shared demo chrome (.mk-*)
+└── README.md         ← this file
 ```
+
+Mirrors the desktop kit (`../app/`): portal index + one HTML per area. PoC and
+Contratos cards in the portal are disabled with a "Próximamente" badge until
+mobile screens exist for them.
 
 ---
 
@@ -176,8 +182,14 @@ kit stands as the design reference first.
 
 ## Planned next screens (next iteration)
 
+Land them in `ordenes.html` as new `.mk-section` blocks.
+
 - [x] **Equipos + intervención (por equipo)** — equipos sheet + per-equipo editor ✓ (`#pantalla-equipos`)
 - [ ] **Detalle de orden** — app bar (back) + tabs (Equipo, Cliente, Intervenciones, Fotos) + sticky action bar
 - [ ] **Nueva orden** — step-by-step mobile form (combobox cliente, tipo de servicio)
 - [ ] **Fotos taller** — mobile photo grid + camera capture tile
 - [ ] **Firmar entrega** — full-width signature pad
+
+If PoC or Contratos ever get dedicated mobile screens, create `poc.html` /
+`contratos.html` alongside `ordenes.html` and activate the corresponding card
+in `index.html` (remove `.mk-portal-disabled` and the `.mk-portal-soon` badge).
