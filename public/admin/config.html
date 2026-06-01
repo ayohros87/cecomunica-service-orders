@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Configuración — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+  <script src="../js/pages/admin-config.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="sliders-horizontal"></i> Configuración',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--narrow">
+
+    <div class="admin-toolbar">
+      <button id="btnReload" class="btn btn-ghost btn-sm">
+        <i data-lucide="refresh-cw"></i> Recargar
+      </button>
+      <button id="btnSave" class="btn btn-primary btn-sm">
+        <i data-lucide="save"></i> Guardar
+      </button>
+      <span class="spacer"></span>
+      <span id="lastUpdate" class="ts">—</span>
+    </div>
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Parámetros admin-tuneables que sobre-escriben los defaults hardcoded del
+        código. Si Firestore no responde, los consumidores siguen funcionando con
+        los defaults — ningún cambio aquí puede dejar la app sin servicio.
+        <span id="configMeta" style="display:block;margin-top:6px;color:var(--fg-3);"></span>
+      </div>
+    </div>
+
+    <div class="ds-card" style="padding:var(--sp-4);">
+      <form id="configForm" onsubmit="event.preventDefault(); return false;">
+        <!-- Renderizado por admin-config.js -->
+        <div class="empty-state-hint" style="text-align:center;color:var(--fg-3);padding:var(--sp-4);">
+          Cargando…
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>

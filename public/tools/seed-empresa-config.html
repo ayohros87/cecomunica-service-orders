@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tool — Seed empresa/config</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+</head>
+<body>
+  <div class="app-wrap">
+    <h1>Seed <code>empresa/config</code></h1>
+    <p>
+      Inicializa el documento <code>empresa/config</code> con los valores por defecto
+      definidos en <code>EmpresaService.CONFIG_DEFAULTS</code>. Usar UNA SOLA VEZ
+      antes de que el primer admin abra <code>admin/config.html</code>. Si el doc
+      ya existe, este tool NO lo modifica.
+    </p>
+    <p style="color:#b91c1c;">
+      <strong>Importante:</strong> esta página está excluida del deploy
+      (<code>firebase.json → hosting.ignore: tools/**</code>). Si por algún motivo
+      llega a producción, no hace nada destructivo — pero confirma siempre el rol
+      antes de ejecutar.
+    </p>
+
+    <pre id="defaults" style="background:#f4f4f4;padding:12px;border-radius:6px;font-size:13px;"></pre>
+
+    <button id="btnRun" class="btn btn-primary">Seed (idempotente)</button>
+    <button id="btnRunForce" class="btn btn-danger" style="margin-left:8px;">Seed FORZADO (sobrescribe valores no editados)</button>
+
+    <pre id="out" style="margin-top:16px;background:#f4f4f4;padding:12px;border-radius:6px;font-size:13px;"></pre>
+  </div>
+
+  <script>
+    const out = document.getElementById('out');
+    const log = (msg) => out.textContent += msg + '\n';
+
+    document.getElementById('defaults').textContent =
+      JSON.stringify(EmpresaService.CONFIG_DEFAULTS, null, 2);
+
+    async function ensureAdmin() {
+      const user = firebase.auth().currentUser;
+      if (!user) throw new Error('Sin sesión. Inicia sesión primero.');
+      const doc = await firebase.firestore().collection('usuarios').doc(user.uid).get();
+      const rol = doc.exists ? doc.data().rol : null;
+      if (rol !== ROLES.ADMIN) throw new Error('Solo admin. Rol actual: ' + (rol || 'ninguno'));
+      log('✓ Admin verificado: ' + user.email);
+    }
+
+    async function run(force) {
+      out.textContent = '';
+      try {
+        await ensureAdmin();
+        const existing = await EmpresaService.getDoc('config');
+        if (existing && !force) {
+          log('⚠ empresa/config YA EXISTE. No se modifica. Usa "FORZADO" para sobrescribir.');
+          log('Doc actual:');
+          log(JSON.stringify(existing, null, 2));
+          return;
+        }
+        log(force ? 'Sobrescribiendo (merge con defaults)…' : 'Creando empresa/config…');
+        await EmpresaService.setConfig({ ...EmpresaService.CONFIG_DEFAULTS });
+        log('✓ Guardado.');
+        const after = await EmpresaService.getDoc('config');
+        log('Doc resultante:');
+        log(JSON.stringify(after, null, 2));
+      } catch (err) {
+        log('✗ Error: ' + (err.message || err.code || err));
+      }
+    }
+
+    document.getElementById('btnRun').addEventListener('click', () => {
+      firebase.auth().onAuthStateChanged(() => run(false), () => {}, () => {});
+      run(false);
+    });
+    document.getElementById('btnRunForce').addEventListener('click', () => run(true));
+  </script>
+</body>
+</html>
