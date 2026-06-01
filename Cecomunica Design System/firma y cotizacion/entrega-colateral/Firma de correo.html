@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Firma de correo</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  :root{
+    --navy:#0B2A47; --navy-2:#143A5C; --signal:#00B4D8; --blue:#0091D7;
+    --ink:#0A1219; --paper:#F5F7FA; --stone:#E4E9EE; --stone-2:#C8D1DA;
+    --fg2:#2F3942; --fg3:#4A5560; --fg4:#6B7884;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:var(--paper); font-family:var(--font-body); color:var(--ink); }
+  .wrap{ max-width:1120px; margin:0 auto; padding:40px 32px 80px; }
+
+  .eb{ font:700 12px/1 var(--font-mono); letter-spacing:.18em; text-transform:uppercase; color:var(--blue); }
+  h1{ font-family:var(--font-display); font-weight:700; font-size:38px; letter-spacing:-0.02em; margin:14px 0 8px; }
+  .sub{ font-size:15px; line-height:1.55; color:var(--fg3); max-width:62ch; margin:0 0 36px; }
+
+  .grid{ display:grid; grid-template-columns:340px 1fr; gap:32px; align-items:start; }
+
+  /* Form panel */
+  .panel{ background:#fff; border:1px solid var(--stone); border-radius:14px; padding:28px; }
+  .panel h2{ font-family:var(--font-display); font-weight:700; font-size:18px; margin:0 0 18px; }
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:16px; }
+  .field label{ font-size:12px; font-weight:600; color:var(--fg3); }
+  .field input{
+    font-family:var(--font-body); font-size:14px; color:var(--ink); background:var(--paper);
+    border:1px solid var(--stone-2); border-radius:7px; padding:9px 12px; outline:none;
+    transition:border-color .12s, box-shadow .12s;
+  }
+  .field input:focus{ border-color:var(--navy); box-shadow:0 0 0 3px rgba(0,145,215,.18); background:#fff; }
+  .field .hint{ font-size:11px; color:var(--fg4); }
+
+  /* Preview side */
+  .previewcol{ display:flex; flex-direction:column; gap:18px; }
+  .mailcard{ background:#fff; border:1px solid var(--stone); border-radius:14px; padding:34px 36px; box-shadow:0 8px 24px rgba(11,42,71,.06); }
+  .mailcard .salut{ font-family:Arial, Helvetica, sans-serif; font-size:14px; color:#2F3942; margin-bottom:22px; }
+  .mailcard .rule{ height:1px; background:var(--stone); margin:0 0 22px; }
+
+  .actions{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .btn{
+    font-family:var(--font-body); font-weight:600; font-size:13px; border-radius:7px; padding:11px 18px; cursor:pointer;
+    border:1px solid transparent; display:inline-flex; align-items:center; gap:8px; transition:background .12s, border-color .12s;
+  }
+  .btn-primary{ background:var(--navy); color:#fff; border-color:var(--navy-2); }
+  .btn-primary:hover{ background:var(--navy-2); }
+  .btn-ghost{ background:#fff; color:var(--fg2); border-color:var(--stone-2); }
+  .btn-ghost:hover{ border-color:var(--navy); color:var(--navy); }
+  .btn svg{ width:16px; height:16px; }
+  .copied{ font-size:13px; font-weight:600; color:#1FA56B; opacity:0; transition:opacity .2s; }
+  .copied.show{ opacity:1; }
+
+  .codebox{ display:none; }
+  .codebox.show{ display:block; }
+  .codebox textarea{
+    width:100%; height:200px; font-family:var(--font-mono); font-size:11.5px; line-height:1.5; color:var(--fg2);
+    background:#fff; border:1px solid var(--stone-2); border-radius:10px; padding:16px; resize:vertical; outline:none;
+  }
+
+  /* Tips */
+  .tips{ background:#fff; border:1px solid var(--stone); border-radius:14px; padding:24px 28px; }
+  .tips h3{ font-family:var(--font-display); font-weight:700; font-size:16px; margin:0 0 14px; display:flex; align-items:center; gap:10px; }
+  .tips ol{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:10px; }
+  .tips li{ font-size:13px; line-height:1.5; color:var(--fg3); }
+  .tips li b{ color:var(--ink); font-weight:600; }
+  .tips code{ font-family:var(--font-mono); font-size:12px; background:var(--paper); padding:2px 6px; border-radius:4px; color:var(--navy); }
+  .warn{ margin-top:14px; padding:12px 14px; background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; font-size:12px; line-height:1.5; color:#92400E; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eb">Brand package · Colateral</div>
+  <h1>Firma de correo</h1>
+  <p class="sub">Plantilla oficial de firma de correo. Rellená los datos, copiá la firma y pegala en la configuración de tu cliente (Gmail, Outlook, Apple Mail). Construida con tablas y estilos inline para que se vea igual en todos los clientes.</p>
+
+  <div class="grid">
+    <!-- Form -->
+    <div class="panel">
+      <h2>Tus datos</h2>
+      <div class="field">
+        <label for="f-nombre">Nombre completo</label>
+        <input id="f-nombre" type="text" value="Sandra Gil">
+      </div>
+      <div class="field">
+        <label for="f-cargo">Cargo</label>
+        <input id="f-cargo" type="text" value="Ejecutiva de Ventas">
+      </div>
+      <div class="field">
+        <label for="f-tel">Teléfono</label>
+        <input id="f-tel" type="text" value="+507 279-5570">
+      </div>
+      <div class="field">
+        <label for="f-cel">Celular</label>
+        <input id="f-cel" type="text" value="+507 6151-5560">
+      </div>
+      <div class="field">
+        <label for="f-email">Correo electrónico</label>
+        <input id="f-email" type="text" value="sandra.gil@cecomunica.com">
+      </div>
+      <div class="field">
+        <label for="f-logo">URL del logo (hospedado)</label>
+        <input id="f-logo" type="text" value="assets/email-logo-mark.png">
+        <span class="hint">Reemplazá por la URL pública del PNG antes de desplegar.</span>
+      </div>
+    </div>
+
+    <!-- Preview + actions -->
+    <div class="previewcol">
+      <div class="mailcard">
+        <div class="salut">Saludos cordiales,</div>
+        <div class="rule"></div>
+        <div id="preview"></div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="copyBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          Copiar firma
+        </button>
+        <button class="btn btn-ghost" id="codeBtn">Ver código HTML</button>
+        <span class="copied" id="copied">¡Copiada!</span>
+      </div>
+
+      <div class="codebox" id="codebox">
+        <textarea id="code" readonly></textarea>
+      </div>
+
+      <div class="tips">
+        <h3>Cómo instalarla</h3>
+        <ol>
+          <li><b>Hospedá el logo.</b> Subí <code>assets/email-logo-mark.png</code> (incluido en esta carpeta) a un servidor o CDN y poné su URL pública en el campo "URL del logo".</li>
+          <li><b>Gmail:</b> Ajustes → Ver toda la configuración → Firma → pegá con <code>Ctrl/Cmd+V</code>.</li>
+          <li><b>Outlook:</b> Archivo → Opciones → Correo → Firmas → pegá en el editor.</li>
+          <li><b>Apple Mail:</b> Mail → Ajustes → Firmas → pegá y desmarcá "usar fuente predeterminada".</li>
+        </ol>
+        <div class="warn">El correo no carga fuentes de marca (Barlow / IBM Plex) ni SVG: la firma usa <b>Arial</b> y el logo va como <b>imagen PNG</b>. Por eso se ve distinta a la papelería, pero consistente en color y estructura.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  function buildSig(){
+    const nombre = esc($('f-nombre').value || '');
+    const cargo  = esc($('f-cargo').value || '');
+    const tel    = esc($('f-tel').value || '');
+    const cel    = esc($('f-cel').value || '');
+    const email  = esc($('f-email').value || '');
+    const logo   = esc($('f-logo').value || '');
+
+    const phones = [
+      tel ? '<span style="color:#6B7884;font-weight:bold;">T</span>&nbsp;' + tel : '',
+      cel ? '<span style="color:#6B7884;font-weight:bold;">C</span>&nbsp;' + cel : ''
+    ].filter(Boolean).join('&nbsp;&nbsp;&nbsp;');
+
+    return ''
++ '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">'
++   '<tr>'
++     '<td style="vertical-align:middle;padding:0 16px 0 0;">'
++       '<img src="' + logo + '" alt="CeComunica" width="56" height="56" style="display:block;border:0;border-radius:10px;">'
++     '</td>'
++     '<td style="vertical-align:middle;padding:1px 0 1px 16px;border-left:1px solid #DDE4EB;">'
++       '<div style="font-size:15px;font-weight:bold;color:#0B2A47;line-height:1.2;">' + nombre + '</div>'
++       '<div style="font-size:12px;color:#4A5560;line-height:1.5;padding-top:2px;">' + cargo + '</div>'
++       '<div style="font-size:11px;color:#6B7884;line-height:1.5;">C Comunica, S.A.</div>'
++       '<div style="font-size:12px;color:#2F3942;line-height:1.7;padding-top:7px;">'
++         phones + '<br>'
++         '<a href="mailto:' + email + '" style="color:#0091D7;text-decoration:none;">' + email + '</a><br>'
++         '<a href="https://www.cecomunica.com" style="color:#0091D7;text-decoration:none;">www.cecomunica.com</a>'
++       '</div>'
++       '<div style="font-size:9px;letter-spacing:1.5px;color:#9AA7B4;padding-top:9px;">SOLUCIONES EN COMUNICACIONES</div>'
++     '</td>'
++   '</tr>'
++ '</table>';
+  }
+
+  function render(){
+    const html = buildSig();
+    $('preview').innerHTML = html;
+    $('code').value = html;
+  }
+
+  ['f-nombre','f-cargo','f-tel','f-cel','f-email','f-logo'].forEach(id => $(id).addEventListener('input', render));
+
+  $('copyBtn').addEventListener('click', async () => {
+    const html = buildSig();
+    const plain = [$('f-nombre').value, $('f-cargo').value + ' · C Comunica, S.A.', $('f-tel').value + '  ' + $('f-cel').value, $('f-email').value, 'www.cecomunica.com'].join('\n');
+    let ok = false;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], {type:'text/html'}),
+        'text/plain': new Blob([plain], {type:'text/plain'})
+      })]);
+      ok = true;
+    } catch(e){
+      try { await navigator.clipboard.writeText(html); ok = true; } catch(e2){ ok = false; }
+    }
+    if(!ok){ $('codebox').classList.add('show'); $('code').select(); }
+    const c = $('copied'); c.classList.add('show'); setTimeout(()=>c.classList.remove('show'), 1800);
+  });
+
+  $('codeBtn').addEventListener('click', () => {
+    $('codebox').classList.toggle('show');
+  });
+
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,265 @@
+/* =============================================================
+   Cecomunica Design System — Tokens
+   Mission-critical communications · Panama
+   ============================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* -----------------------------------------------------------
+     COLOR — Primitives
+     ----------------------------------------------------------- */
+
+  /* Brand blue scale (the "CeComunica" cyan-blue from the logo).
+     -500 is the brand anchor; the bright blue used in the wordmark,
+     icons on the business card, and the footer band. */
+  --blue-50:  #E6F4FB;
+  --blue-100: #CCE9F7;
+  --blue-200: #99D3EF;
+  --blue-300: #66BCE7;
+  --blue-400: #33C3E0;
+  --blue-500: #00B4D8;  /* Signal cyan (accent) */
+  --blue-600: #0091B0;
+  --blue-700: #005781;
+  --blue-800: #003A56;
+  --blue-900: #001D2B;
+
+  /* Cyan/light-blue accent — the translucent layered cubes + dot
+     grid in the logo mark. Used for hover states, highlights,
+     and signal/connectivity visualizations. */
+  --cyan-50:  #ECF7FE;
+  --cyan-100: #D0EAFB;
+  --cyan-200: #A1D5F7;
+  --cyan-300: #72C0F3;
+  --cyan-400: #43AAEF;
+  --cyan-500: #1FA0E1;  /* Footer band, accent */
+  --cyan-600: #1880B4;
+
+  /* Navy — hero/banner backgrounds. The dark gradient behind the
+     product photography is built from these. */
+  --navy-700: #0F3A5F;
+  --navy-800: #0B2A47;  /* Brand primary navy */
+  --navy-900: #061829;
+  --navy-950: #03101C;
+
+  /* Neutrals — corporate gray scale. Industrial, no warm cast. */
+  --gray-0:   #FFFFFF;
+  --gray-50:  #F7F9FB;
+  --gray-100: #EEF2F6;
+  --gray-200: #DDE4EB;
+  --gray-300: #C2CCD6;
+  --gray-400: #9AA7B4;
+  --gray-500: #6B7884;
+  --gray-600: #4A5560;
+  --gray-700: #2F3942;
+  --gray-800: #1C232B;
+  --gray-900: #0E1418;
+
+  /* Semantic status — kept restrained, enterprise palette */
+  --status-online:  #1FA56B;  /* radio active / connected */
+  --status-warning: #E0A93A;  /* signal degraded */
+  --status-critical:#D24545;  /* offline / fault */
+  --status-info:    var(--blue-500);
+
+  /* -----------------------------------------------------------
+     COLOR — Semantic tokens (use these in components)
+     ----------------------------------------------------------- */
+
+  /* Surfaces */
+  --surface-page:      var(--gray-50);
+  --surface-card:      var(--gray-0);
+  --surface-sunken:    var(--gray-100);
+  --surface-inverse:   var(--navy-900);
+  --surface-inverse-2: var(--navy-800);
+
+  /* Foreground / text */
+  --fg-1: var(--gray-900);   /* primary text, headings */
+  --fg-2: var(--gray-700);   /* body */
+  --fg-3: var(--gray-500);   /* secondary, captions */
+  --fg-4: var(--gray-400);   /* placeholder, disabled */
+  --fg-on-brand:   var(--gray-0);
+  --fg-on-inverse: var(--gray-0);
+
+  /* Borders / dividers */
+  --border-subtle: var(--gray-200);
+  --border-default:var(--gray-300);
+  --border-strong: var(--gray-500);
+  --border-brand:  var(--blue-500);
+
+  /* Brand — anchored on deep navy. The bright cyan-blue is the
+     SIGNAL/accent color, used for active states, links, the
+     monogram's center channel, and "in transmission" moments. */
+  --brand:           var(--navy-800);
+  --brand-hover:     var(--navy-700);
+  --brand-press:     var(--navy-900);
+  --brand-soft:      var(--blue-50);
+  --brand-soft-hov:  var(--blue-100);
+  --accent:          var(--blue-500);   /* signal cyan — #0091D7 */
+  --accent-hover:    var(--blue-600);
+
+  /* Hero / signature dark surface — used behind product photos,
+     section headers, and CTA bands. Anchored on navy. */
+  --hero-bg-1: var(--navy-900);
+  --hero-bg-2: var(--navy-700);
+
+  /* -----------------------------------------------------------
+     TYPOGRAPHY — Family stacks
+     ----------------------------------------------------------- */
+
+  /* Display: Barlow — semi-condensed, industrial, telecom-adjacent.
+     Used for headlines, hero titles, large numbers/specs.
+     Substitution flag: original collateral appears to use a
+     proprietary humanist sans for the wordmark — Barlow is the
+     closest-feel Google Font. */
+  --font-display: "Barlow", "Helvetica Neue", Arial, sans-serif;
+
+  /* Body: IBM Plex Sans — technical, professional, broad weight
+     range. Used for body copy, UI, navigation, forms. */
+  --font-body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+
+  /* Mono: IBM Plex Mono — for frequencies, model numbers, codes,
+     callsigns, and any technical spec readout. */
+  --font-mono: "IBM Plex Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  /* -----------------------------------------------------------
+     TYPOGRAPHY — Type scale (semantic)
+     Display sizes are large for hero/marketing; UI sizes are
+     conservative for dense enterprise screens.
+     ----------------------------------------------------------- */
+  --fs-display-xl: 72px;  --lh-display-xl: 1.05;  --tr-display-xl: -0.02em;
+  --fs-display-l:  56px;  --lh-display-l:  1.08;  --tr-display-l:  -0.02em;
+  --fs-display-m:  44px;  --lh-display-m:  1.12;  --tr-display-m:  -0.015em;
+  --fs-h1:         36px;  --lh-h1:         1.18;  --tr-h1:         -0.01em;
+  --fs-h2:         28px;  --lh-h2:         1.22;  --tr-h2:         -0.005em;
+  --fs-h3:         22px;  --lh-h3:         1.30;  --tr-h3:          0;
+  --fs-h4:         18px;  --lh-h4:         1.35;  --tr-h4:          0;
+  --fs-body-l:     17px;  --lh-body-l:     1.55;
+  --fs-body:       15px;  --lh-body:       1.55;
+  --fs-body-s:     13px;  --lh-body-s:     1.50;
+  --fs-caption:    12px;  --lh-caption:    1.40;
+  --fs-eyebrow:    12px;  --lh-eyebrow:    1.30;  --tr-eyebrow:    0.14em;
+  --fs-mono:       13px;  --lh-mono:       1.50;
+
+  /* -----------------------------------------------------------
+     SPACING — 4px base
+     ----------------------------------------------------------- */
+  --sp-0:   0;
+  --sp-1:   4px;
+  --sp-2:   8px;
+  --sp-3:   12px;
+  --sp-4:   16px;
+  --sp-5:   20px;
+  --sp-6:   24px;
+  --sp-8:   32px;
+  --sp-10:  40px;
+  --sp-12:  48px;
+  --sp-16:  64px;
+  --sp-20:  80px;
+  --sp-24:  96px;
+  --sp-32:  128px;
+
+  /* -----------------------------------------------------------
+     RADII — Restrained. Enterprise/industrial brands keep
+     corners modest; nothing should feel "consumer-app fluffy".
+     ----------------------------------------------------------- */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;   /* default for buttons, inputs */
+  --radius-lg: 10px;  /* cards */
+  --radius-xl: 16px;  /* hero panels */
+  --radius-pill: 999px;
+
+  /* -----------------------------------------------------------
+     SHADOWS — Crisp, low spread. We are not a fluffy SaaS app.
+     ----------------------------------------------------------- */
+  --shadow-xs: 0 1px 2px rgba(6, 24, 41, 0.06);
+  --shadow-sm: 0 1px 2px rgba(6, 24, 41, 0.06), 0 1px 3px rgba(6, 24, 41, 0.08);
+  --shadow-md: 0 4px 8px rgba(6, 24, 41, 0.06), 0 2px 4px rgba(6, 24, 41, 0.06);
+  --shadow-lg: 0 12px 24px rgba(6, 24, 41, 0.08), 0 4px 8px rgba(6, 24, 41, 0.06);
+  --shadow-xl: 0 24px 48px rgba(6, 24, 41, 0.12), 0 8px 16px rgba(6, 24, 41, 0.06);
+
+  /* Inset for pressed / sunken inputs */
+  --shadow-inset: inset 0 1px 2px rgba(6, 24, 41, 0.08);
+
+  /* Brand glow — used sparingly (focus rings, signal indicators) */
+  --ring-focus: 0 0 0 3px rgba(0, 145, 215, 0.30);
+  --ring-error: 0 0 0 3px rgba(210, 69, 69, 0.28);
+
+  /* -----------------------------------------------------------
+     MOTION
+     ----------------------------------------------------------- */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:    120ms;
+  --dur-base:    200ms;
+  --dur-slow:    320ms;
+
+  /* -----------------------------------------------------------
+     LAYOUT
+     ----------------------------------------------------------- */
+  --container-max: 1280px;
+  --container-pad: 24px;
+
+  /* -----------------------------------------------------------
+     SIGNATURE GRADIENTS / PATTERNS
+     ----------------------------------------------------------- */
+  /* Hero background: the dark navy field used behind product
+     photography on the website hero banners. */
+  --gradient-hero:
+    radial-gradient(ellipse at 70% 50%, var(--navy-700) 0%, var(--navy-900) 70%);
+
+  /* Brand band: navy-to-signal-cyan gradient, used along the
+     bottom edge of cards, hero panels, and collateral. */
+  --gradient-brand-band:
+    linear-gradient(90deg, var(--navy-800) 0%, var(--blue-500) 100%);
+
+  /* Diagonal corporate "paper" pattern — subtle off-white wedges
+     used on collateral (business card front). Applied as a
+     background-image. */
+  --pattern-corporate-diagonals:
+    linear-gradient(115deg,
+      var(--gray-0) 0% 38%,
+      var(--gray-100) 38% 39%,
+      var(--gray-0) 39% 60%,
+      var(--gray-100) 60% 61%,
+      var(--gray-0) 61% 100%);
+}
+
+/* =============================================================
+   SEMANTIC ELEMENT DEFAULTS
+   Apply these via classes (no global tag overrides) so adopting
+   the system is opt-in and predictable.
+   ============================================================= */
+
+.cc-display-xl { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-display-xl); line-height: var(--lh-display-xl); letter-spacing: var(--tr-display-xl); color: var(--fg-1); }
+.cc-display-l  { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-display-l);  line-height: var(--lh-display-l);  letter-spacing: var(--tr-display-l);  color: var(--fg-1); }
+.cc-display-m  { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-display-m);  line-height: var(--lh-display-m);  letter-spacing: var(--tr-display-m);  color: var(--fg-1); }
+
+.cc-h1 { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-h1); line-height: var(--lh-h1); letter-spacing: var(--tr-h1); color: var(--fg-1); }
+.cc-h2 { font-family: var(--font-display); font-weight: 600; font-size: var(--fs-h2); line-height: var(--lh-h2); letter-spacing: var(--tr-h2); color: var(--fg-1); }
+.cc-h3 { font-family: var(--font-body);    font-weight: 600; font-size: var(--fs-h3); line-height: var(--lh-h3); color: var(--fg-1); }
+.cc-h4 { font-family: var(--font-body);    font-weight: 600; font-size: var(--fs-h4); line-height: var(--lh-h4); color: var(--fg-1); }
+
+.cc-body-l  { font-family: var(--font-body); font-weight: 400; font-size: var(--fs-body-l); line-height: var(--lh-body-l); color: var(--fg-2); }
+.cc-body    { font-family: var(--font-body); font-weight: 400; font-size: var(--fs-body);   line-height: var(--lh-body);   color: var(--fg-2); }
+.cc-body-s  { font-family: var(--font-body); font-weight: 400; font-size: var(--fs-body-s); line-height: var(--lh-body-s); color: var(--fg-3); }
+.cc-caption { font-family: var(--font-body); font-weight: 500; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--fg-3); }
+
+.cc-eyebrow {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-eyebrow);
+  line-height: var(--lh-eyebrow);
+  letter-spacing: var(--tr-eyebrow);
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.cc-mono {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: var(--fs-mono);
+  line-height: var(--lh-mono);
+  color: var(--fg-1);
+  font-feature-settings: "tnum" 1;
+}

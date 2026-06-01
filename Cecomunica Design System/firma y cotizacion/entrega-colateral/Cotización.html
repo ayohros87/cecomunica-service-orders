@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CeComunica · Cotización</title>
+<link rel="stylesheet" href="colors_and_type.css">
+<style>
+  :root{
+    --navy:#0B2A47; --navy-2:#143A5C; --signal:#00B4D8; --blue:#0091D7;
+    --ink:#0A1219; --paper:#F5F7FA; --stone:#E4E9EE; --stone-2:#C8D1DA;
+    --fg2:#2F3942; --fg3:#4A5560; --fg4:#6B7884;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; background:#5b6470; font-family:var(--font-body); color:var(--ink); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  /* Screen backdrop */
+  .stage{ padding:40px; display:flex; justify-content:center; }
+
+  /* Letter page 816×1056 @96dpi */
+  .page{
+    width:816px; min-height:1056px; background:#fff; position:relative;
+    box-shadow:0 18px 50px rgba(0,0,0,.28); display:flex; flex-direction:column;
+  }
+
+  /* ===== Header band ===== */
+  .hd{ background:var(--navy); color:#fff; padding:16px 48px; display:flex; align-items:center; justify-content:space-between; position:relative; overflow:hidden; }
+  .hd::before{
+    content:""; position:absolute; inset:0;
+    background-image:radial-gradient(circle, rgba(0,180,216,.45) 1.1px, transparent 1.2px);
+    background-size:26px 26px;
+    -webkit-mask-image:radial-gradient(ellipse at 92% 50%, #000 0%, transparent 62%);
+            mask-image:radial-gradient(ellipse at 92% 50%, #000 0%, transparent 62%);
+    opacity:.5; pointer-events:none;
+  }
+  .lockup{ display:flex; align-items:center; gap:14px; position:relative; }
+  .lockup .divider{ width:1px; height:42px; background:rgba(255,255,255,.25); }
+  .lockup .wm{ font-family:var(--font-display); font-weight:800; text-transform:uppercase; letter-spacing:.01em; font-size:25px; color:#fff; line-height:1; }
+  .lockup .tag{ font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.72); margin-top:5px; }
+  .hd-right{ text-align:right; position:relative; }
+  .hd-right .doctype{ font-family:var(--font-display); font-weight:700; font-size:30px; letter-spacing:.04em; text-transform:uppercase; line-height:1; color:#fff; }
+  .hd-right .num{ font-family:var(--font-mono); font-size:14px; color:var(--signal); margin-top:8px; letter-spacing:.04em; }
+
+  /* ===== Meta row (De / Para) ===== */
+  .meta{ display:grid; grid-template-columns:1fr 1fr; }
+  .meta .block{ padding:12px 48px; }
+  .meta .block + .block{ border-left:1px solid var(--stone); }
+  .meta .lbl{ font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--signal); margin-bottom:10px; }
+  .meta .co{ font-family:var(--font-display); font-weight:700; font-size:16px; line-height:1.2; color:var(--ink); margin-bottom:6px; }
+  .meta .ln{ font-size:12.5px; line-height:1.55; color:var(--fg3); }
+  .meta .ln b{ color:var(--fg2); font-weight:600; }
+  .meta .mono{ font-family:var(--font-mono); font-size:12px; }
+  .meta .dates{ margin-top:8px; display:flex; gap:28px; }
+  .meta .dates .d .k{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--fg4); }
+  .meta .dates .d .v{ font-family:var(--font-mono); font-size:13px; color:var(--ink); margin-top:3px; }
+
+  .intro{ padding:8px 48px 2px; font-size:12px; line-height:1.5; color:var(--fg3); }
+
+  /* ===== Items table ===== */
+  .items{ padding:10px 48px 0; }
+  table{ width:100%; border-collapse:collapse; }
+  thead th{
+    font-size:10px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#fff;
+    background:var(--navy); padding:8px 14px; text-align:left;
+  }
+  thead th.r{ text-align:right; } thead th.c{ text-align:center; }
+  thead th:first-child{ border-radius:5px 0 0 0; } thead th:last-child{ border-radius:0 5px 0 0; }
+  tbody td{ padding:6px 14px; border-bottom:1px solid var(--stone); vertical-align:top; font-size:12.5px; color:var(--fg2); }
+  tbody tr:nth-child(even){ background:var(--paper); }
+  td.idx{ font-family:var(--font-mono); color:var(--fg4); font-size:11.5px; width:34px; }
+  td .desc{ font-weight:600; color:var(--ink); font-size:13px; }
+  td .spec{ font-size:11px; color:var(--fg4); margin-top:3px; }
+  td .model{ font-family:var(--font-mono); color:var(--blue); }
+  td.c{ text-align:center; } td.r{ text-align:right; }
+  td.num{ font-family:var(--font-mono); font-size:12.5px; color:var(--ink); white-space:nowrap; }
+  td.qty{ font-family:var(--font-mono); font-size:12.5px; color:var(--fg2); text-align:center; width:60px; }
+
+  /* ===== Totals + conditions ===== */
+  .lower{ display:flex; gap:40px; padding:12px 48px 0; align-items:flex-start; }
+  .conditions{ flex:1; }
+  .conditions .lbl{ font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase; color:var(--signal); margin-bottom:12px; }
+  .cgrid{ display:grid; grid-template-columns:auto 1fr; gap:6px 16px; font-size:11.5px; }
+  .cgrid .k{ color:var(--fg4); }
+  .cgrid .v{ color:var(--fg2); font-weight:500; }
+  .totals{ width:290px; flex-shrink:0; }
+  .trow{ display:flex; justify-content:space-between; padding:8px 0; font-size:13px; color:var(--fg3); border-bottom:1px solid var(--stone); }
+  .trow .v{ font-family:var(--font-mono); color:var(--ink); }
+  .trow.disc .v{ color:var(--blue); }
+  .trow.total{
+    margin-top:8px; padding:14px 16px; border:0; border-radius:8px; background:var(--navy); color:#fff;
+    font-family:var(--font-display); font-weight:700; font-size:18px; align-items:baseline;
+  }
+  .trow.total .v{ font-family:var(--font-mono); font-weight:700; color:#fff; font-size:20px; }
+  .trow.total .lbl-t{ text-transform:uppercase; letter-spacing:.04em; }
+
+  /* ===== Signature ===== */
+  .sign{ display:flex; gap:48px; padding:12px 48px 0; margin-top:auto; }
+  .sign .col{ flex:1; }
+  .sign .line{ border-top:1.5px solid var(--ink); padding-top:8px; }
+  .sign .nm{ font-weight:700; font-size:13px; color:var(--ink); }
+  .sign .rl{ font-size:11.5px; color:var(--fg4); margin-top:2px; }
+  .sign .ct{ font-family:var(--font-mono); font-size:11px; color:var(--fg3); margin-top:6px; line-height:1.5; }
+
+  .note{ padding:10px 48px 8px; font-size:10px; line-height:1.5; color:var(--fg4); }
+
+  /* ===== Footer brand band ===== */
+  .ft{ margin-top:8px; display:flex; align-items:center; justify-content:space-between; padding:10px 48px; background:var(--ink); color:rgba(255,255,255,.7); font-size:10.5px; }
+  .ft .web{ font-family:var(--font-mono); color:var(--signal); }
+  .band{ height:6px; background:linear-gradient(90deg, var(--navy) 0%, var(--signal) 100%); }
+
+  /* Print button (screen only) */
+  .printbar{ position:fixed; top:20px; right:20px; z-index:50; }
+  .printbar button{
+    font-family:var(--font-body); font-weight:600; font-size:13px; color:#fff; background:var(--navy);
+    border:1px solid var(--navy-2); border-radius:6px; padding:10px 16px; cursor:pointer; display:inline-flex; align-items:center; gap:8px;
+    box-shadow:0 4px 12px rgba(0,0,0,.25);
+  }
+  .printbar button:hover{ background:var(--navy-2); }
+  .printbar svg{ width:16px; height:16px; }
+
+  @media print{
+    html,body{ background:#fff; }
+    .stage{ padding:0; }
+    .page{ box-shadow:none; width:100%; min-height:auto; }
+    .printbar{ display:none; }
+    @page{ size:letter; margin:0; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <linearGradient id="bk-cc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD3EE"></stop><stop offset="1" stop-color="#0091B0"></stop></linearGradient>
+  <linearGradient id="bk-iplate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"></stop><stop offset="1" stop-color="#E7EDF3"></stop></linearGradient>
+  <linearGradient id="bk-inavy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4267"></stop><stop offset="1" stop-color="#06203A"></stop></linearGradient>
+  <radialGradient id="bk-iglow"><stop offset="0" stop-color="#00B4D8" stop-opacity="0.45"></stop><stop offset="1" stop-color="#00B4D8" stop-opacity="0"></stop></radialGradient>
+</defs></svg>
+
+<div class="printbar">
+  <button onclick="window.print()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+    Imprimir / PDF
+  </button>
+</div>
+
+<div class="stage">
+  <div class="page">
+
+    <!-- Header -->
+    <div class="hd">
+      <div class="lockup">
+        <svg width="52" height="52" viewBox="0 0 64 64" aria-hidden="true">
+          <rect width="64" height="64" rx="10" fill="url(#bk-iplate)"></rect>
+          <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#bk-inavy)" stroke-width="6" fill="none" stroke-linecap="round"></path>
+          <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#bk-cc)" stroke-width="6" fill="none" stroke-linecap="round"></path>
+          <circle cx="32" cy="32" r="6" fill="url(#bk-iglow)"></circle>
+          <rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"></rect>
+        </svg>
+        <div class="divider"></div>
+        <div>
+          <div class="wm">CeComunica</div>
+          <div class="tag">Soluciones en Comunicaciones</div>
+        </div>
+      </div>
+      <div class="hd-right">
+        <div class="doctype">Cotización</div>
+        <div class="num">N° COT-2025-0142</div>
+      </div>
+    </div>
+
+    <!-- De / Para -->
+    <div class="meta">
+      <div class="block">
+        <div class="lbl">De</div>
+        <div class="co">C Comunica, S.A.</div>
+        <div class="ln">
+          RUC <span class="mono">155678901-2-2024 DV 33</span><br>
+          Punta Paitilla, Calle 53 Este<br>
+          Ciudad de Panamá, Panamá<br>
+          <b>Tel</b> <span class="mono">+507 279-5570</span> · <b>Cel</b> <span class="mono">+507 6151-5555</span><br>
+          ventas@cecomunica.com
+        </div>
+      </div>
+      <div class="block">
+        <div class="lbl">Para</div>
+        <div class="co">Autoridad del Canal de Panamá</div>
+        <div class="ln">
+          <b>Atención:</b> Ing. Juan Pérez · Jefe de Telecomunicaciones<br>
+          RUC <span class="mono">1020304-1-123456</span><br>
+          <b>Tel</b> <span class="mono">+507 272-0000</span><br>
+          juan.perez@pancanal.com
+        </div>
+        <div class="dates">
+          <div class="d"><div class="k">Fecha</div><div class="v">12 May 2025</div></div>
+          <div class="d"><div class="k">Validez</div><div class="v">15 días</div></div>
+          <div class="d"><div class="k">Moneda</div><div class="v">USD</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="intro">
+      Estimados señores: de acuerdo con su solicitud, presentamos la siguiente cotización de equipos de radiocomunicación profesional y servicios asociados.
+    </div>
+
+    <!-- Items -->
+    <div class="items">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Descripción</th>
+            <th class="c">Cant.</th>
+            <th class="r">Precio unit.</th>
+            <th class="r">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="idx">01</td>
+            <td>
+              <div class="desc">Radio portátil DMR Tier II — Hytera HP785</div>
+              <div class="spec">UHF 400–470 MHz · IP67 · Bluetooth · GPS · <span class="model">HP785-U1</span></div>
+            </td>
+            <td class="qty">12</td>
+            <td class="num r">$685.00</td>
+            <td class="num r">$8,220.00</td>
+          </tr>
+          <tr>
+            <td class="idx">02</td>
+            <td>
+              <div class="desc">Batería Li-ion 2000 mAh</div>
+              <div class="spec">Compatible HP785 · <span class="model">BL2010</span></div>
+            </td>
+            <td class="qty">12</td>
+            <td class="num r">$48.00</td>
+            <td class="num r">$576.00</td>
+          </tr>
+          <tr>
+            <td class="idx">03</td>
+            <td>
+              <div class="desc">Cargador rápido individual</div>
+              <div class="spec">Base de escritorio · <span class="model">CH10L07</span></div>
+            </td>
+            <td class="qty">12</td>
+            <td class="num r">$39.00</td>
+            <td class="num r">$468.00</td>
+          </tr>
+          <tr>
+            <td class="idx">04</td>
+            <td>
+              <div class="desc">Repetidor DMR Tier II — Hytera HR1065</div>
+              <div class="spec">UHF · 50 W · doble ranura de tiempo · <span class="model">HR1065-U</span></div>
+            </td>
+            <td class="qty">1</td>
+            <td class="num r">$3,450.00</td>
+            <td class="num r">$3,450.00</td>
+          </tr>
+          <tr>
+            <td class="idx">05</td>
+            <td>
+              <div class="desc">Antena base fibra de vidrio UHF</div>
+              <div class="spec">6 dBi · incluye kit de montaje · <span class="model">AN0160</span></div>
+            </td>
+            <td class="qty">1</td>
+            <td class="num r">$185.00</td>
+            <td class="num r">$185.00</td>
+          </tr>
+          <tr>
+            <td class="idx">06</td>
+            <td>
+              <div class="desc">Programación y configuración de red</div>
+              <div class="spec">Servicio de campo · plan de canales · pruebas de cobertura</div>
+            </td>
+            <td class="qty">1</td>
+            <td class="num r">$750.00</td>
+            <td class="num r">$750.00</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Totals + conditions -->
+    <div class="lower">
+      <div class="conditions">
+        <div class="lbl">Condiciones</div>
+        <div class="cgrid">
+          <div class="k">Tiempo de entrega</div><div class="v">4 – 6 semanas tras orden de compra</div>
+          <div class="k">Garantía</div><div class="v">12 meses contra defectos de fábrica</div>
+          <div class="k">Forma de pago</div><div class="v">50% anticipo · 50% contra entrega</div>
+          <div class="k">Validez de la oferta</div><div class="v">15 días calendario</div>
+          <div class="k">Instalación</div><div class="v">No incluida (cotizable aparte)</div>
+        </div>
+      </div>
+      <div class="totals">
+        <div class="trow"><span>Subtotal</span><span class="v">$13,649.00</span></div>
+        <div class="trow disc"><span>Descuento (5%)</span><span class="v">−$682.45</span></div>
+        <div class="trow"><span>ITBMS (7%)</span><span class="v">$907.66</span></div>
+        <div class="trow total"><span class="lbl-t">Total</span><span class="v">$13,874.21</span></div>
+      </div>
+    </div>
+
+    <!-- Signature -->
+    <div class="sign">
+      <div class="col">
+        <div class="line">
+          <div class="nm">Sandra Gil</div>
+          <div class="rl">Ejecutiva de Ventas · C Comunica, S.A.</div>
+          <div class="ct">sandra.gil@cecomunica.com<br>+507 6151-5560</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="line">
+          <div class="nm" style="color:var(--fg4); font-weight:500;">Aceptación del cliente</div>
+          <div class="rl">Nombre, firma y sello</div>
+          <div class="ct">Fecha: ______________________</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      Precios expresados en dólares de los Estados Unidos de América (USD), equivalentes a Balboas (PAB). Esta cotización no constituye factura fiscal. Los precios pueden variar sin previo aviso una vez vencida la validez indicada. Equipos sujetos a disponibilidad de inventario al momento de la orden de compra.
+    </div>
+
+    <div class="band"></div>
+    <div class="ft">
+      <span>C Comunica, S.A.</span>
+      <span class="web">www.cecomunica.com</span>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

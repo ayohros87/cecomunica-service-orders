@@ -1,8 +1,9 @@
 # Arquitectura del Sistema Cecomunica
 
-> **Estado:** post-refactor Phases 0–5f + capa de servicios completa + migración Phase 6 (Layout.renderTopbar) en 24 páginas (verificado 2026-05-19).
+> **Estado:** post-refactor Phases 0–5f + capa de servicios completa + migración Phase 6 (Layout.renderTopbar) en 24 páginas + **migración al UI Kit del Design System en 45 páginas** (Phase R3, completada 2026-05-28).
 > Para el plan de trabajo pendiente ver `OUTSTANDING.md`.
 > Para el historial de cambios ver `CHANGELOG.md`.
+> Para el plan y estado de la migración al UI Kit ver `Cecomunica Design System/ui_kits/MIGRATION.md`.
 
 ---
 
@@ -41,6 +42,7 @@ public/
   index.html                   ← dashboard principal
   login.html
   perfil.html
+  firma-correo.html            ← generador de firma de correo (todos los roles)
   contratos/
     index.html, nuevo-contrato.html, editar-contrato.html,
     imprimir-contrato.html, nuevo-cliente.html
@@ -75,10 +77,37 @@ public/
     ui/                        ← primitivas UI compartidas (Toast, Modal)
     pages/                     ← scripts extraídos de páginas grandes
   css/
-    ceco-ui.css                ← design system compartido
+    ceco-ui.css                ← design system compartido — importa app-kit-extras.css
+    app-kit-extras.css         ← primitivos R3 del UI Kit (toggle-pill, dropdown,
+                                  tooltip-floating, alert-banner, page-header-centered,
+                                  pager-input, responsive-cards, module-grid, auth-shell,
+                                  empty-state-hint, bulk-bar) — bridge hasta consolidar
+                                  todo en app.css del Design System
     print-base.css             ← base para páginas imprimibles
     ordenes-index.css          ← estilos de la página de órdenes
 ```
+
+El Design System vive separado del runtime en `Cecomunica Design System/`:
+
+```
+Cecomunica Design System/
+  colors_and_type.css                       ← tokens base (colores, tipografía, spacing)
+  ui_kits/
+    app/                                    ← kit desktop con portal de 7 áreas
+      index.html, foundations.html,
+      ordenes.html, poc.html, contratos.html,
+      cotizaciones.html, clientes.html, inventario.html
+      app.css                               ← kit completo (3,133 líneas)
+      app-demo.js                           ← demo behaviors (toast, accordion, sheets…)
+      print-demo*.html
+    app-mobile/                             ← kit touch (≤480 px) — solo Órdenes hoy
+      index.html, foundations.html, ordenes.html
+      mobile.css                            ← namespace .m-*
+    MIGRATION.md                            ← plan + checkpoint de migración a producción
+```
+
+La página `index.html` de cada kit es un portal con tarjetas a las áreas; cada
+área tiene una nav superior con anclas a las secciones aplicadas.
 
 ### 3.2 Orden de carga de scripts (por página)
 
@@ -178,6 +207,102 @@ El coordinador es delgado (≤ 110 líneas); cada módulo expone sus funciones p
 | `editar-orden.js` | `ordenes/editar-orden.html` | Candidato a namespace (Phase 5g) |
 | Otros menores | varios | Ver `OUTSTANDING.md` §2.8 (Phase 5g) para inventario pendiente |
 
+### 3.7 Design System y UI Kit (Phase R3 — 2026-05-27/28)
+
+El Design System vive en `Cecomunica Design System/` (ver árbol en §3.1) y es la
+**fuente de verdad de diseño**. Los kits HTML (`ui_kits/app/*.html`,
+`ui_kits/app-mobile/*.html`) son demos navegables que muestran cada primitivo
+en uso real y sirven como referencia 1:1 para las páginas de `public/`.
+
+#### 3.7.1 Capas de CSS
+
+```
+1. colors_and_type.css      ← tokens base (DS) — colores, tipografía, spacing,
+                              radius, shadows. Cargado por todos los kits.
+2. ceco-ui.css              ← CSS de producción. Bridge con tokens del DS
+                              (Fases 1-6 de DS adoption). Importa app-kit-extras.css.
+3. app-kit-extras.css       ← primitivos R3 del UI Kit que aún no están
+                              consolidados en ceco-ui.css. Bridge temporal.
+4. <inline page>            ← solo CSS genuinamente page-local
+                              (badges específicos, density toggles, print overrides).
+```
+
+`ceco-ui.css` hace `@import url('./app-kit-extras.css')` al inicio, así que
+todas las páginas de `public/` heredan los primitivos del kit sin tocar sus
+`<link>`. Cuando se consolide la migración (Phase R4, futura) se reemplazará
+`ceco-ui.css` por el `app.css` del Design System directamente.
+
+#### 3.7.2 Primitivos R3 nuevos (vs versión pre-migración)
+
+Documentados en `Cecomunica Design System/ui_kits/app/foundations.html` y
+disponibles globalmente vía `app-kit-extras.css`:
+
+| Primitivo | Clase | Uso |
+|---|---|---|
+| Toggle pill | `.toggle-pill` (+ `.is-on`) | Filtro booleano compacto inline (clientes, contratos, POC) |
+| Dropdown menu | `.dropdown` / `.dropdown-menu` / `.dropdown-item` | Overflow desktop con secciones, dividers, item.danger |
+| Floating tooltip | `.tooltip-floating` | Preview rica al hover (equipos en lista de contratos) |
+| Alert banner | `.alert-banner` (+ `.alert-success` / `.alert-warning` / `.alert-error`) | Aviso permanente en flujo (no auto-dismiss como toast) |
+| Page header centrado | `.page-header-centered` + `.page-header-icon` | Formularios largos (nueva-orden, nueva-cotización, nuevo-contrato) |
+| Pager input | `.pager-input` | "Página N / total" para tablas grandes |
+| Responsive cards | `.responsive-table-wrap` + `.responsive-cards` + `.responsive-card` | Tabla desktop → stack de tarjetas debajo de 900 px |
+| Module grid | `.module-grid` + `.module-card` | Launcher del home con visibilidad por rol |
+| Auth shell | `.auth-shell` + `.auth-brand` + `.auth-card` (scopeados) | Login + reset password |
+| Empty state hint | `.empty-state-hint` | "Sin resultados / Prueba con menos filtros" |
+| Bulk action bar | `.bulk-bar` (+ `.visible`) + `.bulk-count` + `.bulk-divider` + `.bulk-tag-wrap` | Acciones masivas contextuales con selección |
+
+#### 3.7.3 Estado de migración (2026-05-28)
+
+**45 páginas migradas** de las ~50 páginas en `public/`. 6 de 7 áreas
+completamente alineadas (Home/Auth, Cotizaciones, Clientes, Inventario,
+Contratos, PoC, Configuración Órdenes).
+
+Páginas conservadas intencionalmente sin rewrite completo (kit primitives
+funcionan; rewrite con diminishing returns):
+
+- `ordenes/trabajar-orden.html`, `ordenes/fotos-taller.html` — UX compleja
+  específica (acordeón equipos con zebra, fixed bottom summary, lightbox)
+- `ordenes/imprimir-orden.html`, `ordenes/nota-entrega.html`,
+  `ordenes/nota-entrega-intervenciones.html`, `ordenes/cotizar-orden-formal.html`
+  — print templates A4 con estilos inline intencionales para fidelidad de
+  impresión
+- `inventario/vista-correo.html` — vista intencionalmente inline-CSS para
+  sobrevivir copy-paste a Outlook/Gmail
+
+**Pendiente** (opcional):
+
+- **Mobile móvil de Órdenes** — migrar `public/ordenes/index.html` (móvil) al
+  patrón `.m-*` del kit `ui_kits/app-mobile/ordenes.html`. Recomendado esperar
+  a que el trabajo móvil en curso (commits recientes `feat(ordenes/mobile)`)
+  esté merged.
+- **Consolidación final (Phase R4)** — reemplazar `ceco-ui.css` por
+  `app.css` directo, eliminar `app-kit-extras.css`, deprecar clases legacy.
+
+#### 3.7.4 Coupling JS ↔ kit
+
+El kit es CSS-only en su mayor parte. Algunos primitivos esperan estructura
+HTML específica y por eso el JS de páginas relacionadas se actualizó:
+
+- `clientes-index.js` — `updateBulkBar()` usa `classList.toggle('visible', n>0)`
+  en vez de `style.display` (la `.bulk-bar` del kit se controla por clase)
+- `cotizaciones-index.js` — `renderRow()` construye estructura
+  `.responsive-card` con `__top` / `__title` / `__sub` / `__meta` / `__actions`
+- `nueva-cotizacion.js`, `editar-cotizacion.js` — `mostrarToast()` apende a
+  `#toast-region` en vez de `document.body`
+- `contratos-equipos.js` — tooltip dinámico crea div con
+  `className = 'tooltip-floating'`
+- `piezas.js` — query `.app-table-wrap` en vez de `.table-wrap`
+
+#### 3.7.5 Bug fix retroactivo: `.app-card`
+
+`ceco-ui.css` define `.app-card` como el "launcher card" del home (con
+`cursor:pointer`, `display:flex` horizontal y hover `translateY`). Cuando se
+migró el home a `.module-card` (Semana 2), las migraciones posteriores usaron
+`.app-card` como wrapper de contenido — esto rompía el layout porque el flex
+horizontal afectaba a las celdas internas. El fix vive en
+`app-kit-extras.css` y neutraliza `display`, `cursor`, `transform` y `hover`
+para `.app-card`, manteniendo el comportamiento de launcher en `.module-card`.
+
 ---
 
 ## 4. Autenticación y Roles
@@ -204,6 +329,15 @@ Definidos canónicamente en `js/core/roles.js` como `window.ROLES`:
 | `ROLES.VISTA` | `"vista"` | Solo lectura general |
 
 El campo `usuarios/{uid}.rol` almacena el valor string.
+
+### 4.3 Páginas visibles para todo el personal
+
+Algunas páginas son herramientas personales y se muestran a cualquier usuario autenticado, independientemente del rol. Su tarjeta se agrega en `public/index.html` a **todos** los arreglos de `visiblesPorRol`:
+
+| Página | Módulo (`data-mod`) | Atajo | Descripción |
+|---|---|---|---|
+| `perfil.html` | — (link del menú overflow del topbar) | — | Lectura del propio perfil (nombre, correo, rol) |
+| `firma-correo.html` | `firma` | `F` | Generador personal de firma HTML para correo. Pre-rellena nombre/correo/cargo desde `usuarios/{uid}` y permite copiar la firma (HTML + texto plano) al portapapeles. Usa `UsuariosService.getUsuario`, primitivos `.ds-card` / `.form-input` y `Layout.renderTopbarFor('edit')`. Los estilos inline en la plantilla de firma son intencionales: deben sobrevivir al cliente de correo. |
 
 ---
 
