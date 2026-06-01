@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Panel — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/domain/adminMetrics.js"></script>
+  <script src="../js/pages/admin-index.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="shield"></i> Panel de Administración',
+      showHome: true,
+      homeHref: '../index.html',
+      showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap">
+
+    <!-- Toolbar: refrescar + auto + timestamp -->
+    <div class="admin-toolbar">
+      <button id="btnRefresh" class="btn btn-ghost btn-sm" title="Recargar todas las métricas">
+        <i data-lucide="refresh-cw"></i> Refrescar
+      </button>
+      <button id="btnAuto" class="auto-pill" aria-pressed="false" title="Refresca cada 60 segundos mientras la pestaña esté visible">
+        <span class="dot"></span> <span class="label-text">Auto</span>
+      </button>
+      <span class="spacer"></span>
+      <span id="lastUpdate" class="ts">—</span>
+    </div>
+
+    <!-- Banners de alertas (mail queue, usuarios sin rol, PII vencida, etc.) -->
+    <div id="alertBanners"></div>
+
+    <!-- 4 KPIs principales -->
+    <div class="stat-grid">
+      <div id="kpiOrdenes" class="stat-card" title="Órdenes en cualquier estado distinto a Completada o Entregada">
+        <span class="label"><i data-lucide="settings-2"></i> Órdenes abiertas</span>
+        <span class="value is-loading">—</span>
+        <span class="sub">&nbsp;</span>
+      </div>
+
+      <div id="kpiContratos" class="stat-card" title="Contratos en estado pendiente_aprobacion">
+        <span class="label"><i data-lucide="file-text"></i> Contratos pendientes</span>
+        <span class="value is-loading">—</span>
+        <span class="sub">&nbsp;</span>
+      </div>
+
+      <div id="kpiCotizaciones" class="stat-card" title="Cotizaciones enviadas o aprobadas que vencen en 7 días o menos">
+        <span class="label"><i data-lucide="receipt"></i> Cotizaciones por vencer</span>
+        <span class="value is-loading">—</span>
+        <span class="sub">&nbsp;</span>
+      </div>
+
+      <div id="kpiPoc" class="stat-card" title="Equipos PoC marcados como activos y no eliminados">
+        <span class="label"><i data-lucide="radio-tower"></i> PoC activos</span>
+        <span class="value is-loading">—</span>
+        <span class="sub">&nbsp;</span>
+      </div>
+    </div>
+
+    <!-- Sub-páginas del panel (Fases 2-5 las crearán; por ahora son placeholders) -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Áreas del panel</span>
+        <span class="hint">Acceso rápido a las vistas detalladas</span>
+      </div>
+      <div class="admin-launchers">
+        <a class="admin-launcher" href="operacion.html">
+          <span class="ico"><i data-lucide="activity"></i></span>
+          <span class="meta">
+            <span class="t">Operación</span>
+            <span class="s">Órdenes por estado y técnico, contratos, inventario crítico</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="salud.html">
+          <span class="ico"><i data-lucide="heart-pulse"></i></span>
+          <span class="meta">
+            <span class="t">Salud del sistema</span>
+            <span class="s">Mail queue, usuarios sin rol, índices, integridad</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="auditoria.html">
+          <span class="ico"><i data-lucide="history"></i></span>
+          <span class="meta">
+            <span class="t">Auditoría</span>
+            <span class="s">Timeline de cambios en órdenes, contratos y purgas</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="pii.html">
+          <span class="ico"><i data-lucide="shield-alert"></i></span>
+          <span class="meta">
+            <span class="t">PII</span>
+            <span class="s">Preview y purga de fotos de identificación con más de 90 días</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="config.html">
+          <span class="ico"><i data-lucide="sliders-horizontal"></i></span>
+          <span class="meta">
+            <span class="t">Configuración</span>
+            <span class="s">ITBMS, validez, retención, operadores, tipos de servicio</span>
+          </span>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>

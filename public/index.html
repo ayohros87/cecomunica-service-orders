@@ -51,7 +51,10 @@
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<img src="brand/logo-lockup-horizontal-compact-inverse.svg" alt="CECOMUNICA" class="topbar-logo-img"><span class="brand-suffix"> — CENTRO DE GESTIÓN —</span>', showHome: false, showLogout: true, menu: [{ label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' }] });</script>
+  <script>Layout.renderTopbar({ title: '<img src="brand/logo-lockup-horizontal-compact-inverse.svg" alt="CECOMUNICA" class="topbar-logo-img"><span class="brand-suffix"> — CENTRO DE GESTIÓN —</span>', showHome: false, showLogout: true, menu: [
+    { label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' },
+    { id: 'menu-admin-panel', label: '<i data-lucide="shield"></i> Panel de Administración', href: 'admin/index.html', hidden: true },
+  ] });</script>
 
   <div class="app-wrap">
     <!-- Herramientas -->
@@ -184,6 +187,7 @@
         </span>
         <span class="module-card-shortcut">F</span>
       </a>
+
     </div>
   </div>
 
@@ -211,6 +215,12 @@ firebase.auth().onAuthStateChanged(async (user) => {
       const mod = card.getAttribute("data-mod");
       card.setAttribute("data-visible", visibles.has(mod) ? "true" : "false");
     });
+
+    // Mostrar el acceso al Panel de Administración en el menú "Más" solo si rol === administrador.
+    if (rol === "administrador") {
+      const adminItem = document.getElementById("menu-admin-panel");
+      if (adminItem) adminItem.style.display = "";
+    }
 
     // Ocultar skeletons y aplicar filtro
     document.querySelectorAll(".skeleton-card").forEach(el => el.style.display = "none");
