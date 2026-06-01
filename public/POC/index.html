@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Equipos PoC - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
@@ -20,6 +26,14 @@
 
     /* Row "being edited" highlight (set by JS during bulk edit) */
     tr.row-editing { background: #e0f2fe !important; box-shadow: inset 3px 0 0 var(--accent); }
+
+    /* Zebra stripe + readability bump — mirrors ordenes/index. The kit
+       default (13px on a 1-row band) felt tight here; bumping td font to
+       15px and using a slightly darker tint (#f1f5f9 vs #f8fafc) gives
+       the same "agrupado" feel as ordenes. */
+    table.app-table tbody td { font-size: 15px; }
+    table.app-table tbody tr:nth-child(even) { background: #f1f5f9; }
+    table.app-table tbody tr:nth-child(even):hover { background: var(--brand-soft); }
 
     /* Status dot used in the Activo column — plain colored circle, no pill */
     .poc-estado-cell  { text-align: center; }
@@ -167,7 +181,7 @@
       <div class="app-toolbar poc-toolbar">
         <button id="btnSim" class="btn btn-secondary btn-sm" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
         <button id="btnImprimir" class="btn btn-secondary btn-sm" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
-        <button id="btnEditarMasivo" class="btn btn-secondary btn-sm" title="Máximo 10 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
+        <button id="btnEditarMasivo" class="btn btn-secondary btn-sm" title="Máximo 25 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
         <button id="btnGuardarMasivo" class="btn btn-primary btn-sm" onclick="PocBulk.guardar()" style="display:none;"><i data-lucide="save"></i> Guardar</button>
         <button id="btnCancelarMasivo" class="btn btn-ghost btn-sm" onclick="PocBulk.cancelar()" style="display:none;"><i data-lucide="x"></i> Cancelar</button>
 
@@ -236,6 +250,7 @@
               <th>IP</th>
               <th class="sortable" onclick="PocList.ordenarPor('unit_id')">Unit ID</th>
               <th class="sortable" onclick="PocList.ordenarPor('radio_name')">Nombre del Radio</th>
+              <th>Modelo</th>
               <th>Grupos</th>
               <th>SIM / Teléfono</th>
               <th style="width:120px;">Acciones</th>
@@ -318,7 +333,7 @@
         </div>
         <div class="form-field">
           <label class="form-label" for="drawer-modelo">Modelo</label>
-          <input class="form-input" id="drawer-modelo" type="text">
+          <select class="form-select" id="drawer-modelo"></select>
         </div>
         <div class="form-field">
           <label class="form-label" for="drawer-grupos">Grupos <span class="optional">(separados por coma)</span></label>

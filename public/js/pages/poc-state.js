@@ -2,6 +2,7 @@
 // POC shared state, lookup maps, role helpers
 window.PocState = {
   listaOperadores: [],
+  listaModelos:    [],
   clientesMap:     {},
   modelosMap:      {},
   rolActual:       ROLES.VISTA,
@@ -13,9 +14,10 @@ window.PocState = {
     ip:         4,
     unit_id:    5,
     radio_name: 6,
-    grupos:     7,
-    sim_tel:    8,
-    acciones:   9
+    modelo:     7,
+    grupos:     8,
+    sim_tel:    9,
+    acciones:   10
   },
 
   esLectura() {
@@ -30,6 +32,35 @@ window.PocState = {
       || d.modelo_label || d.modeloLabel || d.Modelo || d.modelo
       || d.model_label  || d.modelLabel  || d.model
       || '';
+  },
+
+  // Resolve the canonical modelo ID for a device doc. Prefers any FK field;
+  // if only a free-text label exists (legacy poc-edit), tries to match it
+  // against listaModelos by label so the dropdown can pre-select correctly.
+  obtenerModeloId(d = {}) {
+    const direct = d.modelo_id || d.modeloId || d.model_id || d.modelId;
+    if (direct) return direct;
+    const txt = (d.modelo_label || d.modeloLabel || d.Modelo || d.modelo ||
+                 d.model_label  || d.modelLabel  || d.model || '').toString().trim();
+    if (!txt) return '';
+    const lc = txt.toLowerCase();
+    const match = (this.listaModelos || []).find(m => (m.label || '').toLowerCase() === lc);
+    return match ? match.id : '';
+  },
+
+  // Build the inner <option>s for a modelo dropdown, pre-selecting `currentId`.
+  // If the current value points to an inactive/removed modelo it is still
+  // surfaced (marked "inactivo") so the user sees what is assigned.
+  buildModeloOptionsHTML(currentId = '') {
+    let lista = this.listaModelos || [];
+    if (currentId && !lista.some(m => m.id === currentId)) {
+      const label = this.modelosMap[currentId] || currentId;
+      lista = [{ id: currentId, label: `${label} (inactivo)` }, ...lista];
+    }
+    return [
+      '<option value="">— Selecciona modelo —</option>',
+      ...lista.map(m => `<option value="${m.id}"${m.id === currentId ? ' selected' : ''}>${m.label}</option>`)
+    ].join('');
   },
 
   nombreClienteDe(d) {
@@ -56,9 +87,15 @@ window.PocState = {
         const label = `${(m.marca || '').trim()} ${(m.modelo || '').trim()}`.trim();
         this.modelosMap[m.id] = label || m.modelo || m.marca || m.id;
       });
+      // Active-only list, sorted, used to populate dropdowns (drawer + bulk)
+      this.listaModelos = modelos
+        .filter(m => m.activo !== false)
+        .map(m => ({ id: m.id, label: this.modelosMap[m.id] }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
     } catch (e) {
       console.error('Error al cargar modelos:', e);
       this.modelosMap = {};
+      this.listaModelos = [];
     }
   },
 

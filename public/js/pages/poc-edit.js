@@ -20,7 +20,13 @@ window.PocEdit = {
     document.getElementById('drawer-serial').value     = data.serial     || '';
     document.getElementById('drawer-unit-id').value    = data.unit_id    || '';
     document.getElementById('drawer-radio-name').value = data.radio_name || '';
-    document.getElementById('drawer-modelo').value     = PocState.obtenerModeloTexto(data);
+
+    // Populate the modelo dropdown from the active-models list, preselecting
+    // the device's current modelo.
+    const modeloIdActual = PocState.obtenerModeloId(data);
+    document.getElementById('drawer-modelo').innerHTML =
+      PocState.buildModeloOptionsHTML(modeloIdActual);
+
     document.getElementById('drawer-grupos').value     = (data.grupos || []).join(', ');
     document.getElementById('drawer-activo').checked   = data.activo !== false;
     document.getElementById('drawer-sim-number').value = data.sim_number || '';
@@ -64,20 +70,21 @@ window.PocEdit = {
         .split(',').map(g => g.trim()).filter(Boolean);
       const user   = firebase.auth().currentUser;
 
-      // The modelo input is free-text but PocState.obtenerModeloTexto prefers
-      // modelosMap[modelo_id] over the literal modelo string. If the user
-      // changed the displayed text, the FK is now stale — clear it so the new
-      // literal becomes authoritative on the next render.
-      const newModeloText = (document.getElementById('drawer-modelo').value || '').trim();
-      const oldModeloText = (PocState.obtenerModeloTexto(originalData) || '').trim();
-      const modeloEditado = newModeloText !== oldModeloText;
+      // Modelo is now picked from a dropdown — write the canonical FK and a
+      // label snapshot (modelo_label) matching the field name used by the
+      // vendedores-batch flow. Other alias keys are cleared below.
+      const newModeloId    = (document.getElementById('drawer-modelo').value || '').trim();
+      const newModeloLabel = newModeloId ? (PocState.modelosMap[newModeloId] || '') : '';
+      const oldModeloId    = PocState.obtenerModeloId(originalData);
+      const modeloEditado  = newModeloId !== oldModeloId;
 
       // Fields sent to Firestore update() — FieldValue sentinels are valid here.
       const updatePayload = {
         serial:           document.getElementById('drawer-serial').value,
         unit_id:          document.getElementById('drawer-unit-id').value,
         radio_name:       document.getElementById('drawer-radio-name').value,
-        modelo:           newModeloText,
+        modelo_id:        newModeloId || firebase.firestore.FieldValue.delete(),
+        modelo_label:     newModeloLabel,
         grupos,
         activo:           document.getElementById('drawer-activo').checked,
         sim_number:       document.getElementById('drawer-sim-number').value,
@@ -91,19 +98,18 @@ window.PocEdit = {
         updated_by_email: user?.email || null
       };
 
-      // All field aliases that obtenerModeloTexto checks before falling back to
-      // the plain `modelo` field. If any of these survive in the document,
-      // they will shadow the new value we wrote to `modelo`.
-      const MODEL_ALIAS_KEYS = [
-        'modelo_id', 'modeloId', 'model_id', 'modelId',
-        'modelo_label', 'modeloLabel', 'Modelo',
+      // Stale aliases that obtenerModeloTexto could fall back to. We now write
+      // modelo_id (FK) and modelo_label (snapshot) as the only sources of truth,
+      // so drop every other variant so none shadow the new value.
+      const MODEL_ALIAS_KEYS_TO_CLEAR = [
+        'modeloId', 'model_id', 'modelId',
+        'modeloLabel', 'Modelo', 'modelo',
         'model_label', 'modelLabel', 'model'
       ];
 
       if (modeloEditado) {
-        // Delete every alias that exists in the document so none shadow the new `modelo`.
-        MODEL_ALIAS_KEYS.forEach(k => {
-          if (k in (originalData || {}) || k === 'modelo_id') {
+        MODEL_ALIAS_KEYS_TO_CLEAR.forEach(k => {
+          if (k in (originalData || {})) {
             updatePayload[k] = firebase.firestore.FieldValue.delete();
           }
         });
@@ -126,7 +132,10 @@ window.PocEdit = {
 
       const mergedData = { ...originalData, ...cleanFields };
       if (modeloEditado) {
-        MODEL_ALIAS_KEYS.forEach(k => delete mergedData[k]);
+        MODEL_ALIAS_KEYS_TO_CLEAR.forEach(k => delete mergedData[k]);
+        // FieldValue.delete() sentinels were filtered out of cleanFields, so
+        // when the user cleared the modelo we must also drop the inherited FK.
+        if (!newModeloId) delete mergedData.modelo_id;
       }
 
       this.cerrar();

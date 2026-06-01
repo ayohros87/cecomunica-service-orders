@@ -26,6 +26,7 @@ window.PocList = {
     const td  = document.createElement('td');
     td.className = 'td-mono';
     const val = String(ip || '').trim();
+    td.dataset.ip = val;
     if (!val) return td;
     const dominio = '.cecomunica.net';
     if (val.toLowerCase().endsWith(dominio)) {
@@ -99,15 +100,20 @@ window.PocList = {
     row.appendChild(this.nuevaCelda(d.unit_id, 'td-mono td-primary'));
     row.appendChild(this.nuevaCelda(d.radio_name));
 
-    // grupos (7)
+    // modelo (7) — stamp the resolved FK so bulk edit / drawer can pre-select
+    const tdModelo = this.nuevaCelda(PocState.obtenerModeloTexto(d));
+    tdModelo.dataset.modeloId = PocState.obtenerModeloId(d) || '';
+    row.appendChild(tdModelo);
+
+    // grupos (8)
     row.appendChild(this.crearCeldaConExpansor((d.grupos || []).join(', '), 'grupos'));
 
-    // sim_tel (8)
+    // sim_tel (9)
     const tdSim = document.createElement('td');
     tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${d.sim_number || ''} / ${d.sim_phone || ''}`;
     row.appendChild(tdSim);
 
-    // acciones (9)
+    // acciones (10)
     const actionCell = document.createElement('td');
     actionCell.style.whiteSpace = 'nowrap';
     if (!PocState.esLectura()) {
@@ -370,6 +376,9 @@ window.PocList = {
       row.appendChild(this.crearCeldaIp(d.ip));
       row.appendChild(this.nuevaCelda(d.unit_id, 'td-mono td-primary'));
       row.appendChild(this.nuevaCelda(d.radio_name));
+      const tdModeloF = this.nuevaCelda(PocState.obtenerModeloTexto(d));
+      tdModeloF.dataset.modeloId = PocState.obtenerModeloId(d) || '';
+      row.appendChild(tdModeloF);
       row.appendChild(this.crearCeldaConExpansor(
         Array.isArray(d.grupos) ? d.grupos.join(', ') : (d.grupos || ''), 'grupos'
       ));
