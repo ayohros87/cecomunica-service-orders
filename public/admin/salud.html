@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Salud del sistema — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/mailQueueService.js"></script>
+  <script src="../js/domain/adminMetrics.js"></script>
+  <script src="../js/pages/admin-salud.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="heart-pulse"></i> Salud del sistema',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="admin-toolbar">
+      <button id="btnRefresh" class="btn btn-ghost btn-sm">
+        <i data-lucide="refresh-cw"></i> Refrescar
+      </button>
+      <span class="spacer"></span>
+      <span id="lastUpdate" class="ts">—</span>
+    </div>
+
+    <!-- MAIL QUEUE -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Mail queue</span>
+        <span class="hint" id="mailSummary">—</span>
+      </div>
+
+      <div class="admin-section" style="margin-top:var(--sp-2);">
+        <div class="admin-section-head">
+          <span class="title" style="font-size:14px;">Atascados (> 1 h sin procesar) — <strong id="countMailStuck">0</strong></span>
+        </div>
+        <div class="ds-card" style="padding:0;">
+          <div id="tblMailStuck"></div>
+        </div>
+      </div>
+
+      <div class="admin-section" style="margin-top:var(--sp-3);">
+        <div class="admin-section-head">
+          <span class="title" style="font-size:14px;">Con error — <strong id="countMailFailed">0</strong></span>
+        </div>
+        <div class="ds-card" style="padding:0;">
+          <div id="tblMailFailed"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- USUARIOS -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Usuarios</span>
+        <span class="hint" id="totalUsuarios">—</span>
+      </div>
+
+      <div class="admin-section" style="margin-top:var(--sp-2);">
+        <div class="admin-section-head">
+          <span class="title" style="font-size:14px;">Sin rol asignado — <strong id="countSinRol">0</strong></span>
+        </div>
+        <div class="ds-card" style="padding:0;">
+          <div id="tblUsuariosSinRol"></div>
+        </div>
+      </div>
+
+      <div class="admin-section" style="margin-top:var(--sp-3);">
+        <div class="admin-section-head">
+          <span class="title" style="font-size:14px;">Rol fuera del enum ROLES — <strong id="countRolInvalido">0</strong></span>
+        </div>
+        <div class="ds-card" style="padding:0;">
+          <div id="tblUsuariosRolInvalido"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ÓRDENES -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Órdenes</span>
+        <span class="hint"><strong id="countSinTokens">0</strong> sin searchTokens (rezagadas del backfill)</span>
+      </div>
+      <div class="ds-card" style="padding:0;">
+        <div style="padding:var(--sp-2) var(--sp-3);font-size:12px;color:var(--fg-3);">
+          Top 10 órdenes por tamaño de os_logs (cap práctico ~20k entradas — ver ARQUITECTURA §5.4)
+        </div>
+        <div id="tblOrdenesGrandes"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>
