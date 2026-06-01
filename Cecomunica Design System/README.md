@@ -95,7 +95,7 @@ Cecomunica writes in **Spanish first** — this is a Panamanian B2B brand. Engli
 
 > **Section eyebrow:** SOLUCIONES VERTICALES
 
-> **About copy:** Cecomunica es el integrador autorizado de Hytera en Panamá. Operamos desde Punta Paitilla, Panamá, con cobertura nacional en despliegue, mantenimiento y soporte 24/7.
+> **About copy:** Cecomunica diseña, despliega y mantiene redes de radiocomunicación profesional. Operamos desde Punta Paitilla, Panamá, con cobertura nacional en despliegue, mantenimiento y soporte 24/7.
 
 ### Anti‑patterns (don't do this)
 - ❌ "Welcome to the future of communication 🚀"

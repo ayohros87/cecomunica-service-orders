@@ -11,6 +11,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cotizaciones - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/cotizaciones-kit.css">
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -20,92 +21,120 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
   <script src="../js/services/cotizacionesService.js"></script>
+  <script src="../js/services/mailService.js"></script>
+  <script src="../js/domain/cotizacionesTotales.js"></script>
+  <script src="../js/pages/cot-editor-state.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Cotizaciones', actions: [{ label: '<i data-lucide="plus"></i> Nueva Cotización', href: 'nueva-cotizacion.html', cls: 'primary' }], showHome: true, homeHref: '../index.html', showLogout: true });</script>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="receipt"></i> Cotizaciones',
+      actions: [{ label: '<i data-lucide="plus"></i> Nueva cotización', href: 'nueva-cotizacion.html', cls: 'primary' }],
+      showHome: true,
+      homeHref: '../index.html',
+      showLogout: true,
+    });
+  </script>
 
-  <div class="app-wrap app-wrap--wide">
+  <div class="app-body">
+    <div class="app-page-header">
+      <div>
+        <h1>Cotizaciones</h1>
+        <p id="headerSubtitle">Cargando…</p>
+      </div>
+      <div class="app-page-header-actions">
+        <a class="btn btn-primary" href="nueva-cotizacion.html"><i data-lucide="plus"></i> Nueva cotización</a>
+      </div>
+    </div>
 
-    <div class="app-card">
+    <!-- Stats -->
+    <div class="cc-stats" id="statsRegion">
+      <div class="cc-stat"><div class="cc-stat-icon"><i data-lucide="file-text"></i></div>
+        <div class="cc-stat-body"><div class="cc-stat-value" id="statTotal">—</div>
+        <div class="cc-stat-label">Total emitidas</div><div class="cc-stat-sub">este año</div></div></div>
+      <div class="cc-stat cc-stat--accent"><div class="cc-stat-icon"><i data-lucide="send"></i></div>
+        <div class="cc-stat-body"><div class="cc-stat-value" id="statPendientes">—</div>
+        <div class="cc-stat-label">Enviadas · esperando</div><div class="cc-stat-sub">requieren seguimiento</div></div></div>
+      <div class="cc-stat cc-stat--green"><div class="cc-stat-icon"><i data-lucide="check-circle"></i></div>
+        <div class="cc-stat-body"><div class="cc-stat-value" id="statMontoAprobado">—</div>
+        <div class="cc-stat-label">Monto aprobado</div><div class="cc-stat-sub">aprobadas + convertidas</div></div></div>
+      <div class="cc-stat cc-stat--amber"><div class="cc-stat-icon"><i data-lucide="trending-up"></i></div>
+        <div class="cc-stat-body"><div class="cc-stat-value" id="statTasa">—</div>
+        <div class="cc-stat-label">Tasa de cierre</div><div class="cc-stat-sub">sobre enviadas</div></div></div>
+    </div>
+
+    <!-- Tabla / lista -->
+    <div class="app-table-wrap">
       <div class="filter-bar">
+        <div class="cc-segments" id="segments"></div>
+        <div style="flex:1;"></div>
         <div class="filter-search">
           <span class="search-icon"><i data-lucide="search"></i></span>
-          <input id="filtroTexto" type="search" placeholder="Filtrar por cliente o ID…" aria-label="Buscar cotizaciones">
+          <input id="filtroTexto" type="search" placeholder="Buscar N°, cliente…" aria-label="Buscar cotizaciones">
         </div>
-        <div class="form-field" style="margin:0; min-width:160px;">
-          <select id="filtroEstado" class="form-select">
-            <option value="">Todos los estados</option>
-            <option value="borrador">Borrador</option>
-            <option value="emitida">Emitida</option>
-            <option value="enviada">Enviada</option>
-            <option value="anulada">Anulada</option>
-          </select>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="aplicarFiltros()"><i data-lucide="search"></i> Aplicar</button>
-        <button class="btn btn-ghost btn-sm" onclick="limpiarFiltros()">Limpiar</button>
-        <div style="flex:1;"></div>
+        <label class="toggle-pill" id="wrapToggleMias" style="display:none;">
+          <input type="checkbox" id="toggleMias">
+          Solo mis cotizaciones
+        </label>
         <label class="toggle-pill">
           <input type="checkbox" id="toggleEliminadas">
           Mostrar eliminadas
         </label>
-        <span id="resumenCotizaciones" style="font-size:13px; color:var(--fg-3);"></span>
       </div>
 
-      <!-- Desktop table -->
       <div class="responsive-table-wrap">
-        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-          <table class="app-table" aria-label="Cotizaciones">
-            <thead>
-              <tr>
-                <th style="width:140px;">ID</th>
-                <th>Cliente</th>
-                <th>Fecha</th>
-                <th>Estado</th>
-                <th style="text-align:right;">Total</th>
-                <th style="text-align:right;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="tablaCotizaciones">
-              <tr class="skeleton-row">
-                <td colspan="6" style="padding: 0; border: none;">
-                  <div class="skeleton-table-row">
-                    <div class="skeleton-cell" style="width: 14%;"></div>
-                    <div class="skeleton-cell" style="width: 26%;"></div>
-                    <div class="skeleton-cell" style="width: 18%;"></div>
-                    <div class="skeleton-cell" style="width: 16%;"></div>
-                    <div class="skeleton-cell" style="width: 16%;"></div>
-                    <div class="skeleton-cell" style="width: 10%;"></div>
-                  </div>
-                </td>
-              </tr>
-              <tr class="skeleton-row">
-                <td colspan="6" style="padding: 0; border: none;">
-                  <div class="skeleton-table-row">
-                    <div class="skeleton-cell" style="width: 12%;"></div>
-                    <div class="skeleton-cell" style="width: 30%;"></div>
-                    <div class="skeleton-cell" style="width: 16%;"></div>
-                    <div class="skeleton-cell" style="width: 16%;"></div>
-                    <div class="skeleton-cell" style="width: 16%;"></div>
-                    <div class="skeleton-cell" style="width: 10%;"></div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <table class="app-table" aria-label="Cotizaciones">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="id" style="width:130px;">N° <span class="sort-icon"><i data-lucide="chevron-down"></i></span></th>
+            <th class="sortable" data-sort="cliente">Cliente <span class="sort-icon"><i data-lucide="chevron-down"></i></span></th>
+            <th class="sortable" data-sort="fecha" style="width:110px;">Fecha <span class="sort-icon"><i data-lucide="chevron-down"></i></span></th>
+            <th style="width:120px;">Estado</th>
+            <th style="width:160px;">Ejecutivo</th>
+            <th class="sortable" data-sort="total" style="width:120px; text-align:right;">Total <span class="sort-icon"><i data-lucide="chevron-down"></i></span></th>
+            <th style="width:170px; text-align:right;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tablaCotizaciones"></tbody>
+      </table>
       </div>
 
-      <!-- Mobile cards fallback (responsive-card del kit) -->
+      <div id="emptyState" class="app-empty-state" style="display:none;">
+        <i data-lucide="search-x"></i>
+        <strong>Sin resultados</strong>
+        <p>No hay cotizaciones que coincidan con el filtro o la búsqueda actual.</p>
+      </div>
+
+      <!-- Cards móviles -->
       <div id="listaCotizacionesMovil" class="responsive-cards" style="padding:var(--sp-3);"></div>
 
       <div class="app-table-footer">
-        <button class="btn btn-secondary btn-sm" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más cotizaciones</button>
+        <span id="footerResumen">—</span>
+        <button class="btn btn-secondary btn-sm" id="btnCargarMas"><i data-lucide="chevron-down"></i> Cargar más</button>
       </div>
     </div>
+  </div>
 
+  <!-- Aprobación overlay (solo admin) -->
+  <div id="overlayCotAprobacion" class="modal-backdrop" style="display:none;"
+       role="dialog" aria-modal="true" aria-labelledby="cotAprobTitulo">
+    <div class="modal modal-lg" id="sheetCotAprobacion">
+      <div class="modal-header">
+        <h3 id="cotAprobTitulo" class="modal-title"><i data-lucide="check-circle"></i> Aprobación de cotización</h3>
+        <button class="modal-close" id="btnCerrarAprob" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body" id="bodyCotAprobacion"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnCancelarAprob"><i data-lucide="x-circle"></i> Cancelar</button>
+        <button class="btn btn-danger" id="btnRechazarAprob"><i data-lucide="x"></i> Rechazar</button>
+        <button class="btn btn-primary" id="btnConfirmarAprob"><i data-lucide="check-circle"></i> Aprobar</button>
+      </div>
+    </div>
   </div>
 
   <script src="../js/pages/cotizaciones-index.js" defer></script>

@@ -80,6 +80,8 @@ auth.onAuthStateChanged(user => {
     setTimeout(() => {
       if (params.get("from") === "clientes") {
         window.location.href = "../clientes/index.html";
+      } else if (params.get("from") === "cotizacion") {
+        window.location.href = `../cotizaciones/nueva-cotizacion.html?cliente_id=${targetId}`;
       } else {
         window.location.href = `nuevo-contrato.html?cliente_id=${targetId}`;
       }

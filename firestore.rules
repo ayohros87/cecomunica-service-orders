@@ -53,5 +53,26 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    // ── Cotizaciones públicas ─────────────────────────────────────────
+    // Mirror público de cotizaciones aprobadas. Creado por la app autenticada
+    // (admin que aprueba); leído por cualquiera con el code en el URL.
+    match /cotizacion_verificaciones/{docId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // Log de aperturas desde el link público. Cualquiera puede crear (POST simple,
+    // no se expone PII más allá de user-agent/referrer). Lectura solo autenticada.
+    match /cotizacion_opens/{logId} {
+      allow create: if request.resource.data.keys().hasOnly(
+                         ['verificacion_id', 'cotizacion_id', 'code',
+                          'opened_at', 'user_agent', 'referrer'])
+                       && request.resource.data.verificacion_id is string
+                       && request.resource.data.code is string;
+      allow read: if request.auth != null;
+      allow update, delete: if false;
+    }
   }
 }

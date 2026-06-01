@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cotización · CeComunica</title>
+  <link rel="stylesheet" href="/css/ceco-ui.css">
+  <link rel="stylesheet" href="/css/cotizaciones-kit.css">
+  <link rel="stylesheet" href="/css/print-cotizacion.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="/js/firebase-init.js"></script>
+  <script src="/js/core/formatting.js"></script>
+  <script src="/js/domain/cotizacionesTotales.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .cc-pt-meta { font-size: 11px; color: var(--fg-3); }
+    .empty-card { max-width: 520px; margin: 80px auto; padding: 32px; background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="cc-print-toolbar">
+    <span class="cc-pt-title" id="ptTitle">Cotización</span>
+    <span class="cc-pt-meta" id="ptMeta"></span>
+    <div style="flex:1;"></div>
+    <button class="btn btn-primary btn-sm" onclick="window.print()"><i data-lucide="download"></i> Descargar PDF</button>
+  </div>
+
+  <div class="cc-print-stage">
+    <div class="cq-page" id="cqPage">
+      <p style="padding:48px;">Cargando…</p>
+    </div>
+  </div>
+
+  <script src="/js/pages/verify-cotizacion.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>

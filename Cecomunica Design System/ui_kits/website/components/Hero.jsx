@@ -24,7 +24,7 @@ const Hero = ({ setRoute }) => (
         <div className="hero-meta">
           <div className="hero-meta-item">
             <i data-lucide="shield-check"></i>
-            <span>Integrador autorizado Hytera</span>
+            <span>Radiocomunicación profesional</span>
           </div>
           <div className="hero-meta-item">
             <i data-lucide="map-pin"></i>

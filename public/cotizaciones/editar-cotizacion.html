@@ -9,8 +9,9 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Editar Cotización - Cecomunica</title>
+  <title>Editar cotización - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/cotizaciones-kit.css">
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -18,252 +19,33 @@
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
   <script src="../js/services/cotizacionesService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/modelosService.js"></script>
   <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+  <script src="../js/services/mailService.js"></script>
+  <script src="../js/domain/cotizacionesTotales.js"></script>
+  <script src="../js/pages/cot-editor-state.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
-  <style>
-    /* Page-local — el resto vive en el kit */
-    .cliente-search { position: relative; }
-    .cliente-dropdown {
-      position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
-      background: var(--surface-card); border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md); max-height: 220px; overflow: auto;
-      box-shadow: var(--shadow-md); display: none; margin-top: 4px;
-    }
-    .cliente-option { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid var(--border-subtle); font-size: 14px; }
-    .cliente-option:last-child { border-bottom: 0; }
-    .cliente-option:hover { background: var(--surface-sunken); color: var(--accent); }
-    .cliente-preview {
-      background: var(--surface-sunken); border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md); padding: 10px 12px; font-size: 13px; color: var(--fg-2);
-      line-height: 1.55;
-    }
-    .item-total { font-weight: 700; text-align: right; }
-    .items-row {
-      display: grid; grid-template-columns: 2fr 1fr 0.8fr 1fr auto;
-      align-items: end; gap: 10px;
-    }
-    @media (max-width: 720px) { .items-row { grid-template-columns: 1fr 1fr; } }
-
-    /* Badge de estado en summary-bar — alias a chip-estado del kit
-       (mantiene la API .badge.{estado} que usa el JS). */
-    #sumEstado.badge {
-      padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
-      border: 1px solid transparent; display: inline-flex; align-items: center;
-    }
-    #sumEstado.badge.borrador { background: var(--chip-recibida-bg); color: var(--chip-recibida-fg); border-color: var(--chip-recibida-bd); }
-    #sumEstado.badge.emitida  { background: var(--chip-cotizada-bg); color: var(--chip-cotizada-fg); border-color: var(--chip-cotizada-bd); }
-    #sumEstado.badge.enviada  { background: var(--chip-entregada-bg); color: var(--chip-entregada-fg); border-color: var(--chip-entregada-bd); }
-    #sumEstado.badge.anulada  { background: var(--chip-cancelada-bg); color: var(--chip-cancelada-fg); border-color: var(--chip-cancelada-bd); }
-
-    /* Modo lectura cuando la cotización está bloqueada */
-    .locked { opacity: 0.6; pointer-events: none; }
-  </style>
 </head>
-<body>
+<body data-modo="editar">
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="receipt"></i> Editar Cotización', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="receipt"></i> Editar cotización',
+      back: { label: '<i data-lucide="arrow-left"></i> Cotizaciones', href: 'index.html' },
+      showHome: false, showLogout: true,
+    });
+  </script>
 
-  <div class="app-wrap app-wrap--wide" id="wrapper">
+  <div id="editorMount" class="app-body"></div>
 
-    <div id="readonlyBanner" class="alert-banner alert-warning" style="display:none;">
-      <span class="alert-banner-icon"><i data-lucide="lock"></i></span>
-      <div class="alert-banner-body">
-        <strong>Modo lectura</strong>
-        Esta cotización está emitida. Para cambiarla, duplícala como nueva versión.
-      </div>
-    </div>
-
-    <div class="app-page-header" style="padding-top: var(--sp-3);">
-      <div>
-        <h1 style="display:flex; align-items:baseline; gap:var(--sp-3);">
-          <span id="sumCotizacionId">-</span>
-          <span id="sumEstado" class="badge borrador" style="font-size:11px;">Borrador</span>
-        </h1>
-        <p>Última modificación: <span id="sumModificacion">-</span></p>
-      </div>
-    </div>
-
-    <div class="split-pane">
-
-      <div class="split-main">
-
-        <!-- Cliente -->
-        <div class="app-card app-card-padded">
-          <div class="form-section-header">
-            <h3><i data-lucide="building-2"></i> Cliente</h3>
-          </div>
-          <div class="form-section-body">
-            <div class="form-grid-2">
-              <div class="form-field cliente-search">
-                <label class="form-label" for="clienteBuscar">Buscar cliente</label>
-                <input class="form-input" type="text" id="clienteBuscar" placeholder="Buscar por nombre…">
-                <div id="clienteDropdown" class="cliente-dropdown"></div>
-                <input type="hidden" id="clienteId">
-              </div>
-              <div class="form-field">
-                <label class="form-label">Cliente seleccionado</label>
-                <div id="clientePreview" class="cliente-preview">Sin seleccionar</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Ítems -->
-        <div class="app-card">
-          <div style="padding: var(--sp-5) var(--sp-5) var(--sp-3);">
-            <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="list" style="width:16px;height:16px;"></i> Ítems</p>
-            <p class="form-section-desc" style="margin-bottom:0;">Agregue los ítems que formarán parte de la cotización.</p>
-          </div>
-          <div style="padding: 0 var(--sp-5) var(--sp-3);">
-            <div class="items-row">
-              <div class="form-field" style="margin-bottom:0;">
-                <label class="form-label">Modelo</label>
-                <select class="form-select" id="modeloSelect"></select>
-              </div>
-              <div class="form-field" style="margin-bottom:0;">
-                <label class="form-label">Modalidad</label>
-                <select class="form-select" id="modeloModalidad">
-                  <option value="venta">Venta</option>
-                  <option value="alquiler">Alquiler</option>
-                </select>
-              </div>
-              <div class="form-field" style="margin-bottom:0;">
-                <label class="form-label">Cantidad</label>
-                <input class="form-input" type="number" id="modeloCantidad" min="1" value="1">
-              </div>
-              <div class="form-field" style="margin-bottom:0;">
-                <label class="form-label">Precio</label>
-                <input class="form-input" type="number" id="modeloPrecio" min="0" step="0.01" value="0">
-                <span class="form-hint" id="modeloPrecioHint"></span>
-              </div>
-              <div>
-                <button class="btn btn-secondary" style="margin-top: 22px;" onclick="agregarDesdeModelo()"><i data-lucide="plus"></i> Agregar</button>
-              </div>
-            </div>
-            <div class="form-field" style="margin-top:var(--sp-3);">
-              <label class="form-label" for="modeloDescripcion">Descripción (opcional)</label>
-              <input class="form-input" type="text" id="modeloDescripcion" placeholder="Descripción">
-            </div>
-          </div>
-          <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-            <table class="app-table editable">
-              <thead>
-                <tr>
-                  <th style="width:160px;">Tipo</th>
-                  <th style="width:160px;">Modelo</th>
-                  <th>Descripción</th>
-                  <th style="width:90px;">Cant.</th>
-                  <th style="width:120px;">P. Unit.</th>
-                  <th style="width:140px; text-align:right;">Total</th>
-                  <th style="width:60px; text-align:right;">Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="itemsTabla"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Firma y banco -->
-        <details class="details-block" id="firmaBancoDetails">
-          <summary>
-            <i data-lucide="pen-line" style="width:16px;height:16px;flex-shrink:0;"></i>
-            Firma y banco
-            <span class="details-summary-live">&nbsp;— <span id="firmaResumenNombre">Sin firmante</span> · <span id="bancoResumen">Banistmo - 0101081314</span></span>
-          </summary>
-          <div class="details-body">
-            <div class="form-grid-2">
-              <div class="form-field">
-                <label class="form-label" for="firmadoNombre">Firmado por (nombre)</label>
-                <input class="form-input" type="text" id="firmadoNombre" value="">
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="firmadoCargo">Cargo</label>
-                <input class="form-input" type="text" id="firmadoCargo" value="Asistente Ejecutiva">
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="firmadoTel">Teléfono</label>
-                <input class="form-input" type="text" id="firmadoTel" value="279-5570">
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="firmadoCel">Celular</label>
-                <input class="form-input" type="text" id="firmadoCel" value="">
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="bancoNombre">Banco</label>
-                <input class="form-input" type="text" id="bancoNombre" value="Banistmo" disabled>
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="bancoTipo">Tipo de cuenta</label>
-                <input class="form-input" type="text" id="bancoTipo" value="Cuenta corriente" disabled>
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="bancoNumero">Número de cuenta</label>
-                <input class="form-input" type="text" id="bancoNumero" value="0101081314" disabled>
-              </div>
-              <div class="form-field">
-                <label class="form-label" for="bancoTitular">Titular</label>
-                <input class="form-input" type="text" id="bancoTitular" value="C COMUNICA, S.A." disabled>
-              </div>
-            </div>
-          </div>
-        </details>
-      </div>
-
-      <!-- Sidebar -->
-      <div class="split-sidebar">
-        <div class="summary-card">
-          <div class="summary-card-title">Resumen de cotización</div>
-          <div class="summary-card-divider"></div>
-          <div class="summary-totals-row"><span>Subtotal</span><strong id="subtotalTxt">$0.00</strong></div>
-          <div class="summary-totals-row muted"><span>ITBMS (7%)</span><span id="itbmsTxt">$0.00</span></div>
-          <div class="summary-totals-row total"><span>Total</span><span id="totalTxt">$0.00</span></div>
-          <div id="notaAlquiler" class="form-hint" style="display:none; margin-top:6px;">Nota: precios de alquiler son /mes.</div>
-
-          <div class="summary-card-divider"></div>
-
-          <div class="form-field">
-            <label class="form-label" for="validezDias">Validez (días)</label>
-            <input class="form-input" type="number" id="validezDias" min="1" value="30">
-          </div>
-          <div class="form-field">
-            <label class="form-label" for="formaPago">Forma de pago</label>
-            <select class="form-select" id="formaPago">
-              <option value="contado">Contado</option>
-              <option value="credito">Crédito</option>
-              <option value="otro">Otro</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label class="form-label" for="tiempoEntrega">Tiempo de entrega</label>
-            <input class="form-input" type="text" id="tiempoEntrega" placeholder="Ej: 3-5 días hábiles">
-          </div>
-          <div class="form-field">
-            <label class="form-label" for="notas">Notas</label>
-            <textarea class="form-input form-textarea" id="notas" rows="3"></textarea>
-          </div>
-
-          <div class="summary-card-divider"></div>
-
-          <div class="summary-card-actions">
-            <button class="btn btn-primary" style="width:100%;" onclick="guardar('emitida')"><i data-lucide="check-circle"></i> Emitir</button>
-            <button class="btn btn-secondary" style="width:100%;" onclick="guardar('borrador')"><i data-lucide="save"></i> Guardar borrador</button>
-            <button class="btn btn-secondary" style="width:100%;" onclick="imprimir()"><i data-lucide="printer"></i> Imprimir</button>
-            <button class="btn btn-secondary" style="width:100%;" onclick="duplicarCotizacion()"><i data-lucide="copy"></i> Duplicar</button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- Toast region -->
-  <div class="toast-region" id="toast-region" aria-live="polite"></div>
-
-  <script src="../js/pages/editar-cotizacion.js" defer></script>
+  <script src="../js/pages/cot-editor.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>
