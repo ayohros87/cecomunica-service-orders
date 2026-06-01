@@ -70,7 +70,7 @@ module.exports = onCall(
     const callerUid = request.auth.uid;
     const userDoc = await db.collection("usuarios").doc(callerUid).get();
     const rol = (userDoc.data() || {}).rol || "";
-    if (rol !== "admin") {
+    if (rol !== "administrador") {
       throw new HttpsError("permission-denied", "Admin role required.");
     }
 
