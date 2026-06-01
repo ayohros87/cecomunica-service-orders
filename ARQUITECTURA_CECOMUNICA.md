@@ -43,6 +43,9 @@ public/
   login.html
   perfil.html
   firma-correo.html            ← generador de firma de correo (todos los roles)
+  admin/                       ← panel de administración (solo ROLES.ADMIN — ver §3.8)
+    index.html, operacion.html, salud.html,
+    auditoria.html, pii.html, config.html
   contratos/
     index.html, nuevo-contrato.html, editar-contrato.html,
     imprimir-contrato.html, nuevo-cliente.html
@@ -339,6 +342,37 @@ Algunas páginas son herramientas personales y se muestran a cualquier usuario a
 | `perfil.html` | — (link del menú overflow del topbar) | — | Lectura del propio perfil (nombre, correo, rol) |
 | `firma-correo.html` | `firma` | `F` | Generador personal de firma HTML para correo. Pre-rellena nombre/correo/cargo desde `usuarios/{uid}` y permite copiar la firma (HTML + texto plano) al portapapeles. Usa `UsuariosService.getUsuario`, primitivos `.ds-card` / `.form-input` y `Layout.renderTopbarFor('edit')`. Los estilos inline en la plantilla de firma son intencionales: deben sobrevivir al cliente de correo. |
 
+### 4.4 Panel de Administración (solo admin)
+
+Acceso vía botón **"Panel de Administración"** en el menú overflow ("Más") del topbar del home, oculto por defecto y revelado solo cuando `verificarAccesoYAplicarVisibilidad` reporta `rol === 'administrador'`. No es una tarjeta del grid de módulos: queda fuera del flujo operativo diario.
+
+Páginas (todas en `public/admin/`):
+
+| Página | Responsabilidad | Servicios usados |
+|---|---|---|
+| `index.html` | Landing del panel: 4 stat cards (órdenes abiertas, contratos pendientes, cotizaciones por vencer, PoC activos) + banners de alerta + lanzadores a sub-páginas. Auto-refresh opcional (60 s, se pausa con `document.hidden`). | `OrdenesService`, `ContratosService`, `CotizacionesService`, `PocService` |
+| `operacion.html` | Tablas detalladas: órdenes por estado y por técnico, contratos por estado, cotizaciones por estado + las que vencen pronto, inventario crítico (stock ≤ mínimo). | `OrdenesService`, `ContratosService`, `CotizacionesService`, `PiezasService` |
+| `salud.html` | Diagnóstico técnico: `mail_queue` atascados (>1h) y con error, resumen 24h; usuarios sin rol o con rol fuera del enum `ROLES`; órdenes sin `searchTokens`; top 10 órdenes por tamaño de `os_logs`. | `MailQueueService` (nuevo), `UsuariosService`, `OrdenesService` |
+| `auditoria.html` | Timeline unificado de eventos recientes: transiciones de orden (ASIGNAR/COMPLETAR/ENTREGAR desde `os_logs`), transiciones de contrato (APROBAR/ANULAR desde `fecha_*`), purgas PII (`identificacion_purged_at`). Resuelve UIDs a nombres en batch. Filtros por tipo (chips) y texto libre. | `AuditoriaService` (nuevo), `UsuariosService` |
+| `pii.html` | UI para `purgePIIRetention` callable: preview en seco con sample de 50 archivos, luego ejecución con `Modal.confirm` destructivo. Configura `retentionDays` (default 90, min 30). | callable `purgePIIRetention` |
+| `config.html` | Editor de `empresa/config` (ver §5.7). Form con validación inline; modal de confirmación al guardar; rastro de `updated_at` + `updated_by`. | `EmpresaService.getConfig` / `setConfig` |
+
+Servicios nuevos vinculados al panel:
+
+| Servicio | Colección | Operaciones |
+|---|---|---|
+| `mailQueueService.js` | `mail_queue` | `listStuck`, `listFailed`, `countRecent` — solo lectura. `MailService` sigue siendo el único escritor. |
+| `auditoriaService.js` | (cross — ordenes + contratos) | `getTimelineEvents({ limitPerSource })` lee `os_logs[]`, `fecha_aprobacion`, `fecha_anulacion`, `identificacion_purged_at` y agrupa en un array unificado descendente. |
+
+Helpers de dominio nuevos (`js/domain/adminMetrics.js`): `groupByStatus`, `countWhere`, `daysUntilExpiry`, `bucketByAge`, `ageInDays`, `toDate`, `daysBetween`. Sin DOM, sin Firestore.
+
+Seguridad — defensa en profundidad:
+
+- **Frontend:** cada página llama `verificarAccesoYAplicarVisibilidad` y redirige a `../index.html` con toast si `rol !== ROLES.ADMIN`.
+- **Backend:** los datos sensibles ya están protegidos por reglas de Firestore (`usuarios.write: if false`, campos owned por CF en contratos, etc.); el panel no necesita reglas nuevas en v1. El callable `purgePIIRetention` valida `rol === 'administrador'` server-side.
+
+> **Bug fix asociado:** `functions/src/triggers/scheduled/purgePIIRetention.js` comparaba con la string literal `"admin"`, pero el rol canónico es `"administrador"` — la función nunca habría aceptado a nadie. Corregido junto con la entrega del panel.
+
 ---
 
 ## 5. Base de Datos (Firestore)
@@ -416,6 +450,33 @@ Al purgar una foto de ID, el CF también limpia `identificacion_url: null` en el
 - **Lógica de tokens:** ver `functions/src/lib/searchTokens.js` — orden ID + sus partes, palabras del cliente (≥2 chars), palabras del técnico (≥2 chars), palabras del tipo de servicio (≥3 chars), y serials de cada equipo más sus sufijos de 4–8 caracteres (para soportar "últimos 4 dígitos" típicos de techs). Cap de 200 tokens por documento.
 - **Quién lee:** `OrdenesService.searchOrders` en el frontend. Query indexada primero; si falla por índice ausente, o devuelve cero resultados (caso de transición pre-backfill), cae al scan completo como fallback.
 - **Normalización idéntica entre server y cliente:** lowercase → NFD → strip diacritics → no-alfanuméricos a espacios → trim. Cualquier divergencia entre la lib en `functions/` y el normalizador embebido en `ordenesService.js` produce falsos negativos — son dos implementaciones del mismo algoritmo, mantener sincronizadas.
+
+### 5.7 Configuración admin-tuneable — `empresa/config`
+
+Documento único que centraliza parámetros que cambian con decisiones de negocio o regulación y que no justifican un redeploy. Editor en `admin/config.html` (ver §4.4).
+
+| Key | Tipo | Default | Consumidor |
+|---|---|---|---|
+| `itbms_rate` | number | `0.07` | `FMT.ITBMS_RATE` — reasignado en boot por `firebase-init.js` |
+| `cotizacion_validez_dias` | int | `15` | Editor de cotizaciones nuevas (campo `validezDias` inicial) |
+| `pii_retention_dias` | int | `90` | Default del input en `admin/pii.html` (callable acepta `retentionDays` por parámetro) |
+| `stock_minimo_default` | int | `5` | Placeholder al crear pieza nueva |
+| `orden_stale_dias` | int | `10` | Umbral del badge "stale" en `admin/operacion.html` |
+| `mail_cc_orden_completada` | string[] | `[]` | Pendiente de leer en `onOrdenCompletada` CF |
+| `mail_cc_contrato_aprobado` | string[] | `[]` | Pendiente de leer en `onContratoActivadoSendPdf` CF |
+
+**Mecánica:**
+
+- `EmpresaService.CONFIG_DEFAULTS` (frozen object) — única fuente de defaults compartida entre el editor, el seeder y el fallback de `getConfig()`.
+- `EmpresaService.getConfig()` — merge sobre defaults; **nunca lanza**: si Firestore falla o el doc no existe, devuelve los defaults puros. Garantiza que la app sobrevive un Firestore caído / ITP de Safari / doc borrado.
+- `EmpresaService.setConfig(patch)` — patch-merge + estampa `updated_at` + `updated_by` (uid).
+- `firebase-init.js → _applyEmpresaConfig()` — corre dentro de `verificarAccesoYAplicarVisibilidad`, antes del callback de la página. Aplica `cfg.itbms_rate → FMT.ITBMS_RATE` y deja `window.EMPRESA_CONFIG` disponible para consumidores ad-hoc. Feature-detected: páginas que no cargan `EmpresaService` simplemente no aplican overrides.
+
+**Regla crítica:** todo consumidor mantiene **su propio default literal** en el código. La config es una capa de override, no una dependencia bloqueante. Ej: `admin-operacion.js` define `STALE_DAYS_DEFAULT = 10` y la función `staleDays()` lee `window.EMPRESA_CONFIG?.orden_stale_dias || STALE_DAYS_DEFAULT`.
+
+**Seguridad:** ninguna regla nueva en Firestore en v1 — `empresa/{docId}` ya es read/write autenticado. Endurecimiento a admin-only pendiente cuando la lectura de la config esté generalizada (hoy el override se aplica una sola vez por sesión, en el contexto del admin que abrió el panel).
+
+**Seed inicial:** `public/tools/seed-empresa-config.html` (excluido del deploy via `firebase.json → hosting.ignore: tools/**`) inicializa el doc con los defaults. Idempotente — si el doc ya existe, no escribe; botón "FORZADO" reescribe explícitamente.
 
 ---
 

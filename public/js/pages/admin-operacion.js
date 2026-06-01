@@ -11,8 +11,12 @@
 (function () {
   'use strict';
 
-  const STALE_DAYS = 10;
+  // Defaults — overridden at runtime by EMPRESA_CONFIG if loaded.
+  const STALE_DAYS_DEFAULT = 10;
   const COT_VENCE_DAYS = 7;
+  function staleDays() {
+    return (window.EMPRESA_CONFIG?.orden_stale_dias) || STALE_DAYS_DEFAULT;
+  }
 
   function $(id) { return document.getElementById(id); }
   function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
@@ -52,14 +56,15 @@
       rows);
     setText('totalOrdenes', `${live.length.toLocaleString('es-PA')} órdenes activas`);
 
-    // Stale: open orders not updated in > STALE_DAYS días.
+    // Stale: open orders not updated in > orden_stale_dias.
     const now = new Date();
+    const threshold = staleDays();
     const stale = live.filter(o => {
       const est = (o.estado_reparacion || '').toUpperCase();
       if (est === 'ENTREGADA' || est === 'COMPLETADA') return false;
       const updated = o.updatedAt || o.fecha_actualizacion || o.fecha_modificacion || o.fecha_entrada || o.fecha_creacion;
       const age = AdminMetrics.ageInDays(updated, now);
-      return age != null && age >= STALE_DAYS;
+      return age != null && age >= threshold;
     });
     setText('countStale', stale.length.toString());
     return live;

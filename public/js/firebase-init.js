@@ -22,6 +22,24 @@ firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((err) =>
 });
 const db = firebase.firestore();
 
+  // Apply admin-tunable config from empresa/config to runtime globals.
+  // Feature-detected: pages that don't load EmpresaService just skip this.
+  // Consumers MUST keep their literal default — this is an override layer,
+  // not a hard dependency (see PLAN_ADMIN_PANEL.md §12.1).
+  async function _applyEmpresaConfig() {
+    if (typeof window.EmpresaService === "undefined") return;
+    try {
+      const cfg = await window.EmpresaService.getConfig();
+      window.EMPRESA_CONFIG = cfg;
+      if (window.FMT && typeof cfg.itbms_rate === "number") {
+        window.FMT.ITBMS_RATE = cfg.itbms_rate;
+      }
+    } catch (err) {
+      // Defaults already returned by getConfig on error; just log.
+      console.warn("[firebase-init] empresa/config not applied:", err?.code || err);
+    }
+  }
+
   window.verificarAccesoYAplicarVisibilidad = async function (callback) {
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) {
@@ -34,6 +52,9 @@ const db = firebase.firestore();
       const rol = doc.exists ? doc.data().rol : null;
 
       window.userRole = rol;
+
+      // Best-effort config apply — never blocks the page if it fails.
+      await _applyEmpresaConfig();
 
       if (typeof callback === "function") {
         callback(rol); // Aplica lógica personalizada en cada página
