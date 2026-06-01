@@ -17,3 +17,4 @@ exports.onOrdenHardDelete             = onOrdenHardDelete;
 exports.onOrdenWriteSearchTokens      = require("./src/triggers/ordenes/onWriteSearchTokens");
 exports.purgePIIRetention             = require("./src/triggers/scheduled/purgePIIRetention");
 exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onOpened");
+exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");

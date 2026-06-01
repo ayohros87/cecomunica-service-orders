@@ -250,6 +250,167 @@
     return { clientes, clientesById, catalogo, ejecutivos, emisor };
   }
 
+  // ── Modal "Cerrar cotización" ─────────────────────────────────────────────
+  // Permite al usuario marcar el desenlace de una cotización enviada / aprobada
+  // como Convertida (venta cerrada) o Rechazada (cliente declinó), evitando
+  // tener dos botones separados. Devuelve Promise<'convertida'|'rechazada'|null>.
+  function cerrarPrompt({ cotizacionId, total, cliente } = {}) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-backdrop';
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:480px;">
+          <div class="modal-header">
+            <h3 class="modal-title"><i data-lucide="flag"></i> Cerrar cotización</h3>
+            <button class="modal-close" data-act="cancel" aria-label="Cerrar"><i data-lucide="x"></i></button>
+          </div>
+          <div class="modal-body">
+            <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
+              ${cotizacionId ? '<b>' + cotizacionId + '</b> · ' : ''}${cliente || ''}${total != null ? ' · ' + window.FMT.money(total) : ''}
+            </p>
+            <p style="margin:0 0 16px; font-size:13.5px; color:var(--fg-2); line-height:1.5;">
+              ¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.
+            </p>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <button class="btn btn-secondary" data-act="convertida"
+                      style="background:#065F46; color:#fff; border-color:#065F46; justify-content:flex-start;">
+                <i data-lucide="trophy"></i>
+                <span style="margin-left:8px;"><b>Convertida a venta</b> — el cliente aceptó y se cerró el negocio</span>
+              </button>
+              <button class="btn btn-secondary" data-act="rechazada"
+                      style="background:#991B1B; color:#fff; border-color:#991B1B; justify-content:flex-start;">
+                <i data-lucide="x-circle"></i>
+                <span style="margin-left:8px;"><b>Rechazada</b> — el cliente declinó la propuesta</span>
+              </button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" data-act="cancel">Cancelar</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+      if (window.lucide) lucide.createIcons();
+
+      function close(result) {
+        document.body.style.overflow = '';
+        overlay.remove();
+        resolve(result);
+      }
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) return close(null);
+        const btn = e.target.closest('[data-act]');
+        if (!btn) return;
+        const act = btn.dataset.act;
+        if (act === 'cancel') return close(null);
+        if (act === 'convertida' || act === 'rechazada') return close(act);
+      });
+      const onKey = (e) => {
+        if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); close(null); }
+      };
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
+  // ── Modal "Reenviar al cliente" ───────────────────────────────────────────
+  // Muestra preview del correo (destinatario editable, CC fijo al vendedor,
+  // asunto y cuerpo) antes de enviar. Similar al panel de aprobación.
+  // opts: { cotizacionId, clienteNombre, total, dirigidoA, defaultDest, ccEmail,
+  //         intro, validezDias, ejecutivo, link }
+  // Devuelve Promise<{ dest, subject, html } | null>.
+  function reenviarPrompt(opts) {
+    return new Promise((resolve) => {
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const subject = `Cotización ${opts.cotizacionId || ''} · CeComunica`;
+      const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
+      const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
+      const bodyHtml = `
+<div style="font-family:Arial, sans-serif; color:#111; max-width:560px;">
+  <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">Cotización ${esc(opts.cotizacionId || '')}</h2>
+  <p style="margin:0 0 10px;">Estimados señores,</p>
+  ${dirAHtml}
+  <p style="margin:0 0 10px;">${introHtml}</p>
+  <p style="margin:0 0 4px;"><b>Total:</b> ${window.FMT.money(Number(opts.total || 0))}</p>
+  <p style="margin:0 0 4px;"><b>Validez:</b> ${opts.validezDias || 15} días</p>
+  <p style="margin:18px 0;">
+    <a href="${esc(opts.link || '#')}" style="background:#0B2A47; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:600;">
+      Ver y descargar cotización (PDF)
+    </a>
+  </p>
+  <p style="font-size:12px; color:#6B7884; margin-top:24px;">
+    Si tiene cualquier consulta, puede responder a este correo. Atentamente, ${esc(opts.ejecutivo || 'CeComunica')}.
+  </p>
+</div>`;
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-backdrop';
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `
+        <div class="modal modal-lg" style="max-width:680px;">
+          <div class="modal-header">
+            <h3 class="modal-title"><i data-lucide="send"></i> Enviar cotización al cliente</h3>
+            <button class="modal-close" data-act="cancel" aria-label="Cerrar"><i data-lucide="x"></i></button>
+          </div>
+          <div class="modal-body">
+            <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3); margin-bottom:var(--sp-3);">
+              <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="mail"></i> Encabezado</legend>
+              <div class="form-field" style="margin-bottom:8px;">
+                <label class="form-label">Para (destinatario)</label>
+                <input type="email" class="form-input" id="rxDest" value="${esc(opts.defaultDest || '')}" placeholder="destinatario@empresa.com">
+                <span class="form-hint" style="font-size:11px; color:var(--fg-3);">Este es el "Email destinatario" de la cotización. Puedes ajustarlo si va a otra persona.</span>
+              </div>
+              <div class="form-field" style="margin-bottom:8px;">
+                <label class="form-label">CC (vendedor)</label>
+                <input type="email" class="form-input" value="${esc(opts.ccEmail || '')}" disabled>
+              </div>
+              <div class="form-field" style="margin-bottom:0;">
+                <label class="form-label">Asunto</label>
+                <input type="text" class="form-input" id="rxSubject" value="${esc(subject)}">
+              </div>
+            </fieldset>
+            <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3);">
+              <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="eye"></i> Vista previa del correo</legend>
+              <div style="background:#F5F7FA; padding:16px; border-radius:6px; max-height:280px; overflow:auto;">${bodyHtml}</div>
+            </fieldset>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" data-act="cancel"><i data-lucide="x-circle"></i> Cancelar</button>
+            <button class="btn btn-primary" data-act="send"><i data-lucide="send"></i> Enviar</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+      if (window.lucide) lucide.createIcons();
+      const destInput = overlay.querySelector('#rxDest');
+      const subjInput = overlay.querySelector('#rxSubject');
+      destInput.focus();
+
+      function close(result) {
+        document.body.style.overflow = '';
+        overlay.remove();
+        resolve(result);
+      }
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) return close(null);
+        const btn = e.target.closest('[data-act]');
+        if (!btn) return;
+        if (btn.dataset.act === 'cancel') return close(null);
+        if (btn.dataset.act === 'send') {
+          const dest = (destInput.value || '').trim();
+          if (!dest) { destInput.focus(); return; }
+          return close({ dest, subject: (subjInput.value || '').trim() || subject, html: bodyHtml });
+        }
+      });
+      const onKey = (e) => {
+        if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); close(null); }
+      };
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
   window.CotState = {
     ESTADOS, ESTADO_ORDEN,
     CONDICIONES_DEFAULT, PLANTILLAS_COND,
@@ -257,5 +418,6 @@
     uid,
     mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec,
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
+    cerrarPrompt, reenviarPrompt,
   };
 })();

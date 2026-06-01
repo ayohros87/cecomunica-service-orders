@@ -65,6 +65,7 @@
         <div class="app-page-header-actions">
           <button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
+          ${(cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
           <button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>
           <button class="btn btn-primary" id="btnImprimir"><i data-lucide="printer"></i> Imprimir / PDF</button>
         </div>
@@ -168,6 +169,8 @@
     $('btnDuplicar').addEventListener('click', duplicar);
     const btnEnv = $('btnEnviar');
     if (btnEnv) btnEnv.addEventListener('click', () => enviarPorCorreo(cli, ej));
+    const btnCer = $('btnCerrar');
+    if (btnCer) btnCer.addEventListener('click', () => cerrarCotizacion(cli));
     $('btnEditar').addEventListener('click', () => { location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId); });
     $('btnImprimir').addEventListener('click', () => { window.open('imprimir-cotizacion.html?id=' + encodeURIComponent(cot._docId), '_blank'); });
 
@@ -176,10 +179,12 @@
   }
 
   // ── Transiciones de estado ────────────────────────────────────
+  // borrador → aprobada (admin aprueba) → enviada (auto al cliente) → convertida (venta cerrada)
+  // En cualquier paso intermedio se puede rechazar o dejar vencer.
   const TRANSICIONES = {
     borrador:   ['enviada'],
-    enviada:    ['aprobada', 'rechazada', 'vencida'],
-    aprobada:   ['convertida', 'rechazada'],
+    aprobada:   ['enviada', 'convertida', 'rechazada'],
+    enviada:    ['convertida', 'rechazada', 'vencida'],
     rechazada:  ['borrador'],
     vencida:    ['enviada', 'borrador'],
     convertida: [],
@@ -203,6 +208,33 @@
     });
   }
 
+  async function cerrarCotizacion(cli) {
+    const t = T.calcTotales(cot);
+    const desenlace = await CotState.cerrarPrompt({
+      cotizacionId: cot.id,
+      total: t.total,
+      cliente: cli?.razon || cot.cliente_nombre || '',
+    });
+    if (!desenlace) return;
+    try {
+      const patch = { estado: desenlace };
+      if (desenlace === 'convertida') {
+        patch.fecha_conversion = firebase.firestore.Timestamp.now();
+        patch.convertida_por_uid = firebase.auth().currentUser?.uid || null;
+      } else {
+        patch.fecha_rechazo = firebase.firestore.Timestamp.now();
+        patch.rechazado_por_uid = firebase.auth().currentUser?.uid || null;
+      }
+      await CotizacionesService.updateCotizacion(cot._docId, patch);
+      cot.estado = desenlace;
+      Toast.show(desenlace === 'convertida' ? '🏆 Convertida a venta' : 'Cotización rechazada', desenlace === 'convertida' ? 'ok' : 'warn');
+      render();
+    } catch (e) {
+      console.error(e);
+      Toast.show('No se pudo cerrar: ' + (e?.message || e), 'bad');
+    }
+  }
+
   async function cambiarEstado(nuevo) {
     const ok = await Modal.confirm({
       title: 'Cambiar estado',
@@ -222,43 +254,55 @@
     }
   }
 
-  // ── Enviar por correo ─────────────────────────────────────────
+  // ── Enviar por correo (panel con preview) ─────────────────────
   async function enviarPorCorreo(cli, ej) {
-    const defaultDest = cot.dirigido_email || cli.email || '';
-    const dest = await Modal.prompt({
-      title: 'Enviar cotización por correo',
-      message: 'Correo del destinatario:',
-      defaultValue: defaultDest,
-      placeholder: 'destinatario@empresa.com',
-    });
-    if (!dest) return;
-
-    const emisor = catalogos.emisor;
     const t = T.calcTotales(cot);
-    const html = `
-      <div style="font-family:Arial, sans-serif; color:#111;">
-        <p>Estimados señores,</p>
-        <p>${esc(cot.intro || 'Adjuntamos la cotización solicitada.')}</p>
-        <p><b>Cotización:</b> ${esc(cot.id)}<br>
-        <b>Total:</b> ${FMT.money(t.total)}<br>
-        <b>Validez:</b> ${cot.validezDias} días</p>
-        <p>Para imprimir o descargar la cotización en PDF, abra el siguiente enlace:</p>
-        <p><a href="${location.origin}/cotizaciones/imprimir-cotizacion.html?id=${encodeURIComponent(cot._docId)}">Ver cotización ${esc(cot.id)}</a></p>
-        <p>Atentamente,<br>
-        ${esc(ej.nombre || '')}<br>
-        ${esc(ej.rol || '')}<br>
-        ${esc(emisor.razon)}<br>
-        ${esc(emisor.tel)} · ${esc(emisor.email)}</p>
-      </div>
-    `;
+    // Generar link público antes de abrir el panel.
+    let link;
+    try {
+      const snapshot = {
+        id: cot.id, estado: cot.estado, fecha: cot.fecha, validezDias: cot.validezDias,
+        moneda: cot.moneda, descuentoPct: cot.descuentoPct, itbmsPct: cot.itbmsPct,
+        intro: cot.intro, items: cot.items, condiciones: cot.condiciones,
+        subtotal: t.subtotal, descGlobal: t.descGlobal, itbms: t.itbms, total: t.total,
+        cliente: { razon: cli.razon, ruc: cli.ruc, tel: cli.tel, email: cli.email, representante: cli.representante },
+        ejecutivo: { nombre: ej.nombre, rol: ej.rol, email: ej.email, tel: ej.tel },
+      };
+      const result = await CotizacionesService.ensureVerificacionPublica(cot._docId, {
+        cotizacion_id: cot.id,
+        cliente_nombre: cli.razon || '',
+        dirigido_a: cot.dirigido_a, dirigido_email: cot.dirigido_email,
+        ejecutivo_nombre: ej.nombre || '',
+        creado_por_uid: cot.creado_por_uid, creado_por_email: cot.creado_por_email,
+        total: t.total, moneda: cot.moneda, fecha: cot.fecha, validezDias: cot.validezDias,
+        snapshot, emisor: catalogos.emisor,
+      });
+      link = result.url;
+    } catch (e) { Toast.show('No se pudo generar el link público: ' + (e?.message || e), 'bad'); return; }
+
+    const payload = await CotState.reenviarPrompt({
+      cotizacionId: cot.id,
+      clienteNombre: cli.razon || '',
+      total: t.total,
+      dirigidoA: cot.dirigido_a || '',
+      defaultDest: cot.dirigido_email || cli.email || '',
+      ccEmail: cot.creado_por_email || '',
+      intro: cot.intro || '',
+      validezDias: cot.validezDias || 15,
+      ejecutivo: ej.nombre || '',
+      link,
+    });
+    if (!payload) return;
+
     try {
       await CotizacionesService.enviarPorCorreo(cot._docId, {
-        to: dest,
-        subject: 'Cotización ' + cot.id + ' · ' + emisor.razon,
-        html,
+        to: payload.dest,
+        cc: cot.creado_por_email || null,
+        subject: payload.subject,
+        html: payload.html,
       });
       cot.estado = 'enviada';
-      Toast.show('Cotización enviada a ' + dest, 'ok');
+      Toast.show('Cotización enviada a ' + payload.dest, 'ok');
       render();
     } catch (err) {
       Toast.show('Error al enviar: ' + (err?.message || err), 'bad');

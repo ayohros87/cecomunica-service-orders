@@ -109,15 +109,18 @@
   function renderStats() {
     const visibles = cotizaciones.filter(c => !c.deleted);
     const enviadas = visibles.filter(c => c.estado === 'enviada').length;
-    const montoAprobado = visibles
-      .filter(c => c.estado === 'aprobada' || c.estado === 'convertida')
+    // "Monto cerrado": solo cotizaciones convertidas a venta efectiva.
+    const montoCerrado = visibles
+      .filter(c => c.estado === 'convertida')
       .reduce((s, c) => s + Number(c.total || 0), 0);
-    const aprobadasoConv = visibles.filter(c => c.estado === 'aprobada' || c.estado === 'convertida').length;
-    const noBorrador = Math.max(1, visibles.filter(c => c.estado !== 'borrador').length);
-    const tasa = Math.round(aprobadasoConv / noBorrador * 100);
+    // Tasa de cierre: convertidas / oportunidades activas (enviadas + convertidas + rechazadas + vencidas).
+    // Excluye borrador (en proceso) y aprobada (aún no llegó al cliente).
+    const convertidas = visibles.filter(c => c.estado === 'convertida').length;
+    const oportunidades = visibles.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
+    const tasa = oportunidades > 0 ? Math.round(convertidas / oportunidades * 100) : 0;
     $('statTotal').textContent = visibles.length;
     $('statPendientes').textContent = enviadas;
-    $('statMontoAprobado').textContent = FMT.money(montoAprobado);
+    $('statMontoAprobado').textContent = FMT.money(montoCerrado);
     $('statTasa').textContent = tasa + '%';
   }
 
@@ -146,6 +149,7 @@
           <td class="td-actions">
             <span class="cc-row-actions">
               ${(userRol === ROLES.ADMIN && (c.estado || 'borrador') === 'borrador') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar" data-action="aprobar"><i data-lucide="check-circle"></i></button>` : ''}
+              ${(c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
               <button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>
               ${(c.estado === 'aprobada' || c.estado === 'enviada' || c.estado === 'convertida') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Reenviar al cliente" data-action="enviar"><i data-lucide="send"></i></button>` : ''}
@@ -210,36 +214,63 @@
     if (action === 'eliminar') { return await eliminar(cot); }
     if (action === 'enviar')   { return await enviar(cot); }
     if (action === 'aprobar')  { return openAprobacion(cot.id); }
+    if (action === 'cerrar')   { return await cerrarDesdeLista(cot); }
+  }
+
+  async function cerrarDesdeLista(cot) {
+    const desenlace = await CotState.cerrarPrompt({
+      cotizacionId: cot.cotizacion_id || cot.id,
+      total: Number(cot.total || 0),
+      cliente: cot.cliente_nombre || '',
+    });
+    if (!desenlace) return;
+    const patch = { estado: desenlace };
+    if (desenlace === 'convertida') {
+      patch.fecha_conversion = firebase.firestore.Timestamp.now();
+      patch.convertida_por_uid = userUid;
+    } else {
+      patch.fecha_rechazo = firebase.firestore.Timestamp.now();
+      patch.rechazado_por_uid = userUid;
+    }
+    try {
+      await CotizacionesService.updateCotizacion(cot.id, patch);
+      cot.estado = desenlace;
+      Toast.show(desenlace === 'convertida' ? '🏆 Convertida a venta' : 'Cotización rechazada',
+                 desenlace === 'convertida' ? 'ok' : 'warn');
+      render();
+    } catch (e) {
+      Toast.show('No se pudo cerrar: ' + (e?.message || e), 'bad');
+    }
   }
 
   async function enviar(cot) {
-    // Default: usa "Email destinatario" (dirigido_email), no el email del cliente.
-    const dest = await Modal.prompt({
-      title: 'Reenviar cotización por correo',
-      message: 'Correo del destinatario:',
-      defaultValue: cot.dirigido_email || cot.cliente_email || '',
-      placeholder: 'destinatario@empresa.com',
+    // Pre-cargar link público (puede tardar un instante) antes de mostrar preview.
+    let link;
+    try { link = await ensureLinkPublico(cot.id); }
+    catch (e) { Toast.show('No se pudo generar el link público: ' + (e?.message || e), 'bad'); return; }
+
+    const payload = await CotState.reenviarPrompt({
+      cotizacionId: cot.cotizacion_id || cot.id,
+      clienteNombre: cot.cliente_nombre || '',
+      total: Number(cot.total || 0),
+      dirigidoA: cot.dirigido_a || '',
+      defaultDest: cot.dirigido_email || cot.cliente_email || '',
+      ccEmail: cot.creado_por_email || '',
+      intro: cot.intro || '',
+      validezDias: cot.validezDias || 15,
+      ejecutivo: cot.ejecutivo_nombre || '',
+      link,
     });
-    if (!dest) return;
-    const subject = 'Cotización ' + (cot.cotizacion_id || cot.id) + ' · CeComunica';
-    const link = await ensureLinkPublico(cot.id);
-    const html = `
-      <div style="font-family:Arial, sans-serif; color:#111;">
-        <p>Estimados señores,</p>
-        <p>${(cot.intro || 'Adjuntamos la cotización solicitada.').replace(/[<>&]/g, s => ({ '<':'&lt;','>':'&gt;','&':'&amp;' }[s]))}</p>
-        <p><b>Cotización:</b> ${cot.cotizacion_id || cot.id}<br>
-        <b>Total:</b> ${FMT.money(Number(cot.total || 0))}</p>
-        <p><a href="${link}" style="background:#0B2A47;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block;">Ver y descargar cotización (PDF)</a></p>
-      </div>
-    `;
+    if (!payload) return;
     try {
       await CotizacionesService.enviarPorCorreo(cot.id, {
-        to: dest,
+        to: payload.dest,
         cc: cot.creado_por_email || null,
-        subject, html,
+        subject: payload.subject,
+        html: payload.html,
       });
       cot.estado = 'enviada';
-      Toast.show('Cotización reenviada a ' + dest, 'ok');
+      Toast.show('Cotización enviada a ' + payload.dest, 'ok');
       render();
     } catch (err) {
       Toast.show('Error al enviar: ' + (err?.message || err), 'bad');
