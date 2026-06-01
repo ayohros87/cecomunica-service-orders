@@ -166,14 +166,14 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
               <div class="leyenda-titulo">Leyenda de Accesorios</div>
               <button class="popover-close" data-action="close-popover" data-stop-propagation="true" data-orden-id="${ordenId}">×</button>
               <div class="leyenda-items-inline">
-                <span class="leyenda-item"><span class="icono"><i data-lucide="battery-full"></i></span> Batería</span>
-                <span class="leyenda-item"><span class="icono"><i data-lucide="paperclip"></i></span> Clip</span>
-                <span class="leyenda-item"><span class="icono"><i data-lucide="plug"></i></span> Cargador</span>
-                <span class="leyenda-item"><span class="icono"><i data-lucide="zap"></i></span> Fuente</span>
-                <span class="leyenda-item"><span class="icono"><i data-lucide="radio-tower"></i></span> Antena</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">BAT</span> Batería</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CLIP</span> Clip</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CARG</span> Cargador</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">FNT</span> Fuente</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">ANT</span> Antena</span>
                 <span class="separador-leyenda">|</span>
-                <span class="estado-inline"><span class="indicador incluido"></span> Incluido</span>
-                <span class="estado-inline"><span class="indicador no-incluido"></span> No incluido</span>
+                <span class="estado-inline"><span class="accesorio-item accesorio-item--chip activo accesorio-item--mini">✓</span> Incluido</span>
+                <span class="estado-inline"><span class="accesorio-item accesorio-item--chip inactivo accesorio-item--mini">✕</span> No incluido</span>
               </div>
             </div>
           </div>
@@ -424,8 +424,13 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
     const progresoIndicador = document.querySelector(`.progreso-intervenciones-inline[data-orden-id="${ordenId}"]`);
     if (progresoIndicador) {
       const valorEl = progresoIndicador.querySelector('.progreso-valor');
-      if (valorEl) valorEl.textContent = `Intervenidos ${equiposConIntervencion} / No disp ${equiposNoDisponibles}`;
+      // Compact format: just "X / N". Detalle (intervenidos vs no
+      // disponibles) queda en el title del contenedor para tooltip.
+      if (valorEl) valorEl.textContent = `${equiposFinalizados} / ${equipos.length}`;
+      progresoIndicador.title = `${equiposConIntervencion} intervenidos · ${equiposNoDisponibles} no disponibles · ${equipos.length} total`;
 
+      // Estado para CSS — el look neutro ignora estos modificadores,
+      // pero los mantenemos por si otras vistas dependen de ellos.
       progresoIndicador.classList.remove('completo', 'parcial', 'vacio');
       if (progresoPercent === 100) {
         progresoIndicador.classList.add('completo');
@@ -505,6 +510,10 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
             const noDisponible = !!e.intervencion_no_disponible;
             const motivoNoDisponible = (e.motivo_no_disponible || "").toString();
             const tieneIntervencion = !!(e.trabajo_tecnico || "").trim();
+            const fotosActivas = (Array.isArray(e.fotos) ? e.fotos : []).filter(f => f && f.deleted !== true && !!f.url).length;
+            const fotosBadgeDesktop = fotosActivas > 0
+              ? `<span class="equipo-fotos-badge" title="${fotosActivas} foto(s)"><i data-lucide="camera"></i> ${fotosActivas}</span>`
+              : '';
 
             return `
             <tr data-equipo-id="${ordenId}_${e.id}" class="equipo-row ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'} ${noDisponible ? 'no-disponible' : ''}">
@@ -512,6 +521,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
                 <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="numero_de_serie">
                   <span class="valor valor-primario">${e.numero_de_serie || "-"}</span>
                   ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'numero_de_serie', e.numero_de_serie || '')}
+                  ${fotosBadgeDesktop}
                 </div>
               </td>
 
@@ -529,22 +539,25 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
                          <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
                            <span class="icon"><i data-lucide="ban"></i></span>
                            <span class="label">No disponible</span>
+                           <span class="chev"><i data-lucide="chevron-right"></i></span>
                          </button>
                        </div>`
                     : (tieneIntervencion
                       ? `<div class="intervencion-badge activa" title="Intervención registrada">
                           <div class="intervencion-content">
                             <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
-                              <span class="icon"><i data-lucide="check-circle"></i></span>
+                              <span class="icon"><i data-lucide="clipboard-check"></i></span>
                               <span class="label">Registrada</span>
+                              <span class="chev"><i data-lucide="chevron-right"></i></span>
                             </button>
                             <span class="intervencion-text" title="${escapeHtml(e.trabajo_tecnico || '')}">${escapeHtml(e.trabajo_tecnico || '')}</span>
                           </div>
                          </div>`
                       : `<div class="intervencion-badge pendiente ${ordenCerrada ? 'historico' : 'activo'}" title="${ordenCerrada ? 'No se registró intervención (orden cerrada)' : 'Pendiente de intervención'}">
                            <button class="btn-intervencion" data-action="abrir-intervencion-desktop" data-stop-propagation="true" data-orden-id="${ordenId}" data-equipo-id="${e.id}">
-                             <span class="icon">${ordenCerrada ? '<i data-lucide="file-text"></i>' : '<i data-lucide="clock"></i>'}</span>
+                             <span class="icon">${ordenCerrada ? '<i data-lucide="file-x"></i>' : '<i data-lucide="clipboard-list"></i>'}</span>
                              <span class="label">${ordenCerrada ? 'No registrada' : 'Pendiente'}</span>
+                             <span class="chev"><i data-lucide="chevron-right"></i></span>
                            </button>
                          </div>`
                     )
@@ -554,22 +567,12 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 
               <td class="col-accesorios">
                 <div class="accesorios-wrapper ${accesoriosCompleto ? 'completo' : 'incompleto'}">
-                  <div class="accesorios-group">
-                    <span class="accesorio-item ${e.bateria ? 'activo' : 'inactivo'}" data-campo="bateria" title="${e.bateria ? 'Batería incluida' : 'Batería NO incluida'}">
-                      <span class="icono"><i data-lucide="battery-full"></i></span>
-                    </span>
-                    <span class="accesorio-item ${e.clip ? 'activo' : 'inactivo'}" data-campo="clip" title="${e.clip ? 'Clip incluido' : 'Clip NO incluido'}">
-                      <span class="icono"><i data-lucide="paperclip"></i></span>
-                    </span>
-                    <span class="accesorio-item ${e.cargador ? 'activo' : 'inactivo'}" data-campo="cargador" title="${e.cargador ? 'Cargador incluido' : 'Cargador NO incluido'}">
-                      <span class="icono"><i data-lucide="plug"></i></span>
-                    </span>
-                    <span class="accesorio-item ${e.fuente ? 'activo' : 'inactivo'}" data-campo="fuente" title="${e.fuente ? 'Fuente incluida' : 'Fuente NO incluida'}">
-                      <span class="icono"><i data-lucide="zap"></i></span>
-                    </span>
-                    <span class="accesorio-item ${e.antena ? 'activo' : 'inactivo'}" data-campo="antena" title="${e.antena ? 'Antena incluida' : 'Antena NO incluida'}">
-                      <span class="icono"><i data-lucide="radio-tower"></i></span>
-                    </span>
+                  <div class="accesorios-group accesorios-group--chips">
+                    <span class="accesorio-item accesorio-item--chip ${e.bateria ? 'activo' : 'inactivo'}" data-campo="bateria" title="${e.bateria ? 'Batería incluida' : 'Batería NO incluida'}">BAT</span>
+                    <span class="accesorio-item accesorio-item--chip ${e.clip ? 'activo' : 'inactivo'}" data-campo="clip" title="${e.clip ? 'Clip incluido' : 'Clip NO incluido'}">CLIP</span>
+                    <span class="accesorio-item accesorio-item--chip ${e.cargador ? 'activo' : 'inactivo'}" data-campo="cargador" title="${e.cargador ? 'Cargador incluido' : 'Cargador NO incluido'}">CARG</span>
+                    <span class="accesorio-item accesorio-item--chip ${e.fuente ? 'activo' : 'inactivo'}" data-campo="fuente" title="${e.fuente ? 'Fuente incluida' : 'Fuente NO incluida'}">FNT</span>
+                    <span class="accesorio-item accesorio-item--chip ${e.antena ? 'activo' : 'inactivo'}" data-campo="antena" title="${e.antena ? 'Antena incluida' : 'Antena NO incluida'}">ANT</span>
                   </div>
                   <span class="completitud-badge">${accesoriosPresentes}/${accesoriosTotal}</span>
                 </div>
@@ -603,24 +606,29 @@ function refrescarEquiposDeOrden(ordenId) {
   if (!ordenData) return;
 
   const filaDetalle = document.querySelector(`tr.filaDetalle[data-orden-id="${ordenId}"]`);
-  if (!filaDetalle || filaDetalle.getAttribute("data-equipos-loaded") === "false") return;
+  if (filaDetalle && filaDetalle.getAttribute("data-equipos-loaded") !== "false") {
+    const equipos = (ordenData.equipos || []).filter(e => !e.eliminado);
+    renderEquiposTabla(ordenId, equipos, filaDetalle);
+  }
 
-  const equipos = (ordenData.equipos || []).filter(e => !e.eliminado);
-  renderEquiposTabla(ordenId, equipos, filaDetalle);
+  // Also re-render the mobile equipos modal if it's currently open.
+  const mobileModal = document.getElementById("modalEquiposMobile");
+  if (mobileModal && !mobileModal.classList.contains("hidden") && typeof window.abrirEquiposMobile === "function") {
+    window.abrirEquiposMobile(ordenId);
+  }
 }
 window.refrescarEquiposDeOrden = refrescarEquiposDeOrden;
 
 function botonesFlujo(ordenId, estado, ordenData) {
   const rol = APP.state.userRole || "";
   let html = "";
-  const tipoServicio = (ordenData?.tipo_de_servicio || "").toUpperCase();
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     if (estado === "POR ASIGNAR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
-    } else if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
+    } else if (estado === "COMPLETADO (EN OFICINA)") {
       html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }
@@ -630,17 +638,21 @@ function botonesFlujo(ordenId, estado, ordenData) {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+    } else if (estado === "COMPLETADO (EN OFICINA)") {
+      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }
 
   else if (rol === ROLES.TECNICO_OPERATIVO) {
     if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+    } else if (estado === "COMPLETADO (EN OFICINA)") {
+      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }
 
   else if (rol === ROLES.VENDEDOR) {
-    if (estado === "COMPLETADO (EN OFICINA)" && !tipoServicio.includes("ENTRADA")) {
+    if (estado === "COMPLETADO (EN OFICINA)") {
       html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
     }
   }

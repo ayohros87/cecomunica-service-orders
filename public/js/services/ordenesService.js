@@ -583,6 +583,65 @@ const OrdenesService = {
   },
 
   /**
+   * Append a photo entry to an equipo inside an order.
+   * Photo is stored inline on equipos[i].fotos = [...]
+   */
+  async addEquipoFoto({ ordenId, equipoId, foto }) {
+    const db = firebase.firestore();
+    const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
+    const snap = await ordenRef.get();
+    if (!snap.exists) throw new Error("Orden no encontrada");
+
+    const data = snap.data() || {};
+    const equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
+    const realIndex = equiposAll.findIndex(e => !e?.eliminado && e?.id === equipoId);
+    if (realIndex === -1) throw new Error("Equipo no encontrado");
+
+    const fotosPrev = Array.isArray(equiposAll[realIndex].fotos) ? equiposAll[realIndex].fotos : [];
+    equiposAll[realIndex].fotos = [...fotosPrev, foto];
+    equiposAll[realIndex].fotos_updated_at = firebase.firestore.Timestamp.now();
+
+    await ordenRef.update({ equipos: equiposAll });
+    return equiposAll;
+  },
+
+  /**
+   * Soft-delete a photo from an equipo (keeps history).
+   */
+  async softDeleteEquipoFoto({ ordenId, equipoId, fotoId, uid, email }) {
+    const db = firebase.firestore();
+    const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
+    const snap = await ordenRef.get();
+    if (!snap.exists) throw new Error("Orden no encontrada");
+
+    const data = snap.data() || {};
+    const equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
+    const realIndex = equiposAll.findIndex(e => !e?.eliminado && e?.id === equipoId);
+    if (realIndex === -1) throw new Error("Equipo no encontrado");
+
+    const fotos = Array.isArray(equiposAll[realIndex].fotos) ? equiposAll[realIndex].fotos : [];
+    let found = false;
+    const updated = fotos.map(f => {
+      if (f?.id !== fotoId || f?.deleted === true) return f;
+      found = true;
+      return {
+        ...f,
+        deleted: true,
+        deleted_by_uid: uid || "",
+        deleted_by_email: email || "",
+        deleted_at: firebase.firestore.Timestamp.now()
+      };
+    });
+    if (!found) throw new Error("Foto no encontrada");
+
+    equiposAll[realIndex].fotos = updated;
+    equiposAll[realIndex].fotos_updated_at = firebase.firestore.Timestamp.now();
+
+    await ordenRef.update({ equipos: equiposAll });
+    return equiposAll;
+  },
+
+  /**
    * Get user data by UID
    * @param {string} uid - User ID
    * @returns {Promise<Object>}

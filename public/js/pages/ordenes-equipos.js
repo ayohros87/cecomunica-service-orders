@@ -304,11 +304,16 @@ window.abrirEquiposMobile = function(ordenId) {
           : `<div class="trabajo-card trabajo-card--empty">Sin intervención registrada</div>`
         );
 
+      const fotosCount = (Array.isArray(e.fotos) ? e.fotos : []).filter(f => f && f.deleted !== true && !!f.url).length;
+      const fotosBadge = fotosCount > 0
+        ? `<span class="equipo-fotos-badge" title="Fotos del equipo"><i data-lucide="camera"></i> ${fotosCount}</span>`
+        : '';
+
       return `
         <div class="${cardClass}">
           <div class="equipo-card-header">
             <div class="equipo-card-info">
-              <div class="equipo-card-serial"><i data-lucide="package"></i> ${escapeHtml(serial)}</div>
+              <div class="equipo-card-serial"><i data-lucide="package"></i> ${escapeHtml(serial)} ${fotosBadge}</div>
               <div class="equipo-card-model">Modelo: <span class="equipo-card-model-value">${escapeHtml(modelo)}</span></div>
             </div>
             ${noDisponible
@@ -347,6 +352,109 @@ window.cerrarEquiposMobile = function() {
 
 let _trabajoOrdenId = null;
 let _trabajoEquipoIdx = null;
+let _trabajoEquipoId = null;
+let _fotoViewerId = null;
+
+function _activeFotosDe(equipo) {
+  const fotos = Array.isArray(equipo?.fotos) ? equipo.fotos : [];
+  return fotos.filter(f => f && f.deleted !== true && !!f.url);
+}
+
+function _puedeEliminarFotos() {
+  const rol = String(APP.state.userRole || "").toLowerCase();
+  return rol === String(ROLES.ADMIN || "").toLowerCase();
+}
+
+function _formatFotoTimestamp(ts) {
+  if (!ts) return "";
+  try {
+    const d = typeof ts.toDate === "function" ? ts.toDate() : new Date(ts);
+    if (!d || Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString("es-CO", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  } catch (_) { return ""; }
+}
+
+function _genFotoId() {
+  return `eq_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function _sanitizeFileName(name) {
+  return String(name || "foto").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, "");
+}
+
+function _readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function _loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function _compressFoto(file, maxWidth = 1600, quality = 0.75) {
+  const dataUrl = await _readFileAsDataURL(file);
+  const img = await _loadImage(dataUrl);
+  let w = img.width, h = img.height;
+  if (w > maxWidth) {
+    const ratio = maxWidth / w;
+    w = maxWidth;
+    h = Math.round(img.height * ratio);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, w, h);
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error("No se pudo comprimir la imagen")), "image/jpeg", quality);
+  });
+}
+
+function _resolveEquipoActual() {
+  const o = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
+  if (!o) return null;
+  const equipos = (o.equipos || []).filter(e => !e.eliminado);
+  return equipos[_trabajoEquipoIdx] || null;
+}
+
+function _renderEquipoFotos() {
+  const grid = document.getElementById("equipoFotosGrid");
+  const countEl = document.getElementById("equipoFotosCount");
+  if (!grid || !countEl) return;
+
+  const equipo = _resolveEquipoActual();
+  const fotos = _activeFotosDe(equipo);
+  countEl.textContent = String(fotos.length);
+
+  if (!fotos.length) {
+    grid.innerHTML = '<div class="equipo-fotos-empty">Sin fotos. Toca «Agregar foto» para capturar la primera.</div>';
+    return;
+  }
+
+  grid.innerHTML = fotos.map(f => `
+    <div class="equipo-foto-thumb" data-action="ver-foto-equipo" data-foto-id="${escapeHtml(f.id)}">
+      <img src="${escapeHtml(f.url)}" alt="Foto del equipo" loading="lazy">
+    </div>
+  `).join("");
+  APP.utils.lucideRefresh(grid);
+}
+
+function _setFotoStatus(msg, isError = false) {
+  const el = document.getElementById("equipoFotosStatus");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.classList.toggle("equipo-fotos-status--error", !!isError);
+}
 
 window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   // Check permissions
@@ -365,12 +473,19 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
 
   _trabajoOrdenId = ordenId;
   _trabajoEquipoIdx = idx;
+  _trabajoEquipoId = e.id || null;
 
   const serial = (e.numero_de_serie || e.serial || e.SERIAL || "-").toString();
   const modelo = (e.modelo || e.MODEL || e.modelo_nombre || "-").toString();
 
   document.getElementById("trabajoEquipoTitle").textContent = `✍️ Intervención técnica · ${serial}`;
   document.getElementById("trabajoEquipoSub").textContent = `Modelo: ${modelo}`;
+
+  // Reset and render fotos for this equipo
+  const fotoInput = document.getElementById("equipoFotoInput");
+  if (fotoInput) fotoInput.value = "";
+  _setFotoStatus("");
+  _renderEquipoFotos();
   const txtEl = document.getElementById("trabajoEquipoText");
   if (txtEl) txtEl.value = (e.trabajo_tecnico || "").toString();
 
@@ -415,8 +530,153 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
 window.cerrarTrabajoEquipoModal = function() {
   const modal = document.getElementById("modalTrabajoEquipo");
   if (modal) APP.utils.hide(modal);
+  if (_fotoViewerId) cerrarFotoEquipoViewer();
   _trabajoOrdenId = null;
   _trabajoEquipoIdx = null;
+  _trabajoEquipoId = null;
+};
+
+window.agregarFotoEquipo = function() {
+  const input = document.getElementById("equipoFotoInput");
+  if (!input) return;
+  input.value = "";
+  input.click();
+};
+
+window.onEquipoFotoInputChange = async function(ev) {
+  const file = ev?.target?.files && ev.target.files[0];
+  if (!file) return;
+  if (!/^image\//i.test(file.type || "")) {
+    Toast.show("Selecciona una imagen válida", "bad");
+    return;
+  }
+  if (!_trabajoOrdenId || !_trabajoEquipoId) {
+    Toast.show("Abre la intervención primero", "bad");
+    return;
+  }
+
+  const ordenId = _trabajoOrdenId;
+  const equipoId = _trabajoEquipoId;
+  const user = firebase.auth().currentUser;
+  if (!user) { Toast.show("Sesión expirada", "bad"); return; }
+
+  try {
+    _setFotoStatus("Comprimiendo imagen…");
+    const blob = await _compressFoto(file, 1600, 0.75);
+
+    _setFotoStatus("Subiendo…");
+    const ts = Date.now();
+    const safe = _sanitizeFileName(file.name || "foto.jpg").replace(/\.[a-z0-9]+$/i, "") || "foto";
+    const safeEquipo = _sanitizeFileName(equipoId);
+    const fileName = `eq_${safeEquipo}_${ts}_${safe}.jpg`;
+    const path = `ordenes_taller_fotos/${ordenId}/${fileName}`;
+    const ref = firebase.storage().ref(path);
+    await ref.put(blob, { contentType: "image/jpeg" });
+    const url = await ref.getDownloadURL();
+
+    const foto = {
+      id: _genFotoId(),
+      url,
+      path,
+      nota: "",
+      uploaded_by_uid: user.uid || "",
+      uploaded_by_email: user.email || "",
+      uploaded_at: firebase.firestore.Timestamp.now(),
+      deleted: false
+    };
+
+    const equiposAll = await OrdenesService.addEquipoFoto({ ordenId, equipoId, foto });
+
+    const cache = APP.state.orders.find(x => x.ordenId === ordenId);
+    if (cache) cache.equipos = equiposAll;
+
+    _setFotoStatus("Foto subida ✓");
+    _renderEquipoFotos();
+    refrescarEquiposDeOrden(ordenId);
+    Toast.show("✅ Foto agregada", "ok");
+  } catch (e) {
+    console.error("❌ Error subiendo foto del equipo:", e);
+    _setFotoStatus("Error al subir la foto", true);
+    Toast.show(`❌ Error al subir: ${e?.message || e}`, "bad");
+  } finally {
+    if (ev?.target) ev.target.value = "";
+  }
+};
+
+window.verFotoEquipo = function(fotoId) {
+  const equipo = _resolveEquipoActual();
+  const fotos = _activeFotosDe(equipo);
+  const foto = fotos.find(f => f.id === fotoId);
+  if (!foto) return;
+
+  _fotoViewerId = fotoId;
+  const viewer = document.getElementById("equipoFotoViewer");
+  const img = document.getElementById("equipoFotoViewerImg");
+  const meta = document.getElementById("equipoFotoViewerMeta");
+  const btnDel = document.getElementById("equipoFotoViewerDelete");
+
+  if (img) img.src = foto.url;
+  if (meta) {
+    const fecha = _formatFotoTimestamp(foto.uploaded_at);
+    const by = foto.uploaded_by_email ? escapeHtml(foto.uploaded_by_email) : "";
+    meta.innerHTML = [fecha, by].filter(Boolean).join(" · ");
+  }
+  if (btnDel) btnDel.classList.toggle("hidden", !_puedeEliminarFotos());
+
+  if (viewer) {
+    viewer.classList.remove("hidden");
+    viewer.classList.add("show");
+  }
+  APP.utils.lucideRefresh(viewer);
+};
+
+window.cerrarFotoEquipoViewer = function() {
+  const viewer = document.getElementById("equipoFotoViewer");
+  const img = document.getElementById("equipoFotoViewerImg");
+  if (img) img.src = "";
+  if (viewer) {
+    viewer.classList.add("hidden");
+    viewer.classList.remove("show");
+  }
+  _fotoViewerId = null;
+};
+
+window.eliminarFotoEquipoViewer = async function() {
+  if (!_fotoViewerId) return;
+  if (!_puedeEliminarFotos()) { Toast.show("Solo un administrador puede eliminar fotos", "bad"); return; }
+  if (!_trabajoOrdenId || !_trabajoEquipoId) return;
+
+  // Capture state before any await — closing the viewer (or another action)
+  // would otherwise clear these globals mid-flow.
+  const ordenId = _trabajoOrdenId;
+  const equipoId = _trabajoEquipoId;
+  const fotoId = _fotoViewerId;
+
+  // Close the viewer first so the confirm dialog (z-index 1500) isn't
+  // hidden behind the viewer (z-index 1600).
+  cerrarFotoEquipoViewer();
+
+  if (!await Modal.confirm({ message: "¿Eliminar esta foto?", danger: true })) return;
+
+  const user = firebase.auth().currentUser;
+  try {
+    const equiposAll = await OrdenesService.softDeleteEquipoFoto({
+      ordenId,
+      equipoId,
+      fotoId,
+      uid: user?.uid || "",
+      email: user?.email || ""
+    });
+    const cache = APP.state.orders.find(x => x.ordenId === ordenId);
+    if (cache) cache.equipos = equiposAll;
+
+    _renderEquipoFotos();
+    refrescarEquiposDeOrden(ordenId);
+    Toast.show("✅ Foto eliminada", "ok");
+  } catch (e) {
+    console.error("❌ Error eliminando foto del equipo:", e);
+    Toast.show(`❌ Error al eliminar: ${e?.message || e}`, "bad");
+  }
 };
 
 window.abrirIntervencionEquipoDesktop = function(ordenId, equipoId) {
@@ -556,11 +816,6 @@ async function setEquipoNoDisponible({ ordenId, equipoId, noDisponible, motivo }
     if (cache) cache.equipos = equiposAll;
 
     refrescarEquiposDeOrden(ordenId);
-
-    const modal = document.getElementById("modalEquiposMobile");
-    if (modal && !modal.classList.contains("hidden")) {
-      abrirEquiposMobile(ordenId);
-    }
 
     Toast.show(noDisponible ? "⚠️ Equipo marcado como no disponible" : "✅ Equipo marcado como disponible", "ok");
   } catch (e) {

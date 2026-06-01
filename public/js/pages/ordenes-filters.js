@@ -603,6 +603,10 @@ window.filtrarPorEstado = async function (estado) {
       return;
     }
 
+    // _toggleOrdenRow resolves orders from APP.state.orders by ordenId;
+    // without this the expand spinner hangs silently after a chip filter.
+    APP.state.orders = resultados;
+
     ordenarOrdenes(resultados).forEach(o => {
       const equipos = (o.equipos || [])
         .filter(e => !e.eliminado)
@@ -626,6 +630,7 @@ window.filtrarPorEstado = async function (estado) {
         if (resultados.length === 0) {
           renderEmptyState("No hay órdenes con ese estado", { icon: 'search-x' });
         } else {
+          APP.state.orders = resultados;
           ordenarOrdenes(resultados).forEach(o => {
             const equipos = (o.equipos || [])
               .filter(e => !e.eliminado)

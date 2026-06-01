@@ -213,6 +213,14 @@
       const idx = parseInt(el.dataset.idx, 10);
       if (ordenId && !isNaN(idx)) verTrabajoEquipo(ordenId, idx);
     },
+    'agregar-foto-equipo': () => agregarFotoEquipo(),
+    'equipo-foto-input-change': (_el, ev) => onEquipoFotoInputChange(ev),
+    'ver-foto-equipo': (el) => {
+      const fotoId = el.dataset.fotoId;
+      if (fotoId) verFotoEquipo(fotoId);
+    },
+    'cerrar-foto-equipo-viewer': () => cerrarFotoEquipoViewer(),
+    'eliminar-foto-equipo-viewer': () => eliminarFotoEquipoViewer(),
     'close-text-modal': () => closeTextModal(),
     'copy-text-modal': () => copyTextModalContent(),
 

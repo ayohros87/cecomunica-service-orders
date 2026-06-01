@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Órdenes de Servicio - Cecomunica</title>
@@ -37,7 +43,7 @@
 </head>
 <body>
   <div class="topbar topbar--desktop" id="desktopTopbar">
-    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"/><rect x="30" y="30" width="4" height="4" fill="#00B4D8"/></svg>
+    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><defs><linearGradient id="ccPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4267"/><stop offset="0.5" stop-color="#0B2A47"/><stop offset="1" stop-color="#06203A"/></linearGradient><linearGradient id="ccSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient><linearGradient id="ccWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C4D2E0"/></linearGradient><linearGradient id="ccCyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD3EE"/><stop offset="1" stop-color="#0091B0"/></linearGradient><radialGradient id="ccGlow"><stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"/><stop offset="1" stop-color="#7FE3FF" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccPlate)"/><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccSheen)"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#ccWhite)" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#ccCyan)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="32" cy="32" r="6" fill="url(#ccGlow)"/><rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"/></svg>
     <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
     <div class="topbar-actions">
       <button class="btn btn-primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
@@ -296,31 +302,10 @@
       <button class="btn btn-ghost modal-entrega__close" data-action="cerrar-modal-entrega" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
 
-    <!-- Checkbox A: Item not received -->
-    <div class="modal-entrega__alert">
-      <div class="modal-entrega__cb-row" onclick="document.getElementById('entregaNoRecibido').click()">
-        <input type="checkbox" id="entregaNoRecibido"
-               class="modal-entrega__cb-input modal-entrega__cb-input--warn"
-               data-action="entrega-no-recibido-change"
-               onclick="event.stopPropagation()">
-        <label for="entregaNoRecibido" class="modal-entrega__cb-label modal-entrega__cb-label--warn">
-          El artículo <strong>NO</strong> fue recibido por el cliente
-        </label>
-      </div>
-      <div id="entregaNoRecibidoBloque" class="modal-entrega__sub hidden">
-        <div class="form-field modal-entrega__field--tight">
-          <label class="modal-entrega__label--warn">Motivo <span class="req--warn">*</span></label>
-          <textarea id="entregaNoRecibidoMotivo" rows="2"
-                    placeholder="Explique por qué no fue recibido..."
-                    class="modal-entrega__warn-input"></textarea>
-        </div>
-        <div class="form-field">
-          <label class="modal-entrega__label--warn">¿Quién recibió / manejó los equipos? <span class="req--warn">*</span></label>
-          <input type="text" id="entregaPersonaInterna"
-                 placeholder="Nombre del responsable interno"
-                 class="modal-entrega__warn-input">
-        </div>
-      </div>
+    <!-- Resumen de la orden (equipos + totales) -->
+    <div id="entregaResumenOrden" class="modal-entrega__resumen">
+      <div class="modal-entrega__resumen-totales" id="entregaResumenTotales"></div>
+      <ul class="modal-entrega__resumen-list" id="entregaResumenEquipos"></ul>
     </div>
 
     <!-- Normal delivery block -->
@@ -336,18 +321,8 @@
                autocomplete="name" class="modal-entrega__nombre">
       </div>
 
-      <!-- Checkbox B: No ID + file input -->
+      <!-- ID box: upload first, then sin-id checkbox below it -->
       <div class="modal-entrega__alert--no-id">
-        <div class="modal-entrega__cb-row" onclick="document.getElementById('entregaSinId').click()">
-          <input type="checkbox" id="entregaSinId"
-                 class="modal-entrega__cb-input modal-entrega__cb-input--brand"
-                 data-action="entrega-sin-id-change"
-                 onclick="event.stopPropagation()">
-          <label for="entregaSinId" class="modal-entrega__cb-label modal-entrega__cb-label--regular">
-            Cliente no desea proporcionar identificación
-          </label>
-        </div>
-
         <!-- With ID: file upload -->
         <div id="entregaConIdBloque">
           <label class="modal-entrega__label--muted">
@@ -358,6 +333,17 @@
                  class="file modal-entrega__file"
                  onchange="_entregaFotoIdChange(this)">
           <div id="entregaPreviewId" class="modal-entrega__preview"></div>
+        </div>
+
+        <!-- Checkbox B: No ID — below the upload box -->
+        <div class="modal-entrega__cb-row modal-entrega__cb-row--below" onclick="document.getElementById('entregaSinId').click()">
+          <input type="checkbox" id="entregaSinId"
+                 class="modal-entrega__cb-input modal-entrega__cb-input--brand"
+                 data-action="entrega-sin-id-change"
+                 onclick="event.stopPropagation()">
+          <label for="entregaSinId" class="modal-entrega__cb-label modal-entrega__cb-label--regular">
+            Cliente no desea proporcionar identificación
+          </label>
         </div>
 
         <!-- Without ID: reason -->
@@ -385,6 +371,38 @@
       </div>
 
     </div><!-- /entregaNormalBloque -->
+
+    <!-- Leyenda para órdenes tipo ENTRADA -->
+    <div id="entregaLegendaEntrada" class="modal-entrega__legenda-entrada hidden">
+      Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización para su posterior facturación.
+    </div>
+
+    <!-- Checkbox A: Item not received — below the normal delivery block -->
+    <div class="modal-entrega__alert">
+      <div class="modal-entrega__cb-row modal-entrega__cb-row--below" onclick="document.getElementById('entregaNoRecibido').click()">
+        <input type="checkbox" id="entregaNoRecibido"
+               class="modal-entrega__cb-input modal-entrega__cb-input--warn"
+               data-action="entrega-no-recibido-change"
+               onclick="event.stopPropagation()">
+        <label for="entregaNoRecibido" class="modal-entrega__cb-label modal-entrega__cb-label--warn">
+          El artículo <strong>NO</strong> fue recibido por el cliente
+        </label>
+      </div>
+      <div id="entregaNoRecibidoBloque" class="modal-entrega__sub hidden">
+        <div class="form-field modal-entrega__field--tight">
+          <label class="modal-entrega__label--warn">Motivo <span class="req--warn">*</span></label>
+          <textarea id="entregaNoRecibidoMotivo" rows="2"
+                    placeholder="Explique por qué no fue recibido..."
+                    class="modal-entrega__warn-input"></textarea>
+        </div>
+        <div class="form-field">
+          <label class="modal-entrega__label--warn">¿Quién recibió / manejó los equipos? <span class="req--warn">*</span></label>
+          <input type="text" id="entregaPersonaInterna"
+                 placeholder="Nombre del responsable interno"
+                 class="modal-entrega__warn-input">
+        </div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <div class="footer">
@@ -527,11 +545,39 @@
       <input type="text" id="trabajoMotivoNoDisponible" class="motivo-no-disponible" placeholder="Motivo (libre)">
     </div>
 
+    <div class="equipo-fotos-section" id="equipoFotosSection">
+      <div class="equipo-fotos-header">
+        <div class="equipo-fotos-title">
+          <i data-lucide="camera"></i>
+          <span>Fotos del equipo</span>
+          <span class="equipo-fotos-count" id="equipoFotosCount">0</span>
+        </div>
+        <button type="button" class="btn btn-secondary equipo-fotos-add" data-action="agregar-foto-equipo">
+          <i data-lucide="plus"></i> Agregar foto
+        </button>
+      </div>
+      <input type="file" id="equipoFotoInput" class="hidden-input" accept="image/*" capture="environment" data-action="equipo-foto-input-change">
+      <div class="equipo-fotos-grid" id="equipoFotosGrid"></div>
+      <div class="equipo-fotos-status" id="equipoFotosStatus"></div>
+    </div>
+
     <div class="modal-footer-mobile">
       <button class="btn btn-secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
       <button id="btnGuardarTrabajoEquipo" class="btn btn-primary btn-full" data-action="guardar-trabajo-equipo"><i data-lucide="save"></i> Guardar</button>
     </div>
   </div>
+</div>
+
+<!-- Photo viewer overlay (used by equipo fotos) -->
+<div id="equipoFotoViewer" class="equipo-foto-viewer hidden">
+  <button class="equipo-foto-viewer__close" type="button" data-action="cerrar-foto-equipo-viewer" aria-label="Cerrar">
+    <i data-lucide="x"></i>
+  </button>
+  <img id="equipoFotoViewerImg" class="equipo-foto-viewer__img" alt="Foto del equipo">
+  <div id="equipoFotoViewerMeta" class="equipo-foto-viewer__meta"></div>
+  <button id="equipoFotoViewerDelete" class="equipo-foto-viewer__delete hidden" type="button" data-action="eliminar-foto-equipo-viewer">
+    <i data-lucide="trash-2"></i> Eliminar
+  </button>
 </div>
 
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

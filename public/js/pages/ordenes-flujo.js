@@ -131,7 +131,8 @@ window.generarNotaEntrega = function (ordenId) {
     numeroOrden: orden.ordenId || "",
     cliente: nombreClienteDe(orden),
     observaciones: orden.observaciones || "",
-    equipos
+    equipos,
+    resumen: computeResumenTotales(equipos)
   };
 
   localStorage.setItem("notaEntregaData", JSON.stringify(data));
@@ -151,7 +152,8 @@ window.generarNotaEntregaIntervenciones = function (ordenId) {
     numeroOrden: orden.ordenId || "",
     cliente: nombreClienteDe(orden),
     observaciones: orden.observaciones || "",
-    equipos
+    equipos,
+    resumen: computeResumenTotales(equipos)
   };
 
   localStorage.setItem("notaEntregaData", JSON.stringify(data));
@@ -175,7 +177,14 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
     if (seen.has(key)) return;
     seen.add(key);
 
-    const item = { serial, modelo, nombre };
+    const item = {
+      serial, modelo, nombre,
+      bateria:  !!e.bateria,
+      clip:     !!e.clip,
+      cargador: !!e.cargador,
+      fuente:   !!e.fuente,
+      antena:   !!e.antena,
+    };
     if (incluirIntervencion) {
       item.intervencion = String(e.trabajo_tecnico || "").trim();
     }
@@ -184,6 +193,26 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
 
   return unicos;
 }
+
+// Shared helper: count radios + accessory totals from a list of
+// equipos (either raw from Firestore or already-prepared via
+// prepararEquiposParaNota). Returns { radios, bateria, clip,
+// cargador, fuente, antena }. Used by print templates and the
+// entrega modal to render a one-line totals summary.
+function computeResumenTotales(equiposLike) {
+  const list = (Array.isArray(equiposLike) ? equiposLike : [])
+    .filter(e => e && e.eliminado !== true);
+  const r = { radios: list.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
+  list.forEach(e => {
+    if (e.bateria)  r.bateria++;
+    if (e.clip)     r.clip++;
+    if (e.cargador) r.cargador++;
+    if (e.fuente)   r.fuente++;
+    if (e.antena)   r.antena++;
+  });
+  return r;
+}
+window.computeResumenTotales = computeResumenTotales;
 
 window.copiarSeriales = function (ordenId) {
   const filas = document.querySelectorAll(`.celda-editable[data-campo="numero_de_serie"][data-id^="${ordenId}_"] .valor`);
@@ -301,17 +330,71 @@ window.copiarSeriales = function (ordenId) {
     const sinIdMotivo = g('entregaSinIdMotivo');
     if (sinIdMotivo) sinIdMotivo.value = '';
 
-    // Reset visibility
+    // Reset visibility. Use classList — the global `.hidden` class
+    // is `display:none !important`, so any prior inline style is moot
+    // and must not be carried over either.
     const nb = g('entregaNoRecibidoBloque');
-    if (nb) nb.style.display = 'none';
+    if (nb) { nb.classList.add('hidden'); nb.style.display = ''; }
     const normalBloque = g('entregaNormalBloque');
-    if (normalBloque) normalBloque.style.display = 'block';
+    if (normalBloque) { normalBloque.classList.remove('hidden'); normalBloque.style.display = ''; }
     const conId = g('entregaConIdBloque');
-    if (conId) conId.style.display = 'block';
+    if (conId) { conId.classList.remove('hidden'); conId.style.display = ''; }
     const sinId = g('entregaSinIdBloque');
-    if (sinId) sinId.style.display = 'none';
+    if (sinId) { sinId.classList.add('hidden'); sinId.style.display = ''; }
 
     _clearCanvas();
+  }
+
+  // ── Resumen de la orden (equipos + totales) + leyenda ENTRADA ───
+  function _escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function _renderResumenEntrega(orden) {
+    const ul  = document.getElementById('entregaResumenEquipos');
+    const tot = document.getElementById('entregaResumenTotales');
+    if (!ul || !tot) return;
+
+    const equipos = (Array.isArray(orden?.equipos) ? orden.equipos : [])
+      .filter(e => e && !e.eliminado);
+
+    const accs = [
+      { key: 'bateria',  short: 'Bat',  plural: 'baterías'   },
+      { key: 'clip',     short: 'Clip', plural: 'clips'      },
+      { key: 'cargador', short: 'Carg', plural: 'cargadores' },
+      { key: 'fuente',   short: 'Fnt',  plural: 'fuentes'    },
+      { key: 'antena',   short: 'Ant',  plural: 'antenas'    },
+    ];
+    const totales = { bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
+
+    ul.innerHTML = equipos.length
+      ? equipos.map((e, i) => {
+          accs.forEach(a => { if (e[a.key]) totales[a.key]++; });
+          const presentes = accs.filter(a => !!e[a.key]).map(a => a.short);
+          const serial = _escapeHtml(e.numero_de_serie || '—');
+          const modelo = e.modelo ? ` <span class="re-mod">${_escapeHtml(e.modelo)}</span>` : '';
+          const accStr = presentes.length
+            ? `<span class="re-acc">${presentes.join(' · ')}</span>`
+            : `<span class="re-acc re-acc--none">sin acc.</span>`;
+          return `<li><span class="re-num">${i + 1}.</span> <span class="re-serial">${serial}</span>${modelo} ${accStr}</li>`;
+        }).join('')
+      : `<li class="re-empty">Sin equipos</li>`;
+
+    const partes = [`<b>${equipos.length}</b> radio${equipos.length !== 1 ? 's' : ''}`];
+    accs.forEach(a => { if (totales[a.key] > 0) partes.push(`<b>${totales[a.key]}</b> ${a.plural}`); });
+    tot.innerHTML = partes.join(' · ');
+  }
+
+  function _toggleLegendaEntrada(orden) {
+    const el = document.getElementById('entregaLegendaEntrada');
+    if (!el) return;
+    const tipo = String(orden?.tipo_de_servicio || '').toUpperCase();
+    // Cache tipo on the element so the no-recibido toggle can decide
+    // whether to re-show the legend when the user unchecks it.
+    el.dataset.tipo = tipo;
+    el.classList.toggle('hidden', !tipo.includes('ENTRADA'));
   }
 
   // ── Public API ──────────────────────────────────────────────────
@@ -321,6 +404,10 @@ window.copiarSeriales = function (ordenId) {
     if (labelEl) labelEl.textContent = ordenId;
 
     _reset();
+
+    const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
+    _renderResumenEntrega(orden);
+    _toggleLegendaEntrada(orden);
 
     // Modal.open wires Escape, Tab focus-trap, and saves/restores focus.
     // ARIA attrs (role=dialog, aria-modal, aria-labelledby) are on the
@@ -350,21 +437,32 @@ window.copiarSeriales = function (ordenId) {
 
   window.limpiarEntregaFirma = _clearCanvas;
 
-  // Exposed for data-action change handlers in ordenes-events.js
+  // Exposed for data-action change handlers in ordenes-events.js.
+  // Use classList.toggle('hidden', ...) — the global `.hidden` class
+  // is `display:none !important`, so plain `style.display` can't
+  // override it when the element starts with class="hidden".
   window._toggleEntregaNoRecibido = function () {
     const checked = !!document.getElementById('entregaNoRecibido')?.checked;
     const nb = document.getElementById('entregaNoRecibidoBloque');
     const norm = document.getElementById('entregaNormalBloque');
-    if (nb)   nb.style.display   = checked ? 'block' : 'none';
-    if (norm) norm.style.display = checked ? 'none'  : 'block';
+    const leg  = document.getElementById('entregaLegendaEntrada');
+    if (nb)   nb.classList.toggle('hidden', !checked);
+    if (norm) norm.classList.toggle('hidden', checked);
+    // Hide ENTRADA legend when toggled into "no recibido" — it's
+    // about delivering, not about not-receiving.
+    if (leg && checked) leg.classList.add('hidden');
+    if (leg && !checked) {
+      const t = String(leg.dataset.tipo || '').toUpperCase();
+      leg.classList.toggle('hidden', !t.includes('ENTRADA'));
+    }
   };
 
   window._toggleEntregaSinId = function () {
     const checked = !!document.getElementById('entregaSinId')?.checked;
     const conId = document.getElementById('entregaConIdBloque');
     const sinId = document.getElementById('entregaSinIdBloque');
-    if (conId) conId.style.display = checked ? 'none'  : 'block';
-    if (sinId) sinId.style.display = checked ? 'block' : 'none';
+    if (conId) conId.classList.toggle('hidden', checked);
+    if (sinId) sinId.classList.toggle('hidden', !checked);
   };
 
   window._entregaFotoIdChange = function (input) {

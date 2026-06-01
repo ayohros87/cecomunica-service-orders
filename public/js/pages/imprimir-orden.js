@@ -57,6 +57,25 @@
         case "PROGRAMACIÓN":tituloEquipos.textContent = "Equipos a Programar"; break;
         default:            tituloEquipos.textContent = "Equipos Asociados";
       }
+
+      // Resumen: cantidad de radios + accesorios (>0). Misma lógica
+      // de cuenta que el modal de entrega y las notas de entrega.
+      const list = Array.isArray(equipos) ? equipos : [];
+      const tot = { radios: list.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
+      list.forEach(e => { ['bateria','clip','cargador','fuente','antena'].forEach(k => { if (e[k]) tot[k]++; }); });
+      const accMap = [
+        ['bateria',  'batería',  'baterías'],
+        ['clip',     'clip',     'clips'],
+        ['cargador', 'cargador', 'cargadores'],
+        ['fuente',   'fuente',   'fuentes'],
+        ['antena',   'antena',   'antenas'],
+      ];
+      const resumenPartes = [`<strong>${tot.radios}</strong> radio${tot.radios !== 1 ? 's' : ''}`];
+      accMap.forEach(([k, sing, plur]) => {
+        if (tot[k] > 0) resumenPartes.push(`<strong>${tot[k]}</strong> ${tot[k] === 1 ? sing : plur}`);
+      });
+      const resumenHtml = resumenPartes.join(' · ');
+
       infoContainer.innerHTML = `
         <div class="info-grid">
           <div class="info-item"><span class="info-label">N° Orden:</span> <span class="info-value">${ordenId}</span></div>
@@ -66,6 +85,7 @@
           <div class="info-item"><span class="info-label">Tipo Servicio:</span> <span class="info-value">${datos.tipo_de_servicio || '—'}</span></div>
           <div class="info-item"><span class="info-label">Técnico:</span> <span class="info-value">${datos.tecnico_asignado || 'Sin asignar'}</span></div>
           <div class="info-item"><span class="info-label">Estado:</span> <span class="info-value">${datos.estado_reparacion || 'POR ASIGNAR'}</span></div>
+          <div class="info-item full"><span class="info-label">Resumen:</span> <span class="info-value">${resumenHtml}</span></div>
           ${datos.observaciones ? `<div class="info-item full"><span class="info-label">Observaciones Generales:</span> <span class="info-value">${datos.observaciones}</span></div>` : ''}
         </div>
       `;
