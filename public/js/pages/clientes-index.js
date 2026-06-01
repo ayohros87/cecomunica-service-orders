@@ -117,6 +117,18 @@ $btnLimpiar.onclick = ()=>{
 $soloActivos.onchange = ()=> { resetPagination(); gotoPage(1); updateTotalPages();
 };
 
+// Vista compacta — esconde columnas secundarias. Persistido en localStorage.
+const $vistaCompacta = document.getElementById('vistaCompacta');
+const _autoCompact = window.matchMedia('(max-width: 900px)').matches;
+const _saved = localStorage.getItem('clientes_compacta');
+const initialCompact = _saved === null ? _autoCompact : (_saved === '1');
+$vistaCompacta.checked = initialCompact;
+document.body.classList.toggle('clientes-compact', initialCompact);
+$vistaCompacta.onchange = () => {
+  document.body.classList.toggle('clientes-compact', $vistaCompacta.checked);
+  localStorage.setItem('clientes_compacta', $vistaCompacta.checked ? '1' : '0');
+};
+
 // Enter en el buscador:
 document.getElementById('q').addEventListener('keydown', (e)=>{
   if(e.key==='Enter'){ resetPagination(); gotoPage(1); updateTotalPages();
@@ -143,7 +155,7 @@ $btnTodo.onclick = async ()=>{
   loadingAll = true;
   $btnTodo.disabled = true; $btnMas.disabled = true;
   try{
-    $tbody.innerHTML = '<tr><td colspan="13" class="loader-center"><div class="loader"></div></td></tr>'; $resumen.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></div>Cargando...';
+    $tbody.innerHTML = '<tr><td colspan="15" class="loader-center"><div class="loader"></div></td></tr>'; $resumen.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></div>Cargando...';
     selectedIds.clear(); $selectAll.checked = false; updateBulkBar();
     lastDoc = null;
     let total = 0, pages = 0, MAX_PAGES = 500; // ~10k si PAGE_SIZE=20
@@ -364,29 +376,30 @@ async function loadPage(reset){
 
 const onInlineUpdate = debounce(async (id, partial)=>{
   try{
-    partial.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    const uid = firebase.auth().currentUser?.uid || null;
+    partial.updated_by = uid;
+    // updated_at lo estampa ClientesService.updateCliente (serverTimestamp).
 
-    // nombre → normaliza + tokens base
+    // nombre → normaliza (nombre_norm) y refresca tokens base
     if(Object.prototype.hasOwnProperty.call(partial,'nombre') && partial.nombre){
-      partial.nombreLower = partial.nombre.toLowerCase();
+      partial.nombre_norm = ClientesService.norm(partial.nombre);
       partial.searchTokens = Array.from(new Set([
-        ...tokensFrom(partial.nombre),
+        ...ClientesService.tokensFrom(partial.nombre),
       ]));
     }
 
     // representante → añade tokens
     if(Object.prototype.hasOwnProperty.call(partial,'representante') && partial.representante){
-      const t = tokensFrom(partial.representante);
+      const t = ClientesService.tokensFrom(partial.representante);
       partial.searchTokens = firebase.firestore.FieldValue.arrayUnion(...t);
     }
 
     // dirección → añade tokens (útil para buscar por calle/sector)
     if(Object.prototype.hasOwnProperty.call(partial,'direccion') && partial.direccion){
-      const t = tokensFrom(partial.direccion);
+      const t = ClientesService.tokensFrom(partial.direccion);
       partial.searchTokens = firebase.firestore.FieldValue.arrayUnion(...t);
     }
 
-    // ruc / cedula_representante: se guardan tal cual, sin tokens (evita ruido)
     await ClientesService.updateCliente(id, partial);
   }catch(e){
     Toast.show('No se pudo guardar: '+e.message, 'bad');
@@ -412,30 +425,40 @@ function renderRow(id, c){
     </td>
 
     <td>
-      <input type="text" class="table-input sm" value="${c.representante||''}" ${ro?'readonly':''} data-field="representante" />
+      <select class="table-input sm" ${ro?'disabled':''} data-field="itbms_exento">
+        <option value="false" ${!c.itbms_exento?'selected':''}>Paga</option>
+        <option value="true" ${c.itbms_exento?'selected':''}>Exento</option>
+      </select>
+    </td>
+    <td class="col-secondary">
+      <input type="text" class="table-input sm" value="${(c.itbms_motivo_exencion||'').replace(/"/g,'&quot;')}" ${(ro||!c.itbms_exento)?'readonly':''} data-field="itbms_motivo_exencion" placeholder="${c.itbms_exento?'Motivo / referencia':'—'}" ${!c.itbms_exento?'style="opacity:.4;"':''} />
     </td>
 
     <td>
-      <input type="text" class="table-input sm mono" value="${c.cedula_representante||''}" ${ro?'readonly':''} data-field="cedula_representante" />
+      <input type="text" class="table-input sm" value="${c.representante||''}" ${ro?'readonly':''} data-field="representante" />
+    </td>
+
+    <td class="col-secondary">
+      <input type="text" class="table-input sm mono" value="${c.representante_cedula||c.cedula_representante||''}" ${ro?'readonly':''} data-field="representante_cedula" />
     </td>
 
     <td>
       <input type="tel" class="table-input sm" value="${c.telefono||''}" ${ro?'readonly':''} data-field="telefono" />
     </td>
 
-    <td>
+    <td class="col-secondary">
       <input type="email" class="table-input sm" value="${c.email||''}" ${ro?'readonly':''} data-field="email" />
     </td>
 
-    <td>
+    <td class="col-secondary">
       <input type="text" class="table-input sm" value="${c.direccion||''}" ${ro?'readonly':''} data-field="direccion" />
     </td>
-    <td>
+    <td class="col-secondary">
       <select class="table-input sm vendedorSelect" data-id="${id}" ${ro?'disabled':''}>
         <option value="">-- Sin asignar --</option>
       </select>
     </td>
-    <td>
+    <td class="col-secondary">
       <input type="text" class="table-input sm" placeholder="tag1, tag2" value="${(c.tags||[]).join(', ')}" ${ro?'readonly':''} data-field="tags" />
     </td>
     <td style="text-align:center">
@@ -516,6 +539,24 @@ if (selectVend) {
     if(asReadonly()){ chk.checked = !!c.activo; return; }
     onInlineUpdate(id, {activo: !!chk.checked});
   });
+
+  // Select ITBMS exento — al cambiar, sincroniza el input de motivo
+  const selItbms   = tr.querySelector('select[data-field="itbms_exento"]');
+  const motivoInp  = tr.querySelector('input[data-field="itbms_motivo_exencion"]');
+  if (selItbms){
+    selItbms.addEventListener('change', ()=>{
+      if (asReadonly()){ selItbms.value = c.itbms_exento ? 'true' : 'false'; return; }
+      const exento = (selItbms.value === 'true');
+      const patch = { itbms_exento: exento };
+      if (!exento){
+        patch.itbms_motivo_exencion = '';
+        if (motivoInp){ motivoInp.value = ''; motivoInp.readOnly = true; motivoInp.style.opacity = '.4'; motivoInp.placeholder = '—'; }
+      } else if (motivoInp){
+        motivoInp.readOnly = false; motivoInp.style.opacity = ''; motivoInp.placeholder = 'Motivo / referencia';
+      }
+      onInlineUpdate(id, patch);
+    });
+  }
 
 // Editar (lleva al mismo formulario de nuevo-cliente, pero con id)
 tr.querySelector('[data-edit]').onclick = ()=> location.href = `../contratos/nuevo-cliente.html?id=${id}&from=clientes`;

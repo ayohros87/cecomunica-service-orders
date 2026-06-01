@@ -118,6 +118,11 @@ window.NCCombo = {
     this.renderInfoCliente(id);
     if (close) document.getElementById('clienteList').hidden = true;
     this.saveRecent(id);
+    const selItbms = document.getElementById('itbms_aplica');
+    if (selItbms) {
+      selItbms.value = d.itbms_exento ? 'false' : 'true';
+      NCForm.recalcularTotalesContrato();
+    }
     NCForm.updateContratoBadges();
   },
 

@@ -2,6 +2,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
   <title>Clientes – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -19,6 +25,15 @@
   <script src="../js/core/auth.js"></script>
 
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+    /* Vista compacta: oculta columnas secundarias en el index de clientes.
+       Toggle manual + auto-activado en pantallas ≤ 900px. */
+    body.clientes-compact #tabla .col-secondary { display: none; }
+    @media (max-width: 900px) {
+      /* Fallback CSS por si el JS no corre: ocultar de todos modos. */
+      #tabla .col-secondary { display: none; }
+    }
+  </style>
 </head>
 <body>
   <div id="topbar-mount"></div>
@@ -26,7 +41,7 @@
 
   <div class="app-wrap app-wrap--full">
 
-    <div class="app-card">
+    <div class="ds-card">
       <div class="filter-bar">
         <div class="filter-search">
           <span class="search-icon"><i data-lucide="search"></i></span>
@@ -35,6 +50,10 @@
         <label class="toggle-pill">
           <input type="checkbox" id="soloActivos">
           Solo activos
+        </label>
+        <label class="toggle-pill" title="Oculta columnas secundarias para una vista más legible">
+          <input type="checkbox" id="vistaCompacta">
+          Compacta
         </label>
         <button id="btnBuscar" class="btn btn-primary btn-sm"><i data-lucide="search"></i> Buscar</button>
         <button id="btnLimpiar" class="btn btn-ghost btn-sm">Limpiar</button>
@@ -61,17 +80,19 @@
           <thead>
             <tr>
               <th style="width:34px; text-align:center"><input id="selectAll" type="checkbox"></th>
-              <th style="width:16%">Nombre</th>
-              <th style="width:12%">RUC</th>
-              <th style="width:8%">DV</th>
-              <th style="width:14%">Representante</th>
-              <th style="width:12%">Cédula Rep. Legal</th>
-              <th style="width:12%">Teléfono</th>
-              <th style="width:16%">Email</th>
-              <th style="width:16%">Dirección</th>
-              <th style="width:14%">Vendedor</th>
-              <th style="width:10%">Tags</th>
-              <th style="width:8%">Activo</th>
+              <th style="width:14%">Nombre</th>
+              <th style="width:10%">RUC</th>
+              <th style="width:7%">DV</th>
+              <th style="width:7%">ITBMS</th>
+              <th class="col-secondary" style="width:12%">Motivo exención</th>
+              <th style="width:12%">Representante</th>
+              <th class="col-secondary" style="width:10%">Cédula Rep. Legal</th>
+              <th style="width:11%">Teléfono</th>
+              <th class="col-secondary" style="width:14%">Email</th>
+              <th class="col-secondary" style="width:14%">Dirección</th>
+              <th class="col-secondary" style="width:12%">Vendedor</th>
+              <th class="col-secondary" style="width:9%">Tags</th>
+              <th style="width:7%">Activo</th>
               <th class="actions" style="width:60px; text-align:center">Acciones</th>
             </tr>
           </thead>

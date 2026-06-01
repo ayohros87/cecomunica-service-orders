@@ -1,230 +1,150 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
-  <title>Nuevo Cliente</title>
+  <title>Nuevo Cliente - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
-  <style>
-    /* ===================================
-       UNIFIED DESIGN SYSTEM - NUEVO CLIENTE
-       =================================== */
-
-    .page-wrap {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 20px;
-      background: #f8fafc;
-      min-height: 100vh;
-    }
-
-    .page-wrap > h2 {
-      margin: 0 0 20px 0;
-      font-size: 26px;
-      font-weight: 700;
-      color: #1e293b;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin: 18px 0 0;
-      padding: 12px 16px;
-      background: #f8fafc;
-      border: 1px solid var(--line);
-      border-left: 4px solid var(--accent);
-      border-radius: 10px 10px 0 0;
-    }
-
-    .section-header h3 {
-      margin: 0;
-      font-size: 17px;
-      font-weight: 650;
-      color: #1e293b;
-    }
-
-    .section-shell {
-      background: #fff;
-      border: 1px solid var(--line);
-      border-top: none;
-      border-radius: 0 0 12px 12px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-      padding: 20px;
-      margin-bottom: 16px;
-    }
-
-    .top-actions {
-      display: flex;
-      gap: 10px;
-      justify-content: flex-start;
-      margin: 10px 0 20px;
-    }
-
-    .form-hint {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 6px;
-      line-height: 1.4;
-    }
-
-    .form-field input,
-    .form-field textarea {
-      background: #f8fafc;
-      border: 1px solid #cbd5e1;
-      transition: all 0.2s ease;
-    }
-
-    .form-field input:focus,
-    .form-field textarea:focus {
-      background: #fff;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-      outline: none;
-    }
-
-    /* Button Styles (.btn.primary inherits the canonical flat style from ceco-ui.css) */
-    .btn-ghost {
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid #cbd5e1;
-      font-weight: 500;
-    }
-
-    .btn-ghost:hover {
-      background: #f8fafc;
-      border-color: #94a3b8;
-      color: #475569;
-    }
-
-    /* Toast system retired by R4 — page now relies on the DS .toast-region +
-       .toast.toast-success/-error/-warning/-info rules in ceco-ui.css. */
-
-    #mensaje {
-      margin-top: 16px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      text-align: center;
-    }
-
-    @media (max-width: 768px) {
-      .page-wrap {
-        padding: 12px;
-      }
-    }
-  </style>
 
   <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-
 </head>
 <body>
-  <div class="page-wrap">
-    <h2 id="pageTitle"><i data-lucide="user-plus"></i> Registrar Nuevo Cliente</h2>
 
-    <div class="top-actions">
-      <button type="button" class="btn btn-ghost" onclick="volverAContrato()"><i data-lucide="arrow-left"></i> Volver</button>
-    </div>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="user-plus"></i> <span id="pageTitle">Registrar Nuevo Cliente</span>',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', onclick: 'volverAContrato()' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--default">
 
     <form id="formCliente">
-      <!-- ============================================
-           SECCIÓN 1: IDENTIFICACIÓN FISCAL
-           ============================================ -->
-      <div class="section-header">
-        <h3><i data-lucide="clipboard"></i> Identificación Fiscal</h3>
+
+      <!-- Sección 1: Identificación fiscal -->
+      <div class="form-section-header">
+        <h3><i data-lucide="clipboard"></i> Identificación fiscal</h3>
       </div>
-      <div class="section-shell">
-        <div class="form-grid cols-2">
-          <div class="form-field" style="grid-column: 1/-1">
-            <label class="req">Nombre del cliente</label>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-grid-2">
+          <div class="form-field" style="grid-column:1/-1">
+            <label class="form-label" for="nombre">Nombre del cliente <span class="req">*</span></label>
             <input class="form-input" type="text" id="nombre" required>
           </div>
 
           <div class="form-field">
-            <label class="req">RUC / Cédula</label>
-            <input class="form-input" type="text" id="ruc" required>
-            <div class="form-hint">Ej: 15567890 (sin DV)</div>
+            <label class="form-label" for="ruc">RUC / Cédula <span class="req">*</span></label>
+            <input class="form-input" type="text" id="ruc" required style="font-family:var(--font-mono);">
+            <span class="form-hint">Ej: 15567890 (sin DV)</span>
           </div>
 
           <div class="form-field">
-            <label>DV</label>
-            <input class="form-input" type="text" id="dv" inputmode="numeric" pattern="\d{1,2}" maxlength="2" placeholder="Ej. 55" title="1-2 dígitos">
-            <div class="form-hint">Si aplica, ingresa 1–2 dígitos</div>
+            <label class="form-label" for="dv">DV</label>
+            <input class="form-input" type="text" id="dv" inputmode="numeric" pattern="\d{1,2}" maxlength="2" placeholder="Ej. 55" title="1-2 dígitos" style="font-family:var(--font-mono);">
+            <span class="form-hint">Si aplica, ingresa 1–2 dígitos.</span>
           </div>
         </div>
       </div>
 
-      <!-- ============================================
-           SECCIÓN 2: CONTACTO
-           ============================================ -->
-      <div class="section-header">
+      <!-- Sección 2: Régimen fiscal -->
+      <div class="form-section-header">
+        <h3><i data-lucide="receipt"></i> Régimen fiscal</h3>
+      </div>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="itbms_exento">ITBMS</label>
+            <select class="form-select" id="itbms_exento">
+              <option value="false" selected>Paga ITBMS (7%)</option>
+              <option value="true">Exento</option>
+            </select>
+            <span class="form-hint">Default que se aplica al crear contratos/cotizaciones para este cliente.</span>
+          </div>
+
+          <div class="form-field" id="motivoExencionWrap" style="display:none;">
+            <label class="form-label" for="itbms_motivo_exencion">Motivo de exención</label>
+            <input class="form-input" type="text" id="itbms_motivo_exencion" placeholder="Ej: Resolución N° 201-1234, entidad estatal, ZLC…">
+            <span class="form-hint">Referencia legal o motivo de la exención.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección 3: Contacto -->
+      <div class="form-section-header">
         <h3><i data-lucide="phone"></i> Contacto</h3>
       </div>
-      <div class="section-shell">
-        <div class="form-grid cols-2">
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-grid-2">
           <div class="form-field">
-            <label>Teléfono</label>
-            <input class="form-input" type="text" id="telefono">
+            <label class="form-label" for="telefono">Teléfono</label>
+            <div class="form-input-wrap">
+              <span class="form-input-prefix"><i data-lucide="phone" style="width:15px;height:15px;"></i></span>
+              <input class="form-input" type="text" id="telefono">
+            </div>
           </div>
 
           <div class="form-field">
-            <label>Email</label>
-            <input class="form-input" type="email" id="email">
+            <label class="form-label" for="email">Email</label>
+            <div class="form-input-wrap">
+              <span class="form-input-prefix"><i data-lucide="mail" style="width:15px;height:15px;"></i></span>
+              <input class="form-input" type="email" id="email">
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ============================================
-           SECCIÓN 3: REPRESENTANTE LEGAL
-           ============================================ -->
-      <div class="section-header">
-        <h3><i data-lucide="user"></i> Representante Legal</h3>
+      <!-- Sección 4: Representante legal -->
+      <div class="form-section-header">
+        <h3><i data-lucide="user"></i> Representante legal</h3>
       </div>
-      <div class="section-shell">
-        <div class="form-grid cols-2">
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-grid-2">
           <div class="form-field">
-            <label>Representante Legal</label>
+            <label class="form-label" for="representante">Representante legal</label>
             <input class="form-input" type="text" id="representante">
           </div>
 
           <div class="form-field">
-            <label>Cédula del Representante Legal</label>
-            <input class="form-input" type="text" id="representante_cedula">
+            <label class="form-label" for="representante_cedula">Cédula del representante</label>
+            <input class="form-input" type="text" id="representante_cedula" style="font-family:var(--font-mono);">
           </div>
         </div>
       </div>
 
-      <!-- ============================================
-           SECCIÓN 4: DIRECCIONES
-           ============================================ -->
-      <div class="section-header">
+      <!-- Sección 5: Direcciones -->
+      <div class="form-section-header">
         <h3><i data-lucide="map-pin"></i> Direcciones</h3>
       </div>
-      <div class="section-shell">
-        <div class="form-grid cols-1">
-          <div class="form-field">
-            <label class="req">Dirección principal</label>
-            <input class="form-input" type="text" id="direccion" required>
-          </div>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-field">
+          <label class="form-label" for="direccion">Dirección principal <span class="req">*</span></label>
+          <input class="form-input" type="text" id="direccion" required>
+        </div>
 
-          <div class="form-field">
-            <label>Dirección de facturación</label>
-            <input class="form-input" type="text" id="direccion_facturacion">
-            <div class="form-hint">Opcional. Si se deja vacío, se usa la dirección principal.</div>
-          </div>
+        <div class="form-field">
+          <label class="form-label" for="direccion_facturacion">Dirección de facturación</label>
+          <input class="form-input" type="text" id="direccion_facturacion">
+          <span class="form-hint">Opcional. Si se deja vacío, se usa la dirección principal.</span>
         </div>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary" data-accion="guardar"><i data-lucide="save"></i> Guardar</button>
+        <button type="submit" class="btn btn-primary btn-lg" data-accion="guardar"><i data-lucide="save"></i> Guardar</button>
         <button type="button" class="btn btn-ghost" onclick="volverAContrato()">Cancelar</button>
       </div>
 
@@ -232,10 +152,10 @@
     </form>
   </div>
 
-  <!-- Toast Container -->
-  <div id="toasts" class="toast-region"></div>
-<script src="../js/ui/toast.js"></script>
+  <!-- Toast region (kit) -->
+  <div id="toasts" class="toast-region" aria-live="polite"></div>
 
+  <script src="../js/ui/toast.js"></script>
   <script src="../js/pages/nuevo-cliente.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>

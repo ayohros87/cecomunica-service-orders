@@ -4,7 +4,90 @@
  * Separates data access from UI logic
  */
 
+// ── Pure helpers (no Firestore) ──────────────────────────────────────────
+// Lower-case, strip accents.
+function _norm(s){
+  return (s || "").toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .trim();
+}
+// Word-prefix tokens: "instituto" → in, ins, inst, …
+function _tokensFrom(text){
+  if (!text) return [];
+  const parts = _norm(text).split(/[^a-z0-9]+/).filter(Boolean);
+  const toks = new Set();
+  for (const p of parts){
+    for (let i = 2; i <= p.length; i++) toks.add(p.slice(0, i));
+  }
+  return Array.from(toks).slice(0, 200);
+}
+
 const ClientesService = {
+  // ── Pure helpers exposed for callers ─────────────────────────────────
+  norm: _norm,
+  tokensFrom: _tokensFrom,
+
+  // Build the searchTokens array from a cliente object.
+  buildSearchTokens(cliente){
+    const t = new Set([
+      ..._tokensFrom(cliente.nombre),
+      ..._tokensFrom(cliente.representante),
+      ..._tokensFrom(cliente.direccion),
+    ]);
+    if (Array.isArray(cliente.tags)){
+      for (const x of cliente.tags) _tokensFrom(x).forEach(k => t.add(k));
+    }
+    if (cliente.ruc)        t.add(String(cliente.ruc).replace(/\D/g, ""));
+    if (cliente.rucdv_norm){
+      t.add(cliente.rucdv_norm);
+      t.add(cliente.rucdv_norm.replace(/\D/g, ""));
+    }
+    return Array.from(t);
+  },
+
+  // Build a fully-normalised cliente payload ready for createCliente/updateCliente.
+  // Single source of truth for field names + derived keys (ruc_norm, rucdv_norm,
+  // nombre_norm, searchTokens). All callers (forms, batch ops) must use this.
+  buildClientePayload(raw, { user = null, isCreate = false } = {}){
+    const ahora = firebase.firestore.FieldValue.serverTimestamp();
+    const ruc = (raw.ruc || "").trim();
+    const dv  = (raw.dv  || "").trim();
+    const ruc_norm = ruc.replace(/\D/g, "");
+    const dv_norm  = dv.replace(/\D/g, "");
+    const rucdv_norm = ruc_norm + (dv_norm ? ("-" + dv_norm) : "");
+    const itbmsExento = !!raw.itbms_exento;
+
+    const cliente = {
+      nombre: (raw.nombre || "").trim(),
+      ruc, dv, ruc_norm, dv_norm, rucdv_norm,
+      nombre_norm: _norm(raw.nombre),
+      direccion: (raw.direccion || "").trim(),
+      direccion_facturacion: (raw.direccion_facturacion || "").trim(),
+      telefono: (raw.telefono || "").replace(/[^\d+]/g, ""),
+      email: (raw.email || "").toLowerCase().trim(),
+      representante: (raw.representante || "").trim(),
+      representante_cedula: (raw.representante_cedula || raw.cedula_representante || "").trim(),
+      itbms_exento: itbmsExento,
+      itbms_motivo_exencion: itbmsExento ? (raw.itbms_motivo_exencion || "").trim() : "",
+      tags: Array.isArray(raw.tags) ? raw.tags : [],
+      activo: raw.activo !== false,
+      vendedor_asignado: raw.vendedor_asignado || null,
+      vendedor_email: raw.vendedor_email || null,
+      updated_at: ahora,
+      updated_by: user?.uid || null,
+    };
+    cliente.searchTokens = this.buildSearchTokens(cliente);
+
+    if (isCreate){
+      cliente.created_at = ahora;
+      cliente.created_by = user?.uid || null;
+      cliente.deleted = false;
+      if (!cliente.vendedor_asignado) cliente.vendedor_asignado = user?.uid || null;
+      if (!cliente.vendedor_email)    cliente.vendedor_email    = user?.email || null;
+    }
+    return cliente;
+  },
+
   /**
    * Load all clients from Firestore
    * @returns {Promise<Map<string, Object>>} Map of clientId => clientData
@@ -91,15 +174,19 @@ const ClientesService = {
     const db = firebase.firestore();
     return db.collection("clientes").doc(clienteId).update({
       ...updates,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
     });
   },
 
   async deleteCliente(clienteId) {
     const db = firebase.firestore();
+    const uid = firebase.auth().currentUser?.uid || null;
     return db.collection("clientes").doc(clienteId).update({
       deleted: true,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      deleted_at: firebase.firestore.FieldValue.serverTimestamp(),
+      deleted_by: uid,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: uid,
     });
   },
 
@@ -131,9 +218,22 @@ const ClientesService = {
   },
 
   // Check for a duplicate by a normalised field. Returns true if a match exists.
+  // Legacy: ignores `deleted` — keeps soft-deleted matches blocking reuse.
+  // Prefer existsActiveByNorm for create flows so reactivation isn't blocked.
   async existsByNorm(field, value) {
     const db = firebase.firestore();
     const snap = await db.collection('clientes').where(field, '==', value).limit(1).get();
+    return !snap.empty;
+  },
+
+  // Duplicate check that ignores soft-deleted records.
+  async existsActiveByNorm(field, value){
+    const db = firebase.firestore();
+    const snap = await db.collection('clientes')
+      .where(field, '==', value)
+      .where('deleted', '==', false)
+      .limit(1)
+      .get();
     return !snap.empty;
   },
 
@@ -222,7 +322,12 @@ const ClientesService = {
   async batchUpdate(ids, fields) {
     const db = firebase.firestore();
     const CHUNK = 450;
-    const update = { ...fields, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+    const uid = firebase.auth().currentUser?.uid || null;
+    const update = {
+      ...fields,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: uid,
+    };
     for (let i = 0; i < ids.length; i += CHUNK) {
       const batch = db.batch();
       for (const id of ids.slice(i, i + CHUNK)) {
