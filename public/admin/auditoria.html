@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Auditoría — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/auditoriaService.js"></script>
+  <script src="../js/pages/admin-auditoria.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="history"></i> Auditoría',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="admin-toolbar">
+      <button id="btnRefresh" class="btn btn-ghost btn-sm">
+        <i data-lucide="refresh-cw"></i> Refrescar
+      </button>
+      <span class="spacer"></span>
+      <span id="countTotal" class="ts">—</span>
+      <span class="ts">·</span>
+      <span id="countShowing" class="ts">—</span>
+      <span class="spacer"></span>
+      <span id="lastUpdate" class="ts">—</span>
+    </div>
+
+    <!-- Filtros -->
+    <div class="audit-toolbar">
+      <span style="font-size:12px;color:var(--fg-3);margin-right:6px;">Tipos:</span>
+      <span class="chip is-active" data-type="orden"><i data-lucide="settings-2"></i> Órdenes</span>
+      <span class="chip is-active" data-type="contrato"><i data-lucide="file-text"></i> Contratos</span>
+      <span class="chip is-active" data-type="pii"><i data-lucide="shield-x"></i> PII</span>
+      <input type="search" id="searchInput" class="search-input" placeholder="Filtrar por ID, cliente, acción…" />
+    </div>
+
+    <div class="ds-card" style="padding:0;">
+      <div id="timeline"></div>
+    </div>
+
+  </div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>
