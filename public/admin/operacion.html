@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Operación — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
+  <script src="../js/services/piezasService.js"></script>
+  <script src="../js/domain/adminMetrics.js"></script>
+  <script src="../js/pages/admin-operacion.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="activity"></i> Operación',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="admin-toolbar">
+      <button id="btnRefresh" class="btn btn-ghost btn-sm" title="Recargar todas las tablas">
+        <i data-lucide="refresh-cw"></i> Refrescar
+      </button>
+      <span class="spacer"></span>
+      <span id="lastUpdate" class="ts">—</span>
+    </div>
+
+    <!-- ÓRDENES -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Órdenes</span>
+        <span class="hint">Distribución por estado y carga por técnico — <strong id="countStale">0</strong> sin movimiento ≥ 10 días</span>
+      </div>
+      <div class="ds-card" style="padding:0;display:grid;grid-template-columns:1fr 1fr;gap:0;">
+        <div style="padding:var(--sp-3);border-right:1px solid var(--border-subtle);">
+          <div style="font-size:12px;color:var(--fg-3);margin-bottom:6px;" id="totalOrdenes">—</div>
+          <div id="tblOrdenesPorEstado"></div>
+        </div>
+        <div style="padding:var(--sp-3);">
+          <div style="font-size:12px;color:var(--fg-3);margin-bottom:6px;">Top 10 técnicos con órdenes abiertas</div>
+          <div id="tblOrdenesPorTecnico"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTRATOS -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Contratos</span>
+        <span class="hint" id="totalContratos">—</span>
+      </div>
+      <div class="ds-card" style="padding:var(--sp-3);">
+        <div id="tblContratos"></div>
+      </div>
+    </div>
+
+    <!-- COTIZACIONES -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Cotizaciones</span>
+        <span class="hint"><strong id="countVencen">0</strong> vencen en 7 días o ya están vencidas</span>
+      </div>
+      <div class="ds-card" style="padding:0;display:grid;grid-template-columns:280px 1fr;gap:0;">
+        <div style="padding:var(--sp-3);border-right:1px solid var(--border-subtle);">
+          <div style="font-size:12px;color:var(--fg-3);margin-bottom:6px;">Por estado</div>
+          <div id="tblCotizaciones"></div>
+        </div>
+        <div style="padding:var(--sp-3);">
+          <div style="font-size:12px;color:var(--fg-3);margin-bottom:6px;">Las que vencen pronto (próximas 20)</div>
+          <div id="tblCotizacionesVencen"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTARIO CRÍTICO -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Inventario crítico</span>
+        <span class="hint"><strong id="countPiezasCriticas">0</strong> piezas en stock ≤ mínimo</span>
+      </div>
+      <div class="ds-card" style="padding:var(--sp-3);">
+        <div id="tblPiezasCriticas"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>

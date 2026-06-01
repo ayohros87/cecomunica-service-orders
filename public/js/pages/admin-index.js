@@ -94,8 +94,8 @@
 
   async function loadContratosKPI() {
     try {
-      const all = await ContratosService.listContratos({ limit: 1000 });
-      const items = Array.isArray(all) ? all : (all?.contratos || []);
+      const res = await ContratosService.listContratos({ limit: 1000 });
+      const items = res?.docs || [];
       const pendientes = AdminMetrics.countWhere(items, c => c.estado === 'pendiente_aprobacion');
       const aprobados = AdminMetrics.countWhere(items, c => c.estado === 'aprobado');
       const activos = AdminMetrics.countWhere(items, c => c.estado === 'activo');
@@ -110,7 +110,7 @@
   async function loadCotizacionesKPI() {
     try {
       const result = await CotizacionesService.listCotizaciones({ limit: 500 });
-      const items = result?.items || result?.cotizaciones || (Array.isArray(result) ? result : []);
+      const items = (result?.docs || []).filter(c => c.deleted !== true);
       const ahora = new Date();
       let vencenPronto = 0; let vencidas = 0; let enviadas = 0;
       for (const c of items) {
