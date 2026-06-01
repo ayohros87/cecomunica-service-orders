@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>CeComunica monogram (un solo tono, para impresión a un color)</title>
+  <rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"></rect>
+  <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="round"></path>
+  <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="round"></path>
+  <rect x="30" y="30" width="4" height="4" rx="1" fill="#FFFFFF"></rect>
+</svg>

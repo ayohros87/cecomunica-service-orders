@@ -43,6 +43,14 @@
     }
     .app-table td.acciones .btn { margin-left: var(--sp-1); }
 
+    /* Zebra stripe + readability bump — mirrors ordenes/index. The kit
+       default (13px on a 1-row band) felt tight here; bumping td font to
+       15px and using a slightly darker tint (#f1f5f9 vs #f8fafc) gives
+       the same "agrupado" feel as ordenes. */
+    table.app-table tbody td { font-size: 15px; }
+    table.app-table tbody tr:nth-child(even) { background: #f1f5f9; }
+    table.app-table tbody tr:nth-child(even):hover { background: var(--brand-soft); }
+
     /* Equipos peek icon (inline emoji-style in table) */
     .equipos-peek {
       display: inline-flex; align-items: center; justify-content: center;

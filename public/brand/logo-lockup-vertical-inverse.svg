@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 150" width="230" height="150" role="img" aria-label="CECOMUNICA · Soluciones en Comunicaciones">
+  <title>CECOMUNICA vertical lockup — inverse (white, on dark)</title>
+  <g transform="translate(83 0)">
+    <rect x="0" y="0" width="64" height="64" rx="10" fill="#FFFFFF"></rect>
+    <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#0B2A47" stroke-width="6" fill="none" stroke-linecap="square"></path>
+    <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"></path>
+    <rect x="30" y="30" width="4" height="4" fill="#00B4D8"></rect>
+  </g>
+  <text x="115" y="104" text-anchor="middle" font-family="Barlow, &#39;Helvetica Neue&#39;, Arial, sans-serif" font-weight="800" font-size="27" letter-spacing="0.5" fill="#FFFFFF">CECOMUNICA</text>
+  <text x="115" y="122" text-anchor="middle" font-family="&#39;IBM Plex Sans&#39;, Arial, sans-serif" font-weight="500" font-size="9.5" letter-spacing="1.4" fill="rgba(255,255,255,0.72)">SOLUCIONES EN COMUNICACIONES</text>
+</svg>

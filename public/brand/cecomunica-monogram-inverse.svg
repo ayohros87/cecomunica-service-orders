@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>CeComunica monogram — acabado completo (inversa, para superficies oscuras)</title>
+  <defs>
+    <linearGradient id="cciPlate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"></stop>
+      <stop offset="1" stop-color="#E7EDF3"></stop>
+    </linearGradient>
+    <linearGradient id="cciNavy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A4267"></stop>
+      <stop offset="1" stop-color="#06203A"></stop>
+    </linearGradient>
+    <linearGradient id="cciCyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5BD3EE"></stop>
+      <stop offset="1" stop-color="#0091B0"></stop>
+    </linearGradient>
+    <radialGradient id="cciGlow">
+      <stop offset="0" stop-color="#00B4D8" stop-opacity="0.45"></stop>
+      <stop offset="1" stop-color="#00B4D8" stop-opacity="0"></stop>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="10" fill="url(#cciPlate)"></rect>
+  <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#cciNavy)" stroke-width="6" fill="none" stroke-linecap="round"></path>
+  <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#cciCyan)" stroke-width="6" fill="none" stroke-linecap="round"></path>
+  <circle cx="32" cy="32" r="6" fill="url(#cciGlow)"></circle>
+  <rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"></rect>
+</svg>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 64" width="360" height="64" role="img" aria-label="CECOMUNICA">
+  <title>CECOMUNICA horizontal lockup (compact, sin tagline) — primary (on light)</title>
+  <defs>
+    <linearGradient id="lcPlate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A4267"></stop>
+      <stop offset="0.5" stop-color="#0B2A47"></stop>
+      <stop offset="1" stop-color="#06203A"></stop>
+    </linearGradient>
+    <linearGradient id="lcSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"></stop>
+      <stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="lcWhite" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"></stop>
+      <stop offset="1" stop-color="#C4D2E0"></stop>
+    </linearGradient>
+    <linearGradient id="lcCyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5BD3EE"></stop>
+      <stop offset="1" stop-color="#0091B0"></stop>
+    </linearGradient>
+    <radialGradient id="lcGlow">
+      <stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"></stop>
+      <stop offset="1" stop-color="#7FE3FF" stop-opacity="0"></stop>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="10" fill="url(#lcPlate)"></rect>
+  <rect x="0" y="0" width="64" height="64" rx="10" fill="url(#lcSheen)"></rect>
+  <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#lcWhite)" stroke-width="6" fill="none" stroke-linecap="round"></path>
+  <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#lcCyan)" stroke-width="6" fill="none" stroke-linecap="round"></path>
+  <circle cx="32" cy="32" r="6" fill="url(#lcGlow)"></circle>
+  <rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"></rect>
+  <line x1="84" y1="14" x2="84" y2="50" stroke="#C2CCD6" stroke-width="1"></line>
+  <text x="100" y="42" font-family="Barlow, 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="27" letter-spacing="0.5" fill="#0B2A47">CECOMUNICA</text>
+</svg>

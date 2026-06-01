@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Mi Firma de Correo - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="css/ceco-ui.css">
+  <style>
+    /* Local layout — preview/code/tips columns. Estilos inline en la firma
+       son intencionales: deben sobrevivir al cliente de correo. No mover al kit. */
+    .firma-grid { display: grid; grid-template-columns: 360px 1fr; gap: var(--sp-6); align-items: start; }
+    @media (max-width: 900px) { .firma-grid { grid-template-columns: 1fr; } }
+
+    .mailcard { background: #fff; border: 1px solid var(--border-default); border-radius: var(--radius-lg);
+                padding: 28px 32px; box-shadow: var(--shadow-sm); }
+    .mailcard .salut { font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #2F3942; margin-bottom: 20px; }
+    .mailcard .rule { height: 1px; background: var(--border-subtle); margin: 0 0 20px; }
+
+    .firma-actions { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; margin-top: var(--sp-4); }
+    .firma-copied { font-size: 13px; font-weight: 600; color: var(--ok); opacity: 0; transition: opacity .2s; }
+    .firma-copied.show { opacity: 1; }
+
+    .codebox { display: none; margin-top: var(--sp-4); }
+    .codebox.show { display: block; }
+    .codebox textarea {
+      width: 100%; height: 200px; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5;
+      color: var(--fg-2); background: #fff; border: 1px solid var(--border-default); border-radius: var(--radius-md);
+      padding: 14px; resize: vertical; outline: none;
+    }
+
+    .firma-tips { margin-top: var(--sp-4); background: #fff; border: 1px solid var(--border-default);
+                  border-radius: var(--radius-lg); padding: 20px 24px; }
+    .firma-tips h3 { font-family: var(--font-display); font-weight: 700; font-size: 16px; margin: 0 0 12px;
+                     display: flex; align-items: center; gap: 8px; color: var(--fg-1); }
+    .firma-tips ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+    .firma-tips li { font-size: 13px; line-height: 1.5; color: var(--fg-2); }
+    .firma-tips li b { color: var(--fg-1); font-weight: 600; }
+    .firma-tips code { font-family: var(--font-mono); font-size: 12px; background: var(--surface-sunken);
+                       padding: 2px 6px; border-radius: 4px; color: var(--navy); }
+    .firma-warn { margin-top: 12px; padding: 12px 14px; background: #FFFBEB; border: 1px solid #FDE68A;
+                  border-radius: var(--radius-md); font-size: 12px; line-height: 1.5; color: #92400E; }
+  </style>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-init.js"></script>
+  <script src="js/core/roles.js"></script>
+  <script src="js/core/layout.js"></script>
+  <script src="js/services/usuariosService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbarFor('edit', {
+      title: '<i data-lucide="mail"></i> Mi Firma de Correo',
+      back:  { href: 'index.html' }
+    });
+  </script>
+
+  <div class="app-wrap">
+
+    <p class="cc-body" style="margin: 0 0 var(--sp-5); color: var(--fg-3); max-width: 70ch;">
+      Plantilla oficial de firma de correo. Ajusta tus datos, copia la firma y pégala en la configuración
+      de tu cliente (Gmail, Outlook, Apple Mail). Está construida con tablas y estilos inline para que se
+      vea igual en todos los clientes.
+    </p>
+
+    <div class="firma-grid">
+
+      <!-- Form -->
+      <div class="ds-card ds-card-padded">
+        <p class="form-section-title" style="margin-bottom: var(--sp-3);">
+          <i data-lucide="user-circle"></i> Tus datos
+        </p>
+        <div class="form-grid-2">
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label class="form-label" for="f-nombre">Nombre completo</label>
+            <input class="form-input" id="f-nombre" type="text" autocomplete="off">
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label class="form-label" for="f-cargo">Cargo</label>
+            <input class="form-input" id="f-cargo" type="text" autocomplete="off" placeholder="Ej: Ejecutiva de Ventas">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="f-tel">Teléfono</label>
+            <input class="form-input" id="f-tel" type="text" autocomplete="off" placeholder="+507 279-5570">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="f-cel">Celular</label>
+            <input class="form-input" id="f-cel" type="text" autocomplete="off" placeholder="+507 6000-0000">
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label class="form-label" for="f-email">Correo electrónico</label>
+            <input class="form-input" id="f-email" type="email" autocomplete="off">
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label class="form-label" for="f-logo">URL del logo (PNG hospedado)</label>
+            <input class="form-input" id="f-logo" type="text" autocomplete="off">
+            <span class="form-hint" style="font-size: 12px; color: var(--fg-4); margin-top: 4px;">
+              Usa la URL pública por defecto o reemplázala por una propia.
+            </span>
+          </div>
+        </div>
+
+        <div class="firma-actions">
+          <button class="btn btn-primary" id="copyBtn" type="button">
+            <i data-lucide="copy"></i> Copiar firma
+          </button>
+          <button class="btn btn-ghost" id="codeBtn" type="button">
+            <i data-lucide="code"></i> Ver código HTML
+          </button>
+          <span class="firma-copied" id="copied">¡Copiada!</span>
+        </div>
+
+        <div class="codebox" id="codebox">
+          <textarea id="code" readonly></textarea>
+        </div>
+      </div>
+
+      <!-- Preview + tips -->
+      <div>
+        <div class="mailcard">
+          <div class="salut">Saludos cordiales,</div>
+          <div class="rule"></div>
+          <div id="preview"></div>
+        </div>
+
+        <div class="firma-tips">
+          <h3><i data-lucide="info"></i> Cómo instalarla</h3>
+          <ol>
+            <li><b>Gmail:</b> Ajustes → Ver toda la configuración → Firma → pegá con <code>Ctrl/Cmd+V</code>.</li>
+            <li><b>Outlook (web):</b> Ajustes → Correo → Redactar y responder → Firma → pegá en el editor.</li>
+            <li><b>Outlook (escritorio):</b> Archivo → Opciones → Correo → Firmas → pegá en el editor.</li>
+            <li><b>Apple Mail:</b> Mail → Ajustes → Firmas → pegá y desmarcá "usar fuente predeterminada".</li>
+          </ol>
+          <div class="firma-warn">
+            El correo no carga fuentes de marca (Barlow / IBM Plex) ni SVG: la firma usa <b>Arial</b> y el
+            logo va como <b>imagen PNG</b>. Por eso se ve un poco distinta a la papelería, pero consistente
+            en color y estructura.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_LOGO_URL = 'https://cecomunica-service-orders.web.app/brand/app-icons/web/icon-192.png';
+
+    // Mapa rol → cargo legible por defecto (editable después por el usuario).
+    const CARGO_POR_ROL = {
+      administrador:     'Administración',
+      gerente:           'Gerencia',
+      vendedor:          'Ejecutivo(a) de Ventas',
+      recepcion:         'Recepción',
+      tecnico:           'Técnico(a) de Servicio',
+      tecnico_operativo: 'Técnico(a) Operativo(a)',
+      jefe_taller:       'Jefe de Taller',
+      inventario:        'Inventario',
+      vista:             ''
+    };
+
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    function buildSig() {
+      const nombre = esc($('f-nombre').value || '');
+      const cargo  = esc($('f-cargo').value  || '');
+      const tel    = esc($('f-tel').value    || '');
+      const cel    = esc($('f-cel').value    || '');
+      const email  = esc($('f-email').value  || '');
+      const logo   = esc($('f-logo').value   || DEFAULT_LOGO_URL);
+
+      const phones = [
+        tel ? '<span style="color:#6B7884;font-weight:bold;">T</span>&nbsp;' + tel : '',
+        cel ? '<span style="color:#6B7884;font-weight:bold;">C</span>&nbsp;' + cel : ''
+      ].filter(Boolean).join('&nbsp;&nbsp;&nbsp;');
+
+      return ''
++ '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;">'
++   '<tr>'
++     '<td align="center" valign="middle" width="72" style="vertical-align:middle;text-align:center;padding:0 16px 0 0;">'
++       '<img src="' + logo + '" alt="CeComunica" width="56" height="56" style="border:0;border-radius:10px;vertical-align:middle;">'
++     '</td>'
++     '<td valign="middle" style="vertical-align:middle;padding:1px 0 1px 16px;border-left:1px solid #DDE4EB;">'
++       '<div style="font-size:15px;font-weight:bold;color:#0B2A47;line-height:1.2;">' + nombre + '</div>'
++       '<div style="font-size:12px;color:#4A5560;line-height:1.5;padding-top:2px;">' + cargo + '</div>'
++       '<div style="font-size:11px;color:#6B7884;line-height:1.5;">C Comunica, S.A.</div>'
++       '<div style="font-size:12px;color:#2F3942;line-height:1.7;padding-top:7px;">'
++         phones + (phones ? '<br>' : '')
++         (email ? '<a href="mailto:' + email + '" style="color:#0091D7;text-decoration:none;">' + email + '</a><br>' : '')
++         '<a href="https://www.cecomunica.com" style="color:#0091D7;text-decoration:none;">www.cecomunica.com</a>'
++       '</div>'
++       '<div style="font-size:9px;letter-spacing:1.5px;color:#9AA7B4;padding-top:9px;">SOLUCIONES EN COMUNICACIONES</div>'
++     '</td>'
++   '</tr>'
++ '</table>';
+    }
+
+    function render() {
+      const html = buildSig();
+      $('preview').innerHTML = html;
+      $('code').value = html;
+    }
+
+    ['f-nombre','f-cargo','f-tel','f-cel','f-email','f-logo']
+      .forEach(id => $(id).addEventListener('input', render));
+
+    $('copyBtn').addEventListener('click', async () => {
+      const html  = buildSig();
+      const plain = [
+        $('f-nombre').value,
+        ($('f-cargo').value ? $('f-cargo').value + ' · ' : '') + 'C Comunica, S.A.',
+        [$('f-tel').value, $('f-cel').value].filter(Boolean).join('  '),
+        $('f-email').value,
+        'www.cecomunica.com'
+      ].filter(Boolean).join('\n');
+
+      let ok = false;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html':  new Blob([html],  { type: 'text/html'  }),
+          'text/plain': new Blob([plain], { type: 'text/plain' })
+        })]);
+        ok = true;
+      } catch (e) {
+        try { await navigator.clipboard.writeText(html); ok = true; } catch (e2) { ok = false; }
+      }
+      if (!ok) { $('codebox').classList.add('show'); $('code').select(); }
+      const c = $('copied');
+      c.classList.add('show');
+      setTimeout(() => c.classList.remove('show'), 1800);
+    });
+
+    $('codeBtn').addEventListener('click', () => {
+      $('codebox').classList.toggle('show');
+    });
+
+    // Pre-fill desde el perfil + render inicial.
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) { location.href = 'login.html'; return; }
+
+      $('f-email').value = user.email || '';
+      $('f-logo').value  = DEFAULT_LOGO_URL;
+
+      try {
+        const data = await UsuariosService.getUsuario(user.uid);
+        if (data) {
+          $('f-nombre').value = data.nombre || user.displayName || '';
+          $('f-cargo').value  = data.cargo  || CARGO_POR_ROL[data.rol] || '';
+          $('f-tel').value    = data.telefono || data.tel || '';
+          $('f-cel').value    = data.celular  || data.cel || '';
+        }
+      } catch (e) {
+        console.error('Error cargando perfil:', e);
+      }
+
+      render();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

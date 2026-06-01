@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>CeComunica app icon (full-bleed)</title>
+  <defs>
+    <linearGradient id="apPlate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1A4267"></stop>
+      <stop offset="0.5" stop-color="#0B2A47"></stop>
+      <stop offset="1" stop-color="#06203A"></stop>
+    </linearGradient>
+    <linearGradient id="apSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"></stop>
+      <stop offset="0.34" stop-color="#FFFFFF" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="apWhite" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"></stop>
+      <stop offset="1" stop-color="#C4D2E0"></stop>
+    </linearGradient>
+    <linearGradient id="apCyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5BD3EE"></stop>
+      <stop offset="1" stop-color="#0091B0"></stop>
+    </linearGradient>
+    <radialGradient id="apGlow">
+      <stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"></stop>
+      <stop offset="1" stop-color="#7FE3FF" stop-opacity="0"></stop>
+    </radialGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" fill="url(#apPlate)"></rect>
+  <rect x="0" y="0" width="64" height="64" fill="url(#apSheen)"></rect>
+  <path d="M30 16 H22 a13 13 0 0 0 0 32 H30" stroke="url(#apWhite)" stroke-width="5.6" fill="none" stroke-linecap="round"></path>
+  <path d="M34 16 H42 a13 13 0 0 1 0 32 H34" stroke="url(#apCyan)" stroke-width="5.6" fill="none" stroke-linecap="round"></path>
+  <circle cx="32" cy="32" r="5.5" fill="url(#apGlow)"></circle>
+  <rect x="30.2" y="30.2" width="3.6" height="3.6" rx="1" fill="#00B4D8"></rect>
+</svg>
