@@ -1,24 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Modelos de Radio - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
-  <style>
-    .form-section, .list-section { max-width: 600px; margin: 20px auto; }
-    ul { list-style: none; padding: 0; }
-    li {
-      background: #f9f9f9;
-      margin-bottom: 10px;
-      padding: 10px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .actions { display: flex; gap: 6px; }
-  </style>
+
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
@@ -27,21 +20,17 @@
   <script src="../js/services/modelosService.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
   <script>
     function cerrarSesion() {
       firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
     }
 
     firebase.auth().onAuthStateChanged(async function(user) {
-      if (!user) {
-        window.location.href = "login.html";
-        return;
-      }
+      if (!user) { window.location.href = "login.html"; return; }
       try {
         const doc = await UsuariosService.getUsuario(user.uid);
-        if (!doc || doc.rol !== "administrador") {
-          window.location.href = "index.html";
-        }
+        if (!doc || doc.rol !== "administrador") { window.location.href = "index.html"; }
       } catch (error) {
         console.error("Error al verificar rol:", error);
         window.location.href = "index.html";
@@ -56,16 +45,28 @@
       async function cargarModelos() {
         lista.innerHTML = "";
         const modelos = await ModelosService.getModelos();
+        if (!modelos || modelos.length === 0) {
+          lista.innerHTML = `
+            <div class="empty-state-hint">
+              <div class="empty-state-hint-icon"><i data-lucide="radio"></i></div>
+              <p class="title">Sin modelos registrados</p>
+              <p class="hint">Agrega el primer modelo con el formulario de arriba.</p>
+            </div>`;
+          if (typeof lucide !== 'undefined') lucide.createIcons();
+          return;
+        }
         modelos.sort((a, b) => (a.modelo || "").localeCompare(b.modelo || ""));
         modelos.forEach(m => {
-          const li = document.createElement("li");
-          li.innerHTML = `
-            <span><strong>${m.modelo}</strong> - ${m.marca || ''} / ${m.tipo || ''} / ${m.estado || ''}</span>
-            <div class="actions">
-              <button class="btn sm" onclick="editarModelo('${m.id}')"><i data-lucide="pencil"></i></button>
-              <button class="btn sm danger" onclick="borrarModelo('${m.id}')"><i data-lucide="trash-2"></i></button>
+          const item = document.createElement("div");
+          item.className = "crud-list-item";
+          item.innerHTML = `
+            <span class="crud-list-item-handle"><i data-lucide="radio"></i></span>
+            <span class="crud-list-item-label"><strong>${m.modelo}</strong> <span style="color:var(--fg-3); font-weight:400;">— ${m.marca || ''} / ${m.tipo || ''} / ${m.estado || ''}</span></span>
+            <div class="crud-list-item-actions">
+              <button class="btn btn-ghost btn-icon btn-sm" onclick="editarModelo('${m.id}')" aria-label="Editar"><i data-lucide="pencil"></i></button>
+              <button class="btn btn-ghost btn-icon btn-sm" onclick="borrarModelo('${m.id}')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
             </div>`;
-          lista.appendChild(li);
+          lista.appendChild(item);
         });
         if (typeof lucide !== 'undefined') lucide.createIcons();
       }
@@ -78,6 +79,7 @@
         document.getElementById("tipo-modelo").value = m.tipo || "";
         document.getElementById("estado-modelo").value = m.estado || "";
         editandoId = id;
+        document.getElementById("nombre-modelo").focus();
       };
 
       window.borrarModelo = async (id) => {
@@ -108,37 +110,48 @@
   </script>
 </head>
 <body>
+
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="radio"></i> Modelos de Radio', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'config.html' }, showHome: false, showLogout: true });</script>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="radio"></i> Modelos de Radio',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'config.html' },
+      showHome: false, showLogout: true
+    });
+  </script>
 
-  <div class="form-section">
-    <form id="form-modelo" class="card">
-      <div class="form-field">
-        <label for="nombre-modelo">Modelo</label>
-        <input type="text" id="nombre-modelo" required placeholder="Ej. RDU2020">
-      </div>
-      <div class="form-field">
-        <label for="marca-modelo">Marca</label>
-        <input type="text" id="marca-modelo" placeholder="Ej. Motorola">
-      </div>
-      <div class="form-field">
-        <label for="tipo-modelo">Tipo</label>
-        <input type="text" id="tipo-modelo" placeholder="Ej. Portátil">
-      </div>
-      <div class="form-field">
-        <label for="estado-modelo">Estado</label>
-        <input type="text" id="estado-modelo" placeholder="Ej. Activo">
-      </div>
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar Modelo</button>
-      </div>
-    </form>
+  <div class="app-wrap app-wrap--default">
+
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <form id="form-modelo">
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="nombre-modelo">Modelo <span class="req">*</span></label>
+            <input class="form-input" type="text" id="nombre-modelo" required placeholder="Ej. RDU2020">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="marca-modelo">Marca</label>
+            <input class="form-input" type="text" id="marca-modelo" placeholder="Ej. Motorola">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="tipo-modelo">Tipo</label>
+            <input class="form-input" type="text" id="tipo-modelo" placeholder="Ej. Portátil">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="estado-modelo">Estado</label>
+            <input class="form-input" type="text" id="estado-modelo" placeholder="Ej. Activo">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar modelo</button>
+        </div>
+      </form>
+    </div>
+
+    <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="list"></i> Modelos registrados</p>
+    <div id="lista-modelos" class="crud-list"></div>
   </div>
 
-  <div class="list-section">
-    <h3 class="cc-h4">Lista de Modelos</h3>
-    <ul id="lista-modelos"></ul>
-  </div>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

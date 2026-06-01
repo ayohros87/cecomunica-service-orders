@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nota de Entrega - C COMUNICA</title>
@@ -244,7 +250,7 @@
       </div>
       <div class="info-row">
         <span class="info-label">Equipos Entregados:</span>
-        <span class="info-value"><strong id="cantidadRadios">0</strong> Radios</span>
+        <span class="info-value" id="resumenEquipos">—</span>
       </div>
     </div>
 
@@ -289,7 +295,30 @@
     document.getElementById("numeroOrden").textContent = data.numeroOrden || "—";
     document.getElementById("cliente").textContent = data.cliente || "—";
     document.getElementById("observaciones").textContent = data.observaciones || "—";
-    document.getElementById("cantidadRadios").textContent = data.equipos?.length || 0;
+
+    // Resumen: radios + accesorios entregados (solo los > 0 para mantenerlo
+    // corto en papel). Fallback: recomputar desde data.equipos si no llegó
+    // `resumen` en localStorage (entradas viejas).
+    function _renderResumen(r) {
+      if (!r) {
+        const eq = data.equipos || [];
+        r = { radios: eq.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
+        eq.forEach(e => { ['bateria','clip','cargador','fuente','antena'].forEach(k => { if (e[k]) r[k]++; }); });
+      }
+      const partes = [`<strong>${r.radios}</strong> radio${r.radios !== 1 ? 's' : ''}`];
+      const map = [
+        ['bateria',  'batería',  'baterías'],
+        ['clip',     'clip',     'clips'],
+        ['cargador', 'cargador', 'cargadores'],
+        ['fuente',   'fuente',   'fuentes'],
+        ['antena',   'antena',   'antenas'],
+      ];
+      map.forEach(([k, sing, plur]) => {
+        if (r[k] > 0) partes.push(`<strong>${r[k]}</strong> ${r[k] === 1 ? sing : plur}`);
+      });
+      return partes.join(' · ');
+    }
+    document.getElementById("resumenEquipos").innerHTML = _renderResumen(data.resumen);
     
     // Fecha de generación
     const ahora = new Date();

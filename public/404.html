@@ -1,33 +1,62 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pagina no encontrada</title>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Página no encontrada — Cecomunica</title>
+  <link rel="stylesheet" href="css/ceco-ui.css">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
-    <style media="screen">
-      body { background: #ECEFF1; color: rgba(0,0,0,0.87); font-family: Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; }
-      #message { background: white; max-width: 360px; margin: 100px auto 16px; padding: 32px 24px 16px; border-radius: 3px; }
-      #message h3 { color: #888; font-weight: normal; font-size: 16px; margin: 16px 0 12px; }
-      #message h2 { color: #ffa100; font-weight: bold; font-size: 16px; margin: 0 0 8px; }
-      #message h1 { font-size: 22px; font-weight: 300; color: rgba(0,0,0,0.6); margin: 0 0 16px;}
-      #message p { line-height: 140%; margin: 16px 0 24px; font-size: 14px; }
-      #message a { display: block; text-align: center; background: #039be5; text-transform: uppercase; text-decoration: none; color: white; padding: 16px; border-radius: 4px; }
-      #message, #message a { box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); }
-      #load { color: rgba(0,0,0,0.4); text-align: center; font-size: 13px; }
-      @media (max-width: 600px) {
-        body, #message { margin-top: 0; background: white; box-shadow: none; }
-        body { border-top: 16px solid #ffa100; }
-      }
-    </style>
-  </head>
-  <body>
-    <div id="message">
-      <h2>404</h2>
-      <h1>Pagina no encontrada</h1>
-      <p>El archivo especificado no fue encontrado en esta página. Verifica el URL y intentalo nuevamente.</p>
-      <h3>¿Porque estoy viendo esto?</h3>
-      <p>Contacta al administrador</p>
-    </div>
-  </body>
+  <style>
+    body { background: var(--surface-page); display: grid; place-items: center; min-height: 100vh; padding: var(--sp-5); }
+    .nf-wrap { max-width: 460px; width: 100%; text-align: center; }
+    .nf-icon {
+      width: 80px; height: 80px;
+      display: inline-grid; place-items: center;
+      border-radius: 50%;
+      background: var(--surface-sunken);
+      margin-bottom: var(--sp-4);
+    }
+    .nf-icon svg { width: 40px; height: 40px; color: var(--fg-4); }
+    .nf-code {
+      font-family: var(--font-display);
+      font-size: 64px; font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+      margin: 0;
+    }
+    .nf-title {
+      font-family: var(--font-display);
+      font-size: 22px; font-weight: 700;
+      color: var(--fg-1);
+      margin: var(--sp-3) 0 var(--sp-2);
+    }
+    .nf-msg {
+      font-size: 14px; color: var(--fg-3);
+      line-height: 1.6;
+      margin: 0 0 var(--sp-5);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="nf-wrap">
+    <div class="nf-icon"><i data-lucide="search-x"></i></div>
+    <p class="nf-code">404</p>
+    <h1 class="nf-title">Página no encontrada</h1>
+    <p class="nf-msg">
+      El archivo solicitado no fue encontrado. Verifica la URL e intenta nuevamente,
+      o regresa al inicio para continuar navegando.
+    </p>
+    <a class="btn btn-primary btn-lg" href="/"><i data-lucide="home"></i> Ir al inicio</a>
+  </div>
+
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
 </html>

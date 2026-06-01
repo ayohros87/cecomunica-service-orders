@@ -1,43 +1,85 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Configuración - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
-  <!-- Firebase desde CDN + configuración centralizada -->
-<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <!-- Firebase + layout -->
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/layout.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
-<script>
-  firebase.auth().onAuthStateChanged(function(user) {
-    if (!user) {
-      window.location.href = "login.html";
-    }
-  });
-
-  function cerrarSesion() {
-    firebase.auth().signOut().then(() => {
-      window.location.href = "login.html";
+  <script>
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (!user) { window.location.href = "login.html"; }
     });
-  }
-</script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
+    }
+  </script>
 </head>
 <body>
+
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="settings"></i> Configuración del Sistema', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: './index.html' }, showHome: false, showLogout: true });</script>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="settings"></i> Configuración del Sistema',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: './index.html' },
+      showHome: false, showLogout: true
+    });
+  </script>
 
+  <div class="app-wrap app-wrap--default">
 
-  <div class="card" style="max-width:700px; margin:16px auto;">
-  <div class="form-grid cols-2">
-    <button class="btn w-100" onclick="window.location.href='importar-exportar.html'"><i data-lucide="package"></i> Importar / Exportar Datos</button>
+    <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="list-checks"></i> Listas administrables</p>
+    <div class="module-grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));">
+      <a class="module-card" href="./estado_reparacion.html">
+        <span class="module-card-icon"><i data-lucide="wrench"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Estados de reparación</span>
+          <span class="module-card-sub">Flujo de trabajo del taller</span>
+        </span>
+      </a>
+      <a class="module-card" href="./tecnicos.html">
+        <span class="module-card-icon"><i data-lucide="users"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Técnicos</span>
+          <span class="module-card-sub">Personal del taller</span>
+        </span>
+      </a>
+      <a class="module-card" href="./modelo-de-radio.html">
+        <span class="module-card-icon"><i data-lucide="radio"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Modelos de radio</span>
+          <span class="module-card-sub">Catálogo de equipos</span>
+        </span>
+      </a>
+    </div>
+
+    <p class="form-section-title" style="margin-top:var(--sp-6); margin-bottom:var(--sp-3);"><i data-lucide="database"></i> Datos</p>
+    <div class="module-grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));">
+      <a class="module-card" href="./importar-exportar.html">
+        <span class="module-card-icon"><i data-lucide="upload"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Importar / Exportar</span>
+          <span class="module-card-sub">Carga masiva y respaldos</span>
+        </span>
+      </a>
+    </div>
+
   </div>
-</div>
 
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

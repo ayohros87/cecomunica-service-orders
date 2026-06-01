@@ -1,8 +1,15 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
-  <title>Cargar Inventario - Último Registro</title>
+  <title>Cargar Inventario - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
   <!-- Firebase -->
@@ -10,6 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/modelosService.js"></script>
@@ -20,32 +28,47 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-<div class="toolbar">
-  <div class="left">
-    <h2 style="margin:8px 0;"><i data-lucide="calendar"></i> Cargar Inventario</h2>
-  </div>
-  <div class="right">
-    <button class="btn btn-primary" onclick="guardarSemana()"><i data-lucide="save"></i> Guardar inventario</button>
-    <button class="btn" onclick="window.location.href='./index.html'"><i data-lucide="package"></i> Ver Inventario</button>
-    <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú principal</button>
-  </div>
-</div>
-<div class="card">
-  <div class="toolbar">
-    <div class="left">
-      <input type="text" id="filtroMarca" placeholder="Buscar por marca">
-      <input type="text" id="filtroModelo" placeholder="Buscar por modelo">
-      <button class="btn" onclick="filtrar()"><i data-lucide="search"></i> Buscar</button>
-      <button class="btn btn-secondary" onclick="limpiarFiltro()"><i data-lucide="refresh-cw"></i> Limpiar</button>
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    title: '<i data-lucide="calendar"></i> Cargar Inventario',
+    actions: [
+      { label: '<i data-lucide="save"></i> Guardar inventario',
+        cls: 'primary',
+        onclick: "guardarSemana()" }
+    ],
+    menu: [
+      { href: './index.html',   label: '<i data-lucide="package"></i> Ver inventario' },
+      { href: './modelos.html', label: '<i data-lucide="book-open"></i> Modelos' }
+    ]
+  });
+</script>
+
+<div class="app-wrap app-wrap--full">
+  <div class="app-card">
+    <div class="filter-bar">
+      <div class="filter-search">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input id="filtroMarca" type="search" placeholder="Buscar por marca" aria-label="Filtrar por marca">
+      </div>
+      <div class="filter-search">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input id="filtroModelo" type="search" placeholder="Buscar por modelo" aria-label="Filtrar por modelo">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="filtrar()"><i data-lucide="search"></i> Buscar</button>
+      <button class="btn btn-ghost btn-sm" onclick="limpiarFiltro()"><i data-lucide="refresh-cw"></i> Limpiar</button>
+      <div style="flex:1;"></div>
+      <span id="resumenCargar" class="resumen">Cargando modelos…</span>
     </div>
-    <div class="right resumen" id="resumenCargar">Cargando modelos…</div>
+
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+      <table class="app-table">
+        <thead id="headerModelos"></thead>
+        <tbody id="tablaModelos"></tbody>
+      </table>
+    </div>
   </div>
-</div>
-<div class="app-table-wrap mt-12">
-  <table class="app-table">
-    <thead id="headerModelos"></thead>
-    <tbody id="tablaModelos"></tbody>
-  </table>
 </div>
 
 <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

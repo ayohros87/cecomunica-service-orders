@@ -1,9 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Editar Orden - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
+
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
@@ -17,445 +25,164 @@
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/empresaService.js"></script>
   <script src="../js/core/layout.js"></script>
+
   <script>
     function cerrarSesion() {
       firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
     }
   </script>
+
   <style>
-    body {
-      background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
-      padding: 0 24px 24px;
-      min-height: 100vh;
-    }
-    
-    .page-header {
-      max-width: 900px;
-      margin: 0 auto 32px auto;
-      text-align: center;
-    }
-    
-    .page-header h1 {
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--text);
-      margin: 0 0 8px 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-    }
-    
-    .page-header p {
-      color: var(--muted);
-      font-size: 14px;
-      margin: 0;
-    }
-    
+    /* Page-local */
     .order-id-badge {
       display: inline-block;
       background: linear-gradient(135deg, var(--accent), var(--accent-hover));
       color: white;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      margin-top: 8px;
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 14px; font-weight: 600;
+      font-family: var(--font-mono);
+      margin-top: var(--sp-2);
     }
-    
-    .form-container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-    
-    #ordenForm {
-      background: white;
-      border-radius: 16px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-      overflow: hidden;
-    }
-    
-    .section.form {
-      padding: 32px;
-      border-bottom: 2px solid var(--line);
-      transition: background 0.2s;
-    }
-    
-    .section.form:hover {
-      background: #fafbfc;
-    }
-    
-    .section.form:last-of-type {
-      border-bottom: none;
-    }
-    
-    .form-title {
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--text);
-      margin: 0 0 24px 0;
-      padding-bottom: 12px;
-      border-bottom: 3px solid var(--accent);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .form-field label {
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--text);
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    
-    .form-field input,
-    .form-field select,
-    .form-field textarea {
-      border: 2px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 14px;
-      transition: all 0.2s;
-      background: white;
-    }
-    
-    .form-field input:focus,
-    .form-field select:focus,
-    .form-field textarea:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-      outline: none;
-    }
-    
-    .form-field input[readonly],
-    .form-field select:disabled,
-    .form-field textarea[readonly] {
-      background: #f3f4f6;
-      color: var(--muted);
-      cursor: not-allowed;
-      border-color: #e5e7eb;
-    }
-    
-    .form-actions {
-      padding: 24px 32px;
-      background: #f8fafc;
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-      border-top: 2px solid var(--line);
-    }
-    
-    .form-actions .btn {
-      font-size: 15px;
-      padding: 12px 24px;
-      font-weight: 600;
-    }
-    
     .contrato-block {
       background: var(--accent-soft);
-      border: 2px solid var(--accent-line);
-      border-radius: 8px;
-      padding: 16px;
-      margin-top: 16px;
+      border: 1px solid var(--accent-line);
+      border-radius: var(--radius-md);
+      padding: var(--sp-3) var(--sp-4);
+      margin-top: var(--sp-2);
     }
-    
     .contrato-hint {
-      font-size: 12px;
-      color: var(--navy);
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    
-    .checkbox-field {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin: 12px 0;
-    }
-    
-    .checkbox-field input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-    }
-    
-    .checkbox-field label {
-      margin: 0;
-      cursor: pointer;
-      font-weight: 500;
-    }
-    
-    #mensaje {
-      max-width: 900px;
-      margin: 20px auto;
-      padding: 16px 24px;
-      border-radius: var(--radius-lg);
-      font-weight: 600;
-      text-align: center;
-      display: none;
-    }
-    
-    #mensaje:not(:empty) {
-      display: block;
-    }
-    
-    .form-hint {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 6px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    
-    .locked-field-notice {
-      background: #fff3cd;
-      border: 2px solid #ffc107;
-      border-radius: 8px;
-      padding: 12px 16px;
-      margin-bottom: 24px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-      color: #856404;
-    }
-    
-    @media (max-width: 768px) {
-      body {
-        padding: 12px;
-      }
-      
-      .page-header h1 {
-        font-size: 24px;
-      }
-      
-      .section.form {
-        padding: 20px;
-      }
-      
-      /* Enhanced mobile form fields */
-      .form-field {
-        margin-bottom: 20px;
-      }
-      
-      .form-field input,
-      .form-field select,
-      .form-field textarea {
-        min-height: 44px;
-        font-size: 16px;
-        padding: 14px;
-        width: 100%;
-        box-sizing: border-box;
-      }
-      
-      .form-field textarea {
-        min-height: 100px;
-      }
-      
-      .form-field label {
-        font-size: 14px;
-        margin-bottom: 10px;
-      }
-      
-      /* Input rows stack on mobile */
-      .input-row {
-        flex-direction: column;
-        gap: 12px;
-      }
-      
-      .btn-pill {
-        width: 48px;
-        height: 48px;
-        font-size: 22px;
-      }
-      
-      /* Mobile actions */
-      .form-actions {
-        padding: 16px 20px;
-        flex-direction: column-reverse;
-        gap: 10px;
-      }
-      
-      .form-actions .btn {
-        width: 100%;
-        min-height: 48px;
-        font-size: 16px;
-        padding: 14px 24px;
-      }
-      
-      /* Checkbox larger tap target */
-      .checkbox-field input[type="checkbox"] {
-        width: 22px;
-        height: 22px;
-      }
-      
-      .checkbox-field label {
-        font-size: 15px;
-      }
-      
-      /* Contrato block spacing */
-      .contrato-block {
-        padding: 14px;
-        margin-top: 12px;
-      }
-      
-      /* Form title */
-      .form-title {
-        font-size: 16px;
-        margin-bottom: 20px;
-      }
-      
-      /* Order ID badge */
-      .order-id-badge {
-        font-size: 14px;
-        padding: 6px 12px;
-      }
-      
-      /* Equipment table on mobile - make scrollable */
-      .section.form table {
-        display: block;
-        overflow-x: auto;
-        white-space: nowrap;
-      }
-      
-      .section.form table td,
-      .section.form table th {
-        font-size: 13px;
-        padding: 8px 6px;
-      }
-    }
-    
-    /* Toast Animations */
-    @keyframes slideInRight {
-      from {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-    
-    @keyframes fadeOut {
-      from {
-        opacity: 1;
-      }
-      to {
-        opacity: 0;
-      }
+      font-size: 12px; color: var(--navy);
+      margin-bottom: var(--sp-2);
+      display: flex; align-items: center; gap: 6px;
     }
   </style>
 </head>
 <body>
+
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="pencil"></i> Editar Orden de Servicio', back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' }, showHome: false, showLogout: true });</script>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="pencil"></i> Editar Orden de Servicio',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
+      showHome: false, showLogout: true
+    });
+  </script>
 
-  <div class="page-header">
-    <p>Modifique los datos de la orden seleccionada</p>
-    <div class="order-id-badge" id="orderIdDisplay"></div>
-  </div>
-  
-  <div class="form-container">
+  <div class="app-wrap app-wrap--default">
 
-  <form id="ordenForm" class="card form">
-    <div class="section form">
-      <h3 class="form-title"><i data-lucide="receipt"></i> Información General</h3>
-      <div class="form-grid cols-2">
-        <div class="form-field">
-          <label class="req">Número de Orden</label>
-          <input type="text" id="orden_id" readonly>
-        </div>
+    <div class="page-header-centered" style="padding-top:var(--sp-6);">
+      <div class="page-header-icon"><i data-lucide="pencil"></i></div>
+      <h1>Editar Orden de Servicio</h1>
+      <p>Modifique los datos de la orden seleccionada.</p>
+      <div class="order-id-badge" id="orderIdDisplay"></div>
+    </div>
 
-        <div class="form-field">
-          <label class="req">Cliente</label>
-          <input type="text" id="cliente" readonly>
-        </div>
+    <form id="ordenForm">
 
-        <div class="form-field">
-          <label class="req">Vendedor</label>
-          <select id="vendedor">
-            <option value="">Seleccione vendedor</option>
-          </select>
-        </div>
+      <!-- Información General -->
+      <div class="form-section-header">
+        <h3><i data-lucide="receipt"></i> Información General</h3>
+      </div>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-grid-2">
 
-        <div class="form-field">
-          <label class="req">Tipo de Servicio</label>
-          <select id="tipo" required>
-            <option value="">Seleccione tipo de servicio</option>
-          </select>
-        </div>
-        
-        <!-- Bloque de Contrato (solo para PROGRAMACION) -->
-        <div id="contratoBlock" class="contrato-block" style="display: none; grid-column: 1 / -1;">
-          <div class="contrato-hint">
-            <i data-lucide="info"></i>
-            <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marque "No aplica" solo si corresponde.</span>
-          </div>
-          
           <div class="form-field">
-            <label id="contratoLabel" class="req">Contrato</label>
-            <select id="contratoSelect" required>
-              <option value="">Seleccione contrato</option>
+            <label class="form-label" for="orden_id">Número de orden <span class="req">*</span></label>
+            <input class="form-input" type="text" id="orden_id" readonly style="font-family:var(--font-mono);">
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="cliente">Cliente <span class="req">*</span></label>
+            <input class="form-input" type="text" id="cliente" readonly>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="vendedor">Vendedor <span class="req">*</span></label>
+            <select class="form-select" id="vendedor">
+              <option value="">Seleccione vendedor</option>
             </select>
           </div>
-          
-          <div class="checkbox-field">
-            <input type="checkbox" id="contratoNoAplica">
-            <label for="contratoNoAplica">No aplica contrato</label>
+
+          <div class="form-field">
+            <label class="form-label" for="tipo">Tipo de servicio <span class="req">*</span></label>
+            <select class="form-select" id="tipo" required>
+              <option value="">Seleccione tipo de servicio</option>
+            </select>
           </div>
-          
-          <div class="form-field" id="contratoMotivoField" style="display: none;">
-            <label class="req">Motivo (No aplica)</label>
-            <textarea id="contratoMotivo" rows="3" placeholder="Explique por qué no aplica contrato..."></textarea>
+
+          <!-- Bloque de Contrato (solo para PROGRAMACIÓN) -->
+          <div id="contratoBlock" class="contrato-block" style="display: none; grid-column: 1 / -1;">
+            <div class="contrato-hint">
+              <i data-lucide="info" style="width:14px;height:14px;"></i>
+              <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marque "No aplica" solo si corresponde.</span>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" id="contratoLabel" for="contratoSelect">Contrato <span class="req">*</span></label>
+              <select class="form-select" id="contratoSelect" required>
+                <option value="">Seleccione contrato</option>
+              </select>
+            </div>
+
+            <label class="form-check" style="margin-top:var(--sp-2);">
+              <input type="checkbox" id="contratoNoAplica">
+              <span><span class="form-check-label">No aplica contrato</span></span>
+            </label>
+
+            <div class="form-field" id="contratoMotivoField" style="display: none; margin-top:var(--sp-2);">
+              <label class="form-label" for="contratoMotivo">Motivo (no aplica) <span class="req">*</span></label>
+              <textarea class="form-input form-textarea" id="contratoMotivo" rows="3" placeholder="Explique por qué no aplica contrato…"></textarea>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Asignación y Estado -->
+      <div class="form-section-header">
+        <h3><i data-lucide="settings-2"></i> Asignación y estado</h3>
+      </div>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="tecnico">Técnico</label>
+            <select class="form-select" id="tecnico" disabled>
+              <option value="">Por asignar</option>
+            </select>
+            <span class="form-hint"><i data-lucide="lock" style="width:12px;height:12px;"></i> Solo se puede asignar desde el listado principal.</span>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="estado">Estado de reparación</label>
+            <select class="form-select" id="estado" disabled>
+              <option value="">Cargando estados…</option>
+            </select>
+            <span class="form-hint"><i data-lucide="lock" style="width:12px;height:12px;"></i> Se actualiza automáticamente según el flujo.</span>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="section form">
-      <h3 class="form-title"><i data-lucide="settings-2"></i> Asignación y Estado</h3>
-      <div class="form-grid cols-2">
+      <!-- Observaciones -->
+      <div class="form-section-header">
+        <h3><i data-lucide="file-text"></i> Observaciones</h3>
+      </div>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
         <div class="form-field">
-          <label>Técnico</label>
-          <select id="tecnico" disabled>
-            <option value="">Por asignar</option>
-          </select>
-          <p class="form-hint"><i data-lucide="lock"></i> Solo se puede asignar desde el listado principal</p>
-        </div>
-
-        <div class="form-field">
-          <label>Estado de Reparación</label>
-          <select id="estado" disabled>
-            <option value="">Cargando estados...</option>
-          </select>
-          <p class="form-hint"><i data-lucide="lock"></i> Se actualiza automáticamente según el flujo</p>
+          <label class="form-label" for="observaciones"># Contrato / Observaciones</label>
+          <textarea class="form-input form-textarea" id="observaciones" rows="4"></textarea>
         </div>
       </div>
-    </div>
 
-    <div class="section form">
-      <h3 class="form-title"><i data-lucide="file-text"></i> Observaciones</h3>
-      <div class="form-field">
-        <label># Contrato / Observaciones</label>
-        <textarea id="observaciones" rows="4"></textarea>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="save"></i> Guardar cambios</button>
+        <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
       </div>
-    </div>
 
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Guardar Cambios</button>
-      <button type="button" class="btn" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar y volver</button>
-    </div>
+    </form>
 
-  </form>
-  
-  <p id="mensaje" class="resumen"></p>
+    <p id="mensaje" class="resumen"></p>
+
   </div>
 
   <script src="../js/pages/editar-orden.js" defer></script>

@@ -1,39 +1,68 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Editar Equipos en Batch - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    textarea, input, select, button { padding: 6px; margin: 4px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-    th { background-color: #f0f0f0; }
-    input[type=text], select { width: 120px; }
-    .grupo-container { display: flex; gap: 6px; margin-bottom: 4px; }
+    /* Page-local — el resto vive en el kit */
+    .grupo-container { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-1); }
+    .grupo-container .grupo-input { min-width: 120px; }
+    #tablaContainer { margin-top: var(--sp-3); overflow-x: auto; }
+    #tablaContainer .app-table th,
+    #tablaContainer .app-table td { text-align: center; vertical-align: middle; }
+    #tablaContainer .app-table td input[type="text"],
+    #tablaContainer .app-table td select { width: 100%; box-sizing: border-box; }
   </style>
+
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/services/pocService.js"></script>
   <script src="../js/services/empresaService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <h2>Editar Equipos en Batch</h2>
 
-  <label>Seriales o Unit IDs (uno por línea):
-    <br>
-    <textarea id="lista_ids" rows="5" cols="50" placeholder="Ejemplo:\nABC12345\n5001\n5002"></textarea>
-  </label>
-  <br>
-  <button onclick="buscarEquipos()"><i data-lucide="search"></i> Buscar</button>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="pencil"></i> Editar Equipos en Batch',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
 
-  <div id="tablaContainer"></div>
+  <div class="app-wrap app-wrap--full">
 
-  <button onclick="guardarCambios()"><i data-lucide="save"></i> Guardar Cambios</button>
-  <button onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Volver</button>
+    <div class="ds-card ds-card-padded">
+      <div class="form-field">
+        <label class="form-label" for="lista_ids">Seriales o Unit IDs <span class="optional">(uno por línea)</span></label>
+        <textarea class="form-input form-textarea" id="lista_ids" rows="5"
+          style="font-family:var(--font-mono); font-size:13px;"
+          placeholder="ABC12345&#10;5001&#10;5002"></textarea>
+      </div>
+
+      <div class="form-actions" style="margin-top:var(--sp-3);">
+        <button class="btn btn-primary" onclick="buscarEquipos()"><i data-lucide="search"></i> Buscar</button>
+        <button class="btn btn-secondary" onclick="guardarCambios()"><i data-lucide="save"></i> Guardar cambios</button>
+        <button class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
+      </div>
+    </div>
+
+    <div id="tablaContainer"></div>
+
+  </div>
 
   <script>
     let equipos = [];
@@ -64,8 +93,8 @@
       const container = document.getElementById(`gruposContainer_${index}`);
       const div = document.createElement("div");
       div.className = "grupo-container";
-      div.innerHTML = `<input type="text" class="grupo-input">
-                        <button type="button" onclick="this.parentNode.remove()"><i data-lucide="x"></i></button>`;
+      div.innerHTML = `<input type="text" class="grupo-input form-input">
+                        <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="this.parentNode.remove()"><i data-lucide="x"></i></button>`;
       container.appendChild(div);
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }
@@ -90,34 +119,34 @@
 
     function renderizarTabla() {
       const container = document.getElementById("tablaContainer");
-      let html = '<table><tr>' +
+      let html = '<div class="ds-card" style="overflow-x:auto;"><table class="app-table compact"><thead><tr>' +
         '<th>Cliente</th><th>IP</th><th>Serial</th><th>Unit ID</th><th>Nombre Radio</th>' +
         '<th>Grupos</th><th>Proveedor</th><th>SIM / Teléfono</th>' +
         '<th>Activo</th><th>GPS</th><th>Notas</th>' +
-        '</tr>';
+        '</tr></thead><tbody>';
 
       equipos.forEach((eq, index) => {
         const d = eq.data;
         html += `<tr>
-          <td><input type="text" value="${d.cliente || ''}" id="cliente_${index}"></td>
-          <td><input type="text" value="${d.ip || ''}" id="ip_${index}"></td>
-          <td>${d.serial}</td>
-          <td>${d.unit_id}</td>
-          <td><input type="text" value="${d.radio_name || ''}" id="radio_${index}"></td>
+          <td><input class="form-input" type="text" value="${d.cliente || ''}" id="cliente_${index}"></td>
+          <td><input class="form-input" type="text" value="${d.ip || ''}" id="ip_${index}" style="font-family:var(--font-mono);"></td>
+          <td class="td-mono">${d.serial}</td>
+          <td class="td-mono">${d.unit_id}</td>
+          <td><input class="form-input" type="text" value="${d.radio_name || ''}" id="radio_${index}"></td>
           <td>
             <div id="gruposContainer_${index}"></div>
-            <button type="button" onclick="agregarGrupo(${index})"><i data-lucide="plus"></i></button>
+            <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="agregarGrupo(${index})"><i data-lucide="plus"></i></button>
           </td>
           <td>
-            <select id="proveedor_${index}"></select>
+            <select class="form-select" id="proveedor_${index}"></select>
           </td>
-          <td><input type="text" value="${formatSimPhone(d.sim_number, d.sim_phone)}" id="simtel_${index}"></td>
+          <td><input class="form-input" type="text" value="${formatSimPhone(d.sim_number, d.sim_phone)}" id="simtel_${index}"></td>
           <td><input type="checkbox" id="activo_${index}" ${d.activo ? 'checked' : ''}></td>
           <td><input type="checkbox" id="gps_${index}" ${d.gps ? 'checked' : ''}></td>
-          <td><input type="text" value="${d.notas || ''}" id="notas_${index}"></td>
+          <td><input class="form-input" type="text" value="${d.notas || ''}" id="notas_${index}"></td>
         </tr>`;
       });
-      html += '</table>';
+      html += '</tbody></table></div>';
       container.innerHTML = html;
 
       equipos.forEach((eq, index) => {
@@ -126,8 +155,8 @@
         grupos.forEach(g => {
           const div = document.createElement("div");
           div.className = "grupo-container";
-          div.innerHTML = `<input type="text" class="grupo-input" value="${g}">
-                            <button type="button" onclick="this.parentNode.remove()"><i data-lucide="x"></i></button>`;
+          div.innerHTML = `<input class="grupo-input form-input" type="text" value="${g}">
+                            <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="this.parentNode.remove()"><i data-lucide="x"></i></button>`;
           container.appendChild(div);
         });
         cargarProveedores(`proveedor_${index}`);

@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Editar Contrato - Cecomunica</title>
@@ -20,21 +26,10 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
-    /* Page-specific tweaks — kit classes do the heavy lifting */
-    .ct-summary-bar {
-      display: flex; gap: var(--sp-4); align-items: center; flex-wrap: wrap;
-      background: var(--surface-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 8px;
-      padding: 10px 14px;
-      margin-bottom: var(--sp-4);
-      font-size: 13px;
-    }
-    .ct-summary-bar > span { color: var(--fg-3); }
-    .ct-summary-bar strong { color: var(--fg-1); font-family: var(--font-mono); }
-    /* Reserve space for the sticky footer-strip */
+    /* Page-local — kit classes hacen el trabajo pesado */
+    /* Reservar espacio para el footer-strip sticky */
     .app-body { padding-bottom: 84px; }
-    /* Renovación badge color follows accent (matches kit example) */
+    /* Renovación badge color sigue el accent (matches kit example) */
     #renovacionBadge.chip-prioridad { background: var(--accent-soft); color: var(--navy); border-color: var(--accent-line); }
   </style>
 </head>

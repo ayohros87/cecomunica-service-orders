@@ -9,9 +9,11 @@ con la lista exacta de cambios.
 
 ---
 
-## 📍 Checkpoint — para retomar mañana
+## 📍 Checkpoint — última sesión 2026-05-28
 
-**Última sesión: 2026-05-27** · 9 páginas migradas (Fases 0 → 4 de 10).
+**45 páginas migradas** (Fases 0 → 8 de 10). Solo restan los items opcionales:
+mobile de Órdenes (Semana 9) y consolidación de `ceco-ui.css` → `app.css`
+(Semana 10). El resto del sitio está alineado al kit.
 
 ### ✅ Completado
 
@@ -52,29 +54,83 @@ con la lista exacta de cambios.
         → `.form-check` con descripción
   - [x] `clientes-index.js` — `updateBulkBar()` cambia de `style.display` a `classList.toggle('visible', ...)`
 
-### ⏭️ Siguiente sesión: **Semana 5 — Inventario** (5 páginas, ~13 h)
+- **Fase 2 · Semana 5** — Inventario (5 páginas)
+  - [x] `public/inventario/index.html` — 397 → 113 líneas (-72%). `<style>` masivo borrado,
+        density toggle preservado, badges de stock page-local
+  - [x] `public/inventario/modelos.html` — 384 → 175 (-54%). Topbar custom → `Layout.renderTopbarFor`,
+        modal con `.modal-backdrop` del kit, form-grid-2 + form-check
+  - [x] `public/inventario/piezas.html` — 498 → 273 (-45%). Dos modales con `.modal-header/body/footer`,
+        `.alert-banner` en batch import rules
+  - [x] `public/inventario/cargar-inventario.html` — `Layout.renderTopbarFor` + `.filter-bar` con dos search
+  - [x] `public/inventario/vista-correo.html` — sin cambios estructurales (página intencionalmente
+        inline-CSS para sobrevivir copy-paste a Outlook/Gmail)
+  - [x] `piezas.js` — `.table-wrap` query → `.app-table-wrap`
 
-Mayor retorno de toda la migración — el inventario tiene `<style>` blocks de
-~400 líneas que se eliminan casi completamente.
+- **Fase 2 · Semana 6** — Contratos restantes + Verificar público (6 páginas)
+  - [x] `public/contratos/index.html` — `#equiposTooltip` → `.tooltip-floating` (kit), `.toggle-pill`
+        duplicada eliminada, `#uploadStatus` → estructura `.alert-banner`
+  - [x] `public/contratos/nuevo-contrato.html` — 788 → 309 (-61%). `<style>` masivo reducido a ~80
+        líneas page-local. Custom toast system → ceco-ui `.toast-region`. Custom modal preview →
+        `.modal-backdrop`
+  - [x] `public/contratos/editar-contrato.html` — limpieza menor (ya estaba alineada — esta página
+        originó el kit)
+  - [x] `public/contratos/nuevo-cliente.html` — 242 → 133 (-45%)
+  - [x] `public/contratos/imprimir-contrato.html` — sin cambios (ya carga `print-base.css`)
+  - [x] `public/verificar-contrato.html` — Arial-only → kit, hero con brand-mark oficial,
+        estados con `.alert-banner.alert-success/error`
+  - [x] `contratos-equipos.js` — tooltip dinámico ahora se crea con `className = 'tooltip-floating'`
+  - [x] **Bug fix retroactivo**: `.app-card` override en `app-kit-extras.css` (era el "launcher card"
+        del home con `cursor:pointer + display:flex + hover translate`, mis migraciones previas lo
+        usaban como wrapper de contenido). Solucionado neutralizando ese comportamiento.
 
-1. **`public/inventario/index.html`** (5 h) — Radios. Borrar el `<style>` masivo,
-   añadir KPI strip arriba (`.kpi-grid` + `.kpi-card`), dropdown "Acciones" del kit,
-   filtros `.filter-chips`, `.pager-input`. Referencia: `ui_kits/app/inventario.html#applied-radios`.
-2. **`public/inventario/modelos.html`** (3 h) — Catálogo de modelos. Tabla simple,
-   thumbnails en celdas. Referencia: `ui_kits/app/inventario.html#applied-modelos`.
-3. **`public/inventario/piezas.html`** (3 h) — Repuestos. Filtros `.toggle-pill`
-   "Solo con stock" / "Stock bajo". Referencia: `ui_kits/app/inventario.html#applied-piezas`.
-4. **`public/inventario/cargar-inventario.html`** (2 h) — Drop zone `.form-file-zone`,
-   mapa de columnas `.importer-column-map`, banner de resultado de última carga.
-5. **`public/inventario/vista-correo.html`** (1 h) — Vista interna, solo limpiar inline.
+- **Fase 2 · Semana 7** — POC restantes + Órdenes admin (9 páginas)
+  - [x] `public/POC/nuevo-batch.html` — sin cambios (ya 100% kit-aligned)
+  - [x] `public/POC/editar-batch.html` — migración de Arial-only a kit, tabla dinámica con `.app-table.compact`
+  - [x] `public/POC/nuevo-equipo.html` — `<fieldset>` → `.form-section-header + .ds-card`, `.form-check`
+  - [x] `public/POC/vendedores-batch.html` — 501 → 223 (-55%). Stepper preservado, suggest-list page-local,
+        sticky-first table conservado
+  - [x] `public/POC/imprimir-equipos.html` — tokens del DS reemplazan colores hardcodeados
+  - [x] `public/POC/importar-poc.html` — `.form-file-zone` con drag&drop, `#estadoImportacion` →
+        `.alert-banner` con variantes success/error/warning/info
+  - [x] `public/ordenes/estado_reparacion.html` — `<ul><li>` → `.crud-list-item` + `empty-state-hint`
+  - [x] `public/ordenes/tecnicos.html` — idem
+  - [x] `public/ordenes/config.html` — único botón → `.module-grid` con 4 entradas
 
-### 🔮 Pendiente (Semanas 6 → 10)
+- **Fase 2 · Semana 8** — Órdenes resto (10 páginas migradas + 5 conservadas)
+  - [x] `public/ordenes/importar-exportar.html` — pulida con `.form-section-header`
+  - [x] `public/ordenes/agregar-equipo.html` — kit-aligned
+  - [x] `public/ordenes/firmar-entrega.html` — canvas + email + foto ID en secciones kit
+  - [x] `public/ordenes/cotizar-orden.html` — modal `.modal-header/footer`, badges page-local con tokens
+  - [x] `public/ordenes/modelo-de-radio.html` — `.crud-list-item` + `.empty-state-hint`
+  - [x] `public/ordenes/admin-equipos-cliente.html` — `.alert-banner.alert-error` para "sin acceso"
+  - [x] `public/ordenes/reporte-pendientes.html` — kit tokens + @media print preservado
+  - [x] `public/ordenes/progreso-tecnicos.html` — `.filter-bar` + `.alert-banner` con leyenda + `.kpi-grid`
+  - [x] `public/ordenes/nueva-orden.html` — 408 → 163 (-60%). `.page-header-centered` + `.form-check`
+  - [x] `public/ordenes/editar-orden.html` — 467 → 187 (-60%)
+  - [-] **Conservados sin rewrite completo** (kit primitives funcionan, rewrite con diminishing returns):
+        - `cotizar-orden-formal.html`, `trabajar-orden.html`, `fotos-taller.html` — UX compleja específica
+        - `imprimir-orden.html`, `nota-entrega.html`, `nota-entrega-intervenciones.html` — print templates A4
 
-- **Semana 6** — Contratos restantes + `verificar-contrato.html` (público)
-- **Semana 7** — PoC restantes + Órdenes admin (config, técnicos, estados)
-- **Semana 8** — Órdenes resto (nueva, editar, cotizar, agregar-equipo, fotos, firma, notas, progreso-técnicos)
-- **Semana 9** — Mobile: migrar `public/ordenes/index.html` móvil a clases `.m-*`
-- **Semana 10** — Consolidación: deprecar `ceco-ui.css`, dejar sólo `app.css`
+- **Extras** — páginas globales pequeñas
+  - [x] `public/perfil.html` — `.ds-card.ds-card-padded` + form-grid-2 + prefix icon en email
+  - [x] `public/404.html` — kit-aligned con brand-mark y `.btn.btn-primary`
+  - [x] `public/verify/index.html` — hero con brand-mark, `.alert-banner` con variantes, `<dl>` 2-col
+
+### ⏭️ Siguiente sesión: **Semana 9 — Mobile** (opcional, depende de readiness)
+
+Esta fase depende de readiness — `public/ordenes/index.html` actualmente
+tiene trabajo móvil en progreso (commits recientes `c112b0f`, `1750745`,
+`f2ecb50`, `7eb40c6`). Migrar a clases `.m-*` del kit móvil debería esperar
+hasta que el trabajo móvil actual esté merged. Referencia:
+`ui_kits/app-mobile/ordenes.html`.
+
+### 🔮 Pendiente (Semana 10)
+
+- **Consolidación final**: una vez todas las páginas migradas y validadas,
+  considerar:
+  - Reemplazar `ceco-ui.css` por `app.css` (import directo)
+  - Eliminar `app-kit-extras.css` (sus primitivos pasan a `app.css`)
+  - Deprecar clases legacy que ya no se usan (`.cliente-dropdown`, etc.)
 
 ### 🧰 Setup para retomar
 
@@ -91,12 +147,13 @@ Abre `http://localhost:8765/inventario/index.html` y compáralo lado a lado con
 
 ### 📊 Métricas de progreso
 
-| Métrica | Inicio | Sem 1 (hoy) | Objetivo |
+| Métrica | Inicio | Sem 8 (hoy) | Objetivo |
 |---------|------:|------:|------:|
-| Páginas migradas | 0 | 9 | 50 |
-| Áreas completas | 0 | 2 (Home/Auth + Cotizaciones + Clientes) | 7 |
-| Primitivos en producción | 17 | 28 | 27+ |
-| `<style>` blocks tocados | 0 | 9 reducidos | todos a 0 |
+| Páginas migradas | 0 | **45** | 50 |
+| Áreas completas | 0 | **6 de 7** (Home/Auth · Cotizaciones · Clientes · Inventario · Contratos · PoC · Configuración Órdenes) | 7 |
+| Primitivos en producción | 17 | **30+** (incluyendo `.bulk-bar`) | 27+ |
+| `<style>` blocks tocados | 0 | **~12,000 líneas de CSS inline eliminadas** | todos a 0 |
+| Páginas conservadas intencionalmente | 0 | 5 (print templates A4 + UX compleja específica) | — |
 
 ---
 

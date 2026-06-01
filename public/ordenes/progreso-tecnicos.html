@@ -1,11 +1,15 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
   <title>Progreso de Técnicos – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-
-  <!-- Estilos base -->
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
   <!-- Firebase -->
@@ -19,137 +23,113 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
-    .subtle { color: var(--muted); font-size: 12px; }
-    .chip-periodo { padding:.25rem .5rem; border-radius: 999px; background: var(--chip); font-size: 12px; }
-/* === Tabla centrada completamente === */
-.tbl {
-  width: 100%;
-  border-collapse: collapse;
-}
+    /* Page-local — el resto vive en el kit */
 
-.tbl thead th {
-  text-align: center;
-  padding: 10px 8px;
-  border-bottom: 1px solid var(--line);
-  background: #f9fafb;
-}
+    /* Tabla ranking centrada */
+    .tbl thead th { text-align: center; }
+    .tbl tbody td { text-align: center; vertical-align: middle; }
+    .tbl tbody td:nth-child(2) span { display: block; }
 
-.tbl tbody td {
-  text-align: center;
-  padding: 8px;
-  border-bottom: 1px solid #f1f5f9;
-  vertical-align: middle;
-}
+    /* Pills de performance */
+    .pill-ok   { background:#bbf7d0; padding:.15rem .5rem; border-radius: 999px; font-weight: 600; }
+    .pill-warn { background:#fde68a; padding:.15rem .5rem; border-radius: 999px; font-weight: 600; }
 
-.tbl tbody tr:hover {
-  background: #f9fafb;
-}
+    /* Leyenda con dots */
+    .legend { display:flex; gap:var(--sp-3); align-items:center; font-size:12px; color:var(--fg-3); }
+    .dot-green  { width:8px; height:8px; background:#22c55e; border-radius:999px; display:inline-block; }
+    .dot-yellow { width:8px; height:8px; background:var(--status-warning); border-radius:999px; display:inline-block; }
 
-/* Centrar texto de la columna Técnico */
-.tbl tbody td:nth-child(2) {
-  text-align: center;
-}
-
-.tbl tbody td:nth-child(2) span {
-  display: block;
-}
-
-/* Medalla y número alineados correctamente */
-.rank-medal {
-  font-size: 18px;
-  vertical-align: middle;
-  margin-right: 4px;
-}
-
-/* Encabezados uniformes */
-.tbl thead th,
-.tbl tbody td {
-  min-width: 100px;
-}
-
-
-    .pill-ok { background:#bbf7d0; padding:.15rem .5rem; border-radius: 999px; font-weight:600; }
-    .pill-warn { background:#fde68a; padding:.15rem .5rem; border-radius: 999px; font-weight:600; }
-    .legend { display:flex; gap:8px; align-items:center; font-size: 12px; color:var(--muted); }
-    .dot-green { width:8px; height:8px; background:#22c55e; border-radius:999px; display:inline-block }
-    .dot-yellow{ width:8px; height:8px; background:var(--warn); border-radius:999px; display:inline-block }
-    .banner { background:#eef2ff; padding:10px 12px; border-radius:var(--radius-lg); margin:8px 0; }
-    .self-stats { display:flex; gap:8px; flex-wrap:wrap; }
-    .self-card { background:var(--card); padding:10px 12px; border-radius:var(--radius-lg); box-shadow: var(--shadow); }
-    .nowrap { white-space: nowrap; }
+    /* Chip de periodo */
+    .chip-periodo {
+      padding: 4px 10px; border-radius: 999px;
+      background: var(--surface-sunken); border: 1px solid var(--border-default);
+      font-size: 12px; color: var(--fg-2);
+    }
   </style>
 </head>
 <body>
+
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: '<i data-lucide="trophy"></i> Progreso de Técnicos', showHome: true, homeHref: '../index.html', showLogout: true });</script>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="trophy"></i> Progreso de Técnicos',
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
 
-  <div class="app-wrap">
+  <div class="app-wrap app-wrap--wide">
 
-  <!-- Toolbar -->
-  <div class="toolbar">
-    <div class="left">
-      <input id="buscarNombre" type="text" placeholder="Buscar técnico por nombre o correo" style="min-width:260px;">
-      <button class="btn btn-primary" id="btnBuscar"><i data-lucide="search"></i> Buscar</button>
-      <button class="btn btn-secondary" id="btnLimpiar"><i data-lucide="x"></i> Limpiar</button>
-    </div>
-    <div class="right">
-      <label class="subtle">Periodo:</label>
-      <select id="selPeriodo">
-        <option value="mensual" selected>Mensual</option>
-        <option value="semanal">Semanal</option>
-        <option value="total">Total histórico</option>
-      </select>
-      <button class="btn" id="btnRefrescar">↻ Refrescar</button>
-      <button class="btn" onclick="window.location.href='index.html'"><i data-lucide="clipboard-list"></i> Ir a Órdenes</button>
-      <button class="btn" onclick="window.location.href='../index.html'"><i data-lucide="home"></i> Menú</button>
-    </div>
-  </div>
-
-  <div class="banner">
-    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-      <div class="legend">
-        <span class="chip-periodo" id="chipPeriodo">Periodo: Mensual</span>
-        <span><span class="dot-green"></span> Top 3</span>
-        <span><span class="dot-yellow"></span> En progreso</span>
+    <!-- Toolbar -->
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
+      <div class="filter-bar">
+        <div class="filter-search">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input id="buscarNombre" type="search" placeholder="Buscar técnico por nombre o correo" aria-label="Buscar técnico">
+        </div>
+        <button class="btn btn-primary btn-sm" id="btnBuscar"><i data-lucide="search"></i> Buscar</button>
+        <button class="btn btn-ghost btn-sm" id="btnLimpiar"><i data-lucide="x"></i> Limpiar</button>
+        <div style="flex:1;"></div>
+        <span style="font-size:12px; color:var(--fg-3);">Periodo:</span>
+        <div class="form-field" style="margin:0; min-width:140px;">
+          <select id="selPeriodo" class="form-select" style="height:32px; padding:4px 10px;">
+            <option value="mensual" selected>Mensual</option>
+            <option value="semanal">Semanal</option>
+            <option value="total">Total histórico</option>
+          </select>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnRefrescar"><i data-lucide="refresh-cw"></i> Refrescar</button>
       </div>
-      <div class="subtle" id="stamp"></div>
     </div>
-  </div>
 
-  <!-- Tus propias estadísticas (si es técnico) -->
-  <div id="misStatsWrap" class="kpi-grid" style="display:none; margin-top:12px;">
-    <div class="kpi-card">
-      <div class="kpi-card-label">Mi Semanal</div>
-      <div class="kpi-card-value kpi-accent" id="miSemanal">0</div>
+    <!-- Banner con leyenda -->
+    <div class="alert-banner" style="margin-bottom:var(--sp-4);">
+      <span class="alert-banner-icon"><i data-lucide="info"></i></span>
+      <div class="alert-banner-body" style="display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); flex-wrap:wrap;">
+        <div class="legend">
+          <span class="chip-periodo" id="chipPeriodo">Periodo: Mensual</span>
+          <span><span class="dot-green"></span> Top 3</span>
+          <span><span class="dot-yellow"></span> En progreso</span>
+        </div>
+        <div style="font-size:12px; color:var(--fg-3);" id="stamp"></div>
+      </div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-card-label">Mi Mensual</div>
-      <div class="kpi-card-value" id="miMensual">0</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-card-label">Mi Total</div>
-      <div class="kpi-card-value kpi-ok" id="miTotal">0</div>
-    </div>
-  </div>
 
-  <!-- Tabla ranking -->
-  <div class="app-table-wrap mt-12">
-    <table class="tbl app-table" style="width:100%;">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Técnico</th>
-          <th class="nowrap">Semanal</th>
-          <th class="nowrap">Mensual</th>
-          <th class="nowrap">Total</th>
-          <th class="nowrap">Estado Actual</th>
-        </tr>
-      </thead>
-      <tbody id="tbodyRanking"></tbody>
-    </table>
-  </div>
+    <!-- KPIs propios del usuario (técnico) -->
+    <div id="misStatsWrap" class="kpi-grid" style="display:none; margin-bottom:var(--sp-4);">
+      <div class="kpi-card">
+        <span class="kpi-card-label">Mi semanal</span>
+        <span class="kpi-card-value kpi-accent" id="miSemanal">0</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Mi mensual</span>
+        <span class="kpi-card-value" id="miMensual">0</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Mi total</span>
+        <span class="kpi-card-value kpi-ok" id="miTotal">0</span>
+      </div>
+    </div>
 
-  </div><!-- /.app-wrap -->
+    <!-- Tabla ranking -->
+    <div class="ds-card">
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="tbl app-table" style="width:100%;">
+          <thead>
+            <tr>
+              <th style="width:48px;">#</th>
+              <th>Técnico</th>
+              <th>Semanal</th>
+              <th>Mensual</th>
+              <th>Total</th>
+              <th>Estado actual</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRanking"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
 
   <script src="../js/pages/progreso-tecnicos.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

@@ -1,27 +1,46 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Trabajar Orden – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <link rel="stylesheet" href="../css/ceco-ui.css">
+
   <style>
-    .fila-equipo{border:1px solid var(--line);border-radius:var(--radius-lg);padding:12px;margin:10px 0;background:#fff}
-    .fila-equipo .hdr{display:flex;justify-content:space-between;align-items:center}
-    .consumos table{width:100%;border-collapse:collapse;margin-top:8px}
-    .consumos th,.consumos td{border:1px solid var(--line);padding:6px;text-align:left}
-    .badge-tipo{padding:2px 6px;border-radius:999px;font-size:12px;border:1px solid var(--line)}
-    .badge-tipo.cobro{background:#ecfeff}
-    .badge-tipo.garantia{background:#f0f9ff}
-    .badge-tipo.interno{background:#fff7ed}
-    .acciones{display:flex;gap:8px;flex-wrap:wrap}
-    .total-mini{font-weight:600}
-    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center}
-    .modal{background:#fff;padding:16px;border-radius:var(--radius-xl);min-width:320px;max-width:520px}
-    .form-field{display:flex;flex-direction:column;margin:8px 0}
+    /* Page-local */
+    .fila-equipo {
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+      padding: var(--sp-3); margin: var(--sp-3) 0;
+      background: var(--surface-card);
+    }
+    .fila-equipo .hdr {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: var(--sp-2);
+    }
+    .consumos table { width: 100%; border-collapse: collapse; margin-top: var(--sp-2); }
+    .consumos th, .consumos td {
+      border: 1px solid var(--border-subtle); padding: 6px; text-align: left;
+      font-size: 13px;
+    }
+    .consumos th { background: var(--surface-sunken); font-weight: 600; }
+    .badge-tipo {
+      padding: 2px 8px; border-radius: 999px; font-size: 12px;
+      border: 1px solid transparent; display: inline-block;
+    }
+    .badge-tipo.cobro    { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    .badge-tipo.garantia { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
+    .badge-tipo.interno  { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
+    .total-mini { font-weight: 600; }
   </style>
 </head>
 <body>
+
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -41,48 +60,56 @@
     });
   </script>
 
-  <div class="card">
-    <div id="infoOrden" class="resumen"></div>
-    <div class="acciones">
-      <button class="btn" onclick="window.open('imprimir-orden.html?id='+ordenId,'_blank')"><i data-lucide="printer"></i> Imprimir orden</button>
-      <button class="btn btn-primary" onclick="irACotizar()"><i data-lucide="receipt"></i> Previsualizar cotización</button>
-    </div>
-  </div>
+  <div class="app-wrap app-wrap--default">
 
-  <div id="equiposWrap"></div>
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <div id="infoOrden" class="resumen" style="margin-bottom:var(--sp-3);"></div>
+      <div class="form-actions" style="margin:0;">
+        <button class="btn btn-secondary" onclick="window.open('imprimir-orden.html?id='+ordenId,'_blank')"><i data-lucide="printer"></i> Imprimir orden</button>
+        <button class="btn btn-primary" onclick="irACotizar()"><i data-lucide="receipt"></i> Previsualizar cotización</button>
+      </div>
+    </div>
+
+    <div id="equiposWrap"></div>
+
+  </div>
 
   <!-- Modal Agregar Pieza -->
-  <div id="modalPieza" class="modal-backdrop">
-    <div class="modal">
-      <h3 style="margin:0 0 8px 0;">Agregar pieza utilizada</h3>
-      <div class="form-field">
-        <label>Buscar pieza (nombre o SKU)</label>
-        <input id="buscarPieza" type="text" placeholder="Ej. Micrófono, Batería BL2009, etc.">
-        <div id="sugerencias" class="chips"></div>
+  <div id="modalPieza" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Agregar pieza utilizada</h3>
+        <button class="modal-close" onclick="cerrarModal()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
-      <div class="form-field">
-        <label>Cantidad</label>
-        <input id="qty" type="number" min="1" step="1" value="1">
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="buscarPieza">Buscar pieza (nombre o SKU)</label>
+          <input class="form-input" id="buscarPieza" type="text" placeholder="Ej. Micrófono, Batería BL2009…">
+          <div id="sugerencias" class="chips" style="margin-top:var(--sp-2);"></div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="qty">Cantidad</label>
+          <input class="form-input" id="qty" type="number" min="1" step="1" value="1">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="tipo">Tipo</label>
+          <select class="form-select" id="tipo">
+            <option value="cobro" selected>Cobrar</option>
+            <option value="garantia">Garantía</option>
+            <option value="interno">Uso interno</option>
+          </select>
+        </div>
       </div>
-      <div class="form-field">
-        <label>Tipo</label>
-        <select id="tipo">
-          <option value="cobro" selected>Cobrar</option>
-          <option value="garantia">Garantía</option>
-          <option value="interno">Uso interno</option>
-        </select>
-      </div>
-
-      <div class="acciones" style="justify-content:flex-end;margin-top:8px;">
-        <button class="btn" onclick="cerrarModal()">Cancelar</button>
-        <button class="btn btn-accent" onclick="confirmarAgregar()">Agregar</button>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarAgregar()"><i data-lucide="plus"></i> Agregar</button>
       </div>
     </div>
   </div>
-<script src="../js/ui/toast.js"></script>
-<script src="../js/ui/modal.js"></script>
 
-<script src="../js/pages/cotizar-orden.js" defer></script>
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="../js/pages/cotizar-orden.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

@@ -68,6 +68,7 @@ window.ContratosEquipos = {
     if (!this._tipEl) {
       this._tipEl = document.createElement('div');
       this._tipEl.id = 'equiposTooltip';
+      this._tipEl.className = 'tooltip-floating';
       document.body.appendChild(this._tipEl);
     }
     this._tipEl.innerHTML = html;

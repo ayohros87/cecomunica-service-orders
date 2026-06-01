@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
   <title>Contratos – Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
@@ -47,45 +53,15 @@
     }
     .equipos-peek:hover { background: var(--accent-soft); }
 
-    /* Floating tooltip for equipos peek */
-    #equiposTooltip {
-      position: fixed; z-index: 9999;
-      background: var(--surface-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      box-shadow: var(--shadow-lg);
-      padding: var(--sp-3);
-      max-width: 420px;
-      pointer-events: none;
-      font-size: 13px;
-    }
-    #equiposTooltip .tooltip-line { margin: 4px 0; line-height: 1.4; }
+    /* Tooltip floating: estilo vive en .tooltip-floating del kit
+       (app-kit-extras.css). Aquí solo override de display por compatibilidad
+       con el JS que toggle-ea style.display = 'block'/'none'. */
+    #equiposTooltip[style*="display: block"] { display: block !important; }
 
-    /* Toggle pill — same pattern as POC list */
-    .toggle-pill {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 5px 11px;
-      background: var(--surface-sunken);
-      border: 1px solid var(--border-default);
-      border-radius: var(--radius-pill);
-      font-size: 12px; font-weight: 500; color: var(--fg-2);
-      cursor: pointer;
-      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
-      white-space: nowrap;
-    }
-    .toggle-pill:hover { border-color: var(--accent); color: var(--accent); }
-    .toggle-pill input[type="checkbox"] { cursor: pointer; margin: 0; }
+    /* Toggle pill: definida en app-kit-extras.css del kit. */
 
-    /* Upload status banner above the card when uploading a signed PDF */
-    #uploadStatus {
-      display: none;
-      margin-bottom: var(--sp-3);
-      padding: var(--sp-2) var(--sp-3);
-      background: var(--accent-soft);
-      border: 1px solid var(--accent-line);
-      border-radius: var(--radius-md);
-      font-size: 13px; color: var(--navy);
-    }
+    /* Upload status: alias del .alert-banner del kit por compatibilidad JS. */
+    #uploadStatus { display: none; }
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -122,8 +98,11 @@
 
     <!-- Upload status banner (shown when uploading a signed PDF) -->
     <input type="file" id="fileFirmado" accept="application/pdf,image/*" style="display:none">
-    <div id="uploadStatus">
-      <i data-lucide="upload"></i> Subiendo contrato firmado <strong id="uploadPct">0%</strong>
+    <div id="uploadStatus" class="alert-banner">
+      <span class="alert-banner-icon"><i data-lucide="upload"></i></span>
+      <div class="alert-banner-body">
+        Subiendo contrato firmado <strong id="uploadPct">0%</strong>
+      </div>
     </div>
 
     <!-- Card containing filter bar + table + footer (kit data-table pattern) -->

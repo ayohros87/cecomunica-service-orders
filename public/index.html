@@ -1,19 +1,42 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Cecomunica - Plataforma</title>
 <link rel="stylesheet" href="css/ceco-ui.css">
   <style>
-    /* En móvil: el título es solo "Cecomunica" (sin el sufijo largo).
-       Ocultamos el spacer flexible para que el logo recupere el ancho que
-       necesita el título — antes competía 50/50 con el spacer y recortaba
-       incluso "Cecomunica". */
+    /* Home: ribbon navy con logo inverso. */
+    .app-topbar { background: #0B2A47; color: #fff; }
+    .app-topbar .app-topbar-logo .topbar-brand { display: none; }
+    .app-topbar .app-topbar-title,
+    .app-topbar .brand-suffix { color: #fff; }
+    .app-topbar .btn-ghost { color: #fff; }
+    .app-topbar .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+    /* "CENTRO DE GESTIÓN" usa el mismo Barlow 800 que el wordmark CECOMUNICA. */
+    .brand-suffix {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 14px;
+      letter-spacing: 0.05em;
+    }
+    .topbar-logo-img {
+      height: 32px;
+      width: auto;
+      display: inline-block;
+      vertical-align: middle;
+    }
     @media (max-width: 640px) {
       .brand-suffix { display: none; }
       .app-topbar-spacer { display: none; }
       .app-topbar-title { min-width: 0; }
+      .topbar-logo-img { height: 26px; }
     }
   </style>
 
@@ -28,7 +51,7 @@
 </head>
 <body>
   <div id="topbar-mount"></div>
-  <script>Layout.renderTopbar({ title: 'Cecomunica<span class="brand-suffix"> — Centro de Gestión</span>', showHome: false, showLogout: true, menu: [{ label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' }] });</script>
+  <script>Layout.renderTopbar({ title: '<img src="brand/logo-lockup-horizontal-compact-inverse.svg" alt="CECOMUNICA" class="topbar-logo-img"><span class="brand-suffix"> — CENTRO DE GESTIÓN —</span>', showHome: false, showLogout: true, menu: [{ label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' }] });</script>
 
   <div class="app-wrap">
     <!-- Herramientas -->
@@ -150,6 +173,17 @@
         </span>
         <span class="module-card-shortcut">V</span>
       </a>
+
+      <!-- Firma de correo (todos los roles) -->
+      <a class="module-card" data-keywords="firma correo email signature plantilla mail" data-mod="firma" data-visible="false"
+         href="firma-correo.html">
+        <span class="module-card-icon"><i data-lucide="mail"></i></span>
+        <span class="module-card-meta">
+          <span class="module-card-title">Mi Firma de Correo</span>
+          <span class="module-card-sub">Genera tu firma oficial y cópiala</span>
+        </span>
+        <span class="module-card-shortcut">F</span>
+      </a>
     </div>
   </div>
 
@@ -160,14 +194,15 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
   verificarAccesoYAplicarVisibilidad(async (rol) => {
     // Mapa de rol → módulos visibles
+    // "firma" disponible para todo el personal autenticado.
     const visiblesPorRol = {
-  administrador: ["ordenes", "poc", "inventario", "vendedores", "contratos", "cotizaciones", "clientes", "piezas"],
-  inventario:    ["inventario", "piezas"],
-  vista:         ["ordenes", "poc"],
-  tecnico:       ["ordenes", "poc"],
-  recepcion:     ["ordenes", "poc", "vendedores", "contratos", "clientes"],
-  vendedor:      ["ordenes", "vendedores", "contratos"],
-  tecnico_operativo: ["ordenes"]
+  administrador: ["ordenes", "poc", "inventario", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
+  inventario:    ["inventario", "piezas", "firma"],
+  vista:         ["ordenes", "poc", "firma"],
+  tecnico:       ["ordenes", "poc", "firma"],
+  recepcion:     ["ordenes", "poc", "vendedores", "contratos", "clientes", "firma"],
+  vendedor:      ["ordenes", "vendedores", "contratos", "firma"],
+  tecnico_operativo: ["ordenes", "firma"]
 };
 
 
@@ -222,6 +257,7 @@ function cerrarSesion() {
     if (e.key === "v") go("vendedores");
     if (e.key === "q") go("cotizaciones");
     if (e.key === "x") go("piezas");
+    if (e.key === "f") go("firma");
   });
   if (typeof lucide !== 'undefined') lucide.createIcons();
 </script>

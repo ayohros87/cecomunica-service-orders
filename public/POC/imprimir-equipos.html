@@ -1,171 +1,87 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Hoja de Programación - C COMUNICA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      padding: 20px;
-      background: #f5f7fa;
-    }
-    
+    /* Page-local: layout específico para impresión */
+    body { background: var(--surface-page); }
+
     .print-page {
       max-width: 1200px;
       margin: 0 auto;
-      background: white;
+      background: var(--surface-card);
       padding: 40px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-md);
       border-radius: var(--radius-lg);
     }
-    
-    .header {
+
+    .print-header-block {
       text-align: center;
       border-bottom: 4px solid var(--accent);
       padding-bottom: 20px;
       margin-bottom: 24px;
     }
-    
-    .header h1 {
-      margin: 0;
-      font-size: 28px;
-      color: #1f2937;
-      font-weight: 700;
+    .print-header-block h1 {
+      margin: 0; font-size: 28px; color: var(--fg-1); font-weight: 700;
     }
-    
-    .header h2 {
-      margin: 8px 0 0 0;
-      font-size: 20px;
-      color: #6b7280;
-      font-weight: 600;
+    .print-header-block h2 {
+      margin: 8px 0 0 0; font-size: 20px; color: var(--fg-3); font-weight: 600;
     }
 
     .info-section {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      background: #f8fafc;
-      padding: 20px;
-      border-radius: 8px;
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 16px; padding: 20px;
+      background: var(--surface-sunken);
+      border-radius: var(--radius-md);
       margin-bottom: 24px;
       border-left: 4px solid var(--accent);
     }
-    
-    .info-item {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    
+    .info-item { display: flex; flex-direction: column; gap: 4px; }
     .info-label {
-      font-weight: 600;
-      font-size: 12px;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      font-weight: 600; font-size: 12px; color: var(--fg-3);
+      text-transform: uppercase; letter-spacing: 0.5px;
     }
-    
-    .info-value {
-      font-size: 16px;
-      color: #1f2937;
-      font-weight: 600;
-    }
+    .info-value { font-size: 16px; color: var(--fg-1); font-weight: 600; }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-      margin-top: 10px;
+    /* Print table — anclado con bordes para impresión */
+    table.print-equipos { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; }
+    table.print-equipos thead {
+      background: linear-gradient(135deg, var(--surface-sunken), var(--surface-page));
     }
+    table.print-equipos th {
+      border: 1px solid var(--border-default); padding: 12px 8px;
+      text-align: center; vertical-align: middle;
+      font-weight: 600; color: var(--fg-1);
+      text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;
+    }
+    table.print-equipos td {
+      border: 1px solid var(--border-default); padding: 10px 8px;
+      text-align: center; vertical-align: middle;
+    }
+    table.print-equipos tbody tr:nth-child(even) { background: var(--surface-sunken); }
 
-    thead {
-      background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    }
-
-    th {
-      border: 1px solid #d1d5db;
-      padding: 12px 8px;
-      text-align: center;
-      vertical-align: middle;
-      font-weight: 600;
-      color: #374151;
-      text-transform: uppercase;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-    }
-    
-    td {
-      border: 1px solid #d1d5db;
-      padding: 10px 8px;
-      text-align: center;
-      vertical-align: middle;
-    }
-    
-    tbody tr:nth-child(even) {
-      background: #fafafa;
-    }
-    
-    tbody tr:hover {
-      background: #f0f9ff;
-    }
-    
-    .toolbar {
+    .print-toolbar {
       max-width: 1200px;
       margin: 0 auto 20px auto;
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-    }
-    
-    .btn {
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .btn-secondary {
-      background: #e5e7eb;
-      color: #374151;
-    }
-    
-    .btn-secondary:hover {
-      background: #d1d5db;
+      display: flex; gap: 12px; justify-content: flex-end;
     }
 
     @media print {
-      body {
-        padding: 0;
-        background: white;
-      }
-      
-      .print-page {
-        box-shadow: none;
-        border-radius: 0;
-        padding: 20px;
-      }
-      
-      .toolbar {
-        display: none !important;
-      }
-      
-      .header {
-        margin-top: 0;
-      }
-      
-      table {
-        font-size: 10px;
-      }
-      
-      th, td {
-        padding: 6px 4px;
-      }
+      body { padding: 0; background: white; }
+      .print-page { box-shadow: none; border-radius: 0; padding: 20px; }
+      .print-toolbar { display: none !important; }
+      table.print-equipos { font-size: 10px; }
+      table.print-equipos th, table.print-equipos td { padding: 6px 4px; }
     }
   </style>
 
@@ -179,101 +95,101 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
-  <div class="toolbar">
+
+  <div class="print-toolbar">
     <button class="btn btn-primary" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
     <button class="btn btn-secondary" onclick="window.close()"><i data-lucide="x"></i> Cerrar</button>
   </div>
-  
+
   <div class="print-page">
-    <div class="header">
+    <div class="print-header-block">
       <h1>C COMUNICA, S.A.</h1>
       <h2>HOJA DE PROGRAMACIÓN DE EQUIPOS</h2>
     </div>
 
     <div class="info-section">
       <div class="info-item">
-        <span class="info-label"><i data-lucide="calendar"></i> Fecha de Impresión</span>
+        <span class="info-label"><i data-lucide="calendar"></i> Fecha de impresión</span>
         <span class="info-value" id="fechaHoy"></span>
       </div>
       <div class="info-item">
-        <span class="info-label"><i data-lucide="package"></i> Total Equipos</span>
+        <span class="info-label"><i data-lucide="package"></i> Total equipos</span>
         <span class="info-value" id="cantidadEquipos">0</span>
       </div>
     </div>
 
-  <table id="tablaEquipos">
-    <thead>
-      <tr>
-        <th>Cliente</th>
-        <th>Serial</th>
-        <th>Operador</th>
-        <th>IP</th>
-        <th>GPS</th>
-        <th>Activo</th>
-        <th>Unit ID</th>
-        <th>Nombre del Radio</th>
-        <th>Modelo</th>
-        <th>Grupos</th>
-        <th>Notas</th>
-      </tr>
-    </thead>
-    <tbody id="cuerpoTabla"></tbody>
-  </table>
+    <table id="tablaEquipos" class="print-equipos">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Serial</th>
+          <th>Operador</th>
+          <th>IP</th>
+          <th>GPS</th>
+          <th>Activo</th>
+          <th>Unit ID</th>
+          <th>Nombre del Radio</th>
+          <th>Modelo</th>
+          <th>Grupos</th>
+          <th>Notas</th>
+        </tr>
+      </thead>
+      <tbody id="cuerpoTabla"></tbody>
+    </table>
   </div>
 
   <script>
     // Mapa: cliente_id -> nombre
-let clientesMap = {};
-  let modelosMap = {};
+    let clientesMap = {};
+    let modelosMap = {};
 
-// Carga solo los clientes necesarios para los equipos seleccionados
-async function cargarClientesPara(equipos) {
-  const ids = [...new Set(equipos.map(x => x.cliente_id).filter(Boolean))];
-  clientesMap = {};
-  await Promise.all(ids.map(async (cid) => {
-    try {
-      const c = await ClientesService.getCliente(cid);
-      if (c) clientesMap[cid] = c.nombre || cid;
-    } catch (e) {/* opcional: console.warn(e); */}
-  }));
-}
+    async function cargarClientesPara(equipos) {
+      const ids = [...new Set(equipos.map(x => x.cliente_id).filter(Boolean))];
+      clientesMap = {};
+      await Promise.all(ids.map(async (cid) => {
+        try {
+          const c = await ClientesService.getCliente(cid);
+          if (c) clientesMap[cid] = c.nombre || cid;
+        } catch (e) {}
+      }));
+    }
 
-async function cargarModelosPara(equipos) {
-  const ids = [...new Set(equipos
-    .map(x => x.modelo_id || x.modeloId || x.model_id || x.modelId)
-    .filter(Boolean))];
+    async function cargarModelosPara(equipos) {
+      const ids = [...new Set(equipos
+        .map(x => x.modelo_id || x.modeloId || x.model_id || x.modelId)
+        .filter(Boolean))];
 
-  modelosMap = {};
-  await Promise.all(ids.map(async (mid) => {
-    try {
-      const m = await ModelosService.getModelo(mid);
-      if (m) {
-        const label = `${(m.marca || "").toString().trim()} ${(m.modelo || "").toString().trim()}`.trim();
-        modelosMap[mid] = label || m.modelo || m.marca || mid;
-      }
-    } catch (e) {/* opcional */}
-  }));
-}
+      modelosMap = {};
+      await Promise.all(ids.map(async (mid) => {
+        try {
+          const m = await ModelosService.getModelo(mid);
+          if (m) {
+            const label = `${(m.marca || "").toString().trim()} ${(m.modelo || "").toString().trim()}`.trim();
+            modelosMap[mid] = label || m.modelo || m.marca || mid;
+          }
+        } catch (e) {}
+      }));
+    }
 
-// Resolver nombre de cliente (nuevo esquema o legacy)
-function nombreClienteDe(d) {
-  return d.cliente || (d.cliente_id && clientesMap[d.cliente_id]) || "";
-}
+    function nombreClienteDe(d) {
+      return d.cliente || (d.cliente_id && clientesMap[d.cliente_id]) || "";
+    }
 
-function modeloDe(d) {
-  return (d.modelo_id && modelosMap[d.modelo_id])
-    || (d.modeloId && modelosMap[d.modeloId])
-    || (d.model_id && modelosMap[d.model_id])
-    || (d.modelId && modelosMap[d.modelId])
-    || d.modelo_label
-    || d.modeloLabel
-    || d.Modelo
-    || d.modelo
-    || d.model_label
-    || d.modelLabel
-    || d.model
-    || "";
-}
+    function modeloDe(d) {
+      return (d.modelo_id && modelosMap[d.modelo_id])
+        || (d.modeloId && modelosMap[d.modeloId])
+        || (d.model_id && modelosMap[d.model_id])
+        || (d.modelId && modelosMap[d.modelId])
+        || d.modelo_label
+        || d.modeloLabel
+        || d.Modelo
+        || d.modelo
+        || d.model_label
+        || d.modelLabel
+        || d.model
+        || "";
+    }
+
     const params = new URLSearchParams(window.location.search);
     const ids = JSON.parse(params.get("ids") || "[]");
     const cuerpoTabla = document.getElementById("cuerpoTabla");
@@ -283,26 +199,21 @@ function modeloDe(d) {
 
       for (const id of ids) {
         const doc = await PocService.getPocDevice(id, { source: 'server' });
-        if (doc) {
-          datos.push(doc);
-        }
+        if (doc) datos.push(doc);
       }
 
-      // Ordenar por unit_id (alfanumérico)
       datos.sort((a, b) => {
         const ua = (a.unit_id || "").toString().padStart(10, '0');
         const ub = (b.unit_id || "").toString().padStart(10, '0');
         return ua.localeCompare(ub, undefined, { numeric: true });
       });
 
-await cargarClientesPara(datos);
-await cargarModelosPara(datos);
+      await cargarClientesPara(datos);
+      await cargarModelosPara(datos);
 
-      // Mostrar fecha y conteo
       document.getElementById("fechaHoy").textContent = new Date().toLocaleDateString("es-PA");
       document.getElementById("cantidadEquipos").textContent = datos.length;
 
-      // Llenar tabla
       for (const d of datos) {
         const tr = document.createElement("tr");
         tr.innerHTML = `

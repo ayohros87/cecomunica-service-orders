@@ -1,12 +1,22 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <title>Nuevo Contrato � Cecomunica</title>
+  <title>Nuevo Contrato — Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
@@ -14,624 +24,143 @@
   <script src="../js/services/mailService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/modelosService.js"></script>
-<link rel="stylesheet" href="../css/ceco-ui.css">
-<style>
-/* ===================================
-   UNIFIED DESIGN SYSTEM - NUEVO CONTRATO
-   =================================== */
 
-/* Page container */
-.page-wrap {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 24px;
-  background: #f8fafc;
-  min-height: 100vh;
-}
-
-/* Section Headers */
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  background: #f8fafc;
-  border-left: 4px solid var(--accent);
-  border-radius: 8px 8px 0 0;
-  margin-bottom: 0;
-}
-
-.section-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-  flex: 1;
-}
-
-.section-header.simple {
-  padding: 12px 16px;
-  background: #f8fafc;
-  border-radius: 6px;
-  margin-bottom: 12px;
-  border-left: 3px solid var(--accent);
-}
-
-.section-header.simple h3 {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-/* Section body containers */
-.section-shell {
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 0 0 8px 8px;
-  padding: 20px;
-  margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-}
-
-/* Badge System */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: var(--radius-lg);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.2s ease;
-}
-
-.badge.pending {
-  background: #e5e7eb;
-  color: #475569;
-}
-
-.badge.ready {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.badge.info {
-  background: var(--accent-soft-hov);
-  color: var(--navy);
-}
-
-/* Button Hierarchy (.btn.primary inherits the canonical flat style from ceco-ui.css) */
-.btn-secondary {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #cbd5e1;
-  font-weight: 500;
-}
-
-.btn-secondary:hover {
-  background: var(--line);
-  border-color: #94a3b8;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid #cbd5e1;
-  font-weight: 500;
-}
-
-.btn-ghost:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  color: #475569;
-}
-
-.btn-danger {
-  background: #fee2e2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  font-weight: 500;
-}
-
-.btn-danger:hover {
-  background: #fecaca;
-  border-color: #fca5a5;
-}
-
-/* Table Improvements */
-#tablaEquipos {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-
-#tablaEquipos thead th {
-  background: #f1f5f9;
-  color: #334155;
-  font-weight: 700;
-  padding: 12px 10px;
-  text-align: left;
-  border-bottom: 2px solid #cbd5e1;
-  white-space: nowrap;
-}
-
-#tablaEquipos tbody tr {
-  border-bottom: 1px solid var(--line);
-  transition: background 0.15s ease;
-}
-
-#tablaEquipos tbody tr:hover {
-  background: #f8fafc;
-}
-
-#tablaEquipos tbody tr.highlight {
-  animation: highlightRow 0.6s ease;
-}
-
-@keyframes highlightRow {
-  0%, 100% { background: #f8fafc; }
-  50% { background: var(--accent-soft-hov); }
-}
-
-#tablaEquipos tbody td {
-  padding: 10px;
-  vertical-align: middle;
-}
-
-#tablaEquipos input,
-#tablaEquipos select {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
-  transition: all 0.15s ease;
-}
-
-#tablaEquipos input:focus,
-#tablaEquipos select:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-}
-
-#tablaEquipos .totalFila {
-  font-weight: 600;
-  color: #1e293b;
-  text-align: right;
-}
-
-#tablaEquipos .btn-del-fila {
-  padding: 4px 8px;
-  background: #fee2e2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.15s ease;
-}
-
-#tablaEquipos .btn-del-fila:hover {
-  background: #fecaca;
-  border-color: #fca5a5;
-}
-
-/* Totals Panel */
-.totals-panel {
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 16px 20px;
-  margin-top: 16px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-}
-
-.totals-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  font-size: 15px;
-  color: #475569;
-}
-
-.totals-row + .totals-row {
-  border-top: 1px solid #f1f5f9;
-}
-
-.totals-row.subtotal {
-  font-weight: 500;
-}
-
-.totals-row.total {
-  font-size: 17px;
-  font-weight: 700;
-  color: #1e293b;
-  padding-top: 12px;
-  border-top: 2px solid #cbd5e1 !important;
-}
-
-.totals-row label {
-  margin: 0;
-  font-weight: inherit;
-}
-
-.totals-row select {
-  padding: 6px 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 14px;
-  background: white;
-  cursor: pointer;
-}
-
-.totals-row select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.14);
-}
-
-/* Preview Modal */
-#previewOverlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 20px;
-}
-#previewModal {
-  background: white;
-  border-radius: var(--radius-lg);
-  max-width: 980px;
-  width: 100%;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-}
-.preview-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.preview-header h3 { margin: 0; font-size: 18px; }
-.preview-sub { font-size: 12px; color: var(--muted); }
-#previewBody {
-  padding: 16px 20px;
-  overflow: auto;
-}
-.preview-footer {
-  padding: 12px 20px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-.preview-card {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-.preview-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 12px;
-  font-size: 13px;
-}
-.preview-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.preview-table th, .preview-table td {
-  border-bottom: 1px solid var(--line);
-  padding: 8px 6px;
-  font-size: 13px;
-}
-.preview-table th { background: #f8fafc; text-align: left; font-size: 12px; text-transform: uppercase; }
-.preview-totals { display: flex; justify-content: flex-end; }
-.preview-totals table { width: 280px; }
-.preview-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
-
-/* Combobox Improvements */
-.combobox {
-  position: relative;
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.combo-list {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  max-height: 320px;
-  overflow-y: auto;
-  z-index: 1000;
-}
-
-.combo-item {
-  padding: 10px 14px;
-  cursor: pointer;
-  border-bottom: 1px solid #f1f5f9;
-  transition: background 0.1s ease;
-}
-
-.combo-item:hover {
-  background: #f8fafc;
-}
-
-.combo-item.active {
-  background: var(--accent-soft);
-  border-left: 3px solid var(--accent);
-}
-
-.combo-sub {
-  display: block;
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
-.combo-empty {
-  padding: 20px 14px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.combo-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.combo-actions .btn {
-  min-width: 36px;
-  padding: 8px 10px;
-}
-
-/* Toast Notification System */
-.toast-container {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 420px;
-}
-
-.toast {
-  background: white;
-  border-left: 4px solid var(--accent);
-  border-radius: 8px;
-  padding: 16px 20px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  display: flex;
-  align-items: start;
-  gap: 12px;
-  animation: slideIn 0.3s ease;
-  opacity: 0.97;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 0.97;
-  }
-}
-
-.toast.success {
-  border-left-color: #16a34a;
-}
-
-.toast.error {
-  border-left-color: #dc2626;
-}
-
-.toast.warning {
-  border-left-color: var(--warn);
-}
-
-.toast.info {
-  border-left-color: var(--accent);
-}
-
-.toast-icon {
-  font-size: 20px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.toast-content {
-  flex: 1;
-  font-size: 14px;
-  color: #1e293b;
-  line-height: 1.5;
-}
-
-.toast-close {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  padding: 0;
-  font-size: 18px;
-  line-height: 1;
-  flex-shrink: 0;
-  transition: color 0.15s ease;
-}
-
-.toast-close:hover {
-  color: #475569;
-}
-
-/* Form Actions Spacing */
-.form-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 24px;
-}
-
-/* Info Cliente Panel */
-#infoCliente {
-  margin-top: 12px;
-  padding: 12px 16px;
-  background: #f8fafc;
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #475569;
-}
-
-#infoCliente:empty {
-  display: none;
-}
-
-.renovacion-mode-box {
-  background: var(--accent-soft);
-  border: 2px solid var(--accent);
-  border-radius: 10px;
-  padding: 14px 16px;
-}
-
-.renovacion-mode-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.renovacion-mode-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--navy);
-}
-
-.renovacion-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #1e293b;
-  cursor: pointer;
-}
-
-.renovacion-check input {
-  width: 16px;
-  height: 16px;
-}
-
-.renovacion-suboption {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px dashed var(--accent-line);
-  border-radius: 8px;
-  background: #f8fbff;
-}
-
-/* Page Title */
-.page-wrap > h2 {
-  margin: 0 0 24px 0;
-  font-size: 28px;
-  font-weight: 700;
-  color: #1e293b;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .page-wrap {
-    padding: 16px;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .totals-panel {
-    padding: 12px 16px;
-  }
-  
-  .toast-container {
-    left: 12px;
-    right: 12px;
-    max-width: none;
-  }
-}
-</style>
-
+  <style>
+    /* Page-local — el resto vive en el kit */
+
+    /* Badges de readiness por sección (JS asigna .pending / .ready / .info) */
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .badge.pending { background: var(--surface-sunken); color: var(--fg-3); border-color: var(--border-default); }
+    .badge.ready   { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    .badge.info    { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
+
+    /* Resumen de info del cliente (debajo del combo) */
+    #infoCliente {
+      margin-top: var(--sp-2);
+      padding: var(--sp-2) var(--sp-3);
+      background: var(--surface-sunken);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius-sm);
+      font-size: 13px; line-height: 1.6; color: var(--fg-2);
+    }
+    #infoCliente:empty { display: none; }
+
+    /* Caja de modalidad de renovación (alternativa visual al .disclosure-panel) */
+    .renovacion-mode-box {
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-line);
+      border-radius: var(--radius-md);
+      padding: var(--sp-3) var(--sp-4);
+    }
+    .renovacion-mode-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--sp-3); margin-bottom: var(--sp-2);
+    }
+    .renovacion-mode-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--navy); }
+    .renovacion-suboption {
+      margin-top: var(--sp-2);
+      padding: var(--sp-2) var(--sp-3);
+      border: 1px dashed var(--accent-line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-card);
+    }
+
+    /* Panel de totales (sticky cuando hay scroll largo, opcional) */
+    .totals-panel {
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: var(--sp-4) var(--sp-5);
+      margin-top: var(--sp-4);
+      box-shadow: var(--shadow-sm);
+    }
+    .totals-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: var(--sp-2) 0;
+      font-size: 14px; color: var(--fg-2);
+    }
+    .totals-row + .totals-row { border-top: 1px solid var(--border-subtle); }
+    .totals-row.total {
+      font-size: 16px; font-weight: 700; color: var(--fg-1);
+      border-top: 2px solid var(--border-default) !important;
+    }
+
+    /* Modal preview — layout custom (el kit cubre el shape) */
+    #previewModal { max-width: 980px; max-height: 90vh; display: flex; flex-direction: column; }
+    #previewBody { padding: var(--sp-4) var(--sp-5); overflow: auto; flex: 1; }
+    .preview-card {
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: var(--sp-3); margin-bottom: var(--sp-3);
+    }
+    .preview-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 12px; font-size: 13px;
+    }
+    .preview-table { width: 100%; border-collapse: collapse; }
+    .preview-table th, .preview-table td {
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 8px 6px; font-size: 13px;
+    }
+    .preview-table th { background: var(--surface-sunken); text-align: left; font-size: 11px; text-transform: uppercase; }
+    .preview-totals { display: flex; justify-content: flex-end; }
+    .preview-totals table { width: 280px; }
+    .preview-note { font-size: 12px; color: var(--fg-3); margin-top: var(--sp-2); }
+  </style>
 </head>
 <body>
-  <div class="page-wrap">
-    <h2><i data-lucide="file-plus"></i> Crear Nuevo Contrato</h2>
+
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="file-plus"></i> Nuevo Contrato',
+      actions: [],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--default">
 
     <form id="formContrato">
-      <!-- ============================================
-           SECCI�N 1: INFORMACI�N DEL CLIENTE
-           ============================================ -->
-      <div class="section-header">
-        <h3><i data-lucide="user"></i> Informaci�n del Cliente</h3>
+
+      <!-- Sección 1: Cliente -->
+      <div class="form-section-header">
+        <h3><i data-lucide="user"></i> Información del Cliente</h3>
         <span class="badge pending" id="badgeCliente">Pendiente</span>
       </div>
-      <div class="section-shell">
+      <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
         <div class="form-field">
-          <label class="req">Cliente</label>
-   <div class="combobox">
-<input id="clienteCombo" class="form-input" type="text" placeholder="Escribe para buscar" autocomplete="off">
-  <input id="cliente" type="hidden" required> <!-- aqu� guardamos el cliente_id -->
-  <div id="clienteList" class="combo-list" hidden></div>
-  <div class="combo-actions">
-    <button type="button" class="btn btn-pill fit" onclick="window.open('../contratos/nuevo-cliente.html?redirect=true','_blank')"><i data-lucide="plus"></i></button>
-    <button type="button" class="btn btn-pill fit" id="btnEditarCliente" disabled><i data-lucide="pencil"></i></button>
-    <button type="button" class="btn btn-pill fit" id="btnClearCliente" title="Limpiar selecci�n"><i data-lucide="x"></i></button>
-  </div>
-</div>
-
-          <div id="infoCliente" class="form-hint"></div>
+          <label class="form-label" for="clienteCombo">Cliente <span class="req">*</span></label>
+          <div class="combobox">
+            <input id="clienteCombo" class="form-input" type="text" placeholder="Escribe para buscar…" autocomplete="off">
+            <input id="cliente" type="hidden" required>
+            <div id="clienteList" class="combo-list" hidden></div>
+            <div class="combo-actions">
+              <button type="button" class="btn btn-secondary btn-icon btn-sm" onclick="window.open('../contratos/nuevo-cliente.html?redirect=true','_blank')" aria-label="Nuevo cliente"><i data-lucide="plus"></i></button>
+              <button type="button" class="btn btn-secondary btn-icon btn-sm" id="btnEditarCliente" disabled aria-label="Editar cliente"><i data-lucide="pencil"></i></button>
+              <button type="button" class="btn btn-ghost btn-icon btn-sm" id="btnClearCliente" title="Limpiar selección" aria-label="Limpiar"><i data-lucide="x"></i></button>
+            </div>
+          </div>
+          <div id="infoCliente"></div>
         </div>
       </div>
 
-      <!-- ============================================
-           SECCI�N 2: DETALLES DEL CONTRATO
-           ============================================ -->
-      <div class="section-header">
+      <!-- Sección 2: Detalles del contrato -->
+      <div class="form-section-header">
         <h3><i data-lucide="file-text"></i> Detalles del Contrato</h3>
         <span class="badge pending" id="badgeDetalles">Pendiente</span>
       </div>
-      <div class="section-shell">
-        <div class="form-grid cols-2">
+      <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-grid-2">
           <div class="form-field">
-            <label class="req">Tipo de contrato</label>
+            <label class="form-label" for="tipo_contrato">Tipo de contrato <span class="req">*</span></label>
             <select class="form-select" id="tipo_contrato" required>
-              <option value="">Seleccione�</option>
+              <option value="">Seleccione…</option>
               <option value="ALQ">Alquiler</option>
               <option value="PROP">Propio</option>
               <option value="REEMP">Reemplazo</option>
@@ -641,37 +170,37 @@
           </div>
 
           <div class="form-field">
-            <label class="req">Tipo de acci�n</label>
+            <label class="form-label" for="accion">Tipo de acción <span class="req">*</span></label>
             <select class="form-select" id="accion" required>
-              <option value="">Seleccione�</option>
+              <option value="">Seleccione…</option>
               <option value="Nuevo">Nuevo</option>
-              <option value="Renovaci�n">Renovaci�n</option>
-              <option value="Adici�n">Adici�n</option>
+              <option value="Renovación">Renovación</option>
+              <option value="Adición">Adición</option>
               <option value="No Aplica">No Aplica</option>
             </select>
           </div>
 
           <div class="form-field renovacion-mode-box" id="renovacionModeBox" style="display:none; grid-column:1/-1;">
             <div class="renovacion-mode-header">
-              <p class="renovacion-mode-title">Modalidad de renovaci�n</p>
-              <span class="badge info" id="badgeRenovacionModo">Renovaci�n con equipo</span>
+              <p class="renovacion-mode-title">Modalidad de renovación</p>
+              <span class="badge info" id="badgeRenovacionModo">Renovación con equipo</span>
             </div>
-            <label class="renovacion-check">
+            <label class="form-check">
               <input type="checkbox" id="renovacion_sin_equipo">
-              Marcar si es renovaci�n sin equipo
+              <span><span class="form-check-label">Marcar si es renovación sin equipo</span></span>
             </label>
             <div class="renovacion-suboption" id="renovacionRefurbishedBox" style="display:none;">
-              <label class="renovacion-check">
+              <label class="form-check">
                 <input type="checkbox" id="renovacion_refurbished_componentes">
-                �El contrato lleva refurbished de bater�a, antena, clip y piezas?
+                <span><span class="form-check-label">¿El contrato lleva refurbished de batería, antena, clip y piezas?</span></span>
               </label>
             </div>
           </div>
 
           <div class="form-field">
-            <label class="req">Duraci�n del contrato</label>
+            <label class="form-label" for="duracion">Duración del contrato <span class="req">*</span></label>
             <select class="form-select" id="duracion" required onchange="NCForm.toggleOtraDuracion(this.value)">
-              <option value="">Seleccione�</option>
+              <option value="">Seleccione…</option>
               <option value="12 meses">12 meses</option>
               <option value="18 meses">18 meses</option>
               <option value="Otro">Otro (especificar)</option>
@@ -679,51 +208,48 @@
           </div>
 
           <div class="form-field" id="otraDuracionLabel" style="display:none;">
-            <label>Especificar duraci�n (meses)</label>
+            <label class="form-label" for="otra_duracion">Especificar duración (meses)</label>
             <input class="form-input" type="number" id="otra_duracion" min="1" placeholder="Ej. 24" style="max-width:140px">
           </div>
 
           <div class="form-field" style="grid-column:1/-1">
-            <label>Observaciones</label>
-            <textarea class="form-textarea" id="observaciones"></textarea>
+            <label class="form-label" for="observaciones">Observaciones</label>
+            <textarea class="form-input form-textarea" id="observaciones"></textarea>
           </div>
         </div>
       </div>
 
-      <!-- ============================================
-           SECCI�N 3: EQUIPOS
-           ============================================ -->
-      <div class="section-header">
+      <!-- Sección 3: Equipos -->
+      <div class="form-section-header">
         <h3><i data-lucide="package"></i> Equipos</h3>
         <span class="badge pending" id="badgeEquipos">Pendiente</span>
       </div>
-      <div class="section-shell">
-        <div class="app-table-wrap compact">
-
+      <div class="app-card" style="margin-bottom:var(--sp-4);">
+        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
           <table id="tablaEquipos" class="app-table editable">
             <thead>
-            <tr>
-              <th>Modelo</th>
-              <th>Descripci�n</th>
-              <th>Cantidad</th>
-              <th>Precio Unitario</th>
-              <th>Total</th>
-              <th>�</th>
-            </tr>
-          </thead>
+              <tr>
+                <th>Modelo</th>
+                <th>Descripción</th>
+                <th style="width:80px;">Cantidad</th>
+                <th style="width:120px;">Precio unitario</th>
+                <th style="width:120px; text-align:right;">Total</th>
+                <th style="width:48px;"></th>
+              </tr>
+            </thead>
             <tbody></tbody>
           </table>
         </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn-secondary" onclick="NCForm.agregarFilaEquipo()"><i data-lucide="plus"></i> Agregar Equipo</button>
+        <div class="table-add-row">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="NCForm.agregarFilaEquipo()"><i data-lucide="plus"></i> Agregar equipo</button>
         </div>
 
-        <!-- === ITBMS Y TOTALES DEL CONTRATO === -->
+        <!-- ITBMS y totales -->
         <div class="totals-panel">
           <div class="totals-row">
-            <label for="itbms_aplica"><strong>ITBMS</strong></label>
-            <select class="form-select" id="itbms_aplica">
-              <option value="true" selected>S�</option>
+            <label class="form-label" for="itbms_aplica" style="margin:0;"><strong>ITBMS</strong></label>
+            <select class="form-select" id="itbms_aplica" style="max-width:180px;">
+              <option value="true" selected>Sí (7%)</option>
               <option value="false">EXENTO</option>
             </select>
           </div>
@@ -743,11 +269,10 @@
             <strong id="total_con_itbms_view">$0.00</strong>
           </div>
         </div>
-        <!-- === /ITBMS Y TOTALES DEL CONTRATO === -->
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary" id="btnGuardar"><i data-lucide="save"></i> Guardar Contrato</button>
+        <button type="submit" class="btn btn-primary btn-lg" id="btnGuardar"><i data-lucide="save"></i> Guardar Contrato</button>
         <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'">Cancelar</button>
       </div>
 
@@ -756,27 +281,28 @@
   </div>
 
   <!-- Preview Modal -->
-  <div id="previewOverlay">
-    <div id="previewModal">
-      <div class="preview-header">
+  <div id="previewOverlay" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+    <div class="modal" id="previewModal" style="max-width:980px;">
+      <div class="modal-header">
         <div>
-          <h3>Vista previa del contrato</h3>
-          <div id="previewSub" class="preview-sub"></div>
+          <h3 class="modal-title">Vista previa del contrato</h3>
+          <div id="previewSub" style="font-size:12px; color:var(--fg-3); margin-top:2px;"></div>
         </div>
-        <button id="btnClosePreview" class="btn btn-ghost">?</button>
+        <button id="btnClosePreview" class="modal-close" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
       </div>
       <div id="previewBody"></div>
-      <div class="preview-footer">
+      <div class="modal-footer">
         <button id="btnEditPreview" class="btn btn-secondary">Editar</button>
         <button id="btnConfirmPreview" class="btn btn-primary">Confirmar y Guardar</button>
         <button class="btn btn-ghost" data-close-preview>Cerrar</button>
       </div>
     </div>
   </div>
-<script src="../js/domain/totales.js"></script>
-<script src="../js/ui/toast.js"></script>
-<script src="../js/ui/modal.js"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script src="../js/domain/totales.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <script src="../js/pages/nc-state.js"       defer></script>
   <script src="../js/pages/nc-form.js"        defer></script>

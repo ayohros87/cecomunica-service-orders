@@ -1,27 +1,66 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Verificación de Contrato – Cecomunica</title>
+  <link rel="stylesheet" href="./css/ceco-ui.css">
+
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="./js/firebase-init.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
   <style>
-    body{font-family:Arial, sans-serif; max-width:700px; margin:40px auto; padding:0 16px;}
-    .ok{color:#065f46; background:#ecfdf5; border:1px solid #bbf7d0; padding:10px; border-radius:8px;}
-    .bad{color:#7f1d1d; background:#fff0f0; border:1px solid #f8d7da; padding:10px; border-radius:8px;}
-    .mono{font-family: ui-monospace, Menlo, Consolas, monospace;}
+    /* Página pública — sin shell ni login. Layout centrado simple. */
+    body { background: var(--surface-page); }
+    .verify-wrap { max-width: 560px; margin: 0 auto; padding: var(--sp-10) var(--sp-5); }
+    .verify-hero { text-align: center; margin-bottom: var(--sp-6); }
+    .verify-hero h1 {
+      font-family: var(--font-display); font-size: 24px;
+      margin: var(--sp-3) 0 4px;
+    }
+    .verify-hero p { font-size: 13px; color: var(--fg-3); margin: 0; }
   </style>
 </head>
 <body>
-  <h1>Verificación de Contrato</h1>
-  <div id="status"></div>
-  <div id="info" style="margin-top:12px;"></div>
+
+  <div class="verify-wrap">
+
+    <div class="verify-hero">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
+        <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+        <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+        <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+        <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+      </svg>
+      <h1>Verificación de Documento</h1>
+      <p>CeComunica · Sistema de autenticidad</p>
+    </div>
+
+    <div id="status"></div>
+    <div id="info"></div>
+
+    <p style="text-align:center; font-size:11px; color:var(--fg-4); margin-top:var(--sp-5);">
+      Para cualquier consulta contacta a soporte@cecomunica.com.
+    </p>
+  </div>
 
   <script>
     const params = new URLSearchParams(location.search);
     const contratoId = params.get("id") || location.pathname.split("/").pop(); // soporta /c/{id}?v=CODE
     const v = params.get("v");
+
+    function fmtMoney(n) {
+      if (n == null) return "—";
+      return "$" + Number(n).toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
 
     async function verificar() {
       const elStatus = document.getElementById("status");
@@ -29,24 +68,59 @@
       try {
         const doc = await db.collection("verificaciones").doc(contratoId).get();
         if (!doc.exists) {
-          elStatus.innerHTML = '<div class="bad">No existe verificación para este contrato.</div>';
+          elStatus.innerHTML = `
+            <div class="alert-banner alert-error" style="margin-bottom:var(--sp-4);">
+              <span class="alert-banner-icon"><i data-lucide="x-circle"></i></span>
+              <div class="alert-banner-body">
+                <strong>Verificación no encontrada</strong>
+                No existe registro de verificación para este contrato.
+              </div>
+            </div>`;
+          if (window.lucide) lucide.createIcons();
           return;
         }
         const data = doc.data();
         if (data.firma_codigo === v && data.estado === "activo") {
-          elStatus.innerHTML = '<div class="ok">✔ Contrato VÁLIDO</div>';
+          elStatus.innerHTML = `
+            <div class="alert-banner alert-success" style="margin-bottom:var(--sp-4);">
+              <span class="alert-banner-icon"><i data-lucide="shield-check"></i></span>
+              <div class="alert-banner-body">
+                <strong>Documento auténtico</strong>
+                La firma digital y el código coinciden con el documento original emitido por Cecomunica.
+              </div>
+            </div>`;
           elInfo.innerHTML = `
-            <div>Contrato: <span class="mono">${data.contrato_id}</span></div>
-            <div>Código: <span class="mono">${data.firma_codigo}</span></div>
-            <div>Estado: ${data.estado}</div>
-            <div>Cliente: ${data.cliente_nombre || "—"}</div>
-            <div>Total (ITBMS incl.): ${data.total_con_itbms != null ? "$" + data.total_con_itbms : "—"}</div>
-          `;
+            <div class="ds-card ds-card-padded">
+              <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="file-text"></i> Datos del documento</p>
+              <dl style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); font-size:13px; margin:0;">
+                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${data.contrato_id || "—"}</dd></div>
+                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Código</dt><dd style="margin:0; font-family:var(--font-mono);">${data.firma_codigo || "—"}</dd></div>
+                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Estado</dt><dd style="margin:0;">${data.estado || "—"}</dd></div>
+                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Total c/ ITBMS</dt><dd style="margin:0; font-family:var(--font-mono);">${fmtMoney(data.total_con_itbms)}</dd></div>
+                <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0;">${data.cliente_nombre || "—"}</dd></div>
+              </dl>
+            </div>`;
         } else {
-          elStatus.innerHTML = '<div class="bad">✖ Código inválido o contrato no activo.</div>';
+          elStatus.innerHTML = `
+            <div class="alert-banner alert-error" style="margin-bottom:var(--sp-4);">
+              <span class="alert-banner-icon"><i data-lucide="x-circle"></i></span>
+              <div class="alert-banner-body">
+                <strong>Código inválido</strong>
+                El código no coincide o el contrato no está activo.
+              </div>
+            </div>`;
         }
+        if (window.lucide) lucide.createIcons();
       } catch (e) {
-        elStatus.innerHTML = '<div class="bad">Error de verificación.</div>';
+        elStatus.innerHTML = `
+          <div class="alert-banner alert-error">
+            <span class="alert-banner-icon"><i data-lucide="alert-triangle"></i></span>
+            <div class="alert-banner-body">
+              <strong>Error de verificación</strong>
+              No fue posible conectar con el servidor.
+            </div>
+          </div>`;
+        if (window.lucide) lucide.createIcons();
       }
     }
     verificar();

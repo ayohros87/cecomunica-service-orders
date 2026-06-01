@@ -176,7 +176,7 @@ function toggleColumn(key, visible){
 }
 /* ===== Densidad ===== */
 function applyDensity(){
-  const tw = document.querySelector('.table-wrap');
+  const tw = document.querySelector('.app-table-wrap');
   if (tw) tw.setAttribute('data-density', dense ? 'dense' : 'roomy');
 }
 

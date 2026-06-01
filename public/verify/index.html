@@ -1,7 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Verificación de Contrato – Cecomunica</title>
   <link rel="stylesheet" href="/css/ceco-ui.css">
 
@@ -10,65 +17,141 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="/js/firebase-init.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    body { background: var(--surface-page); }
+    .verify-wrap { max-width: 560px; margin: 0 auto; padding: var(--sp-10) var(--sp-5); }
+    .verify-hero { text-align: center; margin-bottom: var(--sp-6); }
+    .verify-hero h1 {
+      font-family: var(--font-display); font-size: 24px;
+      margin: var(--sp-3) 0 4px;
+    }
+    .verify-hero p { font-size: 13px; color: var(--fg-3); margin: 0; }
+  </style>
 </head>
 <body>
-  <div class="card" style="max-width:600px;margin:40px auto;padding:20px;">
-    <h2>🔎 Verificación de Contrato</h2>
-    <div id="resultado">Cargando…</div>
+
+  <div class="verify-wrap">
+
+    <div class="verify-hero">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="56" height="56" aria-hidden="true">
+        <rect width="40" height="40" rx="7" fill="#0B2A47"/>
+        <path d="M18 8H13a9 9 0 0 0 0 24h5" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+        <path d="M22 8h5a9 9 0 0 1 0 24h-5" stroke="#00B4D8" stroke-width="3.5" fill="none" stroke-linecap="square"/>
+        <rect x="18.5" y="18.5" width="3" height="3" fill="#00B4D8"/>
+      </svg>
+      <h1>Verificación de Contrato</h1>
+      <p>CeComunica · Sistema de autenticidad</p>
+    </div>
+
+    <div id="resultado">
+      <div class="alert-banner">
+        <span class="alert-banner-icon"><i data-lucide="loader-circle"></i></span>
+        <div class="alert-banner-body">Cargando…</div>
+      </div>
+    </div>
+
+    <p style="text-align:center; font-size:11px; color:var(--fg-4); margin-top:var(--sp-5);">
+      Para cualquier consulta contacta a soporte@cecomunica.com.
+    </p>
+
   </div>
 
-<script>
-  async function verificar() {
-    const params = new URLSearchParams(location.search);
-    const pathParts = location.pathname.split("/c/");
-    const contratoId = pathParts[1] ? pathParts[1].split("?")[0] : null;
-    const codigoUrl = params.get("v");
+  <script>
+    async function verificar() {
+      const params = new URLSearchParams(location.search);
+      const pathParts = location.pathname.split("/c/");
+      const contratoId = pathParts[1] ? pathParts[1].split("?")[0] : null;
+      const codigoUrl = params.get("v");
+      const el = document.getElementById("resultado");
 
-    if (!contratoId || !codigoUrl) {
-      document.getElementById("resultado").textContent = "❌ URL inválida.";
-      return;
-    }
-
-    try {
-      const verifSnap = await db.collection("verificaciones").doc(contratoId).get();
-      if (!verifSnap.exists) {
-        document.getElementById("resultado").textContent = "❌ Contrato no encontrado.";
-        return;
-      }
-      const data = verifSnap.data();
-
-      if (data.firma_codigo !== codigoUrl) {
-        document.getElementById("resultado").innerHTML =
-          "<span style='color:red'>❌ Código de verificación incorrecto.</span>";
+      if (!contratoId || !codigoUrl) {
+        el.innerHTML = `
+          <div class="alert-banner alert-error">
+            <span class="alert-banner-icon"><i data-lucide="x-circle"></i></span>
+            <div class="alert-banner-body">
+              <strong>URL inválida</strong>
+              Falta el ID del contrato o el código de verificación.
+            </div>
+          </div>`;
+        if (window.lucide) lucide.createIcons();
         return;
       }
 
-      const fecha = data.fecha_aprobacion?.toDate
-        ? data.fecha_aprobacion.toDate().toLocaleString("es-PA")
-        : "-";
+      try {
+        const verifSnap = await db.collection("verificaciones").doc(contratoId).get();
+        if (!verifSnap.exists) {
+          el.innerHTML = `
+            <div class="alert-banner alert-error">
+              <span class="alert-banner-icon"><i data-lucide="x-circle"></i></span>
+              <div class="alert-banner-body">
+                <strong>Contrato no encontrado</strong>
+                No existe registro de verificación para este contrato.
+              </div>
+            </div>`;
+          if (window.lucide) lucide.createIcons();
+          return;
+        }
+        const data = verifSnap.data();
 
-      const total = typeof data.total_con_itbms === "number"
-        ? data.total_con_itbms.toFixed(2)
-        : "0.00";
+        if (data.firma_codigo !== codigoUrl) {
+          el.innerHTML = `
+            <div class="alert-banner alert-error">
+              <span class="alert-banner-icon"><i data-lucide="shield-x"></i></span>
+              <div class="alert-banner-body">
+                <strong>Código incorrecto</strong>
+                El código de verificación no coincide con el documento.
+              </div>
+            </div>`;
+          if (window.lucide) lucide.createIcons();
+          return;
+        }
 
-      document.getElementById("resultado").innerHTML = `
-        <p style="color:green">✅ Contrato válido y activo</p>
-        <p><b>Contrato ID:</b> ${data.contrato_id || contratoId}</p>
-        <p><b>Cliente:</b> ${data.cliente_nombre || "-"}</p>
-        <p><b>Total (con ITBMS):</b> $${total}</p>
-        <p><b>Firmado por:</b> ${data.aprobado_por_nombre || "-"} 
-           (${data.aprobado_por_email || "-"}) – ${data.aprobado_por_rol || "-"}</p>
-        <p><b>Fecha de firma:</b> ${fecha}</p>
-      `;
-    } catch (e) {
-      console.error(e);
-      document.getElementById("resultado").textContent = "⚠️ Error verificando el contrato.";
+        const fecha = data.fecha_aprobacion?.toDate
+          ? data.fecha_aprobacion.toDate().toLocaleString("es-PA")
+          : "-";
+
+        const total = typeof data.total_con_itbms === "number"
+          ? data.total_con_itbms.toFixed(2)
+          : "0.00";
+
+        el.innerHTML = `
+          <div class="alert-banner alert-success" style="margin-bottom:var(--sp-4);">
+            <span class="alert-banner-icon"><i data-lucide="shield-check"></i></span>
+            <div class="alert-banner-body">
+              <strong>Contrato válido y activo</strong>
+              La firma digital y el código coinciden con el documento original.
+            </div>
+          </div>
+
+          <div class="ds-card ds-card-padded">
+            <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="file-text"></i> Datos del contrato</p>
+            <dl style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); font-size:13px; margin:0;">
+              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${data.contrato_id || contratoId}</dd></div>
+              <div><dt style="color:var(--fg-3); margin-bottom:2px;">Total c/ ITBMS</dt><dd style="margin:0; font-family:var(--font-mono);">$${total}</dd></div>
+              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0;">${data.cliente_nombre || "—"}</dd></div>
+              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Firmado por</dt><dd style="margin:0;">${data.aprobado_por_nombre || "—"} · ${data.aprobado_por_email || "—"} · ${data.aprobado_por_rol || "—"}</dd></div>
+              <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Fecha de firma</dt><dd style="margin:0;">${fecha}</dd></div>
+            </dl>
+          </div>
+        `;
+        if (window.lucide) lucide.createIcons();
+      } catch (e) {
+        console.error(e);
+        el.innerHTML = `
+          <div class="alert-banner alert-error">
+            <span class="alert-banner-icon"><i data-lucide="alert-triangle"></i></span>
+            <div class="alert-banner-body">
+              <strong>Error de verificación</strong>
+              No fue posible conectar con el servidor. Intenta de nuevo.
+            </div>
+          </div>`;
+        if (window.lucide) lucide.createIcons();
+      }
     }
-  }
 
-  verificar();
-</script>
-
-
+    verificar();
+  </script>
 </body>
 </html>

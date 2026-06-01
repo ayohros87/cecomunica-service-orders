@@ -1,8 +1,15 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Mi Perfil - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="css/ceco-ui.css">
 
   <!-- Firebase -->
@@ -14,6 +21,7 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
+
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbarFor('edit', {
@@ -23,51 +31,51 @@
   </script>
 
   <div class="app-wrap app-wrap--narrow">
-    <div class="section">
-      <div class="form-grid">
-        <div class="form-field">
-          <label>Nombre</label>
-          <input id="perfil-nombre" type="text" readonly>
+
+    <div class="ds-card ds-card-padded">
+      <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="user-circle"></i> Datos del usuario</p>
+      <div class="form-grid-2">
+        <div class="form-field" style="grid-column:1/-1;">
+          <label class="form-label" for="perfil-nombre">Nombre</label>
+          <input class="form-input" id="perfil-nombre" type="text" readonly>
         </div>
         <div class="form-field">
-          <label>Correo electrónico</label>
-          <input id="perfil-correo" type="text" readonly>
+          <label class="form-label" for="perfil-correo">Correo electrónico</label>
+          <div class="form-input-wrap">
+            <span class="form-input-prefix"><i data-lucide="mail" style="width:15px;height:15px;"></i></span>
+            <input class="form-input" id="perfil-correo" type="text" readonly>
+          </div>
         </div>
         <div class="form-field">
-          <label>Rol</label>
-          <input id="perfil-rol" type="text" readonly>
+          <label class="form-label" for="perfil-rol">Rol</label>
+          <input class="form-input" id="perfil-rol" type="text" readonly>
         </div>
       </div>
     </div>
+
   </div>
 
-<script>
-  firebase.auth().onAuthStateChanged(async (user) => {
-    if (!user) {
-      location.href = "login.html";
-      return;
-    }
+  <script>
+    firebase.auth().onAuthStateChanged(async (user) => {
+      if (!user) { location.href = "login.html"; return; }
 
-    document.getElementById("perfil-correo").value = user.email || "";
+      document.getElementById("perfil-correo").value = user.email || "";
 
-    // Buscar datos de Firestore (colección usuarios)
-    try {
-      const snap = await firebase.firestore().collection("usuarios").doc(user.uid).get();
-      if (snap.exists) {
-        const data = snap.data();
-        document.getElementById("perfil-nombre").value = data.nombre || "";
-        document.getElementById("perfil-rol").value = data.rol || "";
+      try {
+        const snap = await firebase.firestore().collection("usuarios").doc(user.uid).get();
+        if (snap.exists) {
+          const data = snap.data();
+          document.getElementById("perfil-nombre").value = data.nombre || "";
+          document.getElementById("perfil-rol").value = data.rol || "";
+        }
+      } catch (e) {
+        console.error("Error al cargar perfil:", e);
       }
-    } catch (e) {
-      console.error("Error al cargar perfil:", e);
-    }
-  });
-
-  function cerrarSesion() {
-    firebase.auth().signOut().then(() => {
-      location.href = "login.html";
     });
-  }
-</script>
+
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { location.href = "login.html"; });
+    }
+  </script>
 </body>
 </html>

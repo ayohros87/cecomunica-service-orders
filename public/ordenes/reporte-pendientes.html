@@ -1,27 +1,42 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <title>Reporte de Órdenes Pendientes</title>
+  <title>Reporte de Órdenes Pendientes - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h2 { margin-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-    th, td { border: 1px solid #000; padding: 6px 8px; text-align: center; }
-    th { background-color: #f0f0f0; }
-    #mensaje { margin-top: 15px; font-weight: bold; }
-    .toolbar { margin-bottom: 15px; }
-    .toolbar button { margin-right: 8px; }
+    /* Page-local — layout para impresión */
+    body { background: var(--surface-page); }
+    .reporte-wrap { max-width: 1100px; margin: 20px auto; padding: 0 var(--sp-5); }
+    .reporte-toolbar { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+    .reporte-print {
+      background: var(--surface-card);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      padding: var(--sp-5);
+    }
+    .reporte-print table {
+      width: 100%; border-collapse: collapse; margin-top: var(--sp-3); font-size: 13px;
+    }
+    .reporte-print th, .reporte-print td {
+      border: 1px solid var(--border-default); padding: 6px 10px; text-align: center;
+    }
+    .reporte-print th { background: var(--surface-sunken); font-weight: 600; }
+
+    @media print {
+      body { background: white; }
+      .reporte-toolbar { display: none !important; }
+      .reporte-print { box-shadow: none; padding: 0; }
+    }
   </style>
-</head>
-<body>
-  <h2><i data-lucide="clock"></i> Reporte de Órdenes Pendientes</h2>
-  <div class="toolbar">
-    <button onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
-    <button onclick="window.close()"><i data-lucide="x"></i> Cerrar</button>
-  </div>
-  <div id="mensaje"></div>
-  <div id="tablaReporte"></div>
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
@@ -30,6 +45,24 @@
   <script src="../js/firebase-init.js"></script>
   <script src="../js/services/ordenesService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+  <div class="reporte-wrap">
+
+    <div class="reporte-toolbar">
+      <h2 style="margin:0; font-family:var(--font-display); flex:1;"><i data-lucide="clock"></i> Reporte de Órdenes Pendientes</h2>
+      <button class="btn btn-primary" onclick="window.print()"><i data-lucide="printer"></i> Imprimir</button>
+      <button class="btn btn-ghost" onclick="window.close()"><i data-lucide="x"></i> Cerrar</button>
+    </div>
+
+    <div id="mensaje" style="margin-bottom:var(--sp-3); font-weight:600;"></div>
+
+    <div class="reporte-print">
+      <div id="tablaReporte"></div>
+    </div>
+
+  </div>
 
   <script>
     const tablaDiv = document.getElementById("tablaReporte");
@@ -37,7 +70,7 @@
 
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) {
-        mensajeDiv.style.color = "red";
+        mensajeDiv.style.color = "var(--status-critical)";
         mensajeDiv.textContent = "Debe iniciar sesión para ver este reporte.";
         return;
       }
@@ -45,11 +78,10 @@
     });
 
     async function generarReporte() {
-      mensajeDiv.textContent = "Cargando datos...";
+      mensajeDiv.textContent = "Cargando datos…";
       tablaDiv.innerHTML = "";
 
       try {
-        // Traer órdenes cuyo estado sea POR ASIGNAR o ASIGNADO
         const ordenes = await OrdenesService.filterByStatuses(["POR ASIGNAR", "ASIGNADO"]);
 
         if (!ordenes.length) {
@@ -63,10 +95,10 @@
             <tr>
               <th>N° Orden</th>
               <th>Cliente</th>
-              <th>Tipo de Servicio</th>
+              <th>Tipo de servicio</th>
               <th>Estado</th>
-              <th>Fecha Entrada</th>
-              <th>Cantidad de Radios</th>
+              <th>Fecha entrada</th>
+              <th>Cant. radios</th>
               <th>Vendedor</th>
             </tr>
             </thead>
@@ -76,32 +108,31 @@
         let totalRadios = 0;
 
         for (const data of ordenes) {
-// Usar lo que ya está guardado en la orden
-let nombreCliente = data.cliente_nombre || data.cliente || "No disponible";
-let vendedor = data.vendedor_email || "No disponible";
-
+          let nombreCliente = data.cliente_nombre || data.cliente || "No disponible";
+          let vendedor = data.vendedor_email || "No disponible";
 
           const equipos = (data.equipos || []).filter(e => !e.eliminado);
           const cantidadRadios = equipos.length;
           totalRadios += cantidadRadios;
 
-        tabla += `
-          <tr>
-            <td>${data.ordenId}</td>
-            <td>${nombreCliente}</td>
-            <td>${data.tipo_de_servicio || "-"}</td>
-            <td>${data.estado_reparacion || "-"}</td>
-            <td>${data.fecha_entrada || "-"}</td>
-            <td>${cantidadRadios}</td>
-            <td>${vendedor}</td>
-          </tr>
-        `;
+          tabla += `
+            <tr>
+              <td>${data.ordenId}</td>
+              <td>${nombreCliente}</td>
+              <td>${data.tipo_de_servicio || "-"}</td>
+              <td>${data.estado_reparacion || "-"}</td>
+              <td>${data.fecha_entrada || "-"}</td>
+              <td>${cantidadRadios}</td>
+              <td>${vendedor}</td>
+            </tr>
+          `;
         }
 
         tabla += `
           <tr>
-            <td colspan="5" style="text-align:right; font-weight:bold;">TOTAL</td>
-            <td style="font-weight:bold;">${totalRadios}</td>
+            <td colspan="5" style="text-align:right; font-weight:700;">TOTAL</td>
+            <td style="font-weight:700;">${totalRadios}</td>
+            <td></td>
           </tr>
         `;
 
@@ -110,8 +141,8 @@ let vendedor = data.vendedor_email || "No disponible";
         mensajeDiv.textContent = "";
 
       } catch (e) {
-        console.error("❌ Error generando reporte:", e);
-        mensajeDiv.style.color = "red";
+        console.error("Error generando reporte:", e);
+        mensajeDiv.style.color = "var(--status-critical)";
         mensajeDiv.textContent = "Error al generar reporte.";
       }
     }

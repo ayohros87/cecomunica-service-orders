@@ -1,38 +1,17 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <title>Importar Dispositivos POC - Cecomunica</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    h2 {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .section {
-      max-width: 600px;
-      margin: auto;
-      margin-bottom: 30px;
-    }
-    .section label, .section input, .section button {
-      display: block;
-      width: 100%;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    button {
-      padding: 10px;
-      cursor: pointer;
-    }
-    #estadoImportacion {
-      text-align: center;
-      margin-top: 10px;
-      font-weight: bold;
-    }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -43,41 +22,74 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
+
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbarFor('child', {
-      title: '<i data-lucide="package"></i> Importar Dispositivos POC',
+      title: '<i data-lucide="upload"></i> Importar Dispositivos POC',
       back:  { href: 'index.html' }
     });
   </script>
 
-  <div class="app-wrap app-wrap--narrow">
+  <div class="app-wrap app-wrap--default">
 
-  <div class="section">
-    <h3><i data-lucide="upload"></i> Importar desde Excel (.xlsx):</h3>
-    <label for="archivoExcel">Selecciona archivo Excel:</label>
-    <input type="file" id="archivoExcel" accept=".xlsx">
-    <button onclick="importarExcelAFirestore()"><i data-lucide="upload"></i> Importar Dispositivos</button>
-    <div id="estadoImportacion"></div>
-  </div>
+    <!-- Importar desde Excel -->
+    <div class="form-section-header">
+      <h3><i data-lucide="upload"></i> Importar desde Excel</h3>
+    </div>
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <div class="form-field">
+        <label class="form-label" for="archivoExcel">Selecciona archivo Excel (.xlsx)</label>
+        <label class="form-file-zone" tabindex="0" role="button">
+          <input type="file" id="archivoExcel" accept=".xlsx">
+          <div class="form-file-zone-icon"><i data-lucide="file-spreadsheet" style="width:32px;height:32px;"></i></div>
+          <p><strong>Arrastra tu archivo aquí</strong> o haz clic para seleccionar</p>
+          <span>XLSX · hoja "BD" con columnas SERIAL, CLIENTE, OPERADOR, etc.</span>
+        </label>
+      </div>
 
-  <div class="section">
-    <h3><i data-lucide="download"></i> Exportar dispositivos actuales:</h3>
-    <button onclick="exportarDispositivos()"><i data-lucide="file-text"></i> Exportar a Excel</button>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="importarExcelAFirestore()"><i data-lucide="upload"></i> Importar dispositivos</button>
+      </div>
+
+      <div id="estadoImportacion" class="alert-banner" style="display:none; margin-top:var(--sp-3);">
+        <span class="alert-banner-icon"><i data-lucide="info"></i></span>
+        <div class="alert-banner-body" id="estadoImportacionBody"></div>
+      </div>
+    </div>
+
+    <!-- Exportar dispositivos actuales -->
+    <div class="form-section-header">
+      <h3><i data-lucide="download"></i> Exportar dispositivos actuales</h3>
+    </div>
+    <div class="ds-card ds-card-padded">
+      <p style="font-size:13px; color:var(--fg-3); margin:0 0 var(--sp-3);">
+        Descarga un Excel con todos los dispositivos PoC registrados, listo para edición masiva.
+      </p>
+      <button class="btn btn-secondary" onclick="exportarDispositivos()"><i data-lucide="file-text"></i> Exportar a Excel</button>
+    </div>
+
   </div>
 
 <script>
+function setEstado(mensaje, tipo = 'info') {
+  const el = document.getElementById('estadoImportacion');
+  const body = document.getElementById('estadoImportacionBody');
+  el.className = `alert-banner alert-${tipo}`;
+  body.textContent = mensaje;
+  el.style.display = '';
+}
+
 async function importarExcelAFirestore() {
   const archivoInput = document.getElementById('archivoExcel');
   const archivo = archivoInput.files[0];
-  const estado = document.getElementById("estadoImportacion");
 
   if (!archivo) {
-    estado.textContent = "Selecciona un archivo .xlsx";
+    setEstado("Selecciona un archivo .xlsx primero.", "warning");
     return;
   }
 
-  estado.textContent = "⏳ Importando, por favor espera...";
+  setEstado("Importando, por favor espera…", "info");
 
   const data = await archivo.arrayBuffer();
   const workbook = XLSX.read(data);
@@ -113,29 +125,27 @@ async function importarExcelAFirestore() {
     });
 
     contador++;
-    estado.textContent = `Dispositivos importados: ${contador}`;
+    setEstado(`Dispositivos importados: ${contador}`, "info");
   }
 
-  estado.textContent = `Importación completada. Total: ${contador}`;
+  setEstado(`Importación completada. Total: ${contador}`, "success");
 }
 
 async function exportarDispositivos() {
-  const estado = document.getElementById("estadoImportacion");
-  estado.textContent = "⏳ Exportando dispositivos...";
+  setEstado("Exportando dispositivos…", "info");
   try {
     const datos = await PocService.getPocDevices();
     const ws = XLSX.utils.json_to_sheet(datos);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Dispositivos");
     XLSX.writeFile(wb, "poc_dispositivos.xlsx");
-    estado.textContent = "Exportación completada.";
+    setEstado("Exportación completada.", "success");
   } catch (error) {
     console.error("Error al exportar:", error);
-    estado.textContent = "Error al exportar.";
+    setEstado("Error al exportar.", "error");
   }
 }
 </script>
-</div>
 <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

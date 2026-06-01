@@ -326,6 +326,28 @@
 }
 
 
+/* ── .app-card override (passive surface wrapper) ────────────────
+   `ceco-ui.css` define .app-card como el "launcher card" del home
+   con cursor:pointer + flex + hover translate. El home actual usa
+   .module-card en su lugar, así que aquí neutralizamos el comportamiento
+   y .app-card se convierte en el wrapper pasivo (alias funcional de
+   .ds-card) que usa el kit para envolver formularios, tablas, etc.
+   ────────────────────────────────────────────────────────────── */
+.app-card {
+  display: block;
+  gap: 0;
+  align-items: stretch;
+  cursor: default;
+  padding: 0;
+  transition: none;
+}
+.app-card:hover,
+.app-card:active { transform: none; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.05)); border-color: var(--border-subtle, #EEF2F6); }
+.app-card-padded { padding: var(--sp-6, 24px); }
+/* .module-card no debe heredar este reset (ya tiene su propio cursor:pointer + hover) */
+.module-card { cursor: pointer; padding: 16px 20px; }
+
+
 /* ── Bulk action bar (contextual selección) ─────────────────────
    Visible cuando hay filas seleccionadas; alterna con .visible.
    ──────────────────────────────────────────────────────────── */
