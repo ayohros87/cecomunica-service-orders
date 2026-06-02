@@ -79,17 +79,43 @@
           { key: 'to', label: 'Para' },
           { key: 'template', label: 'Template' },
           { key: 'error', label: 'Error' },
+          { key: 'action', label: '', align: 'right' },
         ],
         failed.map(m => ({
           createdAt: fmtTs(m.createdAt),
           to: Array.isArray(m.to) ? m.to.join(', ') : (m.to || '—'),
           template: m.template || '—',
           error: `<code style="font-size:11px;color:#991b1b;">${(m.error || '').toString().slice(0, 140)}</code>`,
+          action: `<button class="btn btn-ghost btn-sm" data-mail-retry="${m.id}" title="Reintentar este envío"><i data-lucide="refresh-cw"></i></button>`,
         })),
         'No hay envíos fallidos registrados.');
 
+      // Wire per-row retry buttons.
+      document.querySelectorAll('[data-mail-retry]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.mailRetry;
+          btn.disabled = true;
+          try {
+            await MailQueueService.retry(id);
+            if (window.Toast) Toast.show('Re-encolado. Esperando procesado…', 'ok');
+            setTimeout(() => loadMailQueue(), 1500);
+          } catch (err) {
+            if (window.Toast) Toast.show('Error: ' + (err.message || err.code), 'bad');
+            btn.disabled = false;
+          }
+        });
+      });
+
+      // Show/hide bulk retry button.
+      const bulkBtn = $('btnRetryAll');
+      if (bulkBtn) {
+        bulkBtn.style.display = failed.length > 0 ? '' : 'none';
+        bulkBtn.dataset.ids = JSON.stringify(failed.map(m => m.id));
+      }
+
       setText('countMailStuck', String(stuck.length));
       setText('countMailFailed', String(failed.length));
+      if (window.lucide) lucide.createIcons();
     } catch (err) {
       console.error('[admin/salud] mail:', err);
       setText('mailSummary', 'Error consultando mail_queue: ' + (err.message || err.code || err));
@@ -183,6 +209,29 @@
   function wireToolbar() {
     const refresh = $('btnRefresh');
     if (refresh) refresh.addEventListener('click', () => loadAll());
+
+    const bulkBtn = $('btnRetryAll');
+    if (bulkBtn) {
+      bulkBtn.addEventListener('click', async () => {
+        const ids = JSON.parse(bulkBtn.dataset.ids || '[]');
+        if (!ids.length) return;
+        if (!window.Modal) { return; }
+        const ok = await Modal.confirm({
+          title: 'Reintentar todos',
+          message: `Se re-encolarán <strong>${ids.length}</strong> emails fallidos. Cada uno se procesará de inmediato. ¿Continuar?`,
+          confirmLabel: 'Reintentar',
+        });
+        if (!ok) return;
+        bulkBtn.disabled = true;
+        try {
+          const res = await MailQueueService.retryMany(ids);
+          if (window.Toast) Toast.show(`Re-encolados: ${res.ok} ok, ${res.failed} fallidos`, res.failed ? 'warn' : 'ok');
+          setTimeout(() => loadMailQueue(), 2000);
+        } finally {
+          bulkBtn.disabled = false;
+        }
+      });
+    }
   }
 
   document.addEventListener('DOMContentLoaded', () => {

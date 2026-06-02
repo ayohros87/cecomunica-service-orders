@@ -59,6 +59,33 @@ const MailQueueService = {
     });
     return { sent, pending, failed, total: snap.size };
   },
+
+  /**
+   * Re-arm a mail_queue doc for retry: clears error + sent_at + status so
+   * onMailQueued (now onDocumentWritten) re-processes it. Stamps audit
+   * fields so we can tell retries apart from first attempts.
+   */
+  async retry(docId) {
+    const db = firebase.firestore();
+    const uid = firebase.auth().currentUser?.uid || null;
+    return db.collection('mail_queue').doc(docId).update({
+      error:      firebase.firestore.FieldValue.delete(),
+      sent_at:    firebase.firestore.FieldValue.delete(),
+      status:     firebase.firestore.FieldValue.delete(),
+      retried_at: firebase.firestore.FieldValue.serverTimestamp(),
+      retried_by: uid,
+    });
+  },
+
+  /** Retry a batch of failed docs. Returns counts. */
+  async retryMany(docIds) {
+    const results = { ok: 0, failed: 0 };
+    for (const id of docIds) {
+      try { await this.retry(id); results.ok++; }
+      catch { results.failed++; }
+    }
+    return results;
+  },
 };
 
 window.MailQueueService = MailQueueService;
