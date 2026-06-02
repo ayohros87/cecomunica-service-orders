@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plantillas de email · CeComunica</title>
+<link rel="stylesheet" href="ceco-next.css">
+<style>
+  body{background:var(--navy-900);background-image:radial-gradient(ellipse at 75% 0%,var(--navy-700),var(--navy-900) 60%);min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto;padding:48px 24px 72px}
+  .head{display:flex;align-items:center;gap:15px;margin-bottom:8px}
+  .head img{width:44px;height:44px}
+  .head b{font:800 22px/1 var(--font-display);color:#fff;display:block}
+  .head span{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.5)}
+  .wrap h1{font:800 34px/1.05 var(--font-display);letter-spacing:-.02em;color:#fff;margin:22px 0 10px}
+  .lead{font-size:16px;color:rgba(255,255,255,.65);max-width:62ch;line-height:1.6;margin:0 0 14px}
+  .meta-note{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);padding:8px 13px;border-radius:8px}
+  .meta-note i{width:15px;height:15px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:34px}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .mail{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:var(--r-xl);overflow:hidden}
+  .mail__bar{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .mail__k{font:600 10px/1 var(--font-body);letter-spacing:.13em;text-transform:uppercase;color:var(--cyan-400);background:rgba(0,145,215,.16);padding:5px 9px;border-radius:var(--r-pill)}
+  .mail__t{font:600 14px/1.2 var(--font-body);color:#fff}
+  .mail__open{margin-left:auto;display:inline-flex;align-items:center;gap:6px;color:rgba(255,255,255,.7);font-size:12.5px;font-weight:600;text-decoration:none}
+  .mail__open i{width:14px;height:14px}
+  .mail__open:hover{color:#fff}
+  .mail__view{height:440px;overflow:hidden;background:#E6ECF2;position:relative}
+  .mail__view iframe{width:125%;height:125%;border:0;transform:scale(.8);transform-origin:top left}
+  .mail--wide{grid-column:1 / -1}
+  .mail--wide .mail__view{height:260px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <img src="assets/monogram.svg" alt="CeComunica">
+    <div><b>CeComunica</b><span>Sistema Interno · Plantillas de email</span></div>
+  </div>
+  <h1>Familia de correos</h1>
+  <p class="lead">Un sistema de email coherente con la dirección "Command Center": cabecera en navy, estado como señal, datos en monoespaciado y banda de marca al pie. HTML compatible con clientes de correo (tablas + estilos en línea).</p>
+  <div class="meta-note"><i data-lucide="info"></i> Para producción conviene exportar los logos a PNG — algunos clientes (Gmail) no renderizan SVG.</div>
+
+  <div class="grid">
+
+    <div class="mail">
+      <div class="mail__bar"><span class="mail__k">Ventas</span><span class="mail__t">Cotización emitida</span><a class="mail__open" href="emails/cotizacion.html" target="_blank">Abrir <i data-lucide="external-link"></i></a></div>
+      <div class="mail__view"><iframe src="emails/cotizacion.html" title="Cotización"></iframe></div>
+    </div>
+
+    <div class="mail">
+      <div class="mail__bar"><span class="mail__k">Taller</span><span class="mail__t">Orden recibida</span><a class="mail__open" href="emails/orden-recibida.html" target="_blank">Abrir <i data-lucide="external-link"></i></a></div>
+      <div class="mail__view"><iframe src="emails/orden-recibida.html" title="Orden recibida"></iframe></div>
+    </div>
+
+    <div class="mail">
+      <div class="mail__bar"><span class="mail__k">Interno</span><span class="mail__t">Asignación de técnico</span><a class="mail__open" href="emails/asignacion-tecnico.html" target="_blank">Abrir <i data-lucide="external-link"></i></a></div>
+      <div class="mail__view"><iframe src="emails/asignacion-tecnico.html" title="Asignación"></iframe></div>
+    </div>
+
+    <div class="mail">
+      <div class="mail__bar"><span class="mail__k">Taller</span><span class="mail__t">Orden lista para entrega</span><a class="mail__open" href="emails/orden-lista.html" target="_blank">Abrir <i data-lucide="external-link"></i></a></div>
+      <div class="mail__view"><iframe src="emails/orden-lista.html" title="Orden lista"></iframe></div>
+    </div>
+
+    <div class="mail">
+      <div class="mail__bar"><span class="mail__k">Documento</span><span class="mail__t">Nota de entrega</span><a class="mail__open" href="emails/nota-entrega.html" target="_blank">Abrir <i data-lucide="external-link"></i></a></div>
+      <div class="mail__view"><iframe src="emails/nota-entrega.html" title="Nota de entrega"></iframe></div>
+    </div>
+
+    <div class="mail">
+      <div class="mail__bar"><span class="mail__k">Contratos</span><span class="mail__t">Renovación de contrato</span><a class="mail__open" href="emails/contrato-renovacion.html" target="_blank">Abrir <i data-lucide="external-link"></i></a></div>
+      <div class="mail__view"><iframe src="emails/contrato-renovacion.html" title="Renovación"></iframe></div>
+    </div>
+
+  </div>
+</div>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>if(window.lucide)lucide.createIcons();</script>
+</body>
+</html>

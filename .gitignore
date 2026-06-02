@@ -80,3 +80,6 @@ api- sendgrid.txt
 
 # Local backup archives created by backup_cecomunica_v2.txt
 backups/
+
+# Downloaded zip exports / one-shot artifacts — should never be in the repo
+*.zip
