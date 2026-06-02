@@ -123,7 +123,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
 
   const estadoUpper = estado.toUpperCase();
   const ordenCerrada = estadoUpper.includes('ENTREGAD') || estadoUpper.includes('ENTREGADA');
-  const ordenActiva = estadoUpper === 'POR ASIGNAR' || estadoUpper === 'ASIGNADO' || estadoUpper.includes('EN OFICINA');
+  const ordenActiva = estadoUpper === 'POR ASIGNAR' || estadoUpper === 'RECIBIDO EN MOSTRADOR' || estadoUpper === 'ASIGNADO' || estadoUpper.includes('EN OFICINA');
 
   filaDetalle.innerHTML = `
     <td colspan="8" class="orden-expandida-wrapper">
@@ -326,6 +326,15 @@ function _buildTimelineHTML(ordenData) {
       ts: ordenData.fecha_creacion,
       by: ordenData.creado_por_email || ordenData.created_by_email || '',
       kind: 'created'
+    });
+  }
+  if (ordenData.fecha_recepcion) {
+    entries.push({
+      icon: 'package-plus',
+      label: 'Recibida en mostrador',
+      ts: ordenData.fecha_recepcion,
+      by: ordenData.receptor_recepcion_nombre || ordenData.recepcion_por_email || '',
+      kind: 'recibido'
     });
   }
   if (ordenData.fecha_asignacion) {
@@ -625,6 +634,9 @@ function botonesFlujo(ordenId, estado, ordenData) {
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     if (estado === "POR ASIGNAR") {
+      html += `<button class="btn-flujo btn-flujo--recibir" title="Recibir en mostrador (acuse firmado)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
+      html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+    } else if (estado === "RECIBIDO EN MOSTRADOR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
@@ -634,7 +646,7 @@ function botonesFlujo(ordenId, estado, ordenData) {
   }
 
   else if (rol === ROLES.TECNICO) {
-    if (estado === "POR ASIGNAR") {
+    if (estado === "POR ASIGNAR" || estado === "RECIBIDO EN MOSTRADOR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
@@ -740,6 +752,7 @@ function actualizarResumen(lista) {
 
   const _statusOf = (o) => (o.estado_reparacion || "POR ASIGNAR").toUpperCase();
   const porAsignar         = fullList.filter(o => _statusOf(o) === "POR ASIGNAR").length;
+  const recibidoMostrador  = fullList.filter(o => _statusOf(o) === "RECIBIDO EN MOSTRADOR").length;
   const asignado           = fullList.filter(o => _statusOf(o) === "ASIGNADO").length;
   const completadoOficina  = fullList.filter(o => _statusOf(o) === "COMPLETADO (EN OFICINA)").length;
   const entregadoCliente   = fullList.filter(o => _statusOf(o) === "ENTREGADO AL CLIENTE").length;
@@ -754,6 +767,7 @@ function actualizarResumen(lista) {
   };
   chipCount('all', fullList.length);
   chipCount('POR ASIGNAR', porAsignar);
+  chipCount('RECIBIDO EN MOSTRADOR', recibidoMostrador);
   chipCount('ASIGNADO', asignado);
   chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
   chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
@@ -777,6 +791,7 @@ function actualizarResumen(lista) {
         <div class="resumen-total" data-action="limpiar-filtros" title="Ver todas las órdenes">Total: ${total}</div>
         <div class="resumen-badges">
           <span class="badge asignar ${estadoActivo === 'POR ASIGNAR' ? 'active' : ''}" title="Click para filtrar: POR ASIGNAR" data-action="filtrar-badge" data-estado="POR ASIGNAR">${porAsignar}</span>
+          <span class="badge recibido ${estadoActivo === 'RECIBIDO EN MOSTRADOR' ? 'active' : ''}" title="Click para filtrar: RECIBIDO EN MOSTRADOR" data-action="filtrar-badge" data-estado="RECIBIDO EN MOSTRADOR">${recibidoMostrador}</span>
           <span class="badge asignado ${estadoActivo === 'ASIGNADO' ? 'active' : ''}" title="Click para filtrar: ASIGNADO" data-action="filtrar-badge" data-estado="ASIGNADO">${asignado}</span>
           <span class="badge completo ${estadoActivo === 'COMPLETADO (EN OFICINA)' ? 'active' : ''}" title="Click para filtrar: COMPLETADO (EN OFICINA)" data-action="filtrar-badge" data-estado="COMPLETADO (EN OFICINA)">${completadoOficina}</span>
           <span class="badge ${estadoActivo === 'ENTREGADO AL CLIENTE' ? 'active' : ''}" style="background:#bbf7d0;" title="Click para filtrar: ENTREGADO AL CLIENTE" data-action="filtrar-badge" data-estado="ENTREGADO AL CLIENTE">${entregadoCliente}</span>

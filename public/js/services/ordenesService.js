@@ -172,6 +172,33 @@ const OrdenesService = {
   },
 
   /**
+   * Acknowledge receipt of equipment when the client drops it off at the
+   * counter. Records the signed acknowledgement (firma + nombre del que
+   * entrega) and transitions the order from POR ASIGNAR to
+   * RECIBIDO EN MOSTRADOR so the timeline reflects the physical handoff.
+   * The order still needs a technician assigned afterwards — the flujo
+   * continues normally from there.
+   * @param {string} ordenId
+   * @param {{receptorNombre:string, firmaUrl:string}} payload
+   */
+  async receiveAtCounter(ordenId, { receptorNombre, firmaUrl }) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      estado_reparacion: "RECIBIDO EN MOSTRADOR",
+      fecha_recepcion: firebase.firestore.FieldValue.serverTimestamp(),
+      recepcion_por_uid: user?.uid || '',
+      recepcion_por_email: user?.email || '',
+      firma_recepcion_url: firmaUrl,
+      receptor_recepcion_nombre: receptorNombre,
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'RECIBIR_MOSTRADOR',
+        by: user?.uid || ''
+      })
+    });
+  },
+
+  /**
    * Mark order as delivered to client
    * @param {string} ordenId - Order ID
    * @returns {Promise<void>}

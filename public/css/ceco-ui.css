@@ -330,6 +330,7 @@ body{
 
 .badge{ padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; display:inline-block; transition: var(--transition); }
 .badge.asignar{ background:var(--accent-soft-hov); color:var(--navy); }
+.badge.recibido{ background:#E0F2FE; color:#075985; }
 .badge.asignado{ background:#fed7aa; color:#92400e; }
 .badge.completo{ background:#d1fae5; color:#065f46; }
 .badge.pendiente {

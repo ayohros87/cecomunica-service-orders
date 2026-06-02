@@ -260,6 +260,7 @@ function nombreClienteDe(orden) {
 function getEstadoClass(estado) {
   const e = (estado || "").toUpperCase();
   if (e === "POR ASIGNAR") return "chip-recibida";
+  if (e === "RECIBIDO EN MOSTRADOR") return "chip-recibida";
   if (e === "ASIGNADO") return "chip-reparacion";
   if (e === "COMPLETADO (EN OFICINA)") return "chip-lista";
   if (e === "ENTREGADO AL CLIENTE") return "chip-entregada";
@@ -281,5 +282,6 @@ function estadoCompacto(estado) {
   const e = (estado || "").toUpperCase();
   if (e === "COMPLETADO (EN OFICINA)") return "COMPLETADO";
   if (e === "ENTREGADO AL CLIENTE") return "ENTREGADO";
+  if (e === "RECIBIDO EN MOSTRADOR") return "RECIBIDO";
   return e;
 }

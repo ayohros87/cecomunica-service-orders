@@ -894,6 +894,7 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
    The .estado-pill rules previously here were retired by R2 (chip migration);
    per-order state badges now use .chip-estado.chip-{state} from ceco-ui.css. */
 tr[data-estado="POR ASIGNAR"] td:first-child  { border-left: 4px solid #ef4444; }
+tr[data-estado="RECIBIDO EN MOSTRADOR"] td:first-child { border-left: 4px solid #0EA5E9; }
 tr[data-estado="ASIGNADO"] td:first-child      { border-left: 4px solid #f59e0b; }
 tr[data-estado*="COMPLETADO"] td:first-child   { border-left: 4px solid var(--accent); }
 tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e; }
@@ -1210,6 +1211,8 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
 .btn-flujo:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.10); }
 .btn-flujo--asignar   { color: var(--accent-press); border-color: var(--accent-line); }
 .btn-flujo--asignar:hover   { background: var(--accent-soft); }
+.btn-flujo--recibir   { color: #075985; border-color: #bae6fd; }
+.btn-flujo--recibir:hover   { background: #f0f9ff; }
 .btn-flujo--completar { color: #065f46; border-color: #6ee7b7; }
 .btn-flujo--completar:hover { background: #ecfdf5; }
 .btn-flujo--entregar  { color: #5b21b6; border-color: #c4b5fd; }
@@ -1301,6 +1304,7 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
     transition: var(--transition);
   }
   .card-contrato[data-estado="POR ASIGNAR"]             { border-left-color: #ef4444; }
+  .card-contrato[data-estado="RECIBIDO EN MOSTRADOR"]   { border-left-color: #0EA5E9; }
   .card-contrato[data-estado="ASIGNADO"]                { border-left-color: #f59e0b; }
   .card-contrato[data-estado*="COMPLETADO"]             { border-left-color: var(--accent); }
   .card-contrato[data-estado*="ENTREGADO"]              { border-left-color: #22c55e; }
@@ -3435,6 +3439,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 /* Per-estado palette — active state fills with the matching status
    color so chip + estado-pill in the rows below visually correspond. */
 .estado-chip--por-asignar .dot { background: var(--status-critical); }
+.estado-chip--recibido    .dot { background: #0EA5E9; }
 .estado-chip--asignado    .dot { background: var(--status-warning); }
 .estado-chip--completado  .dot { background: var(--accent); }
 .estado-chip--entregado   .dot { background: var(--status-online); }
@@ -3454,6 +3459,11 @@ tr.activo:hover { background: #f0f9ff !important; }
   background: #FAE3E3;
   border-color: var(--status-critical);
   color: #8A1F1F;
+}
+.estado-chip--recibido.active {
+  background: #E0F2FE;
+  border-color: #0EA5E9;
+  color: #075985;
 }
 .estado-chip--asignado.active {
   background: #FAF1DB;

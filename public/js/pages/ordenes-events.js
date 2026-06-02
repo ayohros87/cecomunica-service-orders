@@ -89,6 +89,10 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) entregarOrden(ordenId);
     },
+    'recibir-mostrador': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) abrirModalRecepcion(ordenId);
+    },
     'eliminar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) eliminarOrden(ordenId);

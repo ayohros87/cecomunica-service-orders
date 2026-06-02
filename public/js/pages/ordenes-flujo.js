@@ -238,6 +238,9 @@ window.copiarSeriales = function (ordenId) {
   // Cached cliente doc for the open modal — populated in abrirModalEntrega
   // so confirmarEntrega can detect email edits without an extra round-trip.
   let _clienteDoc = null;
+  // 'entrega' (default) o 'recepcion'. _applyModo lo sincroniza con la UI;
+  // confirmarEntrega lo lee para despachar a la rama correcta del flujo.
+  let _modo = 'entrega';
 
   // ── Canvas helpers ──────────────────────────────────────────────
   function _initCanvas() {
@@ -448,17 +451,67 @@ window.copiarSeriales = function (ordenId) {
     el.classList.toggle('hidden', !tipo.includes('ENTRADA'));
   }
 
+  // Reconfigura el modal compartido entre los flujos de entrega y
+  // recepción. En 'recepcion' oculta los bloques que no aplican (ID,
+  // sin-ID, no-recibido, leyenda ENTRADA) y cambia título/labels/botón.
+  // Mantiene firma + nombre + email cliente, que son los únicos campos
+  // requeridos para el acuse de recibo en mostrador.
+  function _applyModo(modo) {
+    _modo = (modo === 'recepcion') ? 'recepcion' : 'entrega';
+    const root = document.getElementById('modalEntrega');
+    if (root) root.dataset.modo = _modo;
+    const esRecepcion = _modo === 'recepcion';
+
+    const titulo = document.getElementById('entregaModalTituloPrefijo');
+    if (titulo) titulo.textContent = esRecepcion ? 'Recepción en mostrador' : 'Entrega';
+
+    // Lucide reemplaza el <i> con <svg> en el primer render, así que
+    // un simple setAttribute no actualiza el icono. Re-creamos el <i>
+    // y dejamos que lucideRefresh lo vuelva a renderizar.
+    const icon = document.getElementById('entregaModalIcon');
+    if (icon) {
+      const fresh = document.createElement('i');
+      fresh.id = 'entregaModalIcon';
+      fresh.setAttribute('data-lucide', esRecepcion ? 'package-plus' : 'package-check');
+      icon.replaceWith(fresh);
+    }
+
+    const receptorLabel = document.getElementById('entregaReceptorLabel');
+    if (receptorLabel) receptorLabel.textContent = esRecepcion ? 'Nombre de quien entrega' : 'Nombre de quien recibe';
+
+    const btnLabel = document.getElementById('btnConfirmarEntregaLabel');
+    if (btnLabel) btnLabel.textContent = esRecepcion ? 'Confirmar Recepción' : 'Confirmar Entrega';
+
+    // Containers que no aplican en recepción. .modal-entrega__alert--no-id
+    // envuelve el bloque de foto-ID y el checkbox sin-ID; .modal-entrega__alert
+    // envuelve el checkbox no-recibido y su sub-bloque.
+    const root2 = document.getElementById('modalEntrega');
+    const idAlert = root2?.querySelector('.modal-entrega__alert--no-id');
+    if (idAlert) idAlert.classList.toggle('hidden', esRecepcion);
+    const noRecibidoAlert = root2?.querySelector('.modal-entrega__alert');
+    if (noRecibidoAlert) noRecibidoAlert.classList.toggle('hidden', esRecepcion);
+    const legenda = document.getElementById('entregaLegendaEntrada');
+    if (legenda && esRecepcion) legenda.classList.add('hidden');
+
+    APP.utils.lucideRefresh(root2);
+  }
+
   // ── Public API ──────────────────────────────────────────────────
-  window.abrirModalEntrega = function (ordenId) {
+  // opts.modo: 'entrega' (default) o 'recepcion' — comparte el modal
+  // con `abrirModalRecepcion`, que es solo un envoltorio.
+  window.abrirModalEntrega = function (ordenId, opts = {}) {
     _ordenId = ordenId;
     const labelEl = document.getElementById('entregaModalOrdenId');
     if (labelEl) labelEl.textContent = ordenId;
 
     _reset();
+    _applyModo(opts.modo || 'entrega');
 
     const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
     _renderResumenEntrega(orden);
-    _toggleLegendaEntrada(orden);
+    // En modo recepción la leyenda ENTRADA no aplica (no estamos
+    // entregando radios, los estamos recibiendo); _applyModo ya la ocultó.
+    if (_modo !== 'recepcion') _toggleLegendaEntrada(orden);
     _prefillClienteEmail(orden);
 
     // Modal.open wires Escape, Tab focus-trap, and saves/restores focus.
@@ -485,6 +538,15 @@ window.copiarSeriales = function (ordenId) {
     const modal = document.getElementById('modalEntrega');
     if (modal) modal.classList.add('hidden');  // preserve .hidden invariant
     _ordenId = null;
+    // Reset modo so the next open defaults to 'entrega' even if the
+    // modal was last used for recepción.
+    _modo = 'entrega';
+  };
+
+  // Atajo público para abrir el modal en modo recepción — usado por
+  // botonesFlujo cuando la orden está POR ASIGNAR.
+  window.abrirModalRecepcion = function (ordenId) {
+    window.abrirModalEntrega(ordenId, { modo: 'recepcion' });
   };
 
   window.limpiarEntregaFirma = _clearCanvas;
@@ -584,12 +646,75 @@ window.copiarSeriales = function (ordenId) {
     };
   }
 
+  // ── Submit recepción ────────────────────────────────────────────
+  // Flujo simplificado: validar receptor + firma, subir firma a
+  // Storage, llamar al service que escribe el estado RECIBIDO EN
+  // MOSTRADOR. No envía email (el cliente se lleva la nota impresa
+  // desde "Imprimir orden" si la necesita).
+  async function _confirmarRecepcion(ordenId, user) {
+    const receptorNombre = (document.getElementById('entregaReceptorNombre')?.value || '').trim();
+    if (!receptorNombre) { Toast.show('Ingrese el nombre de quien entrega', 'bad'); return; }
+    if (_isCanvasEmpty())  { Toast.show('La firma es obligatoria', 'bad'); return; }
+
+    const btn = document.getElementById('btnConfirmarEntrega');
+    if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+    try {
+      const canvas = document.getElementById('entregaFirmaCanvas');
+      const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
+      const pathFirma = `ordenes_firmas/${ordenId}_recepcion_${Date.now()}.png`;
+      const refFirma = firebase.storage().ref(pathFirma);
+      await refFirma.put(blob, { contentType: 'image/png' });
+      const firmaUrl = await refFirma.getDownloadURL();
+
+      await OrdenesService.receiveAtCounter(ordenId, { receptorNombre, firmaUrl });
+
+      // Si el operador editó el email del cliente, persistirlo en su
+      // doc — mismo patrón que confirmarEntrega. Fallo no-fatal.
+      const clienteEmailInput = (document.getElementById('entregaClienteEmail')?.value || '').trim().toLowerCase();
+      const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
+      if (clienteEmailInput && orden.cliente_id) {
+        if (!_isValidEmail(clienteEmailInput)) {
+          Toast.show('⚠️ Recepción registrada, pero el email del cliente no es válido', 'warn');
+        } else {
+          const clienteEmailOriginal = (_clienteDoc?.email || '').toLowerCase().trim();
+          if (clienteEmailInput !== clienteEmailOriginal) {
+            try {
+              await ClientesService.updateCliente(orden.cliente_id, { email: clienteEmailInput });
+            } catch (err) {
+              console.warn('[confirmarRecepcion] no se pudo actualizar email del cliente', err);
+            }
+          }
+        }
+      }
+
+      cerrarModalEntrega();
+      Toast.show('✅ Recepción registrada correctamente', 'ok');
+    } catch (err) {
+      console.error('[confirmarRecepcion]', err);
+      Toast.show('❌ Error al registrar la recepción: ' + err.message, 'bad');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="check"></i> <span id="btnConfirmarEntregaLabel">Confirmar Recepción</span>';
+        APP.utils.lucideRefresh(btn);
+      }
+    }
+  }
+
   // ── Submit ──────────────────────────────────────────────────────
   window.confirmarEntrega = async function () {
     if (!_ordenId) return;
     const ordenId = _ordenId;
     const user = firebase.auth().currentUser;
     if (!user) { Toast.show('No hay usuario autenticado', 'bad'); return; }
+
+    // Despacha al flujo de recepción cuando el modal fue abierto en ese
+    // modo — comparte canvas/validaciones/firma pero salta no-recibido,
+    // ID, leyenda y email automático.
+    if (_modo === 'recepcion') {
+      return _confirmarRecepcion(ordenId, user);
+    }
 
     const noRecibido = !!document.getElementById('entregaNoRecibido')?.checked;
     const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
@@ -725,7 +850,10 @@ window.copiarSeriales = function (ordenId) {
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i data-lucide="check"></i> Confirmar Entrega';
+        // Preserva el span btnConfirmarEntregaLabel para que la próxima
+        // apertura del modal (potencialmente en modo recepción) pueda
+        // ajustar el texto vía _applyModo.
+        btn.innerHTML = '<i data-lucide="check"></i> <span id="btnConfirmarEntregaLabel">Confirmar Entrega</span>';
         APP.utils.lucideRefresh(btn);
       }
     }

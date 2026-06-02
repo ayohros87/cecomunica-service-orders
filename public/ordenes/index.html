@@ -94,6 +94,11 @@
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
     </button>
+    <button type="button" class="estado-chip estado-chip--recibido"
+            data-action="filtrar-estado-chip" data-estado="RECIBIDO EN MOSTRADOR"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Recibido <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
+    </button>
     <button type="button" class="estado-chip estado-chip--asignado"
             data-action="filtrar-estado-chip" data-estado="ASIGNADO"
             role="tab" aria-selected="false">
@@ -129,6 +134,11 @@
             data-action="filtrar-estado-chip" data-estado="POR ASIGNAR"
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Por asignar <span class="estado-chip__count" data-count="POR ASIGNAR">0</span>
+    </button>
+    <button type="button" class="estado-chip estado-chip--recibido"
+            data-action="filtrar-estado-chip" data-estado="RECIBIDO EN MOSTRADOR"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Recibido <span class="estado-chip__count" data-count="RECIBIDO EN MOSTRADOR">0</span>
     </button>
     <button type="button" class="estado-chip estado-chip--asignado"
             data-action="filtrar-estado-chip" data-estado="ASIGNADO"
@@ -207,6 +217,7 @@
         <select id="filtroEstado" class="filter-select" data-action="filtrar-estado" tabindex="-1">
           <option value="">Todos</option>
           <option value="POR ASIGNAR">POR ASIGNAR</option>
+          <option value="RECIBIDO EN MOSTRADOR">RECIBIDO EN MOSTRADOR</option>
           <option value="ASIGNADO">ASIGNADO</option>
           <option value="COMPLETADO (EN OFICINA)">COMPLETADO (EN OFICINA)</option>
           <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
@@ -290,14 +301,18 @@
   </div>
 </div>
 
-<!-- Modal Entrega de Equipos -->
-<div id="modalEntrega" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalEntregaTitle">
+<!-- Modal Entrega / Recepción de Equipos.
+     `data-modo` toggles entre 'entrega' (default) y 'recepcion' (cliente
+     trae equipos al mostrador): el modo recepción reusa el canvas y la
+     lista de equipos, pero esconde los bloques de ID, sin-ID, leyenda
+     ENTRADA y no-recibido — ver _applyModo en ordenes-flujo.js. -->
+<div id="modalEntrega" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalEntregaTitle" data-modo="entrega">
   <div class="modal modal-entrega">
 
     <!-- Header -->
     <div class="modal-header modal-entrega__header">
       <h3 class="modal-title modal-entrega__title" id="modalEntregaTitle">
-        <i data-lucide="package-check"></i> Entrega — Orden <span id="entregaModalOrdenId"></span>
+        <i data-lucide="package-check" id="entregaModalIcon"></i> <span id="entregaModalTituloPrefijo">Entrega</span> — Orden <span id="entregaModalOrdenId"></span>
       </h3>
       <button class="btn btn-ghost modal-entrega__close" data-action="cerrar-modal-entrega" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
@@ -323,13 +338,14 @@
     <!-- Normal delivery block -->
     <div id="entregaNormalBloque">
 
-      <!-- Receptor name -->
+      <!-- Receptor name. En modo recepción la etiqueta cambia a
+           "Nombre de quien entrega" via _applyModo. -->
       <div class="form-field modal-entrega__field--med">
         <label for="entregaReceptorNombre" class="modal-entrega__label">
-          Nombre de quien recibe <span class="req">*</span>
+          <span id="entregaReceptorLabel">Nombre de quien recibe</span> <span class="req">*</span>
         </label>
         <input type="text" id="entregaReceptorNombre"
-               placeholder="Nombre completo del receptor"
+               placeholder="Nombre completo"
                autocomplete="name" class="modal-entrega__nombre">
       </div>
 
@@ -420,7 +436,7 @@
     <div class="footer">
       <button class="btn btn-secondary" data-action="cerrar-modal-entrega">Cancelar</button>
       <button class="btn btn-primary" id="btnConfirmarEntrega" data-action="confirmar-entrega">
-        <i data-lucide="check"></i> Confirmar Entrega
+        <i data-lucide="check"></i> <span id="btnConfirmarEntregaLabel">Confirmar Entrega</span>
       </button>
     </div>
 
