@@ -85,7 +85,7 @@ module.exports = onSchedule(
         await db.collection("mail_queue").add({
           to: m.to,
           subject: m.subject,
-          message: { subject: m.subject, html: m.html },
+          html: m.html,
           meta: { tipo: "cotizacion_vencida_auto" },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });

@@ -73,11 +73,13 @@ const CotizacionesService = {
 
   // Encola un correo con la cotización adjunta/embebida. Marca estado=enviada.
   // payload: { to, cc?, subject, html, attachments? }
+  // Forma del doc compatible con onMailQueued: campos to/subject/html al top-level.
   async enviarPorCorreo(id, payload) {
     await MailService.enqueue({
       to: payload.to,
       cc: payload.cc || null,
-      message: { subject: payload.subject, html: payload.html },
+      subject: payload.subject,
+      html: payload.html,
       attachments: payload.attachments || [],
       meta: { tipo: 'cotizacion', cotizacion_id: id },
     });

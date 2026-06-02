@@ -448,7 +448,7 @@
             to: dest,
             cc: doc.creado_por_email || null,
             subject,
-            message: { subject, html },
+            html,
             meta: { tipo: 'cotizacion_aprobada', cotizacion_id: doc.cotizacion_id, doc_id: _aprobId },
           });
           await CotizacionesService.updateCotizacion(_aprobId, {

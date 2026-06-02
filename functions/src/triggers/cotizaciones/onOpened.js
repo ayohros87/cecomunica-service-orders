@@ -88,7 +88,7 @@ module.exports = onDocumentCreated(
       await db.collection("mail_queue").add({
         to: vendedorEmail,
         subject,
-        message: { subject, html },
+        html,
         meta: {
           tipo: "cotizacion_apertura",
           cotizacion_id: cotId,
