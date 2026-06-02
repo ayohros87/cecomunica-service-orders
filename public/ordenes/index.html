@@ -308,6 +308,18 @@
       <ul class="modal-entrega__resumen-list" id="entregaResumenEquipos"></ul>
     </div>
 
+    <!-- Email del cliente (prefill desde el registro; editable para corregir antes de enviar la nota) -->
+    <div class="form-field modal-entrega__field--med">
+      <label for="entregaClienteEmail" class="modal-entrega__label">
+        Email del cliente <span class="modal-entrega__hint">(recibirá la nota de entrega)</span>
+      </label>
+      <input type="email" id="entregaClienteEmail"
+             placeholder="correo@ejemplo.com"
+             autocomplete="email"
+             class="modal-entrega__nombre">
+      <p class="form-hint" id="entregaClienteEmailHint">Cargando email registrado…</p>
+    </div>
+
     <!-- Normal delivery block -->
     <div id="entregaNormalBloque">
 

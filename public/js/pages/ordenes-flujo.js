@@ -235,6 +235,9 @@ window.copiarSeriales = function (ordenId) {
   let _ctx = null;
   let _dibujando = false;
   let _canvasInited = false;
+  // Cached cliente doc for the open modal — populated in abrirModalEntrega
+  // so confirmarEntrega can detect email edits without an extra round-trip.
+  let _clienteDoc = null;
 
   // ── Canvas helpers ──────────────────────────────────────────────
   function _initCanvas() {
@@ -330,6 +333,15 @@ window.copiarSeriales = function (ordenId) {
     const sinIdMotivo = g('entregaSinIdMotivo');
     if (sinIdMotivo) sinIdMotivo.value = '';
 
+    const clienteEmail = g('entregaClienteEmail');
+    if (clienteEmail) clienteEmail.value = '';
+    const clienteEmailHint = g('entregaClienteEmailHint');
+    if (clienteEmailHint) {
+      clienteEmailHint.textContent = 'Cargando email registrado…';
+      clienteEmailHint.style.color = '';
+    }
+    _clienteDoc = null;
+
     // Reset visibility. Use classList — the global `.hidden` class
     // is `display:none !important`, so any prior inline style is moot
     // and must not be carried over either.
@@ -387,6 +399,45 @@ window.copiarSeriales = function (ordenId) {
     tot.innerHTML = partes.join(' · ');
   }
 
+  // Minimal RFC-style check — backend re-validates on send. Enough to
+  // catch typos like missing "@" or domain before queueing the email.
+  function _isValidEmail(s) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+  }
+
+  // Load the cliente doc and prefill the email input so the user can
+  // review/edit before confirming delivery. Stored in _clienteDoc so
+  // confirmarEntrega can diff against the original value.
+  function _prefillClienteEmail(orden) {
+    const input = document.getElementById('entregaClienteEmail');
+    const hint  = document.getElementById('entregaClienteEmailHint');
+    if (!input) return;
+
+    if (!orden?.cliente_id) {
+      _clienteDoc = null;
+      if (hint) hint.textContent = 'No hay cliente vinculado a la orden. Ingrese el email manualmente si desea enviar la nota.';
+      return;
+    }
+
+    ClientesService.getCliente(orden.cliente_id)
+      .then(doc => {
+        _clienteDoc = doc;
+        if (doc?.email) {
+          input.value = doc.email;
+          if (hint) hint.textContent = 'Email registrado del cliente. Edítelo si necesita corregirlo antes de enviar.';
+        } else if (hint) {
+          hint.textContent = 'El cliente no tiene email registrado. Ingréselo para enviar la nota de entrega.';
+        }
+      })
+      .catch(err => {
+        console.warn('[abrirModalEntrega] cliente fetch failed', err);
+        if (hint) {
+          hint.textContent = 'No se pudo cargar el email del cliente. Ingréselo manualmente.';
+          hint.style.color = 'var(--warn, #b45309)';
+        }
+      });
+  }
+
   function _toggleLegendaEntrada(orden) {
     const el = document.getElementById('entregaLegendaEntrada');
     if (!el) return;
@@ -408,6 +459,7 @@ window.copiarSeriales = function (ordenId) {
     const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
     _renderResumenEntrega(orden);
     _toggleLegendaEntrada(orden);
+    _prefillClienteEmail(orden);
 
     // Modal.open wires Escape, Tab focus-trap, and saves/restores focus.
     // ARIA attrs (role=dialog, aria-modal, aria-labelledby) are on the
@@ -542,6 +594,14 @@ window.copiarSeriales = function (ordenId) {
     const noRecibido = !!document.getElementById('entregaNoRecibido')?.checked;
     const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
 
+    // Email del cliente — editable en el modal. Si está vacío se omite
+    // el envío al cliente; si tiene formato inválido se aborta.
+    const clienteEmailInput = (document.getElementById('entregaClienteEmail')?.value || '').trim().toLowerCase();
+    if (clienteEmailInput && !_isValidEmail(clienteEmailInput)) {
+      Toast.show('El email del cliente no tiene un formato válido', 'bad');
+      return;
+    }
+
     const btn = document.getElementById('btnConfirmarEntrega');
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
 
@@ -607,12 +667,32 @@ window.copiarSeriales = function (ordenId) {
 
       await OrdenesService.mergeOrder(ordenId, firestoreData);
 
-      // Look up recipient emails in parallel
+      // Look up recipient emails in parallel. _clienteDoc was populated
+      // when the modal opened; refetch only if missing (e.g., modal opened
+      // before the async load resolved or no orden.cliente_id at open time).
+      const clienteDocPromise = _clienteDoc
+        ? Promise.resolve(_clienteDoc)
+        : (orden.cliente_id ? ClientesService.getCliente(orden.cliente_id).catch(() => null) : Promise.resolve(null));
       const [clienteDoc, vendedorDoc, tecnicoDoc] = await Promise.all([
-        orden.cliente_id       ? ClientesService.getCliente(orden.cliente_id).catch(() => null)            : Promise.resolve(null),
+        clienteDocPromise,
         orden.vendedor_asignado ? UsuariosService.getUsuario(orden.vendedor_asignado).catch(() => null)    : Promise.resolve(null),
         orden.tecnico_uid      ? UsuariosService.getUsuario(orden.tecnico_uid).catch(() => null)           : Promise.resolve(null),
       ]);
+
+      // Persist email change back to the cliente doc if the user edited
+      // it. Skip when blank (user opted out of cliente email this time)
+      // or when unchanged. Failure is non-fatal — the entrega already
+      // saved; we just log so it can be retried manually later.
+      const clienteEmailOriginal = (clienteDoc?.email || '').toLowerCase().trim();
+      if (orden.cliente_id && clienteEmailInput && clienteEmailInput !== clienteEmailOriginal) {
+        try {
+          await ClientesService.updateCliente(orden.cliente_id, { email: clienteEmailInput });
+        } catch (err) {
+          console.warn('[confirmarEntrega] no se pudo actualizar email del cliente', err);
+          Toast.show('⚠️ Entrega registrada, pero no se pudo actualizar el email del cliente', 'warn');
+        }
+      }
+      const clienteEmailToUse = clienteEmailInput || clienteEmailOriginal;
 
       const subject = `Nota de Entrega — Orden ${ordenId}${noRecibido ? ' (No recibido)' : ''}`;
       // Structured payload — onMailQueued renders the body via
@@ -629,7 +709,7 @@ window.copiarSeriales = function (ordenId) {
       };
 
       await Promise.allSettled([
-        clienteDoc?.email  ? MailService.enqueue({ to: clienteDoc.email,  subject, ...mailPayload }) : null,
+        clienteEmailToUse  ? MailService.enqueue({ to: clienteEmailToUse,  subject, ...mailPayload }) : null,
         vendedorDoc?.email ? MailService.enqueue({ to: vendedorDoc.email, subject, ...mailPayload }) : null,
         tecnicoDoc?.email  ? MailService.enqueue({ to: tecnicoDoc.email,  subject, ...mailPayload }) : null,
       ].filter(Boolean));
