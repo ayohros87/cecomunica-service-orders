@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Integridad — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/domain/adminMetrics.js"></script>
+  <script src="../js/pages/admin-integridad.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="clipboard-check"></i> Integridad',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="admin-toolbar">
+      <button id="btnRefresh" class="btn btn-ghost btn-sm">
+        <i data-lucide="refresh-cw"></i> Re-ejecutar checks
+      </button>
+      <span class="spacer"></span>
+      <span id="totalIssues" class="ts">—</span>
+      <span class="spacer"></span>
+      <span id="lastUpdate" class="ts">—</span>
+    </div>
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Cada check detecta inconsistencias entre datos relacionados. <strong>Sólo diagnóstico</strong> — la corrección se hace en la página del módulo correspondiente (botón "Abrir" en cada fila). Los checks se ejecutan en serie para no abrumar a Firestore.
+      </div>
+    </div>
+
+    <div class="ds-card" id="chk1" style="padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+    <div class="ds-card" id="chk2" style="padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+    <div class="ds-card" id="chk3" style="padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+    <div class="ds-card" id="chk4" style="padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+    <div class="ds-card" id="chk5" style="padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+    <div class="ds-card" id="chk6" style="padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+
+  </div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>
