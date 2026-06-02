@@ -135,12 +135,22 @@ window.PocBulk = {
         });
       }
       await PocService.updatePocDevice(id, newData);
-      await PocService.addLog({
+
+      // FieldValue sentinels (delete/serverTimestamp) can only appear at the
+      // top level of an update — strip them before embedding newData in the
+      // audit log, otherwise the addLog .add() throws and the loop aborts
+      // before Toast/refresh run (page stays in edit mode).
+      const FV = firebase.firestore.FieldValue;
+      const cleanFields = Object.fromEntries(
+        Object.entries(newData).filter(([, v]) => !(v instanceof FV))
+      );
+
+      PocService.addLog({
         equipo_id: id,
         fecha:     firebase.firestore.FieldValue.serverTimestamp(),
         usuario:   user?.email,
-        cambios:   { antes: prevData, despues: { ...prevData, ...newData } }
-      });
+        cambios:   { antes: prevData, despues: { ...prevData, ...cleanFields } }
+      }).catch(e => console.warn('poc_log write failed (non-critical):', e));
 
       fila.style.backgroundColor = '#d4edda';
       setTimeout(() => { fila.style.backgroundColor = 'transparent'; }, 1000);
