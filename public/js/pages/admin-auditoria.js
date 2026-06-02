@@ -21,12 +21,17 @@
   };
 
   const ACTION_META = {
-    ASIGNAR:    { icon: 'user-check',  color: '#2563eb', label: 'Asignar técnico' },
-    COMPLETAR:  { icon: 'check-circle', color: '#15803d', label: 'Completar orden' },
-    ENTREGAR:   { icon: 'truck',       color: '#0f766e', label: 'Entregar orden' },
-    APROBAR:    { icon: 'badge-check', color: '#15803d', label: 'Aprobar contrato' },
-    ANULAR:     { icon: 'x-octagon',   color: '#b91c1c', label: 'Anular contrato' },
-    PURGAR_ID:  { icon: 'shield-x',    color: '#7c2d12', label: 'Purgar foto ID' },
+    ASIGNAR:                { icon: 'user-check',  color: '#2563eb', label: 'Asignar técnico' },
+    COMPLETAR:              { icon: 'check-circle', color: '#15803d', label: 'Completar orden' },
+    ENTREGAR:               { icon: 'truck',       color: '#0f766e', label: 'Entregar orden' },
+    APROBAR:                { icon: 'badge-check', color: '#15803d', label: 'Aprobar contrato' },
+    ANULAR:                 { icon: 'x-octagon',   color: '#b91c1c', label: 'Anular contrato' },
+    PURGAR_ID:              { icon: 'shield-x',    color: '#7c2d12', label: 'Purgar foto ID' },
+    USUARIO_CREATE:         { icon: 'user-plus',   color: '#15803d', label: 'Crear usuario' },
+    USUARIO_UPDATE_ROL:     { icon: 'shield',      color: '#2563eb', label: 'Cambiar rol' },
+    USUARIO_DEACTIVATE:     { icon: 'user-x',      color: '#b91c1c', label: 'Desactivar usuario' },
+    USUARIO_REACTIVATE:     { icon: 'user-check',  color: '#15803d', label: 'Reactivar usuario' },
+    USUARIO_RESET_PASSWORD: { icon: 'key',         color: '#7c2d12', label: 'Reset de contraseña' },
   };
 
   function $(id) { return document.getElementById(id); }

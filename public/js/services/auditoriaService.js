@@ -100,6 +100,33 @@ const AuditoriaService = {
       console.warn('[auditoria] contratos:', err);
     }
 
+    // ── USUARIOS (alta, cambio rol, desactivar, reactivar, reset) ──
+    try {
+      const snap = await db.collection('usuarios_audit')
+        .orderBy('ts', 'desc')
+        .limit(limitPerSource)
+        .get();
+      snap.forEach(doc => {
+        const e = doc.data();
+        events.push({
+          ts: toMs(e.ts),
+          type: 'usuario',
+          action: e.action,
+          by: e.actor_uid || null,
+          refType: 'usuario',
+          refId: e.target_uid || doc.id,
+          refLabel: e.target_uid ? e.target_uid.slice(0, 8) + '…' : doc.id,
+          link: 'usuarios.html',
+          cliente: (e.after?.email) || (e.before?.email) || (e.meta?.email) || '',
+          meta: e.before && e.after
+            ? `${JSON.stringify(e.before)} → ${JSON.stringify(e.after)}`
+            : (e.meta ? JSON.stringify(e.meta) : ''),
+        });
+      });
+    } catch (err) {
+      console.warn('[auditoria] usuarios:', err);
+    }
+
     events.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     return events;
   },
