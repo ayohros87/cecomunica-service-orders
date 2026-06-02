@@ -196,11 +196,32 @@ window.VB = {
   },
 
   // ---- Groups chip editor ----
+  // Trim + collapse internal whitespace. Names stay as-typed (case preserved)
+  // so the admin/grupos.html merge UI can suggest casing fixes after the fact.
+  _normalizarNombreGrupo(s) {
+    return (s || '').toString().trim().replace(/\s+/g, ' ');
+  },
+  // Case + accent insensitive dedup. Keeps the first occurrence so user-typed
+  // casing wins over later duplicates.
+  _dedupGrupos(arr) {
+    const seen = new Set();
+    const out = [];
+    for (const g of arr) {
+      const k = FMT.normalize(g);
+      if (!k || seen.has(k)) continue;
+      seen.add(k); out.push(g);
+    }
+    return out;
+  },
+
   renderGrupoChips() {
-    const cont = document.getElementById('grupoChips');
-    const val  = (document.getElementById('grupoInput').value || '');
-    const arr  = val.split(',').map(s => s.trim()).filter(Boolean);
-    VB.grupos  = arr;
+    const cont  = document.getElementById('grupoChips');
+    const input = document.getElementById('grupoInput');
+    const val   = (input.value || '');
+    const raw   = val.split(',').map(s => this._normalizarNombreGrupo(s)).filter(Boolean);
+    const arr   = this._dedupGrupos(raw);
+    if (arr.length !== raw.length || arr.join(', ') !== val) input.value = arr.join(', ');
+    VB.grupos = arr;
     this.actualizarResumenBatch();
     cont.innerHTML = arr.map((g, i) => `
       <span class="chip-x">${g} <button title="Quitar" onclick="VB.quitarGrupo(${i})">×</button></span>
@@ -209,7 +230,7 @@ window.VB = {
 
   quitarGrupo(index) {
     const input = document.getElementById('grupoInput');
-    const arr   = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    const arr   = input.value.split(',').map(s => this._normalizarNombreGrupo(s)).filter(Boolean);
     arr.splice(index, 1);
     input.value = arr.join(', ');
     this.renderGrupoChips();
@@ -217,22 +238,24 @@ window.VB = {
   },
 
   agregarGrupoPrompt() {
-    const g = prompt('Nombre del grupo:');
+    const g = this._normalizarNombreGrupo(prompt('Nombre del grupo:'));
     if (!g) return;
     const input = document.getElementById('grupoInput');
-    const arr   = input.value.split(',').map(s => s.trim()).filter(Boolean);
-    arr.push(g.trim());
+    const arr   = this._dedupGrupos(
+      input.value.split(',').map(s => this._normalizarNombreGrupo(s)).filter(Boolean).concat([g])
+    );
     input.value = arr.join(', ');
     this.renderGrupoChips();
     if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
   },
 
   agregarGrupo() {
-    const nuevoGrupo = prompt('Nombre del nuevo grupo:');
+    const nuevoGrupo = this._normalizarNombreGrupo(prompt('Nombre del nuevo grupo:'));
     if (!nuevoGrupo) return;
     const input = document.getElementById('grupoInput');
-    const arr   = input.value.split(',').map(g => g.trim()).filter(Boolean);
-    arr.push(nuevoGrupo.trim());
+    const arr   = this._dedupGrupos(
+      input.value.split(',').map(g => this._normalizarNombreGrupo(g)).filter(Boolean).concat([nuevoGrupo])
+    );
     input.value = arr.join(', ');
     this.renderGrupoChips();
     this.generarTabla();

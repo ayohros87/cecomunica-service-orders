@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Grupos PoC — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <style>
+    .gp-layout { display: grid; grid-template-columns: 320px 1fr; gap: var(--sp-4); }
+    @media (max-width: 880px) { .gp-layout { grid-template-columns: 1fr; } }
+
+    .gp-cliente-search { position: relative; }
+    .gp-cliente-list {
+      max-height: 460px; overflow-y: auto;
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+      background: var(--surface-card);
+    }
+    .gp-cliente-item {
+      padding: 10px 12px; border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer; font-size: 14px;
+    }
+    .gp-cliente-item:last-child { border-bottom: 0; }
+    .gp-cliente-item:hover { background: var(--surface-sunken); }
+    .gp-cliente-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .gp-cliente-item .count {
+      float: right; font-size: 11px; color: var(--fg-3); font-weight: normal;
+      background: var(--surface-sunken); padding: 2px 8px; border-radius: 999px;
+    }
+    .gp-cliente-item.active .count { background: var(--surface-card); color: var(--accent); }
+
+    .gp-grupo-row {
+      display: grid; grid-template-columns: 1fr 80px auto;
+      align-items: center; gap: var(--sp-3);
+      padding: 10px 12px; border-bottom: 1px solid var(--border-subtle);
+    }
+    .gp-grupo-row:last-child { border-bottom: 0; }
+    .gp-grupo-row.selected { background: var(--accent-soft); }
+    .gp-grupo-name { font-weight: 500; font-size: 14px; }
+    .gp-grupo-count {
+      font-size: 12px; color: var(--fg-3); text-align: center;
+      background: var(--surface-sunken); padding: 4px 10px; border-radius: 999px;
+    }
+    .gp-grupo-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    .gp-dup-banner {
+      background: #FFF7ED; color: #9A3412; border: 1px solid #FDBA74;
+      padding: 10px 14px; border-radius: var(--radius-md);
+      margin-bottom: var(--sp-3); font-size: 13px;
+    }
+    .gp-dup-banner strong { display: block; margin-bottom: 4px; }
+    .gp-dup-banner button { margin-top: 6px; }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/pages/admin-grupos.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="tags"></i> Grupos PoC',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Los grupos viven como <code>grupos[]</code> en cada equipo PoC. Esta vista
+        deriva la lista por cliente y permite renombrar, fusionar y eliminar grupos
+        en lote — los cambios se aplican a todos los equipos no eliminados del cliente.
+      </div>
+    </div>
+
+    <div class="gp-layout">
+
+      <!-- COLUMNA IZQUIERDA: clientes -->
+      <div>
+        <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
+          <div class="form-field" style="margin-bottom:0;">
+            <label class="form-label" for="gpClienteSearch">Cliente</label>
+            <input id="gpClienteSearch" class="form-input" type="text"
+                   placeholder="Buscar por nombre…" autocomplete="off">
+          </div>
+        </div>
+        <div id="gpClienteList" class="gp-cliente-list">
+          <div style="padding:14px; color:var(--fg-3); font-size:13px;">Cargando clientes…</div>
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: grupos del cliente -->
+      <div>
+        <div class="admin-toolbar" style="margin-bottom:var(--sp-3);">
+          <button id="btnGpReload" class="btn btn-ghost btn-sm" disabled>
+            <i data-lucide="refresh-cw"></i> Recargar grupos
+          </button>
+          <button id="btnGpMerge" class="btn btn-secondary btn-sm" disabled
+                  title="Selecciona 2 o más grupos para fusionar">
+            <i data-lucide="git-merge"></i> Fusionar seleccionados
+          </button>
+          <span class="spacer"></span>
+          <span id="gpLastUpdate" class="ts">—</span>
+        </div>
+
+        <div id="gpDupBanner"></div>
+
+        <div class="ds-card" style="padding:0;">
+          <div id="gpGrupoList">
+            <div style="padding:24px; text-align:center; color:var(--fg-3); font-size:13px;">
+              Selecciona un cliente a la izquierda para ver sus grupos.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div id="toasts" class="toast-region"></div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>
