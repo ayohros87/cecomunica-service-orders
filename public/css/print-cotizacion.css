@@ -77,7 +77,10 @@
 .cq-table td.qty { font-family: var(--font-mono); font-size: 12.5px; color: var(--fg2); text-align: center; width: 60px; }
 
 .cq-lower { display: flex; gap: 40px; padding: 12px 48px 0; align-items: flex-start; }
-.cq-conditions { flex: 1; }
+/* Empuja la sección de condiciones hacia abajo para que respire frente al
+   bloque de totales (feedback de cotizaciones: las condiciones aparecían
+   pegadas al subtotal y quedaba muy denso visualmente). */
+.cq-conditions { flex: 1; margin-top: 56px; }
 .cq-cgrid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 11.5px; }
 .cq-cgrid .cq-ck { color: var(--fg4); }
 .cq-cgrid .cq-cv { color: var(--fg2); font-weight: 500; }
