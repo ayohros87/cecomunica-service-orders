@@ -477,47 +477,11 @@
     }
   }
 
-  // Encola correo de solicitud de aprobación a ventas@cecomunica.com — mismo
-  // patrón que nuevo-contrato (ver nc-guardar.js).
+  // Encola correo de solicitud de aprobación a ventas@cecomunica.com — la lógica
+  // vive en CotState para que duplicar (lista / detalle) reuse el mismo correo.
   async function enqueueAprobacionMail(doc, docId, user) {
     try {
-      const t = T.calcTotales(draft);
-      const obsEsc = (doc.intro || '-').replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
-      const itemsHtml = (doc.items || []).map(it =>
-        `<li>${esc(it.nombre || '')} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
-      ).join('');
-      await MailService.enqueue({
-        to: 'ventas@cecomunica.com',
-        cc: user?.email || null,
-        subject: `Nueva cotización: ${doc.cotizacion_id} – ${doc.cliente_nombre}`,
-        preheader: `Cotización pendiente de aprobación: ${doc.cliente_nombre}`,
-        bodyContent: `
-          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Nueva cotización creada</h2>
-          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-            Se registró la cotización <b>${doc.cotizacion_id}</b> en estado borrador y requiere aprobación.
-          </p>
-          <table role="presentation" width="100%" style="font:14px Arial,sans-serif;margin:12px 0 16px;">
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Cliente</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.cliente_nombre}</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Dirigido a</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.dirigido_a || '-'}</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Email destinatario</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.dirigido_email || '-'}</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Ejecutivo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.ejecutivo_nombre || '-'}</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Validez</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.validezDias} días</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Introducción</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${obsEsc}</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Subtotal</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.subtotal)}</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>ITBMS (${doc.itbmsPct}%)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.itbms)}</td></tr>
-            <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Total</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${FMT.money(t.total)}</b></td></tr>
-          </table>
-          ${itemsHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Renglones</h4><ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${itemsHtml}</ul>` : ''}
-        `,
-        ctaUrl: `${location.origin}/cotizaciones/index.html?aprobar=${docId}`,
-        ctaLabel: 'Revisar y aprobar',
-        meta: {
-          created_at: firebase.firestore.FieldValue.serverTimestamp(),
-          created_by: user?.uid || null,
-          source: 'nueva-cotizacion',
-        },
-        status: 'queued',
-      });
+      await CotState.enqueueAprobacionMail({ doc, docId, user });
     } catch (e) {
       console.warn('No se pudo encolar el correo de aprobación:', e);
       Toast.show('⚠️ Cotización guardada, pero no se pudo encolar el correo de aprobación.', 'warn');

@@ -3,6 +3,7 @@
 (() => {
   let cot = null;
   let catalogos = null;
+  let userRol = null;
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,28 +17,67 @@
     return d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
   }
 
+  // Acepta string ISO, Date o Firestore Timestamp y lo formatea como "2 Jun 2026".
+  // El historial guarda Timestamps (Firestore) y fechas ISO (campo `fecha`);
+  // unificamos en una sola función para evitar fechas futuras inventadas.
+  function fmtFechaAny(v) {
+    if (!v) return '—';
+    let d = null;
+    if (typeof v === 'string') {
+      d = new Date(v.length === 10 ? v + 'T00:00:00' : v);
+    } else if (v?.toDate) {
+      d = v.toDate();
+    } else if (v instanceof Date) {
+      d = v;
+    }
+    if (!d || isNaN(d.getTime())) return '—';
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
+  }
+
   function estadoChipHtml(estado) {
     const e = CotState.ESTADOS[estado] || CotState.ESTADOS.borrador;
     return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
   }
 
+  // Historial reconstruido a partir de los timestamps reales del documento.
+  // Antes se derivaban "+1 día / +5 días / +6 días" desde `fecha` y aparecían
+  // fechas futuras (la conversión decía 8 Jun aunque se cerró el 2 Jun).
   function historial(cot, cliente) {
-    const h = [{ act: 'Cotización creada', meta: fmtFechaCorta(cot.fecha) + ' · ' + (cot.ejecutivo_nombre || '—') }];
-    const fechaEnvio = T.addDays(cot.fecha, 1);
-    if (['enviada', 'aprobada', 'rechazada', 'vencida', 'convertida'].includes(cot.estado)) {
-      h.push({ act: 'Enviada al cliente', meta: fmtFechaCorta(fechaEnvio) + ' · por correo a ' + (cliente.email || '—') });
+    const h = [{
+      act: 'Cotización creada',
+      meta: fmtFechaAny(cot.fecha_creacion || cot.fecha) + ' · ' + (cot.ejecutivo_nombre || '—'),
+    }];
+    if (cot.fecha_aprobacion) {
+      h.push({
+        act: 'Aprobada internamente',
+        meta: fmtFechaAny(cot.fecha_aprobacion) + ' · por administrador',
+      });
     }
-    if (cot.estado === 'aprobada' || cot.estado === 'convertida') {
-      h.push({ act: 'Aprobada por el cliente', meta: fmtFechaCorta(T.addDays(cot.fecha, 5)) + ' · orden de compra recibida' });
+    if (cot.enviada_en) {
+      const dest = cot.dirigido_email || cliente.email || '—';
+      h.push({
+        act: 'Enviada al cliente',
+        meta: fmtFechaAny(cot.enviada_en) + ' · por correo a ' + dest,
+      });
     }
-    if (cot.estado === 'convertida') {
-      h.push({ act: 'Convertida a orden de venta', meta: fmtFechaCorta(T.addDays(cot.fecha, 6)) });
+    if (cot.fecha_conversion) {
+      h.push({
+        act: 'Convertida a orden de venta',
+        meta: fmtFechaAny(cot.fecha_conversion) + ' · venta cerrada',
+      });
     }
-    if (cot.estado === 'rechazada') {
-      h.push({ act: 'Rechazada por el cliente', meta: fmtFechaCorta(T.addDays(cot.fecha, 4)) });
+    if (cot.fecha_rechazo) {
+      h.push({
+        act: 'Rechazada',
+        meta: fmtFechaAny(cot.fecha_rechazo) + ' · cliente declinó',
+      });
     }
     if (cot.estado === 'vencida') {
-      h.push({ act: 'Validez vencida', meta: fmtFechaCorta(T.validezVence(cot)) + ' · sin respuesta del cliente' });
+      h.push({
+        act: 'Validez vencida',
+        meta: fmtFechaAny(T.validezVence(cot)) + ' · sin respuesta del cliente',
+      });
     }
     return h.reverse();
   }
@@ -63,6 +103,7 @@
           <p>${esc(cli.razon || '—')} · ${FMT.money(t.total)} · ${cot.items.length} renglones</p>
         </div>
         <div class="app-page-header-actions">
+          ${(cot.estado === 'borrador' && userRol === ROLES.ADMIN) ? '<button class="btn btn-secondary" id="btnAprobar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="check-circle"></i> Aprobar y enviar</button>' : ''}
           <button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
@@ -171,6 +212,12 @@
     if (btnEnv) btnEnv.addEventListener('click', () => enviarPorCorreo(cli, ej));
     const btnCer = $('btnCerrar');
     if (btnCer) btnCer.addEventListener('click', () => cerrarCotizacion(cli));
+    // "Aprobar y enviar" (admin + borrador): la lógica vive en el listado
+    // — redirigimos con ?aprobar=<docId> y allí se abre el panel de aprobación.
+    const btnAp = $('btnAprobar');
+    if (btnAp) btnAp.addEventListener('click', () => {
+      location.href = 'index.html?aprobar=' + encodeURIComponent(cot._docId);
+    });
     $('btnEditar').addEventListener('click', () => { location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId); });
     $('btnImprimir').addEventListener('click', () => { window.open('imprimir-cotizacion.html?id=' + encodeURIComponent(cot._docId), '_blank'); });
 
@@ -179,10 +226,13 @@
   }
 
   // ── Transiciones de estado ────────────────────────────────────
-  // borrador → aprobada (admin aprueba) → enviada (auto al cliente) → convertida (venta cerrada)
-  // En cualquier paso intermedio se puede rechazar o dejar vencer.
+  // borrador → aprobada (admin aprueba) → enviada (auto al cliente) → convertida
+  // Borrador YA NO tiene salto directo a "enviada": antes ese atajo permitía
+  // marcar como enviada sin pasar por aprobación y luego el admin no podía
+  // aprobar (estado ya no era borrador). La salida correcta de borrador es
+  // el botón "Aprobar y enviar" del header (solo admin), que sí envía correo.
   const TRANSICIONES = {
-    borrador:   ['enviada'],
+    borrador:   [],
     aprobada:   ['enviada', 'convertida', 'rechazada'],
     enviada:    ['convertida', 'rechazada', 'vencida'],
     rechazada:  ['borrador'],
@@ -192,6 +242,13 @@
 
   function renderTransiciones() {
     const cont = $('panelTransiciones');
+    if (cot.estado === 'borrador') {
+      const txt = userRol === ROLES.ADMIN
+        ? 'Esta cotización está en borrador. Usa <b>Aprobar y enviar</b> arriba para revisar y enviar al cliente.'
+        : 'Esta cotización está en borrador, pendiente de aprobación por un administrador.';
+      cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0; line-height:1.5;">' + txt + '</p>';
+      return;
+    }
     const opts = TRANSICIONES[cot.estado] || [];
     if (!opts.length) {
       cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0;">Estado final — sin transiciones disponibles.</p>';
@@ -311,16 +368,26 @@
 
   async function duplicar() {
     const nuevoId = await CotState.nextCotizacionId();
-    const copia = CotState.toDoc({ ...cot, id: nuevoId, estado: 'borrador', fecha: new Date().toISOString().slice(0, 10) }, { catalogos });
+    const user = firebase.auth().currentUser;
+    const copia = CotState.toDoc(
+      { ...cot, id: nuevoId, estado: 'borrador', fecha: new Date().toISOString().slice(0, 10),
+        creado_por_uid: user?.uid || null, creado_por_email: user?.email || null },
+      { catalogos }
+    );
     copia.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
+    copia.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
     const ref = await CotizacionesService.addCotizacion(copia);
-    Toast.show('Cotización duplicada como ' + nuevoId, 'ok');
+    // La cotización duplicada nace en borrador → notificar a ventas igual que una nueva.
+    try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
+    catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
+    Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud enviada a ventas@cecomunica.com', 'ok');
     location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(ref.id);
   }
 
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { location.href = '../login.html'; return; }
     verificarAccesoYAplicarVisibilidad(async (rol) => {
+      userRol = rol;
       const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 

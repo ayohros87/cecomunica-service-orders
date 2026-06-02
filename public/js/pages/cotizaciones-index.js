@@ -91,9 +91,14 @@
   function renderSegments() {
     const wrap = $('segments');
     if (!wrap) return;
-    const counts = { todas: cotizaciones.filter(c => !c.deleted).length };
+    // Los conteos respetan los mismos filtros que la tabla (soloMias + visibles),
+    // para que el segmento "Borrador 3" siempre coincida con lo que muestra el listado
+    // al hacer click. Antes el segmento contaba globalmente y la tabla filtraba por
+    // vendedor → "Borrador 3" vs "Sin resultados".
+    const base = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
+    const counts = { todas: base.length };
     CotState.ESTADO_ORDEN.forEach(e => {
-      counts[e] = cotizaciones.filter(c => !c.deleted && (c.estado || 'borrador') === e).length;
+      counts[e] = base.filter(c => (c.estado || 'borrador') === e).length;
     });
     const segs = [
       { key: 'todas', label: 'Todas', count: counts.todas },
@@ -107,7 +112,9 @@
   }
 
   function renderStats() {
-    const visibles = cotizaciones.filter(c => !c.deleted);
+    // Igual que renderSegments(): los KPIs reflejan el alcance del usuario,
+    // no el de toda la empresa (para vendedores soloMias es forzado).
+    const visibles = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
     const enviadas = visibles.filter(c => c.estado === 'enviada').length;
     // "Monto cerrado": solo cotizaciones convertidas a venta efectiva.
     const montoCerrado = visibles
@@ -279,6 +286,7 @@
 
   async function duplicar(src) {
     const nuevoId = await CotState.nextCotizacionId();
+    const user = firebase.auth().currentUser;
     const copia = { ...src };
     delete copia.id;
     copia.cotizacion_id = nuevoId;
@@ -286,8 +294,19 @@
     copia.fecha = new Date().toISOString().slice(0, 10);
     copia.deleted = false;
     copia.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
+    copia.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
+    // La copia es del usuario actual; el ejecutivo firmante se hereda.
+    copia.creado_por_uid = user?.uid || null;
+    copia.creado_por_email = user?.email || null;
+    // Reset de timestamps del ciclo de vida — la copia arranca limpia.
+    ['enviada_en', 'fecha_aprobacion', 'fecha_conversion', 'fecha_rechazo',
+     'aprobado_por_uid', 'convertida_por_uid', 'rechazado_por_uid']
+      .forEach(k => { delete copia[k]; });
     const ref = await CotizacionesService.addCotizacion(copia);
-    Toast.show('Cotización duplicada como ' + nuevoId, 'ok');
+    // La cotización duplicada también requiere aprobación → notificar a ventas.
+    try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
+    catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
+    Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud enviada a ventas@cecomunica.com', 'ok');
     location.href = `editar-cotizacion.html?id=${encodeURIComponent(ref.id)}`;
   }
 

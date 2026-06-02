@@ -142,6 +142,13 @@
       dirigido_email: doc.dirigido_email || '',
       creado_por_uid: doc.creado_por_uid || null,
       creado_por_email: doc.creado_por_email || null,
+      // Timestamps del ciclo de vida — usados por el historial para mostrar
+      // las fechas reales en vez de derivarlas de la fecha de creación.
+      fecha_creacion: doc.fecha_creacion || null,
+      enviada_en: doc.enviada_en || null,
+      fecha_aprobacion: doc.fecha_aprobacion || null,
+      fecha_conversion: doc.fecha_conversion || null,
+      fecha_rechazo: doc.fecha_rechazo || null,
       deleted: !!doc.deleted,
     };
   }
@@ -438,6 +445,55 @@
     });
   }
 
+  // ── Correo de solicitud de aprobación a ventas@cecomunica.com ────────────
+  // Mismo patrón que cot-editor → enqueueAprobacionMail. Centralizado aquí
+  // para que también se dispare al "Duplicar" desde el listado o detalle:
+  // una cotización duplicada nace en borrador y necesita aprobación igual
+  // que una cotización nueva.
+  async function enqueueAprobacionMail({ doc, docId, user }) {
+    const T = window.CotizacionTotales;
+    const FMT = window.FMT;
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const t = T.calcTotales({
+      items: doc.items || [], descuentoPct: doc.descuentoPct || 0, itbmsPct: doc.itbmsPct || 0,
+    });
+    const obsEsc = (doc.intro || '-').replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
+    const itemsHtml = (doc.items || []).map(it =>
+      `<li>${esc(it.nombre || '')} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
+    ).join('');
+    await MailService.enqueue({
+      to: 'ventas@cecomunica.com',
+      cc: user?.email || null,
+      subject: `Nueva cotización: ${doc.cotizacion_id} – ${doc.cliente_nombre}`,
+      preheader: `Cotización pendiente de aprobación: ${doc.cliente_nombre}`,
+      bodyContent: `
+        <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Nueva cotización creada</h2>
+        <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+          Se registró la cotización <b>${doc.cotizacion_id}</b> en estado borrador y requiere aprobación.
+        </p>
+        <table role="presentation" width="100%" style="font:14px Arial,sans-serif;margin:12px 0 16px;">
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Cliente</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.cliente_nombre || '-'}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Dirigido a</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.dirigido_a || '-'}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Email destinatario</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.dirigido_email || '-'}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Ejecutivo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.ejecutivo_nombre || '-'}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Validez</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.validezDias} días</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Introducción</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${obsEsc}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Subtotal</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.subtotal)}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>ITBMS (${doc.itbmsPct}%)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.itbms)}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Total</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${FMT.money(t.total)}</b></td></tr>
+        </table>
+        ${itemsHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Renglones</h4><ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${itemsHtml}</ul>` : ''}
+      `,
+      ctaUrl: `${location.origin}/cotizaciones/index.html?aprobar=${docId}`,
+      ctaLabel: 'Revisar y aprobar',
+      meta: {
+        created_by: user?.uid || null,
+        source: 'cotizacion-aprobacion',
+      },
+      status: 'queued',
+    });
+  }
+
   window.CotState = {
     ESTADOS, ESTADO_ORDEN,
     CONDICIONES_DEFAULT, PLANTILLAS_COND,
@@ -446,5 +502,6 @@
     mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec,
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
     cerrarPrompt, reenviarPrompt,
+    enqueueAprobacionMail,
   };
 })();
