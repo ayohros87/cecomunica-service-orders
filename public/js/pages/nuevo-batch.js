@@ -72,16 +72,19 @@ async function cargarClientes() {
 }
 
 
-    // ✅ Data-sanity validator: Block invalid group values (magnifying glass, icon-only, etc.)
+    // Data-sanity validator + normalize-on-write: trim/whitespace-collapse,
+    // accent+case insensitive dedup, drop the magnifying-glass placeholder and
+    // single-symbol noise that older imports occasionally carried.
     function limpiarGrupos(grupos = []) {
-      return grupos
-        .map(g => g.trim())
+      const sane = (grupos || [])
+        .map(g => FMT.normalizeGrupo(g))
         .filter(g =>
           g !== "" &&
-          g !== "🔍" &&          // bloquea lupa explícitamente
-          !/^[🔍]+$/.test(g) &&  // bloquea solo iconos
-          g.length > 1           // evita símbolos sueltos
+          g !== "🔍" &&
+          !/^[🔍]+$/.test(g) &&
+          g.length > 1
         );
+      return FMT.dedupGrupos(sane);
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
@@ -140,7 +143,7 @@ document.getElementById("addCliente").onclick = async () => {
           return;
         }
 
-        const grupos = [...document.querySelectorAll(".grupo-input")].map(i => i.value.trim()).filter(g => g);
+        const grupos = limpiarGrupos([...document.querySelectorAll(".grupo-input")].map(i => i.value));
         const cliente = document.getElementById("cliente").value;
         await registrarCliente(document.getElementById("cliente").selectedOptions[0].textContent);
 

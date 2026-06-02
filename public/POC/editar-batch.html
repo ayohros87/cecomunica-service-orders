@@ -28,6 +28,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/layout.js"></script>
+  <script src="../js/core/formatting.js"></script>
   <script src="../js/services/pocService.js"></script>
   <script src="../js/services/empresaService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -168,8 +169,9 @@
     async function guardarCambios() {
       const updates = equipos.map(async (eq, index) => {
         const simTel = parseSimPhone(document.getElementById(`simtel_${index}`).value);
-        const grupos = [...document.querySelectorAll(`#gruposContainer_${index} .grupo-input`)]
-          .map(input => input.value.trim()).filter(g => g);
+        const grupos = FMT.dedupGrupos(
+          [...document.querySelectorAll(`#gruposContainer_${index} .grupo-input`)].map(i => i.value)
+        );
 
         return PocService.updatePocDevice(eq.id, {
           cliente: document.getElementById(`cliente_${index}`).value,

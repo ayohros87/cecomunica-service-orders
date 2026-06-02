@@ -131,10 +131,13 @@
           if (checks[1].length > 0) return mostrarMensaje("⚠️ Teléfono ya registrado.", "rojo");
           if (checks[2].length > 0) return mostrarMensaje("⚠️ Serial ya registrado.", "rojo");
 
-          const grupos = [...document.querySelectorAll(".grupo-input")].map(i => i.value.trim()).filter(g => g);
-          const setGrupos = new Set(grupos);
-          if (grupos.length !== setGrupos.size) {
-            return mostrarMensaje("⚠️ Hay grupos duplicados. Revise.", "rojo");
+          const gruposRaw = [...document.querySelectorAll(".grupo-input")].map(i => i.value);
+          const grupos    = FMT.dedupGrupos(gruposRaw);
+          // Detect typo-clones (case/accent differences) so the user notices
+          // before they get silently merged.
+          const gruposNonEmpty = gruposRaw.map(g => FMT.normalizeGrupo(g)).filter(Boolean);
+          if (grupos.length !== gruposNonEmpty.length) {
+            return mostrarMensaje("⚠️ Hay grupos duplicados (incluso por mayúsculas o tildes). Revise.", "rojo");
           }
 
           const data = {

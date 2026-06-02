@@ -38,5 +38,26 @@ window.FMT = {
   // Strip diacritics and lowercase — for text search normalization
   normalize(s) {
     return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+  },
+
+  // PoC group names: trim + collapse internal whitespace. Case stays as typed
+  // so admin/grupos.html can suggest casing fixes after the fact.
+  normalizeGrupo(s) {
+    return (s || "").toString().trim().replace(/\s+/g, " ");
+  },
+
+  // Accent + case insensitive dedup. Keeps the first occurrence so user-typed
+  // casing wins over later duplicates entered with a different case.
+  dedupGrupos(arr) {
+    const seen = new Set();
+    const out = [];
+    for (const g of (arr || [])) {
+      const norm = FMT.normalizeGrupo(g);
+      if (!norm) continue;
+      const k = FMT.normalize(norm);
+      if (seen.has(k)) continue;
+      seen.add(k); out.push(norm);
+    }
+    return out;
   }
 };

@@ -66,8 +66,9 @@ window.PocEdit = {
       const docId        = this._docId;
       const rowRef       = this._row;
       const originalData = this._data;
-      const grupos = document.getElementById('drawer-grupos').value
-        .split(',').map(g => g.trim()).filter(Boolean);
+      const grupos = FMT.dedupGrupos(
+        document.getElementById('drawer-grupos').value.split(',')
+      );
       const user   = firebase.auth().currentUser;
 
       // Modelo is now picked from a dropdown — write the canonical FK and a
