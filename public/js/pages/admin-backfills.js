@@ -1,0 +1,102 @@
+/**
+ * admin-backfills.js — UI runner for admin-only data backfills.
+ *
+ * Each "Run" button invokes the runBackfill callable with {action, dryRun}.
+ * Result is rendered inline below the button with counters.
+ */
+(function () {
+  'use strict';
+
+  function $(id) { return document.getElementById(id); }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderResult(action, dryRun, data) {
+    const target = $(`result-${action}`);
+    if (!target) return;
+    const counters = [
+      ['Escaneados',         data.scanned],
+      ['Skip (eliminadas)',  data.skippedDeleted],
+      ['Skip (sin cambios)', data.skippedUnchanged],
+      ['Pendientes update',  data.toWrite],
+      ['Escritos',           data.written],
+      ['Errores',            data.errors],
+    ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');
+
+    const severity = data.errors > 0 ? 'warning' : 'success';
+    const icon     = data.errors > 0 ? 'alert-triangle' : 'check-circle';
+    const titulo   = dryRun
+      ? `Dry-run completo — habría escrito ${data.written} docs en ${data.elapsedSec}s.`
+      : `Backfill completo — ${data.written} docs actualizados en ${data.elapsedSec}s.`;
+
+    target.innerHTML = `
+      <div class="alert-banner alert-${severity}" style="margin:0 0 var(--sp-2);">
+        <i data-lucide="${icon}"></i>
+        <div><span class="alert-title">${titulo}</span></div>
+      </div>
+      <div style="font-size:12px;">${counters}</div>`;
+    if (window.lucide) lucide.createIcons();
+  }
+
+  function renderError(action, err) {
+    const target = $(`result-${action}`);
+    if (!target) return;
+    const msg = err?.message || err?.code || String(err);
+    target.innerHTML = `
+      <div class="alert-banner alert-error" style="margin:0;">
+        <i data-lucide="alert-octagon"></i>
+        <div><span class="alert-title">Error.</span> <code>${escapeHtml(msg)}</code></div>
+      </div>`;
+    if (window.lucide) lucide.createIcons();
+  }
+
+  async function runBackfill(action, mode, btn) {
+    const dryRun = (mode === 'dry');
+
+    if (!dryRun) {
+      const ok = await Modal.confirm({
+        title: 'Ejecutar backfill',
+        message: `Vas a ejecutar <code>${action}</code> en modo <strong>escritura</strong>. La operación es idempotente (re-ejecutable sin riesgo) pero puede tardar varios minutos en colecciones grandes. ¿Continuar?`,
+        confirmLabel: 'Ejecutar',
+      });
+      if (!ok) return;
+    }
+
+    // Disable all action buttons for this action while running.
+    document.querySelectorAll(`[data-bf-action="${action}"]`).forEach(b => b.disabled = true);
+    const target = $(`result-${action}`);
+    if (target) target.innerHTML = '<div class="empty-state-hint" style="padding:var(--sp-2);color:var(--fg-3);">Ejecutando…</div>';
+
+    try {
+      const fn = firebase.functions().httpsCallable('runBackfill');
+      const res = await fn({ action, dryRun });
+      renderResult(action, dryRun, res.data || {});
+    } catch (err) {
+      console.error('[admin/backfills]', err);
+      renderError(action, err);
+    } finally {
+      document.querySelectorAll(`[data-bf-action="${action}"]`).forEach(b => b.disabled = false);
+    }
+  }
+
+  function wireUI() {
+    document.querySelectorAll('[data-bf-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        runBackfill(btn.dataset.bfAction, btn.dataset.bfMode, btn);
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    verificarAccesoYAplicarVisibilidad((rol) => {
+      if (rol !== ROLES.ADMIN) {
+        if (window.Toast) Toast.show('Acceso restringido a administradores.', 'bad');
+        setTimeout(() => { location.href = '../index.html'; }, 1200);
+        return;
+      }
+      wireUI();
+    });
+  });
+})();

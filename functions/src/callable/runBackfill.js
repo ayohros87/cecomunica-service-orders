@@ -1,0 +1,110 @@
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const logger = require("firebase-functions/logger");
+const { admin, db } = require("../lib/admin");
+const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
+
+/**
+ * runBackfill — admin-only callable to run one-shot data migrations
+ * (formerly stand-alone scripts in functions/backfill-*.js) from the UI.
+ *
+ * Single entry point with action discriminator so the frontend has one
+ * callable to wire. Each action mirrors the script of the same name.
+ *
+ * Actions:
+ *   { action: "searchTokens", dryRun? }
+ *     - Mirrors functions/backfill-search-tokens.js
+ *     - Populates `searchTokens` on existing ordenes_de_servicio.
+ *     - Idempotent (compares computed vs stored before writing).
+ *
+ * Returns {action, dryRun, scanned, ...counters}. All actions are
+ * idempotent — safe to re-run.
+ */
+
+const BATCH_SIZE = 400;
+
+async function requireAdmin(callerUid) {
+  if (!callerUid) throw new HttpsError("unauthenticated", "Sign in required.");
+  const snap = await db.collection("usuarios").doc(callerUid).get();
+  if (!snap.exists || snap.data().rol !== "administrador") {
+    throw new HttpsError("permission-denied", "Solo administradores.");
+  }
+}
+
+// ─────────── searchTokens ───────────
+
+async function backfillSearchTokens(dryRun) {
+  const startedAt = Date.now();
+  const snap = await db.collection("ordenes_de_servicio").get();
+
+  let scanned = 0, skippedDeleted = 0, skippedUnchanged = 0;
+  let toWrite = 0, written = 0, errors = 0;
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) {
+      written += opsInBatch;
+      batch = db.batch();
+      opsInBatch = 0;
+      return;
+    }
+    try {
+      await batch.commit();
+      written += opsInBatch;
+    } catch (err) {
+      logger.error("[runBackfill.searchTokens] batch commit failed", { err: err.message });
+      errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  for (const doc of snap.docs) {
+    scanned++;
+    const data = doc.data();
+    if (data.eliminado === true) { skippedDeleted++; continue; }
+
+    const newTokens     = buildOrderSearchTokens(doc.id, data);
+    const currentTokens = Array.isArray(data.searchTokens) ? data.searchTokens : [];
+    if (tokensEqual(newTokens, currentTokens)) { skippedUnchanged++; continue; }
+
+    toWrite++;
+    batch.update(doc.ref, { searchTokens: newTokens });
+    opsInBatch++;
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+  await flushBatch();
+
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return { scanned, skippedDeleted, skippedUnchanged, toWrite, written, errors, elapsedSec };
+}
+
+// ─────────── dispatcher ───────────
+
+module.exports = onCall(
+  { region: "us-central1", memory: "512MiB", timeoutSeconds: 540 },
+  async (request) => {
+    const callerUid = request.auth?.uid;
+    await requireAdmin(callerUid);
+
+    const data   = request.data || {};
+    const action = data.action;
+    const dryRun = !!data.dryRun;
+
+    logger.info("[runBackfill] start", { action, dryRun, by: callerUid });
+
+    let result;
+    switch (action) {
+      case "searchTokens":
+        result = await backfillSearchTokens(dryRun);
+        break;
+      default:
+        throw new HttpsError("invalid-argument", `Acción desconocida: ${action}`);
+    }
+
+    logger.info("[runBackfill] done", { action, dryRun, ...result });
+    return { action, dryRun, ...result };
+  }
+);

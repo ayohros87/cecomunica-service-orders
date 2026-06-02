@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Alertas — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/domain/adminMetrics.js"></script>
+  <script src="../js/pages/admin-alertas.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="bell"></i> Alertas configurables',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap">
+
+    <div class="admin-toolbar">
+      <button id="btnAdd" class="btn btn-primary btn-sm">
+        <i data-lucide="plus"></i> Agregar alerta
+      </button>
+      <button id="btnSave" class="btn btn-ghost btn-sm" disabled>
+        <i data-lucide="save"></i> Guardar todo
+      </button>
+      <button id="btnReload" class="btn btn-ghost btn-sm">
+        <i data-lucide="refresh-cw"></i> Recargar
+      </button>
+      <span class="spacer"></span>
+      <button id="btnTest" class="btn btn-ghost btn-sm">
+        <i data-lucide="play"></i> Probar contra métricas actuales
+      </button>
+    </div>
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Cada regla compara una métrica (órdenes abiertas, contratos pendientes, etc.) contra
+        un umbral y, si la condición se cumple, muestra un banner en <code>admin/index.html</code>.
+        Las reglas se aplican en cuanto el admin recarga el panel — no requieren deploy.
+        Click <strong>"Probar"</strong> para ver qué dispararían con las métricas reales actuales sin guardar.
+      </div>
+    </div>
+
+    <div class="ds-card" style="padding:0; margin-bottom:var(--sp-4);">
+      <div id="tblAlertas"></div>
+    </div>
+
+    <div id="testResult"></div>
+
+  </div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>

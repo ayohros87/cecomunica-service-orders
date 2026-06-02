@@ -23,6 +23,7 @@
     timer: null,
     loading: false,
     lastLoadAt: null,
+    metrics: {},  // {ordenes_abiertas, contratos_pendientes, cotizaciones_vencen, poc_activos}
   };
 
   function $(id) { return document.getElementById(id); }
@@ -84,6 +85,7 @@
       const abiertas = AdminMetrics.countWhere(live, o => ESTADOS_ABIERTOS.has((o.estado_reparacion || '').toUpperCase()));
       const completadas = AdminMetrics.countWhere(live, o => (o.estado_reparacion || '').toUpperCase() === 'COMPLETADA');
       const entregadas = AdminMetrics.countWhere(live, o => (o.estado_reparacion || '').toUpperCase() === 'ENTREGADA');
+      state.metrics.ordenes_abiertas = abiertas;
       setStat('kpiOrdenes', abiertas.toLocaleString('es-PA'),
         `<span class="tag">${completadas}</span> completadas · <span class="tag">${entregadas}</span> entregadas`);
     } catch (err) {
@@ -99,6 +101,7 @@
       const pendientes = AdminMetrics.countWhere(items, c => c.estado === 'pendiente_aprobacion');
       const aprobados = AdminMetrics.countWhere(items, c => c.estado === 'aprobado');
       const activos = AdminMetrics.countWhere(items, c => c.estado === 'activo');
+      state.metrics.contratos_pendientes = pendientes;
       setStat('kpiContratos', pendientes.toLocaleString('es-PA'),
         `<span class="tag">${aprobados}</span> aprobados · <span class="tag">${activos}</span> activos`);
     } catch (err) {
@@ -126,6 +129,7 @@
       const venc = vencidas > 0
         ? `<span class="tag bad">${vencidas}</span> vencidas · <span class="tag warn">${vencenPronto}</span> en 7 días`
         : `<span class="tag warn">${vencenPronto}</span> en 7 días · <span class="tag">${enviadas}</span> enviadas`;
+      state.metrics.cotizaciones_vencen = vencenPronto;
       setStat('kpiCotizaciones', vencenPronto.toLocaleString('es-PA'), venc);
     } catch (err) {
       console.error('[admin] cotizaciones KPI:', err);
@@ -140,6 +144,7 @@
       const activos = AdminMetrics.countWhere(items, d => d.activo === true && d.deleted !== true);
       const conSim = AdminMetrics.countWhere(items, d => d.activo === true && d.deleted !== true && (d.sim_number || d.sim_phone));
       const total = AdminMetrics.countWhere(items, d => d.deleted !== true);
+      state.metrics.poc_activos = activos;
       setStat('kpiPoc', activos.toLocaleString('es-PA'),
         `<span class="tag">${conSim}</span> con SIM · <span class="tag">${total}</span> totales`);
     } catch (err) {
@@ -161,6 +166,21 @@
     } catch (err) {
       console.warn('[admin] banner usuarios:', err);
     }
+
+    // Alertas configurables — evalúa empresa/config.alertas[] contra state.metrics.
+    try {
+      const alertas = window.EMPRESA_CONFIG?.alertas || [];
+      const triggered = AdminMetrics.evaluateAlertas(alertas, state.metrics);
+      for (const t of triggered) {
+        const kind = (t.severity === 'error') ? 'error'
+                   : (t.severity === 'info')  ? 'info'
+                                              : 'warning';
+        renderBanner(kind, `<span class="alert-title">${t.message}</span>`);
+      }
+    } catch (err) {
+      console.warn('[admin] alertas configurables:', err);
+    }
+
     // Refresh icons after appending.
     if (window.lucide) lucide.createIcons();
   }
@@ -170,13 +190,15 @@
     state.loading = true;
     setLoadingAll();
     try {
+      // KPIs primero — pueblan state.metrics que el evaluador de alertas necesita.
       await Promise.all([
         loadOrdenesKPI(),
         loadContratosKPI(),
         loadCotizacionesKPI(),
         loadPocKPI(),
-        checkBanners(),
       ]);
+      // Banners después (usuarios sin rol + alertas configurables sobre métricas).
+      await checkBanners();
       state.lastLoadAt = new Date();
       const ts = $('lastUpdate');
       if (ts) ts.textContent = `Actualizado ${fmtTs(state.lastLoadAt)}`;

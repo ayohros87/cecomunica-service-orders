@@ -10,6 +10,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   orden_stale_dias:          10,
   mail_cc_orden_completada:  [],
   mail_cc_contrato_aprobado: [],
+  alertas:                   [],  // array de {id, kind, threshold, severity, message, enabled} — ver AdminMetrics.evaluateAlertas
 });
 
 const EmpresaService = {

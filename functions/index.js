@@ -20,3 +20,5 @@ exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onO
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
 exports.manageUser                    = require("./src/callable/manageUser");
 exports.rebuildContractCache          = require("./src/callable/rebuildContractCache");
+exports.runBackfill                   = require("./src/callable/runBackfill");
+exports.previewEmail                  = require("./src/callable/previewEmail");

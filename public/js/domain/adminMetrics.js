@@ -65,6 +65,45 @@
     return out;
   }
 
+  // Catálogo de tipos de alerta: cada uno define qué métrica leer y cómo
+  // comparar contra el threshold. Para añadir uno nuevo, registrarlo aquí
+  // y exponerlo en el editor de admin/alertas.html.
+  //
+  // Cada alerta en empresa/config.alertas[] tiene la forma:
+  //   { id, kind, threshold, severity: 'info'|'warning'|'error', message?, enabled }
+  //
+  // metrics es un objeto plano con keys: ordenes_abiertas, contratos_pendientes,
+  // cotizaciones_vencen, poc_activos. Lo arma admin-index.js tras loadAll().
+  const ALERT_KINDS = {
+    ordenes_abiertas_gt:    { metric: 'ordenes_abiertas',    op: '>', label: 'Órdenes abiertas mayor que…' },
+    ordenes_abiertas_lt:    { metric: 'ordenes_abiertas',    op: '<', label: 'Órdenes abiertas menor que…' },
+    contratos_pendientes_gt: { metric: 'contratos_pendientes', op: '>', label: 'Contratos pendientes mayor que…' },
+    cotizaciones_vencen_gt: { metric: 'cotizaciones_vencen', op: '>', label: 'Cotizaciones por vencer mayor que…' },
+    poc_activos_lt:         { metric: 'poc_activos',         op: '<', label: 'PoC activos menor que… (shrinkage)' },
+  };
+
+  function evaluateAlertas(alertas, metrics) {
+    const triggered = [];
+    for (const a of (alertas || [])) {
+      if (a.enabled === false) continue;
+      const meta = ALERT_KINDS[a.kind];
+      if (!meta) continue;
+      const value = Number(metrics?.[meta.metric] ?? 0);
+      const threshold = Number(a.threshold ?? 0);
+      const hit = meta.op === '>' ? value > threshold : value < threshold;
+      if (!hit) continue;
+      triggered.push({
+        ...a,
+        severity: a.severity || 'warning',
+        currentValue: value,
+        threshold,
+        message: a.message ||
+          `${meta.label} ${threshold} (actual: ${value})`,
+      });
+    }
+    return triggered;
+  }
+
   window.AdminMetrics = {
     groupByStatus,
     countWhere,
@@ -73,5 +112,7 @@
     ageInDays,
     daysUntilExpiry,
     bucketByAge,
+    ALERT_KINDS,
+    evaluateAlertas,
   };
 })();
