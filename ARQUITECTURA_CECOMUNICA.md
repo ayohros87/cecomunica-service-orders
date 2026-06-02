@@ -350,26 +350,37 @@ Páginas (todas en `public/admin/`):
 
 | Página | Responsabilidad | Servicios usados |
 |---|---|---|
-| `index.html` | Landing del panel: 4 stat cards (órdenes abiertas, contratos pendientes, cotizaciones por vencer, PoC activos) + banners de alerta + lanzadores a sub-páginas. Auto-refresh opcional (60 s, se pausa con `document.hidden`). | `OrdenesService`, `ContratosService`, `CotizacionesService`, `PocService` |
+| `index.html` | Landing del panel: 4 stat cards (órdenes abiertas, contratos pendientes, cotizaciones por vencer, PoC activos) + banners de alerta + lanzadores a sub-páginas + búsqueda global Cmd+K (ver §4.4.1). Auto-refresh opcional (60 s, se pausa con `document.hidden`). | `OrdenesService`, `ContratosService`, `CotizacionesService`, `PocService`, `BusquedaGlobalService` |
 | `operacion.html` | Tablas detalladas: órdenes por estado y por técnico, contratos por estado, cotizaciones por estado + las que vencen pronto, inventario crítico (stock ≤ mínimo). | `OrdenesService`, `ContratosService`, `CotizacionesService`, `PiezasService` |
-| `salud.html` | Diagnóstico técnico: `mail_queue` atascados (>1h) y con error, resumen 24h; usuarios sin rol o con rol fuera del enum `ROLES`; órdenes sin `searchTokens`; top 10 órdenes por tamaño de `os_logs`. | `MailQueueService` (nuevo), `UsuariosService`, `OrdenesService` |
-| `auditoria.html` | Timeline unificado de eventos recientes: transiciones de orden (ASIGNAR/COMPLETAR/ENTREGAR desde `os_logs`), transiciones de contrato (APROBAR/ANULAR desde `fecha_*`), purgas PII (`identificacion_purged_at`). Resuelve UIDs a nombres en batch. Filtros por tipo (chips) y texto libre. | `AuditoriaService` (nuevo), `UsuariosService` |
+| `salud.html` | Diagnóstico técnico: `mail_queue` atascados (>1h) y con error, resumen 24h; usuarios sin rol o con rol fuera del enum `ROLES`; órdenes sin `searchTokens`; top 10 órdenes por tamaño de `os_logs`. **Acciones**: re-envío single-row y bulk de mails fallidos (re-arma el doc para que `onMailQueued` lo procese — ver §6.3). | `MailQueueService`, `UsuariosService`, `OrdenesService` |
+| `auditoria.html` | Timeline unificado de eventos recientes: transiciones de orden (ASIGNAR/COMPLETAR/ENTREGAR desde `os_logs`), transiciones de contrato (APROBAR/ANULAR desde `fecha_*`), purgas PII (`identificacion_purged_at`), eventos de usuarios (CREATE/UPDATE_ROL/DEACTIVATE/REACTIVATE/RESET_PASSWORD desde `usuarios_audit`). Resuelve UIDs a nombres en batch. Filtros por tipo (chips) y texto libre. | `AuditoriaService`, `UsuariosService` |
 | `pii.html` | UI para `purgePIIRetention` callable: preview en seco con sample de 50 archivos, luego ejecución con `Modal.confirm` destructivo. Configura `retentionDays` (default 90, min 30). | callable `purgePIIRetention` |
+| `usuarios.html` | CRUD completo de usuarios: alta con email + nombre + rol, cambio inline de rol (dropdown + confirmación), desactivar/reactivar (Auth `disabled` + flag `activo`), generar link de reset de password (modal con copy al portapapeles). Safety: no auto-desactivación, no auto-democión, no dejar sistema sin admins activos. | `UsuariosAdminService` → callable `manageUser` |
+| `integridad.html` | Ejecuta 6 checks en serie y reporta hallazgos sin auto-corregir (botón "Abrir" por fila al doc del módulo): órdenes con `contrato_id` huérfano, clientes sin email ni teléfono, equipos PoC sin serial, órdenes entregadas sin firma, contratos activos vencidos, cotizaciones aprobadas hace >30 días sin vincular. | `OrdenesService`, `ContratosService`, `CotizacionesService`, `ClientesService`, `PocService` |
+| `financiero.html` | Selector de mes (últimos 12) + 4 KPIs (Facturado, ITBMS recaudado, Pipeline, Ticket promedio) con delta % vs mes anterior + tabla resumen diario + top 10 clientes + botón "Exportar ITBMS (XLSX)" que genera workbook de 3 hojas (Resumen / Detalle / Por cliente) listo para contador. | `CotizacionesService`, `ContratosService`, `CotizacionTotales`, SheetJS |
 | `config.html` | Editor de `empresa/config` (ver §5.7). Form con validación inline; modal de confirmación al guardar; rastro de `updated_at` + `updated_by`. | `EmpresaService.getConfig` / `setConfig` |
 
 Servicios nuevos vinculados al panel:
 
 | Servicio | Colección | Operaciones |
 |---|---|---|
-| `mailQueueService.js` | `mail_queue` | `listStuck`, `listFailed`, `countRecent` — solo lectura. `MailService` sigue siendo el único escritor. |
-| `auditoriaService.js` | (cross — ordenes + contratos) | `getTimelineEvents({ limitPerSource })` lee `os_logs[]`, `fecha_aprobacion`, `fecha_anulacion`, `identificacion_purged_at` y agrupa en un array unificado descendente. |
+| `mailQueueService.js` | `mail_queue` | `listStuck`, `listFailed`, `countRecent`, `retry`, `retryMany`. Solo lectura excepto `retry*`, que borra `error`/`sent_at` y estampa `retried_at`/`retried_by` para que el trigger (ahora `onDocumentWritten`) re-procese. `MailService` sigue siendo el escritor canónico para nuevos envíos. |
+| `auditoriaService.js` | (cross — ordenes + contratos + usuarios_audit) | `getTimelineEvents({ limitPerSource })` lee `os_logs[]`, `fecha_aprobacion`, `fecha_anulacion`, `identificacion_purged_at` y `usuarios_audit` y agrupa en un array unificado descendente. |
+| `busquedaGlobalService.js` | (cross — clientes/ordenes/contratos/cotizaciones/poc_devices) | `searchAll(query)` corre 5 búsquedas en paralelo (órdenes vía `searchTokens` indexado; resto vía scan de los 500 más recientes + filtro client-side). Cap 5 hits por colección. Cubre el 95% de búsquedas reales sin destruir quota. |
+| `usuariosAdminService.js` | `usuarios` + Auth | Wrapper del callable `manageUser` con métodos `create`/`updateRol`/`deactivate`/`reactivate`/`resetPassword` + `listAll` (read directo). Toda escritura es server-side. |
 
 Helpers de dominio nuevos (`js/domain/adminMetrics.js`): `groupByStatus`, `countWhere`, `daysUntilExpiry`, `bucketByAge`, `ageInDays`, `toDate`, `daysBetween`. Sin DOM, sin Firestore.
+
+#### 4.4.1 Búsqueda global Cmd+K
+
+`public/js/ui/searchPalette.js` monta un palette overlay con input grande, debounce 250 ms, resultados agrupados por colección con iconos, navegación con ↑/↓/Enter y cierre con Esc/click-fuera. API: `SearchPalette.init()` registra el atajo global; `open()`/`close()` para invocación programática.
+
+Hoy está integrado solo en `admin/index.html` (Cmd+K + botón "Buscar"). Para extenderlo a otras páginas basta cargar `busquedaGlobalService.js` + `searchPalette.js` y llamar `SearchPalette.init()` — ~2 líneas por página.
 
 Seguridad — defensa en profundidad:
 
 - **Frontend:** cada página llama `verificarAccesoYAplicarVisibilidad` y redirige a `../index.html` con toast si `rol !== ROLES.ADMIN`.
-- **Backend:** los datos sensibles ya están protegidos por reglas de Firestore (`usuarios.write: if false`, campos owned por CF en contratos, etc.); el panel no necesita reglas nuevas en v1. El callable `purgePIIRetention` valida `rol === 'administrador'` server-side.
+- **Backend:** los datos sensibles ya están protegidos por reglas de Firestore (`usuarios.write: if false`, campos owned por CF en contratos, etc.); el panel no necesita reglas nuevas en v1. Los callables `purgePIIRetention` y `manageUser` validan `rol === 'administrador'` server-side.
 
 > **Bug fix asociado:** `functions/src/triggers/scheduled/purgePIIRetention.js` comparaba con la string literal `"admin"`, pero el rol canónico es `"administrador"` — la función nunca habría aceptado a nadie. Corregido junto con la entrega del panel.
 
@@ -393,8 +404,9 @@ Seguridad — defensa en profundidad:
 | `piezas` | Inventario de piezas/repuestos | `piezasService` |
 | `poc_devices` | Equipos PoC (radios, SIM, IP, grupos) | `pocService` |
 | `poc_logs` | Historial de cambios por equipo PoC | `pocService` |
-| `mail_queue` | Cola de emails salientes | `mailService` |
+| `mail_queue` | Cola de emails salientes | `mailService` (escritura) + `mailQueueService` (lectura/retry desde admin) |
 | `verificaciones` | Registros de verificación pública de contratos | Solo escribe CF |
+| `usuarios_audit` | Audit trail de operaciones del portal de usuarios (CREATE / UPDATE_ROL / DEACTIVATE / REACTIVATE / RESET_PASSWORD) — un doc por mutación, lo escribe el callable `manageUser` | Solo escribe CF; `auditoriaService` lo lee para el timeline del panel admin |
 
 ### 5.2 Campos críticos — no renombrar
 
@@ -493,18 +505,23 @@ functions/
     http/
       sendMail.js                           ← HTTP endpoint (sin callers frontend)
       sendContractPdf.js                    ← HTTP endpoint protegido por x-api-key
+    callable/
+      manageUser.js                         ← manageUser (admin-only, 5 acciones)
     triggers/
       contratos/
         onApproval.js                       ← onContratoActivado, onContratoActivadoSendPdf
         onAnnulment.js                      ← onContratoAnuladoNotify
+      cotizaciones/
+        onOpened.js                         ← onCotizacionOpened
       ordenes/
         onComplete.js                       ← onOrdenCompletada
         onWriteCacheSync.js                 ← onContratoOrdenWrite, onOrdenWriteSyncContratoCache, onOrdenHardDelete
         onWriteSearchTokens.js              ← onOrdenWriteSearchTokens
       mail/
-        onMailQueued.js                     ← onMailQueued
+        onMailQueued.js                     ← onMailQueued (onDocumentWritten — soporta retry)
       scheduled/
         purgePIIRetention.js                ← purgePIIRetention (callable manual, no cron)
+        markCotizacionesVencidas.js         ← markCotizacionesVencidas (cron)
     domain/
       contractCache.js                      ← rebuildContractCache (idempotente)
       pdfRenderer.js                        ← renderizado de contratos con Puppeteer
@@ -536,10 +553,13 @@ El canal de email activo desde el frontend es la colección `mail_queue` (ver §
 | `onOrdenCompletada` | `onDocumentUpdated("ordenes_de_servicio/{id}")` | Cuando orden se completa: actualiza estadísticas de técnico; encola email de cierre | — |
 | `onOrdenHardDelete` | `onDocumentDeleted("ordenes_de_servicio/{id}")` | Hard-delete: elimina subcol caché y recalcula totales del contrato vinculado | — |
 | `onOrdenWriteSearchTokens` | `onDocumentWritten("ordenes_de_servicio/{id}")` | Mantiene el array `searchTokens` con tokens normalizados de orden ID, cliente, técnico, tipo de servicio y serials de equipos. Idempotente (compara tokens computados vs almacenados antes de escribir). Habilita la búsqueda indexada en `OrdenesService.searchOrders` — ver §5.6 | — |
-| `onMailQueued` | `onDocumentCreated("mail_queue/{id}")` | Lee el documento encolado y envía el email vía SendGrid | `SENDGRID_API_KEY` |
+| `onMailQueued` | `onDocumentWritten("mail_queue/{id}")` | Lee el documento y envía el email vía SendGrid. **Idempotente para retry**: condición de proceso es `after.sent_at == null && after.error == null`, lo que cubre tanto la creación inicial como el caso de retry (admin borra `error` + `sent_at` desde `admin/salud.html` via `MailQueueService.retry`). Las propias escrituras terminales (set `sent_at` ó `error`) hacen skip al re-trigger, evitando loops. | `SENDGRID_API_KEY` |
+| `onCotizacionOpened` | `onDocumentUpdated("cotizaciones/{id}")` | Marca trazabilidad cuando la cotización pasa a estado `enviada` o se abre desde link público | — |
 | `purgePIIRetention` | `onCall` (callable HTTPS, admin-only) | Borra fotos de ID en `ordenes_identificacion/` y `entregas_identificacion/` con > 90 días desde upload (parametrizable vía `retentionDays`). Soporta `dryRun: true` para previsualizar. Limpia `identificacion_url`, estampa `identificacion_purged_at` + `identificacion_purged_by` en el doc de la orden — ver §5.5 | — |
+| `markCotizacionesVencidas` | `onSchedule` (cron diario) | Marca cotizaciones cuya `fecha + validezDias < hoy` como estado `vencida` | — |
+| `manageUser` | `onCall` (callable HTTPS, admin-only) | Acción única con discriminador `action ∈ {create, updateRol, deactivate, reactivate, resetPassword}`. Llama Admin SDK de Auth (`createUser`, `updateUser{disabled}`, `generatePasswordResetLink`) y escribe `usuarios/{uid}`. Safety guards: rechaza auto-desactivación, auto-democión y operaciones que dejarían el sistema sin admins activos (cuenta antes de cada cambio). Cada mutación exitosa escribe un doc en `usuarios_audit` con `{actor_uid, target_uid, action, before, after, meta, ts}`. | — |
 
-Total: **2 endpoints HTTP + 1 callable + 9 triggers Firestore = 12 funciones** exportadas desde `functions/index.js`.
+Total: **2 endpoints HTTP + 2 callables + 11 triggers Firestore (10 Firestore + 1 schedule) = 15 funciones** exportadas desde `functions/index.js`.
 
 ### 6.4 Pipeline de email
 
@@ -550,6 +570,8 @@ página → mailService.enqueue(payload) → mail_queue/{docId} → onMailQueued
 ```
 
 `MailService.enqueue()` estampa `createdAt: serverTimestamp()` automáticamente. Los triggers del backend (`onContratoActivadoSendPdf`, `onOrdenCompletada`, `onContratoAnuladoNotify`) también escriben directamente en `mail_queue`.
+
+**Retry de envíos fallidos:** `MailQueueService.retry(docId)` desde `admin/salud.html` borra `error` + `sent_at` + `status` y estampa `retried_at` + `retried_by`. Ese update vuelve a disparar `onMailQueued` (cuyo trigger es `onDocumentWritten` justamente para soportar este flujo) y el envío se re-intenta. Las propias escrituras terminales del CF (set `sent_at` o `error`) hacen skip al re-trigger, así que no hay loop. Hay también un bulk "Reintentar todos" que itera sobre los fallidos.
 
 **Render precedence en `onMailQueued`** (de mayor a menor prioridad):
 
