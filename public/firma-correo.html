@@ -250,19 +250,24 @@
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) { location.href = 'login.html'; return; }
 
-      $('f-email').value = user.email || '';
+      $('f-email').value = user.email || 'juan.perez@cecomunica.com';
       $('f-logo').value  = DEFAULT_LOGO_URL;
 
       try {
         const data = await UsuariosService.getUsuario(user.uid);
         if (data) {
-          $('f-nombre').value = data.nombre || user.displayName || '';
+          $('f-nombre').value = data.nombre || user.displayName || 'Juan Perez';
           $('f-cargo').value  = data.cargo  || CARGO_POR_ROL[data.rol] || '';
-          $('f-tel').value    = data.telefono || data.tel || '';
+          $('f-tel').value    = data.telefono || data.tel || '+507 279 5570';
           $('f-cel').value    = data.celular  || data.cel || '';
+        } else {
+          $('f-nombre').value = user.displayName || 'Juan Perez';
+          $('f-tel').value    = '+507 279 5570';
         }
       } catch (e) {
         console.error('Error cargando perfil:', e);
+        $('f-nombre').value = $('f-nombre').value || user.displayName || 'Juan Perez';
+        $('f-tel').value    = $('f-tel').value    || '+507 279 5570';
       }
 
       render();
