@@ -152,14 +152,14 @@ const BusquedaGlobalService = {
       if (this._match(p.serial,     q) ||
           this._match(p.unit_id,    q) ||
           this._match(p.radio_name, q) ||
-          this._match(p.sim,        q) ||
-          this._match(p.telefono,   q) ||
+          this._match(p.sim_number, q) ||
+          this._match(p.sim_phone,  q) ||
           this._match(p.ip,         q) ||
           this._match(p.cliente,    q)) {
         hits.push({
           id: d.id,
           title: p.radio_name || p.unit_id || p.serial || d.id,
-          subtitle: [p.serial, p.sim, p.cliente].filter(Boolean).join(' · '),
+          subtitle: [p.serial, p.sim_number, p.cliente].filter(Boolean).join(' · '),
           link: `../POC/index.html?focus=${encodeURIComponent(d.id)}`,
         });
       }

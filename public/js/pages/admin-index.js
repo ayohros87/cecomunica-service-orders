@@ -138,7 +138,7 @@
       const all = await PocService.getPocDevices();
       const items = Array.isArray(all) ? all : [];
       const activos = AdminMetrics.countWhere(items, d => d.activo === true && d.deleted !== true);
-      const conSim = AdminMetrics.countWhere(items, d => d.activo === true && d.deleted !== true && d.sim);
+      const conSim = AdminMetrics.countWhere(items, d => d.activo === true && d.deleted !== true && (d.sim_number || d.sim_phone));
       const total = AdminMetrics.countWhere(items, d => d.deleted !== true);
       setStat('kpiPoc', activos.toLocaleString('es-PA'),
         `<span class="tag">${conSim}</span> con SIM · <span class="tag">${total}</span> totales`);
