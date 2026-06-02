@@ -50,6 +50,9 @@
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
+  <!-- Banner de impersonation (modo "Ver como" para admin — se rellena dinámicamente) -->
+  <div id="impersonateBanner" style="display:none;background:#fef3c7;color:#78350f;border-bottom:1px solid #fde68a;padding:8px 16px;font-size:13px;text-align:center;font-weight:600;position:sticky;top:0;z-index:100;"></div>
+
   <div id="topbar-mount"></div>
   <script>Layout.renderTopbar({ title: '<img src="brand/logo-lockup-horizontal-compact-inverse.svg" alt="CECOMUNICA" class="topbar-logo-img"><span class="brand-suffix"> — CENTRO DE GESTIÓN —</span>', showHome: false, showLogout: true, menu: [
     { label: '<i data-lucide="user"></i> Mi perfil', href: 'perfil.html' },
@@ -209,15 +212,36 @@ firebase.auth().onAuthStateChanged(async (user) => {
   tecnico_operativo: ["ordenes", "firma"]
 };
 
+    // === "Ver como" — impersonation visual para admin (solo afecta visibilidad de tarjetas).
+    // No afecta queries Firestore ni reglas — los datos siguen viéndose como el admin real.
+    // Trigger: ?as=ROL en la URL. Solo aplica si el rol real es administrador.
+    const params = new URLSearchParams(location.search);
+    const asParam = params.get('as');
+    const impersonating = asParam && rol === 'administrador' && visiblesPorRol[asParam] && asParam !== 'administrador';
+    const effectiveRol = impersonating ? asParam : rol;
 
-    const visibles = new Set(visiblesPorRol[rol] || []);
+    if (impersonating) {
+      const banner = document.getElementById('impersonateBanner');
+      if (banner) {
+        banner.style.display = '';
+        banner.innerHTML = `
+          <span style="margin-right:8px;">👁️</span>
+          MODO VISUAL — viendo el home como <strong>${effectiveRol}</strong>.
+          Solo afecta qué tarjetas se muestran; no cambia permisos reales ni datos.
+          <a href="${location.pathname}" style="margin-left:12px;color:#78350f;text-decoration:underline;font-weight:700;">Salir del modo visual</a>
+        `;
+      }
+    }
+
+    const visibles = new Set(visiblesPorRol[effectiveRol] || []);
     document.querySelectorAll("#gridModulos .module-card").forEach(card => {
       const mod = card.getAttribute("data-mod");
       card.setAttribute("data-visible", visibles.has(mod) ? "true" : "false");
     });
 
-    // Mostrar el acceso al Panel de Administración en el menú "Más" solo si rol === administrador.
-    if (rol === "administrador") {
+    // Mostrar el acceso al Panel de Administración solo si el rol EFECTIVO es admin.
+    // En modo "Ver como X", el menú admin queda oculto para simular fielmente la vista de X.
+    if (effectiveRol === "administrador") {
       const adminItem = document.getElementById("menu-admin-panel");
       if (adminItem) adminItem.style.display = "";
     }

@@ -17,6 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
@@ -65,6 +66,21 @@
       <div>
         Cada check detecta inconsistencias entre datos relacionados. <strong>Sólo diagnóstico</strong> — la corrección se hace en la página del módulo correspondiente (botón "Abrir" en cada fila). Los checks se ejecutan en serie para no abrumar a Firestore.
       </div>
+    </div>
+
+    <!-- Tool: Recompute cache de contrato ─ útil cuando os_count y la subcol están desincronizadas -->
+    <div class="ds-card" style="padding:var(--sp-3); margin-bottom:var(--sp-4);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:14px;"><i data-lucide="wrench"></i> Reparar cache de contrato</span>
+        <span class="hint">Llama al callable <code>rebuildContractCache</code> que recalcula <code>os_count</code>, <code>os_linked</code>, <code>os_serials_preview</code>, etc. desde la subcolección actual</span>
+      </div>
+      <div style="display:flex; gap:var(--sp-2); align-items:flex-start; flex-wrap:wrap;">
+        <input type="text" id="inputContratoId" class="form-input" placeholder="Doc ID del contrato (no contrato_id CT-YYYY-NNN). Para varios, sepáralos por coma o espacio." style="flex:1; min-width:320px;">
+        <button id="btnRebuild" class="btn btn-primary">
+          <i data-lucide="wrench"></i> Recomputar
+        </button>
+      </div>
+      <div id="rebuildResult" style="margin-top:var(--sp-3);"></div>
     </div>
 
     <div class="ds-card" id="chk1" style="padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>

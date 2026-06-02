@@ -19,3 +19,4 @@ exports.purgePIIRetention             = require("./src/triggers/scheduled/purgeP
 exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onOpened");
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
 exports.manageUser                    = require("./src/callable/manageUser");
+exports.rebuildContractCache          = require("./src/callable/rebuildContractCache");

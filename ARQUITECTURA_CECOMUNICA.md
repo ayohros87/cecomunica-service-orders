@@ -356,9 +356,9 @@ Páginas (todas en `public/admin/`):
 | `auditoria.html` | Timeline unificado de eventos recientes: transiciones de orden (ASIGNAR/COMPLETAR/ENTREGAR desde `os_logs`), transiciones de contrato (APROBAR/ANULAR desde `fecha_*`), purgas PII (`identificacion_purged_at`), eventos de usuarios (CREATE/UPDATE_ROL/DEACTIVATE/REACTIVATE/RESET_PASSWORD desde `usuarios_audit`). Resuelve UIDs a nombres en batch. Filtros por tipo (chips) y texto libre. | `AuditoriaService`, `UsuariosService` |
 | `pii.html` | UI para `purgePIIRetention` callable: preview en seco con sample de 50 archivos, luego ejecución con `Modal.confirm` destructivo. Configura `retentionDays` (default 90, min 30). | callable `purgePIIRetention` |
 | `usuarios.html` | CRUD completo de usuarios: alta con email + nombre + rol, cambio inline de rol (dropdown + confirmación), desactivar/reactivar (Auth `disabled` + flag `activo`), generar link de reset de password (modal con copy al portapapeles). Safety: no auto-desactivación, no auto-democión, no dejar sistema sin admins activos. | `UsuariosAdminService` → callable `manageUser` |
-| `integridad.html` | Ejecuta 6 checks en serie y reporta hallazgos sin auto-corregir (botón "Abrir" por fila al doc del módulo): órdenes con `contrato_id` huérfano, clientes sin email ni teléfono, equipos PoC sin serial, órdenes entregadas sin firma, contratos activos vencidos, cotizaciones aprobadas hace >30 días sin vincular. | `OrdenesService`, `ContratosService`, `CotizacionesService`, `ClientesService`, `PocService` |
+| `integridad.html` | Ejecuta 6 checks en serie y reporta hallazgos sin auto-corregir (botón "Abrir" por fila al doc del módulo): órdenes con `contrato_id` huérfano, clientes sin email ni teléfono, equipos PoC sin serial, órdenes entregadas sin firma, contratos activos vencidos, cotizaciones aprobadas hace >30 días sin vincular. Además incluye herramienta manual "Reparar cache de contrato" que invoca el callable `rebuildContractCache` con un solo ID o batch hasta 50. | `OrdenesService`, `ContratosService`, `CotizacionesService`, `ClientesService`, `PocService`, callable `rebuildContractCache` |
 | `financiero.html` | Selector de mes (últimos 12) + 4 KPIs (Facturado, ITBMS recaudado, Pipeline, Ticket promedio) con delta % vs mes anterior + tabla resumen diario + top 10 clientes + botón "Exportar ITBMS (XLSX)" que genera workbook de 3 hojas (Resumen / Detalle / Por cliente) listo para contador. | `CotizacionesService`, `ContratosService`, `CotizacionTotales`, SheetJS |
-| `config.html` | Editor de `empresa/config` (ver §5.7). Form con validación inline; modal de confirmación al guardar; rastro de `updated_at` + `updated_by`. | `EmpresaService.getConfig` / `setConfig` |
+| `config.html` | Editor de `empresa/config` (ver §5.7). Form con validación inline; modal de confirmación al guardar; rastro de `updated_at` + `updated_by`. Botón "Snapshot JSON" exporta un archivo `cecomunica_empresa_config_YYYY-MM-DD.json` con `{defaults, config, operadores, exported_at, exported_by}` para backup o transferencia entre environments. | `EmpresaService.getConfig` / `setConfig` / `getDoc('operadores')` |
 
 Servicios nuevos vinculados al panel:
 
@@ -376,6 +376,14 @@ Helpers de dominio nuevos (`js/domain/adminMetrics.js`): `groupByStatus`, `count
 `public/js/ui/searchPalette.js` monta un palette overlay con input grande, debounce 250 ms, resultados agrupados por colección con iconos, navegación con ↑/↓/Enter y cierre con Esc/click-fuera. API: `SearchPalette.init()` registra el atajo global; `open()`/`close()` para invocación programática.
 
 Hoy está integrado solo en `admin/index.html` (Cmd+K + botón "Buscar"). Para extenderlo a otras páginas basta cargar `busquedaGlobalService.js` + `searchPalette.js` y llamar `SearchPalette.init()` — ~2 líneas por página.
+
+#### 4.4.2 "Ver como otro rol" (impersonation visual)
+
+`public/index.html` acepta el query param `?as=ROL`. Cuando el rol real del usuario es `administrador` y `ROL` está en el mapa `visiblesPorRol`, el efectivo se intercambia: la lista de tarjetas visibles se calcula con `ROL` y el botón "Panel de Administración" se oculta para simular fielmente la vista del rol. Un banner amarillo sticky en la parte superior del body indica el modo activo con link "Salir del modo visual" (regresa a la URL sin el param).
+
+**Importante**: es **solo visibilidad** de tarjetas en el home. No cambia `userRole`, ni queries Firestore, ni reglas — sigue siendo el admin para todos los efectos backend. Útil para QA de cambios al mapa de roles sin tener que crear usuarios de prueba.
+
+UI: `public/js/ui/verComoPicker.js` expone `AdminVerComo.open()` (modal con lista de roles que apuntan a `../index.html?as=<rol>`); invocado desde el launcher "Ver como otro rol" en `admin/index.html`.
 
 Seguridad — defensa en profundidad:
 
@@ -559,8 +567,9 @@ El canal de email activo desde el frontend es la colección `mail_queue` (ver §
 | `purgePIIRetention` | `onCall` (callable HTTPS, admin-only) | Borra fotos de ID en `ordenes_identificacion/` y `entregas_identificacion/` con > 90 días desde upload (parametrizable vía `retentionDays`). Soporta `dryRun: true` para previsualizar. Limpia `identificacion_url`, estampa `identificacion_purged_at` + `identificacion_purged_by` en el doc de la orden — ver §5.5 | — |
 | `markCotizacionesVencidas` | `onSchedule` (cron diario) | Marca cotizaciones cuya `fecha + validezDias < hoy` como estado `vencida` | — |
 | `manageUser` | `onCall` (callable HTTPS, admin-only) | Acción única con discriminador `action ∈ {create, updateRol, deactivate, reactivate, resetPassword}`. Llama Admin SDK de Auth (`createUser`, `updateUser{disabled}`, `generatePasswordResetLink`) y escribe `usuarios/{uid}`. Safety guards: rechaza auto-desactivación, auto-democión y operaciones que dejarían el sistema sin admins activos (cuenta antes de cada cambio). Cada mutación exitosa escribe un doc en `usuarios_audit` con `{actor_uid, target_uid, action, before, after, meta, ts}`. | — |
+| `rebuildContractCache` | `onCall` (callable HTTPS, admin-only) | Recalcula manualmente los campos cache del contrato (`os_count`, `os_linked`, `os_serials_preview`, `os_has_equipos`, `os_equipos_count_last`, `tiene_os`) desde la subcolección actual. Acepta `{contratoId}` o `{contratoIds: [...]}` (batch hasta 50). Delegado a `domain/contractCache.recalcularCacheContrato` — la misma lógica que usa el trigger `onContratoOrdenWrite`. Expuesto desde `admin/integridad.html` como herramienta manual cuando el cache se desincroniza. | — |
 
-Total: **2 endpoints HTTP + 2 callables + 11 triggers Firestore (10 Firestore + 1 schedule) = 15 funciones** exportadas desde `functions/index.js`.
+Total: **2 endpoints HTTP + 3 callables + 11 triggers Firestore (10 Firestore + 1 schedule) = 16 funciones** exportadas desde `functions/index.js`.
 
 ### 6.4 Pipeline de email
 

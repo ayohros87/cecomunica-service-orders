@@ -152,9 +152,38 @@
     }
   }
 
+  async function exportSnapshot() {
+    try {
+      const config     = await EmpresaService.getDoc('config');
+      const operadores = await EmpresaService.getDoc('operadores').catch(() => null);
+      const snapshot = {
+        exported_at: new Date().toISOString(),
+        exported_by: firebase.auth().currentUser?.email || firebase.auth().currentUser?.uid || 'unknown',
+        defaults:    EmpresaService.CONFIG_DEFAULTS,
+        config:      config || null,
+        operadores:  operadores || null,
+      };
+      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const ts   = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `cecomunica_empresa_config_${ts}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      if (window.Toast) Toast.show('Snapshot descargado.', 'ok');
+    } catch (err) {
+      console.error('[admin/config] export:', err);
+      if (window.Toast) Toast.show('Error: ' + (err.message || err.code), 'bad');
+    }
+  }
+
   function wireUI() {
     $('btnSave')?.addEventListener('click', save);
     $('btnReload')?.addEventListener('click', load);
+    $('btnExport')?.addEventListener('click', exportSnapshot);
   }
 
   document.addEventListener('DOMContentLoaded', () => {

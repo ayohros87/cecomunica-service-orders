@@ -278,8 +278,53 @@
     setText('lastUpdate', `Actualizado ${new Date().toLocaleTimeString('es-PA', { hour12: false })}`);
   }
 
+  async function rebuildContractCache() {
+    const raw = ($('inputContratoId')?.value || '').trim();
+    if (!raw) {
+      Toast.show('Ingresa al menos un doc ID.', 'warn');
+      return;
+    }
+    const ids = raw.split(/[\s,]+/).filter(Boolean);
+    if (ids.length > 50) {
+      Toast.show('Máximo 50 contratos por ejecución.', 'bad');
+      return;
+    }
+    const out = $('rebuildResult');
+    if (out) out.innerHTML = '<div class="empty-state-hint" style="padding:var(--sp-2);color:var(--fg-3);">Ejecutando…</div>';
+    try {
+      const fn = firebase.functions().httpsCallable('rebuildContractCache');
+      const res = ids.length === 1
+        ? await fn({ contratoId: ids[0] })
+        : await fn({ contratoIds: ids });
+      const data = res.data || {};
+      const rows = (data.results || []).map(r => `
+        <tr>
+          <td><code style="font-size:11px;">${escapeHtml(r.contratoId)}</code></td>
+          <td>${r.success
+            ? '<span class="pill" style="background:#d1fae5;color:#065f46;border-color:#a7f3d0;">ok</span>'
+            : `<span class="pill" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;">error</span> <code style="font-size:11px;color:#991b1b;">${escapeHtml(r.error || '—')}</code>`}</td>
+        </tr>`).join('');
+      if (out) out.innerHTML = `
+        <div class="alert-banner alert-${data.ok ? 'success' : 'warning'}" style="margin:0 0 var(--sp-2);">
+          <i data-lucide="${data.ok ? 'check-circle' : 'alert-triangle'}"></i>
+          <div><span class="alert-title">${data.recomputed}/${data.total} recomputados.</span></div>
+        </div>
+        <table class="admin-table"><thead><tr><th>Contrato</th><th>Resultado</th></tr></thead><tbody>${rows}</tbody></table>`;
+      if (window.lucide) lucide.createIcons();
+    } catch (err) {
+      console.error('[admin/integridad] rebuild:', err);
+      if (out) out.innerHTML = `
+        <div class="alert-banner alert-error" style="margin:0;">
+          <i data-lucide="alert-octagon"></i>
+          <div><code>${escapeHtml(err.message || err.code || String(err))}</code></div>
+        </div>`;
+      if (window.lucide) lucide.createIcons();
+    }
+  }
+
   function wireToolbar() {
     $('btnRefresh')?.addEventListener('click', () => runAll());
+    $('btnRebuild')?.addEventListener('click', () => rebuildContractCache());
   }
 
   document.addEventListener('DOMContentLoaded', () => {

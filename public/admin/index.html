@@ -29,6 +29,7 @@
   <script src="../js/services/pocService.js"></script>
   <script src="../js/services/busquedaGlobalService.js"></script>
   <script src="../js/ui/searchPalette.js"></script>
+  <script src="../js/ui/verComoPicker.js"></script>
   <script src="../js/domain/adminMetrics.js"></script>
   <script src="../js/pages/admin-index.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -137,6 +138,13 @@
           <span class="meta">
             <span class="t">Financiero</span>
             <span class="s">Facturado, ITBMS, pipeline + export XLSX para contador</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="#" id="launcherVerComo" onclick="event.preventDefault(); window.AdminVerComo?.open(); return false;">
+          <span class="ico"><i data-lucide="eye"></i></span>
+          <span class="meta">
+            <span class="t">Ver como otro rol</span>
+            <span class="s">Previsualizar el home tal como lo ve cada rol (solo visual)</span>
           </span>
         </a>
         <a class="admin-launcher" href="pii.html">
