@@ -79,6 +79,20 @@ module.exports = onCall(
       ? Number(request.data.retentionDays)
       : RETENTION_DAYS;
 
+    // Kill-switch in empresa/config: admin can disable destructive purges
+    // without code deploy. Preview (dryRun) is always allowed since it's
+    // read-only. Only the actual delete is gated.
+    if (!dryRun) {
+      const cfgSnap = await db.collection("empresa").doc("config").get();
+      const enabled = cfgSnap.exists ? cfgSnap.data().pii_purge_enabled : true;
+      if (enabled === false) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Purga PII deshabilitada en empresa/config.pii_purge_enabled. Actívala antes de ejecutar."
+        );
+      }
+    }
+
     const bucket = admin.storage().bucket();
     const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
     const cutoffISO = new Date(cutoffMs).toISOString();

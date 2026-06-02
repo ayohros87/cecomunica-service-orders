@@ -22,6 +22,7 @@
   const state = {
     lastPreview: null,
     busy: false,
+    purgeEnabled: true,   // local mirror of empresa/config.pii_purge_enabled
   };
 
   function $(id) { return document.getElementById(id); }
@@ -57,7 +58,7 @@
     const sample = Array.isArray(result.sample) ? result.sample : [];
     if (!sample.length) {
       list.innerHTML = `<div class="empty-state-hint" style="padding:var(--sp-4);text-align:center;color:var(--fg-3);">No hay archivos con más de ${result.retentionDays} días.</div>`;
-      $('btnExecute').disabled = true;
+      refreshExecuteEnabled();
       return;
     }
     const rows = sample.map(s => {
@@ -75,7 +76,7 @@
       <thead><tr><th>Archivo</th><th>Orden</th><th class="num">Edad</th><th>Creado</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
-    $('btnExecute').disabled = (result.candidates === 0);
+    refreshExecuteEnabled();
   }
 
   function renderResult(result) {
@@ -158,9 +159,71 @@
     }
   }
 
+  function applyToggleVisual() {
+    const btn = $('btnToggleEnabled');
+    const hint = $('toggleHint');
+    if (!btn) return;
+    btn.classList.toggle('is-on', state.purgeEnabled);
+    btn.setAttribute('aria-pressed', String(state.purgeEnabled));
+    const label = btn.querySelector('.label-text');
+    if (label) label.textContent = state.purgeEnabled ? 'Habilitada' : 'Deshabilitada';
+    if (hint) {
+      hint.innerHTML = state.purgeEnabled
+        ? 'Las purgas pueden ejecutarse. <strong>Preview siempre está disponible</strong>, incluso si la deshabilitas.'
+        : '<strong style="color:#b91c1c;">Las purgas están bloqueadas.</strong> El botón "Purgar ahora" no funcionará y el servidor también rechaza con <code>failed-precondition</code>.';
+    }
+    refreshExecuteEnabled();
+  }
+
+  function refreshExecuteEnabled() {
+    const exec = $('btnExecute');
+    if (!exec) return;
+    const noCandidates = !state.lastPreview || state.lastPreview.candidates === 0;
+    exec.disabled = noCandidates || !state.purgeEnabled || state.busy;
+    exec.title = !state.purgeEnabled
+      ? 'Purga deshabilitada en empresa/config'
+      : (noCandidates ? 'Sin candidatos para purgar' : 'Ejecutar purga');
+  }
+
+  async function loadToggleState() {
+    try {
+      const cfg = await EmpresaService.getConfig();
+      state.purgeEnabled = cfg.pii_purge_enabled !== false;
+    } catch (err) {
+      console.warn('[admin/pii] loadToggleState:', err);
+      state.purgeEnabled = true; // fail-open on read — server gate is the real guard
+    }
+    applyToggleVisual();
+  }
+
+  async function togglePurgeEnabled() {
+    const next = !state.purgeEnabled;
+    const ok = next || await Modal.confirm({
+      title: 'Deshabilitar purga',
+      message: 'Ningún admin podrá ejecutar purgas hasta que se reactive (preview seguirá funcionando). ¿Continuar?',
+      danger: true,
+      confirmLabel: 'Deshabilitar',
+    });
+    if (!ok) return;
+    const btn = $('btnToggleEnabled');
+    if (btn) btn.disabled = true;
+    try {
+      await EmpresaService.setConfig({ pii_purge_enabled: next });
+      state.purgeEnabled = next;
+      applyToggleVisual();
+      if (window.Toast) Toast.show(next ? 'Purga habilitada.' : 'Purga deshabilitada.', 'ok');
+    } catch (err) {
+      console.error('[admin/pii] toggle:', err);
+      if (window.Toast) Toast.show('Error: ' + (err.message || err.code), 'bad');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   function wireUI() {
     $('btnPreview')?.addEventListener('click', doPreview);
     $('btnExecute')?.addEventListener('click', doExecute);
+    $('btnToggleEnabled')?.addEventListener('click', togglePurgeEnabled);
 
     const input = $('inputRetentionDays');
     if (input) {
@@ -171,6 +234,8 @@
         if (warn) warn.style.display = (n < 60 ? '' : 'none');
       });
     }
+
+    loadToggleState();
   }
 
   document.addEventListener('DOMContentLoaded', () => {

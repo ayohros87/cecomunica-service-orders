@@ -472,6 +472,7 @@ Documento único que centraliza parámetros que cambian con decisiones de negoci
 | `itbms_rate` | number | `0.07` | `FMT.ITBMS_RATE` — reasignado en boot por `firebase-init.js` |
 | `cotizacion_validez_dias` | int | `15` | Editor de cotizaciones nuevas (campo `validezDias` inicial) |
 | `pii_retention_dias` | int | `90` | Default del input en `admin/pii.html` (callable acepta `retentionDays` por parámetro) |
+| `pii_purge_enabled` | bool | `true` | Kill-switch global de la purga PII. **Server-side**: `purgePIIRetention` lee `empresa/config.pii_purge_enabled` antes de cualquier delete y rechaza con `failed-precondition` si está en `false`. Preview (`dryRun: true`) siempre se permite. Editable desde el toggle de `admin/pii.html` (UI directa) o el checkbox de `admin/config.html`. |
 | `stock_minimo_default` | int | `5` | Placeholder al crear pieza nueva |
 | `orden_stale_dias` | int | `10` | Umbral del badge "stale" en `admin/operacion.html` |
 | `mail_cc_orden_completada` | string[] | `[]` | Pendiente de leer en `onOrdenCompletada` CF |

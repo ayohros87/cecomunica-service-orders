@@ -24,6 +24,7 @@
   <script src="../js/core/auth.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script src="../js/pages/admin-pii.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
@@ -56,6 +57,18 @@
         estampa <code>identificacion_purged_at</code> + <code>identificacion_purged_by</code>
         para el audit trail.
       </div>
+    </div>
+
+    <!-- Kill-switch: el server-side también lo respeta -->
+    <div class="ds-card" style="padding:var(--sp-3); margin-bottom:var(--sp-4); display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap;">
+      <div style="flex:1; min-width:240px;">
+        <div style="font-weight:700; font-size:14px;">Función de purga</div>
+        <div class="ts" id="toggleHint">—</div>
+      </div>
+      <button id="btnToggleEnabled" class="auto-pill" aria-pressed="false" title="Habilita o deshabilita la ejecución de purgas (preview siempre disponible)">
+        <span class="dot"></span>
+        <span class="label-text">—</span>
+      </button>
     </div>
 
     <!-- Parámetros + preview -->

@@ -20,6 +20,9 @@
     { key: 'pii_retention_dias',        label: 'Retención PII (días)',
       type: 'int',  min: 30,    max: 730,
       hint: 'Días antes de purgar fotos de identificación. Verifica con legal antes de bajar de 60.' },
+    { key: 'pii_purge_enabled',         label: 'Purga PII habilitada',
+      type: 'bool',
+      hint: 'Kill-switch global: cuando está apagado, el callable purgePIIRetention rechaza ejecuciones reales (preview sigue funcionando). También editable desde admin/pii.html.' },
     { key: 'stock_minimo_default',      label: 'Stock mínimo por defecto (piezas nuevas)',
       type: 'int',  min: 0,     max: 1000,
       hint: 'Placeholder usado al crear una pieza nueva. No modifica las existentes.' },
@@ -50,6 +53,9 @@
         input = `<textarea id="fld-${f.key}" class="form-input" rows="3" style="font-family:inherit;font-size:13px;">${text}</textarea>`;
       } else if (f.type === 'rate') {
         input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="${f.step}" value="${v}" style="width:140px;">`;
+      } else if (f.type === 'bool') {
+        const checked = v === true ? 'checked' : '';
+        input = `<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="checkbox" id="fld-${f.key}" ${checked} style="width:18px;height:18px;"> Habilitada</label>`;
       } else {
         input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="1" value="${v}" style="width:140px;">`;
       }
@@ -70,7 +76,10 @@
       const el = $('fld-' + f.key);
       if (!el) continue;
       const raw = el.value;
-      if (f.type === 'emails') {
+      if (f.type === 'bool') {
+        out[f.key] = !!el.checked;
+        continue;
+      } else if (f.type === 'emails') {
         const list = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
         if (list.length > 10) errors[f.key] = 'Máximo 10 emails.';
         const bad = list.find(s => !EMAIL_RE.test(s));

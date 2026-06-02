@@ -5,6 +5,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   itbms_rate:                0.07,
   cotizacion_validez_dias:   15,
   pii_retention_dias:        90,
+  pii_purge_enabled:         true,
   stock_minimo_default:      5,
   orden_stale_dias:          10,
   mail_cc_orden_completada:  [],
