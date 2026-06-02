@@ -114,7 +114,7 @@
         <div class="cq-totals">
           <div class="cq-trow"><span>Subtotal</span><span class="cq-tv">${FMT.money(t.subtotal)}</span></div>
           ${cot.descuentoPct > 0 ? `<div class="cq-trow disc"><span>Descuento (${cot.descuentoPct}%)</span><span class="cq-tv">−${FMT.money(t.descGlobal)}</span></div>` : ''}
-          <div class="cq-trow"><span>ITBMS (${cot.itbmsPct}%)</span><span class="cq-tv">${FMT.money(t.itbms)}</span></div>
+          <div class="cq-trow"><span>${cot.itbmsPct > 0 ? 'ITBMS (' + cot.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="cq-tv">${FMT.money(t.itbms)}</span></div>
           <div class="cq-trow total"><span class="cq-lblt">Total</span><span class="cq-tv">${FMT.money(t.total)}</span></div>
         </div>
       </div>

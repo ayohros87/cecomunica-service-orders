@@ -120,7 +120,7 @@
         <div class="cq-totals">
           <div class="cq-trow"><span>Subtotal</span><span class="cq-tv">${FMT.money(snap.subtotal)}</span></div>
           ${snap.descuentoPct > 0 ? `<div class="cq-trow disc"><span>Descuento (${snap.descuentoPct}%)</span><span class="cq-tv">−${FMT.money(snap.descGlobal)}</span></div>` : ''}
-          <div class="cq-trow"><span>ITBMS (${snap.itbmsPct}%)</span><span class="cq-tv">${FMT.money(snap.itbms)}</span></div>
+          <div class="cq-trow"><span>${snap.itbmsPct > 0 ? 'ITBMS (' + snap.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="cq-tv">${FMT.money(snap.itbms)}</span></div>
           <div class="cq-trow total"><span class="cq-lblt">Total</span><span class="cq-tv">${FMT.money(snap.total)}</span></div>
         </div>
       </div>

@@ -209,7 +209,16 @@
     $('btnNuevoCliente').addEventListener('click', () => {
       location.href = '../contratos/nuevo-cliente.html?from=cotizacion';
     });
-    $('selCliente').addEventListener('change', (e) => set({ clienteId: e.target.value }));
+    $('selCliente').addEventListener('change', (e) => {
+      const newId = e.target.value;
+      // Auto-ajusta ITBMS al flag itbms_exento del cliente (mismo patrón que contratos).
+      const cli = catalogos.clientesById[newId];
+      const patch = { clienteId: newId };
+      if (cli) {
+        patch.itbmsPct = cli.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+      }
+      set(patch);
+    });
     $('inpDirigidoA').addEventListener('input', (e) => { draft.dirigido_a = e.target.value; });
     $('inpDirigidoEmail').addEventListener('input', (e) => { draft.dirigido_email = e.target.value; });
     $('inpFecha').addEventListener('change', (e) => { draft.fecha = e.target.value; renderCliente(); });
@@ -376,6 +385,11 @@
   // ── Resumen ───────────────────────────────────────────────────
   function renderSummary() {
     const t = T.calcTotales(draft);
+    const cli = catalogos.clientesById[draft.clienteId] || {};
+    const itbmsRatePct = Math.round(FMT.ITBMS_RATE * 100);
+    const exentoHint = cli.itbms_exento
+      ? `<span class="form-hint" style="font-size:11px; color:var(--accent);">Cliente exento de ITBMS${cli.itbms_motivo_exencion ? ' · ' + esc(cli.itbms_motivo_exencion) : ''}</span>`
+      : '';
     $('panelResumen').innerHTML = `
       <div class="cc-sum-controls">
         <div class="form-field">
@@ -385,14 +399,15 @@
         <div class="form-field">
           <label class="form-label">ITBMS</label>
           <select class="form-select" id="selItbms">
-            <option value="7" ${draft.itbmsPct === 7 ? 'selected' : ''}>7%</option>
+            <option value="${itbmsRatePct}" ${draft.itbmsPct > 0 ? 'selected' : ''}>${itbmsRatePct}%</option>
             <option value="0" ${draft.itbmsPct === 0 ? 'selected' : ''}>0% (exento)</option>
           </select>
+          ${exentoHint}
         </div>
       </div>
       <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(t.subtotal)}</span></div>
       ${draft.descuentoPct > 0 ? `<div class="cc-sum-row disc"><span>Descuento (${draft.descuentoPct}%)</span><span class="v">−${FMT.money(t.descGlobal)}</span></div>` : ''}
-      <div class="cc-sum-row"><span>ITBMS (${draft.itbmsPct}%)</span><span class="v">${FMT.money(t.itbms)}</span></div>
+      <div class="cc-sum-row"><span>${draft.itbmsPct > 0 ? 'ITBMS (' + draft.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="v">${FMT.money(t.itbms)}</span></div>
       <div class="cc-sum-total"><span class="lbl">Total</span><span class="v">${FMT.money(t.total)}</span></div>
 
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:20px;">
@@ -534,6 +549,11 @@
         const ejecId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id || catalogos.ejecutivos[0]?.id || '';
         const preselectCliente = params.get('cliente_id') || '';
         draft = CotState.nuevaCotizacion({ ejecutivoId: ejecId, clienteId: preselectCliente });
+        // Si hay cliente preseleccionado, alinea ITBMS al flag del cliente.
+        if (preselectCliente) {
+          const cli = catalogos.clientesById[preselectCliente];
+          if (cli) draft.itbmsPct = cli.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+        }
       } else {
         const docId = params.get('id');
         if (!docId) { Toast.show('Falta id', 'bad'); location.href = 'index.html'; return; }

@@ -68,6 +68,8 @@
       tel: c?.telefono || c?.tel || '',
       email: c?.email || '',
       direccion: c?.direccion || '',
+      itbms_exento: !!c?.itbms_exento,
+      itbms_motivo_exencion: c?.itbms_motivo_exencion || '',
     };
   }
 
@@ -93,6 +95,12 @@
   }
 
   // ── Adaptadores doc <-> UI (esquema del kit, sin legacy) ──────────────────
+  // Esquema ITBMS alineado con contratos/órdenes:
+  //   - `itbms_aplica` (boolean) — fuente de verdad de si se cobra ITBMS.
+  //   - `itbms_porcentaje` (decimal, e.g. 0.07) — siempre = FMT.ITBMS_RATE.
+  //   - `itbms_monto`, `total_con_itbms` — calculados al persistir.
+  // El campo `itbmsPct` se conserva en la UI como número entero (0 o 7) para
+  // los inputs, pero al guardar se traduce a itbms_aplica + itbms_porcentaje.
   function toUi(doc) {
     if (!doc) return null;
     const items = (doc.items || []).map((it) => ({
@@ -104,6 +112,16 @@
       precio: Number(it.precio || 0),
       desc: Number(it.desc || 0),
     }));
+    // Resuelve ITBMS: prioriza `itbms_aplica` (esquema canónico). Fallback al
+    // `itbmsPct` legacy y al default global FMT.ITBMS_RATE.
+    let itbmsPct;
+    if (typeof doc.itbms_aplica === 'boolean') {
+      itbmsPct = doc.itbms_aplica ? Math.round(FMT.ITBMS_RATE * 100) : 0;
+    } else if (doc.itbmsPct != null) {
+      itbmsPct = Number(doc.itbmsPct);
+    } else {
+      itbmsPct = Math.round(FMT.ITBMS_RATE * 100);
+    }
     return {
       _docId: doc.id || null,
       id: doc.cotizacion_id || '',
@@ -114,7 +132,7 @@
       validezDias: Number(doc.validezDias || 15),
       moneda: doc.moneda || 'USD',
       descuentoPct: Number(doc.descuentoPct || 0),
-      itbmsPct: Number(doc.itbmsPct != null ? doc.itbmsPct : Math.round(FMT.ITBMS_RATE * 100)),
+      itbmsPct,
       intro: doc.intro || '',
       items,
       condiciones: Array.isArray(doc.condiciones) && doc.condiciones.length
@@ -132,6 +150,9 @@
     const cliente = catalogos?.clientesById?.[ui.clienteId] || {};
     const ejec = (catalogos?.ejecutivos || []).find(e => e.id === ui.ejecutivoId) || {};
     const totales = window.CotizacionTotales.calcTotales(ui);
+    // ITBMS canónico (alineado con contratos/órdenes vía FMT.ITBMS_RATE)
+    const itbmsAplica = Number(ui.itbmsPct || 0) > 0;
+    const itbmsPorc = FMT.ITBMS_RATE;
     return {
       cotizacion_id: ui.id,
       estado: ui.estado,
@@ -140,6 +161,7 @@
       cliente_ruc: cliente.ruc || '',
       cliente_email: cliente.email || '',
       cliente_representante: cliente.representante || '',
+      cliente_itbms_exento: !!cliente.itbms_exento,
       // Override por-cotización: a quién se dirige y a qué correo se envía
       dirigido_a: ui.dirigido_a || cliente.representante || '',
       dirigido_email: ui.dirigido_email || cliente.email || '',
@@ -149,7 +171,13 @@
       validezDias: Number(ui.validezDias || 15),
       moneda: ui.moneda || 'USD',
       descuentoPct: Number(ui.descuentoPct || 0),
-      itbmsPct: Number(ui.itbmsPct || 0),
+      // Campos canónicos ITBMS (mismo esquema que contratos)
+      itbms_aplica: itbmsAplica,
+      itbms_porcentaje: itbmsPorc,
+      itbms_monto: FMT.round2(totales.itbms),
+      total_con_itbms: FMT.round2(totales.total),
+      // Espejo legacy para vistas internas del kit
+      itbmsPct: itbmsAplica ? Math.round(itbmsPorc * 100) : 0,
       intro: ui.intro || '',
       items: (ui.items || []).map((it) => ({
         id: it.id,
@@ -161,10 +189,9 @@
         desc: Number(it.desc || 0),
       })),
       condiciones: ui.condiciones || [],
-      subtotal: totales.subtotal,
-      descuento_global: totales.descGlobal,
-      itbms: totales.itbms,
-      total: totales.total,
+      subtotal: FMT.round2(totales.subtotal),
+      descuento_global: FMT.round2(totales.descGlobal),
+      total: FMT.round2(totales.total),
       creado_por_uid: ui.creado_por_uid || null,
       creado_por_email: ui.creado_por_email || null,
       deleted: !!ui.deleted,

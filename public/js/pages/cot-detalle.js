@@ -139,7 +139,7 @@
             <div class="cc-panel-body">
               <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(t.subtotal)}</span></div>
               ${cot.descuentoPct > 0 ? `<div class="cc-sum-row disc"><span>Descuento (${cot.descuentoPct}%)</span><span class="v">−${FMT.money(t.descGlobal)}</span></div>` : ''}
-              <div class="cc-sum-row"><span>ITBMS (${cot.itbmsPct}%)</span><span class="v">${FMT.money(t.itbms)}</span></div>
+              <div class="cc-sum-row"><span>${cot.itbmsPct > 0 ? 'ITBMS (' + cot.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="v">${FMT.money(t.itbms)}</span></div>
               <div class="cc-sum-total"><span class="lbl">Total</span><span class="v">${FMT.money(t.total)}</span></div>
               <dl class="cc-kv" style="margin-top:18px; gap:8px 14px;">
                 <dt>Emitida</dt><dd>${esc(fmtFechaCorta(cot.fecha))}</dd>
