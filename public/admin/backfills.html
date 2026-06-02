@@ -78,6 +78,30 @@
       <div id="result-searchTokens" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: normalizeGrupos -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="tags"></i> Normalizar grupos en equipos PoC</span>
+        <span class="hint">Trim + dedup case/acento-insensitive en <code>grupos[]</code></span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        Limpia el array <code>grupos</code> de cada equipo PoC no eliminado: recorta espacios,
+        colapsa whitespace interno y deduplica entradas que solo difieren en mayúsculas o
+        tildes (<code>"Operaciones"</code> vs <code>"operaciones"</code>). Equivalente a la
+        normalización que ya aplican las páginas de escritura — este backfill cubre los
+        documentos creados antes de ese cambio. Skip a equipos con <code>deleted: true</code>.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="normalizeGrupos" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (preview)
+        </button>
+        <button class="btn btn-primary" data-bf-action="normalizeGrupos" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-normalizeGrupos" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>

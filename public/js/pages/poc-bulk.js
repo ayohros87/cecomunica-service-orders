@@ -115,8 +115,9 @@ window.PocBulk = {
       const modelo_label = modelo_id ? (PocState.modelosMap[modelo_id] || '') : '';
       const modelo_id_orig = celdas[COL.modelo].dataset.modeloId || '';
       const modeloEditado  = modelo_id !== modelo_id_orig;
-      const grupos    = (celdas[COL.grupos].querySelector('input')?.value || '')
-        .split(',').map(g => g.trim()).filter(Boolean);
+      const grupos    = FMT.dedupGrupos(
+        (celdas[COL.grupos].querySelector('input')?.value || '').split(',')
+      );
       const sim_number = celdas[COL.sim_tel].querySelector('.sim-number')?.value || '';
       const sim_phone  = celdas[COL.sim_tel].querySelector('.sim-phone')?.value  || '';
 
