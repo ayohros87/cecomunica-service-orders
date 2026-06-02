@@ -386,10 +386,11 @@
         </div>
       </div>
 
-      <!-- Signature canvas -->
+      <!-- Signature canvas. El label cambia entre 'Firma del receptor'
+           (entrega) y 'Firma del que entrega' (recepción) vía _applyModo. -->
       <div class="modal-entrega__sig-wrap">
         <label class="modal-entrega__label--muted">
-          Firma del receptor <span class="req">*</span>
+          <span id="entregaFirmaLabel">Firma del receptor</span> <span class="req">*</span>
         </label>
         <canvas id="entregaFirmaCanvas" class="modal-entrega__canvas"></canvas>
         <button type="button" class="btn btn-ghost modal-entrega__clear-btn"

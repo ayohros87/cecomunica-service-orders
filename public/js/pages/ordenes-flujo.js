@@ -479,6 +479,9 @@ window.copiarSeriales = function (ordenId) {
     const receptorLabel = document.getElementById('entregaReceptorLabel');
     if (receptorLabel) receptorLabel.textContent = esRecepcion ? 'Nombre de quien entrega' : 'Nombre de quien recibe';
 
+    const firmaLabel = document.getElementById('entregaFirmaLabel');
+    if (firmaLabel) firmaLabel.textContent = esRecepcion ? 'Firma del que entrega' : 'Firma del receptor';
+
     const btnLabel = document.getElementById('btnConfirmarEntregaLabel');
     if (btnLabel) btnLabel.textContent = esRecepcion ? 'Confirmar Recepción' : 'Confirmar Entrega';
 
@@ -654,7 +657,7 @@ window.copiarSeriales = function (ordenId) {
   async function _confirmarRecepcion(ordenId, user) {
     const receptorNombre = (document.getElementById('entregaReceptorNombre')?.value || '').trim();
     if (!receptorNombre) { Toast.show('Ingrese el nombre de quien entrega', 'bad'); return; }
-    if (_isCanvasEmpty())  { Toast.show('La firma es obligatoria', 'bad'); return; }
+    if (_isCanvasEmpty())  { Toast.show('La firma del que entrega es obligatoria', 'bad'); return; }
 
     const btn = document.getElementById('btnConfirmarEntrega');
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
