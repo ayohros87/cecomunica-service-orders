@@ -198,6 +198,12 @@
     const refresh = $('btnRefresh');
     if (refresh) refresh.addEventListener('click', () => loadAll());
 
+    // Global search palette: Cmd/Ctrl+K + button click. Init once.
+    if (window.SearchPalette) {
+      SearchPalette.init();
+      $('btnSearch')?.addEventListener('click', () => SearchPalette.open());
+    }
+
     const auto = $('btnAuto');
     if (auto) {
       auto.addEventListener('click', () => {

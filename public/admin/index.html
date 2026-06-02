@@ -27,6 +27,8 @@
   <script src="../js/services/contratosService.js"></script>
   <script src="../js/services/cotizacionesService.js"></script>
   <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/busquedaGlobalService.js"></script>
+  <script src="../js/ui/searchPalette.js"></script>
   <script src="../js/domain/adminMetrics.js"></script>
   <script src="../js/pages/admin-index.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -50,13 +52,16 @@
 
   <div class="app-wrap">
 
-    <!-- Toolbar: refrescar + auto + timestamp -->
+    <!-- Toolbar: refrescar + auto + búsqueda global + timestamp -->
     <div class="admin-toolbar">
       <button id="btnRefresh" class="btn btn-ghost btn-sm" title="Recargar todas las métricas">
         <i data-lucide="refresh-cw"></i> Refrescar
       </button>
       <button id="btnAuto" class="auto-pill" aria-pressed="false" title="Refresca cada 60 segundos mientras la pestaña esté visible">
         <span class="dot"></span> <span class="label-text">Auto</span>
+      </button>
+      <button id="btnSearch" class="btn btn-ghost btn-sm" title="Búsqueda global (Ctrl+K / Cmd+K)">
+        <i data-lucide="search"></i> Buscar <span class="sp-kbd" style="margin-left:6px;">⌘K</span>
       </button>
       <span class="spacer"></span>
       <span id="lastUpdate" class="ts">—</span>
