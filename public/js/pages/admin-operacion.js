@@ -24,8 +24,9 @@
   const DAYS_7   = 7  * 24 * 60 * 60 * 1000;
 
   // Defaults — overridden at runtime by EMPRESA_CONFIG if loaded.
-  const STALE_DAYS_DEFAULT             = 10;
-  const SIN_ASIGNAR_HORAS_DEFAULT      = 24;
+  const STALE_DAYS_DEFAULT              = 10;
+  const SIN_ASIGNAR_HORAS_DEFAULT       = 24;
+  const SIN_ASIGNAR_MAX_DIAS_DEFAULT    = 30;   // > N días = legacy noise, no alerta
   const COMPLETADA_SIN_ENTREGAR_DEFAULT = 5;
   const CONTRATO_PENDIENTE_DIAS_DEFAULT = 7;
   const PIEZAS_STOCK_CRITICO_DEFAULT    = 1;
@@ -34,6 +35,7 @@
 
   function staleDays()         { return Number(window.EMPRESA_CONFIG?.orden_stale_dias)             || STALE_DAYS_DEFAULT; }
   function sinAsignarHoras()   { return Number(window.EMPRESA_CONFIG?.orden_sin_asignar_horas)     || SIN_ASIGNAR_HORAS_DEFAULT; }
+  function sinAsignarMaxDias() { return Number(window.EMPRESA_CONFIG?.orden_sin_asignar_max_dias)  || SIN_ASIGNAR_MAX_DIAS_DEFAULT; }
   function completadaSinEntregarDias() { return Number(window.EMPRESA_CONFIG?.completada_sin_entregar_dias) || COMPLETADA_SIN_ENTREGAR_DEFAULT; }
   function contratoPendienteDias() { return Number(window.EMPRESA_CONFIG?.contrato_pendiente_dias) || CONTRATO_PENDIENTE_DIAS_DEFAULT; }
   function piezasStockCritico() { return Number(window.EMPRESA_CONFIG?.piezas_stock_critico_threshold) || PIEZAS_STOCK_CRITICO_DEFAULT; }
@@ -142,15 +144,19 @@
     const now = new Date();
     const ESTADOS_TERMINAL = new Set(['ENTREGADA', 'COMPLETADA']);
 
-    // ALTA — Órdenes sin asignar > N horas (excluye terminales)
-    const horas = sinAsignarHoras();
+    // ALTA — Órdenes sin asignar entre [N horas, M días]. Las > M días son
+    // legacy noise (probablemente nunca se trabajaron, asignarlas hoy contamina
+    // métricas) — quedan fuera del alert para no enmascarar las accionables
+    // nuevas. Limpieza histórica es trabajo aparte (ver herramienta pendiente).
+    const horas       = sinAsignarHoras();
+    const maxHoras    = sinAsignarMaxDias() * 24;
     const sinAsignar = d.ordenes.filter(o => {
       const est = (o.estado_reparacion || '').toUpperCase();
       if (ESTADOS_TERMINAL.has(est)) return false;
       const tieneTec = !!(o.tecnico_asignado || o.tecnico_uid);
       if (tieneTec) return false;
       const age = AdminMetrics.ageInHours(o.fecha_entrada || o.fecha_creacion, now);
-      return age != null && age >= horas;
+      return age != null && age >= horas && age <= maxHoras;
     }).sort((a, b) => (AdminMetrics.ageInHours(b.fecha_entrada || b.fecha_creacion, now) || 0) -
                       (AdminMetrics.ageInHours(a.fecha_entrada || a.fecha_creacion, now) || 0));
 
@@ -242,9 +248,10 @@
 
     const altaItems = [];
 
-    // Sin asignar > N horas
+    // Sin asignar entre N horas y M días
+    const maxDias = sinAsignarMaxDias();
     if (a.sinAsignar.length) {
-      altaItems.push(`<li class="att-section-header">${a.sinAsignar.length} orden${a.sinAsignar.length !== 1 ? 'es' : ''} sin técnico asignado &gt; ${horas} h</li>`);
+      altaItems.push(`<li class="att-section-header">${a.sinAsignar.length} orden${a.sinAsignar.length !== 1 ? 'es' : ''} sin técnico (entre ${horas} h y ${maxDias} días — las más viejas son legacy y se omiten)</li>`);
       for (const o of a.sinAsignar.slice(0, 5)) {
         const age = AdminMetrics.ageInHours(o.fecha_entrada || o.fecha_creacion, now);
         altaItems.push(attRow({

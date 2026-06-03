@@ -487,6 +487,7 @@ Documento único que centraliza parámetros que cambian con decisiones de negoci
 | `alertas` | array | `[]` | Reglas de alerta configurables. Cada item: `{id, kind, threshold, severity: 'info'\|'warning'\|'error', message?, enabled}`. `kind` es uno de los registrados en `AdminMetrics.ALERT_KINDS` (`ordenes_abiertas_gt`, `cotizaciones_vencen_gt`, etc.). El evaluador puro `evaluateAlertas(alertas, metrics)` corre en `admin/index.html` tras cargar los KPIs y renderiza un banner por cada regla disparada. Editable desde `admin/alertas.html` con tabla inline + botón "Probar contra métricas actuales". |
 | `stock_minimo_default` | int | `5` | Placeholder al crear pieza nueva |
 | `orden_stale_dias` | int | `10` | Umbral del badge "stale" en `admin/operacion.html` |
+| `orden_sin_asignar_max_dias` | int | `30` | Tope superior del alert "sin técnico asignado" en `admin/operacion.html`. Órdenes con más antigüedad se consideran legacy noise (probablemente nunca se trabajaron — asignarlas hoy contamina métricas) y se omiten del alert para no enmascarar las accionables nuevas. La limpieza histórica es trabajo aparte. |
 | `mail_cc_orden_completada` | string[] | `[]` | Pendiente de leer en `onOrdenCompletada` CF |
 | `mail_cc_contrato_aprobado` | string[] | `[]` | Pendiente de leer en `onContratoActivadoSendPdf` CF |
 

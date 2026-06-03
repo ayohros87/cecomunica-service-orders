@@ -8,6 +8,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   pii_purge_enabled:         true,
   stock_minimo_default:      5,
   orden_stale_dias:          10,
+  orden_sin_asignar_max_dias: 30,  // umbral superior — > N días sin asignar se considera legacy noise (no alerta)
   mail_cc_orden_completada:  [],
   mail_cc_contrato_aprobado: [],
   alertas:                   [],  // array de {id, kind, threshold, severity, message, enabled} — ver AdminMetrics.evaluateAlertas
