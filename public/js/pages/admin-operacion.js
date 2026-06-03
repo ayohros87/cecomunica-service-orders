@@ -25,6 +25,7 @@
 
   // Defaults — overridden at runtime by EMPRESA_CONFIG if loaded.
   const STALE_DAYS_DEFAULT              = 10;
+  const STALE_MAX_DIAS_DEFAULT          = 30;   // > N días estancada = legacy noise, no alerta
   const SIN_ASIGNAR_HORAS_DEFAULT       = 24;
   const SIN_ASIGNAR_MAX_DIAS_DEFAULT    = 30;   // > N días = legacy noise, no alerta
   const COMPLETADA_SIN_ENTREGAR_DEFAULT = 5;
@@ -34,6 +35,7 @@
   const COT_VENCE_DAYS = 7;
 
   function staleDays()         { return Number(window.EMPRESA_CONFIG?.orden_stale_dias)             || STALE_DAYS_DEFAULT; }
+  function staleMaxDias()      { return Number(window.EMPRESA_CONFIG?.orden_stale_max_dias)         || STALE_MAX_DIAS_DEFAULT; }
   function sinAsignarHoras()   { return Number(window.EMPRESA_CONFIG?.orden_sin_asignar_horas)     || SIN_ASIGNAR_HORAS_DEFAULT; }
   function sinAsignarMaxDias() { return Number(window.EMPRESA_CONFIG?.orden_sin_asignar_max_dias)  || SIN_ASIGNAR_MAX_DIAS_DEFAULT; }
   function completadaSinEntregarDias() { return Number(window.EMPRESA_CONFIG?.completada_sin_entregar_dias) || COMPLETADA_SIN_ENTREGAR_DEFAULT; }
@@ -169,14 +171,17 @@
     }).sort((a, b) => (AdminMetrics.daysUntilExpiry(a.fecha, a.validezDias || 15, now) || 0) -
                       (AdminMetrics.daysUntilExpiry(b.fecha, b.validezDias || 15, now) || 0));
 
-    // MEDIA — Órdenes estancadas (abierta + sin actualización > orden_stale_dias)
-    const stale = staleDays();
+    // MEDIA — Órdenes estancadas en rango [orden_stale_dias, orden_stale_max_dias].
+    // > max_dias se considera legacy noise (orden olvidada hace meses, no
+    // accionable) — se omite para no enmascarar las estancadas recientes.
+    const stale     = staleDays();
+    const staleMax  = staleMaxDias();
     const ordenesEstancadas = d.ordenes.filter(o => {
       const est = (o.estado_reparacion || '').toUpperCase();
       if (ESTADOS_TERMINAL.has(est)) return false;
       const updated = o.updatedAt || o.fecha_actualizacion || o.fecha_modificacion || o.fecha_entrada;
       const age = AdminMetrics.ageInDays(updated, now);
-      return age != null && age >= stale;
+      return age != null && age >= stale && age <= staleMax;
     }).sort((a, b) => (AdminMetrics.ageInDays(b.fecha_actualizacion || b.fecha_entrada, now) || 0) -
                       (AdminMetrics.ageInDays(a.fecha_actualizacion || a.fecha_entrada, now) || 0));
 
@@ -282,8 +287,9 @@
     const mediaItems = [];
 
     // Órdenes estancadas
+    const staleMax = staleMaxDias();
     if (a.ordenesEstancadas.length) {
-      mediaItems.push(`<li class="att-section-header">${a.ordenesEstancadas.length} orden${a.ordenesEstancadas.length !== 1 ? 'es' : ''} estancada${a.ordenesEstancadas.length !== 1 ? 's' : ''} (sin movimiento &gt; ${stale} días)</li>`);
+      mediaItems.push(`<li class="att-section-header">${a.ordenesEstancadas.length} orden${a.ordenesEstancadas.length !== 1 ? 'es' : ''} estancada${a.ordenesEstancadas.length !== 1 ? 's' : ''} (sin movimiento entre ${stale} y ${staleMax} días — las más viejas son legacy y se omiten)</li>`);
       for (const o of a.ordenesEstancadas.slice(0, 5)) {
         const age = AdminMetrics.ageInDays(o.fecha_actualizacion || o.fecha_entrada, now);
         mediaItems.push(attRow({
