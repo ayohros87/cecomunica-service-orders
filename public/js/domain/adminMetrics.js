@@ -104,14 +104,31 @@
     return triggered;
   }
 
+  // True if `date` falls within the [since, now] window.
+  function isWithinWindow(date, sinceMs, now = Date.now()) {
+    const d = toDate(date);
+    if (!d) return false;
+    const t = d.getTime();
+    return t >= sinceMs && t <= now;
+  }
+
+  // Hours since `date`. null if invalid.
+  function ageInHours(date, now = new Date()) {
+    const d = toDate(date);
+    if (!d) return null;
+    return Math.floor((now.getTime() - d.getTime()) / 3600000);
+  }
+
   window.AdminMetrics = {
     groupByStatus,
     countWhere,
     toDate,
     daysBetween,
     ageInDays,
+    ageInHours,
     daysUntilExpiry,
     bucketByAge,
+    isWithinWindow,
     ALERT_KINDS,
     evaluateAlertas,
   };

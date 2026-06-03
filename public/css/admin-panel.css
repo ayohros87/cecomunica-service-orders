@@ -194,6 +194,115 @@
   font-size: 11px; font-weight: 600;
 }
 
+/* ── Operación: "Lo que pasó" (recent cards) ── */
+
+.recent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-2);
+}
+@media (max-width: 1024px) { .recent-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .recent-grid { grid-template-columns: 1fr; } }
+
+.recent-card {
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  text-decoration: none; color: var(--fg-1);
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+a.recent-card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+.recent-icon {
+  flex: 0 0 auto;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
+  border-radius: var(--radius-sm);
+}
+.recent-icon .lucide { width: 16px; height: 16px; }
+.recent-body { flex: 1; min-width: 0; }
+.recent-label {
+  font-size: 11px; font-weight: 600; color: var(--fg-3);
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.recent-value {
+  font-family: var(--font-display);
+  font-size: 24px; font-weight: 800; line-height: 1.1;
+  color: var(--fg-1);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.recent-sub { font-size: 11px; color: var(--fg-3); margin-top: 2px; }
+
+/* ── Operación: "Requiere atención" (priority groups) ── */
+
+.att-group {
+  margin-bottom: var(--sp-3);
+}
+.att-group-head {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 0;
+  font-size: 13px; font-weight: 700;
+  margin-bottom: 4px;
+}
+.att-group-head .lucide { width: 16px; height: 16px; }
+.att-group-count {
+  color: var(--fg-3); font-weight: 500; font-size: 12px;
+}
+.att-list {
+  list-style: none; padding: 0; margin: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.att-section-header {
+  padding: 8px 12px;
+  background: var(--surface-sunken);
+  font-size: 12px; font-weight: 600;
+  color: var(--fg-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.att-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+.att-row:last-child { border-bottom: none; }
+.att-main { flex: 1; min-width: 0; }
+.att-title { font-weight: 600; color: var(--fg-1); }
+.att-title .att-cliente {
+  font-weight: 400; color: var(--fg-3);
+}
+.att-sub { font-size: 12px; color: var(--fg-3); margin-top: 1px; }
+.att-badge {
+  font-size: 11px; font-weight: 600;
+  padding: 2px 7px; border-radius: 999px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-subtle);
+}
+.att-cta {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.att-cta:hover { background: var(--accent); color: #fff; }
+.att-cta .lucide { width: 12px; height: 12px; }
+.att-more {
+  padding: 6px 12px;
+  font-size: 12px; color: var(--fg-3);
+  font-style: italic;
+}
+
 /* ── Auditoría timeline ── */
 
 .audit-toolbar {
