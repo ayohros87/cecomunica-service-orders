@@ -155,8 +155,12 @@ window.PocList = {
     const tbody      = document.getElementById('devicesTable');
     const btnCargar  = document.getElementById('btnCargarMas');
 
-    if (reset || this._primeraCarga) {
-      tbody.innerHTML = '';
+    // On a reset/first load we want a fresh list, but DON'T wipe the tbody
+    // here — that would drop the skeleton (or current rows) and leave the
+    // table blank for the whole network round-trip. We clear it inside the
+    // .then below, right before appending, so the swap is a single paint.
+    const esReset = reset || this._primeraCarga;
+    if (esReset) {
       this._lastDoc      = null;
       this._primeraCarga = false;
       this._noMasDatos   = false;
@@ -171,6 +175,9 @@ window.PocList = {
       sortField: campoOrden, sortAsc: this._direccionAsc,
       cursorDoc: this._lastDoc || null, limit: 50,
     }).then(({ docs, lastDoc }) => {
+      // Clear the skeleton/old rows now that the data is in (reset only;
+      // pagination appends below the existing rows).
+      if (esReset) tbody.innerHTML = '';
       if (!docs.length) {
         this._noMasDatos = true;
         if (btnCargar) btnCargar.style.display = 'none';

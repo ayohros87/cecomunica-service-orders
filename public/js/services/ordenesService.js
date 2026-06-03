@@ -63,7 +63,7 @@ const OrdenesService = {
           }
           lastDoc = doc;
         });
-        onUpdate?.({ orders, lastSnapshot: lastDoc });
+        onUpdate?.({ orders, lastSnapshot: lastDoc, fromCache: snapshot.metadata.fromCache });
       },
       err => {
         console.error("[OrdenesService.subscribeFirstPage]", err);

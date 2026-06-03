@@ -17,12 +17,6 @@ window.ContratosLista = {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
-  limpiarTabla() {
-    document.getElementById('tablaContratos').innerHTML = '';
-    document.getElementById('resumenContratos').innerHTML =
-      '<div class="loader" style="width:24px;height:24px;border-width:3px;"></div>';
-  },
-
   // ── Row / card builders ──────────────────────────────────────────
   crearFila(id, data) {
     const esc = CS.esc.bind(CS);
@@ -266,12 +260,14 @@ window.ContratosLista = {
       };
 
       if (reset) {
-        this.limpiarTabla();
         CS.contratos = [];
         CS.lastDoc   = null;
       }
 
-      document.querySelectorAll('.skeleton-row').forEach(el => el.remove());
+      // NOTE: we intentionally don't clear the table or strip the skeleton
+      // rows here. The skeleton (or the previous results) stays until the
+      // single `tabla.innerHTML = ''` swap just before the rows are appended
+      // below, so the table never flashes blank during the network load.
 
       const role = String(window.userRole || '').toLowerCase();
       if (role === ROLES.VENDEDOR && !CS.currentUser) return;

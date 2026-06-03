@@ -256,15 +256,82 @@
               <th style="width:120px;">Acciones</th>
             </tr>
           </thead>
-          <tbody id="devicesTable"></tbody>
+          <tbody id="devicesTable">
+            <!-- Skeleton placeholders shown until the first page loads.
+                 Kept on screen through the network load (see PocList.cargar)
+                 and swapped out in a single pass when rows are appended. -->
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:16px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:150px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:48px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:110px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:60px;">&nbsp;</span></td>
+            </tr>
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:16px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:180px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:48px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:100px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:130px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:60px;">&nbsp;</span></td>
+            </tr>
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:16px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:140px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:48px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:100px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:60px;">&nbsp;</span></td>
+            </tr>
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:16px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:165px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:48px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:110px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:60px;">&nbsp;</span></td>
+            </tr>
+            <tr class="skeleton-row" aria-hidden="true">
+              <td><span class="skeleton" style="width:16px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:155px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:48px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:115px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:60px;">&nbsp;</span></td>
+            </tr>
+          </tbody>
         </table>
       </div>
 
       <!-- Footer: count + load more -->
       <div class="app-table-footer">
-        <div class="resumen-badge" id="resumenEquipos">
-          <div class="loader" style="width:18px; height:18px; border-width:2px;"></div>
-        </div>
+        <div class="resumen-badge" id="resumenEquipos"></div>
         <div style="display:flex; gap:var(--sp-2);">
           <button id="btnCargarMas" class="btn btn-ghost btn-sm" onclick="PocList.cargar()"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
           <button class="btn btn-secondary btn-sm" onclick="PocList.mostrarTodo()"><i data-lucide="list"></i> Mostrar todo</button>

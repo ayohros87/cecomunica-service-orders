@@ -117,24 +117,35 @@ function _detenerSnapshotInicial() {
 function _iniciarSnapshotInicial() {
   _detenerSnapshotInicial();
 
-  const ordersTable = APP.utils.mustGetEl("ordersTable");
   const btnCargarMas = APP.utils.mustGetEl("btnCargarMas");
 
   // Reset paginated state — the live listener owns the first page now.
-  ordersTable.innerHTML = "";
+  // NOTE: we intentionally do NOT clear #ordersTable here. The skeleton
+  // rows (or previously-rendered rows) stay on screen until the first
+  // snapshot replaces them in a single synchronous render, so there's no
+  // blank flash between "skeleton gone" and "data in". The flicker fix —
+  // the listener's onUpdate is what owns the swap.
   APP.state.orders = [];
   APP.state.lastVisible = null;
+  // Gate pagination until the live first page renders — see triggerLoadMore
+  // in ordenes-index.js. Without this, auto-load appends page 1 below the
+  // skeleton before the snapshot lands.
+  APP.state.firstPageReady = false;
   btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
   btnCargarMas.disabled = false;
   btnCargarMas.style.display = "block";
 
   const uid = APP.state.userId || firebase.auth().currentUser?.uid || null;
 
+  // Tracks whether we've painted real data yet, so the very first empty
+  // cache snapshot doesn't flash an empty state before the server replies.
+  let _liveRendered = false;
+
   _firstPageUnsubscribe = OrdenesService.subscribeFirstPage({
     userRole: APP.state.userRole,
     userId: uid,
     limit: CONFIG.pageLimit(APP.state.userRole),
-    onUpdate: ({ orders, lastSnapshot }) => {
+    onUpdate: ({ orders, lastSnapshot, fromCache }) => {
       // Merge: live orders replace anything with the same ordenId in
       // the cached state; paginated entries past the live cursor are
       // preserved (they're a snapshot from a previous "Cargar más").
@@ -142,6 +153,17 @@ function _iniciarSnapshotInicial() {
       const paginatedKept = (APP.state.orders || []).filter(o => !liveIds.has(o.ordenId));
       APP.state.orders = [...orders, ...paginatedKept];
       APP.state.lastVisible = lastSnapshot;
+
+      // Hold the skeleton on the first snapshot if it's an empty result
+      // served from the local cache — the server response lands a moment
+      // later with the real data (or a genuine empty state). Without this
+      // the list would flash empty and then immediately repopulate.
+      if (!_liveRendered && fromCache && orders.length === 0 && paginatedKept.length === 0) {
+        return;
+      }
+      _liveRendered = true;
+      // First real page is in — pagination/auto-load may run from here.
+      APP.state.firstPageReady = true;
 
       if (orders.length === 0 && paginatedKept.length === 0) {
         btnCargarMas.style.display = "none";

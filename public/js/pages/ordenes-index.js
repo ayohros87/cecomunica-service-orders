@@ -26,6 +26,12 @@ function syncFilterCardHeight() {
 document.addEventListener("DOMContentLoaded", function () {
   setFechaEntregaVisible(false);
 
+  // Paint the skeleton immediately — before auth + getUserData resolve —
+  // so the table area shows placeholders from the first paint instead of
+  // sitting empty while the header is already visible, then popping a
+  // skeleton in later. It stays until the live snapshot replaces it.
+  if (typeof renderSkeletonRows === 'function') renderSkeletonRows(8);
+
   // §4.1 — Mobile tooltip long-press (500 ms hold on any [title] element).
   // Shows a floating label on touch so tablet/phone users get tooltip info.
   _initTouchTooltips();
@@ -67,20 +73,28 @@ document.addEventListener("DOMContentLoaded", function () {
         if (mobileSoloMias) mobileSoloMias.checked = true;
       }
 
-      // Skeleton placeholders for perceived perf — replaced once
-      // cargarOrdenesYEquipos clears ordersTable + ordersCards.
-      // ORDENES_INDEX_IMPROVEMENTS.md QW11.
-      renderSkeletonRows(8);
+      // Skeleton was already painted at DOMContentLoaded (above) so the
+      // table never sits empty; it stays until the live snapshot replaces
+      // it. ORDENES_INDEX_IMPROVEMENTS.md QW11.
       await cargarTiposDeServicioFiltros();
       await cargarTecnicosFiltros();
       // Apply URL filter state AFTER the dropdowns have their options
       // populated (so `<select>` values resolve correctly) but BEFORE
       // the initial data load (so sort + soloMias take effect on the
       // first render). ORDENES_INDEX_IMPROVEMENTS.md §5.4.
-      const hadUrlFilters = typeof _applyURLToFilters === 'function' && _applyURLToFilters();
+      // Side effect only: writes any URL filter/sort state onto the inputs
+      // so the live listener's first render picks them up (see note below).
+      if (typeof _applyURLToFilters === 'function') _applyURLToFilters();
       await cargarOrdenesYEquipos();
       aplicarRestriccionesPorRol(rol);
-      if (shouldDefaultMine || hadUrlFilters) aplicarFiltrosCombinados();
+      // NOTE: do NOT call aplicarFiltrosCombinados() here. cargarOrdenesYEquipos
+      // sets up the live snapshot listener but returns before its first
+      // callback fires, so APP.state.orders is still empty at this point —
+      // rendering now would flash the "sin coincidencias" empty state over
+      // the skeleton, then get replaced when the snapshot lands. The default
+      // "mis órdenes" / URL filters are already set on the inputs above, so
+      // the listener's own aplicarFiltrosCombinados() applies them once data
+      // arrives.
       // §4.4 — auto-focus search field once the initial render is done.
       _autofocusSearchIfIdle();
     } catch (e) {
@@ -100,6 +114,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const triggerLoadMore = () => {
     if (_autoLoadInFlight) return;
+    // Don't paginate until the live first page has rendered. On initial
+    // load the skeleton is short, so the observer sees the "Cargar más"
+    // button in view and would fire immediately — appending page 1 (with
+    // a still-null cursor) BELOW the skeleton, which then jumps as the
+    // snapshot re-renders from the top. Wait for the first real render.
+    if (!APP.state.firstPageReady) return;
     if (btnCargarMas.disabled) return;
     if (btnCargarMas.style.display === "none") return;
     _autoLoadInFlight = true;
