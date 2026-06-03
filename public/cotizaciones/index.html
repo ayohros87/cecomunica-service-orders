@@ -76,18 +76,19 @@
     <div class="app-table-wrap">
       <div class="filter-bar">
         <div class="cc-segments" id="segments"></div>
-        <div style="flex:1;"></div>
-        <div class="filter-search">
+        <div class="filter-search" style="margin-left:auto;">
           <span class="search-icon"><i data-lucide="search"></i></span>
           <input id="filtroTexto" type="search" placeholder="Buscar N°, cliente…" aria-label="Buscar cotizaciones">
         </div>
-        <label class="toggle-pill" id="wrapToggleMias" style="display:none;">
-          <input type="checkbox" id="toggleMias">
-          Solo mis cotizaciones
+        <label class="filter-toggle" id="wrapToggleMias" for="toggleMias" style="display:none;">
+          <input type="checkbox" id="toggleMias" class="toggle-input">
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">Solo mis cotizaciones</span>
         </label>
-        <label class="toggle-pill">
-          <input type="checkbox" id="toggleEliminadas">
-          Mostrar eliminadas
+        <label class="filter-toggle" for="toggleEliminadas">
+          <input type="checkbox" id="toggleEliminadas" class="toggle-input">
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">Mostrar eliminadas</span>
         </label>
       </div>
 
@@ -104,7 +105,57 @@
             <th style="width:170px; text-align:right;">Acciones</th>
           </tr>
         </thead>
-        <tbody id="tablaCotizaciones"></tbody>
+        <tbody id="tablaCotizaciones">
+          <!-- Skeleton placeholders hasta que llega la primera página.
+               renderTabla() reemplaza todo el tbody de una sola pasada,
+               así que el skeleton se mantiene durante la carga y se
+               intercambia sin parpadeo. -->
+          <tr class="skeleton-row" aria-hidden="true">
+            <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:170px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:90px; border-radius:999px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+          </tr>
+          <tr class="skeleton-row" aria-hidden="true">
+            <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:200px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:90px; border-radius:999px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:140px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+          </tr>
+          <tr class="skeleton-row" aria-hidden="true">
+            <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:150px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:90px; border-radius:999px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:130px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+          </tr>
+          <tr class="skeleton-row" aria-hidden="true">
+            <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:185px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:90px; border-radius:999px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:120px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+          </tr>
+          <tr class="skeleton-row" aria-hidden="true">
+            <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:160px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:90px; border-radius:999px;">&nbsp;</span></td>
+            <td><span class="skeleton" style="width:135px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:80px;">&nbsp;</span></td>
+            <td style="text-align:right;"><span class="skeleton" style="width:70px;">&nbsp;</span></td>
+          </tr>
+        </tbody>
       </table>
       </div>
 
