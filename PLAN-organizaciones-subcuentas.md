@@ -4,7 +4,12 @@
 > **Organización** (matriz) con **subcuentas** (los `clientes` actuales), de forma
 > **explícita y administrable**, sin afectar contratos, órdenes de servicio ni equipos POC.
 
-Estado: **propuesta para aprobación**. Fecha: 2026-06-04.
+Estado: **Fases 0–4 implementadas** (Fase 5 opcional pendiente). Fecha: 2026-06-04.
+
+> Avance: ✅ Fase 0 (cimientos) · ✅ Fase 1 (picker + form) · ✅ Fase 2 (lista) ·
+> ✅ Fase 3 (admin) · ✅ Fase 4 (backfill + revisión) · ⬜ Fase 5 (pulido opcional).
+> Pendiente operativo: desplegar `firestore:indexes`, `firestore:rules` y `functions`
+> antes de usar la lista agrupada y el backfill en producción.
 
 ---
 
