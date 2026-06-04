@@ -3,7 +3,7 @@ const logger     = require("firebase-functions/logger");
 const crypto     = require("crypto");
 const puppeteer  = require("puppeteer-core");
 const { admin, db }                                         = require("../../lib/admin");
-const { sendEmail }                                         = require("../../lib/mail");
+const { sendEmail, recordSendFailure }                      = require("../../lib/mail");
 const { buildEmailFromBase }                                = require("../../domain/emailRenderer");
 const { attachVerificationFromMirror, buildContractHtmlForPdf } = require("../../domain/pdfRenderer");
 
@@ -130,6 +130,11 @@ const onContratoActivadoSendPdf = onDocumentUpdated(
       return null;
     }
 
+    // Captura el contexto del envío para que el catch externo pueda
+    // registrarlo en mail_queue (visibilidad en admin/salud) si algo
+    // falla — antes solo quedaba en CF logs.
+    let mailContext = { source: "onContratoActivadoSendPdf" };
+
     try {
       const contrato = after;
 
@@ -221,10 +226,17 @@ const onContratoActivadoSendPdf = onDocumentUpdated(
         ctaLabel: "Ver contrato"
       });
 
-      await sendEmail({
-        to: "alberto.yohros@cecomunica.com, activaciones@cecomunica.com",
-        cc: vendedorInfo?.email || undefined,
+      mailContext = {
+        ...mailContext,
+        to:      "alberto.yohros@cecomunica.com, activaciones@cecomunica.com",
+        cc:      vendedorInfo?.email || undefined,
         subject: `Contrato APROBADO: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
+      };
+
+      await sendEmail({
+        to:      mailContext.to,
+        cc:      mailContext.cc,
+        subject: mailContext.subject,
         html: htmlEmail,
         attachments: [{
           filename:    `${contrato.contrato_id || "contrato"}.pdf`,
@@ -239,6 +251,9 @@ const onContratoActivadoSendPdf = onDocumentUpdated(
       });
     } catch (err) {
       logger.error("[onContratoActivadoSendPdf] Error en proceso", { message: err.message, stack: err.stack });
+      // Registra el fallo en mail_queue para que aparezca en admin/salud.
+      // Best-effort: si Firestore también está caído, el log de CF ya queda.
+      await recordSendFailure(mailContext, err);
     }
 
     return null;

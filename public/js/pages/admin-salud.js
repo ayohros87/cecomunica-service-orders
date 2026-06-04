@@ -77,17 +77,26 @@
         [
           { key: 'createdAt', label: 'Encolado' },
           { key: 'to', label: 'Para' },
-          { key: 'template', label: 'Template' },
+          { key: 'origen', label: 'Origen' },
           { key: 'error', label: 'Error' },
           { key: 'action', label: '', align: 'right' },
         ],
-        failed.map(m => ({
-          createdAt: fmtTs(m.createdAt),
-          to: Array.isArray(m.to) ? m.to.join(', ') : (m.to || '—'),
-          template: m.template || '—',
-          error: `<code style="font-size:11px;color:#991b1b;">${(m.error || '').toString().slice(0, 140)}</code>`,
-          action: `<button class="btn btn-ghost btn-sm" data-mail-retry="${m.id}" title="Reintentar este envío"><i data-lucide="refresh-cw"></i></button>`,
-        })),
+        failed.map(m => {
+          const direct = m.failed_direct_send === true;
+          const origenLabel = direct
+            ? `<span class="pill" style="background:#fef3c7;color:#92400e;border-color:#fde68a;" title="Enviado directo via sendEmail() — el retry no recupera el payload original">${m.source || 'direct-send'}</span>`
+            : `<span class="pill" title="Encolado via mail_queue — retry re-procesa">${m.template || 'queued'}</span>`;
+          const action = direct
+            ? `<span class="ts" title="Direct-send: el payload no está en el doc, no es retryable desde aquí">—</span>`
+            : `<button class="btn btn-ghost btn-sm" data-mail-retry="${m.id}" title="Reintentar este envío"><i data-lucide="refresh-cw"></i></button>`;
+          return {
+            createdAt: fmtTs(m.createdAt),
+            to: Array.isArray(m.to) ? m.to.join(', ') : (m.to || '—'),
+            origen: origenLabel,
+            error: `<code style="font-size:11px;color:#991b1b;">${(m.error || '').toString().slice(0, 140)}</code>`,
+            action,
+          };
+        }),
         'No hay envíos fallidos registrados.');
 
       // Wire per-row retry buttons.
@@ -106,11 +115,13 @@
         });
       });
 
-      // Show/hide bulk retry button.
+      // Show/hide bulk retry button. Solo incluye queued failures —
+      // direct-send no tiene payload para reintentar.
       const bulkBtn = $('btnRetryAll');
       if (bulkBtn) {
-        bulkBtn.style.display = failed.length > 0 ? '' : 'none';
-        bulkBtn.dataset.ids = JSON.stringify(failed.map(m => m.id));
+        const retryables = failed.filter(m => m.failed_direct_send !== true);
+        bulkBtn.style.display = retryables.length > 0 ? '' : 'none';
+        bulkBtn.dataset.ids = JSON.stringify(retryables.map(m => m.id));
       }
 
       setText('countMailStuck', String(stuck.length));
