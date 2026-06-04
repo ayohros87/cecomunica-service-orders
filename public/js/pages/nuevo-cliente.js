@@ -82,6 +82,31 @@ auth.onAuthStateChanged(user => {
       }
     }
 
+    // 4.5) Auto-provisión de organización por RUC (modelo: toda cuenta pertenece
+    // a una organización = entidad legal). Si el usuario no eligió una org en el
+    // picker y hay RUC, se busca-o-crea la organización de ese RUC y la cuenta
+    // hereda su ficha fiscal (fuente única de verdad).
+    if (!cliente.organizacionId && cliente.ruc_norm && window.OrganizacionesService) {
+      try {
+        const org = await OrganizacionesService.obtenerOCrearPorRuc({
+          nombre: cliente.nombre,
+          ruc: cliente.ruc, dv: cliente.dv,
+          representante: cliente.representante,
+          representante_cedula: cliente.representante_cedula,
+          itbms_exento: cliente.itbms_exento,
+          itbms_motivo_exencion: cliente.itbms_motivo_exencion,
+        }, { user: currentUser });
+        if (org) {
+          cliente.organizacionId = org.id;
+          Object.assign(cliente, OrganizacionesService.fiscalMirror(org));
+          cliente.searchTokens = ClientesService.buildSearchTokens(cliente);
+        }
+      } catch (e) {
+        console.error("auto-provisión de organización:", e);
+        // No bloquea el alta del cliente; queda sin organización (transitorio).
+      }
+    }
+
     // 5) Persistir
     let targetId = clienteId;
     if (clienteId) {

@@ -92,6 +92,28 @@ const OrganizacionesService = {
     return ref.id;
   },
 
+  // Busca la organización por RUC; si no existe, la crea desde la ficha fiscal.
+  // Es el corazón de la auto-provisión: una organización = un RUC, creada sola
+  // al dar de alta un cliente. `fiscal` = { nombre(razón social), ruc, dv,
+  // representante, representante_cedula, itbms_exento, itbms_motivo_exencion }.
+  // Devuelve la organización (con id) o null si no hay RUC.
+  async obtenerOCrearPorRuc(fiscal, { user = null } = {}){
+    const ruc_norm = (fiscal.ruc || "").replace(/\D/g, "");
+    if (!ruc_norm) return null;
+    const db = firebase.firestore();
+    const snap = await db.collection("organizaciones")
+      .where("ruc_norm", "==", ruc_norm)
+      .where("deleted", "==", false)
+      .limit(1).get();
+    if (!snap.empty){
+      const d = snap.docs[0];
+      return { id: d.id, ...d.data() };
+    }
+    const payload = this.buildOrgPayload(fiscal, { user: user || firebase.auth().currentUser, isCreate: true });
+    const id = await this.createOrg(payload);
+    return { id, ...payload };
+  },
+
   async updateOrg(orgId, updates){
     const db = firebase.firestore();
     return db.collection("organizaciones").doc(orgId).update({
