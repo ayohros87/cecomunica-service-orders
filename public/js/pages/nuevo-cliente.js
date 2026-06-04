@@ -3,6 +3,9 @@
 
 const auth = firebase.auth();
 
+// Picker de organización (matriz). Se monta en DOMContentLoaded.
+let orgPicker = null;
+
 function mostrarMensaje(texto, color = "green") {
   const msg = document.getElementById("mensaje");
   msg.textContent = texto;
@@ -23,9 +26,12 @@ auth.onAuthStateChanged(user => {
     const currentUser = firebase.auth().currentUser;
 
     // 1) Recolectar valores crudos del form
+    const org = orgPicker ? orgPicker.getValue() : { id: "", nombre: "" };
     const raw = {
       nombre: document.getElementById("nombre").value,
       cuenta_alias: document.getElementById("cuenta_alias")?.value || "",
+      organizacionId: org.id,
+      organizacion_nombre: org.nombre,
       ruc: document.getElementById("ruc").value,
       dv: document.getElementById("dv").value,
       direccion: document.getElementById("direccion").value,
@@ -105,6 +111,12 @@ window.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const clienteId = params.get("id");
 
+  // Monta el picker de organización (reutilizable).
+  const orgMount = document.getElementById("organizacion");
+  if (orgMount && window.OrganizacionPicker) {
+    orgPicker = OrganizacionPicker.mount(orgMount, {});
+  }
+
   if (clienteId) {
     document.getElementById("pageTitle").textContent = "🧾 Editar Cliente";
 
@@ -114,6 +126,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("nombre").value = d.nombre || "";
     const aliasInput = document.getElementById("cuenta_alias");
     if (aliasInput) aliasInput.value = d.cuenta_alias || "";
+    if (orgPicker && d.organizacionId) {
+      orgPicker.setValue({ id: d.organizacionId, nombre: d.organizacion_nombre || "" });
+    }
     document.getElementById("ruc").value = d.ruc || "";
     document.getElementById("dv").value = d.dv || "";
     document.getElementById("direccion").value = d.direccion || "";

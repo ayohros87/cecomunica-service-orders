@@ -72,6 +72,7 @@ const ClientesService = {
       // (cuenta suelta). Se usa string vacío en vez de null para que las queries
       // con orderBy('organizacionId') no descarten los docs sin organización.
       organizacionId: (raw.organizacionId || "").trim(),
+      organizacion_nombre: (raw.organizacion_nombre || "").trim(),
       organizacion_norm: _norm(raw.organizacion_nombre || raw.organizacion_norm || ""),
       telefono: (raw.telefono || "").replace(/[^\d+]/g, ""),
       email: (raw.email || "").toLowerCase().trim(),

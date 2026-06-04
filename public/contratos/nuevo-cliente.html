@@ -19,6 +19,8 @@
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/organizacionesService.js"></script>
+  <script src="../js/ui/organizacionPicker.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
@@ -45,6 +47,12 @@
           <div class="form-field" style="grid-column:1/-1">
             <label class="form-label" for="nombre">Nombre del cliente <span class="req">*</span></label>
             <input class="form-input" type="text" id="nombre" required>
+          </div>
+
+          <div class="form-field" style="grid-column:1/-1">
+            <label class="form-label" for="organizacion">Organización (matriz)</label>
+            <div id="organizacion"></div>
+            <span class="form-hint">Opcional. Agrupa varias cuentas de un mismo cliente bajo una organización. Puedes elegir una existente o crear una nueva aquí mismo.</span>
           </div>
 
           <div class="form-field" style="grid-column:1/-1">
