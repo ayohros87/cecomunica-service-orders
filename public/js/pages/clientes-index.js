@@ -405,19 +405,22 @@ const onInlineUpdate = debounce(async (id, partial)=>{
     Toast.show('No se pudo guardar: '+e.message, 'bad');
   }
 }, 700);
-// Agrupa las filas de una página por `ruc_norm` (no vacío): cuentas que comparten
-// RUC se pintan bajo una cabecera colapsable; las de RUC único o vacío van sueltas.
+// Agrupa las filas de una página por `organizacionId` (no vacío): las cuentas de
+// una misma organización se pintan bajo una cabecera colapsable; las cuentas sin
+// organización van sueltas como siempre. La agrupación es dentro de la página
+// visible (la lista sigue ordenada por nombre); el detalle completo de membresía
+// vive en la página admin de organizaciones.
 function renderRowsGrouped(docs){
   const buckets = new Map();
   for (const d of docs){
-    const key = (d.ruc_norm || '').trim();
+    const key = (d.organizacionId || '').trim();
     if (!key) continue;
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(d);
   }
   const rendered = new Set();
   for (const d of docs){
-    const key = (d.ruc_norm || '').trim();
+    const key = (d.organizacionId || '').trim();
     const group = key ? buckets.get(key) : null;
     if (group && group.length > 1){
       if (rendered.has(key)) continue;   // ya pintado al toparnos con la 1ª cuenta
@@ -430,24 +433,25 @@ function renderRowsGrouped(docs){
   }
 }
 
-// Cabecera colapsable de un grupo de cuentas con el mismo RUC.
-function renderGroupHeader(rucKey, group){
+// Cabecera colapsable de un grupo de cuentas de una misma organización.
+function renderGroupHeader(orgKey, group){
   const tr = document.createElement('tr');
   tr.className = 'cliente-group-row';
-  const nombre = escapeHtml((group[0].nombre || '').trim() || 'Sin nombre');
-  const ruc = escapeHtml((group[0].ruc || rucKey));
+  const nombre = escapeHtml((group[0].organizacion_nombre || '').trim() || 'Organización');
+  const ruc = escapeHtml((group[0].ruc || ''));
   tr.innerHTML = `
     <td></td>
     <td colspan="14">
       <button type="button" class="cliente-group-toggle" aria-expanded="true">
         <i data-lucide="chevron-down"></i>
+        <i data-lucide="building-2" class="cliente-group-icon"></i>
         <strong>${nombre}</strong>
-        <span class="cliente-group-ruc mono">RUC ${ruc}</span>
+        ${ruc ? `<span class="cliente-group-ruc mono">RUC ${ruc}</span>` : ''}
         <span class="cliente-group-count">${group.length} cuentas</span>
       </button>
     </td>`;
   const btn = tr.querySelector('.cliente-group-toggle');
-  const childSel = `tr.cliente-child[data-group="${(window.CSS && CSS.escape) ? CSS.escape(rucKey) : rucKey}"]`;
+  const childSel = `tr.cliente-child[data-group="${(window.CSS && CSS.escape) ? CSS.escape(orgKey) : orgKey}"]`;
   btn.addEventListener('click', ()=>{
     const expanded = btn.getAttribute('aria-expanded') === 'true';
     btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
@@ -463,7 +467,7 @@ function renderRow(id, c, opts = {}){
   const grouped = !!opts.grouped;
   if (grouped){
     tr.classList.add('cliente-child');
-    tr.dataset.group = (c.ruc_norm || '').trim();
+    tr.dataset.group = (c.organizacionId || '').trim();
   }
   const aliasBadge = (grouped && c.cuenta_alias)
     ? `<span class="cliente-child-alias">${escapeHtml(c.cuenta_alias)}</span>` : '';

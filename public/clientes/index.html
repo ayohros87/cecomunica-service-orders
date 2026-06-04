@@ -47,7 +47,9 @@
       font: inherit; color: inherit; text-align: left;
     }
     .cliente-group-toggle svg { width: 16px; height: 16px; flex: 0 0 auto; transition: transform .15s; }
-    .cliente-group-row.collapsed .cliente-group-toggle svg { transform: rotate(-90deg); }
+    .cliente-group-toggle .cliente-group-icon { color: var(--brand, #0B2A47); transition: none; }
+    .cliente-group-row.collapsed .cliente-group-toggle svg:first-of-type { transform: rotate(-90deg); }
+    .cliente-group-row.collapsed .cliente-group-toggle .cliente-group-icon { transform: none; }
     .cliente-group-ruc { color: var(--fg-3, #64748b); font-size: 12px; }
     .cliente-group-count {
       margin-left: auto; flex: 0 0 auto;
