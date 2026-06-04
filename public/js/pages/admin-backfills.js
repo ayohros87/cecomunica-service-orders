@@ -51,10 +51,12 @@
       ['Skip (sin cambios)', data.skippedUnchanged],
       ['Pendientes update',  data.toWrite],
       // organizacionesPorRuc:
-      ['Grupos propuestos',  data.gruposPropuestos],
+      ['Organizaciones',     data.gruposPropuestos],
       ['Orgs creadas',       data.orgsCreadas],
       ['Cuentas asignadas',  data.cuentasAsignadas],
       ['Skip (ya asignadas)',data.skippedYaAsignados],
+      ['Skip (sin RUC)',     data.skippedSinRuc],
+      ['Cambios fiscales',   data.cuentasConCambioFiscal],
       ['Escritos',           data.written],
       ['Errores',            data.errors],
     ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');

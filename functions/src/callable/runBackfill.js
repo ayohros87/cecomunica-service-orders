@@ -21,9 +21,10 @@ const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
  *     - Mirrors FMT.normalizeGrupo / FMT.dedupGrupos in core/formatting.js.
  *     - Idempotent (only writes when the computed array differs).
  *   { action: "organizacionesPorRuc", dryRun? }
- *     - Propone una organización por cada RUC compartido por 2+ clientes y
- *       asigna esas cuentas (organizacionId). Reutiliza orgs existentes por
- *       ruc_norm; salta cuentas ya asignadas. Devuelve `groups` (preview).
+ *     - Migración: crea una organización por cada RUC (org-de-uno para RUC
+ *       único), con la ficha fiscal del cliente más completo, y la espeja a las
+ *       cuentas. Solo asigna cuentas con organizacionId vacío; reutiliza orgs
+ *       existentes sin pisarlas; nunca toca cliente.nombre. Devuelve `groups`.
  *     - Idempotente. No toca contratos, órdenes ni POC.
  *
  * Returns {action, dryRun, scanned, ...counters}. All actions are
@@ -190,60 +191,115 @@ function orgNorm(s) {
     .toLowerCase().trim();
 }
 
-function orgSearchTokens(nombre, rucNorm) {
+function orgSearchTokens(nombre, rucNorm, rucdvNorm, representante) {
   const toks = new Set();
-  for (const p of orgNorm(nombre).split(/[^a-z0-9]+/).filter(Boolean)) {
-    for (let i = 2; i <= p.length; i++) toks.add(p.slice(0, i));
-  }
+  const add = (text) => {
+    for (const p of orgNorm(text).split(/[^a-z0-9]+/).filter(Boolean)) {
+      for (let i = 2; i <= p.length; i++) toks.add(p.slice(0, i));
+    }
+  };
+  add(nombre); add(representante);
   if (rucNorm) toks.add(rucNorm);
+  if (rucdvNorm) toks.add(rucdvNorm);
   return Array.from(toks).slice(0, 200);
 }
 
-function mostCommon(arr) {
-  const m = new Map();
-  let best = null, bestN = 0;
-  for (const x of arr) {
-    const k = (x || "").trim();
-    if (!k) continue;
-    const n = (m.get(k) || 0) + 1;
-    m.set(k, n);
-    if (n > bestN) { bestN = n; best = k; }
-  }
-  return best;
+// Nº de campos fiscales no vacíos (para elegir el cliente "canónico" del grupo).
+function fiscalScore(d) {
+  let s = 0;
+  if ((d.ruc || "").trim()) s++;
+  if ((d.dv || "").trim()) s++;
+  if ((d.representante || "").trim()) s++;
+  if ((d.representante_cedula || d.cedula_representante || "").trim()) s++;
+  if (d.itbms_exento === true) s++;
+  return s;
 }
 
+// Ficha fiscal de la organización derivada del cliente canónico (sin `nombre` de cuenta).
+function buildOrgFiscal(c) {
+  const ruc = (c.ruc || "").trim();
+  const dv = (c.dv || "").trim();
+  const ruc_norm = ruc.replace(/\D/g, "");
+  const dv_norm = dv.replace(/\D/g, "");
+  const rucdv_norm = ruc_norm + (dv_norm ? ("-" + dv_norm) : "");
+  const itbms = c.itbms_exento === true;
+  const nombre = (c.nombre || "").trim() || "Organización";
+  const representante = (c.representante || "").trim();
+  const representante_cedula = (c.representante_cedula || c.cedula_representante || "").trim();
+  return {
+    nombre, nombre_norm: orgNorm(nombre),
+    ruc, dv, ruc_norm, dv_norm, rucdv_norm,
+    representante, representante_cedula,
+    itbms_exento: itbms,
+    itbms_motivo_exencion: itbms ? (c.itbms_motivo_exencion || "").trim() : "",
+    searchTokens: orgSearchTokens(nombre, ruc_norm, rucdv_norm, representante),
+    activo: true, deleted: false,
+  };
+}
+
+// Ficha fiscal que la organización espeja hacia cada cuenta. NO incluye `nombre`
+// (el nombre es propio de cada cuenta).
+function fiscalMirror(org) {
+  return {
+    ruc: org.ruc || "", dv: org.dv || "",
+    ruc_norm: org.ruc_norm || "", dv_norm: org.dv_norm || "", rucdv_norm: org.rucdv_norm || "",
+    representante: org.representante || "",
+    representante_cedula: org.representante_cedula || "",
+    itbms_exento: !!org.itbms_exento,
+    itbms_motivo_exencion: org.itbms_motivo_exencion || "",
+    organizacion_nombre: org.nombre || "",
+    organizacion_norm: org.nombre_norm || "",
+  };
+}
+
+// ¿El espejo cambiaría algún dato fiscal de usuario del cliente? Solo mira los
+// campos visibles (no los derivados *_norm ni los nuevos organizacion_*), para
+// reportar de forma fiable cuántas cuentas cambian de verdad.
+const FISCAL_KEYS = ["ruc", "dv", "representante", "representante_cedula",
+  "itbms_exento", "itbms_motivo_exencion"];
+function mirrorCambiaFiscal(memberData, mirror) {
+  for (const k of FISCAL_KEYS) {
+    if (k === "itbms_exento") { if (!!memberData[k] !== !!mirror[k]) return true; continue; }
+    if ((memberData[k] || "") !== (mirror[k] || "")) return true;
+  }
+  return false;
+}
+
+// Migración a "toda cuenta tiene organización". Crea una organización por cada RUC
+// (org-de-uno para RUC único), eligiendo la ficha fiscal del cliente más completo,
+// y la espeja a las cuentas. SALVAGUARDAS:
+//   - Solo escribe en `clientes` y `organizaciones` (no toca contratos/órdenes/POC).
+//   - Nunca sobrescribe `cliente.nombre`.
+//   - Solo asigna cuentas con `organizacionId` vacío (respeta asignaciones previas).
+//   - Reutiliza organizaciones existentes sin pisar sus datos.
+//   - Idempotente; salta eliminados y clientes sin RUC.
 async function backfillOrganizacionesPorRuc(dryRun) {
   const startedAt = Date.now();
 
-  // 1) Cargar clientes y agrupar por ruc_norm.
   const snap = await db.collection("clientes").get();
-  let scanned = 0, skippedDeleted = 0, errors = 0;
-  const buckets = new Map(); // ruc_norm -> [{ id, ref, nombre, organizacionId, ruc }]
+  let scanned = 0, skippedDeleted = 0, skippedSinRuc = 0, errors = 0;
+  const buckets = new Map(); // ruc_norm -> [{ id, ref, data }]
   for (const doc of snap.docs) {
     scanned++;
     const d = doc.data();
     if (d.deleted === true) { skippedDeleted++; continue; }
     const ruc = (d.ruc_norm || "").trim();
-    if (!ruc) continue;
+    if (!ruc) { skippedSinRuc++; continue; }
     if (!buckets.has(ruc)) buckets.set(ruc, []);
-    buckets.get(ruc).push({
-      id: doc.id, ref: doc.ref,
-      nombre: d.nombre || "",
-      organizacionId: (d.organizacionId || "").trim(),
-      ruc: d.ruc || "",
-    });
+    buckets.get(ruc).push({ id: doc.id, ref: doc.ref, data: d });
   }
 
-  // 2) Indexar organizaciones existentes por ruc_norm (reuse / idempotencia).
+  // Organizaciones existentes por ruc_norm (se reutilizan; NO se pisan sus datos).
   const orgsSnap = await db.collection("organizaciones").where("deleted", "==", false).get();
   const orgByRuc = new Map();
   for (const o of orgsSnap.docs) {
     const r = (o.data().ruc_norm || "").trim();
-    if (r && !orgByRuc.has(r)) orgByRuc.set(r, { id: o.id, nombre: o.data().nombre || "" });
+    if (r && !orgByRuc.has(r)) orgByRuc.set(r, { id: o.id, ...o.data() });
   }
 
-  let gruposPropuestos = 0, orgsCreadas = 0, cuentasAsignadas = 0, skippedYaAsignados = 0;
-  const groups = []; // preview (capped)
+  let orgsTocadas = 0, orgsCreadas = 0, cuentasAsignadas = 0;
+  let skippedYaAsignados = 0, cuentasConCambioFiscal = 0;
+  const groups = [];
 
   let batch = db.batch();
   let opsInBatch = 0;
@@ -256,55 +312,41 @@ async function backfillOrganizacionesPorRuc(dryRun) {
   };
 
   for (const [ruc, members] of buckets) {
-    if (members.length < 2) continue; // solo multi-cuenta
-    gruposPropuestos++;
+    const pendientes = members.filter(m => !(m.data.organizacionId || "").trim());
+    skippedYaAsignados += (members.length - pendientes.length);
 
-    let org = orgByRuc.get(ruc) || null;
-    const nombreOrg = (org && org.nombre) || mostCommon(members.map(m => m.nombre)) || members[0].nombre || "Organización";
-    const rucDisplay = (members.find(m => m.ruc) || {}).ruc || ruc;
+    const existedOrg = orgByRuc.get(ruc) || null;
+    if (!existedOrg && pendientes.length === 0) continue; // nada que hacer
+    orgsTocadas++;
 
-    // Cuentas que faltan por asignar al destino.
-    const targetId = org ? org.id : null;
-    const pendientes = members.filter(m => !m.organizacionId || (targetId && m.organizacionId !== targetId));
-    const accion = org ? (pendientes.length ? "reuse" : "skip") : "create";
-
-    if (accion === "skip") {
-      skippedYaAsignados += members.length;
-      if (groups.length < 200) groups.push({ ruc: rucDisplay, orgNombre: nombreOrg, accion, miembros: members.length, asignar: 0 });
-      continue;
-    }
-
-    // Crear organización si no existe (pre-generamos id para asignar en el mismo lote).
-    let orgId = targetId;
+    let org = existedOrg;
     if (!org) {
+      // Cliente canónico: el de ficha fiscal más completa del grupo.
+      const canonical = members.slice().sort((a, b) => fiscalScore(b.data) - fiscalScore(a.data))[0];
+      const fiscal = buildOrgFiscal(canonical.data);
       const orgRef = db.collection("organizaciones").doc();
-      orgId = orgRef.id;
+      org = { id: orgRef.id, ...fiscal };
       if (!dryRun) {
         batch.set(orgRef, {
-          nombre: nombreOrg, nombre_norm: orgNorm(nombreOrg),
-          ruc: rucDisplay, ruc_norm: ruc,
-          searchTokens: orgSearchTokens(nombreOrg, ruc),
-          activo: true, deleted: false,
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
-          created_by: "backfill",
-          updated_at: admin.firestore.FieldValue.serverTimestamp(),
-          updated_by: "backfill",
+          ...fiscal,
+          created_at: admin.firestore.FieldValue.serverTimestamp(), created_by: "backfill",
+          updated_at: admin.firestore.FieldValue.serverTimestamp(), updated_by: "backfill",
         });
         opsInBatch++;
+        if (opsInBatch >= BATCH_SIZE) await flushBatch();
       }
       orgsCreadas++;
-      orgByRuc.set(ruc, { id: orgId, nombre: nombreOrg });
-      if (opsInBatch >= BATCH_SIZE) await flushBatch();
+      orgByRuc.set(ruc, org);
     }
 
-    // Asignar cuentas pendientes.
-    const orgTokens = orgSearchTokens(nombreOrg, ruc);
+    const mirror = fiscalMirror(org);
+    const orgTokens = orgSearchTokens(org.nombre, org.ruc_norm, org.rucdv_norm, org.representante);
     for (const m of pendientes) {
+      if (mirrorCambiaFiscal(m.data, mirror)) cuentasConCambioFiscal++;
       if (!dryRun) {
         batch.update(m.ref, {
-          organizacionId: orgId,
-          organizacion_nombre: nombreOrg,
-          organizacion_norm: orgNorm(nombreOrg),
+          organizacionId: org.id,
+          ...mirror,
           searchTokens: admin.firestore.FieldValue.arrayUnion(...orgTokens),
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
           updated_by: "backfill",
@@ -316,15 +358,21 @@ async function backfillOrganizacionesPorRuc(dryRun) {
     }
 
     if (groups.length < 200) {
-      groups.push({ ruc: rucDisplay, orgNombre: nombreOrg, accion, miembros: members.length, asignar: pendientes.length });
+      groups.push({
+        ruc: org.ruc || ruc, orgNombre: org.nombre,
+        accion: existedOrg ? "reuse" : "create",
+        miembros: members.length, asignar: pendientes.length,
+      });
     }
   }
   await flushBatch();
 
   const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
   return {
-    scanned, skippedDeleted, gruposPropuestos, orgsCreadas,
-    cuentasAsignadas, skippedYaAsignados, errors, elapsedSec,
+    scanned, skippedDeleted, skippedSinRuc,
+    gruposPropuestos: orgsTocadas, orgsCreadas,
+    cuentasAsignadas, skippedYaAsignados, cuentasConCambioFiscal,
+    errors, elapsedSec,
     written: cuentasAsignadas + orgsCreadas,
     groups,
   };
