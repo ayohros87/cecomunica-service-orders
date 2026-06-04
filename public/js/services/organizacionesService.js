@@ -154,6 +154,91 @@ const OrganizacionesService = {
       .get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
+
+  // ── Membresía (escriben en `clientes`, vía ClientesService.batchUpdate) ───
+  // Nota: al asignar/renombrar se hace arrayUnion de los tokens de la org para
+  // que el cliente sea buscable por el nombre de su matriz. Al quitar no se
+  // podan tokens (queda buscable por el nombre antiguo; impacto menor).
+
+  // Asigna una o varias cuentas a una organización.
+  async asignarCuentas(orgId, clienteIds){
+    if (!clienteIds || !clienteIds.length) return { affected: 0 };
+    const org = await this.getOrg(orgId);
+    if (!org) throw new Error("Organización no encontrada");
+    const toks = _orgTokens(org.nombre);
+    await ClientesService.batchUpdate(clienteIds, {
+      organizacionId: orgId,
+      organizacion_nombre: org.nombre,
+      organizacion_norm: org.nombre_norm,
+      searchTokens: firebase.firestore.FieldValue.arrayUnion(...toks),
+    });
+    return { affected: clienteIds.length };
+  },
+
+  // Quita una o varias cuentas de su organización (las deja sueltas).
+  async quitarCuentas(clienteIds){
+    if (!clienteIds || !clienteIds.length) return { affected: 0 };
+    await ClientesService.batchUpdate(clienteIds, {
+      organizacionId: "",
+      organizacion_nombre: "",
+      organizacion_norm: "",
+    });
+    return { affected: clienteIds.length };
+  },
+
+  // Renombra la organización y re-sincroniza el nombre denormalizado en sus cuentas.
+  async renombrar(orgId, nuevoNombre){
+    const org = await this.getOrg(orgId);
+    if (!org) throw new Error("Organización no encontrada");
+    const nombre = (nuevoNombre || "").trim();
+    if (!nombre) throw new Error("Nombre vacío");
+    const nombre_norm = _orgNorm(nombre);
+    await this.updateOrg(orgId, {
+      nombre, nombre_norm,
+      searchTokens: this.buildSearchTokens({ nombre, ruc: org.ruc }),
+    });
+    const cuentas = await this.listCuentas(orgId);
+    if (cuentas.length){
+      await ClientesService.batchUpdate(cuentas.map(c => c.id), {
+        organizacion_nombre: nombre,
+        organizacion_norm: nombre_norm,
+        searchTokens: firebase.firestore.FieldValue.arrayUnion(..._orgTokens(nombre)),
+      });
+    }
+    return { affected: cuentas.length };
+  },
+
+  // Fusiona organizaciones origen en una destino: reasigna sus cuentas y
+  // hace soft-delete de las origen.
+  async fusionar(sourceIds, targetId){
+    const target = await this.getOrg(targetId);
+    if (!target) throw new Error("Organización destino no encontrada");
+    const toks = _orgTokens(target.nombre);
+    let affected = 0;
+    for (const sid of (sourceIds || [])){
+      if (!sid || sid === targetId) continue;
+      const cuentas = await this.listCuentas(sid);
+      if (cuentas.length){
+        await ClientesService.batchUpdate(cuentas.map(c => c.id), {
+          organizacionId: targetId,
+          organizacion_nombre: target.nombre,
+          organizacion_norm: target.nombre_norm,
+          searchTokens: firebase.firestore.FieldValue.arrayUnion(...toks),
+        });
+        affected += cuentas.length;
+      }
+      await this.softDeleteOrg(sid);
+    }
+    return { affected };
+  },
+
+  // Soft-delete de una organización, dejando sus cuentas sueltas.
+  async eliminarConCuentas(orgId){
+    const cuentas = await this.listCuentas(orgId);
+    if (cuentas.length) await this.quitarCuentas(cuentas.map(c => c.id));
+    await this.softDeleteOrg(orgId);
+    return { affected: cuentas.length };
+  },
 };
 
 window.OrganizacionesService = OrganizacionesService;

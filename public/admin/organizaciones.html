@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Organizaciones — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <style>
+    .og-layout { display: grid; grid-template-columns: 360px 1fr; gap: var(--sp-4); }
+    @media (max-width: 880px) { .og-layout { grid-template-columns: 1fr; } }
+
+    .og-list {
+      max-height: 520px; overflow-y: auto;
+      border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+      background: var(--surface-card);
+    }
+    .og-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer; font-size: 14px;
+    }
+    .og-item:last-child { border-bottom: 0; }
+    .og-item:hover { background: var(--surface-sunken); }
+    .og-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .og-item .og-name { flex: 1; }
+    .og-item .count {
+      font-size: 11px; color: var(--fg-3); font-weight: normal;
+      background: var(--surface-sunken); padding: 2px 8px; border-radius: 999px;
+    }
+    .og-item.active .count { background: var(--surface-card); color: var(--accent); }
+
+    .og-cuenta-row {
+      display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+      padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); font-size: 14px;
+    }
+    .og-cuenta-row:last-child { border-bottom: 0; }
+    .og-cuenta-meta { color: var(--fg-3); font-size: 12px; }
+    .og-cuenta-alias {
+      display: inline-block; margin-left: 6px; font-size: 11px; color: var(--fg-3);
+      background: var(--surface-sunken); border-radius: 4px; padding: 1px 6px;
+    }
+    .og-assign { position: relative; }
+    .og-assign-menu {
+      position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+      background: #fff; border: 1px solid var(--border-subtle); border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(15,23,42,.12); max-height: 240px; overflow-y: auto; padding: 4px;
+    }
+    .og-assign-menu[hidden] { display: none; }
+    .og-assign-opt { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    .og-assign-opt:hover { background: var(--surface-sunken); }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/organizacionesService.js"></script>
+  <script src="../js/pages/admin-organizaciones.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="building-2"></i> Organizaciones',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Una <strong>organización</strong> (matriz) agrupa varias cuentas de cliente.
+        Cada cuenta sigue siendo un cliente independiente (con su RUC y facturación);
+        esto solo las agrupa. No afecta contratos, órdenes ni equipos POC.
+      </div>
+    </div>
+
+    <div class="og-layout">
+
+      <!-- IZQUIERDA: organizaciones -->
+      <div>
+        <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
+          <div class="form-field" style="margin-bottom:var(--sp-2);">
+            <label class="form-label" for="ogSearch">Organización</label>
+            <input id="ogSearch" class="form-input" type="text" placeholder="Buscar por nombre…" autocomplete="off">
+          </div>
+          <div style="display:flex; gap:var(--sp-2);">
+            <input id="ogNuevoNombre" class="form-input" type="text" placeholder="Nombre de nueva organización…" style="flex:1;">
+            <button id="btnOgCrear" class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Crear</button>
+          </div>
+        </div>
+
+        <div class="admin-toolbar" style="margin-bottom:var(--sp-2);">
+          <button id="btnOgMerge" class="btn btn-secondary btn-sm" disabled
+                  title="Selecciona 2 o más organizaciones para fusionar">
+            <i data-lucide="git-merge"></i> Fusionar seleccionadas
+          </button>
+          <span class="spacer"></span>
+          <span id="ogResumen" class="ts">—</span>
+        </div>
+
+        <div id="ogList" class="og-list">
+          <div style="padding:14px; color:var(--fg-3); font-size:13px;">Cargando organizaciones…</div>
+        </div>
+      </div>
+
+      <!-- DERECHA: detalle -->
+      <div>
+        <div class="ds-card" style="padding:0;">
+          <div id="ogDetalle">
+            <div style="padding:24px; text-align:center; color:var(--fg-3); font-size:13px;">
+              Selecciona una organización a la izquierda para ver y administrar sus cuentas.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div id="toasts" class="toast-region"></div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>
