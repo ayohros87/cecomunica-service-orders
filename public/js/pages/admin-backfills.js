@@ -13,6 +13,35 @@
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  // Reporte de revisión para organizacionesPorRuc: lista los grupos propuestos.
+  function renderGroupsPreview(groups, dryRun) {
+    if (!Array.isArray(groups) || !groups.length) return '';
+    const accionLabel = { create: 'Crear', reuse: 'Reusar', skip: 'Sin cambios' };
+    const rows = groups.map(g => `
+      <tr>
+        <td>${escapeHtml(g.orgNombre)}</td>
+        <td class="mono">${escapeHtml(g.ruc)}</td>
+        <td style="text-align:center;">${g.miembros}</td>
+        <td style="text-align:center;">${g.asignar}</td>
+        <td>${accionLabel[g.accion] || escapeHtml(g.accion)}</td>
+      </tr>`).join('');
+    return `
+      <div style="margin-top:var(--sp-3);">
+        <div class="ts" style="margin-bottom:6px;">
+          ${dryRun ? 'Revisión — grupos que se crearían/actualizarían' : 'Grupos procesados'}
+          (mostrando ${groups.length}):
+        </div>
+        <div class="app-table-wrap" style="max-height:320px; overflow:auto;">
+          <table class="app-table compact" style="font-size:12px;">
+            <thead><tr>
+              <th>Organización</th><th>RUC</th><th>Cuentas</th><th>A asignar</th><th>Acción</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
   function renderResult(action, dryRun, data) {
     const target = $(`result-${action}`);
     if (!target) return;
@@ -21,6 +50,11 @@
       ['Skip (eliminadas)',  data.skippedDeleted],
       ['Skip (sin cambios)', data.skippedUnchanged],
       ['Pendientes update',  data.toWrite],
+      // organizacionesPorRuc:
+      ['Grupos propuestos',  data.gruposPropuestos],
+      ['Orgs creadas',       data.orgsCreadas],
+      ['Cuentas asignadas',  data.cuentasAsignadas],
+      ['Skip (ya asignadas)',data.skippedYaAsignados],
       ['Escritos',           data.written],
       ['Errores',            data.errors],
     ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');
@@ -36,7 +70,8 @@
         <i data-lucide="${icon}"></i>
         <div><span class="alert-title">${titulo}</span></div>
       </div>
-      <div style="font-size:12px;">${counters}</div>`;
+      <div style="font-size:12px;">${counters}</div>
+      ${renderGroupsPreview(data.groups, dryRun)}`;
     if (window.lucide) lucide.createIcons();
   }
 

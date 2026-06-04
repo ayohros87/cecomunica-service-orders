@@ -102,6 +102,29 @@
       <div id="result-normalizeGrupos" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: organizacionesPorRuc -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="building-2"></i> Organizaciones por RUC compartido</span>
+        <span class="hint">Agrupa cuentas con el mismo RUC bajo una organización</span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        Propone una <strong>organización</strong> por cada RUC compartido por 2+ clientes y
+        asigna esas cuentas. Usa <strong>Dry-run</strong> para <strong>revisar</strong> los
+        grupos propuestos antes de aplicar. Idempotente: reutiliza la organización existente
+        con el mismo RUC y salta cuentas ya asignadas. No afecta contratos, órdenes ni POC.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="organizacionesPorRuc" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (revisar)
+        </button>
+        <button class="btn btn-primary" data-bf-action="organizacionesPorRuc" data-bf-mode="run">
+          <i data-lucide="play"></i> Aplicar
+        </button>
+      </div>
+      <div id="result-organizacionesPorRuc" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>
