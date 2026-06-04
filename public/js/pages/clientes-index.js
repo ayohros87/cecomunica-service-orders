@@ -469,15 +469,13 @@ function renderRow(id, c, opts = {}){
     tr.classList.add('cliente-child');
     tr.dataset.group = (c.organizacionId || '').trim();
   }
-  const aliasBadge = (grouped && c.cuenta_alias)
-    ? `<span class="cliente-child-alias">${escapeHtml(c.cuenta_alias)}</span>` : '';
   tr.innerHTML = `
     <td style="text-align:center; width:34px">
       <input type="checkbox" class="rowSel" data-id="${id}" ${ro?'disabled':''}>
     </td>
 
     <td class="${grouped ? 'cliente-child-nombre' : ''}">
-      <input type="text" class="table-input sm" value="${c.nombre||''}" ${ro?'readonly':''} data-field="nombre" />${aliasBadge}
+      <input type="text" class="table-input sm" value="${c.nombre||''}" ${ro?'readonly':''} data-field="nombre" />
     </td>
 
     <td>

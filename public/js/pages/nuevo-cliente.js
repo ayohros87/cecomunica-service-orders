@@ -29,7 +29,6 @@ auth.onAuthStateChanged(user => {
     const org = orgPicker ? orgPicker.getValue() : { id: "", nombre: "" };
     const raw = {
       nombre: document.getElementById("nombre").value,
-      cuenta_alias: document.getElementById("cuenta_alias")?.value || "",
       organizacionId: org.id,
       organizacion_nombre: org.nombre,
       ruc: document.getElementById("ruc").value,
@@ -72,14 +71,9 @@ auth.onAuthStateChanged(user => {
         // Pertenece a una organización: compartir RUC con sus otras cuentas (sedes)
         // es lo esperado. No exigimos nada extra.
       } else if (rucExiste) {
-        // Sin organización: para crear una cuenta adicional exigimos un alias que la distinga.
-        if (!cliente.cuenta_alias) {
-          mostrarMensaje("❌ Ya existe un cliente con ese RUC. Si es una cuenta adicional del mismo cliente, ponle un “Alias de cuenta” (ej. Sucursal X) para distinguirla.", "red");
-          document.getElementById("cuenta_alias")?.focus();
-          return;
-        }
-        if (!confirm(`Ya existe un cliente con el RUC ${cliente.ruc || cliente.ruc_norm}. ¿Crear “${cliente.cuenta_alias}” como cuenta adicional bajo el mismo RUC?`)) return;
-        // Cuenta adicional: se permite compartir RUC (y, por ende, nombre).
+        // Sin organización: confirmamos crear otra cuenta con el mismo RUC.
+        // (Si son sedes del mismo cliente, lo correcto es agruparlas en una organización.)
+        if (!confirm(`Ya existe un cliente con el RUC ${cliente.ruc || cliente.ruc_norm}. ¿Crear “${cliente.nombre}” como otra cuenta con el mismo RUC?\n\nSugerencia: si son cuentas del mismo cliente, agrúpalas en una organización.`)) return;
       } else {
         // RUC nuevo → mantener el chequeo de nombre para evitar duplicados accidentales.
         if (cliente.nombre_norm && await ClientesService.existsActiveByNorm("nombre_norm", cliente.nombre_norm)) {
@@ -174,8 +168,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (!d) return;
 
     document.getElementById("nombre").value = d.nombre || "";
-    const aliasInput = document.getElementById("cuenta_alias");
-    if (aliasInput) aliasInput.value = d.cuenta_alias || "";
     document.getElementById("ruc").value = d.ruc || "";
     document.getElementById("dv").value = d.dv || "";
     document.getElementById("direccion").value = d.direccion || "";

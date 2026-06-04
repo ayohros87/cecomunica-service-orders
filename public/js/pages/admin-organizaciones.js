@@ -110,7 +110,6 @@
           <div class="og-cuenta-row" data-id="${esc(c.id)}">
             <div>
               <strong>${esc(c.nombre || 'Sin nombre')}</strong>
-              ${c.cuenta_alias ? `<span class="og-cuenta-alias">${esc(c.cuenta_alias)}</span>` : ''}
               <div class="og-cuenta-meta">${c.ruc ? 'RUC ' + esc(c.ruc) : 'Sin RUC'}</div>
             </div>
             <button class="btn btn-ghost btn-sm" data-quitar="${esc(c.id)}" title="Quitar de la organización">
