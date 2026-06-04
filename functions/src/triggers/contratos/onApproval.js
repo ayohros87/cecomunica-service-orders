@@ -101,8 +101,12 @@ const onContratoActivado = onDocumentUpdated(
 const onContratoActivadoSendPdf = onDocumentUpdated(
   {
     document: "contratos/{docId}",
-    memory: "1GiB",
-    timeoutSeconds: 120,
+    // Puppeteer + @sparticuz/chromium requieren memoria generosa para
+    // que el bootstrap del binario de Chrome quepa sin caer en el
+    // timeout interno de 30s para el WebSocket endpoint. Con 1 GiB
+    // estaba fallando en cold starts (PROP20260604-01 — 2026-06-04).
+    memory: "2GiB",
+    timeoutSeconds: 180,
     secrets: [
       "FIRMA_SECRET",
       "SMTP_HOST", "SMTP_PORT", "SMTP_SECURE",
