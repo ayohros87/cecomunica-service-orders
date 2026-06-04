@@ -68,8 +68,11 @@ auth.onAuthStateChanged(user => {
         rucExiste = await ClientesService.existsActiveByNorm("ruc_norm", cliente.ruc_norm);
       }
 
-      if (rucExiste) {
-        // Para crear una cuenta adicional exigimos un alias que la distinga.
+      if (rucExiste && cliente.organizacionId) {
+        // Pertenece a una organización: compartir RUC con sus otras cuentas (sedes)
+        // es lo esperado. No exigimos nada extra.
+      } else if (rucExiste) {
+        // Sin organización: para crear una cuenta adicional exigimos un alias que la distinga.
         if (!cliente.cuenta_alias) {
           mostrarMensaje("❌ Ya existe un cliente con ese RUC. Si es una cuenta adicional del mismo cliente, ponle un “Alias de cuenta” (ej. Sucursal X) para distinguirla.", "red");
           document.getElementById("cuenta_alias")?.focus();
@@ -111,10 +114,57 @@ window.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const clienteId = params.get("id");
 
-  // Monta el picker de organización (reutilizable).
+  const selExento = document.getElementById("itbms_exento");
+  const motivoInput = document.getElementById("itbms_motivo_exencion");
+  const motivoWrap = document.getElementById("motivoExencionWrap");
+  const orgHint = document.getElementById("orgHerenciaHint");
+
+  // Mostrar/ocultar motivo según el select de ITBMS
+  const syncMotivoVisibility = () => {
+    if (!selExento || !motivoWrap) return;
+    motivoWrap.style.display = (selExento.value === "true") ? "" : "none";
+  };
+  if (selExento) selExento.addEventListener("change", syncMotivoVisibility);
+
+  // ── Herencia fiscal desde la organización ──────────────────────────────
+  // v2: la org POSEE la ficha fiscal. Si la cuenta tiene organización, esos
+  // campos se heredan y se bloquean (se editan en Admin → Organizaciones).
+  // El nombre, alias, dirección y contacto siguen siendo de la cuenta.
+  function setFiscalReadonly(ro) {
+    ["ruc", "dv", "representante", "representante_cedula", "itbms_motivo_exencion"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.readOnly = ro; el.classList.toggle("is-inherited", ro); }
+    });
+    if (selExento) { selExento.disabled = ro; selExento.classList.toggle("is-inherited", ro); }
+  }
+  async function aplicarHerenciaOrg(orgId) {
+    if (!orgId) {
+      setFiscalReadonly(false);
+      if (orgHint) orgHint.style.display = "none";
+      return;
+    }
+    try {
+      const org = await OrganizacionesService.getOrg(orgId);
+      if (!org) return;
+      document.getElementById("ruc").value = org.ruc || "";
+      document.getElementById("dv").value = org.dv || "";
+      document.getElementById("representante").value = org.representante || "";
+      document.getElementById("representante_cedula").value = org.representante_cedula || "";
+      if (selExento) selExento.value = org.itbms_exento ? "true" : "false";
+      if (motivoInput) motivoInput.value = org.itbms_motivo_exencion || "";
+      syncMotivoVisibility();
+      setFiscalReadonly(true);
+      if (orgHint) {
+        orgHint.textContent = `Datos fiscales heredados de la organización “${org.nombre}”. Para cambiarlos, edita la organización en Admin → Organizaciones.`;
+        orgHint.style.display = "";
+      }
+    } catch (e) { console.error("herencia org:", e); }
+  }
+
+  // Monta el picker de organización (reutilizable) con herencia al cambiar.
   const orgMount = document.getElementById("organizacion");
   if (orgMount && window.OrganizacionPicker) {
-    orgPicker = OrganizacionPicker.mount(orgMount, {});
+    orgPicker = OrganizacionPicker.mount(orgMount, { onChange: (v) => aplicarHerenciaOrg(v && v.id) });
   }
 
   if (clienteId) {
@@ -126,9 +176,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("nombre").value = d.nombre || "";
     const aliasInput = document.getElementById("cuenta_alias");
     if (aliasInput) aliasInput.value = d.cuenta_alias || "";
-    if (orgPicker && d.organizacionId) {
-      orgPicker.setValue({ id: d.organizacionId, nombre: d.organizacion_nombre || "" });
-    }
     document.getElementById("ruc").value = d.ruc || "";
     document.getElementById("dv").value = d.dv || "";
     document.getElementById("direccion").value = d.direccion || "";
@@ -139,21 +186,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("representante_cedula").value =
       d.representante_cedula || d.cedula_representante || "";
     document.getElementById("direccion_facturacion").value = d.direccion_facturacion || "";
-
-    const selExento = document.getElementById("itbms_exento");
     if (selExento) selExento.value = d.itbms_exento ? "true" : "false";
-    const motivoInput = document.getElementById("itbms_motivo_exencion");
     if (motivoInput) motivoInput.value = d.itbms_motivo_exencion || "";
+
+    if (orgPicker && d.organizacionId) {
+      orgPicker.setValue({ id: d.organizacionId, nombre: d.organizacion_nombre || "" });
+      await aplicarHerenciaOrg(d.organizacionId);
+    }
   }
 
-  // Mostrar/ocultar motivo según el select de ITBMS
-  const selExento = document.getElementById("itbms_exento");
-  const motivoWrap = document.getElementById("motivoExencionWrap");
-  const syncMotivoVisibility = () => {
-    if (!selExento || !motivoWrap) return;
-    motivoWrap.style.display = (selExento.value === "true") ? "" : "none";
-  };
-  if (selExento) selExento.addEventListener("change", syncMotivoVisibility);
   syncMotivoVisibility();
 
   // Format RUC on the fly (remove spaces)

@@ -11,6 +11,19 @@
   <title>Nuevo Cliente - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+    /* Campos fiscales heredados de la organización (solo lectura). */
+    .form-input.is-inherited, .form-select.is-inherited {
+      background: var(--bg-2, #f1f5f9);
+      color: var(--fg-2, #475569);
+      cursor: not-allowed;
+    }
+    #orgHerenciaHint {
+      display: none; grid-column: 1 / -1;
+      background: var(--accent-soft, #eef4ff); color: var(--accent, #1e40af);
+      border-radius: 6px; padding: 8px 10px; font-size: 12px;
+    }
+  </style>
 
   <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -72,6 +85,8 @@
             <input class="form-input" type="text" id="dv" inputmode="numeric" pattern="\d{1,2}" maxlength="2" placeholder="Ej. 55" title="1-2 dígitos" style="font-family:var(--font-mono);">
             <span class="form-hint">Si aplica, ingresa 1–2 dígitos.</span>
           </div>
+
+          <div id="orgHerenciaHint"></div>
         </div>
       </div>
 
