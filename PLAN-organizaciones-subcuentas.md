@@ -36,21 +36,20 @@ hacia abajo** (org → cuentas). Contratos/órdenes/POC leen `cliente.ruc`, etc.
 hoy, ahora siempre consistente. La sincronización corre al editar la ficha fiscal de la
 org y al asignar una cuenta.
 
-**Identidad de la cuenta (decisión delicada — pendiente de confirmar):**
-¿`cliente.nombre` de una sede pasa a ser la **razón social** de la org (y la sede se
-distingue con `cuenta_alias`), o conserva su propio nombre? Recomendado: `cliente.nombre`
-= razón social (espejo) + `cuenta_alias` = sede. No afecta contratos existentes (guardan
-su propio snapshot de `cliente_nombre`). **Hasta confirmar, el rehaul NO sobrescribe
-`cliente.nombre`.**
+**Identidad de la cuenta (CONFIRMADO):** cada cuenta conserva su **nombre propio**;
+la organización solo agrupa. La razón social vive en la org; el `nombre` del cliente NO
+se sobrescribe. Por eso `fiscalMirror()` excluye `nombre`.
 
 **Slices del rehaul:**
-- **v2-A** ✅/🔨 Org posee ficha fiscal: `buildOrgPayload` + campos; `actualizarFichaFiscal`
-  (edita org y sincroniza cuentas); form fiscal editable en la página admin.
-- **v2-B** ⬜ Trigger `onWrite organizaciones` → re-sync de cuentas (hardening del sync).
-- **v2-C** ⬜ Form de cliente: al elegir org (o RUC conocido) hereda y **bloquea** los
-  campos fiscales; solo se editan los de sede.
-- **v2-D** ⬜ Backfill v2: la org absorbe la ficha fiscal canónica del grupo de RUC.
-- **v2-E** ⬜ Confirmar identidad de la cuenta (`nombre` = razón social) y aplicarlo.
+- **v2-A** ✅ Org posee ficha fiscal: `buildOrgPayload` + campos; `actualizarFichaFiscal`
+  (edita org y sincroniza cuentas); invariante 1 RUC = 1 org; form fiscal editable en admin.
+- **v2-B** ⬜ Trigger `onWrite organizaciones` → re-sync de cuentas (hardening del sync;
+  hoy el sync corre client-side al guardar/asignar).
+- **v2-C** ✅ Form de cliente: al elegir org hereda y **bloquea** los campos fiscales;
+  nombre/alias/dirección/contacto siguen siendo de la cuenta.
+- **v2-D** ⬜ Backfill v2: la org absorbe la ficha fiscal canónica del grupo de RUC y la
+  espeja a las cuentas (hoy el backfill solo setea nombre/RUC de la org).
+- **v2-E** ✅ Decidido: nombre propio por cuenta (no se sobrescribe).
 
 ---
 
