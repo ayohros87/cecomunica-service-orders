@@ -29,20 +29,34 @@ const OrganizacionesService = {
   tokensFrom: _orgTokens,
 
   buildSearchTokens(org){
-    const t = new Set([ ..._orgTokens(org.nombre) ]);
+    const t = new Set([
+      ..._orgTokens(org.nombre),
+      ..._orgTokens(org.representante),
+    ]);
     if (org.ruc) t.add(String(org.ruc).replace(/\D/g, ""));
+    if (org.rucdv_norm) t.add(org.rucdv_norm);
     return Array.from(t);
   },
 
-  // Payload normalizado, fuente única de verdad de campos derivados.
+  // Payload normalizado, fuente única de verdad de la ficha fiscal de la entidad.
+  // v2: la organización POSEE RUC/DV, razón social, representante y régimen ITBMS;
+  // las cuentas (clientes) los espejan. Ver fiscalMirror() / actualizarFichaFiscal().
   buildOrgPayload(raw, { user = null, isCreate = false } = {}){
     const ahora = firebase.firestore.FieldValue.serverTimestamp();
     const ruc = (raw.ruc || "").trim();
+    const dv  = (raw.dv  || "").trim();
     const ruc_norm = ruc.replace(/\D/g, "");
+    const dv_norm  = dv.replace(/\D/g, "");
+    const rucdv_norm = ruc_norm + (dv_norm ? ("-" + dv_norm) : "");
+    const itbmsExento = !!raw.itbms_exento;
     const org = {
-      nombre: (raw.nombre || "").trim(),
+      nombre: (raw.nombre || "").trim(),              // razón social
       nombre_norm: _orgNorm(raw.nombre),
-      ruc, ruc_norm,
+      ruc, dv, ruc_norm, dv_norm, rucdv_norm,
+      representante: (raw.representante || "").trim(),
+      representante_cedula: (raw.representante_cedula || raw.cedula_representante || "").trim(),
+      itbms_exento: itbmsExento,
+      itbms_motivo_exencion: itbmsExento ? (raw.itbms_motivo_exencion || "").trim() : "",
       activo: raw.activo !== false,
       updated_at: ahora,
       updated_by: user?.uid || null,
@@ -54,6 +68,22 @@ const OrganizacionesService = {
       org.deleted = false;
     }
     return org;
+  },
+
+  // Campos fiscales que la organización espeja hacia cada cuenta (clientes).
+  // NOTA: NO incluye `nombre` todavía — la decisión de si la cuenta adopta la
+  // razón social como su nombre está pendiente de confirmar (ver PLAN v2-E).
+  fiscalMirror(org){
+    return {
+      ruc: org.ruc || "", dv: org.dv || "",
+      ruc_norm: org.ruc_norm || "", dv_norm: org.dv_norm || "", rucdv_norm: org.rucdv_norm || "",
+      representante: org.representante || "",
+      representante_cedula: org.representante_cedula || "",
+      itbms_exento: !!org.itbms_exento,
+      itbms_motivo_exencion: org.itbms_motivo_exencion || "",
+      organizacion_nombre: org.nombre || "",
+      organizacion_norm: org.nombre_norm || "",
+    };
   },
 
   async createOrg(payload){
@@ -160,17 +190,23 @@ const OrganizacionesService = {
   // que el cliente sea buscable por el nombre de su matriz. Al quitar no se
   // podan tokens (queda buscable por el nombre antiguo; impacto menor).
 
-  // Asigna una o varias cuentas a una organización.
+  // Tokens de búsqueda que una cuenta hereda de su organización.
+  _orgTokensUnion(org){
+    const t = new Set([ ..._orgTokens(org.nombre), ..._orgTokens(org.representante) ]);
+    if (org.ruc_norm)   t.add(org.ruc_norm);
+    if (org.rucdv_norm) t.add(org.rucdv_norm);
+    return Array.from(t);
+  },
+
+  // Asigna una o varias cuentas a una organización, espejando su ficha fiscal.
   async asignarCuentas(orgId, clienteIds){
     if (!clienteIds || !clienteIds.length) return { affected: 0 };
     const org = await this.getOrg(orgId);
     if (!org) throw new Error("Organización no encontrada");
-    const toks = _orgTokens(org.nombre);
     await ClientesService.batchUpdate(clienteIds, {
       organizacionId: orgId,
-      organizacion_nombre: org.nombre,
-      organizacion_norm: org.nombre_norm,
-      searchTokens: firebase.firestore.FieldValue.arrayUnion(...toks),
+      ...this.fiscalMirror(org),
+      searchTokens: firebase.firestore.FieldValue.arrayUnion(...this._orgTokensUnion(org)),
     });
     return { affected: clienteIds.length };
   },
@@ -186,26 +222,43 @@ const OrganizacionesService = {
     return { affected: clienteIds.length };
   },
 
-  // Renombra la organización y re-sincroniza el nombre denormalizado en sus cuentas.
-  async renombrar(orgId, nuevoNombre){
-    const org = await this.getOrg(orgId);
-    if (!org) throw new Error("Organización no encontrada");
-    const nombre = (nuevoNombre || "").trim();
-    if (!nombre) throw new Error("Nombre vacío");
-    const nombre_norm = _orgNorm(nombre);
-    await this.updateOrg(orgId, {
-      nombre, nombre_norm,
-      searchTokens: this.buildSearchTokens({ nombre, ruc: org.ruc }),
-    });
+  // Edita la ficha fiscal de la organización (razón social, RUC/DV, representante,
+  // ITBMS) y la sincroniza hacia TODAS sus cuentas. Fuente única de verdad: la org.
+  async actualizarFichaFiscal(orgId, rawFiscal){
+    const prev = await this.getOrg(orgId);
+    if (!prev) throw new Error("Organización no encontrada");
+    const payload = this.buildOrgPayload(
+      { ...prev, ...rawFiscal },
+      { user: firebase.auth().currentUser, isCreate: false }
+    );
+    // Invariante del modelo: un RUC ↔ una organización.
+    if (payload.ruc_norm){
+      const db = firebase.firestore();
+      const dup = await db.collection("organizaciones")
+        .where("ruc_norm", "==", payload.ruc_norm)
+        .where("deleted", "==", false)
+        .limit(3).get();
+      if (dup.docs.some(d => d.id !== orgId)){
+        throw new Error("Ya existe otra organización con ese RUC.");
+      }
+    }
+    await this.updateOrg(orgId, payload);
+    const org = { id: orgId, ...prev, ...payload };
     const cuentas = await this.listCuentas(orgId);
     if (cuentas.length){
       await ClientesService.batchUpdate(cuentas.map(c => c.id), {
-        organizacion_nombre: nombre,
-        organizacion_norm: nombre_norm,
-        searchTokens: firebase.firestore.FieldValue.arrayUnion(..._orgTokens(nombre)),
+        ...this.fiscalMirror(org),
+        searchTokens: firebase.firestore.FieldValue.arrayUnion(...this._orgTokensUnion(org)),
       });
     }
     return { affected: cuentas.length };
+  },
+
+  // Renombrar = cambiar la razón social (delega en la sincronización fiscal).
+  async renombrar(orgId, nuevoNombre){
+    const nombre = (nuevoNombre || "").trim();
+    if (!nombre) throw new Error("Nombre vacío");
+    return this.actualizarFichaFiscal(orgId, { nombre });
   },
 
   // Fusiona organizaciones origen en una destino: reasigna sus cuentas y

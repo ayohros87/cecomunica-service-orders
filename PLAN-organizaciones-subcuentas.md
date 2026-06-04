@@ -13,6 +13,47 @@ Estado: **Fases 0–4 implementadas** (Fase 5 opcional pendiente). Fecha: 2026-0
 
 ---
 
+## 0. Modelo v2 — la organización como entidad fiscal (rehaul)
+
+> El modelo v1 (Fases 0–4) trata la organización como una **etiqueta** que agrupa
+> clientes. Se sentía "crudo" porque la entidad real (RUC, razón social, representante,
+> ITBMS) vivía duplicada en cada cuenta y la org no poseía nada. v2 **invierte la
+> propiedad de los datos**.
+
+**Decisiones (confirmadas):** una organización = **una entidad legal = un RUC**.
+Rehacer el modelo (no solo herencia al crear).
+
+**Quién posee qué:**
+
+| Dato | Dueño (fuente de verdad) |
+|---|---|
+| RUC, DV, razón social, representante legal + cédula, régimen ITBMS | **Organización** |
+| Alias/nombre de sede, dirección, dirección de facturación, contacto local | **Cuenta** (`clientes`) |
+
+**Compatibilidad (no romper contratos/órdenes/POC):** la org es la fuente de verdad;
+los campos fiscales siguen existiendo en cada `clientes` como **espejo sincronizado
+hacia abajo** (org → cuentas). Contratos/órdenes/POC leen `cliente.ruc`, etc. igual que
+hoy, ahora siempre consistente. La sincronización corre al editar la ficha fiscal de la
+org y al asignar una cuenta.
+
+**Identidad de la cuenta (decisión delicada — pendiente de confirmar):**
+¿`cliente.nombre` de una sede pasa a ser la **razón social** de la org (y la sede se
+distingue con `cuenta_alias`), o conserva su propio nombre? Recomendado: `cliente.nombre`
+= razón social (espejo) + `cuenta_alias` = sede. No afecta contratos existentes (guardan
+su propio snapshot de `cliente_nombre`). **Hasta confirmar, el rehaul NO sobrescribe
+`cliente.nombre`.**
+
+**Slices del rehaul:**
+- **v2-A** ✅/🔨 Org posee ficha fiscal: `buildOrgPayload` + campos; `actualizarFichaFiscal`
+  (edita org y sincroniza cuentas); form fiscal editable en la página admin.
+- **v2-B** ⬜ Trigger `onWrite organizaciones` → re-sync de cuentas (hardening del sync).
+- **v2-C** ⬜ Form de cliente: al elegir org (o RUC conocido) hereda y **bloquea** los
+  campos fiscales; solo se editan los de sede.
+- **v2-D** ⬜ Backfill v2: la org absorbe la ficha fiscal canónica del grupo de RUC.
+- **v2-E** ⬜ Confirmar identidad de la cuenta (`nombre` = razón social) y aplicarlo.
+
+---
+
 ## 1. Decisiones ya tomadas
 
 - **Modelo explícito** (colección `organizaciones` + `clientes.organizacionId`), no agrupación implícita por RUC.

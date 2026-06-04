@@ -91,6 +91,8 @@
     renderList();
     $('ogDetalle').innerHTML = `<div style="padding:24px; text-align:center; color:var(--fg-3); font-size:13px;">Cargando cuentas…</div>`;
     try {
+      const fresh = await OrganizacionesService.getOrg(o.id);
+      State.org = fresh || o;
       State.cuentas = await OrganizacionesService.listCuentas(o.id);
       renderDetalle();
     } catch (e) {
@@ -100,7 +102,7 @@
   }
 
   function renderDetalle() {
-    const o = State.seleccionada;
+    const o = State.org;
     if (!o) return;
     const cuentas = State.cuentas;
     const filas = cuentas.length
@@ -117,12 +119,55 @@
           </div>`).join('')
       : `<div style="padding:18px; text-align:center; color:var(--fg-3); font-size:13px;">Esta organización aún no tiene cuentas.</div>`;
 
+    const exento = !!o.itbms_exento;
     $('ogDetalle').innerHTML = `
       <div style="display:flex; align-items:center; gap:var(--sp-2); padding:14px 16px; border-bottom:1px solid var(--border-subtle);">
         <i data-lucide="building-2"></i>
         <strong style="flex:1; font-size:16px;">${esc(o.nombre)}</strong>
-        <button class="btn btn-ghost btn-sm" id="btnOgRename"><i data-lucide="pencil"></i> Renombrar</button>
         <button class="btn btn-danger-ghost btn-sm" id="btnOgDelete"><i data-lucide="trash-2"></i> Eliminar</button>
+      </div>
+
+      <div style="padding:14px 16px; border-bottom:1px solid var(--border-subtle);">
+        <div class="ts" style="margin-bottom:10px;">
+          <i data-lucide="receipt"></i> Ficha fiscal de la entidad — se sincroniza a sus ${cuentas.length} cuenta(s).
+        </div>
+        <div class="form-grid-2">
+          <div class="form-field" style="grid-column:1/-1">
+            <label class="form-label" for="ogfNombre">Razón social <span class="req">*</span></label>
+            <input class="form-input" type="text" id="ogfNombre" value="${esc(o.nombre || '')}">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ogfRuc">RUC</label>
+            <input class="form-input" type="text" id="ogfRuc" value="${esc(o.ruc || '')}" style="font-family:var(--font-mono);">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ogfDv">DV</label>
+            <input class="form-input" type="text" id="ogfDv" value="${esc(o.dv || '')}" maxlength="2" style="font-family:var(--font-mono);">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ogfRep">Representante legal</label>
+            <input class="form-input" type="text" id="ogfRep" value="${esc(o.representante || '')}">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ogfCed">Cédula del representante</label>
+            <input class="form-input" type="text" id="ogfCed" value="${esc(o.representante_cedula || '')}" style="font-family:var(--font-mono);">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="ogfItbms">ITBMS</label>
+            <select class="form-select" id="ogfItbms">
+              <option value="false" ${!exento ? 'selected' : ''}>Paga ITBMS (7%)</option>
+              <option value="true" ${exento ? 'selected' : ''}>Exento</option>
+            </select>
+          </div>
+          <div class="form-field" id="ogfMotivoWrap" style="${exento ? '' : 'display:none;'}">
+            <label class="form-label" for="ogfMotivo">Motivo de exención</label>
+            <input class="form-input" type="text" id="ogfMotivo" value="${esc(o.itbms_motivo_exencion || '')}">
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:var(--sp-2); margin-top:10px;">
+          <button class="btn btn-primary btn-sm" id="btnOgGuardarFiscal"><i data-lucide="save"></i> Guardar ficha fiscal</button>
+          <span class="ts">Al guardar se reescribe la ficha en todas las cuentas de la organización.</span>
+        </div>
       </div>
 
       <div style="padding:12px 16px; border-bottom:1px solid var(--border-subtle);">
@@ -137,8 +182,11 @@
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    $('btnOgRename').addEventListener('click', renombrar);
     $('btnOgDelete').addEventListener('click', eliminar);
+    $('btnOgGuardarFiscal').addEventListener('click', guardarFichaFiscal);
+    $('ogfItbms').addEventListener('change', () => {
+      $('ogfMotivoWrap').style.display = ($('ogfItbms').value === 'true') ? '' : 'none';
+    });
     $('ogCuentas').querySelectorAll('[data-quitar]').forEach(b => {
       b.addEventListener('click', () => quitarCuenta(b.dataset.quitar));
     });
@@ -199,21 +247,26 @@
     }
   }
 
-  async function renombrar() {
-    const o = State.seleccionada;
-    const nuevo = prompt(`Nuevo nombre para “${o.nombre}”:`, o.nombre);
-    if (nuevo === null) return;
-    const n = nuevo.trim();
-    if (!n || n === o.nombre) return;
+  async function guardarFichaFiscal() {
+    const o = State.org;
+    const raw = {
+      nombre: $('ogfNombre').value,
+      ruc: $('ogfRuc').value,
+      dv: $('ogfDv').value,
+      representante: $('ogfRep').value,
+      representante_cedula: $('ogfCed').value,
+      itbms_exento: $('ogfItbms').value === 'true',
+      itbms_motivo_exencion: $('ogfMotivo') ? $('ogfMotivo').value : '',
+    };
+    if (!raw.nombre.trim()) { Toast.show('La razón social es obligatoria.', 'warn'); return; }
     try {
-      const { affected } = await OrganizacionesService.renombrar(o.id, n);
-      Toast.show(`Renombrada — ${affected} cuenta(s) actualizada(s) ✅`, 'ok');
-      State.seleccionada.nombre = n;
+      const { affected } = await OrganizacionesService.actualizarFichaFiscal(o.id, raw);
+      Toast.show(`Ficha guardada — ${affected} cuenta(s) sincronizada(s) ✅`, 'ok');
       await cargarOrgs();
-      await seleccionarOrg({ id: o.id, nombre: n });
+      await seleccionarOrg({ id: o.id, nombre: raw.nombre.trim() });
     } catch (e) {
-      console.error('Error renombrando:', e);
-      Toast.show('No se pudo renombrar.', 'bad');
+      console.error('Error guardando ficha fiscal:', e);
+      Toast.show('No se pudo guardar la ficha fiscal.', 'bad');
     }
   }
 
