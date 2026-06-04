@@ -103,7 +103,8 @@ auth.onAuthStateChanged(user => {
         }
       } catch (e) {
         console.error("auto-provisión de organización:", e);
-        // No bloquea el alta del cliente; queda sin organización (transitorio).
+        // No bloquea el alta del cliente, pero lo avisamos (queda sin organización).
+        if (window.Toast) Toast.show("Aviso: no se pudo asignar la organización automáticamente (" + (e.message || e) + ").", "warn");
       }
     }
 

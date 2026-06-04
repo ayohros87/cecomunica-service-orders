@@ -101,13 +101,14 @@ const OrganizacionesService = {
     const ruc_norm = (fiscal.ruc || "").replace(/\D/g, "");
     if (!ruc_norm) return null;
     const db = firebase.firestore();
+    // Query de un solo campo (índice de campo auto-creado): no depende de un
+    // índice compuesto desplegado. El filtro `deleted` se aplica en memoria.
     const snap = await db.collection("organizaciones")
       .where("ruc_norm", "==", ruc_norm)
-      .where("deleted", "==", false)
-      .limit(1).get();
-    if (!snap.empty){
-      const d = snap.docs[0];
-      return { id: d.id, ...d.data() };
+      .limit(5).get();
+    const existente = snap.docs.find(d => d.data().deleted !== true);
+    if (existente){
+      return { id: existente.id, ...existente.data() };
     }
     const payload = this.buildOrgPayload(fiscal, { user: user || firebase.auth().currentUser, isCreate: true });
     const id = await this.createOrg(payload);
@@ -258,9 +259,8 @@ const OrganizacionesService = {
       const db = firebase.firestore();
       const dup = await db.collection("organizaciones")
         .where("ruc_norm", "==", payload.ruc_norm)
-        .where("deleted", "==", false)
-        .limit(3).get();
-      if (dup.docs.some(d => d.id !== orgId)){
+        .limit(5).get();
+      if (dup.docs.some(d => d.id !== orgId && d.data().deleted !== true)){
         throw new Error("Ya existe otra organización con ese RUC.");
       }
     }
