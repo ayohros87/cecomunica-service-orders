@@ -47,8 +47,9 @@ se sobrescribe. Por eso `fiscalMirror()` excluye `nombre`.
   hoy el sync corre client-side al guardar/asignar).
 - **v2-C** ✅ Form de cliente: al elegir org hereda y **bloquea** los campos fiscales;
   nombre/alias/dirección/contacto siguen siendo de la cuenta.
-- **v2-D** ⬜ Backfill v2: la org absorbe la ficha fiscal canónica del grupo de RUC y la
-  espeja a las cuentas (hoy el backfill solo setea nombre/RUC de la org).
+- **v2-D** ✅ Backfill v2: crea org por cada RUC (org-de-uno incl.), elige la ficha
+  fiscal del cliente más completo y la espeja sin tocar `nombre`; solo asigna cuentas
+  con `organizacionId` vacío; idempotente; reporta "Cambios fiscales" en dry-run.
 - **v2-E** ✅ Decidido: nombre propio por cuenta (no se sobrescribe).
 
 ---
