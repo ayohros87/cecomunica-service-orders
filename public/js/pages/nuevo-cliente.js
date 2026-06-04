@@ -25,6 +25,7 @@ auth.onAuthStateChanged(user => {
     // 1) Recolectar valores crudos del form
     const raw = {
       nombre: document.getElementById("nombre").value,
+      cuenta_alias: document.getElementById("cuenta_alias")?.value || "",
       ruc: document.getElementById("ruc").value,
       dv: document.getElementById("dv").value,
       direccion: document.getElementById("direccion").value,
@@ -52,18 +53,29 @@ auth.onAuthStateChanged(user => {
 
     // 4) Unicidad (SOLO al crear) — ignora soft-deleted para no bloquear reactivaciones
     if (!clienteId) {
+      // ¿Ya existe el RUC? Puede ser un duplicado real o una cuenta adicional
+      // del mismo cliente (mismo RUC, distinta cuenta).
+      let rucExiste = false;
       if (cliente.rucdv_norm && cliente.dv_norm) {
-        if (await ClientesService.existsActiveByNorm("rucdv_norm", cliente.rucdv_norm)) {
-          mostrarMensaje("❌ Ya existe un cliente con ese RUC + DV.", "red"); return;
-        }
+        rucExiste = await ClientesService.existsActiveByNorm("rucdv_norm", cliente.rucdv_norm);
+      } else if (cliente.ruc_norm) {
+        rucExiste = await ClientesService.existsActiveByNorm("ruc_norm", cliente.ruc_norm);
       }
-      if (cliente.ruc_norm) {
-        if (await ClientesService.existsActiveByNorm("ruc_norm", cliente.ruc_norm)) {
-          mostrarMensaje("❌ Ya existe un cliente con ese RUC/Cédula.", "red"); return;
+
+      if (rucExiste) {
+        // Para crear una cuenta adicional exigimos un alias que la distinga.
+        if (!cliente.cuenta_alias) {
+          mostrarMensaje("❌ Ya existe un cliente con ese RUC. Si es una cuenta adicional del mismo cliente, ponle un “Alias de cuenta” (ej. Sucursal X) para distinguirla.", "red");
+          document.getElementById("cuenta_alias")?.focus();
+          return;
         }
-      }
-      if (await ClientesService.existsActiveByNorm("nombre_norm", cliente.nombre_norm)) {
-        mostrarMensaje("❌ Ya existe un cliente con ese nombre.", "red"); return;
+        if (!confirm(`Ya existe un cliente con el RUC ${cliente.ruc || cliente.ruc_norm}. ¿Crear “${cliente.cuenta_alias}” como cuenta adicional bajo el mismo RUC?`)) return;
+        // Cuenta adicional: se permite compartir RUC (y, por ende, nombre).
+      } else {
+        // RUC nuevo → mantener el chequeo de nombre para evitar duplicados accidentales.
+        if (cliente.nombre_norm && await ClientesService.existsActiveByNorm("nombre_norm", cliente.nombre_norm)) {
+          mostrarMensaje("❌ Ya existe un cliente con ese nombre.", "red"); return;
+        }
       }
     }
 
@@ -100,6 +112,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (!d) return;
 
     document.getElementById("nombre").value = d.nombre || "";
+    const aliasInput = document.getElementById("cuenta_alias");
+    if (aliasInput) aliasInput.value = d.cuenta_alias || "";
     document.getElementById("ruc").value = d.ruc || "";
     document.getElementById("dv").value = d.dv || "";
     document.getElementById("direccion").value = d.direccion || "";

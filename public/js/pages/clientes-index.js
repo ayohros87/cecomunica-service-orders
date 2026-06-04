@@ -164,7 +164,7 @@ $btnTodo.onclick = async ()=>{
       const { docs, lastDoc: cur, count } = await fetchPage(lastDoc);
       if(!count) break;
       lastDoc = cur;
-      for(const d of docs){ renderRow(d.id, d); total++; }
+      renderRowsGrouped(docs); total += docs.length;
       pages++;
       if(count < PAGE_SIZE) break;
       if(pages >= MAX_PAGES){
@@ -335,7 +335,7 @@ async function gotoPage(target){
     $tbody.innerHTML = '';
     selectedIds.clear(); $selectAll.checked=false; updateBulkBar();
 
-    for(const d of docs){ renderRow(d.id, d); }
+    renderRowsGrouped(docs);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
     currentPage = target;
@@ -368,9 +368,9 @@ async function loadPage(reset){
   if(cur) lastDoc = cur;
   if(reset && !count){ $resumen.textContent='0 resultados'; return; }
 
-  for(const d of docs){ renderRow(d.id, d); }
+  renderRowsGrouped(docs);
   if (typeof lucide !== 'undefined') lucide.createIcons();
-  $resumen.textContent = `${document.querySelectorAll('#tbody tr').length} resultado(s)`;
+  $resumen.textContent = `${document.querySelectorAll('#tbody tr:not(.cliente-group-row)').length} resultado(s)`;
   $selectAll.disabled = ($tbody.children.length === 0) || asReadonly();
 }
 
@@ -405,16 +405,75 @@ const onInlineUpdate = debounce(async (id, partial)=>{
     Toast.show('No se pudo guardar: '+e.message, 'bad');
   }
 }, 700);
-function renderRow(id, c){
+// Agrupa las filas de una página por `ruc_norm` (no vacío): cuentas que comparten
+// RUC se pintan bajo una cabecera colapsable; las de RUC único o vacío van sueltas.
+function renderRowsGrouped(docs){
+  const buckets = new Map();
+  for (const d of docs){
+    const key = (d.ruc_norm || '').trim();
+    if (!key) continue;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(d);
+  }
+  const rendered = new Set();
+  for (const d of docs){
+    const key = (d.ruc_norm || '').trim();
+    const group = key ? buckets.get(key) : null;
+    if (group && group.length > 1){
+      if (rendered.has(key)) continue;   // ya pintado al toparnos con la 1ª cuenta
+      rendered.add(key);
+      renderGroupHeader(key, group);
+      for (const child of group){ renderRow(child.id, child, { grouped: true }); }
+    } else {
+      renderRow(d.id, d);
+    }
+  }
+}
+
+// Cabecera colapsable de un grupo de cuentas con el mismo RUC.
+function renderGroupHeader(rucKey, group){
+  const tr = document.createElement('tr');
+  tr.className = 'cliente-group-row';
+  const nombre = escapeHtml((group[0].nombre || '').trim() || 'Sin nombre');
+  const ruc = escapeHtml((group[0].ruc || rucKey));
+  tr.innerHTML = `
+    <td></td>
+    <td colspan="14">
+      <button type="button" class="cliente-group-toggle" aria-expanded="true">
+        <i data-lucide="chevron-down"></i>
+        <strong>${nombre}</strong>
+        <span class="cliente-group-ruc mono">RUC ${ruc}</span>
+        <span class="cliente-group-count">${group.length} cuentas</span>
+      </button>
+    </td>`;
+  const btn = tr.querySelector('.cliente-group-toggle');
+  const childSel = `tr.cliente-child[data-group="${(window.CSS && CSS.escape) ? CSS.escape(rucKey) : rucKey}"]`;
+  btn.addEventListener('click', ()=>{
+    const expanded = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+    tr.classList.toggle('collapsed', expanded);
+    $tbody.querySelectorAll(childSel).forEach(r => { r.style.display = expanded ? 'none' : ''; });
+  });
+  $tbody.appendChild(tr);
+}
+
+function renderRow(id, c, opts = {}){
   const tr = document.createElement('tr');
   const ro = asReadonly();
+  const grouped = !!opts.grouped;
+  if (grouped){
+    tr.classList.add('cliente-child');
+    tr.dataset.group = (c.ruc_norm || '').trim();
+  }
+  const aliasBadge = (grouped && c.cuenta_alias)
+    ? `<span class="cliente-child-alias">${escapeHtml(c.cuenta_alias)}</span>` : '';
   tr.innerHTML = `
     <td style="text-align:center; width:34px">
       <input type="checkbox" class="rowSel" data-id="${id}" ${ro?'disabled':''}>
     </td>
 
-    <td>
-      <input type="text" class="table-input sm" value="${c.nombre||''}" ${ro?'readonly':''} data-field="nombre" />
+    <td class="${grouped ? 'cliente-child-nombre' : ''}">
+      <input type="text" class="table-input sm" value="${c.nombre||''}" ${ro?'readonly':''} data-field="nombre" />${aliasBadge}
     </td>
 
     <td>
