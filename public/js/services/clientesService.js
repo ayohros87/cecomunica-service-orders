@@ -34,6 +34,7 @@ const ClientesService = {
       ..._tokensFrom(cliente.representante),
       ..._tokensFrom(cliente.direccion),
       ..._tokensFrom(cliente.cuenta_alias),
+      ..._tokensFrom(cliente.organizacion_norm),
     ]);
     if (Array.isArray(cliente.tags)){
       for (const x of cliente.tags) _tokensFrom(x).forEach(k => t.add(k));
@@ -67,6 +68,11 @@ const ClientesService = {
       // Alias de cuenta — distingue cuentas que comparten el mismo RUC
       // (p. ej. "Sucursal Vía España"). Vacío = cuenta única.
       cuenta_alias: (raw.cuenta_alias || "").trim(),
+      // Organización (matriz) a la que pertenece esta cuenta. '' = sin organización
+      // (cuenta suelta). Se usa string vacío en vez de null para que las queries
+      // con orderBy('organizacionId') no descarten los docs sin organización.
+      organizacionId: (raw.organizacionId || "").trim(),
+      organizacion_norm: _norm(raw.organizacion_nombre || raw.organizacion_norm || ""),
       telefono: (raw.telefono || "").replace(/[^\d+]/g, ""),
       email: (raw.email || "").toLowerCase().trim(),
       representante: (raw.representante || "").trim(),
