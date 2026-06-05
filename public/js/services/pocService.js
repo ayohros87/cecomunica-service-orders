@@ -44,21 +44,46 @@ const PocService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
-  // Query devices by client — tries by clienteId first, falls back to clienteNombre.
-  // Cache-first: tries IndexedDB cache before network.
+  // Query devices by client. Cuando se proveen AMBOS clienteId y clienteNombre,
+  // corre las DOS queries y combina los resultados (dedup por docId) — los
+  // equipos legacy escriben solo `cliente` (string) sin `cliente_id`, así que
+  // sin esto faltarían equipos cuando se llama por id pero hay nombre legacy.
   async getByCliente({ clienteId = null, clienteNombre = null } = {}) {
+    if (!clienteId && !clienteNombre) return [];
     const db = firebase.firestore();
-    let snap;
-    if (clienteId) {
-      snap = await db.collection('poc_devices').where('cliente_id', '==', clienteId).get({ source: 'cache' });
-      if (snap.empty) snap = await db.collection('poc_devices').where('cliente_id', '==', clienteId).get();
-    } else if (clienteNombre) {
-      snap = await db.collection('poc_devices').where('cliente', '==', clienteNombre).get({ source: 'cache' });
-      if (snap.empty) snap = await db.collection('poc_devices').where('cliente', '==', clienteNombre).get();
-    } else {
-      return [];
-    }
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const found = new Map();
+    const runQuery = async (field, value) => {
+      let snap = await db.collection('poc_devices').where(field, '==', value).get({ source: 'cache' });
+      if (snap.empty) snap = await db.collection('poc_devices').where(field, '==', value).get();
+      snap.docs.forEach(d => { if (!found.has(d.id)) found.set(d.id, { id: d.id, ...d.data() }); });
+    };
+    const tasks = [];
+    if (clienteId)     tasks.push(runQuery('cliente_id', clienteId));
+    if (clienteNombre) tasks.push(runQuery('cliente',    clienteNombre));
+    await Promise.all(tasks);
+    return Array.from(found.values());
+  },
+
+  // Returns identifiers of clientes que tienen al menos un device no eliminado
+  // con al menos un grupo en grupos[]. Usado por admin/grupos para filtrar
+  // clientes sin grupos del listado (son ruido — no hay nada que administrar).
+  // Una sola lectura completa de poc_devices; cache-first.
+  async getClientesConGrupos() {
+    const db = firebase.firestore();
+    let snap = await db.collection('poc_devices').get({ source: 'cache' });
+    if (snap.empty) snap = await db.collection('poc_devices').get();
+    const ids = new Set();
+    const nombres = new Set();
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.deleted === true) return;
+      const tieneGrupos = Array.isArray(d.grupos)
+        && d.grupos.some(g => (g || '').toString().trim());
+      if (!tieneGrupos) return;
+      if (d.cliente_id) ids.add(d.cliente_id);
+      if (d.cliente)    nombres.add(d.cliente);
+    });
+    return { ids, nombres };
   },
 
   async getRecent(limit = 5) {
