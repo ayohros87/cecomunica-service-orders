@@ -64,26 +64,48 @@ const PocService = {
     return Array.from(found.values());
   },
 
-  // Returns identifiers of clientes que tienen al menos un device no eliminado
-  // con al menos un grupo en grupos[]. Usado por admin/grupos para filtrar
-  // clientes sin grupos del listado (son ruido — no hay nada que administrar).
-  // Una sola lectura completa de poc_devices; cache-first.
+  // Returns identifiers de clientes que tienen al menos un device no eliminado
+  // con al menos un grupo + (opcional) los grupos crudos agrupados por cliente
+  // para análisis de duplicados desde la página. Una sola lectura cache-first
+  // de poc_devices — sirve tanto para filtrar la lista como para el scan de
+  // duplicados (no se duplica el read).
+  //
+  // Retorna:
+  //   { ids: Set<clienteId>, nombres: Set<clienteNombre>,
+  //     gruposPorId: Map<clienteId, Set<grupoRaw>>,
+  //     gruposPorNombre: Map<clienteNombre, Set<grupoRaw>> }
+  //
+  // Los Sets de grupos dedupan por forma cruda (case-sensitive trimmed) —
+  // las helpers de gruposAnalisis hacen su propia normalización.
   async getClientesConGrupos() {
     const db = firebase.firestore();
     let snap = await db.collection('poc_devices').get({ source: 'cache' });
     if (snap.empty) snap = await db.collection('poc_devices').get();
     const ids = new Set();
     const nombres = new Set();
+    const gruposPorId = new Map();
+    const gruposPorNombre = new Map();
     snap.forEach(doc => {
       const d = doc.data();
       if (d.deleted === true) return;
-      const tieneGrupos = Array.isArray(d.grupos)
-        && d.grupos.some(g => (g || '').toString().trim());
-      if (!tieneGrupos) return;
-      if (d.cliente_id) ids.add(d.cliente_id);
-      if (d.cliente)    nombres.add(d.cliente);
+      const grupos = (Array.isArray(d.grupos) ? d.grupos : [])
+        .map(g => (g || '').toString().trim())
+        .filter(Boolean);
+      if (!grupos.length) return;
+      if (d.cliente_id) {
+        ids.add(d.cliente_id);
+        if (!gruposPorId.has(d.cliente_id)) gruposPorId.set(d.cliente_id, new Set());
+        const set = gruposPorId.get(d.cliente_id);
+        for (const g of grupos) set.add(g);
+      }
+      if (d.cliente) {
+        nombres.add(d.cliente);
+        if (!gruposPorNombre.has(d.cliente)) gruposPorNombre.set(d.cliente, new Set());
+        const set = gruposPorNombre.get(d.cliente);
+        for (const g of grupos) set.add(g);
+      }
     });
-    return { ids, nombres };
+    return { ids, nombres, gruposPorId, gruposPorNombre };
   },
 
   async getRecent(limit = 5) {

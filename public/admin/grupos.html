@@ -52,12 +52,39 @@
     .gp-grupo-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
     .gp-dup-banner {
-      background: #FFF7ED; color: #9A3412; border: 1px solid #FDBA74;
       padding: 10px 14px; border-radius: var(--radius-md);
       margin-bottom: var(--sp-3); font-size: 13px;
+      border: 1px solid;
     }
     .gp-dup-banner strong { display: block; margin-bottom: 4px; }
     .gp-dup-banner button { margin-top: 6px; }
+    .gp-dup-exactos { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
+    .gp-dup-fuzzy   { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+
+    /* Badges en lista de clientes */
+    .gp-cliente-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .gp-cliente-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gp-badge {
+      display: inline-block;
+      min-width: 22px; padding: 2px 8px; border-radius: 999px;
+      font-size: 11px; font-weight: 700; text-align: center;
+      border: 1px solid;
+    }
+    .gp-badge-exactos { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
+    .gp-badge-fuzzy   { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+    .gp-cliente-item.active .gp-badge { box-shadow: 0 0 0 1px var(--accent-soft); }
+
+    .btn-xs { font-size: 11px; padding: 2px 8px; }
+
+    /* Toolbar de scan global (en columna izquierda) */
+    .gp-scan-toolbar {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      padding: 8px; margin-bottom: var(--sp-3);
+      background: var(--surface-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+    .gp-scan-toolbar .btn { font-size: 12px; padding: 5px 10px; }
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -72,6 +99,7 @@
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/pocService.js"></script>
+  <script src="../js/domain/gruposAnalisis.js"></script>
   <script src="../js/pages/admin-grupos.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
@@ -106,6 +134,18 @@
 
       <!-- COLUMNA IZQUIERDA: clientes -->
       <div>
+        <!-- Scan global de duplicados — busquedas separadas (no corren a la vez) -->
+        <div class="gp-scan-toolbar">
+          <button id="btnGpScanExactos" class="btn btn-secondary"
+                  title="Detecta nombres que solo difieren en mayúsculas, acentos o espacios — auto-mergeables">
+            <i data-lucide="search"></i> 🔴 Buscar exactos
+          </button>
+          <button id="btnGpScanFuzzy" class="btn btn-ghost"
+                  title="Detecta nombres similares por distancia de edición — requiere revisión humana antes de fusionar">
+            <i data-lucide="scan-search"></i> 🟡 Buscar fuzzy
+          </button>
+        </div>
+
         <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
           <div class="form-field" style="margin-bottom:0;">
             <label class="form-label" for="gpClienteSearch">Cliente</label>

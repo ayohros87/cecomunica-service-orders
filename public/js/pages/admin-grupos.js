@@ -16,13 +16,18 @@
   'use strict';
 
   const State = {
-    clientes: [],          // [{ id, nombre, norm }] — todos los clientes
-    clientesConGrupos: null, // { idsSet, nombresNormSet } — null hasta cargar
-    mostrarTodos: false,   // toggle: si true, no filtra por "tiene grupos"
+    clientes: [],            // [{ id, nombre, norm }] — todos los clientes
+    clientesConGrupos: null, // { idsSet, nombresNormSet, gruposPorId, gruposPorNombre } — null hasta cargar
+    mostrarTodos: false,     // toggle: si true, no filtra por "tiene grupos"
     clienteFiltro: '',
-    clienteSel: null,      // { id, nombre } | null
-    grupos: [],            // [{ nombre, count, devices: [] }]
+    clienteSel: null,        // { id, nombre } | null
+    grupos: [],              // [{ nombre, count, devices: [] }]
     seleccionados: new Set(),
+
+    // Scan de duplicados — null = ningún scan corrido, sino objeto con análisis.
+    // mode: 'exactos' | 'fuzzy'
+    // porId/porNombre: Map<key, bucketCount> (solo > 0)
+    scan: null,
   };
 
   function $(id) { return document.getElementById(id); }
@@ -53,7 +58,20 @@
       // Normaliza los nombres del set una sola vez para comparación O(1).
       const nombresNorm = new Set();
       conGrupos.nombres.forEach(n => nombresNorm.add(FMT.normalize(n)));
-      State.clientesConGrupos = { ids: conGrupos.ids, nombresNorm };
+      // Mapa nombre normalizado → conjunto de grupos crudos (para el scan).
+      const gruposPorNombreNorm = new Map();
+      conGrupos.gruposPorNombre.forEach((set, nombre) => {
+        const k = FMT.normalize(nombre);
+        if (!gruposPorNombreNorm.has(k)) gruposPorNombreNorm.set(k, new Set());
+        const target = gruposPorNombreNorm.get(k);
+        set.forEach(g => target.add(g));
+      });
+      State.clientesConGrupos = {
+        ids: conGrupos.ids,
+        nombresNorm,
+        gruposPorId: conGrupos.gruposPorId,
+        gruposPorNombreNorm,
+      };
       renderClientes();
     } catch (e) {
       console.error('Error cargando clientes:', e);
@@ -68,23 +86,104 @@
     return cg.ids.has(c.id) || cg.nombresNorm.has(c.norm);
   }
 
+  // Devuelve los grupos crudos del cliente desde los datos del scan inicial.
+  // Combina (union) los grupos encontrados por cliente_id y por nombre normalizado
+  // para que equipos legacy se cuenten también.
+  function gruposCrudosDeCliente(c) {
+    const cg = State.clientesConGrupos;
+    if (!cg) return [];
+    const out = new Set();
+    if (cg.gruposPorId.has(c.id)) cg.gruposPorId.get(c.id).forEach(g => out.add(g));
+    if (cg.gruposPorNombreNorm.has(c.norm)) cg.gruposPorNombreNorm.get(c.norm).forEach(g => out.add(g));
+    return Array.from(out);
+  }
+
+  // Cuenta de buckets duplicados del cliente bajo el scan activo.
+  function bucketCountCliente(c) {
+    if (!State.scan) return 0;
+    return (State.scan.porId.get(c.id) || State.scan.porNombreNorm.get(c.norm) || 0);
+  }
+
+  // Corre el scan global usando los grupos crudos cacheados en
+  // State.clientesConGrupos (no necesita nueva lectura de Firestore).
+  function runScan(modo) {
+    if (!State.clientesConGrupos) {
+      Toast.show('Carga de clientes incompleta — recarga la página.', 'bad');
+      return;
+    }
+    const t0 = performance.now();
+    const porId = new Map();
+    const porNombreNorm = new Map();
+    let clientesAfectados = 0;
+    let totalBuckets = 0;
+    for (const c of State.clientes) {
+      const grupos = gruposCrudosDeCliente(c);
+      if (!grupos.length) continue;
+      const n = GruposAnalisis.contarBuckets(grupos, modo);
+      if (n > 0) {
+        clientesAfectados++;
+        totalBuckets += n;
+        if (c.id) porId.set(c.id, n);
+        if (c.norm) porNombreNorm.set(c.norm, n);
+      }
+    }
+    State.scan = { mode: modo, porId, porNombreNorm, clientesAfectados, totalBuckets, at: new Date() };
+    const dt = ((performance.now() - t0) / 1000).toFixed(2);
+    const tipo = modo === 'fuzzy' ? 'fuzzy' : 'exactos';
+    Toast.show(`Scan ${tipo}: ${clientesAfectados} clientes, ${totalBuckets} buckets · ${dt}s`, 'ok');
+    renderClientes();
+    // Re-render del banner derecho con el nuevo modo si hay cliente seleccionado.
+    if (State.clienteSel) renderDupBanner();
+  }
+
+  function clearScan() {
+    State.scan = null;
+    renderClientes();
+    if (State.clienteSel) renderDupBanner();
+  }
+
   function renderClientes() {
     const cont = $('gpClienteList');
     const needle = State.clienteFiltro ? FMT.normalize(State.clienteFiltro) : '';
+
+    // Base: con grupos o todos.
     let base = State.clientes;
     if (!State.mostrarTodos) base = base.filter(tieneGrupos);
+
+    // Filtro por scan (si activo y "solo afectados" — siempre que hay scan
+    // implícito limitamos a los que tienen buckets > 0, sino el badge no
+    // aporta nada visual).
+    if (State.scan) base = base.filter(c => bucketCountCliente(c) > 0);
+
+    // Filtro de búsqueda.
     let visibles = base;
     if (needle) {
       visibles = base
         .filter(c => c.norm.includes(needle))
         .sort((a, b) => a.norm.indexOf(needle) - b.norm.indexOf(needle));
+    } else if (State.scan) {
+      // Orden por bucketCount desc cuando hay scan activo.
+      visibles = [...base].sort((a, b) => bucketCountCliente(b) - bucketCountCliente(a));
     }
     visibles = visibles.slice(0, 200);
 
-    // Header con conteo + toggle.
+    // Header con toggle + estado del scan.
     const totalConGrupos = State.clientesConGrupos
       ? State.clientes.filter(tieneGrupos).length
       : State.clientes.length;
+
+    let scanRow = '';
+    if (State.scan) {
+      const pill = State.scan.mode === 'fuzzy'
+        ? '<span class="gp-badge gp-badge-fuzzy">fuzzy</span>'
+        : '<span class="gp-badge gp-badge-exactos">exactos</span>';
+      scanRow = `
+        <div style="padding:6px 12px;border-bottom:1px solid var(--border-subtle);font-size:11px;color:var(--fg-3);display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-sunken);">
+          <span>${pill} ${State.scan.clientesAfectados} clientes · ${State.scan.totalBuckets} buckets</span>
+          <button id="gpClearScan" class="btn btn-ghost btn-xs" style="font-size:10px;padding:2px 8px;">Limpiar</button>
+        </div>`;
+    }
+
     const headerHtml = `
       <div style="padding:8px 12px;border-bottom:1px solid var(--border-subtle);font-size:11px;color:var(--fg-3);display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <span>${totalConGrupos} de ${State.clientes.length} clientes con grupos</span>
@@ -92,17 +191,31 @@
           <input type="checkbox" id="gpToggleTodos" ${State.mostrarTodos ? 'checked' : ''} style="width:14px;height:14px;">
           <span>Mostrar todos</span>
         </label>
-      </div>`;
+      </div>
+      ${scanRow}`;
 
     if (!visibles.length) {
+      let emptyMsg = 'Sin coincidencias.';
+      if (!needle && State.scan) emptyMsg = `Ningún cliente con duplicados ${State.scan.mode === 'fuzzy' ? 'fuzzy' : 'exactos'} 🎉`;
+      else if (!needle) emptyMsg = 'Ningún cliente tiene grupos asignados.';
       cont.innerHTML = headerHtml +
-        `<div style="padding:14px; color:var(--fg-3); font-size:13px;">${needle ? 'Sin coincidencias.' : 'Ningún cliente tiene grupos asignados.'}</div>`;
+        `<div style="padding:14px; color:var(--fg-3); font-size:13px;">${emptyMsg}</div>`;
       wireToggle();
       return;
     }
     cont.innerHTML = headerHtml + visibles.map(c => {
       const activo = State.clienteSel && State.clienteSel.id === c.id ? 'active' : '';
-      return `<div class="gp-cliente-item ${activo}" data-id="${esc(c.id)}" data-nombre="${esc(c.nombre)}">${esc(c.nombre)}</div>`;
+      let badge = '';
+      if (State.scan) {
+        const n = bucketCountCliente(c);
+        if (n > 0) {
+          const cls = State.scan.mode === 'fuzzy' ? 'gp-badge-fuzzy' : 'gp-badge-exactos';
+          badge = `<span class="gp-badge ${cls}" title="${n} bucket${n === 1 ? '' : 's'} de duplicados ${State.scan.mode}">${n}</span>`;
+        }
+      }
+      return `<div class="gp-cliente-item ${activo}" data-id="${esc(c.id)}" data-nombre="${esc(c.nombre)}">
+        <span class="gp-cliente-nombre">${esc(c.nombre)}</span>${badge}
+      </div>`;
     }).join('');
     cont.querySelectorAll('.gp-cliente-item').forEach(el => {
       el.addEventListener('click', () => {
@@ -118,6 +231,8 @@
       State.mostrarTodos = t.checked;
       renderClientes();
     });
+    const c = $('gpClearScan');
+    if (c) c.addEventListener('click', clearScan);
   }
 
   // ── Cliente → grupos ────────────────────────────────────────────────
@@ -209,41 +324,82 @@
       : `Fusionar ${State.seleccionados.size} grupos`;
   }
 
-  // ── Near-duplicate detector ─────────────────────────────────────────
-  // Buckets groups whose normalized form (lowercase + accent-stripped + whitespace
-  // collapsed) match. Surfaces the first bucket with > 1 group as a one-click
-  // merge suggestion.
-  function detectarDuplicados() {
-    const buckets = new Map();
-    State.grupos.forEach(g => {
-      const k = FMT.normalize(g.nombre).replace(/\s+/g, ' ').trim();
-      if (!buckets.has(k)) buckets.set(k, []);
-      buckets.get(k).push(g);
-    });
-    return Array.from(buckets.values()).filter(arr => arr.length > 1);
+  // ── Banner de duplicados ────────────────────────────────────────────
+  // Por defecto detecta solo "exactos" (lo que ya hacía antes). Si el scan
+  // global activo es 'fuzzy', también renderiza un banner amarillo separado
+  // con candidatos fuzzy — éstos NO se auto-fusionan: solo abren el flujo
+  // manual con la selección previa.
+  function detectarBucketsLocales(modo) {
+    const grupos = State.grupos.map(g => g.nombre);
+    const buckets = modo === 'fuzzy'
+      ? GruposAnalisis.bucketsFuzzy(grupos)
+      : GruposAnalisis.bucketsExactos(grupos);
+    // Asocia cada nombre raw con su entry de State.grupos para mostrar counts.
+    const byName = new Map(State.grupos.map(g => [g.nombre, g]));
+    return buckets.map(arr => arr.map(n => byName.get(n)).filter(Boolean));
   }
 
   function renderDupBanner() {
     const cont = $('gpDupBanner');
-    const dups = detectarDuplicados();
-    if (!dups.length) { cont.innerHTML = ''; return; }
-    const first = dups[0];
-    const sortedByCount = [...first].sort((a, b) => b.count - a.count);
-    const target = sortedByCount[0].nombre;
-    const sources = sortedByCount.slice(1).map(g => g.nombre);
-    const nombres = first.map(g => `<strong>${esc(g.nombre)}</strong> (${g.count})`).join(', ');
-    cont.innerHTML = `
-      <div class="gp-dup-banner">
-        <strong>Posibles duplicados detectados</strong>
-        Estos grupos solo difieren en mayúsculas, acentos o espacios: ${nombres}.
-        ${dups.length > 1 ? `Hay ${dups.length} grupos más con duplicados similares.` : ''}
-        <div>
-          <button class="btn btn-secondary btn-sm" id="btnGpMergeSug">
-            <i data-lucide="git-merge"></i> Fusionar en "${esc(target)}"
-          </button>
-        </div>
-      </div>`;
-    $('btnGpMergeSug').addEventListener('click', () => fusionarGrupos(sources, target));
+    const dupsExactos = detectarBucketsLocales('exactos');
+    const dupsFuzzy = (State.scan && State.scan.mode === 'fuzzy')
+      ? detectarBucketsLocales('fuzzy')
+      : [];
+
+    let html = '';
+
+    if (dupsExactos.length) {
+      const first = dupsExactos[0];
+      const sortedByCount = [...first].sort((a, b) => b.count - a.count);
+      const target = sortedByCount[0].nombre;
+      const sources = sortedByCount.slice(1).map(g => g.nombre);
+      const nombres = first.map(g => `<strong>${esc(g.nombre)}</strong> (${g.count})`).join(', ');
+      html += `
+        <div class="gp-dup-banner gp-dup-exactos">
+          <strong>🔴 Duplicados exactos — auto-mergeable</strong>
+          Estos grupos solo difieren en mayúsculas, acentos o espacios: ${nombres}.
+          ${dupsExactos.length > 1 ? `Hay ${dupsExactos.length - 1} bucket(s) más con la misma situación.` : ''}
+          <div>
+            <button class="btn btn-secondary btn-sm" id="btnGpMergeSug">
+              <i data-lucide="git-merge"></i> Fusionar en "${esc(target)}"
+            </button>
+          </div>
+        </div>`;
+    }
+
+    if (dupsFuzzy.length) {
+      const first = dupsFuzzy[0];
+      const nombres = first.map(g => `<strong>${esc(g.nombre)}</strong> (${g.count})`).join(', ');
+      const ids = first.map(g => g.nombre).join('|');
+      html += `
+        <div class="gp-dup-banner gp-dup-fuzzy">
+          <strong>🟡 Posibles fuzzy duplicates — revisa antes de fusionar</strong>
+          Estos nombres son similares pero podrían ser conceptos distintos: ${nombres}.
+          ${dupsFuzzy.length > 1 ? `Hay ${dupsFuzzy.length - 1} bucket(s) más con candidatos similares.` : ''}
+          <div>
+            <button class="btn btn-ghost btn-sm" data-fuzzy-preselect="${esc(ids)}">
+              <i data-lucide="check-square"></i> Preseleccionar para revisar
+            </button>
+          </div>
+        </div>`;
+    }
+
+    cont.innerHTML = html;
+    const sug = $('btnGpMergeSug');
+    if (sug) sug.addEventListener('click', () => {
+      const first = dupsExactos[0];
+      const sortedByCount = [...first].sort((a, b) => b.count - a.count);
+      const target = sortedByCount[0].nombre;
+      const sources = sortedByCount.slice(1).map(g => g.nombre);
+      fusionarGrupos(sources, target);
+    });
+    const fuz = cont.querySelector('[data-fuzzy-preselect]');
+    if (fuz) fuz.addEventListener('click', () => {
+      const ids = fuz.dataset.fuzzyPreselect.split('|');
+      State.seleccionados = new Set(ids);
+      renderGrupos();
+      Toast.show('Grupos preseleccionados — revisa y usa "Fusionar seleccionados" si es correcto.', 'warn');
+    });
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
@@ -357,6 +513,10 @@
     });
     $('btnGpReload').addEventListener('click', () => cargarGruposCliente());
     $('btnGpMerge').addEventListener('click', () => mergeSeleccionados());
+    const sExact = $('btnGpScanExactos');
+    if (sExact) sExact.addEventListener('click', () => runScan('exactos'));
+    const sFuzzy = $('btnGpScanFuzzy');
+    if (sFuzzy) sFuzzy.addEventListener('click', () => runScan('fuzzy'));
   }
 
   document.addEventListener('DOMContentLoaded', () => {
