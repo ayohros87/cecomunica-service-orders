@@ -172,6 +172,86 @@ async function backfillNormalizeGrupos(dryRun) {
   return { scanned, skippedDeleted, skippedUnchanged, toWrite, written, errors, elapsedSec };
 }
 
+// ─────────── linkClienteId ───────────
+//
+// Enlaza órdenes y equipos POC legacy a su cliente por `cliente_id` (estable),
+// usando match NORMALIZADO del nombre actual (`cliente`) contra los clientes
+// activos. Aditivo: solo agrega `cliente_id` donde falta; no toca el nombre.
+// Idempotente (salta los que ya tienen id). Reporta ambiguos (nombre que mapea
+// a 2+ clientes) y huérfanos (nombre que no resuelve a ningún cliente).
+
+function _normNombre(s) {
+  return String(s == null ? "" : s)
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+async function backfillLinkClienteId(dryRun) {
+  const startedAt = Date.now();
+
+  // Mapa nombre_norm -> [ids] de clientes activos.
+  const cliSnap = await db.collection("clientes").where("deleted", "==", false).get();
+  const nameToIds = new Map();
+  for (const doc of cliSnap.docs) {
+    const n = _normNombre(doc.data().nombre);
+    if (!n) continue;
+    if (!nameToIds.has(n)) nameToIds.set(n, []);
+    nameToIds.get(n).push(doc.id);
+  }
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+  const flushBatch = async () => {
+    if (opsInBatch === 0 || dryRun) { batch = db.batch(); opsInBatch = 0; return; }
+    try { await batch.commit(); }
+    catch (err) { logger.error("[runBackfill.linkClienteId] commit failed", { err: err.message }); }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  const detalle = {};
+  for (const [col, delField] of [["ordenes_de_servicio", "eliminado"], ["poc_devices", "deleted"]]) {
+    const snap = await db.collection(col).get();
+    let scanned = 0, skippedDeleted = 0, yaLinked = 0, linked = 0, ambiguos = 0, huerfanos = 0;
+    const muestraHuerfanos = [];
+    for (const doc of snap.docs) {
+      const d = doc.data();
+      if (d[delField] === true) { skippedDeleted++; continue; }
+      scanned++;
+      if ((d.cliente_id || "").toString().trim()) { yaLinked++; continue; }
+      const n = _normNombre(d.cliente);
+      const ids = n ? nameToIds.get(n) : null;
+      if (!ids || ids.length === 0) {
+        huerfanos++;
+        if (muestraHuerfanos.length < 25 && d.cliente) muestraHuerfanos.push(d.cliente);
+        continue;
+      }
+      if (ids.length > 1) { ambiguos++; continue; }  // nombre duplicado entre clientes → resolver con dedup primero
+      linked++;
+      if (!dryRun) {
+        batch.update(doc.ref, { cliente_id: ids[0] });
+        opsInBatch++;
+        if (opsInBatch >= BATCH_SIZE) await flushBatch();
+      }
+    }
+    detalle[col] = { scanned, skippedDeleted, yaLinked, linked, ambiguos, huerfanos, muestraHuerfanos };
+  }
+  await flushBatch();
+
+  const sum = k => (detalle.ordenes_de_servicio[k] || 0) + (detalle.poc_devices[k] || 0);
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return {
+    elapsedSec,
+    scanned: sum("scanned"),
+    yaLinked: sum("yaLinked"),
+    linked: sum("linked"),
+    ambiguos: sum("ambiguos"),
+    huerfanos: sum("huerfanos"),
+    written: sum("linked"),
+    detalle,
+  };
+}
+
 // ─────────── dispatcher ───────────
 
 module.exports = onCall(
@@ -193,6 +273,9 @@ module.exports = onCall(
         break;
       case "normalizeGrupos":
         result = await backfillNormalizeGrupos(dryRun);
+        break;
+      case "linkClienteId":
+        result = await backfillLinkClienteId(dryRun);
         break;
       default:
         throw new HttpsError("invalid-argument", `Acción desconocida: ${action}`);

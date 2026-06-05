@@ -21,12 +21,17 @@
       ['Skip (eliminadas)',  data.skippedDeleted],
       ['Skip (sin cambios)', data.skippedUnchanged],
       ['Pendientes update',  data.toWrite],
+      // linkClienteId:
+      ['Ya con id',          data.yaLinked],
+      ['Enlazados',          data.linked],
+      ['Ambiguos',           data.ambiguos],
+      ['Huérfanos',          data.huerfanos],
       ['Escritos',           data.written],
       ['Errores',            data.errors],
     ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');
 
-    const severity = data.errors > 0 ? 'warning' : 'success';
-    const icon     = data.errors > 0 ? 'alert-triangle' : 'check-circle';
+    const severity = (data.errors > 0) ? 'warning' : 'success';
+    const icon     = (data.errors > 0) ? 'alert-triangle' : 'check-circle';
     const titulo   = dryRun
       ? `Dry-run completo — habría escrito ${data.written} docs en ${data.elapsedSec}s.`
       : `Backfill completo — ${data.written} docs actualizados en ${data.elapsedSec}s.`;
@@ -36,8 +41,21 @@
         <i data-lucide="${icon}"></i>
         <div><span class="alert-title">${titulo}</span></div>
       </div>
-      <div style="font-size:12px;">${counters}</div>`;
+      <div style="font-size:12px;">${counters}</div>
+      ${renderHuerfanos(data.detalle)}`;
     if (window.lucide) lucide.createIcons();
+  }
+
+  // Muestra ejemplos de nombres huérfanos (sin cliente) por colección, para linkClienteId.
+  function renderHuerfanos(detalle) {
+    if (!detalle) return '';
+    const bloques = Object.entries(detalle).map(([col, d]) => {
+      const ej = (d.muestraHuerfanos || []);
+      if (!ej.length) return '';
+      return `<div style="margin-top:8px;"><span class="ts">${col} — ${d.huerfanos} huérfano(s), ej.:</span><br>` +
+        ej.map(n => `<code style="font-size:11px;">${escapeHtml(n)}</code>`).join(', ') + `</div>`;
+    }).join('');
+    return bloques;
   }
 
   function renderError(action, err) {

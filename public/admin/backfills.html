@@ -102,6 +102,31 @@
       <div id="result-normalizeGrupos" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: linkClienteId -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="link"></i> Enlazar órdenes/POC por cliente_id</span>
+        <span class="hint">Agrega <code>cliente_id</code> estable a docs legacy enlazados por nombre</span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        Órdenes y equipos POC legacy referencian al cliente por <strong>nombre</strong>
+        (frágil ante renames/typos). Esto les agrega <code>cliente_id</code> haciendo
+        match <strong>normalizado</strong> del nombre contra los clientes activos. Aditivo:
+        no toca el nombre. Idempotente. Reporta <strong>ambiguos</strong> (nombre que mapea
+        a 2+ clientes — resolver con dedup) y <strong>huérfanos</strong> (nombre sin cliente).
+        Usa <strong>Dry-run</strong> para revisar antes.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="linkClienteId" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (preview)
+        </button>
+        <button class="btn btn-primary" data-bf-action="linkClienteId" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-linkClienteId" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>
