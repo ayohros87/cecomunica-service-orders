@@ -22,47 +22,117 @@
 function _dnorm(s){
   return String(s == null ? "" : s)
     .normalize("NFD").replace(/[̀-ͯ]/g, "")
-    .toLowerCase().trim();
+    .toLowerCase().replace(/\s+/g, " ").trim();
 }
 function _val(c, ...keys){
   for (const k of keys){ const v = (c[k] || "").toString().trim(); if (v) return v; }
   return "";
 }
 
+// ── Similitud (puro) ──────────────────────────────────────────────────
+function _lev(a, b){
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++){
+    let cur = [i];
+    for (let j = 1; j <= n; j++){
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+function _ratio(a, b){
+  if (!a && !b) return 1;
+  const len = Math.max(a.length, b.length);
+  return len ? 1 - _lev(a, b) / len : 1;
+}
+function _tokenSetRatio(a, b){
+  const sort = s => s.split(" ").filter(Boolean).sort().join(" ");
+  return _ratio(sort(a), sort(b));
+}
+// Similitud de nombre: máx entre normalizado, sin-espacios y por tokens ordenados.
+function _nameSim(a, b){
+  const na = _dnorm(a), nb = _dnorm(b);
+  if (!na || !nb) return 0;
+  return Math.max(_ratio(na, nb), _ratio(na.replace(/ /g, ""), nb.replace(/ /g, "")), _tokenSetRatio(na, nb));
+}
+function _rucDigits(c){ return ((c.ruc_norm || c.ruc || "") + "").replace(/\D/g, ""); }
+// Similitud de RUC por dígitos; null si alguno no tiene RUC.
+function _rucSim(a, b){
+  const ra = _rucDigits(a), rb = _rucDigits(b);
+  if (!ra || !rb) return null;
+  return _ratio(ra, rb);
+}
+
+const NAME_HIGH = 0.86;  // nombre casi igual (para match SOLO por nombre, sin RUC que corrobore)
+const RUC_HIGH  = 0.88;  // RUC con 1–2 dígitos de diferencia
+const DUP_NAME  = 0.78;  // nombre mínimo para duplicado cuando el RUC coincide.
+// (En los datos reales, los duplicados quedan en 78–100% y las sucursales del
+//  mismo RUC en 52–74%, así que 0.78 las separa: typo = duplicado, sucursal = no.)
+// Nivel de enlace entre dos clientes: 'exacta' | 'fuzzy' | null.
+// CLAVE: mismo RUC NO basta — una empresa con varias sucursales comparte RUC.
+// Para ser duplicado se exige RUC compatible Y nombre parecido.
+function _edge(a, b){
+  const rs = _rucSim(a, b);
+  if (rs !== null && rs < 0.7) return null;       // RUCs distintos → entidades distintas (o RUC mal puesto): no unir
+  const ns = _nameSim(a.nombre, b.nombre);
+  const mismoNombre = _dnorm(a.nombre) && _dnorm(a.nombre) === _dnorm(b.nombre);
+  if (rs === 1){
+    // Mismo RUC: duplicado solo si el nombre también se parece. Si no, son
+    // sucursales del mismo RUC o un RUC mal tecleado → NO agrupar.
+    if (mismoNombre || ns >= 0.9) return "exacta";
+    if (ns >= DUP_NAME) return "fuzzy";
+    return null;
+  }
+  // RUC compatible (alguno vacío, o parecido por typo).
+  if (mismoNombre) return "exacta";
+  if (ns >= NAME_HIGH) return "fuzzy";                       // nombre casi igual (sin RUC que corrobore)
+  if (rs !== null && rs >= RUC_HIGH && ns >= DUP_NAME) return "fuzzy"; // RUC con typo + nombre parecido
+  return null;
+}
+
 const ClientesDedupService = {
   norm: _dnorm,
 
   // ── Detección (puro) ─────────────────────────────────────────────────
+  // Agrupa por similitud: exacto (mismo RUC o nombre) + fuzzy (nombre/RUC casi
+  // iguales, para errores de dedo). Usa "blocking" por prefijo para no comparar
+  // todos contra todos. Cada par candidato se enlaza con union-find.
   buildClusters(clientes){
     const parent = {};
     const find = x => (parent[x] === x ? x : (parent[x] = find(parent[x])));
     const union = (a, b) => { parent[find(a)] = find(b); };
-    clientes.forEach(c => { parent[c.id] = c.id; });
+    const byId = new Map();
+    clientes.forEach(c => { parent[c.id] = c.id; byId.set(c.id, c); });
 
-    // Unir por ruc_norm (no vacío).
-    const byRuc = new Map();
+    // Bloques: clientes que comparten prefijo de nombre (3) o de RUC (4 dígitos).
+    const buckets = new Map();
+    const addBucket = (k, id) => { if (!k) return; if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(id); };
     for (const c of clientes){
-      const k = (c.ruc_norm || "").trim();
-      if (!k) continue;
-      if (!byRuc.has(k)) byRuc.set(k, []);
-      byRuc.get(k).push(c.id);
+      const nn = _dnorm(c.nombre).replace(/ /g, "");
+      if (nn) addBucket("n:" + nn.slice(0, 3), c.id);
+      const rd = _rucDigits(c);
+      if (rd) addBucket("r:" + rd.slice(0, 4), c.id);
     }
-    for (const ids of byRuc.values())
-      for (let i = 1; i < ids.length; i++) union(ids[0], ids[i]);
 
-    // Unir por nombre_norm, salvo que el grupo tenga 2+ RUCs distintos no vacíos.
-    const byName = new Map();
-    for (const c of clientes){
-      const k = _dnorm(c.nombre);
-      if (!k) continue;
-      if (!byName.has(k)) byName.set(k, []);
-      byName.get(k).push(c);
-    }
-    for (const arr of byName.values()){
-      if (arr.length < 2) continue;
-      const rucs = new Set(arr.map(c => (c.ruc_norm || "").trim()).filter(Boolean));
-      if (rucs.size > 1) continue; // mismo nombre, RUCs distintos → no unir
-      for (let i = 1; i < arr.length; i++) union(arr[0].id, arr[i].id);
+    // Candidatos: pares dentro de un mismo bloque. Evalúa el enlace una sola vez.
+    const seen = new Set();
+    for (const ids of buckets.values()){
+      for (let i = 0; i < ids.length; i++){
+        for (let j = i + 1; j < ids.length; j++){
+          const a = ids[i], b = ids[j];
+          if (find(a) === find(b)) continue;
+          const key = a < b ? a + "|" + b : b + "|" + a;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          if (_edge(byId.get(a), byId.get(b))) union(a, b);
+        }
+      }
     }
 
     const groups = new Map();
@@ -72,6 +142,22 @@ const ClientesDedupService = {
       groups.get(r).push(c);
     }
     return Array.from(groups.values()).filter(g => g.length >= 2);
+  },
+
+  // Similitud expuesta para la UI.
+  nameSim(a, b){ return _nameSim(a, b); },
+  rucSim(a, b){ return _rucSim(a, b); },
+
+  // Confianza del grupo: 'exacta' si todos tienen el mismo nombre, o el mismo RUC
+  // con nombres casi idénticos (≥90%). Si no, 'revisar' (se formó por similitud).
+  clusterConfianza(cluster){
+    const canon = this.pickCanonical(cluster);
+    const nombres = cluster.map(c => _dnorm(c.nombre)).filter(Boolean);
+    if (nombres.length === cluster.length && new Set(nombres).size === 1) return "exacta";
+    const rucs = cluster.map(c => _rucDigits(c)).filter(Boolean);
+    const unRuc = rucs.length === cluster.length && new Set(rucs).size === 1;
+    const nombresCerca = cluster.every(c => c.id === canon.id || _nameSim(c.nombre, canon.nombre) >= 0.9);
+    return (unRuc && nombresCerca) ? "exacta" : "revisar";
   },
 
   // Puntaje de completitud (para sugerir el canónico).

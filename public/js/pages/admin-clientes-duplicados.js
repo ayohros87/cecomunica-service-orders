@@ -28,7 +28,10 @@
     try {
       const clientes = await Svc().getClientesActivos();
       const clusters = Svc().buildClusters(clientes);
-      State.clusters = clusters.map((miembros, i) => ({ id: 'cl' + i, miembros, refs: {} }));
+      // Confianza por grupo; exactos primero, "revisar" (fuzzy) después.
+      State.clusters = clusters
+        .map((miembros, i) => ({ id: 'cl' + i, miembros, refs: {}, confianza: Svc().clusterConfianza(miembros) }))
+        .sort((a, b) => (a.confianza === b.confianza ? b.miembros.length - a.miembros.length : (a.confianza === 'exacta' ? -1 : 1)));
       $('dupResumen').textContent =
         `${clientes.length} clientes · ${State.clusters.length} grupo(s) de duplicados`;
       if (!State.clusters.length) {
@@ -55,20 +58,37 @@
   function renderCluster(cl) {
     const canon = Svc().pickCanonical(cl.miembros);
     const rucComun = (cl.miembros.find(m => (m.ruc || '').trim()) || {}).ruc || '—';
+    const esRevisar = cl.confianza === 'revisar';
     const filas = cl.miembros.map(m => {
       const isCanon = m.id === canon.id;
+      const nsRaw = Svc().nameSim(m.nombre, canon.nombre);
+      // Por defecto se incluye solo si es match confiable (nombre ≥85% al canónico).
+      const incluirDefault = isCanon || nsRaw >= 0.85;
+      let sim = '<span class="ts">canónico</span>';
+      if (!isCanon) {
+        const ns = Math.round(nsRaw * 100);
+        const rs = Svc().rucSim(m, canon);
+        const rsTxt = rs === null ? '' : ` · RUC ${Math.round(rs * 100)}%`;
+        const warn = (ns < 100 || (rs !== null && rs < 1)) ? ' style="color:var(--warn,#b45309);font-weight:600;"' : '';
+        sim = `<span${warn}>nombre ${ns}%${rsTxt}</span>${!incluirDefault ? ' <span class="ts">(revisar)</span>' : ''}`;
+      }
       return `
         <tr class="${isCanon ? 'dup-canon-row' : ''}" data-mid="${esc(m.id)}">
           <td><input type="radio" name="${cl.id}-canon" value="${esc(m.id)}" ${isCanon ? 'checked' : ''} title="Conservar este"></td>
-          <td><input type="checkbox" class="dup-incl" value="${esc(m.id)}" checked title="Incluir en la fusión"></td>
+          <td><input type="checkbox" class="dup-incl" value="${esc(m.id)}" ${incluirDefault ? 'checked' : ''} title="Incluir en la fusión"></td>
           <td><strong>${esc(m.nombre || 'Sin nombre')}</strong></td>
           <td class="dup-mono">${esc(m.ruc || '—')}</td>
           <td class="dup-mono">${esc(m.dv || '—')}</td>
           <td>${esc(m.representante || '—')}</td>
           <td>${[m.email, m.telefono].filter(Boolean).map(esc).join('<br>') || '—'}</td>
           <td class="dup-refs" data-refs="${esc(m.id)}">…</td>
+          <td class="dup-refs">${sim}</td>
         </tr>`;
     }).join('');
+
+    const badge = esRevisar
+      ? '<span class="pill" style="background:#FEF3C7;color:#92400E;">⚠ Revisar (por similitud)</span>'
+      : '<span class="pill" style="background:#DCFCE7;color:#166534;">Exacta</span>';
 
     return `
       <div class="dup-cluster" data-cid="${cl.id}">
@@ -76,11 +96,12 @@
           <i data-lucide="users"></i>
           <strong>${cl.miembros.length} registros</strong>
           <span class="ruc">RUC ${esc(rucComun)}</span>
+          ${badge}
         </div>
         <table class="dup-table">
           <thead><tr>
             <th>Conservar</th><th>Incluir</th><th>Nombre</th><th>RUC</th><th>DV</th>
-            <th>Representante</th><th>Contacto</th><th>Refs (C/O/P)</th>
+            <th>Representante</th><th>Contacto</th><th>Refs (C/O/P)</th><th>Similitud</th>
           </tr></thead>
           <tbody>${filas}</tbody>
         </table>
