@@ -242,17 +242,33 @@ const ClientesDedupService = {
       }
     }
 
-    // 2) Órdenes y POC por nombre normalizado (todas las variantes del grupo).
-    if (canonical.nombre){
+    // 2) Órdenes y POC: re-apuntar al canónico por id Y por nombre normalizado.
+    //    Un doc pertenece al grupo si su `cliente_id` es uno de los duplicados, o
+    //    si su nombre (`cliente`/`cliente_nombre`) coincide con cualquier variante.
+    //    Se re-apunta `cliente_id` al canónico (y se rellena si faltaba) y se
+    //    unifica el nombre denormalizado. Así no quedan refs a un cliente borrado.
+    {
+      const dupIds = new Set(dups.map(d => d.id));
       const variantes = new Set([canonical, ...dups].map(c => _dnorm(c.nombre)).filter(Boolean));
       for (const col of ["ordenes_de_servicio", "poc_devices"]){
         const all = await db.collection(col).get();
         for (const doc of all.docs){
-          const cli = doc.data().cliente;
-          if (cli && cli !== canonical.nombre && variantes.has(_dnorm(cli))){
-            await doc.ref.update({ cliente: canonical.nombre });
-            if (col === "ordenes_de_servicio") ordenesRepointed++; else pocRepointed++;
+          const d = doc.data();
+          const porId = d.cliente_id && dupIds.has(d.cliente_id);
+          const porNombre =
+            (d.cliente && variantes.has(_dnorm(d.cliente))) ||
+            (d.cliente_nombre && variantes.has(_dnorm(d.cliente_nombre)));
+          if (!porId && !porNombre) continue;
+
+          const update = {};
+          if (d.cliente_id !== canonical.id) update.cliente_id = canonical.id;
+          if (canonical.nombre){
+            if ("cliente" in d && d.cliente !== canonical.nombre) update.cliente = canonical.nombre;
+            if ("cliente_nombre" in d && d.cliente_nombre !== canonical.nombre) update.cliente_nombre = canonical.nombre;
           }
+          if (!Object.keys(update).length) continue; // ya apunta al canónico
+          await doc.ref.update(update);
+          if (col === "ordenes_de_servicio") ordenesRepointed++; else pocRepointed++;
         }
       }
     }
