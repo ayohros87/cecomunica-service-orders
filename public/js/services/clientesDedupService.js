@@ -220,30 +220,45 @@ const ClientesDedupService = {
   },
 
   // ── Fusión (Firestore, escribe) ──────────────────────────────────────
-  // Re-apunta referencias de cada duplicado al canónico, rellena sus huecos y
-  // hace soft-delete de los duplicados. Devuelve conteos de lo afectado.
+  // Re-apunta referencias al canónico, rellena sus huecos y hace soft-delete de
+  // los duplicados. Devuelve conteos de lo afectado.
+  //   - Contratos: solo se re-enlaza `cliente_id` (el snapshot histórico —
+  //     nombre/RUC/dirección— se conserva tal como se emitió).
+  //   - Órdenes y POC: se re-apunta el campo `cliente` (nombre) por coincidencia
+  //     NORMALIZADA (ignora mayúsculas/acentos/espacios) contra cualquier
+  //     variante de nombre del grupo, y se unifica al nombre exacto del canónico.
   async mergeCluster({ canonical, dups, fill = {} }){
     const db = firebase.firestore();
     const uid = firebase.auth().currentUser?.uid || null;
     const ahora = firebase.firestore.FieldValue.serverTimestamp();
     let contratosRepointed = 0, ordenesRepointed = 0, pocRepointed = 0;
 
+    // 1) Contratos por cliente_id (solo re-enlazar).
     for (const dup of dups){
-      // contratos por cliente_id
       const cSnap = await db.collection("contratos").where("cliente_id", "==", dup.id).get();
       for (const doc of cSnap.docs){
-        await doc.ref.update({ cliente_id: canonical.id, cliente_nombre: canonical.nombre || "" });
+        await doc.ref.update({ cliente_id: canonical.id, updated_at: ahora });
         contratosRepointed++;
       }
-      // ordenes y poc por nombre
-      const nombre = dup.nombre || "";
-      if (nombre && canonical.nombre){
-        const oSnap = await db.collection("ordenes_de_servicio").where("cliente", "==", nombre).get();
-        for (const doc of oSnap.docs){ await doc.ref.update({ cliente: canonical.nombre }); ordenesRepointed++; }
-        const pSnap = await db.collection("poc_devices").where("cliente", "==", nombre).get();
-        for (const doc of pSnap.docs){ await doc.ref.update({ cliente: canonical.nombre }); pocRepointed++; }
+    }
+
+    // 2) Órdenes y POC por nombre normalizado (todas las variantes del grupo).
+    if (canonical.nombre){
+      const variantes = new Set([canonical, ...dups].map(c => _dnorm(c.nombre)).filter(Boolean));
+      for (const col of ["ordenes_de_servicio", "poc_devices"]){
+        const all = await db.collection(col).get();
+        for (const doc of all.docs){
+          const cli = doc.data().cliente;
+          if (cli && cli !== canonical.nombre && variantes.has(_dnorm(cli))){
+            await doc.ref.update({ cliente: canonical.nombre });
+            if (col === "ordenes_de_servicio") ordenesRepointed++; else pocRepointed++;
+          }
+        }
       }
-      // soft-delete del duplicado
+    }
+
+    // 3) Soft-delete de los duplicados.
+    for (const dup of dups){
       await db.collection("clientes").doc(dup.id).update({
         deleted: true,
         merged_into: canonical.id,
@@ -254,8 +269,8 @@ const ClientesDedupService = {
       });
     }
 
-    // Rellenar huecos del canónico (vía buildClientePayload si está disponible,
-    // para mantener derivados/tokens consistentes).
+    // 4) Rellenar huecos del canónico (vía buildClientePayload si está, para
+    // mantener derivados/tokens consistentes).
     if (Object.keys(fill).length){
       const base = { ...canonical, ...fill };
       let payload;
