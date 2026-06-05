@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Clientes duplicados — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <style>
+    .dup-cluster { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); margin-bottom: var(--sp-4); overflow: hidden; }
+    .dup-cluster-head {
+      display: flex; align-items: center; gap: var(--sp-2);
+      padding: 10px 14px; background: var(--surface-sunken); border-bottom: 1px solid var(--border-subtle);
+    }
+    .dup-cluster-head .ruc { font-family: var(--font-mono); color: var(--fg-3); font-size: 12px; }
+    .dup-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .dup-table th, .dup-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); text-align: left; vertical-align: top; }
+    .dup-table th { font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .03em; }
+    .dup-canon-row { background: var(--accent-soft); }
+    .dup-refs { font-size: 11px; color: var(--fg-3); white-space: nowrap; }
+    .dup-actions { padding: 10px 14px; display: flex; align-items: center; gap: var(--sp-2); }
+    .dup-mono { font-family: var(--font-mono); }
+    .dup-empty { padding: 14px; color: var(--fg-3); font-size: 13px; }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/clientesDedupService.js"></script>
+  <script src="../js/pages/admin-clientes-duplicados.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="copy-check"></i> Clientes duplicados',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Detecta clientes <strong>duplicados</strong> (mismo RUC, o mismo nombre con/sin RUC) y los
+        <strong>fusiona</strong> en un solo registro: re-apunta sus contratos, órdenes y equipos,
+        rellena los datos que falten y marca los duplicados como eliminados (soft-delete, reversible).
+        <strong>Revisa cada grupo antes de fusionar.</strong>
+      </div>
+    </div>
+
+    <div class="admin-toolbar" style="margin-bottom:var(--sp-3);">
+      <button id="btnEscanear" class="btn btn-primary btn-sm"><i data-lucide="search"></i> Escanear duplicados</button>
+      <span class="spacer"></span>
+      <span id="dupResumen" class="ts">—</span>
+    </div>
+
+    <div id="dupList"></div>
+
+  </div>
+
+  <div id="toasts" class="toast-region"></div>
+
+  <script>
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  </script>
+</body>
+</html>

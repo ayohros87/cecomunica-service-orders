@@ -16,7 +16,9 @@
   'use strict';
 
   const State = {
-    clientes: [],          // [{ id, nombre, norm }]
+    clientes: [],          // [{ id, nombre, norm }] — todos los clientes
+    clientesConGrupos: null, // { idsSet, nombresNormSet } — null hasta cargar
+    mostrarTodos: false,   // toggle: si true, no filtra por "tiene grupos"
     clienteFiltro: '',
     clienteSel: null,      // { id, nombre } | null
     grupos: [],            // [{ nombre, count, devices: [] }]
@@ -37,12 +39,21 @@
   // ── Cliente list ────────────────────────────────────────────────────
   async function cargarClientes() {
     try {
-      const lista = await ClientesService.getAllClientes();
+      // Paralelo: clientes + qué clientes tienen al menos un grupo. Ambas
+      // lecturas son cache-first y se reusan dentro del PocService.
+      const [lista, conGrupos] = await Promise.all([
+        ClientesService.getAllClientes(),
+        PocService.getClientesConGrupos(),
+      ]);
       State.clientes = lista.map(c => ({
         id: c.id,
         nombre: (c.nombre || '').toString(),
         norm: FMT.normalize(c.nombre || ''),
       }));
+      // Normaliza los nombres del set una sola vez para comparación O(1).
+      const nombresNorm = new Set();
+      conGrupos.nombres.forEach(n => nombresNorm.add(FMT.normalize(n)));
+      State.clientesConGrupos = { ids: conGrupos.ids, nombresNorm };
       renderClientes();
     } catch (e) {
       console.error('Error cargando clientes:', e);
@@ -51,21 +62,45 @@
     }
   }
 
+  function tieneGrupos(c) {
+    const cg = State.clientesConGrupos;
+    if (!cg) return true;  // sin datos aún → no filtra
+    return cg.ids.has(c.id) || cg.nombresNorm.has(c.norm);
+  }
+
   function renderClientes() {
     const cont = $('gpClienteList');
     const needle = State.clienteFiltro ? FMT.normalize(State.clienteFiltro) : '';
-    let visibles = State.clientes;
+    let base = State.clientes;
+    if (!State.mostrarTodos) base = base.filter(tieneGrupos);
+    let visibles = base;
     if (needle) {
-      visibles = State.clientes
+      visibles = base
         .filter(c => c.norm.includes(needle))
         .sort((a, b) => a.norm.indexOf(needle) - b.norm.indexOf(needle));
     }
     visibles = visibles.slice(0, 200);
+
+    // Header con conteo + toggle.
+    const totalConGrupos = State.clientesConGrupos
+      ? State.clientes.filter(tieneGrupos).length
+      : State.clientes.length;
+    const headerHtml = `
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border-subtle);font-size:11px;color:var(--fg-3);display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span>${totalConGrupos} de ${State.clientes.length} clientes con grupos</span>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+          <input type="checkbox" id="gpToggleTodos" ${State.mostrarTodos ? 'checked' : ''} style="width:14px;height:14px;">
+          <span>Mostrar todos</span>
+        </label>
+      </div>`;
+
     if (!visibles.length) {
-      cont.innerHTML = `<div style="padding:14px; color:var(--fg-3); font-size:13px;">Sin coincidencias.</div>`;
+      cont.innerHTML = headerHtml +
+        `<div style="padding:14px; color:var(--fg-3); font-size:13px;">${needle ? 'Sin coincidencias.' : 'Ningún cliente tiene grupos asignados.'}</div>`;
+      wireToggle();
       return;
     }
-    cont.innerHTML = visibles.map(c => {
+    cont.innerHTML = headerHtml + visibles.map(c => {
       const activo = State.clienteSel && State.clienteSel.id === c.id ? 'active' : '';
       return `<div class="gp-cliente-item ${activo}" data-id="${esc(c.id)}" data-nombre="${esc(c.nombre)}">${esc(c.nombre)}</div>`;
     }).join('');
@@ -73,6 +108,15 @@
       el.addEventListener('click', () => {
         seleccionarCliente({ id: el.dataset.id, nombre: el.dataset.nombre });
       });
+    });
+    wireToggle();
+  }
+
+  function wireToggle() {
+    const t = $('gpToggleTodos');
+    if (t) t.addEventListener('change', () => {
+      State.mostrarTodos = t.checked;
+      renderClientes();
     });
   }
 
