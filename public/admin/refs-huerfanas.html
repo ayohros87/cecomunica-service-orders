@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Referencias huérfanas — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <style>
+    .oh-row {
+      display: grid; grid-template-columns: 1fr auto auto; gap: var(--sp-3); align-items: center;
+      padding: 10px 12px; border-bottom: 1px solid var(--border-subtle);
+    }
+    .oh-row:last-child { border-bottom: 0; }
+    .oh-nombre { font-weight: 600; }
+    .oh-meta { font-size: 12px; color: var(--fg-3); }
+    .oh-target { display: flex; align-items: center; gap: 6px; }
+    .oh-target input { min-width: 240px; }
+    .oh-sim { font-size: 11px; color: var(--fg-3); }
+    .oh-empty { padding: 16px; color: var(--fg-3); font-size: 13px; }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/clientesDedupService.js"></script>
+  <script src="../js/services/refsHuerfanasService.js"></script>
+  <script src="../js/pages/admin-refs-huerfanas.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <script>
+    function cerrarSesion() { firebase.auth().signOut().then(() => { window.location.href = "../login.html"; }); }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="unlink"></i> Referencias huérfanas',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Órdenes, equipos POC y contratos que apuntan a un cliente que ya <strong>no existe</strong>
+        (sin <code>cliente_id</code> sin match, o apuntando a un cliente borrado). Se agrupan por
+        nombre y se sugiere el cliente <strong>activo</strong> que mejor coincide. Revisa y re-apunta.
+      </div>
+    </div>
+
+    <div class="admin-toolbar" style="margin-bottom:var(--sp-3);">
+      <button id="btnEscanear" class="btn btn-primary btn-sm"><i data-lucide="search"></i> Escanear huérfanos</button>
+      <span class="spacer"></span>
+      <span id="ohResumen" class="ts">—</span>
+    </div>
+
+    <div class="ds-card" style="padding:0;">
+      <div id="ohList"><div class="oh-empty">Pulsa "Escanear huérfanos".</div></div>
+    </div>
+  </div>
+
+  <datalist id="clientesActivos"></datalist>
+  <div id="toasts" class="toast-region"></div>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>
