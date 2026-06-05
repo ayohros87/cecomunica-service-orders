@@ -528,9 +528,11 @@
     try {
       const userDoc = await UsuariosService.getUsuario(user.uid);
       const rol = userDoc ? userDoc.rol : null;
-      if (![ROLES.ADMIN].includes(rol)) {
-        Toast.show('Acceso restringido a administradores.', 'bad');
-        window.location.href = 'index.html';
+      if (![ROLES.ADMIN, ROLES.RECEPCION].includes(rol)) {
+        Toast.show('Acceso restringido a administradores y recepción.', 'bad');
+        // Devuelve a donde tiene acceso según su rol — los roles permitidos
+        // que llegan aquí (admin/recepcion) pasan; los demás vuelven al home.
+        window.location.href = '../index.html';
         return;
       }
       await cargarClientes();

@@ -114,7 +114,9 @@
   <script>
     Layout.renderTopbar({
       title: '<i data-lucide="tags"></i> Grupos PoC',
-      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      // Back va a PoC porque la página la usan recepción + admin desde POC/index.
+      // Admin que llega desde admin/index.html puede usar Home o browser back.
+      back: { href: '../POC/index.html', label: '<i data-lucide="arrow-left"></i> Equipos PoC' },
       showHome: true, homeHref: '../index.html', showLogout: true
     });
   </script>
