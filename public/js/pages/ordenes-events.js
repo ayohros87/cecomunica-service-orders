@@ -250,32 +250,7 @@
       }
     },
     'imprimir-orden': (el) => {
-      const ordenId = el.dataset.ordenId;
-      if (!ordenId) return;
-      const orden = APP.state.orders.find(o => o.ordenId === ordenId);
-      if (orden) {
-        localStorage.setItem('imprimirOrdenData', JSON.stringify({
-          ordenId: orden.ordenId,
-          tipo_de_servicio: orden.tipo_de_servicio || '',
-          tecnico_asignado: orden.tecnico_asignado || '',
-          estado_reparacion: orden.estado_reparacion || '',
-          observaciones: orden.observaciones || '',
-          cliente: nombreClienteDe(orden),
-          fecha_creacion: orden.fecha_creacion?.toDate?.()?.toISOString?.() ?? null,
-          fecha_entrega: orden.fecha_entrega?.toDate?.()?.toISOString?.() ?? null,
-          equipos: (orden.equipos || []).filter(e => !e.eliminado).map(e => ({
-            numero_de_serie: e.numero_de_serie || '',
-            modelo: e.modelo || '',
-            bateria: !!e.bateria,
-            clip: !!e.clip,
-            cargador: !!e.cargador,
-            fuente: !!e.fuente,
-            antena: !!e.antena,
-            observaciones: e.observaciones || ''
-          }))
-        }));
-      }
-      window.open(BASE + `imprimir-orden.html?id=${ordenId}`, '_blank');
+      abrirImpresionOrden(el.dataset.ordenId);
       closeAllMenus();
     },
     'gestionar-trabajo': (el) => {
@@ -387,6 +362,40 @@
 })();
 
 /* ========================================
+   Abrir la vista (read-only) de la orden — reutilizada por la acción
+   'imprimir-orden' y por el botón "Ver orden" del modal de entrega.
+   Apunta a imprimir-orden.html (trabajar-orden está oculto / sin uso).
+   ======================================== */
+function abrirImpresionOrden(ordenId) {
+  if (!ordenId) return;
+  const orden = (window.APP?.state?.orders || []).find(o => o.ordenId === ordenId);
+  if (orden) {
+    localStorage.setItem('imprimirOrdenData', JSON.stringify({
+      ordenId: orden.ordenId,
+      tipo_de_servicio: orden.tipo_de_servicio || '',
+      tecnico_asignado: orden.tecnico_asignado || '',
+      estado_reparacion: orden.estado_reparacion || '',
+      observaciones: orden.observaciones || '',
+      cliente: (typeof nombreClienteDe === 'function' ? nombreClienteDe(orden) : (orden.cliente_nombre || '')),
+      fecha_creacion: orden.fecha_creacion?.toDate?.()?.toISOString?.() ?? null,
+      fecha_entrega: orden.fecha_entrega?.toDate?.()?.toISOString?.() ?? null,
+      equipos: (orden.equipos || []).filter(e => !e.eliminado).map(e => ({
+        numero_de_serie: e.numero_de_serie || '',
+        modelo: e.modelo || '',
+        bateria: !!e.bateria,
+        clip: !!e.clip,
+        cargador: !!e.cargador,
+        fuente: !!e.fuente,
+        antena: !!e.antena,
+        observaciones: e.observaciones || ''
+      }))
+    }));
+  }
+  window.open(BASE + `imprimir-orden.html?id=${ordenId}`, '_blank');
+}
+window.abrirImpresionOrden = abrirImpresionOrden;
+
+/* ========================================
    Ver entrega — modal con receptor + firma (todos) e identificación (admin)
    ======================================== */
 function _entregaEsc(v) {
@@ -460,17 +469,20 @@ function mostrarEntrega(ordenId) {
         <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-size:12px;">${esc(interv || '—')}</td>
       </tr>`;
   }).join('');
+  // Nota: no usamos <thead> a propósito — la regla global `thead th{position:sticky}`
+  // de ceco-ui.css descoloca el encabezado dentro del modal. El header va como
+  // una fila normal con celdas en negrita.
   const equiposHtml = equipos.length
     ? `<div style="margin-top:14px;">
          <div class="muted" style="margin-bottom:4px;">Equipos entregados (${equipos.length})</div>
          <table width="100%" style="border-collapse:collapse;font-size:13px;">
-           <thead><tr style="text-align:left;">
-             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Nombre</th>
-             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Modelo</th>
-             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Serial</th>
-             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Intervención</th>
-           </tr></thead>
-           <tbody>${equiposRows}</tbody>
+           <tr style="text-align:left;">
+             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Nombre</td>
+             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Modelo</td>
+             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Serial</td>
+             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Intervención</td>
+           </tr>
+           ${equiposRows}
          </table>
        </div>`
     : `<div class="muted" style="margin-top:14px;">Sin equipos registrados en la orden.</div>`;
@@ -516,7 +528,7 @@ function mostrarEntrega(ordenId) {
   overlay.addEventListener('click', async (e) => {
     if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
     if (e.target.closest('[data-ver-orden]')) {
-      window.open(BASE + `trabajar-orden.html?id=${encodeURIComponent(ordenId)}`, '_blank');
+      abrirImpresionOrden(ordenId);
       return;
     }
     const verBtn = e.target.closest('[data-ver-id]');
