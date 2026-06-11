@@ -1,7 +1,7 @@
 // @ts-nocheck
 // POC bulk (masiva) edit — activate inline inputs, save, cancel
 window.PocBulk = {
-  _campos: ['activo','serial','ip','unit_id','radio_name','modelo_id','grupos','sim_number','sim_phone'],
+  _campos: ['operador','activo','serial','ip','unit_id','radio_name','modelo_id','grupos','sim_number','sim_phone'],
   _modo:   false,
   MAX_BULK: 25,
 
@@ -13,10 +13,14 @@ window.PocBulk = {
   ],
 
   buildOperadorSelectHTML(valorActual = '') {
-    const opciones = (PocState.listaOperadores || [])
+    // Surface the current value even if it isn't in the canonical list, so a
+    // legacy/free-text operador stays selected instead of silently resetting.
+    const lista = [...(PocState.listaOperadores || [])];
+    if (valorActual && !lista.includes(valorActual)) lista.push(valorActual);
+    const opciones = lista
       .map(op => `<option value="${op}" ${op === valorActual ? 'selected' : ''}>${op}</option>`)
       .join('');
-    return `<select class="table-input table-select w-100">
+    return `<select class="table-input table-select bulk-operador" style="width:100%;">
               <option value="">— Selecciona operador —</option>
               ${opciones}
             </select>`;
@@ -39,6 +43,12 @@ window.PocBulk = {
 
     seleccionados.forEach(({ fila }) => {
       const celdas = fila.querySelectorAll('td');
+
+      // Operador — read the raw value stamped on the cell (textContent is empty
+      // when the cell only holds the "missing" marker) and render a dropdown.
+      const operadorOrig = celdas[COL.operador].dataset.operador || '';
+      celdas[COL.operador].setAttribute('data-original', celdas[COL.operador].innerHTML);
+      celdas[COL.operador].innerHTML = this.buildOperadorSelectHTML(operadorOrig);
 
       const activoOrig = celdas[COL.activo].dataset.activo === 'true';
       celdas[COL.activo].setAttribute('data-original', celdas[COL.activo].innerHTML);
@@ -106,6 +116,7 @@ window.PocBulk = {
 
     for (const { id, fila } of seleccionados) {
       const celdas    = fila.querySelectorAll('td');
+      const operador  = celdas[COL.operador].querySelector('select.bulk-operador')?.value || '';
       const activo    = celdas[COL.activo].querySelector('input')?.checked  || false;
       const serial    = celdas[COL.serial].querySelector('input')?.value    || '';
       const ip        = celdas[COL.ip].querySelector('input')?.value        || '';
@@ -122,7 +133,7 @@ window.PocBulk = {
       const sim_phone  = celdas[COL.sim_tel].querySelector('.sim-phone')?.value  || '';
 
       const newData = {
-        activo, serial, ip, unit_id, radio_name, grupos, sim_number, sim_phone,
+        operador, activo, serial, ip, unit_id, radio_name, grupos, sim_number, sim_phone,
         modelo_id:    modelo_id || firebase.firestore.FieldValue.delete(),
         modelo_label,
         updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
@@ -171,6 +182,7 @@ window.PocBulk = {
 
     seleccionados.forEach(({ fila }) => {
       const celdas = fila.querySelectorAll('td');
+      celdas[COL.operador].innerHTML  = celdas[COL.operador].getAttribute('data-original')  || '';
       celdas[COL.activo].innerHTML    = celdas[COL.activo].getAttribute('data-original')    || '';
       celdas[COL.serial].innerHTML    = celdas[COL.serial].getAttribute('data-original')    || '';
       celdas[COL.ip].innerHTML        = celdas[COL.ip].getAttribute('data-original')        || '';

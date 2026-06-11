@@ -9,15 +9,16 @@ window.PocState = {
   COL: {
     checkbox:   0,
     cliente:    1,
-    activo:     2,
-    serial:     3,
-    ip:         4,
-    unit_id:    5,
-    radio_name: 6,
-    modelo:     7,
-    grupos:     8,
-    sim_tel:    9,
-    acciones:   10
+    operador:   2,
+    activo:     3,
+    serial:     4,
+    ip:         5,
+    unit_id:    6,
+    radio_name: 7,
+    modelo:     8,
+    grupos:     9,
+    sim_tel:    10,
+    acciones:   11
   },
 
   esLectura() {

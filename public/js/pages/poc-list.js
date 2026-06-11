@@ -85,7 +85,18 @@ window.PocList = {
       : `<strong>${nombreCliente}</strong>`;
     row.appendChild(tdCliente);
 
-    // activo (2)
+    // operador (2) — stamp raw value on the cell so bulk edit can pre-select.
+    // Empty operadores get a critical marker so they're easy to spot/complete.
+    const tdOperador = document.createElement('td');
+    tdOperador.dataset.operador = d.operador || '';
+    if (d.operador && d.operador.trim()) {
+      tdOperador.textContent = d.operador;
+    } else {
+      tdOperador.innerHTML = '<span style="color:var(--status-critical);" title="Operador faltante"><i data-lucide="alert-circle"></i></span>';
+    }
+    row.appendChild(tdOperador);
+
+    // activo (3)
     const tdEstado = document.createElement('td');
     tdEstado.dataset.activo = d.activo ? 'true' : 'false';
     tdEstado.className = 'poc-estado-cell';
@@ -94,26 +105,26 @@ window.PocList = {
       : '<span class="status-dot status-inactivo"></span>';
     row.appendChild(tdEstado);
 
-    // serial (3), ip (4), unit_id (5), radio_name (6)
+    // serial (4), ip (5), unit_id (6), radio_name (7)
     row.appendChild(this.nuevaCelda(d.serial, 'td-mono'));
     row.appendChild(this.crearCeldaIp(d.ip));
     row.appendChild(this.nuevaCelda(d.unit_id, 'td-mono td-primary'));
     row.appendChild(this.nuevaCelda(d.radio_name));
 
-    // modelo (7) — stamp the resolved FK so bulk edit / drawer can pre-select
+    // modelo (8) — stamp the resolved FK so bulk edit / drawer can pre-select
     const tdModelo = this.nuevaCelda(PocState.obtenerModeloTexto(d));
     tdModelo.dataset.modeloId = PocState.obtenerModeloId(d) || '';
     row.appendChild(tdModelo);
 
-    // grupos (8)
+    // grupos (9)
     row.appendChild(this.crearCeldaConExpansor((d.grupos || []).join(', '), 'grupos'));
 
-    // sim_tel (9)
+    // sim_tel (10)
     const tdSim = document.createElement('td');
     tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${d.sim_number || ''} / ${d.sim_phone || ''}`;
     row.appendChild(tdSim);
 
-    // acciones (10)
+    // acciones (11)
     const actionCell = document.createElement('td');
     actionCell.style.whiteSpace = 'nowrap';
     if (!PocState.esLectura()) {
@@ -369,6 +380,15 @@ window.PocList = {
         ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${d.cliente || ''}</strong>`
         : `<strong>${d.cliente || ''}</strong>`;
       row.appendChild(tdCliente);
+
+      const tdOperador = document.createElement('td');
+      tdOperador.dataset.operador = d.operador || '';
+      if (d.operador && d.operador.trim()) {
+        tdOperador.textContent = d.operador;
+      } else {
+        tdOperador.innerHTML = '<span style="color:var(--status-critical);" title="Operador faltante"><i data-lucide="alert-circle"></i></span>';
+      }
+      row.appendChild(tdOperador);
 
       const tdEstado = document.createElement('td');
       tdEstado.dataset.activo = d.activo ? 'true' : 'false';
