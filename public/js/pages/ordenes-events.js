@@ -266,12 +266,19 @@
         closeAllMenus();
       }
     },
-    // Ver entrega — receptor + firma (todos) e identificación (solo admin).
+    // Ver entrega — abre el comprobante imprimible (qué se entregó + receptor + firma).
     'ver-entrega': (el) => {
       const ordenId = el.dataset.ordenId;
       if (!ordenId) return;
       closeAllMenus();
-      mostrarEntrega(ordenId);
+      verEntregaComprobante(ordenId);
+    },
+    // Ver identificación — solo admin; cédula vía signed URL en lightbox.
+    'ver-identificacion': async (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      verIdentificacionAdmin(ordenId, el);
     },
     
     // Badge filter actions
@@ -436,131 +443,124 @@ function _entregaLightbox(url, alt) {
   document.body.appendChild(overlay);
 }
 
-function mostrarEntrega(ordenId) {
+// "Ver entrega" → documento imprimible (comprobante de entrega): muestra qué
+// se entregó y a quién (receptor, fecha, firma). Se abre en ventana nueva,
+// autocontenido (CSS inline) y listo para imprimir. No incluye la cédula: es
+// PII interna, se ve aparte con "Ver identificación" (admin).
+function verEntregaComprobante(ordenId) {
   const o = (window.APP?.state?.orders || []).find(x => x.ordenId === ordenId) || {};
   const esc = _entregaEsc;
-  const esAdmin = (window.APP?.state?.userRole) === (window.ROLES ? ROLES.ADMIN : 'administrador');
-  const fecha = _entregaFecha(o.fecha_entrega);
+  const cliente = (typeof nombreClienteDe === 'function' ? nombreClienteDe(o) : (o.cliente_nombre || '—'));
+  const fecha = _entregaFecha(o.fecha_entrega) || '—';
 
-  const filas = [];
-  if (o.receptor_nombre) filas.push(['Recibido por', esc(o.receptor_nombre)]);
-  if (fecha)             filas.push(['Fecha de entrega', esc(fecha)]);
-  const filasHtml = filas.map(([k, v]) =>
-    `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,#eee);"><span class="muted" style="min-width:140px;">${k}</span><strong>${v}</strong></div>`
-  ).join('');
-
-  const firmaHtml = o.firma_url
-    ? `<div style="margin-top:12px;">
-         <div class="muted" style="margin-bottom:4px;">Firma del receptor</div>
-         <img src="${esc(o.firma_url)}" alt="Firma del receptor"
-              style="max-width:280px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;">
-       </div>`
-    : `<div class="muted" style="margin-top:12px;">Sin firma registrada.</div>`;
-
-  // Lo que se entregó — equipos de la orden (sin los eliminados).
   const equipos = (Array.isArray(o.equipos) ? o.equipos : []).filter(e => !e.eliminado);
-  const equiposRows = equipos.map(e => {
+  const equiposRows = equipos.map((e, i) => {
     const serial = e.numero_de_serie || e.SERIAL || e.serial || '';
     const interv = e.trabajo_tecnico || (e.intervencion_no_disponible ? 'N/D' : '');
     return `<tr>
-        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.nombre || '—')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.modelo || '—')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-family:monospace;font-size:12px;">${esc(serial || '—')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-size:12px;">${esc(interv || '—')}</td>
+        <td class="c-num">${i + 1}</td>
+        <td>${esc(e.nombre || '—')}</td>
+        <td>${esc(e.modelo || '—')}</td>
+        <td class="c-mono">${esc(serial || '—')}</td>
+        <td>${esc(interv || '—')}</td>
       </tr>`;
   }).join('');
-  // Nota: no usamos <thead> a propósito — la regla global `thead th{position:sticky}`
-  // de ceco-ui.css descoloca el encabezado dentro del modal. El header va como
-  // una fila normal con celdas en negrita.
-  const equiposHtml = equipos.length
-    ? `<div style="margin-top:14px;">
-         <div class="muted" style="margin-bottom:4px;">Equipos entregados (${equipos.length})</div>
-         <table width="100%" style="border-collapse:collapse;font-size:13px;">
-           <tr style="text-align:left;">
-             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Nombre</td>
-             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Modelo</td>
-             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Serial</td>
-             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Intervención</td>
-           </tr>
-           ${equiposRows}
-         </table>
-       </div>`
-    : `<div class="muted" style="margin-top:14px;">Sin equipos registrados en la orden.</div>`;
 
-  let idHtml = '';
-  if (esAdmin) {
-    if (o.sin_id) {
-      idHtml = `<div class="muted" style="margin-top:12px;"><i data-lucide="badge-alert"></i> Cliente no presentó identificación${o.sin_id_motivo ? ' — ' + esc(o.sin_id_motivo) : ''}.</div>`;
-    } else if (o.identificacion_purged_at) {
-      idHtml = `<div class="muted" style="margin-top:12px;"><i data-lucide="trash-2"></i> Foto de identificación purgada por política de retención.</div>`;
-    } else if (o.identificacion_path || o.identificacion_url) {
-      idHtml = `<div style="margin-top:12px;">
-          <button class="btn" data-ver-id="1"><i data-lucide="id-card"></i> Ver identificación</button>
-          <span class="muted" style="margin-left:8px;font-size:12px;">Solo administradores · enlace temporal</span>
-        </div>`;
-    } else {
-      idHtml = `<div class="muted" style="margin-top:12px;"><i data-lucide="image-off"></i> Sin foto de identificación registrada.</div>`;
-    }
-  }
+  const idNota = o.sin_id
+    ? `<p class="nota"><strong>Identificación:</strong> Cliente no presentó identificación${o.sin_id_motivo ? ' — ' + esc(o.sin_id_motivo) : ''}.</p>`
+    : `<p class="nota"><strong>Identificación:</strong> Verificada al momento de la entrega.</p>`;
 
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:520px;">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title"><i data-lucide="package-check"></i> Entrega — Orden ${esc(ordenId)}</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:12px 8px;">
-        ${filasHtml || '<div class="muted">Sin datos de receptor.</div>'}
-        ${equiposHtml}
-        ${firmaHtml}
-        ${idHtml}
-      </div>
-      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 8px;border-top:1px solid var(--line,#eee);">
-        <button class="btn btn-primary" data-ver-orden="1"><i data-lucide="external-link"></i> Ver orden</button>
-      </div>
-    </div>`;
+  const firmaBlock = o.firma_url
+    ? `<img src="${esc(o.firma_url)}" alt="Firma del receptor" class="firma-img">`
+    : `<div class="firma-line"></div>`;
 
-  const cleanup = () => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  overlay.addEventListener('click', async (e) => {
-    if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
-    if (e.target.closest('[data-ver-orden]')) {
-      abrirImpresionOrden(ordenId);
-      return;
-    }
-    const verBtn = e.target.closest('[data-ver-id]');
-    if (verBtn) {
-      verBtn.disabled = true;
-      const prev = verBtn.innerHTML;
-      verBtn.innerHTML = 'Cargando…';
-      try {
-        const fn = firebase.functions().httpsCallable('getIdentificacionUrl');
-        const { data } = await fn({ ordenId });
-        if (data.status === 'ok' && data.url) {
-          _entregaLightbox(data.url, 'Identificación del receptor');
-        } else if (data.status === 'sin_id') {
-          Toast.show('El cliente no presentó identificación' + (data.motivo ? `: ${data.motivo}` : ''), 'warn');
-        } else if (data.status === 'purged') {
-          Toast.show('La foto fue purgada por política de retención', 'warn');
-        } else {
-          Toast.show('No hay foto de identificación para esta orden', 'warn');
-        }
-      } catch (err) {
-        console.error('[mostrarEntrega] getIdentificacionUrl', err);
-        Toast.show('No se pudo obtener la identificación: ' + (err.message || err.code || 'error'), 'bad');
-      } finally {
-        verBtn.disabled = false;
-        verBtn.innerHTML = prev;
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-      }
-    }
-  });
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  document.body.style.overflow = 'hidden';
-  if (typeof lucide !== 'undefined') lucide.createIcons();
+  const logo = `${location.origin}/logo_cecomunica.png`;
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<title>Comprobante de Entrega — Orden ${esc(ordenId)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color:#111827; margin:0; padding:32px; max-width:780px; }
+  .head { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #0091D7; padding-bottom:12px; margin-bottom:18px; }
+  .head img { height:42px; }
+  .head h1 { font-size:18px; margin:0; color:#0091D7; text-align:right; }
+  .meta { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; margin-bottom:18px; font-size:14px; }
+  .meta div { padding:4px 0; border-bottom:1px solid #eee; }
+  .meta .k { color:#6b7280; }
+  h2 { font-size:14px; margin:18px 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #e5e7eb; }
+  th { background:#f3f4f6; border-bottom:2px solid #d1d5db; }
+  .c-num { width:28px; color:#6b7280; }
+  .c-mono { font-family:monospace; font-size:12px; }
+  .nota { font-size:13px; margin:14px 0 0; }
+  .firma-wrap { margin-top:28px; }
+  .firma-img { max-width:280px; max-height:130px; display:block; border:1px solid #e5e7eb; border-radius:6px; background:#fff; }
+  .firma-line { width:280px; border-bottom:1px solid #111; height:60px; }
+  .firma-cap { font-size:12px; color:#6b7280; margin-top:4px; }
+  .toolbar { margin-bottom:18px; }
+  .toolbar button { background:#0091D7; color:#fff; border:0; padding:8px 16px; border-radius:6px; font:600 13px Arial; cursor:pointer; }
+  .foot { margin-top:32px; font-size:11px; color:#9ca3af; text-align:center; border-top:1px solid #eee; padding-top:8px; }
+  @media print { .toolbar { display:none; } body { padding:0; } }
+</style></head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">🖨️ Imprimir</button></div>
+  <div class="head">
+    <img src="${esc(logo)}" alt="Cecomunica" onerror="this.style.display='none'">
+    <h1>Comprobante de Entrega</h1>
+  </div>
+  <div class="meta">
+    <div><span class="k">Orden:</span> <strong>${esc(ordenId)}</strong></div>
+    <div><span class="k">Fecha de entrega:</span> <strong>${esc(fecha)}</strong></div>
+    <div><span class="k">Cliente:</span> <strong>${esc(cliente)}</strong></div>
+    <div><span class="k">Tipo de servicio:</span> <strong>${esc(o.tipo_de_servicio || '—')}</strong></div>
+    <div><span class="k">Recibido por:</span> <strong>${esc(o.receptor_nombre || '—')}</strong></div>
+    <div><span class="k">Técnico:</span> <strong>${esc(o.tecnico_asignado || '—')}</strong></div>
+  </div>
+
+  <h2>Equipos entregados (${equipos.length})</h2>
+  ${equipos.length
+    ? `<table><thead><tr><th class="c-num">#</th><th>Nombre</th><th>Modelo</th><th>Serial</th><th>Intervención</th></tr></thead><tbody>${equiposRows}</tbody></table>`
+    : `<p class="nota">Sin equipos registrados en la orden.</p>`}
+
+  ${idNota}
+
+  <div class="firma-wrap">
+    <div class="firma-cap">Firma del receptor:</div>
+    ${firmaBlock}
+    <div class="firma-cap">${esc(o.receptor_nombre || '')}</div>
+  </div>
+
+  <div class="foot">Cecomunica, S.A. — Documento generado el ${esc(new Date().toLocaleString('es-PA'))}</div>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { Toast.show('Permite las ventanas emergentes para ver el comprobante', 'warn'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
-window.mostrarEntrega = mostrarEntrega;
+window.verEntregaComprobante = verEntregaComprobante;
+
+// "Ver identificación" (admin) → signed URL temporal en lightbox.
+async function verIdentificacionAdmin(ordenId, btnEl) {
+  try {
+    if (typeof Toast !== 'undefined') Toast.show('Obteniendo identificación…', 'info');
+    const fn = firebase.functions().httpsCallable('getIdentificacionUrl');
+    const { data } = await fn({ ordenId });
+    if (data.status === 'ok' && data.url) {
+      _entregaLightbox(data.url, 'Identificación del receptor');
+    } else if (data.status === 'sin_id') {
+      Toast.show('El cliente no presentó identificación' + (data.motivo ? `: ${data.motivo}` : ''), 'warn');
+    } else if (data.status === 'purged') {
+      Toast.show('La foto fue purgada por política de retención', 'warn');
+    } else {
+      Toast.show('No hay foto de identificación para esta orden', 'warn');
+    }
+  } catch (err) {
+    console.error('[verIdentificacionAdmin] getIdentificacionUrl', err);
+    Toast.show('No se pudo obtener la identificación: ' + (err.message || err.code || 'error'), 'bad');
+  }
+}
+window.verIdentificacionAdmin = verIdentificacionAdmin;

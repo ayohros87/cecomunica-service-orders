@@ -687,10 +687,14 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
 
-  // "Ver entrega" — receptor + firma (todos) e identificación (solo admin,
-  // gateado dentro del handler). Solo si hay datos de entrega.
+  // "Ver entrega" — documento imprimible (comprobante): qué se entregó + a
+  // quién (receptor, fecha, firma). "Ver identificación" es admin-only y
+  // separado porque la cédula es PII y no va en el comprobante del cliente.
   if (tieneEntrega) {
     menuItems.push({ icon: '<i data-lucide="package-check"></i>', label: "Ver entrega", action: "ver-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" });
+    if (rol === ROLES.ADMIN) {
+      menuItems.push({ icon: '<i data-lucide="id-card"></i>', label: "Ver identificación", action: "ver-identificacion", dataAttributes: `data-orden-id="${ordenId}"`, class: "" });
+    }
   }
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
