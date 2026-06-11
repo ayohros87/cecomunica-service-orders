@@ -669,17 +669,8 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
   }
 
-  const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
-
-  // Un solo botón "Ver" para la información capturada de recepción/entrega.
-  // Abre un modal combinado (Recepción → Entrega) con las fases que existan.
-  // El label se adapta: "Ver entrega" si ya fue entregada, si no "Ver recepción".
-  const tieneRecepcion = !!(od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion);
-  const tieneEntrega   = !!(od.firma_url || od.receptor_nombre || od.fecha_entrega || od.sin_id || od.identificacion_path || od.identificacion_url);
-  if (tieneRecepcion || tieneEntrega) {
-    const label = tieneEntrega ? 'Ver entrega' : 'Ver recepción';
-    html += `<button class="btn-flujo btn-flujo--ver-entrega" title="${label}" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> ${label}</button>`;
-  }
+  // "Ver entrega/recepción" ya NO va inline — vive dentro del menú ⋯
+  // (botonesGestion) para dejar en la columna solo la acción de estado.
 
   return html || "<em>-</em>";
 }
@@ -696,6 +687,20 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   let menuItems = [
     { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
+
+  // "Ver entrega/recepción" como primer ítem destacado cuando hay datos
+  // capturados. Label adaptativo (entrega si ya fue entregada).
+  const tieneRecepcion = !!(o.firma_recepcion_url || o.receptor_recepcion_nombre || o.fecha_recepcion);
+  const tieneEntrega   = !!(o.firma_url || o.receptor_nombre || o.fecha_entrega || o.sin_id || o.identificacion_path || o.identificacion_url);
+  if (tieneRecepcion || tieneEntrega) {
+    menuItems.unshift({
+      icon: '<i data-lucide="package-check"></i>',
+      label: tieneEntrega ? "Ver entrega" : "Ver recepción",
+      action: "ver-entrega",
+      dataAttributes: `data-orden-id="${ordenId}"`,
+      class: "highlighted"
+    });
+  }
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(
