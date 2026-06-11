@@ -699,9 +699,7 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(
-      { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir / documentos", action: "ver-documentos", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' },
       { divider: true },
       { icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
@@ -718,9 +716,7 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     );
   } else if (rol === ROLES.VENDEDOR) {
     menuItems.push(
-      { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir / documentos", action: "ver-documentos", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
   }
 
