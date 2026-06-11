@@ -409,7 +409,10 @@ function _entregaFecha(ts) {
   try {
     const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
     if (!d || isNaN(d)) return null;
-    return d.toLocaleDateString('es-PA', { day: '2-digit', month: 'long', year: 'numeric' });
+    return d.toLocaleString('es-PA', {
+      day: '2-digit', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
   } catch { return null; }
 }
 
@@ -452,7 +455,7 @@ function mostrarEntrega(ordenId) {
     ['Cliente', esc(cliente)],
     ['Tipo de servicio', esc(o.tipo_de_servicio || '—')],
     ['Recibido por', esc(o.receptor_nombre || '—')],
-    ['Fecha de entrega', esc(fecha || '—')],
+    ['Fecha y hora de entrega', esc(fecha || '—')],
   ];
   const filasHtml = filas.map(([k, v]) =>
     `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,#eee);"><span class="muted" style="min-width:140px;">${k}</span><strong>${v}</strong></div>`
@@ -638,7 +641,7 @@ function verEntregaComprobante(ordenId) {
   </div>
   <div class="meta">
     <div><span class="k">Orden:</span> <strong>${esc(ordenId)}</strong></div>
-    <div><span class="k">Fecha de entrega:</span> <strong>${esc(fecha)}</strong></div>
+    <div><span class="k">Fecha y hora de entrega:</span> <strong>${esc(fecha)}</strong></div>
     <div><span class="k">Cliente:</span> <strong>${esc(cliente)}</strong></div>
     <div><span class="k">Tipo de servicio:</span> <strong>${esc(o.tipo_de_servicio || '—')}</strong></div>
     <div><span class="k">Recibido por:</span> <strong>${esc(o.receptor_nombre || '—')}</strong></div>
