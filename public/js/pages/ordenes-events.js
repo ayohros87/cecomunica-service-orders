@@ -448,6 +448,33 @@ function mostrarEntrega(ordenId) {
        </div>`
     : `<div class="muted" style="margin-top:12px;">Sin firma registrada.</div>`;
 
+  // Lo que se entregó — equipos de la orden (sin los eliminados).
+  const equipos = (Array.isArray(o.equipos) ? o.equipos : []).filter(e => !e.eliminado);
+  const equiposRows = equipos.map(e => {
+    const serial = e.numero_de_serie || e.SERIAL || e.serial || '';
+    const interv = e.trabajo_tecnico || (e.intervencion_no_disponible ? 'N/D' : '');
+    return `<tr>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.nombre || '—')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.modelo || '—')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-family:monospace;font-size:12px;">${esc(serial || '—')}</td>
+        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-size:12px;">${esc(interv || '—')}</td>
+      </tr>`;
+  }).join('');
+  const equiposHtml = equipos.length
+    ? `<div style="margin-top:14px;">
+         <div class="muted" style="margin-bottom:4px;">Equipos entregados (${equipos.length})</div>
+         <table width="100%" style="border-collapse:collapse;font-size:13px;">
+           <thead><tr style="text-align:left;">
+             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Nombre</th>
+             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Modelo</th>
+             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Serial</th>
+             <th style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);">Intervención</th>
+           </tr></thead>
+           <tbody>${equiposRows}</tbody>
+         </table>
+       </div>`
+    : `<div class="muted" style="margin-top:14px;">Sin equipos registrados en la orden.</div>`;
+
   let idHtml = '';
   if (esAdmin) {
     if (o.sin_id) {
@@ -475,8 +502,12 @@ function mostrarEntrega(ordenId) {
       </div>
       <div class="sheet-body" style="padding:12px 8px;">
         ${filasHtml || '<div class="muted">Sin datos de receptor.</div>'}
+        ${equiposHtml}
         ${firmaHtml}
         ${idHtml}
+      </div>
+      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 8px;border-top:1px solid var(--line,#eee);">
+        <button class="btn btn-primary" data-ver-orden="1"><i data-lucide="external-link"></i> Ver orden</button>
       </div>
     </div>`;
 
@@ -484,6 +515,10 @@ function mostrarEntrega(ordenId) {
   const kb = e => { if (e.key === 'Escape') cleanup(); };
   overlay.addEventListener('click', async (e) => {
     if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
+    if (e.target.closest('[data-ver-orden]')) {
+      window.open(BASE + `trabajar-orden.html?id=${encodeURIComponent(ordenId)}`, '_blank');
+      return;
+    }
     const verBtn = e.target.closest('[data-ver-id]');
     if (verBtn) {
       verBtn.disabled = true;
