@@ -831,8 +831,11 @@ window.copiarSeriales = function (ordenId) {
         template: 'nota_entrega',
         data: {
           ordenId,
-          orden: _ordenEmailSnapshot(orden),
-          opts:  { ...emailOpts, fechaISO: new Date().toISOString() },
+          orden:  _ordenEmailSnapshot(orden),
+          opts:   { ...emailOpts, fechaISO: new Date().toISOString() },
+          // CTA del botón "Ver orden". Sin esto renderByTemplate cae a "#"
+          // y el botón no hace nada. Mismo patrón que onComplete.js.
+          ctaUrl: `https://app.cecomunica.net/ordenes/trabajar-orden.html?id=${encodeURIComponent(ordenId)}`,
         },
       };
 

@@ -173,9 +173,9 @@ function renderByTemplate(data) {
       return buildEmailFromBase({
         preheader,
         bodyHtml,
-        // No CTA for entrega — the body is informational. Keep the
-        // button hidden by routing to the order URL but with a label
-        // that makes sense if a client decides to render it anyway.
+        // El botón "Ver orden" SIEMPRE se renderiza (email-base.html no lo
+        // condiciona). El caller debe pasar payload.ctaUrl con la URL de la
+        // orden; si falta, cae a "#" y el botón no hace nada.
         ctaUrl:   payload.ctaUrl   || "#",
         ctaLabel: payload.ctaLabel || "Ver orden",
       });
