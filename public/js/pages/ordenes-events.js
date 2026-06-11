@@ -291,6 +291,13 @@
         closeAllMenus();
       }
     },
+    // Ver entrega — receptor + firma (todos) e identificación (solo admin).
+    'ver-entrega': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      mostrarEntrega(ordenId);
+    },
     
     // Badge filter actions
     'filtrar-badge': (el) => {
@@ -375,6 +382,138 @@
   // Attach event listeners to document
   document.addEventListener('click', handleClick);
   document.addEventListener('change', handleChange);
-  
+
   console.log('✅ Event delegation system initialized');
 })();
+
+/* ========================================
+   Ver entrega — modal con receptor + firma (todos) e identificación (admin)
+   ======================================== */
+function _entregaEsc(v) {
+  if (v == null) return '';
+  return String(v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function _entregaFecha(ts) {
+  try {
+    const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null);
+    if (!d || isNaN(d)) return null;
+    return d.toLocaleDateString('es-PA', { day: '2-digit', month: 'long', year: 'numeric' });
+  } catch { return null; }
+}
+
+// Lightbox de imagen — overlay dinámico, cierra con backdrop/Escape/✕.
+function _entregaLightbox(url, alt) {
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '10000';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:90vw;max-height:90vh;padding:8px;">
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+      </div>
+      <img src="${_entregaEsc(url)}" alt="${_entregaEsc(alt || 'Imagen')}"
+           style="max-width:86vw;max-height:78vh;object-fit:contain;display:block;border-radius:6px;">
+    </div>`;
+  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
+  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  });
+  document.addEventListener('keydown', kb);
+  document.body.appendChild(overlay);
+}
+
+function mostrarEntrega(ordenId) {
+  const o = (window.APP?.state?.orders || []).find(x => x.ordenId === ordenId) || {};
+  const esc = _entregaEsc;
+  const esAdmin = (window.APP?.state?.userRole) === (window.ROLES ? ROLES.ADMIN : 'administrador');
+  const fecha = _entregaFecha(o.fecha_entrega);
+
+  const filas = [];
+  if (o.receptor_nombre) filas.push(['Recibido por', esc(o.receptor_nombre)]);
+  if (fecha)             filas.push(['Fecha de entrega', esc(fecha)]);
+  const filasHtml = filas.map(([k, v]) =>
+    `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,#eee);"><span class="muted" style="min-width:140px;">${k}</span><strong>${v}</strong></div>`
+  ).join('');
+
+  const firmaHtml = o.firma_url
+    ? `<div style="margin-top:12px;">
+         <div class="muted" style="margin-bottom:4px;">Firma del receptor</div>
+         <img src="${esc(o.firma_url)}" alt="Firma del receptor"
+              style="max-width:280px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;">
+       </div>`
+    : `<div class="muted" style="margin-top:12px;">Sin firma registrada.</div>`;
+
+  let idHtml = '';
+  if (esAdmin) {
+    if (o.sin_id) {
+      idHtml = `<div class="muted" style="margin-top:12px;"><i data-lucide="badge-alert"></i> Cliente no presentó identificación${o.sin_id_motivo ? ' — ' + esc(o.sin_id_motivo) : ''}.</div>`;
+    } else if (o.identificacion_purged_at) {
+      idHtml = `<div class="muted" style="margin-top:12px;"><i data-lucide="trash-2"></i> Foto de identificación purgada por política de retención.</div>`;
+    } else if (o.identificacion_path || o.identificacion_url) {
+      idHtml = `<div style="margin-top:12px;">
+          <button class="btn" data-ver-id="1"><i data-lucide="id-card"></i> Ver identificación</button>
+          <span class="muted" style="margin-left:8px;font-size:12px;">Solo administradores · enlace temporal</span>
+        </div>`;
+    } else {
+      idHtml = `<div class="muted" style="margin-top:12px;"><i data-lucide="image-off"></i> Sin foto de identificación registrada.</div>`;
+    }
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;">
+      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h3 class="sheet-title"><i data-lucide="package-check"></i> Entrega — Orden ${esc(ordenId)}</h3>
+        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sheet-body" style="padding:12px 8px;">
+        ${filasHtml || '<div class="muted">Sin datos de receptor.</div>'}
+        ${firmaHtml}
+        ${idHtml}
+      </div>
+    </div>`;
+
+  const cleanup = () => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); };
+  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  overlay.addEventListener('click', async (e) => {
+    if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
+    const verBtn = e.target.closest('[data-ver-id]');
+    if (verBtn) {
+      verBtn.disabled = true;
+      const prev = verBtn.innerHTML;
+      verBtn.innerHTML = 'Cargando…';
+      try {
+        const fn = firebase.functions().httpsCallable('getIdentificacionUrl');
+        const { data } = await fn({ ordenId });
+        if (data.status === 'ok' && data.url) {
+          _entregaLightbox(data.url, 'Identificación del receptor');
+        } else if (data.status === 'sin_id') {
+          Toast.show('El cliente no presentó identificación' + (data.motivo ? `: ${data.motivo}` : ''), 'warn');
+        } else if (data.status === 'purged') {
+          Toast.show('La foto fue purgada por política de retención', 'warn');
+        } else {
+          Toast.show('No hay foto de identificación para esta orden', 'warn');
+        }
+      } catch (err) {
+        console.error('[mostrarEntrega] getIdentificacionUrl', err);
+        Toast.show('No se pudo obtener la identificación: ' + (err.message || err.code || 'error'), 'bad');
+      } finally {
+        verBtn.disabled = false;
+        verBtn.innerHTML = prev;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }
+    }
+  });
+  document.addEventListener('keydown', kb);
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+window.mostrarEntrega = mostrarEntrega;

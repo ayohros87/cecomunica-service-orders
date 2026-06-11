@@ -680,17 +680,24 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
   const trabajo = (o.trabajo_estado) || (o.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
   const tieneNota = o.nota_tecnica && o.nota_tecnica.trim() !== "";
+  // ¿La orden tiene datos de entrega capturados? (firma/receptor/cédula)
+  const tieneEntrega = !!(o.firma_url || o.identificacion_path || o.identificacion_url || o.receptor_nombre || o.sin_id);
 
   let menuItems = [
     { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
+
+  // "Ver entrega" — receptor + firma (todos) e identificación (solo admin,
+  // gateado dentro del handler). Solo si hay datos de entrega.
+  if (tieneEntrega) {
+    menuItems.push({ icon: '<i data-lucide="package-check"></i>', label: "Ver entrega", action: "ver-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" });
+  }
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(
       { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
       { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' },
       { divider: true },
       { icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
@@ -699,7 +706,6 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   } else if (rol === ROLES.TECNICO || rol === ROLES.TECNICO_OPERATIVO) {
     menuItems.push(
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' },
       { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
     );
   } else if (rol === ROLES.VISTA) {
@@ -710,8 +716,7 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     menuItems.push(
       { icon: '<i data-lucide="file-text"></i>', label: "Generar nota entrega", action: "generar-nota-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota entrega con intervenciones", action: "generar-nota-entrega-intervenciones", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="wrench"></i>', label: trabajo === 'COMPLETADO' ? "Trabajo completado" : trabajo === 'EN_PROGRESO' ? "Trabajo en progreso" : "Gestionar trabajo", action: "gestionar-trabajo", dataAttributes: `data-orden-id="${ordenId}"`, class: trabajo === 'COMPLETADO' ? 'highlighted' : '' }
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
   }
 
