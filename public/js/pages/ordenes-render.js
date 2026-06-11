@@ -647,8 +647,11 @@ function botonesFlujo(ordenId, estado, ordenData) {
   }
 
   else if (rol === ROLES.TECNICO) {
-    if (estado === "RECIBIDO EN MOSTRADOR") {
-      // Asignar solo después de recibido (recepción es el primer paso).
+    if (estado === "POR ASIGNAR") {
+      // El técnico también puede recibir (primer paso). Si recepción no la
+      // recibió, puede saltarse el paso con "Asignar (saltar recepción)" del ⋯.
+      html += `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
+    } else if (estado === "RECIBIDO EN MOSTRADOR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
@@ -715,9 +718,10 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     });
   }
 
-  // Técnico puede asignar aunque recepción no haya recibido la orden:
-  // opción en el menú para saltarse el paso de recibir en POR ASIGNAR.
-  if (rol === ROLES.TECNICO && estadoUpper === "POR ASIGNAR") {
+  // Asignar aunque recepción no haya recibido la orden: opción en el menú
+  // para saltarse el paso de recibir en POR ASIGNAR. Para todos los roles
+  // operativos (no para 'vista', que es solo lectura).
+  if (estadoUpper === "POR ASIGNAR" && rol !== ROLES.VISTA) {
     menuItems.unshift({
       icon: '<i data-lucide="wrench"></i>',
       label: "Asignar (saltar recepción)",
