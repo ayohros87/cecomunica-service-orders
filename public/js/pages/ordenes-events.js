@@ -453,22 +453,33 @@ function verEntregaComprobante(ordenId) {
   const cliente = (typeof nombreClienteDe === 'function' ? nombreClienteDe(o) : (o.cliente_nombre || '—'));
   const fecha = _entregaFecha(o.fecha_entrega) || '—';
 
+  // Mismas columnas que la hoja que firma el cliente: serial, modelo y
+  // accesorios entregados. El nombre y la intervención NO van en la hoja de
+  // firma, por eso tampoco aquí.
   const equipos = (Array.isArray(o.equipos) ? o.equipos : []).filter(e => !e.eliminado);
   const equiposRows = equipos.map((e, i) => {
     const serial = e.numero_de_serie || e.SERIAL || e.serial || '';
-    const interv = e.trabajo_tecnico || (e.intervencion_no_disponible ? 'N/D' : '');
+    const accs = [];
+    if (e.bateria)  accs.push('Batería');
+    if (e.clip)     accs.push('Clip');
+    if (e.cargador) accs.push('Cargador');
+    if (e.fuente)   accs.push('Fuente');
+    if (e.antena)   accs.push('Antena');
     return `<tr>
         <td class="c-num">${i + 1}</td>
-        <td>${esc(e.nombre || '—')}</td>
-        <td>${esc(e.modelo || '—')}</td>
         <td class="c-mono">${esc(serial || '—')}</td>
-        <td>${esc(interv || '—')}</td>
+        <td>${esc(e.modelo || '—')}</td>
+        <td>${accs.length ? esc(accs.join(', ')) : '—'}</td>
       </tr>`;
   }).join('');
 
+  // La nota de identificación solo afirma "Verificada" si realmente hubo foto;
+  // si el cliente no presentó ID se indica; si no hay dato, se omite.
   const idNota = o.sin_id
     ? `<p class="nota"><strong>Identificación:</strong> Cliente no presentó identificación${o.sin_id_motivo ? ' — ' + esc(o.sin_id_motivo) : ''}.</p>`
-    : `<p class="nota"><strong>Identificación:</strong> Verificada al momento de la entrega.</p>`;
+    : (o.identificacion_path || o.identificacion_url)
+      ? `<p class="nota"><strong>Identificación:</strong> Verificada al momento de la entrega.</p>`
+      : '';
 
   const firmaBlock = o.firma_url
     ? `<img src="${esc(o.firma_url)}" alt="Firma del receptor" class="firma-img">`
@@ -521,7 +532,7 @@ function verEntregaComprobante(ordenId) {
 
   <h2>Equipos entregados (${equipos.length})</h2>
   ${equipos.length
-    ? `<table><thead><tr><th class="c-num">#</th><th>Nombre</th><th>Modelo</th><th>Serial</th><th>Intervención</th></tr></thead><tbody>${equiposRows}</tbody></table>`
+    ? `<table><thead><tr><th class="c-num">#</th><th>Serial</th><th>Modelo</th><th>Accesorios</th></tr></thead><tbody>${equiposRows}</tbody></table>`
     : `<p class="nota">Sin equipos registrados en la orden.</p>`}
 
   ${idNota}
