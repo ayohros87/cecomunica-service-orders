@@ -91,7 +91,7 @@
     },
     'recibir-mostrador': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) abrirModalRecepcion(ordenId);
+      if (ordenId) { closeAllMenus(); abrirModalRecepcion(ordenId); }
     },
     'eliminar-orden': (el) => {
       const ordenId = el.dataset.ordenId;

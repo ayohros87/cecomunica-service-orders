@@ -634,7 +634,8 @@ function botonesFlujo(ordenId, estado, ordenData) {
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     if (estado === "POR ASIGNAR") {
-      html += `<button class="btn-flujo btn-flujo--recibir" title="Recibir en mostrador (acuse firmado)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
+      // Inline solo "Asignar" (progresión principal). "Recibir en mostrador"
+      // pasa al menú ⋯ para no mostrar dos botones de flujo a la vez.
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "RECIBIDO EN MOSTRADOR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
@@ -697,6 +698,18 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
       icon: '<i data-lucide="package-check"></i>',
       label: tieneEntrega ? "Ver entrega" : "Ver recepción",
       action: "ver-entrega",
+      dataAttributes: `data-orden-id="${ordenId}"`,
+      class: "highlighted"
+    });
+  }
+
+  // "Recibir en mostrador" (acuse firmado) vive en el menú para no duplicar
+  // botones de flujo. Solo aplica a órdenes POR ASIGNAR (admin/recepción).
+  if ((rol === ROLES.ADMIN || rol === ROLES.RECEPCION) && estadoUpper === "POR ASIGNAR") {
+    menuItems.unshift({
+      icon: '<i data-lucide="package-plus"></i>',
+      label: "Recibir en mostrador",
+      action: "recibir-mostrador",
       dataAttributes: `data-orden-id="${ordenId}"`,
       class: "highlighted"
     });
