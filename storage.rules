@@ -74,6 +74,25 @@ service firebase.storage {
       allow delete:         if request.auth != null;
     }
 
+    // ── Documentos legales por cliente ──────────────────────────────────
+    // Registro público, cédula del representante legal, comprobante de
+    // dirección, poderes, etc. Todos contienen datos personales o material
+    // legalmente sensible, así que se tratan como PII: READ DENEGADO a todos
+    // los clientes. El doc de Firestore (clientes/{id}/documentos/{docId})
+    // guarda solo el path (storage_path), nunca una URL tokenizada — esto
+    // evita el mismo leak que getIdentificacionUrl resolvió para la cédula de
+    // entrega. El staff autorizado los ve por la callable getClienteDocUrl,
+    // que firma una URL corta vía admin SDK (bypassa estas reglas). Create
+    // abierto a sesión autenticada; sin delete de frontend (borrado lógico en
+    // Firestore).
+    match /clientes_documentos/{clienteId}/{file} {
+      allow read:   if false;
+      allow create: if request.auth != null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('(image/.*|application/pdf)');
+      allow update, delete: if false;
+    }
+
     // ── Signed contract PDFs ────────────────────────────────────────────
     // PDFs only, no frontend delete. Read-restricted to authenticated staff;
     // public verification routes through the Cloud Function instead.

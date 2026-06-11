@@ -16,9 +16,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/clienteDocumentosService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
@@ -150,13 +153,48 @@
 
       <p id="mensaje" class="resumen"></p>
     </form>
+
+    <!-- Sección 6: Documentos legales (solo en edición; PII vía URL firmada) -->
+    <div id="docsSection" style="display:none;">
+      <div class="form-section-header">
+        <h3><i data-lucide="folder-lock"></i> Documentos legales</h3>
+      </div>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <p id="docsNeedSave" class="form-hint" style="display:none;">
+          Guarda el cliente primero para poder adjuntar documentos.
+        </p>
+        <div id="docsBody">
+          <p class="form-hint" style="margin-top:0;">
+            Registro público, cédula del representante, comprobante de dirección, poderes, etc.
+            Son confidenciales: se abren con un enlace temporal y solo personal autorizado puede verlos.
+          </p>
+          <div class="form-grid-2" style="align-items:end;">
+            <div class="form-field">
+              <label class="form-label" for="docTipo">Tipo de documento</label>
+              <select class="form-select" id="docTipo"></select>
+            </div>
+            <div class="form-field">
+              <label class="form-label" for="docFile">Archivo (PDF o imagen, máx. 10 MB)</label>
+              <input class="form-input" type="file" id="docFile" accept="application/pdf,image/*">
+            </div>
+          </div>
+          <div class="form-actions" style="margin-top:var(--sp-3);">
+            <button type="button" class="btn btn-primary" id="docBtnSubir"><i data-lucide="upload"></i> Subir documento</button>
+            <span id="docUploadStatus" style="display:none;">Subiendo <strong id="docUploadPct">0%</strong></span>
+          </div>
+          <div id="docList" style="margin-top:var(--sp-4);"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Toast region (kit) -->
   <div id="toasts" class="toast-region" aria-live="polite"></div>
 
   <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
   <script src="../js/pages/nuevo-cliente.js" defer></script>
+  <script src="../js/pages/cliente-documentos.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

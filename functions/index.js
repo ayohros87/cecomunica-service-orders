@@ -23,4 +23,5 @@ exports.rebuildContractCache          = require("./src/callable/rebuildContractC
 exports.runBackfill                   = require("./src/callable/runBackfill");
 exports.previewEmail                  = require("./src/callable/previewEmail");
 exports.getIdentificacionUrl          = require("./src/callable/getIdentificacionUrl");
+exports.getClienteDocUrl              = require("./src/callable/getClienteDocUrl");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");
