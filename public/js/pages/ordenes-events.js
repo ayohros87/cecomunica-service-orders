@@ -75,6 +75,7 @@
     'limpiar-entrega-firma': () => limpiarEntregaFirma(),
     'entrega-no-recibido-change': () => _toggleEntregaNoRecibido(),
     'entrega-sin-id-change': () => _toggleEntregaSinId(),
+    'entrega-sin-firma-change': () => _toggleEntregaSinFirma(),
     
     // Order actions
     'asignar-tecnico': (el) => {
@@ -521,12 +522,15 @@ function mostrarEntregaRecepcion(ordenId) {
       ${inner}
     </div>`;
 
+  const recFirmaHtml = o.recepcion_sin_firma
+    ? `<div class="muted" style="margin-top:8px;"><i data-lucide="pen-off"></i> Equipos recibidos sin firma${o.recepcion_sin_firma_motivo ? ' — ' + esc(o.recepcion_sin_firma_motivo) : ''}.</div>`
+    : _faseFirma(o.firma_recepcion_url, 'Firma de quien entrega');
   const recepcionHtml = tieneRecepcion ? faseCard('Recepción en mostrador', 'package-plus',
     _faseFilas([
       ['Entregado por (cliente)', esc(o.receptor_recepcion_nombre || '—')],
       ['Recibido por (Cecomunica)', esc(o.recepcion_por_email || '—')],
       ['Fecha y hora', esc(_entregaFecha(o.fecha_recepcion) || '—')],
-    ]) + _faseFirma(o.firma_recepcion_url, 'Firma de quien entrega')
+    ]) + recFirmaHtml
   ) : '';
 
   // Cédula (solo admin) dentro de la fase de entrega.
@@ -783,9 +787,11 @@ function verRecepcionComprobante(ordenId) {
       <td>${esc(e.modelo)}</td>
       <td>${esc(e.accesorios)}</td>
     </tr>`).join('');
-  const firmaBlock = o.firma_recepcion_url
-    ? `<img src="${esc(o.firma_recepcion_url)}" alt="Firma de recepción" class="firma-img">`
-    : `<div class="firma-line"></div>`;
+  const firmaBlock = o.recepcion_sin_firma
+    ? `<div style="font-size:13px;">Equipos recibidos <strong>sin firma</strong>${o.recepcion_sin_firma_motivo ? ' — ' + esc(o.recepcion_sin_firma_motivo) : ''}.</div>`
+    : (o.firma_recepcion_url
+        ? `<img src="${esc(o.firma_recepcion_url)}" alt="Firma de recepción" class="firma-img">`
+        : `<div class="firma-line"></div>`);
   const logo = `${location.origin}/logo_cecomunica.png`;
 
   const html = `<!DOCTYPE html>

@@ -634,9 +634,9 @@ function botonesFlujo(ordenId, estado, ordenData) {
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     if (estado === "POR ASIGNAR") {
-      // Inline solo "Asignar" (progresión principal). "Recibir en mostrador"
-      // pasa al menú ⋯ para no mostrar dos botones de flujo a la vez.
-      html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+      // Primer paso obligatorio: recibir los equipos (acuse). No se puede
+      // asignar hasta haber recibido.
+      html += `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
     } else if (estado === "RECIBIDO EN MOSTRADOR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
@@ -647,7 +647,8 @@ function botonesFlujo(ordenId, estado, ordenData) {
   }
 
   else if (rol === ROLES.TECNICO) {
-    if (estado === "POR ASIGNAR" || estado === "RECIBIDO EN MOSTRADOR") {
+    if (estado === "RECIBIDO EN MOSTRADOR") {
+      // Asignar solo después de recibido (recepción es el primer paso).
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
@@ -714,17 +715,6 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     });
   }
 
-  // "Recibir en mostrador" (acuse firmado) vive en el menú para no duplicar
-  // botones de flujo. Solo aplica a órdenes POR ASIGNAR (admin/recepción).
-  if ((rol === ROLES.ADMIN || rol === ROLES.RECEPCION) && estadoUpper === "POR ASIGNAR") {
-    menuItems.unshift({
-      icon: '<i data-lucide="package-plus"></i>',
-      label: "Recibir en mostrador",
-      action: "recibir-mostrador",
-      dataAttributes: `data-orden-id="${ordenId}"`,
-      class: "highlighted"
-    });
-  }
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(

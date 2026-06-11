@@ -496,6 +496,17 @@ window.copiarSeriales = function (ordenId) {
     const legenda = document.getElementById('entregaLegendaEntrada');
     if (legenda && esRecepcion) legenda.classList.add('hidden');
 
+    // "Equipos recibidos sin firma" solo aplica en recepción. Se resetea a
+    // desmarcado cada vez que se aplica el modo (firma visible, motivo oculto).
+    const sinFirmaWrap   = document.getElementById('entregaRecepcionSinFirmaWrap');
+    const sinFirmaCb     = document.getElementById('entregaRecepcionSinFirma');
+    const sinFirmaBloque = document.getElementById('entregaRecepcionSinFirmaBloque');
+    const sigWrap        = document.getElementById('entregaSigWrap');
+    if (sinFirmaWrap)   sinFirmaWrap.classList.toggle('hidden', !esRecepcion);
+    if (sinFirmaCb)     sinFirmaCb.checked = false;
+    if (sinFirmaBloque) sinFirmaBloque.classList.add('hidden');
+    if (sigWrap)        sigWrap.classList.remove('hidden');
+
     APP.utils.lucideRefresh(root2);
   }
 
@@ -582,6 +593,16 @@ window.copiarSeriales = function (ordenId) {
     if (sinId) sinId.classList.toggle('hidden', !checked);
   };
 
+  // Recepción: "equipos recibidos sin firma" — al marcar se oculta el canvas
+  // de firma y se muestra el motivo (obligatorio).
+  window._toggleEntregaSinFirma = function () {
+    const checked = !!document.getElementById('entregaRecepcionSinFirma')?.checked;
+    const bloque  = document.getElementById('entregaRecepcionSinFirmaBloque');
+    const sigWrap = document.getElementById('entregaSigWrap');
+    if (bloque)  bloque.classList.toggle('hidden', !checked);
+    if (sigWrap) sigWrap.classList.toggle('hidden', checked);
+  };
+
   window._entregaFotoIdChange = function (input) {
     const file = input.files[0];
     if (!file) return;
@@ -657,20 +678,31 @@ window.copiarSeriales = function (ordenId) {
   async function _confirmarRecepcion(ordenId, user) {
     const receptorNombre = (document.getElementById('entregaReceptorNombre')?.value || '').trim();
     if (!receptorNombre) { Toast.show('Ingrese el nombre de quien entrega', 'bad'); return; }
-    if (_isCanvasEmpty())  { Toast.show('La firma del que entrega es obligatoria', 'bad'); return; }
+
+    // "Equipos recibidos sin firma": omite la firma pero exige motivo.
+    const sinFirma = !!document.getElementById('entregaRecepcionSinFirma')?.checked;
+    const sinFirmaMotivo = sinFirma ? (document.getElementById('entregaRecepcionSinFirmaMotivo')?.value || '').trim() : '';
+    if (sinFirma) {
+      if (!sinFirmaMotivo) { Toast.show('Indique el motivo por el cual se reciben sin firma', 'bad'); return; }
+    } else if (_isCanvasEmpty()) {
+      Toast.show('La firma del que entrega es obligatoria', 'bad'); return;
+    }
 
     const btn = document.getElementById('btnConfirmarEntrega');
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
 
     try {
-      const canvas = document.getElementById('entregaFirmaCanvas');
-      const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
-      const pathFirma = `ordenes_firmas/${ordenId}_recepcion_${Date.now()}.png`;
-      const refFirma = firebase.storage().ref(pathFirma);
-      await refFirma.put(blob, { contentType: 'image/png' });
-      const firmaUrl = await refFirma.getDownloadURL();
+      let firmaUrl = null;
+      if (!sinFirma) {
+        const canvas = document.getElementById('entregaFirmaCanvas');
+        const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
+        const pathFirma = `ordenes_firmas/${ordenId}_recepcion_${Date.now()}.png`;
+        const refFirma = firebase.storage().ref(pathFirma);
+        await refFirma.put(blob, { contentType: 'image/png' });
+        firmaUrl = await refFirma.getDownloadURL();
+      }
 
-      await OrdenesService.receiveAtCounter(ordenId, { receptorNombre, firmaUrl });
+      await OrdenesService.receiveAtCounter(ordenId, { receptorNombre, firmaUrl, sinFirma, sinFirmaMotivo });
 
       // Si el operador editó el email del cliente, persistirlo en su
       // doc — mismo patrón que confirmarEntrega. Fallo no-fatal.

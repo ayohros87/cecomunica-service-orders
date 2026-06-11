@@ -387,9 +387,32 @@
         </div>
       </div>
 
+      <!-- Recepción: equipos recibidos sin firma (oculto en modo entrega vía
+           _applyModo). Al marcarlo se omite la firma y se exige el motivo. -->
+      <div id="entregaRecepcionSinFirmaWrap" class="hidden">
+        <div class="modal-entrega__cb-row" onclick="document.getElementById('entregaRecepcionSinFirma').click()">
+          <input type="checkbox" id="entregaRecepcionSinFirma"
+                 class="modal-entrega__cb-input modal-entrega__cb-input--brand"
+                 data-action="entrega-sin-firma-change"
+                 onclick="event.stopPropagation()">
+          <label for="entregaRecepcionSinFirma" class="modal-entrega__cb-label modal-entrega__cb-label--regular">
+            Equipos recibidos sin firma
+          </label>
+        </div>
+        <div id="entregaRecepcionSinFirmaBloque" class="hidden">
+          <div class="form-field">
+            <label class="modal-entrega__label">
+              Motivo (sin firma) <span class="req">*</span>
+            </label>
+            <textarea id="entregaRecepcionSinFirmaMotivo" rows="2"
+                      placeholder="Indique por qué se reciben sin firma..." class="modal-entrega__motivo-id"></textarea>
+          </div>
+        </div>
+      </div>
+
       <!-- Signature canvas. El label cambia entre 'Firma del receptor'
            (entrega) y 'Firma del que entrega' (recepción) vía _applyModo. -->
-      <div class="modal-entrega__sig-wrap">
+      <div id="entregaSigWrap" class="modal-entrega__sig-wrap">
         <label class="modal-entrega__label--muted">
           <span id="entregaFirmaLabel">Firma del receptor</span> <span class="req">*</span>
         </label>

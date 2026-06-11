@@ -181,7 +181,7 @@ const OrdenesService = {
    * @param {string} ordenId
    * @param {{receptorNombre:string, firmaUrl:string}} payload
    */
-  async receiveAtCounter(ordenId, { receptorNombre, firmaUrl }) {
+  async receiveAtCounter(ordenId, { receptorNombre, firmaUrl, sinFirma = false, sinFirmaMotivo = '' }) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
@@ -189,8 +189,10 @@ const OrdenesService = {
       fecha_recepcion: firebase.firestore.FieldValue.serverTimestamp(),
       recepcion_por_uid: user?.uid || '',
       recepcion_por_email: user?.email || '',
-      firma_recepcion_url: firmaUrl,
+      firma_recepcion_url: firmaUrl || null,
       receptor_recepcion_nombre: receptorNombre,
+      recepcion_sin_firma: !!sinFirma,
+      recepcion_sin_firma_motivo: sinFirma ? sinFirmaMotivo : null,
       os_logs: firebase.firestore.FieldValue.arrayUnion({
         action: 'RECIBIR_MOSTRADOR',
         by: user?.uid || ''
