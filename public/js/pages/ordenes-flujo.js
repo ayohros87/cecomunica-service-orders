@@ -772,8 +772,11 @@ window.copiarSeriales = function (ordenId) {
         await refFirma.put(blob, { contentType: 'image/png' });
         const firmaUrl = await refFirma.getDownloadURL();
 
-        // Upload ID photo (if provided and not waived)
-        let identificacionUrl = null;
+        // Upload ID photo (if provided and not waived). We store only the
+        // Storage PATH — never a tokenized download URL — because the ID is
+        // sensitive PII. Admins view it via the getIdentificacionUrl callable
+        // (short-lived signed URL). See storage.rules: read is locked off.
+        let identificacionPath = null;
         if (!sinId) {
           const fileIdRaw = document.getElementById('entregaFotoId')?.files[0];
           if (fileIdRaw) {
@@ -781,13 +784,13 @@ window.copiarSeriales = function (ordenId) {
             const pathId = `ordenes_identificacion/${ordenId}_id_${Date.now()}.${ext}`;
             const refId  = firebase.storage().ref(pathId);
             await refId.put(blob, { contentType });
-            identificacionUrl = await refId.getDownloadURL();
+            identificacionPath = pathId;
           }
         }
 
         firestoreData.receptor_nombre = receptorNombre;
         firestoreData.firma_url = firmaUrl;
-        firestoreData.identificacion_url = identificacionUrl;
+        firestoreData.identificacion_path = identificacionPath;
         firestoreData.sin_id = sinId;
         firestoreData.sin_id_motivo = sinId ? sinIdMotivo : null;
         emailOpts = { ...emailOpts, receptorNombre, firmaUrl, sinId, sinIdMotivo };
