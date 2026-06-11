@@ -669,6 +669,15 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
   }
 
+  const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
+
+  // Recepción en mostrador: botón para ver el acuse de ingreso (receptor +
+  // firma). Aparece siempre que existan datos de recepción, sin importar el
+  // estado actual de la orden.
+  if (od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion) {
+    html += `<button class="btn-flujo btn-flujo--ver-recepcion" title="Ver recepción en mostrador" data-action="ver-recepcion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Ver recepción</button>`;
+  }
+
   // Órdenes ya entregadas: botón para ver la entrega (abre el modal con la
   // info completa; desde ahí se llega al comprobante imprimible). Visible a
   // todos los roles — la cédula dentro del modal queda gateada a admin.

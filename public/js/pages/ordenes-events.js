@@ -273,6 +273,13 @@
       closeAllMenus();
       mostrarEntrega(ordenId);
     },
+    // Ver recepción — acuse de ingreso en mostrador (receptor + firma).
+    'ver-recepcion': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      mostrarRecepcion(ordenId);
+    },
     
     // Badge filter actions
     'filtrar-badge': (el) => {
@@ -693,3 +700,181 @@ async function verIdentificacionAdmin(ordenId, btnEl) {
   }
 }
 window.verIdentificacionAdmin = verIdentificacionAdmin;
+
+// Filas de equipos (serial/modelo/accesorios) compartidas por los modales y
+// comprobantes de entrega/recepción — coinciden con la hoja que se firma.
+function _equiposEntregaRows(o) {
+  const esc = _entregaEsc;
+  return (Array.isArray(o.equipos) ? o.equipos : []).filter(e => !e.eliminado).map(e => {
+    const serial = e.numero_de_serie || e.SERIAL || e.serial || '';
+    const accs = [];
+    if (e.bateria)  accs.push('Batería');
+    if (e.clip)     accs.push('Clip');
+    if (e.cargador) accs.push('Cargador');
+    if (e.fuente)   accs.push('Fuente');
+    if (e.antena)   accs.push('Antena');
+    return { serial: serial || '—', modelo: e.modelo || '—', accesorios: accs.length ? accs.join(', ') : '—' };
+  });
+}
+
+// Modal "Ver recepción" — acuse de ingreso en mostrador: quién entregó los
+// equipos, quién los recibió (Cecomunica), fecha, equipos y firma.
+function mostrarRecepcion(ordenId) {
+  const o = (window.APP?.state?.orders || []).find(x => x.ordenId === ordenId) || {};
+  const esc = _entregaEsc;
+  const cliente = (typeof nombreClienteDe === 'function' ? nombreClienteDe(o) : (o.cliente_nombre || '—'));
+  const fecha = _entregaFecha(o.fecha_recepcion);
+
+  const filas = [
+    ['Orden', esc(ordenId)],
+    ['Cliente', esc(cliente)],
+    ['Tipo de servicio', esc(o.tipo_de_servicio || '—')],
+    ['Entregado por (cliente)', esc(o.receptor_recepcion_nombre || '—')],
+    ['Recibido por (Cecomunica)', esc(o.recepcion_por_email || '—')],
+    ['Fecha y hora de recepción', esc(fecha || '—')],
+  ];
+  const filasHtml = filas.map(([k, v]) =>
+    `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,#eee);"><span class="muted" style="min-width:170px;">${k}</span><strong>${v}</strong></div>`
+  ).join('');
+
+  const eqs = _equiposEntregaRows(o);
+  const equiposRows = eqs.map(e => `<tr>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-family:monospace;font-size:12px;">${esc(e.serial)}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.modelo)}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.accesorios)}</td>
+    </tr>`).join('');
+  const equiposHtml = eqs.length
+    ? `<div style="margin-top:14px;">
+         <div class="muted" style="margin-bottom:4px;">Equipos recibidos (${eqs.length})</div>
+         <table width="100%" style="border-collapse:collapse;font-size:13px;">
+           <tr style="text-align:left;">
+             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Serial</td>
+             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Modelo</td>
+             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Accesorios</td>
+           </tr>
+           ${equiposRows}
+         </table>
+       </div>`
+    : `<div class="muted" style="margin-top:14px;">Sin equipos registrados en la orden.</div>`;
+
+  const firmaHtml = o.firma_recepcion_url
+    ? `<div style="margin-top:14px;">
+         <div class="muted" style="margin-bottom:4px;">Firma de quien entrega</div>
+         <img src="${esc(o.firma_recepcion_url)}" alt="Firma de recepción"
+              style="max-width:280px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;">
+       </div>`
+    : `<div class="muted" style="margin-top:14px;">Sin firma de recepción registrada.</div>`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:560px;">
+      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h3 class="sheet-title"><i data-lucide="package-plus"></i> Recepción en mostrador — Orden ${esc(ordenId)}</h3>
+        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sheet-body" style="padding:12px 8px;max-height:70vh;overflow:auto;">
+        ${filasHtml}
+        ${equiposHtml}
+        ${firmaHtml}
+      </div>
+      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 8px;border-top:1px solid var(--line,#eee);">
+        <button class="btn btn-primary" data-ver-acuse="1"><i data-lucide="printer"></i> Ver acuse</button>
+      </div>
+    </div>`;
+
+  const cleanup = () => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); };
+  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
+    if (e.target.closest('[data-ver-acuse]')) { verRecepcionComprobante(ordenId); return; }
+  });
+  document.addEventListener('keydown', kb);
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+window.mostrarRecepcion = mostrarRecepcion;
+
+// Acuse de recepción imprimible (documento de ingreso en mostrador).
+function verRecepcionComprobante(ordenId) {
+  const o = (window.APP?.state?.orders || []).find(x => x.ordenId === ordenId) || {};
+  const esc = _entregaEsc;
+  const cliente = (typeof nombreClienteDe === 'function' ? nombreClienteDe(o) : (o.cliente_nombre || '—'));
+  const fecha = _entregaFecha(o.fecha_recepcion) || '—';
+  const eqs = _equiposEntregaRows(o);
+  const equiposRows = eqs.map((e, i) => `<tr>
+      <td class="c-num">${i + 1}</td>
+      <td class="c-mono">${esc(e.serial)}</td>
+      <td>${esc(e.modelo)}</td>
+      <td>${esc(e.accesorios)}</td>
+    </tr>`).join('');
+  const firmaBlock = o.firma_recepcion_url
+    ? `<img src="${esc(o.firma_recepcion_url)}" alt="Firma de recepción" class="firma-img">`
+    : `<div class="firma-line"></div>`;
+  const logo = `${location.origin}/logo_cecomunica.png`;
+
+  const html = `<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<title>Acuse de Recepción — Orden ${esc(ordenId)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color:#111827; margin:0; padding:32px; max-width:780px; }
+  .head { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #0091D7; padding-bottom:12px; margin-bottom:18px; }
+  .head img { height:42px; }
+  .head h1 { font-size:18px; margin:0; color:#0091D7; text-align:right; }
+  .meta { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; margin-bottom:18px; font-size:14px; }
+  .meta div { padding:4px 0; border-bottom:1px solid #eee; }
+  .meta .k { color:#6b7280; }
+  h2 { font-size:14px; margin:18px 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid #e5e7eb; }
+  th { background:#f3f4f6; border-bottom:2px solid #d1d5db; }
+  .c-num { width:28px; color:#6b7280; }
+  .c-mono { font-family:monospace; font-size:12px; }
+  .firma-wrap { margin-top:28px; }
+  .firma-img { max-width:280px; max-height:130px; display:block; border:1px solid #e5e7eb; border-radius:6px; background:#fff; }
+  .firma-line { width:280px; border-bottom:1px solid #111; height:60px; }
+  .firma-cap { font-size:12px; color:#6b7280; margin-top:4px; }
+  .toolbar { margin-bottom:18px; }
+  .toolbar button { background:#0091D7; color:#fff; border:0; padding:8px 16px; border-radius:6px; font:600 13px Arial; cursor:pointer; }
+  .foot { margin-top:32px; font-size:11px; color:#9ca3af; text-align:center; border-top:1px solid #eee; padding-top:8px; }
+  @media print { .toolbar { display:none; } body { padding:0; } }
+</style></head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">🖨️ Imprimir</button></div>
+  <div class="head">
+    <img src="${esc(logo)}" alt="Cecomunica" onerror="this.style.display='none'">
+    <h1>Acuse de Recepción en Mostrador</h1>
+  </div>
+  <div class="meta">
+    <div><span class="k">Orden:</span> <strong>${esc(ordenId)}</strong></div>
+    <div><span class="k">Fecha y hora de recepción:</span> <strong>${esc(fecha)}</strong></div>
+    <div><span class="k">Cliente:</span> <strong>${esc(cliente)}</strong></div>
+    <div><span class="k">Tipo de servicio:</span> <strong>${esc(o.tipo_de_servicio || '—')}</strong></div>
+    <div><span class="k">Entregado por (cliente):</span> <strong>${esc(o.receptor_recepcion_nombre || '—')}</strong></div>
+    <div><span class="k">Recibido por (Cecomunica):</span> <strong>${esc(o.recepcion_por_email || '—')}</strong></div>
+  </div>
+
+  <h2>Equipos recibidos (${eqs.length})</h2>
+  ${eqs.length
+    ? `<table><thead><tr><th class="c-num">#</th><th>Serial</th><th>Modelo</th><th>Accesorios</th></tr></thead><tbody>${equiposRows}</tbody></table>`
+    : `<p>Sin equipos registrados en la orden.</p>`}
+
+  <div class="firma-wrap">
+    <div class="firma-cap">Firma de quien entrega:</div>
+    ${firmaBlock}
+    <div class="firma-cap">${esc(o.receptor_recepcion_nombre || '')}</div>
+  </div>
+
+  <div class="foot">Cecomunica, S.A. — Documento generado el ${esc(new Date().toLocaleString('es-PA'))}</div>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { Toast.show('Permite las ventanas emergentes para ver el acuse', 'warn'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+window.verRecepcionComprobante = verRecepcionComprobante;
