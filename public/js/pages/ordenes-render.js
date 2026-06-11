@@ -669,6 +669,13 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
   }
 
+  // Órdenes ya entregadas: botón para ver la entrega (abre el modal con la
+  // info completa; desde ahí se llega al comprobante imprimible). Visible a
+  // todos los roles — la cédula dentro del modal queda gateada a admin.
+  if ((estado || "").toUpperCase().includes("ENTREGAD")) {
+    html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver entrega" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver entrega</button>`;
+  }
+
   return html || "<em>-</em>";
 }
 window.botonesFlujo = botonesFlujo;
@@ -680,22 +687,10 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
   const trabajo = (o.trabajo_estado) || (o.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
   const tieneNota = o.nota_tecnica && o.nota_tecnica.trim() !== "";
-  // ¿La orden tiene datos de entrega capturados? (firma/receptor/cédula)
-  const tieneEntrega = !!(o.firma_url || o.identificacion_path || o.identificacion_url || o.receptor_nombre || o.sin_id);
 
   let menuItems = [
     { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
-
-  // "Ver entrega" — documento imprimible (comprobante): qué se entregó + a
-  // quién (receptor, fecha, firma). "Ver identificación" es admin-only y
-  // separado porque la cédula es PII y no va en el comprobante del cliente.
-  if (tieneEntrega) {
-    menuItems.push({ icon: '<i data-lucide="package-check"></i>', label: "Ver entrega", action: "ver-entrega", dataAttributes: `data-orden-id="${ordenId}"`, class: "" });
-    if (rol === ROLES.ADMIN) {
-      menuItems.push({ icon: '<i data-lucide="id-card"></i>', label: "Ver identificación", action: "ver-identificacion", dataAttributes: `data-orden-id="${ordenId}"`, class: "" });
-    }
-  }
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(

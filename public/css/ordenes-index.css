@@ -1217,6 +1217,8 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
 .btn-flujo--completar:hover { background: #ecfdf5; }
 .btn-flujo--entregar  { color: #5b21b6; border-color: #c4b5fd; }
 .btn-flujo--entregar:hover  { background: #f5f3ff; }
+.btn-flujo--ver-entrega { color: #1e40af; border-color: #bfdbfe; }
+.btn-flujo--ver-entrega:hover { background: #eff6ff; }
 .btn-flujo .lucide    { width: 14px; height: 14px; vertical-align: -2px; color: inherit; }
 
 /* Botón ⋯ es secundario (ghost) */
