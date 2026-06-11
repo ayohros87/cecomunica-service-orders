@@ -12,6 +12,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   orden_sin_asignar_max_dias: 30,  // umbral superior — > N días sin asignar se considera legacy noise (no alerta)
   mail_cc_orden_completada:  [],
   mail_cc_contrato_aprobado: [],
+  email_recepcion_entregas:  '',   // buzón único que recibe copia de cada nota de entrega ('' = no copiar)
   alertas:                   [],  // array de {id, kind, threshold, severity, message, enabled} — ver AdminMetrics.evaluateAlertas
 });
 

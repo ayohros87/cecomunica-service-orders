@@ -35,6 +35,9 @@
     { key: 'mail_cc_contrato_aprobado', label: 'Copia (CC) — Emails al aprobar contrato',
       type: 'emails',
       hint: 'Uno por línea. Se añaden a cada email de aprobación de contrato.' },
+    { key: 'email_recepcion_entregas', label: 'Buzón de recepción (entregas)',
+      type: 'email',
+      hint: 'Correo único que recibe copia de cada nota de entrega (recepción lleva el control). Vacío = no se copia a recepción.' },
   ];
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -51,6 +54,9 @@
       if (f.type === 'emails') {
         const text = Array.isArray(v) ? v.join('\n') : '';
         input = `<textarea id="fld-${f.key}" class="form-input" rows="3" style="font-family:inherit;font-size:13px;">${text}</textarea>`;
+      } else if (f.type === 'email') {
+        const val = (typeof v === 'string' ? v : '');
+        input = `<input type="email" id="fld-${f.key}" class="form-input" value="${val}" placeholder="recepcion@cecomunica.com" style="width:280px;">`;
       } else if (f.type === 'rate') {
         input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="${f.step}" value="${v}" style="width:140px;">`;
       } else if (f.type === 'bool') {
@@ -85,6 +91,10 @@
         const bad = list.find(s => !EMAIL_RE.test(s));
         if (bad) errors[f.key] = `Email inválido: ${bad}`;
         out[f.key] = list;
+      } else if (f.type === 'email') {
+        const val = (raw || '').trim();
+        if (val && !EMAIL_RE.test(val)) errors[f.key] = `Email inválido: ${val}`;
+        out[f.key] = val;
       } else if (f.type === 'rate') {
         const n = Number(raw);
         if (!Number.isFinite(n) || n < f.min || n > f.max) errors[f.key] = `Debe estar entre ${f.min} y ${f.max}.`;

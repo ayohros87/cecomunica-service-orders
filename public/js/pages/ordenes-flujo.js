@@ -804,12 +804,12 @@ window.copiarSeriales = function (ordenId) {
       const clienteDocPromise = _clienteDoc
         ? Promise.resolve(_clienteDoc)
         : (orden.cliente_id ? ClientesService.getCliente(orden.cliente_id).catch(() => null) : Promise.resolve(null));
-      const [clienteDoc, vendedorDoc, tecnicoDoc, recepcionUsers] = await Promise.all([
+      const [clienteDoc, vendedorDoc, tecnicoDoc, empresaConfig] = await Promise.all([
         clienteDocPromise,
         orden.vendedor_asignado ? UsuariosService.getUsuario(orden.vendedor_asignado).catch(() => null)    : Promise.resolve(null),
         orden.tecnico_uid      ? UsuariosService.getUsuario(orden.tecnico_uid).catch(() => null)           : Promise.resolve(null),
-        // Recepción lleva el control de las entregas → siempre se le copia.
-        UsuariosService.getUsuariosByRol([ROLES.RECEPCION]).catch(() => []),
+        // Buzón único de recepción (config de empresa) — lleva el control de entregas.
+        EmpresaService.getConfig().catch(() => ({})),
       ]);
 
       // Persist email change back to the cliente doc if the user edited
@@ -844,16 +844,15 @@ window.copiarSeriales = function (ordenId) {
         },
       };
 
-      // Destinatarios únicos: cliente, vendedor, técnico y TODA recepción
-      // activa (por default, para su control de entregas). Set normaliza a
-      // minúsculas para no enviar duplicados si alguien comparte correo.
+      // Destinatarios únicos: cliente, vendedor, técnico y el buzón de
+      // recepción configurado (por default, para su control de entregas).
+      // Set normaliza a minúsculas para no enviar duplicados.
+      const recepcionEmail = (empresaConfig?.email_recepcion_entregas || '').toLowerCase().trim();
       const destinatarios = new Set();
       if (clienteEmailToUse)  destinatarios.add(clienteEmailToUse.toLowerCase().trim());
       if (vendedorDoc?.email) destinatarios.add(vendedorDoc.email.toLowerCase().trim());
       if (tecnicoDoc?.email)  destinatarios.add(tecnicoDoc.email.toLowerCase().trim());
-      (recepcionUsers || []).forEach(u => {
-        if (u && u.activo !== false && u.email) destinatarios.add(u.email.toLowerCase().trim());
-      });
+      if (recepcionEmail)     destinatarios.add(recepcionEmail);
 
       await Promise.allSettled(
         [...destinatarios]
