@@ -804,10 +804,12 @@ window.copiarSeriales = function (ordenId) {
       const clienteDocPromise = _clienteDoc
         ? Promise.resolve(_clienteDoc)
         : (orden.cliente_id ? ClientesService.getCliente(orden.cliente_id).catch(() => null) : Promise.resolve(null));
-      const [clienteDoc, vendedorDoc, tecnicoDoc] = await Promise.all([
+      const [clienteDoc, vendedorDoc, tecnicoDoc, recepcionUsers] = await Promise.all([
         clienteDocPromise,
         orden.vendedor_asignado ? UsuariosService.getUsuario(orden.vendedor_asignado).catch(() => null)    : Promise.resolve(null),
         orden.tecnico_uid      ? UsuariosService.getUsuario(orden.tecnico_uid).catch(() => null)           : Promise.resolve(null),
+        // Recepción lleva el control de las entregas → siempre se le copia.
+        UsuariosService.getUsuariosByRol([ROLES.RECEPCION]).catch(() => []),
       ]);
 
       // Persist email change back to the cliente doc if the user edited
@@ -842,11 +844,22 @@ window.copiarSeriales = function (ordenId) {
         },
       };
 
-      await Promise.allSettled([
-        clienteEmailToUse  ? MailService.enqueue({ to: clienteEmailToUse,  subject, ...mailPayload }) : null,
-        vendedorDoc?.email ? MailService.enqueue({ to: vendedorDoc.email, subject, ...mailPayload }) : null,
-        tecnicoDoc?.email  ? MailService.enqueue({ to: tecnicoDoc.email,  subject, ...mailPayload }) : null,
-      ].filter(Boolean));
+      // Destinatarios únicos: cliente, vendedor, técnico y TODA recepción
+      // activa (por default, para su control de entregas). Set normaliza a
+      // minúsculas para no enviar duplicados si alguien comparte correo.
+      const destinatarios = new Set();
+      if (clienteEmailToUse)  destinatarios.add(clienteEmailToUse.toLowerCase().trim());
+      if (vendedorDoc?.email) destinatarios.add(vendedorDoc.email.toLowerCase().trim());
+      if (tecnicoDoc?.email)  destinatarios.add(tecnicoDoc.email.toLowerCase().trim());
+      (recepcionUsers || []).forEach(u => {
+        if (u && u.activo !== false && u.email) destinatarios.add(u.email.toLowerCase().trim());
+      });
+
+      await Promise.allSettled(
+        [...destinatarios]
+          .filter(Boolean)
+          .map(to => MailService.enqueue({ to, subject, ...mailPayload }))
+      );
 
       cerrarModalEntrega();
       Toast.show('✅ Entrega registrada correctamente', 'ok');
