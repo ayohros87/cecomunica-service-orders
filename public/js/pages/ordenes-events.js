@@ -80,7 +80,7 @@
     // Order actions
     'asignar-tecnico': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) abrirModalAsignarTecnico(ordenId);
+      if (ordenId) { closeAllMenus(); abrirModalAsignarTecnico(ordenId); }
     },
     'completar-orden': (el) => {
       const ordenId = el.dataset.ordenId;

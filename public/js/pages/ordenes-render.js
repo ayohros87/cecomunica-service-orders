@@ -715,6 +715,18 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     });
   }
 
+  // Técnico puede asignar aunque recepción no haya recibido la orden:
+  // opción en el menú para saltarse el paso de recibir en POR ASIGNAR.
+  if (rol === ROLES.TECNICO && estadoUpper === "POR ASIGNAR") {
+    menuItems.unshift({
+      icon: '<i data-lucide="wrench"></i>',
+      label: "Asignar (saltar recepción)",
+      action: "asignar-tecnico",
+      dataAttributes: `data-orden-id="${ordenId}"`,
+      class: "highlighted"
+    });
+  }
+
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(
