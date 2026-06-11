@@ -670,8 +670,18 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
   }
 
-  // "Ver entrega/recepción" ya NO va inline — vive dentro del menú ⋯
-  // (botonesGestion) para dejar en la columna solo la acción de estado.
+  // Si la orden ya fue entregada no queda acción de flujo, así que "Ver
+  // entrega" vuelve inline (la columna quedaría solo con ⋯). En estados con
+  // acción de flujo, "Ver entrega/recepción" vive en el menú ⋯.
+  if ((estado || "").toUpperCase().includes("ENTREGAD")) {
+    const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
+    const tieneEnt = !!(od.firma_url || od.receptor_nombre || od.fecha_entrega || od.sin_id || od.identificacion_path || od.identificacion_url);
+    const tieneRec = !!(od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion);
+    if (tieneEnt || tieneRec) {
+      const label = tieneEnt ? 'Ver entrega' : 'Ver recepción';
+      html += `<button class="btn-flujo btn-flujo--ver-entrega" title="${label}" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> ${label}</button>`;
+    }
+  }
 
   return html || "<em>-</em>";
 }
@@ -689,11 +699,12 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
 
-  // "Ver entrega/recepción" como primer ítem destacado cuando hay datos
-  // capturados. Label adaptativo (entrega si ya fue entregada).
+  // "Ver entrega/recepción" en el menú SOLO cuando todavía hay acción de
+  // flujo (no entregada). Si ya fue entregada, el botón va inline (botonesFlujo)
+  // para no duplicarlo.
   const tieneRecepcion = !!(o.firma_recepcion_url || o.receptor_recepcion_nombre || o.fecha_recepcion);
   const tieneEntrega   = !!(o.firma_url || o.receptor_nombre || o.fecha_entrega || o.sin_id || o.identificacion_path || o.identificacion_url);
-  if (tieneRecepcion || tieneEntrega) {
+  if (!estadoUpper.includes("ENTREGAD") && (tieneRecepcion || tieneEntrega)) {
     menuItems.unshift({
       icon: '<i data-lucide="package-check"></i>',
       label: tieneEntrega ? "Ver entrega" : "Ver recepción",
