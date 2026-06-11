@@ -671,18 +671,14 @@ function botonesFlujo(ordenId, estado, ordenData) {
 
   const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
 
-  // Recepción en mostrador: botón para ver el acuse de ingreso (receptor +
-  // firma). Aparece siempre que existan datos de recepción, sin importar el
-  // estado actual de la orden.
-  if (od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion) {
-    html += `<button class="btn-flujo btn-flujo--ver-recepcion" title="Ver recepción en mostrador" data-action="ver-recepcion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Ver recepción</button>`;
-  }
-
-  // Órdenes ya entregadas: botón para ver la entrega (abre el modal con la
-  // info completa; desde ahí se llega al comprobante imprimible). Visible a
-  // todos los roles — la cédula dentro del modal queda gateada a admin.
-  if ((estado || "").toUpperCase().includes("ENTREGAD")) {
-    html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver entrega" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver entrega</button>`;
+  // Un solo botón "Ver" para la información capturada de recepción/entrega.
+  // Abre un modal combinado (Recepción → Entrega) con las fases que existan.
+  // El label se adapta: "Ver entrega" si ya fue entregada, si no "Ver recepción".
+  const tieneRecepcion = !!(od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion);
+  const tieneEntrega   = !!(od.firma_url || od.receptor_nombre || od.fecha_entrega || od.sin_id || od.identificacion_path || od.identificacion_url);
+  if (tieneRecepcion || tieneEntrega) {
+    const label = tieneEntrega ? 'Ver entrega' : 'Ver recepción';
+    html += `<button class="btn-flujo btn-flujo--ver-entrega" title="${label}" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> ${label}</button>`;
   }
 
   return html || "<em>-</em>";

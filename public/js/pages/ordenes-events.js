@@ -266,19 +266,12 @@
         closeAllMenus();
       }
     },
-    // Ver entrega — abre el modal con la info completa de la entrega.
+    // Ver entrega/recepción — modal combinado con las fases que existan.
     'ver-entrega': (el) => {
       const ordenId = el.dataset.ordenId;
       if (!ordenId) return;
       closeAllMenus();
-      mostrarEntrega(ordenId);
-    },
-    // Ver recepción — acuse de ingreso en mostrador (receptor + firma).
-    'ver-recepcion': (el) => {
-      const ordenId = el.dataset.ordenId;
-      if (!ordenId) return;
-      closeAllMenus();
-      mostrarRecepcion(ordenId);
+      mostrarEntregaRecepcion(ordenId);
     },
     
     // Badge filter actions
@@ -446,81 +439,98 @@ function _entregaLightbox(url, alt) {
   document.body.appendChild(overlay);
 }
 
-// Modal "Ver entrega" — info completa en pantalla: orden, cliente, receptor,
-// fecha, equipos (serial/modelo/accesorios, igual que la hoja de firma) y
-// firma. La cédula (admin) se ve con un botón interno. Abajo, "Ver entrega"
-// abre el comprobante imprimible.
-function mostrarEntrega(ordenId) {
+// Modal combinado "Ver entrega/recepción" — una sola vista con las fases que
+// existan: Recepción en mostrador (acuse de ingreso) y Entrega al cliente.
+// Cada fase muestra quién/cuándo + su firma; los equipos (serial/modelo/
+// accesorios) se listan una vez; la cédula (admin) tiene botón interno. Abajo,
+// botones para imprimir el comprobante de entrega y/o el acuse de recepción.
+function _faseFilas(pares) {
+  return pares
+    .filter(([, v]) => v != null && v !== '')
+    .map(([k, v]) => `<div style="display:flex;gap:8px;padding:3px 0;"><span class="muted" style="min-width:170px;">${k}</span><strong>${v}</strong></div>`)
+    .join('');
+}
+function _faseFirma(url, cap) {
+  return url
+    ? `<div style="margin-top:8px;"><div class="muted" style="margin-bottom:4px;">${cap}</div>
+         <img src="${_entregaEsc(url)}" alt="${_entregaEsc(cap)}" style="max-width:240px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;"></div>`
+    : '';
+}
+
+function mostrarEntregaRecepcion(ordenId) {
   const o = (window.APP?.state?.orders || []).find(x => x.ordenId === ordenId) || {};
   const esc = _entregaEsc;
   const esAdmin = (window.APP?.state?.userRole) === (window.ROLES ? ROLES.ADMIN : 'administrador');
   const cliente = (typeof nombreClienteDe === 'function' ? nombreClienteDe(o) : (o.cliente_nombre || '—'));
-  const fecha = _entregaFecha(o.fecha_entrega);
 
-  const filas = [
+  const tieneRecepcion = !!(o.firma_recepcion_url || o.receptor_recepcion_nombre || o.fecha_recepcion);
+  const tieneEntrega   = !!(o.firma_url || o.receptor_nombre || o.fecha_entrega || o.sin_id || o.identificacion_path || o.identificacion_url);
+
+  const cabecera = _faseFilas([
     ['Orden', esc(ordenId)],
     ['Cliente', esc(cliente)],
     ['Tipo de servicio', esc(o.tipo_de_servicio || '—')],
-    ['Recibido por', esc(o.receptor_nombre || '—')],
-    ['Fecha y hora de entrega', esc(fecha || '—')],
-  ];
-  const filasHtml = filas.map(([k, v]) =>
-    `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,#eee);"><span class="muted" style="min-width:140px;">${k}</span><strong>${v}</strong></div>`
-  ).join('');
+  ]);
 
-  // Mismas columnas que la hoja de firma: serial, modelo, accesorios.
-  const equipos = (Array.isArray(o.equipos) ? o.equipos : []).filter(e => !e.eliminado);
-  const equiposRows = equipos.map((e, i) => {
-    const serial = e.numero_de_serie || e.SERIAL || e.serial || '';
-    const accs = [];
-    if (e.bateria)  accs.push('Batería');
-    if (e.clip)     accs.push('Clip');
-    if (e.cargador) accs.push('Cargador');
-    if (e.fuente)   accs.push('Fuente');
-    if (e.antena)   accs.push('Antena');
-    return `<tr>
-        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-family:monospace;font-size:12px;">${esc(serial || '—')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.modelo || '—')}</td>
-        <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${accs.length ? esc(accs.join(', ')) : '—'}</td>
-      </tr>`;
-  }).join('');
-  const equiposHtml = equipos.length
+  const faseCard = (titulo, icon, inner) => `
+    <div style="margin-top:14px;border:1px solid var(--line,#e5e7eb);border-radius:10px;padding:10px 12px;">
+      <div style="display:flex;align-items:center;gap:6px;font-weight:600;margin-bottom:6px;"><i data-lucide="${icon}"></i> ${titulo}</div>
+      ${inner}
+    </div>`;
+
+  const recepcionHtml = tieneRecepcion ? faseCard('Recepción en mostrador', 'package-plus',
+    _faseFilas([
+      ['Entregado por (cliente)', esc(o.receptor_recepcion_nombre || '—')],
+      ['Recibido por (Cecomunica)', esc(o.recepcion_por_email || '—')],
+      ['Fecha y hora', esc(_entregaFecha(o.fecha_recepcion) || '—')],
+    ]) + _faseFirma(o.firma_recepcion_url, 'Firma de quien entrega')
+  ) : '';
+
+  // Cédula (solo admin) dentro de la fase de entrega.
+  let idHtml = '';
+  if (esAdmin && tieneEntrega) {
+    if (o.sin_id) {
+      idHtml = `<div class="muted" style="margin-top:8px;"><i data-lucide="badge-alert"></i> Cliente no presentó identificación${o.sin_id_motivo ? ' — ' + esc(o.sin_id_motivo) : ''}.</div>`;
+    } else if (o.identificacion_purged_at) {
+      idHtml = `<div class="muted" style="margin-top:8px;"><i data-lucide="trash-2"></i> Foto de identificación purgada por retención.</div>`;
+    } else if (o.identificacion_path || o.identificacion_url) {
+      idHtml = `<div style="margin-top:8px;"><button class="btn btn-sm" data-ver-id="1"><i data-lucide="id-card"></i> Ver identificación</button>
+          <span class="muted" style="margin-left:6px;font-size:12px;">enlace temporal</span></div>`;
+    }
+  }
+
+  const entregaHtml = tieneEntrega ? faseCard('Entrega al cliente', 'package-check',
+    _faseFilas([
+      ['Recibido por', esc(o.receptor_nombre || '—')],
+      ['Fecha y hora', esc(_entregaFecha(o.fecha_entrega) || '—')],
+    ]) + _faseFirma(o.firma_url, 'Firma del receptor') + idHtml
+  ) : '';
+
+  // Equipos una sola vez (serial/modelo/accesorios).
+  const eqs = _equiposEntregaRows(o);
+  const equiposRows = eqs.map(e => `<tr>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-family:monospace;font-size:12px;">${esc(e.serial)}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.modelo)}</td>
+      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.accesorios)}</td>
+    </tr>`).join('');
+  const equiposHtml = eqs.length
     ? `<div style="margin-top:14px;">
-         <div class="muted" style="margin-bottom:4px;">Equipos entregados (${equipos.length})</div>
+         <div class="muted" style="margin-bottom:4px;">Equipos (${eqs.length})</div>
          <table width="100%" style="border-collapse:collapse;font-size:13px;">
            <tr style="text-align:left;">
              <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Serial</td>
              <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Modelo</td>
              <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Accesorios</td>
-           </tr>
-           ${equiposRows}
+           </tr>${equiposRows}
          </table>
        </div>`
-    : `<div class="muted" style="margin-top:14px;">Sin equipos registrados en la orden.</div>`;
+    : '';
 
-  const firmaHtml = o.firma_url
-    ? `<div style="margin-top:14px;">
-         <div class="muted" style="margin-bottom:4px;">Firma del receptor</div>
-         <img src="${esc(o.firma_url)}" alt="Firma del receptor"
-              style="max-width:280px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;">
-       </div>`
-    : `<div class="muted" style="margin-top:14px;">Sin firma registrada.</div>`;
-
-  let idHtml = '';
-  if (esAdmin) {
-    if (o.sin_id) {
-      idHtml = `<div class="muted" style="margin-top:14px;"><i data-lucide="badge-alert"></i> Cliente no presentó identificación${o.sin_id_motivo ? ' — ' + esc(o.sin_id_motivo) : ''}.</div>`;
-    } else if (o.identificacion_purged_at) {
-      idHtml = `<div class="muted" style="margin-top:14px;"><i data-lucide="trash-2"></i> Foto de identificación purgada por política de retención.</div>`;
-    } else if (o.identificacion_path || o.identificacion_url) {
-      idHtml = `<div style="margin-top:14px;">
-          <button class="btn" data-ver-id="1"><i data-lucide="id-card"></i> Ver identificación</button>
-          <span class="muted" style="margin-left:8px;font-size:12px;">Solo administradores · enlace temporal</span>
-        </div>`;
-    } else {
-      idHtml = `<div class="muted" style="margin-top:14px;"><i data-lucide="image-off"></i> Sin foto de identificación registrada.</div>`;
-    }
-  }
+  const titulo = tieneEntrega ? 'Entrega' : 'Recepción';
+  const footerBtns = [
+    tieneEntrega   ? `<button class="btn btn-primary" data-ver-comprobante="1"><i data-lucide="printer"></i> Imprimir entrega</button>` : '',
+    tieneRecepcion ? `<button class="btn" data-ver-acuse="1"><i data-lucide="printer"></i> Imprimir acuse</button>` : '',
+  ].filter(Boolean).join('');
 
   const overlay = document.createElement('div');
   overlay.className = 'overlay';
@@ -528,17 +538,17 @@ function mostrarEntrega(ordenId) {
   overlay.innerHTML = `
     <div class="modal" style="max-width:560px;">
       <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title"><i data-lucide="package-check"></i> Entrega — Orden ${esc(ordenId)}</h3>
+        <h3 class="sheet-title"><i data-lucide="package-check"></i> ${titulo} — Orden ${esc(ordenId)}</h3>
         <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
       </div>
       <div class="sheet-body" style="padding:12px 8px;max-height:70vh;overflow:auto;">
-        ${filasHtml}
+        ${cabecera}
+        ${recepcionHtml}
+        ${entregaHtml}
         ${equiposHtml}
-        ${firmaHtml}
-        ${idHtml}
       </div>
       <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 8px;border-top:1px solid var(--line,#eee);">
-        <button class="btn btn-primary" data-ver-comprobante="1"><i data-lucide="printer"></i> Ver entrega</button>
+        ${footerBtns}
       </div>
     </div>`;
 
@@ -547,14 +557,14 @@ function mostrarEntrega(ordenId) {
   overlay.addEventListener('click', async (e) => {
     if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
     if (e.target.closest('[data-ver-comprobante]')) { verEntregaComprobante(ordenId); return; }
+    if (e.target.closest('[data-ver-acuse]')) { verRecepcionComprobante(ordenId); return; }
     const verBtn = e.target.closest('[data-ver-id]');
     if (verBtn) {
       verBtn.disabled = true;
       const prev = verBtn.innerHTML;
       verBtn.innerHTML = 'Cargando…';
-      try {
-        await verIdentificacionAdmin(ordenId);
-      } finally {
+      try { await verIdentificacionAdmin(ordenId); }
+      finally {
         verBtn.disabled = false;
         verBtn.innerHTML = prev;
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -566,7 +576,7 @@ function mostrarEntrega(ordenId) {
   document.body.style.overflow = 'hidden';
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
-window.mostrarEntrega = mostrarEntrega;
+window.mostrarEntregaRecepcion = mostrarEntregaRecepcion;
 
 // "Ver entrega" → documento imprimible (comprobante de entrega): muestra qué
 // se entregó y a quién (receptor, fecha, firma). Se abre en ventana nueva,
@@ -716,86 +726,6 @@ function _equiposEntregaRows(o) {
     return { serial: serial || '—', modelo: e.modelo || '—', accesorios: accs.length ? accs.join(', ') : '—' };
   });
 }
-
-// Modal "Ver recepción" — acuse de ingreso en mostrador: quién entregó los
-// equipos, quién los recibió (Cecomunica), fecha, equipos y firma.
-function mostrarRecepcion(ordenId) {
-  const o = (window.APP?.state?.orders || []).find(x => x.ordenId === ordenId) || {};
-  const esc = _entregaEsc;
-  const cliente = (typeof nombreClienteDe === 'function' ? nombreClienteDe(o) : (o.cliente_nombre || '—'));
-  const fecha = _entregaFecha(o.fecha_recepcion);
-
-  const filas = [
-    ['Orden', esc(ordenId)],
-    ['Cliente', esc(cliente)],
-    ['Tipo de servicio', esc(o.tipo_de_servicio || '—')],
-    ['Entregado por (cliente)', esc(o.receptor_recepcion_nombre || '—')],
-    ['Recibido por (Cecomunica)', esc(o.recepcion_por_email || '—')],
-    ['Fecha y hora de recepción', esc(fecha || '—')],
-  ];
-  const filasHtml = filas.map(([k, v]) =>
-    `<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--line,#eee);"><span class="muted" style="min-width:170px;">${k}</span><strong>${v}</strong></div>`
-  ).join('');
-
-  const eqs = _equiposEntregaRows(o);
-  const equiposRows = eqs.map(e => `<tr>
-      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);font-family:monospace;font-size:12px;">${esc(e.serial)}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.modelo)}</td>
-      <td style="padding:5px 8px;border-bottom:1px solid var(--line,#eee);">${esc(e.accesorios)}</td>
-    </tr>`).join('');
-  const equiposHtml = eqs.length
-    ? `<div style="margin-top:14px;">
-         <div class="muted" style="margin-bottom:4px;">Equipos recibidos (${eqs.length})</div>
-         <table width="100%" style="border-collapse:collapse;font-size:13px;">
-           <tr style="text-align:left;">
-             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Serial</td>
-             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Modelo</td>
-             <td style="padding:5px 8px;border-bottom:2px solid var(--line,#e5e7eb);font-weight:600;">Accesorios</td>
-           </tr>
-           ${equiposRows}
-         </table>
-       </div>`
-    : `<div class="muted" style="margin-top:14px;">Sin equipos registrados en la orden.</div>`;
-
-  const firmaHtml = o.firma_recepcion_url
-    ? `<div style="margin-top:14px;">
-         <div class="muted" style="margin-bottom:4px;">Firma de quien entrega</div>
-         <img src="${esc(o.firma_recepcion_url)}" alt="Firma de recepción"
-              style="max-width:280px;border:1px solid var(--line,#e5e7eb);border-radius:8px;background:#fff;display:block;">
-       </div>`
-    : `<div class="muted" style="margin-top:14px;">Sin firma de recepción registrada.</div>`;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'overlay';
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:560px;">
-      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <h3 class="sheet-title"><i data-lucide="package-plus"></i> Recepción en mostrador — Orden ${esc(ordenId)}</h3>
-        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
-      </div>
-      <div class="sheet-body" style="padding:12px 8px;max-height:70vh;overflow:auto;">
-        ${filasHtml}
-        ${equiposHtml}
-        ${firmaHtml}
-      </div>
-      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 8px;border-top:1px solid var(--line,#eee);">
-        <button class="btn btn-primary" data-ver-acuse="1"><i data-lucide="printer"></i> Ver acuse</button>
-      </div>
-    </div>`;
-
-  const cleanup = () => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); };
-  const kb = e => { if (e.key === 'Escape') cleanup(); };
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
-    if (e.target.closest('[data-ver-acuse]')) { verRecepcionComprobante(ordenId); return; }
-  });
-  document.addEventListener('keydown', kb);
-  document.body.appendChild(overlay);
-  document.body.style.overflow = 'hidden';
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
-window.mostrarRecepcion = mostrarRecepcion;
 
 // Acuse de recepción imprimible (documento de ingreso en mostrador).
 function verRecepcionComprobante(ordenId) {
