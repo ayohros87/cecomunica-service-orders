@@ -130,7 +130,10 @@ module.exports = onCall(
           if (ordenId) {
             try {
               await db.collection("ordenes_de_servicio").doc(ordenId).update({
+                // Clear both the legacy tokenized URL and the new path field
+                // so neither lingers after the object is deleted.
                 identificacion_url: null,
+                identificacion_path: null,
                 identificacion_purged_at: admin.firestore.FieldValue.serverTimestamp(),
                 identificacion_purged_by: callerUid,
                 identificacion_retention_days: retentionDays,

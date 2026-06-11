@@ -72,15 +72,17 @@ async function guardarFirma() {
     await storageRef.put(blob, { contentType: "image/png" });
     const urlFirma = await storageRef.getDownloadURL();
 
-    // 3) Subir foto de identificación (si existe)
-    let urlIdentificacion = null;
+    // 3) Subir foto de identificación (si existe). Guardamos solo el PATH de
+    // Storage, nunca una URL tokenizada — la cédula es PII sensible y solo el
+    // admin la ve vía la callable getIdentificacionUrl (signed URL temporal).
+    let pathIdentificacion = null;
     const fileId = document.getElementById("fotoIdentificacion").files[0];
     if (fileId) {
       const ext = (fileId.name.split(".").pop() || "jpg").toLowerCase();
       const pathId = `ordenes_identificacion/${ordenId}_id_${Date.now()}.${ext}`;
       const storageIdRef = firebase.storage().ref(pathId);
       await storageIdRef.put(fileId, { contentType: fileId.type });
-      urlIdentificacion = await storageIdRef.getDownloadURL();
+      pathIdentificacion = pathId;
     }
 
     // 4) Email del cliente
@@ -98,7 +100,7 @@ async function guardarFirma() {
     estado_reparacion: "ENTREGADO AL CLIENTE",
     fecha_entrega: firebase.firestore.FieldValue.serverTimestamp(),
     firma_url: urlFirma,
-    identificacion_url: urlIdentificacion,
+    identificacion_path: pathIdentificacion,
     email_cliente_entrega: emailCliente,
     entrega_por_uid: user.uid,
     entrega_por_email: user.email,

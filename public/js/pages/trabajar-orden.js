@@ -62,6 +62,10 @@ firebase.auth().onAuthStateChanged(async user => {
   await TO.cargarInventarioConCache();
   await TOEquipos.renderEquiposYConsumos();
   await TOCotizacion.renderResumen();
+
+  // Panel "Datos de entrega" — receptor + firma (todos) e identificación
+  // (solo admin). Depende de TO.rolUsuario + TO.ordenData ya cargados.
+  if (window.TOEntrega) TOEntrega.render();
 });
 
 document.addEventListener('input', e => {

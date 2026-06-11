@@ -30,9 +30,13 @@ service firebase.storage {
     // ── Entrega flow: customer ID photo (current path) ───────────────────
     // Compressed client-side to ~200-500 KB JPEG; 6 MiB cap covers the
     // fail-open case where compression skipped/failed.
-    // No frontend delete; PII retention purge runs server-side.
+    // READ IS DENIED to all clients: the ID is sensitive PII. The order doc
+    // stores only the path (identificacion_path), never a tokenized URL.
+    // Admins view it through the getIdentificacionUrl callable, which signs a
+    // short-lived URL via the admin SDK (bypasses these rules). Create stays
+    // open so the entrega flow can upload; no frontend delete (server purge).
     match /ordenes_identificacion/{file} {
-      allow read:   if request.auth != null;
+      allow read:   if false;
       allow create: if request.auth != null
                     && request.resource.size < 6 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
@@ -40,10 +44,9 @@ service firebase.storage {
     }
 
     // ── Entrega flow: customer ID photo (legacy firmar-entrega path) ────
-    // Same constraints; kept until the legacy firmar-entrega.html page is
-    // retired or migrated to the new path.
+    // Same constraints and same read lock-off as the current path above.
     match /entregas_identificacion/{file} {
-      allow read:   if request.auth != null;
+      allow read:   if false;
       allow create: if request.auth != null
                     && request.resource.size < 6 * 1024 * 1024
                     && request.resource.contentType.matches('image/.*');
