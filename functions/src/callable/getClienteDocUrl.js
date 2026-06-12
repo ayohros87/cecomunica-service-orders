@@ -28,7 +28,11 @@ const { admin, db } = require("../lib/admin");
  */
 
 const SIGNED_URL_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const ALLOWED_ROLES = new Set(["administrador", "vendedor", "recepcion"]);
+// Alineado con el guard del módulo de clientes (clientes-index.js): admin +
+// recepción. Vendedores NO tienen acceso al directorio de clientes, así que
+// tampoco a sus documentos legales (el dato más sensible). Recepción es un
+// acceso considerado temporal — a revisar cuando exista el módulo restrictivo.
+const ALLOWED_ROLES = new Set(["administrador", "recepcion"]);
 
 async function writeAudit({ actorUid, clienteId, docId, status }) {
   try {
