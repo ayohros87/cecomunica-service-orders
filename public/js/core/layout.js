@@ -52,9 +52,14 @@ const Layout = (() => {
     };
 
     const actionBtns = actions.map(btnHtml).join('');
-    const backBtn    = back
-      ? `<a href="${back.href}" class="btn btn-ghost">${back.label || '<i data-lucide="arrow-left"></i> Volver'}</a>`
-      : '';
+    const backLabel  = back && (back.label || '<i data-lucide="arrow-left"></i> Volver');
+    const backBtn    = !back
+      ? ''
+      : back.onclick
+        // onclick-driven back (destino dinámico, p.ej. volverAContrato()).
+        ? `<button type="button" class="btn btn-ghost" onclick="${back.onclick}">${backLabel}</button>`
+        // href-driven back (caso por defecto en el resto de páginas).
+        : `<a href="${back.href}" class="btn btn-ghost">${backLabel}</a>`;
     const menuWrapId = `__layout-menu-wrap-${menuId}`;
     const menuBtnId  = `__layout-menu-btn-${menuId}`;
     const menuDropId = `__layout-menu-dropdown-${menuId}`;
