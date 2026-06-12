@@ -256,7 +256,7 @@
         </div>
         <input class="form-input ctr-input cc-item-cant" type="number" min="0" value="${esc(it.cant)}">
         <input class="form-input num-input cc-item-precio" type="number" min="0" step="0.01" value="${esc(it.precio)}">
-        <input class="form-input ctr-input cc-item-desc" type="number" min="0" max="100" value="${esc(it.desc)}">
+        <input class="form-input ctr-input cc-item-descpct" type="number" min="0" max="100" value="${esc(it.desc)}">
         <span class="cc-item-total">${totalLinea}</span>
         <button class="btn btn-ghost btn-icon btn-sm cc-item-del" title="Eliminar"><i data-lucide="trash-2"></i></button>
       </div>
@@ -280,7 +280,7 @@
     row.querySelector('.cc-item-spec-input').addEventListener('input', (e) => { const it = getIt(); if (it) it.spec = e.target.value; });
     row.querySelector('.cc-item-cant').addEventListener('input', (e) => upd({ cant: Number(e.target.value || 0) }));
     row.querySelector('.cc-item-precio').addEventListener('input', (e) => upd({ precio: Number(e.target.value || 0) }));
-    row.querySelector('.cc-item-desc').addEventListener('input', (e) => upd({ desc: Number(e.target.value || 0) }));
+    row.querySelector('.cc-item-descpct').addEventListener('input', (e) => upd({ desc: Number(e.target.value || 0) }));
     row.querySelector('.cc-item-del').addEventListener('click', () => {
       setItems(draft.items.filter(x => x.id !== id));
     });
