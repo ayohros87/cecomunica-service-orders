@@ -319,8 +319,8 @@ const ClientesService = {
     const db = firebase.firestore();
     const words = _norm(term).split(/\s+/).filter(Boolean);
 
-    // Sin término / una palabra: agregación count() en el servidor (1 lectura),
-    // en vez de escanear toda la colección por lotes.
+    // Sin término / una palabra: agregación count() en el servidor (1 lectura).
+    // Si el SDK/índice no la soporta, cae al escaneo por lotes.
     if (words.length <= 1) {
       let base;
       if (words.length === 0) {
@@ -329,20 +329,38 @@ const ClientesService = {
         base = db.collection('clientes').where('searchTokens', 'array-contains', words[0]).where('deleted', '==', false);
       }
       if (onlyActive) base = base.where('activo', '==', true);
-      const snap = await base.count().get();
-      return snap.data().count;
+      try {
+        if (typeof base.count === 'function') {
+          const snap = await base.count().get();
+          const n = snap.data().count;
+          if (typeof n === 'number') return n;
+        }
+      } catch (e) {
+        console.warn('count() no disponible, usando escaneo:', e && e.message ? e.message : e);
+      }
+      return this._scanCount(base);
     }
 
     // Multi-palabra: necesita filtro AND en cliente, así que escaneamos por lotes.
     const { base, need } = this._multiWordBase(db, words, onlyActive);
+    return this._scanCount(base, need);
+  },
+
+  // Cuenta por escaneo paginado (500/lote). Si `need` se pasa, aplica filtro AND
+  // multi-palabra sobre searchTokens en cliente.
+  async _scanCount(base, need = null) {
     let total = 0, last = null, loops = 0;
     while (true) {
       let q = base.limit(500);
       if (last) q = q.startAfter(last);
       const snap = await q.get();
-      for (const doc of snap.docs) {
-        const toks = doc.data().searchTokens || [];
-        if (need.every(w => toks.includes(w))) total++;
+      if (need) {
+        for (const doc of snap.docs) {
+          const toks = doc.data().searchTokens || [];
+          if (need.every(w => toks.includes(w))) total++;
+        }
+      } else {
+        total += snap.size;
       }
       if (snap.empty || snap.size < 500) break;
       last = snap.docs[snap.docs.length - 1];
