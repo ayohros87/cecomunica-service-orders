@@ -33,6 +33,50 @@
       /* Fallback CSS por si el JS no corre: ocultar de todos modos. */
       #tabla .col-secondary { display: none; }
     }
+
+    /* ── Tabla de edición masiva — estilo hoja de cálculo ─────────────────
+       Las celdas usan .td-input/.td-select del DS (borde invisible hasta
+       hover/focus), por lo que la tabla se lee como datos, no como un muro
+       de formularios. Aquí: densidad, zebra, fila activa y columnas fijas. */
+    #tabla.editable tbody tr { cursor: default; }
+    #tabla td { padding: 2px 6px; }
+    #tabla .td-input, #tabla .td-select { height: 28px; }
+
+    /* Zebra + hover + fila en edición */
+    #tabla tbody tr:nth-child(even) { background: var(--surface-sunken); }
+    #tabla tbody tr:hover { background: var(--brand-soft); }
+    #tabla tbody tr:focus-within { background: #eaf4ff; }
+
+    /* Columnas de identidad congeladas (checkbox + Nombre) durante scroll horizontal */
+    #tabla th.sticky-col, #tabla td.sticky-col { position: sticky; z-index: 5; }
+    #tabla th.sticky-sel,    #tabla td.sticky-sel    { left: 0; }
+    #tabla th.sticky-nombre, #tabla td.sticky-nombre { left: 34px; box-shadow: 1px 0 0 var(--border-subtle); }
+    #tabla thead th.sticky-col { z-index: 12; background: var(--surface-sunken); }
+    /* Fondo opaco en celdas fijas (si no, el contenido se transparenta al scrollear) */
+    #tabla tbody td.sticky-col { background: var(--surface-card); }
+    #tabla tbody tr:nth-child(even) td.sticky-col { background: var(--surface-sunken); }
+    #tabla tbody tr:hover td.sticky-col { background: var(--brand-soft); }
+    #tabla tbody tr:focus-within td.sticky-col { background: #eaf4ff; }
+
+    /* Indicador de guardado por fila (vive en la celda del checkbox) */
+    #tabla td.sticky-sel { position: sticky; }
+    .row-status {
+      position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+      width: 6px; height: 6px; border-radius: 50%;
+      background: transparent; transition: background var(--dur-fast);
+    }
+    .row-status.saving { background: var(--status-warning); animation: rowPulse 1s ease-in-out infinite; }
+    .row-status.saved  { background: var(--status-online); }
+    .row-status.error  { background: var(--status-critical); }
+    @keyframes rowPulse { 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
+
+    /* Chips de resumen (total / activos / inactivos) */
+    .cl-stats { display: flex; align-items: center; gap: var(--sp-3); font-size: 13px; color: var(--fg-3); }
+    .cl-stats b { font-family: var(--font-mono); color: var(--fg-1); }
+    .cl-stats .cl-ok b { color: var(--status-online); }
+
+    /* Toggles del DS, alineados horizontalmente dentro de la barra de filtros */
+    .filter-bar .toggle-wrap { align-items: center; gap: var(--sp-2); }
   </style>
 </head>
 <body>
@@ -47,17 +91,30 @@
           <span class="search-icon"><i data-lucide="search"></i></span>
           <input id="q" type="search" placeholder="Buscar por nombre o representante…" aria-label="Buscar clientes">
         </div>
-        <label class="toggle-pill">
-          <input type="checkbox" id="soloActivos">
-          Solo activos
+        <label class="toggle-wrap">
+          <span class="toggle-switch">
+            <input type="checkbox" id="soloActivos" checked>
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </span>
+          <span class="toggle-label">Solo activos</span>
         </label>
-        <label class="toggle-pill" title="Oculta columnas secundarias para una vista más legible">
-          <input type="checkbox" id="vistaCompacta">
-          Compacta
+        <label class="toggle-wrap" title="Oculta columnas secundarias para una vista más legible">
+          <span class="toggle-switch">
+            <input type="checkbox" id="vistaCompacta">
+            <span class="toggle-track"></span>
+            <span class="toggle-thumb"></span>
+          </span>
+          <span class="toggle-label">Compacta</span>
         </label>
         <button id="btnBuscar" class="btn btn-primary btn-sm"><i data-lucide="search"></i> Buscar</button>
         <button id="btnLimpiar" class="btn btn-ghost btn-sm">Limpiar</button>
         <div style="flex:1;"></div>
+        <div class="cl-stats">
+          <span><b id="statTotal">—</b> totales</span>
+          <span class="cl-ok"><b id="statActivos">—</b> activos</span>
+          <span><b id="statInactivos">—</b> inactivos</span>
+        </div>
         <span id="resumen" class="resumen">0 resultados</span>
       </div>
 
@@ -69,29 +126,33 @@
         <button id="bulkDesactivar" class="btn btn-danger-ghost btn-sm"><i data-lucide="power-off"></i> Desactivar</button>
         <div class="bulk-divider"></div>
         <div class="bulk-tag-wrap">
-          <label class="form-label" style="margin:0; white-space:nowrap;">Tag:</label>
-          <input id="bulkTag" class="form-input" type="text" placeholder="vip, factura-mensual…" style="height:32px;">
-          <button id="bulkAddTag" class="btn btn-secondary btn-sm"><i data-lucide="tag"></i> Agregar</button>
+          <label class="form-label" style="margin:0; white-space:nowrap;">Vendedor:</label>
+          <select id="bulkVendedor" class="form-input" style="height:32px; min-width:160px;">
+            <option value="">-- elegir --</option>
+          </select>
+          <button id="bulkAsignarVend" class="btn btn-secondary btn-sm"><i data-lucide="user-check"></i> Asignar</button>
         </div>
+        <div class="bulk-divider"></div>
+        <button id="bulkExento" class="btn btn-secondary btn-sm"><i data-lucide="percent"></i> Marcar exento</button>
+        <button id="bulkPaga" class="btn btn-secondary btn-sm"><i data-lucide="badge-dollar-sign"></i> Marcar paga</button>
       </div>
 
       <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
-        <table id="tabla" class="app-table compact">
+        <table id="tabla" class="app-table editable compact">
           <thead>
             <tr>
-              <th style="width:34px; text-align:center"><input id="selectAll" type="checkbox"></th>
-              <th style="width:14%">Nombre</th>
+              <th class="sticky-col sticky-sel" style="width:34px; text-align:center"><input id="selectAll" type="checkbox"></th>
+              <th class="sticky-col sticky-nombre" style="width:18%">Nombre</th>
               <th style="width:10%">RUC</th>
               <th style="width:7%">DV</th>
               <th style="width:7%">ITBMS</th>
-              <th class="col-secondary" style="width:12%">Motivo exención</th>
+              <th class="col-secondary" style="width:8%">Motivo exención</th>
               <th style="width:12%">Representante</th>
               <th class="col-secondary" style="width:10%">Cédula Rep. Legal</th>
               <th style="width:11%">Teléfono</th>
               <th class="col-secondary" style="width:14%">Email</th>
               <th class="col-secondary" style="width:14%">Dirección</th>
               <th class="col-secondary" style="width:12%">Vendedor</th>
-              <th class="col-secondary" style="width:9%">Tags</th>
               <th style="width:7%">Activo</th>
               <th class="actions" style="width:60px; text-align:center">Acciones</th>
             </tr>

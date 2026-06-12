@@ -241,44 +241,109 @@ const ClientesService = {
   // Returns { docs: [{id,...data}], lastDoc: FirestoreDoc|null, count: number }
   async listClientesPage({ term = '', onlyActive = false, cursorDoc = null, limit = 20 } = {}) {
     const db = firebase.firestore();
-    let q;
-    if (term) {
-      q = db.collection('clientes')
-        .where('searchTokens', 'array-contains', term)
-        .where('deleted', '==', false)
-        .limit(limit);
-    } else {
-      q = db.collection('clientes')
-        .orderBy('nombre')
-        .where('deleted', '==', false)
-        .limit(limit);
+    const words = _norm(term).split(/\s+/).filter(Boolean);
+
+    // Sin término: lista ordenada por nombre.
+    if (words.length === 0) {
+      let q = db.collection('clientes').orderBy('nombre').where('deleted', '==', false).limit(limit);
+      if (onlyActive) q = q.where('activo', '==', true);
+      if (cursorDoc) q = q.startAfter(cursorDoc);
+      const snap = await q.get();
+      return {
+        docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
+        lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],
+        count: snap.size,
+      };
     }
-    if (onlyActive) q = q.where('activo', '==', true);
-    if (cursorDoc) q = q.startAfter(cursorDoc);
-    const snap = await q.get();
+
+    // Una sola palabra: array-contains directo.
+    if (words.length === 1) {
+      let q = db.collection('clientes')
+        .where('searchTokens', 'array-contains', words[0])
+        .where('deleted', '==', false)
+        .limit(limit);
+      if (onlyActive) q = q.where('activo', '==', true);
+      if (cursorDoc) q = q.startAfter(cursorDoc);
+      const snap = await q.get();
+      return {
+        docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
+        lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],
+        count: snap.size,
+      };
+    }
+
+    // Varias palabras: Firestore no soporta AND de varios array-contains.
+    // Anclamos en la palabra más selectiva (la más larga) y exigimos en cliente
+    // que TODAS las palabras estén presentes como token (prefijo) del documento.
+    const { base, need } = this._multiWordBase(db, words, onlyActive);
+    const out = [];
+    let cursor = cursorDoc, returnCursor = null, guard = 0;
+    const BATCH = Math.max(limit * 5, 100);
+    outer:
+    while (guard++ < 50) {
+      let q = base.limit(BATCH);
+      if (cursor) q = q.startAfter(cursor);
+      const snap = await q.get();
+      if (snap.empty) break;
+      for (const doc of snap.docs) {
+        const toks = doc.data().searchTokens || [];
+        if (need.every(w => toks.includes(w))) {
+          out.push({ id: doc.id, ...doc.data() });
+          if (out.length >= limit) { returnCursor = doc; break outer; }
+        }
+      }
+      cursor = snap.docs[snap.docs.length - 1];
+      if (snap.size < BATCH) break;
+    }
     return {
-      docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
-      lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],
-      count: snap.size,
+      docs: out,
+      // Solo hay "siguiente página" si llenamos la página actual.
+      lastDoc: out.length >= limit ? returnCursor : null,
+      count: out.length,
     };
+  },
+
+  // Helper: query base anclada + lista de palabras a exigir (AND) para multi-palabra.
+  _multiWordBase(db, words, onlyActive) {
+    const need = words.filter(w => w.length >= 2);
+    const anchor = (need.length ? need : words).slice().sort((a, b) => b.length - a.length)[0];
+    let base = db.collection('clientes')
+      .where('searchTokens', 'array-contains', anchor)
+      .where('deleted', '==', false);
+    if (onlyActive) base = base.where('activo', '==', true);
+    return { base, need: need.length ? need : words };
   },
 
   // Count all matching clients via paginated scan (no data loaded).
   async countClientes({ term = '', onlyActive = false } = {}) {
     const db = firebase.firestore();
-    let base;
-    if (term) {
-      base = db.collection('clientes').where('searchTokens', 'array-contains', term).where('deleted', '==', false);
-    } else {
-      base = db.collection('clientes').orderBy('nombre').where('deleted', '==', false);
+    const words = _norm(term).split(/\s+/).filter(Boolean);
+
+    // Sin término / una palabra: agregación count() en el servidor (1 lectura),
+    // en vez de escanear toda la colección por lotes.
+    if (words.length <= 1) {
+      let base;
+      if (words.length === 0) {
+        base = db.collection('clientes').orderBy('nombre').where('deleted', '==', false);
+      } else {
+        base = db.collection('clientes').where('searchTokens', 'array-contains', words[0]).where('deleted', '==', false);
+      }
+      if (onlyActive) base = base.where('activo', '==', true);
+      const snap = await base.count().get();
+      return snap.data().count;
     }
-    if (onlyActive) base = base.where('activo', '==', true);
+
+    // Multi-palabra: necesita filtro AND en cliente, así que escaneamos por lotes.
+    const { base, need } = this._multiWordBase(db, words, onlyActive);
     let total = 0, last = null, loops = 0;
     while (true) {
       let q = base.limit(500);
       if (last) q = q.startAfter(last);
       const snap = await q.get();
-      total += snap.size;
+      for (const doc of snap.docs) {
+        const toks = doc.data().searchTokens || [];
+        if (need.every(w => toks.includes(w))) total++;
+      }
       if (snap.empty || snap.size < 500) break;
       last = snap.docs[snap.docs.length - 1];
       if (++loops >= 200) break;

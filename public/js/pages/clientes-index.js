@@ -51,6 +51,20 @@ function escapeHtml(s){
   return (s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
 }
 
+// Indicador de guardado por fila: saving (ámbar) → saved (verde, se desvanece) → error (rojo).
+const _savedTimers = {};
+function setRowStatus(id, state){
+  const sel = document.querySelector(`#tbody .rowSel[data-id="${id}"]`);
+  const dot = sel && sel.closest('tr') && sel.closest('tr').querySelector('.row-status');
+  if(!dot) return;
+  dot.classList.remove('saving','saved','error');
+  if(state) dot.classList.add(state);
+  if(_savedTimers[id]){ clearTimeout(_savedTimers[id]); delete _savedTimers[id]; }
+  if(state === 'saved'){
+    _savedTimers[id] = setTimeout(()=>{ dot.classList.remove('saved'); delete _savedTimers[id]; }, 1600);
+  }
+}
+
 function confirmDialog({ title = 'Confirmar', message = '', confirmText = 'Aceptar' }){
   return new Promise(resolve=>{
     const overlay = document.getElementById('overlay');
@@ -96,8 +110,10 @@ const $bulkBar = document.getElementById('bulkBar');
 const $bulkCount = document.getElementById('bulkCount');
 const $bulkActivar = document.getElementById('bulkActivar');
 const $bulkDesactivar = document.getElementById('bulkDesactivar');
-const $bulkAddTag = document.getElementById('bulkAddTag');
-const $bulkTag = document.getElementById('bulkTag');
+const $bulkVendedor = document.getElementById('bulkVendedor');
+const $bulkAsignarVend = document.getElementById('bulkAsignarVend');
+const $bulkExento = document.getElementById('bulkExento');
+const $bulkPaga = document.getElementById('bulkPaga');
 const $btnPrev = document.getElementById('btnPrev');
 const $btnNext = document.getElementById('btnNext');
 const $pageInput = document.getElementById('pageInput');
@@ -111,17 +127,24 @@ const selectedIds = new Set();
 $btnBuscar.onclick = ()=> { resetPagination(); gotoPage(1); updateTotalPages();
 };
 $btnLimpiar.onclick = ()=>{
-  $q.value=''; $soloActivos.checked=false; resetPagination(); gotoPage(1);updateTotalPages();
+  // Solo limpia la búsqueda; no toca los toggles (Solo activos / Compacta).
+  $q.value='';
+  resetPagination(); gotoPage(1); updateTotalPages();
+};
+$soloActivos.onchange = ()=> {
+  localStorage.setItem('clientes_solo_activos', $soloActivos.checked ? '1' : '0');
+  resetPagination(); gotoPage(1); updateTotalPages();
+};
 
-};
-$soloActivos.onchange = ()=> { resetPagination(); gotoPage(1); updateTotalPages();
-};
+// Solo activos — recuerda el último estado; por defecto ON en la primera visita.
+const _savedActivos = localStorage.getItem('clientes_solo_activos');
+$soloActivos.checked = _savedActivos === null ? true : (_savedActivos === '1');
 
 // Vista compacta — esconde columnas secundarias. Persistido en localStorage.
 const $vistaCompacta = document.getElementById('vistaCompacta');
-const _autoCompact = window.matchMedia('(max-width: 900px)').matches;
 const _saved = localStorage.getItem('clientes_compacta');
-const initialCompact = _saved === null ? _autoCompact : (_saved === '1');
+// Por defecto compacta para todos (oculta columnas secundarias); respeta la preferencia guardada.
+const initialCompact = _saved === null ? true : (_saved === '1');
 $vistaCompacta.checked = initialCompact;
 document.body.classList.toggle('clientes-compact', initialCompact);
 $vistaCompacta.onchange = () => {
@@ -155,7 +178,7 @@ $btnTodo.onclick = async ()=>{
   loadingAll = true;
   $btnTodo.disabled = true; $btnMas.disabled = true;
   try{
-    $tbody.innerHTML = '<tr><td colspan="15" class="loader-center"><div class="loader"></div></td></tr>'; $resumen.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></div>Cargando...';
+    $tbody.innerHTML = '<tr><td colspan="14" class="loader-center"><div class="loader"></div></td></tr>'; $resumen.innerHTML = '<div class="loader" style="width: 20px; height: 20px; border-width: 2px; display: inline-block; vertical-align: middle; margin-right: 8px;"></div>Cargando...';
     selectedIds.clear(); $selectAll.checked = false; updateBulkBar();
     lastDoc = null;
     let total = 0, pages = 0, MAX_PAGES = 500; // ~10k si PAGE_SIZE=20
@@ -192,6 +215,23 @@ $selectAll.onchange = ()=>{
 };
 
 
+  // Navegación tipo hoja de cálculo: Enter mueve a la celda de abajo (Shift+Enter arriba),
+  // manteniendo la misma columna. Los <select> conservan su comportamiento nativo.
+  $tbody.addEventListener('keydown', (e)=>{
+    if(e.key !== 'Enter') return;
+    if(e.target.tagName === 'SELECT') return;
+    const cell = e.target.closest('td');
+    const tr = e.target.closest('tr');
+    if(!cell || !tr) return;
+    e.preventDefault();
+    const colIndex = Array.from(tr.children).indexOf(cell);
+    const nextTr = e.shiftKey ? tr.previousElementSibling : tr.nextElementSibling;
+    if(!nextTr) return;
+    const targetCell = nextTr.children[colIndex];
+    const inp = targetCell && targetCell.querySelector('input, select');
+    if(inp){ inp.focus(); if(typeof inp.select === 'function') inp.select(); }
+  });
+
   // --------- Auth guard ----------
   auth.onAuthStateChanged(async (user)=>{
     if(!user){ location.href = '../index.html'; return; }
@@ -209,6 +249,7 @@ if (!ALLOWED_ROLES.has(role)) {
   return;
 }
 await cargarVendedores();
+populateBulkVendedor();
 resetPagination(); gotoPage(1);
 updateTotalPages();
 
@@ -262,26 +303,85 @@ $bulkDesactivar.onclick = async ()=>{
   Toast.show('Clientes desactivados', 'ok');
 };
 
-$bulkAddTag.onclick = async ()=>{
-  if(asReadonly() || selectedIds.size===0) return;
-  const tag = $bulkTag.value.trim();
-  if(!tag){ Toast.show('Escribe un tag', 'warn'); return; }
-  const tagLower = tag.toLowerCase();
-  await ClientesService.batchUpdate(Array.from(selectedIds), {
-    tags: firebase.firestore.FieldValue.arrayUnion(tag),
-    searchTokens: firebase.firestore.FieldValue.arrayUnion(tagLower),
+// Llena el select de vendedores de la bulk-bar (una sola vez, tras cargarVendedores).
+function populateBulkVendedor(){
+  if(!$bulkVendedor) return;
+  listaVendedores.forEach(v=>{
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = v.nombre ? `${v.nombre} (${v.email})` : v.email;
+    $bulkVendedor.appendChild(opt);
   });
-  Toast.show(`Tag "${tag}" agregado`, 'ok');
-  $bulkTag.value = '';
-};
+}
+
+$bulkAsignarVend && ($bulkAsignarVend.onclick = async ()=>{
+  if(asReadonly() || selectedIds.size===0) return;
+  const vend = listaVendedores.find(v => v.id === $bulkVendedor.value);
+  if(!vend){ Toast.show('Elige un vendedor', 'warn'); return; }
+  if(!await Modal.confirm({ message:`¿Asignar ${selectedIds.size} cliente(s) a ${vend.nombre || vend.email}?` })) return;
+  await ClientesService.batchUpdate(Array.from(selectedIds), {
+    vendedor_asignado: vend.id,
+    vendedor_email: vend.email,
+  });
+  // Reflejar en los selects visibles
+  selectedIds.forEach(id=>{
+    const s = $tbody.querySelector(`.vendedorSelect[data-id="${id}"]`);
+    if(s) s.value = vend.id;
+  });
+  Toast.show('Vendedor asignado', 'ok');
+});
+
+async function bulkSetExento(exento){
+  if(asReadonly() || selectedIds.size===0) return;
+  if(!await Modal.confirm({ message:`¿Marcar ${selectedIds.size} cliente(s) como ${exento ? 'EXENTO de ITBMS' : 'que PAGA ITBMS'}?` })) return;
+  const patch = { itbms_exento: exento };
+  if(!exento) patch.itbms_motivo_exencion = '';
+  await ClientesService.batchUpdate(Array.from(selectedIds), patch);
+  // Reflejar en filas visibles
+  selectedIds.forEach(id=>{
+    const sel = $tbody.querySelector(`.rowSel[data-id="${id}"]`);
+    const row = sel && sel.closest('tr');
+    if(!row) return;
+    const isel = row.querySelector('select[data-field="itbms_exento"]');
+    if(isel) isel.value = exento ? 'true' : 'false';
+    const motivo = row.querySelector('input[data-field="itbms_motivo_exencion"]');
+    if(motivo){
+      if(!exento){ motivo.value=''; motivo.readOnly=true; motivo.style.opacity='.4'; motivo.placeholder='—'; }
+      else { motivo.readOnly=false; motivo.style.opacity=''; motivo.placeholder='Motivo / referencia'; }
+    }
+  });
+  Toast.show(exento ? 'Marcados como exentos' : 'Marcados como paga', 'ok');
+}
+$bulkExento && ($bulkExento.onclick = ()=> bulkSetExento(true));
+$bulkPaga   && ($bulkPaga.onclick   = ()=> bulkSetExento(false));
+async function updateStats(term, onlyActive, total){
+  const $t = document.getElementById('statTotal');
+  const $a = document.getElementById('statActivos');
+  const $i = document.getElementById('statInactivos');
+  if(!$t) return;
+  try{
+    if(onlyActive){
+      // El total ya está filtrado a activos.
+      $t.textContent = total; $a.textContent = total; $i.textContent = 0;
+      return;
+    }
+    $t.textContent = total;
+    const activos = await ClientesService.countClientes({ term, onlyActive: true });
+    $a.textContent = activos;
+    $i.textContent = Math.max(0, total - activos);
+  }catch(e){
+    $a.textContent = '—'; $i.textContent = '—';
+  }
+}
+
 async function updateTotalPages(){
   try{
-    const total = await ClientesService.countClientes({
-      term: $q.value.trim().toLowerCase(),
-      onlyActive: $soloActivos.checked,
-    });
+    const term = $q.value.trim().toLowerCase();
+    const onlyActive = $soloActivos.checked;
+    const total = await ClientesService.countClientes({ term, onlyActive });
     knownTotalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     $pageTotal.textContent = `/ ${knownTotalPages}`;
+    updateStats(term, onlyActive, total);
     return knownTotalPages;
   } catch (e) {
     console.error("No se pudo calcular el total (fallback):", e);
@@ -401,7 +501,9 @@ const onInlineUpdate = debounce(async (id, partial)=>{
     }
 
     await ClientesService.updateCliente(id, partial);
+    setRowStatus(id, 'saved');
   }catch(e){
+    setRowStatus(id, 'error');
     Toast.show('No se pudo guardar: '+e.message, 'bad');
   }
 }, 700);
@@ -409,57 +511,55 @@ function renderRow(id, c){
   const tr = document.createElement('tr');
   const ro = asReadonly();
   tr.innerHTML = `
-    <td style="text-align:center; width:34px">
+    <td class="sticky-col sticky-sel" style="text-align:center; width:34px">
+      <span class="row-status"></span>
       <input type="checkbox" class="rowSel" data-id="${id}" ${ro?'disabled':''}>
     </td>
 
-    <td>
-      <input type="text" class="table-input sm" value="${c.nombre||''}" ${ro?'readonly':''} data-field="nombre" />
+    <td class="sticky-col sticky-nombre">
+      <input type="text" class="td-input" value="${c.nombre||''}" ${ro?'readonly':''} data-field="nombre" />
     </td>
 
     <td>
-      <input type="text" class="table-input sm mono" value="${c.ruc||''}" ${ro?'readonly':''} data-field="ruc" />
+      <input type="text" class="td-input td-mono" value="${c.ruc||''}" ${ro?'readonly':''} data-field="ruc" />
     </td>
     <td>
-      <input type="text" class="table-input sm mono" value="${c.dv||''}" ${ro?'readonly':''} data-field="dv" />
+      <input type="text" class="td-input td-mono" value="${c.dv||''}" ${ro?'readonly':''} data-field="dv" />
     </td>
 
     <td>
-      <select class="table-input sm" ${ro?'disabled':''} data-field="itbms_exento">
+      <select class="td-select" ${ro?'disabled':''} data-field="itbms_exento">
         <option value="false" ${!c.itbms_exento?'selected':''}>Paga</option>
         <option value="true" ${c.itbms_exento?'selected':''}>Exento</option>
       </select>
     </td>
     <td class="col-secondary">
-      <input type="text" class="table-input sm" value="${(c.itbms_motivo_exencion||'').replace(/"/g,'&quot;')}" ${(ro||!c.itbms_exento)?'readonly':''} data-field="itbms_motivo_exencion" placeholder="${c.itbms_exento?'Motivo / referencia':'—'}" ${!c.itbms_exento?'style="opacity:.4;"':''} />
+      <input type="text" class="td-input" value="${(c.itbms_motivo_exencion||'').replace(/"/g,'&quot;')}" ${(ro||!c.itbms_exento)?'readonly':''} data-field="itbms_motivo_exencion" placeholder="${c.itbms_exento?'Motivo / referencia':'—'}" ${!c.itbms_exento?'style="opacity:.4;"':''} />
     </td>
 
     <td>
-      <input type="text" class="table-input sm" value="${c.representante||''}" ${ro?'readonly':''} data-field="representante" />
+      <input type="text" class="td-input" value="${c.representante||''}" ${ro?'readonly':''} data-field="representante" />
     </td>
 
     <td class="col-secondary">
-      <input type="text" class="table-input sm mono" value="${c.representante_cedula||c.cedula_representante||''}" ${ro?'readonly':''} data-field="representante_cedula" />
+      <input type="text" class="td-input td-mono" value="${c.representante_cedula||c.cedula_representante||''}" ${ro?'readonly':''} data-field="representante_cedula" />
     </td>
 
     <td>
-      <input type="tel" class="table-input sm" value="${c.telefono||''}" ${ro?'readonly':''} data-field="telefono" />
+      <input type="tel" class="td-input" value="${c.telefono||''}" ${ro?'readonly':''} data-field="telefono" />
     </td>
 
     <td class="col-secondary">
-      <input type="email" class="table-input sm" value="${c.email||''}" ${ro?'readonly':''} data-field="email" />
+      <input type="email" class="td-input" value="${c.email||''}" ${ro?'readonly':''} data-field="email" />
     </td>
 
     <td class="col-secondary">
-      <input type="text" class="table-input sm" value="${c.direccion||''}" ${ro?'readonly':''} data-field="direccion" />
+      <input type="text" class="td-input" value="${c.direccion||''}" ${ro?'readonly':''} data-field="direccion" />
     </td>
     <td class="col-secondary">
-      <select class="table-input sm vendedorSelect" data-id="${id}" ${ro?'disabled':''}>
+      <select class="td-select vendedorSelect" data-id="${id}" ${ro?'disabled':''}>
         <option value="">-- Sin asignar --</option>
       </select>
-    </td>
-    <td class="col-secondary">
-      <input type="text" class="table-input sm" placeholder="tag1, tag2" value="${(c.tags||[]).join(', ')}" ${ro?'readonly':''} data-field="tags" />
     </td>
     <td style="text-align:center">
       <label class="input-row fit" style="justify-content:center">
@@ -495,10 +595,17 @@ if (selectVend) {
   selectVend.addEventListener('change', async () => {
     const newId = selectVend.value;
     const vend = listaVendedores.find(v => v.id === newId);
-    await ClientesService.updateCliente(id, {
-      vendedor_asignado: vend ? vend.id : null,
-      vendedor_email: vend ? vend.email : null,
-    });
+    setRowStatus(id, 'saving');
+    try {
+      await ClientesService.updateCliente(id, {
+        vendedor_asignado: vend ? vend.id : null,
+        vendedor_email: vend ? vend.email : null,
+      });
+      setRowStatus(id, 'saved');
+    } catch(e){
+      setRowStatus(id, 'error');
+      Toast.show('No se pudo guardar: '+e.message, 'bad');
+    }
   });
 }
 
@@ -516,18 +623,9 @@ if (selectVend) {
   tr.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"]').forEach(inp=>{
     inp.addEventListener('input', ()=>{
       if(asReadonly()) return;
+      setRowStatus(id, 'saving');
       const field = inp.dataset.field;
       let value = inp.value.trim();
-
-      // Normaliza TAGS a array y actualiza tokens
-      if(field === 'tags'){
-        const tagsArr = value ? value.split(',').map(s=>s.trim()).filter(Boolean) : [];
-        onInlineUpdate(id, {
-          tags: tagsArr,
-          searchTokens: firebase.firestore.FieldValue.arrayUnion(...tagsArr.map(t=>t.toLowerCase()))
-        });
-        return;
-      }
 
       onInlineUpdate(id, { [field]: value });
     });
@@ -537,6 +635,7 @@ if (selectVend) {
   const chk = tr.querySelector('input[type="checkbox"][data-field="activo"]');
   chk && chk.addEventListener('change', ()=>{
     if(asReadonly()){ chk.checked = !!c.activo; return; }
+    setRowStatus(id, 'saving');
     onInlineUpdate(id, {activo: !!chk.checked});
   });
 
@@ -554,6 +653,7 @@ if (selectVend) {
       } else if (motivoInp){
         motivoInp.readOnly = false; motivoInp.style.opacity = ''; motivoInp.placeholder = 'Motivo / referencia';
       }
+      setRowStatus(id, 'saving');
       onInlineUpdate(id, patch);
     });
   }
