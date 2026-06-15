@@ -74,7 +74,7 @@
         }
       } catch (error) {
         console.error("Error cargando contratos:", error);
-        mostrarMensaje("Error al cargar contratos: " + error.message, "rojo");
+        mostrarToast("Error al cargar contratos: " + error.message, "error");
       }
     }
     
@@ -183,7 +183,7 @@
 
     async function cargarOrden() {
       if (!ordenId) {
-        mostrarMensaje("No se proporcionó ID de orden en la URL.", "rojo");
+        mostrarToast("No se proporcionó ID de orden en la URL.", "error");
         return;
       }
 
@@ -260,16 +260,22 @@
             contratoLabel.classList.add("req");
           }
         } else {
-          // No es PROGRAMACION, ocultar bloque
+          // No es PROGRAMACION, ocultar bloque y desactivar su validación
+          // (un campo required oculto bloquea el submit de forma silenciosa).
           contratoBlock.style.display = "none";
+          contratoSelect.required = false;
+          contratoSelect.disabled = true;
+          contratoLabel.classList.remove("req");
+          contratoMotivo.required = false;
         }
         
         await cargarTecnicos();
         document.getElementById("tecnico").value = d.tecnico_asignado || "";
+        await cargarEstados();
         document.getElementById("estado").value = d.estado_reparacion || "POR ASIGNAR";
         document.getElementById("observaciones").value = d.observaciones || "";
       } else {
-        mostrarMensaje("Orden no encontrada.", "rojo");
+        mostrarToast("Orden no encontrada.", "error");
       }
     }
 
@@ -283,13 +289,13 @@
         if (!contratoNoAplica.checked) {
           // Debe tener contrato seleccionado
           if (!contratoSelect.value) {
-            mostrarMensaje("⚠️ Para PROGRAMACIÓN debe seleccionar un contrato o marcar 'No aplica'.", "rojo");
+            mostrarToast("⚠️ Para PROGRAMACIÓN debe seleccionar un contrato o marcar 'No aplica'.", "error");
             return;
           }
         } else {
           // Debe tener motivo
           if (!contratoMotivo.value.trim()) {
-            mostrarMensaje("⚠️ Debe indicar el motivo por el cual no aplica contrato.", "rojo");
+            mostrarToast("⚠️ Debe indicar el motivo por el cual no aplica contrato.", "error");
             return;
           }
         }
@@ -419,6 +425,7 @@
       document.getElementById("observaciones").readOnly = !puedeEditarDetalles;
     }
 
+    // cargarOrden() orquesta internamente cargarTipos/cargarEstados/cargarTecnicos
+    // en orden y luego fija los valores; no llamarlos aquí en paralelo (carrera que
+    // puede borrar la selección de un campo required y bloquear el submit).
     cargarOrden();
-    cargarEstados();
-    cargarTipos();
