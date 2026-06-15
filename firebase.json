@@ -19,6 +19,22 @@
         "source": "/api/sendMail",
         "function": "sendMail"
       },
+      {
+        "source": "/api/quickbooks/connect",
+        "function": "quickbooksOAuth"
+      },
+      {
+        "source": "/api/quickbooks/callback",
+        "function": "quickbooksOAuth"
+      },
+      {
+        "source": "/api/quickbooks/disconnect",
+        "function": "quickbooksOAuth"
+      },
+      {
+        "source": "/api/quickbooks/webhook",
+        "function": "quickbooksWebhook"
+      },
       { "source": "/c/**", "destination": "/verify/index.html" }
     ],
     "headers": [

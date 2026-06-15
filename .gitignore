@@ -78,6 +78,10 @@ api- sendgrid.txt
 *credential*.txt
 *password*.txt
 
+# QuickBooks Online tokens — never commit (local discovery/dev only)
+qbo.local.json
+*.local.json
+
 # Local backup archives created by backup_cecomunica_v2.txt
 backups/
 

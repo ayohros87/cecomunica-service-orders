@@ -6,6 +6,8 @@ const { onContratoOrdenWrite, onOrdenWriteSyncContratoCache, onOrdenHardDelete }
 
 exports.sendMail                      = require("./src/http/sendMail");
 exports.sendContractPdf               = require("./src/http/sendContractPdf");
+exports.quickbooksOAuth               = require("./src/http/quickbooksOAuth");
+exports.quickbooksWebhook             = require("./src/http/quickbooksWebhook");
 exports.onContratoActivado            = onContratoActivado;
 exports.onContratoActivadoSendPdf     = onContratoActivadoSendPdf;
 exports.onMailQueued                  = require("./src/triggers/mail/onMailQueued");
