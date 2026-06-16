@@ -2,7 +2,7 @@
 
 > **Para:** Contabilidad y Administración
 > **De:** Equipo de sistemas
-> **Fecha:** 15 de junio de 2026
+> **Fecha:** 16 de junio de 2026
 > **Estado:** Conexión lista ✅ · Automatización en construcción
 
 Este documento explica, sin tecnicismos, qué vamos a hacer al conectar nuestro
@@ -138,9 +138,31 @@ persona encargada tenga control sin tener que aprobar factura por factura:
 - **Facturado:** lo ya emitido, con su **estado de pago** y enlace a QuickBooks.
 - **Reintentar / facturar puntual:** para casos sueltos (un contrato que estaba en
   espera, una entrega de mitad de mes, o una factura que falló).
+- **Ajuste puntual:** aplicar un **descuento o cargo único** a la próxima factura
+  de un contrato (con su motivo), cuando se acuerda algo puntual con el cliente.
 
 Las **anulaciones y notas de crédito** se hacen en **QuickBooks** (donde está la
 cobranza), no en el panel.
+
+## 5.3 Cancelación de equipos (bajas)
+
+Cuando un cliente quiere **dar de baja** equipos de un contrato (p. ej. de 10 baja
+a 9), hay un **procedimiento controlado** — un contrato activo **no se edita "a mano"**:
+
+1. El cliente envía su **nota de cancelación**.
+2. **Vendedor o Recepción** registran la solicitud en la app: qué equipos, y el
+   **término según el contrato** — *hasta fin de mes*, *30 días más*, *60 días más*
+   u *otro* — y **adjuntan la nota** del cliente.
+3. La solicitud entra a una cola **"Cancelaciones pendientes"** (similar a los
+   contratos pendientes de aprobación).
+4. **Administración aprueba**; a partir de ahí el sistema deja de facturar esos
+   equipos según el término (el último tramo se cobra **proporcional**, ÷30).
+
+- **No se generan notas de crédito desde la app** (si hiciera falta, es manual).
+- La **Tasa de Cancelación**, si aplica, se cobra **aparte**.
+- **Control e historial:** cada contrato muestra su **"Historial de bajas"**
+  (de cuánto a cuánto, con los documentos adjuntos); Administración/Recepción ven
+  todo, y queda registrado quién solicitó y quién aprobó.
 
 ## 6. El módulo de facturación fiscal (importante)
 
@@ -153,19 +175,21 @@ tenga el **RUC/DV** correcto para que el módulo fiscal lo tome bien.
 
 ## 7. Lo que necesitamos decidir (preguntas para el equipo)
 
-Estas decisiones las toman Contabilidad y Administración; el sistema se adapta a
-lo que definan:
+**Ya definido:** prorrateo ÷ 30 · emisión el **1.º de cada mes** · la baja se
+factura hasta su término con prorrateo del último tramo · solo contratos nuevos.
 
-1. **Prorrateo:** ¿cómo calculamos la primera factura parcial cuando un contrato
-   empieza a mitad de mes? ¿Mensualidad ÷ 30 × días, o ÷ días reales del mes?
-2. **Día de facturación mensual:** ¿el día 1 de cada mes? ¿otro día de corte?
-3. **Reportes por tipo de contrato:** ¿quieren ver ingresos separados por tipo
+**Falta confirmar** (Contabilidad/Administración):
+
+1. **Reportes por tipo de contrato:** ¿quieren ver ingresos separados por tipo
    de contrato (usando las "clases" de QuickBooks)?
-4. **Pagos de vuelta:** ¿qué información traemos a la app: solo
+2. **Pagos de vuelta:** ¿qué información traemos a la app: solo
    "pagado/pendiente", o también número de factura y saldo?
-5. **Modelos de equipo:** confirmar que el modelo del equipo en la app coincide
-   con el nombre en QuickBooks (PD78X, AP516, etc.); si difieren, armamos una
-   pequeña tabla de equivalencias.
+3. **Tabla de tarifas de alquiler por modelo:** validar los valores de alquiler
+   (y frecuencia) que cargaremos en el panel administrativo.
+4. **Equivalencia de modelos:** confirmar el nombre de cada modelo en QuickBooks
+   (PD78X, AP516, etc.) frente al de la app, para emparejarlos.
+5. **Factura fiscal:** confirmar que el módulo fiscal toma bien el RUC del cliente
+   en facturas a sub-clientes.
 
 ---
 
@@ -174,10 +198,13 @@ lo que definan:
 | Fase | Qué se hace | Resultado visible |
 |---|---|---|
 | 1. Conexión | Enlace seguro con QuickBooks | **✅ Hecho** |
-| 2. Clientes | Crear/actualizar fichas de cliente (con RUC) | Clientes sincronizados |
-| 3. Contratos + 1ra factura | Crear el sub-cliente del contrato y su primera factura (con prorrateo) al entregar equipos | Facturación arranca sola |
-| 4. Mensualidad | Facturación mensual automática | Cada mes se factura solo |
-| 5. Pagos | Traer el estado de pago a la app | Cobro visible en un lugar |
+| 2. Base | Modelo de contrato por "líneas" + panel de tarifas por modelo | Listo para facturar |
+| 3. Clientes | Crear/actualizar fichas de cliente (con RUC) | Clientes sincronizados |
+| 4. Contratos + 1ra factura | Sub-cliente del contrato + primera factura (prorrateada) al entregar equipos | Facturación arranca sola |
+| 5. Mensualidad | Facturación mensual automática | Cada mes se factura solo |
+| 6. Panel de facturación | Próximo a facturar, en espera, alertas, ajustes | Control visual de la emisión |
+| 7. Cancelaciones | Solicitud de baja, aprobación, control e historial | Bajas ordenadas |
+| 8. Pagos | Traer el estado de pago a la app | Cobro visible en un lugar |
 
 Cada fase se **prueba** antes de pasar a la siguiente, para no afectar la
 facturación real.
@@ -188,7 +215,9 @@ facturación real.
 
 - ✅ La **conexión con QuickBooks** ya está hecha y verificada (cuenta CE
   COMUNICA).
-- 🔜 Falta construir la **automatización** (fases 2 a 5).
+- ✅ Confirmamos en la cuenta real que la forma de facturar (bundle "Mensualidad",
+  ITBMS, sub-clientes) **funciona como necesitamos**.
+- 🔜 Falta construir la **automatización** (fases 2 a 8).
 
 ---
 
@@ -207,4 +236,5 @@ facturación real.
 - **Sobre el flujo de contratos y la entrega de equipos** → Administración +
   equipo de sistemas.
 
-Cuando tengan las respuestas del punto 7, podemos arrancar la Fase 2.
+Podemos arrancar la base (Fase 2) de inmediato; las respuestas del punto 7
+destraban las fases siguientes.
