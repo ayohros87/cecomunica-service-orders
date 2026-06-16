@@ -124,7 +124,28 @@ document.getElementById("addCliente").onclick = async () => {
 
         document.getElementById("addIP").onclick = () => agregarElemento("empresa/IPs", "ip", "IP");
 
-      
+        // Drag-and-drop para la zona de carga del JSON (el click ya lo maneja el <label>).
+        const vendorInput = document.getElementById("vendorJson");
+        const dropZone = vendorInput?.closest(".form-file-zone");
+        if (dropZone) {
+          const cancelar = e => { e.preventDefault(); e.stopPropagation(); };
+          ["dragenter", "dragover"].forEach(ev => dropZone.addEventListener(ev, e => {
+            cancelar(e);
+            dropZone.classList.add("drag-over");
+          }));
+          ["dragleave", "dragend"].forEach(ev => dropZone.addEventListener(ev, e => {
+            cancelar(e);
+            dropZone.classList.remove("drag-over");
+          }));
+          dropZone.addEventListener("drop", e => {
+            cancelar(e);
+            dropZone.classList.remove("drag-over");
+            const file = e.dataTransfer?.files?.[0];
+            procesarArchivoJSON(file);
+          });
+        }
+
+
       });
 
       document.getElementById("batchForm").addEventListener("submit", async e => {
@@ -244,8 +265,19 @@ function normalizarDetalleBatch(item = {}) {
 }
 
 function cargarDesdeJSON(input) {
-  const file = input.files[0];
+  procesarArchivoJSON(input.files[0]);
+  // Permite re-adjuntar el mismo archivo (de lo contrario 'change' no se vuelve a disparar).
+  input.value = "";
+}
+
+function procesarArchivoJSON(file) {
   if (!file) return;
+
+  const esJson = file.type === "application/json" || /\.json$/i.test(file.name);
+  if (!esJson) {
+    Toast.show('El archivo debe ser un .json', 'bad');
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = function (e) {
