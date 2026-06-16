@@ -97,6 +97,10 @@ document.addEventListener("DOMContentLoaded", function () {
       // arrives.
       // §4.4 — auto-focus search field once the initial render is done.
       _autofocusSearchIfIdle();
+      // Deep-link desde los correos: ?entrega=<ordenId> abre el modal de
+      // Entrega/Recepción (firma + receptor). Reemplaza el viejo link a
+      // trabajar-orden.html en onComplete.js / ordenes-flujo.js.
+      _abrirEntregaDeepLink();
     } catch (e) {
       console.error("Error obteniendo rol del usuario:", e);
       Toast.show("Error al verificar permisos. Por favor, recarga la página.", 'bad');
@@ -324,6 +328,39 @@ function _autofocusSearchIfIdle() {
   }, 300);
 }
 window._autofocusSearchIfIdle = _autofocusSearchIfIdle;
+
+// Deep-link `?entrega=<ordenId>`: abre directamente el modal de
+// Entrega/Recepción (firma capturada, receptor, equipos). Es el destino del
+// botón "Ver orden" de los correos de nota de entrega / orden completada.
+// Robusto frente a paginación y al filtro "sólo mías": la orden casi nunca
+// está en la primera página del snapshot al momento de cargar, así que la
+// traemos directo por id y la inyectamos en el state para que el modal
+// (que lee de APP.state.orders) la encuentre.
+async function _abrirEntregaDeepLink() {
+  if (typeof URLSearchParams !== 'function') return;
+  const ordenId = new URLSearchParams(window.location.search).get('entrega');
+  if (!ordenId) return;
+
+  try {
+    const orders = (APP.state.orders = APP.state.orders || []);
+    let orden = orders.find(o => o.ordenId === ordenId);
+    if (!orden) {
+      orden = await OrdenesService.getOrder(ordenId);
+      if (orden) orders.unshift(orden);
+    }
+    if (!orden) {
+      Toast.show('No se encontró la orden indicada.', 'bad');
+      return;
+    }
+    if (typeof mostrarEntregaRecepcion === 'function') {
+      mostrarEntregaRecepcion(ordenId);
+    }
+  } catch (e) {
+    console.error('[deep-link entrega]', e);
+    Toast.show('No se pudo abrir la entrega de la orden.', 'bad');
+  }
+}
+window._abrirEntregaDeepLink = _abrirEntregaDeepLink;
 
 // Ctrl/Cmd+K focuses the quick search; ESC closes any open .overlay modal;
 // ? opens the keyboard shortcut cheatsheet.

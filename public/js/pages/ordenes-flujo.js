@@ -872,7 +872,9 @@ window.copiarSeriales = function (ordenId) {
           opts:   { ...emailOpts, fechaISO: new Date().toISOString() },
           // CTA del botón "Ver orden". Sin esto renderByTemplate cae a "#"
           // y el botón no hace nada. Mismo patrón que onComplete.js.
-          ctaUrl: `https://app.cecomunica.net/ordenes/trabajar-orden.html?id=${encodeURIComponent(ordenId)}`,
+          // Deep-link al índice → abre el modal de Entrega/Recepción (firma +
+          // receptor + equipos). NO a trabajar-orden.html (pantalla del técnico).
+          ctaUrl: `https://app.cecomunica.net/ordenes/index.html?entrega=${encodeURIComponent(ordenId)}`,
         },
       };
 
