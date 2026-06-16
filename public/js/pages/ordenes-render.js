@@ -56,6 +56,9 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   const tooltipNota = tieneNota
     ? ordenData.nota_tecnica.slice(0, 80).replace(/"/g, "'")
     : 'Agregar nota técnica';
+  const indicadorNota = tieneNota
+    ? `<span class="nota-tecnica-indicador" title="Notas técnicas: ${tooltipNota}">🧠</span>`
+    : "";
   const fotosBadge = fotosTallerCount > 0
     ? `<span class="fotos-taller-badge" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
     : "";
@@ -107,7 +110,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}</span>
       </div>
     </td>
-    <td>${ordenData.tecnico_asignado || ""}</td>
+    <td>${ordenData.tecnico_asignado || ""}${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
     <td><span class="chip-estado ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}</td>
@@ -238,6 +241,10 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     // table's tr[data-estado=*] rules so cards and rows match).
     card.setAttribute("data-estado", estadoDisplay);
     const tecnicoDisplay = ordenData.tecnico_asignado || "Sin asignar";
+    const tieneNotaCard = ordenData.nota_tecnica && ordenData.nota_tecnica.trim() !== "";
+    const indicadorNotaCard = tieneNotaCard
+      ? `<span class="nota-tecnica-indicador" title="Notas técnicas: ${ordenData.nota_tecnica.slice(0, 80).replace(/"/g, "'")}">🧠</span>`
+      : "";
     const tipoDisplay = ordenData.tipo_de_servicio || "—";
     const fotosBadgeMobile = fotosTallerCount > 0
       ? `<span class="fotos-taller-badge mobile" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
@@ -285,7 +292,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <span class="card-contrato__sep" aria-hidden="true">·</span>
         <span class="card-contrato__tipo">${tipoDisplay}</span>
         <span class="card-contrato__sep" aria-hidden="true">·</span>
-        <span class="card-contrato__tecnico">${tecnicoDisplay}</span>
+        <span class="card-contrato__tecnico">${tecnicoDisplay}${indicadorNotaCard}</span>
         ${fotosBadgeMobile}
       </div>
       <div class="card-contrato__tier3">
