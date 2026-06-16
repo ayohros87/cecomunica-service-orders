@@ -165,6 +165,30 @@
           <label class="form-label" for="f-notas">Notas</label>
           <textarea class="form-input form-textarea" id="f-notas" placeholder="(opcional)"></textarea>
         </div>
+
+        <div class="form-field" style="grid-column:1 / -1; margin-top:6px; border-top:1px solid #e5e7eb; padding-top:12px;">
+          <div class="form-label" style="font-weight:600;">Facturación (QuickBooks)</div>
+          <p style="margin:.25rem 0 0; color:#666; font-size:.8rem;">
+            Tarifas fijas por unidad para el desglose de la mensualidad. El mantenimiento
+            se calcula como el resto (mensualidad − alquiler − frecuencia).
+          </p>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="f-precio-alquiler">Alquiler ($/mes por unidad)</label>
+          <input class="form-input" id="f-precio-alquiler" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="f-precio-frecuencia">Frecuencia ($/mes por unidad)</label>
+          <input class="form-input" id="f-precio-frecuencia" type="number" step="0.01" min="0" placeholder="0.00 (si aplica)">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="f-qbo-item-alquiler">Item QBO "Alquiler" (ID)</label>
+          <input class="form-input" id="f-qbo-item-alquiler" placeholder="Ej. 23">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="f-qbo-bundle">Bundle QBO "Mensualidad" (ID)</label>
+          <input class="form-input" id="f-qbo-bundle" placeholder="Ej. 22">
+        </div>
       </div>
     </div>
     <div class="modal-footer">

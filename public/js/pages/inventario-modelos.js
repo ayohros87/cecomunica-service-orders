@@ -209,6 +209,9 @@
       document.getElementById('f-alto').checked=false;
       document.getElementById('f-activo').checked=true;
       setVal('f-notas','');
+      // Facturación (QuickBooks)
+      setVal('f-precio-alquiler','');   setVal('f-precio-frecuencia','');
+      setVal('f-qbo-item-alquiler',''); setVal('f-qbo-bundle','');
 
       if(!creando){
         const m = listaModelos.find(x=>x.id===id);
@@ -221,11 +224,25 @@
           document.getElementById('f-alto').checked = m.alto_movimiento===true;
           document.getElementById('f-activo').checked = m.activo!==false;
           setVal('f-notas', m.notas||'');
+          setVal('f-precio-alquiler', Number.isFinite(m.precio_alquiler) ? m.precio_alquiler : '');
+          setVal('f-precio-frecuencia', Number.isFinite(m.precio_frecuencia) ? m.precio_frecuencia : '');
+          setVal('f-qbo-item-alquiler', m.qbo_item_alquiler_id || '');
+          setVal('f-qbo-bundle', m.qbo_bundle_id || '');
         }
       }
-      document.getElementById('overlay').classList.add('show');
+      // El overlay tiene `display:none` inline (gana sobre las clases del kit, que
+      // además tiene dos reglas .modal-backdrop en conflicto), así que togglear una
+      // clase NO lo muestra. Controlamos el estilo inline directo para abrir/cerrar.
+      const ov = document.getElementById('overlay');
+      ov.classList.add('show');
+      ov.style.display = 'flex';
     }
-    function cerrarModal(){ document.getElementById('overlay').classList.remove('show'); modeloEditId=null; }
+    function cerrarModal(){
+      const ov = document.getElementById('overlay');
+      ov.classList.remove('show');
+      ov.style.display = 'none';
+      modeloEditId=null;
+    }
     function setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v; }
 
     async function guardarModelo(){
@@ -237,12 +254,21 @@
       const alto=document.getElementById('f-alto').checked;
       const activo=document.getElementById('f-activo').checked;
       const notas=(document.getElementById('f-notas').value||'').trim();
+      // Facturación (QuickBooks)
+      const precioAlquiler   = Math.max(0, Number(document.getElementById('f-precio-alquiler').value||0));
+      const precioFrecuencia = Math.max(0, Number(document.getElementById('f-precio-frecuencia').value||0));
+      const qboItemAlquiler  = (document.getElementById('f-qbo-item-alquiler').value||'').trim();
+      const qboBundle        = (document.getElementById('f-qbo-bundle').value||'').trim();
 
       if(!marca || !modelo){ Toast.show('Marca y Modelo son requeridos','warn'); return; }
 
       const payload = {
         marca, modelo, tipo, estado, minimo,
         alto_movimiento: alto, activo, notas,
+        precio_alquiler: precioAlquiler,
+        precio_frecuencia: precioFrecuencia,
+        qbo_item_alquiler_id: qboItemAlquiler,
+        qbo_bundle_id: qboBundle,
         actualizado_en: firebase.firestore.FieldValue.serverTimestamp()
       };
 
