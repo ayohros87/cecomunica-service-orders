@@ -26,6 +26,7 @@ const { admin, db } = require("../lib/admin");
 const VALID_ROLES = new Set([
   "administrador", "gerente", "vendedor", "recepcion",
   "tecnico", "tecnico_operativo", "jefe_taller", "inventario", "vista",
+  "contabilidad",
 ]);
 
 async function requireAdmin(callerUid) {

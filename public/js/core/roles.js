@@ -8,6 +8,7 @@ window.ROLES = {
   TECNICO_OPERATIVO: 'tecnico_operativo',
   JEFE_TALLER:       'jefe_taller',
   INVENTARIO:        'inventario',
+  CONTABILIDAD:      'contabilidad',
   VISTA:             'vista'
 };
 
@@ -25,6 +26,8 @@ const _PERMISOS = {
   'ver-progreso':      ['administrador', 'vendedor', 'jefe_taller', 'gerente'],
   'ver-inventario':    ['administrador', 'inventario', 'jefe_taller', 'gerente'],
   'admin-equipos':     ['administrador'],
+  // Catálogo de modelos + tarifas de facturación (info sensible) → contabilidad.
+  'gestionar-modelos': ['administrador', 'contabilidad'],
 };
 
 // canRole(rol, accion) → boolean

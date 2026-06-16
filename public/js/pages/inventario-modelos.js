@@ -31,7 +31,8 @@
       try{
         const userDoc = await UsuariosService.getUsuario(user.uid);
         const rol = userDoc ? userDoc.rol : null;
-        if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO)) {
+        // Catálogo de modelos + tarifas (info sensible) → solo admin y contabilidad.
+        if (!userDoc || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD)) {
           document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";
           return;
         }
