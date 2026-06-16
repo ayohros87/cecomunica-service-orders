@@ -67,9 +67,11 @@ decide si aprueba.
 **Group `Mensualidad - <modelo>`** con *componentes ocultos al imprimir*: el cliente
 ve una línea, pero internamente los 3 componentes pueblan Alquiler de Equipo /
 Ingresos por Servicio de Frecuencia / Servicio de Mantenimiento.
-⚠️ **BLOQUEANTE A VALIDAR EN SANDBOX:** ¿la API acepta sobrescribir los montos de
-los componentes del grupo (default $0)? Si no, hay conflicto una-línea vs 3-cuentas
-y se decide alternativa con contabilidad.
+✅ **VALIDADO EN SANDBOX (2026-06-16):** la API SÍ respeta montos de componentes
+sobrescritos en un `GroupLineDetail` de la factura (enviado 10/7 → leído 10/7).
+⚠️ **Restricción:** la API **no crea** items Group ("GROUP is not supported"). Los
+bundles `Mensualidad - <modelo>` deben **pre-existir en QBO** (ya existen); todo
+modelo nuevo requiere crear su bundle en la interfaz de QBO antes de poder facturarlo.
 
 **ITBMS por cliente:** leer `cliente.itbms_exento`. Paga → TaxCode **14** (ITBMS 7%);
 exento → TaxCode **13** (Exento). `itbms_motivo_exencion` → nota en QBO.
@@ -207,9 +209,9 @@ hasta fin de mes), **desglose** (alquiler/frecuencia fijos + mantenimiento resto
 componentes ocultos), **caso excepcional** (advertencia + override de alquiler).
 
 Pendientes:
-1. **⚠️ BLOQUEANTE — bundle por API:** validar en sandbox si la API acepta montos
-   de componentes sobrescritos en un Group. Define si el diseño de factura procede
-   tal cual o necesita alternativa.
+1. ✅ **RESUELTO — bundle por API:** validado en sandbox (2026-06-16), la API respeta
+   montos de componentes sobrescritos. Restricción: los bundles deben pre-existir en
+   QBO (la API no los crea) → modelo nuevo = crear bundle en la UI de QBO primero.
 2. **Mapa modelo→item QBO:** emparejar cada modelo (Firestore) con su item
    `Alquiler - <modelo>`; sembrar el panel admin desde la tabla interna.
 3. **`contrato_id` en factura:** ¿solo DisplayName del sub-customer, o además custom
