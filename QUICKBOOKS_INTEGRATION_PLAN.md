@@ -1,7 +1,84 @@
 # Plan de integración QuickBooks Online ↔ Cecomunica Service Orders
 
-> Borrador v1 · 2026-06-12 · rama `feat/cliente-id-link`
+> Borrador v2 · 2026-06-15 · rama `feat/cliente-id-link`
 > Sincronización bidireccional de contratos → facturas, con desglose por contrato.
+> **Versión no técnica para el equipo:** ver `PLAN_QUICKBOOKS_EQUIPO.md`.
+
+## 0. Hallazgos del descubrimiento (cuenta real, 2026-06-15)
+
+Conexión OAuth establecida y descubrimiento de solo-lectura ejecutado contra la
+cuenta de producción **CE COMUNICA** (`realmId 9130356242376366`). Hechos que
+fijan el mapeo (antes eran supuestos):
+
+- **Entorno:** Panamá, **USD** (sin multimoneda), **QuickBooks Online Plus**
+  (soporta sub-customers y clases). 509 clientes, 1099 items.
+- **Facturación mensual YA existe como items `Group` (bundles):**
+  `Mensualidad - <modelo>` (ej. `Mensualidad - PD78X` id 22, `Mensualidad - AP516`
+  id 49). Un Group se expande en sus componentes en la factura. La integración
+  **selecciona el bundle existente** que corresponde al equipo del contrato.
+  - Renta: `Alquiler - <modelo>` (Service) → cuenta de ingreso **"Alquiler de
+    Equipo"**. Servicios: Mantenimiento (id 18), Frecuencia (id 7), Consola
+    (id 26), GPS (id 56).
+- **ITBMS:** `TaxCode 14 = "ITBMS 7%"` (activo) en líneas gravadas; `TaxRate 19 =
+  "ITBMS 7% (Sales)"`, 7%. Sales tax automatizado ON. (Resuelve la pregunta abierta.)
+- **Sub-customers ya en uso:** ~5 de la muestra son Jobs con `BillWithParent=true`
+  + `ParentRef`. El modelo Customer=cliente / Sub-customer=contrato es **nativo y
+  ya parcialmente adoptado**.
+- **Identidad fiscal:** ~168/200 clientes muestreados tienen `PrimaryTaxIdentifier`
+  (RUC). Es el campo que el módulo fiscal necesita.
+- **Custom fields (legacy de ventas):** usado "ORDEN DE COMPRA" (1 de 3). Queda
+  espacio para "CONTRATO" → estampar `contrato_id` en la factura.
+- **Clases:** activadas (solo "BLACK LINE"). Disponible para P&L por `tipo_contrato`.
+
+**Nuevo requisito que reveló el descubrimiento:** mapa **modelo de equipo →
+item `Mensualidad - <modelo>`**. Hay que confirmar que el modelo guardado en el
+contrato/equipo (Firestore) coincide con el nombre del item en QBO; si difiere,
+tabla de equivalencias.
+
+## 0.5 Lógica de facturación confirmada (2026-06-16)
+
+Reglas validadas con el usuario y contra facturas reales.
+
+**Desglose de la mensualidad.** El vendedor solo captura la **mensualidad
+negociada por equipo**. El sistema reparte ese monto en hasta 3 conceptos:
+```
+alquiler      = valor FIJO por modelo            (configurable en panel admin)
+frecuencia    = valor FIJO por modelo (0 si N/A) (configurable en panel admin)
+mantenimiento = mensualidad − alquiler − frecuencia   (el resto)
+```
+Validado: POC (sin frecuencia) mant = mensual − alq; troncales (frec=5) mant =
+mensual − alq − 5. Confirmado contra factura real 9829 (PD60X: 12+5+3=20).
+
+**Panel administrativo de modelos** (solo administrador): por modelo define
+`precio_alquiler`, `precio_frecuencia` y el **item QBO de alquiler** correspondiente
+(los nombres difieren). Se siembra de la tabla interna POC/Troncales. El alquiler
+de frecuencia/mantenimiento usa items globales QBO: Frecuencia=7, Mantenimiento=18.
+
+**Visibilidad:** el desglose NO lo ve el vendedor; sí admin y recepción. Se calcula
+y **se guarda en el contrato** (snapshot auditable).
+
+**Caso excepcional (sin piso duro):** si mensualidad < alquiler + frecuencia, el
+vendedor recibe advertencia ("el monto parece un error · ¿solicitar aprobación de
+$X para equipo Y?" Cancelar/Proceder). Si procede → **alquiler se sobrescribe =
+mensualidad** (frecuencia y mantenimiento = 0) para ese equipo; el administrador
+decide si aprueba.
+
+**Factura — una sola línea para el cliente + 3 cuentas internas.** Se usa el item
+**Group `Mensualidad - <modelo>`** con *componentes ocultos al imprimir*: el cliente
+ve una línea, pero internamente los 3 componentes pueblan Alquiler de Equipo /
+Ingresos por Servicio de Frecuencia / Servicio de Mantenimiento.
+⚠️ **BLOQUEANTE A VALIDAR EN SANDBOX:** ¿la API acepta sobrescribir los montos de
+los componentes del grupo (default $0)? Si no, hay conflicto una-línea vs 3-cuentas
+y se decide alternativa con contabilidad.
+
+**ITBMS por cliente:** leer `cliente.itbms_exento`. Paga → TaxCode **14** (ITBMS 7%);
+exento → TaxCode **13** (Exento). `itbms_motivo_exencion` → nota en QBO.
+
+**Prorrateo:** tarifa diaria = **mensualidad ÷ 30** × días (denominador fijo 30).
+Primera factura parcial = de la fecha de entrega al último día del mes.
+
+**Ciclo:** emisión el **1.º de cada mes**, período hasta el último día del mes;
+el biller mensual corre el día 1.
 
 ## 1. Objetivo y dolor que resuelve
 
@@ -106,23 +183,37 @@ Enganche con lo existente: la detección de "primera entrega" se apoya en la tra
 emitida por `ordenesService.completeOrder`/entrega (`ENTREGADO AL CLIENTE`) y el vínculo
 orden↔contrato (`contratos/{id}/ordenes/{ordenId}`).
 
-## 8. Fases sugeridas
+## 8. Fases y estado
 
-1. **Fase 0 — Auth + lectura.** App Intuit, OAuth, guardar tokens, leer Customers/Items/
-   TaxCodes de QBO. (Desbloquea ver la cuenta real.)
-2. **Fase 1 — Customers.** Upsert cliente→Customer con identidad fiscal + traer `qbo_customer_id` de vuelta.
-3. **Fase 2 — Sub-customers + factura inicial con prorrateo** disparada por entrega.
-4. **Fase 3 — Biller mensual recurrente.**
+1. **Fase 0 — Auth + lectura. ✅ HECHO.** App Intuit (producción), OAuth, tokens en
+   Firestore, secrets en Secret Manager, descubrimiento ejecutado (ver §0). Endpoints
+   `quickbooksOAuth` + `quickbooksWebhook` desplegados y verificados.
+2. **Fase 1 — Customers.** Upsert cliente→Customer (RUC→`PrimaryTaxIdentifier`, email,
+   tel, dirección) + traer `qbo_customer_id` de vuelta.
+3. **Fase 2 — Sub-customers + factura inicial con prorrateo** disparada por entrega
+   (`ENTREGADO AL CLIENTE`). Línea(s) = item Group `Mensualidad - <modelo>`.
+4. **Fase 3 — Biller mensual recurrente** (scheduled, día de corte por definir).
 5. **Fase 4 — Webhooks entrantes** (Invoice/Payment/Customer) → panel financiero.
 
-## 9. Preguntas abiertas (bloquean detalle fino)
+## 9. Preguntas abiertas
 
-1. **Módulo fiscal:** ¿cuál es y cómo lee de QBO? ¿Requiere campos/custom fields
-   específicos en el Customer o en la Invoice (p.ej. RUC en `PrimaryTaxIdentifier` vs.
-   custom field)? Esto fija el mapeo exacto.
-2. **Base del prorrateo:** ¿tarifa diaria = mensualidad ÷ 30 × días restantes? ¿O ÷ días
-   reales del mes?
-3. **Día de corte** del biller mensual: ¿día 1? ¿otro?
-4. **Catálogo de Items en QBO:** ¿ya existen Items para "Servicio mensual" y "Equipo PoC",
-   o los creamos? (Necesario para las líneas de la Invoice.)
+Resueltas en el descubrimiento (§0): **ITBMS** (TaxCode 14), **versión QBO** (Plus),
+**catálogo de items** (`Mensualidad - <modelo>` Group + `Alquiler -` + servicios),
+**identidad fiscal** (RUC en `PrimaryTaxIdentifier`).
+
+Resueltas con el usuario (ver §0.5): **prorrateo** (÷30), **día de corte** (1.º,
+hasta fin de mes), **desglose** (alquiler/frecuencia fijos + mantenimiento resto),
+**exentos** (`itbms_exento` → TaxCode 14/13), **una línea al cliente** (bundle con
+componentes ocultos), **caso excepcional** (advertencia + override de alquiler).
+
+Pendientes:
+1. **⚠️ BLOQUEANTE — bundle por API:** validar en sandbox si la API acepta montos
+   de componentes sobrescritos en un Group. Define si el diseño de factura procede
+   tal cual o necesita alternativa.
+2. **Mapa modelo→item QBO:** emparejar cada modelo (Firestore) con su item
+   `Alquiler - <modelo>`; sembrar el panel admin desde la tabla interna.
+3. **`contrato_id` en factura:** ¿solo DisplayName del sub-customer, o además custom
+   field "CONTRATO" (SalesCustomName2)?
+4. **Módulo fiscal:** confirmar que toma el RUC de `PrimaryTaxIdentifier`.
+5. **Pagos de vuelta:** ¿solo estado pagado/pendiente, o también número de factura + saldo?
 ```
