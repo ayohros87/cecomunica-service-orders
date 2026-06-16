@@ -18,6 +18,10 @@ día solas** en QuickBooks, con el **desglose por contrato** que hoy nos falta, 
 que **la información de clientes y pagos esté sincronizada** entre la app y
 QuickBooks.
 
+> **Importante — alcance:** esto aplica **solo a contratos nuevos**. Los contratos
+> que ya existen **se siguen facturando como hoy** (manual en QuickBooks); no cambian.
+> En el futuro se podría migrar los viejos, pero por ahora no.
+
 ---
 
 ## 2. El problema que resolvemos hoy
@@ -119,6 +123,24 @@ cliente** (ese dato ya se administra hoy en la ficha del cliente).
 - Si un contrato arranca a mitad de mes (al entregar equipos), la **primera
   factura es proporcional** a los días, calculada de forma simple (mensualidad
   ÷ 30 × días).
+
+## 5.2 Panel de facturación (para quien factura)
+
+La emisión es **automática**, pero habrá un **panel de facturación** para que la
+persona encargada tenga control sin tener que aprobar factura por factura:
+
+- **Próximo a facturar:** ver, días antes del corte, qué se va a facturar el 1.º
+  (montos, contratos que inician, bajas), para revisarlo con anticipación.
+- **Poner "en espera":** sacar un contrato del ciclo automático cuando hay una
+  disputa o algo pendiente (se factura después, cuando se libere).
+- **Red de seguridad:** si el monto de un contrato se **dispara** respecto al mes
+  anterior, el sistema lo **retiene solo** y lo manda a revisión en vez de emitirlo.
+- **Facturado:** lo ya emitido, con su **estado de pago** y enlace a QuickBooks.
+- **Reintentar / facturar puntual:** para casos sueltos (un contrato que estaba en
+  espera, una entrega de mitad de mes, o una factura que falló).
+
+Las **anulaciones y notas de crédito** se hacen en **QuickBooks** (donde está la
+cobranza), no en el panel.
 
 ## 6. El módulo de facturación fiscal (importante)
 

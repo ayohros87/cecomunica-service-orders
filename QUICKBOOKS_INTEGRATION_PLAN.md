@@ -1,221 +1,334 @@
-# Plan de integración QuickBooks Online ↔ Cecomunica Service Orders
+# Plan de integración QuickBooks Online + Módulo de Facturación
 
-> Borrador v2 · 2026-06-15 · rama `feat/cliente-id-link`
-> Sincronización bidireccional de contratos → facturas, con desglose por contrato.
-> **Versión no técnica para el equipo:** ver `PLAN_QUICKBOOKS_EQUIPO.md`.
+> v3 · 2026-06-16 · rama `feat/cliente-id-link`
+> Versión no técnica para el equipo: `PLAN_QUICKBOOKS_EQUIPO.md`
 
-## 0. Hallazgos del descubrimiento (cuenta real, 2026-06-15)
+## 1. Arquitectura en una imagen
 
-Conexión OAuth establecida y descubrimiento de solo-lectura ejecutado contra la
-cuenta de producción **CE COMUNICA** (`realmId 9130356242376366`). Hechos que
-fijan el mapeo (antes eran supuestos):
-
-- **Entorno:** Panamá, **USD** (sin multimoneda), **QuickBooks Online Plus**
-  (soporta sub-customers y clases). 509 clientes, 1099 items.
-- **Facturación mensual YA existe como items `Group` (bundles):**
-  `Mensualidad - <modelo>` (ej. `Mensualidad - PD78X` id 22, `Mensualidad - AP516`
-  id 49). Un Group se expande en sus componentes en la factura. La integración
-  **selecciona el bundle existente** que corresponde al equipo del contrato.
-  - Renta: `Alquiler - <modelo>` (Service) → cuenta de ingreso **"Alquiler de
-    Equipo"**. Servicios: Mantenimiento (id 18), Frecuencia (id 7), Consola
-    (id 26), GPS (id 56).
-- **ITBMS:** `TaxCode 14 = "ITBMS 7%"` (activo) en líneas gravadas; `TaxRate 19 =
-  "ITBMS 7% (Sales)"`, 7%. Sales tax automatizado ON. (Resuelve la pregunta abierta.)
-- **Sub-customers ya en uso:** ~5 de la muestra son Jobs con `BillWithParent=true`
-  + `ParentRef`. El modelo Customer=cliente / Sub-customer=contrato es **nativo y
-  ya parcialmente adoptado**.
-- **Identidad fiscal:** ~168/200 clientes muestreados tienen `PrimaryTaxIdentifier`
-  (RUC). Es el campo que el módulo fiscal necesita.
-- **Custom fields (legacy de ventas):** usado "ORDEN DE COMPRA" (1 de 3). Queda
-  espacio para "CONTRATO" → estampar `contrato_id` en la factura.
-- **Clases:** activadas (solo "BLACK LINE"). Disponible para P&L por `tipo_contrato`.
-
-**Nuevo requisito que reveló el descubrimiento:** mapa **modelo de equipo →
-item `Mensualidad - <modelo>`**. Hay que confirmar que el modelo guardado en el
-contrato/equipo (Firestore) coincide con el nombre del item en QBO; si difiere,
-tabla de equivalencias.
-
-## 0.5 Lógica de facturación confirmada (2026-06-16)
-
-Reglas validadas con el usuario y contra facturas reales.
-
-**Desglose de la mensualidad.** El vendedor solo captura la **mensualidad
-negociada por equipo**. El sistema reparte ese monto en hasta 3 conceptos:
-```
-alquiler      = valor FIJO por modelo            (configurable en panel admin)
-frecuencia    = valor FIJO por modelo (0 si N/A) (configurable en panel admin)
-mantenimiento = mensualidad − alquiler − frecuencia   (el resto)
-```
-Validado: POC (sin frecuencia) mant = mensual − alq; troncales (frec=5) mant =
-mensual − alq − 5. Confirmado contra factura real 9829 (PD60X: 12+5+3=20).
-
-**Panel administrativo de modelos** (solo administrador): por modelo define
-`precio_alquiler`, `precio_frecuencia` y el **item QBO de alquiler** correspondiente
-(los nombres difieren). Se siembra de la tabla interna POC/Troncales. El alquiler
-de frecuencia/mantenimiento usa items globales QBO: Frecuencia=7, Mantenimiento=18.
-
-**Visibilidad:** el desglose NO lo ve el vendedor; sí admin y recepción. Se calcula
-y **se guarda en el contrato** (snapshot auditable).
-
-**Caso excepcional (sin piso duro):** si mensualidad < alquiler + frecuencia, el
-vendedor recibe advertencia ("el monto parece un error · ¿solicitar aprobación de
-$X para equipo Y?" Cancelar/Proceder). Si procede → **alquiler se sobrescribe =
-mensualidad** (frecuencia y mantenimiento = 0) para ese equipo; el administrador
-decide si aprueba.
-
-**Factura — una sola línea para el cliente + 3 cuentas internas.** Se usa el item
-**Group `Mensualidad - <modelo>`** con *componentes ocultos al imprimir*: el cliente
-ve una línea, pero internamente los 3 componentes pueblan Alquiler de Equipo /
-Ingresos por Servicio de Frecuencia / Servicio de Mantenimiento.
-✅ **VALIDADO EN SANDBOX (2026-06-16):** la API SÍ respeta montos de componentes
-sobrescritos en un `GroupLineDetail` de la factura (enviado 10/7 → leído 10/7).
-⚠️ **Restricción:** la API **no crea** items Group ("GROUP is not supported"). Los
-bundles `Mensualidad - <modelo>` deben **pre-existir en QBO** (ya existen); todo
-modelo nuevo requiere crear su bundle en la interfaz de QBO antes de poder facturarlo.
-
-**ITBMS por cliente:** leer `cliente.itbms_exento`. Paga → TaxCode **14** (ITBMS 7%);
-exento → TaxCode **13** (Exento). `itbms_motivo_exencion` → nota en QBO.
-
-**Prorrateo:** tarifa diaria = **mensualidad ÷ 30** × días (denominador fijo 30).
-Primera factura parcial = de la fecha de entrega al último día del mes.
-
-**Ciclo:** emisión el **1.º de cada mes**, período hasta el último día del mes;
-el biller mensual corre el día 1.
-
-## 1. Objetivo y dolor que resuelve
-
-Hoy en QuickBooks Online (QBO) un cliente con varios contratos se ve aplanado: no
-hay forma de desglosar saldo, historial ni facturas **por contrato**. El plan resuelve
-esto con el modelo nativo de **sub-clientes (sub-customers / "jobs")** de QBO.
+Dos capas con responsabilidades claras:
 
 ```
-Customer        =  cliente            (Firestore `clientes`, key = cliente_id)
-  └─ Sub-customer  =  contrato         (CT-YYYY-NNN, "Bill with parent" = ON)
-       └─ Invoice(s) con líneas desglosadas:
-            · Mensualidad / servicio        (precio)
-            · Prorrateo (cuando aplica)     (línea aparte)
-            · Equipos PoC por serial        (desde cache os_serials_preview)
-            · ITBMS 7%                      (TaxCode existente)
-       └─ Custom field: contrato_id = CT-YYYY-NNN
+APP (motor de facturación, fuente de verdad)        QUICKBOOKS (cobranza)
+  cliente ───────────────────────────────crea/actualiza──▶ Customer
+  contrato → LÍNEAS con fechas ──────────────crea sub────▶ Sub-cliente (Job)
+  facturador programado (CF, 1.º de mes) ───crea factura─▶ Invoice (bundle, ITBMS)
+  módulo de facturación (panel visual)                     AR · pagos · estados de cuenta
+  webhooks ◀──────────────estado de pago──────────────────  (cobranza, como hoy)
 ```
 
-Resultado: en QBO ves balance e historial **por contrato** (sub-customer) y a la vez el
-rollup consolidado **por cliente** (customer padre). Las `Classes` por `tipo_contrato`
-quedan como opción para P&L segmentado (fase 2).
+- **La app produce facturas exactas** (entregas, prorrateos, bajas, desglose).
+- **QuickBooks cobra**: cuentas por cobrar, pagos, estados de cuenta por contrato
+  (sub-cliente). La cobranza se sigue trabajando en QBO.
+- **No** se usa el recurrente nativo de QBO (no soporta montos variables, prorrateo,
+  disparo por entrega ni cambios a mitad de término; su API es de solo-lectura).
 
-## 2. Reglas de negocio confirmadas
+> **Alcance:** aplica **solo a contratos nuevos**. Los viejos no se migran por ahora y
+> se siguen facturando como hoy; conviven (ver §12). Migración futura: opcional.
 
-| Regla | Implicación de diseño |
+## 2. Hallazgos del descubrimiento (cuenta real CE COMUNICA)
+
+`realmId 9130356242376366`, Panamá, USD (sin multimoneda), QBO **Plus**. 509 clientes,
+1099 items. Conexión OAuth establecida (producción).
+
+- **Mensualidad ya existe como items `Group`** `Mensualidad - <modelo>` que se expanden
+  en: `Alquiler - <modelo>` (cuenta *Alquiler de Equipo*) + **Servicio de Frecuencia**
+  (item 7, *Ingresos por Servicio de Frecuencia*) + **Servicio de Mantenimiento**
+  (item 18, *Servicio de Mantenimiento*). Precios por defecto $0 (se llenan al facturar).
+- **ITBMS:** TaxCode **14** "ITBMS 7%" (gravado) / TaxCode **13** "Exento".
+- **Sub-clientes (Jobs)** ya en uso con `BillWithParent`. **RUC** en `PrimaryTaxIdentifier`
+  (~84% de clientes). Custom field "ORDEN DE COMPRA" usado (1/3), libre "CONTRATO". Clases ON.
+- **VALIDADO en sandbox (2026-06-16):** la API **sí** respeta montos de componentes
+  sobrescritos en un `GroupLineDetail` (enviado 10/7 → leído 10/7).
+  **Restricción:** la API **no crea** items Group → los bundles deben pre-existir en QBO;
+  modelo nuevo = crear su bundle en la UI de QBO antes de facturarlo.
+
+## 3. Modelo de datos (la decisión central: líneas con fechas)
+
+El contrato deja de guardar una "cantidad plana" y pasa a guardar **líneas de
+facturación con ciclo de vida**. Todo evento (entrega, baja, ampliación) es una
+operación sobre líneas.
+
+```
+contratos/{id}
+  cliente_id, contrato_id (CT-YYYY-NNN), tipo_contrato, moneda, estado
+  facturacion_qbo     (bool)    ← true SOLO en contratos nuevos del sistema (los viejos
+                                  no se migran; el facturador automático los ignora)
+  qbo_subcustomer_id            ← se llena al activar facturación
+  facturacion_activa  (bool)    ← true tras primera entrega
+  lineas: [
+    {
+      id, modelo_id, cantidad,
+      mensualidad_unit,                       ← negociada por el vendedor
+      desglose: { alquiler, frecuencia, mantenimiento },  ← calculado, oculto al vendedor
+      fecha_inicio,    ← = entrega del equipo (dispara facturación de esa línea)
+      fecha_fin,       ← null = activa; fecha = baja con término aplicado
+      origen: 'inicial' | 'ampliacion',
+      motivo_fin, baja_solicitud_id,
+    }, ...
+  ]
+
+clientes/{id}
+  ...campos actuales..., itbms_exento, itbms_motivo_exencion (YA existen)
+  qbo_customer_id               ← se llena al sincronizar
+
+modelos/{id}   (panel administrativo)
+  modelo (nombre)
+  precio_alquiler               ← valor fijo de alquiler por unidad
+  precio_frecuencia             ← 0 si no aplica
+  qbo_item_alquiler_id          ← item "Alquiler - <modelo>" en QBO (nombres difieren)
+  qbo_bundle_id                 ← item Group "Mensualidad - <modelo>" en QBO
+
+solicitudes_cancelacion/{id}    (bajas — ver §8)
+  contrato_id, items:[{modelo_id, cantidad}], termino, fecha_fin_facturacion,
+  fecha_nota_cliente, adjuntos:[urls], motivo, estado, solicitado_por,
+  fecha_solicitud, aprobado_por, fecha_aprobacion
+
+facturacion_periodos/{id}       (registro de lo facturado — idempotencia + módulo)
+  contrato_id, periodo (YYYY-MM), qbo_invoice_id, monto, itbms, estado_pago,
+  lineas_facturadas:[{linea_id, modelo, cantidad, dias, prorrateado, montos}],
+  created_at, qbo_doc_number, en_espera (bool), retenido_por_anomalia (bool)
+
+ajustes_facturacion/{id}        (ajuste puntual del período — descuento/cargo único)
+  contrato_id, periodo (YYYY-MM), tipo: 'descuento'|'cargo', monto, concepto,
+  motivo, creado_por, fecha_creacion   ← el facturador lo aplica como línea extra una vez
+
+integraciones/quickbooks         (tokens — ya existe, CF-only)
+```
+
+Constantes (backend): ITBMS TaxCode 14, Exento 13, item Frecuencia 7, item Mantenimiento 18.
+
+## 4. Reglas de negocio confirmadas
+
+**Desglose de la mensualidad** (calculado, oculto al vendedor; visible admin/recepción):
+```
+alquiler      = precio_alquiler            (fijo del panel, por modelo)
+frecuencia    = precio_frecuencia          (fijo del panel; 0 si N/A)
+mantenimiento = mensualidad_unit − alquiler − frecuencia   (el resto)
+```
+Validado contra tablas internas y factura real 9829 (PD60X: 12+5+3=20).
+
+**Caso excepcional (sin piso duro):** si `mensualidad_unit < alquiler + frecuencia`,
+advertencia al vendedor ("el monto parece un error · ¿solicitar aprobación de $X para
+equipo Y?" Cancelar/Proceder). Si procede → `alquiler = mensualidad_unit`, frecuencia
+y mantenimiento = 0; el administrador decide si aprueba.
+
+**ITBMS por cliente:** `cliente.itbms_exento` → TaxCode 14 (paga) / 13 (exento).
+`itbms_motivo_exencion` → nota en QBO.
+
+**Prorrateo (÷30, denominador fijo):**
+- *Entrada:* línea con `fecha_inicio` a mitad de mes → primer mes = `mensualidad ÷ 30 ×
+  días desde fecha_inicio hasta fin de mes`.
+- *Salida:* línea con `fecha_fin` a mitad de mes → último mes = `mensualidad ÷ 30 × días
+  desde el 1.º hasta fecha_fin`. Sin nota de crédito (se factura hacia adelante).
+
+**Ciclo:** emisión el **1.º de cada mes**, período hasta el último día del mes.
+
+## 5. Motor de facturación (app-side)
+
+**Disparadores de líneas:**
+- *Entrega de equipos:* la orden vinculada al contrato pasa a `ENTREGADO AL CLIENTE`
+  → se setea `fecha_inicio` en la(s) línea(s) correspondientes y `facturacion_activa=true`.
+  Genera la **primera factura prorrateada** (entrega → fin de mes).
+- *Baja:* solicitud aprobada → la línea se **cierra o se parte** (ver §8) con `fecha_fin`.
+- *Ampliación:* nueva línea con `fecha_inicio` posterior (mismo mecanismo de entrega).
+
+**Facturador mensual (Cloud Function programada, día 1, `America/Panama`):**
+1. Recorre contratos con `facturacion_activa = true`.
+2. Para cada contrato, junta las **líneas activas en el período** (las que tienen
+   `fecha_inicio ≤ fin de mes` y (`fecha_fin` null o `≥ inicio de mes`)).
+3. Calcula por línea: meses completos vs. parcial (prorrateo entrada/salida ÷30).
+4. Arma **una factura** bajo el sub-cliente, con el bundle por modelo y los montos de
+   componentes sobrescritos (alquiler/frecuencia/mantenimiento × unidades, prorrateados).
+5. Aplica TaxCode (14/13 según cliente).
+6. Crea la factura vía API y registra `facturacion_periodos` (idempotencia: nunca dos
+   veces el mismo contrato+período).
+
+**Salvaguardas:** idempotencia por contrato+período · reintentos + alerta si falla ·
+botón manual "Correr facturación" · modo borrador/vista previa.
+
+## 6. Representación en QuickBooks
+
+- **cliente → Customer:** DisplayName, `PrimaryTaxIdentifier`=RUC, email, teléfono,
+  dirección; `qbo_customer_id` de vuelta al doc.
+- **contrato → Sub-cliente (Job):** `ParentRef`=customer, `BillWithParent=true`,
+  DisplayName `CT-YYYY-NNN`, custom field "CONTRATO"=contrato_id.
+- **factura mensual:** una por contrato, bajo el sub-cliente. Por cada modelo, una línea
+  **Group `Mensualidad - <modelo>`** con *componentes ocultos al imprimir* (cliente ve una
+  línea) y montos de componentes sobrescritos → poblan las 3 cuentas de ingreso. TaxCode
+  14/13. Un mes parcial (entrada/salida) = bundle con montos prorrateados.
+- **Restricción operativa:** la API no crea bundles; modelo nuevo requiere crear su
+  `Mensualidad - <modelo>` en la UI de QBO antes de mapearlo en el panel.
+
+## 7. Módulo de Facturación (panel visual, independiente)
+
+Para la persona encargada de facturación. **Modelo de operación: emisión automática
+el 1.º + gestión por excepción.** El sistema factura solo; el módulo da los controles
+para intervenir cuando algo lo amerita, sin aprobar factura por factura. Página propia
+(rol admin/facturación).
+
+**La palanca central:** "Poner en espera" un contrato lo **excluye del ciclo automático**
+sin apagar la automatización (disputa, cambio pendiente, caso especial). Se libera y
+entra al siguiente ciclo o se factura puntual.
+
+**Guarda de anomalías (automática):** si el monto calculado de un contrato se desvía
+**±50%** vs. el período anterior **y** la diferencia supera **$100** (piso absoluto), se
+**retiene automáticamente** y va a revisión en lugar de emitirse a ciegas. Se **omite**
+cuando hay un cambio esperado que lo explica (baja/ampliación aprobada, o mes parcial de
+inicio/fin). Umbral y piso **configurables** en el panel admin.
+
+**Ciclo de vida del ciclo:**
+1. *Ventana de revisión previa* (desde unos días antes del corte): "Próximo a facturar"
+   permite revisar, **poner en espera** y **acusar alertas**.
+2. *Emisión automática el 1.º*: emite todo lo **no retenido**; lo retenido/fallido queda
+   visible para gestión.
+3. *Gestión post-emisión*: **reintentar fallidas** (error API, modelo sin bundle),
+   **facturar puntual** un contrato (en espera, entrega de mitad de mes o fallido) —
+   emisión manual **solo para excepciones**.
+
+**Pestañas:**
+- **Próximo a facturar** — simulación del próximo ciclo (montos, prorrateos, inicios,
+  bajas), con acciones *En espera* / *Revisar* por fila.
+- **Facturado** — emitidas (mes/histórico) con monto, **estado de pago** (webhooks),
+  número y **enlace a QBO**; acciones *reintentar* / *facturar puntual* para excepciones.
+- **En espera** — contratos retenidos (manual o por anomalía) con su motivo.
+- **Alertas** — contrato activo **sin entrega**, **modelo sin bundle**, factura **fallida**,
+  **baja pendiente** que afecta el ciclo, mensualidad bajo piso aprobada.
+
+**Auditoría:** toda intervención (poner en espera, liberar, reintentar, facturar puntual)
+queda registrada con autor, fecha y motivo.
+
+```
+┌ FACTURACIÓN ───────────────────────────────────────────────────────────┐
+│ [ Próximo a facturar ] [ Facturado ] [ En espera ② ] [ Alertas ① ]      │
+│ Próximo ciclo · Julio 2026 (emite 01/07 automático)  ⏳ en 6 días        │
+│ A facturar: $42,350 + ITBMS · 68 contratos · 3 inician · 2 bajas         │
+│ ─────────────────────────────────────────────────────────────────────── │
+│ ⚠ CT-2026-077  Aceros Panamá  $9,900  ▲+5400% vs mes ant.   [Revisar]   │
+│   → retenido automáticamente por anomalía                                │
+│ ▸ CT-2026-018  Transporte XYZ $180.00  baja (−1)           [En espera]  │
+│ ▸ CT-2026-031  Minera del Sur $ 92.00  parcial (13 días)               │
+│ ...                                                                       │
+│        [ Vista previa del ciclo ]              [ Exportar (XLSX) ]        │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**Ajuste puntual del período (en alcance inicial):** la persona de facturación puede
+aplicar a un contrato un **descuento o cargo único** sobre su próxima factura (concepto +
+motivo + auditoría). Aparece como una línea extra en esa factura y **no recurre**. Se
+captura en el módulo durante la ventana de revisión.
+
+**Fuera de alcance del módulo (se hace en QuickBooks):** anulaciones y notas de crédito
+de facturas ya emitidas — la cobranza vive en QBO. El módulo puede *marcar* "reemitir",
+pero la corrección formal es en QBO.
+
+**Opcional (fase posterior):** anular+reemitir desde la app.
+
+## 8. Flujo de bajas (cancelación de equipos)
+
+Contrato activo **no editable** en cantidades; el cambio pasa por solicitud formal.
+
+- **Solicitud** (vendedor/recepción): equipos a cancelar, **término** (fin de mes /
+  +30 días / +60 días / otro), `fecha_nota_cliente`, **adjunta la nota**, observaciones.
+  El término calcula `fecha_fin_facturacion` (el último tramo se prorratea ÷30).
+- **Cola "Cancelaciones pendientes"** (estado *Baja solicitada*), identificada en el
+  índice y en el panel, análoga a "Pendientes de aprobación".
+- **Aprobación** (admin): al aprobar, la línea se **cierra** (si se cancela toda) o se
+  **parte** (9 siguen / 1 con `fecha_fin`). El facturador aplica el prorrateo de salida.
+- **Control/historial:** en el contrato (sección "Historial de bajas": original→vigente,
+  con adjuntos), en la cola global, y en `auditoria.html` (eventos solicitada/aprobada/
+  rechazada). Las líneas no se borran → historial por diseño.
+- Sin nota de crédito desde la app (manual si aplicara). Tasa de cancelación: aparte (manual).
+
+## 9. Roles y acceso
+
+| Rol | Puede |
 |---|---|
-| Contratos de **mensualidad** | Facturación recurrente generada por un **scheduled function** mensual (no por QBO Recurring Templates — la API de QBO no los crea bien). |
-| **Prorrateo** cuando la factura no nace cerca del día 1 | Primera factura prorrateada por días; meses siguientes completos. Línea de prorrateo separada. |
-| Contrato aprobado/activo **≠** facturación | El gatillo de facturación **NO** es la aprobación. |
-| Facturación arranca al **entregar equipos** | Gatillo = orden vinculada al contrato pasa a `estado_reparacion = "ENTREGADO AL CLIENTE"` (`fecha_entrega_real`). Eso "activa" el contrato para facturación. |
-| **ITBMS 7%** ya configurado en QBO | Reusar el `TaxCode` existente; no crear impuesto nuevo. |
-| **Módulo fiscal** aguas abajo, manual | QBO es la fuente; el módulo fiscal lee de QBO. El Customer de QBO **debe** cargar la identidad fiscal (RUC / DV / cédula) para que el módulo fiscal la tome. La generación de la factura fiscal la hace el usuario manualmente (OK confirmado). |
-| Traer de vuelta datos de cliente creado en QBO | Webhook entrante actualiza Firestore con `qbo_customer_id`, y cambios de datos del Customer hechos en QBO. |
+| Vendedor | Crear contrato, capturar **mensualidad** (sin ver desglose), solicitar baja |
+| Recepción | Solicitar baja, ver contratos/historial |
+| Administrador / Facturación | Todo: panel de tarifas, aprobar bajas, módulo de facturación, correr emisión, exportar |
 
-## 3. Disparadores (saliente: Firestore → QBO)
+Reglas de Firestore: `integraciones/*` y tokens solo-CF (ya); desglose y `facturacion_periodos`
+con lectura admin/recepción; el frontend nunca escribe campos de facturación calculados.
 
-1. **Upsert de Customer** — al crear/editar `clientes` (o lazy, la primera vez que se
-   necesita). Mapea identidad fiscal:
-   - `DisplayName` ← nombre/razón social
-   - `PrimaryTaxIdentifier` ← `ruc` (+ `dv`) o `cedula`
-   - email, teléfono, dirección
-2. **Upsert de Sub-customer** — al activarse la facturación del contrato (primera entrega
-   de equipos). `Job: true`, `BillWithParent: true`, `ParentRef` = customer del cliente.
-   Custom field `contrato_id`.
-3. **Facturación inicial (con prorrateo)** — al detectar primera entrega de equipos de una
-   orden del contrato → crea Invoice prorrateada por días restantes del mes.
-4. **Facturación recurrente mensual** — scheduled function el día 1 (o N) de cada mes →
-   recorre contratos `facturacion_activa = true` y emite Invoice mensual completa.
+## 10. Archivos a crear
 
-Idempotencia: cada Invoice/Customer creado guarda su id de QBO en Firestore; reintentos
-nunca duplican (clave: `contratos/{id}.qbo_invoice_ids[periodo]`).
-
-## 4. Disparadores (entrante: QBO → Firestore) vía webhooks
-
-Nuevo endpoint HTTP en `functions/src/http/quickbooksWebhook.js`. QBO firma cada evento
-(verificar `intuit-signature`). Eventos suscritos:
-
-- `Customer` create/update → escribe `qbo_customer_id` y refresca datos en `clientes`.
-- `Invoice` update → `estado_factura`, `numero_factura_qbo`, `saldo`.
-- `Payment` → `estado_pago`, `monto_pagado`, `fecha_pago` en el contrato → alimenta el
-  panel `financiero.html` existente.
-
-## 5. Autenticación y tokens (lo más delicado)
-
-- App en **Intuit Developer** (sandbox primero, luego producción). Scope
-  `com.intuit.quickbooks.accounting`.
-- `clientId` / `clientSecret` → **Secret Manager** (ya en uso para PII).
-- `realmId` + access/refresh token → doc `integraciones/quickbooks` (acceso solo CF).
-- **Scheduled function** que refresca el token antes de expirar (refresh token ~100 días
-  sin uso; rotarlo en cada refresh). Sigue el patrón de `functions/src/triggers/scheduled/`.
-
-## 6. Modelo de datos nuevo (Firestore)
-
+**Backend (`functions/src/`)** — sobre la plomería ya desplegada (`quickbooksOAuth`,
+`quickbooksWebhook`, `lib/quickbooks/{config,auth,tokenStore}`):
 ```
-integraciones/quickbooks            { realmId, access_token, refresh_token, expires_at, ... }
-clientes/{id}.qbo_customer_id       string
-contratos/{id}.qbo_subcustomer_id   string
-contratos/{id}.facturacion_activa   bool      ← true tras primera entrega
-contratos/{id}.facturacion_inicio   timestamp ← fecha de entrega que activó
-contratos/{id}.qbo_invoice_ids      map<periodo, invoiceId>  ← idempotencia
-contratos/{id}.estado_pago          string    ← desde webhook
-contratos/{id}.saldo                number     ← desde webhook
+lib/quickbooks/
+  client.js            ← GET/POST autenticado con refresh automático + retry
+  mapping.js           ← cliente→Customer, contrato→Sub-customer, líneas→Invoice(bundle)
+  billing.js           ← cálculo de líneas activas + prorrateo (entrada/salida)
+http/
+  runFacturacion.js    ← endpoint manual "correr facturación" (admin)
+triggers/
+  ordenes/onEntrega.js          ← entrega → fecha_inicio + activar + 1ra factura
+  contratos/onBajaAprobada.js   ← baja aprobada → cerrar/partir línea
+  scheduled/facturacionMensual.js ← día 1: emite el ciclo
+callable/
+  previewFacturacion.js   ← simulación "próximo a facturar" para el módulo
 ```
 
-## 7. Archivos a crear (sin tocar lo existente)
-
+**Frontend (`public/`)**:
 ```
-functions/src/
-  lib/quickbooks/
-    client.js          ← wrapper REST QBO (refresh automático, retry)
-    auth.js            ← OAuth2: authorize, callback, refresh, store en Secret Manager
-    mapping.js         ← cliente→Customer, contrato→Sub-customer, factura→Invoice (ITBMS, prorrateo)
-  http/
-    quickbooksOAuth.js     ← endpoints connect/callback (setup inicial)
-    quickbooksWebhook.js   ← entrante (Customer/Invoice/Payment)
-  triggers/
-    contratos/onFacturacionActiva.js  ← detecta primera entrega → sub-customer + invoice inicial
-    scheduled/facturacionMensual.js   ← biller recurrente mensual con prorrateo
+facturacion/index.html + js   ← módulo de facturación (próximo/facturado/alertas)
+contratos/  → solicitud de baja (modal) + sección "Historial de bajas"
+            → cola "Cancelaciones pendientes" en el índice
+admin/      → panel de tarifas/items por modelo (precio_alquiler, frecuencia, qbo_*)
+contratos/nuevo + editar → líneas con fecha_inicio/fecha_fin; bloqueo de cantidad en activos
 ```
 
-Enganche con lo existente: la detección de "primera entrega" se apoya en la transición ya
-emitida por `ordenesService.completeOrder`/entrega (`ENTREGADO AL CLIENTE`) y el vínculo
-orden↔contrato (`contratos/{id}/ordenes/{ordenId}`).
+## 11. Fases de implementación
 
-## 8. Fases y estado
+| Fase | Entrega | Depende de |
+|---|---|---|
+| 0 · Auth + descubrimiento | ✅ hecho | — |
+| 1 · Modelo de líneas + panel de tarifas/items (solo contratos nuevos) | base de todo | 0 |
+| 2 · Sync clientes → Customer (RUC, exento) | clientes en QBO | 1 |
+| 3 · Sync contrato → Sub-cliente + activación por entrega + 1ra factura prorrateada | facturación arranca | 2 |
+| 4 · Facturador mensual app-side (líneas activas, prorrateo, bundle) | emisión automática | 3 |
+| 5 · **Módulo de facturación** (próximo/facturado/alertas/controles) | control visual | 4 |
+| 6 · Bajas (solicitud, cola, aprobación, cierre/partición de líneas) | cambios a término | 4 |
+| 7 · Webhooks entrantes (pagos/estado) → app/módulo | estado de cobro | 4 |
 
-1. **Fase 0 — Auth + lectura. ✅ HECHO.** App Intuit (producción), OAuth, tokens en
-   Firestore, secrets en Secret Manager, descubrimiento ejecutado (ver §0). Endpoints
-   `quickbooksOAuth` + `quickbooksWebhook` desplegados y verificados.
-2. **Fase 1 — Customers.** Upsert cliente→Customer (RUC→`PrimaryTaxIdentifier`, email,
-   tel, dirección) + traer `qbo_customer_id` de vuelta.
-3. **Fase 2 — Sub-customers + factura inicial con prorrateo** disparada por entrega
-   (`ENTREGADO AL CLIENTE`). Línea(s) = item Group `Mensualidad - <modelo>`.
-4. **Fase 3 — Biller mensual recurrente** (scheduled, día de corte por definir).
-5. **Fase 4 — Webhooks entrantes** (Invoice/Payment/Customer) → panel financiero.
+Cada fase se prueba antes de pasar a la siguiente (sandbox para escrituras nuevas).
 
-## 9. Preguntas abiertas
+## 12. Alcance: SOLO contratos nuevos (sin migración por ahora)
 
-Resueltas en el descubrimiento (§0): **ITBMS** (TaxCode 14), **versión QBO** (Plus),
-**catálogo de items** (`Mensualidad - <modelo>` Group + `Alquiler -` + servicios),
-**identidad fiscal** (RUC en `PrimaryTaxIdentifier`).
+**Decisión (2026-06-16):** el sistema aplica **únicamente a contratos nuevos**. Los
+contratos viejos **no se migran** por ahora.
 
-Resueltas con el usuario (ver §0.5): **prorrateo** (÷30), **día de corte** (1.º,
-hasta fin de mes), **desglose** (alquiler/frecuencia fijos + mantenimiento resto),
-**exentos** (`itbms_exento` → TaxCode 14/13), **una línea al cliente** (bundle con
-componentes ocultos), **caso excepcional** (advertencia + override de alquiler).
+**Coexistencia durante la transición:**
+- Contratos **nuevos** (con modelo de líneas, marca `facturacion_qbo = true`) → facturación
+  automática vía la app + módulo de facturación.
+- Contratos **viejos** (cantidad plana, sin líneas) → se siguen facturando **como hoy**
+  (proceso manual en QuickBooks). El facturador automático **los ignora** (solo procesa
+  contratos marcados para automatización).
+- El módulo de facturación muestra solo los contratos del nuevo sistema.
+
+**Migración futura (opcional, no en este alcance):** cuando se decida, un backfill
+convertiría cada `equipo` de un contrato viejo en una **línea** (`fecha_inicio` =
+activación/entrega, `fecha_fin = null`), calcularía el `desglose` con el panel de tarifas
+y crearía su sub-cliente. Patrón de los `migrate-*.js` existentes, con dry-run y reporte.
+
+## 13. Decisiones / pendientes
+
+Resueltas: **alcance** (solo contratos nuevos, sin migración — §12), **modo de emisión**
+(automática el 1.º + gestión por excepción — §7), **guarda de anomalías** (±50% / piso
+$100, omite cambios esperados, configurable), **ajuste puntual del período** (en alcance
+inicial — §7).
 
 Pendientes:
-1. ✅ **RESUELTO — bundle por API:** validado en sandbox (2026-06-16), la API respeta
-   montos de componentes sobrescritos. Restricción: los bundles deben pre-existir en
-   QBO (la API no los crea) → modelo nuevo = crear bundle en la UI de QBO primero.
-2. **Mapa modelo→item QBO:** emparejar cada modelo (Firestore) con su item
-   `Alquiler - <modelo>`; sembrar el panel admin desde la tabla interna.
-3. **`contrato_id` en factura:** ¿solo DisplayName del sub-customer, o además custom
-   field "CONTRATO" (SalesCustomName2)?
-4. **Módulo fiscal:** confirmar que toma el RUC de `PrimaryTaxIdentifier`.
-5. **Pagos de vuelta:** ¿solo estado pagado/pendiente, o también número de factura + saldo?
-```
+- **Mapa modelo → item/bundle QBO:** sembrar el panel desde la tabla interna POC/Troncales
+  (los nombres difieren). Validar con administración.
+- **`contrato_id` en factura:** DisplayName del sub-cliente + custom field "CONTRATO".
+- **Módulo fiscal:** confirmar que maneja facturas a sub-cliente y toma el RUC del padre.
+- **Pagos de vuelta:** ¿solo pagado/pendiente, o también número de factura + saldo?
+- **Reportes por tipo de contrato** (clases QBO): ¿sí/no?
+
+## 14. Estado actual
+
+- ✅ Conexión OAuth (producción) + webhook desplegados y verificados.
+- ✅ Estrategia de factura (bundle, una línea, 3 cuentas) validada en sandbox.
+- ✅ Reglas de negocio completas y confirmadas.
+- 🔜 Construcción Fase 1+ (modelo de líneas → ... → módulo de facturación).

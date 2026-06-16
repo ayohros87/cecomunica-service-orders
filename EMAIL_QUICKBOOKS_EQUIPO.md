@@ -24,7 +24,8 @@ resumen en tres puntos:
 
 1. **Qué resuelve.** Hoy un cliente con varios contratos se ve "todo junto" en
    QuickBooks y la mensualidad se arma a mano. Con esto, cada contrato tendrá su
-   propio detalle y la facturación mensual será automática.
+   propio detalle y la facturación mensual será automática. *Importante: aplica
+   solo a **contratos nuevos**; los actuales se siguen facturando como hoy.*
 
 2. **Buenas noticias.** Revisamos nuestra cuenta real de QuickBooks y confirmamos
    que **la integración se acopla a cómo ya trabajamos**: usará las mismas
