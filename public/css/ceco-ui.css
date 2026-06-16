@@ -707,8 +707,13 @@ th.ordenado-desc::after {
 }
 .form-input::placeholder { color: var(--fg-4); }
 .form-textarea { height: auto; min-height: 88px; padding: var(--sp-2) var(--sp-3); resize: vertical; }
-.form-select {
-  padding-right: 36px; appearance: none; cursor: pointer;
+/* `select.form-input` también: muchos formularios marcan los droplists con
+   .form-input (input de texto), lo que dejaba la flecha nativa y un baseline
+   distinto → se veían desalineados. Esto los normaliza a TODOS al estilo del
+   kit sin tener que corregir cada marcado. */
+.form-select,
+select.form-input {
+  padding-right: 36px; appearance: none; -webkit-appearance: none; cursor: pointer;
   /* La altura fija de 38px con padding vertical 0 cortaba los descendentes
      (g, p, acentos) del texto seleccionado. Pasamos a min-height + padding
      vertical: misma altura visible, pero el texto deja de chocar con el
