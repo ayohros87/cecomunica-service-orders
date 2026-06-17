@@ -72,6 +72,12 @@
 
     .md-stats { display:flex; align-items:center; gap:var(--sp-3); font-size:13px; color:var(--fg-3); }
     .md-stats b { font-family:var(--font-mono); color:var(--fg-1); }
+
+    /* Segmento visible De alquiler / Todos */
+    .seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; }
+    .seg-btn { border:0; background:var(--surface-card); color:var(--fg-2); padding:5px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+    .seg-btn.is-on { background:var(--accent); color:#fff; }
+    .seg-btn + .seg-btn { border-left:1px solid var(--border-default); }
   </style>
 </head>
 <body>
@@ -89,9 +95,9 @@
       { label: '<i data-lucide="plus"></i> Nuevo modelo', cls: 'primary', onclick: "abrirModal()" }
     ],
     menu: [
+      { href: '../facturacion/index.html', label: '<i data-lucide="calculator"></i> Facturación (inicio)' },
       { href: './cargos.html', label: '<i data-lucide="receipt"></i> Cargos de facturación' },
       { divider: true },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="chk-solo-alquiler"> Solo de alquiler</label>' },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-solo-config"> Solo sin configurar</label>' },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-inactivos"> Mostrar inactivos</label>' },
       { divider: true },
@@ -103,7 +109,13 @@
 <div class="app-wrap app-wrap--full">
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-      <p id="resumenModelos" class="md-stats" style="margin:0;">Cargando…</p>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div class="seg" role="tablist">
+          <button type="button" id="seg-alq" class="seg-btn is-on" onclick="setFiltroAlquiler(true)">De alquiler</button>
+          <button type="button" id="seg-all" class="seg-btn" onclick="setFiltroAlquiler(false)">Todos</button>
+        </div>
+        <p id="resumenModelos" class="md-stats" style="margin:0;">Cargando…</p>
+      </div>
       <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
     </div>
     <div class="app-table-wrap" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">

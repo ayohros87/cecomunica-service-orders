@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8" />
+  <title>Facturación - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbar({ title: '<i data-lucide="calculator"></i> Facturación', showHome: true, homeHref: '../index.html', showLogout: true });
+</script>
+
+<div class="app-wrap">
+  <p style="color:var(--fg-3); margin:0 0 var(--sp-4);">Catálogos y herramientas de facturación. Solo administración y contabilidad.</p>
+
+  <div class="module-grid" id="grid">
+    <a class="module-card" href="../inventario/modelos.html">
+      <span class="module-card-icon"><i data-lucide="radio"></i></span>
+      <span class="module-card-meta">
+        <span class="module-card-title">Equipos y Tarifas</span>
+        <span class="module-card-sub">Tarifas de alquiler y mapeo a QuickBooks</span>
+      </span>
+    </a>
+
+    <a class="module-card" href="../inventario/cargos.html">
+      <span class="module-card-icon"><i data-lucide="receipt"></i></span>
+      <span class="module-card-meta">
+        <span class="module-card-title">Cargos de facturación</span>
+        <span class="module-card-sub">Activación, instalación y otros cargos</span>
+      </span>
+    </a>
+
+    <span class="module-card" style="opacity:.55; cursor:default;" aria-disabled="true">
+      <span class="module-card-icon"><i data-lucide="file-text"></i></span>
+      <span class="module-card-meta">
+        <span class="module-card-title">Emisión de facturas</span>
+        <span class="module-card-sub">Próximamente — facturación automática a QuickBooks</span>
+      </span>
+    </span>
+  </div>
+</div>
+
+<script>
+  firebase.auth().onAuthStateChanged(async (user) => {
+    if (!user) return window.location.href = "../login.html";
+    try{
+      const u = await UsuariosService.getUsuario(user.uid);
+      const rol = u ? u.rol : null;
+      if (!u || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD)) {
+        document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";
+        return;
+      }
+      if (window.lucide) lucide.createIcons();
+    }catch(e){ console.error(e); }
+  });
+</script>
+</body>
+</html>

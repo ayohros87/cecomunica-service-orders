@@ -125,13 +125,13 @@
         <span class="module-card-shortcut">I</span>
       </a>
 
-      <!-- Modelos y Tarifas (contabilidad) -->
-      <a class="module-card" data-keywords="modelos equipos tarifas alquiler facturacion catalogo contabilidad" data-mod="modelos" data-visible="false"
-         href="inventario/modelos.html">
-        <span class="module-card-icon"><i data-lucide="book-open"></i></span>
+      <!-- Facturación (contabilidad) -->
+      <a class="module-card" data-keywords="facturacion contabilidad tarifas alquiler cargos modelos quickbooks activacion" data-mod="facturacion" data-visible="false"
+         href="facturacion/index.html">
+        <span class="module-card-icon"><i data-lucide="calculator"></i></span>
         <span class="module-card-meta">
-          <span class="module-card-title">Modelos y Tarifas</span>
-          <span class="module-card-sub">Catálogo de equipos y tarifas de facturación</span>
+          <span class="module-card-title">Facturación</span>
+          <span class="module-card-sub">Equipos, tarifas, cargos y QuickBooks</span>
         </span>
       </a>
 
@@ -212,9 +212,9 @@ firebase.auth().onAuthStateChanged(async (user) => {
     // Mapa de rol → módulos visibles
     // "firma" disponible para todo el personal autenticado.
     const visiblesPorRol = {
-  administrador: ["ordenes", "poc", "inventario", "modelos", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
+  administrador: ["ordenes", "poc", "inventario", "facturacion", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
   inventario:    ["inventario", "piezas", "firma"],
-  contabilidad:  ["modelos", "firma"],
+  contabilidad:  ["facturacion", "firma"],
   vista:         ["ordenes", "poc", "firma"],
   tecnico:       ["ordenes", "poc", "firma"],
   jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],

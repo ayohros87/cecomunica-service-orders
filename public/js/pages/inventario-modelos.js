@@ -35,7 +35,6 @@ firebase.auth().onAuthStateChanged(async (user) => {
     document.addEventListener('change', (e)=>{
       if (e.target.id === 'chk-inactivos'){ showInactivos = e.target.checked; render(); }
       if (e.target.id === 'chk-solo-config'){ soloConfig = e.target.checked; render(); }
-      if (e.target.id === 'chk-solo-alquiler'){ soloAlquiler = e.target.checked; render(); }
     });
 
     await cargarModelos();
@@ -108,7 +107,7 @@ function render(){
   tbody.innerHTML = '';
   if (data.length === 0){
     const hint = soloAlquiler
-      ? 'No hay modelos marcados como "Se alquila". Abre el menú ⋯ y desactiva <b>Solo de alquiler</b> para marcarlos.'
+      ? 'No hay equipos marcados como "Se alquila". Pulsa <b>Todos</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.'
       : 'No hay modelos para mostrar';
     tbody.innerHTML = `<tr><td colspan="10" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
     actualizarResumen();
@@ -266,6 +265,13 @@ function exportarExcel(){
 }
 
 /* ===== Exponer ===== */
+function setFiltroAlquiler(v){
+  soloAlquiler = v;
+  document.getElementById('seg-alq')?.classList.toggle('is-on', v);
+  document.getElementById('seg-all')?.classList.toggle('is-on', !v);
+  render();
+}
+window.setFiltroAlquiler = setFiltroAlquiler;
 window.abrirModal = abrirModal;
 window.cerrarModal = cerrarModal;
 window.guardarModelo = guardarModelo;
