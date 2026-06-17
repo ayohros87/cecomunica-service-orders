@@ -45,6 +45,11 @@
     #tabla tbody tr:hover td.sticky-col { background: var(--brand-soft); }
     #tabla tbody tr:focus-within td.sticky-col { background: #eaf4ff; }
 
+    /* .toggle-switch es un <label> (inline); fuera de un flex, width/height no
+       aplican y colapsa (solo se ve el thumb = mancha blanca). Lo hacemos
+       inline-block para que el track/thumb se dibujen bien en la celda. */
+    #tabla .toggle-switch { display: inline-block; vertical-align: middle; }
+
     .modelo-cell { position: relative; padding-left: 16px !important; font-weight: 600; white-space: nowrap; }
     .modelo-sub  { display:block; font-weight:400; font-size:11px; color: var(--fg-4); }
 
