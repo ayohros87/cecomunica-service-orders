@@ -32,7 +32,7 @@
        se lee como datos, no como un muro de formularios. Auto-guarda por fila. */
     #tabla td { padding: 2px 6px; vertical-align: middle; }
     #tabla .td-input, #tabla .td-select { height: 28px; }
-    #tabla .td-num { text-align: right; font-family: var(--font-mono); max-width: 90px; }
+    #tabla .td-num { text-align: left; font-family: var(--font-mono); width: 90px; }
     #tabla tbody tr:nth-child(even) { background: var(--surface-sunken); }
     #tabla tbody tr:hover { background: var(--brand-soft); }
     #tabla tbody tr:focus-within { background: #eaf4ff; }
@@ -106,13 +106,13 @@
             <th class="sticky-col">Modelo</th>
             <th>Tipo</th>
             <th style="text-align:center">¿Alquiler?</th>
-            <th style="text-align:right">Alquiler $</th>
-            <th style="text-align:right">Frecuencia $</th>
+            <th>Alquiler $</th>
+            <th>Frecuencia $</th>
             <th>Item QBO "Alquiler"</th>
             <th>Bundle QBO "Mensualidad"</th>
             <th>Mapeo</th>
             <th style="text-align:center">Activo</th>
-            <th></th>
+            <th style="text-align:center">Editar</th>
           </tr>
         </thead>
         <tbody id="tablaModelos"></tbody>

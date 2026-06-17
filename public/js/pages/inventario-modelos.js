@@ -139,7 +139,7 @@ function renderRow(m){
     <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:200px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
     <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
-    <td><button class="btn sm btn-ghost" title="Editar identidad" onclick="abrirModal('${id}')"><i data-lucide="pencil"></i></button></td>`;
+    <td style="text-align:center"><button class="btn sm btn-ghost" title="Editar identidad" onclick="abrirModal('${id}')"><i data-lucide="pencil"></i></button></td>`;
 
   // Listeners inline (auto-guardado por celda)
   tr.querySelectorAll('input[type="number"]').forEach(inp=>{
