@@ -8,6 +8,7 @@ let listaModelos = [];
 let modeloEditId = null;
 let showInactivos = false;   // por defecto ocultos para despejar la vista
 let soloConfig = false;
+let soloAlquiler = true;     // por defecto solo los modelos que se alquilan (vista limpia)
 const _savedTimers = {};
 const qboItems = { alquileres: [], bundles: [], loaded: false };
 
@@ -34,6 +35,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
     document.addEventListener('change', (e)=>{
       if (e.target.id === 'chk-inactivos'){ showInactivos = e.target.checked; render(); }
       if (e.target.id === 'chk-solo-config'){ soloConfig = e.target.checked; render(); }
+      if (e.target.id === 'chk-solo-alquiler'){ soloAlquiler = e.target.checked; render(); }
     });
 
     await cargarModelos();
@@ -96,6 +98,7 @@ function render(){
   const term = (document.getElementById('q')?.value || '').toLowerCase().trim();
 
   let data = (listaModelos||[]).filter(m => showInactivos ? true : (m.activo !== false));
+  if (soloAlquiler) data = data.filter(m => m.es_alquiler === true);
   if (term) data = data.filter(m =>
     (m.modelo||'').toLowerCase().includes(term) || (m.marca||'').toLowerCase().includes(term));
   if (soloConfig) data = data.filter(m => mapeoBadge(m).cls === 'map-warn');
@@ -104,7 +107,10 @@ function render(){
 
   tbody.innerHTML = '';
   if (data.length === 0){
-    tbody.innerHTML = `<tr><td colspan="9" style="padding:20px; text-align:center; color:#666;">No hay modelos para mostrar</td></tr>`;
+    const hint = soloAlquiler
+      ? 'No hay modelos marcados como "Se alquila". Abre el menú ⋯ y desactiva <b>Solo de alquiler</b> para marcarlos.'
+      : 'No hay modelos para mostrar';
+    tbody.innerHTML = `<tr><td colspan="10" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
     actualizarResumen();
     return;
   }
@@ -124,6 +130,7 @@ function renderRow(m){
       ${esc(m.modelo||'—')}<span class="modelo-sub">${esc(m.marca||'')}</span>
     </td>
     <td>${mapTipo(m.tipo)}</td>
+    <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_alquiler"
           value="${Number.isFinite(m.precio_alquiler)?m.precio_alquiler:''}" placeholder="0.00"></td>
     <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_frecuencia"
@@ -147,18 +154,20 @@ function renderRow(m){
       onInlineUpdate(id, { [sel.dataset.field]: (sel.value||'').trim() });
     });
   });
-  const chk = tr.querySelector('input[type="checkbox"][data-field="activo"]');
-  chk && chk.addEventListener('change', ()=>{ setRowStatus(id,'saving'); onInlineUpdate(id, { activo: !!chk.checked }); });
+  tr.querySelectorAll('input[type="checkbox"][data-field]').forEach(chk=>{
+    chk.addEventListener('change', ()=>{ setRowStatus(id,'saving'); onInlineUpdate(id, { [chk.dataset.field]: !!chk.checked }); });
+  });
 
   return tr;
 }
 
 function actualizarResumen(){
   const total = (listaModelos||[]).length;
-  const conTarifa = (listaModelos||[]).filter(m => Number(m.precio_alquiler) > 0).length;
-  const pend = (listaModelos||[]).filter(m => mapeoBadge(m).cls === 'map-warn').length;
+  const alquiler = (listaModelos||[]).filter(m => m.es_alquiler === true).length;
+  const conTarifa = (listaModelos||[]).filter(m => m.es_alquiler === true && Number(m.precio_alquiler) > 0).length;
+  const pend = (listaModelos||[]).filter(m => m.es_alquiler === true && mapeoBadge(m).cls === 'map-warn').length;
   document.getElementById('resumenModelos').innerHTML =
-    `<b>${total}</b> modelos · <b>${conTarifa}</b> con tarifa · <span style="color:#92400E"><b>${pend}</b> sin configurar</span>`;
+    `<b>${total}</b> modelos · <b>${alquiler}</b> de alquiler · <b>${conTarifa}</b> con tarifa · <span style="color:#92400E"><b>${pend}</b> sin configurar</span>`;
 }
 
 /* ===== Guardado inline ===== */
@@ -196,6 +205,7 @@ function abrirModal(id=null){
   document.getElementById('f-tipo').value='P';
   document.getElementById('f-estado').value='N';
   setVal('f-minimo','5');
+  document.getElementById('f-es-alquiler').checked = creando ? true : false; // en esta página, nuevo = de alquiler
   document.getElementById('f-alto').checked=false;
   document.getElementById('f-activo').checked=true;
   setVal('f-notas','');
@@ -207,6 +217,7 @@ function abrirModal(id=null){
       document.getElementById('f-tipo').value = m.tipo||'P';
       document.getElementById('f-estado').value = m.estado||'N';
       setVal('f-minimo', Number.isFinite(m.minimo)?m.minimo:5);
+      document.getElementById('f-es-alquiler').checked = m.es_alquiler===true;
       document.getElementById('f-alto').checked = m.alto_movimiento===true;
       document.getElementById('f-activo').checked = m.activo!==false;
       setVal('f-notas', m.notas||'');
@@ -227,6 +238,7 @@ async function guardarModelo(){
     tipo: document.getElementById('f-tipo').value,
     estado: document.getElementById('f-estado').value,
     minimo: Math.max(0, Number(document.getElementById('f-minimo').value||0)),
+    es_alquiler: document.getElementById('f-es-alquiler').checked,
     alto_movimiento: document.getElementById('f-alto').checked,
     activo: document.getElementById('f-activo').checked,
     notas: (document.getElementById('f-notas').value||'').trim(),

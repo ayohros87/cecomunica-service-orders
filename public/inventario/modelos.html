@@ -84,6 +84,7 @@
       { label: '<i data-lucide="plus"></i> Nuevo modelo', cls: 'primary', onclick: "abrirModal()" }
     ],
     menu: [
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="chk-solo-alquiler"> Solo de alquiler</label>' },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-solo-config"> Solo sin configurar</label>' },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-inactivos"> Mostrar inactivos</label>' },
       { divider: true },
@@ -104,6 +105,7 @@
           <tr>
             <th class="sticky-col">Modelo</th>
             <th>Tipo</th>
+            <th style="text-align:center">¿Alquiler?</th>
             <th style="text-align:right">Alquiler $</th>
             <th style="text-align:right">Frecuencia $</th>
             <th>Item QBO "Alquiler"</th>
@@ -157,7 +159,8 @@
         </div>
         <div class="form-field">
           <label class="form-label">Flags</label>
-          <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center; height:38px;">
+          <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center; min-height:38px;">
+            <label class="form-check"><input type="checkbox" id="f-es-alquiler"><span><span class="form-check-label">Se alquila (aparece en tarifas)</span></span></label>
             <label class="form-check"><input type="checkbox" id="f-alto"><span><span class="form-check-label">Alto movimiento</span></span></label>
             <label class="form-check"><input type="checkbox" id="f-activo" checked><span><span class="form-check-label">Activo</span></span></label>
           </div>
