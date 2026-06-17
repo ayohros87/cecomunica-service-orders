@@ -6,7 +6,7 @@
 /* ===== Estado ===== */
 let listaModelos = [];
 let modeloEditId = null;
-let showInactivos = true;
+let showInactivos = false;   // por defecto ocultos para despejar la vista
 let soloConfig = false;
 const _savedTimers = {};
 const qboItems = { alquileres: [], bundles: [], loaded: false };
@@ -131,7 +131,7 @@ function renderRow(m){
     <td><select class="td-select" data-field="qbo_item_alquiler_id" style="min-width:200px;">${qboOptions(qboItems.alquileres, m.qbo_item_alquiler_id)}</select></td>
     <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:200px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
-    <td style="text-align:center"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''}></td>
+    <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td><button class="btn sm btn-ghost" title="Editar identidad" onclick="abrirModal('${id}')"><i data-lucide="pencil"></i></button></td>`;
 
   // Listeners inline (auto-guardado por celda)
