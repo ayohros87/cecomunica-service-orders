@@ -23,14 +23,20 @@ module.exports = onCall(
   async (request) => {
     await requireAdminOrContabilidad(request.auth?.uid);
     try {
-      const [alq, men] = await Promise.all([
-        qboQuery("select Id, Name from Item where Type='Service' and Name like 'Alquiler%' maxresults 500"),
+      const [svc, men] = await Promise.all([
+        qboQuery("select Id, Name from Item where Type='Service' maxresults 1000"),
         qboQuery("select Id, Name from Item where Type='Group' and Name like 'Mensualidad%' maxresults 500"),
       ]);
       const map = (arr) => (arr || [])
         .map((i) => ({ id: i.Id, name: i.Name }))
         .sort((a, b) => a.name.localeCompare(b.name, "es"));
-      return { alquileres: map(alq.Item), bundles: map(men.Item) };
+      const allSvc = map(svc.Item);
+      const esAlquiler = (n) => /^alquiler\b/i.test(n);
+      return {
+        alquileres: allSvc.filter((i) => esAlquiler(i.name)),   // "Alquiler - <modelo>"
+        servicios:  allSvc.filter((i) => !esAlquiler(i.name)),  // resto (Activacion, etc.) → cargos
+        bundles:    map(men.Item),                              // "Mensualidad - <modelo>"
+      };
     } catch (err) {
       logger.error("[listQBOItems] error", { error: err.message });
       throw new HttpsError("unavailable", `No se pudo consultar QuickBooks: ${err.message}`);

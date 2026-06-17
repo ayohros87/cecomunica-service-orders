@@ -182,6 +182,11 @@ service cloud.firestore {
       allow read:  if isSignedIn();
       allow write: if isSignedIn() && userRole() in ["administrador", "contabilidad"];
     }
+    // Cargos de facturación (activación, etc.) — info sensible, mismo criterio que modelos.
+    match /cargos/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && userRole() in ["administrador", "contabilidad"];
+    }
     match /empresa/{docId}            { allow read, write: if isSignedIn(); }
     match /inventario_actual/{docId}  { allow read, write: if isSignedIn(); }
     match /ultimo_inventario/{docId}  { allow read, write: if isSignedIn(); }

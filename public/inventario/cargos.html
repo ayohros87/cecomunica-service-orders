@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8" />
+  <title>Cargos de Facturación - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/cargosService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    #tabla td { padding: 2px 6px; vertical-align: middle; }
+    #tabla .td-input, #tabla .td-select { height: 28px; }
+    #tabla .td-num { text-align: left; font-family: var(--font-mono); width: 100px; }
+    #tabla tbody tr:nth-child(even) { background: var(--surface-sunken); }
+    #tabla tbody tr:hover { background: var(--brand-soft); }
+    #tabla tbody tr:focus-within { background: #eaf4ff; }
+    #tabla .toggle-switch { display: inline-block; vertical-align: middle; }
+    .concepto-cell { position: relative; padding-left: 16px !important; }
+    .row-status {
+      position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+      width: 6px; height: 6px; border-radius: 50%; background: transparent; transition: background var(--dur-fast);
+    }
+    .row-status.saving { background: var(--status-warning); animation: rowPulse 1s ease-in-out infinite; }
+    .row-status.saved  { background: var(--status-online); }
+    .row-status.error  { background: var(--status-critical); }
+    @keyframes rowPulse { 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
+    .md-stats { font-size:13px; color:var(--fg-3); }
+    .md-stats b { font-family:var(--font-mono); color:var(--fg-1); }
+  </style>
+</head>
+<body>
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    title: '<i data-lucide="receipt"></i> Cargos de Facturación',
+    leftSlot: `
+      <div class="filter-search" style="max-width:300px;">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input id="q" type="search" placeholder="Buscar cargo…" aria-label="Buscar cargos">
+      </div>`,
+    actions: [
+      { label: '<i data-lucide="plus"></i> Nuevo cargo', cls: 'primary', onclick: "agregarCargo()" }
+    ],
+    menu: [
+      { href: './modelos.html', label: '<i data-lucide="book-open"></i> Modelos y Tarifas' },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-inactivos"> Mostrar inactivos</label>' }
+    ]
+  });
+</script>
+
+<div class="app-wrap app-wrap--full">
+  <div class="ds-card" style="padding:0;">
+    <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <p id="resumen" class="md-stats" style="margin:0;">Cargando…</p>
+      <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
+    </div>
+    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
+      <table class="app-table" id="tabla">
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th>Item QBO</th>
+            <th>Monto def. $</th>
+            <th style="text-align:center">Recurrente</th>
+            <th style="text-align:center">Activo</th>
+            <th style="text-align:center">Borrar</th>
+          </tr>
+        </thead>
+        <tbody id="tablaCargos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="../js/ui/toast.js"></script>
+<script src="../js/pages/cargos.js" defer></script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>
