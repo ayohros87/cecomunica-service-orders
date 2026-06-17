@@ -261,47 +261,6 @@
         <div class="table-add-row">
           <button type="button" class="btn btn-ghost btn-sm" onclick="NCForm.agregarFilaEquipo()"><i data-lucide="plus"></i> Agregar equipo</button>
         </div>
-
-        <!-- ITBMS y totales -->
-        <div class="totals-panel">
-          <div class="totals-row">
-            <label class="form-label" for="itbms_aplica" style="margin:0;"><strong>ITBMS</strong></label>
-            <select class="form-select" id="itbms_aplica" style="max-width:180px;">
-              <option value="true" selected>Sí (7%)</option>
-              <option value="false">EXENTO</option>
-            </select>
-          </div>
-
-          <div class="totals-row subtotal">
-            <span>Subtotal equipos</span>
-            <span id="subtotal_view">$0.00</span>
-          </div>
-
-          <div class="totals-row" id="row-cargos-rec" style="display:none;">
-            <span>Otros conceptos (mensual)</span>
-            <span id="cargos_rec_view">$0.00</span>
-          </div>
-
-          <div class="totals-row">
-            <span id="itbms_label">ITBMS (7%)</span>
-            <span id="itbms_view">$0.00</span>
-          </div>
-
-          <div class="totals-row total">
-            <strong>Total mensual</strong>
-            <strong id="total_con_itbms_view">$0.00</strong>
-          </div>
-
-          <div class="totals-row" id="row-cargos-uni" style="display:none;">
-            <span>Otros conceptos (único)</span>
-            <span id="cargos_uni_view">$0.00</span>
-          </div>
-
-          <div class="totals-row total" id="row-primer-pago" style="display:none;">
-            <strong>Primer pago (inicial)</strong>
-            <strong id="primer_pago_view">$0.00</strong>
-          </div>
-        </div>
       </div>
 
       <!-- Sección 4: Otros conceptos (opcional) -->
@@ -325,6 +284,41 @@
         </div>
         <div class="table-add-row">
           <button type="button" class="btn btn-ghost btn-sm" onclick="NCCargos.agregarFila()"><i data-lucide="plus"></i> Agregar cargo</button>
+        </div>
+      </div>
+
+      <!-- ITBMS y totales — al final, amarra equipos + otros conceptos -->
+      <div class="totals-panel" style="margin-bottom:var(--sp-4);">
+        <div class="totals-row">
+          <label class="form-label" for="itbms_aplica" style="margin:0;"><strong>ITBMS</strong></label>
+          <select class="form-select" id="itbms_aplica" style="max-width:180px;">
+            <option value="true" selected>Sí (7%)</option>
+            <option value="false">EXENTO</option>
+          </select>
+        </div>
+        <div class="totals-row subtotal">
+          <span>Subtotal equipos</span>
+          <span id="subtotal_view">$0.00</span>
+        </div>
+        <div class="totals-row" id="row-cargos-rec" style="display:none;">
+          <span>Otros conceptos (mensual)</span>
+          <span id="cargos_rec_view">$0.00</span>
+        </div>
+        <div class="totals-row">
+          <span id="itbms_label">ITBMS (7%)</span>
+          <span id="itbms_view">$0.00</span>
+        </div>
+        <div class="totals-row total">
+          <strong>Total mensual</strong>
+          <strong id="total_con_itbms_view">$0.00</strong>
+        </div>
+        <div class="totals-row" id="row-cargos-uni" style="display:none;">
+          <span>Otros conceptos (único)</span>
+          <span id="cargos_uni_view">$0.00</span>
+        </div>
+        <div class="totals-row total" id="row-primer-pago" style="display:none;">
+          <strong>Primer pago (inicial)</strong>
+          <strong id="primer_pago_view">$0.00</strong>
         </div>
       </div>
 

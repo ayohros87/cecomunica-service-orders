@@ -110,8 +110,14 @@ window.NCCombo = {
     $list.hidden = false;
   },
 
-  selectCliente(id, close = true) {
-    const d = NC.listaClientes[id];
+  async selectCliente(id, close = true) {
+    let d = NC.listaClientes[id];
+    if (!d) {
+      // Los "recientes" no están en NC.listaClientes (solo se llena al buscar):
+      // traer el documento completo para poder seleccionarlo.
+      try { d = await ClientesService.getCliente(id); } catch (e) { d = null; }
+      if (d) NC.listaClientes[id] = d;
+    }
     if (!d) return;
     document.getElementById('cliente').value      = id;
     document.getElementById('clienteCombo').value = d.nombre || '';
