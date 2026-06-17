@@ -388,7 +388,7 @@
     if (!user) { location.href = '../login.html'; return; }
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
-      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR];
+      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
       const params = new URLSearchParams(location.search);

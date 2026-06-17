@@ -31,7 +31,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol;
     }
     function isAdmin()    { return isSignedIn() && userRole() == "administrador"; }
-    function isVentas()   { return isSignedIn() && userRole() in ["administrador", "vendedor"]; }
+    // Cotizaciones: jefe_taller tiene acceso completo salvo aprobar (solo admin).
+    //   puedeCotizar → crear/listar;  verTodasCot → ver/editar/borrar cualquiera (como admin).
+    function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller"]; }
+    function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller"]; }
 
     // Campos cuyo dueño exclusivo es Cloud Functions (admin SDK los salta).
     // Sólo bloquea escrituras desde el frontend.
@@ -93,17 +96,17 @@ service cloud.firestore {
             || changed.hasAny(["fecha_aprobacion", "aprobado_por_uid"]);
       }
 
-      allow get:  if isAdmin() || esDueno();
-      allow list: if isVentas();   // ← variante aislada: isAdmin() || (isVentas() && resource.data.creado_por_uid == request.auth.uid)
+      allow get:  if verTodasCot() || esDueno();
+      allow list: if puedeCotizar();   // ← variante aislada: isAdmin() || (isVentas() && resource.data.creado_por_uid == request.auth.uid)
 
-      allow create: if isVentas()
+      allow create: if puedeCotizar()
                      && request.resource.data.creado_por_uid == request.auth.uid
                      && (request.resource.data.estado == "borrador" || isAdmin());
 
-      allow update: if (isAdmin() || esDueno())
-                     && (isAdmin() || !aprobacionTocada());
+      allow update: if (verTodasCot() || esDueno())
+                     && (isAdmin() || !aprobacionTocada());   // aprobar sigue solo-admin
 
-      allow delete: if isAdmin();
+      allow delete: if verTodasCot();
     }
 
     // ── Cotizaciones públicas (sin cambios) ───────────────────────────────

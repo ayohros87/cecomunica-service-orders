@@ -22,7 +22,9 @@ window.PocState = {
   },
 
   esLectura() {
-    return this.rolActual === ROLES.TECNICO || this.rolActual === ROLES.VISTA;
+    return this.rolActual === ROLES.TECNICO
+        || this.rolActual === ROLES.VISTA
+        || this.rolActual === ROLES.JEFE_TALLER;
   },
 
   obtenerModeloTexto(d = {}) {

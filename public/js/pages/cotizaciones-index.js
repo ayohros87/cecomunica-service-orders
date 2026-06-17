@@ -561,7 +561,7 @@
     userUid = user.uid;
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
-      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR];
+      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
       // Vendedor: forzar "solo mías" y ocultar el toggle. Admin: mostrarlo.

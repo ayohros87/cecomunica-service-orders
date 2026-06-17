@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const userDoc = await UsuariosService.getUsuario(user.uid);
     PocState.rolActual = userDoc?.rol || ROLES.VISTA;
 
-    const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA];
+    const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA, ROLES.JEFE_TALLER];
     if (!permitidos.includes(PocState.rolActual)) {
       Toast.show('No autorizado. Tu rol no tiene acceso a este módulo.', 'bad');
       window.location.href = '/index.html';
