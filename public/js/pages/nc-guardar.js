@@ -76,6 +76,10 @@ window.NCGuardar = {
       NCForm.calcularTotal();
     }
 
+    if (Array.isArray(draft.cargos) && draft.cargos.length && window.NCCargos) {
+      NCCargos.cargar(draft.cargos);
+    }
+
     sessionStorage.removeItem('contrato_prefill');
   },
 
@@ -140,6 +144,9 @@ window.NCGuardar = {
       estado: 'pendiente_aprobacion',
       observaciones: document.getElementById('observaciones').value.trim(),
       equipos,
+      // Cargos no-equipo (activación, etc.). Aditivo: NO afecta subtotal/total de
+      // equipos; se guardan aparte para el documento y la facturación futura.
+      cargos: (window.NCCargos ? NCCargos.leer() : []),
       total_equipos,
       subtotal: tot.subtotal,
       itbms_aplica: tot.itbmsAplica,

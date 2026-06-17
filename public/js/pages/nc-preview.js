@@ -41,6 +41,7 @@ window.NCPreview = {
       duracion: duracionFinal,
       observaciones: document.getElementById('observaciones').value.trim(),
       equipos,
+      cargos: (window.NCCargos ? NCCargos.leer() : []),
       subtotal: tot.subtotal, itbms_aplica: tot.itbmsAplica,
       itbms_monto: tot.itbmsMonto, total_con_itbms: tot.totalConITBMS
     };
@@ -96,6 +97,16 @@ window.NCPreview = {
           <tbody>${eqRows || "<tr><td colspan='6'>Sin equipos</td></tr>"}</tbody>
         </table>
       </div>
+      ${(draft.cargos && draft.cargos.length) ? `
+      <div class="preview-card">
+        <h4>Cargos adicionales</h4>
+        <table class="preview-table">
+          <thead><tr><th>Concepto</th><th>Tipo</th><th>Monto</th></tr></thead>
+          <tbody>${draft.cargos.map(c => `
+            <tr><td>${esc(c.concepto || '')}</td><td>${c.recurrente ? 'Mensual' : 'Único'}</td><td style="text-align:right;">$${Number(c.monto || 0).toFixed(2)}</td></tr>
+          `).join('')}</tbody>
+        </table>
+      </div>` : ''}
       <div class="preview-card">
         <h4>Totales</h4>
         <div class="preview-totals">

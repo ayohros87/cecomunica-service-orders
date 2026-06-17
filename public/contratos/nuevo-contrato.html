@@ -271,6 +271,30 @@
         </div>
       </div>
 
+      <!-- Sección 4: Cargos adicionales (opcional) -->
+      <div class="form-section-header">
+        <h3><i data-lucide="receipt"></i> Cargos adicionales <span style="font-weight:400; font-size:13px; color:var(--fg-3);">(opcional)</span></h3>
+      </div>
+      <div class="app-card" style="margin-bottom:var(--sp-4);">
+        <p style="margin:0 0 8px; font-size:13px; color:var(--fg-3);">Activación, instalación u otros cargos que <b>no son equipos</b>. No afectan el total de equipos de arriba.</p>
+        <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
+          <table id="tablaCargos" class="app-table editable">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th style="width:140px;">Monto</th>
+                <th style="width:140px;">Tipo</th>
+                <th style="width:48px;"></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="table-add-row">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="NCCargos.agregarFila()"><i data-lucide="plus"></i> Agregar cargo</button>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button type="submit" class="btn btn-primary btn-lg" id="btnGuardar"><i data-lucide="save"></i> Guardar Contrato</button>
         <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'">Cancelar</button>
@@ -306,6 +330,7 @@
 
   <script src="../js/pages/nc-state.js"       defer></script>
   <script src="../js/pages/nc-form.js"        defer></script>
+  <script src="../js/pages/nc-cargos.js"      defer></script>
   <script src="../js/pages/nc-combo.js"       defer></script>
   <script src="../js/pages/nc-preview.js"     defer></script>
   <script src="../js/pages/nc-guardar.js"     defer></script>
