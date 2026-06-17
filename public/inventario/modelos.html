@@ -8,7 +8,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8" />
-  <title>Modelos de Radios - Cecomunica</title>
+  <title>Modelos y Tarifas - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
@@ -23,46 +23,50 @@
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/modelosService.js"></script>
 
-  <!-- XLSX (exportación) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
   <style>
-    /* Page-local — el resto vive en el kit */
+    /* ── Hoja de cálculo de Modelos y Tarifas ─────────────────────────────
+       Celdas .td-input/.td-select del DS (borde invisible hasta hover/focus):
+       se lee como datos, no como un muro de formularios. Auto-guarda por fila. */
+    #tabla td { padding: 2px 6px; vertical-align: middle; }
+    #tabla .td-input, #tabla .td-select { height: 28px; }
+    #tabla .td-num { text-align: right; font-family: var(--font-mono); max-width: 90px; }
+    #tabla tbody tr:nth-child(even) { background: var(--surface-sunken); }
+    #tabla tbody tr:hover { background: var(--brand-soft); }
+    #tabla tbody tr:focus-within { background: #eaf4ff; }
 
-    /* Density toggle */
-    .app-table-wrap[data-density="dense"] table { font-size: 12.5px; }
-    .app-table-wrap[data-density="dense"] th,
-    .app-table-wrap[data-density="dense"] td { padding: 6px 8px; }
-    .app-table-wrap[data-density="roomy"] table { font-size: 14.5px; }
-    .app-table-wrap[data-density="roomy"] th,
-    .app-table-wrap[data-density="roomy"] td { padding: 10px 12px; }
+    /* Columna Modelo congelada al hacer scroll horizontal (los selects son anchos) */
+    #tabla th.sticky-col, #tabla td.sticky-col { position: sticky; left: 0; z-index: 5; }
+    #tabla thead th.sticky-col { z-index: 12; background: var(--surface-sunken); }
+    #tabla tbody td.sticky-col { background: var(--surface-card); box-shadow: 1px 0 0 var(--border-subtle); }
+    #tabla tbody tr:nth-child(even) td.sticky-col { background: var(--surface-sunken); }
+    #tabla tbody tr:hover td.sticky-col { background: var(--brand-soft); }
+    #tabla tbody tr:focus-within td.sticky-col { background: #eaf4ff; }
 
-    /* Sortable column header */
-    th[data-sort] { cursor: pointer; user-select: none; }
-    th .sort { font-size: 12px; opacity: .6; margin-left: 4px; }
+    .modelo-cell { position: relative; padding-left: 16px !important; font-weight: 600; white-space: nowrap; }
+    .modelo-sub  { display:block; font-weight:400; font-size:11px; color: var(--fg-4); }
 
-    /* Helper para ocultar columnas vía menú */
-    .hidden-col { display: none; }
-
-    /* Stock badges */
-    .badge {
-      display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 999px; padding: 0 8px; height: 22px;
-      font-size: 12px; font-weight: 600; border: 1px solid transparent;
+    /* Indicador de guardado por fila */
+    .row-status {
+      position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+      width: 6px; height: 6px; border-radius: 50%; background: transparent;
+      transition: background var(--dur-fast);
     }
-    .badge.completo  { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
-    .badge.pendiente { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
-    .badge.danger    { background:#FEF2F2; color:#991B1B; border-color:#FECACA; }
+    .row-status.saving { background: var(--status-warning); animation: rowPulse 1s ease-in-out infinite; }
+    .row-status.saved  { background: var(--status-online); }
+    .row-status.error  { background: var(--status-critical); }
+    @keyframes rowPulse { 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
 
-    /* Acciones inline en celda */
-    .table-actions { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    /* Badge de estado de mapeo */
+    .map-badge { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:1px 8px; font-size:11px; font-weight:600; border:1px solid transparent; white-space:nowrap; }
+    .map-ok   { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    .map-warn { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
+    .map-none { color: var(--fg-4); }
 
-    /* Fila inactiva */
-    tr.inactivo td { opacity: 0.55; }
-
-    /* Modal overlay — alias .show con el shape del kit */
-    #overlay.modal-backdrop.show { display: flex; }
+    .md-stats { display:flex; align-items:center; gap:var(--sp-3); font-size:13px; color:var(--fg-3); }
+    .md-stats b { font-family:var(--font-mono); color:var(--fg-1); }
   </style>
 </head>
 <body>
@@ -70,48 +74,54 @@
 <div id="topbar-mount"></div>
 <script>
   Layout.renderTopbarFor('index', {
-    title: '<i data-lucide="book-open"></i> Modelos de Radios',
+    title: '<i data-lucide="book-open"></i> Modelos y Tarifas',
     leftSlot: `
-      <div class="filter-search" style="max-width:320px;">
+      <div class="filter-search" style="max-width:300px;">
         <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="q" type="search" placeholder="Buscar marca, modelo o tipo…" aria-label="Buscar modelos">
+        <input id="q" type="search" placeholder="Buscar marca o modelo…" aria-label="Buscar modelos">
       </div>`,
     actions: [
       { label: '<i data-lucide="plus"></i> Nuevo modelo', cls: 'primary', onclick: "abrirModal()" }
     ],
     menu: [
-      { href: './index.html',   label: '<i data-lucide="package"></i> Inventario' },
-      { href: './piezas.html',  label: '<i data-lucide="layers"></i> Piezas' },
-      { onclick: 'exportarExcel()', label: '<i data-lucide="download"></i> Excel' },
-      { divider: true },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-estado"> Columna “Estado”</label>' },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-alto"> Columna “Alto mov.”</label>' },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-minimo"> Columna “Mínimo”</label>' },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-activo"> Columna “Activo”</label>' },
-      { divider: true },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-solo-config"> Solo sin configurar</label>' },
       { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="chk-inactivos"> Mostrar inactivos</label>' },
-      { onclick: 'toggleDensity()', label: '<i data-lucide="arrow-up-down"></i> Alternar densidad' }
+      { divider: true },
+      { onclick: 'exportarExcel()', label: '<i data-lucide="download"></i> Excel' }
     ]
   });
 </script>
 
 <div class="app-wrap app-wrap--full">
   <div class="app-card">
-    <div class="app-table-footer" style="border-top:0; padding:var(--sp-3) var(--sp-4);">
-      <p id="resumenModelos" class="resumen" style="margin:0;">Cargando modelos…</p>
+    <div class="app-table-footer" style="border-top:0; padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <p id="resumenModelos" class="md-stats" style="margin:0;">Cargando…</p>
+      <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
     </div>
-    <div class="app-table-wrap" id="wrapTabla" data-density="roomy" style="border:none; box-shadow:none; border-radius:0;">
-      <table class="app-table">
-        <thead id="headerModelos"></thead>
+    <div class="app-table-wrap" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
+      <table class="app-table" id="tabla">
+        <thead>
+          <tr>
+            <th class="sticky-col">Modelo</th>
+            <th>Tipo</th>
+            <th style="text-align:right">Alquiler $</th>
+            <th style="text-align:right">Frecuencia $</th>
+            <th>Item QBO "Alquiler"</th>
+            <th>Bundle QBO "Mensualidad"</th>
+            <th>Mapeo</th>
+            <th style="text-align:center">Activo</th>
+            <th></th>
+          </tr>
+        </thead>
         <tbody id="tablaModelos"></tbody>
       </table>
     </div>
   </div>
 </div>
 
-<!-- Modal nuevo / editar modelo -->
+<!-- Modal nuevo / editar IDENTIDAD del modelo (las tarifas se editan en la grilla) -->
 <div id="overlay" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
-  <div class="modal" style="max-width:680px;">
+  <div class="modal" style="max-width:560px;">
     <div class="modal-header">
       <h3 class="modal-title" id="modalTitle">Nuevo modelo</h3>
       <button class="modal-close" onclick="cerrarModal()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
@@ -126,7 +136,6 @@
           <label class="form-label" for="f-modelo">Modelo <span class="req">*</span></label>
           <input class="form-input" id="f-modelo" placeholder="Ej. PD786">
         </div>
-
         <div class="form-field">
           <label class="form-label" for="f-tipo">Tipo</label>
           <select class="form-select" id="f-tipo">
@@ -142,55 +151,25 @@
             <option value="R">Reuso</option>
           </select>
         </div>
-
         <div class="form-field">
-          <label class="form-label" for="f-minimo">Mínimo (alerta)</label>
+          <label class="form-label" for="f-minimo">Mínimo (alerta inventario)</label>
           <input class="form-input" id="f-minimo" type="number" step="1" min="0" placeholder="5">
         </div>
-
         <div class="form-field">
           <label class="form-label">Flags</label>
-          <div style="display:flex; gap:18px; flex-wrap:wrap;">
-            <label class="form-check">
-              <input type="checkbox" id="f-alto">
-              <span><span class="form-check-label">Alto movimiento</span></span>
-            </label>
-            <label class="form-check">
-              <input type="checkbox" id="f-activo" checked>
-              <span><span class="form-check-label">Activo</span></span>
-            </label>
+          <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center; height:38px;">
+            <label class="form-check"><input type="checkbox" id="f-alto"><span><span class="form-check-label">Alto movimiento</span></span></label>
+            <label class="form-check"><input type="checkbox" id="f-activo" checked><span><span class="form-check-label">Activo</span></span></label>
           </div>
         </div>
-
         <div class="form-field" style="grid-column:1 / -1;">
           <label class="form-label" for="f-notas">Notas</label>
           <textarea class="form-input form-textarea" id="f-notas" placeholder="(opcional)"></textarea>
         </div>
-
-        <div class="form-field" style="grid-column:1 / -1; margin-top:6px; border-top:1px solid #e5e7eb; padding-top:12px;">
-          <div class="form-label" style="font-weight:600;">Facturación (QuickBooks)</div>
-          <p style="margin:.25rem 0 0; color:#666; font-size:.8rem;">
-            Tarifas fijas por unidad para el desglose de la mensualidad. El mantenimiento
-            se calcula como el resto (mensualidad − alquiler − frecuencia).
-          </p>
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="f-precio-alquiler">Alquiler ($/mes por unidad)</label>
-          <input class="form-input" id="f-precio-alquiler" type="number" step="0.01" min="0" placeholder="0.00">
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="f-precio-frecuencia">Frecuencia ($/mes por unidad)</label>
-          <input class="form-input" id="f-precio-frecuencia" type="number" step="0.01" min="0" placeholder="0.00 (si aplica)">
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="f-qbo-item-alquiler">Item QBO "Alquiler"</label>
-          <select class="form-select" id="f-qbo-item-alquiler"><option value="">— ninguno —</option></select>
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="f-qbo-bundle">Bundle QBO "Mensualidad"</label>
-          <select class="form-select" id="f-qbo-bundle"><option value="">— ninguno —</option></select>
-        </div>
       </div>
+      <p style="margin:12px 0 0; font-size:12px; color:var(--fg-4);">
+        Las tarifas (alquiler/frecuencia) y el mapeo a QuickBooks se editan directo en la tabla.
+      </p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
