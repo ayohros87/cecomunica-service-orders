@@ -90,6 +90,24 @@
       border-top: 2px solid var(--border-default) !important;
     }
 
+    /* Tablas editables (Equipos / Cargos) — estilo hoja de cálculo como en otras listas */
+    #tablaEquipos td, #tablaCargos td { padding: 3px 6px; vertical-align: middle; }
+    #tablaEquipos thead th, #tablaCargos thead th { background: var(--surface-sunken); font-size: 12px; }
+    #tablaEquipos tbody tr:nth-child(even), #tablaCargos tbody tr:nth-child(even) { background: var(--surface-sunken); }
+    #tablaEquipos tbody tr:hover, #tablaCargos tbody tr:hover { background: var(--brand-soft); }
+    #tablaEquipos input, #tablaEquipos select,
+    #tablaCargos input, #tablaCargos select {
+      width: 100%; height: 32px; box-sizing: border-box;
+      border: 1px solid transparent; background: transparent;
+      border-radius: var(--radius-sm); padding: 0 8px;
+      font-size: 13px; color: var(--fg-1); font-family: var(--font-body);
+    }
+    #tablaEquipos input:hover, #tablaEquipos select:hover,
+    #tablaCargos input:hover, #tablaCargos select:hover { border-color: var(--border-default); background: var(--surface-card); }
+    #tablaEquipos input:focus, #tablaEquipos select:focus,
+    #tablaCargos input:focus, #tablaCargos select:focus { border-color: var(--accent); background: var(--surface-card); box-shadow: var(--ring-focus); outline: none; }
+    #tablaEquipos .cantidad, #tablaEquipos .precio, #tablaCargos .cargo-monto { text-align: right; font-family: var(--font-mono); }
+
     /* Modal preview — layout custom (el kit cubre el shape) */
     #previewModal { max-width: 980px; max-height: 90vh; display: flex; flex-direction: column; }
     #previewBody { padding: var(--sp-4) var(--sp-5); overflow: auto; flex: 1; }
@@ -328,6 +346,7 @@
   <script src="../js/ui/modal.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
+  <script src="../js/services/cargosService.js" defer></script>
   <script src="../js/pages/nc-state.js"       defer></script>
   <script src="../js/pages/nc-form.js"        defer></script>
   <script src="../js/pages/nc-cargos.js"      defer></script>
