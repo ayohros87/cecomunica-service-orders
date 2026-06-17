@@ -7,6 +7,43 @@
     let ordenAsc = true;
     let dense = false;
     const hiddenCols = new Set(); // 'estado' | 'alto' | 'minimo' | 'activo'
+    // Items de QuickBooks para los desplegables de facturación (se cargan vía callable).
+    const qboItems = { alquileres: [], bundles: [], loaded: false };
+
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+    // Trae los items "Alquiler"/"Mensualidad" de QBO (sin exponer el token al navegador).
+    async function loadQboItems(){
+      try{
+        const res = await firebase.functions().httpsCallable('listQBOItems')();
+        qboItems.alquileres = res.data.alquileres || [];
+        qboItems.bundles    = res.data.bundles || [];
+        qboItems.loaded     = true;
+      }catch(e){
+        console.error('listQBOItems', e);
+        qboItems.loaded = false; // los selects mostrarán solo el id guardado
+      }
+    }
+
+    // Llena un <select> con la lista de QBO, preservando un id guardado aunque no
+    // venga en la lista (QBO desconectado o item inactivo).
+    function fillQboSelect(selectId, list, selectedId){
+      const sel = document.getElementById(selectId);
+      if(!sel) return;
+      const sid = selectedId==null ? '' : String(selectedId);
+      const opts = ['<option value="">— ninguno —</option>'];
+      let found = false;
+      (list||[]).forEach(it=>{
+        const on = String(it.id)===sid;
+        if(on) found = true;
+        opts.push(`<option value="${esc(it.id)}"${on?' selected':''}>${esc(it.name)} (${esc(it.id)})</option>`);
+      });
+      if(sid && !found){
+        const aviso = qboItems.loaded ? 'no encontrado en QBO' : 'QBO no disponible';
+        opts.push(`<option value="${esc(sid)}" selected>ID ${esc(sid)} (${aviso})</option>`);
+      }
+      sel.innerHTML = opts.join('');
+    }
 
     /* ===== Util ===== */
     function debounce(fn, t=220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); } }
@@ -62,6 +99,7 @@
         }
 
         await cargarModelos();
+        await loadQboItems();
       }catch(e){
         console.error(e); Toast.show('Error validando usuario','bad');
       }
@@ -212,7 +250,6 @@
       setVal('f-notas','');
       // Facturación (QuickBooks)
       setVal('f-precio-alquiler','');   setVal('f-precio-frecuencia','');
-      setVal('f-qbo-item-alquiler',''); setVal('f-qbo-bundle','');
 
       if(!creando){
         const m = listaModelos.find(x=>x.id===id);
@@ -227,10 +264,13 @@
           setVal('f-notas', m.notas||'');
           setVal('f-precio-alquiler', Number.isFinite(m.precio_alquiler) ? m.precio_alquiler : '');
           setVal('f-precio-frecuencia', Number.isFinite(m.precio_frecuencia) ? m.precio_frecuencia : '');
-          setVal('f-qbo-item-alquiler', m.qbo_item_alquiler_id || '');
-          setVal('f-qbo-bundle', m.qbo_bundle_id || '');
         }
       }
+
+      // Desplegables de QBO (poblados desde el callable; preservan id guardado).
+      const _mSel = creando ? null : listaModelos.find(x=>x.id===id);
+      fillQboSelect('f-qbo-item-alquiler', qboItems.alquileres, _mSel && _mSel.qbo_item_alquiler_id);
+      fillQboSelect('f-qbo-bundle', qboItems.bundles, _mSel && _mSel.qbo_bundle_id);
       // El overlay tiene `display:none` inline (gana sobre las clases del kit, que
       // además tiene dos reglas .modal-backdrop en conflicto), así que togglear una
       // clase NO lo muestra. Controlamos el estilo inline directo para abrir/cerrar.
