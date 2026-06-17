@@ -273,8 +273,13 @@
           </div>
 
           <div class="totals-row subtotal">
-            <span>Subtotal</span>
+            <span>Subtotal equipos</span>
             <span id="subtotal_view">$0.00</span>
+          </div>
+
+          <div class="totals-row" id="row-cargos-rec" style="display:none;">
+            <span>Otros conceptos (mensual)</span>
+            <span id="cargos_rec_view">$0.00</span>
           </div>
 
           <div class="totals-row">
@@ -283,18 +288,28 @@
           </div>
 
           <div class="totals-row total">
-            <strong>Total</strong>
+            <strong>Total mensual</strong>
             <strong id="total_con_itbms_view">$0.00</strong>
+          </div>
+
+          <div class="totals-row" id="row-cargos-uni" style="display:none;">
+            <span>Otros conceptos (único)</span>
+            <span id="cargos_uni_view">$0.00</span>
+          </div>
+
+          <div class="totals-row total" id="row-primer-pago" style="display:none;">
+            <strong>Primer pago (inicial)</strong>
+            <strong id="primer_pago_view">$0.00</strong>
           </div>
         </div>
       </div>
 
-      <!-- Sección 4: Cargos adicionales (opcional) -->
+      <!-- Sección 4: Otros conceptos (opcional) -->
       <div class="form-section-header">
-        <h3><i data-lucide="receipt"></i> Cargos adicionales <span style="font-weight:400; font-size:13px; color:var(--fg-3);">(opcional)</span></h3>
+        <h3><i data-lucide="receipt"></i> Otros conceptos <span style="font-weight:400; font-size:13px; color:var(--fg-3);">(opcional)</span></h3>
       </div>
       <div class="app-card" style="display:block; margin-bottom:var(--sp-4);">
-        <p style="margin:0 0 8px; font-size:13px; color:var(--fg-3);">Activación, instalación u otros cargos que <b>no son equipos</b>. No afectan el total de equipos de arriba.</p>
+        <p style="margin:0 0 8px; font-size:13px; color:var(--fg-3);">Activación, instalación u otros conceptos que <b>no son equipos</b> (se eligen del catálogo de Facturación). Los <b>mensuales</b> suman al total mensual; los <b>únicos</b>, al primer pago.</p>
         <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">
           <table id="tablaCargos" class="app-table editable">
             <thead>

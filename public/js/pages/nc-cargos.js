@@ -44,6 +44,7 @@ window.NCCargos = {
           </select></td>
       <td><button type="button" class="btn-del-fila cargo-del">❌</button></td>`;
     tbody.appendChild(tr);
+    const recalc = () => { if (window.NCForm) NCForm.recalcularTotalesContrato(); };
 
     const sel = tr.querySelector('.cargo-sel');
     sel.addEventListener('change', () => {
@@ -53,8 +54,12 @@ window.NCCargos = {
         if (m && !tr.querySelector('.cargo-monto').value) tr.querySelector('.cargo-monto').value = m;
         tr.querySelector('.cargo-tipo').value = opt.dataset.rec === '1' ? 'recurrente' : 'unico';
       }
+      recalc();
     });
-    tr.querySelector('.cargo-del').addEventListener('click', () => tr.remove());
+    tr.querySelector('.cargo-monto').addEventListener('input', recalc);
+    tr.querySelector('.cargo-tipo').addEventListener('change', recalc);
+    tr.querySelector('.cargo-del').addEventListener('click', () => { tr.remove(); recalc(); });
+    recalc();
   },
 
   async cargar(cargos) {

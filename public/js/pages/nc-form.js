@@ -133,14 +133,39 @@ window.NCForm = {
   },
 
   recalcularTotalesContrato() {
-    const subtotal    = this.calcularSubtotalDesdeFilas();
+    const equiposSub  = this.calcularSubtotalDesdeFilas();
     const itbmsAplica = (document.getElementById('itbms_aplica')?.value ?? 'true') === 'true';
-    const tot         = ContractTotals.compute(subtotal, itbmsAplica);
-    document.getElementById('itbms_label').textContent             = tot.itbmsLabel;
-    document.getElementById('subtotal_view').textContent           = FMT.money(tot.subtotal);
-    document.getElementById('itbms_view').textContent              = FMT.money(tot.itbmsMonto);
-    document.getElementById('total_con_itbms_view').textContent    = FMT.money(tot.totalConITBMS);
-    return tot;
+
+    // Otros conceptos (cargos): recurrentes suman al mensual; únicos al primer pago.
+    const cargos = (window.NCCargos ? NCCargos.leer() : []);
+    let cargosRec = 0, cargosUni = 0;
+    cargos.forEach(c => { if (c.recurrente) cargosRec += Number(c.monto) || 0; else cargosUni += Number(c.monto) || 0; });
+    cargosRec = FMT.round2(cargosRec); cargosUni = FMT.round2(cargosUni);
+
+    const mensual = ContractTotals.compute(FMT.round2(equiposSub + cargosRec), itbmsAplica);
+    const inicial = ContractTotals.compute(FMT.round2(equiposSub + cargosRec + cargosUni), itbmsAplica);
+
+    const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    const setShow = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+    setTxt('itbms_label', mensual.itbmsLabel);
+    setTxt('subtotal_view', FMT.money(equiposSub));
+    setTxt('cargos_rec_view', FMT.money(cargosRec));
+    setTxt('itbms_view', FMT.money(mensual.itbmsMonto));
+    setTxt('total_con_itbms_view', FMT.money(mensual.totalConITBMS));
+    setTxt('cargos_uni_view', FMT.money(cargosUni));
+    setTxt('primer_pago_view', FMT.money(inicial.totalConITBMS));
+    setShow('row-cargos-rec', cargosRec > 0);
+    setShow('row-cargos-uni', cargosUni > 0);
+    setShow('row-primer-pago', cargosUni > 0);
+
+    return {
+      // Compat: estos campos ahora reflejan el MENSUAL (equipos + cargos recurrentes).
+      subtotal: mensual.subtotal, itbmsAplica, itbmsPorc: mensual.itbmsPorc,
+      itbmsMonto: mensual.itbmsMonto, totalConITBMS: mensual.totalConITBMS, itbmsLabel: mensual.itbmsLabel,
+      // Detalle adicional:
+      equiposSub, cargosRec, cargosUni,
+      subtotalInicial: inicial.subtotal, itbmsInicial: inicial.itbmsMonto, primerPago: inicial.totalConITBMS,
+    };
   },
 
   calcularTotal() {

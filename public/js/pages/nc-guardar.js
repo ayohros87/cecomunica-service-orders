@@ -153,6 +153,13 @@ window.NCGuardar = {
       itbms_porcentaje: FMT.ITBMS_RATE,
       itbms_monto: FMT.round2(tot.itbmsMonto),
       total_con_itbms: FMT.round2(tot.totalConITBMS),
+      // Desglose con "Otros conceptos": el total mensual incluye los conceptos
+      // recurrentes; el primer pago suma además los únicos (activación, etc.).
+      subtotal_equipos: FMT.round2(tot.equiposSub),
+      cargos_recurrente: FMT.round2(tot.cargosRec),
+      cargos_unico: FMT.round2(tot.cargosUni),
+      total_mensual: FMT.round2(tot.totalConITBMS),
+      primer_pago: FMT.round2(tot.primerPago),
       // `total` historically equaled `subtotal` on contratos written by
       // this page — a long-standing bug since the field was first added.
       // Fixed 2026-05-19: write the post-ITBMS total so the name matches

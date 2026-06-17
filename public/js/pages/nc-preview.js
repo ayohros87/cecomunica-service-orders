@@ -43,7 +43,9 @@ window.NCPreview = {
       equipos,
       cargos: (window.NCCargos ? NCCargos.leer() : []),
       subtotal: tot.subtotal, itbms_aplica: tot.itbmsAplica,
-      itbms_monto: tot.itbmsMonto, total_con_itbms: tot.totalConITBMS
+      itbms_monto: tot.itbmsMonto, total_con_itbms: tot.totalConITBMS,
+      equipos_subtotal: tot.equiposSub, cargos_recurrente: tot.cargosRec,
+      cargos_unico: tot.cargosUni, primer_pago: tot.primerPago
     };
   },
 
@@ -99,7 +101,7 @@ window.NCPreview = {
       </div>
       ${(draft.cargos && draft.cargos.length) ? `
       <div class="preview-card">
-        <h4>Cargos adicionales</h4>
+        <h4>Otros conceptos</h4>
         <table class="preview-table">
           <thead><tr><th>Concepto</th><th>Tipo</th><th>Monto</th></tr></thead>
           <tbody>${draft.cargos.map(c => `
@@ -111,9 +113,13 @@ window.NCPreview = {
         <h4>Totales</h4>
         <div class="preview-totals">
           <table>
-            <tr><td>Subtotal</td><td style="text-align:right;">$${Number(draft.subtotal || 0).toFixed(2)}</td></tr>
+            <tr><td>Subtotal equipos</td><td style="text-align:right;">$${Number(draft.equipos_subtotal || 0).toFixed(2)}</td></tr>
+            ${Number(draft.cargos_recurrente || 0) > 0 ? `<tr><td>Otros conceptos (mensual)</td><td style="text-align:right;">$${Number(draft.cargos_recurrente).toFixed(2)}</td></tr>` : ''}
             <tr><td>ITBMS</td><td style="text-align:right;">$${Number(draft.itbms_monto || 0).toFixed(2)}</td></tr>
-            <tr><td><b>Total</b></td><td style="text-align:right;"><b>$${Number(draft.total_con_itbms || 0).toFixed(2)}</b></td></tr>
+            <tr><td><b>Total mensual</b></td><td style="text-align:right;"><b>$${Number(draft.total_con_itbms || 0).toFixed(2)}</b></td></tr>
+            ${Number(draft.cargos_unico || 0) > 0 ? `
+            <tr><td>Otros conceptos (único)</td><td style="text-align:right;">$${Number(draft.cargos_unico).toFixed(2)}</td></tr>
+            <tr><td><b>Primer pago (inicial)</b></td><td style="text-align:right;"><b>$${Number(draft.primer_pago || 0).toFixed(2)}</b></td></tr>` : ''}
           </table>
         </div>
         <div class="preview-note">ID del contrato se asigna al guardar.</div>
