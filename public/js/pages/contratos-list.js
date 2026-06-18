@@ -111,7 +111,7 @@ window.ContratosLista = {
       </td>
       <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
       <td class="td-muted">${esc(CS.mapaUsuarios[data.creado_por_uid] || '-')}</td>
-      <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;" title="${tot.tieneCargos ? 'Total mensual (incluye servicios y otros)' + (tot.tieneCargosUnicos ? ' · Primer pago ' + FMT.money(tot.primerPago) : '') : 'Total del contrato'}">${FMT.money(tot.totalConITBMS)}${tot.tieneCargos ? ' <span style="color:var(--accent); font-weight:700;" title="Incluye servicios y otros">＋</span>' : ''}</td>
+      <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">${FMT.money(tot.totalConITBMS)}</td>
       <td class="acciones">${accionesHtml}</td>
     `;
     return fila;
