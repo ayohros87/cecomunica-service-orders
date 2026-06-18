@@ -99,7 +99,7 @@ function agregarEquipo(modelo_id = '', modeloNombre = '', cantidad = 1, precio =
     <td><select class="td-select modelo" aria-label="Modelo">${opciones}</select></td>
     <td><input class="td-input descripcion" type="text" value="${descripcion}" aria-label="Descripción"></td>
     <td><input class="td-input td-mono cantidad" type="number" min="1" value="${cantidad}" aria-label="Cantidad"></td>
-    <td><input class="td-input td-mono precio" type="number" min="0" step="0.01" value="${precio}" aria-label="Precio unitario"></td>
+    <td><span class="minput"><input class="td-input td-mono precio" type="number" min="0" step="any" value="${precio}" aria-label="Precio unitario"></span></td>
     <td class="td-amount subtotal">$0.00</td>
     <td class="td-actions">
       <button type="button" class="btn btn-ghost btn-icon btn-sm" aria-label="Eliminar equipo"

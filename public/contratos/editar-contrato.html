@@ -32,6 +32,10 @@
     .app-body { padding-bottom: 84px; }
     /* Renovación badge color sigue el accent (matches kit example) */
     #renovacionBadge.chip-prioridad { background: var(--accent-soft); color: var(--navy); border-color: var(--accent-line); }
+    /* Prefijo "$" en campos de dinero */
+    .minput { position: relative; display: block; }
+    .minput::before { content: "$"; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: var(--fg-4); font-size: 12px; pointer-events: none; z-index: 1; }
+    .minput input { padding-left: 18px !important; }
   </style>
 </head>
 <body>
@@ -195,10 +199,10 @@
         </div>
       </div>
 
-      <!-- Sección 4: Otros conceptos -->
+      <!-- Sección 4: Servicios y otros -->
       <div class="ds-card" style="margin-bottom:var(--sp-4);">
         <div style="padding:var(--sp-5) var(--sp-5) var(--sp-3);">
-          <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="receipt" style="width:16px;height:16px;"></i> Otros conceptos</p>
+          <p class="form-section-title" style="margin-bottom:2px;"><i data-lucide="receipt" style="width:16px;height:16px;"></i> Servicios y otros</p>
           <p class="form-section-desc" style="margin-bottom:0;">Activación u otros conceptos (del catálogo de Facturación). Mensuales → total mensual; únicos → primer pago.</p>
         </div>
         <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:visible;">

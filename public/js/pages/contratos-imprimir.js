@@ -381,7 +381,7 @@ function resolverTotalesParaImpresion(contrato) {
 
   const itbmsLabel = itbmsAplica ? `ITBMS (${round2(itbmsPorc*100)}%)` : 'ITBMS EXENTO';
 
-  // Otros conceptos (con fallback: contrato sin ellos → 0, primerPago = total)
+  // Servicios y otros (con fallback: contrato sin ellos → 0, primerPago = total)
   const cargos           = Array.isArray(contrato.cargos) ? contrato.cargos : [];
   const cargosRecurrente = round2(Number(contrato.cargos_recurrente ?? 0));
   const cargosUnico      = round2(Number(contrato.cargos_unico ?? 0));

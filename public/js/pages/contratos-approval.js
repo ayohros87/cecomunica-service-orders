@@ -54,13 +54,13 @@ window.ContratosAprobacion = {
       <p><strong>Observaciones:</strong> ${esc(c.observaciones || '-')}</p>
       <div style="margin-top:8px; padding:8px; border:1px dashed var(--line); border-radius:8px; max-width:420px;">
         <div style="display:flex; justify-content:space-between;"><span>Subtotal${tot.tieneCargos ? ' equipos' : ''}</span><strong>${FMT.money(tot.equiposSub)}</strong></div>
-        ${tot.cargosRecurrente > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Otros conceptos (mensual)</span><strong>${FMT.money(tot.cargosRecurrente)}</strong></div>` : ''}
+        ${tot.cargosRecurrente > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Servicios y otros (mensual)</span><strong>${FMT.money(tot.cargosRecurrente)}</strong></div>` : ''}
         <div style="display:flex; justify-content:space-between;"><span>${tot.itbmsLabel}</span><strong>${FMT.money(tot.itbmsMonto)}</strong></div>
         <div style="border-top:1px solid var(--line); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
           <span>Total${tot.tieneCargos ? ' mensual' : ''}</span><strong>${FMT.money(tot.totalConITBMS)}</strong>
         </div>
         ${tot.tieneCargosUnicos ? `
-        <div style="display:flex; justify-content:space-between; margin-top:6px;"><span>Otros conceptos (único)</span><strong>${FMT.money(tot.cargosUnico)}</strong></div>
+        <div style="display:flex; justify-content:space-between; margin-top:6px;"><span>Servicios y otros (único)</span><strong>${FMT.money(tot.cargosUnico)}</strong></div>
         ${tot.itbmsUnico > 0 ? `<div style="display:flex; justify-content:space-between;"><span>ITBMS (único)</span><strong>${FMT.money(tot.itbmsUnico)}</strong></div>` : ''}
         <div style="display:flex; justify-content:space-between;"><span><b>Primer pago (inicial)</b></span><strong>${FMT.money(tot.primerPago)}</strong></div>` : ''}
       </div>

@@ -94,7 +94,7 @@ window.NCForm = {
       </td>
       <td><input type="text" class="descripcion" value="Equipos de Comunicación"></td>
       <td><input type="number" class="cantidad input-cantidad" min="1" value="1"></td>
-      <td><input type="number" class="precio input-precio" step="0.01" min="0" value="0.00"></td>
+      <td><span class="minput"><input type="number" class="precio input-precio" step="any" min="0" value="0"></span></td>
       <td class="totalFila">$0.00</td>
       <td><button type="button" class="btn-del-fila">❌</button></td>
     `;
@@ -153,9 +153,12 @@ window.NCForm = {
     setTxt('itbms_view', FMT.money(mensual.itbmsMonto));
     setTxt('total_con_itbms_view', FMT.money(mensual.totalConITBMS));
     setTxt('cargos_uni_view', FMT.money(cargosUni));
+    const itbmsUni = Math.max(0, FMT.round2(inicial.itbmsMonto - mensual.itbmsMonto));
+    setTxt('itbms_uni_view', FMT.money(itbmsUni));
     setTxt('primer_pago_view', FMT.money(inicial.totalConITBMS));
     setShow('row-cargos-rec', cargosRec > 0);
     setShow('row-cargos-uni', cargosUni > 0);
+    setShow('row-itbms-uni', cargosUni > 0 && itbmsUni > 0);
     setShow('row-primer-pago', cargosUni > 0);
 
     return {

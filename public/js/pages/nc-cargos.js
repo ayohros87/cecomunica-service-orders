@@ -37,7 +37,7 @@ window.NCCargos = {
     const rec = c.recurrente === true;
     tr.innerHTML = `
       <td><select class="cargo-sel">${this._opcionesHtml(c.cargo_id)}</select></td>
-      <td><input type="number" class="cargo-monto" step="0.01" min="0" value="${Number.isFinite(c.monto) ? c.monto : ''}" placeholder="0.00"></td>
+      <td><span class="minput"><input type="number" class="cargo-monto" step="any" min="0" value="${Number.isFinite(c.monto) ? c.monto : ''}" placeholder="0.00"></span></td>
       <td><select class="cargo-tipo">
             <option value="unico"${rec ? '' : ' selected'}>Único</option>
             <option value="recurrente"${rec ? ' selected' : ''}>Mensual</option>

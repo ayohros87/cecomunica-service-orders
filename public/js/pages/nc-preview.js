@@ -101,7 +101,7 @@ window.NCPreview = {
       </div>
       ${(draft.cargos && draft.cargos.length) ? `
       <div class="preview-card">
-        <h4>Otros conceptos</h4>
+        <h4>Servicios y otros</h4>
         <table class="preview-table">
           <thead><tr><th>Concepto</th><th>Tipo</th><th>Monto</th></tr></thead>
           <tbody>${draft.cargos.map(c => `
@@ -114,11 +114,12 @@ window.NCPreview = {
         <div class="preview-totals">
           <table>
             <tr><td>Subtotal equipos</td><td style="text-align:right;">$${Number(draft.equipos_subtotal || 0).toFixed(2)}</td></tr>
-            ${Number(draft.cargos_recurrente || 0) > 0 ? `<tr><td>Otros conceptos (mensual)</td><td style="text-align:right;">$${Number(draft.cargos_recurrente).toFixed(2)}</td></tr>` : ''}
+            ${Number(draft.cargos_recurrente || 0) > 0 ? `<tr><td>Servicios y otros (mensual)</td><td style="text-align:right;">$${Number(draft.cargos_recurrente).toFixed(2)}</td></tr>` : ''}
             <tr><td>ITBMS</td><td style="text-align:right;">$${Number(draft.itbms_monto || 0).toFixed(2)}</td></tr>
             <tr><td><b>Total mensual</b></td><td style="text-align:right;"><b>$${Number(draft.total_con_itbms || 0).toFixed(2)}</b></td></tr>
             ${Number(draft.cargos_unico || 0) > 0 ? `
-            <tr><td>Otros conceptos (único)</td><td style="text-align:right;">$${Number(draft.cargos_unico).toFixed(2)}</td></tr>
+            <tr><td>Servicios y otros (único)</td><td style="text-align:right;">$${Number(draft.cargos_unico).toFixed(2)}</td></tr>
+            ${(Number(draft.primer_pago||0) - Number(draft.total_con_itbms||0) - Number(draft.cargos_unico||0)) > 0.004 ? `<tr><td>ITBMS (único)</td><td style="text-align:right;">$${(Number(draft.primer_pago) - Number(draft.total_con_itbms) - Number(draft.cargos_unico)).toFixed(2)}</td></tr>` : ''}
             <tr><td><b>Primer pago (inicial)</b></td><td style="text-align:right;"><b>$${Number(draft.primer_pago || 0).toFixed(2)}</b></td></tr>` : ''}
           </table>
         </div>

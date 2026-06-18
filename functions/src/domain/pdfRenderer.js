@@ -70,7 +70,7 @@ function buildContractHtmlForPdf(contrato, vendedorInfo = {}, aprobadorInfo = {}
       </tr>
     `;
   });
-  // Otros conceptos (cargos) — filas extra en la tabla de equipos.
+  // Servicios y otros (cargos) — filas extra en la tabla de equipos.
   const cargos = Array.isArray(contrato.cargos) ? contrato.cargos : [];
   cargos.forEach((cg) => {
     const monto = Number(cg.monto || 0);
@@ -106,10 +106,10 @@ function buildContractHtmlForPdf(contrato, vendedorInfo = {}, aprobadorInfo = {}
   const tdR = (txt, extra = "") => `<td style="padding:6px 10px; border:1px solid #333; text-align:right;${extra}">${txt}</td>`;
   let totalesRows = `
     <tr>${td(tieneCargos ? "Subtotal equipos" : "Subtotal")}${tdR("$" + equiposSub.toFixed(2))}</tr>
-    ${cargosRec > 0 ? `<tr>${td("Otros conceptos (mensual)")}${tdR("$" + cargosRec.toFixed(2))}</tr>` : ""}
+    ${cargosRec > 0 ? `<tr>${td("Servicios y otros (mensual)")}${tdR("$" + cargosRec.toFixed(2))}</tr>` : ""}
     <tr>${td(itbmsLabel)}${tdR("$" + itbms.toFixed(2))}</tr>
     <tr>${td(tieneCargos ? "Total mensual" : "Total", "font-weight:700;")}${tdR("$" + totalMensual.toFixed(2), "font-weight:700;")}</tr>
-    ${cargosUni > 0 ? `<tr>${td("Otros conceptos (único)")}${tdR("$" + cargosUni.toFixed(2))}</tr>
+    ${cargosUni > 0 ? `<tr>${td("Servicios y otros (único)")}${tdR("$" + cargosUni.toFixed(2))}</tr>
     ${itbmsUni > 0 ? `<tr>${td("ITBMS (único)")}${tdR("$" + itbmsUni.toFixed(2))}</tr>` : ""}
     <tr>${td("PRIMER PAGO", "font-weight:700;")}${tdR("$" + primerPago.toFixed(2), "font-weight:700;")}</tr>` : ""}`;
 
