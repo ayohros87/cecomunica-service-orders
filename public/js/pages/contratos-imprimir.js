@@ -387,10 +387,11 @@ function resolverTotalesParaImpresion(contrato) {
   const cargosUnico      = round2(Number(contrato.cargos_unico ?? 0));
   const equiposSub       = round2(Number(contrato.subtotal_equipos ?? subtotal));
   const primerPago       = round2(Number(contrato.primer_pago ?? totalConITBMS));
+  const itbmsUnico       = Math.max(0, round2(primerPago - totalConITBMS - cargosUnico));
   const tieneCargos      = cargos.length > 0 || cargosRecurrente > 0 || cargosUnico > 0;
 
   return { subtotal, itbmsAplica, itbmsPorc, itbmsMonto, totalConITBMS, itbmsLabel,
-           cargos, cargosRecurrente, cargosUnico, equiposSub, primerPago, tieneCargos };
+           cargos, cargosRecurrente, cargosUnico, equiposSub, primerPago, itbmsUnico, tieneCargos };
 }
 
 function pintarTotalesImpresion(tot) {
@@ -411,6 +412,8 @@ function pintarTotalesImpresion(tot) {
 
   setShow('imp_row_cargos_uni', tot.cargosUnico > 0);
   setTxt('imp_cargos_uni', fmt(tot.cargosUnico));
+  setShow('imp_row_itbms_uni', tot.itbmsUnico > 0);
+  setTxt('imp_itbms_uni', fmt(tot.itbmsUnico));
   setShow('imp_row_primer_pago', tot.cargosUnico > 0);
   setTxt('imp_primer_pago', fmt(tot.primerPago));
 

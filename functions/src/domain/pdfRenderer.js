@@ -98,6 +98,7 @@ function buildContractHtmlForPdf(contrato, vendedorInfo = {}, aprobadorInfo = {}
   const itbms       = round2(contrato.itbms_monto ?? (itbmsAplica ? subMensual * ITBMS_RATE : 0));
   const totalMensual = round2(contrato.total_con_itbms ?? (subMensual + itbms));
   const primerPago  = round2(contrato.primer_pago ?? totalMensual);
+  const itbmsUni    = Math.max(0, round2(primerPago - totalMensual - cargosUni));
   const tieneCargos = cargos.length > 0 || cargosRec > 0 || cargosUni > 0;
   const itbmsLabel  = itbmsAplica ? `ITBMS (${round2(ITBMS_RATE*100)}%)` : "ITBMS EXENTO";
 
@@ -109,6 +110,7 @@ function buildContractHtmlForPdf(contrato, vendedorInfo = {}, aprobadorInfo = {}
     <tr>${td(itbmsLabel)}${tdR("$" + itbms.toFixed(2))}</tr>
     <tr>${td(tieneCargos ? "Total mensual" : "Total", "font-weight:700;")}${tdR("$" + totalMensual.toFixed(2), "font-weight:700;")}</tr>
     ${cargosUni > 0 ? `<tr>${td("Otros conceptos (único)")}${tdR("$" + cargosUni.toFixed(2))}</tr>
+    ${itbmsUni > 0 ? `<tr>${td("ITBMS (único)")}${tdR("$" + itbmsUni.toFixed(2))}</tr>` : ""}
     <tr>${td("PRIMER PAGO", "font-weight:700;")}${tdR("$" + primerPago.toFixed(2), "font-weight:700;")}</tr>` : ""}`;
 
   html = html.replace("{{TOTALES_ROWS}}", totalesRows);

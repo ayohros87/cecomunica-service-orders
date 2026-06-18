@@ -61,13 +61,9 @@ window.ContratosAprobacion = {
         </div>
         ${tot.tieneCargosUnicos ? `
         <div style="display:flex; justify-content:space-between; margin-top:6px;"><span>Otros conceptos (único)</span><strong>${FMT.money(tot.cargosUnico)}</strong></div>
+        ${tot.itbmsUnico > 0 ? `<div style="display:flex; justify-content:space-between;"><span>ITBMS (único)</span><strong>${FMT.money(tot.itbmsUnico)}</strong></div>` : ''}
         <div style="display:flex; justify-content:space-between;"><span><b>Primer pago (inicial)</b></span><strong>${FMT.money(tot.primerPago)}</strong></div>` : ''}
       </div>
-      ${tot.tieneCargos ? `
-      <div style="margin-top:8px; max-width:420px;">
-        <p style="margin:0 0 4px; font-weight:600; font-size:13px;">Otros conceptos</p>
-        ${(tot.cargos || []).map(cg => `<div style="display:flex; justify-content:space-between; font-size:13px;"><span>${esc(cg.concepto || '')} ${cg.recurrente ? '(mensual)' : '(único)'}</span><span>${FMT.money(Number(cg.monto) || 0)}</span></div>`).join('')}
-      </div>` : ''}
     `;
 
     const tbody = document.getElementById('tablaEquiposAprobacion');

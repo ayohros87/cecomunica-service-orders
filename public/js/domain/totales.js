@@ -38,9 +38,11 @@ window.ContractTotals = {
     const equiposSub        = FMT.round2(Number(c.subtotal_equipos ?? base.subtotal));
     const totalMensual      = base.totalConITBMS;
     const primerPago        = FMT.round2(Number(c.primer_pago ?? base.totalConITBMS));
+    // ITBMS que recae sobre los conceptos únicos (lo que falta entre total mensual + único y el primer pago).
+    const itbmsUnico = Math.max(0, FMT.round2(primerPago - totalMensual - cargosUnico));
     return {
       ...base,
-      cargos, cargosRecurrente, cargosUnico, equiposSub, totalMensual, primerPago,
+      cargos, cargosRecurrente, cargosUnico, equiposSub, totalMensual, primerPago, itbmsUnico,
       tieneCargos: cargos.length > 0 || cargosRecurrente > 0 || cargosUnico > 0,
       tieneCargosUnicos: cargosUnico > 0,
     };
