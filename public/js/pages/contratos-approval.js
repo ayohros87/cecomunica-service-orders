@@ -53,12 +53,21 @@ window.ContratosAprobacion = {
       <p><strong>Refurbished batería/antena/clip/piezas:</strong> ${esc(refurbishedTexto)}</p>
       <p><strong>Observaciones:</strong> ${esc(c.observaciones || '-')}</p>
       <div style="margin-top:8px; padding:8px; border:1px dashed var(--line); border-radius:8px; max-width:420px;">
-        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${FMT.money(tot.subtotal)}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal${tot.tieneCargos ? ' equipos' : ''}</span><strong>${FMT.money(tot.equiposSub)}</strong></div>
+        ${tot.cargosRecurrente > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Otros conceptos (mensual)</span><strong>${FMT.money(tot.cargosRecurrente)}</strong></div>` : ''}
         <div style="display:flex; justify-content:space-between;"><span>${tot.itbmsLabel}</span><strong>${FMT.money(tot.itbmsMonto)}</strong></div>
         <div style="border-top:1px solid var(--line); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
-          <span>Total</span><strong>${FMT.money(tot.totalConITBMS)}</strong>
+          <span>Total${tot.tieneCargos ? ' mensual' : ''}</span><strong>${FMT.money(tot.totalConITBMS)}</strong>
         </div>
+        ${tot.tieneCargosUnicos ? `
+        <div style="display:flex; justify-content:space-between; margin-top:6px;"><span>Otros conceptos (único)</span><strong>${FMT.money(tot.cargosUnico)}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span><b>Primer pago (inicial)</b></span><strong>${FMT.money(tot.primerPago)}</strong></div>` : ''}
       </div>
+      ${tot.tieneCargos ? `
+      <div style="margin-top:8px; max-width:420px;">
+        <p style="margin:0 0 4px; font-weight:600; font-size:13px;">Otros conceptos</p>
+        ${(tot.cargos || []).map(cg => `<div style="display:flex; justify-content:space-between; font-size:13px;"><span>${esc(cg.concepto || '')} ${cg.recurrente ? '(mensual)' : '(único)'}</span><span>${FMT.money(Number(cg.monto) || 0)}</span></div>`).join('')}
+      </div>` : ''}
     `;
 
     const tbody = document.getElementById('tablaEquiposAprobacion');

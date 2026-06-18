@@ -2,6 +2,10 @@
 const params = new URLSearchParams(location.search);
 const contratoDocId = params.get("id");
 let modelosDisponibles = [];
+let contratoActual = null;
+// NCCargos llama window.NCForm.recalcularTotalesContrato() al cambiar conceptos;
+// aquí lo apuntamos al recálculo de esta página.
+window.NCForm = { recalcularTotalesContrato: () => calcularTotal() };
 
 const ESTADO_CHIPS = {
   activo:               { label: 'Activo',                cls: 'chip-aprobada'  },
@@ -28,6 +32,7 @@ async function cargarContrato() {
     window.location.href = "index.html";
     return;
   }
+  contratoActual = c;
 
   // 3) Bloquear edición si ya fue aprobado
   if (c.estado === "activo") {
@@ -77,6 +82,10 @@ async function cargarContrato() {
   (c.equipos || []).forEach(eq =>
     agregarEquipo(eq.modelo_id || "", eq.modelo || "", eq.cantidad, eq.precio, eq.descripcion)
   );
+
+  // 6b) Cargar otros conceptos (del catálogo) y recalcular
+  if (window.NCCargos) await NCCargos.cargar(c.cargos || []);
+  calcularTotal();
 }
 
 function agregarEquipo(modelo_id = '', modeloNombre = '', cantidad = 1, precio = 0, descripcion = "Equipos de Comunicación") {
@@ -115,15 +124,32 @@ function agregarEquipo(modelo_id = '', modeloNombre = '', cantidad = 1, precio =
 }
 
 function calcularTotal() {
-  let total = 0;
+  let equiposSub = 0;
   document.querySelectorAll("#tablaEquipos tr").forEach(row => {
     const cant = parseFloat(row.querySelector(".cantidad")?.value || 0);
     const price = parseFloat(row.querySelector(".precio")?.value || 0);
     const subtotal = cant * price;
-    row.querySelector(".subtotal").textContent = "$" + subtotal.toFixed(2);
-    total += subtotal;
+    const sc = row.querySelector(".subtotal"); if (sc) sc.textContent = "$" + subtotal.toFixed(2);
+    equiposSub += subtotal;
   });
-  document.getElementById("total").textContent = total.toFixed(2);
+  equiposSub = FMT.round2(equiposSub);
+
+  // Otros conceptos (si el módulo está cargado)
+  const cargos = (window.NCCargos ? NCCargos.leer() : []);
+  let cargosRec = 0, cargosUni = 0;
+  cargos.forEach(c => { if (c.recurrente) cargosRec += Number(c.monto) || 0; else cargosUni += Number(c.monto) || 0; });
+  cargosRec = FMT.round2(cargosRec); cargosUni = FMT.round2(cargosUni);
+
+  // ITBMS: se preserva el del contrato (editar no tiene interruptor propio).
+  const itbmsAplica = contratoActual ? (contratoActual.itbms_aplica !== false) : true;
+  const mensual = ContractTotals.compute(FMT.round2(equiposSub + cargosRec), itbmsAplica);
+  const inicial = ContractTotals.compute(FMT.round2(equiposSub + cargosRec + cargosUni), itbmsAplica);
+
+  const tEl  = document.getElementById("total");        if (tEl)  tEl.textContent  = mensual.totalConITBMS.toFixed(2);
+  const ppEl = document.getElementById("primer_pago");  if (ppEl) ppEl.textContent = inicial.totalConITBMS.toFixed(2);
+  const ppSt = document.getElementById("stat-primer-pago"); if (ppSt) ppSt.style.display = cargosUni > 0 ? '' : 'none';
+
+  return { equiposSub, cargosRec, cargosUni, itbmsAplica, mensual, inicial, cargos };
 }
 
 function refreshRenovacionEditorUI() {
@@ -171,7 +197,7 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
       precio: parseFloat(row.querySelector(".precio").value || 0)
     };
   });
-  const total = equipos.reduce((sum, eq) => sum + (eq.cantidad * eq.precio), 0);
+  const t = calcularTotal(); // recalcula equipos + otros conceptos (mensual + primer pago)
   const accionSeleccionada = document.getElementById("accion").value;
   const esRenovacion = accionSeleccionada === "Renovación";
   const renovacionSinEquipo = esRenovacion && !!document.getElementById("renovacion_sin_equipo")?.checked;
@@ -194,8 +220,20 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
     duracion: duracionFinal,
     observaciones: document.getElementById("observaciones").value.trim(),
     equipos,
-    total,
     total_equipos,
+    // Otros conceptos + totales consistentes con el alta (mensual + primer pago).
+    cargos: t.cargos,
+    subtotal_equipos: t.equiposSub,
+    cargos_recurrente: t.cargosRec,
+    cargos_unico: t.cargosUni,
+    subtotal: t.mensual.subtotal,
+    itbms_aplica: t.itbmsAplica,
+    itbms_porcentaje: FMT.ITBMS_RATE,
+    itbms_monto: t.mensual.itbmsMonto,
+    total_con_itbms: t.mensual.totalConITBMS,
+    total: t.mensual.totalConITBMS,
+    total_mensual: t.mensual.totalConITBMS,
+    primer_pago: t.inicial.totalConITBMS,
     fecha_modificacion: new Date()
   });
 

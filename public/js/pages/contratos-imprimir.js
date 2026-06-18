@@ -381,17 +381,51 @@ function resolverTotalesParaImpresion(contrato) {
 
   const itbmsLabel = itbmsAplica ? `ITBMS (${round2(itbmsPorc*100)}%)` : 'ITBMS EXENTO';
 
-  return { subtotal, itbmsAplica, itbmsPorc, itbmsMonto, totalConITBMS, itbmsLabel };
+  // Otros conceptos (con fallback: contrato sin ellos → 0, primerPago = total)
+  const cargos           = Array.isArray(contrato.cargos) ? contrato.cargos : [];
+  const cargosRecurrente = round2(Number(contrato.cargos_recurrente ?? 0));
+  const cargosUnico      = round2(Number(contrato.cargos_unico ?? 0));
+  const equiposSub       = round2(Number(contrato.subtotal_equipos ?? subtotal));
+  const primerPago       = round2(Number(contrato.primer_pago ?? totalConITBMS));
+  const tieneCargos      = cargos.length > 0 || cargosRecurrente > 0 || cargosUnico > 0;
+
+  return { subtotal, itbmsAplica, itbmsPorc, itbmsMonto, totalConITBMS, itbmsLabel,
+           cargos, cargosRecurrente, cargosUnico, equiposSub, primerPago, tieneCargos };
 }
 
 function pintarTotalesImpresion(tot) {
-  const $sub = document.getElementById('imp_subtotal');
-  const $lbl = document.getElementById('imp_itbms_label');
-  const $itb = document.getElementById('imp_itbms');
-  const $tot = document.getElementById('imp_total');
+  const $ = id => document.getElementById(id);
+  const setShow = (id, on) => { const el = $(id); if (el) el.style.display = on ? '' : 'none'; };
+  const setTxt  = (id, v) => { const el = $(id); if (el) el.textContent = v; };
 
-  if ($sub) $sub.textContent = fmt(tot.subtotal);
-  if ($lbl) $lbl.textContent = tot.itbmsLabel;
-  if ($itb) $itb.textContent = fmt(tot.itbmsMonto);
-  if ($tot) $tot.textContent = fmt(tot.totalConITBMS);
+  // Subtotal muestra solo equipos; los conceptos van en su propia fila.
+  setTxt('imp_subtotal', fmt(tot.equiposSub));
+  setTxt('imp_subtotal_label', tot.tieneCargos ? 'Subtotal equipos' : 'Subtotal');
+  setTxt('imp_itbms_label', tot.itbmsLabel);
+  setTxt('imp_itbms', fmt(tot.itbmsMonto));
+  setTxt('imp_total', fmt(tot.totalConITBMS));
+  setTxt('imp_total_label', tot.tieneCargos ? 'TOTAL MENSUAL' : 'TOTAL');
+
+  setShow('imp_row_cargos_rec', tot.cargosRecurrente > 0);
+  setTxt('imp_cargos_rec', fmt(tot.cargosRecurrente));
+
+  setShow('imp_row_cargos_uni', tot.cargosUnico > 0);
+  setTxt('imp_cargos_uni', fmt(tot.cargosUnico));
+  setShow('imp_row_primer_pago', tot.cargosUnico > 0);
+  setTxt('imp_primer_pago', fmt(tot.primerPago));
+
+  // Lista itemizada de conceptos
+  const wrap = $('imp_conceptos_wrap');
+  const body = $('imp_conceptos');
+  if (wrap && body) {
+    if (tot.tieneCargos && tot.cargos.length) {
+      body.innerHTML = tot.cargos.map(cg => `
+        <tr><td>${(cg.concepto || '').replace(/</g,'&lt;')}</td>
+            <td>${cg.recurrente ? 'Mensual' : 'Único'}</td>
+            <td class="right">${fmt(Number(cg.monto) || 0)}</td></tr>`).join('');
+      wrap.style.display = '';
+    } else {
+      wrap.style.display = 'none';
+    }
+  }
 }

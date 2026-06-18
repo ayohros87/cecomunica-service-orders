@@ -114,6 +114,12 @@
       <tbody id="tablaEquipos"></tbody>
     </table>
 
+    <!-- Otros conceptos (solo si el contrato tiene) -->
+    <table class="print-table" id="imp_conceptos_wrap" style="display:none; margin-top:10px;">
+      <thead><tr><th style="width:60%;">Otros conceptos</th><th>Tipo</th><th class="right">Monto</th></tr></thead>
+      <tbody id="imp_conceptos"></tbody>
+    </table>
+
     <!-- Observaciones + totales -->
     <div class="print-obs-totals">
       <div class="print-obs">
@@ -122,11 +128,14 @@
       </div>
       <table class="print-table" style="margin:0;">
         <tbody>
-          <tr><td>Subtotal</td><td id="imp_subtotal" class="right">$0.00</td></tr>
+          <tr><td id="imp_subtotal_label">Subtotal</td><td id="imp_subtotal" class="right">$0.00</td></tr>
+          <tr id="imp_row_cargos_rec" style="display:none;"><td>Otros conceptos (mensual)</td><td id="imp_cargos_rec" class="right">$0.00</td></tr>
           <tr><td id="imp_itbms_label">ITBMS (7%)</td><td id="imp_itbms" class="right">$0.00</td></tr>
         </tbody>
         <tfoot>
-          <tr class="total-row"><td>TOTAL</td><td id="imp_total" class="right">$0.00</td></tr>
+          <tr class="total-row"><td id="imp_total_label">TOTAL</td><td id="imp_total" class="right">$0.00</td></tr>
+          <tr id="imp_row_cargos_uni" style="display:none;"><td>Otros conceptos (único)</td><td id="imp_cargos_uni" class="right">$0.00</td></tr>
+          <tr class="total-row" id="imp_row_primer_pago" style="display:none;"><td>PRIMER PAGO</td><td id="imp_primer_pago" class="right">$0.00</td></tr>
         </tfoot>
       </table>
     </div>

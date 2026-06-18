@@ -70,15 +70,48 @@ function buildContractHtmlForPdf(contrato, vendedorInfo = {}, aprobadorInfo = {}
       </tr>
     `;
   });
+  // Otros conceptos (cargos) — filas extra en la tabla de equipos.
+  const cargos = Array.isArray(contrato.cargos) ? contrato.cargos : [];
+  cargos.forEach((cg) => {
+    const monto = Number(cg.monto || 0);
+    equiposRows += `
+      <tr>
+        <td>+</td>
+        <td>${cg.concepto || "Concepto"} ${cg.recurrente ? "(mensual)" : "(único)"}</td>
+        <td>—</td>
+        <td>1</td>
+        <td>$${monto.toFixed(2)}</td>
+        <td>$${monto.toFixed(2)}</td>
+      </tr>`;
+  });
   html = html.replace("{{TABLA_EQUIPOS}}", `<tbody>${equiposRows}</tbody>`);
 
-  const subtotal  = (contrato.equipos || []).reduce((acc, eq) => acc + (Number(eq.cantidad||0)*Number(eq.precio||0)), 0);
-  const itbms     = +(subtotal * ITBMS_RATE).toFixed(2);
-  const totalCon  = +(subtotal + itbms).toFixed(2);
+  // Totales: usar los valores guardados (respeta ITBMS exento y conceptos);
+  // fallback a cálculo desde equipos para contratos antiguos.
+  const round2 = (n) => +(Number(n) || 0).toFixed(2);
+  const tieneNuevos = typeof contrato.itbms_aplica !== "undefined";
+  const equiposSub  = round2(contrato.subtotal_equipos ?? (contrato.equipos || []).reduce((a, eq) => a + (Number(eq.cantidad||0)*Number(eq.precio||0)), 0));
+  const cargosRec   = round2(contrato.cargos_recurrente ?? 0);
+  const cargosUni   = round2(contrato.cargos_unico ?? 0);
+  const itbmsAplica = tieneNuevos ? Boolean(contrato.itbms_aplica) : true;
+  const subMensual  = round2(equiposSub + cargosRec);
+  const itbms       = round2(contrato.itbms_monto ?? (itbmsAplica ? subMensual * ITBMS_RATE : 0));
+  const totalMensual = round2(contrato.total_con_itbms ?? (subMensual + itbms));
+  const primerPago  = round2(contrato.primer_pago ?? totalMensual);
+  const tieneCargos = cargos.length > 0 || cargosRec > 0 || cargosUni > 0;
+  const itbmsLabel  = itbmsAplica ? `ITBMS (${round2(ITBMS_RATE*100)}%)` : "ITBMS EXENTO";
 
-  html = html.replace("{{SUBTOTAL}}", subtotal.toFixed(2));
-  html = html.replace("{{ITBMS}}", itbms.toFixed(2));
-  html = html.replace("{{TOTAL_CON_ITBMS}}", totalCon.toFixed(2));
+  const td  = (txt, extra = "") => `<td style="padding:6px 10px; border:1px solid #333;${extra}">${txt}</td>`;
+  const tdR = (txt, extra = "") => `<td style="padding:6px 10px; border:1px solid #333; text-align:right;${extra}">${txt}</td>`;
+  let totalesRows = `
+    <tr>${td(tieneCargos ? "Subtotal equipos" : "Subtotal")}${tdR("$" + equiposSub.toFixed(2))}</tr>
+    ${cargosRec > 0 ? `<tr>${td("Otros conceptos (mensual)")}${tdR("$" + cargosRec.toFixed(2))}</tr>` : ""}
+    <tr>${td(itbmsLabel)}${tdR("$" + itbms.toFixed(2))}</tr>
+    <tr>${td(tieneCargos ? "Total mensual" : "Total", "font-weight:700;")}${tdR("$" + totalMensual.toFixed(2), "font-weight:700;")}</tr>
+    ${cargosUni > 0 ? `<tr>${td("Otros conceptos (único)")}${tdR("$" + cargosUni.toFixed(2))}</tr>
+    <tr>${td("PRIMER PAGO", "font-weight:700;")}${tdR("$" + primerPago.toFixed(2), "font-weight:700;")}</tr>` : ""}`;
+
+  html = html.replace("{{TOTALES_ROWS}}", totalesRows);
   html = html.replace("{{OBSERVACIONES}}", contrato.observaciones || "—");
 
   const fechaVend    = contrato.fecha_modificacion?.toDate?.() ? contrato.fecha_modificacion.toDate() : new Date();
