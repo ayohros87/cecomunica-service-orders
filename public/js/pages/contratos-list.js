@@ -85,11 +85,16 @@ window.ContratosLista = {
       ? `<button class="${ICON_BTN_DEL}" onclick="ContratosLista.quitarComision('${id}')" title="Quitar marca de comisión" aria-label="Quitar comisión"><i data-lucide="x-circle"></i></button>`
       : '';
 
+    const btnBaja = (['activo','aprobado'].includes(data.estado) && (esAdmin || AUTH.is(ROLES.VENDEDOR) || esRecepcion || AUTH.is(ROLES.GERENTE)))
+      ? `<button class="${ICON_BTN}" onclick="window.location.href='cancelaciones.html?contrato=${id}'" title="Solicitar baja de equipos" aria-label="Solicitar baja"><i data-lucide="package-minus"></i></button>`
+      : '';
+
     const accionesHtml = esRecepcion
-      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}`
+      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}${btnBaja}`
       : `${btnImprimir}
          ${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}
          ${btnEditar}
+         ${btnBaja}
          ${btnBorrar}
          ${bloqueFirmado}
          ${esAdmin && data.estado === 'pendiente_aprobacion' ? `<button class="${ICON_BTN}" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar" aria-label="Aprobar"><i data-lucide="check-circle"></i></button>` : ''}

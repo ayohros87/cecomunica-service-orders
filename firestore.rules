@@ -187,6 +187,14 @@ service cloud.firestore {
       allow read:  if isSignedIn();
       allow write: if isSignedIn() && userRole() in ["administrador", "contabilidad"];
     }
+    // Solicitudes de baja de equipos (cancelaciones de contrato).
+    // Crear/ver: admin/gerente/vendedor/recepción. Aprobar/rechazar/borrar: admin/gerente.
+    match /solicitudes_cancelacion/{docId} {
+      allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion"];
+      allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion"];
+      allow update: if isSignedIn() && userRole() in ["administrador","gerente"];
+      allow delete: if isSignedIn() && userRole() in ["administrador","gerente"];
+    }
     match /empresa/{docId}            { allow read, write: if isSignedIn(); }
     match /inventario_actual/{docId}  { allow read, write: if isSignedIn(); }
     match /ultimo_inventario/{docId}  { allow read, write: if isSignedIn(); }
