@@ -23,6 +23,9 @@
   <script src="../js/services/modelosService.js"></script>
   <script src="../js/services/ordenesService.js"></script>
   <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
   <script src="../js/domain/equipoNormalize.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="../js/pages/agregar-equipo.js" defer></script>
@@ -78,7 +81,7 @@
         <div id="equiposContainer"></div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" onclick="agregarEquipo()"><i data-lucide="plus"></i> Agregar equipo</button>
-          <button type="button" class="btn btn-ghost" onclick="duplicarMultiplesEquipos()"><i data-lucide="repeat"></i> Duplicar múltiples</button>
+          <button type="button" class="btn btn-ghost" onclick="abrirBatchEquipos()"><i data-lucide="layers"></i> Importar en lote</button>
         </div>
       </div>
 
@@ -90,6 +93,61 @@
 
     <p id="mensaje" class="resumen"></p>
 
+  </div>
+
+  <!-- Importar equipos en lote -->
+  <div id="overlayBatch" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="layers"></i> Importar equipos en lote</h3>
+        <button class="modal-close" type="button" onclick="cerrarBatchEquipos()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">
+          Cliente: <strong id="batchCliente">—</strong>. Pega un serial por línea; cada uno crea un equipo.
+          Puedes fijar un modelo y accesorios comunes, o jalar los seriales registrados en POC.
+        </p>
+
+        <div class="form-field" style="margin-bottom:var(--sp-4);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:var(--sp-2); margin-bottom:6px;">
+            <label class="form-label" for="batchSeriales" style="margin:0;">Seriales <span class="req">*</span></label>
+            <button type="button" id="btnJalarPoc" class="btn btn-ghost btn-sm" onclick="jalarSerialesDesdePoc()" title="Traer seriales del cliente desde POC"><i data-lucide="download"></i> Jalar desde POC</button>
+          </div>
+          <textarea class="form-input form-textarea" id="batchSeriales" rows="8"
+            style="font-family:var(--font-mono); font-size:13px;"
+            placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
+          <span class="form-hint" id="batchPocInfo" style="display:block; min-height:16px;">Un serial por línea. Líneas en blanco y duplicados se ignoran.</span>
+        </div>
+
+        <div class="form-grid cols-2" style="margin-bottom:var(--sp-4);">
+          <div class="form-field">
+            <label class="form-label" for="batchModelo">Modelo para todos <span class="optional">(opcional)</span></label>
+            <select class="form-select" id="batchModelo"></select>
+            <span class="form-hint">Si jalas de POC, se respeta el modelo reconocido de cada serial.</span>
+          </div>
+          <div class="form-field">
+            <label class="form-label">Accesorios para todos</label>
+            <div class="chips">
+              <label class="chip"><input type="checkbox" id="batchTodos"> Todos</label>
+              <label class="chip"><input type="checkbox" id="batchBateria"> Batería</label>
+              <label class="chip"><input type="checkbox" id="batchClip"> Clip</label>
+              <label class="chip"><input type="checkbox" id="batchCargador"> Cargador</label>
+              <label class="chip"><input type="checkbox" id="batchFuente"> Fuente</label>
+              <label class="chip"><input type="checkbox" id="batchAntena"> Antena</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label class="form-label" for="batchObservaciones">Observaciones para todos <span class="optional">(opcional)</span></label>
+          <textarea class="form-input form-textarea" id="batchObservaciones" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" type="button" onclick="cerrarBatchEquipos()">Cancelar</button>
+        <button class="btn btn-primary" type="button" onclick="aplicarBatchEquipos()"><i data-lucide="plus"></i> Agregar al formulario</button>
+      </div>
+    </div>
   </div>
 
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

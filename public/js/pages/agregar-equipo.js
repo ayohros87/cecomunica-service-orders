@@ -5,7 +5,20 @@
     let modelos = [];
 
     let contador = 0;
-    
+
+    // Cliente de la orden (para "Jalar desde POC"). Se llenan en cargarOrdenes().
+    let clienteId = "";
+    let clienteNombre = "";
+
+    // serialNorm -> modelo_id reconocido en POC, para preasignar el modelo al
+    // importar en lote cuando el serial vino de POC con un modelo conocido.
+    let pocSerialModelo = {};
+
+    // Escapes mínimos para inyectar valores de usuario en el markup del fieldset.
+    const escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+    const escHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const normName = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "").replace(/\s+/g, " ");
+
     async function cargarModelos() {
   const raw = await ModelosService.getModelos();
   modelos = raw
@@ -17,13 +30,15 @@
 }
 
 
-
-
-    window.agregarEquipo = () => {
+    // Crea un fieldset de equipo (modelo + serie + accesorios + observaciones) y
+    // lo agrega al contenedor. Compartido por "Agregar equipo" y el importador en
+    // lote. Devuelve el fieldset creado.
+    function renderEquipoFieldset({ serial = "", modeloId = "", accesorios = {}, observaciones = "", focusSerie = false } = {}) {
       const id = `equipo_${contador}`;
-     const uuid = crypto.randomUUID(); // 👈 agregar esto arriba
+      const uuid = crypto.randomUUID();
+      const acc = accesorios || {};
 
-const html = `
+      const html = `
   <fieldset id="${id}" data-uuid="${uuid}" class="section form">
     <legend>Equipo ${contador + 1}</legend>
 
@@ -32,13 +47,13 @@ const html = `
         <label class="req">Modelo</label>
         <select class="modelo" required>
           <option value="">Seleccione modelo</option>
-          ${modelos.map(m => `<option value="${m.id}">${m.nombre}</option>`).join('')}
+          ${modelos.map(m => `<option value="${m.id}" ${m.id === modeloId ? 'selected' : ''}>${escHtml(m.nombre)}</option>`).join('')}
         </select>
       </div>
 
       <div class="form-field">
         <label class="req">Serie</label>
-        <input type="text" class="serie" required>
+        <input type="text" class="serie" value="${escAttr(serial)}" required>
       </div>
     </div>
 
@@ -46,17 +61,17 @@ const html = `
       <label>Accesorios</label>
       <div class="chips">
         <label class="chip"><input type="checkbox" class="todos-accesorios"> Todos</label>
-        <label class="chip"><input type="checkbox" class="bateria"> Batería</label>
-        <label class="chip"><input type="checkbox" class="clip"> Clip</label>
-        <label class="chip"><input type="checkbox" class="cargador"> Cargador</label>
-        <label class="chip"><input type="checkbox" class="fuente"> Fuente</label>
-        <label class="chip"><input type="checkbox" class="antena"> Antena</label>
+        <label class="chip"><input type="checkbox" class="bateria" ${acc.bateria ? 'checked' : ''}> Batería</label>
+        <label class="chip"><input type="checkbox" class="clip" ${acc.clip ? 'checked' : ''}> Clip</label>
+        <label class="chip"><input type="checkbox" class="cargador" ${acc.cargador ? 'checked' : ''}> Cargador</label>
+        <label class="chip"><input type="checkbox" class="fuente" ${acc.fuente ? 'checked' : ''}> Fuente</label>
+        <label class="chip"><input type="checkbox" class="antena" ${acc.antena ? 'checked' : ''}> Antena</label>
       </div>
     </div>
 
     <div class="form-field">
       <label>Observaciones</label>
-      <textarea class="observaciones" rows="2"></textarea>
+      <textarea class="observaciones" rows="2">${escHtml(observaciones)}</textarea>
     </div>
 
     <div class="form-actions" style="justify-content:flex-start">
@@ -65,24 +80,29 @@ const html = `
   </fieldset>
 `;
 
-
       container.insertAdjacentHTML("beforeend", html);
       if (typeof lucide !== 'undefined') lucide.createIcons();
 
-  const fieldset = document.getElementById(id);
-  const serieInput = fieldset.querySelector(".serie");
-  if (serieInput) serieInput.focus();
+      const fieldset = document.getElementById(id);
       const todosCheckbox = fieldset.querySelector(".todos-accesorios");
       if (todosCheckbox) {
         todosCheckbox.addEventListener("change", function () {
-          const checkboxes = fieldset.querySelectorAll("input[type='checkbox']");
-          checkboxes.forEach(c => {
+          fieldset.querySelectorAll("input[type='checkbox']").forEach(c => {
             if (!c.classList.contains("todos-accesorios")) c.checked = this.checked;
           });
         });
       }
+
+      if (focusSerie) {
+        const serieInput = fieldset.querySelector(".serie");
+        if (serieInput) serieInput.focus();
+      }
+
       contador++;
-    };
+      return fieldset;
+    }
+
+    window.agregarEquipo = () => renderEquipoFieldset({ focusSerie: true });
 
     form.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -203,6 +223,9 @@ const html = `
     }
 
     clienteInput.value = nombreCliente;
+    // Guardado para "Jalar desde POC" (búsqueda por id y/o nombre).
+    clienteNombre = nombreCliente;
+    clienteId = data.cliente_id || "";
     tipoInput.value = data.tipo_de_servicio || data.tipo || "";
   }
 }
@@ -213,6 +236,7 @@ async function init() {
   try {
     await cargarModelos();
     await cargarOrdenes();
+    wireBatchModal();
     agregarEquipo();
   } catch (error) {
     console.error("Error al iniciar la página:", error);
@@ -227,92 +251,120 @@ firebase.auth().onAuthStateChanged(async (user) => {
   }
 });
 
-    window.duplicarMultiplesEquipos = async function() {
-  const cantidad = parseInt(prompt("¿Cuántos equipos desea duplicar?"));
-  if (isNaN(cantidad) || cantidad <= 0) return alert("Cantidad inválida.");
+    // ── Importar equipos en lote ───────────────────────────────────────────
+    // Recepción pega seriales (uno por línea) y, opcionalmente, fija un modelo y
+    // accesorios comunes; cada serial genera un fieldset listo para guardar.
+    // "Jalar desde POC" precarga los seriales del cliente desde poc_devices
+    // (mismo patrón que el modal de seriales de contratos).
 
-  const series = [];
-  for (let i = 0; i < cantidad; i++) {
-    const serie = prompt(`Ingrese la serie del equipo #${i + 1}:`);
-    if (!serie) return alert("Se canceló la operación.");
-    series.push(serie);
-  }
+    window.abrirBatchEquipos = () => {
+      const sel = document.getElementById("batchModelo");
+      if (sel) {
+        sel.innerHTML = `<option value="">— Sin modelo (elegir por equipo) —</option>` +
+          modelos.map(m => `<option value="${m.id}">${escHtml(m.nombre)}</option>`).join('');
+      }
+      const ta = document.getElementById("batchSeriales");
+      if (ta) ta.value = "";
+      const obs = document.getElementById("batchObservaciones");
+      if (obs) obs.value = "";
+      ["batchTodos", "batchBateria", "batchClip", "batchCargador", "batchFuente", "batchAntena"]
+        .forEach(idc => { const el = document.getElementById(idc); if (el) el.checked = false; });
+      const info = document.getElementById("batchPocInfo");
+      if (info) info.textContent = "Un serial por línea. Líneas en blanco y duplicados se ignoran.";
+      const cli = document.getElementById("batchCliente");
+      if (cli) cli.textContent = clienteNombre || "—";
+      pocSerialModelo = {};
+      Modal.open("overlayBatch");
+    };
 
-  const equipos = container.querySelectorAll("fieldset");
-  if (equipos.length === 0) return alert("No hay equipos para duplicar.");
+    window.cerrarBatchEquipos = () => Modal.close("overlayBatch");
 
-  const ultimo = equipos[equipos.length - 1];
-  const modelo = ultimo.querySelector(".modelo")?.value || "";
-  const bateria = ultimo.querySelector(".bateria")?.checked || false;
-  const clip = ultimo.querySelector(".clip")?.checked || false;
-  const cargador = ultimo.querySelector(".cargador")?.checked || false;
-  const fuente = ultimo.querySelector(".fuente")?.checked || false;
-  const antena = ultimo.querySelector(".antena")?.checked || false;
-  const observaciones = ultimo.querySelector(".observaciones")?.value || "";
+    // Trae los seriales del cliente desde POC, los precarga en el textarea y
+    // recuerda el modelo de cada serial para preasignarlo al importar.
+    window.jalarSerialesDesdePoc = async () => {
+      if (typeof PocService === "undefined") { Toast.show("POC no está disponible en esta página.", "bad"); return; }
+      if (!clienteId && !clienteNombre) { Toast.show("La orden no tiene un cliente asociado para buscar en POC.", "warn"); return; }
 
-  for (let i = 0; i < series.length; i++) {
-    const id = `equipo_${contador}`;
-    const uuid = crypto.randomUUID(); // 👈 generar id único
+      const btn = document.getElementById("btnJalarPoc");
+      if (btn) btn.disabled = true;
+      try {
+        let devices = await PocService.getByCliente({ clienteId, clienteNombre });
+        devices = (devices || []).filter(d => d.deleted !== true && String(d.serial || "").trim());
+        if (!devices.length) { Toast.show("No hay equipos en POC para este cliente.", "warn"); return; }
 
-const html = `
-  <fieldset id="${id}" data-uuid="${uuid}">
+        const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
+        const ta = document.getElementById("batchSeriales");
+        const yaPresentes = new Set((ta.value || "").split("\n").map(s => s.trim().toLowerCase()).filter(Boolean));
 
-    <legend>Equipo ${contador + 1}</legend>
-
-    <div class="form-group">
-      <label><span class="required">Modelo:</span></label>
-      <select class="modelo" required>
-    <option value="">Seleccione modelo</option>
-    ${modelos.map(m => `<option value="${m.id}" ${m.id === modelo ? 'selected' : ''}>${m.nombre}</option>`).join('')}
-  </select>
-    </div>
-
-    <div class="form-group">
-      <label><span class="required">Serie:</span></label>
-      <input type="text" class="serie" value="${series[i]}" required>
-    </div>
-
-    <div class="form-group">
-      <div style="display: grid; grid-template-columns: repeat(6, 1fr); text-align: center;">
-        <div>Todos</div>
-        <div>Batería</div>
-        <div>Clip</div>
-        <div>Cargador</div>
-        <div>Fuente</div>
-        <div>Antena</div>
-      </div>
-      <div style="display: grid; grid-template-columns: repeat(6, 1fr); place-items: center; margin-top: 6px;">
-        <input type="checkbox" class="todos-accesorios" style="transform: scale(1.2);">
-        <input type="checkbox" class="bateria" ${bateria ? 'checked' : ''} style="transform: scale(1.2);">
-        <input type="checkbox" class="clip" ${clip ? 'checked' : ''} style="transform: scale(1.2);">
-        <input type="checkbox" class="cargador" ${cargador ? 'checked' : ''} style="transform: scale(1.2);">
-        <input type="checkbox" class="fuente" ${fuente ? 'checked' : ''} style="transform: scale(1.2);">
-        <input type="checkbox" class="antena" ${antena ? 'checked' : ''} style="transform: scale(1.2);">
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>Observaciones:</label>
-      <textarea class="observaciones" rows="2">${observaciones}</textarea>
-    </div>
-
-    <button type="button" onclick="document.getElementById('${id}').remove()" class="eliminar-boton"><i data-lucide="trash-2"></i> Eliminar equipo</button>
-  </fieldset>
-`;
-
-    container.insertAdjacentHTML("beforeend", html);
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-    const fieldset = document.getElementById(id);
-    const todosCheckbox = fieldset.querySelector(".todos-accesorios");
-    if (todosCheckbox) {
-      todosCheckbox.addEventListener("change", function () {
-        const checkboxes = fieldset.querySelectorAll("input[type='checkbox']");
-        checkboxes.forEach(c => {
-          if (!c.classList.contains("todos-accesorios")) c.checked = this.checked;
+        let agregados = 0, reconocidos = 0;
+        const nuevos = [];
+        devices.forEach(d => {
+          const serial = String(d.serial).trim();
+          const mid = modeloPorNombre.get(normName(d.modelo_label || d.modelo || "")) || "";
+          pocSerialModelo[serial.toLowerCase()] = mid;
+          if (mid) reconocidos++;
+          if (!yaPresentes.has(serial.toLowerCase())) {
+            nuevos.push(serial);
+            yaPresentes.add(serial.toLowerCase());
+            agregados++;
+          }
         });
+
+        ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + nuevos.join("\n");
+
+        const info = document.getElementById("batchPocInfo");
+        if (info) info.textContent = `POC: ${devices.length} equipo(s) del cliente · ${agregados} serial(es) agregados · ${reconocidos} con modelo reconocido.`;
+        Toast.show(agregados ? `${agregados} serial(es) jalados desde POC.` : "Los seriales de POC ya estaban en la lista.", agregados ? "ok" : "warn");
+      } catch (e) {
+        console.error("Error consultando POC:", e);
+        Toast.show("No se pudo consultar POC.", "bad");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    };
+
+    window.aplicarBatchEquipos = () => {
+      const lineas = document.getElementById("batchSeriales").value.split("\n").map(s => s.trim()).filter(Boolean);
+      if (!lineas.length) { Toast.show("Pega al menos un serial.", "warn"); return; }
+
+      const vistos = new Set();
+      const seriales = [];
+      let duplicados = 0;
+      lineas.forEach(s => {
+        const k = s.toLowerCase();
+        if (vistos.has(k)) { duplicados++; return; }
+        vistos.add(k);
+        seriales.push(s);
+      });
+
+      const modeloComun = document.getElementById("batchModelo").value;
+      const accesorios = {
+        bateria:  document.getElementById("batchBateria").checked,
+        clip:     document.getElementById("batchClip").checked,
+        cargador: document.getElementById("batchCargador").checked,
+        fuente:   document.getElementById("batchFuente").checked,
+        antena:   document.getElementById("batchAntena").checked,
+      };
+      const observaciones = document.getElementById("batchObservaciones").value.trim();
+
+      seriales.forEach(serial => {
+        // El modelo reconocido en POC para ese serial gana al modelo común.
+        const modeloId = pocSerialModelo[serial.toLowerCase()] || modeloComun || "";
+        renderEquipoFieldset({ serial, modeloId, accesorios, observaciones });
+      });
+
+      Modal.close("overlayBatch");
+      let msg = `${seriales.length} equipo(s) agregados al formulario.`;
+      if (duplicados) msg += ` ${duplicados} serial(es) duplicado(s) omitido(s).`;
+      Toast.show(msg, "ok");
+    };
+
+    // El "Todos" del modal de lote marca/desmarca los accesorios comunes.
+    function wireBatchModal() {
+      const todos = document.getElementById("batchTodos");
+      if (!todos) return;
+      todos.addEventListener("change", function () {
+        ["batchBateria", "batchClip", "batchCargador", "batchFuente", "batchAntena"]
+          .forEach(idc => { const el = document.getElementById(idc); if (el) el.checked = this.checked; });
       });
     }
-    contador++;
-  }
-};
-
