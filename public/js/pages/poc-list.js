@@ -531,6 +531,36 @@ window.PocList = {
       .map(fila => ({ id: fila.dataset.id, fila }));
   },
 
+  // Copy the serials of the checked rows, one per line, ready to paste.
+  // Workflow for "los de un cliente": filtrar por Cliente → seleccionar todos → copiar.
+  async copiarSerialesSeleccionados() {
+    const seleccionados = this.obtenerSeleccionados();
+    if (!seleccionados.length) { Toast.show('Selecciona al menos un equipo para copiar.', 'bad'); return; }
+
+    const COL = PocState.COL;
+    const seriales = seleccionados
+      .map(({ fila }) => {
+        const celda = fila.cells?.[COL.serial];
+        if (!celda) return '';
+        // En edición masiva la celda contiene un <input>; si no, es texto plano.
+        return (celda.querySelector('input')?.value ?? celda.textContent).trim();
+      })
+      .filter(Boolean);
+
+    if (!seriales.length) { Toast.show('No hay seriales para copiar en la selección.', 'warn'); return; }
+
+    const texto = seriales.join('\n');
+    try {
+      await navigator.clipboard.writeText(texto);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = texto; ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+    }
+    Toast.show(`${seriales.length} ${seriales.length === 1 ? 'serial copiado' : 'seriales copiados'} al portapapeles.`, 'ok');
+  },
+
   toggleSeleccionMasiva(master) {
     document.querySelectorAll('.seleccion-sim').forEach(cb => { cb.checked = master.checked; });
   },
