@@ -25,6 +25,26 @@ const ModelosService = {
     });
   },
 
+  // Batch-insert de modelos (Firestore: 500 por batch). Usado por la importación
+  // desde QuickBooks.
+  async importModelos(rows, creado_por_uid) {
+    const db = firebase.firestore();
+    const CHUNK = 450;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      const batch = db.batch();
+      for (const m of rows.slice(i, i + CHUNK)) {
+        const ref = db.collection('modelos').doc();
+        batch.set(ref, {
+          ...m,
+          creado_por_uid,
+          creado_en: firebase.firestore.FieldValue.serverTimestamp(),
+          actualizado_en: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+  },
+
   async setActivo(id, activo) {
     const db = firebase.firestore();
     return db.collection('modelos').doc(id).update({

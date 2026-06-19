@@ -85,6 +85,7 @@
 <div id="topbar-mount"></div>
 <script>
   Layout.renderTopbarFor('index', {
+    back: { href: '../facturacion/index.html', label: '<i data-lucide="arrow-left"></i> Facturación' },
     title: '<i data-lucide="book-open"></i> Modelos y Tarifas',
     leftSlot: `
       <div class="filter-search" style="max-width:300px;">
@@ -92,7 +93,9 @@
         <input id="q" type="search" placeholder="Buscar marca o modelo…" aria-label="Buscar modelos">
       </div>`,
     actions: [
-      { label: '<i data-lucide="plus"></i> Nuevo modelo', cls: 'primary', onclick: "abrirModal()" }
+      { label: '<i data-lucide="download"></i> Importar de QuickBooks', cls: 'primary', onclick: "importarDeQBO()" },
+      { label: '<i data-lucide="git-compare"></i> Proponer mapeo QBO', onclick: "proponerMapeoQBO()" },
+      { label: '<i data-lucide="plus"></i> Nuevo modelo', onclick: "abrirModal()" }
     ],
     menu: [
       { href: '../facturacion/index.html', label: '<i data-lucide="calculator"></i> Facturación (inicio)' },
@@ -196,6 +199,36 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
       <button class="btn btn-primary" id="btnGuardar" onclick="guardarModelo()"><i data-lucide="save"></i> Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de revisión / aprobación de importación desde QuickBooks -->
+<div id="overlayQbo" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+  <div class="modal modal-lg" style="max-width:860px;">
+    <div class="modal-header">
+      <h3 class="modal-title"><i data-lucide="download"></i> Importar modelos desde QuickBooks</h3>
+      <button class="modal-close" onclick="cerrarQbo()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="modal-body" id="qboBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="cerrarQbo()">Cancelar</button>
+      <button class="btn btn-primary" id="btnImportarQbo" onclick="confirmarImportQbo()"><i data-lucide="check"></i> Importar seleccionados</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: proponer mapeo a QuickBooks de modelos existentes (verificar → aprobar) -->
+<div id="overlayMapeo" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+  <div class="modal modal-lg" style="max-width:900px;">
+    <div class="modal-header">
+      <h3 class="modal-title"><i data-lucide="git-compare"></i> Proponer mapeo a QuickBooks</h3>
+      <button class="modal-close" onclick="cerrarMapeo()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="modal-body" id="mapeoBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="cerrarMapeo()">Cancelar</button>
+      <button class="btn btn-primary" id="btnAplicarMapeo" onclick="confirmarMapeo()"><i data-lucide="check"></i> Aplicar mapeo seleccionado</button>
     </div>
   </div>
 </div>

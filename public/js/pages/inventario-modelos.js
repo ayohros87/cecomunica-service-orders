@@ -264,6 +264,203 @@ function exportarExcel(){
   XLSX.writeFile(wb, `Modelos_Tarifas_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
 
+/* ===== Importar desde QuickBooks (revisar → aprobar → ingresar) ===== */
+let qboCandidatos = [];
+
+async function importarDeQBO(){
+  const ov = document.getElementById('overlayQbo');
+  document.getElementById('btnImportarQbo').disabled = true;
+  document.getElementById('qboBody').innerHTML = '<p style="color:var(--fg-3);">Consultando QuickBooks…</p>';
+  ov.classList.add('show'); ov.style.display = 'flex';
+  if (window.lucide) lucide.createIcons();
+  try{
+    const res = await firebase.functions().httpsCallable('listQBOEquipos')();
+    qboCandidatos = (res.data && res.data.equipos) || [];
+    renderQboPreview();
+  }catch(e){
+    console.error('listQBOEquipos', e);
+    document.getElementById('qboBody').innerHTML = `<p style="color:#b91c1c;">No se pudo consultar QuickBooks: ${esc(e.message||'')}</p>`;
+  }
+}
+
+function _normMod(s){ return String(s||'').trim().toLowerCase(); }
+
+// Detecta modelos ya existentes por qbo_item_alquiler_id (preferente) o nombre.
+function _existingModelosIndex(){
+  const byId = new Set(), byName = new Set();
+  (listaModelos||[]).forEach(m=>{
+    if(m.qbo_item_alquiler_id) byId.add(String(m.qbo_item_alquiler_id));
+    if(m.modelo) byName.add(_normMod(m.modelo));
+  });
+  return { byId, byName };
+}
+
+function renderQboPreview(){
+  const { byId, byName } = _existingModelosIndex();
+  const rows = qboCandidatos.map((c, idx)=>{
+    const existe = byId.has(String(c.qbo_item_alquiler_id)) || byName.has(_normMod(c.modelo));
+    return { ...c, idx, existe };
+  });
+  const nuevas = rows.filter(r=>!r.existe).length;
+  const body = document.getElementById('qboBody');
+  const btn = document.getElementById('btnImportarQbo');
+
+  if(!rows.length){
+    body.innerHTML = '<p style="color:var(--fg-3);">No hay items "Alquiler - …" en QuickBooks.</p>';
+    btn.disabled = true; return;
+  }
+  btn.disabled = (nuevas === 0);
+  body.innerHTML = `
+    <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+      <b>${rows.length}</b> modelos en QuickBooks · <b style="color:#065F46;">${nuevas}</b> nuevos · <b>${rows.length-nuevas}</b> ya existen.
+      Revisa y desmarca los que no quieras antes de aprobar. La marca y el tipo se completan después.
+    </p>
+    <div class="table-scroll" style="max-height:55vh; overflow:auto;">
+      <table class="app-table" style="font-size:13px;">
+        <thead><tr>
+          <th style="width:34px;"><input type="checkbox" id="qbo-all" checked onchange="toggleAllQbo(this.checked)"></th>
+          <th>Modelo</th><th style="text-align:right;">Alquiler $</th>
+          <th>Item QBO "Alquiler"</th><th>Bundle "Mensualidad"</th><th>Estado</th>
+        </tr></thead>
+        <tbody>${rows.map(r=>`
+          <tr style="${r.existe?'opacity:.55;':''}">
+            <td><input type="checkbox" class="qbo-chk" data-idx="${r.idx}" ${r.existe?'disabled':'checked'}></td>
+            <td style="font-weight:600;">${esc(r.modelo)}</td>
+            <td style="text-align:right; font-family:var(--font-mono);">$${Number(r.precio_alquiler||0).toFixed(2)}</td>
+            <td>${esc(r.qbo_item_alquiler_name||'—')}</td>
+            <td>${r.qbo_bundle_id ? esc(r.qbo_bundle_name) : '<span class="map-badge map-warn">⚠ sin bundle</span>'}</td>
+            <td>${r.existe?'<span class="map-badge map-none">ya existe</span>':'<span class="map-badge map-ok">nuevo</span>'}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleAllQbo(on){
+  document.querySelectorAll('.qbo-chk:not(:disabled)').forEach(c=> c.checked = on);
+}
+
+async function confirmarImportQbo(){
+  const seleccion = [...document.querySelectorAll('.qbo-chk:checked')]
+    .map(c=> qboCandidatos[Number(c.dataset.idx)]).filter(Boolean);
+  if(!seleccion.length){ Toast.show('No hay modelos seleccionados','warn'); return; }
+  const rows = seleccion.map(c=>({
+    marca: '',
+    modelo: c.modelo,
+    es_alquiler: true,
+    activo: true,
+    precio_alquiler: Number(c.precio_alquiler||0),
+    qbo_item_alquiler_id: c.qbo_item_alquiler_id||'',
+    qbo_bundle_id: c.qbo_bundle_id||'',
+    origen: 'quickbooks',
+  }));
+  const btn = document.getElementById('btnImportarQbo'); btn.disabled = true;
+  try{
+    const uid = firebase.auth().currentUser?.uid || null;
+    await ModelosService.importModelos(rows, uid);
+    Toast.show(`${rows.length} modelo(s) importados`,'ok');
+    cerrarQbo();
+    await cargarModelos();
+    render();
+  }catch(e){ console.error(e); Toast.show('Error al importar: '+e.message,'bad'); btn.disabled = false; }
+}
+
+function cerrarQbo(){ const ov=document.getElementById('overlayQbo'); ov.classList.remove('show'); ov.style.display='none'; }
+
+/* ===== Proponer mapeo QBO a modelos existentes (verificar → aprobar) ===== */
+let mapeoPropuestas = [];
+
+async function proponerMapeoQBO(){
+  const ov = document.getElementById('overlayMapeo');
+  document.getElementById('btnAplicarMapeo').disabled = true;
+  document.getElementById('mapeoBody').innerHTML = '<p style="color:var(--fg-3);">Consultando QuickBooks…</p>';
+  ov.classList.add('show'); ov.style.display = 'flex';
+  if (window.lucide) lucide.createIcons();
+  try{
+    const res = await firebase.functions().httpsCallable('listQBOEquipos')();
+    const cands = (res.data && res.data.equipos) || [];
+    const byName = {};
+    cands.forEach(c => { byName[_normMod(c.modelo)] = c; });
+    // Propone para los modelos existentes que tienen equivalente y donde cambia algo.
+    mapeoPropuestas = (listaModelos||[]).map(m=>{
+      const c = byName[_normMod(m.modelo)];
+      if(!c) return null;
+      const itemProp = String(c.qbo_item_alquiler_id||''), itemActual = String(m.qbo_item_alquiler_id||'');
+      const bundleProp = String(c.qbo_bundle_id||''),      bundleActual = String(m.qbo_bundle_id||'');
+      const itemChange = !!itemProp && itemProp !== itemActual;
+      const bundleChange = !!bundleProp && bundleProp !== bundleActual;
+      if(!itemChange && !bundleChange) return null;
+      return { id:m.id, modelo:m.modelo,
+        item_id:itemProp, item_name:c.qbo_item_alquiler_name||'', itemChange, itemActual,
+        bundle_id:bundleProp, bundle_name:c.qbo_bundle_name||'', bundleChange, bundleActual };
+    }).filter(Boolean);
+    renderMapeoPreview();
+  }catch(e){
+    console.error('proponerMapeoQBO', e);
+    document.getElementById('mapeoBody').innerHTML = `<p style="color:#b91c1c;">No se pudo consultar QuickBooks: ${esc(e.message||'')}</p>`;
+  }
+}
+
+function renderMapeoPreview(){
+  const body = document.getElementById('mapeoBody');
+  const btn = document.getElementById('btnAplicarMapeo');
+  if(!mapeoPropuestas.length){
+    body.innerHTML = '<p style="color:var(--fg-3);">Los modelos con equivalente en QuickBooks ya están mapeados. No hay cambios por proponer.</p>';
+    btn.disabled = true; return;
+  }
+  btn.disabled = false;
+  const tag = (change, prop, actual) => !prop ? '' : (!change ? '<span class="map-badge map-ok">= actual</span>'
+    : (actual ? '<span class="map-badge map-warn">reemplaza</span>' : '<span class="map-badge map-ok">nuevo</span>'));
+  body.innerHTML = `
+    <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+      <b>${mapeoPropuestas.length}</b> modelo(s) con mapeo propuesto (match por nombre con QuickBooks).
+      Verifica el item de <b>Alquiler</b> y el bundle de <b>Mensualidad</b>, desmarca lo que no quieras y aplica.
+    </p>
+    <div class="table-scroll" style="max-height:55vh; overflow:auto;">
+      <table class="app-table" style="font-size:13px;">
+        <thead><tr>
+          <th style="width:34px;"><input type="checkbox" id="mapeo-all" checked onchange="toggleAllMapeo(this.checked)"></th>
+          <th>Modelo</th>
+          <th>Item "Alquiler" propuesto</th>
+          <th>Bundle "Mensualidad" propuesto</th>
+        </tr></thead>
+        <tbody>${mapeoPropuestas.map((p,idx)=>`
+          <tr>
+            <td><input type="checkbox" class="mapeo-chk" data-idx="${idx}" checked></td>
+            <td style="font-weight:600;">${esc(p.modelo)}</td>
+            <td>${p.item_id ? esc(p.item_name) : '—'} ${tag(p.itemChange, p.item_id, p.itemActual)}</td>
+            <td>${p.bundle_id ? (esc(p.bundle_name)+' '+tag(p.bundleChange, p.bundle_id, p.bundleActual)) : '<span class="map-badge map-warn">⚠ sin bundle</span>'}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleAllMapeo(on){
+  document.querySelectorAll('.mapeo-chk:not(:disabled)').forEach(c=> c.checked = on);
+}
+
+async function confirmarMapeo(){
+  const seleccion = [...document.querySelectorAll('.mapeo-chk:checked')]
+    .map(c=> mapeoPropuestas[Number(c.dataset.idx)]).filter(Boolean);
+  if(!seleccion.length){ Toast.show('No hay mapeos seleccionados','warn'); return; }
+  const btn = document.getElementById('btnAplicarMapeo'); btn.disabled = true;
+  try{
+    for(const p of seleccion){
+      const upd = {};
+      if(p.item_id)   upd.qbo_item_alquiler_id = p.item_id;
+      if(p.bundle_id) upd.qbo_bundle_id = p.bundle_id;
+      if(Object.keys(upd).length) await ModelosService.updateModelo(p.id, upd);
+    }
+    Toast.show(`Mapeo aplicado a ${seleccion.length} modelo(s)`,'ok');
+    cerrarMapeo();
+    await cargarModelos();
+    render();
+  }catch(e){ console.error(e); Toast.show('Error al aplicar: '+e.message,'bad'); btn.disabled = false; }
+}
+
+function cerrarMapeo(){ const ov=document.getElementById('overlayMapeo'); ov.classList.remove('show'); ov.style.display='none'; }
+
 /* ===== Exponer ===== */
 function setFiltroAlquiler(v){
   soloAlquiler = v;
@@ -276,5 +473,13 @@ window.abrirModal = abrirModal;
 window.cerrarModal = cerrarModal;
 window.guardarModelo = guardarModelo;
 window.exportarExcel = exportarExcel;
+window.importarDeQBO = importarDeQBO;
+window.toggleAllQbo = toggleAllQbo;
+window.confirmarImportQbo = confirmarImportQbo;
+window.cerrarQbo = cerrarQbo;
+window.proponerMapeoQBO = proponerMapeoQBO;
+window.toggleAllMapeo = toggleAllMapeo;
+window.confirmarMapeo = confirmarMapeo;
+window.cerrarMapeo = cerrarMapeo;
 function cerrarSesion(){ firebase.auth().signOut().then(()=>window.location.href="../login.html"); }
 window.cerrarSesion = cerrarSesion;

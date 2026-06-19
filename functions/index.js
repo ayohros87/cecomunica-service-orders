@@ -30,4 +30,5 @@ exports.getIdentificacionUrl          = require("./src/callable/getIdentificacio
 exports.getClienteDocUrl              = require("./src/callable/getClienteDocUrl");
 exports.listQBOItems                  = require("./src/callable/listQBOItems");
 exports.listQBOPiezas                 = require("./src/callable/listQBOPiezas");
+exports.listQBOEquipos                = require("./src/callable/listQBOEquipos");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");
