@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8" />
+  <title>Piezas y Tarifas - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/piezasService.js"></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Hoja de cálculo de Piezas y Tarifas (mismo patrón que Modelos y Tarifas). */
+    #tabla td { padding: 2px 6px; vertical-align: middle; }
+    #tabla .td-input, #tabla .td-select { height: 28px; }
+    #tabla .td-num { text-align: left; font-family: var(--font-mono); width: 90px; }
+    #tabla tbody tr:nth-child(even) { background: var(--surface-sunken); }
+    #tabla tbody tr:hover { background: var(--brand-soft); }
+    #tabla tbody tr:focus-within { background: #eaf4ff; }
+
+    #tabla th.sticky-col, #tabla td.sticky-col { position: sticky; left: 0; z-index: 5; }
+    #tabla thead th.sticky-col { z-index: 12; background: var(--surface-sunken); }
+    #tabla tbody td.sticky-col { background: var(--surface-card); box-shadow: 1px 0 0 var(--border-subtle); }
+    #tabla tbody tr:nth-child(even) td.sticky-col { background: var(--surface-sunken); }
+    #tabla tbody tr:hover td.sticky-col { background: var(--brand-soft); }
+    #tabla tbody tr:focus-within td.sticky-col { background: #eaf4ff; }
+
+    #tabla .toggle-switch { display: inline-block; vertical-align: middle; }
+
+    .pieza-cell { position: relative; padding-left: 16px !important; font-weight: 600; }
+    .pieza-sub  { display:block; font-weight:400; font-size:11px; color: var(--fg-4); }
+
+    .row-status {
+      position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+      width: 6px; height: 6px; border-radius: 50%; background: transparent;
+      transition: background var(--dur-fast);
+    }
+    .row-status.saving { background: var(--status-warning); animation: rowPulse 1s ease-in-out infinite; }
+    .row-status.saved  { background: var(--status-online); }
+    .row-status.error  { background: var(--status-critical); }
+    @keyframes rowPulse { 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
+
+    .map-badge { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:1px 8px; font-size:11px; font-weight:600; border:1px solid transparent; white-space:nowrap; }
+    .map-ok   { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    .map-warn { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
+    .map-none { color: var(--fg-4); }
+
+    .margen-neg { color: var(--status-critical); }
+    .margen-pos { color: var(--status-online); }
+
+    .md-stats { display:flex; align-items:center; gap:var(--sp-3); font-size:13px; color:var(--fg-3); }
+    .md-stats b { font-family:var(--font-mono); color:var(--fg-1); }
+  </style>
+</head>
+<body>
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    title: '<i data-lucide="puzzle"></i> Piezas y Tarifas',
+    leftSlot: `
+      <div class="filter-search" style="max-width:300px;">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input id="q" type="search" placeholder="Buscar marca, SKU o descripción…" aria-label="Buscar piezas">
+      </div>`,
+    actions: [
+      { label: '<i data-lucide="plus"></i> Nueva pieza', cls: 'primary', onclick: "window.location.href='./piezas.html'" }
+    ],
+    menu: [
+      { href: '../facturacion/index.html', label: '<i data-lucide="calculator"></i> Facturación (inicio)' },
+      { href: './modelos.html', label: '<i data-lucide="book-open"></i> Modelos y Tarifas' },
+      { href: './piezas.html', label: '<i data-lucide="boxes"></i> Inventario de piezas' },
+      { divider: true },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-sin-precio"> Solo sin precio</label>' },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-inactivos"> Mostrar inactivos</label>' },
+      { divider: true },
+      { onclick: 'exportarExcel()', label: '<i data-lucide="download"></i> Excel' }
+    ]
+  });
+</script>
+
+<div class="app-wrap app-wrap--full">
+  <div class="ds-card" style="padding:0;">
+    <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <p id="resumenPiezas" class="md-stats" style="margin:0;">Cargando…</p>
+      <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
+    </div>
+    <div class="app-table-wrap" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
+      <table class="app-table" id="tabla">
+        <thead>
+          <tr>
+            <th class="sticky-col">Pieza</th>
+            <th>SKU</th>
+            <th>Precio venta $</th>
+            <th>Costo $</th>
+            <th>Margen</th>
+            <th>Item QBO</th>
+            <th>Estado</th>
+            <th style="text-align:center">Activo</th>
+          </tr>
+        </thead>
+        <tbody id="tablaPiezas"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="../js/ui/toast.js"></script>
+<script src="../js/pages/inventario-piezas-tarifas.js" defer></script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>
