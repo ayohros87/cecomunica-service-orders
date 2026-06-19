@@ -42,14 +42,14 @@ window.ContratosLista = {
   },
 
   // Indicador de enmienda sobre el contrato (derivado por el trigger onCancelacionWrite).
+  // La baja PENDIENTE ya no se muestra aquí: vive como CTA prominente en la
+  // columna de acciones (ver buildAcciones). Aquí quedan solo los estados
+  // informativos/históricos (terminado, baja aprobada).
   bajaPill(data) {
     const finTerm = data.terminacion_fin?.toDate ? data.terminacion_fin.toDate().toLocaleDateString()
       : (data.baja_fecha_fin?.toDate ? data.baja_fecha_fin.toDate().toLocaleDateString() : '');
     if (data.terminacion_total) {
       return `<span class="chip-estado chip-cancelada" title="Terminación total${finTerm ? ' · factura hasta ' + finTerm : ''}"><i data-lucide="file-minus-2" style="width:12px;height:12px;"></i> Terminado</span>`;
-    }
-    if (data.baja_estado === 'pendiente') {
-      return `<a href="cancelaciones.html" class="chip-estado chip-diagnostico" title="Enmienda pendiente de aprobación" style="text-decoration:none;"><i data-lucide="clock" style="width:12px;height:12px;"></i> Baja pend.</a>`;
     }
     if (data.baja_estado === 'aprobada') {
       const orig = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
@@ -59,15 +59,130 @@ window.ContratosLista = {
     return '';
   },
 
+  // ── Acciones (CTA inline + menú ⋯) ───────────────────────────────
+  // Construye el área de acciones de una fila/card: el pill de Seriales
+  // (indicador de estado) + una sola CTA contextual + un menú overflow
+  // con el resto. Comparte la lógica entre tabla y cards móviles.
+  buildAcciones(id, data, { movil = false } = {}) {
+    const esAdmin     = AUTH.is(ROLES.ADMIN);
+    const esGerente   = AUTH.is(ROLES.GERENTE);
+    const esRecepcion = AUTH.is(ROLES.RECEPCION);
+    const esVendedor  = AUTH.is(ROLES.VENDEDOR);
+    const puedeEditar = esAdmin || esVendedor;
+    const puedePanelTrabajo = esAdmin || esRecepcion;
+    const editable    = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
+    const yaFirmado   = !!data.firmado_url;
+    const puedeSubirFirmado = data.estado === 'aprobado' && puedeEditar;
+    const esActivoOAprobado = ['activo','aprobado'].includes(data.estado);
+
+    const bajaPendiente   = data.baja_estado === 'pendiente' && esActivoOAprobado && !data.terminacion_total;
+    const esAprobadorBaja = esAdmin || esGerente;
+    const puedeSolicitarBaja = esActivoOAprobado && (esAdmin || esVendedor || esRecepcion || esGerente);
+
+    const ctaCls = 'btn btn-sm';
+
+    // ── CTA primaria (precedencia) ──────────────────────────────────
+    // 1) baja pendiente (lo más urgente) → 2) aprobar contrato →
+    // 3) subir firmado → 4) ver/imprimir.
+    let primaryHtml = '';
+    let primaryKind = '';
+    if (bajaPendiente) {
+      primaryKind = 'baja';
+      const amber = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;text-decoration:none;';
+      // Ambos van a la cola (default: filtro 'pendiente'); el aprobador ve los
+      // botones Aprobar/Rechazar, el solicitante solo el estado. No usamos
+      // ?contrato= porque eso abre el formulario de nueva solicitud, no la cola.
+      primaryHtml = esAprobadorBaja
+        ? `<a class="${ctaCls}" style="${amber}" href="cancelaciones.html" title="Aprobar baja pendiente"><i data-lucide="clock" style="width:14px;height:14px;"></i> Aprobar baja</a>`
+        : `<a class="${ctaCls}" style="${amber}" href="cancelaciones.html" title="Baja en revisión por administración"><i data-lucide="clock" style="width:14px;height:14px;"></i> Baja en revisión</a>`;
+    } else if (esAdmin && data.estado === 'pendiente_aprobacion') {
+      primaryKind = 'aprobar';
+      primaryHtml = `<button class="${ctaCls} btn-accent" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar contrato"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Aprobar</button>`;
+    } else if (puedeSubirFirmado && !yaFirmado) {
+      primaryKind = 'subir-firmado';
+      primaryHtml = `<button class="${ctaCls}" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado"><i data-lucide="upload" style="width:14px;height:14px;"></i> Subir firmado</button>`;
+    } else if (data.contrato_id) {
+      primaryKind = 'ver';
+      primaryHtml = `<button class="${ctaCls}" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver / Imprimir"><i data-lucide="printer" style="width:14px;height:14px;"></i> Ver</button>`;
+    }
+
+    // ── Pill de Seriales (indicador de estado, queda inline) ─────────
+    const serialesHtml = ContratosLista.serialesBtn(id, data, { movil });
+
+    // ── Menú overflow: todo lo demás, con texto + icono ──────────────
+    const items = [];
+    const I = (icon, label, onclick, cls = '') =>
+      `<button class="overflow-menu-item ${cls}" onclick="${onclick}"><i data-lucide="${icon}"></i> ${label}</button>`;
+    const A = (icon, label, href, cls = '') =>
+      `<a class="overflow-menu-item ${cls}" href="${href}" target="_blank" rel="noopener"><i data-lucide="${icon}"></i> ${label}</a>`;
+
+    if (primaryKind !== 'ver' && data.contrato_id)
+      items.push(I('printer', 'Ver / Imprimir', `ContratosLista.ver('${data.contrato_id}')`));
+    if (puedePanelTrabajo)
+      items.push(I('folder-open', 'Panel de trabajo', `ContratosEquipos.abrirPanel('${id}')`));
+    if (editable)
+      items.push(I('pencil', 'Editar', `ContratosLista.editar('${id}')`));
+    // Aprobar contrato — en el menú solo si NO es ya la CTA primaria (p.ej.
+    // cuando una baja pendiente desplazó la CTA).
+    if (primaryKind !== 'aprobar' && esAdmin && data.estado === 'pendiente_aprobacion')
+      items.push(I('check-circle', 'Aprobar contrato', `ContratosAprobacion.abrir('${id}')`, 'highlighted'));
+    // Solicitar baja — solo cuando no hay una baja pendiente (si la hay, vive en la CTA).
+    if (puedeSolicitarBaja && !bajaPendiente)
+      items.push(I('package-minus', 'Solicitar baja', `window.location.href='cancelaciones.html?contrato=${id}'`));
+    // Firmado
+    if (yaFirmado) {
+      items.push(A('file-text', 'Ver firmado', data.firmado_url));
+      if (puedeSubirFirmado)
+        items.push(I('refresh-cw', 'Reemplazar firmado', `ContratosFirmado.subir('${id}')`));
+    } else if (puedeSubirFirmado && primaryKind !== 'subir-firmado') {
+      items.push(I('upload', 'Subir firmado', `ContratosFirmado.subir('${id}')`));
+    }
+    // Comisión (admin)
+    if (esAdmin && !data.listo_para_comision)
+      items.push(I('dollar-sign', 'Marcar comisión', `ContratosLista.marcarComision('${id}')`));
+    if (esAdmin && data.listo_para_comision)
+      items.push(I('x-circle', 'Quitar comisión', `ContratosLista.quitarComision('${id}')`));
+    // Duplicar
+    if (puedeEditar && ['anulado','inactivo'].includes(data.estado))
+      items.push(I('copy', 'Duplicar', `ContratosLista.duplicar('${id}')`));
+    // Destructivas (al final, separadas, en rojo)
+    const danger = [];
+    if (esActivoOAprobado && esAdmin)
+      danger.push(I('ban', 'Anular contrato', `ContratosLista.anular('${id}')`, 'danger'));
+    if (!['activo','aprobado','anulado'].includes(data.estado) && (esAdmin || esVendedor))
+      danger.push(I('trash-2', 'Eliminar', `ContratosLista.borrar('${id}')`, 'danger'));
+    if (danger.length) {
+      items.push('<div class="overflow-menu-divider"></div>');
+      items.push(...danger);
+    }
+
+    const menuHtml = items.length
+      ? `<div class="overflow-menu">
+           <button class="overflow-menu-btn" onclick="ContratosLista.toggleMenu('${id}')" title="Más acciones" aria-label="Más acciones" aria-haspopup="true">⋯</button>
+           <div class="overflow-menu-dropdown" id="acc-menu-${id}">${items.join('')}</div>
+         </div>`
+      : '';
+
+    return `${serialesHtml}${primaryHtml}${menuHtml}`;
+  },
+
+  // Abre/cierra el menú overflow de una fila (cierra los demás primero).
+  toggleMenu(id) {
+    const menu = document.getElementById(`acc-menu-${id}`);
+    if (!menu) return;
+    const abierto = menu.classList.contains('open');
+    ContratosLista.closeMenus();
+    if (!abierto) menu.classList.add('open');
+  },
+
+  closeMenus() {
+    document.querySelectorAll('.overflow-menu-dropdown.open[id^="acc-menu-"]')
+      .forEach(m => m.classList.remove('open'));
+  },
+
   // ── Row / card builders ──────────────────────────────────────────
   crearFila(id, data) {
     const esc = CS.esc.bind(CS);
-    const puedeEditar     = AUTH.is(ROLES.ADMIN) || AUTH.is(ROLES.VENDEDOR);
-    const esAdmin         = AUTH.is(ROLES.ADMIN);
-    const esRecepcion     = AUTH.is(ROLES.RECEPCION);
-    const puedePanelTrabajo = esAdmin || esRecepcion;
-    const editable        = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
-    const yaFirmado       = !!data.firmado_url;
 
     const estadoClase =
       data.estado === 'activo'               ? 'chip-aprobada'    :  // verde
@@ -89,64 +204,7 @@ window.ContratosLista = {
 
     const tot = ContractTotals.fromDoc(data);
 
-    const ICON_BTN     = 'btn btn-ghost btn-icon btn-sm';
-    const ICON_BTN_DEL = 'btn btn-danger btn-icon btn-sm';
-
-    const btnImprimir = data.contrato_id
-      ? `<button class="${ICON_BTN}" onclick="ContratosLista.ver('${data.contrato_id}')" title="Imprimir/Ver" aria-label="Imprimir/Ver"><i data-lucide="printer"></i></button>`
-      : '';
-    const btnEditar = editable
-      ? `<button class="${ICON_BTN}" onclick="ContratosLista.editar('${id}')" title="Editar" aria-label="Editar"><i data-lucide="pencil"></i></button>`
-      : '';
-
-    let btnBorrar = '';
-    if (!['activo','aprobado','anulado'].includes(data.estado) && (esAdmin || AUTH.is(ROLES.VENDEDOR))) {
-      btnBorrar = `<button class="${ICON_BTN_DEL}" onclick="ContratosLista.borrar('${id}')" title="Eliminar" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>`;
-    }
-
-    let bloqueFirmado = '';
-    const puedeSubirFirmado = data.estado === 'aprobado' && puedeEditar;
-    if (yaFirmado) {
-      bloqueFirmado = `<a class="${ICON_BTN}" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado" aria-label="Ver firmado"><i data-lucide="file-text"></i></a>`;
-      if (puedeSubirFirmado)
-        bloqueFirmado += ` <button class="${ICON_BTN}" onclick="ContratosFirmado.subir('${id}')" title="Reemplazar firmado" aria-label="Reemplazar firmado"><i data-lucide="refresh-cw"></i></button>`;
-    } else if (puedeSubirFirmado) {
-      bloqueFirmado = `<button class="${ICON_BTN}" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado" aria-label="Subir firmado"><i data-lucide="upload"></i></button>`;
-    }
-
-    const btnAnular = (['activo','aprobado'].includes(data.estado) && esAdmin)
-      ? `<button class="${ICON_BTN_DEL}" onclick="ContratosLista.anular('${id}')" title="Anular contrato" aria-label="Anular"><i data-lucide="ban"></i></button>`
-      : '';
-    const btnDuplicar = (puedeEditar && ['anulado','inactivo'].includes(data.estado))
-      ? `<button class="${ICON_BTN}" onclick="ContratosLista.duplicar('${id}')" title="Duplicar contrato" aria-label="Duplicar"><i data-lucide="copy"></i></button>`
-      : '';
-    const btnComisionAgregar = esAdmin && !data.listo_para_comision
-      ? `<button class="${ICON_BTN}" onclick="ContratosLista.marcarComision('${id}')" title="Marcar listo para comisión" aria-label="Marcar comisión"><i data-lucide="dollar-sign"></i></button>`
-      : '';
-    const btnComisionQuitar = esAdmin && data.listo_para_comision
-      ? `<button class="${ICON_BTN_DEL}" onclick="ContratosLista.quitarComision('${id}')" title="Quitar marca de comisión" aria-label="Quitar comisión"><i data-lucide="x-circle"></i></button>`
-      : '';
-
-    const btnBaja = (['activo','aprobado'].includes(data.estado) && (esAdmin || AUTH.is(ROLES.VENDEDOR) || esRecepcion || AUTH.is(ROLES.GERENTE)))
-      ? `<button class="${ICON_BTN}" onclick="window.location.href='cancelaciones.html?contrato=${id}'" title="Solicitar baja de equipos" aria-label="Solicitar baja"><i data-lucide="package-minus"></i></button>`
-      : '';
-
-    const btnSeriales = ContratosLista.serialesBtn(id, data);
-
-    const accionesHtml = esRecepcion
-      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}${btnSeriales}${btnBaja}`
-      : `${btnImprimir}
-         ${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}
-         ${btnEditar}
-         ${btnSeriales}
-         ${btnBaja}
-         ${btnBorrar}
-         ${bloqueFirmado}
-         ${esAdmin && data.estado === 'pendiente_aprobacion' ? `<button class="${ICON_BTN}" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar" aria-label="Aprobar"><i data-lucide="check-circle"></i></button>` : ''}
-         ${btnComisionAgregar}
-         ${btnComisionQuitar}
-         ${btnAnular}
-         ${btnDuplicar}`;
+    const accionesHtml = ContratosLista.buildAcciones(id, data);
 
     const fila = document.createElement('tr');
     fila.setAttribute('data-contrato-doc-id', id);
@@ -172,12 +230,6 @@ window.ContratosLista = {
 
   crearCard(data) {
     const esc = CS.esc.bind(CS);
-    const esAdmin         = AUTH.is(ROLES.ADMIN);
-    const esRecepcion     = AUTH.is(ROLES.RECEPCION);
-    const puedeEditar     = AUTH.is(ROLES.ADMIN) || AUTH.is(ROLES.VENDEDOR);
-    const puedePanelTrabajo = esAdmin || esRecepcion;
-    const editable        = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
-    const puedeAprobar    = esAdmin && data.estado === 'pendiente_aprobacion';
 
     const tot = ContractTotals.fromDoc(data);
     const totalStr = FMT.money(tot.totalConITBMS);
@@ -196,33 +248,7 @@ window.ContratosLista = {
       data.estado === 'anulado'              ? 'Anulado'   :
       'Inactivo';
 
-    let bloqueFirmado = '';
-    if (data.firmado_url) {
-      bloqueFirmado = `<a class="btn" href="${data.firmado_url}" target="_blank" rel="noopener" title="Ver firmado"><i data-lucide="file-text"></i></a>`;
-      if (data.estado === 'aprobado' && puedeEditar)
-        bloqueFirmado += ` <button class="btn" onclick="ContratosFirmado.subir('${data.id}')" title="Reemplazar firmado"><i data-lucide="refresh-cw"></i></button>`;
-    } else if (data.estado === 'aprobado' && puedeEditar) {
-      bloqueFirmado = `<button class="btn" onclick="ContratosFirmado.subir('${data.id}')" title="Subir firmado"><i data-lucide="upload"></i></button>`;
-    }
-
-    const btnSerialesMovil = ContratosLista.serialesBtn(data.id, data, { movil: true });
-
-    const accionesMovilHtml = esRecepcion
-      ? `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir"><i data-lucide="printer"></i> Ver</button>` : ''}
-         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i> Panel</button>` : ''}
-         ${btnSerialesMovil}`
-      : `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir"><i data-lucide="printer"></i> Ver</button>` : ''}
-         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i> Panel</button>` : ''}
-         ${btnSerialesMovil}
-         ${editable ? `<button class="btn" onclick="ContratosLista.editar('${data.id}')" title="Editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
-         ${puedeAprobar ? `<button class="btn btn-accent block" onclick="ContratosAprobacion.abrir('${data.id}')" title="Aprobar ahora"><i data-lucide="check-circle"></i> Aprobar</button>` : ''}
-         ${bloqueFirmado}
-         ${esAdmin && !data.listo_para_comision
-           ? `<button class="btn" onclick="ContratosLista.marcarComision('${data.id}')" title="Marcar listo para comisión"><i data-lucide="dollar-sign"></i> Comisión</button>`
-           : ''}
-         ${esAdmin && data.listo_para_comision
-           ? `<button class="btn btn-danger" onclick="ContratosLista.quitarComision('${data.id}')" title="Quitar marca de comisión"><i data-lucide="x-circle"></i> Quitar</button>`
-           : ''}`;
+    const accionesMovilHtml = ContratosLista.buildAcciones(data.id, data, { movil: true });
 
     const card = document.createElement('div');
     card.className = 'card-contrato';
@@ -743,6 +769,16 @@ window.ContratosLista = {
         self._lastWidth = window.innerWidth;
         self.renderDesdeCache();
       }
+    });
+
+    // Cierre del menú overflow: al hacer click en un item (tras ejecutar su
+    // acción), al hacer click fuera de cualquier menú, o con ESC.
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.overflow-menu-item')) { self.closeMenus(); return; }
+      if (!e.target.closest('.overflow-menu')) self.closeMenus();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') self.closeMenus();
     });
   }
 };

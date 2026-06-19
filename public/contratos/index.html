@@ -42,6 +42,13 @@
       text-align: right;
     }
     .app-table td.acciones .btn { margin-left: var(--sp-1); }
+    /* The ⋯ overflow menu trigger sits flush after the inline CTA. */
+    .app-table td.acciones .overflow-menu { margin-left: var(--sp-1); vertical-align: middle; }
+
+    /* The overflow dropdown is position:absolute and must escape the table
+       container; the kit default (.app-table-wrap { overflow-x:auto }) clips
+       it. Mirror ordenes-index and make the wrap non-clipping. */
+    .app-table-wrap { overflow: visible; }
 
     /* Zebra stripe + readability bump — mirrors ordenes/index. The kit
        default (13px on a 1-row band) felt tight here; bumping td font to
@@ -82,6 +89,7 @@
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/cancelacionesService.js"></script>
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/mailService.js"></script>
   <script src="../js/services/ordenesService.js"></script>
@@ -98,7 +106,7 @@
       title: '<i data-lucide="file-text"></i> Contratos',
       actions: [{ label: '<i data-lucide="plus"></i> Nuevo Contrato', href: 'nuevo-contrato.html', cls: 'primary', id: 'btnNuevoContrato' }],
       showHome: true, homeHref: '../index.html', showLogout: true,
-      menu: [{ href: 'cancelaciones.html', label: '<i data-lucide="package-minus"></i> Cancelaciones de equipos' }]
+      menu: [{ href: 'cancelaciones.html', label: '<i data-lucide="package-minus"></i> Cancelaciones de equipos', id: 'menuItemCancelaciones' }]
     });
   </script>
 
@@ -169,7 +177,7 @@
               <th class="sortable" onclick="ContratosLista.ordenarPor('fecha_creacion')" style="width:110px;">Fecha</th>
               <th>Creado por</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('total')" style="width:110px; text-align:right;">Total</th>
-              <th class="acciones" style="width:200px; text-align:right;">Acciones</th>
+              <th class="acciones" style="width:230px; text-align:right;">Acciones</th>
             </tr>
           </thead>
           <tbody id="tablaContratos">

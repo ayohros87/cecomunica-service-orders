@@ -19,6 +19,20 @@ function aplicarRestriccionesPorRol(rol) {
   }
 }
 
+// Badge con el conteo de bajas pendientes en el item de menú "Cancelaciones".
+// Solo para aprobadores (admin/gerente); es su cola de aprobación.
+async function mostrarBadgeCancelaciones(rol) {
+  if (rol !== ROLES.ADMIN && rol !== ROLES.GERENTE) return;
+  try {
+    const n  = await CancelacionesService.contarPendientes();
+    const el = document.getElementById('menuItemCancelaciones');
+    if (n > 0 && el && !el.querySelector('.menu-badge')) {
+      el.insertAdjacentHTML('beforeend',
+        ` <span class="menu-badge" style="display:inline-flex;min-width:18px;height:18px;padding:0 5px;align-items:center;justify-content:center;border-radius:999px;background:#DC2626;color:#fff;font-size:11px;font-weight:700;margin-left:6px;">${n}</span>`);
+    }
+  } catch (_) { /* sin permisos o sin red — el menú sigue funcionando */ }
+}
+
 auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = '/login.html'; return; }
   CS.currentUser = user;
@@ -27,6 +41,7 @@ auth.onAuthStateChanged(async user => {
   window.userRole = rol;
 
   aplicarRestriccionesPorRol(rol);
+  mostrarBadgeCancelaciones(rol);
   await CS.cargarUsuarios();
   await ContratosLista.cargar(true);
   ContratosLista.updateBtnCargarMas(false);

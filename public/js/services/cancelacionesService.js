@@ -46,6 +46,20 @@ const CancelacionesService = {
     return rows;
   },
 
+  // Conteo de solicitudes pendientes (para el badge del menú de aprobadores).
+  // Usa la agregación count() del servidor; cae a un get acotado si no existe.
+  async contarPendientes() {
+    const db = firebase.firestore();
+    const q = db.collection('solicitudes_cancelacion').where('estado', '==', 'pendiente');
+    try {
+      const snap = await q.count().get();
+      return snap.data().count;
+    } catch (_) {
+      const snap = await q.limit(100).get();
+      return snap.size;
+    }
+  },
+
   async listarDeContrato(contratoDocId) {
     const db = firebase.firestore();
     const snap = await db.collection('solicitudes_cancelacion')
