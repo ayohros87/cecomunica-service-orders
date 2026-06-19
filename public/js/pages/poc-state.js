@@ -72,14 +72,29 @@ window.PocState = {
   },
 
   actualizarResumen({ total = 0, activos = 0, incompletos = 0 } = {}) {
-    const el = document.getElementById('resumenEquipos');
-    if (!el) return;
-    el.innerHTML = `
-      <strong title="Total de equipos">${total}</strong>
+    const footer = document.getElementById('resumenEquipos');
+    const top    = document.getElementById('resumenEquiposTop');
+
+    if (!total) {
+      if (footer) footer.textContent = 'No se encontraron resultados.';
+      if (top)    top.textContent    = 'No se encontraron resultados.';
+      return;
+    }
+
+    const base = `
+      <strong title="Total de equipos listados (activos e inactivos)">${total}</strong>
       <span style="color:var(--muted);font-size:12px;">equipos</span>
       <span class="badge completo" title="Activos">✅ ${activos}</span>
-      <span class="badge asignado" title="Incompletos (faltan campos)">⚠️ ${incompletos}</span>
-    `;
+      <span class="badge asignado" title="Incompletos (faltan campos)">⚠️ ${incompletos}</span>`;
+
+    if (footer) footer.innerHTML = base;
+    // The top strip mirrors the footer and adds a live "seleccionados" tally
+    // so the user can compare total vs. selected without scrolling/printing.
+    if (top) top.innerHTML = base +
+      `\n      <span class="badge" id="resumenSeleccionados" title="Equipos seleccionados">0 seleccionados</span>`;
+
+    // Reflect any current checkbox selection (normally 0 right after a render).
+    window.PocList?.actualizarSeleccion?.();
   },
 
   async cargarModelosMap() {

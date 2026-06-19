@@ -350,8 +350,7 @@ window.PocList = {
       [...tbody.rows].forEach(r => {
         if (r.cells[PocState.COL.activo]?.dataset.activo === 'true') activos++;
       });
-      document.getElementById('resumenEquipos').textContent =
-        total > 0 ? `Mostrando: ${total} equipos (${activos} activos)` : 'No se encontraron resultados.';
+      PocState.actualizarResumen({ total, activos });
       if (typeof lucide !== 'undefined') lucide.createIcons();
     });
   },
@@ -449,8 +448,7 @@ window.PocList = {
       tbody.appendChild(row);
     });
 
-    document.getElementById('resumenEquipos').textContent =
-      lista.length > 0 ? `Mostrando: ${lista.length} equipos (${activos} activos)` : 'No se encontraron resultados.';
+    PocState.actualizarResumen({ total: lista.length, activos });
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
@@ -563,6 +561,17 @@ window.PocList = {
 
   toggleSeleccionMasiva(master) {
     document.querySelectorAll('.seleccion-sim').forEach(cb => { cb.checked = master.checked; });
+    this.actualizarSeleccion();
+  },
+
+  // Live count of checked rows, shown in the top summary strip. Lets the user
+  // see "X de N" at a glance (e.g. 13 de 14) without printing the list.
+  actualizarSeleccion() {
+    const el = document.getElementById('resumenSeleccionados');
+    if (!el) return;
+    const n = document.querySelectorAll('#devicesTable .seleccion-sim:checked').length;
+    el.textContent = `${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}`;
+    el.classList.toggle('recibido', n > 0);
   },
 
   async exportarExcelSeleccionados() {
@@ -629,6 +638,12 @@ window.PocList = {
     const self = this;
     const btnCargarMas = document.getElementById('btnCargarMas');
     if (btnCargarMas) btnCargarMas.addEventListener('click', () => self.cargar());
+
+    // Delegated listener: any row checkbox toggling updates the live tally.
+    const tbody = document.getElementById('devicesTable');
+    if (tbody) tbody.addEventListener('change', (e) => {
+      if (e.target?.classList?.contains('seleccion-sim')) self.actualizarSeleccion();
+    });
   }
 };
 

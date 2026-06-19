@@ -24,6 +24,16 @@
     }
     .poc-toolbar { margin: 0; }
 
+    /* Always-visible summary strip under the toolbar buttons. Mirrors the
+       footer count so it's readable without scrolling a long list, and adds
+       a live "seleccionados" tally (see PocList.actualizarSeleccion). */
+    .poc-toolbar-resumen {
+      display: flex; align-items: center; flex-wrap: wrap;
+      gap: var(--sp-2);
+      margin-top: var(--sp-2);
+      padding-left: var(--sp-1);
+    }
+
     /* Row "being edited" highlight (set by JS during bulk edit) */
     tr.row-editing { background: #e0f2fe !important; box-shadow: inset 3px 0 0 var(--accent); }
 
@@ -196,6 +206,11 @@
             <a id="btnAdminGrupos" class="overflow-menu-item" href="../admin/grupos.html" title="Renombrar, fusionar y eliminar grupos en lote por cliente"><i data-lucide="tags"></i> Administrar grupos</a>
           </div>
         </div>
+      </div>
+
+      <!-- Live summary: total del cliente (activos/inactivos) + seleccionados -->
+      <div class="poc-toolbar-resumen">
+        <span class="resumen-badge" id="resumenEquiposTop" aria-live="polite"></span>
       </div>
     </div>
 
