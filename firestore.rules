@@ -33,7 +33,7 @@ service cloud.firestore {
     function isAdmin()    { return isSignedIn() && userRole() == "administrador"; }
     // Cotizaciones: jefe_taller tiene acceso completo salvo aprobar (solo admin).
     //   puedeCotizar → crear/listar;  verTodasCot → ver/editar/borrar cualquiera (como admin).
-    function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller"]; }
+    function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller", "recepcion"]; }
     function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller"]; }
 
     // Campos cuyo dueño exclusivo es Cloud Functions (admin SDK los salta).

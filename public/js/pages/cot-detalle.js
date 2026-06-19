@@ -107,7 +107,7 @@
           <button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
-          <button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>
+          ${CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}
           <button class="btn btn-primary" id="btnImprimir"><i data-lucide="printer"></i> Imprimir / PDF</button>
         </div>
       </div>
@@ -218,7 +218,8 @@
     if (btnAp) btnAp.addEventListener('click', () => {
       location.href = 'index.html?aprobar=' + encodeURIComponent(cot._docId);
     });
-    $('btnEditar').addEventListener('click', () => { location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId); });
+    const btnEd = $('btnEditar');
+    if (btnEd) btnEd.addEventListener('click', () => { location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId); });
     $('btnImprimir').addEventListener('click', () => { window.open('imprimir-cotizacion.html?id=' + encodeURIComponent(cot._docId), '_blank'); });
 
     renderTransiciones();
@@ -388,7 +389,7 @@
     if (!user) { location.href = '../login.html'; return; }
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
-      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
+      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.RECEPCION];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
       const params = new URLSearchParams(location.search);

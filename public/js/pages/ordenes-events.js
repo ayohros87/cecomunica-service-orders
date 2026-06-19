@@ -267,6 +267,13 @@
         window.location.href = BASE + `trabajar-orden.html?id=${ordenId}`;
       }
     },
+    'cotizar-orden': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) {
+        closeAllMenus();
+        window.location.href = BASE + `cotizar-orden.html?id=${ordenId}`;
+      }
+    },
     'gestionar-notas': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) {

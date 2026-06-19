@@ -639,7 +639,11 @@ function botonesFlujo(ordenId, estado, ordenData) {
   const rol = APP.state.userRole || "";
   let html = "";
 
-  if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
+  // jefe_taller (supervisor de taller) comparte el flujo completo con
+  // admin/recepción: recibir → asignar → completar → entregar. Tiene el
+  // permiso 'asignar-tecnico' en roles.js, así que debe ver el botón de
+  // flujo igual que ellos.
+  if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION || rol === ROLES.JEFE_TALLER) {
     if (estado === "POR ASIGNAR") {
       // Primer paso obligatorio: recibir los equipos (acuse). No se puede
       // asignar hasta haber recibido.
@@ -759,6 +763,14 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   } else if (rol === ROLES.VENDEDOR) {
     menuItems.push(
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir / documentos", action: "ver-documentos", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+    );
+  }
+
+  // Cotizar — crea una cotización (borrador) a partir de la orden y sus
+  // intervenciones. Disponible para los roles que pueden cotizar.
+  if ([ROLES.ADMIN, ROLES.VENDEDOR, ROLES.RECEPCION, ROLES.JEFE_TALLER].includes(rol)) {
+    menuItems.push(
+      { icon: '<i data-lucide="receipt"></i>', label: "Cotizar", action: "cotizar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );
   }
 

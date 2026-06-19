@@ -8,107 +8,75 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <title>Trabajar Orden – Cecomunica</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Cotizar Orden – Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/cotizaciones-kit.css">
 
   <style>
-    /* Page-local */
-    .fila-equipo {
-      border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
-      padding: var(--sp-3); margin: var(--sp-3) 0;
-      background: var(--surface-card);
-    }
-    .fila-equipo .hdr {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: var(--sp-2);
-    }
-    .consumos table { width: 100%; border-collapse: collapse; margin-top: var(--sp-2); }
-    .consumos th, .consumos td {
-      border: 1px solid var(--border-subtle); padding: 6px; text-align: left;
-      font-size: 13px;
-    }
-    .consumos th { background: var(--surface-sunken); font-weight: 600; }
-    .badge-tipo {
-      padding: 2px 8px; border-radius: 999px; font-size: 12px;
-      border: 1px solid transparent; display: inline-block;
-    }
-    .badge-tipo.cobro    { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
-    .badge-tipo.garantia { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
-    .badge-tipo.interno  { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
-    .total-mini { font-weight: 600; }
+    /* Page-local: tarjeta de equipo + intervención + líneas de pieza */
+    .co-equipo { border:1px solid var(--border-subtle, #e5e7eb); border-radius:var(--radius-md, 10px);
+      padding:var(--sp-3, 12px); margin-bottom:var(--sp-3, 12px); background:var(--surface-card, #fff); }
+    .co-equipo-hd { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; margin-bottom:6px; }
+    .co-equipo-hd .serie { font-weight:600; }
+    .co-equipo-hd .modelo { color:var(--fg-3, #6b7280); font-size:13px; }
+    .co-interv { font-size:12.5px; color:#374151; background:var(--accent-soft, #eef6ff);
+      border:1px solid var(--accent-line, #cfe3f7); border-radius:6px; padding:6px 8px; margin:4px 0 10px; }
+    .co-interv.vacia { color:#9ca3af; font-style:italic; background:#fafafa; border-color:#eee; }
+    .co-lineas { width:100%; border-collapse:collapse; font-size:13px; }
+    .co-lineas th, .co-lineas td { padding:5px 6px; text-align:left; vertical-align:top; }
+    .co-lineas th { font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--fg-3,#6b7280); border-bottom:1px solid var(--border-subtle,#e5e7eb); }
+    .co-lineas td { border-bottom:1px solid #f1f3f5; }
+    .co-lineas .num { text-align:right; }
+    .co-cell-rel { position:relative; }
+    .co-pza-pop { position:absolute; z-index:30; left:0; right:0; top:100%; background:#fff;
+      border:1px solid var(--border-subtle,#e5e7eb); border-radius:8px; box-shadow:var(--shadow, 0 8px 24px rgba(0,0,0,.12));
+      max-height:240px; overflow:auto; margin-top:2px; }
+    .co-pza-item { padding:7px 10px; cursor:pointer; display:flex; justify-content:space-between; gap:10px; }
+    .co-pza-item:hover, .co-pza-item.active { background:var(--accent-soft, #eef6ff); }
+    .co-pza-item .meta { color:var(--fg-3,#6b7280); font-size:12px; white-space:nowrap; }
+    .co-w-sku { width:130px; } .co-w-cant { width:64px; } .co-w-precio { width:96px; }
+    .co-w-total { width:90px; } .co-w-acc { width:36px; }
+    .co-empty { color:var(--fg-3,#6b7280); font-style:italic; padding:8px 0; }
   </style>
-</head>
-<body>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
   <script src="../js/core/layout.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
   <script src="../js/services/ordenesService.js"></script>
   <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script src="../js/services/piezasService.js"></script>
+  <script src="../js/services/cotizacionesService.js"></script>
+  <script src="../js/services/mailService.js"></script>
+  <script src="../js/domain/cotizacionesTotales.js"></script>
+  <script src="../js/pages/cot-editor-state.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
 
   <div id="topbar-mount"></div>
   <script>
-    Layout.renderTopbarFor('child', {
-      title: '<i data-lucide="wrench"></i> Trabajar Orden',
-      back:  { href: 'index.html' }
+    Layout.renderTopbar({
+      title: '<i data-lucide="receipt"></i> Cotizar orden',
+      back: { label: '<i data-lucide="arrow-left"></i> Órdenes', href: 'index.html' },
+      showHome: false, showLogout: true,
     });
   </script>
 
-  <div class="app-wrap app-wrap--default">
-
-    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-      <div id="infoOrden" class="resumen" style="margin-bottom:var(--sp-3);"></div>
-      <div class="form-actions" style="margin:0;">
-        <button class="btn btn-secondary" onclick="window.open('imprimir-orden.html?id='+ordenId,'_blank')"><i data-lucide="printer"></i> Imprimir orden</button>
-        <button class="btn btn-primary" onclick="irACotizar()"><i data-lucide="receipt"></i> Previsualizar cotización</button>
-      </div>
-    </div>
-
-    <div id="equiposWrap"></div>
-
+  <div class="app-body">
+    <div id="cotizarMount"></div>
   </div>
 
-  <!-- Modal Agregar Pieza -->
-  <div id="modalPieza" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
-    <div class="modal" style="max-width:520px;">
-      <div class="modal-header">
-        <h3 class="modal-title">Agregar pieza utilizada</h3>
-        <button class="modal-close" onclick="cerrarModal()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-      </div>
-      <div class="modal-body">
-        <div class="form-field">
-          <label class="form-label" for="buscarPieza">Buscar pieza (nombre o SKU)</label>
-          <input class="form-input" id="buscarPieza" type="text" placeholder="Ej. Micrófono, Batería BL2009…">
-          <div id="sugerencias" class="chips" style="margin-top:var(--sp-2);"></div>
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="qty">Cantidad</label>
-          <input class="form-input" id="qty" type="number" min="1" step="1" value="1">
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="tipo">Tipo</label>
-          <select class="form-select" id="tipo">
-            <option value="cobro" selected>Cobrar</option>
-            <option value="garantia">Garantía</option>
-            <option value="interno">Uso interno</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="confirmarAgregar()"><i data-lucide="plus"></i> Agregar</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="../js/ui/toast.js"></script>
-  <script src="../js/ui/modal.js"></script>
   <script src="../js/pages/cotizar-orden.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
