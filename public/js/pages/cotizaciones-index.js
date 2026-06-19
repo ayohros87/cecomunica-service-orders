@@ -78,7 +78,7 @@
   function render() {
     const filtradas = getFiltradas();
     renderSegments();
-    renderStats();
+    renderStats(filtradas);
     renderTabla(filtradas);
     renderCards(filtradas);
     renderSortIcons();
@@ -111,9 +111,9 @@
     `).join('');
   }
 
-  function renderStats() {
-    // Igual que renderSegments(): los KPIs reflejan el alcance del usuario,
-    // no el de toda la empresa (para vendedores soloMias es forzado).
+  function renderStats(filtradas) {
+    // Los KPIs de negocio (enviadas / monto cerrado / tasa) reflejan el alcance del
+    // usuario (soloMias forzado para vendedores), no el de toda la empresa.
     const visibles = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
     const enviadas = visibles.filter(c => c.estado === 'enviada').length;
     // "Monto cerrado": solo cotizaciones convertidas a venta efectiva.
@@ -125,7 +125,10 @@
     const convertidas = visibles.filter(c => c.estado === 'convertida').length;
     const oportunidades = visibles.filter(c => ['enviada', 'convertida', 'rechazada', 'vencida'].includes(c.estado)).length;
     const tasa = oportunidades > 0 ? Math.round(convertidas / oportunidades * 100) : 0;
-    $('statTotal').textContent = visibles.length;
+    // "Total emitidas" debe ser consonante con lo que el usuario ve: cuenta
+    // exactamente las filas listadas (respeta filtros de estado/texto/eliminadas
+    // y la paginación), no el set completo `visibles`.
+    $('statTotal').textContent = filtradas.length;
     $('statPendientes').textContent = enviadas;
     $('statMontoAprobado').textContent = FMT.money(montoCerrado);
     $('statTasa').textContent = tasa + '%';
@@ -158,7 +161,7 @@
               ${(userRol === ROLES.ADMIN && (c.estado || 'borrador') === 'borrador') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar" data-action="aprobar"><i data-lucide="check-circle"></i></button>` : ''}
               ${(c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
-              <button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>
+              ${CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
               ${(c.estado === 'aprobada' || c.estado === 'enviada' || c.estado === 'convertida') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Reenviar al cliente" data-action="enviar"><i data-lucide="send"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Duplicar" data-action="duplicar"><i data-lucide="copy"></i></button>
               <button class="btn btn-ghost btn-icon btn-sm" title="Imprimir / PDF" data-action="imprimir"><i data-lucide="printer"></i></button>
@@ -190,7 +193,7 @@
           </div>
           <div class="responsive-card-actions">
             <button class="btn btn-ghost btn-sm" data-action="detalle"><i data-lucide="eye"></i> Ver</button>
-            <button class="btn btn-ghost btn-sm" data-action="editar"><i data-lucide="pencil"></i> Editar</button>
+            ${CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-sm" data-action="editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
             <button class="btn btn-ghost btn-sm" data-action="imprimir"><i data-lucide="printer"></i> Imprimir</button>
           </div>
         </div>

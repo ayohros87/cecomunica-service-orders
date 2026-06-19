@@ -13,6 +13,11 @@
   };
   const ESTADO_ORDEN = ['borrador', 'enviada', 'aprobada', 'rechazada', 'vencida', 'convertida'];
 
+  // Una cotización solo es editable mientras está en 'borrador'. Apenas se aprueba,
+  // envía, convierte, rechaza o vence queda como registro inmutable — ni siquiera un
+  // admin la edita. Para cambiarla se usa "Duplicar", que crea un nuevo borrador.
+  function esEditable(estado) { return (estado || 'borrador') === 'borrador'; }
+
   // ── Condiciones por defecto + plantillas ──────────────────────────────────
   const CONDICIONES_DEFAULT = [
     { k: 'Tiempo de entrega',   v: '4 – 6 semanas tras orden de compra' },
@@ -495,7 +500,7 @@
   }
 
   window.CotState = {
-    ESTADOS, ESTADO_ORDEN,
+    ESTADOS, ESTADO_ORDEN, esEditable,
     CONDICIONES_DEFAULT, PLANTILLAS_COND,
     EMISOR_FALLBACK,
     uid,

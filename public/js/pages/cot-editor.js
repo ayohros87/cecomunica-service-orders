@@ -465,6 +465,11 @@
         Toast.show('Cotización ' + draft.id + ' guardada · solicitud enviada a ventas@cecomunica.com', 'ok');
         setTimeout(() => { location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(ref.id); }, 800);
       } else {
+        // Defensa adicional: nunca persistir cambios sobre una cotización no editable.
+        if (!CotState.esEditable(draft.estado)) {
+          Toast.show('Esta cotización ya no es editable.', 'warn');
+          return;
+        }
         const doc = CotState.toDoc(draft, { catalogos });
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
         await CotizacionesService.updateCotizacion(draft._docId, doc);
@@ -524,6 +529,15 @@
         const doc = await CotizacionesService.getCotizacion(docId);
         if (!doc) { Toast.show('No encontrada', 'bad'); location.href = 'index.html'; return; }
         draft = CotState.toUi(doc);
+        // Solo se editan borradores. Una cotización aprobada/enviada/convertida/
+        // rechazada/vencida es un registro inmutable (ni admin la edita): si se
+        // llega por URL directa, se redirige al detalle.
+        if (!CotState.esEditable(draft.estado)) {
+          const lbl = (CotState.ESTADOS[draft.estado] || {}).label || draft.estado;
+          Toast.show('Esta cotización (' + lbl + ') ya no es editable. Usa "Duplicar" para crear una nueva versión.', 'warn');
+          location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(docId);
+          return;
+        }
         // Vendedor solo puede editar lo suyo
         if (AUTH.is(ROLES.VENDEDOR) && draft.creado_por_uid && draft.creado_por_uid !== user.uid) {
           Toast.show('Solo el creador o un administrador puede editar esta cotización.', 'bad');
