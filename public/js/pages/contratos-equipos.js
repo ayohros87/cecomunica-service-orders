@@ -16,18 +16,22 @@ window.ContratosEquipos = {
       const c = CS.contratos.find(x => x.id === id);
       if (!c) { celda.innerHTML = '<span style="opacity:0.3;">—</span>'; return; }
 
-      const osLinked = !!(c.os_linked || c.tiene_os || (c.os_count ?? 0) > 0);
-      const osCount  = Number(c.os_count || 0);
-      const serials  = c.os_serials_preview || [];
+      // Conteo de unidades activas del contrato (contratado − dado de baja).
+      const total   = (c.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const activos = Math.max(0, total - Number(c.baja_cancelado_total || 0));
+      const countTxt = total > 0
+        ? (activos < total
+            ? `<span title="${activos} activos de ${total} contratados"><b>${activos}</b><span style="color:var(--fg-3);">/${total}</span></span>`
+            : `<span title="${total} equipos contratados"><b>${total}</b></span>`)
+        : '<span style="opacity:0.3;">—</span>';
 
-      if (osLinked) {
-        const display = osCount > 1
-          ? `<i data-lucide="package"></i> ${osCount}`
-          : `<i data-lucide="package"></i>`;
-        celda.innerHTML = `<span class="equipos-peek" data-contrato-doc="${id}">${display}</span>`;
-      } else {
-        celda.innerHTML = '<span style="opacity:0.3;" title="Sin órdenes asociadas">—</span>';
-      }
+      // Peek de órdenes vinculadas (secundario), conserva el tooltip al pasar el mouse.
+      const osLinked = !!(c.os_linked || c.tiene_os || (c.os_count ?? 0) > 0);
+      const peek = osLinked
+        ? ` <span class="equipos-peek" data-contrato-doc="${id}" title="Órdenes vinculadas" style="margin-left:4px; opacity:0.55;"><i data-lucide="package" style="width:14px;height:14px;"></i></span>`
+        : '';
+
+      celda.innerHTML = `${countTxt}${peek}`;
       if (window.lucide) lucide.createIcons({ nodes: [celda] });
     });
   },

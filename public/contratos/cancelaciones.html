@@ -26,6 +26,7 @@
     .estado-pill { display:inline-flex; align-items:center; border-radius:999px; padding:1px 9px; font-size:12px; font-weight:600; }
     .e-pend { background:#FFFBEB; color:#92400E; border:1px solid #FDE68A; }
     .e-aprob{ background:#ECFDF5; color:#065F46; border:1px solid #A7F3D0; }
+    .e-cerr { background:#EFF6FF; color:#1E40AF; border:1px solid #BFDBFE; }
     .e-rech { background:#FEF2F2; color:#991B1B; border:1px solid #FECACA; }
     .baja-card + .baja-card { margin-top: var(--sp-3); }
     .seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; }
@@ -38,7 +39,7 @@
 
 <div id="topbar-mount"></div>
 <script>
-  Layout.renderTopbar({ title: '<i data-lucide="package-minus"></i> Cancelaciones de equipos', showHome: true, homeHref: '../index.html', showLogout: true,
+  Layout.renderTopbar({ title: '<i data-lucide="file-minus-2"></i> Enmiendas y terminaciones', showHome: true, homeHref: '../index.html', showLogout: true,
     menu: [{ href: './index.html', label: '<i data-lucide="file-text"></i> Contratos' }] });
 </script>
 
@@ -46,14 +47,28 @@
   <!-- Solicitud (solo si llega ?contrato=) -->
   <div id="solicitudWrap" style="display:none; margin-bottom:var(--sp-5);">
     <div class="ds-card" style="padding:var(--sp-5);">
-      <h3 style="margin:0 0 4px;"><i data-lucide="package-minus" style="width:18px;height:18px;"></i> Solicitar baja de equipos</h3>
+      <h3 style="margin:0 0 4px;"><i data-lucide="file-minus-2" style="width:18px;height:18px;"></i> Enmienda / terminación de contrato</h3>
       <p id="solSub" style="margin:0 0 var(--sp-4); color:var(--fg-3); font-size:13px;"></p>
+
+      <div class="form-grid-2" style="margin-bottom:var(--sp-3);">
+        <div class="form-field">
+          <label class="form-label" for="tipo">Tipo de enmienda</label>
+          <select class="form-select" id="tipo">
+            <option value="baja_parcial">Baja parcial (devolución de unidades)</option>
+            <option value="terminacion_total">Terminación total del contrato</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="motivoCodigo">Motivo</label>
+          <select class="form-select" id="motivoCodigo"></select>
+        </div>
+      </div>
 
       <div id="solEquipos" style="margin-bottom:var(--sp-4);"></div>
 
       <div class="form-grid-2">
         <div class="form-field">
-          <label class="form-label">Término de cancelación</label>
+          <label class="form-label" for="termino">Término (fin de facturación)</label>
           <select class="form-select" id="termino">
             <option value="fin_mes">Hasta fin de mes</option>
             <option value="30_dias">30 días más</option>
@@ -70,14 +85,36 @@
           <input class="form-input" type="date" id="fechaOtra">
         </div>
         <div class="form-field">
-          <label class="form-label" for="notaArchivo">Adjuntar nota de cancelación (PDF/imagen)</label>
+          <label class="form-label" for="notaArchivo">Aviso del cliente (PDF/imagen)</label>
           <input class="form-input" type="file" id="notaArchivo" accept="image/*,application/pdf">
         </div>
+      </div>
+
+      <!-- Liquidación -->
+      <div class="form-grid-2" style="margin-top:var(--sp-2);">
+        <div class="form-field">
+          <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="aplicaPenalidad" style="width:auto;"> Penalidad por terminación anticipada
+          </label>
+          <input class="form-input" type="number" id="penalidadMonto" min="0" step="any" placeholder="0.00" disabled>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="depositoAccion">Depósito / garantía</label>
+          <div style="display:flex; gap:8px;">
+            <select class="form-select" id="depositoAccion" style="flex:1;">
+              <option value="na">No aplica</option>
+              <option value="devolver">Devolver</option>
+              <option value="retener">Retener</option>
+            </select>
+            <input class="form-input" type="number" id="depositoMonto" min="0" step="any" placeholder="0.00" style="width:120px;" disabled>
+          </div>
+        </div>
         <div class="form-field" style="grid-column:1/-1;">
-          <label class="form-label" for="motivo">Observaciones</label>
-          <textarea class="form-input form-textarea" id="motivo" placeholder="(opcional)"></textarea>
+          <label class="form-label" for="motivoDetalle">Observaciones / detalle</label>
+          <textarea class="form-input form-textarea" id="motivoDetalle" placeholder="(opcional)"></textarea>
         </div>
       </div>
+
       <p id="finPreview" style="margin:8px 0 0; font-size:13px; color:var(--fg-2);"></p>
 
       <div style="display:flex; gap:8px; margin-top:var(--sp-4);">
@@ -93,6 +130,7 @@
       <div class="seg" role="tablist">
         <button type="button" class="seg-btn is-on" data-estado="pendiente" onclick="Cancelaciones.setFiltro('pendiente')">Pendientes</button>
         <button type="button" class="seg-btn" data-estado="aprobada" onclick="Cancelaciones.setFiltro('aprobada')">Aprobadas</button>
+        <button type="button" class="seg-btn" data-estado="cerrada" onclick="Cancelaciones.setFiltro('cerrada')">Cerradas</button>
         <button type="button" class="seg-btn" data-estado="rechazada" onclick="Cancelaciones.setFiltro('rechazada')">Rechazadas</button>
         <button type="button" class="seg-btn" data-estado="" onclick="Cancelaciones.setFiltro('')">Todas</button>
       </div>

@@ -175,6 +175,69 @@ const ContratosService = {
     const ref = db.collection('contratos').doc(contratoId).collection('ordenes').doc(ordenId);
     return merge ? ref.set(data, { merge: true }) : ref.set(data);
   },
+
+  // Seriales (uso interno). Doc-por-serial en la subcolección
+  // `contratos/{id}/seriales/{autoId}` — cada doc es la semilla de un registro de
+  // equipo: el serial es la identidad durable, lo demás (contrato/cliente) es la
+  // asignación actual. Vive en subcolección para no tocar el documento principal
+  // (que tiene campos cacheados por Cloud Functions protegidos por reglas) y para
+  // ser consultable por `collectionGroup` por serial el día que se necesite.
+  async getSerialesManual(contratoId) {
+    const db = firebase.firestore();
+    const snap = await db.collection('contratos').doc(contratoId)
+      .collection('seriales').get();
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(x => typeof x.serial === 'string' && x.serial.trim());
+  },
+
+  // Reconcilia el set deseado contra lo existente: agrega nuevos, actualiza el
+  // modelo/asignación de los que siguen, borra los que se quitaron. Conserva
+  // created_at (y futuros enlaces de órdenes) en los que permanecen.
+  async saveSerialesManual(contratoId, desired, meta = {}) {
+    const db = firebase.firestore();
+    const col = db.collection('contratos').doc(contratoId).collection('seriales');
+    const norm = (s) => String(s || '').trim().toLowerCase();
+
+    const snap = await col.get();
+    const existing = new Map();                       // serialNorm -> docId
+    snap.docs.forEach(d => existing.set(norm(d.data().serial), d.id));
+
+    const desiredMap = new Map();                     // serialNorm -> item (deduplicado)
+    for (const it of (desired || [])) {
+      const k = norm(it.serial);
+      if (!k) continue;
+      if (!desiredMap.has(k)) desiredMap.set(k, it);
+    }
+
+    const now = firebase.firestore.FieldValue.serverTimestamp();
+    const uid = meta.uid || null;
+    const batch = db.batch();
+
+    for (const [k, it] of desiredMap) {
+      const base = {
+        serial: String(it.serial || '').trim(),
+        modelo: it.modelo || '',
+        modelo_id: it.modelo_id || '',
+        contrato_doc_id: contratoId,
+        contrato_id: meta.contrato_id || '',
+        cliente_id: meta.cliente_id || '',
+        cliente_nombre: meta.cliente_nombre || '',
+        source: it.source || 'manual',
+        updated_at: now,
+        updated_by: uid,
+      };
+      if (existing.has(k)) {
+        batch.set(col.doc(existing.get(k)), base, { merge: true });
+      } else {
+        batch.set(col.doc(), { ...base, created_at: now, created_by: uid });
+      }
+    }
+    for (const [k, docId] of existing) {
+      if (!desiredMap.has(k)) batch.delete(col.doc(docId));
+    }
+    return batch.commit();
+  },
 };
 
 window.ContratosService = ContratosService;

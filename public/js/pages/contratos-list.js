@@ -17,6 +17,48 @@ window.ContratosLista = {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
+  // Botón de seriales con estado: pendiente (resaltado) / parcial / completo (verde).
+  // Se muestra en contratos activos/aprobados con unidades activas.
+  serialesBtn(id, data, { movil = false } = {}) {
+    if (!['activo', 'aprobado'].includes(data.estado)) return '';
+    const total = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
+    const activos = Math.max(0, total - Number(data.baja_cancelado_total || 0));
+    if (activos === 0) return '';
+    const count = Number(data.seriales_count || 0);
+
+    let css, icon, label, title;
+    if (count === 0) {
+      css = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;';
+      icon = 'scan-barcode'; label = 'Seriales pendientes'; title = `Faltan seriales (0 de ${activos})`;
+    } else if (count >= activos) {
+      css = 'background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;';
+      icon = 'check'; label = 'Seriales'; title = `Seriales completos (${count} de ${activos})`;
+    } else {
+      css = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;';
+      icon = 'scan-barcode'; label = `Seriales ${count}/${activos}`; title = `Seriales incompletos (${count} de ${activos})`;
+    }
+    const cls = movil ? 'btn btn-sm' : 'btn btn-sm';
+    return `<button class="${cls}" style="${css}" onclick="ContratosSeriales.abrir('${id}')" title="${title}"><i data-lucide="${icon}" style="width:14px;height:14px;"></i> ${label}</button>`;
+  },
+
+  // Indicador de enmienda sobre el contrato (derivado por el trigger onCancelacionWrite).
+  bajaPill(data) {
+    const finTerm = data.terminacion_fin?.toDate ? data.terminacion_fin.toDate().toLocaleDateString()
+      : (data.baja_fecha_fin?.toDate ? data.baja_fecha_fin.toDate().toLocaleDateString() : '');
+    if (data.terminacion_total) {
+      return `<span class="chip-estado chip-cancelada" title="Terminación total${finTerm ? ' · factura hasta ' + finTerm : ''}"><i data-lucide="file-minus-2" style="width:12px;height:12px;"></i> Terminado</span>`;
+    }
+    if (data.baja_estado === 'pendiente') {
+      return `<a href="cancelaciones.html" class="chip-estado chip-diagnostico" title="Enmienda pendiente de aprobación" style="text-decoration:none;"><i data-lucide="clock" style="width:12px;height:12px;"></i> Baja pend.</a>`;
+    }
+    if (data.baja_estado === 'aprobada') {
+      const orig = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const activos = Math.max(0, orig - Number(data.baja_cancelado_total || 0));
+      return `<span class="chip-estado chip-cancelada" title="Baja parcial aprobada · ${activos} de ${orig} activos${finTerm ? ' · factura hasta ' + finTerm : ''}"><i data-lucide="package-minus" style="width:12px;height:12px;"></i> Baja · ${activos}/${orig}</span>`;
+    }
+    return '';
+  },
+
   // ── Row / card builders ──────────────────────────────────────────
   crearFila(id, data) {
     const esc = CS.esc.bind(CS);
@@ -89,11 +131,14 @@ window.ContratosLista = {
       ? `<button class="${ICON_BTN}" onclick="window.location.href='cancelaciones.html?contrato=${id}'" title="Solicitar baja de equipos" aria-label="Solicitar baja"><i data-lucide="package-minus"></i></button>`
       : '';
 
+    const btnSeriales = ContratosLista.serialesBtn(id, data);
+
     const accionesHtml = esRecepcion
-      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}${btnBaja}`
+      ? `${btnImprimir}${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}${btnSeriales}${btnBaja}`
       : `${btnImprimir}
          ${puedePanelTrabajo ? `<button class="${ICON_BTN}" onclick="ContratosEquipos.abrirPanel('${id}')" title="Panel de trabajo" aria-label="Panel de trabajo"><i data-lucide="folder-open"></i></button>` : ''}
          ${btnEditar}
+         ${btnSeriales}
          ${btnBaja}
          ${btnBorrar}
          ${bloqueFirmado}
@@ -112,7 +157,10 @@ window.ContratosLista = {
       <td>${esc(data.accion || '-')}</td>
       <td style="text-align:center;" data-contrato-equipos="${id}"><span style="opacity:0.3;"><i data-lucide="loader"></i></span></td>
       <td class="estado-cell">
-        <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
+        <div style="display:inline-flex; flex-direction:column; align-items:flex-start; gap:4px;">
+          <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
+          ${ContratosLista.bajaPill(data)}
+        </div>
       </td>
       <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
       <td class="td-muted">${esc(CS.mapaUsuarios[data.creado_por_uid] || '-')}</td>
@@ -157,11 +205,15 @@ window.ContratosLista = {
       bloqueFirmado = `<button class="btn" onclick="ContratosFirmado.subir('${data.id}')" title="Subir firmado"><i data-lucide="upload"></i></button>`;
     }
 
+    const btnSerialesMovil = ContratosLista.serialesBtn(data.id, data, { movil: true });
+
     const accionesMovilHtml = esRecepcion
       ? `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir"><i data-lucide="printer"></i> Ver</button>` : ''}
-         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i> Panel</button>` : ''}`
+         ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i> Panel</button>` : ''}
+         ${btnSerialesMovil}`
       : `${data.contrato_id ? `<button class="btn" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver/Imprimir"><i data-lucide="printer"></i> Ver</button>` : ''}
          ${puedePanelTrabajo ? `<button class="btn" onclick="ContratosEquipos.abrirPanel('${data.id}')" title="Panel de trabajo"><i data-lucide="folder-open"></i> Panel</button>` : ''}
+         ${btnSerialesMovil}
          ${editable ? `<button class="btn" onclick="ContratosLista.editar('${data.id}')" title="Editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
          ${puedeAprobar ? `<button class="btn btn-accent block" onclick="ContratosAprobacion.abrir('${data.id}')" title="Aprobar ahora"><i data-lucide="check-circle"></i> Aprobar</button>` : ''}
          ${bloqueFirmado}
@@ -183,7 +235,10 @@ window.ContratosLista = {
           </div>
           <div class="t2">${esc(data.cliente_nombre || '-')}</div>
         </div>
-        <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+          <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
+          ${ContratosLista.bajaPill(data)}
+        </div>
       </div>
       <div class="row">
         <div class="t2">${esc(data.tipo_contrato || '-')} · ${esc(data.accion || '-')}</div>
