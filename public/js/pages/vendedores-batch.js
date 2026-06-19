@@ -152,7 +152,9 @@ window.VB = {
     if (!nombreExacto) { Toast.show('Primero escribe el nombre del cliente.', 'bad'); return; }
 
     const cacheKey = this.clienteIDSeleccionado || FMT.normalize(nombreExacto);
-    const lsKey    = 'grupos_id_' + cacheKey;
+    // v2: invalida cachés viejos que se llenaron con la query solo-por-id
+    // (antes faltaban grupos de equipos legacy sin cliente_id).
+    const lsKey    = 'grupos_v2_' + cacheKey;
 
     if (this.gruposClienteCache.has(cacheKey)) {
       const g = this.gruposClienteCache.get(cacheKey);
@@ -168,9 +170,13 @@ window.VB = {
       return;
     }
     try {
+      // Pasa id Y nombre (como el panel de admin): getByCliente corre ambas
+      // queries y une los resultados, así los equipos legacy que solo tienen
+      // `cliente` (string) sin `cliente_id` también aportan sus grupos. Con
+      // solo el id se perdían esos grupos de forma intermitente.
       const devices = await PocService.getByCliente({
         clienteId: this.clienteIDSeleccionado || null,
-        clienteNombre: this.clienteIDSeleccionado ? null : nombreExacto,
+        clienteNombre: nombreExacto || null,
       });
       const gruposSet = new Set();
       devices.forEach(d => {

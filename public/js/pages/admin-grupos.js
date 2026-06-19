@@ -8,7 +8,7 @@
  * delete actions that batch-update every device referencing those groups.
  *
  * Cache invalidation: vendedores-batch caches per-client groups in
- * localStorage under `grupos_id_<clienteId>` / `grupos_id_<nombreNorm>`.
+ * localStorage under `grupos_v2_<clienteId>` / `grupos_v2_<nombreNorm>`.
  * After any write we clear those entries so the batch tool picks up the
  * change on next refresh.
  */
@@ -409,8 +409,8 @@
   function invalidarCachesGrupos() {
     if (!State.clienteSel) return;
     try {
-      localStorage.removeItem('grupos_id_' + State.clienteSel.id);
-      localStorage.removeItem('grupos_id_' + FMT.normalize(State.clienteSel.nombre));
+      localStorage.removeItem('grupos_v2_' + State.clienteSel.id);
+      localStorage.removeItem('grupos_v2_' + FMT.normalize(State.clienteSel.nombre));
     } catch (_) {}
   }
 
