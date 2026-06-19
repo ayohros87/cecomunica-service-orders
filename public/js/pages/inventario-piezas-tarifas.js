@@ -217,7 +217,117 @@ function exportarExcel(){
   XLSX.writeFile(wb, `Piezas_Tarifas_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
 
+/* ===== Importar desde QuickBooks (revisar → aprobar → ingresar) ===== */
+let qboCandidatos = [];
+
+async function importarDeQBO(){
+  const ov = document.getElementById('overlayQbo');
+  document.getElementById('btnImportarQbo').disabled = true;
+  document.getElementById('qboBody').innerHTML = '<p style="color:var(--fg-3);">Consultando QuickBooks…</p>';
+  ov.classList.add('show'); ov.style.display = 'flex';
+  if (window.lucide) lucide.createIcons();
+  try{
+    const res = await firebase.functions().httpsCallable('listQBOPiezas')();
+    qboCandidatos = (res.data && res.data.piezas) || [];
+    renderQboPreview();
+  }catch(e){
+    console.error('listQBOPiezas', e);
+    document.getElementById('qboBody').innerHTML = `<p style="color:#b91c1c;">No se pudo consultar QuickBooks: ${esc(e.message||'')}</p>`;
+  }
+}
+
+// Detecta piezas ya existentes por qbo_item_id (preferente) o SKU.
+function _existingPiezasIndex(){
+  const byId = new Set(), bySku = new Set();
+  (listaPiezas||[]).forEach(p=>{
+    if(p.qbo_item_id) byId.add(String(p.qbo_item_id));
+    if(p.sku) bySku.add(String(p.sku).toLowerCase());
+  });
+  return { byId, bySku };
+}
+
+function renderQboPreview(){
+  const { byId, bySku } = _existingPiezasIndex();
+  const rows = qboCandidatos.map((c, idx)=>{
+    const existe = byId.has(String(c.qbo_item_id)) || (!!c.sku && bySku.has(String(c.sku).toLowerCase()));
+    return { ...c, idx, existe };
+  });
+  const nuevas = rows.filter(r=>!r.existe).length;
+  const body = document.getElementById('qboBody');
+  const btn = document.getElementById('btnImportarQbo');
+
+  if(!rows.length){
+    body.innerHTML = '<p style="color:var(--fg-3);">No hay productos (Inventory/NonInventory) en QuickBooks.</p>';
+    btn.disabled = true; return;
+  }
+  btn.disabled = (nuevas === 0);
+  body.innerHTML = `
+    <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+      <b>${rows.length}</b> productos en QuickBooks · <b style="color:#065F46;">${nuevas}</b> nuevas · <b>${rows.length-nuevas}</b> ya existen.
+      Revisa y desmarca las que no quieras antes de aprobar.
+    </p>
+    <div class="table-scroll" style="max-height:55vh; overflow:auto;">
+      <table class="app-table" style="font-size:13px;">
+        <thead><tr>
+          <th style="width:34px;"><input type="checkbox" id="qbo-all" checked onchange="toggleAllQbo(this.checked)"></th>
+          <th>Nombre</th><th>SKU</th>
+          <th style="text-align:right;">Precio</th><th style="text-align:right;">Costo</th>
+          <th>Tipo</th><th>Estado</th>
+        </tr></thead>
+        <tbody>${rows.map(r=>`
+          <tr style="${r.existe?'opacity:.55;':''}">
+            <td><input type="checkbox" class="qbo-chk" data-idx="${r.idx}" ${r.existe?'disabled':'checked'}></td>
+            <td>${esc(r.name)}</td>
+            <td style="font-family:var(--font-mono); font-size:12px;">${esc(r.sku||'—')}</td>
+            <td style="text-align:right; font-family:var(--font-mono);">$${num(r.precio_venta).toFixed(2)}</td>
+            <td style="text-align:right; font-family:var(--font-mono);">$${num(r.costo_unitario).toFixed(2)}</td>
+            <td>${r.tipo==='Inventory'?'Inventario':'No-inventario'}</td>
+            <td>${r.existe?'<span class="map-badge map-none">ya existe</span>':'<span class="map-badge map-ok">nueva</span>'}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+function toggleAllQbo(on){
+  document.querySelectorAll('.qbo-chk:not(:disabled)').forEach(c=> c.checked = on);
+}
+
+async function confirmarImportQbo(){
+  const seleccion = [...document.querySelectorAll('.qbo-chk:checked')]
+    .map(c=> qboCandidatos[Number(c.dataset.idx)]).filter(Boolean);
+  if(!seleccion.length){ Toast.show('No hay piezas seleccionadas','warn'); return; }
+  const rows = seleccion.map(c=>({
+    marca: '',
+    sku: c.sku||'',
+    descripcion: c.descripcion||c.name||'',
+    precio_venta: num(c.precio_venta),
+    costo_unitario: num(c.costo_unitario),
+    cantidad: 0,
+    unidad: 'pieza',
+    activo: true,
+    notas: c.notas||'',
+    qbo_item_id: c.qbo_item_id||'',
+    origen: 'quickbooks',
+  }));
+  const btn = document.getElementById('btnImportarQbo'); btn.disabled = true;
+  try{
+    const uid = firebase.auth().currentUser?.uid || null;
+    await PiezasService.importarPiezas(rows, uid);
+    Toast.show(`${rows.length} pieza(s) importadas`,'ok');
+    cerrarQbo();
+    await cargarPiezas();
+    render();
+  }catch(e){ console.error(e); Toast.show('Error al importar: '+e.message,'bad'); btn.disabled = false; }
+}
+
+function cerrarQbo(){ const ov=document.getElementById('overlayQbo'); ov.classList.remove('show'); ov.style.display='none'; }
+
 /* ===== Exponer ===== */
+window.importarDeQBO = importarDeQBO;
+window.toggleAllQbo = toggleAllQbo;
+window.confirmarImportQbo = confirmarImportQbo;
+window.cerrarQbo = cerrarQbo;
 window.exportarExcel = exportarExcel;
 function cerrarSesion(){ firebase.auth().signOut().then(()=>window.location.href="../login.html"); }
 window.cerrarSesion = cerrarSesion;

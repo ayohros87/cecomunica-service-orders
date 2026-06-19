@@ -29,4 +29,5 @@ exports.previewEmail                  = require("./src/callable/previewEmail");
 exports.getIdentificacionUrl          = require("./src/callable/getIdentificacionUrl");
 exports.getClienteDocUrl              = require("./src/callable/getClienteDocUrl");
 exports.listQBOItems                  = require("./src/callable/listQBOItems");
+exports.listQBOPiezas                 = require("./src/callable/listQBOPiezas");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");

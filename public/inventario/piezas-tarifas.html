@@ -78,7 +78,8 @@
         <input id="q" type="search" placeholder="Buscar marca, SKU o descripción…" aria-label="Buscar piezas">
       </div>`,
     actions: [
-      { label: '<i data-lucide="plus"></i> Nueva pieza', cls: 'primary', onclick: "window.location.href='./piezas.html'" }
+      { label: '<i data-lucide="download"></i> Importar de QuickBooks', cls: 'primary', onclick: "importarDeQBO()" },
+      { label: '<i data-lucide="plus"></i> Nueva pieza', onclick: "window.location.href='./piezas.html'" }
     ],
     menu: [
       { href: '../facturacion/index.html', label: '<i data-lucide="calculator"></i> Facturación (inicio)' },
@@ -115,6 +116,21 @@
         </thead>
         <tbody id="tablaPiezas"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de revisión / aprobación de importación desde QuickBooks -->
+<div id="overlayQbo" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+  <div class="modal modal-lg" style="max-width:860px;">
+    <div class="modal-header">
+      <h3 class="modal-title"><i data-lucide="download"></i> Importar piezas desde QuickBooks</h3>
+      <button class="modal-close" onclick="cerrarQbo()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="modal-body" id="qboBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="cerrarQbo()">Cancelar</button>
+      <button class="btn btn-primary" id="btnImportarQbo" onclick="confirmarImportQbo()"><i data-lucide="check"></i> Importar seleccionadas</button>
     </div>
   </div>
 </div>
