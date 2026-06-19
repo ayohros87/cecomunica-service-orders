@@ -36,19 +36,27 @@ const UsuariosService = {
     return results;
   },
 
-  // Fetch stats for a technician (root doc + optional period subcollection).
-  async getTecnicoStats(uid, { periodo = null, periodoKey = null } = {}) {
+  // Fetch stats for a technician, merged across one or more doc keys.
+  // Historically `tecnico_asignado` (the stat doc id) stored the Auth UID,
+  // but newer orders store the display NAME — so a technician can have stats
+  // split across two docs (tecnico_stats/{uid} and tecnico_stats/{nombre}).
+  // We sum both, and always read BOTH period subcollections so the ranking
+  // can show semanal + mensual + total at the same time.
+  async getTecnicoStats(keys, { mes = null, semana = null } = {}) {
     const db = firebase.firestore();
-    const statDoc = db.collection('tecnico_stats').doc(uid);
-    const [root, per] = await Promise.all([
-      statDoc.get(),
-      (periodo && periodoKey)
-        ? statDoc.collection(periodo).doc(periodoKey).get()
-        : Promise.resolve(null),
-    ]);
-    const total   = root.exists ? (root.data().total || 0) : 0;
-    const mensual = (per && per.exists && periodo === 'mensual') ? (per.data().count || 0) : 0;
-    const semanal = (per && per.exists && periodo === 'semanal') ? (per.data().count || 0) : 0;
+    const ids = (Array.isArray(keys) ? keys : [keys]).filter(Boolean);
+    let total = 0, mensual = 0, semanal = 0;
+    await Promise.all(ids.map(async (id) => {
+      const statDoc = db.collection('tecnico_stats').doc(id);
+      const [root, mDoc, sDoc] = await Promise.all([
+        statDoc.get(),
+        mes    ? statDoc.collection('mensual').doc(mes).get()    : Promise.resolve(null),
+        semana ? statDoc.collection('semanal').doc(semana).get() : Promise.resolve(null),
+      ]);
+      if (root.exists)         total   += (root.data().total  || 0);
+      if (mDoc && mDoc.exists) mensual += (mDoc.data().count || 0);
+      if (sDoc && sDoc.exists) semanal += (sDoc.data().count || 0);
+    }));
     return { total, mensual, semanal };
   },
 };

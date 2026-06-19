@@ -202,7 +202,10 @@ service cloud.firestore {
     match /poc_logs/{docId}           { allow read, write: if isSignedIn(); }
     match /analytics_piezas_modelo/{docId} { allow read, write: if isSignedIn(); }
     match /mail_queue/{docId}         { allow read, write: if isSignedIn(); }
-    match /tecnico_stats/{docId}      { allow read, write: if isSignedIn(); }
+    match /tecnico_stats/{docId} {
+      allow read, write: if isSignedIn();
+      match /{sub=**} { allow read, write: if isSignedIn(); }   // mensual, semanal
+    }
 
     // Solicitudes de reseteo desde login.html. Hoy se intentan SIN sesión y
     // fallan silenciosamente (best-effort, try/catch). Se preserva ese estado.

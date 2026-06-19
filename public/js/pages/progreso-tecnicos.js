@@ -73,8 +73,11 @@ function aplicarModoSoloLectura() {
       }));
     }
 
-async function cargarProgresos(periodoSel = 'mensual') {
-  // periodoSel: 'mensual' | 'semanal' | 'total'
+async function cargarProgresos() {
+  // Lee total + ambas subcolecciones (mensual y semanal) del periodo actual.
+  // Resuelve cada técnico por UID y por nombre, porque los docs de stats están
+  // mezclados: unos con clave UID (órdenes viejas) y otros con clave nombre
+  // (órdenes nuevas, que guardan tecnico_asignado = nombre).
   cacheProgreso = {};
   const now = new Date();
   const year = now.getFullYear();
@@ -82,13 +85,11 @@ async function cargarProgresos(periodoSel = 'mensual') {
   const yyyyMM = `${year}-${month}`;
   const isoWeek = getISOWeekKey(now);
 
-  // Lee total (doc raíz) + subcolección del periodo
-  const periodKey = periodoSel === 'mensual' ? yyyyMM : periodoSel === 'semanal' ? isoWeek : null;
   await Promise.all(cacheUsuarios.map(async u => {
-    const stats = await UsuariosService.getTecnicoStats(u.uid, {
-      periodo: periodKey ? periodoSel : null,
-      periodoKey: periodKey,
-    });
+    const stats = await UsuariosService.getTecnicoStats(
+      [u.uid, u.nombre],
+      { mes: yyyyMM, semana: isoWeek }
+    );
     cacheProgreso[u.uid] = stats;
   }));
 }
@@ -157,7 +158,7 @@ function getISOWeekKey(d) {
     async function cargarPantalla(periodo='mensual', filtro=''){
       // Permisos: si no es admin/recepcion, igual cargamos ranking pero mostramos mi bloque propio
       await cargarUsuariosTecnicos();
-      await cargarProgresos(periodo); 
+      await cargarProgresos();
       renderTabla(periodo, filtro);
       setPeriodoChip(periodo);
       formatStamp();

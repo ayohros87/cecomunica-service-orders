@@ -17,29 +17,44 @@ module.exports = onDocumentUpdated(
 
     if (!/COMPLETADO/i.test(estadoDespues)) return null;
 
-    const tecnicoUid = after?.tecnico_asignado || null;
-    const actorUid   = after?.actualizado_por  || null;
+    // Llavea las estadísticas por UID (identidad estable). Las órdenes sin
+    // `tecnico_uid` (viejas) caen al nombre como fallback. NOTA: el lector
+    // (usuariosService.getTecnicoStats) suma ambas claves uid+nombre, así que
+    // los docs históricos por-nombre se siguen contando durante la transición.
+    const tecnicoNombre = after?.tecnico_asignado || null;
+    const tecnicoKey    = after?.tecnico_uid || tecnicoNombre || null;
+    const actorUid      = after?.actualizado_por || null;
 
-    if (tecnicoUid) {
+    if (tecnicoKey) {
       const now    = new Date();
       const year   = now.getFullYear();
       const month  = now.getMonth() + 1;
       const yyyyMM = `${year}-${String(month).padStart(2, "0")}`;
       const isoWeek = getISOWeekKey(now);
 
-      const statDoc    = db.collection("tecnico_stats").doc(tecnicoUid);
+      const statDoc    = db.collection("tecnico_stats").doc(tecnicoKey);
       const mensualDoc = statDoc.collection("mensual").doc(yyyyMM);
       const semanalDoc = statDoc.collection("semanal").doc(isoWeek);
       const eventoDoc  = statDoc.collection("eventos").doc(ordenId);
+      // Anti-doble-conteo: si esta orden ya fue contada bajo el doc viejo
+      // (clave = nombre) antes de migrar a UID, no la vuelvas a contar.
+      const legacyEventoDoc = (tecnicoNombre && tecnicoNombre !== tecnicoKey)
+        ? db.collection("tecnico_stats").doc(tecnicoNombre).collection("eventos").doc(ordenId)
+        : null;
 
       try {
         await db.runTransaction(async (t) => {
-          const eventoSnap = await t.get(eventoDoc);
+          const [eventoSnap, legacySnap] = await Promise.all([
+            t.get(eventoDoc),
+            legacyEventoDoc ? t.get(legacyEventoDoc) : Promise.resolve(null),
+          ]);
           if (eventoSnap.exists) return;
+          if (legacySnap && legacySnap.exists) return;
 
           t.set(eventoDoc, {
             ordenId,
-            tecnicoUid,
+            tecnicoKey,
+            tecnicoNombre,
             actorUid: actorUid || null,
             fecha: admin.firestore.Timestamp.fromDate(now),
             estado: "COMPLETADO",
