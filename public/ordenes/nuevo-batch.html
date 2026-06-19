@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Nuevo batch de equipos - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <style>
+    /* Celda de accesorios compacta — kit primitives manejan el resto */
+    .batch-acc { display:flex; flex-wrap:wrap; gap:8px 10px; }
+    .batch-acc label { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--fg-2); white-space:nowrap; cursor:pointer; }
+    .batch-acc input[type="checkbox"] { margin:0; }
+    .batch-num { text-align:center; color:var(--fg-3); font-variant-numeric:tabular-nums; }
+    .batch-acciones { text-align:center; }
+    #tablaBatch th, #tablaBatch td { vertical-align:middle; }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="../js/services/ordenesService.js"></script>
+  <script src="../js/services/clientesService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="../js/domain/equipoNormalize.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/pages/ordenes-nuevo-batch.js" defer></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+  <div id="topbar-mount"></div>
+  <script>
+    var _ordenIdQS = new URLSearchParams(window.location.search).get('orden_id') || '';
+    Layout.renderTopbar({
+      title: '<i data-lucide="layers"></i> Nuevo batch de equipos',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: _ordenIdQS ? ('agregar-equipo.html?orden_id=' + encodeURIComponent(_ordenIdQS)) : 'index.html' },
+      showHome: false, showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <!-- Datos de la orden -->
+    <div class="form-section-header">
+      <h3><i data-lucide="clipboard"></i> Datos de la orden</h3>
+    </div>
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <div class="form-grid-3">
+        <div class="form-field">
+          <label class="form-label" for="ordenNumero">Número de orden</label>
+          <input class="form-input" type="text" id="ordenNumero" readonly style="font-family:var(--font-mono);">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="cliente">Cliente</label>
+          <input class="form-input" type="text" id="cliente" readonly>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="tipo">Tipo de servicio</label>
+          <input class="form-input" type="text" id="tipo" readonly>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cargar equipos -->
+    <div class="form-section-header">
+      <h3><i data-lucide="download"></i> Cargar equipos</h3>
+    </div>
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">
+        Jala los seriales del cliente desde POC (trae también el modelo automáticamente) o pega seriales manualmente.
+      </p>
+
+      <div class="form-actions" style="margin-bottom:var(--sp-4);">
+        <button type="button" id="btnJalarPoc" class="btn btn-secondary" onclick="jalarSerialesDesdePoc()" title="Traer seriales y modelos del cliente desde POC">
+          <i data-lucide="download"></i> Jalar desde POC
+        </button>
+        <button type="button" class="btn btn-ghost" onclick="agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
+      </div>
+
+      <div class="form-field" style="margin-bottom:var(--sp-3);">
+        <label class="form-label" for="pegarSeriales">Pegar seriales <span class="optional">(opcional)</span></label>
+        <div style="display:flex; gap:var(--sp-2); align-items:flex-start;">
+          <textarea class="form-input form-textarea" id="pegarSeriales" rows="3" style="font-family:var(--font-mono); font-size:13px; flex:1;"
+            placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;…"></textarea>
+          <button type="button" class="btn btn-ghost" onclick="agregarDesdePegado()" style="white-space:nowrap;"><i data-lucide="corner-down-left"></i> Agregar a la tabla</button>
+        </div>
+        <span class="form-hint">Un serial por línea. Líneas en blanco y duplicados se ignoran.</span>
+      </div>
+    </div>
+
+    <!-- Valores comunes -->
+    <div class="form-section-header">
+      <h3><i data-lucide="sliders-horizontal"></i> Valores comunes <span class="optional" style="font-weight:400;">(opcional)</span></h3>
+    </div>
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">
+        Defaults para las filas que pegues. Con "Aplicar a todas" los empujas a las filas existentes (el modelo solo a filas sin modelo).
+      </p>
+      <div class="form-grid cols-2" style="margin-bottom:var(--sp-3);">
+        <div class="form-field">
+          <label class="form-label" for="comunModelo">Modelo</label>
+          <select class="form-select" id="comunModelo"></select>
+        </div>
+        <div class="form-field">
+          <label class="form-label">Accesorios</label>
+          <div class="chips">
+            <label class="chip"><input type="checkbox" id="comunTodos"> Todos</label>
+            <label class="chip"><input type="checkbox" id="comunBateria"> Batería</label>
+            <label class="chip"><input type="checkbox" id="comunClip"> Clip</label>
+            <label class="chip"><input type="checkbox" id="comunCargador"> Cargador</label>
+            <label class="chip"><input type="checkbox" id="comunFuente"> Fuente</label>
+            <label class="chip"><input type="checkbox" id="comunAntena"> Antena</label>
+          </div>
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:var(--sp-3);">
+        <label class="form-label" for="comunObs">Observaciones</label>
+        <input class="form-input" type="text" id="comunObs" placeholder="Observaciones para los equipos">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" onclick="aplicarComunes()"><i data-lucide="wand-2"></i> Aplicar a todas las filas</button>
+      </div>
+    </div>
+
+    <!-- Tabla de equipos -->
+    <div class="form-section-header">
+      <h3><i data-lucide="monitor"></i> Equipos <span id="contadorBatch" class="optional" style="font-weight:400;"></span></h3>
+    </div>
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <div id="emptyBatch" class="app-empty-state" style="text-align:center; padding:var(--sp-6) var(--sp-4); color:var(--fg-3);">
+        <i data-lucide="package-open" style="width:32px;height:32px;"></i>
+        <p style="margin:var(--sp-2) 0 0;">Aún no hay equipos. Jala desde POC, pega seriales o agrega una fila.</p>
+      </div>
+      <div id="tablaWrap" class="table-wrap table-wrap--compact" style="display:none;">
+        <table id="tablaBatch">
+          <thead>
+            <tr>
+              <th style="width:44px;">#</th>
+              <th style="min-width:160px;">Serial</th>
+              <th style="min-width:200px;">Modelo</th>
+              <th style="min-width:220px;">Accesorios</th>
+              <th style="min-width:200px;">Observaciones</th>
+              <th style="width:52px;"></th>
+            </tr>
+          </thead>
+          <tbody id="filasBatch"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" id="btnGuardar" class="btn btn-primary btn-lg" onclick="guardarBatch()"><i data-lucide="save"></i> Guardar todos</button>
+      <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
+    </div>
+
+  </div>
+
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>

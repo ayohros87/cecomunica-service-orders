@@ -28,10 +28,17 @@ window.ContratosEquipos = {
       // Peek de órdenes vinculadas (secundario), conserva el tooltip al pasar el mouse.
       const osLinked = !!(c.os_linked || c.tiene_os || (c.os_count ?? 0) > 0);
       const peek = osLinked
-        ? ` <span class="equipos-peek" data-contrato-doc="${id}" title="Órdenes vinculadas" style="margin-left:4px; opacity:0.55;"><i data-lucide="package" style="width:14px;height:14px;"></i></span>`
+        ? `<span class="equipos-peek" data-contrato-doc="${id}" title="Órdenes vinculadas" style="opacity:0.55;"><i data-lucide="package" style="width:14px;height:14px;"></i></span>`
         : '';
 
-      celda.innerHTML = `${countTxt}${peek}`;
+      // Grid 1fr/auto/1fr: el conteo queda SIEMPRE centrado en la celda; el
+      // icono de órdenes vinculadas vive en la columna derecha y no descuadra
+      // el número (antes el text-align:center centraba número+icono juntos).
+      celda.innerHTML = `<span style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center; width:100%;">
+        <span></span>
+        <span>${countTxt}</span>
+        <span style="justify-self:start; margin-left:4px;">${peek}</span>
+      </span>`;
       if (window.lucide) lucide.createIcons({ nodes: [celda] });
     });
   },

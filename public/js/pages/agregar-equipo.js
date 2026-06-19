@@ -6,18 +6,9 @@
 
     let contador = 0;
 
-    // Cliente de la orden (para "Jalar desde POC"). Se llenan en cargarOrdenes().
-    let clienteId = "";
-    let clienteNombre = "";
-
-    // serialNorm -> modelo_id reconocido en POC, para preasignar el modelo al
-    // importar en lote cuando el serial vino de POC con un modelo conocido.
-    let pocSerialModelo = {};
-
     // Escapes mínimos para inyectar valores de usuario en el markup del fieldset.
     const escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     const escHtml = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const normName = (s) => String(s ?? "").trim().toLowerCase().normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "").replace(/\s+/g, " ");
 
     async function cargarModelos() {
   const raw = await ModelosService.getModelos();
@@ -223,9 +214,6 @@
     }
 
     clienteInput.value = nombreCliente;
-    // Guardado para "Jalar desde POC" (búsqueda por id y/o nombre).
-    clienteNombre = nombreCliente;
-    clienteId = data.cliente_id || "";
     tipoInput.value = data.tipo_de_servicio || data.tipo || "";
   }
 }
@@ -236,7 +224,6 @@ async function init() {
   try {
     await cargarModelos();
     await cargarOrdenes();
-    wireBatchModal();
     agregarEquipo();
   } catch (error) {
     console.error("Error al iniciar la página:", error);
@@ -251,82 +238,41 @@ firebase.auth().onAuthStateChanged(async (user) => {
   }
 });
 
-    // ── Importar equipos en lote ───────────────────────────────────────────
-    // Recepción pega seriales (uno por línea) y, opcionalmente, fija un modelo y
-    // accesorios comunes; cada serial genera un fieldset listo para guardar.
-    // "Jalar desde POC" precarga los seriales del cliente desde poc_devices
-    // (mismo patrón que el modal de seriales de contratos).
+    // ── Duplicar múltiples ─────────────────────────────────────────────────
+    // Toma el modelo + accesorios + observaciones del ÚLTIMO equipo del
+    // formulario y crea un equipo nuevo por cada serial pegado (uno por línea).
+    // Útil cuando entran varios equipos del mismo modelo con distinto serial.
 
-    window.abrirBatchEquipos = () => {
-      const sel = document.getElementById("batchModelo");
-      if (sel) {
-        sel.innerHTML = `<option value="">— Sin modelo (elegir por equipo) —</option>` +
-          modelos.map(m => `<option value="${m.id}">${escHtml(m.nombre)}</option>`).join('');
-      }
-      const ta = document.getElementById("batchSeriales");
+    function ultimoFieldset() {
+      const fs = container.querySelectorAll("fieldset");
+      return fs.length ? fs[fs.length - 1] : null;
+    }
+
+    window.abrirDuplicarMultiples = () => {
+      const ultimo = ultimoFieldset();
+      if (!ultimo) { Toast.show("Primero agrega y llena un equipo para duplicar.", "warn"); return; }
+
+      const modeloId = ultimo.querySelector(".modelo")?.value || "";
+      const modeloNombre = modelos.find(m => m.id === modeloId)?.nombre || "sin modelo";
+      const info = document.getElementById("dupInfo");
+      if (info) info.textContent = `Se copiará el modelo (${modeloNombre}), accesorios y observaciones del último equipo. Pega un serial por línea.`;
+
+      const ta = document.getElementById("dupSeriales");
       if (ta) ta.value = "";
-      const obs = document.getElementById("batchObservaciones");
-      if (obs) obs.value = "";
-      ["batchTodos", "batchBateria", "batchClip", "batchCargador", "batchFuente", "batchAntena"]
-        .forEach(idc => { const el = document.getElementById(idc); if (el) el.checked = false; });
-      const info = document.getElementById("batchPocInfo");
-      if (info) info.textContent = "Un serial por línea. Líneas en blanco y duplicados se ignoran.";
-      const cli = document.getElementById("batchCliente");
-      if (cli) cli.textContent = clienteNombre || "—";
-      pocSerialModelo = {};
-      Modal.open("overlayBatch");
+      Modal.open("overlayDuplicar");
+      setTimeout(() => { if (ta) ta.focus(); }, 50);
     };
 
-    window.cerrarBatchEquipos = () => Modal.close("overlayBatch");
+    window.cerrarDuplicarMultiples = () => Modal.close("overlayDuplicar");
 
-    // Trae los seriales del cliente desde POC, los precarga en el textarea y
-    // recuerda el modelo de cada serial para preasignarlo al importar.
-    window.jalarSerialesDesdePoc = async () => {
-      if (typeof PocService === "undefined") { Toast.show("POC no está disponible en esta página.", "bad"); return; }
-      if (!clienteId && !clienteNombre) { Toast.show("La orden no tiene un cliente asociado para buscar en POC.", "warn"); return; }
+    window.aplicarDuplicarMultiples = () => {
+      const ultimo = ultimoFieldset();
+      if (!ultimo) { Toast.show("No hay equipo de referencia para duplicar.", "warn"); return; }
 
-      const btn = document.getElementById("btnJalarPoc");
-      if (btn) btn.disabled = true;
-      try {
-        let devices = await PocService.getByCliente({ clienteId, clienteNombre });
-        devices = (devices || []).filter(d => d.deleted !== true && String(d.serial || "").trim());
-        if (!devices.length) { Toast.show("No hay equipos en POC para este cliente.", "warn"); return; }
-
-        const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
-        const ta = document.getElementById("batchSeriales");
-        const yaPresentes = new Set((ta.value || "").split("\n").map(s => s.trim().toLowerCase()).filter(Boolean));
-
-        let agregados = 0, reconocidos = 0;
-        const nuevos = [];
-        devices.forEach(d => {
-          const serial = String(d.serial).trim();
-          const mid = modeloPorNombre.get(normName(d.modelo_label || d.modelo || "")) || "";
-          pocSerialModelo[serial.toLowerCase()] = mid;
-          if (mid) reconocidos++;
-          if (!yaPresentes.has(serial.toLowerCase())) {
-            nuevos.push(serial);
-            yaPresentes.add(serial.toLowerCase());
-            agregados++;
-          }
-        });
-
-        ta.value = (ta.value.trim() ? ta.value.trim() + "\n" : "") + nuevos.join("\n");
-
-        const info = document.getElementById("batchPocInfo");
-        if (info) info.textContent = `POC: ${devices.length} equipo(s) del cliente · ${agregados} serial(es) agregados · ${reconocidos} con modelo reconocido.`;
-        Toast.show(agregados ? `${agregados} serial(es) jalados desde POC.` : "Los seriales de POC ya estaban en la lista.", agregados ? "ok" : "warn");
-      } catch (e) {
-        console.error("Error consultando POC:", e);
-        Toast.show("No se pudo consultar POC.", "bad");
-      } finally {
-        if (btn) btn.disabled = false;
-      }
-    };
-
-    window.aplicarBatchEquipos = () => {
-      const lineas = document.getElementById("batchSeriales").value.split("\n").map(s => s.trim()).filter(Boolean);
+      const lineas = document.getElementById("dupSeriales").value.split("\n").map(s => s.trim()).filter(Boolean);
       if (!lineas.length) { Toast.show("Pega al menos un serial.", "warn"); return; }
 
+      // Dedup de la lista pegada.
       const vistos = new Set();
       const seriales = [];
       let duplicados = 0;
@@ -337,34 +283,20 @@ firebase.auth().onAuthStateChanged(async (user) => {
         seriales.push(s);
       });
 
-      const modeloComun = document.getElementById("batchModelo").value;
+      const modeloId = ultimo.querySelector(".modelo")?.value || "";
       const accesorios = {
-        bateria:  document.getElementById("batchBateria").checked,
-        clip:     document.getElementById("batchClip").checked,
-        cargador: document.getElementById("batchCargador").checked,
-        fuente:   document.getElementById("batchFuente").checked,
-        antena:   document.getElementById("batchAntena").checked,
+        bateria:  ultimo.querySelector(".bateria")?.checked || false,
+        clip:     ultimo.querySelector(".clip")?.checked || false,
+        cargador: ultimo.querySelector(".cargador")?.checked || false,
+        fuente:   ultimo.querySelector(".fuente")?.checked || false,
+        antena:   ultimo.querySelector(".antena")?.checked || false,
       };
-      const observaciones = document.getElementById("batchObservaciones").value.trim();
+      const observaciones = ultimo.querySelector(".observaciones")?.value || "";
 
-      seriales.forEach(serial => {
-        // El modelo reconocido en POC para ese serial gana al modelo común.
-        const modeloId = pocSerialModelo[serial.toLowerCase()] || modeloComun || "";
-        renderEquipoFieldset({ serial, modeloId, accesorios, observaciones });
-      });
+      seriales.forEach(serial => renderEquipoFieldset({ serial, modeloId, accesorios, observaciones }));
 
-      Modal.close("overlayBatch");
-      let msg = `${seriales.length} equipo(s) agregados al formulario.`;
+      Modal.close("overlayDuplicar");
+      let msg = `${seriales.length} equipo(s) duplicado(s).`;
       if (duplicados) msg += ` ${duplicados} serial(es) duplicado(s) omitido(s).`;
       Toast.show(msg, "ok");
     };
-
-    // El "Todos" del modal de lote marca/desmarca los accesorios comunes.
-    function wireBatchModal() {
-      const todos = document.getElementById("batchTodos");
-      if (!todos) return;
-      todos.addEventListener("change", function () {
-        ["batchBateria", "batchClip", "batchCargador", "batchFuente", "batchAntena"]
-          .forEach(idc => { const el = document.getElementById(idc); if (el) el.checked = this.checked; });
-      });
-    }

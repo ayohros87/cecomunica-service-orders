@@ -148,6 +148,9 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
             <button class="btn-header-compact" data-action="agregar-equipo" data-stop-propagation="true" data-orden-id="${ordenId}" title="Agregar equipo">
               <i data-lucide="plus"></i>
             </button>
+            <button class="btn-header-compact" data-action="nuevo-batch" data-stop-propagation="true" data-orden-id="${ordenId}" title="Nuevo batch de equipos">
+              <i data-lucide="layers"></i>
+            </button>
             <div class="overflow-menu mini-menu">
               <button class="btn-header-compact" data-action="toggle-order-actions" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">
                 ⋯

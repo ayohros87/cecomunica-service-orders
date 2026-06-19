@@ -114,6 +114,10 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) agregarEquipo(ordenId);
     },
+    'nuevo-batch': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) nuevoBatch(ordenId);
+    },
     'copiar-seriales': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) copiarSeriales(ordenId);

@@ -118,6 +118,10 @@ window.agregarEquipo = function (ordenId) {
   window.location.href = `agregar-equipo.html?orden_id=${ordenId}`;
 };
 
+window.nuevoBatch = function (ordenId) {
+  window.location.href = `nuevo-batch.html?orden_id=${ordenId}`;
+};
+
 window.generarNotaEntrega = function (ordenId) {
   const orden = APP.state.orders.find(o => o.ordenId === ordenId);
   if (!orden) {
