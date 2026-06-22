@@ -136,6 +136,11 @@
                 <select class="form-select" id="ip" required style="flex:1;"></select>
                 <button type="button" id="addIP" class="btn btn-secondary btn-icon" aria-label="Crear bloque IP"><i data-lucide="plus"></i></button>
               </div>
+              <span class="form-hint">Se rellena con el IP asignado del cliente. Puedes cambiarlo para este batch.</span>
+              <p class="form-hint" id="ipSinInfo" style="display:none; color:var(--danger, #b42318); font-weight:600;">
+                <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:-2px;"></i>
+                Sin información de IP — búscala y asígnala. Se guardará en el cliente.
+              </p>
             </div>
 
             <div class="form-field" style="grid-column:1 / -1;">

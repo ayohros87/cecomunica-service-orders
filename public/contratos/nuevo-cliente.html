@@ -22,6 +22,7 @@
   <script src="../js/core/layout.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/clienteDocumentosService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 </head>
 <body>
@@ -143,6 +144,23 @@
           <label class="form-label" for="direccion_facturacion">Dirección de facturación</label>
           <input class="form-input" type="text" id="direccion_facturacion">
           <span class="form-hint">Opcional. Si se deja vacío, se usa la dirección principal.</span>
+        </div>
+      </div>
+
+      <!-- Sección 6: Conectividad -->
+      <div class="form-section-header">
+        <h3><i data-lucide="network"></i> Conectividad</h3>
+      </div>
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="form-field" style="grid-column:1 / -1;">
+          <label class="form-label" for="ip">IP asignado</label>
+          <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
+            <select class="form-select" id="ip" style="flex:1;">
+              <option value="">Sin IP asignado</option>
+            </select>
+            <button type="button" id="addIP" class="btn btn-secondary btn-icon" aria-label="Crear bloque IP"><i data-lucide="plus"></i></button>
+          </div>
+          <span class="form-hint">Si se deja vacío, recepción verá "Sin información de IP" al cargar equipos y deberá buscarla.</span>
         </div>
       </div>
 

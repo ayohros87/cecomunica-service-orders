@@ -3,6 +3,47 @@
 
 const auth = firebase.auth();
 
+// Pobla el <select id="ip"> con los bloques IP de empresa/IPs. Conserva la opción
+// vacía ("Sin IP asignado") como primer ítem. Si se pasa un valor que no está en
+// la lista, lo agrega para no perderlo (p. ej. un IP legacy guardado en el cliente).
+async function cargarListaIPs(valorActual = "") {
+  const select = document.getElementById("ip");
+  if (!select) return;
+  let lista = [];
+  try {
+    const snap = await EmpresaService.getDoc("IPs");
+    lista = (snap && Array.isArray(snap.list)) ? snap.list.slice() : [];
+  } catch (err) {
+    console.warn("[nuevo-cliente] no se pudo cargar empresa/IPs:", err?.code || err);
+  }
+  lista.sort((a, b) => String(a).localeCompare(String(b), "es", { sensitivity: "base" }));
+  select.innerHTML = '<option value="">Sin IP asignado</option>';
+  for (const ip of lista) {
+    select.appendChild(new Option(ip, ip));
+  }
+  if (valorActual && !lista.includes(valorActual)) {
+    select.appendChild(new Option(valorActual, valorActual));
+  }
+  select.value = valorActual || "";
+}
+
+// Agrega un bloque IP a empresa/IPs (mismo patrón que Nuevo batch) y lo selecciona.
+async function agregarIP() {
+  const nuevo = (prompt("Nuevo bloque IP (ej. cliente.cecomunica.net):") || "").trim();
+  if (!nuevo) return;
+  const snap = await EmpresaService.getDoc("IPs");
+  const lista = snap && Array.isArray(snap.list) ? snap.list : [];
+  if (!lista.includes(nuevo)) {
+    lista.push(nuevo);
+    await EmpresaService.setDoc("IPs", { list: lista });
+  }
+  const select = document.getElementById("ip");
+  if (![...select.options].some(o => o.value === nuevo)) {
+    select.appendChild(new Option(nuevo, nuevo));
+  }
+  select.value = nuevo;
+}
+
 function mostrarMensaje(texto, color = "green") {
   const msg = document.getElementById("mensaje");
   msg.textContent = texto;
@@ -32,6 +73,7 @@ auth.onAuthStateChanged(user => {
       email: document.getElementById("email").value,
       representante: document.getElementById("representante").value,
       representante_cedula: document.getElementById("representante_cedula").value,
+      ip: document.getElementById("ip")?.value || "",
       direccion_facturacion: document.getElementById("direccion_facturacion").value,
       itbms_exento: document.getElementById("itbms_exento")?.value === "true",
       itbms_motivo_exencion: document.getElementById("itbms_motivo_exencion")?.value || "",
@@ -92,6 +134,10 @@ auth.onAuthStateChanged(user => {
 window.addEventListener("DOMContentLoaded", async () => {
   const params = new URLSearchParams(window.location.search);
   const clienteId = params.get("id");
+  let ipActual = "";
+
+  // Wire del botón "agregar IP" (independiente del modo crear/editar).
+  document.getElementById("addIP")?.addEventListener("click", agregarIP);
 
   if (clienteId) {
     document.getElementById("pageTitle").textContent = "🧾 Editar Cliente";
@@ -110,12 +156,16 @@ window.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("representante_cedula").value =
       d.representante_cedula || d.cedula_representante || "";
     document.getElementById("direccion_facturacion").value = d.direccion_facturacion || "";
+    ipActual = d.ip || "";
 
     const selExento = document.getElementById("itbms_exento");
     if (selExento) selExento.value = d.itbms_exento ? "true" : "false";
     const motivoInput = document.getElementById("itbms_motivo_exencion");
     if (motivoInput) motivoInput.value = d.itbms_motivo_exencion || "";
   }
+
+  // Cargar lista de bloques IP (preseleccionando el del cliente en edición).
+  await cargarListaIPs(ipActual);
 
   // Mostrar/ocultar motivo según el select de ITBMS
   const selExento = document.getElementById("itbms_exento");

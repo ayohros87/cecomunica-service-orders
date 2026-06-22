@@ -20,6 +20,13 @@ const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
  *       grupos[] string array on every non-deleted poc_devices doc.
  *     - Mirrors FMT.normalizeGrupo / FMT.dedupGrupos in core/formatting.js.
  *     - Idempotent (only writes when the computed array differs).
+ *   { action: "linkClienteId", dryRun? }
+ *     - Adds stable `cliente_id` to legacy ordenes/poc_devices linked by name.
+ *   { action: "clienteIp", dryRun? }
+ *     - Derives each client's assigned `ip` from existing poc_devices (mode when
+ *       several) and writes it to clientes/<id>.ip when the client has no IP yet.
+ *     - Idempotent: never overwrites an existing IP. Reports `ambiguos` (clients
+ *       with 2+ distinct device IPs) and `huerfanos` (no derivable IP).
  *
  * Returns {action, dryRun, scanned, ...counters}. All actions are
  * idempotent — safe to re-run.
@@ -252,6 +259,105 @@ async function backfillLinkClienteId(dryRun) {
   };
 }
 
+// ─────────── clienteIp ───────────
+//
+// Deriva el IP asignado de cada cliente a partir de los equipos PoC existentes y
+// lo escribe en `clientes/<id>.ip` cuando el cliente aún no tiene IP. Por device
+// se resuelve el cliente vía `cliente_id` (estable) o, si falta, por nombre
+// normalizado contra los clientes activos (solo si resuelve a 1). Cuando un cliente
+// tiene equipos con IPs distintos se elige el más frecuente (modo) y se reporta
+// como `ambiguos` para revisión. Idempotente: nunca sobrescribe un IP existente.
+
+async function backfillClienteIp(dryRun) {
+  const startedAt = Date.now();
+
+  // Mapa nombre_norm -> [ids] de clientes activos (para resolver devices legacy
+  // que solo guardan `cliente` por nombre).
+  const cliSnap = await db.collection("clientes").where("deleted", "==", false).get();
+  const nameToIds = new Map();
+  for (const doc of cliSnap.docs) {
+    const n = _normNombre(doc.data().nombre);
+    if (!n) continue;
+    if (!nameToIds.has(n)) nameToIds.set(n, []);
+    nameToIds.get(n).push(doc.id);
+  }
+
+  // Tally de IPs por cliente: Map<clienteId, Map<ip, count>>.
+  const ipTally = new Map();
+  const devSnap = await db.collection("poc_devices").get();
+  for (const doc of devSnap.docs) {
+    const d = doc.data();
+    if (d.deleted === true) continue;
+    const ip = (d.ip || "").toString().trim();
+    if (!ip) continue;
+    let cid = (d.cliente_id || "").toString().trim();
+    if (!cid) {
+      const ids = nameToIds.get(_normNombre(d.cliente));
+      if (!ids || ids.length !== 1) continue; // sin id y nombre ausente/ambiguo → no se puede atribuir
+      cid = ids[0];
+    }
+    if (!ipTally.has(cid)) ipTally.set(cid, new Map());
+    const m = ipTally.get(cid);
+    m.set(ip, (m.get(ip) || 0) + 1);
+  }
+
+  // IP más frecuente + flag de conflicto (2+ IPs distintos).
+  const pickMode = (m) => {
+    let best = null, bestCount = -1;
+    for (const [ip, c] of m) if (c > bestCount) { best = ip; bestCount = c; }
+    return { ip: best, conflict: m.size > 1 };
+  };
+
+  let scanned = 0, skippedUnchanged = 0, toWrite = 0, written = 0, ambiguos = 0, huerfanos = 0, errors = 0;
+  const muestraHuerfanos = [];
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) {
+      written += opsInBatch;
+      batch = db.batch();
+      opsInBatch = 0;
+      return;
+    }
+    try {
+      await batch.commit();
+      written += opsInBatch;
+    } catch (err) {
+      logger.error("[runBackfill.clienteIp] batch commit failed", { err: err.message });
+      errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  for (const doc of cliSnap.docs) {
+    scanned++;
+    const current = (doc.data().ip || "").toString().trim();
+    if (current) { skippedUnchanged++; continue; } // ya tiene IP → no tocar
+    const tally = ipTally.get(doc.id);
+    if (!tally || tally.size === 0) {
+      huerfanos++;
+      if (muestraHuerfanos.length < 25 && doc.data().nombre) muestraHuerfanos.push(doc.data().nombre);
+      continue;
+    }
+    const { ip, conflict } = pickMode(tally);
+    if (conflict) ambiguos++;
+    toWrite++;
+    batch.update(doc.ref, { ip });
+    opsInBatch++;
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+  await flushBatch();
+
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return {
+    scanned, skippedUnchanged, toWrite, written, ambiguos, huerfanos, errors, elapsedSec,
+    detalle: { clientes: { huerfanos, muestraHuerfanos } },
+  };
+}
+
 // ─────────── dispatcher ───────────
 
 module.exports = onCall(
@@ -276,6 +382,9 @@ module.exports = onCall(
         break;
       case "linkClienteId":
         result = await backfillLinkClienteId(dryRun);
+        break;
+      case "clienteIp":
+        result = await backfillClienteIp(dryRun);
         break;
       default:
         throw new HttpsError("invalid-argument", `Acción desconocida: ${action}`);

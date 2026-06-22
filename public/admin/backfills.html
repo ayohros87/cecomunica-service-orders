@@ -127,6 +127,32 @@
       <div id="result-linkClienteId" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: clienteIp -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="network"></i> IP asignado por cliente</span>
+        <span class="hint">Deriva <code>clientes.ip</code> desde los equipos PoC existentes</span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        Calcula el IP asignado de cada cliente a partir del <code>ip</code> de sus equipos PoC
+        (el más frecuente si hay varios) y lo escribe en <code>clientes/&lt;id&gt;.ip</code>
+        <strong>solo cuando el cliente aún no tiene IP</strong>. Aditivo e idempotente: nunca
+        sobrescribe un IP existente. Reporta <strong>ambiguos</strong> (clientes con 2+ IPs
+        distintos — se escribe el modo, revisar) y <strong>huérfanos</strong> (sin IP derivable;
+        recepción debe buscarlo). Recomendado: ejecutar antes <strong>Enlazar por cliente_id</strong>
+        para máxima cobertura de equipos legacy. Usa <strong>Dry-run</strong> para revisar antes.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="clienteIp" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (preview)
+        </button>
+        <button class="btn btn-primary" data-bf-action="clienteIp" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-clienteIp" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>

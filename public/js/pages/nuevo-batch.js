@@ -67,8 +67,29 @@ async function cargarClientes() {
     const option = document.createElement("option");
     option.value = d.id;
     option.textContent = d.nombre;
+    option.dataset.ip = d.ip || ""; // IP asignado del cliente (para auto-jalar)
     select.appendChild(option);
   });
+}
+
+// Auto-jala el IP del cliente seleccionado al <select id="ip">. Si el cliente no
+// tiene IP, limpia la selección y muestra el aviso "Sin información de IP".
+function onClienteChange() {
+  const clienteSelect = document.getElementById("cliente");
+  const ipSelect = document.getElementById("ip");
+  const aviso = document.getElementById("ipSinInfo");
+  const ipCliente = (clienteSelect.selectedOptions[0]?.dataset.ip || "").trim();
+
+  if (ipCliente) {
+    if (![...ipSelect.options].some(o => o.value === ipCliente)) {
+      ipSelect.appendChild(new Option(ipCliente, ipCliente));
+    }
+    ipSelect.value = ipCliente;
+    if (aviso) aviso.style.display = "none";
+  } else {
+    ipSelect.value = "";
+    if (aviso) aviso.style.display = "";
+  }
 }
 
 
@@ -94,6 +115,9 @@ async function cargarClientes() {
         await cargarClientes();
         await cargarListaSelect("empresa/IPs", "ip");
         await mostrarUltimosUnitIDs();
+
+        // Auto-jalar el IP asignado del cliente al elegirlo.
+        document.getElementById("cliente").addEventListener("change", onClienteChange);
 document.getElementById("addCliente").onclick = async () => {
   const nombre = prompt("Ingrese el nombre del nuevo cliente:");
   if (!nombre) return;
@@ -117,6 +141,7 @@ document.getElementById("addCliente").onclick = async () => {
       break;
     }
   }
+  onClienteChange(); // cliente nuevo → sin IP → muestra el aviso
 
   Toast.show('Cliente registrado y cargado.', 'ok');
 };
@@ -165,8 +190,12 @@ document.getElementById("addCliente").onclick = async () => {
         }
 
         const grupos = limpiarGrupos([...document.querySelectorAll(".grupo-input")].map(i => i.value));
-        const cliente = document.getElementById("cliente").value;
-        await registrarCliente(document.getElementById("cliente").selectedOptions[0].textContent);
+        const clienteSelect = document.getElementById("cliente");
+        const cliente = clienteSelect.value;
+        // IP asignado del cliente al cargar la página (para decidir write-back).
+        const ipOriginalCliente = (clienteSelect.selectedOptions[0]?.dataset.ip || "").trim();
+        const ipElegido = document.getElementById("ip").value.trim();
+        await registrarCliente(clienteSelect.selectedOptions[0].textContent);
 
         if ((detallesBatch || []).length > 0 && detallesBatch.length !== seriales.length) {
           Toast.show(`El archivo JSON tiene ${detallesBatch.length} filas pero ingresaste ${seriales.length} seriales. Deben coincidir para guardar modelo por equipo.`, 'bad');
@@ -207,6 +236,16 @@ document.getElementById("addCliente").onclick = async () => {
         deleted: false
         };
           await PocService.addPocDevice(data);
+        }
+
+        // Write-back: si el cliente no tenía IP asignado, guardar el elegido en su
+        // ficha para recordarlo la próxima vez. Nunca sobrescribe un IP existente.
+        if (cliente && !ipOriginalCliente && ipElegido) {
+          try {
+            await ClientesService.updateCliente(cliente, { ip: ipElegido });
+          } catch (err) {
+            console.warn("[nuevo-batch] no se pudo guardar el IP en el cliente:", err?.code || err);
+          }
         }
 
         Toast.show('Equipos creados correctamente.', 'ok');

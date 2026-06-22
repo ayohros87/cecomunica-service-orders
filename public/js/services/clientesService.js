@@ -67,6 +67,7 @@ const ClientesService = {
       email: (raw.email || "").toLowerCase().trim(),
       representante: (raw.representante || "").trim(),
       representante_cedula: (raw.representante_cedula || raw.cedula_representante || "").trim(),
+      ip: (raw.ip || "").trim(),
       itbms_exento: itbmsExento,
       itbms_motivo_exencion: itbmsExento ? (raw.itbms_motivo_exencion || "").trim() : "",
       tags: Array.isArray(raw.tags) ? raw.tags : [],
