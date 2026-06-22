@@ -23,6 +23,7 @@
         receptorNombre: 'María González (Recepción)',
         firmaUrl:       '',
         sinId:          false,
+        notas:          'Equipos entregados con cargadores nuevos. Próxima revisión en 6 meses.',
         fechaISO:       new Date().toISOString(),
       },
     },
@@ -44,12 +45,12 @@
       Normal: SAMPLES.nota_entrega,
       'No recibido': (() => {
         const v = JSON.parse(JSON.stringify(SAMPLES.nota_entrega));
-        v.opts = { noRecibido: true, motivo: 'Cliente ausente, agendamos reenvío', personaInterna: 'Carlos Ruiz', fechaISO: v.opts.fechaISO };
+        v.opts = { noRecibido: true, motivo: 'Cliente ausente, agendamos reenvío', personaInterna: 'Carlos Ruiz', notas: 'Reintentar entrega el lunes por la mañana.', fechaISO: v.opts.fechaISO };
         return v;
       })(),
     },
     orden_completada: {
-      Por defecto: SAMPLES.orden_completada,
+      'Por defecto': SAMPLES.orden_completada,
     },
   };
 

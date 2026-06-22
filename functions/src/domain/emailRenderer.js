@@ -101,6 +101,15 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
     `<tr><td style="padding:5px 0;border-bottom:1px solid #eee;width:42%;"><strong>${k}</strong></td><td style="padding:5px 0;border-bottom:1px solid #eee;">${v}</td></tr>`
   ).join("");
 
+  // Notas de entrega (libres, opcionales). white-space:pre-wrap conserva
+  // los saltos de línea que el operador escribió en el textarea.
+  const notasBlock = opts.notas
+    ? `<div style="margin-top:16px;padding:12px 16px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
+         <p style="margin:0 0 4px;font-size:13px;color:#92400e;font-weight:600;">Notas de entrega:</p>
+         <p style="margin:0;font-size:14px;line-height:1.5;color:#111827;white-space:pre-wrap;">${f(opts.notas)}</p>
+       </div>`
+    : "";
+
   if (opts.noRecibido) {
     return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
       <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:16px;">
@@ -117,6 +126,7 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
         ])}
       </table>
       ${equiposTable}
+      ${notasBlock}
     </div>`;
   }
 
@@ -146,6 +156,7 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
       ${sinIdNote}
       ${firmaImg}
     </div>
+    ${notasBlock}
   </div>`;
 }
 

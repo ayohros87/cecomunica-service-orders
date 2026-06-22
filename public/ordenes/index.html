@@ -457,6 +457,17 @@
       </div>
     </div>
 
+    <!-- Notas de entrega (opcional) — se guardan en la orden y se incluyen
+         en el email de entrega. Oculto en modo recepción vía _applyModo. -->
+    <div class="form-field modal-entrega__field--med" id="entregaNotasWrap">
+      <label for="entregaNotas" class="modal-entrega__label">
+        Notas de entrega <span class="modal-entrega__hint">(opcional, se incluyen en el email)</span>
+      </label>
+      <textarea id="entregaNotas" rows="3"
+                placeholder="Observaciones o instrucciones para el cliente..."
+                class="modal-entrega__motivo-id"></textarea>
+    </div>
+
     <!-- Footer -->
     <div class="footer">
       <button class="btn btn-secondary" data-action="cerrar-modal-entrega">Cancelar</button>
