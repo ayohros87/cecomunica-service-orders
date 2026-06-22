@@ -103,7 +103,7 @@
           <p>${esc(cli.razon || '—')} · ${FMT.money(t.total)} · ${cot.items.length} renglones</p>
         </div>
         <div class="app-page-header-actions">
-          ${(cot.estado === 'borrador' && userRol === ROLES.ADMIN) ? '<button class="btn btn-secondary" id="btnAprobar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="check-circle"></i> Aprobar y enviar</button>' : ''}
+          ${(cot.estado === 'borrador' && canRole(userRol, 'aprobar-cotizacion')) ? '<button class="btn btn-secondary" id="btnAprobar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="check-circle"></i> Aprobar y enviar</button>' : ''}
           <button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
@@ -244,9 +244,9 @@
   function renderTransiciones() {
     const cont = $('panelTransiciones');
     if (cot.estado === 'borrador') {
-      const txt = userRol === ROLES.ADMIN
+      const txt = canRole(userRol, 'aprobar-cotizacion')
         ? 'Esta cotización está en borrador. Usa <b>Aprobar y enviar</b> arriba para revisar y enviar al cliente.'
-        : 'Esta cotización está en borrador, pendiente de aprobación por un administrador.';
+        : 'Esta cotización está en borrador, pendiente de aprobación por un administrador o jefe de taller.';
       cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0; line-height:1.5;">' + txt + '</p>';
       return;
     }

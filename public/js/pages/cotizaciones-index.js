@@ -158,7 +158,7 @@
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
             <span class="cc-row-actions">
-              ${(userRol === ROLES.ADMIN && (c.estado || 'borrador') === 'borrador') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar" data-action="aprobar"><i data-lucide="check-circle"></i></button>` : ''}
+              ${(canRole(userRol, 'aprobar-cotizacion') && (c.estado || 'borrador') === 'borrador') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar y enviar" data-action="aprobar"><i data-lucide="check-circle"></i></button>` : ''}
               ${(c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
               ${CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
@@ -357,12 +357,12 @@
     return url;
   }
 
-  // ── Aprobación overlay (solo admin) ───────────────────────────
+  // ── Aprobación overlay (admin + jefe de taller) ───────────────
   const T = window.CotizacionTotales;
   let _aprobId = null;
 
   async function openAprobacion(docId) {
-    if (userRol !== ROLES.ADMIN) { Toast.show('Solo un administrador puede aprobar.', 'warn'); return; }
+    if (!canRole(userRol, 'aprobar-cotizacion')) { Toast.show('No tienes permiso para aprobar cotizaciones.', 'warn'); return; }
     const doc = await CotizacionesService.getCotizacion(docId);
     if (!doc) { Toast.show('Cotización no encontrada', 'bad'); return; }
     _aprobId = docId;
@@ -583,13 +583,13 @@
       const params = new URLSearchParams(location.search);
       const aprobarId = params.get('aprobar');
       if (aprobarId) {
-        if (rol === ROLES.ADMIN) {
+        if (canRole(rol, 'aprobar-cotizacion')) {
           openAprobacion(aprobarId);
           const url = new URL(window.location);
           url.searchParams.delete('aprobar');
           window.history.replaceState({}, document.title, url.toString());
         } else {
-          Toast.show('Solo un administrador puede aprobar cotizaciones.', 'warn');
+          Toast.show('No tienes permiso para aprobar cotizaciones.', 'warn');
         }
       }
     });

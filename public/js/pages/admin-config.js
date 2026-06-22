@@ -38,12 +38,26 @@
     { key: 'email_recepcion_entregas', label: 'Buzón de recepción (entregas)',
       type: 'email',
       hint: 'Correo único que recibe copia de cada nota de entrega (recepción lleva el control). Vacío = no se copia a recepción.' },
+    { key: 'cotizacion_aprobacion_to', label: 'Aprobadores de cotización (notificación)',
+      type: 'user-picker',
+      hint: 'Usuarios que reciben la solicitud de aprobación cuando se prepara una cotización. Filtra por rol y selecciona uno o varios. Vacío = se notifica a ventas@cecomunica.com.' },
   ];
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  // Cargado una vez en load() para alimentar los campos tipo 'user-picker'.
+  let _users = [];
+
+  const ROL_LABELS = {
+    administrador: 'Administrador', gerente: 'Gerente', vendedor: 'Vendedor',
+    recepcion: 'Recepción', tecnico: 'Técnico', tecnico_operativo: 'Técnico operativo',
+    jefe_taller: 'Jefe de taller', inventario: 'Inventario', contabilidad: 'Contabilidad', vista: 'Vista',
+  };
+  const rolLabel = (r) => ROL_LABELS[r] || (r || '—');
+
   function $(id) { return document.getElementById(id); }
   function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
   function renderForm(current) {
     const form = $('configForm');
@@ -51,7 +65,9 @@
     form.innerHTML = FIELDS.map(f => {
       const v = current[f.key];
       let input;
-      if (f.type === 'emails') {
+      if (f.type === 'user-picker') {
+        input = renderUserPicker(f.key, Array.isArray(v) ? v : []);
+      } else if (f.type === 'emails') {
         const text = Array.isArray(v) ? v.join('\n') : '';
         input = `<textarea id="fld-${f.key}" class="form-input" rows="3" style="font-family:inherit;font-size:13px;">${text}</textarea>`;
       } else if (f.type === 'email') {
@@ -75,6 +91,72 @@
     }).join('');
   }
 
+  // ── user-picker: lista filtrable de usuarios activos (multi-selección) ──────
+  // Guarda un array de emails. Pre-marca los que ya estaban configurados.
+  function renderUserPicker(key, selectedEmails) {
+    const sel = new Set((selectedEmails || []).map(e => String(e).toLowerCase()));
+    const usables = _users
+      .filter(u => u.activo !== false && EMAIL_RE.test(String(u.email || '')))
+      .sort((a, b) => String(a.nombre || a.email).localeCompare(String(b.nombre || b.email)));
+
+    if (!usables.length) {
+      return `<div id="fld-${key}" class="up-root ts" data-empty="1" style="color:var(--fg-3);">
+        No se pudieron cargar usuarios (o ninguno tiene email). Recarga la página.</div>`;
+    }
+
+    const roles = [...new Set(usables.map(u => u.rol).filter(Boolean))].sort();
+    const rolOpts = ['<option value="">Todos los roles</option>']
+      .concat(roles.map(r => `<option value="${esc(r)}">${esc(rolLabel(r))}</option>`)).join('');
+
+    const items = usables.map(u => {
+      const checked = sel.has(String(u.email).toLowerCase()) ? 'checked' : '';
+      return `<label class="up-item" data-rol="${esc(u.rol || '')}" data-search="${esc((u.nombre || '') + ' ' + (u.email || '')).toLowerCase()}"
+          style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);cursor:pointer;font-size:13px;">
+        <input type="checkbox" value="${esc(u.email)}" ${checked} style="width:16px;height:16px;">
+        <span style="flex:1;">${esc(u.nombre || u.email)}</span>
+        <span class="ts" style="white-space:nowrap;">${esc(u.email)} · ${esc(rolLabel(u.rol))}</span>
+      </label>`;
+    }).join('');
+
+    return `<div id="fld-${key}" class="up-root" data-key="${key}">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+        <select class="form-input up-filter-rol" style="width:200px;">${rolOpts}</select>
+        <input type="text" class="form-input up-filter-q" placeholder="Buscar nombre o email…" style="flex:1;min-width:180px;">
+      </div>
+      <div class="up-list" style="max-height:260px;overflow:auto;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">${items}</div>
+      <div class="ts up-count" style="margin-top:6px;"></div>
+    </div>`;
+  }
+
+  function wireUserPickers() {
+    document.querySelectorAll('.up-root[data-key]').forEach(root => {
+      const filterRol = root.querySelector('.up-filter-rol');
+      const filterQ   = root.querySelector('.up-filter-q');
+      const items     = [...root.querySelectorAll('.up-item')];
+      const countEl   = root.querySelector('.up-count');
+
+      const apply = () => {
+        const r = (filterRol?.value || '').trim();
+        const q = (filterQ?.value || '').trim().toLowerCase();
+        items.forEach(it => {
+          const okRol = !r || it.dataset.rol === r;
+          const okQ   = !q || (it.dataset.search || '').includes(q);
+          it.style.display = (okRol && okQ) ? '' : 'none';
+        });
+        updateCount();
+      };
+      const updateCount = () => {
+        const total = items.filter(i => i.querySelector('input').checked).length;
+        if (countEl) countEl.textContent = total ? `${total} seleccionado${total === 1 ? '' : 's'}` : 'Sin selección — se notificará a ventas@cecomunica.com';
+      };
+
+      filterRol?.addEventListener('change', apply);
+      filterQ?.addEventListener('input', apply);
+      root.addEventListener('change', e => { if (e.target.matches('input[type="checkbox"]')) updateCount(); });
+      updateCount();
+    });
+  }
+
   function readForm() {
     const out = {};
     const errors = {};
@@ -82,7 +164,15 @@
       const el = $('fld-' + f.key);
       if (!el) continue;
       const raw = el.value;
-      if (f.type === 'bool') {
+      if (f.type === 'user-picker') {
+        // Si la lista no cargó, no tocar el valor guardado (setConfig hace merge).
+        if (el.dataset.empty === '1') continue;
+        const emails = [...el.querySelectorAll('input[type="checkbox"]:checked')].map(c => c.value.trim()).filter(Boolean);
+        const uniq = [...new Set(emails.map(e => e.toLowerCase()))];
+        if (uniq.length > 20) errors[f.key] = 'Máximo 20 aprobadores.';
+        out[f.key] = uniq;
+        continue;
+      } else if (f.type === 'bool') {
         out[f.key] = !!el.checked;
         continue;
       } else if (f.type === 'emails') {
@@ -122,8 +212,12 @@
   async function load() {
     setText('lastUpdate', 'Cargando…');
     try {
-      const cfg = await EmpresaService.getConfig();
+      const [cfg] = await Promise.all([
+        EmpresaService.getConfig(),
+        (async () => { try { _users = await UsuariosAdminService.listAll(); } catch (e) { console.warn('[admin/config] no se pudieron cargar usuarios:', e); _users = []; } })(),
+      ]);
       renderForm(cfg);
+      wireUserPickers();
       const meta = $('configMeta');
       if (meta) {
         const ts = cfg.updated_at;

@@ -769,9 +769,10 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     );
   }
 
-  // Cotizar — crea una cotización (borrador) a partir de la orden y sus
-  // intervenciones. Disponible para los roles que pueden cotizar.
-  if ([ROLES.ADMIN, ROLES.VENDEDOR, ROLES.RECEPCION, ROLES.JEFE_TALLER].includes(rol)) {
+  // Cotizar — prepara una cotización (borrador) a partir de la orden y sus
+  // intervenciones. Disponible para quienes pueden prepararla, incluidos los
+  // técnicos de taller (preparan; la aprobación/envío es otro permiso).
+  if (canRole(rol, 'preparar-cotizacion')) {
     menuItems.push(
       { icon: '<i data-lucide="receipt"></i>', label: "Cotizar", action: "cotizar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
     );

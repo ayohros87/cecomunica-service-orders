@@ -346,20 +346,31 @@
     });
 
     // Renderizar equipos con intervenciones
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const tbody = document.getElementById("tablaEquipos");
     (data.equipos || []).forEach((e, index) => {
       const row = document.createElement("tr");
-      
+
       // Determinar si hay intervención
       const tieneIntervencion = e.intervencion && e.intervencion.trim() !== "";
       const intervencionTexto = tieneIntervencion ? e.intervencion : "Sin intervención registrada";
       const intervencionClass = tieneIntervencion ? "intervencion-cell" : "intervencion-cell sin-intervencion";
-      
+
+      // Piezas / accesorios cambiados o reparados (registrados por el técnico)
+      const piezas = Array.isArray(e.piezas) ? e.piezas : [];
+      const piezasHtml = piezas.length ? `
+        <div style="margin-top:6px; font-size:12px;">
+          <strong>Piezas / accesorios cambiados o reparados:</strong>
+          <ul style="margin:4px 0 0; padding-left:18px;">
+            ${piezas.map(p => `<li>${esc(p.nombre)}${p.sku ? ' (' + esc(p.sku) + ')' : ''} — ${Number(p.qty || 0)} u.${p.tipo === 'garantia' ? ' · garantía' : ''}</li>`).join('')}
+          </ul>
+        </div>` : '';
+
       row.innerHTML = `
         <td><strong>${index + 1}</strong></td>
-        <td>${e.modelo || "—"}</td>
-        <td>${e.serial || "—"}</td>
-        <td class="${intervencionClass}">${intervencionTexto}</td>
+        <td>${esc(e.modelo) || "—"}</td>
+        <td>${esc(e.serial) || "—"}</td>
+        <td class="${intervencionClass}">${esc(intervencionTexto)}${piezasHtml}</td>
       `;
       tbody.appendChild(row);
     });

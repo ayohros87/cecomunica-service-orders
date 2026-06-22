@@ -28,6 +28,11 @@ const _PERMISOS = {
   'admin-equipos':     ['administrador'],
   // Catálogo de modelos + tarifas de facturación (info sensible) → contabilidad.
   'gestionar-modelos': ['administrador', 'contabilidad'],
+  // Preparar una cotización a partir de una orden (borrador). Los técnicos de
+  // taller pueden prepararla; la aprobación/envío al cliente es otro permiso.
+  'preparar-cotizacion': ['administrador', 'vendedor', 'recepcion', 'jefe_taller', 'tecnico', 'tecnico_operativo'],
+  // Aprobar una cotización en borrador y enviarla al cliente.
+  'aprobar-cotizacion':  ['administrador', 'jefe_taller'],
 };
 
 // canRole(rol, accion) → boolean

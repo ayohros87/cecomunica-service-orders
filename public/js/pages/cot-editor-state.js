@@ -466,9 +466,21 @@
     const itemsHtml = (doc.items || []).map(it =>
       `<li>${esc(it.nombre || '')} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
     ).join('');
+    // Destinatarios de la solicitud de aprobación: configurables por admin
+    // (empresa/config.cotizacion_aprobacion_to). Si no hay ninguno, cae al
+    // buzón histórico de ventas para no perder la notificación. Convención del
+    // repo (ver onCancelacionWrite): to = primero, cc = el resto + creador.
+    let aprobacionList = ['ventas@cecomunica.com'];
+    try {
+      const cfg = await EmpresaService.getConfig();
+      const list = Array.isArray(cfg.cotizacion_aprobacion_to) ? cfg.cotizacion_aprobacion_to.filter(Boolean) : [];
+      if (list.length) aprobacionList = list;
+    } catch (e) { console.warn('No se pudo leer destinatarios de aprobación, usando ventas@:', e); }
+    const aprobacionTo = aprobacionList[0];
+    const aprobacionCc = [...aprobacionList.slice(1), user?.email].filter(Boolean).join(',') || null;
     await MailService.enqueue({
-      to: 'ventas@cecomunica.com',
-      cc: user?.email || null,
+      to: aprobacionTo,
+      cc: aprobacionCc,
       subject: `Nueva cotización: ${doc.cotizacion_id} – ${doc.cliente_nombre}`,
       preheader: `Cotización pendiente de aprobación: ${doc.cliente_nombre}`,
       bodyContent: `

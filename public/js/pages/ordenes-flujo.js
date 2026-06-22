@@ -143,14 +143,39 @@ window.generarNotaEntrega = function (ordenId) {
   window.open(BASE + "nota-entrega.html", "_blank");
 };
 
-window.generarNotaEntregaIntervenciones = function (ordenId) {
+window.generarNotaEntregaIntervenciones = async function (ordenId) {
   const orden = APP.state.orders.find(o => o.ordenId === ordenId);
   if (!orden) {
     Toast.show("Orden no encontrada", 'bad');
     return;
   }
 
+  // Abrir la ventana dentro del gesto del usuario (evita bloqueo de pop-ups);
+  // la apuntamos al documento una vez resueltos los datos asíncronos.
+  const win = window.open("about:blank", "_blank");
+
   const equipos = prepararEquiposParaNota(orden, true);
+
+  // Adjunta las piezas/accesorios cambiados o reparados por el técnico (consumos
+  // cobrables y de garantía) a cada equipo, para que la nota que firma el cliente
+  // muestre nº de serie, modelo, piezas cambiadas y la intervención completa.
+  try {
+    const cons = await OrdenesService.getConsumos(ordenId);
+    const porEquipo = {};
+    (cons || []).forEach(c => {
+      if ((c.tipo || 'cobro') === 'interno') return; // las internas no van en la nota del cliente
+      const k = c.equipoId || 'X';
+      (porEquipo[k] = porEquipo[k] || []).push({
+        nombre: c.pieza_nombre || 'Pieza',
+        sku: c.sku || '',
+        qty: Number(c.qty || 0),
+        tipo: c.tipo || 'cobro',
+      });
+    });
+    equipos.forEach(eq => { eq.piezas = porEquipo[eq.id] || porEquipo[eq.serial] || []; });
+  } catch (e) {
+    console.warn('No se pudieron cargar las piezas del técnico para la nota:', e);
+  }
 
   const data = {
     numeroOrden: orden.ordenId || "",
@@ -161,7 +186,8 @@ window.generarNotaEntregaIntervenciones = function (ordenId) {
   };
 
   localStorage.setItem("notaEntregaData", JSON.stringify(data));
-  window.open(BASE + "nota-entrega-intervenciones.html", "_blank");
+  if (win) { win.location = BASE + "nota-entrega-intervenciones.html"; }
+  else { window.open(BASE + "nota-entrega-intervenciones.html", "_blank"); }
 };
 
 function prepararEquiposParaNota(orden, incluirIntervencion = false) {
@@ -182,6 +208,7 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
     seen.add(key);
 
     const item = {
+      id: id || serial,
       serial, modelo, nombre,
       bateria:  !!e.bateria,
       clip:     !!e.clip,
@@ -339,6 +366,9 @@ window.copiarSeriales = function (ordenId) {
     if (preview) preview.innerHTML = '';
     const sinIdMotivo = g('entregaSinIdMotivo');
     if (sinIdMotivo) sinIdMotivo.value = '';
+
+    const notas = g('entregaNotas');
+    if (notas) notas.value = '';
 
     const clienteEmail = g('entregaClienteEmail');
     if (clienteEmail) clienteEmail.value = '';
@@ -499,6 +529,11 @@ window.copiarSeriales = function (ordenId) {
     if (noRecibidoAlert) noRecibidoAlert.classList.toggle('hidden', esRecepcion);
     const legenda = document.getElementById('entregaLegendaEntrada');
     if (legenda && esRecepcion) legenda.classList.add('hidden');
+
+    // Notas de entrega solo aplican al flujo de entrega (van en el email).
+    // En recepción no se envía email, así que el campo se oculta.
+    const notasWrap = document.getElementById('entregaNotasWrap');
+    if (notasWrap) notasWrap.classList.toggle('hidden', esRecepcion);
 
     // "Equipos recibidos sin firma" solo aplica en recepción. Se resetea a
     // desmarcado cada vez que se aplica el modo (firma visible, motivo oculto).
@@ -758,6 +793,10 @@ window.copiarSeriales = function (ordenId) {
     const noRecibido = !!document.getElementById('entregaNoRecibido')?.checked;
     const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
 
+    // Notas de entrega — opcionales, libres. Aplican a ambos flujos
+    // (entrega normal y no-recibido) y se incluyen en el email.
+    const notasEntrega = (document.getElementById('entregaNotas')?.value || '').trim();
+
     // Email del cliente — editable en el modal. Si está vacío se omite
     // el envío al cliente; si tiene formato inválido se aborta.
     const clienteEmailInput = (document.getElementById('entregaClienteEmail')?.value || '').trim().toLowerCase();
@@ -773,12 +812,13 @@ window.copiarSeriales = function (ordenId) {
       let firestoreData = {
         estado_reparacion: 'ENTREGADO AL CLIENTE',
         no_recibido: noRecibido,
+        notas_entrega: notasEntrega || null,
         fecha_entrega: firebase.firestore.FieldValue.serverTimestamp(),
         entrega_por_uid: user.uid,
         entrega_por_email: user.email,
         os_logs: firebase.firestore.FieldValue.arrayUnion({ action: 'ENTREGAR', by: user.uid })
       };
-      let emailOpts = { noRecibido };
+      let emailOpts = { noRecibido, notas: notasEntrega };
 
       if (noRecibido) {
         // ── Branch A: not received ──
