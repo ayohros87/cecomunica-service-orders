@@ -73,36 +73,36 @@
 
     <!-- 4 KPIs principales -->
     <div class="stat-grid">
-      <div id="kpiOrdenes" class="stat-card" title="Órdenes en cualquier estado distinto a Completada o Entregada">
+      <a href="operacion.html" id="kpiOrdenes" class="stat-card" title="Órdenes en cualquier estado distinto a Completada o Entregada — abre Operación">
         <span class="label"><i data-lucide="settings-2"></i> Órdenes abiertas</span>
         <span class="value is-loading">—</span>
         <span class="sub">&nbsp;</span>
-      </div>
+      </a>
 
-      <div id="kpiContratos" class="stat-card" title="Contratos en estado pendiente_aprobacion">
+      <a href="../contratos/index.html" id="kpiContratos" class="stat-card" title="Contratos en estado pendiente_aprobacion — abre Contratos">
         <span class="label"><i data-lucide="file-text"></i> Contratos pendientes</span>
         <span class="value is-loading">—</span>
         <span class="sub">&nbsp;</span>
-      </div>
+      </a>
 
-      <div id="kpiCotizaciones" class="stat-card" title="Cotizaciones enviadas o aprobadas que vencen en 7 días o menos">
+      <a href="../cotizaciones/index.html" id="kpiCotizaciones" class="stat-card" title="Cotizaciones enviadas o aprobadas que vencen en 7 días o menos — abre Cotizaciones">
         <span class="label"><i data-lucide="receipt"></i> Cotizaciones por vencer</span>
         <span class="value is-loading">—</span>
         <span class="sub">&nbsp;</span>
-      </div>
+      </a>
 
-      <div id="kpiPoc" class="stat-card" title="Equipos PoC marcados como activos y no eliminados">
+      <a href="../POC/index.html" id="kpiPoc" class="stat-card" title="Equipos PoC marcados como activos y no eliminados — abre Base de Datos PoC">
         <span class="label"><i data-lucide="radio-tower"></i> PoC activos</span>
         <span class="value is-loading">—</span>
         <span class="sub">&nbsp;</span>
-      </div>
+      </a>
     </div>
 
-    <!-- Sub-páginas del panel (Fases 2-5 las crearán; por ahora son placeholders) -->
+    <!-- ── Monitoreo: lo que se revisa a diario (solo lectura) ── -->
     <div class="admin-section">
       <div class="admin-section-head">
-        <span class="title">Áreas del panel</span>
-        <span class="hint">Acceso rápido a las vistas detalladas</span>
+        <span class="title"><i data-lucide="gauge"></i> Monitoreo</span>
+        <span class="hint">Para revisar a diario · solo lectura</span>
       </div>
       <div class="admin-launchers">
         <a class="admin-launcher" href="operacion.html">
@@ -110,6 +110,13 @@
           <span class="meta">
             <span class="t">Operación</span>
             <span class="s">Órdenes por estado y técnico, contratos, inventario crítico</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="financiero.html">
+          <span class="ico"><i data-lucide="dollar-sign"></i></span>
+          <span class="meta">
+            <span class="t">Financiero</span>
+            <span class="s">Facturado, ITBMS, pipeline + export XLSX para contador</span>
           </span>
         </a>
         <a class="admin-launcher" href="salud.html">
@@ -126,10 +133,75 @@
             <span class="s">Timeline de cambios en órdenes, contratos y purgas</span>
           </span>
         </a>
+      </div>
+    </div>
+
+    <!-- ── Usuarios y acceso ── -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title"><i data-lucide="users-round"></i> Usuarios y acceso</span>
+        <span class="hint">Quién entra y qué ve cada rol</span>
+      </div>
+      <div class="admin-launchers">
+        <a class="admin-launcher" href="usuarios.html">
+          <span class="ico"><i data-lucide="users-round"></i></span>
+          <span class="meta">
+            <span class="t">Usuarios</span>
+            <span class="s">Alta, cambio de rol, desactivación y reset de contraseña</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="#" id="launcherVerComo" onclick="event.preventDefault(); window.AdminVerComo?.open(); return false;">
+          <span class="ico"><i data-lucide="eye"></i></span>
+          <span class="meta">
+            <span class="t">Ver como otro rol</span>
+            <span class="s">Previsualizar el home tal como lo ve cada rol (solo visual)</span>
+          </span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Configuración del sistema ── -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title"><i data-lucide="sliders-horizontal"></i> Configuración</span>
+        <span class="hint">Parámetros que cambian el comportamiento del sistema</span>
+      </div>
+      <div class="admin-launchers">
+        <a class="admin-launcher" href="config.html">
+          <span class="ico"><i data-lucide="sliders-horizontal"></i></span>
+          <span class="meta">
+            <span class="t">Configuración</span>
+            <span class="s">ITBMS, validez, retención, operadores, tipos de servicio</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="alertas.html">
+          <span class="ico"><i data-lucide="bell"></i></span>
+          <span class="meta">
+            <span class="t">Alertas configurables</span>
+            <span class="s">Umbrales que disparan banners en el panel (sin deploy)</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="pii.html">
+          <span class="ico"><i data-lucide="shield-alert"></i></span>
+          <span class="meta">
+            <span class="t">Privacidad (PII)</span>
+            <span class="s">Preview y purga de fotos de identificación con más de 90 días</span>
+          </span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Calidad de datos: estas herramientas MODIFICAN datos (acento ámbar) ── -->
+    <div class="admin-section admin-section--caution">
+      <div class="admin-section-head">
+        <span class="title"><i data-lucide="alert-triangle"></i> Calidad de datos</span>
+        <span class="hint">Modifican registros — usar cuando algo se ve mal</span>
+      </div>
+      <div class="admin-launchers">
         <a class="admin-launcher" href="integridad.html">
           <span class="ico"><i data-lucide="clipboard-check"></i></span>
           <span class="meta">
-            <span class="t">Integridad</span>
+            <span class="t">Chequeo de integridad</span>
             <span class="s">Detección de inconsistencias entre módulos</span>
           </span>
         </a>
@@ -143,57 +215,8 @@
         <a class="admin-launcher" href="refs-huerfanas.html">
           <span class="ico"><i data-lucide="unlink"></i></span>
           <span class="meta">
-            <span class="t">Referencias huérfanas</span>
+            <span class="t">Enlaces de cliente rotos</span>
             <span class="s">Órdenes/POC/contratos que apuntan a un cliente inexistente; re-apuntar</span>
-          </span>
-        </a>
-        <a class="admin-launcher" href="financiero.html">
-          <span class="ico"><i data-lucide="dollar-sign"></i></span>
-          <span class="meta">
-            <span class="t">Financiero</span>
-            <span class="s">Facturado, ITBMS, pipeline + export XLSX para contador</span>
-          </span>
-        </a>
-        <a class="admin-launcher" href="#" id="launcherVerComo" onclick="event.preventDefault(); window.AdminVerComo?.open(); return false;">
-          <span class="ico"><i data-lucide="eye"></i></span>
-          <span class="meta">
-            <span class="t">Ver como otro rol</span>
-            <span class="s">Previsualizar el home tal como lo ve cada rol (solo visual)</span>
-          </span>
-        </a>
-        <a class="admin-launcher" href="backfills.html">
-          <span class="ico"><i data-lucide="play-circle"></i></span>
-          <span class="meta">
-            <span class="t">Backfills</span>
-            <span class="s">Migraciones one-shot (searchTokens, etc.) con dry-run</span>
-          </span>
-        </a>
-        <a class="admin-launcher" href="email-preview.html">
-          <span class="ico"><i data-lucide="mail-search"></i></span>
-          <span class="meta">
-            <span class="t">Preview de email</span>
-            <span class="s">Renderiza templates con datos dummy sin enviar correos</span>
-          </span>
-        </a>
-        <a class="admin-launcher" href="alertas.html">
-          <span class="ico"><i data-lucide="bell"></i></span>
-          <span class="meta">
-            <span class="t">Alertas configurables</span>
-            <span class="s">Umbrales que disparan banners en el panel (sin deploy)</span>
-          </span>
-        </a>
-        <a class="admin-launcher" href="pii.html">
-          <span class="ico"><i data-lucide="shield-alert"></i></span>
-          <span class="meta">
-            <span class="t">PII</span>
-            <span class="s">Preview y purga de fotos de identificación con más de 90 días</span>
-          </span>
-        </a>
-        <a class="admin-launcher" href="usuarios.html">
-          <span class="ico"><i data-lucide="users-round"></i></span>
-          <span class="meta">
-            <span class="t">Usuarios</span>
-            <span class="s">Alta, cambio de rol, desactivación y reset de contraseña</span>
           </span>
         </a>
         <a class="admin-launcher" href="grupos.html">
@@ -203,15 +226,34 @@
             <span class="s">Renombrar, fusionar y eliminar grupos por cliente; detectar duplicados</span>
           </span>
         </a>
-        <a class="admin-launcher" href="config.html">
-          <span class="ico"><i data-lucide="sliders-horizontal"></i></span>
+      </div>
+    </div>
+
+    <!-- ── Herramientas técnicas: raras, con cuidado — colapsadas por defecto ── -->
+    <details class="admin-advanced">
+      <summary>
+        <i data-lucide="chevron-right" class="chev"></i>
+        <i data-lucide="wrench"></i>
+        Herramientas técnicas
+        <span class="hint">Uso esporádico · ejecutar con cuidado</span>
+      </summary>
+      <div class="admin-launchers">
+        <a class="admin-launcher" href="backfills.html">
+          <span class="ico"><i data-lucide="play-circle"></i></span>
           <span class="meta">
-            <span class="t">Configuración</span>
-            <span class="s">ITBMS, validez, retención, operadores, tipos de servicio</span>
+            <span class="t">Migraciones de datos</span>
+            <span class="s">Backfills one-shot (searchTokens, etc.) con dry-run</span>
+          </span>
+        </a>
+        <a class="admin-launcher" href="email-preview.html">
+          <span class="ico"><i data-lucide="mail-search"></i></span>
+          <span class="meta">
+            <span class="t">Preview de email</span>
+            <span class="s">Renderiza templates con datos dummy sin enviar correos</span>
           </span>
         </a>
       </div>
-    </div>
+    </details>
 
   </div>
 

@@ -172,6 +172,42 @@
 .admin-section-head .hint {
   font-size: 12px; color: var(--fg-3);
 }
+.admin-section-head .title .lucide { width: 16px; height: 16px; vertical-align: -3px; margin-right: 2px; }
+
+/* Clickable KPI cards — the whole tile navigates to the relevant page. */
+a.stat-card { text-decoration: none; color: inherit; cursor: pointer; }
+a.stat-card:hover { border-color: var(--accent); }
+
+/* Caution section — tools that MODIFY data get an amber accent so they don't
+   read like the read-only dashboards above. */
+.admin-section--caution .admin-section-head .title { color: #b45309; }
+.admin-section--caution .admin-launcher .ico { background: #fef3c7; color: #b45309; }
+.admin-section--caution .admin-launcher:hover { border-color: #d97706; }
+
+/* Advanced / rare tools — collapsed by default inside a <details>. */
+.admin-advanced {
+  margin-top: var(--sp-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.admin-advanced > summary {
+  display: flex; align-items: center; gap: 8px;
+  padding: var(--sp-3);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 14px;
+  color: var(--fg-2);
+  list-style: none;
+  user-select: none;
+}
+.admin-advanced > summary::-webkit-details-marker { display: none; }
+.admin-advanced > summary .lucide { width: 16px; height: 16px; }
+.admin-advanced > summary .chev { transition: transform var(--dur-fast); color: var(--fg-3); }
+.admin-advanced[open] > summary .chev { transform: rotate(90deg); }
+.admin-advanced > summary .hint { font-weight: 400; font-size: 12px; color: var(--fg-3); margin-left: auto; }
+.admin-advanced .admin-launchers { margin-top: 0; padding: 0 var(--sp-3) var(--sp-3); }
 
 /* Used by operacion.html etc. — compact tables inside admin cards. */
 .admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
