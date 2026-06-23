@@ -136,11 +136,15 @@ const ContratosService = {
   // All contracts in aprobado or activo estado (used for assignment dropdowns).
   async getContratosActivosAprobados() {
     const db = firebase.firestore();
+    // Solo filtro `in` por estado (usa índice automático de un solo campo); `deleted`
+    // se descarta en el cliente para NO requerir un índice compuesto
+    // (deleted != true + estado in ...).
     const snap = await db.collection('contratos')
-      .where('deleted', '!=', true)
       .where('estado', 'in', ['aprobado', 'activo'])
       .get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => c.deleted !== true);
   },
 
   // ── Ordenes subcollection ─────────────────────────────────────────────────
