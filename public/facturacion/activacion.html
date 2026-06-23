@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8" />
+  <title>Activación de facturación - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/modelosService.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    .seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; flex-wrap:wrap; }
+    .seg-btn { border:0; background:var(--surface-card); color:var(--fg-2); padding:5px 12px; font-size:13px; font-weight:600; cursor:pointer; }
+    .seg-btn.is-on { background:var(--accent); color:#fff; }
+    .seg-btn + .seg-btn { border-left:1px solid var(--border-default); }
+    .seg-btn span { display:inline-block; min-width:18px; margin-left:4px; padding:0 6px; border-radius:999px; background:rgba(0,0,0,.08); font-size:11px; }
+    .seg-btn.is-on span { background:rgba(255,255,255,.25); }
+
+    .r-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .r-chip { display:inline-flex; align-items:center; gap:3px; border-radius:999px; padding:1px 8px; font-size:11px; font-weight:600; border:1px solid transparent; }
+    .r-ok   { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    .r-warn { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
+    .r-bad  { background:#FEF2F2; color:#991B1B; border-color:#FECACA; }
+  </style>
+</head>
+<body>
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    back: { href: './index.html', label: '<i data-lucide="arrow-left"></i> Facturación' },
+    title: '<i data-lucide="play-circle"></i> Activación de facturación',
+  });
+</script>
+
+<div class="app-wrap app-wrap--full">
+  <p style="color:var(--fg-3); margin:0 0 var(--sp-3); font-size:13px;">
+    Requeridos para activar: <b>contrato vigente</b> + <b>mapeo QuickBooks</b>. Entrega, seriales y firmado son recomendados (no bloquean).
+    La facturación no se emite todavía — esto solo marca qué contratos están listos.
+  </p>
+
+  <div class="ds-card" style="padding:0;">
+    <div style="padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--border-subtle);">
+      <div class="seg" role="tablist">
+        <button type="button" class="seg-btn is-on" data-v="pendientes" onclick="setVista('pendientes')">Pendientes <span id="cnt-pendientes">0</span></button>
+        <button type="button" class="seg-btn" data-v="listos" onclick="setVista('listos')">Listos <span id="cnt-listos">0</span></button>
+        <button type="button" class="seg-btn" data-v="activos" onclick="setVista('activos')">Activos <span id="cnt-activos">0</span></button>
+        <button type="button" class="seg-btn" data-v="en_espera" onclick="setVista('en_espera')">En espera <span id="cnt-en_espera">0</span></button>
+        <button type="button" class="seg-btn" data-v="no_facturables" onclick="setVista('no_facturables')">No facturables <span id="cnt-no_facturables">0</span></button>
+      </div>
+    </div>
+    <div id="lista" style="padding:var(--sp-4);"><p style="color:var(--fg-3);">Cargando…</p></div>
+  </div>
+</div>
+
+<script src="../js/ui/toast.js"></script>
+<script src="../js/pages/facturacion-activacion.js" defer></script>
+<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>

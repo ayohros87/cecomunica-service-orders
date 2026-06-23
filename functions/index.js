@@ -31,4 +31,6 @@ exports.getClienteDocUrl              = require("./src/callable/getClienteDocUrl
 exports.listQBOItems                  = require("./src/callable/listQBOItems");
 exports.listQBOPiezas                 = require("./src/callable/listQBOPiezas");
 exports.listQBOEquipos                = require("./src/callable/listQBOEquipos");
+exports.gestionarFacturacion          = require("./src/callable/gestionarFacturacion");
+exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");
