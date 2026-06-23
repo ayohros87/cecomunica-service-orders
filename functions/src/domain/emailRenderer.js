@@ -15,6 +15,31 @@ function escapeHtml(v) {
     .replace(/'/g, "&#39;");
 }
 
+// Bullet-proof CTA button (VML for Outlook + anchor for everyone else).
+// Returns an empty string when there's no real link — `"#"` and blank are
+// treated as "no CTA" so the email renders WITHOUT a dead button. This is
+// what lets the client's nota de entrega go out button-less while internal
+// recipients keep the deep-link (see ordenes-flujo.js confirmarEntrega).
+function buildCtaBlock(ctaUrl, ctaLabel) {
+  if (!ctaUrl || ctaUrl === "#") return "";
+  const url   = escapeHtml(String(ctaUrl));
+  const label = escapeHtml(String(ctaLabel || "Abrir"));
+  return `<!--[if mso]>
+                  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${url}" style="height:40px;v-text-anchor:middle;width:220px;" arcsize="12%" stroke="f" fillcolor="#0091D7">
+                    <w:anchorlock/>
+                    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">
+                      ${label}
+                    </center>
+                  </v:roundrect>
+                  <![endif]-->
+                  <!--[if !mso]><!-- -->
+                <a class="btn" href="${url}" rel="noopener noreferrer"
+                style="display:inline-block; background:#0091D7; color:#ffffff; text-decoration:none; padding:12px 18px; border-radius:6px; font:bold 14px Arial, sans-serif; margin-top:8px;">
+                ${label}
+                </a>
+                  <!--<![endif]-->`;
+}
+
 function buildEmailFromBase({ preheader, bodyHtml, ctaUrl, ctaLabel }) {
   const templatePath = path.join(__dirname, "../../templates", "email-base.html");
   let tpl = fs.readFileSync(templatePath, "utf8");
@@ -22,8 +47,7 @@ function buildEmailFromBase({ preheader, bodyHtml, ctaUrl, ctaLabel }) {
   tpl = tpl
     .replace("{{PREHEADER}}", preheader || "")
     .replace("{{BODY_CONTENT}}", bodyHtml || "")
-    .replace(/{{CTA_URL}}/g, ctaUrl || "#")
-    .replace(/{{CTA_LABEL}}/g, ctaLabel || "Abrir");
+    .replace("{{CTA_BLOCK}}", buildCtaBlock(ctaUrl, ctaLabel));
 
   return tpl;
 }
@@ -75,11 +99,27 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
   const fecha = fechaSource.toLocaleDateString("es-PA", { day: "2-digit", month: "long", year: "numeric" });
 
   const equipos = (Array.isArray(orden.equipos) ? orden.equipos : []).filter(e => !e.eliminado);
+
+  // Accesorios entregados con cada equipo. Misma fuente de datos (flags
+  // booleanos) y mismas etiquetas que la nota impresa ("Imprimir orden").
+  // Se listan solo los presentes; "—" si el equipo no trae accesorios.
+  const ACCESORIOS = [
+    ["bateria",  "Batería"],
+    ["clip",     "Clip"],
+    ["cargador", "Cargador"],
+    ["fuente",   "Fuente"],
+    ["antena",   "Antena"],
+  ];
+  const accesoriosDe = (e) => {
+    const presentes = ACCESORIOS.filter(([k]) => e[k]).map(([, label]) => label);
+    return presentes.length ? presentes.join(", ") : "—";
+  };
+
   const rows = equipos.map(e => `
     <tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #eee;">${f(e.nombre)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;">${f(e.modelo)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${f(e.numero_de_serie || e.SERIAL || e.serial)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${escapeHtml(accesoriosDe(e))}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${f(e.trabajo_tecnico)}</td>
     </tr>`).join("");
 
@@ -88,9 +128,9 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font:13px Arial,sans-serif;">
       <thead>
         <tr style="background:#f3f4f6;">
-          <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Nombre</th>
           <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Modelo</th>
           <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Serial</th>
+          <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Accesorios</th>
           <th style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:2px solid #e5e7eb;">Intervención</th>
         </tr>
       </thead>
@@ -184,9 +224,10 @@ function renderByTemplate(data) {
       return buildEmailFromBase({
         preheader,
         bodyHtml,
-        // El botón "Ver orden" SIEMPRE se renderiza (email-base.html no lo
-        // condiciona). El caller debe pasar payload.ctaUrl con la URL de la
-        // orden; si falta, cae a "#" y el botón no hace nada.
+        // El botón "Ver orden" se renderiza SOLO si el caller pasa una
+        // ctaUrl real. La nota al cliente se encola sin ctaUrl → cae a "#"
+        // → sin botón (buildCtaBlock). Los destinatarios internos sí reciben
+        // el deep-link. Ver confirmarEntrega en ordenes-flujo.js.
         ctaUrl:   payload.ctaUrl   || "#",
         ctaLabel: payload.ctaLabel || "Ver orden",
       });
@@ -198,6 +239,7 @@ function renderByTemplate(data) {
 
 module.exports = {
   escapeHtml,
+  buildCtaBlock,
   buildEmailFromBase,
   buildBodyOrdenCompletada,
   buildBodyNotaEntrega,

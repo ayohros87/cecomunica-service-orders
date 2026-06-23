@@ -15,8 +15,8 @@
         tecnico_asignado: 'Juan Pérez',
         tipo_de_servicio: 'Reparación',
         equipos: [
-          { nombre: 'Radio Motorola DGP-8550', modelo: 'DGP-8550', numero_de_serie: '912AGW1234', trabajo_tecnico: 'Cambio de batería + diagnóstico' },
-          { nombre: 'Radio Motorola XPR-7550', modelo: 'XPR-7550', numero_de_serie: '914AKZ5678', trabajo_tecnico: 'Reprogramación' },
+          { modelo: 'DGP-8550', numero_de_serie: '912AGW1234', trabajo_tecnico: 'Cambio de batería + diagnóstico', bateria: true, clip: true, cargador: true },
+          { modelo: 'XPR-7550', numero_de_serie: '914AKZ5678', trabajo_tecnico: 'Reprogramación', cargador: true, antena: true },
         ],
       },
       opts: {

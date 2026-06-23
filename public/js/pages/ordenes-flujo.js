@@ -696,10 +696,16 @@ window.copiarSeriales = function (ordenId) {
     const equipos = (Array.isArray(orden.equipos) ? orden.equipos : [])
       .filter(e => e && !e.eliminado)
       .map(e => ({
-        nombre:          e.nombre || null,
         modelo:          e.modelo || null,
         numero_de_serie: e.numero_de_serie || e.SERIAL || e.serial || null,
         trabajo_tecnico: e.trabajo_tecnico || null,
+        // Accesorios (flags booleanos) — se listan en la nota como columna
+        // "Accesorios", con la misma fuente de datos que "Imprimir orden".
+        bateria:  !!e.bateria,
+        clip:     !!e.clip,
+        cargador: !!e.cargador,
+        fuente:   !!e.fuente,
+        antena:   !!e.antena,
       }));
     return {
       cliente_nombre:    orden.cliente_nombre    || null,
@@ -907,36 +913,45 @@ window.copiarSeriales = function (ordenId) {
       // Structured payload — onMailQueued renders the body via
       // emailRenderer.renderByTemplate. fechaISO is included so the
       // email reflects the moment the entrega was confirmed even if
-      // there's queue latency.
-      const mailPayload = {
-        template: 'nota_entrega',
-        data: {
-          ordenId,
-          orden:  _ordenEmailSnapshot(orden),
-          opts:   { ...emailOpts, fechaISO: new Date().toISOString() },
-          // CTA del botón "Ver orden". Sin esto renderByTemplate cae a "#"
-          // y el botón no hace nada. Mismo patrón que onComplete.js.
-          // Deep-link al índice → abre el modal de Entrega/Recepción (firma +
-          // receptor + equipos). NO a trabajar-orden.html (pantalla del técnico).
-          ctaUrl: `https://app.cecomunica.net/ordenes/index.html?entrega=${encodeURIComponent(ordenId)}`,
-        },
+      // there's queue latency. ctaUrl se inyecta por-destinatario (abajo).
+      const baseData = {
+        ordenId,
+        orden:  _ordenEmailSnapshot(orden),
+        opts:   { ...emailOpts, fechaISO: new Date().toISOString() },
       };
 
-      // Destinatarios únicos: cliente, vendedor, técnico y el buzón de
-      // recepción configurado (por default, para su control de entregas).
-      // Set normaliza a minúsculas para no enviar duplicados.
-      const recepcionEmail = (empresaConfig?.email_recepcion_entregas || '').toLowerCase().trim();
-      const destinatarios = new Set();
-      if (clienteEmailToUse)  destinatarios.add(clienteEmailToUse.toLowerCase().trim());
-      if (vendedorDoc?.email) destinatarios.add(vendedorDoc.email.toLowerCase().trim());
-      if (tecnicoDoc?.email)  destinatarios.add(tecnicoDoc.email.toLowerCase().trim());
-      if (recepcionEmail)     destinatarios.add(recepcionEmail);
+      // CTA "Ver orden": deep-link al índice INTERNO → abre el modal de
+      // Entrega/Recepción sobre la lista completa de órdenes. Es útil para
+      // el personal, pero NO debe ir al cliente: detrás del modal quedaría
+      // expuesta toda la cartera de órdenes de la empresa (y la página exige
+      // login del staff). Por eso el cliente recibe la nota SIN botón — el
+      // cuerpo del correo ya es su comprobante completo (equipos, receptor,
+      // firma, notas). Solo los internos llevan el deep-link.
+      const internalCtaUrl = `https://app.cecomunica.net/ordenes/index.html?entrega=${encodeURIComponent(ordenId)}`;
 
-      await Promise.allSettled(
-        [...destinatarios]
-          .filter(Boolean)
-          .map(to => MailService.enqueue({ to, subject, ...mailPayload }))
-      );
+      // Destinatarios. Set normaliza a minúsculas para no duplicar.
+      const recepcionEmail = (empresaConfig?.email_recepcion_entregas || '').toLowerCase().trim();
+      const clienteEmail   = (clienteEmailToUse || '').toLowerCase().trim();
+      const internos = new Set();
+      if (vendedorDoc?.email) internos.add(vendedorDoc.email.toLowerCase().trim());
+      if (tecnicoDoc?.email)  internos.add(tecnicoDoc.email.toLowerCase().trim());
+      if (recepcionEmail)     internos.add(recepcionEmail);
+      // Si el correo del cliente coincide con uno interno, mándalo como cliente
+      // (sin link) — nunca le des el deep-link a un destinatario externo.
+      if (clienteEmail) internos.delete(clienteEmail);
+
+      const jobs = [];
+      if (clienteEmail) {
+        jobs.push(MailService.enqueue({ to: clienteEmail, subject, template: 'nota_entrega', data: baseData }));
+      }
+      for (const to of internos) {
+        if (!to) continue;
+        jobs.push(MailService.enqueue({
+          to, subject, template: 'nota_entrega',
+          data: { ...baseData, ctaUrl: internalCtaUrl },
+        }));
+      }
+      await Promise.allSettled(jobs);
 
       cerrarModalEntrega();
       Toast.show('✅ Entrega registrada correctamente', 'ok');

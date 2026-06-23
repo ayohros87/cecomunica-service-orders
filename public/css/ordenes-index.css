@@ -481,6 +481,19 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
    Class extraction of inline styles that accreted while iterating
    on the entrega flow. ORDENES_INDEX_IMPROVEMENTS.md QW9.
    ====================================== */
+
+/* Backdrop reforzado (más opaco + más blur que el .overlay genérico) para
+   que la lista de órdenes detrás del modal de Entrega quede ilegible. Esta
+   pantalla es el destino del deep-link "Ver orden" de los correos, así que
+   ocultar la cartera de fondo es defensa en profundidad. Mismo lenguaje
+   visual navy que el .modal-backdrop de contratos, un poco más fuerte.
+   El -webkit- es necesario para que el blur funcione en Safari/iOS. */
+#modalEntrega.overlay {
+  background: rgba(6, 24, 41, 0.6);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
 .modal-entrega { max-width: 480px; }
 
 .modal-entrega__header {

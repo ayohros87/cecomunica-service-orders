@@ -31,7 +31,9 @@ const HELPERS = {
   orden_completada: (data) => buildEmailFromBase({
     preheader: `Orden completada — ${data.orden_id || data.id || "—"}`,
     bodyHtml:  buildBodyOrdenCompletada(data),
-    ctaUrl:    "#",
+    // Sample link so the CTA still renders in preview ("#" now means "no
+    // button" — see buildCtaBlock in emailRenderer.js).
+    ctaUrl:    "https://app.cecomunica.net/ordenes/index.html",
     ctaLabel:  "Ver orden",
   }),
 };

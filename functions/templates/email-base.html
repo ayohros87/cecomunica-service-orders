@@ -70,21 +70,9 @@
                 <tr><td class="p-24" style="padding:24px;">
                   {{BODY_CONTENT}}
 
-                  <!-- Botón “bulletproof” con VML -->
-                  <!--[if mso]>
-                  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="{{CTA_URL}}" style="height:40px;v-text-anchor:middle;width:220px;" arcsize="12%" stroke="f" fillcolor="#0091D7">
-                    <w:anchorlock/>
-                    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;">
-                      {{CTA_LABEL}}
-                    </center>
-                  </v:roundrect>
-                  <![endif]-->
-                  <!--[if !mso]><!-- -->
-                <a class="btn" href="{{CTA_URL}}" rel="noopener noreferrer"
-                style="display:inline-block; background:#0091D7; color:#ffffff; text-decoration:none; padding:12px 18px; border-radius:6px; font:bold 14px Arial, sans-serif; margin-top:8px;">
-                {{CTA_LABEL}}
-                </a>
-                  <!--<![endif]-->
+                  <!-- Botón “bulletproof” (VML + anchor). Se inyecta solo
+                       cuando hay un CTA real; ver buildCtaBlock en emailRenderer.js. -->
+                  {{CTA_BLOCK}}
                 </td></tr>
               </table>
             </td>
