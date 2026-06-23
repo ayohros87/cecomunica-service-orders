@@ -54,7 +54,7 @@
   </p>
 
   <div class="ds-card" style="padding:0;">
-    <div style="padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--border-subtle);">
+    <div style="padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div class="seg" role="tablist">
         <button type="button" class="seg-btn is-on" data-v="pendientes" onclick="setVista('pendientes')">Pendientes <span id="cnt-pendientes">0</span></button>
         <button type="button" class="seg-btn" data-v="listos" onclick="setVista('listos')">Listos <span id="cnt-listos">0</span></button>
@@ -62,8 +62,25 @@
         <button type="button" class="seg-btn" data-v="en_espera" onclick="setVista('en_espera')">En espera <span id="cnt-en_espera">0</span></button>
         <button type="button" class="seg-btn" data-v="no_facturables" onclick="setVista('no_facturables')">No facturables <span id="cnt-no_facturables">0</span></button>
       </div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg-2); cursor:pointer; white-space:nowrap;" title="Si está activo, la corrida diaria (7:00 AM) activa solo los contratos Listos.">
+        <input type="checkbox" id="autoActivar" onchange="toggleAuto(this.checked)"> Auto-activar contratos listos
+      </label>
     </div>
     <div id="lista" style="padding:var(--sp-4);"><p style="color:var(--fg-3);">Cargando…</p></div>
+  </div>
+</div>
+
+<!-- Vista previa de factura (cálculo de validación, sin escribir a QBO) -->
+<div id="overlayFactura" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
+  <div class="modal modal-lg" style="max-width:820px;">
+    <div class="modal-header">
+      <h3 class="modal-title"><i data-lucide="file-text"></i> Vista previa de factura</h3>
+      <button class="modal-close" onclick="cerrarFactura()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+    </div>
+    <div class="modal-body" id="facturaBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="cerrarFactura()">Cerrar</button>
+    </div>
   </div>
 </div>
 

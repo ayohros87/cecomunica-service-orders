@@ -22,9 +22,27 @@ firebase.auth().onAuthStateChanged(async (user)=>{
       document.body.innerHTML="<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>"; return;
     }
     await cargar();
+    await cargarConfig();
     render();
   }catch(e){ console.error(e); Toast.show('Error al iniciar','bad'); }
 });
+
+// Config de auto-activación (en empresa/facturacion_config, read/write=auth; UI gateada).
+async function cargarConfig(){
+  try{
+    const d = await firebase.firestore().collection('empresa').doc('facturacion_config').get();
+    const on = !!(d.exists && d.data().auto_activar);
+    const el = document.getElementById('autoActivar'); if(el) el.checked = on;
+  }catch(e){ console.warn('config', e); }
+}
+async function toggleAuto(on){
+  try{
+    await firebase.firestore().collection('empresa').doc('facturacion_config')
+      .set({ auto_activar: !!on, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+    Toast.show(on?'Auto-activación activada (corre 7:00 AM)':'Auto-activación desactivada','ok');
+  }catch(e){ console.error(e); Toast.show('No se pudo guardar la config','bad'); }
+}
+window.toggleAuto = toggleAuto;
 
 async function cargar(){
   const [cs, ms] = await Promise.all([
@@ -119,7 +137,9 @@ function cardContrato(c){
       ${!r.mapeo?`<a class="btn sm btn-ghost" href="../inventario/modelos.html"><i data-lucide="git-compare"></i> Arreglar mapeo</a>`:''}
       <button class="btn sm btn-ghost" onclick="accion('${id}','no_facturable')"><i data-lucide="ban"></i> No factura</button>`;
   } else if(vista==='activos'){
-    acciones = `<button class="btn sm btn-ghost" onclick="accion('${id}','en_espera')"><i data-lucide="pause"></i> Poner en espera</button>`;
+    acciones = `
+      <button class="btn sm btn-ghost" onclick="vistaPrevia('${id}')"><i data-lucide="file-text"></i> Vista previa factura</button>
+      <button class="btn sm btn-ghost" onclick="accion('${id}','en_espera')"><i data-lucide="pause"></i> Poner en espera</button>`;
   } else if(vista==='en_espera'){
     acciones = `<button class="btn sm btn-primary" onclick="accion('${id}','reactivar')"><i data-lucide="play"></i> Reactivar</button>`;
   } else if(vista==='no_facturables'){
@@ -168,3 +188,48 @@ async function accion(id, acc){
 
 window.setVista = setVista;
 window.accion = accion;
+
+/* ===== Vista previa de factura (C1 — cálculo, sin escribir a QBO) ===== */
+function money(n){ return '$'+Number(n||0).toFixed(2); }
+const MESES=['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+async function vistaPrevia(id){
+  const ov=document.getElementById('overlayFactura');
+  document.getElementById('facturaBody').innerHTML='<p style="color:var(--fg-3);">Calculando…</p>';
+  ov.classList.add('show'); ov.style.display='flex';
+  if(window.lucide) lucide.createIcons();
+  try{
+    const res = await firebase.functions().httpsCallable('calcularFacturaContrato')({ contratoId:id });
+    renderFactura(res.data);
+  }catch(e){ console.error(e); document.getElementById('facturaBody').innerHTML=`<p style="color:#b91c1c;">${esc(e.message||'Error')}</p>`; }
+}
+
+function renderFactura(f){
+  const lineas=(f.lineas||[]).map(l=>`
+    <tr>
+      <td>${esc(l.modelo)} ${l.parcial?`<span class="r-chip r-warn" title="${l.dias} días">parcial</span>`:''} ${!l.mapeo_ok?'<span class="r-chip r-bad">sin mapeo</span>':''} ${l.advertencia?`<span class="r-chip r-bad" title="${esc(l.advertencia)}">⚠</span>`:''}</td>
+      <td style="text-align:center;">${l.cantidad}</td>
+      <td style="text-align:right; font-family:var(--font-mono);">${money(l.importe)}</td>
+      <td style="font-size:11px; color:var(--fg-3); white-space:nowrap;">A ${money(l.desglose.alquiler)} · F ${money(l.desglose.frecuencia)} · M ${money(l.desglose.mantenimiento)}</td>
+    </tr>`).join('');
+  const cargos=(f.cargos||[]).map(c=>`<tr><td>${esc(c.concepto)} <span style="font-size:11px;color:var(--fg-4);">(cargo)</span></td><td></td><td style="text-align:right; font-family:var(--font-mono);">${money(c.importe)}</td><td></td></tr>`).join('');
+  document.getElementById('facturaBody').innerHTML=`
+    <div style="margin-bottom:8px;"><b>${esc(f.contrato_id)}</b> · ${esc(f.cliente_nombre)} — ${MESES[f.periodo.mes]} ${f.periodo.anio} <span style="color:var(--fg-3);">(${f.periodo.inicio} a ${f.periodo.fin})</span></div>
+    <div class="table-scroll" style="max-height:50vh; overflow:auto;">
+      <table class="app-table" style="font-size:13px;">
+        <thead><tr><th>Concepto</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">Importe</th><th>Desglose (Alq/Frec/Mant)</th></tr></thead>
+        <tbody>${lineas}${cargos}${(!lineas&&!cargos)?'<tr><td colspan="4" style="text-align:center; padding:12px; color:var(--fg-3);">Nada facturable este período.</td></tr>':''}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:12px; text-align:right; font-size:14px;">
+      <div>Subtotal: <b style="font-family:var(--font-mono);">${money(f.subtotal)}</b></div>
+      <div>${f.itbms_aplica?`ITBMS (${Math.round(f.itbms_porc*100)}%)`:'ITBMS exento'}: <b style="font-family:var(--font-mono);">${money(f.itbms)}</b></div>
+      <div style="font-size:16px; margin-top:4px;">Total: <b style="font-family:var(--font-mono);">${money(f.total)}</b></div>
+    </div>
+    ${(f.omitidas&&f.omitidas.length)?`<p style="font-size:12px; color:var(--fg-3); margin-top:8px;">Omitidas: ${f.omitidas.map(o=>esc(o.modelo)+' ('+esc(o.motivo)+')').join(', ')}</p>`:''}
+    <p style="font-size:11px; color:var(--fg-4); margin-top:8px;"><i data-lucide="info" style="width:12px;height:12px;vertical-align:-1px;"></i> Cálculo de validación. No se ha emitido ninguna factura en QuickBooks.</p>`;
+  if(window.lucide) lucide.createIcons();
+}
+
+function cerrarFactura(){ const ov=document.getElementById('overlayFactura'); ov.classList.remove('show'); ov.style.display='none'; }
+window.vistaPrevia=vistaPrevia; window.cerrarFactura=cerrarFactura;

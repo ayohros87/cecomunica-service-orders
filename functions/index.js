@@ -33,4 +33,6 @@ exports.listQBOPiezas                 = require("./src/callable/listQBOPiezas");
 exports.listQBOEquipos                = require("./src/callable/listQBOEquipos");
 exports.gestionarFacturacion          = require("./src/callable/gestionarFacturacion");
 exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
+exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
+exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");
