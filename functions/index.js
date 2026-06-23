@@ -35,4 +35,5 @@ exports.gestionarFacturacion          = require("./src/callable/gestionarFactura
 exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenEntregada");
 exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");
+exports.listQBOCustomers              = require("./src/callable/listQBOCustomers");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");
