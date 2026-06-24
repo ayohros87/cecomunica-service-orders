@@ -31,10 +31,11 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol;
     }
     function isAdmin()    { return isSignedIn() && userRole() == "administrador"; }
-    // Cotizaciones: jefe_taller tiene acceso completo salvo aprobar (solo admin).
+    // Cotizaciones: aprobación separada por TIPO (ver match /cotizaciones).
     //   puedeCotizar → crear/listar;  verTodasCot → ver/editar/borrar cualquiera (como admin).
-    function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller", "recepcion"]; }
-    function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller"]; }
+    //   gerente: incluido para que pueda revisar y aprobar cotizaciones comerciales.
+    function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller", "recepcion", "gerente"]; }
+    function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller", "gerente"]; }
 
     // Campos cuyo dueño exclusivo es Cloud Functions (admin SDK los salta).
     // Sólo bloquea escrituras desde el frontend.
@@ -88,12 +89,19 @@ service cloud.firestore {
         return isSignedIn() && resource.data.creado_por_uid == request.auth.uid;
       }
       // ¿La escritura intenta aprobar (transición a 'aprobada') o estampar
-      // los campos de aprobación? Eso es exclusivo de administradores.
+      // los campos de aprobación?
       function aprobacionTocada() {
         let after = request.resource.data;
         let changed = after.diff(resource.data).affectedKeys();
         return (after.estado == "aprobada" && resource.data.estado != "aprobada")
             || changed.hasAny(["fecha_aprobacion", "aprobado_por_uid"]);
+      }
+      // Tipo de cotización: 'orden' (servicio, sale de una orden de taller) vs
+      // comercial. Las legacy sin `origen` se tratan como comerciales. Se lee del
+      // doc EXISTENTE (resource), no del entrante, para que nadie eleve el tipo en
+      // la misma escritura de aprobación (p.ej. comercial→'orden' para saltarse al gerente).
+      function cotEsServicio() {
+        return resource.data.get("origen", "comercial") == "orden";
       }
 
       allow get:  if verTodasCot() || esDueno();
@@ -103,8 +111,14 @@ service cloud.firestore {
                      && request.resource.data.creado_por_uid == request.auth.uid
                      && (request.resource.data.estado == "borrador" || isAdmin());
 
+      // Envío del dueño (estado→enviada) no es aprobacionTocada → vendedor envía lo
+      // suyo. La APROBACIÓN se separa por tipo: servicio la aprueba el jefe de
+      // mantenimiento (jefe_taller); comercial, el gerente; admin cualquiera.
       allow update: if (verTodasCot() || esDueno())
-                     && (isAdmin() || !aprobacionTocada());   // aprobar sigue solo-admin
+                     && (isAdmin()
+                         || !aprobacionTocada()
+                         || (userRole() == "jefe_taller" && cotEsServicio())
+                         || (userRole() == "gerente" && !cotEsServicio()));
 
       allow delete: if verTodasCot();
     }

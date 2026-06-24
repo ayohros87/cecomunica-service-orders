@@ -145,6 +145,10 @@
         : JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
       dirigido_a: doc.dirigido_a || '',
       dirigido_email: doc.dirigido_email || '',
+      // Tipo de cotización (servicio vs comercial). Se conserva en el round-trip
+      // para que editar una cotización de servicio no la reclasifique como comercial.
+      origen: doc.origen || '',
+      orden_id: doc.orden_id || '',
       creado_por_uid: doc.creado_por_uid || null,
       creado_por_email: doc.creado_por_email || null,
       // Timestamps del ciclo de vida — usados por el historial para mostrar
@@ -204,6 +208,10 @@
       subtotal: FMT.round2(totales.subtotal),
       descuento_global: FMT.round2(totales.descGlobal),
       total: FMT.round2(totales.total),
+      // Tipo de cotización: por defecto 'comercial'. cotizar-orden.js sobrescribe
+      // con 'orden' + orden_id después de toDoc (cotizaciones de servicio).
+      origen: ui.origen || 'comercial',
+      ...(ui.orden_id ? { orden_id: ui.orden_id } : {}),
       creado_por_uid: ui.creado_por_uid || null,
       creado_por_email: ui.creado_por_email || null,
       deleted: !!ui.deleted,

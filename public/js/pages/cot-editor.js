@@ -6,6 +6,8 @@
   let catalogos = null;
   let dragId = null;
   let overId = null;
+  let userRol = null;       // rol del usuario actual (para política de envío)
+  let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -461,8 +463,17 @@
         doc.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
         const ref = await CotizacionesService.addCotizacion(doc);
-        await enqueueAprobacionMail(doc, ref.id, user);
-        Toast.show('Cotización ' + draft.id + ' guardada · solicitud enviada a ventas@cecomunica.com', 'ok');
+        // Si el creador puede enviar y la cotización está DENTRO de política, no se
+        // molesta al aprobador: la envía él mismo desde el detalle. Solo se encola la
+        // solicitud de aprobación cuando excede el umbral (o el rol no puede enviar).
+        const pol = T.requiereAprobacion({ total: doc.total, descuentoPct: doc.descuentoPct }, policyCfg);
+        const autoEnvia = canRole(userRol, 'enviar-cotizacion') && !pol.requiere;
+        if (autoEnvia) {
+          Toast.show('Cotización ' + draft.id + ' guardada · lista para enviar al cliente.', 'ok');
+        } else {
+          await enqueueAprobacionMail(doc, ref.id, user);
+          Toast.show('Cotización ' + draft.id + ' guardada · solicitud enviada a ventas@cecomunica.com', 'ok');
+        }
         setTimeout(() => { location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(ref.id); }, 800);
       } else {
         // Defensa adicional: nunca persistir cambios sobre una cotización no editable.
@@ -509,8 +520,11 @@
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
+      userRol = rol;
 
       catalogos = await CotState.bootstrapCatalogos();
+      try { policyCfg = T.policyFromConfig(await EmpresaService.getConfig()); }
+      catch (e) { policyCfg = T.POLICY_DEFAULT; }
       const esNueva = document.body.dataset.modo === 'nueva';
       const params = new URLSearchParams(location.search);
 

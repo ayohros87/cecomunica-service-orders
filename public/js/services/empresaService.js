@@ -14,6 +14,8 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   mail_cc_contrato_aprobado: [],
   email_recepcion_entregas:  '',   // buzón único que recibe copia de cada nota de entrega ('' = no copiar)
   cotizacion_aprobacion_to:  [],   // emails que reciben la solicitud de aprobación de cotización ([] = fallback ventas@)
+  cotizacion_descuento_max_pct: 15, // descuento % máximo que un vendedor puede enviar sin aprobación
+  cotizacion_total_max:      5000, // total máximo (USD) que un vendedor puede enviar sin aprobación
   alertas:                   [],  // array de {id, kind, threshold, severity, message, enabled} — ver AdminMetrics.evaluateAlertas
 });
 

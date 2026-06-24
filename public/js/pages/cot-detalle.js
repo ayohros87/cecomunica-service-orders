@@ -2,8 +2,11 @@
 // Detalle de cotización — vista de lectura con timeline derivado del estado.
 (() => {
   let cot = null;
+  let rawDoc = null;       // doc Firestore crudo (para enqueueAprobacionMail)
   let catalogos = null;
   let userRol = null;
+  let policyCfg = null;    // { descuentoMaxPct, totalMax } desde empresa/config
+  let polEnvio = { requiere: false, motivos: [] }; // recalculado en cada render()
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -82,12 +85,31 @@
     return h.reverse();
   }
 
+  // Botón principal del header para un borrador, según rol + política de envío:
+  //  · aprobador (admin/jefe taller) → "Aprobar y enviar" (revisa cualquier cotización)
+  //  · vendedor + dentro de política  → "Enviar al cliente" (envío directo, sin aprobación)
+  //  · vendedor + fuera de política   → "Solicitar aprobación" (notifica al aprobador)
+  function botonAccionPrincipal(estado) {
+    if (estado !== 'borrador') return '';
+    if (puedeAprobarCotizacion(userRol, cot)) {
+      return '<button class="btn btn-secondary" id="btnAprobar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="check-circle"></i> Aprobar y enviar</button>';
+    }
+    if (canRole(userRol, 'enviar-cotizacion') && !polEnvio.requiere) {
+      return '<button class="btn btn-secondary" id="btnEnviarDirecto" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="send"></i> Enviar al cliente</button>';
+    }
+    if (canRole(userRol, 'enviar-cotizacion') && polEnvio.requiere) {
+      return '<button class="btn btn-secondary" id="btnSolicitar"><i data-lucide="shield-check"></i> Solicitar aprobación</button>';
+    }
+    return '';
+  }
+
   function render() {
     const cli = (catalogos.clientesById[cot.clienteId]) || { razon: cot.cliente_nombre, ruc: cot.cliente_ruc, email: cot.cliente_email, representante: '' };
     const ej = catalogos.ejecutivos.find(e => e.id === cot.ejecutivoId) || { nombre: cot.ejecutivo_nombre || '—' };
     const dirigidoA = cot.dirigido_a || cli.representante || '';
     const dirigidoEmail = cot.dirigido_email || cli.email || '';
     const t = T.calcTotales(cot);
+    polEnvio = T.requiereAprobacion({ total: t.total, descuentoPct: cot.descuentoPct }, policyCfg);
     const vence = T.validezVence(cot);
 
     $('detalleMount').innerHTML = `
@@ -103,7 +125,7 @@
           <p>${esc(cli.razon || '—')} · ${FMT.money(t.total)} · ${cot.items.length} renglones</p>
         </div>
         <div class="app-page-header-actions">
-          ${(cot.estado === 'borrador' && canRole(userRol, 'aprobar-cotizacion')) ? '<button class="btn btn-secondary" id="btnAprobar" style="background:#065F46; color:#fff; border-color:#065F46;"><i data-lucide="check-circle"></i> Aprobar y enviar</button>' : ''}
+          ${botonAccionPrincipal(cot.estado)}
           <button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
           ${(cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
@@ -218,6 +240,12 @@
     if (btnAp) btnAp.addEventListener('click', () => {
       location.href = 'index.html?aprobar=' + encodeURIComponent(cot._docId);
     });
+    // Envío directo del vendedor (cotización dentro de política).
+    const btnDir = $('btnEnviarDirecto');
+    if (btnDir) btnDir.addEventListener('click', () => enviarPorCorreo(cli, ej));
+    // Solicitar aprobación (cotización fuera de política).
+    const btnSol = $('btnSolicitar');
+    if (btnSol) btnSol.addEventListener('click', solicitarAprobacion);
     const btnEd = $('btnEditar');
     if (btnEd) btnEd.addEventListener('click', () => { location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(cot._docId); });
     $('btnImprimir').addEventListener('click', () => { window.open('imprimir-cotizacion.html?id=' + encodeURIComponent(cot._docId), '_blank'); });
@@ -244,9 +272,18 @@
   function renderTransiciones() {
     const cont = $('panelTransiciones');
     if (cot.estado === 'borrador') {
-      const txt = canRole(userRol, 'aprobar-cotizacion')
-        ? 'Esta cotización está en borrador. Usa <b>Aprobar y enviar</b> arriba para revisar y enviar al cliente.'
-        : 'Esta cotización está en borrador, pendiente de aprobación por un administrador o jefe de taller.';
+      let txt;
+      if (puedeAprobarCotizacion(userRol, cot)) {
+        txt = 'Esta cotización está en borrador. Usa <b>Aprobar y enviar</b> arriba para revisar y enviar al cliente.';
+      } else if (canRole(userRol, 'enviar-cotizacion') && !polEnvio.requiere) {
+        txt = 'Esta cotización está dentro de los límites de envío directo. Puedes enviarla al cliente con <b>Enviar al cliente</b> arriba.';
+      } else if (canRole(userRol, 'enviar-cotizacion') && polEnvio.requiere) {
+        txt = 'Esta cotización supera los límites para envío directo y requiere aprobación:<br>· ' +
+          polEnvio.motivos.map(esc).join('<br>· ') +
+          '<br>Usa <b>Solicitar aprobación</b> arriba.';
+      } else {
+        txt = 'Esta cotización está en borrador, pendiente de aprobación.';
+      }
       cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0; line-height:1.5;">' + txt + '</p>';
       return;
     }
@@ -367,6 +404,26 @@
     }
   }
 
+  // Notifica al aprobador (correo a ventas@/config) que un borrador fuera de
+  // política espera revisión. Reusa el mismo correo que se encola al crear/duplicar.
+  async function solicitarAprobacion() {
+    const ok = await Modal.confirm({
+      title: 'Solicitar aprobación',
+      message: 'Esta cotización supera los límites para envío directo:\n\n• ' +
+        polEnvio.motivos.join('\n• ') +
+        '\n\nSe notificará a un aprobador para que la revise y la envíe al cliente.',
+    });
+    if (!ok) return;
+    try {
+      await CotState.enqueueAprobacionMail({
+        doc: rawDoc, docId: cot._docId, user: firebase.auth().currentUser,
+      });
+      Toast.show('Solicitud de aprobación enviada.', 'ok');
+    } catch (e) {
+      Toast.show('No se pudo enviar la solicitud: ' + (e?.message || e), 'bad');
+    }
+  }
+
   async function duplicar() {
     const nuevoId = await CotState.nextCotizacionId();
     const user = firebase.auth().currentUser;
@@ -389,7 +446,7 @@
     if (!user) { location.href = '../login.html'; return; }
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
-      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.RECEPCION];
+      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.RECEPCION, ROLES.GERENTE];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
       const params = new URLSearchParams(location.search);
@@ -406,6 +463,9 @@
       }
 
       catalogos = await CotState.bootstrapCatalogos();
+      rawDoc = doc;
+      try { policyCfg = T.policyFromConfig(await EmpresaService.getConfig()); }
+      catch (e) { policyCfg = T.POLICY_DEFAULT; }
       cot = CotState.toUi(doc);
       render();
     });

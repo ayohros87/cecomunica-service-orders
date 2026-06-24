@@ -38,4 +38,37 @@ window.CotizacionTotales = {
   validezVence(cot) {
     return this.addDays(cot?.fecha, cot?.validezDias);
   },
+
+  // ── Política de envío (por excepción) ─────────────────────────────────────
+  // Dentro de límites, el vendedor envía la cotización él mismo; fuera de
+  // límites, requiere aprobación. Umbrales configurables en empresa/config;
+  // los defaults se mantienen aquí para sobrevivir una caída de Firestore.
+  POLICY_DEFAULT: { descuentoMaxPct: 15, totalMax: 5000 },
+
+  // Mapea el doc empresa/config (EmpresaService.getConfig) a la forma de política.
+  policyFromConfig(cfg) {
+    const d = this.POLICY_DEFAULT;
+    return {
+      descuentoMaxPct: cfg && cfg.cotizacion_descuento_max_pct != null
+        ? Number(cfg.cotizacion_descuento_max_pct) : d.descuentoMaxPct,
+      totalMax: cfg && cfg.cotizacion_total_max != null
+        ? Number(cfg.cotizacion_total_max) : d.totalMax,
+    };
+  },
+
+  // ¿La cotización excede la política de envío directo? input: { total, descuentoPct }.
+  // Devuelve { requiere: bool, motivos: [string] } para poder explicar el porqué en UI.
+  requiereAprobacion(input, policy) {
+    const pol = { ...this.POLICY_DEFAULT, ...(policy || {}) };
+    const total = Number(input?.total || 0);
+    const desc = Number(input?.descuentoPct || 0);
+    const motivos = [];
+    if (pol.descuentoMaxPct != null && desc > Number(pol.descuentoMaxPct)) {
+      motivos.push(`Descuento ${desc}% supera el máximo para envío directo (${pol.descuentoMaxPct}%).`);
+    }
+    if (pol.totalMax != null && total > Number(pol.totalMax)) {
+      motivos.push(`El total ${FMT.money(total)} supera el máximo para envío directo (${FMT.money(Number(pol.totalMax))}).`);
+    }
+    return { requiere: motivos.length > 0, motivos };
+  },
 };

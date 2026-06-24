@@ -10,6 +10,7 @@
   let userUid = null;
   let userRol = null;
   let soloMias = false;     // toggle "Solo mis cotizaciones" (admins; forzado para vendedores)
+  let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
 
   const $ = (id) => document.getElementById(id);
 
@@ -139,6 +140,22 @@
     return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
   }
 
+  // Botón de fila para un borrador, según rol + política de envío (espejo del
+  // header de detalle-cotizacion): aprobar (aprobador) · enviar directo (vendedor
+  // dentro de política) · solicitar aprobación (vendedor fuera de política).
+  function botonBorrador(c) {
+    if ((c.estado || 'borrador') !== 'borrador') return '';
+    if (puedeAprobarCotizacion(userRol, c)) {
+      return `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar y enviar" data-action="aprobar"><i data-lucide="check-circle"></i></button>`;
+    }
+    if (!canRole(userRol, 'enviar-cotizacion')) return '';
+    const pol = window.CotizacionTotales.requiereAprobacion(
+      { total: Number(c.total || 0), descuentoPct: Number(c.descuentoPct || 0) }, policyCfg);
+    return pol.requiere
+      ? `<button class="btn btn-ghost btn-icon btn-sm" title="Solicitar aprobación" data-action="solicitar"><i data-lucide="shield-check"></i></button>`
+      : `<button class="btn btn-ghost btn-icon btn-sm" title="Enviar al cliente" data-action="enviar-directo"><i data-lucide="send"></i></button>`;
+  }
+
   function renderTabla(lista) {
     const tbody = $('tablaCotizaciones');
     if (!tbody) return;
@@ -158,7 +175,7 @@
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
             <span class="cc-row-actions">
-              ${(canRole(userRol, 'aprobar-cotizacion') && (c.estado || 'borrador') === 'borrador') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar y enviar" data-action="aprobar"><i data-lucide="check-circle"></i></button>` : ''}
+              ${botonBorrador(c)}
               ${(c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
               ${CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
@@ -223,8 +240,30 @@
     if (action === 'duplicar') { return await duplicar(cot); }
     if (action === 'eliminar') { return await eliminar(cot); }
     if (action === 'enviar')   { return await enviar(cot); }
+    if (action === 'enviar-directo') { return await enviar(cot); } // envío directo del vendedor (borrador→enviada)
+    if (action === 'solicitar') { return await solicitarAprobacion(cot); }
     if (action === 'aprobar')  { return openAprobacion(cot.id); }
     if (action === 'cerrar')   { return await cerrarDesdeLista(cot); }
+  }
+
+  // Notifica al aprobador que un borrador fuera de política espera revisión.
+  async function solicitarAprobacion(cot) {
+    const pol = window.CotizacionTotales.requiereAprobacion(
+      { total: Number(cot.total || 0), descuentoPct: Number(cot.descuentoPct || 0) }, policyCfg);
+    const ok = await Modal.confirm({
+      title: 'Solicitar aprobación',
+      message: 'Esta cotización supera los límites para envío directo:\n\n• ' +
+        pol.motivos.join('\n• ') +
+        '\n\nSe notificará a un aprobador para que la revise y la envíe al cliente.',
+    });
+    if (!ok) return;
+    try {
+      const doc = await CotizacionesService.getCotizacion(cot.id);
+      await CotState.enqueueAprobacionMail({ doc, docId: cot.id, user: firebase.auth().currentUser });
+      Toast.show('Solicitud de aprobación enviada.', 'ok');
+    } catch (e) {
+      Toast.show('No se pudo enviar la solicitud: ' + (e?.message || e), 'bad');
+    }
   }
 
   async function cerrarDesdeLista(cot) {
@@ -357,14 +396,21 @@
     return url;
   }
 
-  // ── Aprobación overlay (admin + jefe de taller) ───────────────
+  // ── Aprobación overlay (servicio → jefe mantenimiento; comercial → gerente) ──
   const T = window.CotizacionTotales;
   let _aprobId = null;
 
   async function openAprobacion(docId) {
-    if (!canRole(userRol, 'aprobar-cotizacion')) { Toast.show('No tienes permiso para aprobar cotizaciones.', 'warn'); return; }
     const doc = await CotizacionesService.getCotizacion(docId);
     if (!doc) { Toast.show('Cotización no encontrada', 'bad'); return; }
+    // Permiso según TIPO: una cotización de servicio la aprueba el jefe de
+    // mantenimiento; una comercial, el gerente (ambas también el admin).
+    if (!puedeAprobarCotizacion(userRol, doc)) {
+      Toast.show(esCotizacionServicio(doc)
+        ? 'Las cotizaciones de servicio las aprueba el jefe de mantenimiento o un administrador.'
+        : 'Las cotizaciones comerciales las aprueba un gerente o un administrador.', 'warn');
+      return;
+    }
     _aprobId = docId;
     const ui = CotState.toUi(doc);
     const tot = T.calcTotales(ui);
@@ -564,7 +610,7 @@
     userUid = user.uid;
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
-      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
+      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.GERENTE];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
       // Vendedor: forzar "solo mías" y ocultar el toggle. Admin: mostrarlo.
@@ -576,21 +622,22 @@
         soloMias = false;
       }
 
+      try { policyCfg = window.CotizacionTotales.policyFromConfig(await EmpresaService.getConfig()); }
+      catch (e) { policyCfg = window.CotizacionTotales.POLICY_DEFAULT; }
+
       bindEvents();
       await cargarCotizaciones(true);
 
-      // Manejo de ?aprobar=<docId> (CTA desde correo de solicitud)
+      // Manejo de ?aprobar=<docId> (CTA desde correo de solicitud). El permiso se
+      // valida dentro de openAprobacion según el tipo de cotización (servicio vs
+      // comercial), ya que requiere leer el doc primero.
       const params = new URLSearchParams(location.search);
       const aprobarId = params.get('aprobar');
       if (aprobarId) {
-        if (canRole(rol, 'aprobar-cotizacion')) {
-          openAprobacion(aprobarId);
-          const url = new URL(window.location);
-          url.searchParams.delete('aprobar');
-          window.history.replaceState({}, document.title, url.toString());
-        } else {
-          Toast.show('No tienes permiso para aprobar cotizaciones.', 'warn');
-        }
+        openAprobacion(aprobarId);
+        const url = new URL(window.location);
+        url.searchParams.delete('aprobar');
+        window.history.replaceState({}, document.title, url.toString());
       }
     });
   });
