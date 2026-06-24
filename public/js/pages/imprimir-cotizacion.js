@@ -156,9 +156,43 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // Aviso de "vista previa, sin guardar": oculta el botón Editar (no hay id que
+  // editar todavía) y muestra un banner en la barra de impresión.
+  function marcarVistaPrevia() {
+    const btnEd = $('btnEditarPt');
+    if (btnEd) btnEd.style.display = 'none';
+    const title = $('ptTitle');
+    if (title) title.textContent = 'Vista previa (sin guardar)';
+    const toolbar = document.querySelector('.cc-print-toolbar');
+    if (toolbar && !$('cqPreviewNote')) {
+      const note = document.createElement('div');
+      note.id = 'cqPreviewNote';
+      note.style.cssText = 'flex-basis:100%; order:99; margin-top:8px; padding:8px 12px; border-radius:6px; background:#FFF7E6; color:#8A5A00; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;';
+      note.innerHTML = '<i data-lucide="eye"></i> Vista previa — esta cotización aún no se ha guardado.';
+      toolbar.appendChild(note);
+    }
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) { location.href = '../login.html'; return; }
     const params = new URLSearchParams(location.search);
+
+    // Modo vista previa: renderiza desde el borrador en sessionStorage, sin tocar
+    // Firestore. Lo usa el editor para previsualizar/imprimir sin guardar.
+    if (params.get('preview') === '1') {
+      let cot = null;
+      try { cot = JSON.parse(sessionStorage.getItem('cotPreviewDraft') || 'null'); }
+      catch (e) { cot = null; }
+      if (!cot) { $('cqPage').innerHTML = '<p style="padding:48px;">No hay datos de vista previa. Vuelve al editor e intenta de nuevo.</p>'; return; }
+      const catalogos = await CotState.bootstrapCatalogos();
+      const cli = catalogos.clientesById[cot.clienteId] || { razon: '—', ruc: '—', email: cot.dirigido_email || '', tel: '', representante: cot.dirigido_a || '' };
+      const ej = catalogos.ejecutivos.find(e => e.id === cot.ejecutivoId) || { nombre: '—', rol: '', email: '', tel: '' };
+      render(cot, cli, ej, catalogos.emisor, cot);
+      marcarVistaPrevia();
+      return;
+    }
+
     const docId = params.get('id');
     if (!docId) { $('cqPage').innerHTML = '<p style="padding:48px;">Falta id.</p>'; return; }
 

@@ -504,14 +504,19 @@
     }
   }
 
-  async function preview() {
+  // Vista previa: NUNCA persiste. Serializa el borrador tal como está en pantalla
+  // y lo abre en la página de impresión en modo preview (mismo layout que el
+  // documento final). El guardado solo ocurre con el botón "Guardar".
+  function preview() {
     if (!validar()) return;
-    if (document.body.dataset.modo === 'editar' && draft._docId) {
-      window.open('imprimir-cotizacion.html?id=' + encodeURIComponent(draft._docId), '_blank');
+    try {
+      sessionStorage.setItem('cotPreviewDraft', JSON.stringify(draft));
+    } catch (e) {
+      console.warn('No se pudo preparar la vista previa:', e);
+      Toast.show('No se pudo abrir la vista previa.', 'bad');
       return;
     }
-    // En modo nueva, guardamos primero como borrador para tener id.
-    await guardar();
+    window.open('imprimir-cotizacion.html?preview=1', '_blank');
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────
