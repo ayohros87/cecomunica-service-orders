@@ -59,6 +59,53 @@ const UsuariosService = {
     }));
     return { total, mensual, semanal };
   },
+
+  // One-shot read of every technician's historical total. The root doc of
+  // each tecnico_stats/{key} carries `total`; reading the whole collection in
+  // a single query (it only holds the root docs, not the subcollections)
+  // avoids the per-technician fan-out the ranking used to do. Returns a Map
+  // keyed by doc id (uid OR legacy nombre) -> total.
+  async getAllTecnicoStats() {
+    const db = firebase.firestore();
+    const snap = await db.collection('tecnico_stats').get();
+    const map = new Map();
+    snap.forEach(d => map.set(d.id, d.data().total || 0));
+    return map;
+  },
+
+  // Rolling-window completion counts for ALL technicians in one shot.
+  // Each completion is recorded by the onComplete trigger as a doc in
+  // tecnico_stats/{key}/eventos with a `fecha` Timestamp. A single
+  // collection-group query over `eventos` (filtered by `fecha >= since`)
+  // replaces the old per-technician fan-out: O(1) round-trips instead of
+  // O(N). We bucket the results client-side by the parent stat-doc id
+  // (uid OR legacy nombre) so the caller can merge both keys per technician.
+  // Comparing absolute instants keeps it immune to the UTC-server /
+  // local-client timezone skew that the calendar buckets (semanal/mensual)
+  // suffer from.
+  // Requires a COLLECTION_GROUP single-field index on eventos.fecha
+  // (see firestore.indexes.json fieldOverrides).
+  // Returns Map<parentKey, { count, ultima }>.
+  async getEventosCountSince(sinceDate) {
+    const db = firebase.firestore();
+    const since = firebase.firestore.Timestamp.fromDate(sinceDate);
+    const snap = await db.collectionGroup('eventos')
+      .where('fecha', '>=', since)
+      .get();
+    const map = new Map();
+    snap.forEach(d => {
+      const parent = d.ref.parent.parent; // tecnico_stats/{key}
+      const key = parent && parent.id;
+      if (!key) return;
+      const f  = d.data().fecha;
+      const dt = (f && f.toDate) ? f.toDate() : null;
+      let e = map.get(key);
+      if (!e) { e = { count: 0, ultima: null }; map.set(key, e); }
+      e.count += 1;
+      if (dt && (!e.ultima || dt > e.ultima)) e.ultima = dt;
+    });
+    return map;
+  },
 };
 
 window.UsuariosService = UsuariosService;

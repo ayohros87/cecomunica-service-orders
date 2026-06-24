@@ -2,7 +2,7 @@
     let currentUser = null;
     let currentRole = null;
     let cacheUsuarios = []; // {uid, nombre, email, rol}
-    let cacheProgreso = {}; // uid -> {semanal, mensual, total, mes, semana}
+    let cacheProgreso = {}; // uid -> {total, count, ultima}
 
 // 🔒 Restringir funciones interactivas si el usuario es técnico
 function aplicarModoSoloLectura() {
@@ -29,7 +29,12 @@ function aplicarModoSoloLectura() {
     note.style.borderRadius = "8px";
     note.style.margin = "12px 0";
     note.style.fontSize = "14px";
-    document.body.insertBefore(note, document.querySelector(".banner").nextSibling);
+    const anchor = document.querySelector(".alert-banner");
+    if (anchor && anchor.parentNode) {
+      anchor.parentNode.insertBefore(note, anchor.nextSibling);
+    } else {
+      document.body.insertBefore(note, document.body.firstChild);
+    }
   }
 }
 
@@ -39,9 +44,31 @@ function aplicarModoSoloLectura() {
       document.getElementById('stamp').textContent = 'Actualizado: ' + f;
     }
 
+    // Mapeo periodo -> días de ventana móvil. `total` => null (histórico).
+    const PERIODO_LABEL = {
+      '7':'Últimos 7 días', '30':'Últimos 30 días',
+      '90':'Últimos 90 días', 'total':'Total histórico'
+    };
+    function periodoDias(p){
+      return p === '7' ? 7 : p === '30' ? 30 : p === '90' ? 90 : null;
+    }
+
     function setPeriodoChip(value){
-      const map = { semanal:'Semanal', mensual:'Mensual', total:'Total histórico' };
-      document.getElementById('chipPeriodo').textContent = 'Periodo: ' + (map[value] || 'Mensual');
+      document.getElementById('chipPeriodo').textContent =
+        'Periodo: ' + (PERIODO_LABEL[value] || PERIODO_LABEL['7']);
+    }
+
+    // Muestra un mensaje de estado (cargando / error / vacío) ocupando la tabla.
+    function setTablaMensaje(html){
+      const tbody = document.getElementById('tbodyRanking');
+      if (tbody) tbody.innerHTML =
+        `<tr><td colspan="5" style="padding:24px; color:var(--fg-3);">${html}</td></tr>`;
+    }
+
+    function fmtUltima(d){
+      if (!d) return '—';
+      try { return d.toLocaleDateString('es-MX', { day:'2-digit', month:'short' }); }
+      catch (_) { return '—'; }
     }
 
     function canViewAll(role){
@@ -56,57 +83,60 @@ function aplicarModoSoloLectura() {
       return '';
     }
 
-    function estadoVisual(p){
-      // Pequeño “estado” a modo de ejemplo: si semanal>0 => en progreso
-      if ((p?.semanal || 0) > 0) return '<span class="pill-warn">En progreso</span>';
-      return '<span class="pill-ok">—</span>';
-    }
-
     async function cargarUsuariosTecnicos(){
       const users = await UsuariosService.getUsuariosByRol([ROLES.TECNICO, ROLES.TECNICO_OPERATIVO]);
 
-      cacheUsuarios = users.map(u => ({
-        uid: u.id,
-        nombre: u.nombre || '',
-        email : u.email || '',
-        rol   : u.rol
-      }));
+      cacheUsuarios = users
+        // Excluir técnicos desactivados del ranking. Convención del proyecto:
+        // un usuario está activo cuando `activo !== false` (true o ausente).
+        .filter(u => u.activo !== false)
+        .map(u => ({
+          uid: u.id,
+          nombre: u.nombre || '',
+          email : u.email || '',
+          rol   : u.rol
+        }));
     }
 
-async function cargarProgresos() {
-  // Lee total + ambas subcolecciones (mensual y semanal) del periodo actual.
-  // Resuelve cada técnico por UID y por nombre, porque los docs de stats están
-  // mezclados: unos con clave UID (órdenes viejas) y otros con clave nombre
-  // (órdenes nuevas, que guardan tecnico_asignado = nombre).
+// Carga el conteo por ventana móvil (días) + el total histórico de cada técnico.
+// Resuelve cada técnico por UID y por nombre, porque los docs de stats están
+// mezclados: unos con clave UID (órdenes nuevas, con tecnico_uid) y otros con
+// clave nombre (órdenes viejas sin UID). El trigger registra cada orden bajo una
+// sola clave, así que sumar ambas no duplica.
+async function cargarProgresos(dias) {
   cacheProgreso = {};
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth()+1).padStart(2,'0');
-  const yyyyMM = `${year}-${month}`;
-  const isoWeek = getISOWeekKey(now);
+  const since = (dias != null) ? new Date(Date.now() - dias * 86400000) : null;
 
-  await Promise.all(cacheUsuarios.map(async u => {
-    const stats = await UsuariosService.getTecnicoStats(
-      [u.uid, u.nombre],
-      { mes: yyyyMM, semana: isoWeek }
-    );
-    cacheProgreso[u.uid] = stats;
-  }));
+  // Dos lecturas en total, sin importar el número de técnicos:
+  //  - totales históricos: una lectura de toda la colección raíz.
+  //  - ventana móvil: una collection-group query sobre `eventos`.
+  // Ambos mapas vienen claveados por id de doc (uid O nombre legacy).
+  const [totals, winMap] = await Promise.all([
+    UsuariosService.getAllTecnicoStats(),
+    since ? UsuariosService.getEventosCountSince(since) : Promise.resolve(new Map()),
+  ]);
+
+  cacheUsuarios.forEach(u => {
+    // Suma bajo ambas claves (uid + nombre legacy); el trigger registra cada
+    // orden bajo una sola, así que no se duplica.
+    const keys = [u.uid, u.nombre].filter(Boolean);
+    const total = keys.reduce((s, k) => s + (totals.get(k) || 0), 0);
+    let count = 0, ultima = null;
+    keys.forEach(k => {
+      const w = winMap.get(k);
+      if (!w) return;
+      count += w.count;
+      if (w.ultima && (!ultima || w.ultima > ultima)) ultima = w.ultima;
+    });
+    cacheProgreso[u.uid] = { total, count, ultima };
+  });
 }
 
-function getISOWeekKey(d) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
-  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
-  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
-}
-
-
-    function renderTabla(periodo='mensual', filtro=''){
+    function renderTabla(periodo='7', filtro=''){
       const tbody = document.getElementById('tbodyRanking');
       tbody.innerHTML = '';
+
+      const esTotal = periodo === 'total';
 
       // filtro simple por nombre/correo
       const needle = filtro.trim().toLowerCase();
@@ -118,57 +148,67 @@ function getISOWeekKey(d) {
           return txt.includes(needle);
         })
         .map(u => {
-          const p = cacheProgreso[u.uid] || {semanal:0, mensual:0, total:0};
+          const p = cacheProgreso[u.uid] || { total:0, count:0, ultima:null };
           return {
             uid: u.uid,
             nombre: u.nombre || u.email || u.uid,
             email: u.email,
-            semanal: p.semanal || 0,
-            mensual: p.mensual || 0,
+            // métrica del ranking: en histórico = total; si no = conteo de la ventana
+            metric: esTotal ? (p.total || 0) : (p.count || 0),
             total: p.total || 0,
-            estado: estadoVisual(p)
+            ultima: p.ultima || null,
           };
         });
 
-      // ordenar por periodo
-      rows.sort((a,b) => {
-        if (periodo === 'semanal') return b.semanal - a.semanal;
-        if (periodo === 'total')   return b.total - a.total;
-        return b.mensual - a.mensual; // default: mensual
-      });
+      // ordenar por la métrica del periodo (desc); desempate por total
+      rows.sort((a,b) => (b.metric - a.metric) || (b.total - a.total));
+
+      const hayDatos = rows.some(r => r.metric > 0);
+      if (!hayDatos) {
+        tbody.innerHTML = `
+          <tr><td colspan="5" style="padding:24px; color:var(--fg-3);">
+            Sin órdenes completadas en ${PERIODO_LABEL[periodo] || 'este periodo'}.
+          </td></tr>`;
+        return;
+      }
 
       rows.forEach((r, idx) => {
         const m = medalla(idx);
-        const isTop3 = idx < 3;
+        const isTop3 = idx < 3 && r.metric > 0;
         const tr = document.createElement('tr');
         if (isTop3) tr.style.boxShadow = 'inset 2px 0 0 #22c55e';
 
         tr.innerHTML = `
         <td class="nowrap"><span class="rank-medal">${m}</span> ${idx + 1}</td>
         <td class="nowrap">${r.nombre}<br><span class="subtle">${r.email || ''}</span></td>
-        <td class="nowrap">${r.semanal}</td>
-        <td class="nowrap">${r.mensual}</td>
+        <td class="nowrap"><strong>${r.metric}</strong></td>
+        <td class="nowrap">${esTotal ? '—' : fmtUltima(r.ultima)}</td>
         <td class="nowrap">${r.total}</td>
-        <td>${r.estado}</td>
         `;
         tbody.appendChild(tr);
       });
     }
 
-    async function cargarPantalla(periodo='mensual', filtro=''){
+    async function cargarPantalla(periodo='7', filtro=''){
       // Permisos: si no es admin/recepcion, igual cargamos ranking pero mostramos mi bloque propio
+      setTablaMensaje('Cargando…');
       await cargarUsuariosTecnicos();
-      await cargarProgresos();
+      await cargarProgresos(periodoDias(periodo));
       renderTabla(periodo, filtro);
       setPeriodoChip(periodo);
       formatStamp();
 
+      // Actualiza el encabezado de la columna métrica según el periodo
+      const thMetric = document.getElementById('thMetric');
+      if (thMetric) thMetric.textContent = (periodo === 'total') ? 'Total' : 'Órdenes (periodo)';
+
       // Mis estadísticas (si soy técnico)
       if (currentRole === ROLES.TECNICO || currentRole === ROLES.TECNICO_OPERATIVO) {
-        const mine = cacheProgreso[currentUser.uid] || {semanal:0,mensual:0,total:0};
+        const mine = cacheProgreso[currentUser.uid] || { total:0, count:0 };
         document.getElementById('misStatsWrap').style.display = 'flex';
-        document.getElementById('miSemanal').textContent = mine.semanal || 0;
-        document.getElementById('miMensual').textContent = mine.mensual || 0;
+        document.getElementById('miPeriodoLabel').textContent =
+          'Mis órdenes · ' + (PERIODO_LABEL[periodo] || '');
+        document.getElementById('miPeriodo').textContent = mine.count || 0;
         document.getElementById('miTotal').textContent = mine.total || 0;
       } else {
         document.getElementById('misStatsWrap').style.display = 'none';
@@ -186,30 +226,47 @@ function getISOWeekKey(d) {
       currentRole = uDoc ? (uDoc.rol || '') : '';
 
       // Todos pueden ver (técnico ve sus propios números + ranking general sin datos sensibles)
-      await cargarPantalla('mensual','');
+      try {
+        await cargarPantalla('7','');
+      } catch (e) {
+        console.error('[progreso-tecnicos] carga falló', e);
+        setTablaMensaje('No se pudo cargar el ranking: ' +
+          (e?.message || e?.code || e) + '. Revisa la consola para más detalle.');
+      }
       aplicarModoSoloLectura();
     });
 
+    // Ejecuta una carga protegiendo la UI de fallos silenciosos.
+    async function cargarSeguro(periodo, filtro){
+      try {
+        await cargarPantalla(periodo, filtro);
+      } catch (e) {
+        console.error('[progreso-tecnicos] carga falló', e);
+        setTablaMensaje('No se pudo cargar el ranking: ' +
+          (e?.message || e?.code || e) + '. Revisa la consola para más detalle.');
+      }
+    }
+
     // UI handlers
-    document.getElementById('btnRefrescar').addEventListener('click', async () => {
-      const periodo = document.getElementById('selPeriodo').value || 'mensual';
+    document.getElementById('btnRefrescar').addEventListener('click', () => {
+      const periodo = document.getElementById('selPeriodo').value || '7';
       const filtro  = document.getElementById('buscarNombre').value || '';
-      await cargarPantalla(periodo, filtro);
+      cargarSeguro(periodo, filtro);
     });
 
-    document.getElementById('selPeriodo').addEventListener('change', async (e) => {
+    document.getElementById('selPeriodo').addEventListener('change', (e) => {
       const filtro = document.getElementById('buscarNombre').value || '';
-      await cargarPantalla(e.target.value, filtro);
+      cargarSeguro(e.target.value, filtro);
     });
 
     document.getElementById('btnBuscar').addEventListener('click', async () => {
-      const periodo = document.getElementById('selPeriodo').value || 'mensual';
+      const periodo = document.getElementById('selPeriodo').value || '7';
       const filtro  = document.getElementById('buscarNombre').value || '';
       renderTabla(periodo, filtro);
     });
 
     document.getElementById('btnLimpiar').addEventListener('click', async () => {
       document.getElementById('buscarNombre').value = '';
-      const periodo = document.getElementById('selPeriodo').value || 'mensual';
+      const periodo = document.getElementById('selPeriodo').value || '7';
       renderTabla(periodo, '');
     });
