@@ -31,8 +31,9 @@ firebase.auth().onAuthStateChanged(async (user)=>{
 async function cargarConfig(){
   try{
     const d = await firebase.firestore().collection('empresa').doc('facturacion_config').get();
-    const on = !!(d.exists && d.data().auto_activar);
-    const el = document.getElementById('autoActivar'); if(el) el.checked = on;
+    const data = d.exists ? d.data() : {};
+    const a = document.getElementById('autoActivar'); if(a) a.checked = !!data.auto_activar;
+    const al = document.getElementById('alertasCorreo'); if(al) al.checked = !data.alertas_off; // on por default
   }catch(e){ console.warn('config', e); }
 }
 async function toggleAuto(on){
@@ -42,7 +43,15 @@ async function toggleAuto(on){
     Toast.show(on?'Auto-activación activada (corre 7:00 AM)':'Auto-activación desactivada','ok');
   }catch(e){ console.error(e); Toast.show('No se pudo guardar la config','bad'); }
 }
+async function toggleAlertas(on){
+  try{
+    await firebase.firestore().collection('empresa').doc('facturacion_config')
+      .set({ alertas_off: !on, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+    Toast.show(on?'Alertas por correo activadas':'Alertas por correo apagadas','ok');
+  }catch(e){ console.error(e); Toast.show('No se pudo guardar la config','bad'); }
+}
 window.toggleAuto = toggleAuto;
+window.toggleAlertas = toggleAlertas;
 
 async function cargar(){
   const [cs, ms] = await Promise.all([

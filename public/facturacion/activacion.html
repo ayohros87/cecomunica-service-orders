@@ -62,9 +62,14 @@
         <button type="button" class="seg-btn" data-v="en_espera" onclick="setVista('en_espera')">En espera <span id="cnt-en_espera">0</span></button>
         <button type="button" class="seg-btn" data-v="no_facturables" onclick="setVista('no_facturables')">No facturables <span id="cnt-no_facturables">0</span></button>
       </div>
-      <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg-2); cursor:pointer; white-space:nowrap;" title="Si está activo, la corrida diaria (7:00 AM) activa solo los contratos Listos.">
-        <input type="checkbox" id="autoActivar" onchange="toggleAuto(this.checked)"> Auto-activar contratos listos
-      </label>
+      <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg-2); cursor:pointer; white-space:nowrap;" title="Apaga los correos de alerta (fuga / falso arranque) hasta que estén facturando.">
+          <input type="checkbox" id="alertasCorreo" onchange="toggleAlertas(this.checked)"> Alertas por correo
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg-2); cursor:pointer; white-space:nowrap;" title="Si está activo, la corrida diaria (7:00 AM) activa solo los contratos Listos.">
+          <input type="checkbox" id="autoActivar" onchange="toggleAuto(this.checked)"> Auto-activar contratos listos
+        </label>
+      </div>
     </div>
     <div id="lista" style="padding:var(--sp-4);"><p style="color:var(--fg-3);">Cargando…</p></div>
   </div>

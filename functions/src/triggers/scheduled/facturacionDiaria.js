@@ -38,11 +38,13 @@ module.exports = onSchedule(
     secrets: ["SMTP_HOST", "SMTP_PORT", "SMTP_SECURE", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"],
   },
   async () => {
-    // Config (auto-activación)
-    let autoActivar = false;
+    // Config (auto-activación + alertas por correo)
+    let autoActivar = false, alertasOff = false;
     try {
       const cfg = await db.collection("empresa").doc("facturacion_config").get();
-      autoActivar = !!(cfg.exists && cfg.data().auto_activar);
+      const d = cfg.exists ? cfg.data() : {};
+      autoActivar = !!d.auto_activar;
+      alertasOff = !!d.alertas_off;
     } catch (e) { logger.warn("[facturacionDiaria] sin config", { message: e.message }); }
 
     // Catálogo de modelos
@@ -102,6 +104,12 @@ module.exports = onSchedule(
     logger.info("[facturacionDiaria]", { contratos: contratos.length, autoActivar, autoActivados, fuga: fuga.length, falso: falso.length });
 
     if (!fuga.length && !falso.length) return null;
+
+    // Alertas apagadas desde el módulo (mientras no se factura) → no se envía el digest.
+    if (alertasOff) {
+      logger.info("[facturacionDiaria] alertas apagadas, no se envía digest", { fuga: fuga.length, falso: falso.length });
+      return null;
+    }
 
     // Destinatarios: admin + contabilidad
     const emails = [];
