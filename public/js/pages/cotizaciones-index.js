@@ -372,7 +372,9 @@
     const ui = CotState.toUi(doc);
     const cat = await CotState.bootstrapCatalogos();
     const cli = cat.clientesById[ui.clienteId] || {};
-    const ej  = cat.ejecutivos.find(e => e.id === ui.ejecutivoId) || {};
+    // Fallback al nombre guardado en el doc: el firmante puede ser un supervisor
+    // de taller (jefe_taller), que no está en el catálogo de ejecutivos (vendedores).
+    const ej  = cat.ejecutivos.find(e => e.id === ui.ejecutivoId) || { nombre: doc.ejecutivo_nombre || '', rol: '', email: '', tel: '' };
     const t   = window.CotizacionTotales.calcTotales(ui);
     const snapshot = {
       id: ui.id, estado: ui.estado, fecha: ui.fecha, validezDias: ui.validezDias,

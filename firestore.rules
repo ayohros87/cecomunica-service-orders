@@ -103,18 +103,32 @@ service cloud.firestore {
       function cotEsServicio() {
         return resource.data.get("origen", "comercial") == "orden";
       }
+      // Técnicos de taller: PREPARAN cotizaciones de servicio (origen=orden) en
+      // borrador desde una orden. No crean comerciales ni envían/aprueban: el
+      // envío al cliente y la aprobación quedan para el supervisor (jefe_taller).
+      function esTecnicoTaller() {
+        return isSignedIn() && userRole() in ["tecnico", "tecnico_operativo"];
+      }
+      function entranteEsServicio() {
+        return request.resource.data.get("origen", "comercial") == "orden";
+      }
 
       allow get:  if verTodasCot() || esDueno();
-      allow list: if puedeCotizar();   // ← variante aislada: isAdmin() || (isVentas() && resource.data.creado_por_uid == request.auth.uid)
+      // `list` lo usa la generación del correlativo (nextCotizacionId); se concede
+      // también a técnicos de taller para que el id no colisione al preparar.
+      allow list: if puedeCotizar() || esTecnicoTaller();
 
-      allow create: if puedeCotizar()
+      allow create: if (puedeCotizar() || (esTecnicoTaller() && entranteEsServicio()))
                      && request.resource.data.creado_por_uid == request.auth.uid
                      && (request.resource.data.estado == "borrador" || isAdmin());
 
       // Envío del dueño (estado→enviada) no es aprobacionTocada → vendedor envía lo
       // suyo. La APROBACIÓN se separa por tipo: servicio la aprueba el jefe de
       // mantenimiento (jefe_taller); comercial, el gerente; admin cualquiera.
+      // Un técnico de taller solo puede mantener SU borrador (editarlo): no puede
+      // moverlo a 'enviada' ni 'aprobada' — eso lo hace el supervisor.
       allow update: if (verTodasCot() || esDueno())
+                     && (!esTecnicoTaller() || request.resource.data.estado == "borrador")
                      && (isAdmin()
                          || !aprobacionTocada()
                          || (userRole() == "jefe_taller" && cotEsServicio())
@@ -219,6 +233,18 @@ service cloud.firestore {
     match /tecnico_stats/{docId} {
       allow read, write: if isSignedIn();
       match /{sub=**} { allow read, write: if isSignedIn(); }   // mensual, semanal
+    }
+
+    // Collection-group query sobre `eventos` (ranking de progreso-tecnicos:
+    // UsuariosService.getEventosCountSince → db.collectionGroup('eventos')).
+    // OJO: la regla de subcolección con wildcard recursivo de arriba NO autoriza
+    // collection-group queries — Firestore exige una regla dedicada con el id de
+    // colección como segmento literal precedido por {path=**}. Sin esto la query
+    // falla con "Missing or insufficient permissions". El único `eventos` del
+    // proyecto vive en tecnico_stats/{key}/eventos (lo escribe el trigger
+    // onComplete vía admin SDK), así que basta read para autenticados.
+    match /{path=**}/eventos/{eventoId} {
+      allow read: if isSignedIn();
     }
 
     // Solicitudes de reseteo desde login.html. Hoy se intentan SIN sesión y

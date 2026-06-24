@@ -474,16 +474,25 @@
     const itemsHtml = (doc.items || []).map(it =>
       `<li>${esc(it.nombre || '')} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
     ).join('');
-    // Destinatarios de la solicitud de aprobación: configurables por admin
-    // (empresa/config.cotizacion_aprobacion_to). Si no hay ninguno, cae al
-    // buzón histórico de ventas para no perder la notificación. Convención del
-    // repo (ver onCancelacionWrite): to = primero, cc = el resto + creador.
+    // Destinatarios de la solicitud de aprobación, por TIPO de cotización:
+    //   · servicio (origen=orden, sale de una orden de taller) → supervisor de
+    //     taller (jefe_taller), que es quien la aprueba.
+    //   · comercial → lista configurable por admin (empresa/config
+    //     .cotizacion_aprobacion_to); si está vacía, buzón histórico de ventas.
+    // Convención del repo (ver onCancelacionWrite): to = primero, cc = el resto + creador.
     let aprobacionList = ['ventas@cecomunica.com'];
+    const esServicio = (doc.origen || '') === 'orden';
     try {
-      const cfg = await EmpresaService.getConfig();
-      const list = Array.isArray(cfg.cotizacion_aprobacion_to) ? cfg.cotizacion_aprobacion_to.filter(Boolean) : [];
-      if (list.length) aprobacionList = list;
-    } catch (e) { console.warn('No se pudo leer destinatarios de aprobación, usando ventas@:', e); }
+      if (esServicio) {
+        const jefes = await UsuariosService.getUsuariosByRol(['jefe_taller']);
+        const emails = (jefes || []).map(j => j.email).filter(Boolean);
+        if (emails.length) aprobacionList = emails;
+      } else {
+        const cfg = await EmpresaService.getConfig();
+        const list = Array.isArray(cfg.cotizacion_aprobacion_to) ? cfg.cotizacion_aprobacion_to.filter(Boolean) : [];
+        if (list.length) aprobacionList = list;
+      }
+    } catch (e) { console.warn('No se pudieron resolver destinatarios de aprobación, usando ventas@:', e); }
     const aprobacionTo = aprobacionList[0];
     const aprobacionCc = [...aprobacionList.slice(1), user?.email].filter(Boolean).join(',') || null;
     await MailService.enqueue({

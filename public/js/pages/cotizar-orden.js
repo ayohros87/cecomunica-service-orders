@@ -691,14 +691,29 @@
     catalogos = await CotState.bootstrapCatalogos();
     piezas = (await PiezasService.getPiezas()).filter(p => p.activo !== false);
 
+    // El firmante de una cotización de SERVICIO es el supervisor de taller
+    // (jefe_taller), no un vendedor. Lo sumamos al catálogo de ejecutivos para
+    // que salga en el selector y su nombre se resuelva en la impresión.
+    let supervisores = [];
+    try {
+      const jefes = await UsuariosService.getUsuariosByRol([ROLES.JEFE_TALLER]);
+      supervisores = (jefes || []).map(CotState.mapVendedorToEjec);
+      const yaIds = new Set(catalogos.ejecutivos.map(e => e.id));
+      supervisores.forEach(s => { if (s.id && !yaIds.has(s.id)) catalogos.ejecutivos.push(s); });
+      catalogos.ejecutivos.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es', { sensitivity: 'base' }));
+    } catch (e) { console.warn('No se pudieron cargar supervisores de taller:', e); }
+
     // Cliente por defecto: el vinculado a la orden (si existe en el catálogo).
     if (orden.cliente_id && catalogos.clientesById[orden.cliente_id]) {
       form.clienteId = orden.cliente_id;
       const cli = catalogos.clientesById[form.clienteId];
       if (cli) form.itbmsPct = cli.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
     }
-    // Ejecutivo por defecto: el usuario actual si es vendedor, si no el primero.
-    form.ejecutivoId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id || catalogos.ejecutivos[0]?.id || '';
+    // Firmante por defecto: el usuario actual si es ejecutivo/supervisor; si no
+    // (p.ej. un técnico) el supervisor de taller. Nunca un vendedor arbitrario.
+    form.ejecutivoId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id
+                    || supervisores[0]?.id
+                    || '';
 
     render();
   });
