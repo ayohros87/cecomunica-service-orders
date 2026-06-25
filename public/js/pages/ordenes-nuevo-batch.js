@@ -123,12 +123,17 @@ function renumber() {
   $("emptyBatch").style.display = filas.length ? "none" : "";
   $("tablaWrap").style.display = filas.length ? "" : "none";
   $("contadorBatch").textContent = filas.length ? `${filas.length} equipo(s)` : "";
+  if (!filas.length) mostrarOrigenEquipos("");
 }
 
 window.agregarFila = () => addRow({ focus: true });
 
-// Trae los seriales del cliente desde POC y crea una fila por equipo con su
-// serial Y el modelo reconocido automáticamente. Deduplica contra la tabla.
+// Trae los seriales del cliente desde POC. Un cliente puede tener cientos de
+// equipos acumulados de importaciones viejas, pero al crear una orden normalmente
+// solo interesan los del ÚLTIMO batch importado. Por eso, en vez de volcar TODO,
+// detecta los batches de importación (equipos creados en la misma sesión,
+// agrupados por cercanía de `created_at`) y deja elegir cuál jalar — el último
+// importado aparece primero. "Jalar todos" conserva el comportamiento anterior.
 window.jalarSerialesDesdePoc = async () => {
   if (typeof PocService === "undefined") { Toast.show("POC no está disponible.", "bad"); return; }
   if (!clienteId && !clienteNombre) { Toast.show("La orden no tiene un cliente asociado para buscar en POC.", "warn"); return; }
@@ -140,23 +145,21 @@ window.jalarSerialesDesdePoc = async () => {
     devices = (devices || []).filter(d => d.deleted !== true && String(d.serial || "").trim());
     if (!devices.length) { Toast.show("No hay equipos en POC para este cliente.", "warn"); return; }
 
-    const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
-    const yaPresentes = serialesActuales();
+    const batches = agruparDevicesPorBatch(devices);
 
-    let agregados = 0, reconocidos = 0, omitidos = 0;
-    devices.forEach(d => {
-      const serial = String(d.serial).trim();
-      if (yaPresentes.has(serial.toLowerCase())) { omitidos++; return; }
-      const modeloId = modeloPorNombre.get(normName(d.modelo_label || d.modelo || "")) || "";
-      if (modeloId) reconocidos++;
-      addRow({ serial, modeloId });
-      yaPresentes.add(serial.toLowerCase());
-      agregados++;
-    });
+    // Un solo batch: no hay nada que elegir, jala directo.
+    let seleccion, origen;
+    if (batches.length <= 1) {
+      seleccion = devices;
+      origen = origenDeBatch(batches[0]);
+    } else {
+      const elegido = await abrirSelectorBatchPoc(batches, devices.length);
+      if (elegido === null) return;                       // cancelado
+      if (elegido === "__todos__") { seleccion = devices; origen = "todos los batches"; }
+      else { seleccion = elegido.devices; origen = origenDeBatch(elegido); }
+    }
 
-    let msg = `${agregados} equipo(s) jalados desde POC · ${reconocidos} con modelo reconocido.`;
-    if (omitidos) msg += ` ${omitidos} ya estaban en la tabla.`;
-    Toast.show(agregados ? msg : "Los seriales de POC ya estaban en la tabla.", agregados ? "ok" : "warn");
+    volcarDevicesEnTabla(seleccion, origen);
   } catch (e) {
     console.error("Error consultando POC:", e);
     Toast.show("No se pudo consultar POC.", "bad");
@@ -164,6 +167,141 @@ window.jalarSerialesDesdePoc = async () => {
     if (btn) btn.disabled = false;
   }
 };
+
+// created_at (Firestore Timestamp | Date | epoch) → milisegundos. 0 si falta.
+function deviceMillis(d) {
+  const t = d?.created_at;
+  if (!t) return 0;
+  if (typeof t.toMillis === "function") return t.toMillis();
+  if (typeof t.seconds === "number") return t.seconds * 1000;
+  const n = new Date(t).getTime();
+  return Number.isNaN(n) ? 0 : n;
+}
+
+// Detecta los "batches" de importación de un cliente agrupando los equipos por
+// cercanía de `created_at`: los de una misma importación se crean en ráfaga
+// (segundos), mientras que entre dos importaciones distintas hay horas o días de
+// diferencia. Recorre los equipos del más nuevo al más viejo y abre un corte
+// nuevo cuando el salto entre dos consecutivos supera BATCH_GAP_MS. Devuelve los
+// batches del más reciente al más viejo, cada uno etiquetado con su fecha.
+const BATCH_GAP_MS = 2 * 60 * 60 * 1000; // 2 h
+function agruparDevicesPorBatch(devices) {
+  const ordenados = devices
+    .map(d => ({ d, ms: deviceMillis(d) }))
+    .sort((a, b) => b.ms - a.ms);
+
+  const batches = [];
+  let actual = null;
+  let prevMs = null;
+  for (const { d, ms } of ordenados) {
+    if (actual === null || (prevMs - ms) > BATCH_GAP_MS) {
+      actual = { devices: [], maxTs: d.created_at || null };
+      batches.push(actual);
+    }
+    actual.devices.push(d);
+    prevMs = ms;
+  }
+
+  batches.forEach(b => { b.nombre = b.maxTs ? FMT.date(b.maxTs) : "Sin fecha"; });
+  return batches;
+}
+
+// Descriptor legible del batch jalado (para la nota de origen). Vacío si no hay
+// fecha utilizable; en ese caso la nota solo dirá "POC".
+function origenDeBatch(batch) {
+  const fecha = batch?.nombre && batch.nombre !== "Sin fecha" ? batch.nombre : "";
+  return fecha ? `batch del ${fecha}` : "";
+}
+
+// Pinta (o esconde) la nota persistente de "de dónde se jalaron los equipos",
+// análoga a la anotación de origen en contratos-seriales.
+function mostrarOrigenEquipos(texto) {
+  const el = $("origenEquipos");
+  const txt = $("origenEquiposTexto");
+  if (!el || !txt) return;
+  if (texto) { txt.textContent = texto; el.style.display = ""; }
+  else { el.style.display = "none"; }
+}
+
+// Vuelca una lista de devices POC en la tabla: una fila por equipo con su
+// serial Y el modelo reconocido automáticamente. Deduplica contra la tabla.
+function volcarDevicesEnTabla(devices, origen = "") {
+  const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
+  const yaPresentes = serialesActuales();
+
+  let agregados = 0, reconocidos = 0, omitidos = 0;
+  (devices || []).forEach(d => {
+    const serial = String(d.serial || "").trim();
+    if (!serial) return;
+    if (yaPresentes.has(serial.toLowerCase())) { omitidos++; return; }
+    const modeloId = modeloPorNombre.get(normName(d.modelo_label || d.modelo || "")) || "";
+    if (modeloId) reconocidos++;
+    addRow({ serial, modeloId });
+    yaPresentes.add(serial.toLowerCase());
+    agregados++;
+  });
+
+  // Nota persistente = solo el ORIGEN (de dónde se jaló). El conteo va en el
+  // Toast: meterlo aquí choca con el contador del header tras un segundo jalado.
+  if (agregados) {
+    const partes = ["Jalado desde POC"];
+    if (origen) partes.push(origen);
+    mostrarOrigenEquipos(partes.join(" · "));
+  }
+
+  let msg = `${agregados} equipo(s) jalados desde POC · ${reconocidos} con modelo reconocido.`;
+  if (omitidos) msg += ` ${omitidos} ya estaban en la tabla.`;
+  Toast.show(agregados ? msg : "Esos seriales ya estaban en la tabla.", agregados ? "ok" : "warn");
+}
+
+// Modal para elegir el batch de importación a jalar. Resuelve con el batch
+// elegido, la cadena "__todos__", o null si se cancela. Construido a mano (no hay
+// picker de lista en Modal) siguiendo el patrón de Modal.confirm.
+function abrirSelectorBatchPoc(batches, total) {
+  return new Promise(resolve => {
+    const filas = batches.map((b, i) => `
+      <button type="button" class="lote-item" data-idx="${i}">
+        <span class="lote-nombre">${escHtml(b.nombre)}${i === 0 ? ' <span class="lote-badge">último</span>' : ''}</span>
+        <span class="lote-meta">${b.devices.length} equipo(s)</span>
+      </button>`).join("");
+
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    overlay.style.display = "flex";
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:520px">
+        <div class="sheet-header"><h3 class="sheet-title">Jalar equipos desde POC</h3></div>
+        <div class="sheet-body" style="padding:12px 8px">
+          <p style="margin:0 0 10px;font-size:14px;color:var(--fg-3)">Elige el batch de importación a jalar. El último importado aparece primero; solo se jalarán los equipos de ese batch.</p>
+          <div class="lote-list">${filas}</div>
+        </div>
+        <div class="footer">
+          <button class="btn btn-ghost" data-action="cancel">Cancelar</button>
+          <button class="btn btn-secondary" data-action="todos">Jalar todos (${total})</button>
+        </div>
+      </div>`;
+
+    const cleanup = (result) => {
+      overlay.remove();
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", kb);
+      resolve(result);
+    };
+    const kb = (e) => { if (e.key === "Escape") cleanup(null); };
+    overlay.addEventListener("click", (e) => {
+      const item = e.target.closest(".lote-item");
+      if (item) { cleanup(batches[Number(item.dataset.idx)]); return; }
+      const action = e.target.closest("[data-action]")?.dataset?.action;
+      if (action === "todos") cleanup("__todos__");
+      else if (action === "cancel" || e.target === overlay) cleanup(null);
+    });
+
+    document.addEventListener("keydown", kb);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  });
+}
 
 // Agrega filas desde el textarea de seriales pegados, aplicando los valores
 // comunes (modelo / accesorios / observaciones) como defaults editables.
