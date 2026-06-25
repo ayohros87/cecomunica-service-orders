@@ -828,6 +828,10 @@
     filas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
     State.globalFilas = filas;
     renderGlobal();
+    // Exportar a CSV solo para admin: recepción no ve el botón aunque llegara
+    // a abrir esta vista.
+    const exp = $('gpGlobalExport');
+    if (exp) exp.style.display = (State.rol === ROLES.ADMIN) ? '' : 'none';
     $('gpGlobalOverlay').style.display = 'flex';
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
@@ -856,6 +860,12 @@
   }
 
   function exportarGlobalCSV() {
+    // Exportar a CSV es solo para administradores (por ahora). Guard a nivel de
+    // la acción, además de ocultar el botón a recepción en abrirGlobal().
+    if (State.rol !== ROLES.ADMIN) {
+      Toast.show('La exportación a CSV es solo para administradores.', 'bad');
+      return;
+    }
     const filas = State.globalFilas;
     if (!filas.length) { Toast.show('Nada que exportar.', 'warn'); return; }
     const head = ['Empresa', 'Prefijo', 'Grupos (catalogo)', 'Grupos (equipos)', 'Estado'];
