@@ -88,14 +88,17 @@
     .autosave-status { color: var(--fg-3); font-size: 12px; white-space: nowrap; }
 
     /* Tarjeta de paso con encabezado integrado (número + título + badge) */
+    /* Sin overflow:hidden — recortaba el desplegable de sugerencias del cliente.
+       El encabezado redondea sus esquinas superiores para respetar la tarjeta. */
     .vb-step {
       background: var(--surface-card); border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg); margin-bottom: var(--sp-4); overflow: hidden;
+      border-radius: var(--radius-lg); margin-bottom: var(--sp-4);
     }
     .vb-step-head {
       display: flex; align-items: center; gap: 10px;
       padding: 12px 16px; border-bottom: 1px solid var(--border-subtle);
       background: var(--surface-sunken);
+      border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);
     }
     .vb-step-num {
       flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
