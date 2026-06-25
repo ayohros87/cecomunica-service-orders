@@ -129,6 +129,24 @@
     .grupos-cell .chip { padding: 3px 10px; font-size: 11px; white-space: nowrap; }
     .grupos-cell .chip:hover { transform: none; }   /* sin scale en tabla densa */
 
+    /* Inputs/selects de la tabla con el look del kit. Las reglas del kit están
+       atadas a .table-wrap; aquí se replican para #wrapTablaEquipos (.app-table-wrap)
+       en vez de añadir la clase (que un breakpoint oculta). */
+    #wrapTablaEquipos input[type="text"],
+    #wrapTablaEquipos select,
+    #wrapTablaEquipos textarea {
+      width: 100%; padding: 8px 10px;
+      border: 1px solid var(--line); border-radius: 6px;
+      background: #f9fafb; font-size: 14px; line-height: 1.2;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    #wrapTablaEquipos input:focus-visible,
+    #wrapTablaEquipos select:focus-visible,
+    #wrapTablaEquipos textarea:focus-visible {
+      outline: none; background: #fff; border-color: var(--accent); box-shadow: var(--ring-focus);
+    }
+    #wrapTablaEquipos ::placeholder { color: #9ca3af; }
+
     /* Checkbox con color de marca (mismo criterio que .table-wrap del kit) */
     #wrapTablaEquipos input[type="checkbox"],
     .vb-bulk-bar input[type="checkbox"] {
