@@ -51,10 +51,16 @@
 
     /* .chips-editor y .chip-x los provee el kit (ceco-ui.css) — no duplicar. */
 
-    /* Tabla: scroll propio (máx 60vh) con encabezado sticky + 1ª columna sticky */
+    /* Tabla: scroll propio (máx 60vh). table-layout:fixed para que la columna
+       Grupos tome el ancho restante y sus chips ENVUELVAN (no crezcan a lo ancho).
+       Encabezado + 1ª columna sticky. */
     #wrapTablaEquipos { overflow: auto; max-height: 60vh; }
-    #wrapTablaEquipos table.app-table { width: max-content; min-width: 100%; }
-    #wrapTablaEquipos th, #wrapTablaEquipos td { min-width: 112px; }
+    #wrapTablaEquipos table.app-table { width: 100%; min-width: 760px; table-layout: fixed; }
+    #tablaEquipos th:nth-child(1), #tablaEquipos td:nth-child(1) { width: 190px; }  /* Nombre */
+    #tablaEquipos th:nth-child(2), #tablaEquipos td:nth-child(2) { width: 60px; }   /* GPS */
+    #tablaEquipos th:nth-child(4), #tablaEquipos td:nth-child(4) { width: 190px; }  /* Modelo */
+    #tablaEquipos th:nth-child(5), #tablaEquipos td:nth-child(5) { width: 56px; }   /* borrar */
+    #tablaEquipos td { vertical-align: middle; }
     #tablaEquipos thead th {
       position: sticky; top: 0; z-index: 6;
       background: var(--surface-sunken);
