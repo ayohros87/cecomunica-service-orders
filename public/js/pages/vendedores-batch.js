@@ -241,9 +241,9 @@ window.VB = {
     // Solo-catálogo: los grupos vienen del catálogo del cliente. El × solo los
     // quita de ESTE batch (no toca el catálogo). Para crear grupos nuevos se usa
     // Admin · Grupos.
-    cont.innerHTML = arr.map((g, i) => `
-      <span class="chip-x">${g} <button title="Quitar del batch" onclick="VB.quitarGrupo(${i})">×</button></span>
-    `).join('');
+    cont.innerHTML = arr.length
+      ? arr.map((g, i) => `<span class="chip-x">${g} <button title="Quitar del batch" onclick="VB.quitarGrupo(${i})">×</button></span>`).join('')
+      : '<span class="chips-empty">Selecciona un cliente para cargar sus grupos.</span>';
     this.scheduleAutosave();
   },
 
@@ -276,18 +276,20 @@ window.VB = {
       <th>Modelo</th>
       <th></th>
     `;
-    document.getElementById('tablaEquipos').style.display = 'table';
-    document.getElementById('wrapTablaEquipos').style.display = 'block';
-    document.getElementById('scrollHintEquipos').style.display = 'block';
-    document.getElementById('tableSection').style.display = 'flex';
-    document.getElementById('exportSection').style.display = 'flex';
-    document.getElementById('actionCard').style.display = 'block';
-    document.getElementById('tablaToolbar').style.display = 'flex';
+    this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
     const cuerpo = document.getElementById('cuerpoTabla');
     cuerpo.innerHTML = '';
     nombres.forEach(n => this.agregarFila('', n));
-    document.getElementById('tablaEquipos').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('vbStep3').scrollIntoView({ behavior: 'smooth' });
+  },
+
+  // Muestra/oculta los pasos 3 (Equipos) y 4 (Exportación) como una unidad.
+  _mostrarPasosTabla(visible) {
+    const s3 = document.getElementById('vbStep3');
+    const s4 = document.getElementById('vbStep4');
+    if (s3) s3.style.display = visible ? 'block' : 'none';
+    if (s4) s4.style.display = visible ? 'block' : 'none';
   },
 
   agregarFila(_, nombreRadio = '') {
@@ -309,14 +311,8 @@ window.VB = {
       <td><button class="btn btn-danger" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave();">❌</button></td>
     `;
     fila.dataset.cliente = cliente;
-    document.getElementById('tablaEquipos').style.display = 'table';
     document.getElementById('cuerpoTabla').appendChild(fila);
-    document.getElementById('wrapTablaEquipos').style.display = 'block';
-    document.getElementById('scrollHintEquipos').style.display = 'block';
-    document.getElementById('tableSection').style.display = 'flex';
-    document.getElementById('exportSection').style.display = 'flex';
-    document.getElementById('actionCard').style.display = 'block';
-    document.getElementById('tablaToolbar').style.display = 'flex';
+    this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
     this.scheduleAutosave();
     fila.addEventListener('click', () => fila.classList.toggle('selected'));
@@ -347,13 +343,7 @@ window.VB = {
         </tr>`;
     }
     if (tbody) tbody.innerHTML = '';
-    if (table) table.style.display = 'none';
-    document.getElementById('wrapTablaEquipos').style.display = 'none';
-    document.getElementById('scrollHintEquipos').style.display = 'none';
-    document.getElementById('tableSection').style.display = 'none';
-    document.getElementById('exportSection').style.display = 'none';
-    document.getElementById('actionCard').style.display = 'none';
-    document.getElementById('tablaToolbar').style.display = 'none';
+    this._mostrarPasosTabla(false);
     this.actualizarResumenBatch();
   },
 
@@ -364,6 +354,9 @@ window.VB = {
     const gruposArr  = (document.getElementById('grupoInput').value || '').split(',').map(g => g.trim()).filter(Boolean);
     const tooltip    = gruposArr.length ? gruposArr.join(', ') : 'Sin grupos';
     resumenEl.innerHTML = `<strong>${filas}</strong> filas · <span class="badge completo" title="${tooltip}">${gruposArr.length}</span>`;
+    // Badge del paso 4: "Listo" cuando hay filas para exportar.
+    const be = document.getElementById('badgeExport');
+    if (be) { be.textContent = filas ? 'Listo' : 'Pendiente'; be.className = filas ? 'badge completo' : 'badge pending'; }
   },
 
   setStep(step) {
@@ -554,7 +547,7 @@ window.VB = {
           <th><input type="checkbox" id="gpsMaster" onchange="VB.toggleGPS(this)"> GPS</th>
           ${VB.grupos.map((g, i) => `<th><input type='checkbox' onchange='VB.toggleGrupo(${i}, this)'> ${g}</th>`).join('')}
           <th>Modelo</th><th>🗑️</th>`;
-        document.getElementById('wrapTablaEquipos').style.display = 'block';
+        this._mostrarPasosTabla(true);
         const tbody = document.getElementById('cuerpoTabla');
         tbody.innerHTML = '';
         d.tabla.forEach(r => {
@@ -586,8 +579,8 @@ window.VB = {
     const lista   = (document.getElementById('serialesPaste').value || '').trim();
     const b1 = document.getElementById('badgeCliente');
     const b2 = document.getElementById('badgeLote');
-    if (b1) { b1.textContent = cliente ? 'Listo' : 'Pendiente'; b1.className = cliente ? 'badge ready' : 'badge pending'; }
-    if (b2) { b2.textContent = (grupos && lista) ? 'Listo' : 'Pendiente'; b2.className = (grupos && lista) ? 'badge ready' : 'badge pending'; }
+    if (b1) { b1.textContent = cliente ? 'Listo' : 'Pendiente'; b1.className = cliente ? 'badge completo' : 'badge pending'; }
+    if (b2) { b2.textContent = (grupos && lista) ? 'Listo' : 'Pendiente'; b2.className = (grupos && lista) ? 'badge completo' : 'badge pending'; }
   },
 
   init() {
