@@ -145,8 +145,10 @@
       </div>
 
       <div class="form-field">
-        <label class="form-label" for="grupoInput">Grupos <span class="optional">(separados por coma)</span></label>
-        <input class="form-input" type="text" id="grupoInput" placeholder="Ej: Grupo A, Grupo B, Grupo C">
+        <label class="form-label" for="grupoInput">Grupos <span class="optional">(del catálogo del cliente)</span></label>
+        <input class="form-input" type="text" id="grupoInput" readonly
+               placeholder="Selecciona un cliente para cargar sus grupos" style="background:var(--surface-sunken);">
+        <span class="form-hint">Los grupos vienen del catálogo del cliente. Para crear uno nuevo, ve a <strong>Admin · Grupos</strong>.</span>
       </div>
       <div id="grupoChips" class="chips-editor"></div>
 
@@ -192,7 +194,6 @@
       <p class="form-section-title" style="margin-bottom:var(--sp-3);">Acciones rápidas</p>
       <div class="action-grid">
         <button class="btn btn-secondary" onclick="VB.agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
-        <button class="btn btn-secondary" onclick="VB.agregarGrupo()"><i data-lucide="plus-circle"></i> Agregar grupo</button>
         <button class="btn btn-primary" onclick="VB.mostrarTablaResultado()"><i data-lucide="eye"></i> Revisar resultado</button>
         <button class="btn btn-primary" onclick="VB.descargarExcel()"><i data-lucide="download"></i> Descargar Excel</button>
         <button class="btn btn-ghost" onclick="VB.descargarJSON()"><i data-lucide="file-json"></i> Descargar JSON</button>

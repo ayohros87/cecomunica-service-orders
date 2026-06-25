@@ -26,6 +26,7 @@
     clientePrefijo: null,    // prefijo de 3 letras del cliente seleccionado | null
     prefijosTomados: new Set(), // todos los prefijos ya usados (unicidad global)
     migFilas: [],            // filas del modal de migración de prefijos
+    globalFilas: [],         // filas de la vista global de empresas
     rol: null,               // rol del usuario actual (gate de la migración)
     listaLimpia: false,      // toggle: mostrar nombres sin el prefijo
     seleccionados: new Set(),
@@ -69,6 +70,7 @@
         nombre: (c.nombre || '').toString(),
         norm: FMT.normalize(c.nombre || ''),
         prefijo: FMT.normalizePrefijo(c.poc_grupo_prefix) || null,
+        nCatalogo: Array.isArray(c.poc_grupos) ? c.poc_grupos.length : null,
       }));
       // Set global de prefijos ya tomados (para proponer únicos).
       State.prefijosTomados = new Set();
@@ -352,38 +354,17 @@
     }
   }
 
-  // Garantiza que el cliente tenga prefijo; si no, lo propone, valida y guarda.
-  // Devuelve el prefijo (3 letras) o null si el usuario canceló.
-  async function ensurePrefijoCliente() {
-    if (State.clientePrefijo) return State.clientePrefijo;
-    const propuesto = GruposAnalisis.proponerPrefijo(State.clienteSel.nombre, State.prefijosTomados);
-    const pfx = pedirPrefijo(propuesto);
-    if (!pfx) return null;
-    try {
-      await PocService.setGrupoPrefix(State.clienteSel.id, pfx);
-    } catch (e) {
-      console.error('Error guardando prefijo:', e);
-      Toast.show('Error al guardar el prefijo.', 'bad');
-      return null;
-    }
-    State.prefijosTomados.add(pfx);
-    State.clientePrefijo = pfx;
-    const c = State.clientes.find(x => x.id === State.clienteSel.id);
-    if (c) c.prefijo = pfx;
-    renderPrefijoBar();
-    return pfx;
-  }
-
-  // Alta (uno o varios) de grupos al catálogo del cliente. Recibe nombres BASE
-  // (sin prefijo); el prefijo se aplica solo. Omite los que ya existan.
+  // Alta (uno o varios) de grupos al catálogo del cliente. Recibe nombres BASE.
+  // Migración escalonada: NO se fuerza el prefijo — si el cliente ya tiene uno,
+  // los grupos se prefijan; si no, se guardan crudos (luego se prefijan con
+  // "Asignar prefijo…" o la migración masiva). Omite los que ya existan.
   async function agregarGruposBase(nombresBase) {
     if (!State.clienteSel) return;
     const limpios = FMT.dedupGrupos(nombresBase);
     if (!limpios.length) return;
-    const prefijo = await ensurePrefijoCliente();
-    if (!prefijo) return;   // canceló la asignación del prefijo
+    const prefijo = State.clientePrefijo;   // puede ser null — no forzamos
     const nuevos = limpios.filter(b => {
-      const full = FMT.aplicarPrefijoGrupo(prefijo, b);
+      const full = prefijo ? FMT.aplicarPrefijoGrupo(prefijo, b) : FMT.normalizeGrupo(b);
       return full && !State.grupos.some(g => FMT.normalize(g.nombre) === FMT.normalize(full));
     });
     if (!nuevos.length) { Toast.show('Esos grupos ya existen para este cliente.', 'warn'); return; }
@@ -491,8 +472,9 @@
                    style="width:16px; height:16px;">
             <span class="gp-grupo-name">${esc(display)}</span>
           </div>
-          <span class="gp-grupo-count ${g.count === 0 ? 'gp-grupo-count--empty' : ''}"
-                title="${g.count === 0 ? 'En el catálogo, sin equipos asignados todavía' : g.count + ' equipo' + (g.count === 1 ? '' : 's')}">${g.count}</span>
+          <span class="gp-grupo-count ${g.count === 0 ? 'gp-grupo-count--empty' : 'gp-grupo-count--click'}"
+                ${g.count > 0 ? `data-action="ver" data-nombre="${esc(g.nombre)}"` : ''}
+                title="${g.count === 0 ? 'En el catálogo, sin equipos asignados todavía' : 'Ver los ' + g.count + ' equipo' + (g.count === 1 ? '' : 's')}">${g.count}</span>
           <div class="gp-grupo-actions">
             <button class="btn btn-ghost btn-sm" data-action="rename" data-nombre="${esc(g.nombre)}" title="Renombrar">
               <i data-lucide="pencil"></i>
@@ -519,10 +501,52 @@
     cont.querySelectorAll('button[data-action="delete"]').forEach(b => {
       b.addEventListener('click', () => eliminarGrupo(b.dataset.nombre));
     });
+    cont.querySelectorAll('.gp-grupo-count--click[data-action="ver"]').forEach(b => {
+      b.addEventListener('click', () => verEquiposDeGrupo(b.dataset.nombre));
+    });
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
     actualizarBotonMerge();
   }
+
+  // Drill-down: equipos PoC del cliente que tienen el grupo `nombre`.
+  async function verEquiposDeGrupo(nombre) {
+    if (!State.clienteSel) return;
+    const ov = $('gpEquiposOverlay');
+    $('gpEquiposTitle').innerHTML = `<i data-lucide="radio-tower"></i> Equipos en “${esc(nombre)}”`;
+    $('gpEquiposResumen').textContent = '';
+    $('gpEquiposList').innerHTML = '<div class="gp-mig-empty">Cargando…</div>';
+    ov.style.display = 'flex';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    try {
+      const devices = await PocService.getByCliente({
+        clienteId: State.clienteSel.id,
+        clienteNombre: State.clienteSel.nombre,
+        fresh: true,
+      });
+      const norm = FMT.normalize(nombre);
+      const equipos = devices.filter(d => d.deleted !== true
+        && (d.grupos || []).some(g => FMT.normalize(g) === norm));
+      if (!equipos.length) {
+        $('gpEquiposList').innerHTML = '<div class="gp-mig-empty">Sin equipos con este grupo.</div>';
+        return;
+      }
+      equipos.sort((a, b) => (a.unit_id || '').localeCompare(b.unit_id || '', 'es', { numeric: true }));
+      $('gpEquiposResumen').textContent = `${equipos.length} equipo${equipos.length === 1 ? '' : 's'}`;
+      $('gpEquiposList').innerHTML = equipos.map(d => `
+        <div class="gp-eq-row">
+          <span class="gp-eq-serial" title="${esc(d.serial || '')}">${esc(d.serial || '—')}</span>
+          <span class="gp-eq-unit">${esc(d.unit_id || '—')}</span>
+          <span class="gp-eq-name" title="${esc(d.radio_name || '')}">${esc(d.radio_name || '—')}</span>
+          <span class="gp-eq-act" title="${d.activo !== false ? 'Activo' : 'Inactivo'}">${d.activo !== false ? '🟢' : '🔴'}</span>
+        </div>`).join('');
+    } catch (e) {
+      console.error('Error cargando equipos del grupo:', e);
+      $('gpEquiposList').innerHTML = '<div class="gp-mig-empty">Error al cargar los equipos.</div>';
+    }
+  }
+
+  function cerrarEquipos() { $('gpEquiposOverlay').style.display = 'none'; }
 
   function actualizarBotonMerge() {
     const btn = $('btnGpMerge');
@@ -743,6 +767,71 @@
     setTimeout(cerrarMigracion, 1400);
   }
 
+  // ── Vista global de empresas (admin-only) ───────────────────────────
+  // Tabla de todas las empresas con prefijo + # grupos (catálogo / equipos),
+  // marca las sin prefijo y los prefijos repetidos, y exporta a CSV.
+  function abrirGlobal() {
+    const prefijoCount = new Map();
+    State.clientes.forEach(c => { if (c.prefijo) prefijoCount.set(c.prefijo, (prefijoCount.get(c.prefijo) || 0) + 1); });
+    const filas = [];
+    for (const c of State.clientes) {
+      const nDev = gruposCrudosDeCliente(c).length;
+      const nCat = (typeof c.nCatalogo === 'number') ? c.nCatalogo : 0;
+      if (!c.prefijo && nDev === 0 && nCat === 0) continue;  // empresas sin nada
+      filas.push({
+        nombre: c.nombre,
+        prefijo: c.prefijo || '',
+        nCat, nDev,
+        dupPrefijo: !!(c.prefijo && prefijoCount.get(c.prefijo) > 1),
+      });
+    }
+    filas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+    State.globalFilas = filas;
+    renderGlobal();
+    $('gpGlobalOverlay').style.display = 'flex';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function cerrarGlobal() { $('gpGlobalOverlay').style.display = 'none'; }
+
+  function renderGlobal() {
+    const filas = State.globalFilas;
+    const sinPrefijo = filas.filter(f => !f.prefijo).length;
+    const dups = new Set(filas.filter(f => f.dupPrefijo).map(f => f.prefijo)).size;
+    $('gpGlobalResumen').innerHTML =
+      `${filas.length} empresas · ${sinPrefijo} sin prefijo`
+      + (dups ? ` · <strong style="color:#DC2626;">${dups} prefijo(s) duplicado(s)</strong>` : '');
+    $('gpGlobalList').innerHTML = filas.map(f => `
+      <div class="gp-glob-row">
+        <span class="gp-glob-name" title="${esc(f.nombre)}">${esc(f.nombre)}</span>
+        <span class="gp-glob-pfx ${!f.prefijo ? 'is-none' : ''} ${f.dupPrefijo ? 'is-dup' : ''}">${f.prefijo ? esc(f.prefijo) : '—'}</span>
+        <span class="gp-glob-num">${f.nCat}</span>
+        <span class="gp-glob-num">${f.nDev}</span>
+      </div>`).join('') || '<div class="gp-mig-empty">No hay empresas con grupos.</div>';
+  }
+
+  function csvCell(v) {
+    const s = (v == null ? '' : String(v));
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function exportarGlobalCSV() {
+    const filas = State.globalFilas;
+    if (!filas.length) { Toast.show('Nada que exportar.', 'warn'); return; }
+    const head = ['Empresa', 'Prefijo', 'Grupos (catalogo)', 'Grupos (equipos)', 'Estado'];
+    const lines = [head.join(',')];
+    filas.forEach(f => {
+      const estado = !f.prefijo ? 'sin prefijo' : (f.dupPrefijo ? 'prefijo duplicado' : 'ok');
+      lines.push([f.nombre, f.prefijo, f.nCat, f.nDev, estado].map(csvCell).join(','));
+    });
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'grupos-por-empresa.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Cache invalidation ───────────────────────────────────────────────
   // vendedores-batch caches groups under both the client ID and the normalized
   // name. Clear both keys so the next pull is fresh.
@@ -874,6 +963,16 @@
     const migApply = $('gpMigApply');    if (migApply)  migApply.addEventListener('click', aplicarMigracion);
     const migOv = $('gpMigOverlay');
     if (migOv) migOv.addEventListener('click', e => { if (e.target === migOv) cerrarMigracion(); });
+
+    const glob = $('btnGpVistaGlobal');  if (glob)       glob.addEventListener('click', abrirGlobal);
+    const globClose = $('gpGlobalClose');  if (globClose)  globClose.addEventListener('click', cerrarGlobal);
+    const globExport = $('gpGlobalExport'); if (globExport) globExport.addEventListener('click', exportarGlobalCSV);
+    const globOv = $('gpGlobalOverlay');
+    if (globOv) globOv.addEventListener('click', e => { if (e.target === globOv) cerrarGlobal(); });
+
+    const eqClose = $('gpEquiposClose'); if (eqClose) eqClose.addEventListener('click', cerrarEquipos);
+    const eqOv = $('gpEquiposOverlay');
+    if (eqOv) eqOv.addEventListener('click', e => { if (e.target === eqOv) cerrarEquipos(); });
     const sExact = $('btnGpScanExactos');
     if (sExact) sExact.addEventListener('click', () => runScan('exactos'));
     const sFuzzy = $('btnGpScanFuzzy');
@@ -897,10 +996,12 @@
         return;
       }
       State.rol = rol;
-      // La migración masiva de prefijos es admin-only; recepción administra
-      // grupos por cliente pero no migra todas las empresas en lote.
+      // Migración masiva y vista global son admin-only; recepción administra
+      // grupos por cliente pero no migra ni audita todas las empresas en lote.
       const mig = $('btnGpMigrarPrefijos');
       if (mig && rol === ROLES.ADMIN) mig.style.display = '';
+      const glob = $('btnGpVistaGlobal');
+      if (glob && rol === ROLES.ADMIN) glob.style.display = '';
       await cargarClientes();
     } catch (e) {
       console.error('Error inicializando admin/grupos:', e);

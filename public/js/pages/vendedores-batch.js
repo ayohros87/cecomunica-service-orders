@@ -5,7 +5,6 @@ window.VB = {
   modelosDisponibles:     [],
   clienteIDSeleccionado:  null,
   clienteNombreSeleccionado: null,
-  clientePrefijo:         null,   // prefijo de 3 letras del cliente (si tiene)
   clientesCache:          [],
   clientesCargados:       false,
   gruposClienteCache:     new Map(),
@@ -181,8 +180,6 @@ window.VB = {
           const cat = await PocService.getCatalogoGrupos(this.clienteIDSeleccionado);
           if (Array.isArray(cat)) found = cat.slice();
         } catch (_) {}
-        try { this.clientePrefijo = await PocService.getGrupoPrefix(this.clienteIDSeleccionado); }
-        catch (_) { this.clientePrefijo = null; }
       }
       if (found === null) {
         const devices = await PocService.getByCliente({
@@ -223,9 +220,12 @@ window.VB = {
     if (arr.join(', ') !== val) input.value = arr.join(', ');
     VB.grupos = arr;
     this.actualizarResumenBatch();
+    // Solo-catálogo: los grupos vienen del catálogo del cliente. El × solo los
+    // quita de ESTE batch (no toca el catálogo). Para crear grupos nuevos se usa
+    // Admin · Grupos.
     cont.innerHTML = arr.map((g, i) => `
-      <span class="chip-x">${g} <button title="Quitar" onclick="VB.quitarGrupo(${i})">×</button></span>
-    `).join('') + `<button class="btn btn-pill" onclick="VB.agregarGrupoPrompt()" title="Agregar grupo"><span style="margin-right:4px">+</span> Grupo</button>`;
+      <span class="chip-x">${g} <button title="Quitar del batch" onclick="VB.quitarGrupo(${i})">×</button></span>
+    `).join('');
   },
 
   quitarGrupo(index) {
@@ -235,60 +235,6 @@ window.VB = {
     input.value = arr.join(', ');
     this.renderGrupoChips();
     if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
-  },
-
-  // Prefija el nombre con el prefijo del cliente (si tiene). Sin prefijo, el
-  // grupo se guarda crudo y la migración de admin lo prefijará luego.
-  prefijarGrupo(nombre) {
-    const g = FMT.normalizeGrupo(nombre);
-    return this.clientePrefijo ? FMT.aplicarPrefijoGrupo(this.clientePrefijo, g) : g;
-  },
-
-  agregarGrupoPrompt() {
-    const g = this.prefijarGrupo(prompt('Nombre del grupo:'));
-    if (!g) return;
-    const input = document.getElementById('grupoInput');
-    const arr   = FMT.dedupGrupos(input.value.split(',').concat([g]));
-    input.value = arr.join(', ');
-    this.renderGrupoChips();
-    this.persistirGrupoCatalogo(g);
-    if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
-  },
-
-  agregarGrupo() {
-    const nuevoGrupo = this.prefijarGrupo(prompt('Nombre del nuevo grupo:'));
-    if (!nuevoGrupo) return;
-    const input = document.getElementById('grupoInput');
-    const arr   = FMT.dedupGrupos(input.value.split(',').concat([nuevoGrupo]));
-    input.value = arr.join(', ');
-    this.renderGrupoChips();
-    this.persistirGrupoCatalogo(nuevoGrupo);
-    this.generarTabla();
-  },
-
-  // Persiste un grupo nuevo al catálogo del cliente (clientes/{id}.poc_grupos)
-  // para que quede disponible en todas las pantallas. Best-effort: requiere un
-  // cliente seleccionado con id; invalida los cachés locales tras escribir.
-  async persistirGrupoCatalogo(nombre) {
-    const clienteId = this.clienteIDSeleccionado;
-    if (!clienteId || !nombre) return;
-    try {
-      const { added } = await PocService.agregarGrupoCatalogo({
-        clienteId,
-        clienteNombre: this.clienteNombreSeleccionado || null,
-        nombre,
-      });
-      if (!added) return;
-      this.gruposClienteCache.delete(clienteId);
-      try {
-        localStorage.removeItem('grupos_v2_' + clienteId);
-        if (this.clienteNombreSeleccionado) {
-          localStorage.removeItem('grupos_v2_' + FMT.normalize(this.clienteNombreSeleccionado));
-        }
-      } catch (_) {}
-    } catch (e) {
-      console.warn('No se pudo guardar el grupo en el catálogo:', e?.code || e);
-    }
   },
 
   // ---- Batch table ----
@@ -416,7 +362,6 @@ window.VB = {
     if (fb) fb.remove();
     this.clienteIDSeleccionado   = null;
     this.clienteNombreSeleccionado = null;
-    this.clientePrefijo          = null;
     VB.grupos = [];
     this.renderGrupoChips();
     this.actualizarResumenBatch();
