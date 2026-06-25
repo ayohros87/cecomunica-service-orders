@@ -769,6 +769,19 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     );
   }
 
+  // Cambiar técnico — reasignación esporádica para admin / supervisor de taller
+  // (permiso 'reasignar-tecnico'). Solo cuando la orden YA tiene técnico y aún
+  // NO se ha entregado: después de entregada no se cambia. Vive en el menú ⋯
+  // por ser de uso poco frecuente, y usa un flujo aparte de "Asignar" que no
+  // altera el estado de la orden.
+  if (canRole(rol, 'reasignar-tecnico')
+      && (o.tecnico_uid || o.tecnico_asignado)
+      && !estadoUpper.includes("ENTREGAD")) {
+    menuItems.push(
+      { icon: '<i data-lucide="user-cog"></i>', label: "Cambiar técnico", action: "reasignar-tecnico", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+    );
+  }
+
   // Cotizar — prepara una cotización (borrador) a partir de la orden y sus
   // intervenciones. Disponible para quienes pueden prepararla, incluidos los
   // técnicos de taller (preparan; la aprobación/envío es otro permiso).

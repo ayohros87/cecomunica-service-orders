@@ -7,18 +7,38 @@
  * cargarOrdenesYEquipos.
  * ======================================== */
 
-// ===== MODAL ASIGNAR TÉCNICO =====
-window.abrirModalAsignarTecnico = function (ordenId) {
+// ===== MODAL ASIGNAR / CAMBIAR TÉCNICO =====
+// El mismo modal (#modalAsignar) sirve dos flujos:
+//   · 'asignar'   → primera asignación; transiciona la orden a ASIGNADO.
+//   · 'reasignar' → cambio esporádico de técnico (admin/jefe_taller) que NO
+//                   toca el estado. Preselecciona el técnico actual.
+// El modo viaja en el dataset del botón confirmar y lo lee confirmarAsignarTecnico.
+function _abrirModalTecnico(ordenId, { modo }) {
   const modal = document.getElementById("modalAsignar");
   const select = document.getElementById("asignarTecnicoSelect");
-  const btnConfirmar = modal.querySelector("button[data-action='confirmar-asignar-tecnico']");
+  const btnConfirmar = modal && modal.querySelector("button[data-action='confirmar-asignar-tecnico']");
+  const titulo = document.getElementById("modalAsignarTitle");
 
   if (!modal || !select || !btnConfirmar) {
     console.error("Modal elements not found");
     return;
   }
 
+  const esReasignar = modo === "reasignar";
   btnConfirmar.dataset.ordenId = ordenId;
+  btnConfirmar.dataset.modo = modo;
+
+  // Título + texto del botón según el modo (el modal se reutiliza para ambos).
+  if (titulo) {
+    titulo.innerHTML = esReasignar
+      ? '<i data-lucide="user-cog"></i> Cambiar técnico'
+      : '<i data-lucide="wrench"></i> Asignar técnico';
+  }
+  btnConfirmar.textContent = esReasignar ? "Cambiar técnico" : "Asignar técnico";
+
+  // Técnico actual, para preseleccionarlo en modo reasignar.
+  const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+  const tecnicoActualUid = orden.tecnico_uid || "";
 
   select.innerHTML = '<option value="">Seleccionar técnico...</option>';
 
@@ -28,8 +48,10 @@ window.abrirModalAsignarTecnico = function (ordenId) {
         const option = document.createElement("option");
         option.value = tech.uid;
         option.textContent = tech.nombre;
+        if (esReasignar && tech.uid === tecnicoActualUid) option.selected = true;
         select.appendChild(option);
       });
+      select.style.borderColor = select.value ? 'var(--accent)' : 'var(--line)';
     })
     .catch(error => {
       console.error("Error cargando técnicos:", error);
@@ -46,6 +68,17 @@ window.abrirModalAsignarTecnico = function (ordenId) {
   // focus on the previously-focused element. The `.hidden` class is
   // removed inside open(). ORDENES_INDEX_IMPROVEMENTS.md QW5.
   Modal.open("modalAsignar");
+  // Re-pinta el icono del título recién inyectado (data-lucide).
+  if (APP?.utils?.lucideRefresh) APP.utils.lucideRefresh(modal);
+  else if (window.lucide?.createIcons) window.lucide.createIcons();
+}
+
+window.abrirModalAsignarTecnico = function (ordenId) {
+  _abrirModalTecnico(ordenId, { modo: "asignar" });
+};
+
+window.abrirModalCambiarTecnico = function (ordenId) {
+  _abrirModalTecnico(ordenId, { modo: "reasignar" });
 };
 
 window.cerrarModalAsignar = function () {
@@ -64,13 +97,28 @@ window.confirmarAsignarTecnico = async function (ordenId) {
     return;
   }
 
+  const btnConfirmar = document.querySelector("#modalAsignar button[data-action='confirmar-asignar-tecnico']");
+  const modo = (btnConfirmar && btnConfirmar.dataset.modo) || "asignar";
   const tecnicoUid = select.value;
   const tecnicoNombre = select.options[select.selectedIndex].text;
 
   try {
-    await OrdenesService.assignTechnician(ordenId, tecnicoUid, tecnicoNombre);
-
-    Toast.show("✅ Técnico asignado correctamente", "ok");
+    if (modo === "reasignar") {
+      const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+      // Eligió el mismo técnico: nada que cambiar, solo cierra.
+      if (tecnicoUid && tecnicoUid === orden.tecnico_uid) {
+        cerrarModalAsignar();
+        return;
+      }
+      await OrdenesService.reassignTechnician(ordenId, tecnicoUid, tecnicoNombre, {
+        prevUid: orden.tecnico_uid || "",
+        prevNombre: orden.tecnico_asignado || ""
+      });
+      Toast.show("✅ Técnico cambiado correctamente", "ok");
+    } else {
+      await OrdenesService.assignTechnician(ordenId, tecnicoUid, tecnicoNombre);
+      Toast.show("✅ Técnico asignado correctamente", "ok");
+    }
 
     cerrarModalAsignar();
     // The live snapshot in ordenes-data.js picks up the Firestore write

@@ -151,6 +151,36 @@ const OrdenesService = {
   },
 
   /**
+   * Reassign an order to a different technician WITHOUT changing the
+   * order's state (unlike assignTechnician, which forces ASIGNADO).
+   * Backs the occasional "Cambiar técnico" action available to
+   * administrador / jefe_taller. Records a REASIGNAR `os_logs` entry
+   * capturing the previous → new technician so the change is auditable,
+   * and re-stamps `fecha_asignacion` so the timeline reflects the
+   * current effective assignment.
+   * @param {string} ordenId - Order ID
+   * @param {string} tecnicoUid - New technician user ID
+   * @param {string} tecnicoNombre - New technician name
+   * @param {{prevUid?: string, prevNombre?: string}} [prev] - Previous técnico, for the audit entry
+   * @returns {Promise<void>}
+   */
+  async reassignTechnician(ordenId, tecnicoUid, tecnicoNombre, { prevUid = "", prevNombre = "" } = {}) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      tecnico_asignado: tecnicoNombre,
+      tecnico_uid: tecnicoUid,
+      fecha_asignacion: firebase.firestore.FieldValue.serverTimestamp(),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'REASIGNAR',
+        by: user?.uid || '',
+        from: prevNombre || prevUid || '',
+        to: tecnicoNombre || tecnicoUid || ''
+      })
+    });
+  },
+
+  /**
    * Mark order as completed. Captures `completado_por_email` so the
    * timeline can attribute the action, and appends an `os_logs` entry.
    * @param {string} ordenId - Order ID

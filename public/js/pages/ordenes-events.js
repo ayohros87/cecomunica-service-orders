@@ -82,6 +82,10 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) { closeAllMenus(); abrirModalAsignarTecnico(ordenId); }
     },
+    'reasignar-tecnico': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) { closeAllMenus(); abrirModalCambiarTecnico(ordenId); }
+    },
     'completar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) completarOrden(ordenId);

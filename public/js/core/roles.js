@@ -23,6 +23,9 @@ const _PERMISOS = {
   'ver-contratos':     ['administrador', 'vendedor', 'recepcion', 'gerente'],
   'crear-orden':       ['administrador', 'vendedor', 'recepcion', 'tecnico', 'tecnico_operativo', 'jefe_taller'],
   'asignar-tecnico':   ['administrador', 'jefe_taller', 'recepcion'],
+  // Cambiar el técnico de una orden YA asignada (reasignación esporádica que NO
+  // toca el estado). Más restringido que 'asignar-tecnico': sin recepción.
+  'reasignar-tecnico': ['administrador', 'jefe_taller'],
   'ver-progreso':      ['administrador', 'vendedor', 'jefe_taller', 'gerente'],
   'ver-inventario':    ['administrador', 'inventario', 'jefe_taller', 'gerente'],
   'admin-equipos':     ['administrador'],
