@@ -27,6 +27,7 @@
     prefijosTomados: new Set(), // todos los prefijos ya usados (unicidad global)
     migFilas: [],            // filas del modal de migración de prefijos
     globalFilas: [],         // filas de la vista global de empresas
+    comunes: [],             // grupos comunes (empresa/config.poc_grupos_comunes)
     rol: null,               // rol del usuario actual (gate de la migración)
     listaLimpia: false,      // toggle: mostrar nombres sin el prefijo
     seleccionados: new Set(),
@@ -37,13 +38,21 @@
     scan: null,
   };
 
-  // Grupos comunes propuestos como chips de 1 clic (alta rápida).
-  const COMUNES = [
+  // Grupos comunes propuestos como chips de 1 clic (alta rápida). Editable y
+  // persistido en empresa/config.poc_grupos_comunes; este es solo el fallback.
+  const DEFAULT_COMUNES = [
     'Ventas', 'Operaciones', 'Administración', 'Gerencia', 'Contabilidad',
     'GPS', 'Bodega', 'Logística', 'Soporte', 'Mantenimiento', 'Cobranzas', 'Recursos Humanos',
   ];
 
   function $(id) { return document.getElementById(id); }
+
+  // Lista de grupos comunes saneada (dedup + trim). Array vacío explícito se
+  // respeta; si no es array (config incompleta) cae al default.
+  function sanitizarComunes(arr) {
+    if (!Array.isArray(arr)) return DEFAULT_COMUNES.slice();
+    return FMT.dedupGrupos(arr);
+  }
   function esc(s) {
     return (s || '').toString()
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -61,10 +70,12 @@
       // lecturas son cache-first y se reusan dentro del PocService.
       // fresh:true en getClientesConGrupos → lee TODOS los equipos del servidor
       // (la caché parcial dejaba grupos fuera de la lista).
-      const [lista, conGrupos] = await Promise.all([
+      const [lista, conGrupos, config] = await Promise.all([
         ClientesService.getAllClientes(),
         PocService.getClientesConGrupos({ fresh: true }),
+        EmpresaService.getConfig(),
       ]);
+      State.comunes = sanitizarComunes(config && config.poc_grupos_comunes);
       State.clientes = lista.map(c => ({
         id: c.id,
         nombre: (c.nombre || '').toString(),
@@ -397,7 +408,7 @@
     if (!State.clienteSel) { cont.innerHTML = ''; return; }
     const prefijo = State.clientePrefijo;
     const have = new Set(State.grupos.map(g => FMT.normalize(g.nombre)));
-    const chips = COMUNES.map(b => {
+    const chips = State.comunes.map(b => {
       const full = prefijo ? FMT.aplicarPrefijoGrupo(prefijo, b) : b;
       const yes = full && have.has(FMT.normalize(full));
       return `<button type="button" class="gp-chip-add ${yes ? 'is-added' : ''}" data-base="${esc(b)}" ${yes ? 'disabled' : ''}
@@ -420,6 +431,7 @@
         </div>
         <div class="gp-add-comunes">
           <span class="gp-add-comunes-label">Comunes:</span>${chips}
+          <button id="gpEditComunes" type="button" class="gp-comunes-edit" title="Editar la lista de grupos comunes">✎ editar</button>
         </div>
       </div>`;
 
@@ -440,7 +452,35 @@
     cont.querySelectorAll('.gp-chip-add:not(.is-added)').forEach(b => {
       b.addEventListener('click', () => agregarGruposBase([b.dataset.base]));
     });
+    const ec = $('gpEditComunes');
+    if (ec) ec.addEventListener('click', abrirComunes);
     if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  // ── Editor de la lista de grupos comunes (empresa/config) ───────────
+  function abrirComunes() {
+    $('gpComunesText').value = State.comunes.join('\n');
+    $('gpComunesOverlay').style.display = 'flex';
+    setTimeout(() => { const t = $('gpComunesText'); if (t) t.focus(); }, 50);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+  function cerrarComunes() { $('gpComunesOverlay').style.display = 'none'; }
+  async function guardarComunes() {
+    const list = FMT.dedupGrupos(($('gpComunesText').value || '').split(/[\n,]+/));
+    const btn = $('gpComunesGuardar');
+    if (btn) btn.disabled = true;
+    try {
+      await EmpresaService.setConfig({ poc_grupos_comunes: list });
+      State.comunes = list;
+      Toast.show('Lista de grupos comunes guardada ✅', 'ok');
+      cerrarComunes();
+      if (State.clienteSel) renderPanelAgregar();
+    } catch (e) {
+      console.error('Error guardando grupos comunes:', e);
+      Toast.show('Error al guardar la lista.', 'bad');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   function renderGrupos() {
@@ -973,6 +1013,12 @@
     const eqClose = $('gpEquiposClose'); if (eqClose) eqClose.addEventListener('click', cerrarEquipos);
     const eqOv = $('gpEquiposOverlay');
     if (eqOv) eqOv.addEventListener('click', e => { if (e.target === eqOv) cerrarEquipos(); });
+
+    const comClose = $('gpComunesClose');   if (comClose)  comClose.addEventListener('click', cerrarComunes);
+    const comCancel = $('gpComunesCancel');  if (comCancel) comCancel.addEventListener('click', cerrarComunes);
+    const comSave = $('gpComunesGuardar');   if (comSave)   comSave.addEventListener('click', guardarComunes);
+    const comOv = $('gpComunesOverlay');
+    if (comOv) comOv.addEventListener('click', e => { if (e.target === comOv) cerrarComunes(); });
     const sExact = $('btnGpScanExactos');
     if (sExact) sExact.addEventListener('click', () => runScan('exactos'));
     const sFuzzy = $('btnGpScanFuzzy');

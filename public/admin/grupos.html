@@ -116,6 +116,11 @@
     }
     .gp-chip-add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
     .gp-chip-add.is-added { opacity: .6; cursor: default; border-style: dashed; }
+    .gp-comunes-edit {
+      font-size: 11px; color: var(--accent); background: none; border: none; cursor: pointer;
+      padding: 2px 6px; margin-left: 2px;
+    }
+    .gp-comunes-edit:hover { text-decoration: underline; }
 
     /* Barra de prefijo del cliente seleccionado */
     .gp-prefijo-bar { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); min-height: 0; }
@@ -237,6 +242,7 @@
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script src="../js/domain/gruposAnalisis.js"></script>
   <script src="../js/pages/admin-grupos.js" defer></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -413,6 +419,30 @@
       <div class="gp-modal-foot">
         <span class="spacer" style="flex:1;"></span>
         <button class="btn btn-primary" onclick="document.getElementById('gpEquiposOverlay').style.display='none'">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editar grupos comunes (empresa/config) -->
+  <div id="gpComunesOverlay" class="gp-modal-overlay" style="display:none;">
+    <div class="gp-modal" role="dialog" aria-modal="true" aria-labelledby="gpComunesTitle" style="width:460px;">
+      <div class="gp-modal-head">
+        <h3 id="gpComunesTitle"><i data-lucide="list-plus"></i> Grupos comunes</h3>
+        <button class="gp-modal-close" id="gpComunesClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="gp-modal-body">
+        <p class="gp-mig-intro">
+          Estos son los chips de alta rápida que aparecen al agregar grupos. Uno por línea.
+          Se guardan en <code>empresa/config</code> y aplican a todas las empresas.
+        </p>
+        <textarea id="gpComunesText" class="form-input" rows="12"
+                  style="width:100%; resize:vertical; font-size:13px;"
+                  placeholder="Ventas&#10;Operaciones&#10;GPS"></textarea>
+      </div>
+      <div class="gp-modal-foot">
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn btn-ghost" id="gpComunesCancel">Cancelar</button>
+        <button class="btn btn-primary" id="gpComunesGuardar"><i data-lucide="save"></i> Guardar</button>
       </div>
     </div>
   </div>

@@ -17,6 +17,11 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   cotizacion_descuento_max_pct: 15, // descuento % máximo que un vendedor puede enviar sin aprobación
   cotizacion_total_max:      5000, // total máximo (USD) que un vendedor puede enviar sin aprobación
   alertas:                   [],  // array de {id, kind, threshold, severity, message, enabled} — ver AdminMetrics.evaluateAlertas
+  // Grupos PoC propuestos como chips de alta rápida en admin/grupos (editable).
+  poc_grupos_comunes: [
+    'Ventas', 'Operaciones', 'Administración', 'Gerencia', 'Contabilidad',
+    'GPS', 'Bodega', 'Logística', 'Soporte', 'Mantenimiento', 'Cobranzas', 'Recursos Humanos',
+  ],
 });
 
 const EmpresaService = {
