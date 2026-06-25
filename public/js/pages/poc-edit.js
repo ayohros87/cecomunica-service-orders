@@ -30,6 +30,13 @@ window.PocEdit = {
       PocState.buildModeloOptionsHTML(modeloIdActual);
 
     document.getElementById('drawer-grupos').value     = (data.grupos || []).join(', ');
+    // Mensaje "crear grupo" según rol: el vendedor no entra a Administrar grupos.
+    const ghint = document.getElementById('drawerGruposHint');
+    if (ghint) {
+      ghint.innerHTML = (PocState.rolActual === ROLES.VENDEDOR)
+        ? 'Toca un grupo del catálogo para añadir o quitar. Para crear uno nuevo, <strong>pídele a recepción</strong>.'
+        : 'Toca un grupo del catálogo para añadir o quitar. Para crear uno nuevo, ve a <strong>Administrar grupos</strong> (menú “Más” en POC).';
+    }
     // Catálogo del cliente → chips toggle encima del input (async, no bloquea).
     this._cargarCatalogo(data.cliente_id);
     document.getElementById('drawer-activo').checked   = data.activo !== false;

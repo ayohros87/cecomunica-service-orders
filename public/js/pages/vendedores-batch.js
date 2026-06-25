@@ -673,6 +673,14 @@ firebase.auth().onAuthStateChanged(async user => {
       window.location.href = '../index.html';
       return;
     }
+    // Mensaje "crear grupo" según el rol: el vendedor NO entra a Administrar
+    // grupos (es solo admin/recepción), así que se le indica pedírselo a recepción.
+    const hint = document.getElementById('grupoHintVB');
+    if (hint) {
+      hint.innerHTML = (rol === ROLES.VENDEDOR)
+        ? 'Para crear un grupo nuevo, <strong>pídele a recepción</strong> que lo agregue.'
+        : 'Para crear un grupo nuevo, ve a <strong>Administrar grupos</strong> (menú “Más” en POC).';
+    }
     VB._draftKey = 'vend_batch_draft_' + user.uid;
     VB.restoreDraft();
     setTimeout(() => document.getElementById('clienteGlobal')?.focus(), 100);
