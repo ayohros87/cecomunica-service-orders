@@ -10,6 +10,7 @@ window.VB = {
   gruposClienteCache:     new Map(),
   _draftKey:              null,
   _timeoutCliente:        null,
+  _autosaveTimer:         null,
 
   // ---- LS cache helpers ----
   lsGet(key) {
@@ -134,6 +135,23 @@ window.VB = {
     contenedor.appendChild(lista);
   },
 
+  // Carga automática: si el texto escrito coincide exactamente con un cliente
+  // del caché (y aún no hay uno seleccionado), lo fija y carga sus grupos sin
+  // tener que pulsar "Buscar". Se llama en el blur del input.
+  async intentarCargarGruposAuto() {
+    if (this.clienteIDSeleccionado) return;
+    const texto = (document.getElementById('clienteGlobal').value || '').trim();
+    if (texto.length < 3) return;
+    if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (_) {} }
+    const needle = FMT.normalize(texto);
+    const hit = (this.clientesCache || []).find(c => c.norm === needle);
+    if (!hit) return;
+    this.clienteIDSeleccionado     = hit.id;
+    this.clienteNombreSeleccionado = hit.nombre;
+    document.getElementById('clienteGlobal').value = hit.nombre;
+    this.buscarGruposCliente();
+  },
+
   // ---- Groups search ----
   async buscarGruposCliente() {
     const escrito    = (document.getElementById('clienteGlobal').value || '').trim();
@@ -226,6 +244,7 @@ window.VB = {
     cont.innerHTML = arr.map((g, i) => `
       <span class="chip-x">${g} <button title="Quitar del batch" onclick="VB.quitarGrupo(${i})">×</button></span>
     `).join('');
+    this.scheduleAutosave();
   },
 
   quitarGrupo(index) {
@@ -263,6 +282,7 @@ window.VB = {
     document.getElementById('tableSection').style.display = 'flex';
     document.getElementById('exportSection').style.display = 'flex';
     document.getElementById('actionCard').style.display = 'block';
+    document.getElementById('tablaToolbar').style.display = 'flex';
     this.actualizarResumenBatch();
     const cuerpo = document.getElementById('cuerpoTabla');
     cuerpo.innerHTML = '';
@@ -286,7 +306,7 @@ window.VB = {
           ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${m.label}</option>`).join('')}
         </select>
       </td>
-      <td><button class="btn btn-danger" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch();">❌</button></td>
+      <td><button class="btn btn-danger" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave();">❌</button></td>
     `;
     fila.dataset.cliente = cliente;
     document.getElementById('tablaEquipos').style.display = 'table';
@@ -296,9 +316,11 @@ window.VB = {
     document.getElementById('tableSection').style.display = 'flex';
     document.getElementById('exportSection').style.display = 'flex';
     document.getElementById('actionCard').style.display = 'block';
+    document.getElementById('tablaToolbar').style.display = 'flex';
     this.actualizarResumenBatch();
+    this.scheduleAutosave();
     fila.addEventListener('click', () => fila.classList.toggle('selected'));
-    fila.addEventListener('keydown', e => { if (e.key === 'Delete') { fila.remove(); VB.actualizarResumenBatch(); } });
+    fila.addEventListener('keydown', e => { if (e.key === 'Delete') { fila.remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave(); } });
   },
 
   toggleGrupo(index, master) {
@@ -331,6 +353,7 @@ window.VB = {
     document.getElementById('tableSection').style.display = 'none';
     document.getElementById('exportSection').style.display = 'none';
     document.getElementById('actionCard').style.display = 'none';
+    document.getElementById('tablaToolbar').style.display = 'none';
     this.actualizarResumenBatch();
   },
 
@@ -344,9 +367,15 @@ window.VB = {
   },
 
   setStep(step) {
-    document.getElementById('step-prep').classList.toggle('active', step === 'prep');
-    document.getElementById('step-rev').classList.toggle('active', step === 'rev');
-    document.getElementById('step-exp').classList.toggle('active', step === 'exp');
+    // El stepper de la topbar se retiró (las secciones numeradas son el único
+    // indicador de progreso). Si no existen los nodos, no-op.
+    const p = document.getElementById('step-prep');
+    const r = document.getElementById('step-rev');
+    const e = document.getElementById('step-exp');
+    if (!p || !r || !e) return;
+    p.classList.toggle('active', step === 'prep');
+    r.classList.toggle('active', step === 'rev');
+    e.classList.toggle('active', step === 'exp');
   },
 
   limpiarTodo() {
@@ -457,9 +486,8 @@ window.VB = {
   },
 
   // ---- Draft autosave ----
-  saveDraft() {
-    if (!this._draftKey) return;
-    const draft = {
+  _collectDraft() {
+    return {
       cliente: document.getElementById('clienteGlobal').value || '',
       modelo:  document.getElementById('modeloGlobal').value  || '',
       grupos:  document.getElementById('grupoInput').value    || '',
@@ -471,8 +499,41 @@ window.VB = {
         grupos: Array.from(tr.querySelectorAll('.grupo')).map(ch => !!ch.checked)
       }))
     };
+  },
+  _writeDraft(draft) {
+    if (!this._draftKey) return;
     localStorage.setItem(this._draftKey, JSON.stringify(draft));
+  },
+  _setAutosaveStatus(state) {
+    const el = document.getElementById('autosaveStatus');
+    if (!el) return;
+    if (state === 'idle')   { el.textContent = ''; return; }
+    if (state === 'saving') { el.textContent = '· Guardando…'; return; }
+    const t = new Date().toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+    el.textContent = `· Borrador guardado ✓ ${t}`;
+  },
+  // Autoguardado con debounce — se dispara al editar campos o la tabla, para
+  // que el vendedor no pierda el trabajo si cierra la pestaña.
+  scheduleAutosave() {
+    if (!this._draftKey) return;
+    this._setAutosaveStatus('saving');
+    clearTimeout(this._autosaveTimer);
+    this._autosaveTimer = setTimeout(() => this.autoSaveDraft(), 1500);
+  },
+  autoSaveDraft() {
+    if (!this._draftKey) return;
+    const draft = this._collectDraft();
+    // No sobreescribir un borrador previo con uno vacío (p.ej. tras "Limpiar").
+    const vacio = !draft.cliente && !draft.grupos && !draft.lista && !(draft.tabla || []).length;
+    if (vacio) { this._setAutosaveStatus('idle'); return; }
+    try { this._writeDraft(draft); this._setAutosaveStatus('saved'); }
+    catch (e) { console.warn('Autoguardado falló:', e); }
+  },
+  saveDraft() {
+    if (!this._draftKey) return;
+    this._writeDraft(this._collectDraft());
     Toast.show('Borrador guardado', 'ok');
+    this._setAutosaveStatus('saved');
   },
 
   restoreDraft() {
@@ -512,7 +573,9 @@ window.VB = {
 
   clearDraft() {
     if (!this._draftKey) return;
+    clearTimeout(this._autosaveTimer);
     localStorage.removeItem(this._draftKey);
+    this._setAutosaveStatus('idle');
     Toast.show('Borrador eliminado', 'warn');
   },
 
@@ -544,10 +607,24 @@ window.VB = {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); VB.generarTabla(); Toast.show('Tabla generada', 'ok'); }
     });
 
-    ['clienteGlobal','grupoInput','serialesPaste'].forEach(id => {
+    ['clienteGlobal','serialesPaste'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener('input', () => VB.updateStepBadges());
+      if (el) el.addEventListener('input', () => { VB.updateStepBadges(); VB.scheduleAutosave(); });
     });
+    const modeloEl = document.getElementById('modeloGlobal');
+    if (modeloEl) modeloEl.addEventListener('change', () => VB.scheduleAutosave());
+
+    // Carga automática de grupos al salir del campo cliente (pequeño retraso
+    // para que un clic en una sugerencia gane la selección primero).
+    const clienteEl = document.getElementById('clienteGlobal');
+    if (clienteEl) clienteEl.addEventListener('blur', () => setTimeout(() => VB.intentarCargarGruposAuto(), 200));
+
+    // Autoguardado al editar cualquier celda de la tabla (delegación).
+    const cuerpo = document.getElementById('cuerpoTabla');
+    if (cuerpo) {
+      cuerpo.addEventListener('input',  () => VB.scheduleAutosave());
+      cuerpo.addEventListener('change', () => VB.scheduleAutosave());
+    }
 
     document.addEventListener('DOMContentLoaded', () => { VB.setStep('prep'); VB.updateStepBadges(); });
   }

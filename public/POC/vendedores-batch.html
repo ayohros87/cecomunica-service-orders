@@ -8,7 +8,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <title>Ingreso de Equipos por Vendedor - Cecomunica</title>
+  <title>Preparar Equipos PoC por Vendedor - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
@@ -71,6 +71,16 @@
     }
     .table-scroll-hint { margin-top: var(--sp-2); font-size: 12px; color: var(--fg-3); }
 
+    /* Banner "qué es esto" + estado de autoguardado */
+    .vb-intro {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: var(--accent-soft); border: 1px solid var(--accent-line);
+      border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: var(--sp-4);
+      font-size: 13px; color: var(--fg-2); line-height: 1.5;
+    }
+    .vb-intro i { color: var(--accent); flex: 0 0 auto; margin-top: 2px; width: 18px; height: 18px; }
+    .autosave-status { color: var(--fg-3); font-size: 12px; white-space: nowrap; }
+
     /* Action grid (botones de export) */
     .action-grid {
       display: grid;
@@ -89,16 +99,7 @@
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbarFor('index', {
-      title: '<i data-lucide="briefcase"></i> Ingreso de Equipos PoC — Vendedores',
-      leftSlot: `
-        <div style="margin-top: 4px;">
-          <span style="font-size: 13px; color: var(--fg-3); font-weight: 500;">Flujo:</span>
-          <span class="stepper">
-            <span class="step active" id="step-prep">Preparar</span>
-            <span class="step" id="step-rev">Revisar</span>
-            <span class="step" id="step-exp">Exportar</span>
-          </span>
-        </div>`,
+      title: '<i data-lucide="briefcase"></i> Preparar Equipos PoC — Vendedores',
       actions: [
         { id: 'btnGuardarBorrador', title: 'Ctrl+S',
           label: '<i data-lucide="save"></i> Guardar borrador' },
@@ -111,6 +112,17 @@
   </script>
 
   <div class="app-wrap app-wrap--full">
+
+    <!-- Qué es esto + estado de autoguardado -->
+    <div class="vb-intro">
+      <i data-lucide="info"></i>
+      <div>
+        Esta herramienta <strong>prepara</strong> los equipos de un cliente y genera un archivo —
+        <strong>no los carga al sistema</strong>. Al terminar, descarga el <strong>JSON</strong> y
+        envíalo a recepción para que los cargue.
+        <span id="autosaveStatus" class="autosave-status"></span>
+      </div>
+    </div>
 
     <!-- STEP 1: Datos del cliente -->
     <div class="form-section-header">
@@ -126,7 +138,7 @@
           <button class="btn btn-ghost btn-sm" type="button" onclick="VB.refrescarClientes()" title="Actualizar lista de clientes"><i data-lucide="refresh-cw"></i> Actualizar</button>
         </div>
         <div id="sugerenciasClientes" style="position:relative;"></div>
-        <span class="form-hint">Escribe parte del nombre o selecciónalo de la lista. Si el navegador auto-completó, haz clic en Buscar para cargar los grupos.</span>
+        <span class="form-hint">Escribe parte del nombre y selecciónalo de la lista — sus grupos se cargan solos. (Si hace falta, también puedes pulsar <strong>Buscar</strong>.)</span>
       </div>
     </div>
 
@@ -153,10 +165,11 @@
       <div id="grupoChips" class="chips-editor"></div>
 
       <div class="form-field" style="margin-top:var(--sp-3);">
-        <label class="form-label" for="serialesPaste">Lista de equipos <span class="req">*</span> <span class="optional">(uno por línea)</span></label>
+        <label class="form-label" for="serialesPaste">Nombres de los equipos <span class="req">*</span> <span class="optional">(uno por línea)</span></label>
         <textarea class="form-input form-textarea" id="serialesPaste"
           style="font-family:var(--font-mono); font-size:13px;"
-          placeholder="Ej: Radio 1&#10;Radio 2&#10;Radio 3"></textarea>
+          placeholder="Ej: Radio Ventas 1&#10;Radio Ventas 2&#10;Radio Bodega 1"></textarea>
+        <span class="form-hint">Un nombre por línea — uno por cada equipo. El serial y el Unit ID se asignan después, cuando recepción los carga.</span>
       </div>
 
       <div class="form-actions" style="justify-content:center;">
@@ -171,8 +184,13 @@
       <span class="badge info" id="resumenBatch">Sin filas</span>
     </div>
 
+    <div class="form-actions" id="tablaToolbar" style="display:none; justify-content:flex-start; margin-bottom:var(--sp-2);">
+      <button class="btn btn-secondary btn-sm" onclick="VB.agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
+    </div>
+
     <div id="scrollHintEquipos" class="table-scroll-hint" style="display:none;">
       Si tienes muchos grupos, desliza horizontalmente el cuadro para ver y marcar todas las columnas.
+      Usa la casilla del encabezado de cada grupo para <strong>marcar/desmarcar toda la columna</strong>.
     </div>
 
     <div class="app-table-wrap" id="wrapTablaEquipos" style="display:none;">
@@ -191,12 +209,14 @@
     </div>
 
     <div class="ds-card ds-card-padded" id="actionCard" style="display:none; margin-bottom:var(--sp-4);">
-      <p class="form-section-title" style="margin-bottom:var(--sp-3);">Acciones rápidas</p>
+      <p class="form-section-title" style="margin-bottom:var(--sp-2);">Revisión y exportación</p>
+      <span class="form-hint" style="display:block; margin-bottom:var(--sp-3);">
+        Envía el <strong>JSON</strong> a recepción para cargar los equipos. El Excel es solo para revisar.
+      </span>
       <div class="action-grid">
-        <button class="btn btn-secondary" onclick="VB.agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
-        <button class="btn btn-primary" onclick="VB.mostrarTablaResultado()"><i data-lucide="eye"></i> Revisar resultado</button>
-        <button class="btn btn-primary" onclick="VB.descargarExcel()"><i data-lucide="download"></i> Descargar Excel</button>
-        <button class="btn btn-ghost" onclick="VB.descargarJSON()"><i data-lucide="file-json"></i> Descargar JSON</button>
+        <button class="btn btn-secondary" onclick="VB.mostrarTablaResultado()"><i data-lucide="eye"></i> Revisar resultado</button>
+        <button class="btn btn-primary" onclick="VB.descargarJSON()"><i data-lucide="file-json"></i> Descargar para recepción (JSON)</button>
+        <button class="btn btn-ghost" onclick="VB.descargarExcel()"><i data-lucide="download"></i> Excel (solo revisar)</button>
       </div>
     </div>
 
