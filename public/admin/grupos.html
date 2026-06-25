@@ -81,6 +81,67 @@
 
     .btn-xs { font-size: 11px; padding: 2px 8px; }
 
+    /* Barra de prefijo del cliente seleccionado */
+    .gp-prefijo-bar { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); min-height: 0; }
+    .gp-prefijo-bar:empty { display: none; }
+    .gp-prefijo-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--fg-2);
+      background: var(--accent-soft); border: 1px solid var(--accent);
+      padding: 3px 10px; border-radius: 999px;
+    }
+    .gp-prefijo-pill strong { font-family: var(--font-mono); letter-spacing: 1px; color: var(--accent); }
+    .gp-prefijo-pill--none { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+
+    /* Modal de migración de prefijos */
+    .gp-modal-overlay {
+      position: fixed; inset: 0; z-index: 9998;
+      background: rgba(0,0,0,.5);
+      display: flex; align-items: center; justify-content: center;
+      padding: var(--sp-4);
+    }
+    .gp-modal {
+      background: var(--surface-card); border-radius: var(--radius-lg);
+      width: 760px; max-width: 100%; max-height: 88vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    .gp-modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border-subtle);
+    }
+    .gp-modal-head h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    .gp-modal-close { background: none; border: none; font-size: 26px; line-height: 1; cursor: pointer; color: var(--fg-3); }
+    .gp-modal-close:hover { color: var(--fg-1); }
+    .gp-modal-body { padding: var(--sp-4) var(--sp-5); overflow-y: auto; }
+    .gp-mig-intro { font-size: 13px; color: var(--fg-2); margin: 0 0 var(--sp-3); }
+    .gp-mig-head-row, .gp-mig-row {
+      display: grid; grid-template-columns: 1fr 84px 90px 1.2fr; gap: 10px; align-items: center;
+    }
+    .gp-mig-head-row {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--fg-3);
+      padding: 0 4px 6px; border-bottom: 1px solid var(--border-subtle);
+    }
+    .gp-mig-list { max-height: 48vh; overflow-y: auto; }
+    .gp-mig-row { padding: 6px 4px; border-bottom: 1px solid var(--border-subtle); font-size: 13px; }
+    .gp-mig-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gp-mig-prefix {
+      width: 100%; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 2px;
+      text-align: center; font-weight: 700; padding: 5px 6px;
+      border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--surface-card);
+    }
+    .gp-mig-prefix.is-invalid { border-color: #F59E0B; background: #FFFBEB; }
+    .gp-mig-prefix.is-dup { border-color: #DC2626; background: #FEF2F2; color: #991B1B; }
+    .gp-mig-ngrupos { font-size: 12px; color: var(--fg-3); text-align: center; }
+    .gp-mig-ej { font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+    .gp-mig-empty { padding: 20px; text-align: center; color: var(--fg-3); font-size: 13px; }
+    .gp-mig-status { font-size: 12px; color: var(--fg-2); margin-top: var(--sp-3); min-height: 16px; }
+    .gp-modal-foot {
+      display: flex; align-items: center; gap: 8px;
+      padding: var(--sp-3) var(--sp-5); border-top: 1px solid var(--border-subtle);
+    }
+    .gp-mig-count { font-size: 12px; color: var(--fg-3); }
+
     /* Toolbar de scan global (en columna izquierda) */
     .gp-scan-toolbar {
       display: flex; gap: 6px; flex-wrap: wrap;
@@ -131,15 +192,16 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Cada empresa tiene su <strong>catálogo de grupos</strong> en
-        <code>clientes/{id}.poc_grupos</code>. Aquí puedes <strong>agregar</strong>,
-        renombrar, fusionar y eliminar grupos — los cambios se aplican al catálogo y
-        se propagan a todos los equipos PoC no eliminados del cliente. Un grupo puede
-        existir en el catálogo sin equipos asignados todavía.
+        Cada empresa tiene un <strong>prefijo único de 3 letras</strong>
+        (<code>clientes/{id}.poc_grupo_prefix</code>) y su <strong>catálogo de grupos</strong>
+        (<code>poc_grupos</code>). Todos los grupos quedan como <code>PREFIJO-Nombre</code>.
+        Aquí puedes <strong>agregar</strong>, renombrar, fusionar y eliminar grupos — los
+        cambios se aplican al catálogo y se propagan a los equipos PoC del cliente. Usa
+        <strong>“Asignar prefijos y migrar”</strong> para prefijar todo en lote.
       </div>
-      <button id="btnGpSeedCatalogo" class="btn btn-secondary btn-sm" style="display:none; flex:0 0 auto; margin-left:auto;"
-              title="Inicializa el catálogo de TODOS los clientes a partir de los grupos que hoy tienen sus equipos (idempotente)">
-        <i data-lucide="database"></i> Inicializar catálogos
+      <button id="btnGpMigrarPrefijos" class="btn btn-secondary btn-sm" style="display:none; flex:0 0 auto; margin-left:auto;"
+              title="Asigna un prefijo único de 3 letras a cada empresa y renombra sus grupos a PREFIJO-Nombre (catálogo + equipos)">
+        <i data-lucide="tags"></i> Asignar prefijos y migrar
       </button>
     </div>
 
@@ -189,6 +251,8 @@
           <span id="gpLastUpdate" class="ts">—</span>
         </div>
 
+        <div id="gpPrefijoBar" class="gp-prefijo-bar"></div>
+
         <div id="gpDupBanner"></div>
 
         <div class="ds-card" style="padding:0;">
@@ -205,6 +269,34 @@
   </div>
 
   <div id="toasts" class="toast-region"></div>
+
+  <!-- Modal: asignar prefijos y migrar grupos -->
+  <div id="gpMigOverlay" class="gp-modal-overlay" style="display:none;">
+    <div class="gp-modal" role="dialog" aria-modal="true" aria-labelledby="gpMigTitle">
+      <div class="gp-modal-head">
+        <h3 id="gpMigTitle"><i data-lucide="tags"></i> Asignar prefijos y migrar grupos</h3>
+        <button class="gp-modal-close" id="gpMigClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="gp-modal-body">
+        <p class="gp-mig-intro">
+          Revisa y edita el prefijo de 3 letras de cada empresa. Al aplicar, cada grupo se
+          renombra a <code>PREFIJO-Nombre</code> en el catálogo y en los equipos. Es idempotente
+          (se puede repetir). Los prefijos deben ser únicos.
+        </p>
+        <div class="gp-mig-head-row">
+          <span>Empresa</span><span>Prefijo</span><span>Grupos</span><span>Ejemplo</span>
+        </div>
+        <div id="gpMigList" class="gp-mig-list"></div>
+        <div id="gpMigStatus" class="gp-mig-status" aria-live="polite"></div>
+      </div>
+      <div class="gp-modal-foot">
+        <span id="gpMigCount" class="gp-mig-count"></span>
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn btn-ghost" id="gpMigCancel">Cancelar</button>
+        <button class="btn btn-primary" id="gpMigApply"><i data-lucide="play"></i> Aplicar migración</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     if (typeof lucide !== 'undefined') lucide.createIcons();

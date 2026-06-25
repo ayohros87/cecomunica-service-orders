@@ -48,13 +48,17 @@ const PocService = {
   // corre las DOS queries y combina los resultados (dedup por docId) — los
   // equipos legacy escriben solo `cliente` (string) sin `cliente_id`, así que
   // sin esto faltarían equipos cuando se llama por id pero hay nombre legacy.
-  async getByCliente({ clienteId = null, clienteNombre = null } = {}) {
+  async getByCliente({ clienteId = null, clienteNombre = null, fresh = false } = {}) {
     if (!clienteId && !clienteNombre) return [];
     const db = firebase.firestore();
     const found = new Map();
+    // `fresh` salta la caché y lee del servidor — necesario en herramientas
+    // admin que deben ver TODOS los equipos (la caché del navegador puede tener
+    // solo las páginas cargadas en la lista PoC y devolver un subconjunto).
     const runQuery = async (field, value) => {
-      let snap = await db.collection('poc_devices').where(field, '==', value).get({ source: 'cache' });
-      if (snap.empty) snap = await db.collection('poc_devices').where(field, '==', value).get();
+      const base = db.collection('poc_devices').where(field, '==', value);
+      let snap = fresh ? await base.get() : await base.get({ source: 'cache' });
+      if (!fresh && snap.empty) snap = await base.get();
       snap.docs.forEach(d => { if (!found.has(d.id)) found.set(d.id, { id: d.id, ...d.data() }); });
     };
     const tasks = [];
@@ -77,10 +81,12 @@ const PocService = {
   //
   // Los Sets de grupos dedupan por forma cruda (case-sensitive trimmed) —
   // las helpers de gruposAnalisis hacen su propia normalización.
-  async getClientesConGrupos() {
+  async getClientesConGrupos({ fresh = false } = {}) {
     const db = firebase.firestore();
-    let snap = await db.collection('poc_devices').get({ source: 'cache' });
-    if (snap.empty) snap = await db.collection('poc_devices').get();
+    let snap = fresh
+      ? await db.collection('poc_devices').get()
+      : await db.collection('poc_devices').get({ source: 'cache' });
+    if (!fresh && snap.empty) snap = await db.collection('poc_devices').get();
     const ids = new Set();
     const nombres = new Set();
     const gruposPorId = new Map();
@@ -216,10 +222,39 @@ const PocService = {
     await this._writeCatalogo(clienteId, transformFn(base.slice()));
   },
 
+  // ── Prefijo de grupo por empresa (clientes/{id}.poc_grupo_prefix) ─────
+  async getGrupoPrefix(clienteId) {
+    if (!clienteId) return null;
+    const ref = firebase.firestore().collection('clientes').doc(clienteId);
+    let doc;
+    try {
+      doc = await ref.get({ source: 'cache' });
+      if (!doc.exists) doc = await ref.get();
+    } catch (_) {
+      doc = await ref.get();
+    }
+    if (!doc.exists) return null;
+    const p = FMT.normalizePrefijo(doc.data().poc_grupo_prefix);
+    return p.length === 3 ? p : null;
+  },
+
+  async setGrupoPrefix(clienteId, prefijo) {
+    const p = FMT.normalizePrefijo(prefijo);
+    if (!clienteId || p.length !== 3) return null;
+    await firebase.firestore().collection('clientes').doc(clienteId).update({
+      poc_grupo_prefix: p,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: firebase.auth().currentUser?.uid || null,
+    });
+    return p;
+  },
+
   // Add one group to the catalog without touching any device. Returns
   // { added, grupos }. No-op (added:false) if an accent/case variant exists.
-  async agregarGrupoCatalogo({ clienteId = null, clienteNombre = null, nombre }) {
-    const n = FMT.normalizeGrupo(nombre);
+  // Si se pasa `prefijo`, el nombre se guarda como "AAA-Nombre".
+  async agregarGrupoCatalogo({ clienteId = null, clienteNombre = null, nombre, prefijo = null }) {
+    let n = FMT.normalizeGrupo(nombre);
+    if (prefijo) n = FMT.aplicarPrefijoGrupo(prefijo, n);
     if (!clienteId || !n) return { added: false, grupos: [] };
     let base = await this.getCatalogoGrupos(clienteId);
     if (base === null) {
@@ -231,12 +266,68 @@ const PocService = {
     return { added: !exists, grupos };
   },
 
+  // Migración: aplica `prefijo` a TODOS los grupos del cliente — equipos
+  // (server-fresh) + catálogo — y guarda el prefijo en el cliente. Idempotente
+  // y soporta cambio de prefijo (lee el anterior para no duplicar). Devuelve
+  // { affected, grupos, prefijo }.
+  async aplicarPrefijoCliente({ clienteId = null, clienteNombre = null, prefijo }) {
+    const pfx = FMT.normalizePrefijo(prefijo);
+    if (!clienteId || pfx.length !== 3) return { affected: 0, grupos: [], prefijo: null };
+    const oldPfx = await this.getGrupoPrefix(clienteId);   // puede ser null
+    const db = firebase.firestore();
+    const uid = firebase.auth().currentUser?.uid || null;
+    const CHUNK = 450;
+
+    // Equipos (server-fresh, así migramos el universo completo).
+    const devices = (await this.getByCliente({ clienteId, clienteNombre, fresh: true }))
+      .filter(d => d.deleted !== true);
+
+    const prefijar = g => FMT.aplicarPrefijoGrupo(pfx, g, oldPfx);
+    const targets = [];
+    for (const d of devices) {
+      const orig = (d.grupos || []).map(g => (g || '').toString().trim()).filter(Boolean);
+      const next = Array.from(new Set(orig.map(prefijar).filter(Boolean)));
+      const cambia = next.length !== orig.length || next.some((g, i) => g !== orig[i]);
+      if (cambia) targets.push({ id: d.id, next });
+    }
+    for (let i = 0; i < targets.length; i += CHUNK) {
+      const batch = db.batch();
+      for (const t of targets.slice(i, i + CHUNK)) {
+        batch.update(db.collection('poc_devices').doc(t.id), {
+          grupos: t.next,
+          updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+          updated_by: uid,
+        });
+      }
+      await batch.commit();
+    }
+
+    // Catálogo = (catálogo actual ∪ grupos de equipos), todo prefijado.
+    const cat = await this.getCatalogoGrupos(clienteId);
+    const universo = new Set();
+    (cat || []).forEach(g => { const v = prefijar(g); if (v) universo.add(v); });
+    devices.forEach(d => (d.grupos || []).forEach(g => {
+      const v = prefijar((g || '').toString().trim());
+      if (v) universo.add(v);
+    }));
+    const grupos = await this._writeCatalogo(clienteId, Array.from(universo));
+
+    // Guarda el prefijo en el cliente.
+    await db.collection('clientes').doc(clienteId).update({
+      poc_grupo_prefix: pfx,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: uid,
+    });
+
+    return { affected: targets.length, grupos, prefijo: pfx };
+  },
+
   // Admin/data-entry view: union of catalog + device-derived groups.
   // Returns { grupos: [{ nombre, count }], tieneCatalogo }. count = number of
   // non-deleted devices tagging the group (0 for catalog-only groups).
-  async listGruposConCatalogo({ clienteId = null, clienteNombre = null } = {}) {
+  async listGruposConCatalogo({ clienteId = null, clienteNombre = null, fresh = false } = {}) {
     const [derivados, catalogo] = await Promise.all([
-      this.listGruposByCliente({ clienteId, clienteNombre }),
+      this.listGruposByCliente({ clienteId, clienteNombre, fresh }),
       clienteId ? this.getCatalogoGrupos(clienteId) : Promise.resolve(null),
     ]);
     const map = new Map();   // normKey → { nombre, count }
@@ -256,8 +347,8 @@ const PocService = {
 
   // Returns [{ nombre, count, devices: [deviceId] }] sorted by nombre.
   // Excludes soft-deleted devices.
-  async listGruposByCliente({ clienteId = null, clienteNombre = null } = {}) {
-    const devices = await this.getByCliente({ clienteId, clienteNombre });
+  async listGruposByCliente({ clienteId = null, clienteNombre = null, fresh = false } = {}) {
+    const devices = await this.getByCliente({ clienteId, clienteNombre, fresh });
     const map = new Map();
     devices.forEach(d => {
       if (d.deleted === true) return;

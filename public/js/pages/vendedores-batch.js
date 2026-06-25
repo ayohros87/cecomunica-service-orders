@@ -5,6 +5,7 @@ window.VB = {
   modelosDisponibles:     [],
   clienteIDSeleccionado:  null,
   clienteNombreSeleccionado: null,
+  clientePrefijo:         null,   // prefijo de 3 letras del cliente (si tiene)
   clientesCache:          [],
   clientesCargados:       false,
   gruposClienteCache:     new Map(),
@@ -180,6 +181,8 @@ window.VB = {
           const cat = await PocService.getCatalogoGrupos(this.clienteIDSeleccionado);
           if (Array.isArray(cat)) found = cat.slice();
         } catch (_) {}
+        try { this.clientePrefijo = await PocService.getGrupoPrefix(this.clienteIDSeleccionado); }
+        catch (_) { this.clientePrefijo = null; }
       }
       if (found === null) {
         const devices = await PocService.getByCliente({
@@ -234,8 +237,15 @@ window.VB = {
     if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
   },
 
+  // Prefija el nombre con el prefijo del cliente (si tiene). Sin prefijo, el
+  // grupo se guarda crudo y la migración de admin lo prefijará luego.
+  prefijarGrupo(nombre) {
+    const g = FMT.normalizeGrupo(nombre);
+    return this.clientePrefijo ? FMT.aplicarPrefijoGrupo(this.clientePrefijo, g) : g;
+  },
+
   agregarGrupoPrompt() {
-    const g = FMT.normalizeGrupo(prompt('Nombre del grupo:'));
+    const g = this.prefijarGrupo(prompt('Nombre del grupo:'));
     if (!g) return;
     const input = document.getElementById('grupoInput');
     const arr   = FMT.dedupGrupos(input.value.split(',').concat([g]));
@@ -246,7 +256,7 @@ window.VB = {
   },
 
   agregarGrupo() {
-    const nuevoGrupo = FMT.normalizeGrupo(prompt('Nombre del nuevo grupo:'));
+    const nuevoGrupo = this.prefijarGrupo(prompt('Nombre del nuevo grupo:'));
     if (!nuevoGrupo) return;
     const input = document.getElementById('grupoInput');
     const arr   = FMT.dedupGrupos(input.value.split(',').concat([nuevoGrupo]));
@@ -406,6 +416,7 @@ window.VB = {
     if (fb) fb.remove();
     this.clienteIDSeleccionado   = null;
     this.clienteNombreSeleccionado = null;
+    this.clientePrefijo          = null;
     VB.grupos = [];
     this.renderGrupoChips();
     this.actualizarResumenBatch();

@@ -5,6 +5,7 @@ window.PocEdit = {
   _row:   null,
   _data:  null,
   _catalogo: [],   // grupos del catálogo del cliente (clientes/{id}.poc_grupos)
+  _prefijo: null,  // prefijo de 3 letras del cliente (clientes/{id}.poc_grupo_prefix)
 
   abrir(row, docId, data) {
     if (PocState.esLectura()) {
@@ -69,10 +70,15 @@ window.PocEdit = {
   // cliente_id → sin catálogo (solo chips de los grupos que ya trae el equipo).
   async _cargarCatalogo(clienteId) {
     this._catalogo = [];
+    this._prefijo = null;
     try {
       if (clienteId) {
-        const cat = await PocService.getCatalogoGrupos(clienteId);
+        const [cat, pfx] = await Promise.all([
+          PocService.getCatalogoGrupos(clienteId),
+          PocService.getGrupoPrefix(clienteId),
+        ]);
         this._catalogo = Array.isArray(cat) ? cat : [];
+        this._prefijo = pfx || null;
       }
     } catch (e) {
       console.warn('No se pudo cargar el catálogo de grupos:', e?.code || e);
@@ -132,9 +138,13 @@ window.PocEdit = {
       const docId        = this._docId;
       const rowRef       = this._row;
       const originalData = this._data;
-      const grupos = FMT.dedupGrupos(
+      let grupos = FMT.dedupGrupos(
         document.getElementById('drawer-grupos').value.split(',')
       );
+      // Si el cliente tiene prefijo, todos los grupos quedan como PREFIJO-Nombre.
+      if (this._prefijo) {
+        grupos = FMT.dedupGrupos(grupos.map(g => FMT.aplicarPrefijoGrupo(this._prefijo, g)));
+      }
       const user   = firebase.auth().currentUser;
 
       // Modelo is now picked from a dropdown — write the canonical FK and a

@@ -59,5 +59,38 @@ window.FMT = {
       seen.add(k); out.push(norm);
     }
     return out;
+  },
+
+  // ── Prefijo de grupo PoC (3 letras por empresa) ───────────────────────
+  // Todos los grupos de un cliente llevan un prefijo único "AAA-Nombre".
+  PREFIJO_SEP: "-",
+
+  // Normaliza un candidato a prefijo: solo A-Z, mayúsculas, máx 3 letras.
+  normalizePrefijo(p) {
+    return (p || "").toString().normalize("NFD").replace(/\p{Diacritic}/gu, "")
+      .toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  },
+
+  // Aplica el prefijo al nombre del grupo → "AAA-Nombre". Idempotente: si el
+  // nombre ya empieza con este prefijo (o con `prefijoAnterior`, para cambios
+  // de prefijo), reemplaza solo esa parte sin duplicar. Conserva bases como
+  // "GPS-Tracker" cuando NO coinciden con el prefijo del cliente.
+  aplicarPrefijoGrupo(prefijo, nombre, prefijoAnterior) {
+    const pfx = FMT.normalizePrefijo(prefijo);
+    let base = FMT.normalizeGrupo(nombre);
+    if (!pfx) return base;
+    const old = FMT.normalizePrefijo(prefijoAnterior);
+    const up = base.toUpperCase();
+    if (old && up.startsWith(old + FMT.PREFIJO_SEP)) {
+      base = FMT.normalizeGrupo(base.slice(old.length + 1));
+    } else if (up.startsWith(pfx + FMT.PREFIJO_SEP)) {
+      base = FMT.normalizeGrupo(base.slice(pfx.length + 1));
+    }
+    return base ? (pfx + FMT.PREFIJO_SEP + base) : "";
+  },
+
+  // ¿El nombre ya empieza con un prefijo "AAA-"?
+  tienePrefijo(nombre) {
+    return /^[A-Za-z]{3}-/.test((nombre || "").toString().trim());
   }
 };

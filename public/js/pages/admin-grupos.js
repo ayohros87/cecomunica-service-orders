@@ -23,7 +23,10 @@
     clienteSel: null,        // { id, nombre } | null
     grupos: [],              // [{ nombre, count }] — union catálogo + derivado
     tieneCatalogo: false,    // true si el cliente ya tiene clientes/{id}.poc_grupos
-    rol: null,               // rol del usuario actual (gate del sembrado masivo)
+    clientePrefijo: null,    // prefijo de 3 letras del cliente seleccionado | null
+    prefijosTomados: new Set(), // todos los prefijos ya usados (unicidad global)
+    migFilas: [],            // filas del modal de migración de prefijos
+    rol: null,               // rol del usuario actual (gate de la migración)
     seleccionados: new Set(),
 
     // Scan de duplicados — null = ningún scan corrido, sino objeto con análisis.
@@ -48,15 +51,21 @@
     try {
       // Paralelo: clientes + qué clientes tienen al menos un grupo. Ambas
       // lecturas son cache-first y se reusan dentro del PocService.
+      // fresh:true en getClientesConGrupos → lee TODOS los equipos del servidor
+      // (la caché parcial dejaba grupos fuera de la lista).
       const [lista, conGrupos] = await Promise.all([
         ClientesService.getAllClientes(),
-        PocService.getClientesConGrupos(),
+        PocService.getClientesConGrupos({ fresh: true }),
       ]);
       State.clientes = lista.map(c => ({
         id: c.id,
         nombre: (c.nombre || '').toString(),
         norm: FMT.normalize(c.nombre || ''),
+        prefijo: FMT.normalizePrefijo(c.poc_grupo_prefix) || null,
       }));
+      // Set global de prefijos ya tomados (para proponer únicos).
+      State.prefijosTomados = new Set();
+      State.clientes.forEach(c => { if (c.prefijo) State.prefijosTomados.add(c.prefijo); });
       // Normaliza los nombres del set una sola vez para comparación O(1).
       const nombresNorm = new Set();
       conGrupos.nombres.forEach(n => nombresNorm.add(FMT.normalize(n)));
@@ -251,15 +260,21 @@
   async function cargarGruposCliente() {
     if (!State.clienteSel) return;
     try {
-      const { grupos, tieneCatalogo } = await PocService.listGruposConCatalogo({
-        clienteId: State.clienteSel.id,
-        clienteNombre: State.clienteSel.nombre,
-      });
+      const [{ grupos, tieneCatalogo }, prefijo] = await Promise.all([
+        PocService.listGruposConCatalogo({
+          clienteId: State.clienteSel.id,
+          clienteNombre: State.clienteSel.nombre,
+          fresh: true,
+        }),
+        PocService.getGrupoPrefix(State.clienteSel.id),
+      ]);
       State.grupos = grupos;
       State.tieneCatalogo = tieneCatalogo;
+      State.clientePrefijo = prefijo;
       $('gpLastUpdate').textContent = nowTs();
       const addBtn = $('btnGpAddGrupo');
       if (addBtn) addBtn.disabled = false;
+      renderPrefijoBar();
       renderGrupos();
       renderDupBanner();
     } catch (e) {
@@ -268,13 +283,94 @@
     }
   }
 
-  // Add a group to the client's catalog (no device needed). Shows up with a
-  // "0 equipos" badge until it's tagged onto equipos at data-entry.
+  // ── Prefijo del cliente ──────────────────────────────────────────────
+  function renderPrefijoBar() {
+    const bar = $('gpPrefijoBar');
+    if (!bar) return;
+    if (!State.clienteSel) { bar.innerHTML = ''; return; }
+    const p = State.clientePrefijo;
+    bar.innerHTML = p
+      ? `<span class="gp-prefijo-pill">Prefijo <strong>${esc(p)}</strong></span>
+         <button id="gpEditPrefijo" class="btn btn-ghost btn-xs">Cambiar prefijo…</button>`
+      : `<span class="gp-prefijo-pill gp-prefijo-pill--none">Sin prefijo asignado</span>
+         <button id="gpEditPrefijo" class="btn btn-secondary btn-xs">Asignar prefijo…</button>`;
+    const b = $('gpEditPrefijo');
+    if (b) b.addEventListener('click', cambiarPrefijoCliente);
+  }
+
+  // Pide y valida un prefijo único de 3 letras; lo propone si el cliente no
+  // tiene. Al confirmar, re-aplica el prefijo a TODOS los grupos del cliente.
+  function pedirPrefijo(propuesto) {
+    const tomados = new Set(State.prefijosTomados);
+    if (State.clientePrefijo) tomados.delete(State.clientePrefijo); // puede conservar el propio
+    const entrada = prompt(
+      `Prefijo de 3 letras (A-Z) para ${State.clienteSel.nombre}:\n` +
+      `Los grupos quedarán como PREFIJO-Nombre.`,
+      propuesto
+    );
+    if (entrada === null) return null;
+    const pfx = FMT.normalizePrefijo(entrada);
+    if (pfx.length !== 3) { Toast.show('El prefijo debe ser exactamente 3 letras (A-Z).', 'bad'); return null; }
+    if (tomados.has(pfx)) { Toast.show(`El prefijo "${pfx}" ya lo usa otra empresa.`, 'bad'); return null; }
+    return pfx;
+  }
+
+  async function cambiarPrefijoCliente() {
+    if (!State.clienteSel) return;
+    const tomados = new Set(State.prefijosTomados);
+    if (State.clientePrefijo) tomados.delete(State.clientePrefijo);
+    const propuesto = State.clientePrefijo || GruposAnalisis.proponerPrefijo(State.clienteSel.nombre, tomados);
+    const pfx = pedirPrefijo(propuesto);
+    if (!pfx) return;
+    if (!confirm(`Aplicar el prefijo "${pfx}" a TODOS los grupos de ${State.clienteSel.nombre} (catálogo + equipos)?`)) return;
+    try {
+      const { affected, prefijo } = await PocService.aplicarPrefijoCliente({
+        clienteId: State.clienteSel.id,
+        clienteNombre: State.clienteSel.nombre,
+        prefijo: pfx,
+      });
+      if (State.clientePrefijo) State.prefijosTomados.delete(State.clientePrefijo);
+      State.prefijosTomados.add(prefijo);
+      State.clientePrefijo = prefijo;
+      const c = State.clientes.find(x => x.id === State.clienteSel.id);
+      if (c) c.prefijo = prefijo;
+      invalidarCachesGrupos();
+      Toast.show(`Prefijo "${prefijo}" aplicado en ${affected} equipo${affected === 1 ? '' : 's'} ✅`, 'ok');
+      await cargarGruposCliente();
+    } catch (e) {
+      console.error('Error aplicando prefijo:', e);
+      Toast.show('Error al aplicar el prefijo.', 'bad');
+    }
+  }
+
+  // Add a group to the client's catalog (no device needed). Auto-prefija con el
+  // prefijo del cliente; si no tiene, lo propone y lo guarda antes de crear.
   async function agregarGrupo() {
     if (!State.clienteSel) return;
-    const nombre = FMT.normalizeGrupo(prompt(`Nuevo grupo para ${State.clienteSel.nombre}:`) || '');
-    if (!nombre) return;
-    if (State.grupos.some(g => FMT.normalize(g.nombre) === FMT.normalize(nombre))) {
+    let prefijo = State.clientePrefijo;
+    if (!prefijo) {
+      const propuesto = GruposAnalisis.proponerPrefijo(State.clienteSel.nombre, State.prefijosTomados);
+      const pfx = pedirPrefijo(propuesto);
+      if (!pfx) return;
+      try {
+        await PocService.setGrupoPrefix(State.clienteSel.id, pfx);
+      } catch (e) {
+        console.error('Error guardando prefijo:', e);
+        Toast.show('Error al guardar el prefijo.', 'bad');
+        return;
+      }
+      State.prefijosTomados.add(pfx);
+      State.clientePrefijo = pfx;
+      const c = State.clientes.find(x => x.id === State.clienteSel.id);
+      if (c) c.prefijo = pfx;
+      prefijo = pfx;
+      renderPrefijoBar();
+    }
+    const baseName = FMT.normalizeGrupo(prompt(`Nuevo grupo para ${State.clienteSel.nombre} (se guardará como ${prefijo}-…):`) || '');
+    if (!baseName) return;
+    const full = FMT.aplicarPrefijoGrupo(prefijo, baseName);
+    if (!full) return;
+    if (State.grupos.some(g => FMT.normalize(g.nombre) === FMT.normalize(full))) {
       Toast.show('Ese grupo ya existe para este cliente.', 'warn');
       return;
     }
@@ -282,10 +378,11 @@
       const { added } = await PocService.agregarGrupoCatalogo({
         clienteId: State.clienteSel.id,
         clienteNombre: State.clienteSel.nombre,
-        nombre,
+        nombre: baseName,
+        prefijo,
       });
       invalidarCachesGrupos();
-      Toast.show(added ? `Grupo "${nombre}" agregado ✅` : 'Ese grupo ya existía.', added ? 'ok' : 'warn');
+      Toast.show(added ? `Grupo "${full}" agregado ✅` : 'Ese grupo ya existía.', added ? 'ok' : 'warn');
       await cargarGruposCliente();
     } catch (e) {
       console.error('Error agregando grupo:', e);
@@ -434,62 +531,136 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  // ── Backfill: seed catalogs from device tags (admin-only, one-shot) ──
-  // Writes clientes/{id}.poc_grupos from the device-derived union already
-  // loaded in State.clientesConGrupos. Idempotent: skips clients that already
-  // have a catalog. Batched (450/commit).
-  async function sembrarCatalogos() {
+  // ── Migración de prefijos (admin-only) ──────────────────────────────
+  // Modal con la lista editable de empresas + su prefijo (propuesto o ya
+  // guardado). Al aplicar, cada grupo se renombra a PREFIJO-Nombre en catálogo
+  // + equipos (idempotente). El universo de grupos por cliente sale del scan
+  // server-fresh en State.clientesConGrupos (gruposCrudosDeCliente).
+  function abrirMigracion() {
     if (!State.clientesConGrupos) {
       Toast.show('Carga de clientes incompleta — recarga la página.', 'bad');
       return;
     }
-    if (!confirm(
-      'Inicializar el catálogo de grupos (poc_grupos) de cada cliente a partir de los grupos ' +
-      'que hoy tienen sus equipos.\n\n' +
-      'Solo escribe clientes que AÚN NO tienen catálogo (idempotente — se puede repetir sin riesgo). ¿Continuar?'
-    )) return;
-    const btn = $('btnGpSeedCatalogo');
-    if (btn) btn.disabled = true;
-    try {
-      // Full docs (cache-first) para saber quién ya tiene catálogo.
-      const full = await ClientesService.getAllClientes();
-      const yaTiene = new Set(full.filter(c => Array.isArray(c.poc_grupos)).map(c => c.id));
-      const pendientes = [];
-      for (const c of State.clientes) {
-        if (yaTiene.has(c.id)) continue;
-        const grupos = gruposCrudosDeCliente(c);
-        if (grupos.length) pendientes.push({ id: c.id, grupos });
-      }
-      if (!pendientes.length) {
-        Toast.show('Todos los catálogos ya están al día. Nada que sembrar.', 'ok');
-        return;
-      }
-      const db = firebase.firestore();
-      const uid = firebase.auth().currentUser?.uid || null;
-      const CHUNK = 450;
-      let ok = 0;
-      for (let i = 0; i < pendientes.length; i += CHUNK) {
-        const batch = db.batch();
-        for (const p of pendientes.slice(i, i + CHUNK)) {
-          const limpio = FMT.dedupGrupos(p.grupos)
-            .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
-          batch.update(db.collection('clientes').doc(p.id), {
-            poc_grupos: limpio,
-            updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-            updated_by: uid,
-          });
-          ok++;
-        }
-        await batch.commit();
-      }
-      Toast.show(`Catálogo inicializado en ${ok} cliente${ok === 1 ? '' : 's'} ✅`, 'ok');
-      if (State.clienteSel) await cargarGruposCliente();
-    } catch (e) {
-      console.error('Error sembrando catálogos:', e);
-      Toast.show('Error al inicializar catálogos.', 'bad');
-    } finally {
-      if (btn) btn.disabled = false;
+    // Prefijos ya guardados en OTROS clientes (semilla de unicidad).
+    const usados = new Set(State.prefijosTomados);
+    const filas = [];
+    for (const c of State.clientes) {
+      const grupos = gruposCrudosDeCliente(c);
+      if (!grupos.length && !c.prefijo) continue;  // nada que migrar
+      filas.push({ id: c.id, nombre: c.nombre, grupos, nGrupos: grupos.length, prefijo: c.prefijo || '' });
     }
+    // Propone prefijo a quien no tenga, manteniendo unicidad global.
+    filas.forEach(f => {
+      if (!f.prefijo) f.prefijo = GruposAnalisis.proponerPrefijo(f.nombre, usados);
+      usados.add(f.prefijo);
+    });
+    State.migFilas = filas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+    $('gpMigStatus').textContent = '';
+    renderMigList();
+    $('gpMigOverlay').style.display = 'flex';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function cerrarMigracion() {
+    $('gpMigOverlay').style.display = 'none';
+  }
+
+  function ejemploFila(f) {
+    const ej = f.grupos.slice(0, 2).map(g => FMT.aplicarPrefijoGrupo(f.prefijo, g)).filter(Boolean).join(', ');
+    return ej + (f.grupos.length > 2 ? '…' : '');
+  }
+
+  function renderMigList() {
+    const cont = $('gpMigList');
+    if (!State.migFilas.length) {
+      cont.innerHTML = '<div class="gp-mig-empty">No hay empresas con grupos para migrar.</div>';
+      validarMig();
+      return;
+    }
+    cont.innerHTML = State.migFilas.map((f, i) => `
+      <div class="gp-mig-row" data-i="${i}">
+        <span class="gp-mig-name" title="${esc(f.nombre)}">${esc(f.nombre)}</span>
+        <input class="gp-mig-prefix" data-i="${i}" maxlength="3" value="${esc(f.prefijo)}"
+               autocomplete="off" spellcheck="false" aria-label="Prefijo de ${esc(f.nombre)}">
+        <span class="gp-mig-ngrupos">${f.nGrupos} grupo${f.nGrupos === 1 ? '' : 's'}</span>
+        <span class="gp-mig-ej" title="${esc(ejemploFila(f))}">${esc(ejemploFila(f))}</span>
+      </div>`).join('');
+    cont.querySelectorAll('.gp-mig-prefix').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const i = +inp.dataset.i;
+        const norm = FMT.normalizePrefijo(inp.value);
+        State.migFilas[i].prefijo = norm;
+        if (inp.value !== norm) inp.value = norm;
+        const row = inp.closest('.gp-mig-row');
+        const ej = row.querySelector('.gp-mig-ej');
+        ej.textContent = ejemploFila(State.migFilas[i]);
+        ej.title = ejemploFila(State.migFilas[i]);
+        validarMig();
+      });
+    });
+    validarMig();
+  }
+
+  function validarMig() {
+    const counts = new Map();
+    State.migFilas.forEach(f => {
+      if (f.prefijo.length === 3) counts.set(f.prefijo, (counts.get(f.prefijo) || 0) + 1);
+    });
+    let invalid = 0, dups = 0;
+    $('gpMigList').querySelectorAll('.gp-mig-row').forEach(row => {
+      const i = +row.dataset.i;
+      const f = State.migFilas[i];
+      const inp = row.querySelector('.gp-mig-prefix');
+      const isInvalid = f.prefijo.length !== 3;
+      const isDup = !isInvalid && counts.get(f.prefijo) > 1;
+      inp.classList.toggle('is-invalid', isInvalid);
+      inp.classList.toggle('is-dup', isDup);
+      if (isInvalid) invalid++;
+      if (isDup) dups++;
+    });
+    const ok = invalid === 0 && dups === 0 && State.migFilas.length > 0;
+    $('gpMigApply').disabled = !ok;
+    $('gpMigCount').textContent = State.migFilas.length === 0
+      ? ''
+      : (ok ? `${State.migFilas.length} empresa(s) listas`
+            : `${invalid} inválido(s), ${dups} duplicado(s)`);
+  }
+
+  async function aplicarMigracion() {
+    const filas = State.migFilas;
+    if (!filas.length) return;
+    if (!confirm(
+      `Aplicar prefijos y renombrar grupos en ${filas.length} empresa(s)?\n\n` +
+      `Esto modifica el catálogo Y los equipos en producción. Es idempotente (se puede repetir).`
+    )) return;
+    const apply = $('gpMigApply');
+    const cancel = $('gpMigCancel');
+    const status = $('gpMigStatus');
+    apply.disabled = true; if (cancel) cancel.disabled = true;
+    let ok = 0, fail = 0;
+    for (let i = 0; i < filas.length; i++) {
+      const f = filas[i];
+      status.textContent = `Migrando ${i + 1}/${filas.length}: ${f.nombre}…`;
+      try {
+        await PocService.aplicarPrefijoCliente({ clienteId: f.id, clienteNombre: f.nombre, prefijo: f.prefijo });
+        ok++;
+        const c = State.clientes.find(x => x.id === f.id);
+        if (c) c.prefijo = f.prefijo;
+        State.prefijosTomados.add(f.prefijo);
+      } catch (e) {
+        console.error('Migración falló para', f.nombre, e);
+        fail++;
+      }
+    }
+    status.textContent = `Listo: ${ok} ok${fail ? `, ${fail} con error` : ''}.`;
+    Toast.show(`Migración: ${ok} empresa(s) ✅${fail ? `, ${fail} con error` : ''}`, fail ? 'warn' : 'ok');
+    if (cancel) cancel.disabled = false;
+    if (State.clienteSel) {
+      State.clientePrefijo = await PocService.getGrupoPrefix(State.clienteSel.id);
+      renderPrefijoBar();
+      await cargarGruposCliente();
+    }
+    setTimeout(cerrarMigracion, 1400);
   }
 
   // ── Cache invalidation ───────────────────────────────────────────────
@@ -507,7 +678,9 @@
   async function renombrarGrupo(nombre) {
     const nuevo = prompt(`Nuevo nombre para "${nombre}":`, nombre);
     if (!nuevo) return;
-    const nuevoN = nuevo.toString().trim().replace(/\s+/g, ' ');
+    let nuevoN = FMT.normalizeGrupo(nuevo);
+    // Conserva el prefijo del cliente en el nombre nuevo.
+    if (State.clientePrefijo) nuevoN = FMT.aplicarPrefijoGrupo(State.clientePrefijo, nuevoN);
     if (!nuevoN || nuevoN === nombre) return;
     if (!confirm(`Renombrar "${nombre}" → "${nuevoN}" en todos los equipos de ${State.clienteSel.nombre}?`)) return;
     try {
@@ -603,8 +776,13 @@
     $('btnGpReload').addEventListener('click', () => cargarGruposCliente());
     $('btnGpAddGrupo').addEventListener('click', () => agregarGrupo());
     $('btnGpMerge').addEventListener('click', () => mergeSeleccionados());
-    const seed = $('btnGpSeedCatalogo');
-    if (seed) seed.addEventListener('click', () => sembrarCatalogos());
+    const mig = $('btnGpMigrarPrefijos');
+    if (mig) mig.addEventListener('click', abrirMigracion);
+    const migClose = $('gpMigClose');   if (migClose)  migClose.addEventListener('click', cerrarMigracion);
+    const migCancel = $('gpMigCancel');  if (migCancel) migCancel.addEventListener('click', cerrarMigracion);
+    const migApply = $('gpMigApply');    if (migApply)  migApply.addEventListener('click', aplicarMigracion);
+    const migOv = $('gpMigOverlay');
+    if (migOv) migOv.addEventListener('click', e => { if (e.target === migOv) cerrarMigracion(); });
     const sExact = $('btnGpScanExactos');
     if (sExact) sExact.addEventListener('click', () => runScan('exactos'));
     const sFuzzy = $('btnGpScanFuzzy');
@@ -628,10 +806,10 @@
         return;
       }
       State.rol = rol;
-      // El sembrado masivo (inicializa catálogos de TODOS los clientes) es
-      // admin-only; recepción administra grupos por cliente pero no migra en lote.
-      const seed = $('btnGpSeedCatalogo');
-      if (seed && rol === ROLES.ADMIN) seed.style.display = '';
+      // La migración masiva de prefijos es admin-only; recepción administra
+      // grupos por cliente pero no migra todas las empresas en lote.
+      const mig = $('btnGpMigrarPrefijos');
+      if (mig && rol === ROLES.ADMIN) mig.style.display = '';
       await cargarClientes();
     } catch (e) {
       console.error('Error inicializando admin/grupos:', e);
