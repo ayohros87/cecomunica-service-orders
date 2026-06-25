@@ -172,9 +172,17 @@ const PocService = {
   // absent (caller distinguishes "empty catalog" from "no catalog yet").
   async getCatalogoGrupos(clienteId) {
     if (!clienteId) return null;
-    const db = firebase.firestore();
-    let doc = await db.collection('clientes').doc(clienteId).get({ source: 'cache' });
-    if (!doc.exists) doc = await db.collection('clientes').doc(clienteId).get();
+    const ref = firebase.firestore().collection('clientes').doc(clienteId);
+    // OJO: get({source:'cache'}) sobre un DOC individual LANZA si no está en
+    // caché (las queries de colección sí devuelven vacío). Probamos caché y
+    // caemos al servidor ante cualquier fallo o cache-miss.
+    let doc;
+    try {
+      doc = await ref.get({ source: 'cache' });
+      if (!doc.exists) doc = await ref.get();
+    } catch (_) {
+      doc = await ref.get();
+    }
     if (!doc.exists) return null;
     const arr = doc.data().poc_grupos;
     return Array.isArray(arr) ? arr.slice() : null;
