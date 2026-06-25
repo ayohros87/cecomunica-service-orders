@@ -120,6 +120,29 @@
     /* Estado vacío de los chips de grupos */
     .chips-empty { font-size: 13px; color: var(--fg-3); padding: 4px 0; }
 
+    /* Barra "Aplicar a todas las filas" (reemplaza el marcar-toda-la-columna) */
+    .vb-bulk-bar {
+      display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+      padding: 8px 12px; margin-bottom: var(--sp-2);
+      background: var(--surface-sunken); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); font-size: 12px;
+    }
+    .vb-bulk-label { color: var(--fg-3); font-weight: 700; }
+    .vb-bulk-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+    .vb-bulk-item input { width: 14px; height: 14px; cursor: pointer; }
+
+    /* Celda "Grupos" por fila: chips toggle */
+    .grupos-cell { min-width: 240px; }
+    .row-grupos { display: flex; flex-wrap: wrap; gap: 4px; }
+    .grp-chip {
+      font-size: 11px; padding: 2px 9px; border-radius: 999px;
+      border: 1px solid var(--border-default); background: var(--surface-card);
+      color: var(--fg-3); cursor: pointer; white-space: nowrap;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    }
+    .grp-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .grp-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
     /* Action grid (botones de export) */
     .action-grid {
       display: grid;
@@ -235,9 +258,10 @@
         <div class="form-actions" id="tablaToolbar" style="justify-content:flex-start; margin-bottom:var(--sp-2);">
           <button class="btn btn-secondary btn-sm" onclick="VB.agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
         </div>
+        <div id="bulkBar" class="vb-bulk-bar" style="display:none;"></div>
         <div id="scrollHintEquipos" class="table-scroll-hint">
-          Desliza horizontalmente para ver todas las columnas. La casilla del encabezado de cada grupo
-          <strong>marca/desmarca toda la columna</strong>.
+          Toca los grupos de cada equipo en la columna <strong>Grupos</strong>. Usa
+          <strong>“Aplicar a todas”</strong> para marcar un grupo en todas las filas a la vez.
         </div>
         <div class="app-table-wrap" id="wrapTablaEquipos">
           <table id="tablaEquipos" class="app-table compact table-sticky-first">

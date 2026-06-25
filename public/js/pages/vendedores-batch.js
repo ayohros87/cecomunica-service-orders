@@ -269,13 +269,13 @@ window.VB = {
 
     const nombres = document.getElementById('serialesPaste').value.trim().split('\n').map(s => s.trim()).filter(Boolean);
     document.getElementById('encabezadoTabla').innerHTML = `
-      <th>Cliente</th>
       <th>Nombre del Radio</th>
-      <th><input type="checkbox" id="gpsMaster" onchange="VB.toggleGPS(this)"> GPS</th>
-      ${grupos.map((g, i) => `<th><input type='checkbox' onchange='VB.toggleGrupo(${i}, this)'> ${g}</th>`).join('')}
+      <th style="text-align:center;">GPS</th>
+      <th>Grupos</th>
       <th>Modelo</th>
       <th></th>
     `;
+    this._renderBulkBar();
     this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
     const cuerpo = document.getElementById('cuerpoTabla');
@@ -292,16 +292,43 @@ window.VB = {
     if (s4) s4.style.display = visible ? 'block' : 'none';
   },
 
+  _esc(s) {
+    return (s == null ? '' : String(s))
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+
+  // Barra "Aplicar a todas las filas": GPS + un toggle por grupo (master).
+  // Reemplaza el viejo marcar-toda-la-columna del encabezado de la matriz.
+  _renderBulkBar() {
+    const bar = document.getElementById('bulkBar');
+    if (!bar) return;
+    if (!VB.grupos.length) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML =
+      `<span class="vb-bulk-label">Aplicar a todas:</span>` +
+      `<label class="vb-bulk-item"><input type="checkbox" class="bulk-gps"> GPS</label>` +
+      VB.grupos.map(g =>
+        `<label class="vb-bulk-item"><input type="checkbox" class="bulk-grupo" data-grupo="${this._esc(g)}"> ${this._esc(g)}</label>`
+      ).join('');
+    const gps = bar.querySelector('.bulk-gps');
+    if (gps) gps.addEventListener('change', e => { VB.toggleGPS(e.target); VB.scheduleAutosave(); });
+    bar.querySelectorAll('.bulk-grupo').forEach(cb => {
+      cb.addEventListener('change', e => { VB.aplicarGrupoATodas(e.target.dataset.grupo, e.target.checked); VB.scheduleAutosave(); });
+    });
+  },
+
   agregarFila(_, nombreRadio = '') {
     const cliente      = document.getElementById('clienteGlobal').value;
     const modeloGlobal = document.getElementById('modeloGlobal').value;
     const grupos       = VB.grupos;
     const fila         = document.createElement('tr');
+    const gruposChips = grupos.map(g =>
+      `<button type="button" class="grp-chip" data-grupo="${VB._esc(g)}" onclick="event.stopPropagation(); VB.toggleChipFila(this)">${VB._esc(g)}</button>`
+    ).join('');
     fila.innerHTML = `
-      <td>${cliente}</td>
-      <td><input type="text" class="table-input nombre" value="${nombreRadio}"></td>
-      <td><input type="checkbox" class="table-checkbox gps"></td>
-      ${grupos.map(() => `<td><input type="checkbox" class="table-checkbox grupo"></td>`).join('')}
+      <td><input type="text" class="table-input nombre" value="${VB._esc(nombreRadio)}"></td>
+      <td style="text-align:center;"><input type="checkbox" class="table-checkbox gps"></td>
+      <td class="grupos-cell">${grupos.length ? `<div class="row-grupos">${gruposChips}</div>` : '<span class="chips-empty">—</span>'}</td>
       <td>
         <select class="table-input table-select modelo">
           <option value="">— Selecciona modelo —</option>
@@ -319,11 +346,17 @@ window.VB = {
     fila.addEventListener('keydown', e => { if (e.key === 'Delete') { fila.remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave(); } });
   },
 
-  toggleGrupo(index, master) {
-    document.querySelectorAll('#cuerpoTabla tr').forEach(fila => {
-      const checks = fila.querySelectorAll('.grupo');
-      if (checks[index]) checks[index].checked = master.checked;
+  // Aplica (o quita) un grupo en TODAS las filas — desde la barra "Aplicar a todas".
+  aplicarGrupoATodas(grupo, on) {
+    document.querySelectorAll('#cuerpoTabla .grp-chip').forEach(chip => {
+      if (chip.dataset.grupo === grupo) chip.classList.toggle('is-on', !!on);
     });
+  },
+
+  // Toggle de un chip de grupo en una fila concreta.
+  toggleChipFila(chip) {
+    chip.classList.toggle('is-on');
+    this.scheduleAutosave();
   },
 
   toggleGPS(master) {
@@ -337,12 +370,15 @@ window.VB = {
     if (thead) {
       thead.innerHTML = `
         <tr id="encabezadoTabla">
-          <th>Cliente</th><th>Nombre del Radio</th>
-          <th><input type="checkbox" id="gpsMaster" onchange="VB.toggleGPS(this)"> GPS</th>
-          <th>Modelo</th><th>🗑️</th>
+          <th>Nombre del Radio</th>
+          <th style="text-align:center;">GPS</th>
+          <th>Grupos</th>
+          <th>Modelo</th><th></th>
         </tr>`;
     }
     if (tbody) tbody.innerHTML = '';
+    const bar = document.getElementById('bulkBar');
+    if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
     this._mostrarPasosTabla(false);
     this.actualizarResumenBatch();
   },
@@ -408,8 +444,7 @@ window.VB = {
       const nombre   = (fila.querySelector('.nombre')?.value || '').trim();
       const gps      = !!fila.querySelector('.gps')?.checked;
       const modeloId = (fila.querySelector('.modelo')?.value || '').trim();
-      const checks   = fila.querySelectorAll('.grupo');
-      const gruposMarcados = VB.grupos.filter((g, i) => checks[i]?.checked);
+      const gruposMarcados = Array.from(fila.querySelectorAll('.grp-chip.is-on')).map(c => c.dataset.grupo);
       if (nombre) {
         const modeloSel = this.modelosDisponibles.find(m => m.id === modeloId);
         datos.push({ cliente_id: cid, cliente_nombre: cn, radio_name: nombre, gps, modelo_id: modeloId || null, modelo_label: modeloSel ? modeloSel.label : '', grupos: gruposMarcados });
@@ -454,9 +489,9 @@ window.VB = {
       const fromCatalog = this.modelosDisponibles.find(m => m.id === modeloId);
       const fromSelect  = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].textContent.trim() : '';
       const modeloLabel = fromCatalog ? fromCatalog.label : (fromSelect === '— Selecciona modelo —' ? '' : fromSelect);
-      const checks = fila.querySelectorAll('.grupo');
+      const selecc = new Set(Array.from(fila.querySelectorAll('.grp-chip.is-on')).map(c => c.dataset.grupo));
       const row    = { Cliente: cliente, 'Nombre del Radio': nombre, GPS: gps, Modelo: modeloLabel };
-      VB.grupos.forEach((g, i) => { row[g] = checks[i]?.checked ? '✅' : ''; });
+      VB.grupos.forEach(g => { row[g] = selecc.has(g) ? '✅' : ''; });
       datos.push(row);
     });
     const ws = XLSX.utils.json_to_sheet(datos);
@@ -489,7 +524,7 @@ window.VB = {
         nombre: tr.querySelector('.nombre')?.value || '',
         gps:    !!tr.querySelector('.gps')?.checked,
         modelo: tr.querySelector('.modelo')?.value || '',
-        grupos: Array.from(tr.querySelectorAll('.grupo')).map(ch => !!ch.checked)
+        grupos: Array.from(tr.querySelectorAll('.grp-chip')).map(c => c.classList.contains('is-on'))
       }))
     };
   },
@@ -543,10 +578,11 @@ window.VB = {
       if ((d.tabla || []).length) {
         VB.grupos = (d.grupos || '').split(',').map(s => s.trim()).filter(Boolean);
         document.getElementById('encabezadoTabla').innerHTML = `
-          <th>Cliente</th><th>Nombre del Radio</th>
-          <th><input type="checkbox" id="gpsMaster" onchange="VB.toggleGPS(this)"> GPS</th>
-          ${VB.grupos.map((g, i) => `<th><input type='checkbox' onchange='VB.toggleGrupo(${i}, this)'> ${g}</th>`).join('')}
-          <th>Modelo</th><th>🗑️</th>`;
+          <th>Nombre del Radio</th>
+          <th style="text-align:center;">GPS</th>
+          <th>Grupos</th>
+          <th>Modelo</th><th></th>`;
+        this._renderBulkBar();
         this._mostrarPasosTabla(true);
         const tbody = document.getElementById('cuerpoTabla');
         tbody.innerHTML = '';
@@ -556,7 +592,7 @@ window.VB = {
           tr.querySelector('.gps').checked = !!r.gps;
           const sel = tr.querySelector('.modelo');
           if (sel) sel.value = r.modelo || '';
-          tr.querySelectorAll('.grupo').forEach((ch, idx) => { ch.checked = !!(r.grupos || [])[idx]; });
+          tr.querySelectorAll('.grp-chip').forEach((c, idx) => { c.classList.toggle('is-on', !!(r.grupos || [])[idx]); });
         });
         this.actualizarResumenBatch();
         Toast.show('Borrador restaurado', 'ok');
