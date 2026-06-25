@@ -89,56 +89,56 @@ function bucketDe(cl){
 
 function setVista(v){ vista=v; document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('is-on', b.dataset.v===v)); render(); }
 
+function emptyState(msg){
+  return `<div class="empty-state"><i data-lucide="inbox" style="width:34px;height:34px;opacity:.4;"></i><div class="es-title">${msg}</div></div>`;
+}
+
 function render(){
   const cnt={sugeridos:0,multiples:0,sin_match:0,vinculados:0};
   clientes.forEach(c=>{ cnt[bucketDe(c)]++; });
   Object.keys(cnt).forEach(k=>{ const el=document.getElementById('cnt-'+k); if(el) el.textContent=cnt[k]; });
-  const el=document.getElementById('cnt-dupes'); if(el) el.textContent=dupRucs.length;
+  const eld=document.getElementById('cnt-dupes'); if(eld) eld.textContent=dupRucs.length;
 
   const cont=document.getElementById('lista');
   if(vista==='dupes'){ cont.innerHTML = renderDupes(); if(window.lucide) lucide.createIcons(); return; }
 
   const rows = clientes.filter(c=>bucketDe(c)===vista)
     .sort((a,b)=>norm(a.empresa||a.nombre).localeCompare(norm(b.empresa||b.nombre)));
-  if(!rows.length){ cont.innerHTML='<p style="color:var(--fg-3); padding:8px;">Sin clientes en esta vista.</p>'; return; }
-  cont.innerHTML = rows.map(rowCliente).join('');
+  if(!rows.length){ cont.innerHTML = emptyState('Sin clientes en esta vista.'); if(window.lucide) lucide.createIcons(); return; }
+  cont.innerHTML = `
+    <div class="app-table-wrap" style="border:none; box-shadow:none;">
+      <table class="app-table">
+        <thead><tr><th>Cliente</th><th>QuickBooks</th><th style="text-align:right;">Acción</th></tr></thead>
+        <tbody>${rows.map(filaCliente).join('')}</tbody>
+      </table>
+    </div>`;
   if(window.lucide) lucide.createIcons();
 }
 
-function rowCliente(cl){
+function filaCliente(cl){
   const nombre = esc(cl.empresa || cl.nombre || '—');
   const tax = cl.ruc || cl.cedula || '';
-  const meta = `<div style="font-size:12px; color:var(--fg-3);">${tax?('RUC/CI: '+esc(tax)):'sin RUC'}</div>`;
+  const cli = `<td><div style="font-weight:600;">${nombre}</div><div style="font-size:12px; color:var(--fg-3);">${tax?('RUC/CI: '+esc(tax)):'sin RUC'}</div></td>`;
 
   if(cl.qbo_customer_id){
-    return card(nombre, meta, `
-      <span class="r-chip r-ok">✓ ${esc(cl.qbo_customer_name||'vinculado')}</span>
-      <button class="btn sm btn-ghost" onclick="desvincular('${cl.id}')"><i data-lucide="unlink"></i> Desvincular</button>`);
+    return `<tr>${cli}
+      <td><span class="r-chip r-ok">✓ ${esc(cl.qbo_customer_name||'vinculado')}</span></td>
+      <td style="text-align:right; white-space:nowrap;"><button class="btn btn-sm btn-ghost" onclick="desvincular('${cl.id}')"><i data-lucide="unlink"></i> Desvincular</button></td></tr>`;
   }
   const mi = matchInfo(cl);
   const cands = mi.custs;
   if(!cands.length){
-    return card(nombre, meta, `<span class="r-chip r-bad">sin match en QBO</span>`);
+    return `<tr>${cli}<td><span class="r-chip r-bad">sin match en QBO</span></td><td></td></tr>`;
   }
-  const botones = cands.map(c=>`
+  const lista = cands.map(c=>`
     <div style="display:flex; align-items:center; gap:8px; margin:3px 0;">
-      <button class="btn sm btn-primary" onclick="vincular('${cl.id}','${c.qbo_customer_id}','${esc(c.display_name).replace(/'/g,"\\'")}')"><i data-lucide="link"></i> Vincular</button>
-      <span style="font-size:13px;">${esc(c.display_name)} <span style="color:var(--fg-3); font-size:12px;">${c.ruc?('· '+esc(c.ruc)):''} · saldo ${money(c.balance)}</span> ${(mi.via==='ruc'&&!c._parecido)?'<span class="r-chip r-bad" title="El RUC coincide pero el nombre no se parece — posible RUC errado en QBO">⚠ nombre distinto</span>':''}</span>
+      <button class="btn btn-sm btn-primary" onclick="vincular('${cl.id}','${c.qbo_customer_id}','${esc(c.display_name).replace(/'/g,"\\'")}')"><i data-lucide="link"></i> Vincular</button>
+      <span style="font-size:13px;">${esc(c.display_name)}<span style="color:var(--fg-3); font-size:12px;">${c.ruc?(' · '+esc(c.ruc)):''} · saldo ${money(c.balance)}</span>${(mi.via==='ruc'&&!c._parecido)?' <span class="r-chip r-bad" title="RUC coincide pero el nombre no se parece — posible RUC errado en QBO">⚠ nombre distinto</span>':''}</span>
     </div>`).join('');
   let badge='';
-  if(cands.length>1) badge += '<span class="r-chip r-warn">múltiples cuentas</span> ';
-  if(mi.nombreDistinto) badge += '<span class="r-chip r-bad">RUC coincide · nombre distinto</span>';
-  return card(nombre, meta, botones, badge);
-}
-
-function card(nombre, meta, acciones, badge=''){
-  return `
-    <div class="ds-card" style="padding:var(--sp-3) var(--sp-4); margin-bottom:var(--sp-2);">
-      <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start;">
-        <div style="min-width:240px;"><div style="font-weight:600;">${nombre} ${badge}</div>${meta}</div>
-        <div style="display:flex; flex-direction:column; align-items:flex-start; gap:2px;">${acciones}</div>
-      </div>
-    </div>`;
+  if(cands.length>1) badge += '<span class="r-chip r-warn">múltiples</span> ';
+  if(mi.nombreDistinto) badge += '<span class="r-chip r-bad">verificar</span>';
+  return `<tr>${cli}<td>${lista}</td><td style="text-align:right; white-space:nowrap;">${badge}</td></tr>`;
 }
 
 function renderDupes(){

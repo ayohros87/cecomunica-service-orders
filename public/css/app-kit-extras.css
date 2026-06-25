@@ -517,3 +517,45 @@
   .auth-shell .auth-form-wrap { padding: 24px; }
   .auth-shell .auth-card { box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.10)); padding: 24px; }
 }
+
+/* ============================================================================
+   Facturación — componentes compartidos
+   (antes copiados a mano en cada página: control de pestañas, chips de
+   verificación, badges de mapeo, dot de guardado, empty-state, KPIs).
+   ========================================================================== */
+
+/* Control segmentado de pestañas (con contador opcional) */
+.seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; flex-wrap:wrap; }
+.seg-btn { border:0; background:var(--surface-card); color:var(--fg-2); padding:5px 12px; font-size:13px; font-weight:600; cursor:pointer; }
+.seg-btn.is-on { background:var(--accent); color:#fff; }
+.seg-btn + .seg-btn { border-left:1px solid var(--border-default); }
+.seg-btn span { display:inline-block; min-width:18px; margin-left:4px; padding:0 6px; border-radius:999px; background:rgba(0,0,0,.08); font-size:11px; }
+.seg-btn.is-on span { background:rgba(255,255,255,.25); }
+
+/* Chips de verificación (readiness) y badges de mapeo */
+.r-chip { display:inline-flex; align-items:center; gap:3px; border-radius:999px; padding:1px 8px; font-size:11px; font-weight:600; border:1px solid transparent; white-space:nowrap; }
+.r-ok, .map-ok   { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+.r-warn, .map-warn { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
+.r-bad   { background:#FEF2F2; color:#991B1B; border-color:#FECACA; }
+.map-badge { display:inline-flex; align-items:center; gap:4px; border-radius:999px; padding:1px 8px; font-size:11px; font-weight:600; border:1px solid transparent; white-space:nowrap; }
+.map-none { color: var(--fg-4); }
+
+/* Variantes de botón por estado */
+.btn.btn-warn { background:#FEF3C7; color:#92400E; border:1px solid #FDE68A; }
+.btn.btn-warn:hover { background:#FDE68A; }
+.btn.btn-ok { background:#ECFDF5; color:#065F46; border:1px solid #A7F3D0; }
+.btn.btn-ok:hover { background:#D1FAE5; }
+
+/* Dot de guardado por fila (hojas de cálculo de tarifas) */
+.row-status { position:absolute; left:4px; top:50%; transform:translateY(-50%); width:6px; height:6px; border-radius:50%; background:transparent; transition:background var(--dur-fast,.15s); }
+.row-status.saving { background:var(--status-warning); animation:rowPulse 1s ease-in-out infinite; }
+.row-status.saved  { background:var(--status-online); }
+.row-status.error  { background:var(--status-critical); }
+@keyframes rowPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* Estado vacío y KPIs */
+.empty-state { text-align:center; padding:34px 16px; color:var(--fg-3); }
+.empty-state .es-title { font-weight:600; color:var(--fg-2); margin:6px 0 2px; }
+.fact-kpis { display:flex; gap:20px; flex-wrap:wrap; align-items:center; font-size:13px; color:var(--fg-3); }
+.fact-kpis .k b { font-family:var(--font-mono); color:var(--fg-1); font-size:16px; display:block; line-height:1.1; }
+.fact-kpis .k.warn b { color:#92400E; }

@@ -98,18 +98,41 @@ function setVista(v){
   render();
 }
 
-function chip(ok, label, req){
-  const cls = ok ? 'r-ok' : (req ? 'r-bad' : 'r-warn');
-  const icon = ok ? '✓' : (req ? '✗' : '⚠');
-  return `<span class="r-chip ${cls}" title="${req?'Requerido':'Advertencia'}">${icon} ${label}</span>`;
+function emptyState(msg){
+  return `<div class="empty-state"><i data-lucide="inbox" style="width:34px;height:34px;opacity:.4;"></i><div class="es-title">${msg}</div></div>`;
+}
+
+// Celda de verificación: si todo OK muestra "✓ completo"; si no, solo los chips
+// de lo que falta (rojo = requerido, ámbar = recomendado). Más denso y escaneable.
+function checklistCell(r){
+  const items = [
+    ['Vigente', r.vigente, true], ['Mapeo QBO', r.mapeo, true],
+    ['Entrega', r.entrega, false], ['Seriales', r.seriales, false], ['Firmado', r.firmado, false],
+  ];
+  const faltan = items.filter(([,ok])=>!ok);
+  if(!faltan.length) return '<span class="r-chip r-ok">✓ completo</span>';
+  return '<div class="r-chips">' + faltan.map(([label,,req]) =>
+    `<span class="r-chip ${req?'r-bad':'r-warn'}" title="${req?'Requerido':'Recomendado'}">${req?'✗':'⚠'} ${label}</span>`).join('') + '</div>';
 }
 
 function render(){
   actualizarConteos();
   const cont = document.getElementById('lista');
   const rows = contratos.filter(c=>bucketDe(c)===vista);
-  if(!rows.length){ cont.innerHTML='<p style="color:var(--fg-3); padding:16px;">No hay contratos en esta vista.</p>'; return; }
-  cont.innerHTML = rows.map(cardContrato).join('');
+  if(!rows.length){ cont.innerHTML = emptyState('No hay contratos en esta vista.'); if(window.lucide) lucide.createIcons(); return; }
+  cont.innerHTML = `
+    <div class="app-table-wrap" style="border:none; box-shadow:none;">
+      <table class="app-table">
+        <thead><tr>
+          <th>Contrato / Cliente</th>
+          <th style="text-align:center;">Equipos</th>
+          <th>Verificación</th>
+          <th>${vista==='activos'?'Factura desde':'Fecha sugerida'}</th>
+          <th style="text-align:right;">Acciones</th>
+        </tr></thead>
+        <tbody id="tablaActivacion">${rows.map(filaContrato).join('')}</tbody>
+      </table>
+    </div>`;
   if(window.lucide) lucide.createIcons();
 }
 
@@ -117,58 +140,58 @@ function actualizarConteos(){
   const cnt={pendientes:0,listos:0,activos:0,en_espera:0,no_facturables:0};
   contratos.forEach(c=>{ cnt[bucketDe(c)]++; });
   Object.keys(cnt).forEach(k=>{ const el=document.getElementById('cnt-'+k); if(el) el.textContent=cnt[k]; });
+  const kpis=document.getElementById('kpis');
+  if(kpis){
+    const sinMapeo = contratos.filter(c=>c.facturable!==false && c.facturacion_estado!=='no_aplica' && !readiness(c).mapeo).length;
+    kpis.innerHTML =
+      `<span class="k"><b>${cnt.activos}</b>activos</span>`+
+      `<span class="k"><b>${cnt.listos}</b>listos para activar</span>`+
+      `<span class="k warn"><b>${cnt.pendientes}</b>pendientes</span>`+
+      `<span class="k warn"><b>${sinMapeo}</b>sin mapeo QBO</span>`;
+  }
 }
 
-function cardContrato(c){
+function filaContrato(c){
   const id=c.id;
   const r = readiness(c);
   const act = activosDe(c);
   const total = (c.equipos||[]).reduce((s,e)=>s+Number(e.cantidad||0),0);
-  const chips = [
-    chip(r.vigente,'Vigente',true), chip(r.mapeo,'Mapeo QBO',true),
-    chip(r.entrega,'Entrega',false), chip(r.seriales,'Seriales',false), chip(r.firmado,'Firmado',false),
-  ].join(' ');
-  const fechaSug = c.fecha_entrega_ultima ? fdate(c.fecha_entrega_ultima) : 'hoy';
   const defDate = c.fecha_entrega_ultima?.toDate
     ? c.fecha_entrega_ultima.toDate().toISOString().slice(0,10)
     : new Date().toISOString().slice(0,10);
 
+  const fechaCol = vista==='activos'
+    ? `<span style="color:var(--status-online);">${fdate(c.facturacion_fecha_inicio)}</span>`
+    : (vista==='listos'
+        ? `<input type="date" class="form-input" id="fi-${id}" value="${defDate}" style="height:30px; width:140px;" title="Fecha de inicio">`
+        : (c.fecha_entrega_ultima ? fdate(c.fecha_entrega_ultima) : '—'));
+
   let acciones='';
   if(vista==='listos'){
-    acciones = `
-      <input type="date" class="form-input" id="fi-${id}" value="${defDate}" style="height:32px; width:150px;" title="Fecha de inicio de facturación">
-      <button class="btn sm btn-primary" onclick="accion('${id}','activar')"><i data-lucide="play"></i> Activar</button>
-      ${!r.entrega?`<button class="btn sm btn-ghost" onclick="accion('${id}','confirmar_entrega')"><i data-lucide="truck"></i> Confirmar entrega</button>`:''}
-      <button class="btn sm btn-ghost" onclick="accion('${id}','no_facturable')"><i data-lucide="ban"></i> No factura</button>`;
+    acciones = `<button class="btn btn-sm btn-primary" onclick="accion('${id}','activar')"><i data-lucide="play"></i> Activar</button>
+      ${!r.entrega?`<button class="btn btn-sm btn-ghost" onclick="accion('${id}','confirmar_entrega')" title="Confirmar entrega"><i data-lucide="truck"></i></button>`:''}
+      <button class="btn btn-sm btn-ghost" onclick="accion('${id}','no_facturable')" title="No factura"><i data-lucide="ban"></i></button>`;
   } else if(vista==='pendientes'){
-    acciones = `
-      ${!r.entrega?`<button class="btn sm btn-ghost" onclick="accion('${id}','confirmar_entrega')"><i data-lucide="truck"></i> Confirmar entrega</button>`:''}
-      ${!r.mapeo?`<a class="btn sm btn-ghost" href="../inventario/modelos.html"><i data-lucide="git-compare"></i> Arreglar mapeo</a>`:''}
-      <button class="btn sm btn-ghost" onclick="accion('${id}','no_facturable')"><i data-lucide="ban"></i> No factura</button>`;
+    acciones = `${!r.entrega?`<button class="btn btn-sm btn-ghost" onclick="accion('${id}','confirmar_entrega')"><i data-lucide="truck"></i> Entrega</button>`:''}
+      ${!r.mapeo?`<a class="btn btn-sm btn-ghost" href="../inventario/modelos.html"><i data-lucide="git-compare"></i> Mapeo</a>`:''}
+      <button class="btn btn-sm btn-ghost" onclick="accion('${id}','no_facturable')" title="No factura"><i data-lucide="ban"></i></button>`;
   } else if(vista==='activos'){
-    acciones = `
-      <button class="btn sm btn-ghost" onclick="vistaPrevia('${id}')"><i data-lucide="file-text"></i> Vista previa factura</button>
-      <button class="btn sm btn-ghost" onclick="accion('${id}','en_espera')"><i data-lucide="pause"></i> Poner en espera</button>`;
+    acciones = `<button class="btn btn-sm btn-ghost" onclick="vistaPrevia('${id}')"><i data-lucide="file-text"></i> Vista previa</button>
+      <button class="btn btn-sm btn-ghost" onclick="accion('${id}','en_espera')" title="Poner en espera"><i data-lucide="pause"></i></button>`;
   } else if(vista==='en_espera'){
-    acciones = `<button class="btn sm btn-primary" onclick="accion('${id}','reactivar')"><i data-lucide="play"></i> Reactivar</button>`;
+    acciones = `<button class="btn btn-sm btn-primary" onclick="accion('${id}','reactivar')"><i data-lucide="play"></i> Reactivar</button>`;
   } else if(vista==='no_facturables'){
-    acciones = `<button class="btn sm btn-ghost" onclick="accion('${id}','facturable')"><i data-lucide="rotate-ccw"></i> Sí factura</button>`;
+    acciones = `<button class="btn btn-sm btn-ghost" onclick="accion('${id}','facturable')"><i data-lucide="rotate-ccw"></i> Sí factura</button>`;
   }
-  const lineaFact = vista==='activos'
-    ? `<div style="font-size:12px; color:var(--status-online); margin-top:2px;">Factura desde ${fdate(c.facturacion_fecha_inicio)}</div>` : '';
 
   return `
-    <div class="ds-card" style="padding:var(--sp-3) var(--sp-4); margin-bottom:var(--sp-2);">
-      <div style="display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start;">
-        <div style="min-width:240px;">
-          <div style="font-weight:600;">${esc(c.contrato_id||id)} · ${esc(c.cliente_nombre||'')}</div>
-          <div style="font-size:12px; color:var(--fg-3); margin:2px 0;">${act}/${total} equipos activos · entrega: ${fechaSug}</div>
-          <div class="r-chips">${chips}</div>
-          ${lineaFact}
-        </div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">${acciones}</div>
-      </div>
-    </div>`;
+    <tr>
+      <td><div style="font-weight:600;">${esc(c.contrato_id||id)}</div><div style="font-size:12px; color:var(--fg-3);">${esc(c.cliente_nombre||'')}</div></td>
+      <td style="text-align:center; font-family:var(--font-mono);">${act}${total>act?`<span style="color:var(--fg-3);">/${total}</span>`:''}</td>
+      <td>${checklistCell(r)}</td>
+      <td style="white-space:nowrap;">${fechaCol}</td>
+      <td style="text-align:right; white-space:nowrap;">${acciones}</td>
+    </tr>`;
 }
 
 async function accion(id, acc){
