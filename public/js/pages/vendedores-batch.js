@@ -11,6 +11,7 @@ window.VB = {
   _draftKey:              null,
   _timeoutCliente:        null,
   _autosaveTimer:         null,
+  _iconTimer:             null,
 
   // ---- LS cache helpers ----
   lsGet(key) {
@@ -297,6 +298,13 @@ window.VB = {
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   },
 
+  // Renderiza los iconos lucide de filas/celdas añadidas dinámicamente. Debounce
+  // con setTimeout(0) para coalescer las N llamadas del loop de generarTabla.
+  _renderIcons() {
+    clearTimeout(this._iconTimer);
+    this._iconTimer = setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 0);
+  },
+
   // Barra "Aplicar a todas las filas": GPS + un toggle por grupo (master).
   // Reemplaza el viejo marcar-toda-la-columna del encabezado de la matriz.
   _renderBulkBar() {
@@ -323,39 +331,40 @@ window.VB = {
     const grupos       = VB.grupos;
     const fila         = document.createElement('tr');
     const gruposChips = grupos.map(g =>
-      `<button type="button" class="grp-chip" data-grupo="${VB._esc(g)}" onclick="event.stopPropagation(); VB.toggleChipFila(this)">${VB._esc(g)}</button>`
+      `<button type="button" class="chip" data-grupo="${VB._esc(g)}" onclick="event.stopPropagation(); VB.toggleChipFila(this)">${VB._esc(g)}</button>`
     ).join('');
     fila.innerHTML = `
       <td><input type="text" class="table-input nombre" value="${VB._esc(nombreRadio)}"></td>
       <td style="text-align:center;"><input type="checkbox" class="table-checkbox gps"></td>
-      <td class="grupos-cell">${grupos.length ? `<div class="row-grupos">${gruposChips}</div>` : '<span class="chips-empty">—</span>'}</td>
+      <td class="grupos-cell">${grupos.length ? `<div class="chips">${gruposChips}</div>` : '<span class="chips-empty">—</span>'}</td>
       <td>
         <select class="table-input table-select modelo">
           <option value="">— Selecciona modelo —</option>
           ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${m.label}</option>`).join('')}
         </select>
       </td>
-      <td><button class="btn btn-danger" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave();">❌</button></td>
+      <td><button class="btn btn-ghost btn-sm" title="Quitar fila" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave();"><i data-lucide="trash-2"></i></button></td>
     `;
     fila.dataset.cliente = cliente;
     document.getElementById('cuerpoTabla').appendChild(fila);
     this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
     this.scheduleAutosave();
+    this._renderIcons();
     fila.addEventListener('click', () => fila.classList.toggle('selected'));
     fila.addEventListener('keydown', e => { if (e.key === 'Delete') { fila.remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave(); } });
   },
 
   // Aplica (o quita) un grupo en TODAS las filas — desde la barra "Aplicar a todas".
   aplicarGrupoATodas(grupo, on) {
-    document.querySelectorAll('#cuerpoTabla .grp-chip').forEach(chip => {
-      if (chip.dataset.grupo === grupo) chip.classList.toggle('is-on', !!on);
+    document.querySelectorAll('#cuerpoTabla .chip').forEach(chip => {
+      if (chip.dataset.grupo === grupo) chip.classList.toggle('active', !!on);
     });
   },
 
   // Toggle de un chip de grupo en una fila concreta.
   toggleChipFila(chip) {
-    chip.classList.toggle('is-on');
+    chip.classList.toggle('active');
     this.scheduleAutosave();
   },
 
@@ -444,7 +453,7 @@ window.VB = {
       const nombre   = (fila.querySelector('.nombre')?.value || '').trim();
       const gps      = !!fila.querySelector('.gps')?.checked;
       const modeloId = (fila.querySelector('.modelo')?.value || '').trim();
-      const gruposMarcados = Array.from(fila.querySelectorAll('.grp-chip.is-on')).map(c => c.dataset.grupo);
+      const gruposMarcados = Array.from(fila.querySelectorAll('.chip.active')).map(c => c.dataset.grupo);
       if (nombre) {
         const modeloSel = this.modelosDisponibles.find(m => m.id === modeloId);
         datos.push({ cliente_id: cid, cliente_nombre: cn, radio_name: nombre, gps, modelo_id: modeloId || null, modelo_label: modeloSel ? modeloSel.label : '', grupos: gruposMarcados });
@@ -489,7 +498,7 @@ window.VB = {
       const fromCatalog = this.modelosDisponibles.find(m => m.id === modeloId);
       const fromSelect  = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].textContent.trim() : '';
       const modeloLabel = fromCatalog ? fromCatalog.label : (fromSelect === '— Selecciona modelo —' ? '' : fromSelect);
-      const selecc = new Set(Array.from(fila.querySelectorAll('.grp-chip.is-on')).map(c => c.dataset.grupo));
+      const selecc = new Set(Array.from(fila.querySelectorAll('.chip.active')).map(c => c.dataset.grupo));
       const row    = { Cliente: cliente, 'Nombre del Radio': nombre, GPS: gps, Modelo: modeloLabel };
       VB.grupos.forEach(g => { row[g] = selecc.has(g) ? '✅' : ''; });
       datos.push(row);
@@ -524,7 +533,7 @@ window.VB = {
         nombre: tr.querySelector('.nombre')?.value || '',
         gps:    !!tr.querySelector('.gps')?.checked,
         modelo: tr.querySelector('.modelo')?.value || '',
-        grupos: Array.from(tr.querySelectorAll('.grp-chip')).map(c => c.classList.contains('is-on'))
+        grupos: Array.from(tr.querySelectorAll('.chip')).map(c => c.classList.contains('active'))
       }))
     };
   },
@@ -592,7 +601,7 @@ window.VB = {
           tr.querySelector('.gps').checked = !!r.gps;
           const sel = tr.querySelector('.modelo');
           if (sel) sel.value = r.modelo || '';
-          tr.querySelectorAll('.grp-chip').forEach((c, idx) => { c.classList.toggle('is-on', !!(r.grupos || [])[idx]); });
+          tr.querySelectorAll('.chip').forEach((c, idx) => { c.classList.toggle('active', !!(r.grupos || [])[idx]); });
         });
         this.actualizarResumenBatch();
         Toast.show('Borrador restaurado', 'ok');

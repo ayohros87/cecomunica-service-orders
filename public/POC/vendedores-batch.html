@@ -49,15 +49,7 @@
     .suggest-item { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
     .suggest-item:hover { background: var(--surface-sunken); color: var(--accent); }
 
-    /* Chips editor (grupos asignados) */
-    .chips-editor { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--sp-2); }
-    .chip-x {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 4px 10px; border-radius: 999px;
-      background: var(--accent-soft); color: var(--accent);
-      border: 1px solid var(--accent-line); font-size: 12px;
-    }
-    .chip-x button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0 2px; }
+    /* .chips-editor y .chip-x los provee el kit (ceco-ui.css) — no duplicar. */
 
     /* Tabla: scroll propio (máx 60vh) con encabezado sticky + 1ª columna sticky */
     #wrapTablaEquipos { overflow: auto; max-height: 60vh; }
@@ -131,17 +123,17 @@
     .vb-bulk-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
     .vb-bulk-item input { width: 14px; height: 14px; cursor: pointer; }
 
-    /* Celda "Grupos" por fila: chips toggle */
+    /* Celda "Grupos" por fila — reusa el .chip/.chip.active del kit; solo
+       ajustamos densidad para la tabla. */
     .grupos-cell { min-width: 240px; }
-    .row-grupos { display: flex; flex-wrap: wrap; gap: 4px; }
-    .grp-chip {
-      font-size: 11px; padding: 2px 9px; border-radius: 999px;
-      border: 1px solid var(--border-default); background: var(--surface-card);
-      color: var(--fg-3); cursor: pointer; white-space: nowrap;
-      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    .grupos-cell .chip { padding: 3px 10px; font-size: 11px; white-space: nowrap; }
+    .grupos-cell .chip:hover { transform: none; }   /* sin scale en tabla densa */
+
+    /* Checkbox con color de marca (mismo criterio que .table-wrap del kit) */
+    #wrapTablaEquipos input[type="checkbox"],
+    .vb-bulk-bar input[type="checkbox"] {
+      width: 16px; height: 16px; accent-color: var(--accent); border-radius: 4px; cursor: pointer;
     }
-    .grp-chip:hover { border-color: var(--accent); color: var(--accent); }
-    .grp-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 
     /* Action grid (botones de export) */
     .action-grid {
