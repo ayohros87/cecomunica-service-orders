@@ -21,7 +21,9 @@
     mostrarTodos: false,     // toggle: si true, no filtra por "tiene grupos"
     clienteFiltro: '',
     clienteSel: null,        // { id, nombre } | null
-    grupos: [],              // [{ nombre, count, devices: [] }]
+    grupos: [],              // [{ nombre, count }] — union catálogo + derivado
+    tieneCatalogo: false,    // true si el cliente ya tiene clientes/{id}.poc_grupos
+    rol: null,               // rol del usuario actual (gate del sembrado masivo)
     seleccionados: new Set(),
 
     // Scan de duplicados — null = ningún scan corrido, sino objeto con análisis.
@@ -249,12 +251,15 @@
   async function cargarGruposCliente() {
     if (!State.clienteSel) return;
     try {
-      const grupos = await PocService.listGruposByCliente({
+      const { grupos, tieneCatalogo } = await PocService.listGruposConCatalogo({
         clienteId: State.clienteSel.id,
         clienteNombre: State.clienteSel.nombre,
       });
       State.grupos = grupos;
+      State.tieneCatalogo = tieneCatalogo;
       $('gpLastUpdate').textContent = nowTs();
+      const addBtn = $('btnGpAddGrupo');
+      if (addBtn) addBtn.disabled = false;
       renderGrupos();
       renderDupBanner();
     } catch (e) {
@@ -263,12 +268,37 @@
     }
   }
 
+  // Add a group to the client's catalog (no device needed). Shows up with a
+  // "0 equipos" badge until it's tagged onto equipos at data-entry.
+  async function agregarGrupo() {
+    if (!State.clienteSel) return;
+    const nombre = FMT.normalizeGrupo(prompt(`Nuevo grupo para ${State.clienteSel.nombre}:`) || '');
+    if (!nombre) return;
+    if (State.grupos.some(g => FMT.normalize(g.nombre) === FMT.normalize(nombre))) {
+      Toast.show('Ese grupo ya existe para este cliente.', 'warn');
+      return;
+    }
+    try {
+      const { added } = await PocService.agregarGrupoCatalogo({
+        clienteId: State.clienteSel.id,
+        clienteNombre: State.clienteSel.nombre,
+        nombre,
+      });
+      invalidarCachesGrupos();
+      Toast.show(added ? `Grupo "${nombre}" agregado ✅` : 'Ese grupo ya existía.', added ? 'ok' : 'warn');
+      await cargarGruposCliente();
+    } catch (e) {
+      console.error('Error agregando grupo:', e);
+      Toast.show('Error al agregar el grupo.', 'bad');
+    }
+  }
+
   function renderGrupos() {
     const cont = $('gpGrupoList');
     if (!State.grupos.length) {
       cont.innerHTML =
         `<div style="padding:24px; text-align:center; color:var(--fg-3); font-size:13px;">
-          Este cliente no tiene grupos asignados a equipos.
+          Este cliente no tiene grupos. Usa <strong>“Agregar grupo”</strong> para crear el primero.
         </div>`;
       actualizarBotonMerge();
       return;
@@ -284,7 +314,8 @@
                    style="width:16px; height:16px;">
             <span class="gp-grupo-name">${esc(g.nombre)}</span>
           </div>
-          <span class="gp-grupo-count" title="${g.count} equipo${g.count === 1 ? '' : 's'}">${g.count}</span>
+          <span class="gp-grupo-count ${g.count === 0 ? 'gp-grupo-count--empty' : ''}"
+                title="${g.count === 0 ? 'En el catálogo, sin equipos asignados todavía' : g.count + ' equipo' + (g.count === 1 ? '' : 's')}">${g.count}</span>
           <div class="gp-grupo-actions">
             <button class="btn btn-ghost btn-sm" data-action="rename" data-nombre="${esc(g.nombre)}" title="Renombrar">
               <i data-lucide="pencil"></i>
@@ -403,6 +434,64 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // ── Backfill: seed catalogs from device tags (admin-only, one-shot) ──
+  // Writes clientes/{id}.poc_grupos from the device-derived union already
+  // loaded in State.clientesConGrupos. Idempotent: skips clients that already
+  // have a catalog. Batched (450/commit).
+  async function sembrarCatalogos() {
+    if (!State.clientesConGrupos) {
+      Toast.show('Carga de clientes incompleta — recarga la página.', 'bad');
+      return;
+    }
+    if (!confirm(
+      'Inicializar el catálogo de grupos (poc_grupos) de cada cliente a partir de los grupos ' +
+      'que hoy tienen sus equipos.\n\n' +
+      'Solo escribe clientes que AÚN NO tienen catálogo (idempotente — se puede repetir sin riesgo). ¿Continuar?'
+    )) return;
+    const btn = $('btnGpSeedCatalogo');
+    if (btn) btn.disabled = true;
+    try {
+      // Full docs (cache-first) para saber quién ya tiene catálogo.
+      const full = await ClientesService.getAllClientes();
+      const yaTiene = new Set(full.filter(c => Array.isArray(c.poc_grupos)).map(c => c.id));
+      const pendientes = [];
+      for (const c of State.clientes) {
+        if (yaTiene.has(c.id)) continue;
+        const grupos = gruposCrudosDeCliente(c);
+        if (grupos.length) pendientes.push({ id: c.id, grupos });
+      }
+      if (!pendientes.length) {
+        Toast.show('Todos los catálogos ya están al día. Nada que sembrar.', 'ok');
+        return;
+      }
+      const db = firebase.firestore();
+      const uid = firebase.auth().currentUser?.uid || null;
+      const CHUNK = 450;
+      let ok = 0;
+      for (let i = 0; i < pendientes.length; i += CHUNK) {
+        const batch = db.batch();
+        for (const p of pendientes.slice(i, i + CHUNK)) {
+          const limpio = FMT.dedupGrupos(p.grupos)
+            .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+          batch.update(db.collection('clientes').doc(p.id), {
+            poc_grupos: limpio,
+            updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+            updated_by: uid,
+          });
+          ok++;
+        }
+        await batch.commit();
+      }
+      Toast.show(`Catálogo inicializado en ${ok} cliente${ok === 1 ? '' : 's'} ✅`, 'ok');
+      if (State.clienteSel) await cargarGruposCliente();
+    } catch (e) {
+      console.error('Error sembrando catálogos:', e);
+      Toast.show('Error al inicializar catálogos.', 'bad');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   // ── Cache invalidation ───────────────────────────────────────────────
   // vendedores-batch caches groups under both the client ID and the normalized
   // name. Clear both keys so the next pull is fresh.
@@ -512,7 +601,10 @@
       renderClientes();
     });
     $('btnGpReload').addEventListener('click', () => cargarGruposCliente());
+    $('btnGpAddGrupo').addEventListener('click', () => agregarGrupo());
     $('btnGpMerge').addEventListener('click', () => mergeSeleccionados());
+    const seed = $('btnGpSeedCatalogo');
+    if (seed) seed.addEventListener('click', () => sembrarCatalogos());
     const sExact = $('btnGpScanExactos');
     if (sExact) sExact.addEventListener('click', () => runScan('exactos'));
     const sFuzzy = $('btnGpScanFuzzy');
@@ -535,6 +627,11 @@
         window.location.href = '../index.html';
         return;
       }
+      State.rol = rol;
+      // El sembrado masivo (inicializa catálogos de TODOS los clientes) es
+      // admin-only; recepción administra grupos por cliente pero no migra en lote.
+      const seed = $('btnGpSeedCatalogo');
+      if (seed && rol === ROLES.ADMIN) seed.style.display = '';
       await cargarClientes();
     } catch (e) {
       console.error('Error inicializando admin/grupos:', e);

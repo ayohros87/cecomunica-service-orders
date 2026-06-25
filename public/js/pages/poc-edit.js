@@ -4,6 +4,7 @@ window.PocEdit = {
   _docId: null,
   _row:   null,
   _data:  null,
+  _catalogo: [],   // grupos del catálogo del cliente (clientes/{id}.poc_grupos)
 
   abrir(row, docId, data) {
     if (PocState.esLectura()) {
@@ -28,6 +29,8 @@ window.PocEdit = {
       PocState.buildModeloOptionsHTML(modeloIdActual);
 
     document.getElementById('drawer-grupos').value     = (data.grupos || []).join(', ');
+    // Catálogo del cliente → chips toggle encima del input (async, no bloquea).
+    this._cargarCatalogo(data.cliente_id);
     document.getElementById('drawer-activo').checked   = data.activo !== false;
     document.getElementById('drawer-sim-number').value = data.sim_number || '';
     document.getElementById('drawer-sim-phone').value  = data.sim_phone  || '';
@@ -58,6 +61,69 @@ window.PocEdit = {
     this._docId = null;
     this._row   = null;
     this._data  = null;
+    this._catalogo = [];
+  },
+
+  // ── Catálogo de grupos del cliente ──────────────────────────────────
+  // Carga clientes/{id}.poc_grupos y pinta chips toggle. Legacy sin
+  // cliente_id → sin catálogo (solo chips de los grupos que ya trae el equipo).
+  async _cargarCatalogo(clienteId) {
+    this._catalogo = [];
+    try {
+      if (clienteId) {
+        const cat = await PocService.getCatalogoGrupos(clienteId);
+        this._catalogo = Array.isArray(cat) ? cat : [];
+      }
+    } catch (e) {
+      console.warn('No se pudo cargar el catálogo de grupos:', e?.code || e);
+    }
+    this.renderGruposChips();
+  },
+
+  _inputGrupos() {
+    return FMT.dedupGrupos((document.getElementById('drawer-grupos').value || '').split(','));
+  },
+  _setInputGrupos(arr) {
+    document.getElementById('drawer-grupos').value = FMT.dedupGrupos(arr).join(', ');
+  },
+
+  renderGruposChips() {
+    const cont = document.getElementById('drawer-grupos-catalog');
+    if (!cont) return;
+    const seleccion = this._inputGrupos();
+    const selNorms = new Set(seleccion.map(g => FMT.normalize(g)));
+    // Universo = catálogo ∪ grupos que ya trae el equipo (para no perder de
+    // vista los escritos a mano; se marcan punteados como "fuera de catálogo").
+    const universo = [];
+    const vistos = new Set();
+    const push = (g) => { const k = FMT.normalize(g); if (k && !vistos.has(k)) { vistos.add(k); universo.push(g); } };
+    (this._catalogo || []).forEach(push);
+    seleccion.forEach(push);
+    if (!universo.length) {
+      cont.innerHTML = '<span class="drawer-grupos-empty">Sin grupos en el catálogo. Escríbelos abajo o créalos en Admin · Grupos.</span>';
+      return;
+    }
+    universo.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    const catNorms = new Set((this._catalogo || []).map(c => FMT.normalize(c)));
+    cont.innerHTML = universo.map(g => {
+      const activo = selNorms.has(FMT.normalize(g));
+      const extra  = !catNorms.has(FMT.normalize(g));
+      const safe = (g || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      return `<button type="button" class="grupo-chip ${activo ? 'is-active' : ''} ${extra ? 'is-extra' : ''}" data-grupo="${safe}">${safe}${activo ? ' ✓' : ''}</button>`;
+    }).join('');
+    cont.querySelectorAll('.grupo-chip').forEach(btn => {
+      btn.addEventListener('click', () => this.toggleGrupoChip(btn.dataset.grupo));
+    });
+  },
+
+  toggleGrupoChip(nombre) {
+    const arr = this._inputGrupos();
+    const k = FMT.normalize(nombre);
+    const idx = arr.findIndex(g => FMT.normalize(g) === k);
+    if (idx >= 0) arr.splice(idx, 1);
+    else arr.push(nombre);
+    this._setInputGrupos(arr);
+    this.renderGruposChips();
   },
 
   async guardar() {
@@ -153,6 +219,9 @@ window.PocEdit = {
   init() {
     const overlay = document.getElementById('editDrawerOverlay');
     if (overlay) overlay.addEventListener('click', () => this.cerrar());
+    // Escribir a mano en el input refleja en los chips (activa/atenúa).
+    const gi = document.getElementById('drawer-grupos');
+    if (gi) gi.addEventListener('input', () => this.renderGruposChips());
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && document.getElementById('editDrawer')?.classList.contains('active')) {
         this.cerrar();

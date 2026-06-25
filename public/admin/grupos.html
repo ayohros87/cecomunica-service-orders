@@ -49,6 +49,11 @@
       font-size: 12px; color: var(--fg-3); text-align: center;
       background: var(--surface-sunken); padding: 4px 10px; border-radius: 999px;
     }
+    /* Catálogo sin equipos asignados todavía — badge atenuado y punteado */
+    .gp-grupo-count--empty {
+      background: transparent; color: var(--fg-3);
+      border: 1px dashed var(--border-default); opacity: .8;
+    }
     .gp-grupo-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
     .gp-dup-banner {
@@ -126,10 +131,16 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Los grupos viven como <code>grupos[]</code> en cada equipo PoC. Esta vista
-        deriva la lista por cliente y permite renombrar, fusionar y eliminar grupos
-        en lote — los cambios se aplican a todos los equipos no eliminados del cliente.
+        Cada empresa tiene su <strong>catálogo de grupos</strong> en
+        <code>clientes/{id}.poc_grupos</code>. Aquí puedes <strong>agregar</strong>,
+        renombrar, fusionar y eliminar grupos — los cambios se aplican al catálogo y
+        se propagan a todos los equipos PoC no eliminados del cliente. Un grupo puede
+        existir en el catálogo sin equipos asignados todavía.
       </div>
+      <button id="btnGpSeedCatalogo" class="btn btn-secondary btn-sm" style="display:none; flex:0 0 auto; margin-left:auto;"
+              title="Inicializa el catálogo de TODOS los clientes a partir de los grupos que hoy tienen sus equipos (idempotente)">
+        <i data-lucide="database"></i> Inicializar catálogos
+      </button>
     </div>
 
     <div class="gp-layout">
@@ -165,6 +176,10 @@
         <div class="admin-toolbar" style="margin-bottom:var(--sp-3);">
           <button id="btnGpReload" class="btn btn-ghost btn-sm" disabled>
             <i data-lucide="refresh-cw"></i> Recargar grupos
+          </button>
+          <button id="btnGpAddGrupo" class="btn btn-primary btn-sm" disabled
+                  title="Agrega un grupo al catálogo del cliente (no necesita equipos)">
+            <i data-lucide="plus"></i> Agregar grupo
           </button>
           <button id="btnGpMerge" class="btn btn-secondary btn-sm" disabled
                   title="Selecciona 2 o más grupos para fusionar">

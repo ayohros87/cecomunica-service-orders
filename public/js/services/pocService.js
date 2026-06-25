@@ -157,6 +157,91 @@ const PocService = {
   },
 
   // ── Group administration ─────────────────────────────────────────────
+  // Two layers:
+  //   1. Canonical CATALOG — clientes/{id}.poc_grupos (string[]). Source of
+  //      truth for "which groups this empresa has". Managed from admin/grupos
+  //      and offered as a checklist at data-entry. Can hold groups with 0
+  //      devices (pre-provisioned).
+  //   2. Device tags — grupos[] on each poc_devices doc (denormalized copy so
+  //      filters/exports/queries keep working). rename/merge/delete propagate
+  //      to BOTH layers.
+  // Pre-backfill clients have no catalog yet; the helpers below derive + seed
+  // it lazily from the device tags on the first admin edit.
+
+  // Read the canonical catalog. Returns string[] or null when the field is
+  // absent (caller distinguishes "empty catalog" from "no catalog yet").
+  async getCatalogoGrupos(clienteId) {
+    if (!clienteId) return null;
+    const db = firebase.firestore();
+    let doc = await db.collection('clientes').doc(clienteId).get({ source: 'cache' });
+    if (!doc.exists) doc = await db.collection('clientes').doc(clienteId).get();
+    if (!doc.exists) return null;
+    const arr = doc.data().poc_grupos;
+    return Array.isArray(arr) ? arr.slice() : null;
+  },
+
+  // Write the catalog (deduped accent/case-insensitively + sorted). Stamps
+  // updated_at/by like ClientesService does.
+  async _writeCatalogo(clienteId, grupos) {
+    const db = firebase.firestore();
+    const uid = firebase.auth().currentUser?.uid || null;
+    const limpio = FMT.dedupGrupos(grupos)
+      .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+    await db.collection('clientes').doc(clienteId).update({
+      poc_grupos: limpio,
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by: uid,
+    });
+    return limpio;
+  },
+
+  // Apply transformFn to the catalog and persist. Keyed by clientes doc id
+  // (legacy name-only clients have no catalog). Seeds from device tags the
+  // first time so the catalog materializes on first edit.
+  async _syncCatalogo(clienteId, clienteNombre, transformFn) {
+    if (!clienteId) return;
+    let base = await this.getCatalogoGrupos(clienteId);
+    if (base === null) {
+      const derivados = await this.listGruposByCliente({ clienteId, clienteNombre });
+      base = derivados.map(g => g.nombre);
+    }
+    await this._writeCatalogo(clienteId, transformFn(base.slice()));
+  },
+
+  // Add one group to the catalog without touching any device. Returns
+  // { added, grupos }. No-op (added:false) if an accent/case variant exists.
+  async agregarGrupoCatalogo({ clienteId = null, clienteNombre = null, nombre }) {
+    const n = FMT.normalizeGrupo(nombre);
+    if (!clienteId || !n) return { added: false, grupos: [] };
+    let base = await this.getCatalogoGrupos(clienteId);
+    if (base === null) {
+      const derivados = await this.listGruposByCliente({ clienteId, clienteNombre });
+      base = derivados.map(g => g.nombre);
+    }
+    const exists = base.some(g => FMT.normalize(g) === FMT.normalize(n));
+    const grupos = await this._writeCatalogo(clienteId, exists ? base : base.concat([n]));
+    return { added: !exists, grupos };
+  },
+
+  // Admin/data-entry view: union of catalog + device-derived groups.
+  // Returns { grupos: [{ nombre, count }], tieneCatalogo }. count = number of
+  // non-deleted devices tagging the group (0 for catalog-only groups).
+  async listGruposConCatalogo({ clienteId = null, clienteNombre = null } = {}) {
+    const [derivados, catalogo] = await Promise.all([
+      this.listGruposByCliente({ clienteId, clienteNombre }),
+      clienteId ? this.getCatalogoGrupos(clienteId) : Promise.resolve(null),
+    ]);
+    const map = new Map();   // normKey → { nombre, count }
+    for (const g of derivados) map.set(FMT.normalize(g.nombre), { nombre: g.nombre, count: g.count });
+    for (const raw of (catalogo || [])) {
+      const k = FMT.normalize(raw);
+      if (!map.has(k)) map.set(k, { nombre: raw, count: 0 });
+    }
+    const grupos = Array.from(map.values())
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+    return { grupos, tieneCatalogo: Array.isArray(catalogo) };
+  },
+
   // Groups are stored as a string[] on each poc_devices doc. There is no
   // grupos collection; the canonical list per client is derived by unioning
   // grupos[] across the client's non-deleted devices.
@@ -191,27 +276,33 @@ const PocService = {
     if (!fromN || !toN || fromN === toN) return { affected: 0 };
     const devices = await this.getByCliente({ clienteId, clienteNombre });
     const targets = devices.filter(d => d.deleted !== true && (d.grupos || []).includes(fromN));
-    if (!targets.length) return { affected: 0 };
-    const db = firebase.firestore();
-    const CHUNK = 450;
-    const uid = firebase.auth().currentUser?.uid || null;
-    for (let i = 0; i < targets.length; i += CHUNK) {
-      const batch = db.batch();
-      for (const d of targets.slice(i, i + CHUNK)) {
-        const next = Array.from(new Set(
-          (d.grupos || [])
-            .map(g => (g || '').toString().trim())
-            .filter(Boolean)
-            .map(g => (g === fromN ? toN : g))
-        ));
-        batch.update(db.collection('poc_devices').doc(d.id), {
-          grupos: next,
-          updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-          updated_by: uid,
-        });
+    if (targets.length) {
+      const db = firebase.firestore();
+      const CHUNK = 450;
+      const uid = firebase.auth().currentUser?.uid || null;
+      for (let i = 0; i < targets.length; i += CHUNK) {
+        const batch = db.batch();
+        for (const d of targets.slice(i, i + CHUNK)) {
+          const next = Array.from(new Set(
+            (d.grupos || [])
+              .map(g => (g || '').toString().trim())
+              .filter(Boolean)
+              .map(g => (g === fromN ? toN : g))
+          ));
+          batch.update(db.collection('poc_devices').doc(d.id), {
+            grupos: next,
+            updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+            updated_by: uid,
+          });
+        }
+        await batch.commit();
       }
-      await batch.commit();
     }
+    // Keep the catalog in sync (also seeds it on the first edit). Runs even
+    // when 0 devices matched, so renaming a catalog-only group still works.
+    await this._syncCatalogo(clienteId, clienteNombre, list =>
+      list.map(g => (FMT.normalize(g) === FMT.normalize(fromN) ? toN : g))
+    );
     return { affected: targets.length };
   },
 
@@ -227,27 +318,35 @@ const PocService = {
     const sourceSet = new Set(sourcesN);
     const targets = devices.filter(d => d.deleted !== true
       && (d.grupos || []).some(g => sourceSet.has((g || '').toString().trim())));
-    if (!targets.length) return { affected: 0 };
-    const db = firebase.firestore();
-    const CHUNK = 450;
-    const uid = firebase.auth().currentUser?.uid || null;
-    for (let i = 0; i < targets.length; i += CHUNK) {
-      const batch = db.batch();
-      for (const d of targets.slice(i, i + CHUNK)) {
-        const next = Array.from(new Set(
-          (d.grupos || [])
-            .map(g => (g || '').toString().trim())
-            .filter(Boolean)
-            .map(g => (sourceSet.has(g) ? targetN : g))
-        ));
-        batch.update(db.collection('poc_devices').doc(d.id), {
-          grupos: next,
-          updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-          updated_by: uid,
-        });
+    if (targets.length) {
+      const db = firebase.firestore();
+      const CHUNK = 450;
+      const uid = firebase.auth().currentUser?.uid || null;
+      for (let i = 0; i < targets.length; i += CHUNK) {
+        const batch = db.batch();
+        for (const d of targets.slice(i, i + CHUNK)) {
+          const next = Array.from(new Set(
+            (d.grupos || [])
+              .map(g => (g || '').toString().trim())
+              .filter(Boolean)
+              .map(g => (sourceSet.has(g) ? targetN : g))
+          ));
+          batch.update(db.collection('poc_devices').doc(d.id), {
+            grupos: next,
+            updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+            updated_by: uid,
+          });
+        }
+        await batch.commit();
       }
-      await batch.commit();
     }
+    // Catalog: drop the sources, ensure the target is present.
+    const srcNorms = new Set(sourcesN.map(s => FMT.normalize(s)));
+    await this._syncCatalogo(clienteId, clienteNombre, list => {
+      const kept = list.filter(g => !srcNorms.has(FMT.normalize(g)));
+      if (!kept.some(g => FMT.normalize(g) === FMT.normalize(targetN))) kept.push(targetN);
+      return kept;
+    });
     return { affected: targets.length };
   },
 
@@ -257,24 +356,30 @@ const PocService = {
     if (!nombreN) return { affected: 0 };
     const devices = await this.getByCliente({ clienteId, clienteNombre });
     const targets = devices.filter(d => d.deleted !== true && (d.grupos || []).includes(nombreN));
-    if (!targets.length) return { affected: 0 };
-    const db = firebase.firestore();
-    const CHUNK = 450;
-    const uid = firebase.auth().currentUser?.uid || null;
-    for (let i = 0; i < targets.length; i += CHUNK) {
-      const batch = db.batch();
-      for (const d of targets.slice(i, i + CHUNK)) {
-        const next = (d.grupos || [])
-          .map(g => (g || '').toString().trim())
-          .filter(g => g && g !== nombreN);
-        batch.update(db.collection('poc_devices').doc(d.id), {
-          grupos: Array.from(new Set(next)),
-          updated_at: firebase.firestore.FieldValue.serverTimestamp(),
-          updated_by: uid,
-        });
+    if (targets.length) {
+      const db = firebase.firestore();
+      const CHUNK = 450;
+      const uid = firebase.auth().currentUser?.uid || null;
+      for (let i = 0; i < targets.length; i += CHUNK) {
+        const batch = db.batch();
+        for (const d of targets.slice(i, i + CHUNK)) {
+          const next = (d.grupos || [])
+            .map(g => (g || '').toString().trim())
+            .filter(g => g && g !== nombreN);
+          batch.update(db.collection('poc_devices').doc(d.id), {
+            grupos: Array.from(new Set(next)),
+            updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+            updated_by: uid,
+          });
+        }
+        await batch.commit();
       }
-      await batch.commit();
     }
+    // Catalog: remove the group too (runs even with 0 device matches, so a
+    // catalog-only group can be deleted).
+    await this._syncCatalogo(clienteId, clienteNombre, list =>
+      list.filter(g => FMT.normalize(g) !== FMT.normalize(nombreN))
+    );
     return { affected: targets.length };
   },
 };

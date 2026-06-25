@@ -170,21 +170,31 @@ window.VB = {
       return;
     }
     try {
-      // Pasa id Y nombre (como el panel de admin): getByCliente corre ambas
-      // queries y une los resultados, así los equipos legacy que solo tienen
-      // `cliente` (string) sin `cliente_id` también aportan sus grupos. Con
-      // solo el id se perdían esos grupos de forma intermitente.
-      const devices = await PocService.getByCliente({
-        clienteId: this.clienteIDSeleccionado || null,
-        clienteNombre: nombreExacto || null,
-      });
-      const gruposSet = new Set();
-      devices.forEach(d => {
-        if (d.deleted === true) return;
-        (d.grupos || []).forEach(g => { const v = (g || '').toString().trim(); if (v) gruposSet.add(v); });
-      });
-      const found = Array.from(gruposSet).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
-      if (!found.length) { Toast.show('No se encontraron grupos para este cliente.', 'bad'); return; }
+      // Fuente preferida: el catálogo canónico del cliente
+      // (clientes/{id}.poc_grupos). Para clientes aún sin catálogo, se cae a
+      // derivar de los equipos — pasando id Y nombre para incluir equipos
+      // legacy que solo tienen `cliente` (string) sin `cliente_id`.
+      let found = null;
+      if (this.clienteIDSeleccionado) {
+        try {
+          const cat = await PocService.getCatalogoGrupos(this.clienteIDSeleccionado);
+          if (Array.isArray(cat)) found = cat.slice();
+        } catch (_) {}
+      }
+      if (found === null) {
+        const devices = await PocService.getByCliente({
+          clienteId: this.clienteIDSeleccionado || null,
+          clienteNombre: nombreExacto || null,
+        });
+        const gruposSet = new Set();
+        devices.forEach(d => {
+          if (d.deleted === true) return;
+          (d.grupos || []).forEach(g => { const v = (g || '').toString().trim(); if (v) gruposSet.add(v); });
+        });
+        found = Array.from(gruposSet);
+      }
+      found = found.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+      if (!found.length) Toast.show('Este cliente aún no tiene grupos. Agrégalos con “+ Grupo”.', 'warn');
       this.gruposClienteCache.set(cacheKey, found);
       this.lsSet(lsKey, found);
       document.getElementById('grupoInput').value = found.join(', ');
@@ -231,6 +241,7 @@ window.VB = {
     const arr   = FMT.dedupGrupos(input.value.split(',').concat([g]));
     input.value = arr.join(', ');
     this.renderGrupoChips();
+    this.persistirGrupoCatalogo(g);
     if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
   },
 
@@ -241,7 +252,33 @@ window.VB = {
     const arr   = FMT.dedupGrupos(input.value.split(',').concat([nuevoGrupo]));
     input.value = arr.join(', ');
     this.renderGrupoChips();
+    this.persistirGrupoCatalogo(nuevoGrupo);
     this.generarTabla();
+  },
+
+  // Persiste un grupo nuevo al catálogo del cliente (clientes/{id}.poc_grupos)
+  // para que quede disponible en todas las pantallas. Best-effort: requiere un
+  // cliente seleccionado con id; invalida los cachés locales tras escribir.
+  async persistirGrupoCatalogo(nombre) {
+    const clienteId = this.clienteIDSeleccionado;
+    if (!clienteId || !nombre) return;
+    try {
+      const { added } = await PocService.agregarGrupoCatalogo({
+        clienteId,
+        clienteNombre: this.clienteNombreSeleccionado || null,
+        nombre,
+      });
+      if (!added) return;
+      this.gruposClienteCache.delete(clienteId);
+      try {
+        localStorage.removeItem('grupos_v2_' + clienteId);
+        if (this.clienteNombreSeleccionado) {
+          localStorage.removeItem('grupos_v2_' + FMT.normalize(this.clienteNombreSeleccionado));
+        }
+      } catch (_) {}
+    } catch (e) {
+      console.warn('No se pudo guardar el grupo en el catálogo:', e?.code || e);
+    }
   },
 
   // ---- Batch table ----
