@@ -266,6 +266,32 @@ const PocService = {
     return { added: !exists, grupos };
   },
 
+  // Alta en lote: agrega varios grupos al catálogo en UNA sola escritura.
+  // Aplica `prefijo` a cada nombre y omite los que ya existan. Devuelve
+  // { added: <cuántos nuevos>, grupos }.
+  async agregarGruposCatalogo({ clienteId = null, clienteNombre = null, nombres = [], prefijo = null }) {
+    if (!clienteId) return { added: 0, grupos: [] };
+    const items = (nombres || [])
+      .map(n => (prefijo ? FMT.aplicarPrefijoGrupo(prefijo, n) : FMT.normalizeGrupo(n)))
+      .filter(Boolean);
+    let base = await this.getCatalogoGrupos(clienteId);
+    if (base === null) {
+      const derivados = await this.listGruposByCliente({ clienteId, clienteNombre });
+      base = derivados.map(g => g.nombre);
+    }
+    if (!items.length) return { added: 0, grupos: base };
+    const have = new Set(base.map(g => FMT.normalize(g)));
+    const next = base.slice();
+    let added = 0;
+    for (const it of items) {
+      const k = FMT.normalize(it);
+      if (have.has(k)) continue;
+      have.add(k); next.push(it); added++;
+    }
+    const grupos = added ? await this._writeCatalogo(clienteId, next) : base;
+    return { added, grupos };
+  },
+
   // Migración: aplica `prefijo` a TODOS los grupos del cliente — equipos
   // (server-fresh) + catálogo — y guarda el prefijo en el cliente. Idempotente
   // y soporta cambio de prefijo (lee el anterior para no duplicar). Devuelve

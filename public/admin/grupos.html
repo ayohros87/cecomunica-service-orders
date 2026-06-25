@@ -81,6 +81,42 @@
 
     .btn-xs { font-size: 11px; padding: 2px 8px; }
 
+    /* Toggle "Lista limpia" en la toolbar */
+    .gp-toggle-limpia {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--fg-2); cursor: pointer; user-select: none;
+    }
+    .gp-toggle-limpia input { width: 14px; height: 14px; cursor: pointer; }
+
+    /* Tag "nuevo" en la lista de clientes (empresas sin grupos al buscar) */
+    .gp-cli-tag {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+      color: var(--fg-3); background: var(--surface-sunken);
+      border: 1px dashed var(--border-default); border-radius: 999px; padding: 1px 7px;
+    }
+
+    /* Panel de alta de grupos (inline + pegar-varios + comunes) */
+    #gpAddPanel:empty { display: none; }
+    .gp-add-card {
+      background: var(--surface-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); padding: var(--sp-3); margin-bottom: var(--sp-3);
+    }
+    .gp-add-row { display: flex; gap: 8px; align-items: center; }
+    .gp-add-row .form-input { flex: 1; }
+    .gp-add-varios { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: 6px; }
+    .gp-add-varios textarea { width: 100%; font-family: inherit; resize: vertical; }
+    .gp-add-varios .btn { align-self: flex-start; }
+    .gp-add-comunes { margin-top: var(--sp-3); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .gp-add-comunes-label { font-size: 11px; color: var(--fg-3); margin-right: 2px; }
+    .gp-chip-add {
+      font-size: 12px; padding: 3px 10px; border-radius: var(--radius-pill);
+      border: 1px solid var(--border-default); background: var(--surface-sunken);
+      color: var(--fg-2); cursor: pointer;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    }
+    .gp-chip-add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .gp-chip-add.is-added { opacity: .6; cursor: default; border-style: dashed; }
+
     /* Barra de prefijo del cliente seleccionado */
     .gp-prefijo-bar { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); min-height: 0; }
     .gp-prefijo-bar:empty { display: none; }
@@ -239,19 +275,19 @@
           <button id="btnGpReload" class="btn btn-ghost btn-sm" disabled>
             <i data-lucide="refresh-cw"></i> Recargar grupos
           </button>
-          <button id="btnGpAddGrupo" class="btn btn-primary btn-sm" disabled
-                  title="Agrega un grupo al catálogo del cliente (no necesita equipos)">
-            <i data-lucide="plus"></i> Agregar grupo
-          </button>
           <button id="btnGpMerge" class="btn btn-secondary btn-sm" disabled
                   title="Selecciona 2 o más grupos para fusionar">
             <i data-lucide="git-merge"></i> Fusionar seleccionados
           </button>
+          <label class="gp-toggle-limpia" title="Mostrar los nombres sin el prefijo de 3 letras">
+            <input type="checkbox" id="gpToggleLimpia"> Lista limpia
+          </label>
           <span class="spacer"></span>
           <span id="gpLastUpdate" class="ts">—</span>
         </div>
 
         <div id="gpPrefijoBar" class="gp-prefijo-bar"></div>
+        <div id="gpAddPanel"></div>
 
         <div id="gpDupBanner"></div>
 

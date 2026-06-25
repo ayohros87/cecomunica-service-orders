@@ -27,6 +27,7 @@
     prefijosTomados: new Set(), // todos los prefijos ya usados (unicidad global)
     migFilas: [],            // filas del modal de migración de prefijos
     rol: null,               // rol del usuario actual (gate de la migración)
+    listaLimpia: false,      // toggle: mostrar nombres sin el prefijo
     seleccionados: new Set(),
 
     // Scan de duplicados — null = ningún scan corrido, sino objeto con análisis.
@@ -34,6 +35,12 @@
     // porId/porNombre: Map<key, bucketCount> (solo > 0)
     scan: null,
   };
+
+  // Grupos comunes propuestos como chips de 1 clic (alta rápida).
+  const COMUNES = [
+    'Ventas', 'Operaciones', 'Administración', 'Gerencia', 'Contabilidad',
+    'GPS', 'Bodega', 'Logística', 'Soporte', 'Mantenimiento', 'Cobranzas', 'Recursos Humanos',
+  ];
 
   function $(id) { return document.getElementById(id); }
   function esc(s) {
@@ -157,9 +164,11 @@
     const cont = $('gpClienteList');
     const needle = State.clienteFiltro ? FMT.normalize(State.clienteFiltro) : '';
 
-    // Base: con grupos o todos.
+    // Base: con grupos o todos. Con término de búsqueda llega a TODAS las
+    // empresas (incl. sin grupos) para poder pre-aprovisionar; sin término
+    // muestra solo "con grupos" salvo que esté activo "Mostrar todos".
     let base = State.clientes;
-    if (!State.mostrarTodos) base = base.filter(tieneGrupos);
+    if (!needle && !State.mostrarTodos) base = base.filter(tieneGrupos);
 
     // Filtro por scan (si activo y "solo afectados" — siempre que hay scan
     // implícito limitamos a los que tienen buckets > 0, sino el badge no
@@ -224,8 +233,9 @@
           badge = `<span class="gp-badge ${cls}" title="${n} bucket${n === 1 ? '' : 's'} de duplicados ${State.scan.mode}">${n}</span>`;
         }
       }
+      const nuevoTag = (needle && !tieneGrupos(c)) ? '<span class="gp-cli-tag">nuevo</span>' : '';
       return `<div class="gp-cliente-item ${activo}" data-id="${esc(c.id)}" data-nombre="${esc(c.nombre)}">
-        <span class="gp-cliente-nombre">${esc(c.nombre)}</span>${badge}
+        <span class="gp-cliente-nombre">${esc(c.nombre)}</span>${nuevoTag}${badge}
       </div>`;
     }).join('');
     cont.querySelectorAll('.gp-cliente-item').forEach(el => {
@@ -272,9 +282,8 @@
       State.tieneCatalogo = tieneCatalogo;
       State.clientePrefijo = prefijo;
       $('gpLastUpdate').textContent = nowTs();
-      const addBtn = $('btnGpAddGrupo');
-      if (addBtn) addBtn.disabled = false;
       renderPrefijoBar();
+      renderPanelAgregar();
       renderGrupos();
       renderDupBanner();
     } catch (e) {
@@ -343,51 +352,114 @@
     }
   }
 
-  // Add a group to the client's catalog (no device needed). Auto-prefija con el
-  // prefijo del cliente; si no tiene, lo propone y lo guarda antes de crear.
-  async function agregarGrupo() {
-    if (!State.clienteSel) return;
-    let prefijo = State.clientePrefijo;
-    if (!prefijo) {
-      const propuesto = GruposAnalisis.proponerPrefijo(State.clienteSel.nombre, State.prefijosTomados);
-      const pfx = pedirPrefijo(propuesto);
-      if (!pfx) return;
-      try {
-        await PocService.setGrupoPrefix(State.clienteSel.id, pfx);
-      } catch (e) {
-        console.error('Error guardando prefijo:', e);
-        Toast.show('Error al guardar el prefijo.', 'bad');
-        return;
-      }
-      State.prefijosTomados.add(pfx);
-      State.clientePrefijo = pfx;
-      const c = State.clientes.find(x => x.id === State.clienteSel.id);
-      if (c) c.prefijo = pfx;
-      prefijo = pfx;
-      renderPrefijoBar();
-    }
-    const baseName = FMT.normalizeGrupo(prompt(`Nuevo grupo para ${State.clienteSel.nombre} (se guardará como ${prefijo}-…):`) || '');
-    if (!baseName) return;
-    const full = FMT.aplicarPrefijoGrupo(prefijo, baseName);
-    if (!full) return;
-    if (State.grupos.some(g => FMT.normalize(g.nombre) === FMT.normalize(full))) {
-      Toast.show('Ese grupo ya existe para este cliente.', 'warn');
-      return;
-    }
+  // Garantiza que el cliente tenga prefijo; si no, lo propone, valida y guarda.
+  // Devuelve el prefijo (3 letras) o null si el usuario canceló.
+  async function ensurePrefijoCliente() {
+    if (State.clientePrefijo) return State.clientePrefijo;
+    const propuesto = GruposAnalisis.proponerPrefijo(State.clienteSel.nombre, State.prefijosTomados);
+    const pfx = pedirPrefijo(propuesto);
+    if (!pfx) return null;
     try {
-      const { added } = await PocService.agregarGrupoCatalogo({
+      await PocService.setGrupoPrefix(State.clienteSel.id, pfx);
+    } catch (e) {
+      console.error('Error guardando prefijo:', e);
+      Toast.show('Error al guardar el prefijo.', 'bad');
+      return null;
+    }
+    State.prefijosTomados.add(pfx);
+    State.clientePrefijo = pfx;
+    const c = State.clientes.find(x => x.id === State.clienteSel.id);
+    if (c) c.prefijo = pfx;
+    renderPrefijoBar();
+    return pfx;
+  }
+
+  // Alta (uno o varios) de grupos al catálogo del cliente. Recibe nombres BASE
+  // (sin prefijo); el prefijo se aplica solo. Omite los que ya existan.
+  async function agregarGruposBase(nombresBase) {
+    if (!State.clienteSel) return;
+    const limpios = FMT.dedupGrupos(nombresBase);
+    if (!limpios.length) return;
+    const prefijo = await ensurePrefijoCliente();
+    if (!prefijo) return;   // canceló la asignación del prefijo
+    const nuevos = limpios.filter(b => {
+      const full = FMT.aplicarPrefijoGrupo(prefijo, b);
+      return full && !State.grupos.some(g => FMT.normalize(g.nombre) === FMT.normalize(full));
+    });
+    if (!nuevos.length) { Toast.show('Esos grupos ya existen para este cliente.', 'warn'); return; }
+    try {
+      const { added } = await PocService.agregarGruposCatalogo({
         clienteId: State.clienteSel.id,
         clienteNombre: State.clienteSel.nombre,
-        nombre: baseName,
+        nombres: nuevos,
         prefijo,
       });
       invalidarCachesGrupos();
-      Toast.show(added ? `Grupo "${full}" agregado ✅` : 'Ese grupo ya existía.', added ? 'ok' : 'warn');
+      Toast.show(`${added} grupo${added === 1 ? '' : 's'} agregado${added === 1 ? '' : 's'} ✅`, 'ok');
       await cargarGruposCliente();
     } catch (e) {
-      console.error('Error agregando grupo:', e);
-      Toast.show('Error al agregar el grupo.', 'bad');
+      console.error('Error agregando grupos:', e);
+      Toast.show('Error al agregar los grupos.', 'bad');
     }
+  }
+
+  // Parte un texto libre (líneas y/o comas) en nombres y los agrega.
+  function agregarGruposDesdeTexto(texto) {
+    const partes = (texto || '').split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+    if (partes.length) agregarGruposBase(partes);
+  }
+
+  // Panel de alta: input inline + "pegar varios" + chips de grupos comunes.
+  function renderPanelAgregar() {
+    const cont = $('gpAddPanel');
+    if (!cont) return;
+    if (!State.clienteSel) { cont.innerHTML = ''; return; }
+    const prefijo = State.clientePrefijo;
+    const have = new Set(State.grupos.map(g => FMT.normalize(g.nombre)));
+    const chips = COMUNES.map(b => {
+      const full = prefijo ? FMT.aplicarPrefijoGrupo(prefijo, b) : b;
+      const yes = full && have.has(FMT.normalize(full));
+      return `<button type="button" class="gp-chip-add ${yes ? 'is-added' : ''}" data-base="${esc(b)}" ${yes ? 'disabled' : ''}
+        title="${yes ? 'Ya está en el catálogo' : 'Agregar ' + esc(b)}">${yes ? '✓ ' : '+ '}${esc(b)}</button>`;
+    }).join('');
+    cont.innerHTML = `
+      <div class="gp-add-card">
+        <div class="gp-add-row">
+          <input id="gpAddInput" class="form-input" type="text" autocomplete="off"
+                 placeholder="Nuevo grupo… (Enter para agregar)">
+          <button id="gpAddBtn" class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Agregar</button>
+          <button id="gpAddVariosToggle" class="btn btn-ghost btn-sm" title="Agregar varios a la vez">
+            <i data-lucide="list-plus"></i> Pegar varios
+          </button>
+        </div>
+        <div id="gpAddVarios" class="gp-add-varios" style="display:none;">
+          <textarea id="gpAddVariosText" class="form-input" rows="4"
+                    placeholder="Un grupo por línea o separados por coma…"></textarea>
+          <button id="gpAddVariosBtn" class="btn btn-secondary btn-sm"><i data-lucide="list-plus"></i> Agregar todos</button>
+        </div>
+        <div class="gp-add-comunes">
+          <span class="gp-add-comunes-label">Comunes:</span>${chips}
+        </div>
+      </div>`;
+
+    const input = $('gpAddInput');
+    const altaInput = () => { const v = input.value; input.value = ''; agregarGruposDesdeTexto(v); input.focus(); };
+    $('gpAddBtn').addEventListener('click', altaInput);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); altaInput(); } });
+    $('gpAddVariosToggle').addEventListener('click', () => {
+      const v = $('gpAddVarios');
+      v.style.display = v.style.display === 'none' ? 'block' : 'none';
+      if (v.style.display === 'block') $('gpAddVariosText').focus();
+    });
+    $('gpAddVariosBtn').addEventListener('click', () => {
+      const t = $('gpAddVariosText'); const v = t.value; t.value = '';
+      $('gpAddVarios').style.display = 'none';
+      agregarGruposDesdeTexto(v);
+    });
+    cont.querySelectorAll('.gp-chip-add:not(.is-added)').forEach(b => {
+      b.addEventListener('click', () => agregarGruposBase([b.dataset.base]));
+    });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function renderGrupos() {
@@ -395,21 +467,29 @@
     if (!State.grupos.length) {
       cont.innerHTML =
         `<div style="padding:24px; text-align:center; color:var(--fg-3); font-size:13px;">
-          Este cliente no tiene grupos. Usa <strong>“Agregar grupo”</strong> para crear el primero.
+          Este cliente no tiene grupos. Usa el panel <strong>“Agregar grupos”</strong> de arriba
+          (escribe uno, pega varios o toca un grupo común) para crear el primero.
         </div>`;
       actualizarBotonMerge();
       return;
     }
+    const pfx = State.clientePrefijo;
     cont.innerHTML = State.grupos.map(g => {
       const checked = State.seleccionados.has(g.nombre) ? 'checked' : '';
       const sel = State.seleccionados.has(g.nombre) ? 'selected' : '';
+      // Toggle "lista limpia": muestra el nombre base (sin prefijo) sin perder
+      // el nombre real (data-nombre) que usan las acciones.
+      const display = (State.listaLimpia && pfx
+        && FMT.normalize(g.nombre).startsWith(FMT.normalize(pfx) + '-'))
+        ? g.nombre.slice(pfx.length + 1)
+        : g.nombre;
       return `
         <div class="gp-grupo-row ${sel}" data-nombre="${esc(g.nombre)}">
           <div style="display:flex; align-items:center; gap:10px;">
             <input type="checkbox" class="gp-check" ${checked}
                    data-nombre="${esc(g.nombre)}"
                    style="width:16px; height:16px;">
-            <span class="gp-grupo-name">${esc(g.nombre)}</span>
+            <span class="gp-grupo-name">${esc(display)}</span>
           </div>
           <span class="gp-grupo-count ${g.count === 0 ? 'gp-grupo-count--empty' : ''}"
                 title="${g.count === 0 ? 'En el catálogo, sin equipos asignados todavía' : g.count + ' equipo' + (g.count === 1 ? '' : 's')}">${g.count}</span>
@@ -774,8 +854,19 @@
       renderClientes();
     });
     $('btnGpReload').addEventListener('click', () => cargarGruposCliente());
-    $('btnGpAddGrupo').addEventListener('click', () => agregarGrupo());
     $('btnGpMerge').addEventListener('click', () => mergeSeleccionados());
+
+    // Toggle "Lista limpia" (persistente): muestra los nombres sin el prefijo.
+    try { State.listaLimpia = localStorage.getItem('gp_lista_limpia') === '1'; } catch (_) {}
+    const limpia = $('gpToggleLimpia');
+    if (limpia) {
+      limpia.checked = State.listaLimpia;
+      limpia.addEventListener('change', () => {
+        State.listaLimpia = limpia.checked;
+        try { localStorage.setItem('gp_lista_limpia', limpia.checked ? '1' : '0'); } catch (_) {}
+        if (State.clienteSel) renderGrupos();
+      });
+    }
     const mig = $('btnGpMigrarPrefijos');
     if (mig) mig.addEventListener('click', abrirMigracion);
     const migClose = $('gpMigClose');   if (migClose)  migClose.addEventListener('click', cerrarMigracion);
