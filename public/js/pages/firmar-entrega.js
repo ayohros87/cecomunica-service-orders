@@ -116,6 +116,15 @@ if (emailCliente) {
   const cliente = ordenData.cliente_nombre || "—";
   const tipo = ordenData.tipo_de_servicio || "—";
   const radios = (ordenData.equipos || []).filter(e => !e.eliminado).length;
+  // Mismo dato "Contrato / Observaciones" que la Orden de Servicio y las notas
+  // de entrega imprimibles (orden.observaciones). Permite identificar contrato
+  // y sucursal en la nota que firma/recibe el cliente. Si la OS no lo tiene, va
+  // vacío ("—") y la nota se genera igual.
+  const contratoObservaciones = (ordenData.observaciones || "").trim() || "—";
+  // El cuerpo HTML interpola sin usar textContent, así que escapamos el texto
+  // libre de observaciones para no romper/inyectar el correo (< > & ").
+  const contratoObservacionesHtml = contratoObservaciones
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 await MailService.enqueue({
   to: emailCliente,
@@ -129,6 +138,7 @@ Su Orden de Servicio ${ordenId} ha sido marcada como ENTREGADA AL CLIENTE.
 👤 Cliente: ${cliente}
 🔧 Tipo de servicio: ${tipo}
 📻 Equipos entregados: ${radios}
+📝 Contrato / Observaciones: ${contratoObservaciones}
 
 Gracias por confiar en Cecomunica.
   `.trim(),
@@ -139,6 +149,7 @@ Gracias por confiar en Cecomunica.
   <li><strong>Cliente:</strong> ${cliente}</li>
   <li><strong>Tipo de servicio:</strong> ${tipo}</li>
   <li><strong>Equipos entregados:</strong> ${radios}</li>
+  <li><strong>Contrato / Observaciones:</strong> ${contratoObservacionesHtml}</li>
 </ul>
 <p>Gracias por confiar en <strong>Cecomunica</strong>.</p>
   `.trim(),
