@@ -362,7 +362,9 @@ function _activeFotosDe(equipo) {
 
 function _puedeEliminarFotos() {
   const rol = String(APP.state.userRole || "").toLowerCase();
-  return rol === String(ROLES.ADMIN || "").toLowerCase();
+  const permitidos = [ROLES.ADMIN, ROLES.TECNICO, ROLES.TECNICO_OPERATIVO]
+    .map(r => String(r || "").toLowerCase());
+  return permitidos.includes(rol);
 }
 
 function _formatFotoTimestamp(ts) {
@@ -643,7 +645,7 @@ window.cerrarFotoEquipoViewer = function() {
 
 window.eliminarFotoEquipoViewer = async function() {
   if (!_fotoViewerId) return;
-  if (!_puedeEliminarFotos()) { Toast.show("Solo un administrador puede eliminar fotos", "bad"); return; }
+  if (!_puedeEliminarFotos()) { Toast.show("No tienes permisos para eliminar fotos", "bad"); return; }
   if (!_trabajoOrdenId || !_trabajoEquipoId) return;
 
   // Capture state before any await — closing the viewer (or another action)
