@@ -358,6 +358,60 @@ async function backfillClienteIp(dryRun) {
   };
 }
 
+// ─────────── marcarSerialesLegacy ───────────
+//
+// Corte del flujo de seriales (reemplazos/renovaciones). Marca como "legacy"
+// todo contrato que HOY esté en activo/aprobado y que NO tenga aún un estado de
+// seriales. Los saca del nuevo flujo: la lista no los muestra como "Seriales
+// pendientes", el recordatorio diario los ignora (solo busca "pendiente"), el
+// trigger de solicitud no los re-pide (idempotencia por `seriales_estado`), y el
+// correo a activaciones queda bloqueado (backstop en onSerialesAsignadasSendPdf).
+// Idempotente: salta los que ya tienen `seriales_estado` (pendiente/asignados/
+// legacy) y los que no están en activo/aprobado.
+
+async function backfillMarcarSerialesLegacy(dryRun) {
+  const startedAt = Date.now();
+  const snap = await db.collection("contratos").get();
+
+  let scanned = 0, skippedDeleted = 0, skippedEstado = 0, skippedYaEstado = 0;
+  let toWrite = 0, written = 0, errors = 0;
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) { written += opsInBatch; batch = db.batch(); opsInBatch = 0; return; }
+    try { await batch.commit(); written += opsInBatch; }
+    catch (err) {
+      logger.error("[runBackfill.marcarSerialesLegacy] batch commit failed", { err: err.message });
+      errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  for (const doc of snap.docs) {
+    scanned++;
+    const d = doc.data() || {};
+    if (d.deleted === true) { skippedDeleted++; continue; }
+    if (!["activo", "aprobado"].includes(d.estado)) { skippedEstado++; continue; }
+    if (d.seriales_estado) { skippedYaEstado++; continue; } // ya en el flujo (pendiente/asignados/legacy)
+
+    toWrite++;
+    batch.update(doc.ref, {
+      seriales_estado: "legacy",
+      seriales_legacy_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    opsInBatch++;
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+  await flushBatch();
+
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return { scanned, skippedDeleted, skippedEstado, skippedYaEstado, toWrite, written, errors, elapsedSec };
+}
+
 // ─────────── dispatcher ───────────
 
 module.exports = onCall(
@@ -385,6 +439,9 @@ module.exports = onCall(
         break;
       case "clienteIp":
         result = await backfillClienteIp(dryRun);
+        break;
+      case "marcarSerialesLegacy":
+        result = await backfillMarcarSerialesLegacy(dryRun);
         break;
       default:
         throw new HttpsError("invalid-argument", `Acción desconocida: ${action}`);

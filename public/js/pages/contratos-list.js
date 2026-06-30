@@ -21,6 +21,12 @@ window.ContratosLista = {
   // Se muestra en contratos activos/aprobados con unidades activas.
   serialesBtn(id, data, { movil = false } = {}) {
     if (!['activo', 'aprobado'].includes(data.estado)) return '';
+    // Contratos históricos (corte legacy): seriales ya gestionados fuera del
+    // nuevo flujo. Chip informativo NO accionable — no invita a re-asignar ni a
+    // reenviar a activaciones. Ver backfill `marcarSerialesLegacy`.
+    if (data.seriales_estado === 'legacy') {
+      return `<span class="btn btn-sm" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;cursor:default;" title="Contrato histórico — seriales gestionados fuera del sistema"><i data-lucide="archive" style="width:14px;height:14px;"></i> Seriales · histórico</span>`;
+    }
     const total = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
     const activos = Math.max(0, total - Number(data.baja_cancelado_total || 0));
     if (activos === 0) return '';

@@ -48,6 +48,15 @@
       return;
     }
 
+    // Corte legacy: contratos históricos no participan del flujo de seriales.
+    // Evita que alguien que llegue por link directo asigne seriales y reenvíe a
+    // activaciones un contrato viejo ya gestionado. renderMensaje oculta el
+    // footer (Confirmar). Ver backfill `marcarSerialesLegacy`.
+    if (contrato.seriales_estado === 'legacy') {
+      renderMensaje('Este contrato es histórico: sus seriales se gestionaron fuera del sistema y no requiere asignación. No se enviará nada a activaciones.');
+      return;
+    }
+
     ctx.contratoIdVisible = contrato.contrato_id || contratoDocId;
     ctx.clienteNombre = contrato.cliente_nombre || '';
     ctx.clienteId = contrato.cliente_id || '';

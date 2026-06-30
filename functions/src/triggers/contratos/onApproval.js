@@ -220,6 +220,21 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
 
     const cid = event.params.cid;
     const contratoRef = db.collection("contratos").doc(cid);
+
+    // Backstop del corte legacy: si el contrato es histórico, no participa del
+    // nuevo flujo — no espejar ni reenviar a activaciones (por si alguien llega
+    // por link directo a seriales.html de un contrato viejo). Ver backfill
+    // `marcarSerialesLegacy` y el guard en contrato-seriales-page.js.
+    try {
+      const cSnap = await contratoRef.get();
+      if (cSnap.exists && cSnap.data()?.seriales_estado === "legacy") {
+        logger.info("[onSerialesAsignadasSendPdf] Contrato legacy — omitido (sin correo a activaciones)", { cid });
+        return null;
+      }
+    } catch (e) {
+      logger.warn("[onSerialesAsignadasSendPdf] No se pudo verificar estado legacy", { cid, message: e.message });
+    }
+
     const omisiones = Array.isArray(after.omisiones) ? after.omisiones : [];
 
     logger.info("[onSerialesAsignadasSendPdf] Seriales asignados", { cid, omisiones: omisiones.length });

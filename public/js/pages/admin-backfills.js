@@ -20,6 +20,9 @@
       ['Escaneados',         data.scanned],
       ['Skip (eliminadas)',  data.skippedDeleted],
       ['Skip (sin cambios)', data.skippedUnchanged],
+      // marcarSerialesLegacy:
+      ['Skip (no act/aprob)', data.skippedEstado],
+      ['Skip (ya con estado)', data.skippedYaEstado],
       ['Pendientes update',  data.toWrite],
       // linkClienteId:
       ['Ya con id',          data.yaLinked],

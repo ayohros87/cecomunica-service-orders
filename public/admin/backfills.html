@@ -153,6 +153,32 @@
       <div id="result-clienteIp" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: marcarSerialesLegacy -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="archive"></i> Marcar contratos históricos (seriales)</span>
+        <span class="hint">Corte del flujo de seriales: saca los contratos viejos</span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        Marca como <code>seriales_estado: "legacy"</code> todo contrato que <strong>hoy</strong>
+        esté en <strong>activo o aprobado</strong> y que aún no tenga estado de seriales. Los saca
+        del nuevo flujo: la lista deja de mostrarlos como <strong>"Seriales pendientes"</strong>,
+        el recordatorio diario los ignora y <strong>no se reenvían a activaciones</strong>. Solo
+        los contratos generados de aquí en adelante entran al flujo. Idempotente: salta los que ya
+        tienen estado de seriales o no están en activo/aprobado. Usa <strong>Dry-run</strong> para
+        ver el conteo antes de escribir.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="marcarSerialesLegacy" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (preview)
+        </button>
+        <button class="btn btn-primary" data-bf-action="marcarSerialesLegacy" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-marcarSerialesLegacy" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>
