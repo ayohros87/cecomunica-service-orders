@@ -39,8 +39,14 @@
       type: 'email',
       hint: 'Correo único que recibe copia de cada nota de entrega (recepción lleva el control). Vacío = no se copia a recepción.' },
     { key: 'cotizacion_aprobacion_to', label: 'Aprobadores de cotización (notificación)',
-      type: 'user-picker',
+      type: 'user-picker', emptyHint: 'se notificará a ventas@cecomunica.com',
       hint: 'Usuarios que reciben la solicitud de aprobación cuando se prepara una cotización. Filtra por rol y selecciona uno o varios. Vacío = se notifica a ventas@cecomunica.com.' },
+    { key: 'email_solicitud_seriales', label: 'Inventario — Solicitud de seriales',
+      type: 'user-picker', emptyHint: 'se usa inventario@cecomunica.com',
+      hint: 'Usuarios que reciben el correo "Solicitud de seriales" cuando se aprueba un contrato con equipos. Selecciona uno o varios. Vacío = se usa inventario@cecomunica.com.' },
+    { key: 'seriales_recordatorio_dias', label: 'Recordatorio de seriales (días)',
+      type: 'int', min: 1, max: 30,
+      hint: 'Cada cuántos días se le recuerda a inventario un contrato con seriales pendientes (hasta 4 veces). El badge "Seriales pendientes" en la lista queda como recordatorio permanente.' },
   ];
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -66,7 +72,7 @@
       const v = current[f.key];
       let input;
       if (f.type === 'user-picker') {
-        input = renderUserPicker(f.key, Array.isArray(v) ? v : []);
+        input = renderUserPicker(f.key, Array.isArray(v) ? v : [], f.emptyHint);
       } else if (f.type === 'emails') {
         const text = Array.isArray(v) ? v.join('\n') : '';
         input = `<textarea id="fld-${f.key}" class="form-input" rows="3" style="font-family:inherit;font-size:13px;">${text}</textarea>`;
@@ -93,7 +99,7 @@
 
   // ── user-picker: lista filtrable de usuarios activos (multi-selección) ──────
   // Guarda un array de emails. Pre-marca los que ya estaban configurados.
-  function renderUserPicker(key, selectedEmails) {
+  function renderUserPicker(key, selectedEmails, emptyHint) {
     const sel = new Set((selectedEmails || []).map(e => String(e).toLowerCase()));
     const usables = _users
       .filter(u => u.activo !== false && EMAIL_RE.test(String(u.email || '')))
@@ -118,7 +124,7 @@
       </label>`;
     }).join('');
 
-    return `<div id="fld-${key}" class="up-root" data-key="${key}">
+    return `<div id="fld-${key}" class="up-root" data-key="${key}" data-empty-hint="${esc(emptyHint || 'se notificará a ventas@cecomunica.com')}">
       <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <select class="form-input up-filter-rol" style="width:200px;">${rolOpts}</select>
         <input type="text" class="form-input up-filter-q" placeholder="Buscar nombre o email…" style="flex:1;min-width:180px;">
@@ -145,9 +151,10 @@
         });
         updateCount();
       };
+      const emptyHint = root.getAttribute('data-empty-hint') || 'se notificará a ventas@cecomunica.com';
       const updateCount = () => {
         const total = items.filter(i => i.querySelector('input').checked).length;
-        if (countEl) countEl.textContent = total ? `${total} seleccionado${total === 1 ? '' : 's'}` : 'Sin selección — se notificará a ventas@cecomunica.com';
+        if (countEl) countEl.textContent = total ? `${total} seleccionado${total === 1 ? '' : 's'}` : `Sin selección — ${emptyHint}`;
       };
 
       filterRol?.addEventListener('change', apply);

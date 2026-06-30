@@ -106,8 +106,15 @@
 
   if (window.lucide) lucide.createIcons();
 
-  // Si ya hay sesión, ir al home
-  auth.onAuthStateChanged((user) => { if (user) location.href = "index.html"; });
+  // Si ya hay sesión, ir al destino (?next, deep-link) o al home.
+  // Solo se acepta una ruta relativa de la misma app (empieza con un único "/")
+  // para evitar open-redirects (rechaza "//host" y URLs absolutas).
+  function destinoPostLogin() {
+    const next = new URLSearchParams(location.search).get('next');
+    if (next && /^\/(?!\/)/.test(next)) return next;
+    return "index.html";
+  }
+  auth.onAuthStateChanged((user) => { if (user) location.href = destinoPostLogin(); });
 
   // Mostrar/ocultar password
   function togglePass(){

@@ -193,6 +193,24 @@
               </dl>
             </div>
           </div>
+
+          ${(cot.adjuntos && cot.adjuntos.length) ? `
+          <!-- Adjuntos (viajan con la propuesta) -->
+          <div class="cc-panel">
+            <div class="cc-panel-head"><h3><i data-lucide="paperclip"></i> Adjuntos</h3></div>
+            <div class="cc-panel-body">
+              <ul style="list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px;">
+                ${cot.adjuntos.map(a => `
+                  <li style="display:flex; align-items:center; gap:8px;">
+                    <i data-lucide="${a.content_type === 'application/pdf' ? 'file-text' : 'image'}" style="color:var(--fg-3);"></i>
+                    ${a.url
+                      ? `<a href="${esc(a.url)}" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">${esc(a.nombre)}</a>`
+                      : esc(a.nombre)}
+                  </li>`).join('')}
+              </ul>
+              <p style="font-size:11.5px; color:var(--fg-3); margin:12px 0 0;">Estos archivos se envían junto con la propuesta al cliente.</p>
+            </div>
+          </div>` : ''}
         </div>
 
         <!-- Sidebar -->
@@ -386,6 +404,7 @@
       validezDias: cot.validezDias || 15,
       ejecutivo: ej.nombre || '',
       link,
+      adjuntos: cot.adjuntos || [],
     });
     if (!payload) return;
 
@@ -395,6 +414,7 @@
         cc: cot.creado_por_email || null,
         subject: payload.subject,
         html: payload.html,
+        attachments: CotState.adjuntosToAttachments(cot.adjuntos),
       });
       cot.estado = 'enviada';
       Toast.show('Cotización enviada a ' + payload.dest, 'ok');

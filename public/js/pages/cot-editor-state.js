@@ -145,6 +145,15 @@
         : JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
       dirigido_a: doc.dirigido_a || '',
       dirigido_email: doc.dirigido_email || '',
+      // Adjuntos (brochures / fichas técnicas) que viajan con la propuesta.
+      adjuntos: Array.isArray(doc.adjuntos) ? doc.adjuntos.map(a => ({
+        id: a.id || uid(),
+        nombre: a.nombre || a.path || 'archivo',
+        url: a.url || '',
+        path: a.path || '',
+        content_type: a.content_type || null,
+        size: Number(a.size || 0),
+      })) : [],
       // Tipo de cotización (servicio vs comercial). Se conserva en el round-trip
       // para que editar una cotización de servicio no la reclasifique como comercial.
       origen: doc.origen || '',
@@ -205,6 +214,16 @@
         desc: Number(it.desc || 0),
       })),
       condiciones: ui.condiciones || [],
+      // Adjuntos: se persisten en el doc para que viajen automáticamente en cada
+      // envío de la propuesta (detalle, listado y aprobar-y-enviar).
+      adjuntos: (ui.adjuntos || []).map(a => ({
+        id: a.id,
+        nombre: a.nombre || '',
+        url: a.url || '',
+        path: a.path || '',
+        content_type: a.content_type || null,
+        size: Number(a.size || 0),
+      })),
       subtotal: FMT.round2(totales.subtotal),
       descuento_global: FMT.round2(totales.descGlobal),
       total: FMT.round2(totales.total),
@@ -257,7 +276,22 @@
       condiciones: JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
       dirigido_a: '',
       dirigido_email: '',
+      adjuntos: [],
     };
+  }
+
+  // Convierte los adjuntos guardados en el doc al formato de attachments de
+  // nodemailer. Usa `path` (download URL) para que la Cloud Function los baje
+  // de Storage al enviar — los docs de mail_queue tienen tope de 1 MB, así que
+  // no se puede embeber el contenido. Filtra los que no tengan URL.
+  function adjuntosToAttachments(adjuntos) {
+    return (adjuntos || [])
+      .filter(a => a && a.url)
+      .map(a => ({
+        filename: a.nombre || 'adjunto',
+        path: a.url,
+        ...(a.content_type ? { contentType: a.content_type } : {}),
+      }));
   }
 
   // ── Bootstrap de catálogos ────────────────────────────────────────────────
@@ -373,6 +407,12 @@
       const subject = `Cotización ${opts.cotizacionId || ''} · CeComunica`;
       const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
       const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
+      const adjuntos = Array.isArray(opts.adjuntos) ? opts.adjuntos.filter(a => a && a.url) : [];
+      const adjuntosHtml = adjuntos.length ? `
+  <p style="margin:14px 0 4px;"><b>Archivos adjuntos:</b></p>
+  <ul style="margin:0 0 10px; padding-left:18px; color:#374151;">
+    ${adjuntos.map(a => `<li>${esc(a.nombre || 'adjunto')}</li>`).join('')}
+  </ul>` : '';
       const bodyHtml = `
 <div style="font-family:Arial, sans-serif; color:#111; max-width:560px;">
   <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">Cotización ${esc(opts.cotizacionId || '')}</h2>
@@ -381,6 +421,7 @@
   <p style="margin:0 0 10px;">${introHtml}</p>
   <p style="margin:0 0 4px;"><b>Total:</b> ${window.FMT.money(Number(opts.total || 0))}</p>
   <p style="margin:0 0 4px;"><b>Validez:</b> ${opts.validezDias || 15} días</p>
+  ${adjuntosHtml}
   <p style="margin:18px 0;">
     <a href="${esc(opts.link || '#')}" style="background:#0B2A47; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:600;">
       Ver y descargar cotización (PDF)
@@ -537,5 +578,6 @@
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
     cerrarPrompt, reenviarPrompt,
     enqueueAprobacionMail,
+    adjuntosToAttachments,
   };
 })();

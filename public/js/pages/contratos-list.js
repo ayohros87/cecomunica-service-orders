@@ -24,7 +24,8 @@ window.ContratosLista = {
     const total = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
     const activos = Math.max(0, total - Number(data.baja_cancelado_total || 0));
     if (activos === 0) return '';
-    const count = Number(data.seriales_count || 0);
+    // Unidades resueltas = seriales reales + unidades marcadas "sin serial" (omitidas).
+    const count = Number(data.seriales_count || 0) + Number(data.seriales_omitidos_count || 0);
 
     let css, icon, label, title;
     if (count === 0) {
@@ -38,7 +39,7 @@ window.ContratosLista = {
       icon = 'scan-barcode'; label = `Seriales ${count}/${activos}`; title = `Seriales incompletos (${count} de ${activos})`;
     }
     const cls = movil ? 'btn btn-sm' : 'btn btn-sm';
-    return `<button class="${cls}" style="${css}" onclick="ContratosSeriales.abrir('${id}')" title="${title}"><i data-lucide="${icon}" style="width:14px;height:14px;"></i> ${label}</button>`;
+    return `<button class="${cls}" style="${css}" onclick="location.href='seriales.html?id=${id}'" title="${title}"><i data-lucide="${icon}" style="width:14px;height:14px;"></i> ${label}</button>`;
   },
 
   // Indicador de enmienda sobre el contrato (derivado por el trigger onCancelacionWrite).

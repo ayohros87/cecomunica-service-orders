@@ -280,7 +280,6 @@
   <script src="../js/pages/contratos-approval.js"></script>
   <script src="../js/pages/contratos-upload.js"></script>
   <script src="../js/pages/contratos-equipos.js"></script>
-  <script src="../js/pages/contratos-seriales.js"></script>
   <script src="../js/pages/contratos-list.js"></script>
   <script src="../js/pages/contratos-index.js" defer></script>
 
@@ -345,21 +344,6 @@
       <div class="modal-body" id="modalEquiposBody"></div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="ContratosEquipos.cerrarModal()">Cerrar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Seriales del contrato overlay (interno) -->
-  <div id="overlaySeriales" class="modal-backdrop" style="display:none;" role="dialog" aria-modal="true">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="scan-barcode"></i> Seriales del contrato</h3>
-        <button class="modal-close" onclick="ContratosSeriales.cerrar()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-      </div>
-      <div class="modal-body" id="serialesBody"></div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="ContratosSeriales.cerrar()">Cerrar</button>
-        <button class="btn btn-primary" id="btnGuardarSeriales" onclick="ContratosSeriales.guardar()"><i data-lucide="save"></i> Guardar</button>
       </div>
     </div>
   </div>

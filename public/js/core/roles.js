@@ -28,6 +28,10 @@ const _PERMISOS = {
   'reasignar-tecnico': ['administrador', 'jefe_taller'],
   'ver-progreso':      ['administrador', 'vendedor', 'jefe_taller', 'gerente'],
   'ver-inventario':    ['administrador', 'inventario', 'jefe_taller', 'gerente'],
+  // Asignar seriales al inicio del ciclo del contrato (flujo de inventario). El
+  // encargado de inventario abre la página desde el correo "Solicitud de
+  // seriales"; admin/recepción/vendedor/gerente también pueden completarlos.
+  'gestionar-seriales': ['administrador', 'recepcion', 'vendedor', 'gerente', 'inventario'],
   'admin-equipos':     ['administrador'],
   // Catálogo de modelos + tarifas de facturación (info sensible) → contabilidad.
   'gestionar-modelos': ['administrador', 'contabilidad'],

@@ -309,6 +309,7 @@
       validezDias: cot.validezDias || 15,
       ejecutivo: cot.ejecutivo_nombre || '',
       link,
+      adjuntos: cot.adjuntos || [],
     });
     if (!payload) return;
     try {
@@ -317,6 +318,7 @@
         cc: cot.creado_por_email || null,
         subject: payload.subject,
         html: payload.html,
+        attachments: CotState.adjuntosToAttachments(cot.adjuntos),
       });
       cot.estado = 'enviada';
       Toast.show('Cotización enviada a ' + payload.dest, 'ok');
@@ -496,6 +498,12 @@
             .replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
           const totalTxt = FMT.money(Number(doc.total || 0));
           const dirA = doc.dirigido_a ? `<p style="margin:0 0 12px;">A la atención de: <b>${doc.dirigido_a}</b></p>` : '';
+          const attachments = CotState.adjuntosToAttachments(doc.adjuntos);
+          const adjuntosHtml = attachments.length ? `
+              <p style="margin:14px 0 4px;"><b>Archivos adjuntos:</b></p>
+              <ul style="margin:0 0 12px; padding-left:18px; color:#374151;">
+                ${attachments.map(a => `<li>${a.filename}</li>`).join('')}
+              </ul>` : '';
           const html = `
             <div style="font-family:Arial, sans-serif; color:#111; max-width:560px;">
               <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">Cotización ${doc.cotizacion_id}</h2>
@@ -504,6 +512,7 @@
               <p style="margin:0 0 12px;">${intro}</p>
               <p style="margin:0 0 4px;"><b>Total:</b> ${totalTxt}</p>
               <p style="margin:0 0 4px;"><b>Validez:</b> ${doc.validezDias || 15} días</p>
+              ${adjuntosHtml}
               <p style="margin:18px 0;">
                 <a href="${link}" style="background:#0B2A47; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:600;">
                   Ver y descargar cotización (PDF)
@@ -519,6 +528,7 @@
             cc: doc.creado_por_email || null,
             subject,
             html,
+            attachments,
             meta: { tipo: 'cotizacion_aprobada', cotizacion_id: doc.cotizacion_id, doc_id: _aprobId },
           });
           await CotizacionesService.updateCotizacion(_aprobId, {

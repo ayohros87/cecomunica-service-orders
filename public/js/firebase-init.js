@@ -43,7 +43,16 @@ const db = firebase.firestore();
   window.verificarAccesoYAplicarVisibilidad = async function (callback) {
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) {
-      window.location.href = "login.html";
+      // Preserva el destino (deep-link) para volver tras el login. Ruta
+      // absoluta porque esta función la usan páginas en subcarpetas
+      // (/contratos/…, /admin/…), donde "login.html" relativo no resuelve.
+      const onLogin = /\/login\.html$/.test(window.location.pathname);
+      if (onLogin) {
+        window.location.href = "/login.html";
+      } else {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = "/login.html?next=" + encodeURIComponent(next);
+      }
       return;
     }
 

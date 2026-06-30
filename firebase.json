@@ -12,7 +12,8 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
-      "tools/**"
+      "tools/**",
+      "mejoras solicitadas/**"
     ],
     "rewrites": [
       {
