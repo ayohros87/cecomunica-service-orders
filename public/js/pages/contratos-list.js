@@ -21,11 +21,14 @@ window.ContratosLista = {
   // Se muestra en contratos activos/aprobados con unidades activas.
   serialesBtn(id, data, { movil = false } = {}) {
     if (!['activo', 'aprobado'].includes(data.estado)) return '';
-    // Contratos históricos (corte legacy): seriales ya gestionados fuera del
-    // nuevo flujo. Chip informativo NO accionable — no invita a re-asignar ni a
-    // reenviar a activaciones. Ver backfill `marcarSerialesLegacy`.
+    // Contratos históricos (corte legacy): fuera del flujo automático. Chip GRIS
+    // (no es un CTA pendiente como el ámbar) pero SÍ clickeable: abre la página de
+    // seriales en modo "registro histórico" por si más adelante se quieren
+    // registrar los seriales en el contrato. Eso NO reenvía a activaciones (la
+    // página oculta "Confirmar" y el trigger backstop bloquea el correo).
+    // Ver backfill `marcarSerialesLegacy`.
     if (data.seriales_estado === 'legacy') {
-      return `<span class="btn btn-sm" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;cursor:default;" title="Contrato histórico — seriales gestionados fuera del sistema"><i data-lucide="archive" style="width:14px;height:14px;"></i> Seriales · histórico</span>`;
+      return `<button class="btn btn-sm" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;" onclick="location.href='seriales.html?id=${id}'" title="Contrato histórico — registrar seriales para referencia (no se envía a activaciones)"><i data-lucide="archive" style="width:14px;height:14px;"></i> Seriales · histórico</button>`;
     }
     const total = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
     const activos = Math.max(0, total - Number(data.baja_cancelado_total || 0));

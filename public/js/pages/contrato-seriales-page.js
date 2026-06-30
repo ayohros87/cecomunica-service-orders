@@ -48,14 +48,13 @@
       return;
     }
 
-    // Corte legacy: contratos históricos no participan del flujo de seriales.
-    // Evita que alguien que llegue por link directo asigne seriales y reenvíe a
-    // activaciones un contrato viejo ya gestionado. renderMensaje oculta el
-    // footer (Confirmar). Ver backfill `marcarSerialesLegacy`.
-    if (contrato.seriales_estado === 'legacy') {
-      renderMensaje('Este contrato es histórico: sus seriales se gestionaron fuera del sistema y no requiere asignación. No se enviará nada a activaciones.');
-      return;
-    }
+    // Corte legacy: contratos históricos no entran al flujo AUTOMÁTICO de
+    // seriales (no se notifica a activaciones). Pero SÍ se permite registrar
+    // seriales para referencia/historial — modo "registro histórico": render
+    // normal con banner, solo "Guardar" (se oculta "Confirmar y enviar"). El
+    // correo a activaciones queda bloqueado de todos modos por el backstop del
+    // trigger onSerialesAsignadasSendPdf. Ver backfill `marcarSerialesLegacy`.
+    ctx.esLegacy = (contrato.seriales_estado === 'legacy');
 
     ctx.contratoIdVisible = contrato.contrato_id || contratoDocId;
     ctx.clienteNombre = contrato.cliente_nombre || '';
@@ -141,6 +140,29 @@
     $('serialesBody').innerHTML = gruposHtml ||
       `<div class="ds-card ds-card-padded" style="color:var(--fg-3);">Este contrato no tiene unidades activas que serializar.</div>`;
 
+    // Barra "Jalar seriales": trae los seriales del cliente desde POC o desde las
+    // órdenes de servicio vinculadas al contrato y rellena los slots por modelo,
+    // sin teclear. Útil en el flujo normal y en el registro histórico (legacy).
+    if (gruposHtml) {
+      const toolbar = document.createElement('div');
+      toolbar.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-bottom:var(--sp-3,12px);';
+      toolbar.innerHTML =
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="jalar-poc"><i data-lucide="download"></i> Jalar desde POC</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="jalar-os"><i data-lucide="clipboard-list"></i> Jalar desde órdenes</button>';
+      $('serialesBody').prepend(toolbar);
+    }
+
+    // Modo "registro histórico" (contrato legacy): banner explicativo + se oculta
+    // "Confirmar y enviar a activaciones". "Guardar" sigue disponible para dejar
+    // los seriales registrados en el contrato sin notificar a nadie.
+    if (ctx.esLegacy) {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'margin-bottom:var(--sp-3,12px);padding:12px 14px;border:1px solid #BFDBFE;background:#EFF6FF;color:#1E3A8A;border-radius:10px;display:flex;gap:8px;align-items:flex-start;font-size:14px;';
+      banner.innerHTML = '<i data-lucide="archive" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Contrato histórico.</strong> Puedes registrar los seriales para referencia; <strong>no se envía nada a activaciones</strong> ni se reinicia el proceso.</div>';
+      $('serialesBody').prepend(banner);
+      const bc = $('btnConfirmar'); if (bc) bc.style.display = 'none';
+    }
+
     const fs = $('footerStrip');
     if (fs) fs.style.display = gruposHtml ? '' : 'none';
 
@@ -173,6 +195,8 @@
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.getAttribute('data-action');
+      if (action === 'jalar-poc') { jalarDesdePoc(); return; }
+      if (action === 'jalar-os')  { jalarDesdeOS();  return; }
       const grupo = btn.closest('.serial-group');
       if (action === 'toggle-paste') togglePaste(grupo, true);
       else if (action === 'cancel-paste') togglePaste(grupo, false);
@@ -404,6 +428,101 @@
       console.error('Error confirmando seriales:', e);
       Toast.show('No se pudo confirmar. Intenta de nuevo.', 'bad');
       btn.disabled = false;
+    }
+  }
+
+  // ── Jalar seriales (POC / órdenes) ───────────────────────────────────────
+  // Distribuye una lista de candidatos {serial, modelo, modeloId} en los slots
+  // vacíos por modelo del contrato. Hace match por modelo_id (si ambos lo
+  // tienen) o, en su defecto, por nombre normalizado. Deduplica contra los
+  // seriales ya presentes en el formulario y dentro del mismo lote. No toca
+  // filas marcadas "Sin serial". Reporta cuántos entraron / duplicados / sin
+  // cupo / sin modelo en el contrato.
+  function jalarItems(items, origen) {
+    const grupos = [...document.querySelectorAll('#serialesBody .serial-group')];
+    if (!grupos.length) { Toast.show('No hay modelos que serializar en este contrato.', 'warn'); return; }
+
+    const presentes = new Set();
+    document.querySelectorAll('#serialesBody .serial-input').forEach(i => {
+      const v = norm(i.value); if (v) presentes.add(v);
+    });
+
+    const porId = new Map(), porNombre = new Map();
+    grupos.forEach(g => {
+      const mid = g.getAttribute('data-modelo-id') || '';
+      const mnom = norm(g.getAttribute('data-modelo') || '');
+      if (mid) porId.set(mid, g);
+      if (mnom && !porNombre.has(mnom)) porNombre.set(mnom, g);
+    });
+
+    let agregados = 0, duplicados = 0, sinModelo = 0, sinCupo = 0;
+
+    for (const it of (items || [])) {
+      const serial = String(it.serial || '').trim();
+      if (!serial) continue;
+      const key = serial.toLowerCase();
+      if (presentes.has(key)) { duplicados++; continue; }
+
+      const grupo = (it.modeloId && porId.get(it.modeloId)) || porNombre.get(norm(it.modelo)) || null;
+      if (!grupo) { sinModelo++; continue; }
+
+      const slot = [...grupo.querySelectorAll('.serial-row')].find(row => {
+        const inp = row.querySelector('.serial-input');
+        const omit = row.querySelector('.omit-toggle')?.checked;
+        return inp && !inp.disabled && !omit && !inp.value.trim();
+      });
+      if (!slot) { sinCupo++; continue; }
+
+      slot.querySelector('.serial-input').value = serial;
+      presentes.add(key);
+      agregados++;
+    }
+
+    refresh();
+
+    const partes = [`${agregados} agregado(s)`];
+    if (duplicados) partes.push(`${duplicados} ya presentes`);
+    if (sinCupo)    partes.push(`${sinCupo} sin cupo`);
+    if (sinModelo)  partes.push(`${sinModelo} sin modelo en el contrato`);
+    Toast.show(`Jalado desde ${origen}: ${partes.join(' · ')}.`, agregados ? 'ok' : 'warn');
+  }
+
+  async function jalarDesdePoc() {
+    if (typeof PocService === 'undefined') { Toast.show('POC no está disponible.', 'bad'); return; }
+    if (!ctx.clienteId && !ctx.clienteNombre) { Toast.show('El contrato no tiene cliente asociado para buscar en POC.', 'warn'); return; }
+    try {
+      let devices = await PocService.getByCliente({ clienteId: ctx.clienteId, clienteNombre: ctx.clienteNombre });
+      devices = (devices || []).filter(d => d.deleted !== true && String(d.serial || '').trim());
+      if (!devices.length) { Toast.show('No hay equipos en POC para este cliente.', 'warn'); return; }
+      const items = devices.map(d => ({
+        serial: d.serial,
+        modelo: d.modelo_label || d.modelo || '',
+        modeloId: d.modelo_id || '',
+      }));
+      jalarItems(items, 'POC');
+    } catch (e) {
+      console.error('Error consultando POC:', e);
+      Toast.show('No se pudo consultar POC.', 'bad');
+    }
+  }
+
+  async function jalarDesdeOS() {
+    if (typeof ContratosService === 'undefined' || !ContratosService.getOrdenesDeContratoCompleto) {
+      Toast.show('Las órdenes del contrato no están disponibles.', 'bad'); return;
+    }
+    try {
+      const ordenes = await ContratosService.getOrdenesDeContratoCompleto(contratoDocId);
+      const vivas = (ordenes || []).filter(o => o.eliminado !== true);
+      const items = [];
+      vivas.forEach(o => (o.equipos || []).forEach(e => {
+        const serial = String(e.serial || '').trim();
+        if (serial) items.push({ serial, modelo: e.modelo || '', modeloId: '' });
+      }));
+      if (!items.length) { Toast.show('Las órdenes vinculadas no tienen seriales registrados.', 'warn'); return; }
+      jalarItems(items, 'órdenes del contrato');
+    } catch (e) {
+      console.error('Error leyendo órdenes del contrato:', e);
+      Toast.show('No se pudieron leer las órdenes del contrato.', 'bad');
     }
   }
 })();
