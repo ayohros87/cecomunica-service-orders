@@ -154,7 +154,12 @@ window.VB = {
   },
 
   // ---- Groups search ----
-  async buscarGruposCliente() {
+  // Fuente de verdad: el catálogo del cliente (clientes/{id}.poc_grupos), leído
+  // FRESCO del servidor — así el vendedor ve los grupos que recepción/admin
+  // acaban de agregar (la caché local quedaría obsoleta). La caché en memoria
+  // evita re-lecturas dentro de la sesión; localStorage queda solo como respaldo
+  // offline. `force` (botón "refrescar grupos") salta la caché de sesión.
+  async buscarGruposCliente({ force = false } = {}) {
     const escrito    = (document.getElementById('clienteGlobal').value || '').trim();
     let nombreExacto = this.clienteNombreSeleccionado || escrito;
     if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (_) {} }
@@ -175,28 +180,22 @@ window.VB = {
     // (antes faltaban grupos de equipos legacy sin cliente_id).
     const lsKey    = 'grupos_v2_' + cacheKey;
 
-    if (this.gruposClienteCache.has(cacheKey)) {
-      const g = this.gruposClienteCache.get(cacheKey);
-      document.getElementById('grupoInput').value = g.join(', ');
-      this.renderGrupoChips(); this.actualizarResumenBatch(); this.feedbackGrupos(g.length);
+    // Caché de sesión (en memoria): consistente mientras la página esté abierta.
+    // El botón refrescar (force) la salta para volver a leer del servidor.
+    if (!force && this.gruposClienteCache.has(cacheKey)) {
+      this._pintarGrupos(this.gruposClienteCache.get(cacheKey));
       return;
     }
-    const gLS = this.lsGet(lsKey);
-    if (gLS && Array.isArray(gLS) && gLS.length) {
-      this.gruposClienteCache.set(cacheKey, gLS);
-      document.getElementById('grupoInput').value = gLS.join(', ');
-      this.renderGrupoChips(); this.actualizarResumenBatch(); this.feedbackGrupos(gLS.length);
-      return;
-    }
+
     try {
       // Fuente preferida: el catálogo canónico del cliente
-      // (clientes/{id}.poc_grupos). Para clientes aún sin catálogo, se cae a
-      // derivar de los equipos — pasando id Y nombre para incluir equipos
-      // legacy que solo tienen `cliente` (string) sin `cliente_id`.
+      // (clientes/{id}.poc_grupos), leído FRESCO. Para clientes aún sin catálogo
+      // se cae a derivar de los equipos — pasando id Y nombre para incluir
+      // equipos legacy que solo tienen `cliente` (string) sin `cliente_id`.
       let found = null;
       if (this.clienteIDSeleccionado) {
         try {
-          const cat = await PocService.getCatalogoGrupos(this.clienteIDSeleccionado);
+          const cat = await PocService.getCatalogoGrupos(this.clienteIDSeleccionado, { fresh: true });
           if (Array.isArray(cat)) found = cat.slice();
         } catch (_) {}
       }
@@ -204,6 +203,7 @@ window.VB = {
         const devices = await PocService.getByCliente({
           clienteId: this.clienteIDSeleccionado || null,
           clienteNombre: nombreExacto || null,
+          fresh: force,
         });
         const gruposSet = new Set();
         devices.forEach(d => {
@@ -216,9 +216,38 @@ window.VB = {
       if (!found.length) Toast.show('Este cliente aún no tiene grupos. Agrégalos con “+ Grupo”.', 'warn');
       this.gruposClienteCache.set(cacheKey, found);
       this.lsSet(lsKey, found);
-      document.getElementById('grupoInput').value = found.join(', ');
-      this.renderGrupoChips(); this.actualizarResumenBatch(); this.feedbackGrupos(found.length);
-    } catch (e) { console.error('Error buscando grupos:', e); Toast.show('Ocurrió un error al buscar los grupos.', 'bad'); }
+      this._pintarGrupos(found);
+    } catch (e) {
+      // Sin red: último recurso, lo último que se cacheó en localStorage.
+      const gLS = this.lsGet(lsKey);
+      if (gLS && Array.isArray(gLS) && gLS.length) {
+        this.gruposClienteCache.set(cacheKey, gLS);
+        this._pintarGrupos(gLS);
+        return;
+      }
+      console.error('Error buscando grupos:', e);
+      Toast.show('Ocurrió un error al buscar los grupos.', 'bad');
+    }
+  },
+
+  // Vuelca una lista de grupos al input + chips + feedback. Único punto de
+  // pintado para todas las rutas de buscarGruposCliente.
+  _pintarGrupos(arr) {
+    const lista = Array.isArray(arr) ? arr : [];
+    document.getElementById('grupoInput').value = lista.join(', ');
+    this.renderGrupoChips();           // ya llama a actualizarResumenBatch()
+    this.feedbackGrupos(lista.length);
+  },
+
+  // Botón "refrescar grupos": salta la caché de sesión y vuelve a leer el
+  // catálogo del servidor (para ver grupos que agregó otra persona).
+  refrescarGrupos() {
+    const nombre = (document.getElementById('clienteGlobal').value || '').trim();
+    if (!this.clienteIDSeleccionado && !nombre) {
+      Toast.show('Primero selecciona un cliente.', 'warn');
+      return;
+    }
+    this.buscarGruposCliente({ force: true });
   },
 
   feedbackGrupos(n) {

@@ -241,7 +241,10 @@
           </div>
 
           <div class="form-field">
-            <label class="form-label">Grupos <span class="optional">(del catálogo del cliente)</span></label>
+            <label class="form-label" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <span>Grupos <span class="optional">(del catálogo del cliente)</span></span>
+              <button class="btn btn-ghost btn-icon" type="button" id="btnRefrescarGrupos" onclick="VB.refrescarGrupos()" title="Volver a cargar los grupos del cliente"><i data-lucide="refresh-cw"></i></button>
+            </label>
             <input type="hidden" id="grupoInput">
             <div id="grupoChips" class="chips-editor"></div>
             <span class="form-hint" id="grupoHintVB">Para crear un grupo nuevo, ve a <strong>Administrar grupos</strong> (menú “Más” en POC).</span>

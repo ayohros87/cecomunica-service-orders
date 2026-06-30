@@ -176,18 +176,25 @@ const PocService = {
 
   // Read the canonical catalog. Returns string[] or null when the field is
   // absent (caller distinguishes "empty catalog" from "no catalog yet").
-  async getCatalogoGrupos(clienteId) {
+  async getCatalogoGrupos(clienteId, { fresh = false } = {}) {
     if (!clienteId) return null;
     const ref = firebase.firestore().collection('clientes').doc(clienteId);
     // OJO: get({source:'cache'}) sobre un DOC individual LANZA si no está en
     // caché (las queries de colección sí devuelven vacío). Probamos caché y
     // caemos al servidor ante cualquier fallo o cache-miss.
+    // `fresh` salta la caché del SDK y lee del servidor — necesario cuando otro
+    // usuario (recepción/admin) acaba de editar el catálogo y este cliente debe
+    // ver los grupos nuevos (la caché local quedaría obsoleta).
     let doc;
-    try {
-      doc = await ref.get({ source: 'cache' });
-      if (!doc.exists) doc = await ref.get();
-    } catch (_) {
+    if (fresh) {
       doc = await ref.get();
+    } else {
+      try {
+        doc = await ref.get({ source: 'cache' });
+        if (!doc.exists) doc = await ref.get();
+      } catch (_) {
+        doc = await ref.get();
+      }
     }
     if (!doc.exists) return null;
     const arr = doc.data().poc_grupos;
