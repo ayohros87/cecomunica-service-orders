@@ -182,12 +182,30 @@ window.PocList = {
     const campoOrden    = this._campoOrden || 'cliente';
     const direccionOrden = this._direccionAsc ? 'asc' : 'desc';
 
+    // Watchdog for the "página pensando" report (F1). Firestore connectivity
+    // intermittency can leave listPage pending forever, leaving the skeleton
+    // spinning. On a reset/first load, if nothing lands within the window we
+    // show a friendly error + "Reintentar" instead of an endless skeleton.
+    let _resuelto = false;
+    let _watchdog = null;
+    if (esReset) {
+      _watchdog = setTimeout(() => {
+        if (_resuelto) return;
+        this._mostrarErrorCarga(tbody, btnCargar,
+          'La carga está tardando más de lo normal',
+          'Puede ser una intermitencia de conexión. Vuelve a intentar.');
+      }, 15000);
+    }
+
     PocService.listPage({
       sortField: campoOrden, sortAsc: this._direccionAsc,
       cursorDoc: this._lastDoc || null, limit: 50,
     }).then(({ docs, lastDoc }) => {
+      _resuelto = true;
+      if (_watchdog) clearTimeout(_watchdog);
       // Clear the skeleton/old rows now that the data is in (reset only;
-      // pagination appends below the existing rows).
+      // pagination appends below the existing rows). This also clears any
+      // timeout-error row painted by the watchdog if data lands late.
       if (esReset) tbody.innerHTML = '';
       if (!docs.length) {
         this._noMasDatos = true;
@@ -215,7 +233,46 @@ window.PocList = {
       PocState.actualizarResumen({ total, activos, incompletos });
       this.actualizarFlechitas();
       if (typeof lucide !== 'undefined') lucide.createIcons();
+    }).catch(err => {
+      _resuelto = true;
+      if (_watchdog) clearTimeout(_watchdog);
+      console.error('❌ Error al cargar la base POC:', err);
+      // Only take over the table on a reset load — a failed "Cargar más"
+      // shouldn't wipe the rows already on screen.
+      if (esReset) {
+        this._mostrarErrorCarga(tbody, btnCargar,
+          'Error al cargar la base POC',
+          'Revisa tu conexión e intenta de nuevo.');
+      }
     });
+  },
+
+  // Friendly error/timeout state for the device table (F1). Spans all 12
+  // columns and offers a retry that re-runs a clean reset load.
+  _mostrarErrorCarga(tbody, btnCargar, titulo, sub) {
+    if (!tbody) return;
+    if (btnCargar) btnCargar.style.display = 'none';
+    tbody.innerHTML = `
+      <tr><td colspan="12" style="padding:32px 16px;text-align:center;color:var(--muted,#64748b);">
+        <div style="display:inline-flex;flex-direction:column;align-items:center;gap:8px;">
+          <i data-lucide="wifi-off" style="width:32px;height:32px;"></i>
+          <strong style="color:var(--text,#0f172a);">${titulo}</strong>
+          <span style="font-size:13px;">${sub}</span>
+          <button class="btn btn-secondary" id="btnReintentarPoc" style="margin-top:8px;">
+            <i data-lucide="refresh-cw"></i> Reintentar
+          </button>
+        </div>
+      </td></tr>`;
+    const btn = document.getElementById('btnReintentarPoc');
+    if (btn) btn.addEventListener('click', () => {
+      tbody.innerHTML = '<tr><td colspan="12" style="padding:24px;text-align:center;color:var(--muted,#64748b);">Cargando…</td></tr>';
+      // refresh() re-dispatches based on the current filter input: a clean
+      // reset load when empty, or the same filtered search when not — so the
+      // retry redoes whatever actually failed.
+      this._primeraCarga = true;
+      this.refresh();
+    }, { once: true });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   // ── Filtered search ──────────────────────────────────────────────
@@ -267,6 +324,13 @@ window.PocList = {
         });
         PocState.actualizarResumen({ total, activos, incompletos });
         if (typeof lucide !== 'undefined') lucide.createIcons();
+      }).catch(err => {
+        // Stale-search guard: ignore errors from a superseded query.
+        if (ejecucionID !== this._filtroID) return;
+        console.error('❌ Error al filtrar la base POC:', err);
+        this._mostrarErrorCarga(tbody, btnCargar,
+          'Error al buscar en la base POC',
+          'Revisa tu conexión e intenta de nuevo.');
       });
   },
 

@@ -107,11 +107,30 @@ window.ordenarOrdenes = function (data) {
 // workflow happens on recent orders which live in the first page.
 let _firstPageUnsubscribe = null;
 
+// Watchdog for the "página pensando" report (F1). Firestore connectivity
+// intermittency can leave the first snapshot pending forever: neither
+// onUpdate nor onError fires, so the skeleton spins indefinitely. If no
+// real data lands within this window we swap the skeleton for a friendly
+// error + "Reintentar". The listener stays attached, so if data arrives
+// late it self-heals by painting over the error.
+let _firstPageWatchdog = null;
+const FIRST_PAGE_TIMEOUT_MS = 15000;
+
+function _limpiarWatchdogInicial() {
+  if (_firstPageWatchdog) { clearTimeout(_firstPageWatchdog); _firstPageWatchdog = null; }
+}
+
+function _reintentarCargaInicial() {
+  if (typeof renderSkeletonRows === 'function') renderSkeletonRows(8);
+  _iniciarSnapshotInicial();
+}
+
 function _detenerSnapshotInicial() {
   if (typeof _firstPageUnsubscribe === 'function') {
     try { _firstPageUnsubscribe(); } catch (e) { console.warn("unsubscribe failed", e); }
   }
   _firstPageUnsubscribe = null;
+  _limpiarWatchdogInicial();
 }
 
 function _iniciarSnapshotInicial() {
@@ -162,6 +181,8 @@ function _iniciarSnapshotInicial() {
         return;
       }
       _liveRendered = true;
+      // Real data painted — the load succeeded, so stand down the watchdog.
+      _limpiarWatchdogInicial();
       // First real page is in — pagination/auto-load may run from here.
       APP.state.firstPageReady = true;
 
@@ -177,12 +198,31 @@ function _iniciarSnapshotInicial() {
     },
     onError: (err) => {
       console.error("❌ Snapshot error:", err);
+      _limpiarWatchdogInicial();
       renderEmptyState("Error al cargar datos", {
         icon: 'alert-triangle',
-        sublabel: 'Por favor, recarga la página.'
+        sublabel: 'Revisa tu conexión e intenta de nuevo.',
+        retryLabel: 'Reintentar',
+        onRetry: _reintentarCargaInicial
       });
     }
   });
+
+  // Arm the watchdog now that the listener is attached. Cleared on the first
+  // real render (onUpdate) or on error; if it fires first, it means the
+  // snapshot is stuck — show the retry state instead of an endless skeleton.
+  _limpiarWatchdogInicial();
+  _firstPageWatchdog = setTimeout(() => {
+    _firstPageWatchdog = null;
+    if (typeof renderEmptyState === 'function') {
+      renderEmptyState("La carga está tardando más de lo normal", {
+        icon: 'wifi-off',
+        sublabel: 'Puede ser una intermitencia de conexión. Vuelve a intentar.',
+        retryLabel: 'Reintentar',
+        onRetry: _reintentarCargaInicial
+      });
+    }
+  }, FIRST_PAGE_TIMEOUT_MS);
 
   // Stop the listener when the tab is hidden permanently (closed/refresh).
   // BFCache restore on Safari/Firefox keeps the listener alive; pageshow

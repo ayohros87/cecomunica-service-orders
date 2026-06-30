@@ -932,6 +932,9 @@ window.renderSkeletonRows = renderSkeletonRows;
  * @param {Object} [opts]
  * @param {string} [opts.icon='inbox'] - Lucide icon name
  * @param {string} [opts.sublabel] - Optional secondary line
+ * @param {Function} [opts.onRetry] - When set, renders a "Reintentar"
+ *   button wired to this callback (load-error / timeout states).
+ * @param {string} [opts.retryLabel='Reintentar'] - Retry button label
  */
 function renderEmptyState(message, opts = {}) {
   const icon = opts.icon || 'inbox';
@@ -945,11 +948,18 @@ function renderEmptyState(message, opts = {}) {
     }
   } catch { /* noop */ }
 
-  const ctaHtml = activeFilters
-    ? `<button class="btn btn-secondary empty-state__cta" data-action="limpiar-filtros">
-         <i data-lucide="x"></i> Limpiar filtros
+  // A retry action (error/timeout) takes precedence over the "limpiar
+  // filtros" CTA — when the load itself failed, clearing filters wouldn't
+  // help the user.
+  const ctaHtml = opts.onRetry
+    ? `<button class="btn btn-secondary empty-state__cta" data-action="reintentar-carga">
+         <i data-lucide="refresh-cw"></i> ${opts.retryLabel || 'Reintentar'}
        </button>`
-    : '';
+    : (activeFilters
+      ? `<button class="btn btn-secondary empty-state__cta" data-action="limpiar-filtros">
+           <i data-lucide="x"></i> Limpiar filtros
+         </button>`
+      : '');
 
   const cardHtml = `
     <div class="empty-state" role="status">
@@ -966,6 +976,15 @@ function renderEmptyState(message, opts = {}) {
   const ordersCards = document.getElementById("ordersCards");
   if (ordersCards) {
     ordersCards.innerHTML = cardHtml;
+  }
+
+  // Wire the retry button directly (not via the delegated table listener,
+  // which only knows about row actions). One-shot: re-rendering replaces it.
+  if (opts.onRetry) {
+    [ordersTable, ordersCards].forEach(root => {
+      const btn = root && root.querySelector('[data-action="reintentar-carga"]');
+      if (btn) btn.addEventListener('click', () => opts.onRetry(), { once: true });
+    });
   }
 
   APP.utils.lucideRefresh([ordersTable, ordersCards]);
