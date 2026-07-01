@@ -35,8 +35,8 @@ firebase.auth().onAuthStateChanged(async (user) => {
     });
 
     await cargarPiezas();
-    await loadQboItems();
-    render();
+    render();                               // muestra las piezas de una vez (Firestore, rápido)
+    loadQboItems().then(render).catch(()=>{}); // QBO en segundo plano; refresca los desplegables al llegar
   }catch(e){
     console.error(e); Toast.show('Error validando usuario','bad');
   }
@@ -54,7 +54,10 @@ async function loadQboItems(){
     // Las piezas se vinculan a PRODUCTOS de QBO (Inventory/NonInventory), no a items
     // de servicio. Usar la lista correcta es lo que arregla el "(no encontrado)".
     const res = await firebase.functions().httpsCallable('listQBOPiezas')();
-    qboItems.productos = (res.data.piezas || []).map(p => ({ id: p.qbo_item_id, name: p.name || p.descripcion || '' }));
+    qboItems.productos = (res.data.piezas || []).map(p => ({
+      id: p.qbo_item_id,
+      name: (p.descripcion && p.descripcion !== p.name) ? `${p.name} · ${p.descripcion}` : (p.name || p.descripcion || ''),
+    }));
     qboItems.loaded = true;
     if (hint) hint.textContent = `QuickBooks: ${qboItems.productos.length} productos vinculables`;
   }catch(e){
@@ -297,14 +300,14 @@ function renderQboPreview(){
       <table class="app-table" style="font-size:13px;">
         <thead><tr>
           <th style="width:34px;"><input type="checkbox" id="qbo-all" checked onchange="toggleAllQbo(this.checked)"></th>
-          <th>Nombre</th><th>SKU</th>
+          <th>Descripción</th><th>SKU / código</th>
           <th style="text-align:right;">Precio</th><th style="text-align:right;">Costo</th>
           <th>Tipo</th><th>Estado</th>
         </tr></thead>
         <tbody>${rows.map(r=>`
           <tr style="${r.existe?'opacity:.55;':''}">
             <td><input type="checkbox" class="qbo-chk" data-idx="${r.idx}" ${r.existe?'disabled':'checked'}></td>
-            <td>${esc(r.name)}</td>
+            <td>${esc(r.descripcion||r.name)}</td>
             <td style="font-family:var(--font-mono); font-size:12px;">${esc(r.sku||'—')}</td>
             <td style="text-align:right; font-family:var(--font-mono);">$${num(r.precio_venta).toFixed(2)}</td>
             <td style="text-align:right; font-family:var(--font-mono);">$${num(r.costo_unitario).toFixed(2)}</td>
