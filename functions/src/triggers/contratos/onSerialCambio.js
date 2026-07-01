@@ -38,20 +38,38 @@ async function vendedorEmail(uid) {
   }
 }
 
+// Espeja en el contrato si tiene alguna solicitud de cambio de serial PENDIENTE,
+// para el chip de la lista (evita consultar la subcolección por cada fila).
+async function actualizarFlagPendiente(contratoRef) {
+  try {
+    const qs = await contratoRef.collection("seriales_cambios")
+      .where("estado", "==", "pendiente").limit(1).get();
+    await contratoRef.set({ seriales_cambio_pendiente: !qs.empty }, { merge: true });
+  } catch (e) {
+    logger.warn("[onSerialCambio] No se pudo actualizar el flag de pendiente", { message: e.message });
+  }
+}
+
 module.exports = onDocumentWritten(
   { document: "contratos/{cid}/seriales_cambios/{reqId}", region: "us-central1" },
   async (event) => {
     const before = event.data?.before?.data();
     const after  = event.data?.after?.data();
-    if (!after) return null; // borrado — nada que hacer
 
     const cid   = event.params.cid;
     const reqId = event.params.reqId;
+    const contratoRef = db.collection("contratos").doc(cid);
+
+    // Mantén el flag "seriales_cambio_pendiente" en el contrato (chip de la lista)
+    // en TODOS los casos: alta, resuelto, cancelado o borrado de la solicitud.
+    await actualizarFlagPendiente(contratoRef);
+
+    if (!after) return null; // borrado — flag actualizado, sin correo
 
     // Datos autoritativos del contrato (para el correo y CC al vendedor).
     let contrato = {};
     try {
-      const snap = await db.collection("contratos").doc(cid).get();
+      const snap = await contratoRef.get();
       contrato = snap.exists ? snap.data() : {};
     } catch (e) {
       logger.warn("[onSerialCambio] No se pudo leer el contrato", { cid, message: e.message });

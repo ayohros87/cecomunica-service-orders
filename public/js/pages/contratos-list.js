@@ -69,6 +69,14 @@ window.ContratosLista = {
     return '';
   },
 
+  // Chip informativo: hay una solicitud de cambio de serial PENDIENTE de que
+  // inventario introduzca los reemplazos. El flag lo mantiene el trigger
+  // onSerialCambio en el contrato (seriales_cambio_pendiente).
+  cambioSerialPill(data) {
+    if (!data.seriales_cambio_pendiente) return '';
+    return `<span class="chip-estado" style="background:#EFF6FF;color:#1E3A8A;border:1px solid #93C5FD;" title="Solicitud de cambio de serial pendiente de reemplazo por inventario"><i data-lucide="replace" style="width:12px;height:12px;"></i> Cambio de serial</span>`;
+  },
+
   // ── Acciones (CTA inline + menú ⋯) ───────────────────────────────
   // Construye el área de acciones de una fila/card: el pill de Seriales
   // (indicador de estado) + una sola CTA contextual + un menú overflow
@@ -233,6 +241,7 @@ window.ContratosLista = {
         <div style="display:inline-flex; flex-direction:column; align-items:flex-start; gap:4px;">
           <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
           ${ContratosLista.bajaPill(data)}
+          ${ContratosLista.cambioSerialPill(data)}
         </div>
       </td>
       <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
@@ -279,6 +288,7 @@ window.ContratosLista = {
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
           <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
           ${ContratosLista.bajaPill(data)}
+          ${ContratosLista.cambioSerialPill(data)}
         </div>
       </div>
       <div class="row">
