@@ -89,6 +89,26 @@
     ctx.puedeEditarAsignados = ctx.yaAsignados ? await puedeEditarAsignados(rol) : false;
     ctx.desbloqueado = false;
 
+    // Modo reemplazo: si hay una solicitud de cambio de serial PENDIENTE
+    // (creada por recepción/admin desde el módulo de contratos), inventario puede
+    // reemplazar SOLO los seriales marcados en la solicitud, aun con el candado.
+    ctx.cambioReq = null;
+    ctx.cambioSet = new Set();
+    if (ctx.yaAsignados) {
+      try {
+        const qs = await db().collection('contratos').doc(contratoDocId)
+          .collection('seriales_cambios').where('estado', '==', 'pendiente').get();
+        if (!qs.empty) {
+          const docs = qs.docs.map(d => ({ id: d.id, ...d.data() }));
+          docs.sort((a, b) => (b.solicitado_at?.toMillis?.() || 0) - (a.solicitado_at?.toMillis?.() || 0));
+          const req = docs[0];
+          ctx.cambioReq = { id: req.id, items: Array.isArray(req.items) ? req.items : [], motivo: req.motivo || '', motivo_tipo: req.motivo_tipo || '' };
+          ctx.cambioReq.items.forEach(it => { const s = norm(it.serial); if (s) ctx.cambioSet.add(s); });
+        }
+      } catch (e) { /* ok */ }
+    }
+    ctx.modoReemplazo = !!ctx.cambioReq && ctx.cambioSet.size > 0;
+
     render(serialesGuardados, omisiones);
   }
 
@@ -207,44 +227,76 @@
     if (window.lucide) lucide.createIcons();
   }
 
-  // Modo solo-lectura sobre la pantalla ya renderizada. Deshabilita toda edición,
-  // muestra un banner de bloqueo y ajusta el pie: los usuarios habilitados ven
-  // "Editar seriales" (para reabrir); el resto solo ve el aviso.
+  // Modo solo-lectura sobre la pantalla ya renderizada. Tres estados:
+  //   · editable   → normal o desbloqueado por admin (Guardar/Confirmar).
+  //   · reemplazo  → hay solicitud pendiente: desbloquea SOLO los seriales
+  //                  marcados y ofrece "Guardar reemplazo".
+  //   · bloqueado  → seriales asignados sin solicitud (admin/allowlist ve "Editar").
   function aplicarCandado(locked) {
     const body = $('serialesBody');
     const btnGuardar = $('btnGuardar');
     const btnConfirmar = $('btnConfirmar');
     const btnEditar = $('btnEditar');
+    const btnReemplazo = $('btnReemplazo');
     const lockNote = $('lockNote');
 
-    if (locked) {
-      body.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = true; });
-      if (!body.querySelector('#lockBanner')) {
-        const banner = document.createElement('div');
-        banner.id = 'lockBanner';
-        banner.style.cssText = 'margin-bottom:var(--sp-3,12px);padding:12px 14px;border:1px solid #FCD34D;background:#FFFBEB;color:#92400E;border-radius:10px;display:flex;gap:8px;align-items:flex-start;font-size:14px;';
-        banner.innerHTML = ctx.puedeEditarAsignados
-          ? '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Están bloqueados para evitar cambios accidentales. Pulsa <strong>“Editar seriales”</strong> para corregirlos.</div>'
-          : '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Ya no se pueden editar desde aquí. Si necesitas corregir un serial, contacta a un administrador.</div>';
-        body.prepend(banner);
-      }
-      if (btnGuardar)   btnGuardar.style.display = 'none';
-      if (btnConfirmar) btnConfirmar.style.display = 'none';
-      if (btnEditar)    btnEditar.style.display = ctx.puedeEditarAsignados ? '' : 'none';
-      if (lockNote) {
-        lockNote.style.display = ctx.puedeEditarAsignados ? 'none' : '';
-        lockNote.textContent = 'Bloqueado — seriales asignados';
-      }
-    } else {
-      const lb = body.querySelector('#lockBanner'); if (lb) lb.remove();
-      if (btnEditar) btnEditar.style.display = 'none';
-      if (lockNote)  lockNote.style.display = 'none';
+    const lb = body.querySelector('#lockBanner'); if (lb) lb.remove();
+    [btnGuardar, btnConfirmar, btnEditar, btnReemplazo].forEach(b => { if (b) b.style.display = 'none'; });
+    if (lockNote) lockNote.style.display = 'none';
+
+    if (!locked) {
       if (btnGuardar) btnGuardar.style.display = '';
       // Al editar seriales YA asignados NO reofrecemos "Confirmar y enviar a
-      // activaciones" (evitar reenvío del correo): solo "Guardar cambios". En
-      // legacy ya se oculta arriba.
+      // activaciones" (evitar reenvío): solo "Guardar cambios". Legacy ya se oculta.
       if (btnConfirmar) btnConfirmar.style.display = (ctx.yaAsignados || ctx.esLegacy) ? 'none' : '';
+      return;
     }
+
+    // Bloqueado: deshabilita toda edición del cuerpo.
+    body.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = true; });
+
+    // ¿Modo reemplazo? Reabre SOLO los seriales marcados en la solicitud.
+    let nReemplazo = 0;
+    if (ctx.modoReemplazo) {
+      body.querySelectorAll('.serial-input').forEach(inp => {
+        if (ctx.cambioSet.has(norm(inp.value))) {
+          inp.disabled = false;
+          inp.dataset.reemplazo = inp.value.trim();   // serial original a reemplazar
+          inp.classList.add('reemplazo');
+          nReemplazo++;
+        }
+      });
+    }
+
+    if (nReemplazo > 0) {
+      body.prepend(bannerCandado('reemplazo', nReemplazo));
+      if (btnReemplazo) btnReemplazo.style.display = '';
+      return;
+    }
+
+    // Bloqueo normal (sin solicitud aplicable).
+    body.prepend(bannerCandado(ctx.puedeEditarAsignados ? 'editable' : 'bloqueado'));
+    if (btnEditar) btnEditar.style.display = ctx.puedeEditarAsignados ? '' : 'none';
+    if (lockNote && !ctx.puedeEditarAsignados) { lockNote.style.display = ''; lockNote.textContent = 'Bloqueado — seriales asignados'; }
+  }
+
+  function bannerCandado(kind, n) {
+    const el = document.createElement('div');
+    el.id = 'lockBanner';
+    const s = (border, bg, color) => `margin-bottom:var(--sp-3,12px);padding:12px 14px;border:1px solid ${border};background:${bg};color:${color};border-radius:10px;display:flex;gap:8px;align-items:flex-start;font-size:14px;`;
+    if (kind === 'reemplazo') {
+      el.style.cssText = s('#93C5FD', '#EFF6FF', '#1E3A8A');
+      const m = ctx.cambioReq?.motivo_tipo
+        ? ` (${esc(ctx.cambioReq.motivo_tipo)}${ctx.cambioReq.motivo ? ' — ' + esc(ctx.cambioReq.motivo) : ''})` : '';
+      el.innerHTML = `<i data-lucide="replace" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Solicitud de cambio de serial${m}.</strong> Reemplaza los ${n} serial(es) resaltados y pulsa <strong>“Guardar reemplazo”</strong>. Los demás quedan bloqueados.</div>`;
+    } else if (kind === 'editable') {
+      el.style.cssText = s('#FCD34D', '#FFFBEB', '#92400E');
+      el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Están bloqueados para evitar cambios accidentales. Pulsa <strong>“Editar seriales”</strong> para corregirlos.</div>';
+    } else {
+      el.style.cssText = s('#FCD34D', '#FFFBEB', '#92400E');
+      el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Ya no se pueden editar desde aquí. Si necesitas corregir un serial, contacta a un administrador.</div>';
+    }
+    return el;
   }
 
   function rowHtml(modelo, modeloId, num, slot) {
@@ -298,6 +350,7 @@
       ctx.desbloqueado = true;
       render(ctx._saved, ctx._oms);
     });
+    $('btnReemplazo')?.addEventListener('click', () => guardarReemplazo());
   }
 
   function onOmitToggle(chk) {
@@ -497,6 +550,50 @@
       console.error('Error guardando seriales:', e);
       Toast.show('No se pudieron guardar los seriales.', 'bad');
     } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // Guardar reemplazo (modo solicitud de cambio de serial): persiste los seriales
+  // (preservando 'asignados', sin reenviar a activaciones desde el flujo normal) y
+  // marca la solicitud como resuelta con el mapeo anterior→nuevo; el trigger
+  // onSerialCambio envía la corrección a activaciones.
+  async function guardarReemplazo() {
+    if (!ctx.cambioReq) return;
+    const reemplazos = [];
+    document.querySelectorAll('#serialesBody .serial-input[data-reemplazo]').forEach(inp => {
+      const anterior = inp.dataset.reemplazo;
+      const nuevo = inp.value.trim();
+      if (!nuevo) return;
+      if (norm(nuevo) !== norm(anterior)) {
+        reemplazos.push({ anterior, nuevo, modelo: inp.getAttribute('data-modelo') || '' });
+      }
+    });
+    if (!reemplazos.length) { Toast.show('No cambiaste ningún serial marcado. Escribe el serial de reemplazo.', 'warn'); return; }
+
+    // Anti-duplicado contra TODOS los seriales (no solo los editables).
+    const todos = [...document.querySelectorAll('#serialesBody .serial-input')]
+      .map(i => norm(i.value)).filter(Boolean);
+    const hayDup = todos.some((v, i) => todos.indexOf(v) !== i);
+    if (hayDup) { Toast.show('Un serial de reemplazo duplica otro ya asignado. Revisa los valores.', 'warn'); return; }
+
+    const btn = $('btnReemplazo');
+    btn.disabled = true;
+    try {
+      await persistir('asignados');
+      const uid = firebase.auth().currentUser?.uid || null;
+      await db().collection('contratos').doc(contratoDocId)
+        .collection('seriales_cambios').doc(ctx.cambioReq.id).set({
+          estado: 'resuelto',
+          resuelto_por: uid,
+          resuelto_at: firebase.firestore.FieldValue.serverTimestamp(),
+          reemplazos,
+        }, { merge: true });
+      Toast.show(`Reemplazo guardado (${reemplazos.length}). Se notificará a activaciones.`, 'ok');
+      setTimeout(() => { location.href = 'index.html'; }, 1400);
+    } catch (e) {
+      console.error('Error guardando reemplazo:', e);
+      Toast.show('No se pudo guardar el reemplazo.', 'bad');
       btn.disabled = false;
     }
   }

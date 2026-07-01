@@ -139,6 +139,11 @@ window.ContratosLista = {
     // Solicitar baja — solo cuando no hay una baja pendiente (si la hay, vive en la CTA).
     if (puedeSolicitarBaja && !bajaPendiente)
       items.push(I('package-minus', 'Solicitar baja', `window.location.href='cancelaciones.html?contrato=${id}'`));
+    // Solicitar cambio/corrección de serial — recepción/admin, SOLO mientras el
+    // contrato está 'aprobado' (antes de activarse) y ya tiene seriales asignados.
+    if ((esAdmin || esRecepcion) && data.estado === 'aprobado'
+        && data.seriales_estado !== 'legacy' && Number(data.seriales_count || 0) > 0)
+      items.push(I('scan-barcode', 'Solicitar cambio de serial', `ContratosSerialCambio.abrir('${id}')`));
     // Firmado
     if (yaFirmado) {
       items.push(A('file-text', 'Ver firmado', data.firmado_url));

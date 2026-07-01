@@ -42,6 +42,9 @@ service cloud.firestore {
     // El candado fino "solo admin/allowlist tras asignados" vive en la UI
     // (contrato-seriales-page.js + empresa/config.seriales_editores_extra).
     function puedeGestionarSeriales() { return isSignedIn() && userRole() in ["administrador", "recepcion", "vendedor", "gerente", "inventario"]; }
+    // Solicitar cambio/corrección de serial (recepción/admin) — solo mientras el
+    // contrato está 'aprobado' (antes de activarse). Ver match /seriales_cambios.
+    function puedeSolicitarCambioSerial() { return isSignedIn() && userRole() in ["administrador", "recepcion"]; }
 
     // Campos cuyo dueño exclusivo es Cloud Functions (admin SDK los salta).
     // Sólo bloquea escrituras desde el frontend.
@@ -195,6 +198,17 @@ service cloud.firestore {
       match /seriales/{serialId}          { allow write: if puedeGestionarSeriales(); }
       match /seriales_estado/{docId2}     { allow write: if puedeGestionarSeriales(); }
       match /seriales_historial/{docId2}  { allow write: if puedeGestionarSeriales(); }
+
+      // Solicitudes de cambio de serial. Crear: recepción/admin y SOLO mientras
+      // el contrato está 'aprobado' (la ventana se cierra al activarse). Resolver
+      // (estado→'resuelto') o cancelar: quien gestiona seriales (inventario,
+      // recepción, admin, …). Borrar: admin.
+      match /seriales_cambios/{reqId} {
+        allow create: if puedeSolicitarCambioSerial()
+                       && get(/databases/$(database)/documents/contratos/$(docId)).data.estado == "aprobado";
+        allow update: if puedeGestionarSeriales();
+        allow delete: if isAdmin();
+      }
     }
 
     // ── Verificaciones de contratos (público, sin cambios) ────────────────

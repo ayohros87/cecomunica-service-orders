@@ -18,6 +18,7 @@ exports.onMailQueued                  = require("./src/triggers/mail/onMailQueue
 exports.onContratoAnuladoNotify       = require("./src/triggers/contratos/onAnnulment");
 exports.onCancelacionWrite            = require("./src/triggers/cancelaciones/onCancelacionWrite");
 exports.onSerialWrite                 = require("./src/triggers/contratos/onSerialWrite");
+exports.onSerialCambio                = require("./src/triggers/contratos/onSerialCambio");
 exports.onOrdenCompletada             = require("./src/triggers/ordenes/onComplete");
 exports.onContratoOrdenWrite          = onContratoOrdenWrite;
 exports.onOrdenWriteSyncContratoCache = onOrdenWriteSyncContratoCache;
