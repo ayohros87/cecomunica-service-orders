@@ -9,7 +9,7 @@ let listaPiezas = [];
 let showInactivos = false;
 let soloSinPrecio = false;
 const _savedTimers = {};
-const qboItems = { servicios: [], loaded: false };
+const qboItems = { productos: [], loaded: false };
 
 /* ===== Util ===== */
 function debounce(fn, t = 220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); }; }
@@ -51,14 +51,16 @@ async function cargarPiezas(){
 async function loadQboItems(){
   const hint = document.getElementById('qboHint');
   try{
-    const res = await firebase.functions().httpsCallable('listQBOItems')();
-    qboItems.servicios = res.data.servicios || [];
-    qboItems.loaded    = true;
-    if (hint) hint.textContent = `QuickBooks: ${qboItems.servicios.length} items de servicio/producto`;
+    // Las piezas se vinculan a PRODUCTOS de QBO (Inventory/NonInventory), no a items
+    // de servicio. Usar la lista correcta es lo que arregla el "(no encontrado)".
+    const res = await firebase.functions().httpsCallable('listQBOPiezas')();
+    qboItems.productos = (res.data.piezas || []).map(p => ({ id: p.qbo_item_id, name: p.name || p.descripcion || '' }));
+    qboItems.loaded = true;
+    if (hint) hint.textContent = `QuickBooks: ${qboItems.productos.length} productos vinculables`;
   }catch(e){
-    console.error('listQBOItems', e);
+    console.error('listQBOPiezas', e);
     qboItems.loaded = false;
-    if (hint) hint.textContent = '⚠ No se pudo cargar la lista de QuickBooks (se conserva el ID guardado).';
+    if (hint) hint.textContent = '⚠ No se pudo cargar la lista de QuickBooks (se conserva el vínculo guardado).';
   }
 }
 
@@ -71,6 +73,13 @@ function mapeoBadge(p){
   return { cls:'map-ok', label:'✓ mapeado' };
 }
 
+// Origen del dato (G1): QBO = sincronizado desde QuickBooks; manual = creado a mano.
+function origenBadge(p){
+  return p.origen==='quickbooks'
+    ? '<span title="Sincronizado desde QuickBooks" style="background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;border-radius:999px;padding:0 6px;font-size:10px;font-weight:700;">QBO</span>'
+    : '<span title="Creado manualmente en la app" style="background:#eef2f7;color:#475569;border-radius:999px;padding:0 6px;font-size:10px;font-weight:700;">manual</span>';
+}
+
 function margenInfo(p){
   const precio = num(p.precio_venta), costo = num(p.costo_unitario);
   if(!precio) return { txt:'—', cls:'' };
@@ -79,7 +88,7 @@ function margenInfo(p){
   return { txt:`$${m.toFixed(2)} (${pct}%)`, cls: m<0 ? 'margen-neg' : 'margen-pos' };
 }
 
-function qboOptions(list, selectedId){
+function qboOptions(list, selectedId, fallbackName){
   const sid = selectedId==null ? '' : String(selectedId);
   const opts = ['<option value="">— ninguno —</option>'];
   let found = false;
@@ -87,9 +96,12 @@ function qboOptions(list, selectedId){
     const on = String(it.id)===sid; if(on) found = true;
     opts.push(`<option value="${esc(it.id)}"${on?' selected':''}>${esc(it.name)} (${esc(it.id)})</option>`);
   });
+  // Si hay un vínculo guardado que no está en la lista actual: mostramos su NOMBRE
+  // (si lo guardamos al importar) con un aviso accionable, no "(no encontrado)".
   if(sid && !found){
-    const aviso = qboItems.loaded ? 'no encontrado en QBO' : 'QBO no disponible';
-    opts.push(`<option value="${esc(sid)}" selected>ID ${esc(sid)} (${aviso})</option>`);
+    const label = fallbackName ? esc(fallbackName) : ('ID ' + esc(sid));
+    const aviso = qboItems.loaded ? 'inactivo/borrado en QBO — re-vincular' : 'QBO no disponible';
+    opts.push(`<option value="${esc(sid)}" selected>${label} (${aviso})</option>`);
   }
   return opts.join('');
 }
@@ -128,7 +140,7 @@ function renderRow(p){
   tr.innerHTML = `
     <td class="sticky-col pieza-cell">
       <span class="row-status"></span>
-      ${esc(p.descripcion||'(sin descripción)')}<span class="pieza-sub">${esc(p.marca||'')}${p.sku?(' · '+esc(p.sku)):''}</span>
+      ${esc(p.descripcion||'(sin descripción)')} ${origenBadge(p)}<span class="pieza-sub">${esc(p.marca||'')}${p.sku?(' · '+esc(p.sku)):''}</span>
     </td>
     <td style="font-family:var(--font-mono); font-size:12px;">${esc(p.sku||'—')}</td>
     <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_venta"
@@ -136,7 +148,7 @@ function renderRow(p){
     <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="costo_unitario"
           value="${Number.isFinite(p.costo_unitario)?p.costo_unitario:''}" placeholder="0.00"></td>
     <td class="margen-cell ${mg.cls}" style="font-family:var(--font-mono); white-space:nowrap;">${mg.txt}</td>
-    <td><select class="td-select" data-field="qbo_item_id" style="min-width:220px;">${qboOptions(qboItems.servicios, p.qbo_item_id)}</select></td>
+    <td><select class="td-select" data-field="qbo_item_id" style="min-width:220px;">${qboOptions(qboItems.productos, p.qbo_item_id, p.qbo_item_name)}</select></td>
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
     <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${p.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>`;
 
@@ -195,9 +207,24 @@ function setRowStatus(id, state){
 
 const onInlineUpdate = debounce(async (id, partial)=>{
   try{
+    const p = listaPiezas.find(x=>x.id===id) || {};
+    // G4 — Auditoría del precio (anterior→nuevo, quién, cuándo). El precio vive SOLO
+    // en la app; NO se sincroniza de vuelta a QuickBooks.
+    if (Object.prototype.hasOwnProperty.call(partial,'precio_venta') && num(partial.precio_venta) !== num(p.precio_venta)){
+      partial.precio_historial = firebase.firestore.FieldValue.arrayUnion({
+        anterior: num(p.precio_venta), nuevo: num(partial.precio_venta),
+        por: firebase.auth().currentUser?.uid || null, at: new Date().toISOString(),
+      });
+    }
+    // Al (re)vincular un producto QBO desde el desplegable, guarda su nombre para que
+    // el display no muestre "(no encontrado)" (G2).
+    if (Object.prototype.hasOwnProperty.call(partial,'qbo_item_id')){
+      const prod = (qboItems.productos||[]).find(x=>String(x.id)===String(partial.qbo_item_id));
+      partial.qbo_item_name = prod ? prod.name : (partial.qbo_item_id ? (p.qbo_item_name||'') : '');
+    }
     await PiezasService.updatePieza(id, partial);
-    const p = listaPiezas.find(x=>x.id===id);
-    if(p) Object.assign(p, partial);
+    const { precio_historial, ...mem } = partial; // el sentinel arrayUnion no va a memoria
+    Object.assign(p, mem);
     setRowStatus(id,'saved');
     actualizarResumen();
   }catch(e){ console.error(e); setRowStatus(id,'error'); Toast.show('No se pudo guardar: '+e.message,'bad'); }
@@ -308,6 +335,7 @@ async function confirmarImportQbo(){
     activo: true,
     notas: c.notas||'',
     qbo_item_id: c.qbo_item_id||'',
+    qbo_item_name: c.name||c.descripcion||'',
     origen: 'quickbooks',
   }));
   const btn = document.getElementById('btnImportarQbo'); btn.disabled = true;

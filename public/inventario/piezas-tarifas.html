@@ -27,6 +27,11 @@
     /* Hoja de cálculo de Piezas y Tarifas (mismo patrón que Modelos y Tarifas). */
     #tabla td { padding: 2px 6px; vertical-align: middle; }
     #tabla .td-input, #tabla .td-select { height: 28px; }
+    /* Afford­ancia de edición (G4): los campos editables muestran un subrayado
+       punteado en reposo y borde sólido al enfocar, para que se vean editables. */
+    #tabla .td-input { border: 1px solid transparent; border-bottom: 1px dashed var(--border-default); border-radius: 4px; background: transparent; }
+    #tabla .td-input:hover { background: var(--surface-card); }
+    #tabla .td-input:focus { border: 1px solid var(--accent); background: #fff; outline: none; }
     #tabla .td-num { text-align: left; font-family: var(--font-mono); width: 90px; }
     #tabla tbody tr:nth-child(even) { background: var(--surface-sunken); }
     #tabla tbody tr:hover { background: var(--brand-soft); }
