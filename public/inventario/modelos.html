@@ -121,6 +121,9 @@
       </div>
       <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
     </div>
+    <div style="margin:0 var(--sp-4) var(--sp-3); padding:8px 12px; background:var(--surface-sunken); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; font-size:12px; color:var(--fg-2);">
+      <b>Cómo se relaciona inventario ↔ servicios:</b> cada modelo (inventario, izquierda) mapea su mensualidad a QuickBooks como el <b>bundle "Mensualidad"</b>, que internamente se reparte en hasta 3 servicios/cuentas (derecha): <b>Alquiler + Frecuencia + Mantenimiento</b>. El cliente ve una sola línea; contabilidad ve el desglose. Los equipos <b>POC no llevan Frecuencia</b> (usa el switch ¿POC?).
+    </div>
     <div class="app-table-wrap" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
       <table class="app-table" id="tabla">
         <thead>
@@ -128,9 +131,12 @@
             <th class="sticky-col">Modelo</th>
             <th>Tipo</th>
             <th style="text-align:center">¿Alquiler?</th>
+            <th style="text-align:center">¿POC?</th>
             <th>Alquiler $</th>
             <th>Frecuencia $</th>
             <th>Item QBO "Alquiler"</th>
+            <th>Item QBO "Frecuencia"</th>
+            <th>Item QBO "Mantenimiento"</th>
             <th>Bundle QBO "Mensualidad"</th>
             <th>Mapeo</th>
             <th style="text-align:center">Activo</th>

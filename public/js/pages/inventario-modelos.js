@@ -10,7 +10,7 @@ let showInactivos = false;   // por defecto ocultos para despejar la vista
 let soloConfig = false;
 let soloAlquiler = true;     // por defecto solo los modelos que se alquilan (vista limpia)
 const _savedTimers = {};
-const qboItems = { alquileres: [], bundles: [], loaded: false };
+const qboItems = { alquileres: [], bundles: [], servicios: [], loaded: false };
 
 /* ===== Util ===== */
 function debounce(fn, t = 220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); }; }
@@ -57,8 +57,9 @@ async function loadQboItems(){
     const res = await firebase.functions().httpsCallable('listQBOItems')();
     qboItems.alquileres = res.data.alquileres || [];
     qboItems.bundles    = res.data.bundles || [];
+    qboItems.servicios  = res.data.servicios || [];   // para mapear Frecuencia y Mantenimiento
     qboItems.loaded     = true;
-    if (hint) hint.textContent = `QuickBooks: ${qboItems.alquileres.length} items "Alquiler" · ${qboItems.bundles.length} bundles "Mensualidad"`;
+    if (hint) hint.textContent = `QuickBooks: ${qboItems.alquileres.length} "Alquiler" · ${qboItems.bundles.length} bundles · ${qboItems.servicios.length} servicios`;
   }catch(e){
     console.error('listQBOItems', e);
     qboItems.loaded = false;
@@ -109,7 +110,7 @@ function render(){
     const hint = soloAlquiler
       ? 'No hay equipos marcados como "Se alquila". Pulsa <b>Todos</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.'
       : 'No hay modelos para mostrar';
-    tbody.innerHTML = `<tr><td colspan="10" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
     actualizarResumen();
     return;
   }
@@ -123,6 +124,7 @@ function renderRow(m){
   const b = mapeoBadge(m);
   const tr = document.createElement('tr');
   tr.dataset.id = id;
+  const pocDis = m.es_poc===true;
   tr.innerHTML = `
     <td class="sticky-col modelo-cell">
       <span class="row-status"></span>
@@ -130,12 +132,15 @@ function renderRow(m){
     </td>
     <td>${mapTipo(m.tipo)}</td>
     <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
+    <td style="text-align:center"><label class="toggle-switch" title="¿Es POC? (POC no lleva frecuencia)"><input type="checkbox" data-field="es_poc" ${pocDis?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_alquiler"
           value="${Number.isFinite(m.precio_alquiler)?m.precio_alquiler:''}" placeholder="0.00"></td>
     <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_frecuencia"
-          value="${Number.isFinite(m.precio_frecuencia)?m.precio_frecuencia:''}" placeholder="0.00"></td>
-    <td><select class="td-select" data-field="qbo_item_alquiler_id" style="min-width:200px;">${qboOptions(qboItems.alquileres, m.qbo_item_alquiler_id)}</select></td>
-    <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:200px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
+          value="${Number.isFinite(m.precio_frecuencia)?m.precio_frecuencia:''}" placeholder="0.00" ${pocDis?'disabled title="POC no lleva frecuencia"':''}></td>
+    <td><select class="td-select" data-field="qbo_item_alquiler_id" style="min-width:170px;">${qboOptions(qboItems.alquileres, m.qbo_item_alquiler_id)}</select></td>
+    <td><select class="td-select" data-field="qbo_item_frecuencia_id" style="min-width:170px;" ${pocDis?'disabled':''}>${qboOptions(qboItems.servicios, m.qbo_item_frecuencia_id)}</select></td>
+    <td><select class="td-select" data-field="qbo_item_mantenimiento_id" style="min-width:170px;">${qboOptions(qboItems.servicios, m.qbo_item_mantenimiento_id)}</select></td>
+    <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:170px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
     <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td style="text-align:center"><button class="btn sm btn-ghost" title="Editar identidad" onclick="abrirModal('${id}')"><i data-lucide="pencil"></i></button></td>`;
@@ -154,10 +159,26 @@ function renderRow(m){
     });
   });
   tr.querySelectorAll('input[type="checkbox"][data-field]').forEach(chk=>{
-    chk.addEventListener('change', ()=>{ setRowStatus(id,'saving'); onInlineUpdate(id, { [chk.dataset.field]: !!chk.checked }); });
+    chk.addEventListener('change', ()=>{
+      setRowStatus(id,'saving');
+      onInlineUpdate(id, { [chk.dataset.field]: !!chk.checked });
+      if(chk.dataset.field==='es_poc') aplicarPocRow(tr, chk.checked, id);
+    });
   });
 
   return tr;
+}
+
+// POC no lleva frecuencia: deshabilita monto y mapeo de frecuencia; al prender POC,
+// limpia esos valores.
+function aplicarPocRow(tr, isPoc, id){
+  const f  = tr.querySelector('[data-field="precio_frecuencia"]');
+  const fi = tr.querySelector('[data-field="qbo_item_frecuencia_id"]');
+  [f, fi].forEach(el=>{ if(el){ el.disabled = isPoc; el.title = isPoc ? 'POC no lleva frecuencia' : ''; }});
+  if(isPoc){
+    if(f) f.value = ''; if(fi) fi.value = '';
+    onInlineUpdate(id, { precio_frecuencia: 0, qbo_item_frecuencia_id: '' });
+  }
 }
 
 function actualizarResumen(){
