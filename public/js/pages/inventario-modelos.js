@@ -121,7 +121,12 @@ function refreshGlobalDisplay(){
   for(const s of ['Frec','Mant']){
     const lbl = document.getElementById('lbl'+s);
     const sel = document.getElementById('global'+s);
-    if(lbl){ lbl.innerHTML = itemNombre(map[s]); lbl.style.display=''; }
+    if(lbl){
+      const it = (qboItems.servicios||[]).find(x=>String(x.id)===String(map[s]));
+      lbl.innerHTML = !map[s] ? '<span style="color:var(--fg-4);">— sin definir —</span>'
+        : (it ? `${esc(it.name)} <span style="color:var(--fg-3);">(${esc(it.id)})</span>` : ('ID '+esc(map[s])));
+      lbl.style.display='';
+    }
     if(sel){ sel.innerHTML = qboOptions(qboItems.servicios, map[s]); sel.style.display='none'; }
     const btn = document.getElementById('btn'+s); if(btn) btn.style.display='';
   }
