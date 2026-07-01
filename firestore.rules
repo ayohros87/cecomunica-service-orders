@@ -36,6 +36,12 @@ service cloud.firestore {
     //   gerente: incluido para que pueda revisar y aprobar cotizaciones comerciales.
     function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller", "recepcion", "gerente"]; }
     function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller", "gerente"]; }
+    // Gestión de seriales del contrato (subcolecciones seriales/seriales_estado/
+    // seriales_historial). Refleja el permiso 'gestionar-seriales' de roles.js.
+    // Cierra el hueco por el que CUALQUIER autenticado podía escribir seriales.
+    // El candado fino "solo admin/allowlist tras asignados" vive en la UI
+    // (contrato-seriales-page.js + empresa/config.seriales_editores_extra).
+    function puedeGestionarSeriales() { return isSignedIn() && userRole() in ["administrador", "recepcion", "vendedor", "gerente", "inventario"]; }
 
     // Campos cuyo dueño exclusivo es Cloud Functions (admin SDK los salta).
     // Sólo bloquea escrituras desde el frontend.
@@ -168,13 +174,27 @@ service cloud.firestore {
             || (userRole() in ["administrador", "gerente"]));
       allow delete: if isSignedIn() && (userRole() in ["administrador", "gerente"]);
 
-      // Subcolección `ordenes` (cache de órdenes vinculadas). NOTA: además de
-      // las Cloud Functions, el cliente escribe aquí vía contratosService
-      // .linkOrden() / .unlinkOrden() (contratos-equipos.js, editar-orden.js),
-      // por eso NO es write:false. Cualquier otra subcolección de contrato.
+      // Lectura de CUALQUIER subcolección de contrato para autenticados (ordenes,
+      // seriales, seriales_estado, seriales_historial, …). La escritura NO se
+      // concede de forma recursiva: se otorga por subcolección más abajo, para
+      // que las reglas específicas no queden sombreadas por el OR de Firestore.
       match /{sub=**} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn();
       }
+
+      // Subcolección `ordenes` (cache de órdenes vinculadas). Además de las Cloud
+      // Functions, el cliente escribe aquí vía contratosService.linkOrden() /
+      // .unlinkOrden() (contratos-equipos.js, editar-orden.js).
+      match /ordenes/{ordenId} {
+        allow write: if isSignedIn();
+      }
+
+      // Seriales del contrato — escritura restringida al rol que los gestiona.
+      // (El candado "solo admin/allowlist tras asignados" es adicional y vive en
+      // la UI; a nivel de reglas basta con cerrar el rol.)
+      match /seriales/{serialId}          { allow write: if puedeGestionarSeriales(); }
+      match /seriales_estado/{docId2}     { allow write: if puedeGestionarSeriales(); }
+      match /seriales_historial/{docId2}  { allow write: if puedeGestionarSeriales(); }
     }
 
     // ── Verificaciones de contratos (público, sin cambios) ────────────────

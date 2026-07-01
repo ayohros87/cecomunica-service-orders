@@ -68,14 +68,42 @@
     // Prefill: seriales guardados + omisiones (de la señal).
     let serialesGuardados = [];
     let omisiones = [];
+    let estadoSenal = '';
     try { serialesGuardados = await ContratosService.getSerialesManual(contratoDocId); } catch (e) { /* ok */ }
     try {
       const sig = await db().collection('contratos').doc(contratoDocId)
         .collection('seriales_estado').doc('current').get();
-      if (sig.exists && Array.isArray(sig.data().omisiones)) omisiones = sig.data().omisiones;
+      if (sig.exists) {
+        const sd = sig.data() || {};
+        if (Array.isArray(sd.omisiones)) omisiones = sd.omisiones;
+        estadoSenal = sd.estado || '';
+      }
     } catch (e) { /* ok */ }
 
+    // Candado: una vez "asignados", la pantalla queda en solo-lectura para evitar
+    // cambios accidentales. Solo administradores (o usuarios habilitados en
+    // empresa/config.seriales_editores_extra) pueden reabrir y editar. Los
+    // contratos legacy (registro histórico) no aplican al candado.
+    ctx.yaAsignados = !ctx.esLegacy &&
+      (estadoSenal === 'asignados' || contrato.seriales_estado === 'asignados');
+    ctx.puedeEditarAsignados = ctx.yaAsignados ? await puedeEditarAsignados(rol) : false;
+    ctx.desbloqueado = false;
+
     render(serialesGuardados, omisiones);
+  }
+
+  // ¿Este usuario puede editar seriales YA asignados? Admin siempre; además, los
+  // emails habilitados en empresa/config.seriales_editores_extra (config del
+  // panel de administración). Falla cerrado si no se puede leer la config.
+  async function puedeEditarAsignados(rol) {
+    if (rol === (window.ROLES && ROLES.ADMIN) || rol === 'administrador') return true;
+    try {
+      if (typeof EmpresaService === 'undefined') return false;
+      const cfg = await EmpresaService.getConfig();
+      const extra = Array.isArray(cfg.seriales_editores_extra) ? cfg.seriales_editores_extra : [];
+      const email = String(firebase.auth().currentUser?.email || '').toLowerCase();
+      return !!email && extra.map(e => String(e).toLowerCase()).includes(email);
+    } catch (e) { return false; }
   }
 
   // ── Render ─────────────────────────────────────────────────────────────
@@ -86,6 +114,11 @@
   }
 
   function render(serialesGuardados, omisiones) {
+    // Recordado para poder re-renderizar al (des)bloquear sin recargar.
+    ctx._saved = serialesGuardados;
+    ctx._oms = omisiones;
+    const locked = ctx.yaAsignados && !ctx.desbloqueado;
+
     const equipos = Array.isArray(contrato.equipos) ? contrato.equipos : [];
     const cancelado = contrato.baja_cancelado || {};
 
@@ -143,7 +176,8 @@
     // Barra "Jalar seriales": trae los seriales del cliente desde POC o desde las
     // órdenes de servicio vinculadas al contrato y rellena los slots por modelo,
     // sin teclear. Útil en el flujo normal y en el registro histórico (legacy).
-    if (gruposHtml) {
+    // No se muestra en modo solo-lectura (candado de seriales asignados).
+    if (gruposHtml && !locked) {
       const toolbar = document.createElement('div');
       toolbar.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-bottom:var(--sp-3,12px);';
       toolbar.innerHTML =
@@ -166,9 +200,51 @@
     const fs = $('footerStrip');
     if (fs) fs.style.display = gruposHtml ? '' : 'none';
 
+    aplicarCandado(locked);
+
     wire();
     refresh();
     if (window.lucide) lucide.createIcons();
+  }
+
+  // Modo solo-lectura sobre la pantalla ya renderizada. Deshabilita toda edición,
+  // muestra un banner de bloqueo y ajusta el pie: los usuarios habilitados ven
+  // "Editar seriales" (para reabrir); el resto solo ve el aviso.
+  function aplicarCandado(locked) {
+    const body = $('serialesBody');
+    const btnGuardar = $('btnGuardar');
+    const btnConfirmar = $('btnConfirmar');
+    const btnEditar = $('btnEditar');
+    const lockNote = $('lockNote');
+
+    if (locked) {
+      body.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = true; });
+      if (!body.querySelector('#lockBanner')) {
+        const banner = document.createElement('div');
+        banner.id = 'lockBanner';
+        banner.style.cssText = 'margin-bottom:var(--sp-3,12px);padding:12px 14px;border:1px solid #FCD34D;background:#FFFBEB;color:#92400E;border-radius:10px;display:flex;gap:8px;align-items:flex-start;font-size:14px;';
+        banner.innerHTML = ctx.puedeEditarAsignados
+          ? '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Están bloqueados para evitar cambios accidentales. Pulsa <strong>“Editar seriales”</strong> para corregirlos.</div>'
+          : '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Ya no se pueden editar desde aquí. Si necesitas corregir un serial, contacta a un administrador.</div>';
+        body.prepend(banner);
+      }
+      if (btnGuardar)   btnGuardar.style.display = 'none';
+      if (btnConfirmar) btnConfirmar.style.display = 'none';
+      if (btnEditar)    btnEditar.style.display = ctx.puedeEditarAsignados ? '' : 'none';
+      if (lockNote) {
+        lockNote.style.display = ctx.puedeEditarAsignados ? 'none' : '';
+        lockNote.textContent = 'Bloqueado — seriales asignados';
+      }
+    } else {
+      const lb = body.querySelector('#lockBanner'); if (lb) lb.remove();
+      if (btnEditar) btnEditar.style.display = 'none';
+      if (lockNote)  lockNote.style.display = 'none';
+      if (btnGuardar) btnGuardar.style.display = '';
+      // Al editar seriales YA asignados NO reofrecemos "Confirmar y enviar a
+      // activaciones" (evitar reenvío del correo): solo "Guardar cambios". En
+      // legacy ya se oculta arriba.
+      if (btnConfirmar) btnConfirmar.style.display = (ctx.yaAsignados || ctx.esLegacy) ? 'none' : '';
+    }
   }
 
   function rowHtml(modelo, modeloId, num, slot) {
@@ -217,6 +293,11 @@
 
     $('btnGuardar').addEventListener('click', () => guardar());
     $('btnConfirmar').addEventListener('click', () => confirmar());
+    $('btnEditar')?.addEventListener('click', () => {
+      if (!ctx.puedeEditarAsignados) return;
+      ctx.desbloqueado = true;
+      render(ctx._saved, ctx._oms);
+    });
   }
 
   function onOmitToggle(chk) {
@@ -384,6 +465,7 @@
 
     await ContratosService.saveSerialesManual(contratoDocId, seriales, {
       uid,
+      estado,
       contrato_id: ctx.contratoIdVisible,
       cliente_id: ctx.clienteId,
       cliente_nombre: ctx.clienteNombre,
@@ -403,8 +485,14 @@
     const btn = $('btnGuardar');
     btn.disabled = true;
     try {
-      const { seriales, omisiones } = await persistir('pendiente');
+      // Al corregir seriales YA asignados preservamos 'asignados' (no se degrada a
+      // 'pendiente' ni se reenvía a activaciones: el trigger solo dispara en la
+      // transición a 'asignados'). En el flujo normal se guarda como 'pendiente'.
+      const estadoGuardar = ctx.yaAsignados ? 'asignados' : 'pendiente';
+      const { seriales, omisiones } = await persistir(estadoGuardar);
       Toast.show(`Guardado (${seriales.length} serial(es)${omisiones.length ? `, ${omisiones.length} sin serial` : ''}).`, 'ok');
+      // Si estábamos editando seriales asignados, re-bloquear tras guardar.
+      if (ctx.yaAsignados) { ctx.desbloqueado = false; render(seriales, omisiones); }
     } catch (e) {
       console.error('Error guardando seriales:', e);
       Toast.show('No se pudieron guardar los seriales.', 'bad');

@@ -47,6 +47,9 @@
     { key: 'seriales_recordatorio_dias', label: 'Recordatorio de seriales (días)',
       type: 'int', min: 1, max: 30,
       hint: 'Cada cuántos días se le recuerda a inventario un contrato con seriales pendientes (hasta 4 veces). El badge "Seriales pendientes" en la lista queda como recordatorio permanente.' },
+    { key: 'seriales_editores_extra', label: 'Seriales — Editar tras "asignados" (además de admin)',
+      type: 'user-picker', emptyHint: 'solo administradores',
+      hint: 'Cuando los seriales de un contrato quedan "asignados", la pantalla se bloquea en solo-lectura para evitar cambios accidentales. Los administradores siempre pueden reabrir y editar; aquí puedes habilitar usuarios específicos (aunque no sean admin) para reabrir y editar seriales ya asignados. Vacío = solo administradores.' },
   ];
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

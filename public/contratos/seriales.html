@@ -21,6 +21,7 @@
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
   <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
@@ -83,7 +84,9 @@
       <span class="app-footer-strip-stat-label">Progreso</span>
       <span class="app-footer-strip-stat-value value-highlight" id="footProgreso">0 / 0</span>
     </div>
-    <div class="app-footer-strip-actions" style="margin-left:auto;">
+    <div class="app-footer-strip-actions" style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <span id="lockNote" class="ts" style="display:none; color:var(--fg-3);"></span>
+      <button type="button" class="btn btn-ghost" id="btnEditar" style="display:none;"><i data-lucide="lock-open"></i> Editar seriales</button>
       <button type="button" class="btn btn-ghost" id="btnGuardar"><i data-lucide="save"></i> Guardar</button>
       <button type="button" class="btn btn-primary" id="btnConfirmar"><i data-lucide="send"></i> Confirmar y enviar a activaciones</button>
     </div>
