@@ -11,6 +11,9 @@ let soloConfig = false;
 let soloAlquiler = true;     // por defecto solo los modelos que se alquilan (vista limpia)
 const _savedTimers = {};
 const qboItems = { alquileres: [], bundles: [], servicios: [], loaded: false };
+// Frecuencia y Mantenimiento usan el MISMO ítem de QBO para todos los modelos:
+// se mapean una vez, globalmente (empresa/facturacion_config), y cada fila lo muestra.
+const factConfig = { qbo_item_frecuencia_id: '', qbo_item_mantenimiento_id: '' };
 
 /* ===== Util ===== */
 function debounce(fn, t = 220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); }; }
@@ -39,6 +42,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
     await cargarModelos();
     await loadQboItems();
+    await loadFactConfig();
     render();
   }catch(e){
     console.error(e); Toast.show('Error validando usuario','bad');
@@ -92,6 +96,35 @@ function qboOptions(list, selectedId){
   return opts.join('');
 }
 
+// Nombre legible de un ítem de servicio de QBO (para mostrar el mapeo global por fila).
+function itemNombre(id){
+  if(!id) return '<span style="color:var(--fg-4);">— sin definir —</span>';
+  const it = (qboItems.servicios||[]).find(x=>String(x.id)===String(id));
+  return it ? esc(it.name) : ('ID '+esc(id));
+}
+
+// Config global: Frecuencia y Mantenimiento comparten el MISMO ítem de QBO para todos.
+async function loadFactConfig(){
+  try{
+    const d = await firebase.firestore().collection('empresa').doc('facturacion_config').get();
+    const c = d.exists ? d.data() : {};
+    factConfig.qbo_item_frecuencia_id    = c.qbo_item_frecuencia_id || '';
+    factConfig.qbo_item_mantenimiento_id = c.qbo_item_mantenimiento_id || '';
+  }catch(e){ console.warn('factConfig', e); }
+  const gf=document.getElementById('globalFrec'); if(gf) gf.innerHTML = qboOptions(qboItems.servicios, factConfig.qbo_item_frecuencia_id);
+  const gm=document.getElementById('globalMant'); if(gm) gm.innerHTML = qboOptions(qboItems.servicios, factConfig.qbo_item_mantenimiento_id);
+}
+async function setGlobalItem(campo, value){
+  factConfig[campo] = value;
+  try{
+    await firebase.firestore().collection('empresa').doc('facturacion_config')
+      .set({ [campo]: value, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+    Toast.show('Mapeo global guardado','ok');
+    render();
+  }catch(e){ console.error(e); Toast.show('No se pudo guardar el mapeo global','bad'); }
+}
+window.setGlobalItem = setGlobalItem;
+
 /* ===== Render ===== */
 function render(){
   const tbody = document.getElementById('tablaModelos');
@@ -133,13 +166,13 @@ function renderRow(m){
     <td>${mapTipo(m.tipo)}</td>
     <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td style="text-align:center"><label class="toggle-switch" title="¿Es POC? (POC no lleva frecuencia)"><input type="checkbox" data-field="es_poc" ${pocDis?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
-    <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_alquiler"
+    <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_alquiler"
           value="${Number.isFinite(m.precio_alquiler)?m.precio_alquiler:''}" placeholder="0.00"></td>
-    <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_frecuencia"
+    <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_frecuencia"
           value="${Number.isFinite(m.precio_frecuencia)?m.precio_frecuencia:''}" placeholder="0.00" ${pocDis?'disabled title="POC no lleva frecuencia"':''}></td>
     <td><select class="td-select" data-field="qbo_item_alquiler_id" style="min-width:170px;">${qboOptions(qboItems.alquileres, m.qbo_item_alquiler_id)}</select></td>
-    <td><select class="td-select" data-field="qbo_item_frecuencia_id" style="min-width:170px;" ${pocDis?'disabled':''}>${qboOptions(qboItems.servicios, m.qbo_item_frecuencia_id)}</select></td>
-    <td><select class="td-select" data-field="qbo_item_mantenimiento_id" style="min-width:170px;">${qboOptions(qboItems.servicios, m.qbo_item_mantenimiento_id)}</select></td>
+    <td style="font-size:12px; color:var(--fg-2);">${pocDis ? '<span style="color:var(--fg-4);">— (POC)</span>' : itemNombre(factConfig.qbo_item_frecuencia_id)}</td>
+    <td style="font-size:12px; color:var(--fg-2);">${itemNombre(factConfig.qbo_item_mantenimiento_id)}</td>
     <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:170px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
     <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
@@ -161,24 +194,20 @@ function renderRow(m){
   tr.querySelectorAll('input[type="checkbox"][data-field]').forEach(chk=>{
     chk.addEventListener('change', ()=>{
       setRowStatus(id,'saving');
-      onInlineUpdate(id, { [chk.dataset.field]: !!chk.checked });
-      if(chk.dataset.field==='es_poc') aplicarPocRow(tr, chk.checked, id);
+      if(chk.dataset.field==='es_poc'){
+        // POC no lleva frecuencia: refleja en memoria, limpia el monto y re-renderiza
+        // (la celda de frecuencia queda deshabilitada / "— (POC)").
+        const m = listaModelos.find(x=>x.id===id);
+        if(m){ m.es_poc = chk.checked; if(chk.checked) m.precio_frecuencia = 0; }
+        onInlineUpdate(id, chk.checked ? { es_poc:true, precio_frecuencia:0 } : { es_poc:false });
+        render();
+      } else {
+        onInlineUpdate(id, { [chk.dataset.field]: !!chk.checked });
+      }
     });
   });
 
   return tr;
-}
-
-// POC no lleva frecuencia: deshabilita monto y mapeo de frecuencia; al prender POC,
-// limpia esos valores.
-function aplicarPocRow(tr, isPoc, id){
-  const f  = tr.querySelector('[data-field="precio_frecuencia"]');
-  const fi = tr.querySelector('[data-field="qbo_item_frecuencia_id"]');
-  [f, fi].forEach(el=>{ if(el){ el.disabled = isPoc; el.title = isPoc ? 'POC no lleva frecuencia' : ''; }});
-  if(isPoc){
-    if(f) f.value = ''; if(fi) fi.value = '';
-    onInlineUpdate(id, { precio_frecuencia: 0, qbo_item_frecuencia_id: '' });
-  }
 }
 
 function actualizarResumen(){

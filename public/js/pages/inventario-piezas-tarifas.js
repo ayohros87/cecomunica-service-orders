@@ -143,9 +143,9 @@ function renderRow(p){
       ${esc(p.descripcion||'(sin descripción)')} ${origenBadge(p)}<span class="pieza-sub">${esc(p.marca||'')}${p.sku?(' · '+esc(p.sku)):''}</span>
     </td>
     <td style="font-family:var(--font-mono); font-size:12px;">${esc(p.sku||'—')}</td>
-    <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_venta"
+    <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_venta"
           value="${Number.isFinite(p.precio_venta)?p.precio_venta:''}" placeholder="0.00"></td>
-    <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="costo_unitario"
+    <td><input type="number" step="any" min="0" class="td-input td-num" data-field="costo_unitario"
           value="${Number.isFinite(p.costo_unitario)?p.costo_unitario:''}" placeholder="0.00"></td>
     <td class="margen-cell ${mg.cls}" style="font-family:var(--font-mono); white-space:nowrap;">${mg.txt}</td>
     <td><select class="td-select" data-field="qbo_item_id" style="min-width:220px;">${qboOptions(qboItems.productos, p.qbo_item_id, p.qbo_item_name)}</select></td>
