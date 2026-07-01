@@ -8,6 +8,7 @@
 let listaPiezas = [];
 let showInactivos = false;
 let soloSinPrecio = false;
+let soloPorRevisar = false;
 const _savedTimers = {};
 const qboItems = { productos: [], loaded: false };
 
@@ -32,6 +33,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
     document.addEventListener('change', (e)=>{
       if (e.target.id === 'chk-inactivos'){ showInactivos = e.target.checked; render(); }
       if (e.target.id === 'chk-sin-precio'){ soloSinPrecio = e.target.checked; render(); }
+      if (e.target.id === 'chk-por-revisar'){ soloPorRevisar = e.target.checked; render(); }
     });
 
     await cargarPiezas();
@@ -116,6 +118,7 @@ function render(){
 
   let data = (listaPiezas||[]).filter(p => showInactivos ? true : (p.activo !== false));
   if (soloSinPrecio) data = data.filter(p => !(num(p.precio_venta) > 0));
+  if (soloPorRevisar) data = data.filter(p => p.revision_estado === 'por_revisar');
   if (term) data = data.filter(p =>
     (p.descripcion||'').toLowerCase().includes(term) ||
     (p.marca||'').toLowerCase().includes(term) ||
@@ -144,6 +147,14 @@ function renderRow(p){
     <td class="sticky-col pieza-cell">
       <span class="row-status"></span>
       ${esc(p.descripcion||'(sin descripción)')} ${origenBadge(p)}<span class="pieza-sub">${esc(p.marca||'')}${p.sku?(' · '+esc(p.sku)):''}</span>
+      ${p.revision_estado==='por_revisar' && p.qbo_pendiente ? `
+        <div style="margin-top:4px; font-size:11px; background:#FFFBEB; border:1px solid #FDE68A; border-radius:6px; padding:4px 6px; white-space:normal;">
+          <b>⚠ Por revisar</b> — QBO propone: "${esc(p.qbo_pendiente.descripcion||'')}"${p.qbo_pendiente.sku?(' · SKU '+esc(p.qbo_pendiente.sku)):''}
+          <div style="margin-top:3px; display:flex; gap:6px;">
+            <button class="btn btn-sm btn-primary" onclick="resolverRevision('${id}','qbo')">Usar QBO</button>
+            <button class="btn btn-sm btn-ghost" onclick="resolverRevision('${id}','app')">Mantener app</button>
+          </div>
+        </div>` : ''}
     </td>
     <td style="font-family:var(--font-mono); font-size:12px;">${esc(p.sku||'—')}</td>
     <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_venta"
@@ -193,8 +204,10 @@ function actualizarResumen(){
   const conPrecio = (listaPiezas||[]).filter(p => num(p.precio_venta) > 0).length;
   const conItem = (listaPiezas||[]).filter(p => num(p.precio_venta) > 0 && p.qbo_item_id).length;
   const sinPrecio = (listaPiezas||[]).filter(p => p.activo !== false && !(num(p.precio_venta) > 0)).length;
+  const porRevisar = (listaPiezas||[]).filter(p => p.revision_estado === 'por_revisar').length;
   document.getElementById('resumenPiezas').innerHTML =
-    `<b>${total}</b> piezas · <b>${conPrecio}</b> con precio · <b>${conItem}</b> mapeadas a QBO · <span style="color:#92400E"><b>${sinPrecio}</b> activas sin precio</span>`;
+    `<b>${total}</b> piezas · <b>${conPrecio}</b> con precio · <b>${conItem}</b> mapeadas a QBO · <span style="color:#92400E"><b>${sinPrecio}</b> activas sin precio</span>` +
+    (porRevisar ? ` · <span style="color:#92400E"><b>${porRevisar}</b> por revisar</span>` : '');
 }
 
 /* ===== Guardado inline ===== */
@@ -266,23 +279,32 @@ async function importarDeQBO(){
   }
 }
 
-// Detecta piezas ya existentes por qbo_item_id (preferente) o SKU.
+// Índice de piezas existentes por qbo_item_id y por SKU (para detectar conflictos).
 function _existingPiezasIndex(){
-  const byId = new Set(), bySku = new Set();
+  const byId = new Map(), bySku = new Map();
   (listaPiezas||[]).forEach(p=>{
-    if(p.qbo_item_id) byId.add(String(p.qbo_item_id));
-    if(p.sku) bySku.add(String(p.sku).toLowerCase());
+    if(p.qbo_item_id) byId.set(String(p.qbo_item_id), p);
+    if(p.sku) bySku.set(String(p.sku).toLowerCase(), p);
   });
   return { byId, bySku };
 }
+function _matchExistente(c, idx){
+  return idx.byId.get(String(c.qbo_item_id)) || (c.sku ? idx.bySku.get(String(c.sku).toLowerCase()) : null) || null;
+}
+function _difiere(ex, c){
+  return ((ex.descripcion||'') !== (c.descripcion||'')) || ((ex.sku||'') !== (c.sku||''));
+}
 
 function renderQboPreview(){
-  const { byId, bySku } = _existingPiezasIndex();
-  const rows = qboCandidatos.map((c, idx)=>{
-    const existe = byId.has(String(c.qbo_item_id)) || (!!c.sku && bySku.has(String(c.sku).toLowerCase()));
-    return { ...c, idx, existe };
+  const idx = _existingPiezasIndex();
+  const rows = qboCandidatos.map((c, i)=>{
+    const ex = _matchExistente(c, idx);
+    const estado = !ex ? 'nueva' : (_difiere(ex, c) ? 'difiere' : 'igual');
+    return { ...c, idx:i, estado };
   });
-  const nuevas = rows.filter(r=>!r.existe).length;
+  const nuevas   = rows.filter(r=>r.estado==='nueva').length;
+  const difieren = rows.filter(r=>r.estado==='difiere').length;
+  const iguales  = rows.filter(r=>r.estado==='igual').length;
   const body = document.getElementById('qboBody');
   const btn = document.getElementById('btnImportarQbo');
 
@@ -290,11 +312,14 @@ function renderQboPreview(){
     body.innerHTML = '<p style="color:var(--fg-3);">No hay productos (Inventory/NonInventory) en QuickBooks.</p>';
     btn.disabled = true; return;
   }
-  btn.disabled = (nuevas === 0);
+  btn.disabled = (nuevas + difieren === 0);
+  const chip = (e)=> e==='nueva' ? '<span class="map-badge map-ok">nueva</span>'
+    : e==='difiere' ? '<span class="map-badge map-warn">difiere → por revisar</span>'
+    : '<span class="map-badge map-none">ya existe</span>';
   body.innerHTML = `
     <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
-      <b>${rows.length}</b> productos en QuickBooks · <b style="color:#065F46;">${nuevas}</b> nuevas · <b>${rows.length-nuevas}</b> ya existen.
-      Revisa y desmarca las que no quieras antes de aprobar.
+      <b>${rows.length}</b> productos en QuickBooks · <b style="color:#065F46;">${nuevas}</b> nuevas · <b style="color:#92400E;">${difieren}</b> difieren (se marcan "Por revisar") · <b>${iguales}</b> iguales.
+      Revisa y desmarca lo que no quieras antes de aprobar.
     </p>
     <div class="table-scroll" style="max-height:55vh; overflow:auto;">
       <table class="app-table" style="font-size:13px;">
@@ -305,14 +330,14 @@ function renderQboPreview(){
           <th>Tipo</th><th>Estado</th>
         </tr></thead>
         <tbody>${rows.map(r=>`
-          <tr style="${r.existe?'opacity:.55;':''}">
-            <td><input type="checkbox" class="qbo-chk" data-idx="${r.idx}" ${r.existe?'disabled':'checked'}></td>
+          <tr style="${r.estado==='igual'?'opacity:.55;':''}">
+            <td><input type="checkbox" class="qbo-chk" data-idx="${r.idx}" ${r.estado==='igual'?'disabled':'checked'}></td>
             <td>${esc(r.descripcion||r.name)}</td>
             <td style="font-family:var(--font-mono); font-size:12px;">${esc(r.sku||'—')}</td>
             <td style="text-align:right; font-family:var(--font-mono);">$${num(r.precio_venta).toFixed(2)}</td>
             <td style="text-align:right; font-family:var(--font-mono);">$${num(r.costo_unitario).toFixed(2)}</td>
             <td>${r.tipo==='Inventory'?'Inventario':'No-inventario'}</td>
-            <td>${r.existe?'<span class="map-badge map-none">ya existe</span>':'<span class="map-badge map-ok">nueva</span>'}</td>
+            <td>${chip(r.estado)}</td>
           </tr>`).join('')}</tbody>
       </table>
     </div>`;
@@ -327,30 +352,53 @@ async function confirmarImportQbo(){
   const seleccion = [...document.querySelectorAll('.qbo-chk:checked')]
     .map(c=> qboCandidatos[Number(c.dataset.idx)]).filter(Boolean);
   if(!seleccion.length){ Toast.show('No hay piezas seleccionadas','warn'); return; }
-  const rows = seleccion.map(c=>({
-    marca: '',
-    sku: c.sku||'',
-    descripcion: c.descripcion||c.name||'',
-    precio_venta: num(c.precio_venta),
-    costo_unitario: num(c.costo_unitario),
-    cantidad: 0,
-    unidad: 'pieza',
-    activo: true,
-    notas: c.notas||'',
-    qbo_item_id: c.qbo_item_id||'',
-    qbo_item_name: c.name||c.descripcion||'',
-    origen: 'quickbooks',
-  }));
+  const idx = _existingPiezasIndex();
+  const nuevas = [], revisiones = [];
+  for(const c of seleccion){
+    const ex = _matchExistente(c, idx);
+    if(!ex){
+      nuevas.push({
+        marca:'', sku:c.sku||'', descripcion:c.descripcion||c.name||'',
+        precio_venta:num(c.precio_venta), costo_unitario:num(c.costo_unitario),
+        cantidad:0, unidad:'pieza', activo:true, notas:c.notas||'',
+        qbo_item_id:c.qbo_item_id||'', qbo_item_name:c.name||c.descripcion||'', origen:'quickbooks',
+      });
+    } else if(_difiere(ex, c)){
+      // Opción (a): NO se pisa; se marca "Por revisar" con el valor propuesto por QBO.
+      revisiones.push({ id: ex.id, qbo_pendiente: { descripcion:c.descripcion||'', sku:c.sku||'', qbo_item_name:c.name||'' } });
+    }
+  }
   const btn = document.getElementById('btnImportarQbo'); btn.disabled = true;
   try{
     const uid = firebase.auth().currentUser?.uid || null;
-    await PiezasService.importarPiezas(rows, uid);
-    Toast.show(`${rows.length} pieza(s) importadas`,'ok');
+    if(nuevas.length) await PiezasService.importarPiezas(nuevas, uid);
+    for(const r of revisiones){ await PiezasService.updatePieza(r.id, { revision_estado:'por_revisar', qbo_pendiente:r.qbo_pendiente }); }
+    Toast.show(`${nuevas.length} nueva(s) · ${revisiones.length} marcada(s) "Por revisar"`, 'ok');
     cerrarQbo();
     await cargarPiezas();
     render();
   }catch(e){ console.error(e); Toast.show('Error al importar: '+e.message,'bad'); btn.disabled = false; }
 }
+
+// Resolver un conflicto "Por revisar": usar el valor de QBO o mantener el de la app.
+async function resolverRevision(id, cual){
+  const p = (listaPiezas||[]).find(x=>x.id===id); if(!p) return;
+  const upd = {
+    revision_estado: firebase.firestore.FieldValue.delete(),
+    qbo_pendiente: firebase.firestore.FieldValue.delete(),
+  };
+  if(cual==='qbo' && p.qbo_pendiente){
+    if(p.qbo_pendiente.descripcion!==undefined)   upd.descripcion   = p.qbo_pendiente.descripcion;
+    if(p.qbo_pendiente.sku!==undefined)           upd.sku           = p.qbo_pendiente.sku;
+    if(p.qbo_pendiente.qbo_item_name!==undefined) upd.qbo_item_name = p.qbo_pendiente.qbo_item_name;
+  }
+  try{
+    await PiezasService.updatePieza(id, upd);
+    await cargarPiezas(); render();
+    Toast.show(cual==='qbo' ? 'Actualizada con el valor de QBO' : 'Se mantuvo el valor de la app', 'ok');
+  }catch(e){ console.error(e); Toast.show('No se pudo resolver','bad'); }
+}
+window.resolverRevision = resolverRevision;
 
 function cerrarQbo(){ const ov=document.getElementById('overlayQbo'); ov.classList.remove('show'); ov.style.display='none'; }
 
