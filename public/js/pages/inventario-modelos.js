@@ -111,19 +111,48 @@ async function loadFactConfig(){
     factConfig.qbo_item_frecuencia_id    = c.qbo_item_frecuencia_id || '';
     factConfig.qbo_item_mantenimiento_id = c.qbo_item_mantenimiento_id || '';
   }catch(e){ console.warn('factConfig', e); }
-  const gf=document.getElementById('globalFrec'); if(gf) gf.innerHTML = qboOptions(qboItems.servicios, factConfig.qbo_item_frecuencia_id);
-  const gm=document.getElementById('globalMant'); if(gm) gm.innerHTML = qboOptions(qboItems.servicios, factConfig.qbo_item_mantenimiento_id);
+  refreshGlobalDisplay();
 }
+
+// Muestra el mapeo global como texto (read-only) + oculta el select, para que NO se
+// cambie por accidente. Se edita con el botón ✏️ y confirmación.
+function refreshGlobalDisplay(){
+  const map = { Frec: factConfig.qbo_item_frecuencia_id, Mant: factConfig.qbo_item_mantenimiento_id };
+  for(const s of ['Frec','Mant']){
+    const lbl = document.getElementById('lbl'+s);
+    const sel = document.getElementById('global'+s);
+    if(lbl){ lbl.innerHTML = itemNombre(map[s]); lbl.style.display=''; }
+    if(sel){ sel.innerHTML = qboOptions(qboItems.servicios, map[s]); sel.style.display='none'; }
+    const btn = document.getElementById('btn'+s); if(btn) btn.style.display='';
+  }
+}
+
+function editarGlobal(sufijo){
+  const sel = document.getElementById('global'+sufijo);
+  const lbl = document.getElementById('lbl'+sufijo);
+  const btn = document.getElementById('btn'+sufijo);
+  if(sel){ sel.style.display=''; sel.focus(); }
+  if(lbl) lbl.style.display='none';
+  if(btn) btn.style.display='none';
+}
+
 async function setGlobalItem(campo, value){
+  const sufijo = campo==='qbo_item_frecuencia_id' ? 'Frec' : 'Mant';
+  if(String(value) === String(factConfig[campo]||'')){ refreshGlobalDisplay(); return; }
+  if(!window.confirm('Vas a cambiar el ítem global — afecta a TODOS los modelos. ¿Continuar?')){
+    refreshGlobalDisplay(); return; // revertir sin guardar
+  }
   factConfig[campo] = value;
   try{
     await firebase.firestore().collection('empresa').doc('facturacion_config')
       .set({ [campo]: value, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
     Toast.show('Mapeo global guardado','ok');
+    refreshGlobalDisplay();
     render();
-  }catch(e){ console.error(e); Toast.show('No se pudo guardar el mapeo global','bad'); }
+  }catch(e){ console.error(e); Toast.show('No se pudo guardar el mapeo global','bad'); refreshGlobalDisplay(); }
 }
 window.setGlobalItem = setGlobalItem;
+window.editarGlobal = editarGlobal;
 
 /* ===== Render ===== */
 function render(){

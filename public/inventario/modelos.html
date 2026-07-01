@@ -123,11 +123,17 @@
     </div>
     <div style="margin:0 var(--sp-4) var(--sp-3); padding:8px 12px; background:var(--surface-sunken); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; font-size:12px; color:var(--fg-2);">
       <b>Cómo se relaciona inventario ↔ servicios:</b> cada modelo mapea su mensualidad al <b>bundle "Mensualidad"</b> de QuickBooks, que se reparte en <b>Alquiler + Frecuencia + Mantenimiento</b>. El cliente ve una sola línea; contabilidad ve el desglose. <b>Frecuencia y Mantenimiento usan el mismo ítem de QBO para todos</b> (se define aquí una vez); los <b>POC no llevan Frecuencia</b>.
-      <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:center; margin-top:8px;">
-        <label style="display:flex; align-items:center; gap:6px;">Item QBO Frecuencia (global):
-          <select id="globalFrec" class="form-select" style="height:32px; min-width:200px;" onchange="setGlobalItem('qbo_item_frecuencia_id', this.value)"></select></label>
-        <label style="display:flex; align-items:center; gap:6px;">Item QBO Mantenimiento (global):
-          <select id="globalMant" class="form-select" style="height:32px; min-width:200px;" onchange="setGlobalItem('qbo_item_mantenimiento_id', this.value)"></select></label>
+      <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+        <div style="display:flex; align-items:center; gap:6px;">Item QBO Frecuencia (global):
+          <b id="lblFrec">—</b>
+          <button type="button" id="btnFrec" class="btn btn-sm btn-ghost" title="Cambiar (afecta a TODOS los modelos)" onclick="editarGlobal('Frec')"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+          <select id="globalFrec" class="form-select" style="height:32px; min-width:200px; display:none;" onchange="setGlobalItem('qbo_item_frecuencia_id', this.value)"></select>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">Item QBO Mantenimiento (global):
+          <b id="lblMant">—</b>
+          <button type="button" id="btnMant" class="btn btn-sm btn-ghost" title="Cambiar (afecta a TODOS los modelos)" onclick="editarGlobal('Mant')"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+          <select id="globalMant" class="form-select" style="height:32px; min-width:200px; display:none;" onchange="setGlobalItem('qbo_item_mantenimiento_id', this.value)"></select>
+        </div>
       </div>
     </div>
     <div class="app-table-wrap" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
