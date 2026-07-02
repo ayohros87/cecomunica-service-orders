@@ -510,6 +510,15 @@ async function backfillLinkModeloIdPoc(dryRun) {
     add(byTight, _tightModelo(`${m.marca || ""} ${m.modelo || ""}`), doc.id);
     add(byTight, _tightModelo(m.modelo), doc.id);
     add(byTight, _tightModelo(m.nombre), doc.id);
+    // Aliases opcionales del catálogo (array `aliases` o string `alias`): grafías
+    // conocidas del texto libre viejo, resueltas al modelo por el admin. Resuelven
+    // los irregulares que el match automático no puede ("PNC360R" → PNC360S-R,
+    // "TM7"/"TM-07 INTRICO" → Inrico TM7PlusSR). Match exacto/apretado, prioritario.
+    const aliasArr = Array.isArray(m.aliases) ? m.aliases : (m.alias ? [m.alias] : []);
+    for (const a of aliasArr) {
+      add(byBare,  _normModelo(a), doc.id);
+      add(byTight, _tightModelo(a), doc.id);
+    }
     const tModelo = _tightModelo(m.modelo);
     if (tModelo.length >= 4) tightList.push({ tight: tModelo, id: doc.id });
     // Marcas: tokens de `marca` con ≥3 letras (no quitar "s", números, etc.).
@@ -536,17 +545,24 @@ async function backfillLinkModeloIdPoc(dryRun) {
       const ids = byLabel.get(n) || byBare.get(n) || byTight.get(_tightModelo(f));
       if (ids && ids.size) return { ids, tipo: ids.size > 1 ? "ambiguo" : "exacto" };
     }
+    // Se prefiere el candidato con el sufijo faltante MÁS corto: "PNC360" →
+    // "PNC360S" (falta "S", 1 char) antes que "PNC360S-R" (falta "SR", 2). Así el
+    // código base no se conflaciona con su variante -R. Ambiguo solo si el sufijo
+    // mínimo empata entre 2+ modelos (p.ej. duplicados aún sin consolidar).
     const claves = [...new Set(formas.map(f => _tightModelo(f)).filter(t => t.length >= 5))];
-    const hit = new Set();
+    let mejorExtra = Infinity;
+    let mejor = new Set();
     for (const dt of claves) {
       for (const c of tightList) {
-        if (c.tight.length > dt.length &&
-            c.tight.length - dt.length <= 2 &&
-            c.tight.startsWith(dt)) hit.add(c.id);
+        if (c.tight.length <= dt.length || !c.tight.startsWith(dt)) continue;
+        const extra = c.tight.length - dt.length;
+        if (extra > 2) continue;
+        if (extra < mejorExtra) { mejorExtra = extra; mejor = new Set([c.id]); }
+        else if (extra === mejorExtra) mejor.add(c.id);
       }
     }
-    if (hit.size === 1) return { ids: hit, tipo: "prefijo" };
-    if (hit.size > 1)   return { ids: hit, tipo: "ambiguo" };
+    if (mejor.size === 1) return { ids: mejor, tipo: "prefijo" };
+    if (mejor.size > 1)   return { ids: mejor, tipo: "ambiguo" };
     return null;
   };
 
