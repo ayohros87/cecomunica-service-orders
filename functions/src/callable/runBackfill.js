@@ -558,6 +558,7 @@ async function backfillLinkModeloIdPoc(dryRun) {
   // prefijo revisar antes de escribir).
   const huerfanoCount = new Map();
   const ambiguoCount  = new Map();
+  const ambiguoInfo   = new Map();   // texto -> [labels de los modelos candidatos]
   const prefijoCount  = new Map();   // "texto → label" -> nº equipos
 
   let batch = db.batch();
@@ -593,6 +594,9 @@ async function backfillLinkModeloIdPoc(dryRun) {
     if (r.tipo === "ambiguo") {                            // texto mapea a 2+ modelos
       ambiguos++;
       ambiguoCount.set(texto, (ambiguoCount.get(texto) || 0) + 1);
+      if (!ambiguoInfo.has(texto)) {
+        ambiguoInfo.set(texto, [...r.ids].map(id => labelById.get(id) || id));
+      }
       continue;
     }
 
@@ -631,7 +635,17 @@ async function backfillLinkModeloIdPoc(dryRun) {
       },
       ambiguos: {
         titulo: `Ambiguos (catálogo duplicado / código repetido) — ${ambiguos} equipos, ${ambiguoCount.size} distintos`,
-        muestraHuerfanos: top(ambiguoCount, 20),
+        // Muestra los modelos candidatos de cada texto y marca (DUPLICADO) cuando
+        // 2+ candidatos comparten el mismo label (= filas repetidas en el catálogo).
+        muestraHuerfanos: [...ambiguoCount.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 25)
+          .map(([t, c]) => {
+            const labels = ambiguoInfo.get(t) || [];
+            const uniq = [...new Set(labels)];
+            const dup = uniq.length < labels.length ? " (DUPLICADO)" : "";
+            return `${t} (×${c}) → ${labels.length} modelos${dup}: ${uniq.join(" | ")}`;
+          }),
       },
       poc_devices: {
         titulo: `Huérfanos (crear/renombrar en catálogo) — ${huerfanos} equipos, ${huerfanoCount.size} distintos`,
