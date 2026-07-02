@@ -27,6 +27,15 @@ const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
  *       several) and writes it to clientes/<id>.ip when the client has no IP yet.
  *     - Idempotent: never overwrites an existing IP. Reports `ambiguos` (clients
  *       with 2+ distinct device IPs) and `huerfanos` (no derivable IP).
+ *   { action: "linkModeloIdPoc", dryRun? }
+ *     - Links legacy poc_devices to their catalog model: writes `modelo_id` (FK)
+ *       + `modelo_label` (snapshot) by NORMALIZED match of the free-text modelo
+ *       against the `modelos` collection. The POC drawer/bulk now use a <select>
+ *       bound to the catalog (PocState.obtenerModeloId) that only pre-selects on
+ *       an exact label match, so devices holding the old free-text stopped
+ *       resolving. Additive (never deletes the legacy text) and idempotent
+ *       (skips docs that already have a modelo FK). Reports `ambiguos` (text that
+ *       maps to 2+ models) and `huerfanos` (text with no catalog match).
  *
  * Returns {action, dryRun, scanned, ...counters}. All actions are
  * idempotent — safe to re-run.
@@ -412,6 +421,127 @@ async function backfillMarcarSerialesLegacy(dryRun) {
   return { scanned, skippedDeleted, skippedEstado, skippedYaEstado, toWrite, written, errors, elapsedSec };
 }
 
+// ─────────── linkModeloIdPoc ───────────
+//
+// Enlaza equipos POC legacy a su modelo del catálogo por `modelo_id` (estable) +
+// `modelo_label` (snapshot), haciendo match NORMALIZADO del texto libre (`modelo`
+// y sus alias) contra la colección `modelos`. El drawer/edición-masiva del POC
+// ahora usan un <select> ligado al catálogo (PocState.obtenerModeloId), que solo
+// pre-selecciona con match exacto del label `${marca} ${modelo}`; los equipos
+// viejos guardaban el modelo como texto libre y dejaron de pre-seleccionarse.
+// Aditivo: agrega el FK donde falta y hay match único; NO borra el texto libre
+// (la lista lo sigue mostrando vía obtenerModeloTexto). Idempotente: salta los
+// que ya tienen un FK de modelo. Reporta `ambiguos` (texto que mapea a 2+
+// modelos distintos) y `huerfanos` (texto sin correspondencia en el catálogo —
+// crear/renombrar el modelo). Incluye modelos inactivos en el match.
+
+function _normModelo(s) {
+  return String(s == null ? "" : s)
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// Label visible del modelo, idéntico al que arma PocState.cargarModelosMap.
+function _modeloLabel(m) {
+  const label = `${(m.marca || "").trim()} ${(m.modelo || "").trim()}`.trim();
+  return label || m.modelo || m.marca || m.nombre || "";
+}
+
+// FK de modelo ya presente en un doc POC (cualquier variante). Si hay uno, el
+// equipo ya está enlazado y se salta.
+function _modeloFk(d) {
+  return (d.modelo_id || d.modeloId || d.model_id || d.modelId || "").toString().trim();
+}
+
+// Texto libre legacy del modelo (mismos alias que revisa el frontend), sin las
+// claves FK que ya se evaluaron aparte.
+function _modeloTextoLegacy(d) {
+  return (d.modelo_label || d.modeloLabel || d.Modelo || d.modelo ||
+          d.model_label  || d.modelLabel  || d.model || "").toString().trim();
+}
+
+async function backfillLinkModeloIdPoc(dryRun) {
+  const startedAt = Date.now();
+
+  // Mapas de match desde el catálogo. byLabel: `${marca} ${modelo}` normalizado
+  // (lo que muestra el dropdown). byBare: `modelo` / `nombre` solo (cubre textos
+  // legacy sin marca y modelos importados de QBO con marca vacía). El valor es un
+  // Set de ids para detectar ambigüedad. Se incluyen modelos inactivos.
+  const modSnap = await db.collection("modelos").get();
+  const byLabel = new Map();
+  const byBare  = new Map();
+  const labelById = new Map();
+  const add = (map, key, id) => {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(id);
+  };
+  for (const doc of modSnap.docs) {
+    const m = doc.data() || {};
+    labelById.set(doc.id, _modeloLabel(m));
+    add(byLabel, _normModelo(`${(m.marca || "").trim()} ${(m.modelo || "").trim()}`), doc.id);
+    add(byBare,  _normModelo(m.modelo), doc.id);
+    add(byBare,  _normModelo(m.nombre), doc.id);
+  }
+
+  let scanned = 0, skippedDeleted = 0, yaLinked = 0, skippedUnchanged = 0;
+  let linked = 0, ambiguos = 0, huerfanos = 0, written = 0, errors = 0;
+  const muestraHuerfanos = [];
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) { written += opsInBatch; batch = db.batch(); opsInBatch = 0; return; }
+    try { await batch.commit(); written += opsInBatch; }
+    catch (err) {
+      logger.error("[runBackfill.linkModeloIdPoc] batch commit failed", { err: err.message });
+      errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  const snap = await db.collection("poc_devices").get();
+  for (const doc of snap.docs) {
+    const d = doc.data() || {};
+    if (d.deleted === true) { skippedDeleted++; continue; }
+    scanned++;
+    if (_modeloFk(d)) { yaLinked++; continue; }          // ya enlazado
+
+    const texto = _modeloTextoLegacy(d);
+    if (!texto) { skippedUnchanged++; continue; }         // sin modelo que enlazar
+
+    const norm = _normModelo(texto);
+    let ids = byLabel.get(norm);                          // 1º label completo
+    if (!ids || ids.size === 0) ids = byBare.get(norm);   // 2º modelo/nombre solo
+
+    if (!ids || ids.size === 0) {
+      huerfanos++;
+      if (muestraHuerfanos.length < 25) muestraHuerfanos.push(texto);
+      continue;
+    }
+    if (ids.size > 1) { ambiguos++; continue; }           // texto mapea a 2+ modelos
+
+    const modeloId = [...ids][0];
+    linked++;
+    batch.update(doc.ref, {
+      modelo_id: modeloId,
+      modelo_label: labelById.get(modeloId) || texto,
+    });
+    opsInBatch++;
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+  await flushBatch();
+
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return {
+    scanned, skippedDeleted, yaLinked, skippedUnchanged,
+    linked, ambiguos, huerfanos, written, errors, elapsedSec,
+    detalle: { poc_devices: { huerfanos, muestraHuerfanos } },
+  };
+}
+
 // ─────────── dispatcher ───────────
 
 module.exports = onCall(
@@ -442,6 +572,9 @@ module.exports = onCall(
         break;
       case "marcarSerialesLegacy":
         result = await backfillMarcarSerialesLegacy(dryRun);
+        break;
+      case "linkModeloIdPoc":
+        result = await backfillLinkModeloIdPoc(dryRun);
         break;
       default:
         throw new HttpsError("invalid-argument", `Acción desconocida: ${action}`);

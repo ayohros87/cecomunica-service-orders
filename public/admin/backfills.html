@@ -179,6 +179,35 @@
       <div id="result-marcarSerialesLegacy" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: linkModeloIdPoc -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="link"></i> Enlazar modelo del catálogo en equipos PoC</span>
+        <span class="hint">Agrega <code>modelo_id</code> + <code>modelo_label</code> a equipos con modelo en texto libre</span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        El modelo del PoC pasó de texto libre a un <strong>desplegable ligado al catálogo</strong>
+        <code>modelos</code>. Los equipos viejos guardaban el nombre como texto y el desplegable
+        <strong>dejó de pre-seleccionarlos</strong> (solo hace match exacto del label
+        <code>marca&nbsp;modelo</code>). Esto les agrega <code>modelo_id</code> +
+        <code>modelo_label</code> haciendo match <strong>normalizado</strong> (sin acentos/mayúsculas)
+        del texto contra el catálogo — probando el label completo y luego el modelo/nombre solo, e
+        incluyendo modelos inactivos. Aditivo: <strong>no borra el texto viejo</strong>. Idempotente:
+        salta los que ya tienen modelo. Reporta <strong>ambiguos</strong> (texto que mapea a 2+
+        modelos) y <strong>huérfanos</strong> (texto sin modelo en el catálogo — crear/renombrar).
+        Usa <strong>Dry-run</strong> para ver los números y la muestra de huérfanos antes de escribir.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="linkModeloIdPoc" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (preview)
+        </button>
+        <button class="btn btn-primary" data-bf-action="linkModeloIdPoc" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-linkModeloIdPoc" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>
