@@ -10,7 +10,7 @@ let showInactivos = false;   // por defecto ocultos para despejar la vista
 let soloConfig = false;
 let soloAlquiler = true;     // por defecto solo los modelos que se alquilan (vista limpia)
 const _savedTimers = {};
-const qboItems = { alquileres: [], bundles: [], servicios: [], loaded: false };
+const qboItems = { alquileres: [], bundles: [], servicios: [], loaded: false, loading: false };
 // Frecuencia y Mantenimiento usan el MISMO ítem de QBO para todos los modelos:
 // se mapean una vez, globalmente (empresa/facturacion_config), y cada fila lo muestra.
 const factConfig = { qbo_item_frecuencia_id: '', qbo_item_mantenimiento_id: '' };
@@ -41,9 +41,17 @@ firebase.auth().onAuthStateChanged(async (user) => {
     });
 
     await cargarModelos();
-    await loadQboItems();
+    qboItems.loading = true;  // la lista de QBO llega en 2º plano (ver abajo)
     await loadFactConfig();
-    render();
+    render();                 // pinta el catálogo YA desde Firestore (rápido)
+
+    // La lista de QuickBooks solo llena los NOMBRES de los desplegables de mapeo
+    // (el ID ya está guardado en cada modelo). Se carga en segundo plano para que
+    // la página abra al instante en vez de esperar la API de QBO; al llegar se
+    // repinta la tabla y el mapeo global.
+    const hint = document.getElementById('qboHint');
+    if (hint) hint.textContent = 'Cargando lista de QuickBooks…';
+    loadQboItems().then(() => { render(); refreshGlobalDisplay(); }).catch(() => {});
   }catch(e){
     console.error(e); Toast.show('Error validando usuario','bad');
   }
@@ -57,6 +65,7 @@ async function cargarModelos(){
 
 async function loadQboItems(){
   const hint = document.getElementById('qboHint');
+  qboItems.loading = true;
   try{
     const res = await firebase.functions().httpsCallable('listQBOItems')();
     qboItems.alquileres = res.data.alquileres || [];
@@ -68,6 +77,8 @@ async function loadQboItems(){
     console.error('listQBOItems', e);
     qboItems.loaded = false;
     if (hint) hint.textContent = '⚠ No se pudo cargar la lista de QuickBooks (se conserva el ID guardado).';
+  }finally{
+    qboItems.loading = false;
   }
 }
 
@@ -90,7 +101,7 @@ function qboOptions(list, selectedId){
     opts.push(`<option value="${esc(it.id)}"${on?' selected':''}>${esc(it.name)} (${esc(it.id)})</option>`);
   });
   if(sid && !found){
-    const aviso = qboItems.loaded ? 'no encontrado en QBO' : 'QBO no disponible';
+    const aviso = qboItems.loaded ? 'no encontrado en QBO' : (qboItems.loading ? 'cargando…' : 'QBO no disponible');
     opts.push(`<option value="${esc(sid)}" selected>ID ${esc(sid)} (${aviso})</option>`);
   }
   return opts.join('');
