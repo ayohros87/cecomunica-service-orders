@@ -13,7 +13,9 @@ La arquitectura es sólida: backend bien modularizado (`index.js` son 45 líneas
 
 ---
 
-## 🔴 Críticos — arreglar esta semana
+## 🔴 Críticos — ✅ RESUELTOS (commit `c3bd887`, 2026-07-02)
+
+> C1, C2 y C3 corregidos y commiteados. Falta **desplegar** (`firebase deploy --only firestore:rules,functions,hosting`) y validar las reglas contra el emulador antes de subirlas a producción.
 
 ### C1. Fuga de la API key de correo a Cloud Logging
 - **Archivo:** `functions/src/http/sendContractPdf.js:29`
