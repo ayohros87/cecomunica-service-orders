@@ -28,7 +28,9 @@
       ['Ya con id',          data.yaLinked],
       ['Enlazados',          data.linked],
       ['Ambiguos',           data.ambiguos],
+      ['Ambiguos (distintos)', data.ambiguosDistintos],
       ['Huérfanos',          data.huerfanos],
+      ['Huérfanos (distintos)', data.huerfanosDistintos],
       ['Escritos',           data.written],
       ['Errores',            data.errors],
     ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');
@@ -55,7 +57,7 @@
     const bloques = Object.entries(detalle).map(([col, d]) => {
       const ej = (d.muestraHuerfanos || []);
       if (!ej.length) return '';
-      return `<div style="margin-top:8px;"><span class="ts">${col} — ${d.huerfanos} huérfano(s), ej.:</span><br>` +
+      return `<div style="margin-top:8px;"><span class="ts">${col} — ${d.huerfanos} sin enlazar, ej.:</span><br>` +
         ej.map(n => `<code style="font-size:11px;">${escapeHtml(n)}</code>`).join(', ') + `</div>`;
     }).join('');
     return bloques;

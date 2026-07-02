@@ -441,6 +441,15 @@ function _normModelo(s) {
     .toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// Clave "apretada": solo alfanuméricos (sin espacios/guiones/acentos). Reconcilia
+// las variantes de un mismo código de modelo escrito distinto ("PNC 360" /
+// "PNC-360" / "PNC360" → "pnc360"). Se usa como último recurso de match.
+function _tightModelo(s) {
+  return String(s == null ? "" : s)
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 // Label visible del modelo, idéntico al que arma PocState.cargarModelosMap.
 function _modeloLabel(m) {
   const label = `${(m.marca || "").trim()} ${(m.modelo || "").trim()}`.trim();
@@ -470,6 +479,7 @@ async function backfillLinkModeloIdPoc(dryRun) {
   const modSnap = await db.collection("modelos").get();
   const byLabel = new Map();
   const byBare  = new Map();
+  const byTight = new Map();
   const labelById = new Map();
   const add = (map, key, id) => {
     if (!key) return;
@@ -482,11 +492,18 @@ async function backfillLinkModeloIdPoc(dryRun) {
     add(byLabel, _normModelo(`${(m.marca || "").trim()} ${(m.modelo || "").trim()}`), doc.id);
     add(byBare,  _normModelo(m.modelo), doc.id);
     add(byBare,  _normModelo(m.nombre), doc.id);
+    // Tight: label completo (marca+modelo, espacios/guiones fuera) y nombre. No
+    // se indexa `modelo` solo en tight para evitar colisiones de códigos cortos.
+    add(byTight, _tightModelo(`${m.marca || ""} ${m.modelo || ""}`), doc.id);
+    add(byTight, _tightModelo(m.nombre), doc.id);
   }
 
   let scanned = 0, skippedDeleted = 0, yaLinked = 0, skippedUnchanged = 0;
   let linked = 0, ambiguos = 0, huerfanos = 0, written = 0, errors = 0;
-  const muestraHuerfanos = [];
+  // Texto libre distinto -> nº de equipos, para reportar la lista accionable
+  // (qué modelos crear/renombrar en el catálogo o qué duplicados dedup-ear).
+  const huerfanoCount = new Map();
+  const ambiguoCount  = new Map();
 
   let batch = db.batch();
   let opsInBatch = 0;
@@ -513,15 +530,20 @@ async function backfillLinkModeloIdPoc(dryRun) {
     if (!texto) { skippedUnchanged++; continue; }         // sin modelo que enlazar
 
     const norm = _normModelo(texto);
-    let ids = byLabel.get(norm);                          // 1º label completo
-    if (!ids || ids.size === 0) ids = byBare.get(norm);   // 2º modelo/nombre solo
+    let ids = byLabel.get(norm);                              // 1º label completo
+    if (!ids || ids.size === 0) ids = byBare.get(norm);      // 2º modelo/nombre solo
+    if (!ids || ids.size === 0) ids = byTight.get(_tightModelo(texto)); // 3º apretado
 
     if (!ids || ids.size === 0) {
       huerfanos++;
-      if (muestraHuerfanos.length < 25) muestraHuerfanos.push(texto);
+      huerfanoCount.set(texto, (huerfanoCount.get(texto) || 0) + 1);
       continue;
     }
-    if (ids.size > 1) { ambiguos++; continue; }           // texto mapea a 2+ modelos
+    if (ids.size > 1) {                                       // texto mapea a 2+ modelos
+      ambiguos++;
+      ambiguoCount.set(texto, (ambiguoCount.get(texto) || 0) + 1);
+      continue;
+    }
 
     const modeloId = [...ids][0];
     linked++;
@@ -534,11 +556,22 @@ async function backfillLinkModeloIdPoc(dryRun) {
   }
   await flushBatch();
 
+  // Muestra distinta ordenada por frecuencia: la lista de trabajo real.
+  const topDistintos = (m, n) => [...m.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([t, c]) => `${t} (×${c})`);
+
   const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
   return {
     scanned, skippedDeleted, yaLinked, skippedUnchanged,
     linked, ambiguos, huerfanos, written, errors, elapsedSec,
-    detalle: { poc_devices: { huerfanos, muestraHuerfanos } },
+    huerfanosDistintos: huerfanoCount.size,
+    ambiguosDistintos:  ambiguoCount.size,
+    detalle: {
+      poc_devices: { huerfanos, muestraHuerfanos: topDistintos(huerfanoCount, 40) },
+      ambiguos:    { huerfanos: ambiguos, muestraHuerfanos: topDistintos(ambiguoCount, 20) },
+    },
   };
 }
 
