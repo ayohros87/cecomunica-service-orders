@@ -291,6 +291,7 @@ function abrirModal(id=null){
   document.getElementById('f-es-alquiler').checked = creando ? true : false; // en esta página, nuevo = de alquiler
   document.getElementById('f-alto').checked=false;
   document.getElementById('f-activo').checked=true;
+  setVal('f-aliases','');
   setVal('f-notas','');
 
   if(!creando){
@@ -303,6 +304,7 @@ function abrirModal(id=null){
       document.getElementById('f-es-alquiler').checked = m.es_alquiler===true;
       document.getElementById('f-alto').checked = m.alto_movimiento===true;
       document.getElementById('f-activo').checked = m.activo!==false;
+      setVal('f-aliases', Array.isArray(m.aliases) ? m.aliases.join(', ') : (m.aliases||m.alias||''));
       setVal('f-notas', m.notas||'');
     }
   }
@@ -324,6 +326,10 @@ async function guardarModelo(){
     es_alquiler: document.getElementById('f-es-alquiler').checked,
     alto_movimiento: document.getElementById('f-alto').checked,
     activo: document.getElementById('f-activo').checked,
+    // Aliases: grafías alternativas (coma/; separadas), sin duplicados ni vacíos.
+    // Las usa el backfill linkModeloIdPoc para enlazar equipos con nombre viejo.
+    aliases: [...new Set((document.getElementById('f-aliases').value||'')
+      .split(/[,;]/).map(s=>s.trim()).filter(Boolean))],
     notas: (document.getElementById('f-notas').value||'').trim(),
   };
   try{
