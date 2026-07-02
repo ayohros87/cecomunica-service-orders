@@ -284,6 +284,8 @@ function abrirModal(id=null){
   modeloEditId = id;
   const creando = (id===null);
   document.getElementById('modalTitle').textContent = creando ? 'Nuevo modelo' : 'Editar modelo';
+  const btnEl = document.getElementById('btnEliminar');
+  if (btnEl) btnEl.style.display = creando ? 'none' : 'inline-flex';
   setVal('f-marca',''); setVal('f-modelo','');
   document.getElementById('f-tipo').value='P';
   document.getElementById('f-estado').value='N';
@@ -339,6 +341,27 @@ async function guardarModelo(){
     await cargarModelos();
     render();
   }catch(e){ console.error(e); Toast.show('Error al guardar','bad'); }
+}
+
+// Eliminar (permanente) — pensado para consolidar duplicados del catálogo.
+async function eliminarModelo(){
+  if (modeloEditId===null) return;
+  const m = listaModelos.find(x=>x.id===modeloEditId);
+  const nombre = m ? `${(m.marca||'').trim()} ${(m.modelo||'').trim()}`.trim() : 'este modelo';
+  const ok = await Modal.confirm({
+    title: 'Eliminar modelo',
+    message: `Vas a eliminar <b>${nombre}</b> del catálogo de forma permanente. Úsalo para consolidar duplicados. Si el modelo está en uso (contratos/equipos), esas referencias quedarán sin catálogo — deja la fila que esté en uso y borra la repetida.`,
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return;
+  try{
+    await ModelosService.deleteModelo(modeloEditId);
+    Toast.show('Modelo eliminado','ok');
+    cerrarModal();
+    await cargarModelos();
+    render();
+  }catch(e){ console.error(e); Toast.show('No se pudo eliminar el modelo','bad'); }
 }
 
 /* ===== Exportar ===== */
@@ -562,6 +585,7 @@ window.setFiltroAlquiler = setFiltroAlquiler;
 window.abrirModal = abrirModal;
 window.cerrarModal = cerrarModal;
 window.guardarModelo = guardarModelo;
+window.eliminarModelo = eliminarModelo;
 window.exportarExcel = exportarExcel;
 window.importarDeQBO = importarDeQBO;
 window.toggleAllQbo = toggleAllQbo;
