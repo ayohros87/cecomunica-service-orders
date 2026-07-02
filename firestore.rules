@@ -262,7 +262,16 @@ service cloud.firestore {
     match /inventario_piezas/{docId}  { allow read, write: if isSignedIn(); }
     match /poc_logs/{docId}           { allow read, write: if isSignedIn(); }
     match /analytics_piezas_modelo/{docId} { allow read, write: if isSignedIn(); }
-    match /mail_queue/{docId}         { allow read, write: if isSignedIn(); }
+    // La cola de correo contiene PII (destinatarios, cuerpos con datos de
+    // clientes/contratos). Lectura y administración solo admin/gerente; el
+    // `create` queda abierto al staff autenticado porque cotizaciones y órdenes
+    // encolan correos vía MailService.enqueue(). El saneo de `attachments`
+    // (LFI/SSRF) se hace server-side en functions/src/lib/mail.js.
+    match /mail_queue/{docId} {
+      allow read:           if isSignedIn() && userRole() in ["administrador","gerente"];
+      allow create:         if isSignedIn();
+      allow update, delete: if isSignedIn() && userRole() in ["administrador","gerente"];
+    }
     match /tecnico_stats/{docId} {
       allow read, write: if isSignedIn();
       match /{sub=**} { allow read, write: if isSignedIn(); }   // mensual, semanal

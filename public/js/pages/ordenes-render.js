@@ -106,11 +106,11 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     </td>
     <td class="client-name-cell">
       <div class="cliente-cell">
-        <span class="cliente-text">${nombreClienteDe(ordenData)}</span>
+        <span class="cliente-text">${escapeHtml(nombreClienteDe(ordenData))}</span>
         <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}</span>
       </div>
     </td>
-    <td>${ordenData.tecnico_asignado || ""}${indicadorNota}</td>
+    <td>${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
     <td><span class="chip-estado ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}</td>
@@ -132,10 +132,10 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     <td colspan="8" class="orden-expandida-wrapper">
       <div class="orden-expandida-card ${ordenCerrada ? 'orden-cerrada' : 'orden-activa'}">
         <div class="orden-header-compacto">
-          <div class="header-col-izq header-line" title="Cliente: ${nombreClienteDe(ordenData)} · Técnico: ${ordenData.tecnico_asignado || 'Sin asignar'}">
+          <div class="header-col-izq header-line" title="Cliente: ${escapeHtml(nombreClienteDe(ordenData))} · Técnico: ${escapeHtml(ordenData.tecnico_asignado || 'Sin asignar')}">
             <span class="orden-numero"><strong>Orden ${ordenId}</strong></span>
             <span class="separador">•</span>
-            <span class="cliente-nombre">${nombreClienteDe(ordenData)}</span>
+            <span class="cliente-nombre">${escapeHtml(nombreClienteDe(ordenData))}</span>
             <span class="separador">•</span>
             <div class="progreso-intervenciones-inline ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'}" data-orden-id="${ordenId}">
               <span class="icon"><i data-lucide="wrench"></i></span>
@@ -538,7 +538,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
             <tr data-equipo-id="${ordenId}_${e.id}" class="equipo-row ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'} ${noDisponible ? 'no-disponible' : ''}">
               <td class="col-serie">
                 <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="numero_de_serie">
-                  <span class="valor valor-primario">${e.numero_de_serie || "-"}</span>
+                  <span class="valor valor-primario">${e.numero_de_serie ? escapeHtml(e.numero_de_serie) : "-"}</span>
                   ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'numero_de_serie', e.numero_de_serie || '')}
                   ${fotosBadgeDesktop}
                 </div>
@@ -546,7 +546,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 
               <td class="col-modelo">
                 <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="modelo">
-                  <span class="valor valor-primario">${e.modelo || "-"}</span>
+                  <span class="valor valor-primario">${e.modelo ? escapeHtml(e.modelo) : "-"}</span>
                   ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'modelo', e.modelo || '')}
                 </div>
               </td>

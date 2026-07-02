@@ -166,12 +166,12 @@
         <tr data-id="${c.id}">
           <td><span class="cc-cell-num">${id}</span></td>
           <td>
-            <div class="cc-cell-cliente">${c.cliente_nombre || '—'}</div>
-            ${c.cliente_email ? '<div class="cc-aten">' + c.cliente_email + '</div>' : ''}
+            <div class="cc-cell-cliente">${c.cliente_nombre ? FMT.esc(c.cliente_nombre) : '—'}</div>
+            ${c.cliente_email ? '<div class="cc-aten">' + FMT.esc(c.cliente_email) + '</div>' : ''}
           </td>
           <td class="td-muted">${fmtFechaCorta(fechaIso(c))}</td>
           <td>${estadoChip(c.estado || 'borrador')}</td>
-          <td style="font-size:13px;">${c.ejecutivo_nombre || '—'}</td>
+          <td style="font-size:13px;">${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</td>
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
             <span class="cc-row-actions">
@@ -199,13 +199,13 @@
         <div class="responsive-card" data-id="${c.id}">
           <div class="responsive-card-top">
             <div>
-              <div class="responsive-card-title">${c.cliente_nombre || '—'}</div>
+              <div class="responsive-card-title">${c.cliente_nombre ? FMT.esc(c.cliente_nombre) : '—'}</div>
               <div class="responsive-card-sub"><span class="cc-cell-num">${id}</span> · ${fmtFechaCorta(fechaIso(c))}</div>
             </div>
             ${estadoChip(c.estado || 'borrador')}
           </div>
           <div class="responsive-card-meta">
-            <span>${c.ejecutivo_nombre || '—'}</span>
+            <span>${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</span>
             <span class="cc-cell-total">${FMT.money(Number(c.total || 0))}</span>
           </div>
           <div class="responsive-card-actions">

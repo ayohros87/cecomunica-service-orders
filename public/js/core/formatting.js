@@ -2,6 +2,18 @@
 window.FMT = {
   ITBMS_RATE: 0.07,
 
+  // Escapa texto para interpolar de forma segura dentro de innerHTML (contenido
+  // y atributos entrecomillados). Única fuente de verdad para escape HTML —
+  // reemplaza las 14+ copias locales de escapeHtml/esc repartidas por el código.
+  esc(v) {
+    return String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  },
+
   // "$1,234.56" — Panama locale, USD
   money(n) {
     return Number(n || 0).toLocaleString('es-PA', { style: 'currency', currency: 'USD' });

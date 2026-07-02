@@ -2,6 +2,38 @@ const nodemailer = require("nodemailer");
 const { htmlToText } = require("html-to-text");
 const admin = require("firebase-admin");
 
+// Hosts de Firebase Storage permitidos como origen de un adjunto por `path`.
+const STORAGE_HOST_RE =
+  /(^|\.)(firebasestorage\.googleapis\.com|storage\.googleapis\.com|firebasestorage\.app)$/i;
+
+// Sanea los adjuntos antes de entregarlos a nodemailer. Un doc de `mail_queue`
+// lo puede crear cualquier usuario autenticado, así que un `path` arbitrario
+// haría que nodemailer leyera archivos locales del contenedor (LFI) o disparara
+// requests salientes (SSRF). Solo permitimos:
+//   - `content` (Buffer/string en línea) — lo usan las CF internas (PDFs).
+//   - `path` que sea una URL https a un host de Firebase Storage — cotizaciones.
+// Cualquier otro adjunto se descarta silenciosamente.
+function sanitizeAttachments(attachments) {
+  if (!Array.isArray(attachments)) return undefined;
+  const safe = [];
+  for (const a of attachments) {
+    if (!a || typeof a !== "object") continue;
+    if (a.content !== undefined) {
+      safe.push(a);
+      continue;
+    }
+    if (typeof a.path === "string") {
+      let url;
+      try { url = new URL(a.path); } catch { continue; }
+      if (url.protocol === "https:" && STORAGE_HOST_RE.test(url.host)) {
+        safe.push(a);
+      }
+    }
+    // Sin `content` ni `path` https-Storage válido → se descarta.
+  }
+  return safe.length ? safe : undefined;
+}
+
 async function sendEmail({ to, subject, html, text, cc, bcc, attachments, replyTo }) {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
@@ -17,7 +49,7 @@ async function sendEmail({ to, subject, html, text, cc, bcc, attachments, replyT
     to, cc, bcc, subject,
     html,
     text: plain,
-    attachments,
+    attachments: sanitizeAttachments(attachments),
     replyTo
   });
 }

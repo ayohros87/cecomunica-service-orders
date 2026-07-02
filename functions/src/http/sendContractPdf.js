@@ -26,8 +26,9 @@ module.exports = onRequest(
   },
   (req, res) => {
     cors(req, res, async () => {
+      // NO loguear req.headers: contiene x-api-key (= SENDMAIL_KEY) y quedaría
+      // en texto claro en Cloud Logging. Solo las claves del body, sin valores.
       console.log(">>> sendContractPdf invoked", {
-        headers: req.headers,
         bodyKeys: Object.keys(req.body || {})
       });
 

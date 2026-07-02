@@ -81,8 +81,8 @@ window.PocList = {
     // cliente (1)
     const tdCliente = document.createElement('td');
     tdCliente.innerHTML = algunoVacio
-      ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${nombreCliente}</strong>`
-      : `<strong>${nombreCliente}</strong>`;
+      ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${FMT.esc(nombreCliente)}</strong>`
+      : `<strong>${FMT.esc(nombreCliente)}</strong>`;
     row.appendChild(tdCliente);
 
     // operador (2) — stamp raw value on the cell so bulk edit can pre-select.
@@ -121,7 +121,7 @@ window.PocList = {
 
     // sim_tel (10)
     const tdSim = document.createElement('td');
-    tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${d.sim_number || ''} / ${d.sim_phone || ''}`;
+    tdSim.innerHTML = `<i data-lucide="smartphone"></i> ${FMT.esc(d.sim_number)} / ${FMT.esc(d.sim_phone)}`;
     row.appendChild(tdSim);
 
     // acciones (11)
@@ -440,8 +440,8 @@ window.PocList = {
       const algunoVacio = camposCrit.some(v => !v || v.trim?.() === '');
       const tdCliente = document.createElement('td');
       tdCliente.innerHTML = algunoVacio
-        ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${d.cliente || ''}</strong>`
-        : `<strong>${d.cliente || ''}</strong>`;
+        ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${FMT.esc(d.cliente)}</strong>`
+        : `<strong>${FMT.esc(d.cliente)}</strong>`;
       row.appendChild(tdCliente);
 
       const tdOperador = document.createElement('td');
@@ -473,7 +473,7 @@ window.PocList = {
         Array.isArray(d.grupos) ? d.grupos.join(', ') : (d.grupos || ''), 'grupos'
       ));
       const tdSimF = document.createElement('td');
-      tdSimF.innerHTML = `<i data-lucide="smartphone"></i> ${(d.sim || d.sim_number) || ''} / ${d.sim_phone || ''}`;
+      tdSimF.innerHTML = `<i data-lucide="smartphone"></i> ${FMT.esc((d.sim || d.sim_number))} / ${FMT.esc(d.sim_phone)}`;
       row.appendChild(tdSimF);
 
       const acciones = document.createElement('td');
