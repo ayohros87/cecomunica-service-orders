@@ -560,10 +560,12 @@ window.PocList = {
     if (resumenEl) resumenEl.innerHTML = '<div class="loader" style="width:20px;height:20px;border-width:2px;"></div>';
 
     const devices  = await PocService.getPocDevices();
+    const soloActivos = document.getElementById('soloActivos')?.checked;
     const invalidos = [];
 
     devices.forEach(d => {
       if (d.deleted === true) return;
+      if (soloActivos && !d.activo) return;
       const grupos = d.grupos || [];
       if (!grupos.some(g => { const v = (g || '').toString(); return v.includes('...') || v.includes('🔍'); })) return;
       invalidos.push({
