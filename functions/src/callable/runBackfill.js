@@ -431,9 +431,19 @@ async function backfillMarcarSerialesLegacy(dryRun) {
 // viejos guardaban el modelo como texto libre y dejaron de pre-seleccionarse.
 // Aditivo: agrega el FK donde falta y hay match único; NO borra el texto libre
 // (la lista lo sigue mostrando vía obtenerModeloTexto). Idempotente: salta los
-// que ya tienen un FK de modelo. Reporta `ambiguos` (texto que mapea a 2+
-// modelos distintos) y `huerfanos` (texto sin correspondencia en el catálogo —
-// crear/renombrar el modelo). Incluye modelos inactivos en el match.
+// que ya tienen un FK de modelo. Incluye modelos inactivos en el match.
+//
+// El match tiene varios niveles, del más estricto al más laxo, y SIEMPRE exige
+// unicidad (2+ candidatos → `ambiguo`, no adivina):
+//   1. exacto: label `${marca} ${modelo}`, o `modelo`/`nombre` solo, o su forma
+//      "apretada" (solo alfanuméricos) que iguala variantes de espaciado/guiones
+//      ("PNC 360" == "PNC-360" == "PNC360"). Se prueba el texto crudo Y sin la
+//      marca (el catálogo la lleva, "Hytera PNC360S", pero el texto viejo no).
+//   2. prefijo: el código del equipo es prefijo de UN solo código del catálogo,
+//      con un sufijo faltante de ≤2 chars ("PNC360" → "PNC360S"). Estos se marcan
+//      aparte (linkedPrefijo) y el dry-run los lista para revisión.
+// Reporta `ambiguos` (texto que mapea a 2+ modelos — normalmente catálogo
+// duplicado) y `huerfanos` (texto sin correspondencia — crear/renombrar).
 
 function _normModelo(s) {
   return String(s == null ? "" : s)
@@ -472,15 +482,20 @@ function _modeloTextoLegacy(d) {
 async function backfillLinkModeloIdPoc(dryRun) {
   const startedAt = Date.now();
 
-  // Mapas de match desde el catálogo. byLabel: `${marca} ${modelo}` normalizado
-  // (lo que muestra el dropdown). byBare: `modelo` / `nombre` solo (cubre textos
-  // legacy sin marca y modelos importados de QBO con marca vacía). El valor es un
-  // Set de ids para detectar ambigüedad. Se incluyen modelos inactivos.
+  // Índices del catálogo (valor = Set de ids para detectar ambigüedad; incluye
+  // modelos inactivos):
+  //   byLabel  norm(`${marca} ${modelo}`) — el label completo que muestra el UI.
+  //   byBare   norm(modelo) / norm(nombre) — el código solo, sin marca.
+  //   byTight  alfanumérico del label completo, del modelo solo y del nombre.
+  //   tightList {tight,id} del código de modelo (sin marca) para match por prefijo.
+  //   brands   marcas normalizadas, para quitar la marca del texto libre viejo.
   const modSnap = await db.collection("modelos").get();
   const byLabel = new Map();
   const byBare  = new Map();
   const byTight = new Map();
   const labelById = new Map();
+  const tightList = [];
+  const brands = new Set();
   const add = (map, key, id) => {
     if (!key) return;
     if (!map.has(key)) map.set(key, new Set());
@@ -492,18 +507,58 @@ async function backfillLinkModeloIdPoc(dryRun) {
     add(byLabel, _normModelo(`${(m.marca || "").trim()} ${(m.modelo || "").trim()}`), doc.id);
     add(byBare,  _normModelo(m.modelo), doc.id);
     add(byBare,  _normModelo(m.nombre), doc.id);
-    // Tight: label completo (marca+modelo, espacios/guiones fuera) y nombre. No
-    // se indexa `modelo` solo en tight para evitar colisiones de códigos cortos.
     add(byTight, _tightModelo(`${m.marca || ""} ${m.modelo || ""}`), doc.id);
+    add(byTight, _tightModelo(m.modelo), doc.id);
     add(byTight, _tightModelo(m.nombre), doc.id);
+    const tModelo = _tightModelo(m.modelo);
+    if (tModelo.length >= 4) tightList.push({ tight: tModelo, id: doc.id });
+    // Marcas: tokens de `marca` con ≥3 letras (no quitar "s", números, etc.).
+    for (const tok of _normModelo(m.marca).split(" ")) {
+      if (tok.length >= 3 && /[a-z]/.test(tok)) brands.add(tok);
+    }
   }
 
+  // Quita tokens de marca del texto libre ("hytera pnc360s" → "pnc360s"). Nunca
+  // deja el texto vacío (si todo era marca, devuelve el normalizado original).
+  const stripBrand = (texto) => {
+    const toks = _normModelo(texto).split(" ").filter(Boolean);
+    const keep = toks.filter(t => !brands.has(t));
+    return keep.length ? keep.join(" ") : _normModelo(texto);
+  };
+
+  // Resuelve un texto libre → { ids, tipo }. Prueba el texto crudo y sin marca en
+  // los tres niveles exactos; si nada, intenta prefijo (código del equipo == inicio
+  // de UN código del catálogo con ≤2 chars extra). Devuelve null si no hay match.
+  const resolver = (texto) => {
+    const formas = [texto, stripBrand(texto)];
+    for (const f of formas) {
+      const n = _normModelo(f);
+      const ids = byLabel.get(n) || byBare.get(n) || byTight.get(_tightModelo(f));
+      if (ids && ids.size) return { ids, tipo: ids.size > 1 ? "ambiguo" : "exacto" };
+    }
+    const claves = [...new Set(formas.map(f => _tightModelo(f)).filter(t => t.length >= 5))];
+    const hit = new Set();
+    for (const dt of claves) {
+      for (const c of tightList) {
+        if (c.tight.length > dt.length &&
+            c.tight.length - dt.length <= 2 &&
+            c.tight.startsWith(dt)) hit.add(c.id);
+      }
+    }
+    if (hit.size === 1) return { ids: hit, tipo: "prefijo" };
+    if (hit.size > 1)   return { ids: hit, tipo: "ambiguo" };
+    return null;
+  };
+
   let scanned = 0, skippedDeleted = 0, yaLinked = 0, skippedUnchanged = 0;
-  let linked = 0, ambiguos = 0, huerfanos = 0, written = 0, errors = 0;
+  let linked = 0, linkedExacto = 0, linkedPrefijo = 0;
+  let ambiguos = 0, huerfanos = 0, written = 0, errors = 0;
   // Texto libre distinto -> nº de equipos, para reportar la lista accionable
-  // (qué modelos crear/renombrar en el catálogo o qué duplicados dedup-ear).
+  // (qué modelos crear/renombrar, qué duplicados dedup-ear, y qué enlaces por
+  // prefijo revisar antes de escribir).
   const huerfanoCount = new Map();
   const ambiguoCount  = new Map();
+  const prefijoCount  = new Map();   // "texto → label" -> nº equipos
 
   let batch = db.batch();
   let opsInBatch = 0;
@@ -529,35 +584,36 @@ async function backfillLinkModeloIdPoc(dryRun) {
     const texto = _modeloTextoLegacy(d);
     if (!texto) { skippedUnchanged++; continue; }         // sin modelo que enlazar
 
-    const norm = _normModelo(texto);
-    let ids = byLabel.get(norm);                              // 1º label completo
-    if (!ids || ids.size === 0) ids = byBare.get(norm);      // 2º modelo/nombre solo
-    if (!ids || ids.size === 0) ids = byTight.get(_tightModelo(texto)); // 3º apretado
-
-    if (!ids || ids.size === 0) {
+    const r = resolver(texto);
+    if (!r) {                                              // sin match en el catálogo
       huerfanos++;
       huerfanoCount.set(texto, (huerfanoCount.get(texto) || 0) + 1);
       continue;
     }
-    if (ids.size > 1) {                                       // texto mapea a 2+ modelos
+    if (r.tipo === "ambiguo") {                            // texto mapea a 2+ modelos
       ambiguos++;
       ambiguoCount.set(texto, (ambiguoCount.get(texto) || 0) + 1);
       continue;
     }
 
-    const modeloId = [...ids][0];
+    const modeloId = [...r.ids][0];
+    const label = labelById.get(modeloId) || texto;
     linked++;
-    batch.update(doc.ref, {
-      modelo_id: modeloId,
-      modelo_label: labelById.get(modeloId) || texto,
-    });
+    if (r.tipo === "prefijo") {
+      linkedPrefijo++;
+      const k = `${texto} → ${label}`;
+      prefijoCount.set(k, (prefijoCount.get(k) || 0) + 1);
+    } else {
+      linkedExacto++;
+    }
+    batch.update(doc.ref, { modelo_id: modeloId, modelo_label: label });
     opsInBatch++;
     if (opsInBatch >= BATCH_SIZE) await flushBatch();
   }
   await flushBatch();
 
   // Muestra distinta ordenada por frecuencia: la lista de trabajo real.
-  const topDistintos = (m, n) => [...m.entries()]
+  const top = (m, n) => [...m.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)
     .map(([t, c]) => `${t} (×${c})`);
@@ -565,12 +621,23 @@ async function backfillLinkModeloIdPoc(dryRun) {
   const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
   return {
     scanned, skippedDeleted, yaLinked, skippedUnchanged,
-    linked, ambiguos, huerfanos, written, errors, elapsedSec,
+    linked, linkedExacto, linkedPrefijo, ambiguos, huerfanos, written, errors, elapsedSec,
     huerfanosDistintos: huerfanoCount.size,
     ambiguosDistintos:  ambiguoCount.size,
     detalle: {
-      poc_devices: { huerfanos, muestraHuerfanos: topDistintos(huerfanoCount, 40) },
-      ambiguos:    { huerfanos: ambiguos, muestraHuerfanos: topDistintos(ambiguoCount, 20) },
+      enlaces_prefijo: {
+        titulo: `Enlaces por prefijo (REVISAR antes de escribir) — ${linkedPrefijo} equipos`,
+        muestraHuerfanos: top(prefijoCount, 40),
+      },
+      ambiguos: {
+        titulo: `Ambiguos (catálogo duplicado / código repetido) — ${ambiguos} equipos, ${ambiguoCount.size} distintos`,
+        muestraHuerfanos: top(ambiguoCount, 20),
+      },
+      poc_devices: {
+        titulo: `Huérfanos (crear/renombrar en catálogo) — ${huerfanos} equipos, ${huerfanoCount.size} distintos`,
+        huerfanos,
+        muestraHuerfanos: top(huerfanoCount, 40),
+      },
     },
   };
 }

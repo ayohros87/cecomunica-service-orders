@@ -27,6 +27,8 @@
       // linkClienteId:
       ['Ya con id',          data.yaLinked],
       ['Enlazados',          data.linked],
+      ['Enlazados (exacto)',  data.linkedExacto],
+      ['Enlazados (prefijo)', data.linkedPrefijo],
       ['Ambiguos',           data.ambiguos],
       ['Ambiguos (distintos)', data.ambiguosDistintos],
       ['Huérfanos',          data.huerfanos],
@@ -57,7 +59,8 @@
     const bloques = Object.entries(detalle).map(([col, d]) => {
       const ej = (d.muestraHuerfanos || []);
       if (!ej.length) return '';
-      return `<div style="margin-top:8px;"><span class="ts">${col} — ${d.huerfanos} sin enlazar, ej.:</span><br>` +
+      const titulo = d.titulo || `${col} — ${d.huerfanos ?? ej.length} sin enlazar`;
+      return `<div style="margin-top:8px;"><span class="ts">${escapeHtml(titulo)}, ej.:</span><br>` +
         ej.map(n => `<code style="font-size:11px;">${escapeHtml(n)}</code>`).join(', ') + `</div>`;
     }).join('');
     return bloques;
