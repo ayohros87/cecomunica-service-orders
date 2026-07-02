@@ -47,22 +47,21 @@ service cloud.firestore {
     function puedeSolicitarCambioSerial() { return isSignedIn() && userRole() in ["administrador", "recepcion"]; }
 
     // Campos cuyo dueño exclusivo es Cloud Functions (admin SDK los salta).
-    // Sólo bloquea escrituras desde el frontend.
+    // Sólo bloquea escrituras desde el frontend que CAMBIEN estos campos. Se
+    // evalúa sobre las claves AFECTADAS (diff), no sobre su mera presencia: en un
+    // `update`, request.resource.data es el doc COMPLETO resultante, así que
+    // comprobar `"X" in incoming` bloqueaba cualquier edición de un contrato que
+    // ya tuviera firma_*/os_* estampados por la CF (aunque no se tocaran).
+    //   NOTA: `fecha_aprobacion` NO va aquí — el frontend lo estampa al aprobar
+    //   (contratos-approval.js); la CF onContratoActivado solo lo rellena/repara.
     function touchesCFOwnedFields() {
-      let incoming = request.resource.data;
-      return ("firma_codigo"        in incoming) ||
-             ("firma_hash"          in incoming) ||
-             ("firma_url"           in incoming) ||
-             ("fecha_aprobacion"    in incoming) ||
-             ("os_count"            in incoming) ||
-             ("equipos_total"       in incoming) ||
-             ("tiene_os"            in incoming) ||
-             ("os_linked"           in incoming) ||
-             ("os_serials_preview"  in incoming) ||
-             ("os_has_equipos"      in incoming) ||
-             ("os_last_orden_id"    in incoming) ||
-             ("os_equipos_count_last" in incoming) ||
-             ("os_dirty"            in incoming);
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasAny([
+        "firma_codigo", "firma_hash", "firma_url",
+        "os_count", "equipos_total", "tiene_os", "os_linked",
+        "os_serials_preview", "os_has_equipos", "os_last_orden_id",
+        "os_equipos_count_last", "os_dirty"
+      ]);
     }
 
     // ── Usuarios ──────────────────────────────────────────────────────────
