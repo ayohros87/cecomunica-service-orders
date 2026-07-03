@@ -189,7 +189,6 @@ document.getElementById("addCliente").onclick = async () => {
           return;
         }
 
-        const grupos = limpiarGrupos([...document.querySelectorAll(".grupo-input")].map(i => i.value));
         const clienteSelect = document.getElementById("cliente");
         const cliente = clienteSelect.value;
         // IP asignado del cliente al cargar la página (para decidir write-back).

@@ -20,12 +20,19 @@
       ['Escaneados',         data.scanned],
       ['Skip (eliminadas)',  data.skippedDeleted],
       ['Skip (sin cambios)', data.skippedUnchanged],
+      // marcarSerialesLegacy:
+      ['Skip (no act/aprob)', data.skippedEstado],
+      ['Skip (ya con estado)', data.skippedYaEstado],
       ['Pendientes update',  data.toWrite],
       // linkClienteId:
       ['Ya con id',          data.yaLinked],
       ['Enlazados',          data.linked],
+      ['Enlazados (exacto)',  data.linkedExacto],
+      ['Enlazados (prefijo)', data.linkedPrefijo],
       ['Ambiguos',           data.ambiguos],
+      ['Ambiguos (distintos)', data.ambiguosDistintos],
       ['Huérfanos',          data.huerfanos],
+      ['Huérfanos (distintos)', data.huerfanosDistintos],
       ['Escritos',           data.written],
       ['Errores',            data.errors],
     ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');
@@ -52,7 +59,8 @@
     const bloques = Object.entries(detalle).map(([col, d]) => {
       const ej = (d.muestraHuerfanos || []);
       if (!ej.length) return '';
-      return `<div style="margin-top:8px;"><span class="ts">${col} — ${d.huerfanos} huérfano(s), ej.:</span><br>` +
+      const titulo = d.titulo || `${col} — ${d.huerfanos ?? ej.length} sin enlazar`;
+      return `<div style="margin-top:8px;"><span class="ts">${escapeHtml(titulo)}, ej.:</span><br>` +
         ej.map(n => `<code style="font-size:11px;">${escapeHtml(n)}</code>`).join(', ') + `</div>`;
     }).join('');
     return bloques;

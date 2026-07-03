@@ -19,6 +19,18 @@
     .batch-num { text-align:center; color:var(--fg-3); font-variant-numeric:tabular-nums; }
     .batch-acciones { text-align:center; }
     #tablaBatch th, #tablaBatch td { vertical-align:middle; }
+
+    /* Selector de batch de importación POC (jalarSerialesDesdePoc) */
+    .lote-list { display:flex; flex-direction:column; gap:8px; max-height:50vh; overflow:auto; }
+    .lote-item { display:flex; justify-content:space-between; align-items:center; gap:12px;
+      width:100%; text-align:left; padding:12px 14px; border:1px solid var(--border-default);
+      border-radius:var(--radius-md); background:var(--surface-card); cursor:pointer;
+      transition:border-color .12s, background .12s; }
+    .lote-item:hover, .lote-item:focus-visible { border-color:var(--accent); background:var(--surface-sunken); outline:none; }
+    .lote-nombre { font-weight:600; color:var(--fg-1); display:inline-flex; align-items:center; gap:8px; }
+    .lote-meta { font-size:12px; color:var(--fg-3); white-space:nowrap; }
+    .lote-badge { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+      padding:2px 7px; border-radius:999px; background:var(--accent-soft); color:var(--accent-press, var(--accent)); }
   </style>
 
   <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
@@ -38,7 +50,7 @@
   <script src="../js/domain/equipoNormalize.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="../js/pages/ordenes-nuevo-batch.js" defer></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 
@@ -81,7 +93,7 @@
     </div>
     <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">
-        Jala los seriales del cliente desde POC (trae también el modelo automáticamente) o pega seriales manualmente.
+        Jala los seriales del cliente desde POC — te deja elegir el último batch importado (trae también el modelo automáticamente) — o pega seriales manualmente.
       </p>
 
       <div class="form-actions" style="margin-bottom:var(--sp-4);">
@@ -141,6 +153,10 @@
       <h3><i data-lucide="monitor"></i> Equipos <span id="contadorBatch" class="optional" style="font-weight:400;"></span></h3>
     </div>
     <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <p id="origenEquipos" style="display:none; margin:0 0 12px; font-size:13px; color:var(--fg-2);">
+        <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;"></i>
+        <span id="origenEquiposTexto"></span>
+      </p>
       <div id="emptyBatch" class="app-empty-state" style="text-align:center; padding:var(--sp-6) var(--sp-4); color:var(--fg-3);">
         <i data-lucide="package-open" style="width:32px;height:32px;"></i>
         <p style="margin:var(--sp-2) 0 0;">Aún no hay equipos. Jala desde POC, pega seriales o agrega una fila.</p>

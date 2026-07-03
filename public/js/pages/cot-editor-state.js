@@ -145,6 +145,19 @@
         : JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
       dirigido_a: doc.dirigido_a || '',
       dirigido_email: doc.dirigido_email || '',
+      // Adjuntos (brochures / fichas técnicas) que viajan con la propuesta.
+      adjuntos: Array.isArray(doc.adjuntos) ? doc.adjuntos.map(a => ({
+        id: a.id || uid(),
+        nombre: a.nombre || a.path || 'archivo',
+        url: a.url || '',
+        path: a.path || '',
+        content_type: a.content_type || null,
+        size: Number(a.size || 0),
+      })) : [],
+      // Tipo de cotización (servicio vs comercial). Se conserva en el round-trip
+      // para que editar una cotización de servicio no la reclasifique como comercial.
+      origen: doc.origen || '',
+      orden_id: doc.orden_id || '',
       creado_por_uid: doc.creado_por_uid || null,
       creado_por_email: doc.creado_por_email || null,
       // Timestamps del ciclo de vida — usados por el historial para mostrar
@@ -201,9 +214,23 @@
         desc: Number(it.desc || 0),
       })),
       condiciones: ui.condiciones || [],
+      // Adjuntos: se persisten en el doc para que viajen automáticamente en cada
+      // envío de la propuesta (detalle, listado y aprobar-y-enviar).
+      adjuntos: (ui.adjuntos || []).map(a => ({
+        id: a.id,
+        nombre: a.nombre || '',
+        url: a.url || '',
+        path: a.path || '',
+        content_type: a.content_type || null,
+        size: Number(a.size || 0),
+      })),
       subtotal: FMT.round2(totales.subtotal),
       descuento_global: FMT.round2(totales.descGlobal),
       total: FMT.round2(totales.total),
+      // Tipo de cotización: por defecto 'comercial'. cotizar-orden.js sobrescribe
+      // con 'orden' + orden_id después de toDoc (cotizaciones de servicio).
+      origen: ui.origen || 'comercial',
+      ...(ui.orden_id ? { orden_id: ui.orden_id } : {}),
       creado_por_uid: ui.creado_por_uid || null,
       creado_por_email: ui.creado_por_email || null,
       deleted: !!ui.deleted,
@@ -249,7 +276,22 @@
       condiciones: JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
       dirigido_a: '',
       dirigido_email: '',
+      adjuntos: [],
     };
+  }
+
+  // Convierte los adjuntos guardados en el doc al formato de attachments de
+  // nodemailer. Usa `path` (download URL) para que la Cloud Function los baje
+  // de Storage al enviar — los docs de mail_queue tienen tope de 1 MB, así que
+  // no se puede embeber el contenido. Filtra los que no tengan URL.
+  function adjuntosToAttachments(adjuntos) {
+    return (adjuntos || [])
+      .filter(a => a && a.url)
+      .map(a => ({
+        filename: a.nombre || 'adjunto',
+        path: a.url,
+        ...(a.content_type ? { contentType: a.content_type } : {}),
+      }));
   }
 
   // ── Bootstrap de catálogos ────────────────────────────────────────────────
@@ -365,6 +407,12 @@
       const subject = `Cotización ${opts.cotizacionId || ''} · CeComunica`;
       const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
       const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
+      const adjuntos = Array.isArray(opts.adjuntos) ? opts.adjuntos.filter(a => a && a.url) : [];
+      const adjuntosHtml = adjuntos.length ? `
+  <p style="margin:14px 0 4px;"><b>Archivos adjuntos:</b></p>
+  <ul style="margin:0 0 10px; padding-left:18px; color:#374151;">
+    ${adjuntos.map(a => `<li>${esc(a.nombre || 'adjunto')}</li>`).join('')}
+  </ul>` : '';
       const bodyHtml = `
 <div style="font-family:Arial, sans-serif; color:#111; max-width:560px;">
   <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">Cotización ${esc(opts.cotizacionId || '')}</h2>
@@ -373,6 +421,7 @@
   <p style="margin:0 0 10px;">${introHtml}</p>
   <p style="margin:0 0 4px;"><b>Total:</b> ${window.FMT.money(Number(opts.total || 0))}</p>
   <p style="margin:0 0 4px;"><b>Validez:</b> ${opts.validezDias || 15} días</p>
+  ${adjuntosHtml}
   <p style="margin:18px 0;">
     <a href="${esc(opts.link || '#')}" style="background:#0B2A47; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:600;">
       Ver y descargar cotización (PDF)
@@ -466,16 +515,25 @@
     const itemsHtml = (doc.items || []).map(it =>
       `<li>${esc(it.nombre || '')} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
     ).join('');
-    // Destinatarios de la solicitud de aprobación: configurables por admin
-    // (empresa/config.cotizacion_aprobacion_to). Si no hay ninguno, cae al
-    // buzón histórico de ventas para no perder la notificación. Convención del
-    // repo (ver onCancelacionWrite): to = primero, cc = el resto + creador.
+    // Destinatarios de la solicitud de aprobación, por TIPO de cotización:
+    //   · servicio (origen=orden, sale de una orden de taller) → supervisor de
+    //     taller (jefe_taller), que es quien la aprueba.
+    //   · comercial → lista configurable por admin (empresa/config
+    //     .cotizacion_aprobacion_to); si está vacía, buzón histórico de ventas.
+    // Convención del repo (ver onCancelacionWrite): to = primero, cc = el resto + creador.
     let aprobacionList = ['ventas@cecomunica.com'];
+    const esServicio = (doc.origen || '') === 'orden';
     try {
-      const cfg = await EmpresaService.getConfig();
-      const list = Array.isArray(cfg.cotizacion_aprobacion_to) ? cfg.cotizacion_aprobacion_to.filter(Boolean) : [];
-      if (list.length) aprobacionList = list;
-    } catch (e) { console.warn('No se pudo leer destinatarios de aprobación, usando ventas@:', e); }
+      if (esServicio) {
+        const jefes = await UsuariosService.getUsuariosByRol(['jefe_taller']);
+        const emails = (jefes || []).map(j => j.email).filter(Boolean);
+        if (emails.length) aprobacionList = emails;
+      } else {
+        const cfg = await EmpresaService.getConfig();
+        const list = Array.isArray(cfg.cotizacion_aprobacion_to) ? cfg.cotizacion_aprobacion_to.filter(Boolean) : [];
+        if (list.length) aprobacionList = list;
+      }
+    } catch (e) { console.warn('No se pudieron resolver destinatarios de aprobación, usando ventas@:', e); }
     const aprobacionTo = aprobacionList[0];
     const aprobacionCc = [...aprobacionList.slice(1), user?.email].filter(Boolean).join(',') || null;
     await MailService.enqueue({
@@ -520,5 +578,6 @@
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
     cerrarPrompt, reenviarPrompt,
     enqueueAprobacionMail,
+    adjuntosToAttachments,
   };
 })();

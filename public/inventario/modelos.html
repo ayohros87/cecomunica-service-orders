@@ -24,7 +24,7 @@
   <script src="../js/services/modelosService.js"></script>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 
   <style>
     /* ── Hoja de cálculo de Modelos y Tarifas ─────────────────────────────
@@ -121,6 +121,21 @@
       </div>
       <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
     </div>
+    <div style="margin:0 var(--sp-4) var(--sp-3); padding:8px 12px; background:var(--surface-sunken); border-left:4px solid var(--accent); border-radius:0 8px 8px 0; font-size:12px; color:var(--fg-2);">
+      <b>Cómo se relaciona inventario ↔ servicios:</b> cada modelo mapea su mensualidad al <b>bundle "Mensualidad"</b> de QuickBooks, que se reparte en <b>Alquiler + Frecuencia + Mantenimiento</b>. El cliente ve una sola línea; contabilidad ve el desglose. <b>Frecuencia y Mantenimiento usan el mismo ítem de QBO para todos</b> (se define aquí una vez); los <b>POC no llevan Frecuencia</b>.
+      <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+        <div style="display:flex; align-items:center; gap:6px;">Item QBO Frecuencia (global):
+          <b id="lblFrec">—</b>
+          <button type="button" id="btnFrec" class="btn btn-sm btn-ghost" title="Cambiar (afecta a TODOS los modelos)" onclick="editarGlobal('Frec')"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+          <select id="globalFrec" class="form-select" style="height:32px; min-width:200px; display:none;" onchange="setGlobalItem('qbo_item_frecuencia_id', this.value)"></select>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">Item QBO Mantenimiento (global):
+          <b id="lblMant">—</b>
+          <button type="button" id="btnMant" class="btn btn-sm btn-ghost" title="Cambiar (afecta a TODOS los modelos)" onclick="editarGlobal('Mant')"><i data-lucide="pencil" style="width:14px;height:14px;"></i></button>
+          <select id="globalMant" class="form-select" style="height:32px; min-width:200px; display:none;" onchange="setGlobalItem('qbo_item_mantenimiento_id', this.value)"></select>
+        </div>
+      </div>
+    </div>
     <div class="app-table-wrap" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
       <table class="app-table" id="tabla">
         <thead>
@@ -128,9 +143,12 @@
             <th class="sticky-col">Modelo</th>
             <th>Tipo</th>
             <th style="text-align:center">¿Alquiler?</th>
+            <th style="text-align:center">¿POC?</th>
             <th>Alquiler $</th>
             <th>Frecuencia $</th>
             <th>Item QBO "Alquiler"</th>
+            <th title="Mapeo global — se define arriba">Frec. (global)</th>
+            <th title="Mapeo global — se define arriba">Mant. (global)</th>
             <th>Bundle QBO "Mensualidad"</th>
             <th>Mapeo</th>
             <th style="text-align:center">Activo</th>
@@ -188,6 +206,13 @@
           </div>
         </div>
         <div class="form-field" style="grid-column:1 / -1;">
+          <label class="form-label" for="f-aliases">Aliases <span style="font-weight:400;color:var(--fg-4);">(otras grafías, separadas por coma)</span></label>
+          <input class="form-input" id="f-aliases" placeholder="Ej. PNC360-R, PNC360R, PNC 360 R">
+          <p style="margin:4px 0 0; font-size:12px; color:var(--fg-4);">
+            Nombres alternativos con los que aparece este modelo en datos viejos (equipos PoC). Sirven para enlazarlos al catálogo.
+          </p>
+        </div>
+        <div class="form-field" style="grid-column:1 / -1;">
           <label class="form-label" for="f-notas">Notas</label>
           <textarea class="form-input form-textarea" id="f-notas" placeholder="(opcional)"></textarea>
         </div>
@@ -197,6 +222,7 @@
       </p>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-danger" id="btnEliminar" style="margin-right:auto; display:none;" onclick="eliminarModelo()"><i data-lucide="trash-2"></i> Eliminar</button>
       <button class="btn btn-ghost" onclick="cerrarModal()">Cancelar</button>
       <button class="btn btn-primary" id="btnGuardar" onclick="guardarModelo()"><i data-lucide="save"></i> Guardar</button>
     </div>
@@ -234,6 +260,7 @@
 </div>
 
 <script src="../js/ui/toast.js"></script>
+<script src="../js/ui/modal.js"></script>
 <script src="../js/pages/inventario-modelos.js" defer></script>
 <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>

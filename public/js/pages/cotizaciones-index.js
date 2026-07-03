@@ -10,6 +10,7 @@
   let userUid = null;
   let userRol = null;
   let soloMias = false;     // toggle "Solo mis cotizaciones" (admins; forzado para vendedores)
+  let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
 
   const $ = (id) => document.getElementById(id);
 
@@ -139,6 +140,22 @@
     return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
   }
 
+  // Botón de fila para un borrador, según rol + política de envío (espejo del
+  // header de detalle-cotizacion): aprobar (aprobador) · enviar directo (vendedor
+  // dentro de política) · solicitar aprobación (vendedor fuera de política).
+  function botonBorrador(c) {
+    if ((c.estado || 'borrador') !== 'borrador') return '';
+    if (puedeAprobarCotizacion(userRol, c)) {
+      return `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar y enviar" data-action="aprobar"><i data-lucide="check-circle"></i></button>`;
+    }
+    if (!canRole(userRol, 'enviar-cotizacion')) return '';
+    const pol = window.CotizacionTotales.requiereAprobacion(
+      { total: Number(c.total || 0), descuentoPct: Number(c.descuentoPct || 0) }, policyCfg);
+    return pol.requiere
+      ? `<button class="btn btn-ghost btn-icon btn-sm" title="Solicitar aprobación" data-action="solicitar"><i data-lucide="shield-check"></i></button>`
+      : `<button class="btn btn-ghost btn-icon btn-sm" title="Enviar al cliente" data-action="enviar-directo"><i data-lucide="send"></i></button>`;
+  }
+
   function renderTabla(lista) {
     const tbody = $('tablaCotizaciones');
     if (!tbody) return;
@@ -149,16 +166,16 @@
         <tr data-id="${c.id}">
           <td><span class="cc-cell-num">${id}</span></td>
           <td>
-            <div class="cc-cell-cliente">${c.cliente_nombre || '—'}</div>
-            ${c.cliente_email ? '<div class="cc-aten">' + c.cliente_email + '</div>' : ''}
+            <div class="cc-cell-cliente">${c.cliente_nombre ? FMT.esc(c.cliente_nombre) : '—'}</div>
+            ${c.cliente_email ? '<div class="cc-aten">' + FMT.esc(c.cliente_email) + '</div>' : ''}
           </td>
           <td class="td-muted">${fmtFechaCorta(fechaIso(c))}</td>
           <td>${estadoChip(c.estado || 'borrador')}</td>
-          <td style="font-size:13px;">${c.ejecutivo_nombre || '—'}</td>
+          <td style="font-size:13px;">${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</td>
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
             <span class="cc-row-actions">
-              ${(canRole(userRol, 'aprobar-cotizacion') && (c.estado || 'borrador') === 'borrador') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar y enviar" data-action="aprobar"><i data-lucide="check-circle"></i></button>` : ''}
+              ${botonBorrador(c)}
               ${(c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
               ${CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
@@ -182,13 +199,13 @@
         <div class="responsive-card" data-id="${c.id}">
           <div class="responsive-card-top">
             <div>
-              <div class="responsive-card-title">${c.cliente_nombre || '—'}</div>
+              <div class="responsive-card-title">${c.cliente_nombre ? FMT.esc(c.cliente_nombre) : '—'}</div>
               <div class="responsive-card-sub"><span class="cc-cell-num">${id}</span> · ${fmtFechaCorta(fechaIso(c))}</div>
             </div>
             ${estadoChip(c.estado || 'borrador')}
           </div>
           <div class="responsive-card-meta">
-            <span>${c.ejecutivo_nombre || '—'}</span>
+            <span>${c.ejecutivo_nombre ? FMT.esc(c.ejecutivo_nombre) : '—'}</span>
             <span class="cc-cell-total">${FMT.money(Number(c.total || 0))}</span>
           </div>
           <div class="responsive-card-actions">
@@ -223,8 +240,30 @@
     if (action === 'duplicar') { return await duplicar(cot); }
     if (action === 'eliminar') { return await eliminar(cot); }
     if (action === 'enviar')   { return await enviar(cot); }
+    if (action === 'enviar-directo') { return await enviar(cot); } // envío directo del vendedor (borrador→enviada)
+    if (action === 'solicitar') { return await solicitarAprobacion(cot); }
     if (action === 'aprobar')  { return openAprobacion(cot.id); }
     if (action === 'cerrar')   { return await cerrarDesdeLista(cot); }
+  }
+
+  // Notifica al aprobador que un borrador fuera de política espera revisión.
+  async function solicitarAprobacion(cot) {
+    const pol = window.CotizacionTotales.requiereAprobacion(
+      { total: Number(cot.total || 0), descuentoPct: Number(cot.descuentoPct || 0) }, policyCfg);
+    const ok = await Modal.confirm({
+      title: 'Solicitar aprobación',
+      message: 'Esta cotización supera los límites para envío directo:\n\n• ' +
+        pol.motivos.join('\n• ') +
+        '\n\nSe notificará a un aprobador para que la revise y la envíe al cliente.',
+    });
+    if (!ok) return;
+    try {
+      const doc = await CotizacionesService.getCotizacion(cot.id);
+      await CotState.enqueueAprobacionMail({ doc, docId: cot.id, user: firebase.auth().currentUser });
+      Toast.show('Solicitud de aprobación enviada.', 'ok');
+    } catch (e) {
+      Toast.show('No se pudo enviar la solicitud: ' + (e?.message || e), 'bad');
+    }
   }
 
   async function cerrarDesdeLista(cot) {
@@ -270,6 +309,7 @@
       validezDias: cot.validezDias || 15,
       ejecutivo: cot.ejecutivo_nombre || '',
       link,
+      adjuntos: cot.adjuntos || [],
     });
     if (!payload) return;
     try {
@@ -278,6 +318,7 @@
         cc: cot.creado_por_email || null,
         subject: payload.subject,
         html: payload.html,
+        attachments: CotState.adjuntosToAttachments(cot.adjuntos),
       });
       cot.estado = 'enviada';
       Toast.show('Cotización enviada a ' + payload.dest, 'ok');
@@ -333,7 +374,9 @@
     const ui = CotState.toUi(doc);
     const cat = await CotState.bootstrapCatalogos();
     const cli = cat.clientesById[ui.clienteId] || {};
-    const ej  = cat.ejecutivos.find(e => e.id === ui.ejecutivoId) || {};
+    // Fallback al nombre guardado en el doc: el firmante puede ser un supervisor
+    // de taller (jefe_taller), que no está en el catálogo de ejecutivos (vendedores).
+    const ej  = cat.ejecutivos.find(e => e.id === ui.ejecutivoId) || { nombre: doc.ejecutivo_nombre || '', rol: '', email: '', tel: '' };
     const t   = window.CotizacionTotales.calcTotales(ui);
     const snapshot = {
       id: ui.id, estado: ui.estado, fecha: ui.fecha, validezDias: ui.validezDias,
@@ -357,14 +400,21 @@
     return url;
   }
 
-  // ── Aprobación overlay (admin + jefe de taller) ───────────────
+  // ── Aprobación overlay (servicio → jefe mantenimiento; comercial → gerente) ──
   const T = window.CotizacionTotales;
   let _aprobId = null;
 
   async function openAprobacion(docId) {
-    if (!canRole(userRol, 'aprobar-cotizacion')) { Toast.show('No tienes permiso para aprobar cotizaciones.', 'warn'); return; }
     const doc = await CotizacionesService.getCotizacion(docId);
     if (!doc) { Toast.show('Cotización no encontrada', 'bad'); return; }
+    // Permiso según TIPO: una cotización de servicio la aprueba el jefe de
+    // mantenimiento; una comercial, el gerente (ambas también el admin).
+    if (!puedeAprobarCotizacion(userRol, doc)) {
+      Toast.show(esCotizacionServicio(doc)
+        ? 'Las cotizaciones de servicio las aprueba el jefe de mantenimiento o un administrador.'
+        : 'Las cotizaciones comerciales las aprueba un gerente o un administrador.', 'warn');
+      return;
+    }
     _aprobId = docId;
     const ui = CotState.toUi(doc);
     const tot = T.calcTotales(ui);
@@ -448,6 +498,12 @@
             .replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
           const totalTxt = FMT.money(Number(doc.total || 0));
           const dirA = doc.dirigido_a ? `<p style="margin:0 0 12px;">A la atención de: <b>${doc.dirigido_a}</b></p>` : '';
+          const attachments = CotState.adjuntosToAttachments(doc.adjuntos);
+          const adjuntosHtml = attachments.length ? `
+              <p style="margin:14px 0 4px;"><b>Archivos adjuntos:</b></p>
+              <ul style="margin:0 0 12px; padding-left:18px; color:#374151;">
+                ${attachments.map(a => `<li>${a.filename}</li>`).join('')}
+              </ul>` : '';
           const html = `
             <div style="font-family:Arial, sans-serif; color:#111; max-width:560px;">
               <h2 style="font:700 22px Arial,sans-serif; color:#0B2A47; margin:0 0 12px;">Cotización ${doc.cotizacion_id}</h2>
@@ -456,6 +512,7 @@
               <p style="margin:0 0 12px;">${intro}</p>
               <p style="margin:0 0 4px;"><b>Total:</b> ${totalTxt}</p>
               <p style="margin:0 0 4px;"><b>Validez:</b> ${doc.validezDias || 15} días</p>
+              ${adjuntosHtml}
               <p style="margin:18px 0;">
                 <a href="${link}" style="background:#0B2A47; color:#fff; padding:12px 18px; border-radius:6px; text-decoration:none; display:inline-block; font-weight:600;">
                   Ver y descargar cotización (PDF)
@@ -471,6 +528,7 @@
             cc: doc.creado_por_email || null,
             subject,
             html,
+            attachments,
             meta: { tipo: 'cotizacion_aprobada', cotizacion_id: doc.cotizacion_id, doc_id: _aprobId },
           });
           await CotizacionesService.updateCotizacion(_aprobId, {
@@ -564,7 +622,7 @@
     userUid = user.uid;
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
-      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
+      const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.GERENTE];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
       // Vendedor: forzar "solo mías" y ocultar el toggle. Admin: mostrarlo.
@@ -576,21 +634,22 @@
         soloMias = false;
       }
 
+      try { policyCfg = window.CotizacionTotales.policyFromConfig(await EmpresaService.getConfig()); }
+      catch (e) { policyCfg = window.CotizacionTotales.POLICY_DEFAULT; }
+
       bindEvents();
       await cargarCotizaciones(true);
 
-      // Manejo de ?aprobar=<docId> (CTA desde correo de solicitud)
+      // Manejo de ?aprobar=<docId> (CTA desde correo de solicitud). El permiso se
+      // valida dentro de openAprobacion según el tipo de cotización (servicio vs
+      // comercial), ya que requiere leer el doc primero.
       const params = new URLSearchParams(location.search);
       const aprobarId = params.get('aprobar');
       if (aprobarId) {
-        if (canRole(rol, 'aprobar-cotizacion')) {
-          openAprobacion(aprobarId);
-          const url = new URL(window.location);
-          url.searchParams.delete('aprobar');
-          window.history.replaceState({}, document.title, url.toString());
-        } else {
-          Toast.show('No tienes permiso para aprobar cotizaciones.', 'warn');
-        }
+        openAprobacion(aprobarId);
+        const url = new URL(window.location);
+        url.searchParams.delete('aprobar');
+        window.history.replaceState({}, document.title, url.toString());
       }
     });
   });

@@ -106,11 +106,11 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     </td>
     <td class="client-name-cell">
       <div class="cliente-cell">
-        <span class="cliente-text">${nombreClienteDe(ordenData)}</span>
+        <span class="cliente-text">${escapeHtml(nombreClienteDe(ordenData))}</span>
         <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}</span>
       </div>
     </td>
-    <td>${ordenData.tecnico_asignado || ""}${indicadorNota}</td>
+    <td>${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
     <td><span class="chip-estado ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}</td>
@@ -132,10 +132,10 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     <td colspan="8" class="orden-expandida-wrapper">
       <div class="orden-expandida-card ${ordenCerrada ? 'orden-cerrada' : 'orden-activa'}">
         <div class="orden-header-compacto">
-          <div class="header-col-izq header-line" title="Cliente: ${nombreClienteDe(ordenData)} · Técnico: ${ordenData.tecnico_asignado || 'Sin asignar'}">
+          <div class="header-col-izq header-line" title="Cliente: ${escapeHtml(nombreClienteDe(ordenData))} · Técnico: ${escapeHtml(ordenData.tecnico_asignado || 'Sin asignar')}">
             <span class="orden-numero"><strong>Orden ${ordenId}</strong></span>
             <span class="separador">•</span>
-            <span class="cliente-nombre">${nombreClienteDe(ordenData)}</span>
+            <span class="cliente-nombre">${escapeHtml(nombreClienteDe(ordenData))}</span>
             <span class="separador">•</span>
             <div class="progreso-intervenciones-inline ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'}" data-orden-id="${ordenId}">
               <span class="icon"><i data-lucide="wrench"></i></span>
@@ -538,7 +538,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
             <tr data-equipo-id="${ordenId}_${e.id}" class="equipo-row ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'} ${noDisponible ? 'no-disponible' : ''}">
               <td class="col-serie">
                 <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="numero_de_serie">
-                  <span class="valor valor-primario">${e.numero_de_serie || "-"}</span>
+                  <span class="valor valor-primario">${e.numero_de_serie ? escapeHtml(e.numero_de_serie) : "-"}</span>
                   ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'numero_de_serie', e.numero_de_serie || '')}
                   ${fotosBadgeDesktop}
                 </div>
@@ -546,7 +546,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 
               <td class="col-modelo">
                 <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="modelo">
-                  <span class="valor valor-primario">${e.modelo || "-"}</span>
+                  <span class="valor valor-primario">${e.modelo ? escapeHtml(e.modelo) : "-"}</span>
                   ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'modelo', e.modelo || '')}
                 </div>
               </td>
@@ -769,6 +769,19 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     );
   }
 
+  // Cambiar técnico — reasignación esporádica para admin / supervisor de taller
+  // (permiso 'reasignar-tecnico'). Solo cuando la orden YA tiene técnico y aún
+  // NO se ha entregado: después de entregada no se cambia. Vive en el menú ⋯
+  // por ser de uso poco frecuente, y usa un flujo aparte de "Asignar" que no
+  // altera el estado de la orden.
+  if (canRole(rol, 'reasignar-tecnico')
+      && (o.tecnico_uid || o.tecnico_asignado)
+      && !estadoUpper.includes("ENTREGAD")) {
+    menuItems.push(
+      { icon: '<i data-lucide="user-cog"></i>', label: "Cambiar técnico", action: "reasignar-tecnico", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+    );
+  }
+
   // Cotizar — prepara una cotización (borrador) a partir de la orden y sus
   // intervenciones. Disponible para quienes pueden prepararla, incluidos los
   // técnicos de taller (preparan; la aprobación/envío es otro permiso).
@@ -919,6 +932,9 @@ window.renderSkeletonRows = renderSkeletonRows;
  * @param {Object} [opts]
  * @param {string} [opts.icon='inbox'] - Lucide icon name
  * @param {string} [opts.sublabel] - Optional secondary line
+ * @param {Function} [opts.onRetry] - When set, renders a "Reintentar"
+ *   button wired to this callback (load-error / timeout states).
+ * @param {string} [opts.retryLabel='Reintentar'] - Retry button label
  */
 function renderEmptyState(message, opts = {}) {
   const icon = opts.icon || 'inbox';
@@ -932,11 +948,18 @@ function renderEmptyState(message, opts = {}) {
     }
   } catch { /* noop */ }
 
-  const ctaHtml = activeFilters
-    ? `<button class="btn btn-secondary empty-state__cta" data-action="limpiar-filtros">
-         <i data-lucide="x"></i> Limpiar filtros
+  // A retry action (error/timeout) takes precedence over the "limpiar
+  // filtros" CTA — when the load itself failed, clearing filters wouldn't
+  // help the user.
+  const ctaHtml = opts.onRetry
+    ? `<button class="btn btn-secondary empty-state__cta" data-action="reintentar-carga">
+         <i data-lucide="refresh-cw"></i> ${opts.retryLabel || 'Reintentar'}
        </button>`
-    : '';
+    : (activeFilters
+      ? `<button class="btn btn-secondary empty-state__cta" data-action="limpiar-filtros">
+           <i data-lucide="x"></i> Limpiar filtros
+         </button>`
+      : '');
 
   const cardHtml = `
     <div class="empty-state" role="status">
@@ -953,6 +976,15 @@ function renderEmptyState(message, opts = {}) {
   const ordersCards = document.getElementById("ordersCards");
   if (ordersCards) {
     ordersCards.innerHTML = cardHtml;
+  }
+
+  // Wire the retry button directly (not via the delegated table listener,
+  // which only knows about row actions). One-shot: re-rendering replaces it.
+  if (opts.onRetry) {
+    [ordersTable, ordersCards].forEach(root => {
+      const btn = root && root.querySelector('[data-action="reintentar-carga"]');
+      if (btn) btn.addEventListener('click', () => opts.onRetry(), { once: true });
+    });
   }
 
   APP.utils.lucideRefresh([ordersTable, ordersCards]);

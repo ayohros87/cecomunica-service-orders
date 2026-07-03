@@ -41,6 +41,10 @@ window.TOEntrega = {
     const filas = [];
     if (o.receptor_nombre) filas.push(['Recibido por', esc(o.receptor_nombre)]);
     if (fecha)             filas.push(['Fecha de entrega', esc(fecha)]);
+    // Contrato / Observaciones de la OS — mismo dato que la nota impresa y el
+    // correo que firma el cliente. Permite identificar contrato/sucursal aquí
+    // sin abrir la nota. Se omite la fila si la OS no trae observaciones.
+    if (o.observaciones)   filas.push(['Contrato / Observaciones', esc(o.observaciones)]);
     const filasHtml = filas.map(([k, v]) =>
       `<div style="display:flex;gap:8px;padding:4px 0;"><span class="muted" style="min-width:140px;">${k}</span><strong>${v}</strong></div>`
     ).join('');

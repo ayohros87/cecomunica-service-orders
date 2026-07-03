@@ -15,7 +15,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="./js/firebase-init.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 
   <style>
     /* Página pública — sin shell ni login. Layout centrado simple. */
@@ -62,6 +62,14 @@
       return "$" + Number(n).toLocaleString("es-PA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    // Escapa datos de Firestore antes de inyectarlos en innerHTML (esta página
+    // es pública y no carga core/formatting.js, así que lleva su propio helper).
+    function esc(v) {
+      return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
     async function verificar() {
       const elStatus = document.getElementById("status");
       const elInfo = document.getElementById("info");
@@ -93,11 +101,11 @@
             <div class="ds-card ds-card-padded">
               <p class="form-section-title" style="margin-bottom:var(--sp-3);"><i data-lucide="file-text"></i> Datos del documento</p>
               <dl style="display:grid; grid-template-columns:1fr 1fr; gap:var(--sp-3); font-size:13px; margin:0;">
-                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${data.contrato_id || "—"}</dd></div>
-                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Código</dt><dd style="margin:0; font-family:var(--font-mono);">${data.firma_codigo || "—"}</dd></div>
-                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Estado</dt><dd style="margin:0;">${data.estado || "—"}</dd></div>
+                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Contrato</dt><dd style="margin:0; font-weight:500; font-family:var(--font-mono);">${data.contrato_id ? esc(data.contrato_id) : "—"}</dd></div>
+                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Código</dt><dd style="margin:0; font-family:var(--font-mono);">${data.firma_codigo ? esc(data.firma_codigo) : "—"}</dd></div>
+                <div><dt style="color:var(--fg-3); margin-bottom:2px;">Estado</dt><dd style="margin:0;">${data.estado ? esc(data.estado) : "—"}</dd></div>
                 <div><dt style="color:var(--fg-3); margin-bottom:2px;">Total c/ ITBMS</dt><dd style="margin:0; font-family:var(--font-mono);">${fmtMoney(data.total_con_itbms)}</dd></div>
-                <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0;">${data.cliente_nombre || "—"}</dd></div>
+                <div style="grid-column:1/-1;"><dt style="color:var(--fg-3); margin-bottom:2px;">Cliente</dt><dd style="margin:0;">${data.cliente_nombre ? esc(data.cliente_nombre) : "—"}</dd></div>
               </dl>
             </div>`;
         } else {

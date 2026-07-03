@@ -87,3 +87,6 @@ backups/
 
 # Downloaded zip exports / one-shot artifacts — should never be in the repo
 *.zip
+
+# Manuales / documentos binarios — no se versionan en el repo
+Manual_Facturacion_CECOMUNICA.pdf

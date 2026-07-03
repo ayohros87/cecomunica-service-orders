@@ -1,5 +1,6 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
+const crypto = require("crypto");
 const { admin, db } = require("../lib/admin");
 
 /**
@@ -105,8 +106,9 @@ module.exports = onCall(
           }
         }
 
-        // Random password — user resets via the link we return.
-        const randomPw = "tmp" + Math.random().toString(36).slice(2, 12) + "A1!";
+        // Random password — user resets via the link we return. Usa CSPRNG
+        // (crypto) en vez de Math.random, que no es criptográficamente seguro.
+        const randomPw = "tmp" + crypto.randomBytes(18).toString("base64url") + "A1!";
         const userRecord = await admin.auth().createUser({
           email,
           emailVerified: false,

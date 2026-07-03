@@ -12,6 +12,45 @@ const CotizacionesService = {
     return db.collection('cotizaciones').add(data);
   },
 
+  // Sube un adjunto de cotización (brochure, ficha técnica, etc.) a Storage.
+  // A diferencia de los documentos PII de cliente, el brochure es material de
+  // marketing: guardamos la download URL para que la Cloud Function de correo
+  // (nodemailer, attachment.path) pueda adjuntarlo al enviar la propuesta.
+  // Devuelve la UploadTask (para progreso) y resuelve la metadata vía onDone.
+  // onDone({ id, nombre, url, path, content_type, size }).
+  uploadAdjunto({ file, onProgress, onDone, onError }) {
+    const storage = firebase.storage();
+    const user = firebase.auth().currentUser;
+    const id = 'adj_' + Math.random().toString(36).slice(2, 10);
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const path = `cotizaciones_adjuntos/${id}.${ext}`;
+
+    const task = storage.ref(path).put(file, {
+      contentType: file.type,
+      customMetadata: { subido_por: user?.uid || '', nombre_original: file.name },
+    });
+
+    task.on('state_changed',
+      (snap) => { if (onProgress) onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)); },
+      (err) => { if (onError) onError(err); },
+      async () => {
+        try {
+          const url = await task.snapshot.ref.getDownloadURL();
+          if (onDone) onDone({
+            id,
+            nombre: file.name,
+            url,
+            path,
+            content_type: file.type || null,
+            size: file.size || null,
+          });
+        } catch (err) { if (onError) onError(err); }
+      }
+    );
+
+    return task;
+  },
+
   async updateCotizacion(id, fields) {
     const db = firebase.firestore();
     return db.collection('cotizaciones').doc(id).update(fields);

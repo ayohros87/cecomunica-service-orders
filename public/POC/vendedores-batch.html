@@ -8,7 +8,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <title>Ingreso de Equipos por Vendedor - Cecomunica</title>
+  <title>Preparar Equipos PoC por Vendedor - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
 
@@ -49,27 +49,115 @@
     .suggest-item { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
     .suggest-item:hover { background: var(--surface-sunken); color: var(--accent); }
 
-    /* Chips editor (grupos asignados) */
-    .chips-editor { display: flex; gap: 6px; flex-wrap: wrap; margin-top: var(--sp-2); }
-    .chip-x {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 4px 10px; border-radius: 999px;
-      background: var(--accent-soft); color: var(--accent);
-      border: 1px solid var(--accent-line); font-size: 12px;
-    }
-    .chip-x button { background: none; border: 0; color: inherit; cursor: pointer; padding: 0 2px; }
+    /* .chips-editor y .chip-x los provee el kit (ceco-ui.css) — no duplicar. */
 
-    /* Tabla con primera columna sticky */
-    #wrapTablaEquipos { overflow-x: auto; overflow-y: hidden; }
-    #wrapTablaEquipos table.app-table { width: max-content; min-width: 100%; }
-    #wrapTablaEquipos th, #wrapTablaEquipos td { min-width: 112px; }
+    /* Tabla: scroll propio (máx 60vh). table-layout:fixed para que la columna
+       Grupos tome el ancho restante y sus chips ENVUELVAN (no crezcan a lo ancho).
+       Encabezado + 1ª columna sticky. */
+    #wrapTablaEquipos { overflow: auto; max-height: 60vh; }
+    #wrapTablaEquipos table.app-table { width: 100%; min-width: 760px; table-layout: fixed; }
+    #tablaEquipos th:nth-child(1), #tablaEquipos td:nth-child(1) { width: 190px; }  /* Nombre */
+    #tablaEquipos th:nth-child(2), #tablaEquipos td:nth-child(2) { width: 60px; }   /* GPS */
+    #tablaEquipos th:nth-child(4), #tablaEquipos td:nth-child(4) { width: 190px; }  /* Modelo */
+    #tablaEquipos th:nth-child(5), #tablaEquipos td:nth-child(5) { width: 56px; }   /* borrar */
+    #tablaEquipos td { vertical-align: middle; }
+    #tablaEquipos thead th {
+      position: sticky; top: 0; z-index: 6;
+      background: var(--surface-sunken);
+    }
+    #tablaEquipos tbody tr:nth-child(even) { background: var(--surface-sunken); }
     .table-sticky-first th:first-child,
     .table-sticky-first td:first-child {
       position: sticky; left: 0; z-index: 5;
       background: var(--surface-card);
       box-shadow: 1px 0 0 var(--border-subtle);
     }
+    #tablaEquipos thead th:first-child { z-index: 7; background: var(--surface-sunken); }
     .table-scroll-hint { margin-top: var(--sp-2); font-size: 12px; color: var(--fg-3); }
+
+    /* Banner "qué es esto" + estado de autoguardado */
+    .vb-intro {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: var(--accent-soft); border: 1px solid var(--accent-line);
+      border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: var(--sp-4);
+      font-size: 13px; color: var(--fg-2); line-height: 1.5;
+    }
+    .vb-intro i { color: var(--accent); flex: 0 0 auto; margin-top: 2px; width: 18px; height: 18px; }
+    .autosave-status { color: var(--fg-3); font-size: 12px; white-space: nowrap; }
+
+    /* Tarjeta de paso con encabezado integrado (número + título + badge) */
+    /* Sin overflow:hidden — recortaba el desplegable de sugerencias del cliente.
+       El encabezado redondea sus esquinas superiores para respetar la tarjeta. */
+    .vb-step {
+      background: var(--surface-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg); margin-bottom: var(--sp-4);
+    }
+    .vb-step-head {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-bottom: 1px solid var(--border-subtle);
+      background: var(--surface-sunken);
+      border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);
+    }
+    .vb-step-num {
+      flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+      background: var(--accent); color: #fff; font-weight: 700; font-size: 13px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .vb-step-title { margin: 0; font-size: 15px; font-weight: 600; flex: 1; }
+    .vb-step-head .badge { flex: 0 0 auto; }
+    .vb-step-body { padding: 16px; }
+
+    /* Fila input + botones (cliente / modelo) */
+    .vb-input-row { display: flex; gap: var(--sp-2); align-items: stretch; position: relative; }
+    .vb-input-row > .form-input, .vb-input-row > .form-select { flex: 1; }
+
+    /* 2 columnas en desktop (modelo + grupos) */
+    .vb-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); align-items: start; }
+    @media (max-width: 720px) { .vb-grid-2 { grid-template-columns: 1fr; } }
+
+    /* Estado vacío de los chips de grupos */
+    .chips-empty { font-size: 13px; color: var(--fg-3); padding: 4px 0; }
+
+    /* Barra "Aplicar a todas las filas" (reemplaza el marcar-toda-la-columna) */
+    .vb-bulk-bar {
+      display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+      padding: 8px 12px; margin-bottom: var(--sp-2);
+      background: var(--surface-sunken); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); font-size: 12px;
+    }
+    .vb-bulk-label { color: var(--fg-3); font-weight: 700; }
+    .vb-bulk-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+    .vb-bulk-item input { width: 14px; height: 14px; cursor: pointer; }
+
+    /* Celda "Grupos" por fila — reusa el .chip/.chip.active del kit; solo
+       ajustamos densidad para la tabla. */
+    .grupos-cell { min-width: 240px; }
+    .grupos-cell .chip { padding: 3px 10px; font-size: 11px; white-space: nowrap; }
+    .grupos-cell .chip:hover { transform: none; }   /* sin scale en tabla densa */
+
+    /* Inputs/selects de la tabla con el look del kit. Las reglas del kit están
+       atadas a .table-wrap; aquí se replican para #wrapTablaEquipos (.app-table-wrap)
+       en vez de añadir la clase (que un breakpoint oculta). */
+    #wrapTablaEquipos input[type="text"],
+    #wrapTablaEquipos select,
+    #wrapTablaEquipos textarea {
+      width: 100%; padding: 8px 10px;
+      border: 1px solid var(--line); border-radius: 6px;
+      background: #f9fafb; font-size: 14px; line-height: 1.2;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    #wrapTablaEquipos input:focus-visible,
+    #wrapTablaEquipos select:focus-visible,
+    #wrapTablaEquipos textarea:focus-visible {
+      outline: none; background: #fff; border-color: var(--accent); box-shadow: var(--ring-focus);
+    }
+    #wrapTablaEquipos ::placeholder { color: #9ca3af; }
+
+    /* Checkbox con color de marca (mismo criterio que .table-wrap del kit) */
+    #wrapTablaEquipos input[type="checkbox"],
+    .vb-bulk-bar input[type="checkbox"] {
+      width: 16px; height: 16px; accent-color: var(--accent); border-radius: 4px; cursor: pointer;
+    }
 
     /* Action grid (botones de export) */
     .action-grid {
@@ -82,23 +170,14 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="../js/core/layout.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbarFor('index', {
-      title: '<i data-lucide="briefcase"></i> Ingreso de Equipos PoC — Vendedores',
-      leftSlot: `
-        <div style="margin-top: 4px;">
-          <span style="font-size: 13px; color: var(--fg-3); font-weight: 500;">Flujo:</span>
-          <span class="stepper">
-            <span class="step active" id="step-prep">Preparar</span>
-            <span class="step" id="step-rev">Revisar</span>
-            <span class="step" id="step-exp">Exportar</span>
-          </span>
-        </div>`,
+      title: '<i data-lucide="briefcase"></i> Preparar Equipos PoC — Vendedores',
       actions: [
         { id: 'btnGuardarBorrador', title: 'Ctrl+S',
           label: '<i data-lucide="save"></i> Guardar borrador' },
@@ -112,92 +191,126 @@
 
   <div class="app-wrap app-wrap--full">
 
-    <!-- STEP 1: Datos del cliente -->
-    <div class="form-section-header">
-      <h3>1. Datos del cliente</h3>
-      <span class="badge pending" id="badgeCliente">Pendiente</span>
+    <!-- Qué es esto + estado de autoguardado -->
+    <div class="vb-intro">
+      <i data-lucide="info"></i>
+      <div>
+        Esta herramienta <strong>prepara</strong> los equipos de un cliente y genera un archivo —
+        <strong>no los carga al sistema</strong>. Al terminar, descarga el <strong>JSON</strong> y
+        envíalo a recepción para que los cargue.
+        <span id="autosaveStatus" class="autosave-status"></span>
+      </div>
     </div>
-    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-      <div class="form-field">
-        <label class="form-label" for="clienteGlobal">Cliente <span class="req">*</span></label>
-        <div style="display:flex; gap:var(--sp-2); align-items:stretch; position:relative;">
-          <input class="form-input" type="text" id="clienteGlobal" placeholder="Nombre del cliente" oninput="VB.sugerirClientes()" autocomplete="off" style="flex:1;">
-          <button class="btn btn-secondary btn-sm" onclick="VB.buscarGruposCliente()"><i data-lucide="search"></i> Buscar</button>
-          <button class="btn btn-ghost btn-sm" type="button" onclick="VB.refrescarClientes()" title="Actualizar lista de clientes"><i data-lucide="refresh-cw"></i> Actualizar</button>
+
+    <!-- PASO 1: Datos del cliente -->
+    <section class="vb-step">
+      <header class="vb-step-head">
+        <span class="vb-step-num">1</span>
+        <h3 class="vb-step-title">Datos del cliente</h3>
+        <span class="badge pending" id="badgeCliente">Pendiente</span>
+      </header>
+      <div class="vb-step-body">
+        <div class="form-field">
+          <label class="form-label" for="clienteGlobal">Cliente <span class="req">*</span></label>
+          <div class="vb-input-row">
+            <input class="form-input" type="text" id="clienteGlobal" placeholder="Nombre del cliente" oninput="VB.sugerirClientes()" autocomplete="off">
+            <button class="btn btn-secondary btn-icon" onclick="VB.buscarGruposCliente()" title="Buscar grupos del cliente"><i data-lucide="search"></i></button>
+            <button class="btn btn-ghost btn-icon" type="button" onclick="VB.refrescarClientes()" title="Actualizar lista de clientes"><i data-lucide="refresh-cw"></i></button>
+          </div>
+          <div id="sugerenciasClientes" style="position:relative;"></div>
+          <span class="form-hint">Escribe parte del nombre y selecciónalo de la lista — sus grupos se cargan solos.</span>
         </div>
-        <div id="sugerenciasClientes" style="position:relative;"></div>
-        <span class="form-hint">Escribe parte del nombre o selecciónalo de la lista. Si el navegador auto-completó, haz clic en Buscar para cargar los grupos.</span>
       </div>
-    </div>
+    </section>
 
-    <!-- STEP 2: Configuración del lote -->
-    <div class="form-section-header">
-      <h3>2. Configuración del lote</h3>
-      <span class="badge pending" id="badgeLote">Pendiente</span>
-    </div>
-    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-      <div class="form-field">
-        <label class="form-label" for="modeloGlobal">Modelo <span class="optional">(aplicar a todas las filas)</span></label>
-        <div style="display:flex; gap:var(--sp-2);">
-          <select class="form-select" id="modeloGlobal" style="flex:1;"></select>
-          <button class="btn btn-ghost btn-sm" type="button" onclick="VB.refrescarModelos()" title="Actualizar lista de modelos"><i data-lucide="refresh-cw"></i> Actualizar</button>
+    <!-- PASO 2: Configuración del lote -->
+    <section class="vb-step">
+      <header class="vb-step-head">
+        <span class="vb-step-num">2</span>
+        <h3 class="vb-step-title">Configuración del lote</h3>
+        <span class="badge pending" id="badgeLote">Pendiente</span>
+      </header>
+      <div class="vb-step-body">
+        <div class="vb-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="modeloGlobal">Modelo <span class="optional">(aplicar a todas)</span></label>
+            <div class="vb-input-row">
+              <select class="form-select" id="modeloGlobal"></select>
+              <button class="btn btn-ghost btn-icon" type="button" onclick="VB.refrescarModelos()" title="Actualizar lista de modelos"><i data-lucide="refresh-cw"></i></button>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <span>Grupos <span class="optional">(del catálogo del cliente)</span></span>
+              <button class="btn btn-ghost btn-icon" type="button" id="btnRefrescarGrupos" onclick="VB.refrescarGrupos()" title="Volver a cargar los grupos del cliente"><i data-lucide="refresh-cw"></i></button>
+            </label>
+            <input type="hidden" id="grupoInput">
+            <div id="grupoChips" class="chips-editor"></div>
+            <span class="form-hint" id="grupoHintVB">Para crear un grupo nuevo, ve a <strong>Administrar grupos</strong> (menú “Más” en POC).</span>
+          </div>
+        </div>
+
+        <div class="form-field" style="margin-top:var(--sp-3);">
+          <label class="form-label" for="serialesPaste">Nombres de los equipos <span class="req">*</span> <span class="optional">(uno por línea)</span></label>
+          <textarea class="form-input form-textarea" id="serialesPaste"
+            style="font-family:var(--font-mono); font-size:13px;"
+            placeholder="Ej: Radio Ventas 1&#10;Radio Ventas 2&#10;Radio Bodega 1"></textarea>
+          <span class="form-hint">Un nombre por línea — uno por cada equipo. El serial y el Unit ID se asignan después, cuando recepción los carga.</span>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="VB.generarTabla()"><i data-lucide="table-2"></i> Generar tabla</button>
+          <button class="btn btn-ghost" onclick="VB.limpiarTodo()"><i data-lucide="rotate-ccw"></i> Limpiar todo</button>
         </div>
       </div>
+    </section>
 
-      <div class="form-field">
-        <label class="form-label" for="grupoInput">Grupos <span class="optional">(separados por coma)</span></label>
-        <input class="form-input" type="text" id="grupoInput" placeholder="Ej: Grupo A, Grupo B, Grupo C">
+    <!-- PASO 3: Equipos -->
+    <section class="vb-step" id="vbStep3" style="display:none;">
+      <header class="vb-step-head">
+        <span class="vb-step-num">3</span>
+        <h3 class="vb-step-title">Equipos</h3>
+        <span class="badge info" id="resumenBatch">Sin filas</span>
+      </header>
+      <div class="vb-step-body">
+        <div class="form-actions" id="tablaToolbar" style="justify-content:flex-start; margin-bottom:var(--sp-2);">
+          <button class="btn btn-secondary btn-sm" onclick="VB.agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
+        </div>
+        <div id="bulkBar" class="vb-bulk-bar" style="display:none;"></div>
+        <div id="scrollHintEquipos" class="table-scroll-hint">
+          Toca los grupos de cada equipo en la columna <strong>Grupos</strong>. Usa
+          <strong>“Aplicar a todas”</strong> para marcar un grupo en todas las filas a la vez.
+        </div>
+        <div class="app-table-wrap" id="wrapTablaEquipos">
+          <table id="tablaEquipos" class="app-table compact table-sticky-first">
+            <thead>
+              <tr id="encabezadoTabla"></tr>
+            </thead>
+            <tbody id="cuerpoTabla"></tbody>
+          </table>
+        </div>
       </div>
-      <div id="grupoChips" class="chips-editor"></div>
+    </section>
 
-      <div class="form-field" style="margin-top:var(--sp-3);">
-        <label class="form-label" for="serialesPaste">Lista de equipos <span class="req">*</span> <span class="optional">(uno por línea)</span></label>
-        <textarea class="form-input form-textarea" id="serialesPaste"
-          style="font-family:var(--font-mono); font-size:13px;"
-          placeholder="Ej: Radio 1&#10;Radio 2&#10;Radio 3"></textarea>
+    <!-- PASO 4: Revisión y exportación -->
+    <section class="vb-step" id="vbStep4" style="display:none;">
+      <header class="vb-step-head">
+        <span class="vb-step-num">4</span>
+        <h3 class="vb-step-title">Revisión y exportación</h3>
+        <span class="badge pending" id="badgeExport">Pendiente</span>
+      </header>
+      <div class="vb-step-body">
+        <span class="form-hint" style="display:block; margin-bottom:var(--sp-3);">
+          Envía el <strong>JSON</strong> a recepción para cargar los equipos. El Excel es solo para revisar.
+        </span>
+        <div class="action-grid">
+          <button class="btn btn-secondary" onclick="VB.mostrarTablaResultado()"><i data-lucide="eye"></i> Revisar resultado</button>
+          <button class="btn btn-primary" onclick="VB.descargarJSON()"><i data-lucide="file-json"></i> Descargar para recepción (JSON)</button>
+          <button class="btn btn-ghost" onclick="VB.descargarExcel()"><i data-lucide="download"></i> Excel (solo revisar)</button>
+        </div>
       </div>
-
-      <div class="form-actions" style="justify-content:center;">
-        <button class="btn btn-primary" onclick="VB.generarTabla()"><i data-lucide="table-2"></i> Generar tabla</button>
-        <button class="btn btn-ghost" onclick="VB.limpiarTodo()"><i data-lucide="rotate-ccw"></i> Limpiar todo</button>
-      </div>
-    </div>
-
-    <!-- STEP 3: Equipos -->
-    <div class="form-section-header" id="tableSection" style="display:none;">
-      <h3>3. Equipos</h3>
-      <span class="badge info" id="resumenBatch">Sin filas</span>
-    </div>
-
-    <div id="scrollHintEquipos" class="table-scroll-hint" style="display:none;">
-      Si tienes muchos grupos, desliza horizontalmente el cuadro para ver y marcar todas las columnas.
-    </div>
-
-    <div class="app-table-wrap" id="wrapTablaEquipos" style="display:none;">
-      <table id="tablaEquipos" class="app-table compact table-sticky-first">
-        <thead>
-          <tr id="encabezadoTabla"></tr>
-        </thead>
-        <tbody id="cuerpoTabla"></tbody>
-      </table>
-    </div>
-
-    <!-- STEP 4: Revisión y exportación -->
-    <div class="form-section-header" id="exportSection" style="display:none;">
-      <h3>4. Revisión y exportación</h3>
-      <span class="badge pending" id="badgeExport">Pendiente</span>
-    </div>
-
-    <div class="ds-card ds-card-padded" id="actionCard" style="display:none; margin-bottom:var(--sp-4);">
-      <p class="form-section-title" style="margin-bottom:var(--sp-3);">Acciones rápidas</p>
-      <div class="action-grid">
-        <button class="btn btn-secondary" onclick="VB.agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
-        <button class="btn btn-secondary" onclick="VB.agregarGrupo()"><i data-lucide="plus-circle"></i> Agregar grupo</button>
-        <button class="btn btn-primary" onclick="VB.mostrarTablaResultado()"><i data-lucide="eye"></i> Revisar resultado</button>
-        <button class="btn btn-primary" onclick="VB.descargarExcel()"><i data-lucide="download"></i> Descargar Excel</button>
-        <button class="btn btn-ghost" onclick="VB.descargarJSON()"><i data-lucide="file-json"></i> Descargar JSON</button>
-      </div>
-    </div>
+    </section>
 
     <!-- Resultado -->
     <div id="salida" style="margin-top: var(--sp-6);"></div>

@@ -33,27 +33,37 @@ module.exports = onCall(
     const ref = db.collection("contratos").doc(contratoId);
     const snap = await ref.get();
     if (!snap.exists) throw new HttpsError("not-found", "Contrato no encontrado.");
-    const c = snap.data();
+    // Nota: el caso "activar" re-lee el contrato FRESCO dentro de su transacción;
+    // los demás casos solo estampan campos escalares con merge sobre `ref`.
 
     const now = admin.firestore.FieldValue.serverTimestamp();
     const audit = { facturacion_gestionado_por: uid, facturacion_gestionado_at: now };
 
     switch (accion) {
       case "activar": {
-        if (c.facturable === false) throw new HttpsError("failed-precondition", "El contrato está marcado como NO facturable.");
-        if (!["activo", "aprobado"].includes(c.estado)) throw new HttpsError("failed-precondition", "El contrato debe estar vigente (activo/aprobado).");
-        const fechaTs = toTs(payload.fecha_inicio) || c.fecha_entrega_ultima || TS.now();
-        const equipos = Array.isArray(c.equipos)
-          ? c.equipos.map((e) => ({ ...e, fecha_inicio_facturacion: fechaTs, facturacion_estado: "activa" }))
-          : [];
-        await ref.set({
-          equipos,
-          facturacion_estado: "activa",
-          facturacion_fecha_inicio: fechaTs,
-          facturacion_activada_por: uid,
-          facturacion_activada_at: now,
-          ...audit,
-        }, { merge: true });
+        // RMW del array `equipos` dentro de una transacción: leemos el contrato
+        // FRESCO y reescribimos equipos atómicamente. Sin esto, si un usuario edita
+        // el contrato entre el get() de arriba y este set(), su edición se perdería
+        // (lost update), porque el set reescribe el array completo.
+        await db.runTransaction(async (t) => {
+          const fresh = await t.get(ref);
+          if (!fresh.exists) throw new HttpsError("not-found", "Contrato no encontrado.");
+          const cc = fresh.data();
+          if (cc.facturable === false) throw new HttpsError("failed-precondition", "El contrato está marcado como NO facturable.");
+          if (!["activo", "aprobado"].includes(cc.estado)) throw new HttpsError("failed-precondition", "El contrato debe estar vigente (activo/aprobado).");
+          const fechaTs = toTs(payload.fecha_inicio) || cc.fecha_entrega_ultima || TS.now();
+          const equipos = Array.isArray(cc.equipos)
+            ? cc.equipos.map((e) => ({ ...e, fecha_inicio_facturacion: fechaTs, facturacion_estado: "activa" }))
+            : [];
+          t.set(ref, {
+            equipos,
+            facturacion_estado: "activa",
+            facturacion_fecha_inicio: fechaTs,
+            facturacion_activada_por: uid,
+            facturacion_activada_at: now,
+            ...audit,
+          }, { merge: true });
+        });
         break;
       }
       case "en_espera":

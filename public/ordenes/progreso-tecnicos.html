@@ -20,7 +20,7 @@
   <script src="../js/core/layout.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/services/usuariosService.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 
   <style>
     /* Page-local — el resto vive en el kit */
@@ -72,8 +72,9 @@
         <span style="font-size:12px; color:var(--fg-3);">Periodo:</span>
         <div class="form-field" style="margin:0; min-width:140px;">
           <select id="selPeriodo" class="form-select" style="height:32px; padding:4px 10px;">
-            <option value="mensual" selected>Mensual</option>
-            <option value="semanal">Semanal</option>
+            <option value="7" selected>Últimos 7 días</option>
+            <option value="30">Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
             <option value="total">Total histórico</option>
           </select>
         </div>
@@ -86,7 +87,7 @@
       <span class="alert-banner-icon"><i data-lucide="info"></i></span>
       <div class="alert-banner-body" style="display:flex; justify-content:space-between; align-items:center; gap:var(--sp-3); flex-wrap:wrap;">
         <div class="legend">
-          <span class="chip-periodo" id="chipPeriodo">Periodo: Mensual</span>
+          <span class="chip-periodo" id="chipPeriodo">Periodo: Últimos 7 días</span>
           <span><span class="dot-green"></span> Top 3</span>
           <span><span class="dot-yellow"></span> En progreso</span>
         </div>
@@ -97,15 +98,11 @@
     <!-- KPIs propios del usuario (técnico) -->
     <div id="misStatsWrap" class="kpi-grid" style="display:none; margin-bottom:var(--sp-4);">
       <div class="kpi-card">
-        <span class="kpi-card-label">Mi semanal</span>
-        <span class="kpi-card-value kpi-accent" id="miSemanal">0</span>
+        <span class="kpi-card-label" id="miPeriodoLabel">Mis órdenes · Últimos 7 días</span>
+        <span class="kpi-card-value kpi-accent" id="miPeriodo">0</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-card-label">Mi mensual</span>
-        <span class="kpi-card-value" id="miMensual">0</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-card-label">Mi total</span>
+        <span class="kpi-card-label">Mi total histórico</span>
         <span class="kpi-card-value kpi-ok" id="miTotal">0</span>
       </div>
     </div>
@@ -118,10 +115,9 @@
             <tr>
               <th style="width:48px;">#</th>
               <th>Técnico</th>
-              <th>Semanal</th>
-              <th>Mensual</th>
+              <th id="thMetric">Órdenes (periodo)</th>
+              <th>Última</th>
               <th>Total</th>
-              <th>Estado actual</th>
             </tr>
           </thead>
           <tbody id="tbodyRanking"></tbody>

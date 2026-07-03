@@ -19,7 +19,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="js/firebase-init.js"></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 </head>
 <body>
   <div class="auth-shell">
@@ -106,8 +106,15 @@
 
   if (window.lucide) lucide.createIcons();
 
-  // Si ya hay sesión, ir al home
-  auth.onAuthStateChanged((user) => { if (user) location.href = "index.html"; });
+  // Si ya hay sesión, ir al destino (?next, deep-link) o al home.
+  // Solo se acepta una ruta relativa de la misma app (empieza con un único "/")
+  // para evitar open-redirects (rechaza "//host" y URLs absolutas).
+  function destinoPostLogin() {
+    const next = new URLSearchParams(location.search).get('next');
+    if (next && /^\/(?!\/)/.test(next)) return next;
+    return "index.html";
+  }
+  auth.onAuthStateChanged((user) => { if (user) location.href = destinoPostLogin(); });
 
   // Mostrar/ocultar password
   function togglePass(){

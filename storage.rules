@@ -104,6 +104,21 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // ── Adjuntos de cotización (brochures, fichas técnicas) ─────────────
+    // Material que el cliente solicita junto con la propuesta (p.ej. el
+    // brochure del radio). A diferencia de los paths PII de arriba, esto es
+    // material de MARKETING público: el doc de la cotización guarda la download
+    // URL para que la Cloud Function de correo (nodemailer, attachment.path)
+    // pueda adjuntarlo al enviar la propuesta. PDF o imagen, hasta 10 MiB.
+    // Sin delete de frontend: quitar un adjunto solo lo desreferencia del doc.
+    match /cotizaciones_adjuntos/{file} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('(image/.*|application/pdf)');
+      allow update, delete: if false;
+    }
+
     // Notas de cancelación adjuntas a una solicitud de baja (PDF o imagen).
     match /cancelaciones_notas/{file} {
       allow read:   if request.auth != null;

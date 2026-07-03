@@ -46,12 +46,15 @@ module.exports = onCall(
         queryAllByType("Inventory"),
         queryAllByType("NonInventory"),
       ]);
+      // En QBO el "Name" suele ser el CÓDIGO/SKU de la pieza y el "Sku" viene vacío;
+      // la descripción legible está en "Description". Por eso: SKU ← Sku||Name,
+      // Descripción ← Description||Name.
       const map = (arr, tipo) => (arr || []).map((i) => ({
         qbo_item_id: i.Id,
-        name: i.Name || "",
-        sku: i.Sku || "",
-        descripcion: i.Name || "",
-        notas: i.Description || "",
+        name: i.Name || "",                          // nombre del ítem en QBO (el código)
+        sku: i.Sku || i.Name || "",                  // código de la pieza
+        descripcion: i.Description || i.Name || "",   // descripción legible
+        notas: "",
         precio_venta: Number(i.UnitPrice || 0),
         costo_unitario: Number(i.PurchaseCost || 0),
         tipo,

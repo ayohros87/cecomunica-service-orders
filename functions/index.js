@@ -1,19 +1,30 @@
 const admin = require("firebase-admin");
+const { setGlobalOptions } = require("firebase-functions/v2");
 admin.initializeApp();
 
-const { onContratoActivado, onContratoActivadoSendPdf }                              = require("./src/triggers/contratos/onApproval");
+// Cap de escalado por defecto para TODAS las funciones (las opciones por-función
+// lo pueden sobreescribir). Evita que un endpoint HTTP abusado o un loop de
+// triggers dispare instancias sin tope (costo). 10 es holgado para uso interno.
+setGlobalOptions({ maxInstances: 10 });
+
+const { onContratoActivado, onContratoAprobadoSolicitaSeriales, onSerialesAsignadasSendPdf, onContratoActivadoSendPdf } = require("./src/triggers/contratos/onApproval");
 const { onContratoOrdenWrite, onOrdenWriteSyncContratoCache, onOrdenHardDelete }     = require("./src/triggers/ordenes/onWriteCacheSync");
 
 exports.sendMail                      = require("./src/http/sendMail");
 exports.sendContractPdf               = require("./src/http/sendContractPdf");
 exports.quickbooksOAuth               = require("./src/http/quickbooksOAuth");
 exports.quickbooksWebhook             = require("./src/http/quickbooksWebhook");
-exports.onContratoActivado            = onContratoActivado;
-exports.onContratoActivadoSendPdf     = onContratoActivadoSendPdf;
+exports.onContratoActivado                 = onContratoActivado;
+exports.onContratoAprobadoSolicitaSeriales = onContratoAprobadoSolicitaSeriales;
+exports.onSerialesAsignadasSendPdf         = onSerialesAsignadasSendPdf;
+// Conservada pero deshabilitada (no envía) — borrado pendiente. Se mantiene
+// exportada para que el deploy NO la elimine todavía.
+exports.onContratoActivadoSendPdf          = onContratoActivadoSendPdf;
 exports.onMailQueued                  = require("./src/triggers/mail/onMailQueued");
 exports.onContratoAnuladoNotify       = require("./src/triggers/contratos/onAnnulment");
 exports.onCancelacionWrite            = require("./src/triggers/cancelaciones/onCancelacionWrite");
 exports.onSerialWrite                 = require("./src/triggers/contratos/onSerialWrite");
+exports.onSerialCambio                = require("./src/triggers/contratos/onSerialCambio");
 exports.onOrdenCompletada             = require("./src/triggers/ordenes/onComplete");
 exports.onContratoOrdenWrite          = onContratoOrdenWrite;
 exports.onOrdenWriteSyncContratoCache = onOrdenWriteSyncContratoCache;
@@ -22,6 +33,7 @@ exports.onOrdenWriteSearchTokens      = require("./src/triggers/ordenes/onWriteS
 exports.purgePIIRetention             = require("./src/triggers/scheduled/purgePIIRetention");
 exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onOpened");
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
+exports.recordatorioSeriales          = require("./src/triggers/scheduled/recordatorioSeriales");
 exports.manageUser                    = require("./src/callable/manageUser");
 exports.rebuildContractCache          = require("./src/callable/rebuildContractCache");
 exports.runBackfill                   = require("./src/callable/runBackfill");

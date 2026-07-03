@@ -129,11 +129,61 @@
     return buckets.length;
   }
 
+  // ── Prefijo de 3 letras por empresa ─────────────────────────────────
+  // Stopwords societarias/artículos que no aportan al prefijo.
+  const PREFIJO_STOP = new Set([
+    'de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'o', 'a',
+    'sa', 's.a', 's.a.', 'srl', 's.r.l', 'corp', 'inc', 'co', 'cia', 'compania',
+    'grupo', 'the', 'de.', 'panama',
+  ]);
+
+  // Propone un prefijo de 3 letras (A-Z) derivado del nombre del cliente,
+  // garantizando unicidad contra `tomados` (Set<string> en mayúsculas).
+  //   "Cervecería Nacional"     → CNA
+  //   "Banco General"           → BGE
+  //   "Tropigas"                → TRO
+  // Si colisiona, varía la 3a letra con letras posteriores del nombre y luego A-Z.
+  function proponerPrefijo(nombre, tomados) {
+    const taken = tomados instanceof Set ? tomados : new Set(tomados || []);
+    const limpio = (nombre || '')
+      .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+      .toUpperCase().replace(/[^A-Z\s]/g, ' ').trim();
+    const palabras = limpio.split(/\s+/).filter(w => w && !PREFIJO_STOP.has(w.toLowerCase()));
+
+    let base = '';
+    if (palabras.length >= 3)      base = palabras[0][0] + palabras[1][0] + palabras[2][0];
+    else if (palabras.length === 2) base = palabras[0][0] + palabras[1].slice(0, 2);
+    else if (palabras.length === 1) base = palabras[0].slice(0, 3);
+    base = (base + 'XXX').slice(0, 3);
+
+    if (!taken.has(base)) return base;
+    // Varía la 3a letra: primero con letras restantes del nombre, luego A-Z.
+    const src = limpio.replace(/\s/g, '');
+    const dosPrimeras = base.slice(0, 2);
+    for (const ch of src) {
+      const cand = dosPrimeras + ch;
+      if (!taken.has(cand)) return cand;
+    }
+    for (let c = 65; c <= 90; c++) {
+      const cand = dosPrimeras + String.fromCharCode(c);
+      if (!taken.has(cand)) return cand;
+    }
+    // Último recurso: barrido completo de 3 letras.
+    for (let a = 65; a <= 90; a++)
+      for (let b = 65; b <= 90; b++)
+        for (let c = 65; c <= 90; c++) {
+          const cand = String.fromCharCode(a, b, c);
+          if (!taken.has(cand)) return cand;
+        }
+    return base;
+  }
+
   window.GruposAnalisis = {
     normalizar,
     levenshtein,
     bucketsExactos,
     bucketsFuzzy,
     contarBuckets,
+    proponerPrefijo,
   };
 })();

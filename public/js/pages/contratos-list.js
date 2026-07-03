@@ -21,10 +21,20 @@ window.ContratosLista = {
   // Se muestra en contratos activos/aprobados con unidades activas.
   serialesBtn(id, data, { movil = false } = {}) {
     if (!['activo', 'aprobado'].includes(data.estado)) return '';
+    // Contratos históricos (corte legacy): fuera del flujo automático. Chip GRIS
+    // (no es un CTA pendiente como el ámbar) pero SÍ clickeable: abre la página de
+    // seriales en modo "registro histórico" por si más adelante se quieren
+    // registrar los seriales en el contrato. Eso NO reenvía a activaciones (la
+    // página oculta "Confirmar" y el trigger backstop bloquea el correo).
+    // Ver backfill `marcarSerialesLegacy`.
+    if (data.seriales_estado === 'legacy') {
+      return `<button class="btn btn-sm" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;" onclick="location.href='seriales.html?id=${id}'" title="Contrato histórico — registrar seriales para referencia (no se envía a activaciones)"><i data-lucide="archive" style="width:14px;height:14px;"></i> Seriales · histórico</button>`;
+    }
     const total = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
     const activos = Math.max(0, total - Number(data.baja_cancelado_total || 0));
     if (activos === 0) return '';
-    const count = Number(data.seriales_count || 0);
+    // Unidades resueltas = seriales reales + unidades marcadas "sin serial" (omitidas).
+    const count = Number(data.seriales_count || 0) + Number(data.seriales_omitidos_count || 0);
 
     let css, icon, label, title;
     if (count === 0) {
@@ -38,7 +48,7 @@ window.ContratosLista = {
       icon = 'scan-barcode'; label = `Seriales ${count}/${activos}`; title = `Seriales incompletos (${count} de ${activos})`;
     }
     const cls = movil ? 'btn btn-sm' : 'btn btn-sm';
-    return `<button class="${cls}" style="${css}" onclick="ContratosSeriales.abrir('${id}')" title="${title}"><i data-lucide="${icon}" style="width:14px;height:14px;"></i> ${label}</button>`;
+    return `<button class="${cls}" style="${css}" onclick="location.href='seriales.html?id=${id}'" title="${title}"><i data-lucide="${icon}" style="width:14px;height:14px;"></i> ${label}</button>`;
   },
 
   // Indicador de enmienda sobre el contrato (derivado por el trigger onCancelacionWrite).
@@ -57,6 +67,14 @@ window.ContratosLista = {
       return `<span class="chip-estado chip-cancelada" title="Baja parcial aprobada · ${activos} de ${orig} activos${finTerm ? ' · factura hasta ' + finTerm : ''}"><i data-lucide="package-minus" style="width:12px;height:12px;"></i> Baja · ${activos}/${orig}</span>`;
     }
     return '';
+  },
+
+  // Chip informativo: hay una solicitud de cambio de serial PENDIENTE de que
+  // inventario introduzca los reemplazos. El flag lo mantiene el trigger
+  // onSerialCambio en el contrato (seriales_cambio_pendiente).
+  cambioSerialPill(data) {
+    if (!data.seriales_cambio_pendiente) return '';
+    return `<span class="chip-estado" style="background:#EFF6FF;color:#1E3A8A;border:1px solid #93C5FD;" title="Solicitud de cambio de serial pendiente de reemplazo por inventario"><i data-lucide="replace" style="width:12px;height:12px;"></i> Cambio de serial</span>`;
   },
 
   // ── Acciones (CTA inline + menú ⋯) ───────────────────────────────
@@ -129,6 +147,11 @@ window.ContratosLista = {
     // Solicitar baja — solo cuando no hay una baja pendiente (si la hay, vive en la CTA).
     if (puedeSolicitarBaja && !bajaPendiente)
       items.push(I('package-minus', 'Solicitar baja', `window.location.href='cancelaciones.html?contrato=${id}'`));
+    // Solicitar cambio/corrección de serial — recepción/admin, SOLO mientras el
+    // contrato está 'aprobado' (antes de activarse) y ya tiene seriales asignados.
+    if ((esAdmin || esRecepcion) && data.estado === 'aprobado'
+        && data.seriales_estado !== 'legacy' && Number(data.seriales_count || 0) > 0)
+      items.push(I('scan-barcode', 'Solicitar cambio de serial', `ContratosSerialCambio.abrir('${id}')`));
     // Firmado
     if (yaFirmado) {
       items.push(A('file-text', 'Ver firmado', data.firmado_url));
@@ -218,6 +241,7 @@ window.ContratosLista = {
         <div style="display:inline-flex; flex-direction:column; align-items:flex-start; gap:4px;">
           <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
           ${ContratosLista.bajaPill(data)}
+          ${ContratosLista.cambioSerialPill(data)}
         </div>
       </td>
       <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
@@ -264,6 +288,7 @@ window.ContratosLista = {
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
           <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
           ${ContratosLista.bajaPill(data)}
+          ${ContratosLista.cambioSerialPill(data)}
         </div>
       </div>
       <div class="row">

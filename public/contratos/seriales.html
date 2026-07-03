@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asignar seriales - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/contratosService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Page-local — kit classes hacen el trabajo pesado */
+    .app-body { padding-bottom: 84px; } /* espacio para el footer-strip sticky */
+    .serial-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+    .serial-num { width:24px; text-align:right; color:var(--fg-3); font-size:12px; }
+    .serial-input { height:36px; flex:1; min-width:180px; font-family:var(--font-mono, monospace); }
+    .serial-input.dup { border-color:#dc2626 !important; background:#fef2f2; }
+    /* Modo reemplazo: seriales marcados en la solicitud (editables sobre candado). */
+    .serial-input.reemplazo { border-color:#2563eb !important; background:#eff6ff; box-shadow:0 0 0 2px rgba(37,99,235,.15); }
+    .serial-omit { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--fg-3); white-space:nowrap; cursor:pointer; }
+    .motivo-input { flex-basis:100%; margin-left:32px; height:34px; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="scan-barcode"></i> Asignar seriales',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
+      showHome: true,
+      homeHref: '../index.html',
+      showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide app-body">
+
+    <nav class="app-breadcrumbs" aria-label="Breadcrumb">
+      <a href="../index.html">Inicio</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <a href="index.html">Contratos</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <span class="app-breadcrumbs-current" id="bc-contrato-id">—</span>
+    </nav>
+
+    <div class="app-page-header">
+      <div>
+        <h1>Asignar seriales</h1>
+        <p id="ph-subtitle">Coloca el número de serie de cada equipo solicitado en el contrato.</p>
+      </div>
+      <div class="app-page-header-actions">
+        <span id="ph-cliente" style="font-weight:700;"></span>
+      </div>
+    </div>
+
+    <p style="margin:0 0 16px; font-size:13px; color:var(--fg-3);">
+      <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;"></i>
+      Asigna un serial a cada unidad. Puedes <b>copiar una columna desde Excel y pegarla</b>
+      (sobre la primera casilla o con “Pegar columna”). Si una unidad no llevará serial,
+      marca <b>“Sin serial”</b> y escribe el motivo.
+    </p>
+
+    <div id="serialesBody"></div>
+  </div>
+
+  <!-- Sticky footer strip: progreso + acciones -->
+  <div class="app-footer-strip" id="footerStrip" style="display:none;">
+    <div class="app-footer-strip-stat">
+      <span class="app-footer-strip-stat-label">Progreso</span>
+      <span class="app-footer-strip-stat-value value-highlight" id="footProgreso">0 / 0</span>
+    </div>
+    <div class="app-footer-strip-actions" style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+      <span id="lockNote" class="ts" style="display:none; color:var(--fg-3);"></span>
+      <button type="button" class="btn btn-primary" id="btnReemplazo" style="display:none;"><i data-lucide="replace"></i> Guardar reemplazo</button>
+      <button type="button" class="btn btn-ghost" id="btnEditar" style="display:none;"><i data-lucide="lock-open"></i> Editar seriales</button>
+      <button type="button" class="btn btn-ghost" id="btnGuardar"><i data-lucide="save"></i> Guardar</button>
+      <button type="button" class="btn btn-primary" id="btnConfirmar"><i data-lucide="send"></i> Confirmar y enviar a activaciones</button>
+    </div>
+  </div>
+
+  <script src="../js/pages/contrato-seriales-page.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>

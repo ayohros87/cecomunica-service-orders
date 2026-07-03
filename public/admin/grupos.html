@@ -49,6 +49,11 @@
       font-size: 12px; color: var(--fg-3); text-align: center;
       background: var(--surface-sunken); padding: 4px 10px; border-radius: 999px;
     }
+    /* Catálogo sin equipos asignados todavía — badge atenuado y punteado */
+    .gp-grupo-count--empty {
+      background: transparent; color: var(--fg-3);
+      border: 1px dashed var(--border-default); opacity: .8;
+    }
     .gp-grupo-actions { display: flex; gap: 6px; justify-content: flex-end; }
 
     .gp-dup-banner {
@@ -76,6 +81,144 @@
 
     .btn-xs { font-size: 11px; padding: 2px 8px; }
 
+    /* Toggle "Lista limpia" en la toolbar */
+    .gp-toggle-limpia {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--fg-2); cursor: pointer; user-select: none;
+    }
+    .gp-toggle-limpia input { width: 14px; height: 14px; cursor: pointer; }
+
+    /* Tag "nuevo" en la lista de clientes (empresas sin grupos al buscar) */
+    .gp-cli-tag {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+      color: var(--fg-3); background: var(--surface-sunken);
+      border: 1px dashed var(--border-default); border-radius: 999px; padding: 1px 7px;
+    }
+
+    /* Panel de alta de grupos (inline + pegar-varios + comunes) */
+    #gpAddPanel:empty { display: none; }
+    .gp-add-card {
+      background: var(--surface-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); padding: var(--sp-3); margin-bottom: var(--sp-3);
+    }
+    .gp-add-row { display: flex; gap: 8px; align-items: center; }
+    .gp-add-row .form-input { flex: 1; }
+    .gp-add-varios { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: 6px; }
+    .gp-add-varios textarea { width: 100%; font-family: inherit; resize: vertical; }
+    .gp-add-varios .btn { align-self: flex-start; }
+    .gp-add-comunes { margin-top: var(--sp-3); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .gp-add-comunes-label { font-size: 11px; color: var(--fg-3); margin-right: 2px; }
+    .gp-chip-add {
+      font-size: 12px; padding: 3px 10px; border-radius: var(--radius-pill);
+      border: 1px solid var(--border-default); background: var(--surface-sunken);
+      color: var(--fg-2); cursor: pointer;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    }
+    .gp-chip-add:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .gp-chip-add.is-added { opacity: .6; cursor: default; border-style: dashed; }
+    .gp-comunes-edit {
+      font-size: 11px; color: var(--accent); background: none; border: none; cursor: pointer;
+      padding: 2px 6px; margin-left: 2px;
+    }
+    .gp-comunes-edit:hover { text-decoration: underline; }
+
+    /* Barra de prefijo del cliente seleccionado */
+    .gp-prefijo-bar { display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3); min-height: 0; }
+    .gp-prefijo-bar:empty { display: none; }
+    .gp-prefijo-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--fg-2);
+      background: var(--accent-soft); border: 1px solid var(--accent);
+      padding: 3px 10px; border-radius: 999px;
+    }
+    .gp-prefijo-pill strong { font-family: var(--font-mono); letter-spacing: 1px; color: var(--accent); }
+    .gp-prefijo-pill--none { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+
+    /* Modal de migración de prefijos */
+    .gp-modal-overlay {
+      position: fixed; inset: 0; z-index: 9998;
+      background: rgba(0,0,0,.5);
+      display: flex; align-items: center; justify-content: center;
+      padding: var(--sp-4);
+    }
+    .gp-modal {
+      background: var(--surface-card); border-radius: var(--radius-lg);
+      width: 760px; max-width: 100%; max-height: 88vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,.3);
+    }
+    .gp-modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--sp-4) var(--sp-5); border-bottom: 1px solid var(--border-subtle);
+    }
+    .gp-modal-head h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+    .gp-modal-close { background: none; border: none; font-size: 26px; line-height: 1; cursor: pointer; color: var(--fg-3); }
+    .gp-modal-close:hover { color: var(--fg-1); }
+    .gp-modal-body { padding: var(--sp-4) var(--sp-5); overflow-y: auto; }
+    .gp-mig-intro { font-size: 13px; color: var(--fg-2); margin: 0 0 var(--sp-3); }
+    .gp-mig-head-row, .gp-mig-row {
+      display: grid; grid-template-columns: 1fr 84px 90px 1.2fr; gap: 10px; align-items: center;
+    }
+    .gp-mig-head-row {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--fg-3);
+      padding: 0 4px 6px; border-bottom: 1px solid var(--border-subtle);
+    }
+    .gp-mig-list { max-height: 48vh; overflow-y: auto; }
+    .gp-mig-row { padding: 6px 4px; border-bottom: 1px solid var(--border-subtle); font-size: 13px; }
+    .gp-mig-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gp-mig-prefix {
+      width: 100%; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 2px;
+      text-align: center; font-weight: 700; padding: 5px 6px;
+      border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--surface-card);
+    }
+    .gp-mig-prefix.is-invalid { border-color: #F59E0B; background: #FFFBEB; }
+    .gp-mig-prefix.is-dup { border-color: #DC2626; background: #FEF2F2; color: #991B1B; }
+    .gp-mig-ngrupos { font-size: 12px; color: var(--fg-3); text-align: center; }
+    .gp-mig-ej { font-size: 12px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+    .gp-mig-empty { padding: 20px; text-align: center; color: var(--fg-3); font-size: 13px; }
+    .gp-mig-status { font-size: 12px; color: var(--fg-2); margin-top: var(--sp-3); min-height: 16px; }
+    .gp-modal-foot {
+      display: flex; align-items: center; gap: 8px;
+      padding: var(--sp-3) var(--sp-5); border-top: 1px solid var(--border-subtle);
+    }
+    .gp-mig-count { font-size: 12px; color: var(--fg-3); }
+
+    /* Vista global de empresas */
+    .gp-glob-head-row, .gp-glob-row {
+      display: grid; grid-template-columns: 1fr 84px 90px 90px; gap: 10px; align-items: center;
+    }
+    .gp-glob-head-row {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--fg-3);
+      padding: 0 4px 6px; border-bottom: 1px solid var(--border-subtle);
+    }
+    .gp-glob-row { padding: 6px 4px; border-bottom: 1px solid var(--border-subtle); font-size: 13px; }
+    .gp-glob-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gp-glob-pfx {
+      font-family: var(--font-mono); font-weight: 700; letter-spacing: 1px; text-align: center;
+      padding: 2px 6px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent);
+    }
+    .gp-glob-pfx.is-none { background: #FEF3C7; color: #92400E; font-weight: 400; letter-spacing: 0; }
+    .gp-glob-pfx.is-dup  { background: #FEF2F2; color: #991B1B; }
+    .gp-glob-num { text-align: center; color: var(--fg-2); }
+
+    /* Conteo de grupo clickeable (drill-down a equipos) */
+    .gp-grupo-count--click { cursor: pointer; }
+    .gp-grupo-count--click:hover { background: var(--accent-soft); color: var(--accent); }
+
+    /* Modal de equipos de un grupo */
+    .gp-eq-head-row, .gp-eq-row {
+      display: grid; grid-template-columns: 1.1fr 80px 1.3fr 60px; gap: 10px; align-items: center;
+    }
+    .gp-eq-head-row {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--fg-3);
+      padding: 0 4px 6px; border-bottom: 1px solid var(--border-subtle);
+    }
+    .gp-eq-row { padding: 6px 4px; border-bottom: 1px solid var(--border-subtle); font-size: 13px; }
+    .gp-eq-serial { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gp-eq-unit { font-family: var(--font-mono); color: var(--fg-2); }
+    .gp-eq-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gp-eq-act { text-align: center; }
+
     /* Toolbar de scan global (en columna izquierda) */
     .gp-scan-toolbar {
       display: flex; gap: 6px; flex-wrap: wrap;
@@ -99,9 +242,10 @@
   <script src="../js/services/usuariosService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
   <script src="../js/domain/gruposAnalisis.js"></script>
   <script src="../js/pages/admin-grupos.js" defer></script>
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 
   <script>
     function cerrarSesion() {
@@ -126,10 +270,21 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        Los grupos viven como <code>grupos[]</code> en cada equipo PoC. Esta vista
-        deriva la lista por cliente y permite renombrar, fusionar y eliminar grupos
-        en lote — los cambios se aplican a todos los equipos no eliminados del cliente.
+        Cada empresa tiene un <strong>prefijo único de 3 letras</strong>
+        (<code>clientes/{id}.poc_grupo_prefix</code>) y su <strong>catálogo de grupos</strong>
+        (<code>poc_grupos</code>). Todos los grupos quedan como <code>PREFIJO-Nombre</code>.
+        Aquí puedes <strong>agregar</strong>, renombrar, fusionar y eliminar grupos — los
+        cambios se aplican al catálogo y se propagan a los equipos PoC del cliente. Usa
+        <strong>“Asignar prefijos y migrar”</strong> para prefijar todo en lote.
       </div>
+      <button id="btnGpVistaGlobal" class="btn btn-ghost btn-sm" style="display:none; flex:0 0 auto; margin-left:auto;"
+              title="Tabla de todas las empresas con su prefijo y # de grupos; exporta a CSV">
+        <i data-lucide="table"></i> Vista global
+      </button>
+      <button id="btnGpMigrarPrefijos" class="btn btn-secondary btn-sm" style="display:none; flex:0 0 auto;"
+              title="Asigna un prefijo único de 3 letras a cada empresa y renombra sus grupos a PREFIJO-Nombre (catálogo + equipos)">
+        <i data-lucide="tags"></i> Asignar prefijos y migrar
+      </button>
     </div>
 
     <div class="gp-layout">
@@ -170,9 +325,15 @@
                   title="Selecciona 2 o más grupos para fusionar">
             <i data-lucide="git-merge"></i> Fusionar seleccionados
           </button>
+          <label class="gp-toggle-limpia" title="Mostrar los nombres sin el prefijo de 3 letras">
+            <input type="checkbox" id="gpToggleLimpia"> Lista limpia
+          </label>
           <span class="spacer"></span>
           <span id="gpLastUpdate" class="ts">—</span>
         </div>
+
+        <div id="gpPrefijoBar" class="gp-prefijo-bar"></div>
+        <div id="gpAddPanel"></div>
 
         <div id="gpDupBanner"></div>
 
@@ -190,6 +351,101 @@
   </div>
 
   <div id="toasts" class="toast-region"></div>
+
+  <!-- Modal: asignar prefijos y migrar grupos -->
+  <div id="gpMigOverlay" class="gp-modal-overlay" style="display:none;">
+    <div class="gp-modal" role="dialog" aria-modal="true" aria-labelledby="gpMigTitle">
+      <div class="gp-modal-head">
+        <h3 id="gpMigTitle"><i data-lucide="tags"></i> Asignar prefijos y migrar grupos</h3>
+        <button class="gp-modal-close" id="gpMigClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="gp-modal-body">
+        <p class="gp-mig-intro">
+          Revisa y edita el prefijo de 3 letras de cada empresa. Al aplicar, cada grupo se
+          renombra a <code>PREFIJO-Nombre</code> en el catálogo y en los equipos. Es idempotente
+          (se puede repetir). Los prefijos deben ser únicos.
+        </p>
+        <div class="gp-mig-head-row">
+          <span>Empresa</span><span>Prefijo</span><span>Grupos</span><span>Ejemplo</span>
+        </div>
+        <div id="gpMigList" class="gp-mig-list"></div>
+        <div id="gpMigStatus" class="gp-mig-status" aria-live="polite"></div>
+      </div>
+      <div class="gp-modal-foot">
+        <span id="gpMigCount" class="gp-mig-count"></span>
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn btn-ghost" id="gpMigCancel">Cancelar</button>
+        <button class="btn btn-primary" id="gpMigApply"><i data-lucide="play"></i> Aplicar migración</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: vista global de empresas (admin) -->
+  <div id="gpGlobalOverlay" class="gp-modal-overlay" style="display:none;">
+    <div class="gp-modal" role="dialog" aria-modal="true" aria-labelledby="gpGlobalTitle">
+      <div class="gp-modal-head">
+        <h3 id="gpGlobalTitle"><i data-lucide="table"></i> Grupos por empresa</h3>
+        <button class="gp-modal-close" id="gpGlobalClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="gp-modal-body">
+        <div id="gpGlobalResumen" class="gp-mig-status" style="margin:0 0 var(--sp-2);"></div>
+        <div class="gp-glob-head-row">
+          <span>Empresa</span><span>Prefijo</span><span>Catálogo</span><span>Equipos</span>
+        </div>
+        <div id="gpGlobalList" class="gp-mig-list"></div>
+      </div>
+      <div class="gp-modal-foot">
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn btn-ghost" id="gpGlobalClose2" onclick="document.getElementById('gpGlobalOverlay').style.display='none'">Cerrar</button>
+        <button class="btn btn-primary" id="gpGlobalExport"><i data-lucide="download"></i> Exportar CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: equipos de un grupo (drill-down) -->
+  <div id="gpEquiposOverlay" class="gp-modal-overlay" style="display:none;">
+    <div class="gp-modal" role="dialog" aria-modal="true" aria-labelledby="gpEquiposTitle">
+      <div class="gp-modal-head">
+        <h3 id="gpEquiposTitle"><i data-lucide="radio-tower"></i> Equipos</h3>
+        <button class="gp-modal-close" id="gpEquiposClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="gp-modal-body">
+        <div id="gpEquiposResumen" class="gp-mig-status" style="margin:0 0 var(--sp-2);"></div>
+        <div class="gp-eq-head-row">
+          <span>Serial</span><span>Unit ID</span><span>Nombre</span><span>Estado</span>
+        </div>
+        <div id="gpEquiposList" class="gp-mig-list"></div>
+      </div>
+      <div class="gp-modal-foot">
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn btn-primary" onclick="document.getElementById('gpEquiposOverlay').style.display='none'">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editar grupos comunes (empresa/config) -->
+  <div id="gpComunesOverlay" class="gp-modal-overlay" style="display:none;">
+    <div class="gp-modal" role="dialog" aria-modal="true" aria-labelledby="gpComunesTitle" style="width:460px;">
+      <div class="gp-modal-head">
+        <h3 id="gpComunesTitle"><i data-lucide="list-plus"></i> Grupos comunes</h3>
+        <button class="gp-modal-close" id="gpComunesClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="gp-modal-body">
+        <p class="gp-mig-intro">
+          Estos son los chips de alta rápida que aparecen al agregar grupos. Uno por línea.
+          Se guardan en <code>empresa/config</code> y aplican a todas las empresas.
+        </p>
+        <textarea id="gpComunesText" class="form-input" rows="12"
+                  style="width:100%; resize:vertical; font-size:13px;"
+                  placeholder="Ventas&#10;Operaciones&#10;GPS"></textarea>
+      </div>
+      <div class="gp-modal-foot">
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn btn-ghost" id="gpComunesCancel">Cancelar</button>
+        <button class="btn btn-primary" id="gpComunesGuardar"><i data-lucide="save"></i> Guardar</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     if (typeof lucide !== 'undefined') lucide.createIcons();

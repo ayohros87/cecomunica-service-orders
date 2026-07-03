@@ -517,14 +517,14 @@ function renderRow(id, c){
     </td>
 
     <td class="sticky-col sticky-nombre">
-      <input type="text" class="td-input" value="${c.nombre||''}" ${ro?'readonly':''} data-field="nombre" />
+      <input type="text" class="td-input" value="${FMT.esc(c.nombre)}" ${ro?'readonly':''} data-field="nombre" />
     </td>
 
     <td>
-      <input type="text" class="td-input td-mono" value="${c.ruc||''}" ${ro?'readonly':''} data-field="ruc" />
+      <input type="text" class="td-input td-mono" value="${FMT.esc(c.ruc)}" ${ro?'readonly':''} data-field="ruc" />
     </td>
     <td>
-      <input type="text" class="td-input td-mono" value="${c.dv||''}" ${ro?'readonly':''} data-field="dv" />
+      <input type="text" class="td-input td-mono" value="${FMT.esc(c.dv)}" ${ro?'readonly':''} data-field="dv" />
     </td>
 
     <td>
@@ -534,27 +534,27 @@ function renderRow(id, c){
       </select>
     </td>
     <td class="col-secondary">
-      <input type="text" class="td-input" value="${(c.itbms_motivo_exencion||'').replace(/"/g,'&quot;')}" ${(ro||!c.itbms_exento)?'readonly':''} data-field="itbms_motivo_exencion" placeholder="${c.itbms_exento?'Motivo / referencia':'—'}" ${!c.itbms_exento?'style="opacity:.4;"':''} />
+      <input type="text" class="td-input" value="${FMT.esc(c.itbms_motivo_exencion)}" ${(ro||!c.itbms_exento)?'readonly':''} data-field="itbms_motivo_exencion" placeholder="${c.itbms_exento?'Motivo / referencia':'—'}" ${!c.itbms_exento?'style="opacity:.4;"':''} />
     </td>
 
     <td>
-      <input type="text" class="td-input" value="${c.representante||''}" ${ro?'readonly':''} data-field="representante" />
+      <input type="text" class="td-input" value="${FMT.esc(c.representante)}" ${ro?'readonly':''} data-field="representante" />
     </td>
 
     <td class="col-secondary">
-      <input type="text" class="td-input td-mono" value="${c.representante_cedula||c.cedula_representante||''}" ${ro?'readonly':''} data-field="representante_cedula" />
+      <input type="text" class="td-input td-mono" value="${FMT.esc(c.representante_cedula||c.cedula_representante)}" ${ro?'readonly':''} data-field="representante_cedula" />
     </td>
 
     <td>
-      <input type="tel" class="td-input" value="${c.telefono||''}" ${ro?'readonly':''} data-field="telefono" />
+      <input type="tel" class="td-input" value="${FMT.esc(c.telefono)}" ${ro?'readonly':''} data-field="telefono" />
     </td>
 
     <td class="col-secondary">
-      <input type="email" class="td-input" value="${c.email||''}" ${ro?'readonly':''} data-field="email" />
+      <input type="email" class="td-input" value="${FMT.esc(c.email)}" ${ro?'readonly':''} data-field="email" />
     </td>
 
     <td class="col-secondary">
-      <input type="text" class="td-input" value="${c.direccion||''}" ${ro?'readonly':''} data-field="direccion" />
+      <input type="text" class="td-input" value="${FMT.esc(c.direccion)}" ${ro?'readonly':''} data-field="direccion" />
     </td>
     <td class="col-secondary">
       <select class="td-select vendedorSelect" data-id="${id}" ${ro?'disabled':''}>

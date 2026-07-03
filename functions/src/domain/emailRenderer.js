@@ -161,6 +161,7 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
           ["Cliente", f(orden.cliente_nombre)],
           ["Tipo", f(orden.tipo_de_servicio)],
           ["Fecha", escapeHtml(fecha)],
+          ["Contrato / Observaciones", f(orden.observaciones)],
           ["Motivo", f(opts.motivo)],
           ["Responsable interno", f(opts.personaInterna)]
         ])}
@@ -186,7 +187,8 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
         ["Cliente", f(orden.cliente_nombre)],
         ["Técnico", f(orden.tecnico_asignado)],
         ["Tipo", f(orden.tipo_de_servicio)],
-        ["Fecha de entrega", escapeHtml(fecha)]
+        ["Fecha de entrega", escapeHtml(fecha)],
+        ["Contrato / Observaciones", f(orden.observaciones)]
       ])}
     </table>
     ${equiposTable}

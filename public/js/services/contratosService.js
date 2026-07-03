@@ -200,12 +200,19 @@ const ContratosService = {
   // created_at (y futuros enlaces de órdenes) en los que permanecen.
   async saveSerialesManual(contratoId, desired, meta = {}) {
     const db = firebase.firestore();
-    const col = db.collection('contratos').doc(contratoId).collection('seriales');
+    const parent = db.collection('contratos').doc(contratoId);
+    const col = parent.collection('seriales');
     const norm = (s) => String(s || '').trim().toLowerCase();
 
     const snap = await col.get();
     const existing = new Map();                       // serialNorm -> docId
-    snap.docs.forEach(d => existing.set(norm(d.data().serial), d.id));
+    const existingData = new Map();                   // serialNorm -> {serial, modelo} (valor anterior)
+    snap.docs.forEach(d => {
+      const data = d.data();
+      const k = norm(data.serial);
+      existing.set(k, d.id);
+      existingData.set(k, { serial: String(data.serial || '').trim(), modelo: data.modelo || '' });
+    });
 
     const desiredMap = new Map();                     // serialNorm -> item (deduplicado)
     for (const it of (desired || [])) {
@@ -239,6 +246,31 @@ const ContratosService = {
     }
     for (const [k, docId] of existing) {
       if (!desiredMap.has(k)) batch.delete(col.doc(docId));
+    }
+
+    // Historial (auditoría): registra en cada guardado qué seriales ENTRARON y
+    // cuáles SALIERON, para no perder el valor anterior al sobrescribir/borrar.
+    // Como la identidad del doc es el serial normalizado, cambiar un serial se ve
+    // como "sale el viejo, entra el nuevo" — exactamente lo que queremos auditar.
+    const agregados = [];
+    for (const [k, it] of desiredMap) {
+      if (!existing.has(k)) agregados.push({ serial: String(it.serial || '').trim(), modelo: it.modelo || '' });
+    }
+    const eliminados = [];
+    for (const [k, prev] of existingData) {
+      if (!desiredMap.has(k)) eliminados.push(prev);
+    }
+    if (agregados.length || eliminados.length) {
+      batch.set(parent.collection('seriales_historial').doc(), {
+        at: now,
+        por: uid,
+        estado: meta.estado || null,        // 'pendiente' | 'asignados' (contexto del guardado)
+        contrato_id: meta.contrato_id || '',
+        cliente_id: meta.cliente_id || '',
+        cliente_nombre: meta.cliente_nombre || '',
+        agregados,
+        eliminados,
+      });
     }
     return batch.commit();
   },

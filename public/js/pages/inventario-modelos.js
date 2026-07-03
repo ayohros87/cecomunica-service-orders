@@ -10,7 +10,10 @@ let showInactivos = false;   // por defecto ocultos para despejar la vista
 let soloConfig = false;
 let soloAlquiler = true;     // por defecto solo los modelos que se alquilan (vista limpia)
 const _savedTimers = {};
-const qboItems = { alquileres: [], bundles: [], loaded: false };
+const qboItems = { alquileres: [], bundles: [], servicios: [], loaded: false, loading: false };
+// Frecuencia y Mantenimiento usan el MISMO ítem de QBO para todos los modelos:
+// se mapean una vez, globalmente (empresa/facturacion_config), y cada fila lo muestra.
+const factConfig = { qbo_item_frecuencia_id: '', qbo_item_mantenimiento_id: '' };
 
 /* ===== Util ===== */
 function debounce(fn, t = 220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); }; }
@@ -38,8 +41,17 @@ firebase.auth().onAuthStateChanged(async (user) => {
     });
 
     await cargarModelos();
-    await loadQboItems();
-    render();
+    qboItems.loading = true;  // la lista de QBO llega en 2º plano (ver abajo)
+    await loadFactConfig();
+    render();                 // pinta el catálogo YA desde Firestore (rápido)
+
+    // La lista de QuickBooks solo llena los NOMBRES de los desplegables de mapeo
+    // (el ID ya está guardado en cada modelo). Se carga en segundo plano para que
+    // la página abra al instante en vez de esperar la API de QBO; al llegar se
+    // repinta la tabla y el mapeo global.
+    const hint = document.getElementById('qboHint');
+    if (hint) hint.textContent = 'Cargando lista de QuickBooks…';
+    loadQboItems().then(() => { render(); refreshGlobalDisplay(); }).catch(() => {});
   }catch(e){
     console.error(e); Toast.show('Error validando usuario','bad');
   }
@@ -53,16 +65,20 @@ async function cargarModelos(){
 
 async function loadQboItems(){
   const hint = document.getElementById('qboHint');
+  qboItems.loading = true;
   try{
     const res = await firebase.functions().httpsCallable('listQBOItems')();
     qboItems.alquileres = res.data.alquileres || [];
     qboItems.bundles    = res.data.bundles || [];
+    qboItems.servicios  = res.data.servicios || [];   // para mapear Frecuencia y Mantenimiento
     qboItems.loaded     = true;
-    if (hint) hint.textContent = `QuickBooks: ${qboItems.alquileres.length} items "Alquiler" · ${qboItems.bundles.length} bundles "Mensualidad"`;
+    if (hint) hint.textContent = `QuickBooks: ${qboItems.alquileres.length} "Alquiler" · ${qboItems.bundles.length} bundles · ${qboItems.servicios.length} servicios`;
   }catch(e){
     console.error('listQBOItems', e);
     qboItems.loaded = false;
     if (hint) hint.textContent = '⚠ No se pudo cargar la lista de QuickBooks (se conserva el ID guardado).';
+  }finally{
+    qboItems.loading = false;
   }
 }
 
@@ -85,11 +101,74 @@ function qboOptions(list, selectedId){
     opts.push(`<option value="${esc(it.id)}"${on?' selected':''}>${esc(it.name)} (${esc(it.id)})</option>`);
   });
   if(sid && !found){
-    const aviso = qboItems.loaded ? 'no encontrado en QBO' : 'QBO no disponible';
+    const aviso = qboItems.loaded ? 'no encontrado en QBO' : (qboItems.loading ? 'cargando…' : 'QBO no disponible');
     opts.push(`<option value="${esc(sid)}" selected>ID ${esc(sid)} (${aviso})</option>`);
   }
   return opts.join('');
 }
+
+// Nombre legible de un ítem de servicio de QBO (para mostrar el mapeo global por fila).
+function itemNombre(id){
+  if(!id) return '<span style="color:var(--fg-4);">— sin definir —</span>';
+  const it = (qboItems.servicios||[]).find(x=>String(x.id)===String(id));
+  return it ? esc(it.name) : ('ID '+esc(id));
+}
+
+// Config global: Frecuencia y Mantenimiento comparten el MISMO ítem de QBO para todos.
+async function loadFactConfig(){
+  try{
+    const d = await firebase.firestore().collection('empresa').doc('facturacion_config').get();
+    const c = d.exists ? d.data() : {};
+    factConfig.qbo_item_frecuencia_id    = c.qbo_item_frecuencia_id || '';
+    factConfig.qbo_item_mantenimiento_id = c.qbo_item_mantenimiento_id || '';
+  }catch(e){ console.warn('factConfig', e); }
+  refreshGlobalDisplay();
+}
+
+// Muestra el mapeo global como texto (read-only) + oculta el select, para que NO se
+// cambie por accidente. Se edita con el botón ✏️ y confirmación.
+function refreshGlobalDisplay(){
+  const map = { Frec: factConfig.qbo_item_frecuencia_id, Mant: factConfig.qbo_item_mantenimiento_id };
+  for(const s of ['Frec','Mant']){
+    const lbl = document.getElementById('lbl'+s);
+    const sel = document.getElementById('global'+s);
+    if(lbl){
+      const it = (qboItems.servicios||[]).find(x=>String(x.id)===String(map[s]));
+      lbl.innerHTML = !map[s] ? '<span style="color:var(--fg-4);">— sin definir —</span>'
+        : (it ? `${esc(it.name)} <span style="color:var(--fg-3);">(${esc(it.id)})</span>` : ('ID '+esc(map[s])));
+      lbl.style.display='';
+    }
+    if(sel){ sel.innerHTML = qboOptions(qboItems.servicios, map[s]); sel.style.display='none'; }
+    const btn = document.getElementById('btn'+s); if(btn) btn.style.display='';
+  }
+}
+
+function editarGlobal(sufijo){
+  const sel = document.getElementById('global'+sufijo);
+  const lbl = document.getElementById('lbl'+sufijo);
+  const btn = document.getElementById('btn'+sufijo);
+  if(sel){ sel.style.display=''; sel.focus(); }
+  if(lbl) lbl.style.display='none';
+  if(btn) btn.style.display='none';
+}
+
+async function setGlobalItem(campo, value){
+  const sufijo = campo==='qbo_item_frecuencia_id' ? 'Frec' : 'Mant';
+  if(String(value) === String(factConfig[campo]||'')){ refreshGlobalDisplay(); return; }
+  if(!window.confirm('Vas a cambiar el ítem global — afecta a TODOS los modelos. ¿Continuar?')){
+    refreshGlobalDisplay(); return; // revertir sin guardar
+  }
+  factConfig[campo] = value;
+  try{
+    await firebase.firestore().collection('empresa').doc('facturacion_config')
+      .set({ [campo]: value, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
+    Toast.show('Mapeo global guardado','ok');
+    refreshGlobalDisplay();
+    render();
+  }catch(e){ console.error(e); Toast.show('No se pudo guardar el mapeo global','bad'); refreshGlobalDisplay(); }
+}
+window.setGlobalItem = setGlobalItem;
+window.editarGlobal = editarGlobal;
 
 /* ===== Render ===== */
 function render(){
@@ -109,7 +188,7 @@ function render(){
     const hint = soloAlquiler
       ? 'No hay equipos marcados como "Se alquila". Pulsa <b>Todos</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.'
       : 'No hay modelos para mostrar';
-    tbody.innerHTML = `<tr><td colspan="10" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
     actualizarResumen();
     return;
   }
@@ -123,6 +202,7 @@ function renderRow(m){
   const b = mapeoBadge(m);
   const tr = document.createElement('tr');
   tr.dataset.id = id;
+  const pocDis = m.es_poc===true;
   tr.innerHTML = `
     <td class="sticky-col modelo-cell">
       <span class="row-status"></span>
@@ -130,12 +210,15 @@ function renderRow(m){
     </td>
     <td>${mapTipo(m.tipo)}</td>
     <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
-    <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_alquiler"
+    <td style="text-align:center"><label class="toggle-switch" title="¿Es POC? (POC no lleva frecuencia)"><input type="checkbox" data-field="es_poc" ${pocDis?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
+    <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_alquiler"
           value="${Number.isFinite(m.precio_alquiler)?m.precio_alquiler:''}" placeholder="0.00"></td>
-    <td><input type="number" step="0.01" min="0" class="td-input td-num" data-field="precio_frecuencia"
-          value="${Number.isFinite(m.precio_frecuencia)?m.precio_frecuencia:''}" placeholder="0.00"></td>
-    <td><select class="td-select" data-field="qbo_item_alquiler_id" style="min-width:200px;">${qboOptions(qboItems.alquileres, m.qbo_item_alquiler_id)}</select></td>
-    <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:200px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
+    <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_frecuencia"
+          value="${Number.isFinite(m.precio_frecuencia)?m.precio_frecuencia:''}" placeholder="0.00" ${pocDis?'disabled title="POC no lleva frecuencia"':''}></td>
+    <td><select class="td-select" data-field="qbo_item_alquiler_id" style="min-width:170px;">${qboOptions(qboItems.alquileres, m.qbo_item_alquiler_id)}</select></td>
+    <td style="font-size:12px; color:var(--fg-2);">${pocDis ? '<span style="color:var(--fg-4);">— (POC)</span>' : itemNombre(factConfig.qbo_item_frecuencia_id)}</td>
+    <td style="font-size:12px; color:var(--fg-2);">${itemNombre(factConfig.qbo_item_mantenimiento_id)}</td>
+    <td><select class="td-select" data-field="qbo_bundle_id" style="min-width:170px;">${qboOptions(qboItems.bundles, m.qbo_bundle_id)}</select></td>
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
     <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${m.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td style="text-align:center"><button class="btn sm btn-ghost" title="Editar identidad" onclick="abrirModal('${id}')"><i data-lucide="pencil"></i></button></td>`;
@@ -154,7 +237,19 @@ function renderRow(m){
     });
   });
   tr.querySelectorAll('input[type="checkbox"][data-field]').forEach(chk=>{
-    chk.addEventListener('change', ()=>{ setRowStatus(id,'saving'); onInlineUpdate(id, { [chk.dataset.field]: !!chk.checked }); });
+    chk.addEventListener('change', ()=>{
+      setRowStatus(id,'saving');
+      if(chk.dataset.field==='es_poc'){
+        // POC no lleva frecuencia: refleja en memoria, limpia el monto y re-renderiza
+        // (la celda de frecuencia queda deshabilitada / "— (POC)").
+        const m = listaModelos.find(x=>x.id===id);
+        if(m){ m.es_poc = chk.checked; if(chk.checked) m.precio_frecuencia = 0; }
+        onInlineUpdate(id, chk.checked ? { es_poc:true, precio_frecuencia:0 } : { es_poc:false });
+        render();
+      } else {
+        onInlineUpdate(id, { [chk.dataset.field]: !!chk.checked });
+      }
+    });
   });
 
   return tr;
@@ -200,6 +295,8 @@ function abrirModal(id=null){
   modeloEditId = id;
   const creando = (id===null);
   document.getElementById('modalTitle').textContent = creando ? 'Nuevo modelo' : 'Editar modelo';
+  const btnEl = document.getElementById('btnEliminar');
+  if (btnEl) btnEl.style.display = creando ? 'none' : 'inline-flex';
   setVal('f-marca',''); setVal('f-modelo','');
   document.getElementById('f-tipo').value='P';
   document.getElementById('f-estado').value='N';
@@ -207,6 +304,7 @@ function abrirModal(id=null){
   document.getElementById('f-es-alquiler').checked = creando ? true : false; // en esta página, nuevo = de alquiler
   document.getElementById('f-alto').checked=false;
   document.getElementById('f-activo').checked=true;
+  setVal('f-aliases','');
   setVal('f-notas','');
 
   if(!creando){
@@ -219,6 +317,7 @@ function abrirModal(id=null){
       document.getElementById('f-es-alquiler').checked = m.es_alquiler===true;
       document.getElementById('f-alto').checked = m.alto_movimiento===true;
       document.getElementById('f-activo').checked = m.activo!==false;
+      setVal('f-aliases', Array.isArray(m.aliases) ? m.aliases.join(', ') : (m.aliases||m.alias||''));
       setVal('f-notas', m.notas||'');
     }
   }
@@ -240,6 +339,10 @@ async function guardarModelo(){
     es_alquiler: document.getElementById('f-es-alquiler').checked,
     alto_movimiento: document.getElementById('f-alto').checked,
     activo: document.getElementById('f-activo').checked,
+    // Aliases: grafías alternativas (coma/; separadas), sin duplicados ni vacíos.
+    // Las usa el backfill linkModeloIdPoc para enlazar equipos con nombre viejo.
+    aliases: [...new Set((document.getElementById('f-aliases').value||'')
+      .split(/[,;]/).map(s=>s.trim()).filter(Boolean))],
     notas: (document.getElementById('f-notas').value||'').trim(),
   };
   try{
@@ -249,6 +352,27 @@ async function guardarModelo(){
     await cargarModelos();
     render();
   }catch(e){ console.error(e); Toast.show('Error al guardar','bad'); }
+}
+
+// Eliminar (permanente) — pensado para consolidar duplicados del catálogo.
+async function eliminarModelo(){
+  if (modeloEditId===null) return;
+  const m = listaModelos.find(x=>x.id===modeloEditId);
+  const nombre = m ? `${(m.marca||'').trim()} ${(m.modelo||'').trim()}`.trim() : 'este modelo';
+  const ok = await Modal.confirm({
+    title: 'Eliminar modelo',
+    message: `Vas a eliminar <b>${nombre}</b> del catálogo de forma permanente. Úsalo para consolidar duplicados. Si el modelo está en uso (contratos/equipos), esas referencias quedarán sin catálogo — deja la fila que esté en uso y borra la repetida.`,
+    confirmLabel: 'Eliminar',
+    danger: true,
+  });
+  if (!ok) return;
+  try{
+    await ModelosService.deleteModelo(modeloEditId);
+    Toast.show('Modelo eliminado','ok');
+    cerrarModal();
+    await cargarModelos();
+    render();
+  }catch(e){ console.error(e); Toast.show('No se pudo eliminar el modelo','bad'); }
 }
 
 /* ===== Exportar ===== */
@@ -472,6 +596,7 @@ window.setFiltroAlquiler = setFiltroAlquiler;
 window.abrirModal = abrirModal;
 window.cerrarModal = cerrarModal;
 window.guardarModelo = guardarModelo;
+window.eliminarModelo = eliminarModelo;
 window.exportarExcel = exportarExcel;
 window.importarDeQBO = importarDeQBO;
 window.toggleAllQbo = toggleAllQbo;

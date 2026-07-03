@@ -10,6 +10,8 @@ window.VB = {
   gruposClienteCache:     new Map(),
   _draftKey:              null,
   _timeoutCliente:        null,
+  _autosaveTimer:         null,
+  _iconTimer:             null,
 
   // ---- LS cache helpers ----
   lsGet(key) {
@@ -134,8 +136,30 @@ window.VB = {
     contenedor.appendChild(lista);
   },
 
+  // Carga automática: si el texto escrito coincide exactamente con un cliente
+  // del caché (y aún no hay uno seleccionado), lo fija y carga sus grupos sin
+  // tener que pulsar "Buscar". Se llama en el blur del input.
+  async intentarCargarGruposAuto() {
+    if (this.clienteIDSeleccionado) return;
+    const texto = (document.getElementById('clienteGlobal').value || '').trim();
+    if (texto.length < 3) return;
+    if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (_) {} }
+    const needle = FMT.normalize(texto);
+    const hit = (this.clientesCache || []).find(c => c.norm === needle);
+    if (!hit) return;
+    this.clienteIDSeleccionado     = hit.id;
+    this.clienteNombreSeleccionado = hit.nombre;
+    document.getElementById('clienteGlobal').value = hit.nombre;
+    this.buscarGruposCliente();
+  },
+
   // ---- Groups search ----
-  async buscarGruposCliente() {
+  // Fuente de verdad: el catálogo del cliente (clientes/{id}.poc_grupos), leído
+  // FRESCO del servidor — así el vendedor ve los grupos que recepción/admin
+  // acaban de agregar (la caché local quedaría obsoleta). La caché en memoria
+  // evita re-lecturas dentro de la sesión; localStorage queda solo como respaldo
+  // offline. `force` (botón "refrescar grupos") salta la caché de sesión.
+  async buscarGruposCliente({ force = false } = {}) {
     const escrito    = (document.getElementById('clienteGlobal').value || '').trim();
     let nombreExacto = this.clienteNombreSeleccionado || escrito;
     if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (_) {} }
@@ -156,40 +180,74 @@ window.VB = {
     // (antes faltaban grupos de equipos legacy sin cliente_id).
     const lsKey    = 'grupos_v2_' + cacheKey;
 
-    if (this.gruposClienteCache.has(cacheKey)) {
-      const g = this.gruposClienteCache.get(cacheKey);
-      document.getElementById('grupoInput').value = g.join(', ');
-      this.renderGrupoChips(); this.actualizarResumenBatch(); this.feedbackGrupos(g.length);
+    // Caché de sesión (en memoria): consistente mientras la página esté abierta.
+    // El botón refrescar (force) la salta para volver a leer del servidor.
+    if (!force && this.gruposClienteCache.has(cacheKey)) {
+      this._pintarGrupos(this.gruposClienteCache.get(cacheKey));
       return;
     }
-    const gLS = this.lsGet(lsKey);
-    if (gLS && Array.isArray(gLS) && gLS.length) {
-      this.gruposClienteCache.set(cacheKey, gLS);
-      document.getElementById('grupoInput').value = gLS.join(', ');
-      this.renderGrupoChips(); this.actualizarResumenBatch(); this.feedbackGrupos(gLS.length);
-      return;
-    }
+
     try {
-      // Pasa id Y nombre (como el panel de admin): getByCliente corre ambas
-      // queries y une los resultados, así los equipos legacy que solo tienen
-      // `cliente` (string) sin `cliente_id` también aportan sus grupos. Con
-      // solo el id se perdían esos grupos de forma intermitente.
-      const devices = await PocService.getByCliente({
-        clienteId: this.clienteIDSeleccionado || null,
-        clienteNombre: nombreExacto || null,
-      });
-      const gruposSet = new Set();
-      devices.forEach(d => {
-        if (d.deleted === true) return;
-        (d.grupos || []).forEach(g => { const v = (g || '').toString().trim(); if (v) gruposSet.add(v); });
-      });
-      const found = Array.from(gruposSet).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
-      if (!found.length) { Toast.show('No se encontraron grupos para este cliente.', 'bad'); return; }
+      // Fuente preferida: el catálogo canónico del cliente
+      // (clientes/{id}.poc_grupos), leído FRESCO. Para clientes aún sin catálogo
+      // se cae a derivar de los equipos — pasando id Y nombre para incluir
+      // equipos legacy que solo tienen `cliente` (string) sin `cliente_id`.
+      let found = null;
+      if (this.clienteIDSeleccionado) {
+        try {
+          const cat = await PocService.getCatalogoGrupos(this.clienteIDSeleccionado, { fresh: true });
+          if (Array.isArray(cat)) found = cat.slice();
+        } catch (_) {}
+      }
+      if (found === null) {
+        const devices = await PocService.getByCliente({
+          clienteId: this.clienteIDSeleccionado || null,
+          clienteNombre: nombreExacto || null,
+          fresh: force,
+        });
+        const gruposSet = new Set();
+        devices.forEach(d => {
+          if (d.deleted === true) return;
+          (d.grupos || []).forEach(g => { const v = (g || '').toString().trim(); if (v) gruposSet.add(v); });
+        });
+        found = Array.from(gruposSet);
+      }
+      found = found.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+      if (!found.length) Toast.show('Este cliente aún no tiene grupos. Agrégalos con “+ Grupo”.', 'warn');
       this.gruposClienteCache.set(cacheKey, found);
       this.lsSet(lsKey, found);
-      document.getElementById('grupoInput').value = found.join(', ');
-      this.renderGrupoChips(); this.actualizarResumenBatch(); this.feedbackGrupos(found.length);
-    } catch (e) { console.error('Error buscando grupos:', e); Toast.show('Ocurrió un error al buscar los grupos.', 'bad'); }
+      this._pintarGrupos(found);
+    } catch (e) {
+      // Sin red: último recurso, lo último que se cacheó en localStorage.
+      const gLS = this.lsGet(lsKey);
+      if (gLS && Array.isArray(gLS) && gLS.length) {
+        this.gruposClienteCache.set(cacheKey, gLS);
+        this._pintarGrupos(gLS);
+        return;
+      }
+      console.error('Error buscando grupos:', e);
+      Toast.show('Ocurrió un error al buscar los grupos.', 'bad');
+    }
+  },
+
+  // Vuelca una lista de grupos al input + chips + feedback. Único punto de
+  // pintado para todas las rutas de buscarGruposCliente.
+  _pintarGrupos(arr) {
+    const lista = Array.isArray(arr) ? arr : [];
+    document.getElementById('grupoInput').value = lista.join(', ');
+    this.renderGrupoChips();           // ya llama a actualizarResumenBatch()
+    this.feedbackGrupos(lista.length);
+  },
+
+  // Botón "refrescar grupos": salta la caché de sesión y vuelve a leer el
+  // catálogo del servidor (para ver grupos que agregó otra persona).
+  refrescarGrupos() {
+    const nombre = (document.getElementById('clienteGlobal').value || '').trim();
+    if (!this.clienteIDSeleccionado && !nombre) {
+      Toast.show('Primero selecciona un cliente.', 'warn');
+      return;
+    }
+    this.buscarGruposCliente({ force: true });
   },
 
   feedbackGrupos(n) {
@@ -210,9 +268,13 @@ window.VB = {
     if (arr.join(', ') !== val) input.value = arr.join(', ');
     VB.grupos = arr;
     this.actualizarResumenBatch();
-    cont.innerHTML = arr.map((g, i) => `
-      <span class="chip-x">${g} <button title="Quitar" onclick="VB.quitarGrupo(${i})">×</button></span>
-    `).join('') + `<button class="btn btn-pill" onclick="VB.agregarGrupoPrompt()" title="Agregar grupo"><span style="margin-right:4px">+</span> Grupo</button>`;
+    // Solo-catálogo: los grupos vienen del catálogo del cliente. El × solo los
+    // quita de ESTE batch (no toca el catálogo). Para crear grupos nuevos se usa
+    // Admin · Grupos.
+    cont.innerHTML = arr.length
+      ? arr.map((g, i) => `<span class="chip-x">${g} <button title="Quitar del batch" onclick="VB.quitarGrupo(${i})">×</button></span>`).join('')
+      : '<span class="chips-empty">Selecciona un cliente para cargar sus grupos.</span>';
+    this.scheduleAutosave();
   },
 
   quitarGrupo(index) {
@@ -222,26 +284,6 @@ window.VB = {
     input.value = arr.join(', ');
     this.renderGrupoChips();
     if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
-  },
-
-  agregarGrupoPrompt() {
-    const g = FMT.normalizeGrupo(prompt('Nombre del grupo:'));
-    if (!g) return;
-    const input = document.getElementById('grupoInput');
-    const arr   = FMT.dedupGrupos(input.value.split(',').concat([g]));
-    input.value = arr.join(', ');
-    this.renderGrupoChips();
-    if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
-  },
-
-  agregarGrupo() {
-    const nuevoGrupo = FMT.normalizeGrupo(prompt('Nombre del nuevo grupo:'));
-    if (!nuevoGrupo) return;
-    const input = document.getElementById('grupoInput');
-    const arr   = FMT.dedupGrupos(input.value.split(',').concat([nuevoGrupo]));
-    input.value = arr.join(', ');
-    this.renderGrupoChips();
-    this.generarTabla();
   },
 
   // ---- Batch table ----
@@ -257,24 +299,59 @@ window.VB = {
 
     const nombres = document.getElementById('serialesPaste').value.trim().split('\n').map(s => s.trim()).filter(Boolean);
     document.getElementById('encabezadoTabla').innerHTML = `
-      <th>Cliente</th>
       <th>Nombre del Radio</th>
-      <th><input type="checkbox" id="gpsMaster" onchange="VB.toggleGPS(this)"> GPS</th>
-      ${grupos.map((g, i) => `<th><input type='checkbox' onchange='VB.toggleGrupo(${i}, this)'> ${g}</th>`).join('')}
+      <th style="text-align:center;">GPS</th>
+      <th>Grupos</th>
       <th>Modelo</th>
       <th></th>
     `;
-    document.getElementById('tablaEquipos').style.display = 'table';
-    document.getElementById('wrapTablaEquipos').style.display = 'block';
-    document.getElementById('scrollHintEquipos').style.display = 'block';
-    document.getElementById('tableSection').style.display = 'flex';
-    document.getElementById('exportSection').style.display = 'flex';
-    document.getElementById('actionCard').style.display = 'block';
+    this._renderBulkBar();
+    this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
     const cuerpo = document.getElementById('cuerpoTabla');
     cuerpo.innerHTML = '';
     nombres.forEach(n => this.agregarFila('', n));
-    document.getElementById('tablaEquipos').scrollIntoView({ behavior: 'smooth' });
+    document.getElementById('vbStep3').scrollIntoView({ behavior: 'smooth' });
+  },
+
+  // Muestra/oculta los pasos 3 (Equipos) y 4 (Exportación) como una unidad.
+  _mostrarPasosTabla(visible) {
+    const s3 = document.getElementById('vbStep3');
+    const s4 = document.getElementById('vbStep4');
+    if (s3) s3.style.display = visible ? 'block' : 'none';
+    if (s4) s4.style.display = visible ? 'block' : 'none';
+  },
+
+  _esc(s) {
+    return (s == null ? '' : String(s))
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  },
+
+  // Renderiza los iconos lucide de filas/celdas añadidas dinámicamente. Debounce
+  // con setTimeout(0) para coalescer las N llamadas del loop de generarTabla.
+  _renderIcons() {
+    clearTimeout(this._iconTimer);
+    this._iconTimer = setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 0);
+  },
+
+  // Barra "Aplicar a todas las filas": GPS + un toggle por grupo (master).
+  // Reemplaza el viejo marcar-toda-la-columna del encabezado de la matriz.
+  _renderBulkBar() {
+    const bar = document.getElementById('bulkBar');
+    if (!bar) return;
+    if (!VB.grupos.length) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML =
+      `<span class="vb-bulk-label">Aplicar a todas:</span>` +
+      `<label class="vb-bulk-item"><input type="checkbox" class="bulk-gps"> GPS</label>` +
+      VB.grupos.map(g =>
+        `<label class="vb-bulk-item"><input type="checkbox" class="bulk-grupo" data-grupo="${this._esc(g)}"> ${this._esc(g)}</label>`
+      ).join('');
+    const gps = bar.querySelector('.bulk-gps');
+    if (gps) gps.addEventListener('change', e => { VB.toggleGPS(e.target); VB.scheduleAutosave(); });
+    bar.querySelectorAll('.bulk-grupo').forEach(cb => {
+      cb.addEventListener('change', e => { VB.aplicarGrupoATodas(e.target.dataset.grupo, e.target.checked); VB.scheduleAutosave(); });
+    });
   },
 
   agregarFila(_, nombreRadio = '') {
@@ -282,37 +359,42 @@ window.VB = {
     const modeloGlobal = document.getElementById('modeloGlobal').value;
     const grupos       = VB.grupos;
     const fila         = document.createElement('tr');
+    const gruposChips = grupos.map(g =>
+      `<button type="button" class="chip" data-grupo="${VB._esc(g)}" onclick="event.stopPropagation(); VB.toggleChipFila(this)">${VB._esc(g)}</button>`
+    ).join('');
     fila.innerHTML = `
-      <td>${cliente}</td>
-      <td><input type="text" class="table-input nombre" value="${nombreRadio}"></td>
-      <td><input type="checkbox" class="table-checkbox gps"></td>
-      ${grupos.map(() => `<td><input type="checkbox" class="table-checkbox grupo"></td>`).join('')}
+      <td><input type="text" class="table-input nombre" value="${VB._esc(nombreRadio)}"></td>
+      <td style="text-align:center;"><input type="checkbox" class="table-checkbox gps"></td>
+      <td class="grupos-cell">${grupos.length ? `<div class="chips">${gruposChips}</div>` : '<span class="chips-empty">—</span>'}</td>
       <td>
         <select class="table-input table-select modelo">
           <option value="">— Selecciona modelo —</option>
           ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${m.label}</option>`).join('')}
         </select>
       </td>
-      <td><button class="btn btn-danger" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch();">❌</button></td>
+      <td><button class="btn btn-ghost btn-sm" title="Quitar fila" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave();"><i data-lucide="trash-2"></i></button></td>
     `;
     fila.dataset.cliente = cliente;
-    document.getElementById('tablaEquipos').style.display = 'table';
     document.getElementById('cuerpoTabla').appendChild(fila);
-    document.getElementById('wrapTablaEquipos').style.display = 'block';
-    document.getElementById('scrollHintEquipos').style.display = 'block';
-    document.getElementById('tableSection').style.display = 'flex';
-    document.getElementById('exportSection').style.display = 'flex';
-    document.getElementById('actionCard').style.display = 'block';
+    this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
+    this.scheduleAutosave();
+    this._renderIcons();
     fila.addEventListener('click', () => fila.classList.toggle('selected'));
-    fila.addEventListener('keydown', e => { if (e.key === 'Delete') { fila.remove(); VB.actualizarResumenBatch(); } });
+    fila.addEventListener('keydown', e => { if (e.key === 'Delete') { fila.remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave(); } });
   },
 
-  toggleGrupo(index, master) {
-    document.querySelectorAll('#cuerpoTabla tr').forEach(fila => {
-      const checks = fila.querySelectorAll('.grupo');
-      if (checks[index]) checks[index].checked = master.checked;
+  // Aplica (o quita) un grupo en TODAS las filas — desde la barra "Aplicar a todas".
+  aplicarGrupoATodas(grupo, on) {
+    document.querySelectorAll('#cuerpoTabla .chip').forEach(chip => {
+      if (chip.dataset.grupo === grupo) chip.classList.toggle('active', !!on);
     });
+  },
+
+  // Toggle de un chip de grupo en una fila concreta.
+  toggleChipFila(chip) {
+    chip.classList.toggle('active');
+    this.scheduleAutosave();
   },
 
   toggleGPS(master) {
@@ -326,18 +408,16 @@ window.VB = {
     if (thead) {
       thead.innerHTML = `
         <tr id="encabezadoTabla">
-          <th>Cliente</th><th>Nombre del Radio</th>
-          <th><input type="checkbox" id="gpsMaster" onchange="VB.toggleGPS(this)"> GPS</th>
-          <th>Modelo</th><th>🗑️</th>
+          <th>Nombre del Radio</th>
+          <th style="text-align:center;">GPS</th>
+          <th>Grupos</th>
+          <th>Modelo</th><th></th>
         </tr>`;
     }
     if (tbody) tbody.innerHTML = '';
-    if (table) table.style.display = 'none';
-    document.getElementById('wrapTablaEquipos').style.display = 'none';
-    document.getElementById('scrollHintEquipos').style.display = 'none';
-    document.getElementById('tableSection').style.display = 'none';
-    document.getElementById('exportSection').style.display = 'none';
-    document.getElementById('actionCard').style.display = 'none';
+    const bar = document.getElementById('bulkBar');
+    if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+    this._mostrarPasosTabla(false);
     this.actualizarResumenBatch();
   },
 
@@ -348,12 +428,21 @@ window.VB = {
     const gruposArr  = (document.getElementById('grupoInput').value || '').split(',').map(g => g.trim()).filter(Boolean);
     const tooltip    = gruposArr.length ? gruposArr.join(', ') : 'Sin grupos';
     resumenEl.innerHTML = `<strong>${filas}</strong> filas · <span class="badge completo" title="${tooltip}">${gruposArr.length}</span>`;
+    // Badge del paso 4: "Listo" cuando hay filas para exportar.
+    const be = document.getElementById('badgeExport');
+    if (be) { be.textContent = filas ? 'Listo' : 'Pendiente'; be.className = filas ? 'badge completo' : 'badge pending'; }
   },
 
   setStep(step) {
-    document.getElementById('step-prep').classList.toggle('active', step === 'prep');
-    document.getElementById('step-rev').classList.toggle('active', step === 'rev');
-    document.getElementById('step-exp').classList.toggle('active', step === 'exp');
+    // El stepper de la topbar se retiró (las secciones numeradas son el único
+    // indicador de progreso). Si no existen los nodos, no-op.
+    const p = document.getElementById('step-prep');
+    const r = document.getElementById('step-rev');
+    const e = document.getElementById('step-exp');
+    if (!p || !r || !e) return;
+    p.classList.toggle('active', step === 'prep');
+    r.classList.toggle('active', step === 'rev');
+    e.classList.toggle('active', step === 'exp');
   },
 
   limpiarTodo() {
@@ -393,8 +482,7 @@ window.VB = {
       const nombre   = (fila.querySelector('.nombre')?.value || '').trim();
       const gps      = !!fila.querySelector('.gps')?.checked;
       const modeloId = (fila.querySelector('.modelo')?.value || '').trim();
-      const checks   = fila.querySelectorAll('.grupo');
-      const gruposMarcados = VB.grupos.filter((g, i) => checks[i]?.checked);
+      const gruposMarcados = Array.from(fila.querySelectorAll('.chip.active')).map(c => c.dataset.grupo);
       if (nombre) {
         const modeloSel = this.modelosDisponibles.find(m => m.id === modeloId);
         datos.push({ cliente_id: cid, cliente_nombre: cn, radio_name: nombre, gps, modelo_id: modeloId || null, modelo_label: modeloSel ? modeloSel.label : '', grupos: gruposMarcados });
@@ -439,9 +527,9 @@ window.VB = {
       const fromCatalog = this.modelosDisponibles.find(m => m.id === modeloId);
       const fromSelect  = sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex].textContent.trim() : '';
       const modeloLabel = fromCatalog ? fromCatalog.label : (fromSelect === '— Selecciona modelo —' ? '' : fromSelect);
-      const checks = fila.querySelectorAll('.grupo');
+      const selecc = new Set(Array.from(fila.querySelectorAll('.chip.active')).map(c => c.dataset.grupo));
       const row    = { Cliente: cliente, 'Nombre del Radio': nombre, GPS: gps, Modelo: modeloLabel };
-      VB.grupos.forEach((g, i) => { row[g] = checks[i]?.checked ? '✅' : ''; });
+      VB.grupos.forEach(g => { row[g] = selecc.has(g) ? '✅' : ''; });
       datos.push(row);
     });
     const ws = XLSX.utils.json_to_sheet(datos);
@@ -464,9 +552,8 @@ window.VB = {
   },
 
   // ---- Draft autosave ----
-  saveDraft() {
-    if (!this._draftKey) return;
-    const draft = {
+  _collectDraft() {
+    return {
       cliente: document.getElementById('clienteGlobal').value || '',
       modelo:  document.getElementById('modeloGlobal').value  || '',
       grupos:  document.getElementById('grupoInput').value    || '',
@@ -475,11 +562,44 @@ window.VB = {
         nombre: tr.querySelector('.nombre')?.value || '',
         gps:    !!tr.querySelector('.gps')?.checked,
         modelo: tr.querySelector('.modelo')?.value || '',
-        grupos: Array.from(tr.querySelectorAll('.grupo')).map(ch => !!ch.checked)
+        grupos: Array.from(tr.querySelectorAll('.chip')).map(c => c.classList.contains('active'))
       }))
     };
+  },
+  _writeDraft(draft) {
+    if (!this._draftKey) return;
     localStorage.setItem(this._draftKey, JSON.stringify(draft));
+  },
+  _setAutosaveStatus(state) {
+    const el = document.getElementById('autosaveStatus');
+    if (!el) return;
+    if (state === 'idle')   { el.textContent = ''; return; }
+    if (state === 'saving') { el.textContent = '· Guardando…'; return; }
+    const t = new Date().toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+    el.textContent = `· Borrador guardado ✓ ${t}`;
+  },
+  // Autoguardado con debounce — se dispara al editar campos o la tabla, para
+  // que el vendedor no pierda el trabajo si cierra la pestaña.
+  scheduleAutosave() {
+    if (!this._draftKey) return;
+    this._setAutosaveStatus('saving');
+    clearTimeout(this._autosaveTimer);
+    this._autosaveTimer = setTimeout(() => this.autoSaveDraft(), 1500);
+  },
+  autoSaveDraft() {
+    if (!this._draftKey) return;
+    const draft = this._collectDraft();
+    // No sobreescribir un borrador previo con uno vacío (p.ej. tras "Limpiar").
+    const vacio = !draft.cliente && !draft.grupos && !draft.lista && !(draft.tabla || []).length;
+    if (vacio) { this._setAutosaveStatus('idle'); return; }
+    try { this._writeDraft(draft); this._setAutosaveStatus('saved'); }
+    catch (e) { console.warn('Autoguardado falló:', e); }
+  },
+  saveDraft() {
+    if (!this._draftKey) return;
+    this._writeDraft(this._collectDraft());
     Toast.show('Borrador guardado', 'ok');
+    this._setAutosaveStatus('saved');
   },
 
   restoreDraft() {
@@ -496,11 +616,12 @@ window.VB = {
       if ((d.tabla || []).length) {
         VB.grupos = (d.grupos || '').split(',').map(s => s.trim()).filter(Boolean);
         document.getElementById('encabezadoTabla').innerHTML = `
-          <th>Cliente</th><th>Nombre del Radio</th>
-          <th><input type="checkbox" id="gpsMaster" onchange="VB.toggleGPS(this)"> GPS</th>
-          ${VB.grupos.map((g, i) => `<th><input type='checkbox' onchange='VB.toggleGrupo(${i}, this)'> ${g}</th>`).join('')}
-          <th>Modelo</th><th>🗑️</th>`;
-        document.getElementById('wrapTablaEquipos').style.display = 'block';
+          <th>Nombre del Radio</th>
+          <th style="text-align:center;">GPS</th>
+          <th>Grupos</th>
+          <th>Modelo</th><th></th>`;
+        this._renderBulkBar();
+        this._mostrarPasosTabla(true);
         const tbody = document.getElementById('cuerpoTabla');
         tbody.innerHTML = '';
         d.tabla.forEach(r => {
@@ -509,7 +630,7 @@ window.VB = {
           tr.querySelector('.gps').checked = !!r.gps;
           const sel = tr.querySelector('.modelo');
           if (sel) sel.value = r.modelo || '';
-          tr.querySelectorAll('.grupo').forEach((ch, idx) => { ch.checked = !!(r.grupos || [])[idx]; });
+          tr.querySelectorAll('.chip').forEach((c, idx) => { c.classList.toggle('active', !!(r.grupos || [])[idx]); });
         });
         this.actualizarResumenBatch();
         Toast.show('Borrador restaurado', 'ok');
@@ -519,7 +640,9 @@ window.VB = {
 
   clearDraft() {
     if (!this._draftKey) return;
+    clearTimeout(this._autosaveTimer);
     localStorage.removeItem(this._draftKey);
+    this._setAutosaveStatus('idle');
     Toast.show('Borrador eliminado', 'warn');
   },
 
@@ -530,8 +653,8 @@ window.VB = {
     const lista   = (document.getElementById('serialesPaste').value || '').trim();
     const b1 = document.getElementById('badgeCliente');
     const b2 = document.getElementById('badgeLote');
-    if (b1) { b1.textContent = cliente ? 'Listo' : 'Pendiente'; b1.className = cliente ? 'badge ready' : 'badge pending'; }
-    if (b2) { b2.textContent = (grupos && lista) ? 'Listo' : 'Pendiente'; b2.className = (grupos && lista) ? 'badge ready' : 'badge pending'; }
+    if (b1) { b1.textContent = cliente ? 'Listo' : 'Pendiente'; b1.className = cliente ? 'badge completo' : 'badge pending'; }
+    if (b2) { b2.textContent = (grupos && lista) ? 'Listo' : 'Pendiente'; b2.className = (grupos && lista) ? 'badge completo' : 'badge pending'; }
   },
 
   init() {
@@ -551,10 +674,24 @@ window.VB = {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); VB.generarTabla(); Toast.show('Tabla generada', 'ok'); }
     });
 
-    ['clienteGlobal','grupoInput','serialesPaste'].forEach(id => {
+    ['clienteGlobal','serialesPaste'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.addEventListener('input', () => VB.updateStepBadges());
+      if (el) el.addEventListener('input', () => { VB.updateStepBadges(); VB.scheduleAutosave(); });
     });
+    const modeloEl = document.getElementById('modeloGlobal');
+    if (modeloEl) modeloEl.addEventListener('change', () => VB.scheduleAutosave());
+
+    // Carga automática de grupos al salir del campo cliente (pequeño retraso
+    // para que un clic en una sugerencia gane la selección primero).
+    const clienteEl = document.getElementById('clienteGlobal');
+    if (clienteEl) clienteEl.addEventListener('blur', () => setTimeout(() => VB.intentarCargarGruposAuto(), 200));
+
+    // Autoguardado al editar cualquier celda de la tabla (delegación).
+    const cuerpo = document.getElementById('cuerpoTabla');
+    if (cuerpo) {
+      cuerpo.addEventListener('input',  () => VB.scheduleAutosave());
+      cuerpo.addEventListener('change', () => VB.scheduleAutosave());
+    }
 
     document.addEventListener('DOMContentLoaded', () => { VB.setStep('prep'); VB.updateStepBadges(); });
   }
@@ -573,6 +710,14 @@ firebase.auth().onAuthStateChanged(async user => {
       Toast.show('Acceso restringido.', 'bad');
       window.location.href = '../index.html';
       return;
+    }
+    // Mensaje "crear grupo" según el rol: el vendedor NO entra a Administrar
+    // grupos (es solo admin/recepción), así que se le indica pedírselo a recepción.
+    const hint = document.getElementById('grupoHintVB');
+    if (hint) {
+      hint.innerHTML = (rol === ROLES.VENDEDOR)
+        ? 'Para crear un grupo nuevo, <strong>pídele a recepción</strong> que lo agregue.'
+        : 'Para crear un grupo nuevo, ve a <strong>Administrar grupos</strong> (menú “Más” en POC).';
     }
     VB._draftKey = 'vend_batch_draft_' + user.uid;
     VB.restoreDraft();

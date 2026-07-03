@@ -6,6 +6,9 @@
   let catalogos = null;
   let dragId = null;
   let overId = null;
+  let subiendo = [];        // adjuntos en curso: [{ tmpId, nombre, pct }]
+  let userRol = null;       // rol del usuario actual (para política de envío)
+  let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
 
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -91,6 +94,22 @@
               <button class="btn btn-secondary cc-add-row" id="btnAddCond"><i data-lucide="plus"></i> Agregar condición</button>
             </div>
           </div>
+
+          <!-- Adjuntos (brochures / fichas técnicas que viajan con la propuesta) -->
+          <div class="cc-panel">
+            <div class="cc-panel-head">
+              <h3><i data-lucide="paperclip"></i> Adjuntos</h3>
+              <span id="adjuntosMeta" style="font-size:12px; color:var(--fg-3);"></span>
+            </div>
+            <div class="cc-panel-body">
+              <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 12px; line-height:1.5;">
+                Archivos que se enviarán junto con la propuesta al cliente (p.ej. el brochure del radio). PDF o imágenes, hasta 10 MB cada uno.
+              </p>
+              <div id="adjuntosList"></div>
+              <input type="file" id="inpAdjunto" accept="application/pdf,image/*" multiple hidden>
+              <button class="btn btn-secondary cc-add-row" id="btnAddAdjunto"><i data-lucide="paperclip"></i> Agregar archivo</button>
+            </div>
+          </div>
         </div>
 
         <!-- Sidebar resumen -->
@@ -106,6 +125,7 @@
     renderCliente();
     renderItems();
     renderCondiciones();
+    renderAdjuntos();
     renderSummary();
     bindHeader();
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -382,6 +402,94 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // ── Adjuntos ──────────────────────────────────────────────────
+  const ADJUNTO_MAX_BYTES = 10 * 1024 * 1024;
+
+  function fmtBytes(n) {
+    n = Number(n || 0);
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function setAdjuntos(adjuntos) { draft = { ...draft, adjuntos }; renderAdjuntos(); }
+
+  function renderAdjuntos() {
+    const list = $('adjuntosList');
+    const meta = $('adjuntosMeta');
+    if (!list) return;
+    const adj = draft.adjuntos || [];
+    const totalBytes = adj.reduce((s, a) => s + Number(a.size || 0), 0);
+    if (meta) meta.textContent = adj.length
+      ? `${adj.length} archivo${adj.length === 1 ? '' : 's'} · ${fmtBytes(totalBytes)}`
+      : '';
+
+    const rowsGuardados = adj.map(a => `
+      <div class="cc-cond-row" data-adj-id="${esc(a.id)}" style="grid-template-columns:1fr auto;">
+        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+          <i data-lucide="${a.content_type === 'application/pdf' ? 'file-text' : 'image'}" style="flex:0 0 auto; color:var(--fg-3);"></i>
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${a.url ? `<a href="${esc(a.url)}" target="_blank" rel="noopener" style="color:var(--accent); text-decoration:none;">${esc(a.nombre)}</a>` : esc(a.nombre)}
+            <span style="color:var(--fg-3); font-size:11.5px;"> · ${fmtBytes(a.size)}</span>
+          </span>
+        </div>
+        <button class="btn btn-ghost btn-icon btn-sm cc-adj-del" title="Quitar"><i data-lucide="trash-2"></i></button>
+      </div>
+    `).join('');
+
+    const rowsSubiendo = subiendo.map(u => `
+      <div class="cc-cond-row" style="grid-template-columns:1fr auto;">
+        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+          <i data-lucide="loader" style="flex:0 0 auto; color:var(--fg-3);"></i>
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${esc(u.nombre)} <span style="color:var(--fg-3); font-size:11.5px;"> · subiendo ${u.pct}%</span>
+          </span>
+        </div>
+        <span></span>
+      </div>
+    `).join('');
+
+    list.innerHTML = rowsGuardados + rowsSubiendo;
+    list.querySelectorAll('.cc-adj-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.closest('[data-adj-id]')?.dataset.adjId;
+        setAdjuntos((draft.adjuntos || []).filter(a => a.id !== id));
+      });
+    });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function onAdjuntoSeleccionado(e) {
+    const files = [...(e.target.files || [])];
+    e.target.value = '';   // permite re-seleccionar el mismo archivo
+    files.forEach(file => {
+      const okTipo = file.type === 'application/pdf' || /^image\//.test(file.type);
+      if (!okTipo) { Toast.show(`"${file.name}" no es PDF ni imagen — se omitió.`, 'warn'); return; }
+      if (file.size > ADJUNTO_MAX_BYTES) { Toast.show(`"${file.name}" supera 10 MB — se omitió.`, 'warn'); return; }
+      const tmpId = CotState.uid();
+      subiendo.push({ tmpId, nombre: file.name, pct: 0 });
+      renderAdjuntos();
+      CotizacionesService.uploadAdjunto({
+        file,
+        onProgress: (pct) => {
+          const u = subiendo.find(x => x.tmpId === tmpId);
+          if (u) { u.pct = pct; renderAdjuntos(); }
+        },
+        onDone: (meta) => {
+          subiendo = subiendo.filter(x => x.tmpId !== tmpId);
+          draft.adjuntos = [...(draft.adjuntos || []), meta];
+          renderAdjuntos();
+          Toast.show(`"${meta.nombre}" adjuntado`, 'ok');
+        },
+        onError: (err) => {
+          subiendo = subiendo.filter(x => x.tmpId !== tmpId);
+          renderAdjuntos();
+          Toast.show('No se pudo subir el archivo: ' + (err?.message || err), 'bad');
+        },
+      });
+    });
+  }
+
   // ── Resumen ───────────────────────────────────────────────────
   function renderSummary() {
     const t = T.calcTotales(draft);
@@ -432,6 +540,8 @@
     $('btnAddCond').addEventListener('click', () => {
       setCondiciones([...draft.condiciones, { k: '', v: '' }]);
     });
+    $('btnAddAdjunto').addEventListener('click', () => $('inpAdjunto').click());
+    $('inpAdjunto').addEventListener('change', onAdjuntoSeleccionado);
     $('plantillaCond').addEventListener('change', (e) => {
       const p = CotState.PLANTILLAS_COND.find(x => x.id === e.target.value);
       if (p) setCondiciones(JSON.parse(JSON.stringify(p.cond)));
@@ -443,6 +553,7 @@
   function validar() {
     if (!draft.clienteId) { Toast.show('Selecciona un cliente.', 'warn'); return false; }
     if (!draft.items || !draft.items.length) { Toast.show('Agrega al menos un renglón.', 'warn'); return false; }
+    if (subiendo.length) { Toast.show('Espera a que terminen de subir los adjuntos.', 'warn'); return false; }
     return true;
   }
 
@@ -461,8 +572,17 @@
         doc.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
         const ref = await CotizacionesService.addCotizacion(doc);
-        await enqueueAprobacionMail(doc, ref.id, user);
-        Toast.show('Cotización ' + draft.id + ' guardada · solicitud enviada a ventas@cecomunica.com', 'ok');
+        // Si el creador puede enviar y la cotización está DENTRO de política, no se
+        // molesta al aprobador: la envía él mismo desde el detalle. Solo se encola la
+        // solicitud de aprobación cuando excede el umbral (o el rol no puede enviar).
+        const pol = T.requiereAprobacion({ total: doc.total, descuentoPct: doc.descuentoPct }, policyCfg);
+        const autoEnvia = canRole(userRol, 'enviar-cotizacion') && !pol.requiere;
+        if (autoEnvia) {
+          Toast.show('Cotización ' + draft.id + ' guardada · lista para enviar al cliente.', 'ok');
+        } else {
+          await enqueueAprobacionMail(doc, ref.id, user);
+          Toast.show('Cotización ' + draft.id + ' guardada · solicitud enviada a ventas@cecomunica.com', 'ok');
+        }
         setTimeout(() => { location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(ref.id); }, 800);
       } else {
         // Defensa adicional: nunca persistir cambios sobre una cotización no editable.
@@ -493,14 +613,19 @@
     }
   }
 
-  async function preview() {
+  // Vista previa: NUNCA persiste. Serializa el borrador tal como está en pantalla
+  // y lo abre en la página de impresión en modo preview (mismo layout que el
+  // documento final). El guardado solo ocurre con el botón "Guardar".
+  function preview() {
     if (!validar()) return;
-    if (document.body.dataset.modo === 'editar' && draft._docId) {
-      window.open('imprimir-cotizacion.html?id=' + encodeURIComponent(draft._docId), '_blank');
+    try {
+      sessionStorage.setItem('cotPreviewDraft', JSON.stringify(draft));
+    } catch (e) {
+      console.warn('No se pudo preparar la vista previa:', e);
+      Toast.show('No se pudo abrir la vista previa.', 'bad');
       return;
     }
-    // En modo nueva, guardamos primero como borrador para tener id.
-    await guardar();
+    window.open('imprimir-cotizacion.html?preview=1', '_blank');
   }
 
   // ── Bootstrap ─────────────────────────────────────────────────
@@ -509,8 +634,11 @@
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER];
       if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
+      userRol = rol;
 
       catalogos = await CotState.bootstrapCatalogos();
+      try { policyCfg = T.policyFromConfig(await EmpresaService.getConfig()); }
+      catch (e) { policyCfg = T.POLICY_DEFAULT; }
       const esNueva = document.body.dataset.modo === 'nueva';
       const params = new URLSearchParams(location.search);
 

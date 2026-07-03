@@ -12,7 +12,9 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
-      "tools/**"
+      "tools/**",
+      "mejoras solicitadas/**",
+      "notes.txt"
     ],
     "rewrites": [
       {
@@ -39,11 +41,20 @@
     ],
     "headers": [
       {
+        "source": "**",
+        "headers": [
+          { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+          { "key": "Content-Security-Policy", "value": "object-src 'none'; base-uri 'self'; frame-ancestors 'self'" }
+        ]
+      },
+      {
         "source": "**/*.@(js|css|html)",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
+            "value": "no-cache"
           }
         ]
       }
@@ -58,8 +69,23 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
+        "*.local",
+        "eslint.config.js",
+        ".eslintcache",
+        "backfill-*.js",
+        "migrate-*.js",
+        "rebuild-*.js",
+        "serviceAccountKey.json"
       ]
     }
-  ]
+  ],
+  "emulators": {
+    "auth": { "port": 9099 },
+    "functions": { "port": 5001 },
+    "firestore": { "port": 8080 },
+    "storage": { "port": 9199 },
+    "hosting": { "port": 5000 },
+    "ui": { "enabled": true, "port": 4000 },
+    "singleProjectMode": true
+  }
 }

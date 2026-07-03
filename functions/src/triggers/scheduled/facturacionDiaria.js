@@ -69,22 +69,39 @@ module.exports = onSchedule(
       const r = readiness(c, modelosById, modelosByName);
       const enCiclo = ["activa", "en_espera"].includes(c.facturacion_estado);
 
-      // 1) Auto-activación
+      // 1) Auto-activación. RMW del array `equipos` dentro de una transacción con
+      // re-lectura FRESCA: el snapshot de arriba pudo quedar viejo si un usuario
+      // editó el contrato durante la corrida diaria; sin la transacción, el set
+      // reescribiría equipos con datos rancios (lost update). Re-chequeamos las
+      // precondiciones sobre el doc fresco antes de escribir.
       if (autoActivar && facturable && r.requeridosOk && !enCiclo) {
-        const fechaTs = c.fecha_entrega_ultima || TS.now();
-        const equipos = Array.isArray(c.equipos)
-          ? c.equipos.map((e) => ({ ...e, fecha_inicio_facturacion: fechaTs, facturacion_estado: "activa" }))
-          : [];
         try {
-          await c._ref.set({
-            equipos,
-            facturacion_estado: "activa",
-            facturacion_fecha_inicio: fechaTs,
-            facturacion_activada_por: "auto",
-            facturacion_activada_at: admin.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
-          autoActivados++;
-          c.facturacion_estado = "activa"; // refleja para las alertas de abajo
+          const activado = await db.runTransaction(async (t) => {
+            const fresh = await t.get(c._ref);
+            if (!fresh.exists) return false;
+            const cc = fresh.data();
+            const facturableNow = cc.facturable !== false && cc.facturacion_estado !== "no_aplica";
+            const rNow = readiness(cc, modelosById, modelosByName);
+            const enCicloNow = ["activa", "en_espera"].includes(cc.facturacion_estado);
+            if (!(facturableNow && rNow.requeridosOk && !enCicloNow)) return false;
+
+            const fechaTs = cc.fecha_entrega_ultima || TS.now();
+            const equipos = Array.isArray(cc.equipos)
+              ? cc.equipos.map((e) => ({ ...e, fecha_inicio_facturacion: fechaTs, facturacion_estado: "activa" }))
+              : [];
+            t.set(c._ref, {
+              equipos,
+              facturacion_estado: "activa",
+              facturacion_fecha_inicio: fechaTs,
+              facturacion_activada_por: "auto",
+              facturacion_activada_at: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            return true;
+          });
+          if (activado) {
+            autoActivados++;
+            c.facturacion_estado = "activa"; // refleja para las alertas de abajo
+          }
         } catch (e) { logger.warn("[facturacionDiaria] no se pudo auto-activar", { id: c.id, message: e.message }); }
       }
 

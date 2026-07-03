@@ -27,6 +27,15 @@ const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
  *       several) and writes it to clientes/<id>.ip when the client has no IP yet.
  *     - Idempotent: never overwrites an existing IP. Reports `ambiguos` (clients
  *       with 2+ distinct device IPs) and `huerfanos` (no derivable IP).
+ *   { action: "linkModeloIdPoc", dryRun? }
+ *     - Links legacy poc_devices to their catalog model: writes `modelo_id` (FK)
+ *       + `modelo_label` (snapshot) by NORMALIZED match of the free-text modelo
+ *       against the `modelos` collection. The POC drawer/bulk now use a <select>
+ *       bound to the catalog (PocState.obtenerModeloId) that only pre-selects on
+ *       an exact label match, so devices holding the old free-text stopped
+ *       resolving. Additive (never deletes the legacy text) and idempotent
+ *       (skips docs that already have a modelo FK). Reports `ambiguos` (text that
+ *       maps to 2+ models) and `huerfanos` (text with no catalog match).
  *
  * Returns {action, dryRun, scanned, ...counters}. All actions are
  * idempotent — safe to re-run.
@@ -358,6 +367,311 @@ async function backfillClienteIp(dryRun) {
   };
 }
 
+// ─────────── marcarSerialesLegacy ───────────
+//
+// Corte del flujo de seriales (reemplazos/renovaciones). Marca como "legacy"
+// todo contrato que HOY esté en activo/aprobado y que NO tenga aún un estado de
+// seriales. Los saca del nuevo flujo: la lista no los muestra como "Seriales
+// pendientes", el recordatorio diario los ignora (solo busca "pendiente"), el
+// trigger de solicitud no los re-pide (idempotencia por `seriales_estado`), y el
+// correo a activaciones queda bloqueado (backstop en onSerialesAsignadasSendPdf).
+// Idempotente: salta los que ya tienen `seriales_estado` (pendiente/asignados/
+// legacy) y los que no están en activo/aprobado.
+
+async function backfillMarcarSerialesLegacy(dryRun) {
+  const startedAt = Date.now();
+  const snap = await db.collection("contratos").get();
+
+  let scanned = 0, skippedDeleted = 0, skippedEstado = 0, skippedYaEstado = 0;
+  let toWrite = 0, written = 0, errors = 0;
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) { written += opsInBatch; batch = db.batch(); opsInBatch = 0; return; }
+    try { await batch.commit(); written += opsInBatch; }
+    catch (err) {
+      logger.error("[runBackfill.marcarSerialesLegacy] batch commit failed", { err: err.message });
+      errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  for (const doc of snap.docs) {
+    scanned++;
+    const d = doc.data() || {};
+    if (d.deleted === true) { skippedDeleted++; continue; }
+    if (!["activo", "aprobado"].includes(d.estado)) { skippedEstado++; continue; }
+    if (d.seriales_estado) { skippedYaEstado++; continue; } // ya en el flujo (pendiente/asignados/legacy)
+
+    toWrite++;
+    batch.update(doc.ref, {
+      seriales_estado: "legacy",
+      seriales_legacy_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    opsInBatch++;
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+  await flushBatch();
+
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return { scanned, skippedDeleted, skippedEstado, skippedYaEstado, toWrite, written, errors, elapsedSec };
+}
+
+// ─────────── linkModeloIdPoc ───────────
+//
+// Enlaza equipos POC legacy a su modelo del catálogo por `modelo_id` (estable) +
+// `modelo_label` (snapshot), haciendo match NORMALIZADO del texto libre (`modelo`
+// y sus alias) contra la colección `modelos`. El drawer/edición-masiva del POC
+// ahora usan un <select> ligado al catálogo (PocState.obtenerModeloId), que solo
+// pre-selecciona con match exacto del label `${marca} ${modelo}`; los equipos
+// viejos guardaban el modelo como texto libre y dejaron de pre-seleccionarse.
+// Aditivo: agrega el FK donde falta y hay match único; NO borra el texto libre
+// (la lista lo sigue mostrando vía obtenerModeloTexto). Idempotente: salta los
+// que ya tienen un FK de modelo. Incluye modelos inactivos en el match.
+//
+// El match tiene varios niveles, del más estricto al más laxo, y SIEMPRE exige
+// unicidad (2+ candidatos → `ambiguo`, no adivina):
+//   1. exacto: label `${marca} ${modelo}`, o `modelo`/`nombre` solo, o su forma
+//      "apretada" (solo alfanuméricos) que iguala variantes de espaciado/guiones
+//      ("PNC 360" == "PNC-360" == "PNC360"). Se prueba el texto crudo Y sin la
+//      marca (el catálogo la lleva, "Hytera PNC360S", pero el texto viejo no).
+//   2. prefijo: el código del equipo es prefijo de UN solo código del catálogo,
+//      con un sufijo faltante de ≤2 chars ("PNC360" → "PNC360S"). Estos se marcan
+//      aparte (linkedPrefijo) y el dry-run los lista para revisión.
+// Reporta `ambiguos` (texto que mapea a 2+ modelos — normalmente catálogo
+// duplicado) y `huerfanos` (texto sin correspondencia — crear/renombrar).
+
+function _normModelo(s) {
+  return String(s == null ? "" : s)
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+// Clave "apretada": solo alfanuméricos (sin espacios/guiones/acentos). Reconcilia
+// las variantes de un mismo código de modelo escrito distinto ("PNC 360" /
+// "PNC-360" / "PNC360" → "pnc360"). Se usa como último recurso de match.
+function _tightModelo(s) {
+  return String(s == null ? "" : s)
+    .normalize("NFD").replace(/\p{Diacritic}/gu, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+// Label visible del modelo, idéntico al que arma PocState.cargarModelosMap.
+function _modeloLabel(m) {
+  const label = `${(m.marca || "").trim()} ${(m.modelo || "").trim()}`.trim();
+  return label || m.modelo || m.marca || m.nombre || "";
+}
+
+// FK de modelo ya presente en un doc POC (cualquier variante). Si hay uno, el
+// equipo ya está enlazado y se salta.
+function _modeloFk(d) {
+  return (d.modelo_id || d.modeloId || d.model_id || d.modelId || "").toString().trim();
+}
+
+// Texto libre legacy del modelo (mismos alias que revisa el frontend), sin las
+// claves FK que ya se evaluaron aparte.
+function _modeloTextoLegacy(d) {
+  return (d.modelo_label || d.modeloLabel || d.Modelo || d.modelo ||
+          d.model_label  || d.modelLabel  || d.model || "").toString().trim();
+}
+
+async function backfillLinkModeloIdPoc(dryRun) {
+  const startedAt = Date.now();
+
+  // Índices del catálogo (valor = Set de ids para detectar ambigüedad; incluye
+  // modelos inactivos):
+  //   byLabel  norm(`${marca} ${modelo}`) — el label completo que muestra el UI.
+  //   byBare   norm(modelo) / norm(nombre) — el código solo, sin marca.
+  //   byTight  alfanumérico del label completo, del modelo solo y del nombre.
+  //   tightList {tight,id} del código de modelo (sin marca) para match por prefijo.
+  //   brands   marcas normalizadas, para quitar la marca del texto libre viejo.
+  const modSnap = await db.collection("modelos").get();
+  const byLabel = new Map();
+  const byBare  = new Map();
+  const byTight = new Map();
+  const labelById = new Map();
+  const tightList = [];
+  const brands = new Set();
+  const add = (map, key, id) => {
+    if (!key) return;
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(id);
+  };
+  for (const doc of modSnap.docs) {
+    const m = doc.data() || {};
+    labelById.set(doc.id, _modeloLabel(m));
+    add(byLabel, _normModelo(`${(m.marca || "").trim()} ${(m.modelo || "").trim()}`), doc.id);
+    add(byBare,  _normModelo(m.modelo), doc.id);
+    add(byBare,  _normModelo(m.nombre), doc.id);
+    add(byTight, _tightModelo(`${m.marca || ""} ${m.modelo || ""}`), doc.id);
+    add(byTight, _tightModelo(m.modelo), doc.id);
+    add(byTight, _tightModelo(m.nombre), doc.id);
+    // Aliases opcionales del catálogo (array `aliases` o string `alias`): grafías
+    // conocidas del texto libre viejo, resueltas al modelo por el admin. Resuelven
+    // los irregulares que el match automático no puede ("PNC360R" → PNC360S-R,
+    // "TM7"/"TM-07 INTRICO" → Inrico TM7PlusSR). Match exacto/apretado, prioritario.
+    const aliasArr = Array.isArray(m.aliases) ? m.aliases : (m.alias ? [m.alias] : []);
+    for (const a of aliasArr) {
+      add(byBare,  _normModelo(a), doc.id);
+      add(byTight, _tightModelo(a), doc.id);
+    }
+    const tModelo = _tightModelo(m.modelo);
+    if (tModelo.length >= 4) tightList.push({ tight: tModelo, id: doc.id });
+    // Marcas: tokens de `marca` con ≥3 letras (no quitar "s", números, etc.).
+    for (const tok of _normModelo(m.marca).split(" ")) {
+      if (tok.length >= 3 && /[a-z]/.test(tok)) brands.add(tok);
+    }
+  }
+
+  // Quita tokens de marca del texto libre ("hytera pnc360s" → "pnc360s"). Nunca
+  // deja el texto vacío (si todo era marca, devuelve el normalizado original).
+  const stripBrand = (texto) => {
+    const toks = _normModelo(texto).split(" ").filter(Boolean);
+    const keep = toks.filter(t => !brands.has(t));
+    return keep.length ? keep.join(" ") : _normModelo(texto);
+  };
+
+  // Resuelve un texto libre → { ids, tipo }. Prueba el texto crudo y sin marca en
+  // los tres niveles exactos; si nada, intenta prefijo (código del equipo == inicio
+  // de UN código del catálogo con ≤2 chars extra). Devuelve null si no hay match.
+  const resolver = (texto) => {
+    const formas = [texto, stripBrand(texto)];
+    for (const f of formas) {
+      const n = _normModelo(f);
+      const ids = byLabel.get(n) || byBare.get(n) || byTight.get(_tightModelo(f));
+      if (ids && ids.size) return { ids, tipo: ids.size > 1 ? "ambiguo" : "exacto" };
+    }
+    // Se prefiere el candidato con el sufijo faltante MÁS corto: "PNC360" →
+    // "PNC360S" (falta "S", 1 char) antes que "PNC360S-R" (falta "SR", 2). Así el
+    // código base no se conflaciona con su variante -R. Ambiguo solo si el sufijo
+    // mínimo empata entre 2+ modelos (p.ej. duplicados aún sin consolidar).
+    const claves = [...new Set(formas.map(f => _tightModelo(f)).filter(t => t.length >= 5))];
+    let mejorExtra = Infinity;
+    let mejor = new Set();
+    for (const dt of claves) {
+      for (const c of tightList) {
+        if (c.tight.length <= dt.length || !c.tight.startsWith(dt)) continue;
+        const extra = c.tight.length - dt.length;
+        if (extra > 2) continue;
+        if (extra < mejorExtra) { mejorExtra = extra; mejor = new Set([c.id]); }
+        else if (extra === mejorExtra) mejor.add(c.id);
+      }
+    }
+    if (mejor.size === 1) return { ids: mejor, tipo: "prefijo" };
+    if (mejor.size > 1)   return { ids: mejor, tipo: "ambiguo" };
+    return null;
+  };
+
+  let scanned = 0, skippedDeleted = 0, yaLinked = 0, skippedUnchanged = 0;
+  let linked = 0, linkedExacto = 0, linkedPrefijo = 0;
+  let ambiguos = 0, huerfanos = 0, written = 0, errors = 0;
+  // Texto libre distinto -> nº de equipos, para reportar la lista accionable
+  // (qué modelos crear/renombrar, qué duplicados dedup-ear, y qué enlaces por
+  // prefijo revisar antes de escribir).
+  const huerfanoCount = new Map();
+  const ambiguoCount  = new Map();
+  const ambiguoInfo   = new Map();   // texto -> [labels de los modelos candidatos]
+  const prefijoCount  = new Map();   // "texto → label" -> nº equipos
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) { written += opsInBatch; batch = db.batch(); opsInBatch = 0; return; }
+    try { await batch.commit(); written += opsInBatch; }
+    catch (err) {
+      logger.error("[runBackfill.linkModeloIdPoc] batch commit failed", { err: err.message });
+      errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  const snap = await db.collection("poc_devices").get();
+  for (const doc of snap.docs) {
+    const d = doc.data() || {};
+    if (d.deleted === true) { skippedDeleted++; continue; }
+    scanned++;
+    if (_modeloFk(d)) { yaLinked++; continue; }          // ya enlazado
+
+    const texto = _modeloTextoLegacy(d);
+    if (!texto) { skippedUnchanged++; continue; }         // sin modelo que enlazar
+
+    const r = resolver(texto);
+    if (!r) {                                              // sin match en el catálogo
+      huerfanos++;
+      huerfanoCount.set(texto, (huerfanoCount.get(texto) || 0) + 1);
+      continue;
+    }
+    if (r.tipo === "ambiguo") {                            // texto mapea a 2+ modelos
+      ambiguos++;
+      ambiguoCount.set(texto, (ambiguoCount.get(texto) || 0) + 1);
+      if (!ambiguoInfo.has(texto)) {
+        ambiguoInfo.set(texto, [...r.ids].map(id => labelById.get(id) || id));
+      }
+      continue;
+    }
+
+    const modeloId = [...r.ids][0];
+    const label = labelById.get(modeloId) || texto;
+    linked++;
+    if (r.tipo === "prefijo") {
+      linkedPrefijo++;
+      const k = `${texto} → ${label}`;
+      prefijoCount.set(k, (prefijoCount.get(k) || 0) + 1);
+    } else {
+      linkedExacto++;
+    }
+    batch.update(doc.ref, { modelo_id: modeloId, modelo_label: label });
+    opsInBatch++;
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+  await flushBatch();
+
+  // Muestra distinta ordenada por frecuencia: la lista de trabajo real.
+  const top = (m, n) => [...m.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([t, c]) => `${t} (×${c})`);
+
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return {
+    scanned, skippedDeleted, yaLinked, skippedUnchanged,
+    linked, linkedExacto, linkedPrefijo, ambiguos, huerfanos, written, errors, elapsedSec,
+    huerfanosDistintos: huerfanoCount.size,
+    ambiguosDistintos:  ambiguoCount.size,
+    detalle: {
+      enlaces_prefijo: {
+        titulo: `Enlaces por prefijo (REVISAR antes de escribir) — ${linkedPrefijo} equipos`,
+        muestraHuerfanos: top(prefijoCount, 40),
+      },
+      ambiguos: {
+        titulo: `Ambiguos (catálogo duplicado / código repetido) — ${ambiguos} equipos, ${ambiguoCount.size} distintos`,
+        // Muestra los modelos candidatos de cada texto y marca (DUPLICADO) cuando
+        // 2+ candidatos comparten el mismo label (= filas repetidas en el catálogo).
+        muestraHuerfanos: [...ambiguoCount.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 25)
+          .map(([t, c]) => {
+            const labels = ambiguoInfo.get(t) || [];
+            const uniq = [...new Set(labels)];
+            const dup = uniq.length < labels.length ? " (DUPLICADO)" : "";
+            return `${t} (×${c}) → ${labels.length} modelos${dup}: ${uniq.join(" | ")}`;
+          }),
+      },
+      poc_devices: {
+        titulo: `Huérfanos (crear/renombrar en catálogo) — ${huerfanos} equipos, ${huerfanoCount.size} distintos`,
+        huerfanos,
+        muestraHuerfanos: top(huerfanoCount, 40),
+      },
+    },
+  };
+}
+
 // ─────────── dispatcher ───────────
 
 module.exports = onCall(
@@ -385,6 +699,12 @@ module.exports = onCall(
         break;
       case "clienteIp":
         result = await backfillClienteIp(dryRun);
+        break;
+      case "marcarSerialesLegacy":
+        result = await backfillMarcarSerialesLegacy(dryRun);
+        break;
+      case "linkModeloIdPoc":
+        result = await backfillLinkModeloIdPoc(dryRun);
         break;
       default:
         throw new HttpsError("invalid-argument", `Acción desconocida: ${action}`);

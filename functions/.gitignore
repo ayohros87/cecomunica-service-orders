@@ -1,2 +1,8 @@
 node_modules/
 *.local
+
+# Credenciales de service account — NUNCA commitear. Algunos scripts de
+# migración las requieren (serviceAccountKey.json); un `git add .` las subiría.
+serviceAccountKey.json
+*serviceAccount*.json
+*service-account*.json
