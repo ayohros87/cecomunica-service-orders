@@ -72,7 +72,7 @@ Renderers que interpolan texto de Firestore directo en `innerHTML` sin escapar:
 ## 🟡 Medios — ✅ RESUELTOS (commits `8c37147` + `721fb4c` + `12d5807`, 2026-07-03)
 
 > M1–M7 corregidos y commiteados (sin pushear aún). `node -c` + `npm run lint` (0 errores) OK. **Falta desplegar** functions+hosting. Notas:
-> - **M2**: fix puntual — `recalcularCacheContrato` ahora recomputa `equipos_total`. El rediseño completo de "dueño único" del contador (hacer el recálculo transaccional / eliminar el camino delta) se deja pendiente por riesgo; la deriva concreta queda corregida.
+> - **M2**: fix puntual — `recalcularCacheContrato` ahora recomputa `equipos_total`. **[RESUELTO 2026-07-03, commit `bc93d67`]** El rediseño completo de "dueño único" ya está hecho: `recomputarContadorTx` es el único escritor de `os_count`/`equipos_total`/`tiene_os` (transaccional; lee la subcolección de caché y escribe atómico), ambos triggers rutean por ahí y se eliminó el camino delta. Validado con unit tests (uno atrapó un bug de NaN) + integración en emulador con concurrencia.
 > - **M4**: compare-and-swap sobre el refresh_token en vez de lock con lease (evita riesgo de dejar la integración colgada). Residual: dos refresh concurrentes aún llaman a Intuit, pero el token store ya no se corrompe.
 > - **M5**: CSP conservadora (object-src/base-uri/frame-ancestors) que NO restringe script/style/connect — no rompe inline scripts ni CDNs. Endurecer a una CSP con script-src acotado requiere quitar los inline scripts/onclick primero (pendiente).
 > - **M7**: ESLint scoped a `functions/` (no a `public/js`, que usa globals de navegador — pendiente).
