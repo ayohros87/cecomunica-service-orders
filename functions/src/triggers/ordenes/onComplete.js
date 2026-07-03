@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db }               = require("../../lib/admin");
 const { buildBodyOrdenCompletada } = require("../../domain/emailRenderer");
 const { getISOWeekKey }           = require("../../domain/contractCache");
+const { atencionClienteEmailTo }  = require("../../lib/mailRecipients");
 
 module.exports = onDocumentUpdated(
   { document: "ordenes_de_servicio/{ordenId}" },
@@ -98,7 +99,7 @@ module.exports = onDocumentUpdated(
         vendedorEmail = vSnap.exists ? (vSnap.data().email || "") : "";
       }
 
-      const toList = ["atencionalcliente@cecomunica.com"];
+      const toList = [await atencionClienteEmailTo()];
       if (vendedorEmail) toList.push(vendedorEmail);
 
       await db.collection("mail_queue").add({

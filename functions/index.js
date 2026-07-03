@@ -1,5 +1,11 @@
 const admin = require("firebase-admin");
+const { setGlobalOptions } = require("firebase-functions/v2");
 admin.initializeApp();
+
+// Cap de escalado por defecto para TODAS las funciones (las opciones por-función
+// lo pueden sobreescribir). Evita que un endpoint HTTP abusado o un loop de
+// triggers dispare instancias sin tope (costo). 10 es holgado para uso interno.
+setGlobalOptions({ maxInstances: 10 });
 
 const { onContratoActivado, onContratoAprobadoSolicitaSeriales, onSerialesAsignadasSendPdf, onContratoActivadoSendPdf } = require("./src/triggers/contratos/onApproval");
 const { onContratoOrdenWrite, onOrdenWriteSyncContratoCache, onOrdenHardDelete }     = require("./src/triggers/ordenes/onWriteCacheSync");

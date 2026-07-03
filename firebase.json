@@ -71,7 +71,11 @@
         "firebase-debug.*.log",
         "*.local",
         "eslint.config.js",
-        ".eslintcache"
+        ".eslintcache",
+        "backfill-*.js",
+        "migrate-*.js",
+        "rebuild-*.js",
+        "serviceAccountKey.json"
       ]
     }
   ],

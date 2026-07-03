@@ -17,9 +17,7 @@ const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const { db } = require("../../lib/admin");
 const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
-
-// Mismos destinatarios que el correo de "seriales asignados" a activaciones.
-const ACTIVACIONES_TO = "alberto.yohros@cecomunica.com, activaciones@cecomunica.com";
+const { activacionesEmailTo }             = require("../../lib/mailRecipients");
 
 function escapeHtml(v) {
   return String(v == null ? "" : v).replace(/[&<>"']/g, s => (
@@ -160,7 +158,7 @@ module.exports = onDocumentWritten(
 
       const cc = await vendedorEmail(contrato.creado_por_uid);
       await db.collection("mail_queue").add({
-        to: ACTIVACIONES_TO,
+        to: await activacionesEmailTo(),
         ...(cc ? { cc } : {}),
         subject:   `Corrección de seriales: ${contratoIdVis} – ${clienteNombre}`,
         preheader: `Se corrigieron ${reemplazos.length} serial(es) del contrato ${contratoIdVis}`,

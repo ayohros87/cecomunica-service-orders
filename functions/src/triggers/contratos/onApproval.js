@@ -7,6 +7,7 @@ const { sendEmail, recordSendFailure }                      = require("../../lib
 const { buildEmailFromBase, escapeHtml }                    = require("../../domain/emailRenderer");
 const { attachVerificationFromMirror, buildContractHtmlForPdf } = require("../../domain/pdfRenderer");
 const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
+const { activacionesEmailTo }             = require("../../lib/mailRecipients");
 
 const HMAC_SECRET = process.env.FIRMA_SECRET || "MISSING_SECRET";
 
@@ -401,7 +402,7 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
 
       mailContext = {
         ...mailContext,
-        to:      "alberto.yohros@cecomunica.com, activaciones@cecomunica.com",
+        to:      await activacionesEmailTo(),
         cc:      vendedorInfo?.email || undefined,
         subject: `Contrato APROBADO: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
       };
@@ -563,7 +564,7 @@ const onContratoActivadoSendPdf = onDocumentUpdated(
 
       mailContext = {
         ...mailContext,
-        to:      "alberto.yohros@cecomunica.com, activaciones@cecomunica.com",
+        to:      await activacionesEmailTo(),
         cc:      vendedorInfo?.email || undefined,
         subject: `Contrato APROBADO: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
       };

@@ -34,13 +34,26 @@ function sanitizeAttachments(attachments) {
   return safe.length ? safe : undefined;
 }
 
+// Transporter singleton por instancia caliente: se crea perezosamente en el
+// primer envío (los secrets SMTP_* solo están disponibles en runtime, no al
+// cargar el módulo) y se reutiliza en envíos siguientes de la misma instancia,
+// evitando recrear la conexión en cada correo.
+let _transporter = null;
+function getTransporter() {
+  if (!_transporter) {
+    _transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: String(process.env.SMTP_SECURE).toLowerCase() === "true",
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      pool: true
+    });
+  }
+  return _transporter;
+}
+
 async function sendEmail({ to, subject, html, text, cc, bcc, attachments, replyTo }) {
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: String(process.env.SMTP_SECURE).toLowerCase() === "true",
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
+  const transporter = getTransporter();
 
   const plain = text || (html ? htmlToText(html, { wordwrap: 120 }) : undefined);
 
