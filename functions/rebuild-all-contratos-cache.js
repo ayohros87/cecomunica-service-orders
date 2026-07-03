@@ -154,26 +154,27 @@ async function rebuildAllContratosCache() {
         }
         
         // Escribir cache para cada orden
-        const batch = db.batch();
+        let batch = db.batch();
         let batchCount = 0;
-        
+
         for (const orden of ordenes) {
           const cacheData = extractCacheData(orden.id, orden.data);
           if (!cacheData) continue;
-          
+
           const cacheRef = contratoRef
             .collection("ordenes")
             .doc(orden.id);
-          
+
           batch.set(cacheRef, cacheData, { merge: true });
           batchCount++;
-          
+
           if (batchCount >= BATCH_SIZE) {
             await batch.commit();
+            batch = db.batch(); // batch nuevo: uno commiteado no se puede reutilizar
             batchCount = 0;
           }
         }
-        
+
         if (batchCount > 0) {
           await batch.commit();
         }
@@ -222,7 +223,7 @@ async function rebuildAllContratosCache() {
     
     if (DRY_RUN) {
       console.log("🏁 DRY RUN completado. No se escribió nada en DB.");
-      console.log("   Para escribir, cambia DRY_RUN = false");
+      console.log("   Para escribir, corre el script SIN el flag --dry-run");
     } else {
       console.log("🎉 Rebuild completado exitosamente!");
       console.log("");

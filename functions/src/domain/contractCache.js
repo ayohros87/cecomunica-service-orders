@@ -61,11 +61,25 @@ async function recalcularCacheContrato(contratoId) {
     });
 
     const os_count = ordenesVigentes.length;
+
+    // equipos_total es el otro contador que mantiene onContratoOrdenWrite por
+    // delta transaccional. Al recalcular (soft/hard delete, unlink) hay que
+    // recomputarlo TAMBIÉN desde las órdenes vigentes; si no, os_count se corrige
+    // pero equipos_total queda inflado con los equipos de las órdenes borradas
+    // (deriva silenciosa). Sumamos sobre TODAS las vigentes, no solo las 10 del
+    // preview. Este recálculo completo es la fuente de verdad que corrige la
+    // deriva del camino incremental.
+    let equipos_total = 0;
+    for (const orden of ordenesVigentes) {
+      equipos_total += Number(orden.data.equipos_count || 0);
+    }
+
     let updateData = {};
 
     if (os_count === 0) {
       updateData = {
         os_count: 0,
+        equipos_total: 0,
         os_linked: false,
         os_has_equipos: false,
         os_serials_preview: [],
@@ -94,6 +108,7 @@ async function recalcularCacheContrato(contratoId) {
 
       updateData = {
         os_count,
+        equipos_total,
         os_linked: true,
         os_has_equipos: hasEquipos,
         os_serials_preview: serialsPreview,
@@ -102,7 +117,7 @@ async function recalcularCacheContrato(contratoId) {
         os_dirty: false,
         updated_at: admin.firestore.FieldValue.serverTimestamp()
       };
-      logger.info("[recalcularCacheContrato] Campos recalculados", { contratoId, os_count, hasEquipos, serialsPreview });
+      logger.info("[recalcularCacheContrato] Campos recalculados", { contratoId, os_count, equipos_total, hasEquipos, serialsPreview });
     }
 
     await db.collection("contratos").doc(contratoId).update(updateData);
