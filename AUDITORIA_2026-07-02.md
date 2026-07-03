@@ -40,7 +40,11 @@ Renderers que interpolan texto de Firestore directo en `innerHTML` sin escapar:
 
 ---
 
-## 🟠 Altos
+## 🟠 Altos — ✅ RESUELTOS (commits `bd80d98` + `bb63f16`, 2026-07-03)
+
+> A1–A5 corregidos y commiteados (2 commits, sin pushear aún). Validado local: reglas compilan en emulador, `node -c` OK, firebase-admin 13 + nodemailer 9 cargan sin romper imports. **Falta desplegar** (`firebase deploy --only firestore:rules,functions,hosting`) — la prueba de integración real del bump de dependencias es el deploy. Notas por ítem:
+> - **A1** scoping quirúrgico: `empresa/config`→admin; `delete` de `ordenes_de_servicio`→admin/gerente y de `poc_devices`→admin (el cliente nunca hace hard-delete). El resto de colecciones sigue en `auth read+write` (endurecer requiere análisis de flujo por colección — pendiente, riesgo de romper el flujo core de órdenes).
+> - **A4** dependencias: 26→8 vulnerabilidades (0 críticas, 0 altas). Las 8 residuales son moderadas transitivas de google-cloud sin fix salvo degradar storage a 5.x.
 
 ### A1. Escritura sin scoping en casi todas las colecciones de negocio
 - `firestore.rules:229-269`: `ordenes_de_servicio`, `poc_devices`, `inventario_*`, `contratos`, etc. son `auth read/write` para cualquier rol → un `vista`/`tecnico` puede modificar o borrar datos de toda la empresa. Es también el vector de escritura de C2.
