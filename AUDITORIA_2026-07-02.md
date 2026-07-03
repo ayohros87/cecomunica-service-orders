@@ -87,7 +87,10 @@ Renderers que interpolan texto de Firestore directo en `innerHTML` sin escapar:
 
 ---
 
-## 🟢 Bajos / higiene
+## 🟢 Bajos / higiene — ✅ MAYORÍA RESUELTA (commits backend + frontend, 2026-07-03)
+
+> Hechos: `serviceAccountKey` en .gitignore de functions; `crypto.randomBytes` en manageUser; transporter de nodemailer como singleton `pool`; destinatarios de correo → `empresa/config` con fallback (lib/mailRecipients); `setGlobalOptions maxInstances:10`; scripts de migración fuera del bundle de deploy; **código muerto borrado** (editar-cotizacion.js, nueva-cotizacion.js); **lucide pineado** a 1.23.0 en 74 páginas.
+> **Diferido (riesgo > valor para una Baja):** `storage.rules` delete de adjuntos de taller (necesita un lookup a Firestore por rol o un modelo de dueño por orden; el safe version solo excluye roles no-taller y añade dependencia a un flujo core). Y los **refactors grandes de duplicación** (consolidar `escapeHtml`/`fmtFechaCorta`/paginación en `core/`, dedup de `poc-list.js`) — mecánicos pero de alto alcance, mejor en su propio PR enfocado. Falta también unificar versiones de firebase-compat/xlsx (requiere probar cada página).
 
 - `functions/src/callable/manageUser.js:109` genera password temporal con `Math.random()` (usar `crypto.randomBytes`).
 - nodemailer crea transporter en cada envío (mover a module scope).
