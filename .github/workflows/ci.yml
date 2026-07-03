@@ -1,8 +1,8 @@
 name: CI
 
-# Valida antes de merge/deploy: lint de las Cloud Functions (atrapa bugs como
-# referencias no definidas) y compilación de las reglas de Firestore en el
-# emulador (evita repetir el deploy accidental de reglas rotas).
+# Valida antes de merge/deploy: lint + unit tests de las Cloud Functions, y
+# compilación de reglas + test de integración del contador contra el emulador
+# de Firestore (evita repetir el deploy accidental de reglas rotas).
 on:
   pull_request:
   push:
@@ -29,6 +29,10 @@ jobs:
         working-directory: functions
         run: npm run lint
 
+      - name: Unit tests
+        working-directory: functions
+        run: npm test
+
       - name: Set up Java (Firestore emulator)
         uses: actions/setup-java@v4
         with:
@@ -38,7 +42,8 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Validate Firestore rules compile
-        # Proyecto demo-* → el emulador corre sin credenciales. Compila las reglas
-        # al arrancar; si son inválidas, el comando falla.
-        run: firebase emulators:exec --only firestore --project demo-ci "echo rules-ok"
+      - name: Rules compile + counter integration (emulator)
+        # Proyecto demo-* → el emulador corre sin credenciales. Arrancar el emulador
+        # compila las reglas (falla si son inválidas); el script de integración
+        # ejercita recomputarContadorTx (incl. concurrencia) contra Firestore real.
+        run: firebase emulators:exec --only firestore --project demo-ci "node functions/test-emulator/recompute.js"

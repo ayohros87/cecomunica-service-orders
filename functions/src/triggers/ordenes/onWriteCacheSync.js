@@ -1,7 +1,7 @@
 const { onDocumentWritten, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db }               = require("../../lib/admin");
-const { recalcularCacheContrato } = require("../../domain/contractCache");
+const { recalcularCacheContrato, recomputarContadorTx } = require("../../domain/contractCache");
 
 const onContratoOrdenWrite = onDocumentWritten(
   {
@@ -15,69 +15,35 @@ const onContratoOrdenWrite = onDocumentWritten(
     const beforeData = event.data.before?.data() || null;
     const afterData  = event.data.after?.data()  || null;
 
-    let deltaOrdenes = 0;
-    let deltaEquipos = 0;
-
-    const equiposCountBefore = Number(beforeData?.equipos_count || 0);
-    const equiposCountAfter  = Number(afterData?.equipos_count  || 0);
-
-    if (!beforeData && afterData) {
-      deltaOrdenes = 1;
-      deltaEquipos = equiposCountAfter;
-      logger.info("[onContratoOrdenWrite] CREATE", { contratoId, ordenId, equiposCountAfter, deltaOrdenes, deltaEquipos });
-    } else if (beforeData && afterData) {
-      deltaOrdenes = 0;
-      deltaEquipos = equiposCountAfter - equiposCountBefore;
-      logger.info("[onContratoOrdenWrite] UPDATE", { contratoId, ordenId, equiposCountBefore, equiposCountAfter, deltaEquipos });
-    } else if (beforeData && !afterData) {
-      deltaOrdenes = -1;
-      deltaEquipos = -equiposCountBefore;
-      logger.info("[onContratoOrdenWrite] DELETE", { contratoId, ordenId, equiposCountBefore, deltaOrdenes, deltaEquipos });
-    } else {
+    if (!beforeData && !afterData) {
       logger.warn("[onContratoOrdenWrite] Caso inesperado: ambos null", { contratoId, ordenId });
       return null;
     }
 
-    if (deltaOrdenes === 0 && deltaEquipos === 0) {
-      logger.info("[onContratoOrdenWrite] Sin cambios, salir", { contratoId, ordenId });
+    // Solo recomputa el contador cuando el cambio en el doc de caché PODRÍA
+    // afectarlo: alta, baja, cambio de equipos_count, o del flag `eliminado`.
+    // Un update que solo toca serials/updated_at no mueve el contador → se omite
+    // para no re-leer la subcolección en vano.
+    const equiposBefore   = Number(beforeData?.equipos_count || 0);
+    const equiposAfter    = Number(afterData?.equipos_count  || 0);
+    const eliminadoBefore = beforeData?.eliminado === true;
+    const eliminadoAfter  = afterData?.eliminado === true;
+
+    const esCreate = !beforeData && !!afterData;
+    const esDelete = !!beforeData && !afterData;
+    const cambioRelevante = esCreate || esDelete
+      || equiposBefore !== equiposAfter
+      || eliminadoBefore !== eliminadoAfter;
+
+    if (!cambioRelevante) {
+      logger.info("[onContratoOrdenWrite] Cambio sin impacto en el contador, salir", { contratoId, ordenId });
       return null;
     }
 
-    const contratoRef = db.collection("contratos").doc(contratoId);
-
-    try {
-      await db.runTransaction(async (t) => {
-        const contratoSnap = await t.get(contratoRef);
-        if (!contratoSnap.exists) {
-          logger.error("[onContratoOrdenWrite] Contrato no existe", { contratoId });
-          return;
-        }
-
-        const contratoData     = contratoSnap.data();
-        const osCountActual    = Number(contratoData.os_count     || 0);
-        const equiposActual    = Number(contratoData.equipos_total || 0);
-        const nuevoOsCount     = Math.max(0, osCountActual + deltaOrdenes);
-        const nuevoEquiposTotal = Math.max(0, equiposActual + deltaEquipos);
-
-        t.update(contratoRef, {
-          os_count:      nuevoOsCount,
-          equipos_total: nuevoEquiposTotal,
-          tiene_os:      nuevoOsCount > 0,
-          updated_at:    admin.firestore.FieldValue.serverTimestamp()
-        });
-
-        logger.info("[onContratoOrdenWrite] Actualizado", {
-          contratoId,
-          antes:   { os_count: osCountActual,  equipos_total: equiposActual },
-          despues: { os_count: nuevoOsCount, equipos_total: nuevoEquiposTotal }
-        });
-      });
-    } catch (err) {
-      logger.error("[onContratoOrdenWrite] Error en transaction", {
-        contratoId, ordenId, message: err.message, stack: err.stack
-      });
-    }
-
+    // DUEÑO ÚNICO del contador: recompute transaccional desde la subcolección.
+    // Reemplaza el delta incremental que competía con recalcularCacheContrato.
+    await recomputarContadorTx(contratoId);
+    logger.info("[onContratoOrdenWrite] Contador recomputado", { contratoId, ordenId, esCreate, esDelete });
     return null;
   }
 );
