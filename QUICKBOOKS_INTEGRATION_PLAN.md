@@ -81,7 +81,7 @@ facturación. Un solo documento por serial, en dos zonas:
 ```
 poc_devices/{id}   (uno por serial)
   ── NÚCLEO DE FACTURACIÓN (protegido — el módulo POC NO lo escribe) ──
-     serial, modelo_id, cliente_id, contrato_id
+     serial, modelo_id, condicion (nuevo | refurbished), cliente_id, contrato_id
      facturable (bool)     ← true SOLO en equipos de contratos nuevos (facturacion_qbo)
      tarifa { mensualidad_unit, desglose{ alquiler, frecuencia, mantenimiento, ...addons } }
      fecha_inicio (= entrega, dispara el cobro)
@@ -104,6 +104,22 @@ poc_devices/{id}   (uno por serial)
     edición solo para los `facturable=true`** (cambio a implementar en el módulo POC + reglas).
 - **Unidad sin serial:** placeholder con motivo (no bloquea el cobro; marcada para completar).
 - **Legacy:** vive solo con la capa operativa (`facturable:false`) → el motor lo ignora.
+
+> **Decisión (2026-07-03) — Condición nuevo/refurbished (el sufijo "R").** Hoy hay
+> "dos modelos" por equipo (ej. `PD78X` y `PD78X R`) porque en QBO el ítem refurbished
+> lleva **costo contable 0** (su costo landed ya se absorbió en su primera vida) y el
+> nuevo lleva su **costo landed**. Esa dualidad es correcta **en QBO** (el costo es un
+> atributo del ítem) y **se conserva**. Pero **en la app el modelo es UNO** y la
+> condición es un **atributo de la unidad** (`condicion` en el núcleo): un serial
+> reacondicionado sigue siendo el mismo modelo con el mismo historial — solo cambia su
+> condición. El puente es el mapeo **`(modelo_id, condicion) → item/bundle QBO`** en el
+> panel de tarifas. Si la tarifa refurb difiere, se resuelve en la tabla de tarifas
+> (valor por condición), **no** con modelos duplicados en el catálogo de la app.
+> **Implementación: patrón variante, SIN backfill** — los dos docs del catálogo se
+> conservan (inventario necesita stock separado por condición); el doc "R" gana
+> `variante_de: <id base>` y la resolución a `modelo_id` base + `condicion` ocurre
+> **al crear la unidad facturable** (solo datos nuevos). Los históricos no se tocan.
+> Plan completo: `public/mejoras solicitadas/07_modelos_variante_refurbished.md`.
 
 ### Contrato (acuerdo comercial — sigue siendo la autoridad)
 
@@ -129,6 +145,8 @@ contratos/{id}
 clientes/{id}   ...itbms_exento, itbms_motivo_exencion (ya existen)
                 qbo_customer_id            ← entidad de cobro (sin sub-cliente)
 modelos/{id}    precio_alquiler, precio_frecuencia, qbo_item_alquiler_id, qbo_bundle_id
+                (tarifas y qbo_* admiten valor POR CONDICIÓN — nuevo | refurbished;
+                 ej. qbo_bundle_id_refurb → "Mensualidad - <modelo> R")
 facturacion_periodos/{id}  contrato_id, periodo (YYYY-MM), qbo_invoice_id (compartido por
                 cliente en el período), monto, itbms, estado_pago,
                 lineas_facturadas:[{ref, modelo|concepto, cantidad, dias, prorrateado, montos}]
@@ -397,11 +415,16 @@ $100, omite cambios esperados, configurable), **ajuste puntual del período** (e
 inicial — §7), **sin sub-cliente / cobro por cliente** (v4), **una sola factura por cliente**
 (consolidada, agrupada por contrato — v5), **unidad facturable = `poc_devices` con núcleo
 protegido** como fuente de la factura (v5), **cargos** como líneas con ciclo de vida (por
-equipo → tarifa; plano → línea de contrato — v5), **`facturable`** deja fuera al legacy (v5).
+equipo → tarifa; plano → línea de contrato — v5), **`facturable`** deja fuera al legacy (v5),
+**condición nuevo/refurbished como atributo de la unidad** (modelo único en la app; QBO
+conserva sus dos ítems por costo contable landed vs. 0; puente = mapeo
+`(modelo, condición) → item/bundle` — 2026-07-03).
 
 Pendientes:
 - **Mapa modelo → item/bundle QBO:** sembrar el panel desde la tabla interna POC/Troncales
-  (los nombres difieren). Validar con administración.
+  (los nombres difieren). Incluye la dimensión **condición**: identificar los ítems "R"
+  (refurbished) de QBO y mapearlos como `(modelo, refurbished)`, no como modelos aparte.
+  Validar con administración.
 - **`contrato_id` en factura:** número de contrato en la descripción de la línea + `Class = contrato`.
 - **Módulo fiscal:** confirmar que factura al **Customer** con su RUC (sin sub-cliente).
 - **Pagos de vuelta:** ¿solo pagado/pendiente, o también número de factura + saldo?

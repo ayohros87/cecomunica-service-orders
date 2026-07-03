@@ -132,6 +132,15 @@ Como la factura sale del **registro de equipos**, ese registro debe ser confiabl
 Así POC sigue siendo flexible para lo operativo (grupos, SIM, programación) y para
 el legacy, pero **lo que sostiene una factura no se altera por accidente**.
 
+**Equipos refurbished (la "R"):** hoy se manejan como "dos modelos" (ej. *PD78X* y
+*PD78X R*) porque en QuickBooks el equipo refurbished lleva **costo contable 0** y el
+nuevo su **costo real (landed)**. Eso **no cambia en QuickBooks** — las dos partidas
+se quedan tal cual, cada una con su costo. Lo que cambia es en la app: el modelo será
+**uno solo** y la condición ("nuevo" o "refurbished") será un **dato del equipo**. El
+sistema apunta a la partida correcta de QuickBooks según la condición. Así un radio
+conserva su historia completa aunque pase de nuevo a reacondicionado, y no se
+duplican tarifas ni catálogos por cada variante "R".
+
 ## 5.3 Panel de facturación (para quien factura)
 
 La emisión es **automática**, pero habrá un **panel** para tener control sin aprobar
@@ -183,7 +192,9 @@ contratos nuevos** · el registro de equipos es el sustento de la factura.
    las "clases" de QuickBooks dentro de la factura del cliente)?
 2. **Pagos de vuelta:** ¿solo "pagado/pendiente", o también número de factura y saldo?
 3. **Tabla de tarifas de alquiler por modelo:** validar los valores (alquiler/frecuencia).
-4. **Equivalencia de modelos:** confirmar el nombre de cada modelo en QuickBooks vs. la app.
+4. **Equivalencia de modelos:** confirmar el nombre de cada modelo en QuickBooks vs. la app
+   (incluyendo las variantes **"R"** de refurbished, que en la app serán el mismo modelo
+   con condición "refurbished").
 5. **Factura fiscal:** confirmar que el módulo fiscal toma bien el **RUC del Cliente**.
 6. **Alerta de descuadre:** qué hacer cuando los equipos registrados **no cuadran**
    con la cantidad acordada en el contrato (solo avisar, o retener la factura).
