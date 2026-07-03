@@ -13,7 +13,8 @@
       "**/.*",
       "**/node_modules/**",
       "tools/**",
-      "mejoras solicitadas/**"
+      "mejoras solicitadas/**",
+      "notes.txt"
     ],
     "rewrites": [
       {
@@ -40,11 +41,20 @@
     ],
     "headers": [
       {
+        "source": "**",
+        "headers": [
+          { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+          { "key": "X-Content-Type-Options", "value": "nosniff" },
+          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+          { "key": "Content-Security-Policy", "value": "object-src 'none'; base-uri 'self'; frame-ancestors 'self'" }
+        ]
+      },
+      {
         "source": "**/*.@(js|css|html)",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
+            "value": "no-cache"
           }
         ]
       }
@@ -59,7 +69,9 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
+        "*.local",
+        "eslint.config.js",
+        ".eslintcache"
       ]
     }
   ],
