@@ -69,7 +69,13 @@ Renderers que interpolan texto de Firestore directo en `innerHTML` sin escapar:
 
 ---
 
-## 🟡 Medios
+## 🟡 Medios — ✅ RESUELTOS (commits `8c37147` + `721fb4c` + `12d5807`, 2026-07-03)
+
+> M1–M7 corregidos y commiteados (sin pushear aún). `node -c` + `npm run lint` (0 errores) OK. **Falta desplegar** functions+hosting. Notas:
+> - **M2**: fix puntual — `recalcularCacheContrato` ahora recomputa `equipos_total`. El rediseño completo de "dueño único" del contador (hacer el recálculo transaccional / eliminar el camino delta) se deja pendiente por riesgo; la deriva concreta queda corregida.
+> - **M4**: compare-and-swap sobre el refresh_token en vez de lock con lease (evita riesgo de dejar la integración colgada). Residual: dos refresh concurrentes aún llaman a Intuit, pero el token store ya no se corrompe.
+> - **M5**: CSP conservadora (object-src/base-uri/frame-ancestors) que NO restringe script/style/connect — no rompe inline scripts ni CDNs. Endurecer a una CSP con script-src acotado requiere quitar los inline scripts/onclick primero (pendiente).
+> - **M7**: ESLint scoped a `functions/` (no a `public/js`, que usa globals de navegador — pendiente).
 
 - **Batch reutilizado tras commit** — `functions/rebuild-all-contratos-cache.js:157`: hace `batch.set()` sobre un batch ya commiteado; explota con contratos de >500 órdenes. Y `functions/migrate-add-cliente-nombre-lower.js:20` usa un solo batch sin chunking a 500.
 - **Doble dueño del contador `os_count`/`equipos_total`** — delta transaccional vs recálculo no-transaccional con carrera; `recalcularCacheContrato` nunca recalcula `equipos_total` → deriva silenciosa. Definir un solo dueño.
