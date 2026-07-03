@@ -6,7 +6,8 @@
     "shell": "firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "lint": "eslint . --max-warnings=-1"
   },
   "engines": {
     "node": "22"
@@ -24,6 +25,8 @@
     "puppeteer-core": "^24.17.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
     "firebase-functions-test": "^3.1.0"
   },
   "private": true
