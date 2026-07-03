@@ -15,6 +15,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
   <script src="../js/services/empresaService.js"></script>
   <script src="../js/core/layout.js"></script>
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
@@ -24,18 +25,18 @@
       firebase.auth().signOut().then(() => { window.location.href = "login.html"; });
     }
 
-    document.addEventListener("DOMContentLoaded", async () => {
-      if (!firebase.apps.length) {
-        firebase.initializeApp({
-          apiKey: "AIzaSyDN1ErV5svRGPtx5tCi_FU_Vei6Dl-J_ng",
-          authDomain: "cecomunica-service-orders.firebaseapp.com",
-          projectId: "cecomunica-service-orders",
-          storageBucket: "cecomunica-service-orders.firebasestorage.app",
-          messagingSenderId: "615730883223",
-          appId: "1:615730883223:web:8cf1941241657bd08ad7d2"
-        });
-      }
+    function esc(v) {
+      return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
 
+    // Guard de acceso: firebase-init.js inicializa Firebase y redirige a login
+    // (preservando el deep-link) si no hay sesión. La lógica de la página corre
+    // dentro del callback, ya autenticado. El control por rol real vive en las
+    // reglas de Firestore (empresa/* write). Antes esta página no tenía guard.
+    document.addEventListener("DOMContentLoaded", () => {
+      verificarAccesoYAplicarVisibilidad(async (rol) => {
       const lista = document.getElementById("lista-estados");
       const form = document.getElementById("form-estado");
       const inputEstado = document.getElementById("nombre-estado");
@@ -61,7 +62,7 @@
             item.className = "crud-list-item";
             item.innerHTML = `
               <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
-              <span class="crud-list-item-label">${nombre}</span>
+              <span class="crud-list-item-label">${esc(nombre)}</span>
               <div class="crud-list-item-actions">
                 <button class="btn btn-ghost btn-icon btn-sm" onclick="editarEstado('${nombre.replace(/'/g, "\\'")}')" aria-label="Editar"><i data-lucide="pencil"></i></button>
                 <button class="btn btn-ghost btn-icon btn-sm" onclick="borrarEstado('${nombre.replace(/'/g, "\\'")}')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
@@ -106,6 +107,7 @@
       });
 
       await cargarEstados();
+      }); // fin callback verificarAccesoYAplicarVisibilidad
     });
   </script>
 </head>

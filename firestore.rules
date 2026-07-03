@@ -227,12 +227,23 @@ service cloud.firestore {
     }
 
     match /ordenes_de_servicio/{docId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      // El cliente nunca hace hard-delete de una orden a nivel doc (verificado:
+      // solo borra líneas de la subcolección `consumos`; los borrados de orden
+      // pasan por consola/admin SDK y la CF onOrdenHardDelete limpia después).
+      // Restringir delete a admin/gerente cierra el borrado de órdenes de negocio
+      // por cualquier rol, sin afectar el borrado de consumos (regla sub=** abajo).
+      allow delete: if isSignedIn() && userRole() in ["administrador","gerente"];
       match /{sub=**} { allow read, write: if isSignedIn(); }   // consumos, equipos_meta
     }
 
     match /poc_devices/{docId} {
-      allow read, write: if isSignedIn();
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      // El cliente solo hace soft-delete (update deleted:true); el hard-delete a
+      // nivel doc queda para admin.
+      allow delete: if isAdmin();
       match /{sub=**} { allow read, write: if isSignedIn(); }
     }
 
@@ -256,7 +267,16 @@ service cloud.firestore {
       allow update: if isSignedIn() && userRole() in ["administrador","gerente"];
       allow delete: if isSignedIn() && userRole() in ["administrador","gerente"];
     }
-    match /empresa/{docId}            { allow read, write: if isSignedIn(); }
+    // empresa/config guarda parámetros sensibles: umbrales de auto-envío de
+    // cotizaciones (descuento_max_pct, total_max), seriales_editores_extra
+    // (allowlist que salta el candado de seriales) e itbms_rate (tasa fiscal).
+    // Solo admin lo escribe. El resto de docs de empresa (estado_de_reparacion,
+    // operadores, emisor, tecnicos…) es config operativa que el staff edita
+    // desde las páginas de configuración, así que conserva write autenticado.
+    match /empresa/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && (docId != "config" || isAdmin());
+    }
     match /inventario_actual/{docId}  { allow read, write: if isSignedIn(); }
     match /ultimo_inventario/{docId}  { allow read, write: if isSignedIn(); }
     match /inventario_piezas/{docId}  { allow read, write: if isSignedIn(); }

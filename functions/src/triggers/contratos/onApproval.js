@@ -227,12 +227,20 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
     // `marcarSerialesLegacy` y el guard en contrato-seriales-page.js.
     try {
       const cSnap = await contratoRef.get();
-      if (cSnap.exists && cSnap.data()?.seriales_estado === "legacy") {
+      const cData = cSnap.exists ? (cSnap.data() || {}) : {};
+      if (cData.seriales_estado === "legacy") {
         logger.info("[onSerialesAsignadasSendPdf] Contrato legacy — omitido (sin correo a activaciones)", { cid });
         return null;
       }
+      // Idempotencia: los triggers de Firestore son at-least-once. Si ya se envió
+      // el PDF a activaciones para este contrato, no reenviar en una re-entrega
+      // del evento (ni al re-editar seriales, que es admin-only y no debe reenviar).
+      if (cData.seriales_pdf_enviado_at) {
+        logger.info("[onSerialesAsignadasSendPdf] PDF ya enviado antes — se omite reenvío", { cid });
+        return null;
+      }
     } catch (e) {
-      logger.warn("[onSerialesAsignadasSendPdf] No se pudo verificar estado legacy", { cid, message: e.message });
+      logger.warn("[onSerialesAsignadasSendPdf] No se pudo verificar estado legacy/idempotencia", { cid, message: e.message });
     }
 
     const omisiones = Array.isArray(after.omisiones) ? after.omisiones : [];
@@ -299,14 +307,20 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
       });
-      const page = await browser.newPage();
-      await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
-      const pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
-      });
-      await browser.close();
+      let pdfBuffer;
+      try {
+        const page = await browser.newPage();
+        await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
+        pdfBuffer = await page.pdf({
+          format: "A4",
+          printBackground: true,
+          margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
+        });
+      } finally {
+        // Cierra Chromium aunque falle setContent/pdf; si no, la instancia
+        // caliente acumula procesos de 1-2 GiB y termina en OOM.
+        await browser.close();
+      }
 
       const equiposHtml = (contrato.equipos || []).map(e =>
         `<li>${e.modelo || "—"} – ${Number(e.cantidad||0)} × $${Number(e.precio || 0).toFixed(2)}</li>`
@@ -408,6 +422,13 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         contratoId: contrato.contrato_id,
         cliente:    contrato.cliente_nombre
       });
+
+      // Marca de idempotencia: bloquea reenvíos ante re-entregas del trigger.
+      // Best-effort — si esta escritura falla, una re-entrega podría reenviar
+      // (ventana estrecha aceptada), pero el correo ya salió correctamente.
+      await contratoRef.set({
+        seriales_pdf_enviado_at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
     } catch (err) {
       logger.error("[onSerialesAsignadasSendPdf] Error en proceso", { message: err.message, stack: err.stack });
       // Registra el fallo en mail_queue para que aparezca en admin/salud.
@@ -491,14 +512,20 @@ const onContratoActivadoSendPdf = onDocumentUpdated(
         executablePath: await chromium.executablePath(),
         headless: chromium.headless,
       });
-      const page = await browser.newPage();
-      await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
-      const pdfBuffer = await page.pdf({
-        format: "A4",
-        printBackground: true,
-        margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
-      });
-      await browser.close();
+      let pdfBuffer;
+      try {
+        const page = await browser.newPage();
+        await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
+        pdfBuffer = await page.pdf({
+          format: "A4",
+          printBackground: true,
+          margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
+        });
+      } finally {
+        // Cierra Chromium aunque falle setContent/pdf; si no, la instancia
+        // caliente acumula procesos de 1-2 GiB y termina en OOM.
+        await browser.close();
+      }
 
       const equiposHtml = (contrato.equipos || []).map(e =>
         `<li>${e.modelo || "—"} – ${Number(e.cantidad||0)} × $${Number(e.precio || 0).toFixed(2)}</li>`

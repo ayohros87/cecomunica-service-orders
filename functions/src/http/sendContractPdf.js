@@ -90,14 +90,19 @@ module.exports = onRequest(
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
           });
-          const page = await browser.newPage();
-          await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
-          pdfBuffer = await page.pdf({
-            format: "A4",
-            printBackground: true,
-            margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
-          });
-          await browser.close();
+          try {
+            const page = await browser.newPage();
+            await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
+            pdfBuffer = await page.pdf({
+              format: "A4",
+              printBackground: true,
+              margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
+            });
+          } finally {
+            // Cierra Chromium aunque falle setContent/pdf; si no, la instancia
+            // caliente acumula procesos de 1-2 GiB y termina en OOM.
+            await browser.close();
+          }
         } catch (pdfErr) {
           logger.error("Puppeteer/PDF error", { message: pdfErr.message, stack: pdfErr.stack });
           return res.status(500).json({ error: "PDF generation failed" });
