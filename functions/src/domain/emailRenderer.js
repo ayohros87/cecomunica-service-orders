@@ -120,7 +120,10 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
   // internos (opts.interno) — el cliente recibe la lista sin montos.
   const interno = opts.interno === true;
   const consumosSubtabla = (e) => {
-    const cons = Array.isArray(e.consumos) ? e.consumos : [];
+    // Al cliente no se le muestran los consumos de tipo "interno" — mismo
+    // criterio que la nota impresa (ordenes-flujo.js, prepararNotaEntrega).
+    const cons = (Array.isArray(e.consumos) ? e.consumos : [])
+      .filter(c => interno || (c.tipo || "cobro") !== "interno");
     if (!cons.length) return "";
     const consRows = cons.map(c => `
           <tr>

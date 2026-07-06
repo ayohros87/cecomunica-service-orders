@@ -572,7 +572,7 @@
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>ITBMS (${doc.itbmsPct}%)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.itbms)}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Total</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${FMT.money(t.total)}</b></td></tr>
         </table>
-        ${itemsHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Renglones</h4><ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${itemsHtml}</ul>` : ''}
+        ${itemsHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Renglones</h4>${itemsHtml}` : ''}
       `,
       ctaUrl: `${location.origin}/cotizaciones/index.html?aprobar=${docId}`,
       ctaLabel: 'Revisar y aprobar',

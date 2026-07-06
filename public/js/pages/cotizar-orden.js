@@ -114,7 +114,9 @@
     list.forEach((e) => {
       if (!e || e.eliminado === true) return;
       const serial = String(e.numero_de_serie || '').trim();
-      const modelo = String(e.modelo || '').trim();
+      // Mismos fallbacks de campo que el escritor de analytics
+      // (ordenes-equipos._modeloNormEquipo) — equipos legacy usan MODEL.
+      const modelo = String(e.modelo || e.MODEL || e.modelo_nombre || '').trim();
       const id = String(e.id || '').trim();
       const key = id ? `id:${id}` : `sm:${serial.toLowerCase()}|${modelo.toLowerCase()}`;
       if (seen.has(key)) return;
@@ -623,17 +625,20 @@
   async function cargarSugeridas(eq) {
     if (!eq) return [];
     if (sugeridasCache.has(eq.id)) return sugeridasCache.get(eq.id);
-    let out = [];
     try {
+      let out = [];
       const mnorm = modeloNormDe(eq);
       if (mnorm) {
         const rows = await PiezasService.getTopByModelo(mnorm, 8);
         const byId = new Map(piezas.map(p => [p.id, p]));
         out = (rows || []).map(r => byId.get(r.pieza_id)).filter(Boolean);
       }
-    } catch (e) { console.warn('No se pudieron cargar las piezas sugeridas:', e); }
-    sugeridasCache.set(eq.id, out);
-    return out;
+      sugeridasCache.set(eq.id, out); // solo se cachea el éxito: un fallo transitorio reintenta en la próxima apertura
+      return out;
+    } catch (e) {
+      console.warn('No se pudieron cargar las piezas sugeridas:', e);
+      return [];
+    }
   }
 
   function ensureCatalogo() {
@@ -732,15 +737,23 @@
         if (b === 'Sin categoría') return -1;
         return a.localeCompare(b, 'es', { sensitivity: 'base' });
       });
+      // Tope por grupo: mantiene el DOM acotado en catálogos grandes (el
+      // render viejo capaba a 200 en total); el resto se alcanza buscando.
+      const MAX_POR_GRUPO = 100;
       html += cats.map(cat => {
         const items = grupos.get(cat);
         const collapsed = categoriasColapsadas.has(cat);
+        const visibles = items.slice(0, MAX_POR_GRUPO);
+        const resto = items.length - visibles.length;
         return `
           <button type="button" class="co-cat-group" data-cat-group="${esc(cat)}">
             <span>${esc(cat)} <span class="co-cat-group-n">(${items.length})</span></span>
-            <span>${collapsed ? '▸' : '▾'}</span>
+            <span class="co-cat-caret">${collapsed ? '▸' : '▾'}</span>
           </button>
-          <div class="co-cat-group-body${collapsed ? ' collapsed' : ''}">${items.map(itemCatalogoHtml).join('')}</div>`;
+          <div class="co-cat-group-body${collapsed ? ' collapsed' : ''}">
+            ${visibles.map(itemCatalogoHtml).join('')}
+            ${resto > 0 ? `<div class="co-cat-empty">+${resto} más — usa la búsqueda para encontrarlas</div>` : ''}
+          </div>`;
       }).join('');
       if (!piezas.length) html = '<div class="co-cat-empty">Catálogo vacío.</div>';
     }
@@ -761,10 +774,16 @@
     });
     list.querySelectorAll('[data-cat-group]').forEach(btn => {
       btn.addEventListener('click', () => {
+        // Colapsar/expandir sin re-render: solo alterna la clase del cuerpo
+        // del grupo (re-armar todo el catálogo por un toggle es un derroche).
         const cat = btn.dataset.catGroup;
-        if (categoriasColapsadas.has(cat)) categoriasColapsadas.delete(cat);
-        else categoriasColapsadas.add(cat);
-        renderCatalogoList(catalogoEl.querySelector('.co-cat-search input')?.value || '');
+        const body = btn.nextElementSibling;
+        const collapsed = !categoriasColapsadas.has(cat);
+        if (collapsed) categoriasColapsadas.add(cat);
+        else categoriasColapsadas.delete(cat);
+        if (body?.classList.contains('co-cat-group-body')) body.classList.toggle('collapsed', collapsed);
+        const caret = btn.querySelector('.co-cat-caret');
+        if (caret) caret.textContent = collapsed ? '▸' : '▾';
       });
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();

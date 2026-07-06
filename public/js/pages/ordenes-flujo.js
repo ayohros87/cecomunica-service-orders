@@ -950,12 +950,15 @@ window.copiarSeriales = function (ordenId) {
       const clienteDocPromise = _clienteDoc
         ? Promise.resolve(_clienteDoc)
         : (orden.cliente_id ? ClientesService.getCliente(orden.cliente_id).catch(() => null) : Promise.resolve(null));
-      const [clienteDoc, vendedorDoc, tecnicoDoc, empresaConfig] = await Promise.all([
+      const [clienteDoc, vendedorDoc, tecnicoDoc, empresaConfig, consumosOrden] = await Promise.all([
         clienteDocPromise,
         orden.vendedor_asignado ? UsuariosService.getUsuario(orden.vendedor_asignado).catch(() => null)    : Promise.resolve(null),
         orden.tecnico_uid      ? UsuariosService.getUsuario(orden.tecnico_uid).catch(() => null)           : Promise.resolve(null),
         // Buzón único de recepción (config de empresa) — lleva el control de entregas.
         EmpresaService.getConfig().catch(() => ({})),
+        // Repuestos registrados por el técnico — se agrupan por equipo en el
+        // correo. Fallo no-fatal: la nota sale sin esa tabla.
+        OrdenesService.getConsumos(ordenId).catch(err => { console.warn('[confirmarEntrega] no se pudieron cargar los consumos', err); return []; }),
       ]);
 
       // Persist email change back to the cliente doc if the user edited
@@ -974,11 +977,6 @@ window.copiarSeriales = function (ordenId) {
       const clienteEmailToUse = clienteEmailInput || clienteEmailOriginal;
 
       const subject = `Nota de Entrega — Orden ${ordenId}${noRecibido ? ' (No recibido)' : ''}`;
-      // Repuestos/accesorios registrados por el técnico — se agrupan por
-      // equipo en el correo. Fallo no-fatal: la nota sale sin esa tabla.
-      let consumosOrden = [];
-      try { consumosOrden = await OrdenesService.getConsumos(ordenId); }
-      catch (err) { console.warn('[confirmarEntrega] no se pudieron cargar los consumos', err); }
       // Structured payload — onMailQueued renders the body via
       // emailRenderer.renderByTemplate. fechaISO is included so the
       // email reflects the moment the entrega was confirmed even if

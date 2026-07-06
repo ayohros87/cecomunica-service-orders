@@ -943,15 +943,24 @@ window.confirmarMaterialEquipo = async function() {
       added_at: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    if (!sinControl) {
-      await PiezasService.ajustarDelta(_materialSeleccionada.id, -qty);
-      const cache = (_materialPiezas || []).find(x => x.id === _materialSeleccionada.id);
-      if (cache) cache.cantidad = Number(cache.cantidad || 0) - qty;
+    // A partir de aquí el consumo YA existe: los pasos restantes no deben
+    // presentarse como fallo total — un reintento del usuario duplicaría el
+    // consumo (y el descuento de stock).
+    const piezaId = _materialSeleccionada.id;
+    try {
+      if (!sinControl) {
+        await PiezasService.ajustarDelta(piezaId, -qty);
+        const cache = (_materialPiezas || []).find(x => x.id === piezaId);
+        if (cache) cache.cantidad = Number(cache.cantidad || 0) - qty;
+      }
+    } catch (e) {
+      console.error("❌ Material registrado pero no se pudo descontar stock:", e);
+      Toast.show("⚠️ Material registrado, pero no se pudo descontar el stock — ajústalo en inventario", "warn");
     }
 
     // Alimenta las recomendaciones "más usadas por modelo" (analytics).
     if (tipo === "cobro") {
-      try { await PiezasService.incrementarUsoAnalytics(_modeloNormEquipo(equipo), _materialSeleccionada.id); }
+      try { await PiezasService.incrementarUsoAnalytics(_modeloNormEquipo(equipo), piezaId); }
       catch (e) { console.warn("No se pudo registrar analytics de pieza:", e); }
     }
 
