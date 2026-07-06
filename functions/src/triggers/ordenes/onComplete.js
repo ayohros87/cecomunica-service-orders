@@ -86,8 +86,7 @@ module.exports = onDocumentUpdated(
 
     try {
       // Deep-link al índice de órdenes, que abre el modal de Entrega/Recepción
-      // (firma + receptor + equipos). NO apuntar a trabajar-orden.html: esa
-      // pantalla es para que el técnico opere la orden, no para revisarla.
+      // (firma + receptor + equipos).
       const ordenLink   = `https://app.cecomunica.net/ordenes/index.html?entrega=${encodeURIComponent(ordenId)}`;
       const bodyContent = buildBodyOrdenCompletada(after);
       const preheader   = `Orden ${after.orden_id || ordenId} completada · ${after.cliente_nombre || "Cliente"}`;

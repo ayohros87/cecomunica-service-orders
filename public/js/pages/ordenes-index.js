@@ -98,8 +98,8 @@ document.addEventListener("DOMContentLoaded", function () {
       // §4.4 — auto-focus search field once the initial render is done.
       _autofocusSearchIfIdle();
       // Deep-link desde los correos: ?entrega=<ordenId> abre el modal de
-      // Entrega/Recepción (firma + receptor). Reemplaza el viejo link a
-      // trabajar-orden.html en onComplete.js / ordenes-flujo.js.
+      // Entrega/Recepción (firma + receptor). Es el destino de los links
+      // generados en onComplete.js.
       _abrirEntregaDeepLink();
     } catch (e) {
       console.error("Error obteniendo rol del usuario:", e);

@@ -51,7 +51,7 @@ public/
     imprimir-contrato.html, nuevo-cliente.html
   ordenes/
     index.html, nueva-orden.html, editar-orden.html,
-    trabajar-orden.html, agregar-equipo.html,
+    agregar-equipo.html,
     firmar-entrega.html, imprimir-orden.html,
     cotizar-orden.html, cotizar-orden-formal.html,
     estado_reparacion.html, tecnicos.html, modelo-de-radio.html,
@@ -193,7 +193,6 @@ Páginas grandes con script extraído a archivo externo (cargado con `defer`).
 |---|---|---|
 | `contratos-index.js` | `contratos/index.html` | `contratos-state.js`, `contratos-approval.js`, `contratos-upload.js`, `contratos-equipos.js`, `contratos-list.js` |
 | `nuevo-contrato.js` | `contratos/nuevo-contrato.html` | `nc-state.js`, `nc-form.js`, `nc-combo.js`, `nc-preview.js`, `nc-guardar.js` |
-| `trabajar-orden.js` | `ordenes/trabajar-orden.html` | `to-state.js`, `to-cotizacion.js`, `to-servicio.js`, `to-equipos.js`, `to-pieza.js` |
 | `poc-index.js` | `POC/index.html` | `poc-state.js`, `poc-list.js`, `poc-bulk.js`, `poc-edit.js`, `poc-sim.js` |
 | `vendedores-batch.js` | `POC/vendedores-batch.html` | `window.VB` (namespace único) |
 | `ordenes-index.js` | `ordenes/index.html` | `ordenes-state.js`, `ordenes-data.js`, `ordenes-render.js`, `ordenes-filters.js`, `ordenes-flujo.js`, `ordenes-equipos.js`, `ordenes-notas.js`, `ordenes-ui.js`, `ordenes-events.js` *(Phase 5f, 2026-05-14)* |
@@ -263,8 +262,7 @@ Contratos, PoC, Configuración Órdenes).
 Páginas conservadas intencionalmente sin rewrite completo (kit primitives
 funcionan; rewrite con diminishing returns):
 
-- `ordenes/trabajar-orden.html`, `ordenes/fotos-taller.html` — UX compleja
-  específica (acordeón equipos con zebra, fixed bottom summary, lightbox)
+- `ordenes/fotos-taller.html` — UX compleja específica (photo grid, lightbox)
 - `ordenes/imprimir-orden.html`, `ordenes/nota-entrega.html`,
   `ordenes/nota-entrega-intervenciones.html`, `ordenes/cotizar-orden-formal.html`
   — print templates A4 con estilos inline intencionales para fidelidad de
@@ -449,7 +447,7 @@ Las reglas viven en `storage.rules` (en raíz, deployadas via `firebase deploy -
 | `ordenes_firmas/{file}` | Firma del receptor (entrega) | `image/png` | 1 MiB | No |
 | `ordenes_identificacion/{file}` | Foto ID del receptor (entrega — ruta nueva) | `image/*` | 6 MiB | No |
 | `entregas_identificacion/{file}` | Foto ID del receptor (entrega — ruta legacy de `firmar-entrega.html`) | `image/*` | 6 MiB | No |
-| `ordenes/{ordenId}/{equipoId}/{file}` | Adjuntos por equipo (trabajar-orden) | `image/*` o `application/pdf` | 10 MiB | Sí |
+| `ordenes/{ordenId}/{equipoId}/{file}` | Adjuntos por equipo (legacy — los subía trabajar-orden, eliminada; cotizar-orden-formal los lee) | `image/*` o `application/pdf` | 10 MiB | Sí |
 | `ordenes_taller_fotos/{ordenId}/{file}` | Fotos de equipo en taller | `image/*` | 8 MiB | Sí |
 | `contratos_firmados/{file}` | PDFs de contratos firmados | `application/pdf` | 10 MiB | No |
 

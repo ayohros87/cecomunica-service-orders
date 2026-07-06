@@ -98,7 +98,7 @@ Hardcoded colors + off-spec radii — **shipped** in commits `2bb2de8`, `12393ab
 - `menu: [{ html, divider, ... }]` — `html` lets a menu item render arbitrary markup (e.g. `<label><input type="checkbox">...`)
 - `menuId` — used to scope auto-wire IDs when a page hosts multiple overflow menus
 
-**Pages now using Layout.renderTopbar (24 total):** index, ordenes/{editar-orden, nueva-orden, agregar-equipo, admin-equipos-cliente, importar-exportar, modelo-de-radio, tecnicos, estado_reparacion, config, cotizar-orden, trabajar-orden}, contratos/index, cotizaciones/{index, editar-cotizacion, nueva-cotizacion}, clientes/{index, editar}, inventario/{index, piezas}, POC/{index, vendedores-batch, importar-poc}, perfil.
+**Pages now using Layout.renderTopbar (23 total):** index, ordenes/{editar-orden, nueva-orden, agregar-equipo, admin-equipos-cliente, importar-exportar, modelo-de-radio, tecnicos, estado_reparacion, config, cotizar-orden}, contratos/index, cotizaciones/{index, editar-cotizacion, nueva-cotizacion}, clientes/{index, editar}, inventario/{index, piezas}, POC/{index, vendedores-batch, importar-poc}, perfil.
 
 **Intentionally NOT migrated (working as-is, migration cost > benefit):**
 - `ordenes/index.html` — custom event delegation in `ordenes-events.js`, dedicated mobile header, view-toggle widget, badge cluster. Already works; migrating risks regressions in the highest-traffic page.
@@ -157,7 +157,7 @@ Pattern: `textContent = "✏️ Editar"` → `innerHTML = '<i data-lucide="penci
 |---|---|---|
 | `'index'`  | `showHome:true, showLogout:true` — primary action + overflow menu, no back | inventario/index, piezas, contratos/index, cotizaciones/index, POC/index, POC/vendedores-batch |
 | `'edit'`   | `back:{href:'index.html'}, showHome:false, showLogout:true` | editar-orden, nueva-orden, agregar-equipo, editar-cotizacion, perfil, clientes/editar |
-| `'child'`  | `back:{href:'…'}, showHome:false, showLogout:true` — back link explicit per workflow | trabajar-orden, cotizar-orden, importar-poc |
+| `'child'`  | `back:{href:'…'}, showHome:false, showLogout:true` — back link explicit per workflow | cotizar-orden, importar-poc |
 | `'home'`   | `showHome:false, showLogout:true` — root home page | index.html |
 
 Print pages (`imprimir-*.html`) deliberately do NOT use `Layout.renderTopbar` — they use `.print-toolbar` with print/close buttons, per the §3.6 / §3.5 spec.

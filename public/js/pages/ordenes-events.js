@@ -269,12 +269,6 @@
       closeAllMenus();
       mostrarDocumentos(ordenId);
     },
-    'gestionar-trabajo': (el) => {
-      const ordenId = el.dataset.ordenId;
-      if (ordenId) {
-        window.location.href = BASE + `trabajar-orden.html?id=${ordenId}`;
-      }
-    },
     'cotizar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) {
@@ -387,7 +381,7 @@
 /* ========================================
    Abrir la vista (read-only) de la orden — reutilizada por la acción
    'imprimir-orden' y por el botón "Ver orden" del modal de entrega.
-   Apunta a imprimir-orden.html (trabajar-orden está oculto / sin uso).
+   Apunta a imprimir-orden.html.
    ======================================== */
 function abrirImpresionOrden(ordenId) {
   if (!ordenId) return;
