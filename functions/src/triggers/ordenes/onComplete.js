@@ -3,7 +3,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db }               = require("../../lib/admin");
 const { buildBodyOrdenCompletada } = require("../../domain/emailRenderer");
 const { getISOWeekKey }           = require("../../domain/contractCache");
-const { atencionClienteEmailTo }  = require("../../lib/mailRecipients");
+const { atencionClienteEmailTo, tallerEmailTo } = require("../../lib/mailRecipients");
 
 module.exports = onDocumentUpdated(
   { document: "ordenes_de_servicio/{ordenId}" },
@@ -99,6 +99,8 @@ module.exports = onDocumentUpdated(
       }
 
       const toList = [await atencionClienteEmailTo()];
+      const tallerEmail = await tallerEmailTo();
+      if (tallerEmail) toList.push(tallerEmail);
       if (vendedorEmail) toList.push(vendedorEmail);
 
       await db.collection("mail_queue").add({

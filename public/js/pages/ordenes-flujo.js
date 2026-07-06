@@ -984,6 +984,12 @@ window.copiarSeriales = function (ordenId) {
       if (vendedorDoc?.email) internos.add(vendedorDoc.email.toLowerCase().trim());
       if (tecnicoDoc?.email)  internos.add(tecnicoDoc.email.toLowerCase().trim());
       if (recepcionEmail)     internos.add(recepcionEmail);
+      // Jefe de taller (empresa/config.email_taller — string o array).
+      const tallerCfg = empresaConfig?.email_taller;
+      (Array.isArray(tallerCfg) ? tallerCfg : (tallerCfg ? [tallerCfg] : []))
+        .map(e => String(e || '').toLowerCase().trim())
+        .filter(Boolean)
+        .forEach(e => internos.add(e));
       // Si el correo del cliente coincide con uno interno, mándalo como cliente
       // (sin link) — nunca le des el deep-link a un destinatario externo.
       if (clienteEmail) internos.delete(clienteEmail);

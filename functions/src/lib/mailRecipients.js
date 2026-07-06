@@ -8,6 +8,9 @@ const { db } = require("./admin");
 const FALLBACKS = {
   activaciones:     "alberto.yohros@cecomunica.com, activaciones@cecomunica.com",
   atencion_cliente: "atencionalcliente@cecomunica.com",
+  // Jefe de taller: sin buzón por defecto — se configura en empresa/config
+  // (email_taller). Los callers omiten el destinatario cuando viene vacío.
+  taller:           "",
 };
 
 async function configEmailTo(key, fallback) {
@@ -24,5 +27,6 @@ async function configEmailTo(key, fallback) {
 
 const activacionesEmailTo    = () => configEmailTo("activaciones", FALLBACKS.activaciones);
 const atencionClienteEmailTo = () => configEmailTo("atencion_cliente", FALLBACKS.atencion_cliente);
+const tallerEmailTo          = () => configEmailTo("taller", FALLBACKS.taller);
 
-module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, FALLBACKS };
+module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, tallerEmailTo, FALLBACKS };
