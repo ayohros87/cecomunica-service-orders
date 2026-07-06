@@ -122,6 +122,7 @@
       out.push({
         id: id || key,
         serial, modelo,
+        marca: String(e.marca || e.fabricante || '').trim(),
         nombre: String(e.nombre || '').trim(),
         intervencion: String(e.trabajo_tecnico || '').trim(),
       });
@@ -431,7 +432,7 @@
     const matches = buscarPiezas(term);
     if (!matches.length) { pop.hidden = true; pop.innerHTML = ''; return; }
     pop.innerHTML = matches.map((p, i) => `
-      <div class="co-pza-item${i === 0 ? ' active' : ''}" data-pid="${esc(p.id)}">
+      <div class="co-pza-item${i === 0 ? ' active' : ''}" data-pid="${esc(p.id)}" title="${esc(p.nombre || '—')}">
         <span>${esc(p.nombre || '—')}</span>
         <span class="meta">${esc(p.sku || '')} · ${FMT.money(p.precio_venta || 0)}</span>
       </div>`).join('');
@@ -607,6 +608,33 @@
   // ── Catálogo de piezas (drawer lateral, arrastrable a un equipo) ───────────
   let catalogoTargetEq = null;
   let catalogoEl = null;
+  const sugeridasCache = new Map();   // eqId → piezas sugeridas por analytics
+  const categoriasColapsadas = new Set();
+
+  // modelo_norm con el mismo criterio que el escritor de analytics
+  // (ordenes-equipos._modeloNormEquipo): marca_modelo normalizado.
+  const _norm = (x = '') => String(x).toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  function modeloNormDe(eq) {
+    const m = _norm(eq?.modelo || '');
+    const b = _norm(eq?.marca || '');
+    return b ? `${b}_${m}` : m;
+  }
+
+  async function cargarSugeridas(eq) {
+    if (!eq) return [];
+    if (sugeridasCache.has(eq.id)) return sugeridasCache.get(eq.id);
+    let out = [];
+    try {
+      const mnorm = modeloNormDe(eq);
+      if (mnorm) {
+        const rows = await PiezasService.getTopByModelo(mnorm, 8);
+        const byId = new Map(piezas.map(p => [p.id, p]));
+        out = (rows || []).map(r => byId.get(r.pieza_id)).filter(Boolean);
+      }
+    } catch (e) { console.warn('No se pudieron cargar las piezas sugeridas:', e); }
+    sugeridasCache.set(eq.id, out);
+    return out;
+  }
 
   function ensureCatalogo() {
     if (catalogoEl) return catalogoEl;
@@ -649,25 +677,75 @@
     el.hidden = false;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     setTimeout(() => el.querySelector('.co-cat-search input')?.focus(), 30);
+    // Las sugeridas por modelo llegan async — re-render cuando estén (solo si
+    // el drawer sigue abierto sobre el mismo equipo y sin búsqueda activa).
+    if (eq && !sugeridasCache.has(eq.id)) {
+      cargarSugeridas(eq).then(() => {
+        const term = el.querySelector('.co-cat-search input')?.value || '';
+        if (!el.hidden && catalogoTargetEq === eqId && !term.trim()) renderCatalogoList(term);
+      });
+    }
   }
 
   function cerrarCatalogo() { if (catalogoEl) catalogoEl.hidden = true; catalogoTargetEq = null; }
 
-  function renderCatalogoList(term) {
-    const list = catalogoEl.querySelector('.co-cat-list');
-    const q = (term || '').trim().toLowerCase();
-    const rows = piezas
-      .filter(p => !q || (p.nombre || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))
-      .slice(0, 200);
-    if (!rows.length) { list.innerHTML = '<div class="co-cat-empty">Sin coincidencias.</div>'; return; }
-    list.innerHTML = rows.map(p => `
-      <div class="co-cat-item" draggable="true" data-pid="${esc(p.id)}">
+  function itemCatalogoHtml(p) {
+    const nombre = p.nombre || p.descripcion || 'Pieza';
+    return `
+      <div class="co-cat-item" draggable="true" data-pid="${esc(p.id)}" title="${esc(nombre)}">
         <div class="co-cat-item-main">
-          <span class="co-cat-item-name">${esc(p.nombre || p.descripcion || 'Pieza')}</span>
+          <span class="co-cat-item-name">${esc(nombre)}</span>
           <span class="co-cat-item-meta">${esc(p.sku || '—')} · ${FMT.money(p.precio_venta || 0)}${(p.cantidad != null) ? ' · stock ' + Number(p.cantidad) : ''}</span>
         </div>
         <button class="btn btn-secondary btn-icon btn-sm" data-add-pid="${esc(p.id)}" title="Agregar"><i data-lucide="plus"></i></button>
-      </div>`).join('');
+      </div>`;
+  }
+
+  function renderCatalogoList(term) {
+    const list = catalogoEl.querySelector('.co-cat-list');
+    const q = (term || '').trim().toLowerCase();
+
+    let html = '';
+    if (q) {
+      // Búsqueda: filtra globalmente (lista plana, sin grupos).
+      const rows = piezas
+        .filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))
+        .slice(0, 200);
+      html = rows.length ? rows.map(itemCatalogoHtml).join('') : '<div class="co-cat-empty">Sin coincidencias.</div>';
+    } else {
+      // Arriba: sugeridas para el modelo del equipo destino (analytics de uso).
+      const eq = equipos.find(x => x.id === catalogoTargetEq);
+      const sugeridas = (eq && sugeridasCache.get(eq.id)) || [];
+      if (sugeridas.length) {
+        html += `<div class="co-cat-sugeridas-hd">Sugeridas para ${esc(eq.modelo || 'el modelo')}</div>`;
+        html += sugeridas.map(itemCatalogoHtml).join('');
+      }
+      // Luego: grupos colapsables por categoría ("Sin categoría" al final).
+      const grupos = new Map();
+      piezas.forEach(p => {
+        const cat = String(p.categoria || '').trim() || 'Sin categoría';
+        if (!grupos.has(cat)) grupos.set(cat, []);
+        grupos.get(cat).push(p);
+      });
+      const cats = [...grupos.keys()].sort((a, b) => {
+        if (a === 'Sin categoría') return 1;
+        if (b === 'Sin categoría') return -1;
+        return a.localeCompare(b, 'es', { sensitivity: 'base' });
+      });
+      html += cats.map(cat => {
+        const items = grupos.get(cat);
+        const collapsed = categoriasColapsadas.has(cat);
+        return `
+          <button type="button" class="co-cat-group" data-cat-group="${esc(cat)}">
+            <span>${esc(cat)} <span class="co-cat-group-n">(${items.length})</span></span>
+            <span>${collapsed ? '▸' : '▾'}</span>
+          </button>
+          <div class="co-cat-group-body${collapsed ? ' collapsed' : ''}">${items.map(itemCatalogoHtml).join('')}</div>`;
+      }).join('');
+      if (!piezas.length) html = '<div class="co-cat-empty">Catálogo vacío.</div>';
+    }
+
+    list.innerHTML = html;
     list.querySelectorAll('.co-cat-item').forEach(item => {
       const pid = item.dataset.pid;
       item.addEventListener('dragstart', (e) => {
@@ -679,6 +757,14 @@
       btn.addEventListener('click', () => {
         const p = piezas.find(x => x.id === btn.dataset.addPid);
         if (p && catalogoTargetEq) addPiezaLine(catalogoTargetEq, p);
+      });
+    });
+    list.querySelectorAll('[data-cat-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cat = btn.dataset.catGroup;
+        if (categoriasColapsadas.has(cat)) categoriasColapsadas.delete(cat);
+        else categoriasColapsadas.add(cat);
+        renderCatalogoList(catalogoEl.querySelector('.co-cat-search input')?.value || '');
       });
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();
