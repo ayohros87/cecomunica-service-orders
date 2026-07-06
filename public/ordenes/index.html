@@ -27,6 +27,8 @@
 <script src="../js/services/empresaService.js"></script>
 <script src="../js/services/usuariosService.js"></script>
 <script src="../js/services/mailService.js"></script>
+<script src="../js/services/piezasService.js"></script>
+<script src="../js/domain/scoring.js"></script>
 <script src="../js/ui/toast.js"></script>
 <script src="../js/ui/modal.js"></script>
 <script src="../js/pages/ordenes-state.js"></script>
@@ -609,6 +611,22 @@
       <input type="text" id="trabajoMotivoNoDisponible" class="motivo-no-disponible" placeholder="Motivo (libre)">
     </div>
 
+    <!-- Materiales / piezas del equipo (consumos) — el técnico selecciona los
+         materiales usados junto a la intervención; cotizar-orden los precarga. -->
+    <div class="equipo-fotos-section" id="equipoMaterialesSection">
+      <div class="equipo-fotos-header">
+        <div class="equipo-fotos-title">
+          <i data-lucide="puzzle"></i>
+          <span>Materiales / piezas</span>
+          <span class="equipo-fotos-count" id="equipoMaterialesCount">0</span>
+        </div>
+        <button type="button" class="btn btn-secondary equipo-fotos-add" data-action="abrir-material-equipo">
+          <i data-lucide="plus"></i> Seleccionar materiales
+        </button>
+      </div>
+      <div class="equipo-materiales-list" id="equipoMaterialesList"></div>
+    </div>
+
     <div class="equipo-fotos-section" id="equipoFotosSection">
       <div class="equipo-fotos-header">
         <div class="equipo-fotos-title">
@@ -628,6 +646,47 @@
     <div class="modal-footer-mobile">
       <button class="btn btn-secondary btn-full" data-action="cerrar-trabajo-equipo">Cancelar</button>
       <button id="btnGuardarTrabajoEquipo" class="btn btn-primary btn-full" data-action="guardar-trabajo-equipo"><i data-lucide="save"></i> Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal selección de material (pieza) para la intervención de un equipo -->
+<div id="modalMaterialEquipo" class="overlay hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header-mobile">
+      <div>
+        <div class="modal-title-mobile">Seleccionar material</div>
+        <div id="materialEquipoSub" class="modal-subtitle"></div>
+      </div>
+      <button class="btn btn-ghost" data-action="cerrar-material-equipo"><i data-lucide="x"></i></button>
+    </div>
+
+    <input type="text" id="materialBuscar" class="form-input" placeholder="Buscar pieza por nombre, SKU o marca…" autocomplete="off">
+    <div id="materialSugerencias" class="material-sugerencias"></div>
+    <div id="materialSeleccion" class="material-seleccion"></div>
+
+    <div class="material-detalle">
+      <div class="form-field">
+        <label class="form-label" for="materialQty">Cantidad</label>
+        <input type="number" id="materialQty" class="form-input" min="1" step="1" value="1">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="materialTipo">Tipo</label>
+        <select id="materialTipo" class="form-select">
+          <option value="cobro">Cobro</option>
+          <option value="garantia">Garantía</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="materialPrecio">Precio unit. (USD)</label>
+        <input type="number" id="materialPrecio" class="form-input" min="0" step="0.01" value="0">
+      </div>
+    </div>
+    <div id="materialSubtotal" class="material-subtotal"></div>
+
+    <div class="modal-footer-mobile">
+      <button class="btn btn-secondary btn-full" data-action="cerrar-material-equipo">Cancelar</button>
+      <button id="btnAgregarMaterial" class="btn btn-primary btn-full" data-action="confirmar-material-equipo"><i data-lucide="plus"></i> Agregar material</button>
     </div>
   </div>
 </div>

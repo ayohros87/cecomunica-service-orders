@@ -739,8 +739,22 @@ window.copiarSeriales = function (ordenId) {
   // Distill the order doc down to just the fields the entrega email
   // needs. Mail queue docs are public to anyone with read on the
   // collection, so we ship the minimum, not the whole order.
-  function _ordenEmailSnapshot(orden) {
+  // `consumos` (opcional) son las piezas registradas por el técnico
+  // (subcolección consumos); se adjuntan por equipo casando por equipoId
+  // con fallback por serial (equipos legacy sin id).
+  function _ordenEmailSnapshot(orden, consumos = []) {
     if (!orden || typeof orden !== 'object') return {};
+    const consumosDe = (e) => (Array.isArray(consumos) ? consumos : []).filter(c => {
+      if (!c || !c.equipoId) return false;
+      const serial = e.numero_de_serie || e.SERIAL || e.serial || null;
+      return (e.id && c.equipoId === e.id) || (serial && c.equipoId === serial);
+    }).map(c => ({
+      pieza_nombre: c.pieza_nombre || null,
+      sku:          c.sku || null,
+      qty:          Number(c.qty || 0),
+      precio_unit:  Number(c.precio_unit || 0),
+      tipo:         c.tipo || 'cobro',
+    }));
     const equipos = (Array.isArray(orden.equipos) ? orden.equipos : [])
       .filter(e => e && !e.eliminado)
       .map(e => ({
@@ -754,6 +768,8 @@ window.copiarSeriales = function (ordenId) {
         cargador: !!e.cargador,
         fuente:   !!e.fuente,
         antena:   !!e.antena,
+        // Repuestos/accesorios usados por el técnico (tabla por equipo).
+        consumos: consumosDe(e),
       }));
     return {
       cliente_nombre:    orden.cliente_nombre    || null,
@@ -934,12 +950,15 @@ window.copiarSeriales = function (ordenId) {
       const clienteDocPromise = _clienteDoc
         ? Promise.resolve(_clienteDoc)
         : (orden.cliente_id ? ClientesService.getCliente(orden.cliente_id).catch(() => null) : Promise.resolve(null));
-      const [clienteDoc, vendedorDoc, tecnicoDoc, empresaConfig] = await Promise.all([
+      const [clienteDoc, vendedorDoc, tecnicoDoc, empresaConfig, consumosOrden] = await Promise.all([
         clienteDocPromise,
         orden.vendedor_asignado ? UsuariosService.getUsuario(orden.vendedor_asignado).catch(() => null)    : Promise.resolve(null),
         orden.tecnico_uid      ? UsuariosService.getUsuario(orden.tecnico_uid).catch(() => null)           : Promise.resolve(null),
         // Buzón único de recepción (config de empresa) — lleva el control de entregas.
         EmpresaService.getConfig().catch(() => ({})),
+        // Repuestos registrados por el técnico — se agrupan por equipo en el
+        // correo. Fallo no-fatal: la nota sale sin esa tabla.
+        OrdenesService.getConsumos(ordenId).catch(err => { console.warn('[confirmarEntrega] no se pudieron cargar los consumos', err); return []; }),
       ]);
 
       // Persist email change back to the cliente doc if the user edited
@@ -964,7 +983,7 @@ window.copiarSeriales = function (ordenId) {
       // there's queue latency. ctaUrl se inyecta por-destinatario (abajo).
       const baseData = {
         ordenId,
-        orden:  _ordenEmailSnapshot(orden),
+        orden:  _ordenEmailSnapshot(orden, consumosOrden),
         opts:   { ...emailOpts, fechaISO: new Date().toISOString() },
       };
 
@@ -984,6 +1003,12 @@ window.copiarSeriales = function (ordenId) {
       if (vendedorDoc?.email) internos.add(vendedorDoc.email.toLowerCase().trim());
       if (tecnicoDoc?.email)  internos.add(tecnicoDoc.email.toLowerCase().trim());
       if (recepcionEmail)     internos.add(recepcionEmail);
+      // Jefe de taller (empresa/config.email_taller — string o array).
+      const tallerCfg = empresaConfig?.email_taller;
+      (Array.isArray(tallerCfg) ? tallerCfg : (tallerCfg ? [tallerCfg] : []))
+        .map(e => String(e || '').toLowerCase().trim())
+        .filter(Boolean)
+        .forEach(e => internos.add(e));
       // Si el correo del cliente coincide con uno interno, mándalo como cliente
       // (sin link) — nunca le des el deep-link a un destinatario externo.
       if (clienteEmail) internos.delete(clienteEmail);
@@ -994,9 +1019,11 @@ window.copiarSeriales = function (ordenId) {
       }
       for (const to of internos) {
         if (!to) continue;
+        // `interno: true` habilita columnas sensibles (precio/tipo) en la
+        // tabla de repuestos — el cliente recibe la nota sin precios.
         jobs.push(MailService.enqueue({
           to, subject, template: 'nota_entrega',
-          data: { ...baseData, ctaUrl: internalCtaUrl },
+          data: { ...baseData, ctaUrl: internalCtaUrl, interno: true },
         }));
       }
       await Promise.allSettled(jobs);

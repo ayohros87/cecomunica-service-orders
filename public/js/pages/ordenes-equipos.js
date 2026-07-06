@@ -488,6 +488,7 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   if (fotoInput) fotoInput.value = "";
   _setFotoStatus("");
   _renderEquipoFotos();
+  _renderEquipoMateriales();
   const txtEl = document.getElementById("trabajoEquipoText");
   if (txtEl) txtEl.value = (e.trabajo_tecnico || "").toString();
 
@@ -709,6 +710,283 @@ window.verTrabajoEquipo = function(ordenId, idx) {
     texto || (noDisponible ? `Equipo no disponible para intervención${motivo ? ` · ${motivo}` : ""}` : "Sin intervención registrada"),
     !texto && !noDisponible
   );
+};
+
+/* ========================================
+   Materiales / piezas del equipo (consumos)
+   El técnico selecciona los materiales usados junto a la intervención; se
+   guardan en ordenes_de_servicio/{id}/consumos (mismo esquema que el flujo
+   legacy de trabajar-orden) y cotizar-orden los precarga como líneas.
+   ======================================== */
+
+let _materialPiezas = null;         // cache del catálogo (inventario_piezas activas)
+let _materialSeleccionada = null;   // pieza elegida en el modal de selección
+let _materialBuscarTimer = null;
+let _materialWired = false;
+
+function _normMaterial(x = "") {
+  return String(x).toLowerCase().trim().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+}
+
+// modelo_norm con el mismo criterio que el flujo legacy (marca_modelo),
+// para que analytics_piezas_modelo siga acumulando sobre las mismas claves.
+function _modeloNormEquipo(equipo) {
+  const m = _normMaterial(equipo?.modelo || equipo?.MODEL || equipo?.modelo_nombre || "");
+  const b = _normMaterial(equipo?.marca || equipo?.fabricante || "");
+  return b ? `${b}_${m}` : m;
+}
+
+function _nombrePieza(p) {
+  return p?.descripcion || p?.nombre || (((p?.marca || "") + " " + (p?.modelo || "")).trim()) || "Pieza";
+}
+
+// Los consumos legacy de equipos sin id se guardaban bajo el número de serie;
+// se conserva ese criterio para que cotizar-orden los siga casando.
+function _consumoKeyEquipoActual() {
+  const e = _resolveEquipoActual();
+  if (!e) return null;
+  return e.id || (e.numero_de_serie || e.serial || e.SERIAL || "").toString() || null;
+}
+
+function _ordenActualBloqueada() {
+  const o = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
+  return o?.cotizacion_emitida === true;
+}
+
+async function _ensureMaterialPiezas() {
+  if (_materialPiezas) return _materialPiezas;
+  const all = await PiezasService.getPiezas();
+  _materialPiezas = (all || []).filter(p => p.activo !== false);
+  return _materialPiezas;
+}
+
+async function _renderEquipoMateriales() {
+  const list = document.getElementById("equipoMaterialesList");
+  const countEl = document.getElementById("equipoMaterialesCount");
+  if (!list || !countEl) return;
+  const equipoKey = _consumoKeyEquipoActual();
+  if (!_trabajoOrdenId || !equipoKey) { list.innerHTML = ""; countEl.textContent = "0"; return; }
+
+  list.innerHTML = '<div class="equipo-fotos-empty">Cargando materiales…</div>';
+  let items = [];
+  try {
+    items = await OrdenesService.getConsumos(_trabajoOrdenId, { equipoId: equipoKey });
+  } catch (e) {
+    console.error("❌ Error cargando materiales del equipo:", e);
+    list.innerHTML = '<div class="equipo-fotos-empty">No se pudieron cargar los materiales.</div>';
+    return;
+  }
+
+  countEl.textContent = String(items.length);
+  if (!items.length) {
+    list.innerHTML = '<div class="equipo-fotos-empty">Sin materiales. Toca «Seleccionar materiales» para registrar el primero.</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(it => `
+    <div class="equipo-material-item">
+      <div class="equipo-material-main">
+        <span class="equipo-material-name">${escapeHtml(it.pieza_nombre || "Pieza")}</span>
+        <span class="equipo-material-meta">${it.sku ? escapeHtml(it.sku) + " · " : ""}${Number(it.qty || 0)} × ${FMT.money(it.precio_unit || 0)} · ${escapeHtml(it.tipo || "cobro")}</span>
+      </div>
+      <button type="button" class="btn btn-ghost equipo-material-del" data-action="eliminar-material-equipo" data-linea-id="${escapeHtml(it.id)}" title="Eliminar material">
+        <i data-lucide="trash-2"></i>
+      </button>
+    </div>
+  `).join("");
+  APP.utils.lucideRefresh(list);
+}
+
+function _materialSubtotalRefresh() {
+  const out = document.getElementById("materialSubtotal");
+  if (!out) return;
+  const qty = Math.max(1, parseInt(document.getElementById("materialQty")?.value || "1", 10));
+  const tipo = document.getElementById("materialTipo")?.value || "cobro";
+  const precio = Number(document.getElementById("materialPrecio")?.value || 0);
+  if (!_materialSeleccionada) { out.textContent = ""; return; }
+  const sub = tipo === "cobro" ? qty * precio : 0;
+  out.innerHTML = `Subtotal: <strong>${FMT.money(sub)}</strong>${tipo === "garantia" ? " (garantía — no se cobra)" : ""}`;
+}
+
+function _materialRenderSugerencias(q) {
+  const sug = document.getElementById("materialSugerencias");
+  if (!sug) return;
+  const query = (q || "").trim();
+  if (!query) { sug.innerHTML = ""; return; }
+  const piezas = _materialPiezas || [];
+  const list = PiezaSearch.search(piezas, query.toLowerCase());
+  if (!list.length) { sug.innerHTML = '<div class="equipo-fotos-empty">Sin coincidencias.</div>'; return; }
+  sug.innerHTML = list.map(p => {
+    const stock = Number(p.cantidad || 0);
+    const sinControl = p.sin_control_inventario === true;
+    const agotada = !sinControl && stock <= 0;
+    return `<button type="button" class="equipo-material-chip" ${agotada ? "disabled" : ""}
+      data-action="pick-material-equipo" data-pieza-id="${escapeHtml(p.id)}"
+      title="Stock: ${sinControl ? "sin control" : stock}">
+      <span>${escapeHtml(_nombrePieza(p))}</span>
+      <span class="mono">${escapeHtml(p.sku || "-")}</span>
+      <span>${FMT.money(p.precio_venta || 0)}</span>
+    </button>`;
+  }).join("");
+}
+
+function _materialWireInputs() {
+  if (_materialWired) return;
+  _materialWired = true;
+  document.getElementById("materialBuscar")?.addEventListener("input", (e) => {
+    clearTimeout(_materialBuscarTimer);
+    _materialBuscarTimer = setTimeout(() => _materialRenderSugerencias(e.target.value), 150);
+  });
+  document.getElementById("materialQty")?.addEventListener("input", _materialSubtotalRefresh);
+  document.getElementById("materialTipo")?.addEventListener("change", _materialSubtotalRefresh);
+  document.getElementById("materialPrecio")?.addEventListener("input", _materialSubtotalRefresh);
+}
+
+window.abrirMaterialEquipoModal = async function() {
+  const equipo = _resolveEquipoActual();
+  if (!_trabajoOrdenId || !equipo) { Toast.show("Abre la intervención primero", "bad"); return; }
+  if (_ordenActualBloqueada()) { Toast.show("Orden bloqueada: la cotización ya fue emitida", "warn"); return; }
+
+  _materialWireInputs();
+  _materialSeleccionada = null;
+
+  const serial = (equipo.numero_de_serie || equipo.serial || equipo.SERIAL || "-").toString();
+  const modelo = (equipo.modelo || equipo.MODEL || equipo.modelo_nombre || "-").toString();
+  const sub = document.getElementById("materialEquipoSub");
+  if (sub) sub.textContent = `Serie: ${serial} · Modelo: ${modelo}`;
+
+  const buscar = document.getElementById("materialBuscar");
+  if (buscar) buscar.value = "";
+  const sugEl = document.getElementById("materialSugerencias");
+  if (sugEl) sugEl.innerHTML = '<div class="equipo-fotos-empty">Cargando catálogo…</div>';
+  const selEl = document.getElementById("materialSeleccion");
+  if (selEl) selEl.innerHTML = "";
+  const qtyEl = document.getElementById("materialQty");
+  if (qtyEl) qtyEl.value = "1";
+  const tipoEl = document.getElementById("materialTipo");
+  if (tipoEl) tipoEl.value = "cobro";
+  const precioEl = document.getElementById("materialPrecio");
+  if (precioEl) precioEl.value = "0";
+  _materialSubtotalRefresh();
+
+  const modal = document.getElementById("modalMaterialEquipo");
+  if (modal) APP.utils.show(modal);
+  APP.utils.lucideRefresh(modal);
+
+  try {
+    await _ensureMaterialPiezas();
+    if (sugEl) sugEl.innerHTML = "";
+    setTimeout(() => buscar?.focus(), 50);
+  } catch (e) {
+    console.error("❌ Error cargando catálogo de piezas:", e);
+    if (sugEl) sugEl.innerHTML = '<div class="equipo-fotos-empty">No se pudo cargar el catálogo.</div>';
+  }
+};
+
+window.cerrarMaterialEquipoModal = function() {
+  const modal = document.getElementById("modalMaterialEquipo");
+  if (modal) APP.utils.hide(modal);
+  _materialSeleccionada = null;
+};
+
+window.pickMaterialEquipo = function(piezaId) {
+  const p = (_materialPiezas || []).find(x => x.id === piezaId);
+  if (!p) return;
+  _materialSeleccionada = p;
+  const selEl = document.getElementById("materialSeleccion");
+  if (selEl) {
+    const stock = p.sin_control_inventario === true ? "sin control" : Number(p.cantidad || 0);
+    selEl.innerHTML = `Seleccionado: <strong>${escapeHtml(_nombrePieza(p))}</strong> (${escapeHtml(p.sku || "-")}) · Stock: ${stock}`;
+  }
+  const precioEl = document.getElementById("materialPrecio");
+  if (precioEl) precioEl.value = String(Number(p.precio_venta || 0));
+  _materialSubtotalRefresh();
+};
+
+window.confirmarMaterialEquipo = async function() {
+  const btn = document.getElementById("btnAgregarMaterial");
+  const equipo = _resolveEquipoActual();
+  const equipoKey = _consumoKeyEquipoActual();
+  if (!_trabajoOrdenId || !equipo || !equipoKey) { Toast.show("Abre la intervención primero", "bad"); return; }
+  if (!_materialSeleccionada) { Toast.show("Selecciona una pieza", "warn"); return; }
+  if (_ordenActualBloqueada()) { Toast.show("Orden bloqueada: la cotización ya fue emitida", "warn"); return; }
+
+  const qty = Math.max(1, parseInt(document.getElementById("materialQty")?.value || "1", 10));
+  const tipo = document.getElementById("materialTipo")?.value === "garantia" ? "garantia" : "cobro";
+  const precio = Math.max(0, Number(document.getElementById("materialPrecio")?.value || 0));
+  const subtotal = +((tipo === "cobro" ? qty * precio : 0)).toFixed(2);
+  const user = firebase.auth().currentUser;
+
+  try {
+    if (btn) btn.disabled = true;
+
+    // Releer la pieza para validar stock real antes de descontar.
+    const piezaDB = await PiezasService.getPieza(_materialSeleccionada.id);
+    if (!piezaDB) { Toast.show("La pieza ya no existe en el catálogo", "bad"); return; }
+    const sinControl = piezaDB.sin_control_inventario === true;
+    if (!sinControl && Number(piezaDB.cantidad || 0) < qty) {
+      Toast.show(`Stock insuficiente (${Number(piezaDB.cantidad || 0)} disponibles)`, "warn");
+      return;
+    }
+
+    await OrdenesService.addConsumo(_trabajoOrdenId, {
+      equipoId: equipoKey,
+      pieza_id: _materialSeleccionada.id,
+      pieza_nombre: _nombrePieza(_materialSeleccionada),
+      sku: _materialSeleccionada.sku || "",
+      qty,
+      precio_unit: precio,
+      tipo,
+      subtotal,
+      added_by_uid: user?.uid || null,
+      added_by_email: user?.email || null,
+      added_at: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // A partir de aquí el consumo YA existe: los pasos restantes no deben
+    // presentarse como fallo total — un reintento del usuario duplicaría el
+    // consumo (y el descuento de stock).
+    const piezaId = _materialSeleccionada.id;
+    try {
+      if (!sinControl) {
+        await PiezasService.ajustarDelta(piezaId, -qty);
+        const cache = (_materialPiezas || []).find(x => x.id === piezaId);
+        if (cache) cache.cantidad = Number(cache.cantidad || 0) - qty;
+      }
+    } catch (e) {
+      console.error("❌ Material registrado pero no se pudo descontar stock:", e);
+      Toast.show("⚠️ Material registrado, pero no se pudo descontar el stock — ajústalo en inventario", "warn");
+    }
+
+    // Alimenta las recomendaciones "más usadas por modelo" (analytics).
+    if (tipo === "cobro") {
+      try { await PiezasService.incrementarUsoAnalytics(_modeloNormEquipo(equipo), piezaId); }
+      catch (e) { console.warn("No se pudo registrar analytics de pieza:", e); }
+    }
+
+    cerrarMaterialEquipoModal();
+    Toast.show("✅ Material registrado", "ok");
+    _renderEquipoMateriales();
+  } catch (e) {
+    console.error("❌ Error registrando material:", e);
+    Toast.show(`❌ Error al registrar: ${e?.message || e}`, "bad");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
+
+window.eliminarMaterialEquipo = async function(lineaId) {
+  if (!_trabajoOrdenId || !lineaId) return;
+  if (_ordenActualBloqueada()) { Toast.show("Orden bloqueada: la cotización ya fue emitida", "warn"); return; }
+  if (!await Modal.confirm({ message: "¿Eliminar este material?", danger: true })) return;
+  try {
+    await OrdenesService.deleteConsumo(_trabajoOrdenId, lineaId);
+    Toast.show("Material eliminado", "ok");
+    _renderEquipoMateriales();
+  } catch (e) {
+    console.error("❌ Error eliminando material:", e);
+    Toast.show(`❌ Error al eliminar: ${e?.message || e}`, "bad");
+  }
 };
 
 window.guardarTrabajoEquipoModal = async function() {

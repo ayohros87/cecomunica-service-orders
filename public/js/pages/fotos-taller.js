@@ -250,8 +250,11 @@
       document.getElementById("viewerMeta").textContent = "";
     }
 
-    function canSoftDelete() {
-      return String(state.userRole || "").toLowerCase() === ROLES.ADMIN;
+    // Puede eliminar: admin, jefe de taller, o quien subió la foto.
+    function canSoftDelete(foto) {
+      const rol = String(state.userRole || "").toLowerCase();
+      if ([ROLES.ADMIN, ROLES.JEFE_TALLER].map(r => String(r || "").toLowerCase()).includes(rol)) return true;
+      return !!(foto?.uploaded_by_uid && state.user?.uid && foto.uploaded_by_uid === state.user.uid);
     }
 
     function renderGallery() {
@@ -292,7 +295,7 @@
             <div class="photo-body">
               <div class="photo-meta">${serial}</div>
               ${noteHtml}
-              ${canSoftDelete() ? `<button class=\"photo-delete\" data-action=\"delete-photo\" data-photo-id=\"${escapeHtml(f.id)}\">Eliminar</button>` : ""}
+              ${canSoftDelete(f) ? `<button class=\"photo-delete\" data-action=\"delete-photo\" data-photo-id=\"${escapeHtml(f.id)}\">Eliminar</button>` : ""}
             </div>
           </article>
         `;
@@ -403,8 +406,9 @@
 
     async function softDeletePhoto(photoId) {
       if (!photoId) return;
-      if (!canSoftDelete()) {
-        Toast.show("Solo un administrador puede eliminar fotos.", 'bad');
+      const fotoActual = (state.fotos || []).find(f => f.id === photoId);
+      if (!canSoftDelete(fotoActual)) {
+        Toast.show("Solo un administrador, el jefe de taller o quien subió la foto puede eliminarla.", 'bad');
         return;
       }
       if (!await Modal.confirm({ message: "¿Marcar esta foto como eliminada?", danger: true })) return;

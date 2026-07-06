@@ -17,6 +17,19 @@ function debounce(fn, t = 220){ let id; return (...a)=>{ clearTimeout(id); id=se
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
+// Categorías del catálogo (Tarea 3 — navegación tipo → accesorios en el
+// drawer de cotizar-orden). Campo opcional: sin backfill, los docs sin
+// categoría caen en "Sin categoría" al agrupar.
+const CATEGORIAS_PIEZA = ['Batería','Antena','Cargador','Clip','Fuente','Repuesto interno','Servicio','Otros'];
+function categoriaOptions(sel){
+  const cur = String(sel||'').trim();
+  const opts = ['<option value="">— sin categoría —</option>'];
+  CATEGORIAS_PIEZA.forEach(c => opts.push(`<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`));
+  // Valor legacy/manual que no está en la lista: consérvalo seleccionable.
+  if (cur && !CATEGORIAS_PIEZA.includes(cur)) opts.push(`<option value="${esc(cur)}" selected>${esc(cur)}</option>`);
+  return opts.join('');
+}
+
 /* ===== Auth ===== */
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) return window.location.href = "../login.html";
@@ -128,7 +141,7 @@ function render(){
 
   tbody.innerHTML = '';
   if (data.length === 0){
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:20px; text-align:center; color:#666;">No hay piezas para mostrar</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="padding:20px; text-align:center; color:#666;">No hay piezas para mostrar</td></tr>`;
     actualizarResumen();
     return;
   }
@@ -157,6 +170,7 @@ function renderRow(p){
         </div>` : ''}
     </td>
     <td style="font-family:var(--font-mono); font-size:12px;">${esc(p.sku||'—')}</td>
+    <td><select class="td-select" data-field="categoria" style="min-width:140px;">${categoriaOptions(p.categoria)}</select></td>
     <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_venta"
           value="${Number.isFinite(p.precio_venta)?p.precio_venta:''}" placeholder="0.00"></td>
     <td><input type="number" step="any" min="0" class="td-input td-num" data-field="costo_unitario"
@@ -249,10 +263,10 @@ const onInlineUpdate = debounce(async (id, partial)=>{
 /* ===== Exportar ===== */
 function exportarExcel(){
   const wb = XLSX.utils.book_new();
-  const ws = [["Marca","SKU","Descripción","Precio venta","Costo","Margen","Item QBO","Estado","Activo"]];
+  const ws = [["Marca","SKU","Descripción","Categoría","Precio venta","Costo","Margen","Item QBO","Estado","Activo"]];
   (listaPiezas||[]).forEach(p=>{
     const mg = margenInfo(p);
-    ws.push([ p.marca||'', p.sku||'', p.descripcion||'',
+    ws.push([ p.marca||'', p.sku||'', p.descripcion||'', p.categoria||'',
       Number.isFinite(p.precio_venta)?p.precio_venta:'', Number.isFinite(p.costo_unitario)?p.costo_unitario:'',
       mg.txt, p.qbo_item_id||'', mapeoBadge(p).label, (p.activo!==false)?'Sí':'No' ]);
   });

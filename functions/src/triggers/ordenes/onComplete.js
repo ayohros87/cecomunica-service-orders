@@ -3,7 +3,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db }               = require("../../lib/admin");
 const { buildBodyOrdenCompletada } = require("../../domain/emailRenderer");
 const { getISOWeekKey }           = require("../../domain/contractCache");
-const { atencionClienteEmailTo }  = require("../../lib/mailRecipients");
+const { atencionClienteEmailTo, tallerEmailTo } = require("../../lib/mailRecipients");
 
 module.exports = onDocumentUpdated(
   { document: "ordenes_de_servicio/{ordenId}" },
@@ -98,11 +98,15 @@ module.exports = onDocumentUpdated(
         vendedorEmail = vSnap.exists ? (vSnap.data().email || "") : "";
       }
 
-      const toList = [await atencionClienteEmailTo()];
-      if (vendedorEmail) toList.push(vendedorEmail);
+      // Set deduplica (p.ej. si email_taller coincide con el vendedor).
+      const toSet = new Set();
+      const addTo = (v) => String(v || "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean).forEach(e => toSet.add(e));
+      addTo(await atencionClienteEmailTo());
+      addTo(await tallerEmailTo());
+      addTo(vendedorEmail);
 
       await db.collection("mail_queue").add({
-        to:       toList.join(","),
+        to:       [...toSet].join(","),
         subject:  `Orden COMPLETADA: ${after.orden_id || ordenId} – ${after.cliente_nombre || "Cliente"}`,
         preheader,
         bodyContent,

@@ -35,6 +35,77 @@
 
   const uid = () => 'l' + Math.random().toString(36).slice(2, 9);
 
+  // ── Borrador (autoguardado) ────────────────────────────────────────────────
+  // Cada mutación de form/lineas llama touch(); el borrador se persiste con
+  // debounce en ordenes_de_servicio/{id}/borradores_cotizacion/{uid} para
+  // sobrevivir cierre de pestaña y cambio de dispositivo (los técnicos usan
+  // iPad). Se borra al generar la cotización con éxito.
+  const DRAFT_DEBOUNCE_MS = 600;
+  const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // borradores más viejos se descartan
+  let draftTimer = null;
+  let draftDirty = false;
+
+  function touch() {
+    draftDirty = true;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, DRAFT_DEBOUNCE_MS);
+  }
+
+  async function saveDraft() {
+    if (!user || !ordenId || !draftDirty) return;
+    draftDirty = false;
+    try {
+      await OrdenesService.setBorradorCotizacion(ordenId, user.uid, {
+        form: { ...form },
+        lineas: JSON.parse(JSON.stringify(lineas)),
+        orden_id: ordenId,
+      });
+    } catch (e) {
+      draftDirty = true; // reintenta en la próxima mutación
+      console.warn('No se pudo autoguardar el borrador:', e);
+    }
+  }
+
+  async function discardDraft() {
+    try { await OrdenesService.deleteBorradorCotizacion(ordenId, user.uid); }
+    catch (e) { console.warn('No se pudo borrar el borrador:', e); }
+  }
+
+  // Restaura form/lineas desde un borrador guardado (lineas es const: se muta).
+  function applyDraft(d) {
+    if (d.form && typeof d.form === 'object') form = { ...form, ...d.form };
+    Object.keys(lineas).forEach(k => delete lineas[k]);
+    if (d.lineas && typeof d.lineas === 'object') {
+      Object.entries(d.lineas).forEach(([k, v]) => { if (Array.isArray(v)) lineas[k] = v; });
+    }
+  }
+
+  // Si hay un borrador reciente del usuario, ofrece restaurarlo; si lo rechaza,
+  // se descarta para no volver a preguntar.
+  async function maybeRestoreDraft() {
+    let d = null;
+    try { d = await OrdenesService.getBorradorCotizacion(ordenId, user.uid); }
+    catch (e) { console.warn('No se pudo leer el borrador:', e); }
+    if (!d) return false;
+    const ts = d.updated_at?.toDate?.() || null;
+    if (ts && (Date.now() - ts.getTime()) > DRAFT_MAX_AGE_MS) { discardDraft(); return false; }
+    const cuando = ts
+      ? ts.toLocaleString('es-PA', { dateStyle: 'medium', timeStyle: 'short' })
+      : 'una sesión anterior';
+    const restaurar = await Modal.confirm({
+      title: 'Borrador encontrado',
+      message: `Tienes una cotización sin terminar para esta orden (guardada el ${cuando}). ¿Quieres restaurarla?`,
+      confirmLabel: 'Restaurar borrador',
+      cancelLabel: 'Empezar de cero',
+    });
+    if (restaurar) { applyDraft(d); return true; }
+    discardDraft();
+    return false;
+  }
+
+  // Flush al salir de la página si quedó un guardado pendiente del debounce.
+  window.addEventListener('pagehide', () => { if (draftDirty) saveDraft(); });
+
   // ── Dedup de equipos (mismo criterio que prepararEquiposParaNota) ──────────
   function prepararEquipos(od) {
     const list = Array.isArray(od?.equipos) ? od.equipos : [];
@@ -43,7 +114,9 @@
     list.forEach((e) => {
       if (!e || e.eliminado === true) return;
       const serial = String(e.numero_de_serie || '').trim();
-      const modelo = String(e.modelo || '').trim();
+      // Mismos fallbacks de campo que el escritor de analytics
+      // (ordenes-equipos._modeloNormEquipo) — equipos legacy usan MODEL.
+      const modelo = String(e.modelo || e.MODEL || e.modelo_nombre || '').trim();
       const id = String(e.id || '').trim();
       const key = id ? `id:${id}` : `sm:${serial.toLowerCase()}|${modelo.toLowerCase()}`;
       if (seen.has(key)) return;
@@ -51,6 +124,7 @@
       out.push({
         id: id || key,
         serial, modelo,
+        marca: String(e.marca || e.fabricante || '').trim(),
         nombre: String(e.nombre || '').trim(),
         intervencion: String(e.trabajo_tecnico || '').trim(),
       });
@@ -174,12 +248,13 @@
       form.clienteId = e.target.value;
       const cli2 = catalogos.clientesById[form.clienteId];
       if (cli2) form.itbmsPct = cli2.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+      touch();
       renderCliente(); renderResumen();
     });
-    $('inpFecha').addEventListener('change', (e) => { form.fecha = e.target.value; });
-    $('inpValidez').addEventListener('input', (e) => { form.validezDias = Number(e.target.value || 0); });
-    $('selEjec').addEventListener('change', (e) => { form.ejecutivoId = e.target.value; });
-    $('inpIntro').addEventListener('input', (e) => { form.intro = e.target.value; });
+    $('inpFecha').addEventListener('change', (e) => { form.fecha = e.target.value; touch(); });
+    $('inpValidez').addEventListener('input', (e) => { form.validezDias = Number(e.target.value || 0); touch(); });
+    $('selEjec').addEventListener('change', (e) => { form.ejecutivoId = e.target.value; touch(); });
+    $('inpIntro').addEventListener('input', (e) => { form.intro = e.target.value; touch(); });
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
@@ -266,6 +341,7 @@
     const eq = equipos.find(x => x.id === eqId);
     wrap.querySelector('[data-add]')?.addEventListener('click', () => {
       (lineas[eqId] = lineas[eqId] || []).push({ id: uid(), sku: '', nombre: '', cant: 1, precio: 0 });
+      touch();
       renderEquipos(); renderResumen();
       // Foco en la última fila agregada de este equipo (tras el re-render)
       const w2 = [...document.querySelectorAll('.co-equipo')].find(x => x.dataset.eq === eqId);
@@ -309,6 +385,7 @@
       id: uid(), sku: p.sku || '', nombre: p.nombre || p.descripcion || 'Pieza',
       cant: 1, precio: Number(p.precio_venta || 0),
     });
+    touch();
     if (!silent) { renderEquipos(); renderResumen(); Toast.show('Pieza agregada a la cotización', 'ok'); }
   }
 
@@ -318,6 +395,7 @@
       id: uid(), sku: c.sku || '', nombre: c.pieza_nombre || 'Pieza',
       cant: Number(c.qty || 1), precio: Number(c.precio_unit || 0),
     });
+    touch();
     if (!silent) { renderEquipos(); renderResumen(); Toast.show('Pieza agregada a la cotización', 'ok'); }
   }
 
@@ -330,14 +408,15 @@
       renderResumen();
     };
     const skuInput = row.querySelector('.co-sku');
-    skuInput.addEventListener('input', (e) => { const l = get(); if (l) l.sku = e.target.value; openPop(row, eqId, lineId, e.target.value); });
+    skuInput.addEventListener('input', (e) => { const l = get(); if (l) l.sku = e.target.value; touch(); openPop(row, eqId, lineId, e.target.value); });
     skuInput.addEventListener('focus', (e) => openPop(row, eqId, lineId, e.target.value));
     skuInput.addEventListener('keydown', (e) => onPopKeydown(e, row, eqId, lineId));
-    row.querySelector('.co-desc').addEventListener('input', (e) => { const l = get(); if (l) l.nombre = e.target.value; });
-    row.querySelector('.co-cant').addEventListener('input', (e) => { const l = get(); if (l) l.cant = Number(e.target.value || 0); recalc(); });
-    row.querySelector('.co-precio').addEventListener('input', (e) => { const l = get(); if (l) l.precio = Number(e.target.value || 0); recalc(); });
+    row.querySelector('.co-desc').addEventListener('input', (e) => { const l = get(); if (l) l.nombre = e.target.value; touch(); });
+    row.querySelector('.co-cant').addEventListener('input', (e) => { const l = get(); if (l) l.cant = Number(e.target.value || 0); touch(); recalc(); });
+    row.querySelector('.co-precio').addEventListener('input', (e) => { const l = get(); if (l) l.precio = Number(e.target.value || 0); touch(); recalc(); });
     row.querySelector('.co-del').addEventListener('click', () => {
       lineas[eqId] = (lineas[eqId] || []).filter(x => x.id !== lineId);
+      touch();
       renderEquipos(); renderResumen();
     });
   }
@@ -355,7 +434,7 @@
     const matches = buscarPiezas(term);
     if (!matches.length) { pop.hidden = true; pop.innerHTML = ''; return; }
     pop.innerHTML = matches.map((p, i) => `
-      <div class="co-pza-item${i === 0 ? ' active' : ''}" data-pid="${esc(p.id)}">
+      <div class="co-pza-item${i === 0 ? ' active' : ''}" data-pid="${esc(p.id)}" title="${esc(p.nombre || '—')}">
         <span>${esc(p.nombre || '—')}</span>
         <span class="meta">${esc(p.sku || '')} · ${FMT.money(p.precio_venta || 0)}</span>
       </div>`).join('');
@@ -377,6 +456,7 @@
     row.querySelector('.co-precio').value = l.precio;
     row.querySelector('.co-total').textContent = FMT.money(Number(l.cant || 0) * Number(l.precio || 0));
     row.querySelector('.co-pza-pop').hidden = true;
+    touch();
     renderResumen();
   }
   function onPopKeydown(e, row, eqId, lineId) {
@@ -462,8 +542,8 @@
         Se creará una cotización en borrador y se notificará a los aprobadores configurados para su revisión y envío al cliente. La <b>vista previa</b> no guarda ni notifica.
       </p>
     `;
-    $('inpDesc').addEventListener('input', (e) => { form.descuentoPct = Number(e.target.value || 0); renderResumen(); });
-    $('selItbms').addEventListener('change', (e) => { form.itbmsPct = Number(e.target.value); renderResumen(); });
+    $('inpDesc').addEventListener('input', (e) => { form.descuentoPct = Number(e.target.value || 0); touch(); renderResumen(); });
+    $('selItbms').addEventListener('change', (e) => { form.itbmsPct = Number(e.target.value); touch(); renderResumen(); });
     $('btnGenerar2').addEventListener('click', generar);
     $('btnPreview2').addEventListener('click', abrirPreview);
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -500,6 +580,11 @@
 
       const ref = await CotizacionesService.addCotizacion(doc);
 
+      // La cotización ya existe: el borrador de autoguardado sobra.
+      clearTimeout(draftTimer);
+      draftDirty = false;
+      await discardDraft();
+
       // Notifica a ventas@ (mismo correo que una cotización nueva).
       try { await CotState.enqueueAprobacionMail({ doc, docId: ref.id, user }); }
       catch (e) { console.warn('No se pudo encolar el correo de aprobación:', e); }
@@ -525,6 +610,36 @@
   // ── Catálogo de piezas (drawer lateral, arrastrable a un equipo) ───────────
   let catalogoTargetEq = null;
   let catalogoEl = null;
+  const sugeridasCache = new Map();   // eqId → piezas sugeridas por analytics
+  const categoriasColapsadas = new Set();
+
+  // modelo_norm con el mismo criterio que el escritor de analytics
+  // (ordenes-equipos._modeloNormEquipo): marca_modelo normalizado.
+  const _norm = (x = '') => String(x).toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  function modeloNormDe(eq) {
+    const m = _norm(eq?.modelo || '');
+    const b = _norm(eq?.marca || '');
+    return b ? `${b}_${m}` : m;
+  }
+
+  async function cargarSugeridas(eq) {
+    if (!eq) return [];
+    if (sugeridasCache.has(eq.id)) return sugeridasCache.get(eq.id);
+    try {
+      let out = [];
+      const mnorm = modeloNormDe(eq);
+      if (mnorm) {
+        const rows = await PiezasService.getTopByModelo(mnorm, 8);
+        const byId = new Map(piezas.map(p => [p.id, p]));
+        out = (rows || []).map(r => byId.get(r.pieza_id)).filter(Boolean);
+      }
+      sugeridasCache.set(eq.id, out); // solo se cachea el éxito: un fallo transitorio reintenta en la próxima apertura
+      return out;
+    } catch (e) {
+      console.warn('No se pudieron cargar las piezas sugeridas:', e);
+      return [];
+    }
+  }
 
   function ensureCatalogo() {
     if (catalogoEl) return catalogoEl;
@@ -567,25 +682,83 @@
     el.hidden = false;
     if (typeof lucide !== 'undefined') lucide.createIcons();
     setTimeout(() => el.querySelector('.co-cat-search input')?.focus(), 30);
+    // Las sugeridas por modelo llegan async — re-render cuando estén (solo si
+    // el drawer sigue abierto sobre el mismo equipo y sin búsqueda activa).
+    if (eq && !sugeridasCache.has(eq.id)) {
+      cargarSugeridas(eq).then(() => {
+        const term = el.querySelector('.co-cat-search input')?.value || '';
+        if (!el.hidden && catalogoTargetEq === eqId && !term.trim()) renderCatalogoList(term);
+      });
+    }
   }
 
   function cerrarCatalogo() { if (catalogoEl) catalogoEl.hidden = true; catalogoTargetEq = null; }
 
-  function renderCatalogoList(term) {
-    const list = catalogoEl.querySelector('.co-cat-list');
-    const q = (term || '').trim().toLowerCase();
-    const rows = piezas
-      .filter(p => !q || (p.nombre || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))
-      .slice(0, 200);
-    if (!rows.length) { list.innerHTML = '<div class="co-cat-empty">Sin coincidencias.</div>'; return; }
-    list.innerHTML = rows.map(p => `
-      <div class="co-cat-item" draggable="true" data-pid="${esc(p.id)}">
+  function itemCatalogoHtml(p) {
+    const nombre = p.nombre || p.descripcion || 'Pieza';
+    return `
+      <div class="co-cat-item" draggable="true" data-pid="${esc(p.id)}" title="${esc(nombre)}">
         <div class="co-cat-item-main">
-          <span class="co-cat-item-name">${esc(p.nombre || p.descripcion || 'Pieza')}</span>
+          <span class="co-cat-item-name">${esc(nombre)}</span>
           <span class="co-cat-item-meta">${esc(p.sku || '—')} · ${FMT.money(p.precio_venta || 0)}${(p.cantidad != null) ? ' · stock ' + Number(p.cantidad) : ''}</span>
         </div>
         <button class="btn btn-secondary btn-icon btn-sm" data-add-pid="${esc(p.id)}" title="Agregar"><i data-lucide="plus"></i></button>
-      </div>`).join('');
+      </div>`;
+  }
+
+  function renderCatalogoList(term) {
+    const list = catalogoEl.querySelector('.co-cat-list');
+    const q = (term || '').trim().toLowerCase();
+
+    let html = '';
+    if (q) {
+      // Búsqueda: filtra globalmente (lista plana, sin grupos).
+      const rows = piezas
+        .filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))
+        .slice(0, 200);
+      html = rows.length ? rows.map(itemCatalogoHtml).join('') : '<div class="co-cat-empty">Sin coincidencias.</div>';
+    } else {
+      // Arriba: sugeridas para el modelo del equipo destino (analytics de uso).
+      const eq = equipos.find(x => x.id === catalogoTargetEq);
+      const sugeridas = (eq && sugeridasCache.get(eq.id)) || [];
+      if (sugeridas.length) {
+        html += `<div class="co-cat-sugeridas-hd">Sugeridas para ${esc(eq.modelo || 'el modelo')}</div>`;
+        html += sugeridas.map(itemCatalogoHtml).join('');
+      }
+      // Luego: grupos colapsables por categoría ("Sin categoría" al final).
+      const grupos = new Map();
+      piezas.forEach(p => {
+        const cat = String(p.categoria || '').trim() || 'Sin categoría';
+        if (!grupos.has(cat)) grupos.set(cat, []);
+        grupos.get(cat).push(p);
+      });
+      const cats = [...grupos.keys()].sort((a, b) => {
+        if (a === 'Sin categoría') return 1;
+        if (b === 'Sin categoría') return -1;
+        return a.localeCompare(b, 'es', { sensitivity: 'base' });
+      });
+      // Tope por grupo: mantiene el DOM acotado en catálogos grandes (el
+      // render viejo capaba a 200 en total); el resto se alcanza buscando.
+      const MAX_POR_GRUPO = 100;
+      html += cats.map(cat => {
+        const items = grupos.get(cat);
+        const collapsed = categoriasColapsadas.has(cat);
+        const visibles = items.slice(0, MAX_POR_GRUPO);
+        const resto = items.length - visibles.length;
+        return `
+          <button type="button" class="co-cat-group" data-cat-group="${esc(cat)}">
+            <span>${esc(cat)} <span class="co-cat-group-n">(${items.length})</span></span>
+            <span class="co-cat-caret">${collapsed ? '▸' : '▾'}</span>
+          </button>
+          <div class="co-cat-group-body${collapsed ? ' collapsed' : ''}">
+            ${visibles.map(itemCatalogoHtml).join('')}
+            ${resto > 0 ? `<div class="co-cat-empty">+${resto} más — usa la búsqueda para encontrarlas</div>` : ''}
+          </div>`;
+      }).join('');
+      if (!piezas.length) html = '<div class="co-cat-empty">Catálogo vacío.</div>';
+    }
+
+    list.innerHTML = html;
     list.querySelectorAll('.co-cat-item').forEach(item => {
       const pid = item.dataset.pid;
       item.addEventListener('dragstart', (e) => {
@@ -597,6 +770,20 @@
       btn.addEventListener('click', () => {
         const p = piezas.find(x => x.id === btn.dataset.addPid);
         if (p && catalogoTargetEq) addPiezaLine(catalogoTargetEq, p);
+      });
+    });
+    list.querySelectorAll('[data-cat-group]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // Colapsar/expandir sin re-render: solo alterna la clase del cuerpo
+        // del grupo (re-armar todo el catálogo por un toggle es un derroche).
+        const cat = btn.dataset.catGroup;
+        const body = btn.nextElementSibling;
+        const collapsed = !categoriasColapsadas.has(cat);
+        if (collapsed) categoriasColapsadas.add(cat);
+        else categoriasColapsadas.delete(cat);
+        if (body?.classList.contains('co-cat-group-body')) body.classList.toggle('collapsed', collapsed);
+        const caret = btn.querySelector('.co-cat-caret');
+        if (caret) caret.textContent = collapsed ? '▸' : '▾';
       });
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -714,6 +901,30 @@
     form.ejecutivoId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id
                     || supervisores[0]?.id
                     || '';
+
+    // Borrador autoguardado: se ofrece restaurar DESPUÉS de aplicar los
+    // defaults, para que lo restaurado tenga la última palabra.
+    const restaurado = await maybeRestoreDraft();
+
+    // Precarga automática: los consumos de cobro registrados por el técnico
+    // entran como líneas de la cotización (editables). Si se restauró un
+    // borrador NO se precarga, para no duplicar lo ya trabajado.
+    if (!restaurado) {
+      let precargadas = 0;
+      equipos.forEach(eq => {
+        consumosDe(eq)
+          .filter(c => (c.tipo || 'cobro') === 'cobro')
+          .forEach(c => { addConsumoLine(eq.id, c, { silent: true }); precargadas++; });
+      });
+      if (precargadas) {
+        // La precarga no es un cambio del usuario: no dispares el autosave.
+        clearTimeout(draftTimer);
+        draftDirty = false;
+        setTimeout(() => Toast.show(
+          `Se precargaron ${precargadas} pieza${precargadas === 1 ? '' : 's'} registradas por el técnico — revisa y ajusta`, 'ok'
+        ), 400);
+      }
+    }
 
     render();
   });

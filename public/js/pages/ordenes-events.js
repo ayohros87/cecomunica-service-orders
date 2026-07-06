@@ -234,6 +234,14 @@
     },
     'cerrar-foto-equipo-viewer': () => cerrarFotoEquipoViewer(),
     'eliminar-foto-equipo-viewer': () => eliminarFotoEquipoViewer(),
+
+    // Materiales / piezas del equipo (modal de intervención técnica)
+    'abrir-material-equipo': () => abrirMaterialEquipoModal(),
+    'cerrar-material-equipo': () => cerrarMaterialEquipoModal(),
+    'confirmar-material-equipo': () => confirmarMaterialEquipo(),
+    'pick-material-equipo': (el) => pickMaterialEquipo(el.dataset.piezaId),
+    'eliminar-material-equipo': (el) => eliminarMaterialEquipo(el.dataset.lineaId),
+
     'close-text-modal': () => closeTextModal(),
     'copy-text-modal': () => copyTextModalContent(),
 
