@@ -796,6 +796,31 @@ const OrdenesService = {
     return db.collection("ordenes_de_servicio").doc(ordenId)
       .collection("equipos_meta").doc(equipoId).set(data, opts);
   },
+
+  // ── Borradores de cotización (autoguardado de cotizar-orden) ──────────────
+  // Un doc por usuario: ordenes_de_servicio/{ordenId}/borradores_cotizacion/{uid}
+
+  async getBorradorCotizacion(ordenId, uid) {
+    const db = firebase.firestore();
+    const doc = await db.collection("ordenes_de_servicio").doc(ordenId)
+      .collection("borradores_cotizacion").doc(uid).get();
+    return doc.exists ? doc.data() : null;
+  },
+
+  async setBorradorCotizacion(ordenId, uid, data) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(ordenId)
+      .collection("borradores_cotizacion").doc(uid).set({
+        ...data,
+        updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+  },
+
+  async deleteBorradorCotizacion(ordenId, uid) {
+    const db = firebase.firestore();
+    return db.collection("ordenes_de_servicio").doc(ordenId)
+      .collection("borradores_cotizacion").doc(uid).delete();
+  },
 };
 
 // Export to window for global access

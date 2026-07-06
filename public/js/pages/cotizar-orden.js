@@ -35,6 +35,77 @@
 
   const uid = () => 'l' + Math.random().toString(36).slice(2, 9);
 
+  // ── Borrador (autoguardado) ────────────────────────────────────────────────
+  // Cada mutación de form/lineas llama touch(); el borrador se persiste con
+  // debounce en ordenes_de_servicio/{id}/borradores_cotizacion/{uid} para
+  // sobrevivir cierre de pestaña y cambio de dispositivo (los técnicos usan
+  // iPad). Se borra al generar la cotización con éxito.
+  const DRAFT_DEBOUNCE_MS = 600;
+  const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // borradores más viejos se descartan
+  let draftTimer = null;
+  let draftDirty = false;
+
+  function touch() {
+    draftDirty = true;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(saveDraft, DRAFT_DEBOUNCE_MS);
+  }
+
+  async function saveDraft() {
+    if (!user || !ordenId || !draftDirty) return;
+    draftDirty = false;
+    try {
+      await OrdenesService.setBorradorCotizacion(ordenId, user.uid, {
+        form: { ...form },
+        lineas: JSON.parse(JSON.stringify(lineas)),
+        orden_id: ordenId,
+      });
+    } catch (e) {
+      draftDirty = true; // reintenta en la próxima mutación
+      console.warn('No se pudo autoguardar el borrador:', e);
+    }
+  }
+
+  async function discardDraft() {
+    try { await OrdenesService.deleteBorradorCotizacion(ordenId, user.uid); }
+    catch (e) { console.warn('No se pudo borrar el borrador:', e); }
+  }
+
+  // Restaura form/lineas desde un borrador guardado (lineas es const: se muta).
+  function applyDraft(d) {
+    if (d.form && typeof d.form === 'object') form = { ...form, ...d.form };
+    Object.keys(lineas).forEach(k => delete lineas[k]);
+    if (d.lineas && typeof d.lineas === 'object') {
+      Object.entries(d.lineas).forEach(([k, v]) => { if (Array.isArray(v)) lineas[k] = v; });
+    }
+  }
+
+  // Si hay un borrador reciente del usuario, ofrece restaurarlo; si lo rechaza,
+  // se descarta para no volver a preguntar.
+  async function maybeRestoreDraft() {
+    let d = null;
+    try { d = await OrdenesService.getBorradorCotizacion(ordenId, user.uid); }
+    catch (e) { console.warn('No se pudo leer el borrador:', e); }
+    if (!d) return false;
+    const ts = d.updated_at?.toDate?.() || null;
+    if (ts && (Date.now() - ts.getTime()) > DRAFT_MAX_AGE_MS) { discardDraft(); return false; }
+    const cuando = ts
+      ? ts.toLocaleString('es-PA', { dateStyle: 'medium', timeStyle: 'short' })
+      : 'una sesión anterior';
+    const restaurar = await Modal.confirm({
+      title: 'Borrador encontrado',
+      message: `Tienes una cotización sin terminar para esta orden (guardada el ${cuando}). ¿Quieres restaurarla?`,
+      confirmLabel: 'Restaurar borrador',
+      cancelLabel: 'Empezar de cero',
+    });
+    if (restaurar) { applyDraft(d); return true; }
+    discardDraft();
+    return false;
+  }
+
+  // Flush al salir de la página si quedó un guardado pendiente del debounce.
+  window.addEventListener('pagehide', () => { if (draftDirty) saveDraft(); });
+
   // ── Dedup de equipos (mismo criterio que prepararEquiposParaNota) ──────────
   function prepararEquipos(od) {
     const list = Array.isArray(od?.equipos) ? od.equipos : [];
@@ -174,12 +245,13 @@
       form.clienteId = e.target.value;
       const cli2 = catalogos.clientesById[form.clienteId];
       if (cli2) form.itbmsPct = cli2.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+      touch();
       renderCliente(); renderResumen();
     });
-    $('inpFecha').addEventListener('change', (e) => { form.fecha = e.target.value; });
-    $('inpValidez').addEventListener('input', (e) => { form.validezDias = Number(e.target.value || 0); });
-    $('selEjec').addEventListener('change', (e) => { form.ejecutivoId = e.target.value; });
-    $('inpIntro').addEventListener('input', (e) => { form.intro = e.target.value; });
+    $('inpFecha').addEventListener('change', (e) => { form.fecha = e.target.value; touch(); });
+    $('inpValidez').addEventListener('input', (e) => { form.validezDias = Number(e.target.value || 0); touch(); });
+    $('selEjec').addEventListener('change', (e) => { form.ejecutivoId = e.target.value; touch(); });
+    $('inpIntro').addEventListener('input', (e) => { form.intro = e.target.value; touch(); });
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
@@ -266,6 +338,7 @@
     const eq = equipos.find(x => x.id === eqId);
     wrap.querySelector('[data-add]')?.addEventListener('click', () => {
       (lineas[eqId] = lineas[eqId] || []).push({ id: uid(), sku: '', nombre: '', cant: 1, precio: 0 });
+      touch();
       renderEquipos(); renderResumen();
       // Foco en la última fila agregada de este equipo (tras el re-render)
       const w2 = [...document.querySelectorAll('.co-equipo')].find(x => x.dataset.eq === eqId);
@@ -309,6 +382,7 @@
       id: uid(), sku: p.sku || '', nombre: p.nombre || p.descripcion || 'Pieza',
       cant: 1, precio: Number(p.precio_venta || 0),
     });
+    touch();
     if (!silent) { renderEquipos(); renderResumen(); Toast.show('Pieza agregada a la cotización', 'ok'); }
   }
 
@@ -318,6 +392,7 @@
       id: uid(), sku: c.sku || '', nombre: c.pieza_nombre || 'Pieza',
       cant: Number(c.qty || 1), precio: Number(c.precio_unit || 0),
     });
+    touch();
     if (!silent) { renderEquipos(); renderResumen(); Toast.show('Pieza agregada a la cotización', 'ok'); }
   }
 
@@ -330,14 +405,15 @@
       renderResumen();
     };
     const skuInput = row.querySelector('.co-sku');
-    skuInput.addEventListener('input', (e) => { const l = get(); if (l) l.sku = e.target.value; openPop(row, eqId, lineId, e.target.value); });
+    skuInput.addEventListener('input', (e) => { const l = get(); if (l) l.sku = e.target.value; touch(); openPop(row, eqId, lineId, e.target.value); });
     skuInput.addEventListener('focus', (e) => openPop(row, eqId, lineId, e.target.value));
     skuInput.addEventListener('keydown', (e) => onPopKeydown(e, row, eqId, lineId));
-    row.querySelector('.co-desc').addEventListener('input', (e) => { const l = get(); if (l) l.nombre = e.target.value; });
-    row.querySelector('.co-cant').addEventListener('input', (e) => { const l = get(); if (l) l.cant = Number(e.target.value || 0); recalc(); });
-    row.querySelector('.co-precio').addEventListener('input', (e) => { const l = get(); if (l) l.precio = Number(e.target.value || 0); recalc(); });
+    row.querySelector('.co-desc').addEventListener('input', (e) => { const l = get(); if (l) l.nombre = e.target.value; touch(); });
+    row.querySelector('.co-cant').addEventListener('input', (e) => { const l = get(); if (l) l.cant = Number(e.target.value || 0); touch(); recalc(); });
+    row.querySelector('.co-precio').addEventListener('input', (e) => { const l = get(); if (l) l.precio = Number(e.target.value || 0); touch(); recalc(); });
     row.querySelector('.co-del').addEventListener('click', () => {
       lineas[eqId] = (lineas[eqId] || []).filter(x => x.id !== lineId);
+      touch();
       renderEquipos(); renderResumen();
     });
   }
@@ -377,6 +453,7 @@
     row.querySelector('.co-precio').value = l.precio;
     row.querySelector('.co-total').textContent = FMT.money(Number(l.cant || 0) * Number(l.precio || 0));
     row.querySelector('.co-pza-pop').hidden = true;
+    touch();
     renderResumen();
   }
   function onPopKeydown(e, row, eqId, lineId) {
@@ -462,8 +539,8 @@
         Se creará una cotización en borrador y se notificará a los aprobadores configurados para su revisión y envío al cliente. La <b>vista previa</b> no guarda ni notifica.
       </p>
     `;
-    $('inpDesc').addEventListener('input', (e) => { form.descuentoPct = Number(e.target.value || 0); renderResumen(); });
-    $('selItbms').addEventListener('change', (e) => { form.itbmsPct = Number(e.target.value); renderResumen(); });
+    $('inpDesc').addEventListener('input', (e) => { form.descuentoPct = Number(e.target.value || 0); touch(); renderResumen(); });
+    $('selItbms').addEventListener('change', (e) => { form.itbmsPct = Number(e.target.value); touch(); renderResumen(); });
     $('btnGenerar2').addEventListener('click', generar);
     $('btnPreview2').addEventListener('click', abrirPreview);
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -499,6 +576,11 @@
       doc.origen = 'orden';
 
       const ref = await CotizacionesService.addCotizacion(doc);
+
+      // La cotización ya existe: el borrador de autoguardado sobra.
+      clearTimeout(draftTimer);
+      draftDirty = false;
+      await discardDraft();
 
       // Notifica a ventas@ (mismo correo que una cotización nueva).
       try { await CotState.enqueueAprobacionMail({ doc, docId: ref.id, user }); }
@@ -714,6 +796,10 @@
     form.ejecutivoId = catalogos.ejecutivos.find(e => e.id === user.uid)?.id
                     || supervisores[0]?.id
                     || '';
+
+    // Borrador autoguardado: se ofrece restaurar DESPUÉS de aplicar los
+    // defaults, para que lo restaurado tenga la última palabra.
+    await maybeRestoreDraft();
 
     render();
   });
