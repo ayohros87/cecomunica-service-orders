@@ -799,7 +799,27 @@
 
     // Borrador autoguardado: se ofrece restaurar DESPUÉS de aplicar los
     // defaults, para que lo restaurado tenga la última palabra.
-    await maybeRestoreDraft();
+    const restaurado = await maybeRestoreDraft();
+
+    // Precarga automática: los consumos de cobro registrados por el técnico
+    // entran como líneas de la cotización (editables). Si se restauró un
+    // borrador NO se precarga, para no duplicar lo ya trabajado.
+    if (!restaurado) {
+      let precargadas = 0;
+      equipos.forEach(eq => {
+        consumosDe(eq)
+          .filter(c => (c.tipo || 'cobro') === 'cobro')
+          .forEach(c => { addConsumoLine(eq.id, c, { silent: true }); precargadas++; });
+      });
+      if (precargadas) {
+        // La precarga no es un cambio del usuario: no dispares el autosave.
+        clearTimeout(draftTimer);
+        draftDirty = false;
+        setTimeout(() => Toast.show(
+          `Se precargaron ${precargadas} pieza${precargadas === 1 ? '' : 's'} registradas por el técnico — revisa y ajusta`, 'ok'
+        ), 400);
+      }
+    }
 
     render();
   });
