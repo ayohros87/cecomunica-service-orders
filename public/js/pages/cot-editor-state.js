@@ -512,9 +512,24 @@
       items: doc.items || [], descuentoPct: doc.descuentoPct || 0, itbmsPct: doc.itbmsPct || 0,
     });
     const obsEsc = (doc.intro || '-').replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
-    const itemsHtml = (doc.items || []).map(it =>
-      `<li>${esc(it.nombre || '')} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
-    ).join('');
+    // Renglones agrupados por equipo: los ítems creados desde una orden llevan
+    // el contexto del radio en `spec` ("Equipo: Serie … · Modelo …"); los que
+    // no lo traen (cotización comercial) caen a un grupo general sin encabezado.
+    const grupos = new Map();
+    (doc.items || []).forEach(it => {
+      const key = String(it.spec || '').trim();
+      if (!grupos.has(key)) grupos.set(key, []);
+      grupos.get(key).push(it);
+    });
+    const itemsHtml = [...grupos.entries()].map(([spec, items]) => {
+      const lis = items.map(it =>
+        `<li>${esc(it.nombre || '')}${it.modelo ? ` <span style="font-family:monospace;font-size:12px;">(${esc(it.modelo)})</span>` : ''} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
+      ).join('');
+      const header = spec
+        ? `<p style="margin:10px 0 4px;font:600 13px Arial,sans-serif;color:#374151;">${esc(spec)}</p>`
+        : '';
+      return `${header}<ul style="margin:0 0 8px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${lis}</ul>`;
+    }).join('');
     // Destinatarios de la solicitud de aprobación, por TIPO de cotización:
     //   · servicio (origen=orden, sale de una orden de taller) → supervisor de
     //     taller (jefe_taller), que es quien la aprueba.

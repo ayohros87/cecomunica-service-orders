@@ -115,13 +115,48 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
     return presentes.length ? presentes.join(", ") : "—";
   };
 
+  // Sub-tabla "Repuestos / accesorios utilizados" por equipo, agrupada bajo
+  // la fila del radio (modelo + serie). Precio y tipo solo van en los correos
+  // internos (opts.interno) — el cliente recibe la lista sin montos.
+  const interno = opts.interno === true;
+  const consumosSubtabla = (e) => {
+    const cons = Array.isArray(e.consumos) ? e.consumos : [];
+    if (!cons.length) return "";
+    const consRows = cons.map(c => `
+          <tr>
+            <td style="padding:4px 8px;border-bottom:1px solid #f3f4f6;">${f(c.pieza_nombre)}</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f3f4f6;font-family:monospace;font-size:11px;">${f(c.sku)}</td>
+            <td style="padding:4px 8px;border-bottom:1px solid #f3f4f6;text-align:right;">${Number(c.qty || 0)}</td>
+            ${interno ? `<td style="padding:4px 8px;border-bottom:1px solid #f3f4f6;text-align:right;">$${Number(c.precio_unit || 0).toFixed(2)}</td>` : ""}
+            ${interno ? `<td style="padding:4px 8px;border-bottom:1px solid #f3f4f6;">${f(c.tipo)}</td>` : ""}
+          </tr>`).join("");
+    return `
+    <tr>
+      <td colspan="4" style="padding:0 8px 10px 18px;border-bottom:1px solid #eee;">
+        <p style="margin:6px 0 4px;font:600 12px Arial,sans-serif;color:#6b7280;">Repuestos / accesorios utilizados — ${f(e.modelo)} · ${f(e.numero_de_serie || e.SERIAL || e.serial)}</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font:12px Arial,sans-serif;">
+          <thead>
+            <tr style="background:#f9fafb;">
+              <th style="padding:4px 8px;text-align:left;font-weight:600;border-bottom:1px solid #e5e7eb;">Pieza</th>
+              <th style="padding:4px 8px;text-align:left;font-weight:600;border-bottom:1px solid #e5e7eb;">SKU</th>
+              <th style="padding:4px 8px;text-align:right;font-weight:600;border-bottom:1px solid #e5e7eb;">Cant.</th>
+              ${interno ? `<th style="padding:4px 8px;text-align:right;font-weight:600;border-bottom:1px solid #e5e7eb;">Precio</th>` : ""}
+              ${interno ? `<th style="padding:4px 8px;text-align:left;font-weight:600;border-bottom:1px solid #e5e7eb;">Tipo</th>` : ""}
+            </tr>
+          </thead>
+          <tbody>${consRows}</tbody>
+        </table>
+      </td>
+    </tr>`;
+  };
+
   const rows = equipos.map(e => `
     <tr>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;">${f(e.modelo)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${f(e.numero_de_serie || e.SERIAL || e.serial)}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${escapeHtml(accesoriosDe(e))}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-size:12px;">${f(e.trabajo_tecnico)}</td>
-    </tr>`).join("");
+    </tr>${consumosSubtabla(e)}`).join("");
 
   const equiposTable = equipos.length ? `
     <h3 style="margin:18px 0 8px;font:600 15px Arial,sans-serif;color:#111827;">Equipos</h3>
@@ -218,7 +253,9 @@ function renderByTemplate(data) {
       const bodyHtml = buildBodyNotaEntrega({
         orden:   payload.orden,
         ordenId: payload.ordenId,
-        opts:    payload.opts,
+        // `interno` viaja a nivel de data (por destinatario) — habilita las
+        // columnas de precio/tipo en la tabla de repuestos.
+        opts:    { ...(payload.opts || {}), interno: payload.interno === true },
       });
       const preheader = payload.opts?.noRecibido
         ? `Artículo NO recibido — Orden ${payload.ordenId}`

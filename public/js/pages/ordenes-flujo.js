@@ -739,8 +739,22 @@ window.copiarSeriales = function (ordenId) {
   // Distill the order doc down to just the fields the entrega email
   // needs. Mail queue docs are public to anyone with read on the
   // collection, so we ship the minimum, not the whole order.
-  function _ordenEmailSnapshot(orden) {
+  // `consumos` (opcional) son las piezas registradas por el técnico
+  // (subcolección consumos); se adjuntan por equipo casando por equipoId
+  // con fallback por serial (equipos legacy sin id).
+  function _ordenEmailSnapshot(orden, consumos = []) {
     if (!orden || typeof orden !== 'object') return {};
+    const consumosDe = (e) => (Array.isArray(consumos) ? consumos : []).filter(c => {
+      if (!c || !c.equipoId) return false;
+      const serial = e.numero_de_serie || e.SERIAL || e.serial || null;
+      return (e.id && c.equipoId === e.id) || (serial && c.equipoId === serial);
+    }).map(c => ({
+      pieza_nombre: c.pieza_nombre || null,
+      sku:          c.sku || null,
+      qty:          Number(c.qty || 0),
+      precio_unit:  Number(c.precio_unit || 0),
+      tipo:         c.tipo || 'cobro',
+    }));
     const equipos = (Array.isArray(orden.equipos) ? orden.equipos : [])
       .filter(e => e && !e.eliminado)
       .map(e => ({
@@ -754,6 +768,8 @@ window.copiarSeriales = function (ordenId) {
         cargador: !!e.cargador,
         fuente:   !!e.fuente,
         antena:   !!e.antena,
+        // Repuestos/accesorios usados por el técnico (tabla por equipo).
+        consumos: consumosDe(e),
       }));
     return {
       cliente_nombre:    orden.cliente_nombre    || null,
@@ -958,13 +974,18 @@ window.copiarSeriales = function (ordenId) {
       const clienteEmailToUse = clienteEmailInput || clienteEmailOriginal;
 
       const subject = `Nota de Entrega — Orden ${ordenId}${noRecibido ? ' (No recibido)' : ''}`;
+      // Repuestos/accesorios registrados por el técnico — se agrupan por
+      // equipo en el correo. Fallo no-fatal: la nota sale sin esa tabla.
+      let consumosOrden = [];
+      try { consumosOrden = await OrdenesService.getConsumos(ordenId); }
+      catch (err) { console.warn('[confirmarEntrega] no se pudieron cargar los consumos', err); }
       // Structured payload — onMailQueued renders the body via
       // emailRenderer.renderByTemplate. fechaISO is included so the
       // email reflects the moment the entrega was confirmed even if
       // there's queue latency. ctaUrl se inyecta por-destinatario (abajo).
       const baseData = {
         ordenId,
-        orden:  _ordenEmailSnapshot(orden),
+        orden:  _ordenEmailSnapshot(orden, consumosOrden),
         opts:   { ...emailOpts, fechaISO: new Date().toISOString() },
       };
 
@@ -1000,9 +1021,11 @@ window.copiarSeriales = function (ordenId) {
       }
       for (const to of internos) {
         if (!to) continue;
+        // `interno: true` habilita columnas sensibles (precio/tipo) en la
+        // tabla de repuestos — el cliente recibe la nota sin precios.
         jobs.push(MailService.enqueue({
           to, subject, template: 'nota_entrega',
-          data: { ...baseData, ctaUrl: internalCtaUrl },
+          data: { ...baseData, ctaUrl: internalCtaUrl, interno: true },
         }));
       }
       await Promise.allSettled(jobs);
