@@ -1,5 +1,22 @@
 # Changelog
 
+## [Mejoras a "Cotizar desde orden" — feedback de taller (Solangel)] — 2026-07-06
+
+> Driver: `PROMPT_FIX_COTIZAR_ORDEN_SOLANGEL.md` (correo de Solangel Ho Sang 2026-07-03, 6 hallazgos). Rama `feat/cotizar-orden-solangel`, un commit por tarea. NO desplegado — pendiente de revisión.
+
+- **Tarea 4 — Autosave de cotización** (`5f9e68c`): borrador por usuario en `ordenes_de_servicio/{id}/borradores_cotizacion/{uid}` con debounce 600ms + flush en `pagehide`; al reabrir ofrece restaurar (borradores >7 días se descartan); se borra al generar. Nuevos métodos `get/set/deleteBorradorCotizacion` en `OrdenesService`.
+- **Tarea 6 — Selección de materiales en la intervención** (`6b03403`): sección "Materiales / piezas" en el modal de trabajo técnico (`ordenes/index.html` + `ordenes-equipos.js`) con modal de búsqueda (`PiezaSearch`), qty, tipo cobro/garantía y precio editable; guarda en la subcolección `consumos` (esquema legacy), descuenta stock (`ajustarDelta`) y reactiva el escritor de `analytics_piezas_modelo` (`incrementarUsoAnalytics`, huérfano desde que se eliminó trabajar-orden en `b4cefac`). `cotizar-orden.js` precarga los consumos de cobro como líneas al abrir (skip si se restauró borrador).
+- **Tarea 1 — Jefe de taller** (`8675dbb`): nueva clave `empresa/config.email_taller` (`tallerEmailTo()` en `mailRecipients.js`) sumada a los correos de orden COMPLETADA (`onComplete.js`) y nota de entrega (`confirmarEntrega`); `fotos-taller.js` permite eliminar a admin/jefe_taller/uploader; el menú ⋯ de la orden gana rama `jefe_taller` con "Imprimir / documentos" + notas técnicas.
+- **Tarea 5 — Correos estructurados** (`c9087eb`): la nota de entrega adjunta los consumos por equipo (snapshot mínimo) y `emailRenderer` renderiza una sub-tabla "Repuestos / accesorios utilizados — modelo · serie" por radio; precio/tipo solo en correos internos (`data.interno` por destinatario). El correo de aprobación de cotización agrupa renglones por `it.spec` (contexto de equipo).
+- **Tareas 2–3 — Catálogo** (`a2361c1`): nombres del drawer legibles en iPad (line-clamp 2 + `title`, panel ≤1024px); campo opcional `categoria` en `inventario_piezas` editable en piezas-tarifas; el drawer agrupa por categoría (colapsable, "Sin categoría" al final) con sección "Sugeridas para {modelo}" vía `getTopByModelo`.
+
+### QA targets
+- Cotizar una orden, llenar líneas, cerrar pestaña, reabrir → ofrece restaurar borrador; generar → el borrador desaparece.
+- Como técnico: modal de intervención → "Seleccionar materiales" → registrar 2 piezas de cobro → abrir "Cotizar orden" → las 2 líneas aparecen precargadas con SKU/precio; `analytics_piezas_modelo.usos_cobro` incrementa.
+- Como jefe_taller: configurar `empresa/config.email_taller`, completar una orden → recibe el correo; ve "Eliminar" en fotos de taller; menú ⋯ muestra "Imprimir / documentos".
+- Nota de entrega: correo interno muestra tabla de repuestos con precio; el del cliente sin precio.
+- Drawer de catálogo en iPad (≤1024px): nombres en máx. 2 líneas; sin búsqueda se ve "Sugeridas para {modelo}" + grupos por categoría.
+
 ## [Ordenes index improvements — batch 21: §3.7 ordenes-index.css cleanup] — 2026-05-19
 
 > Driver: `ORDENES_INDEX_IMPROVEMENTS.md` §3.7 — the 4,362-line file was the maintenance hotspot. Cleanup ran in 7 ordered buckets with one commit per bucket so any regression bisects cleanly.
