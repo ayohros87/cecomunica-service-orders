@@ -13,6 +13,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   mail_cc_orden_completada:  [],
   mail_cc_contrato_aprobado: [],
   email_recepcion_entregas:  '',   // buzón único que recibe copia de cada nota de entrega ('' = no copiar)
+  email_taller:              [],   // emails del taller (jefe_taller) copiados en orden COMPLETADA y nota de entrega ([] = no copiar)
   cotizacion_aprobacion_to:  [],   // emails que reciben la solicitud de aprobación de cotización ([] = fallback ventas@)
   email_solicitud_seriales:  [],   // usuarios que reciben "Solicitud de seriales" al aprobar contrato ([] = fallback inventario@)
   seriales_recordatorio_dias: 3,   // cada cuántos días se le recuerda a inventario un contrato con seriales pendientes
