@@ -9,7 +9,7 @@ const _savedTimers = {};
 const qboServicios = { list: [], loaded: false };
 
 function debounce(fn, t=220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); }; }
-function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 firebase.auth().onAuthStateChanged(async (user) => {
   if (!user) return window.location.href = "../login.html";

@@ -31,6 +31,16 @@ window.FMT = {
     return d.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' });
   },
 
+  // ISO date string ("YYYY-MM-DD") → fecha corta legible "7 Jul 2026".
+  // Fuente única para las cotizaciones (antes: fmtFechaCorta copiada 5 veces).
+  dateShort(iso) {
+    if (!iso) return '—';
+    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return '—';
+    return d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
+  },
+
   // Firestore Timestamp or Date → "DD/MM/YYYY, HH:MM:SS"
   datetime(ts) {
     if (!ts) return '—';

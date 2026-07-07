@@ -19,13 +19,7 @@
     // Esquema kit: campo `fecha` ISO YYYY-MM-DD.
     return c.fecha || (c.fecha_creacion?.toDate ? c.fecha_creacion.toDate().toISOString().slice(0, 10) : '');
   }
-  function fmtFechaCorta(iso) {
-    if (!iso) return '—';
-    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const d = new Date(iso + 'T00:00:00');
-    if (isNaN(d.getTime())) return '—';
-    return d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
-  }
+  function fmtFechaCorta(iso) { return FMT.dateShort(iso); } // delega en el helper canónico
 
   // ── Carga ─────────────────────────────────────────────────────
   async function cargarCotizaciones(esInicial = true) {

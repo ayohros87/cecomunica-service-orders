@@ -11,20 +11,14 @@
   let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
 
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = FMT.esc; // helper canónico (core/formatting.js)
   const T = window.CotizacionTotales;
 
   // ── Utils ──────────────────────────────────────────────────────
   function set(patch) { draft = { ...draft, ...patch }; renderTodo(); }
   function setItems(items) { draft = { ...draft, items }; renderItems(); renderSummary(); }
   function setCondiciones(condiciones) { draft = { ...draft, condiciones }; renderCondiciones(); }
-  function fmtFechaCorta(iso) {
-    if (!iso) return '—';
-    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const d = new Date(iso + 'T00:00:00');
-    if (isNaN(d.getTime())) return '—';
-    return d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
-  }
+  function fmtFechaCorta(iso) { return FMT.dateShort(iso); } // delega en el helper canónico
 
   // ── Render principal ──────────────────────────────────────────
   function renderTodo() {

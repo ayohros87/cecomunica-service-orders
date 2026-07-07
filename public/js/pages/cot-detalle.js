@@ -9,16 +9,10 @@
   let polEnvio = { requiere: false, motivos: [] }; // recalculado en cada render()
 
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = FMT.esc; // helper canónico (core/formatting.js)
   const T = window.CotizacionTotales;
 
-  function fmtFechaCorta(iso) {
-    if (!iso) return '—';
-    const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const d = new Date(iso + 'T00:00:00');
-    if (isNaN(d.getTime())) return '—';
-    return d.getDate() + ' ' + meses[d.getMonth()] + ' ' + d.getFullYear();
-  }
+  function fmtFechaCorta(iso) { return FMT.dateShort(iso); } // delega en el helper canónico
 
   // Acepta string ISO, Date o Firestore Timestamp y lo formatea como "2 Jun 2026".
   // El historial guarda Timestamps (Firestore) y fechas ISO (campo `fecha`);

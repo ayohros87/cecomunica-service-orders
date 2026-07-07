@@ -10,7 +10,7 @@ let byRuc = {}, byName = {};
 let dupRucs = [];          // [{ruc, custs:[...]}]
 let vista = 'sugeridos';
 
-function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function norm(s){ return String(s||'').trim().toLowerCase(); }
 function normTax(s){ return String(s||'').replace(/[^a-zA-Z0-9]/g,'').toUpperCase(); }
 function money(n){ return '$'+Number(n||0).toFixed(2); }

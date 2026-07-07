@@ -17,7 +17,7 @@ const factConfig = { qbo_item_frecuencia_id: '', qbo_item_mantenimiento_id: '' }
 
 /* ===== Util ===== */
 function debounce(fn, t = 220){ let id; return (...a)=>{ clearTimeout(id); id=setTimeout(()=>fn(...a),t); }; }
-function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function mapTipo(v){ return v==='P'?'Portátil':v==='B'?'Base':v==='C'?'Cámara':'—'; }
 function setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v; }
 

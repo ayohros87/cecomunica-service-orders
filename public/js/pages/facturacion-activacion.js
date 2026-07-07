@@ -9,7 +9,7 @@ let modelosById = {};
 let modelosByName = {};
 let vista = 'pendientes';
 
-function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function esc(s){ return FMT.esc(s); } // helper canónico (core/formatting.js)
 function _norm(s){ return String(s||'').trim().toLowerCase(); }
 function fdate(ts){ return ts?.toDate ? ts.toDate().toLocaleDateString('es-PA') : (ts ? new Date(ts).toLocaleDateString('es-PA') : '—'); }
 

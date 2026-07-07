@@ -403,7 +403,7 @@
   // Devuelve Promise<{ dest, subject, html } | null>.
   function reenviarPrompt(opts) {
     return new Promise((resolve) => {
-      const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const esc = window.FMT.esc; // helper canónico (core/formatting.js)
       const subject = `Cotización ${opts.cotizacionId || ''} · CeComunica`;
       const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
       const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
@@ -507,7 +507,7 @@
   async function enqueueAprobacionMail({ doc, docId, user }) {
     const T = window.CotizacionTotales;
     const FMT = window.FMT;
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const esc = FMT.esc; // helper canónico (core/formatting.js)
     const t = T.calcTotales({
       items: doc.items || [], descuentoPct: doc.descuentoPct || 0, itbmsPct: doc.itbmsPct || 0,
     });
