@@ -50,6 +50,9 @@
     { key: 'seriales_recordatorio_dias', label: 'Recordatorio de seriales (días)',
       type: 'int', min: 1, max: 30,
       hint: 'Cada cuántos días se le recuerda a inventario un contrato con seriales pendientes (hasta 4 veces). El badge "Seriales pendientes" en la lista queda como recordatorio permanente.' },
+    { key: 'piezas_categorias', label: 'Inventario — Categorías de piezas',
+      type: 'lines',
+      hint: 'Una por línea. Alimentan el selector de categoría en Piezas y Tarifas y los grupos del catálogo al cotizar una orden. Quitar una categoría no toca las piezas que ya la tienen (se conservan como valor legacy).' },
     { key: 'seriales_editores_extra', label: 'Seriales — Editar tras "asignados" (además de admin)',
       type: 'user-picker', emptyHint: 'solo administradores',
       hint: 'Cuando los seriales de un contrato quedan "asignados", la pantalla se bloquea en solo-lectura para evitar cambios accidentales. Los administradores siempre pueden reabrir y editar; aquí puedes habilitar usuarios específicos (aunque no sean admin) para reabrir y editar seriales ya asignados. Vacío = solo administradores.' },
@@ -79,9 +82,10 @@
       let input;
       if (f.type === 'user-picker') {
         input = renderUserPicker(f.key, Array.isArray(v) ? v : [], f.emptyHint);
-      } else if (f.type === 'emails') {
+      } else if (f.type === 'emails' || f.type === 'lines') {
         const text = Array.isArray(v) ? v.join('\n') : '';
-        input = `<textarea id="fld-${f.key}" class="form-input" rows="3" style="font-family:inherit;font-size:13px;">${text}</textarea>`;
+        const rows = f.type === 'lines' ? 6 : 3;
+        input = `<textarea id="fld-${f.key}" class="form-input" rows="${rows}" style="font-family:inherit;font-size:13px;">${esc(text)}</textarea>`;
       } else if (f.type === 'email') {
         const val = (typeof v === 'string' ? v : '');
         input = `<input type="email" id="fld-${f.key}" class="form-input" value="${val}" placeholder="recepcion@cecomunica.com" style="width:280px;">`;
@@ -193,6 +197,11 @@
         if (list.length > 10) errors[f.key] = 'Máximo 10 emails.';
         const bad = list.find(s => !EMAIL_RE.test(s));
         if (bad) errors[f.key] = `Email inválido: ${bad}`;
+        out[f.key] = list;
+      } else if (f.type === 'lines') {
+        // Lista de strings libres (una por línea), deduplicada conservando orden.
+        const list = [...new Set(raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean))];
+        if (list.length > 30) errors[f.key] = 'Máximo 30 líneas.';
         out[f.key] = list;
       } else if (f.type === 'email') {
         const val = (raw || '').trim();

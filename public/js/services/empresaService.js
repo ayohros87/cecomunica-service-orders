@@ -21,6 +21,12 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   cotizacion_descuento_max_pct: 15, // descuento % máximo que un vendedor puede enviar sin aprobación
   cotizacion_total_max:      5000, // total máximo (USD) que un vendedor puede enviar sin aprobación
   alertas:                   [],  // array de {id, kind, threshold, severity, message, enabled} — ver AdminMetrics.evaluateAlertas
+  // Categorías del catálogo de piezas (select en piezas-tarifas; el drawer de
+  // cotizar-orden agrupa por el string libre del doc, así que una categoría
+  // nueva aparece sola). Editable en admin/config.html.
+  piezas_categorias: [
+    'Batería', 'Antena', 'Cargador', 'Clip', 'Fuente', 'Repuesto interno', 'Servicio', 'Otros',
+  ],
   // Grupos PoC propuestos como chips de alta rápida en admin/grupos (editable).
   poc_grupos_comunes: [
     'Ventas', 'Operaciones', 'Administración', 'Gerencia', 'Contabilidad',

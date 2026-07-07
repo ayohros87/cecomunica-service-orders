@@ -6,7 +6,7 @@
 // cotizaciones (toDoc, totales, correo de aprobación, detalle/impresión/envío).
 (() => {
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = FMT.esc; // helper canónico (core/formatting.js)
   const T = window.CotizacionTotales;
 
   const params = new URLSearchParams(location.search);
@@ -44,6 +44,11 @@
   const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // borradores más viejos se descartan
   let draftTimer = null;
   let draftDirty = false;
+  // IDs de consumos del técnico ya incorporados a las líneas (por precarga o
+  // por los botones "Agregar cobrables"). Viaja en el borrador para que, al
+  // restaurar, solo se precarguen los consumos NUEVOS (registrados después).
+  let consumosVistos = new Set();
+  let draftSinVistos = false; // borrador legacy sin consumos_vistos → no precargar sobre él
 
   function touch() {
     draftDirty = true;
@@ -58,6 +63,7 @@
       await OrdenesService.setBorradorCotizacion(ordenId, user.uid, {
         form: { ...form },
         lineas: JSON.parse(JSON.stringify(lineas)),
+        consumos_vistos: [...consumosVistos],
         orden_id: ordenId,
       });
     } catch (e) {
@@ -78,6 +84,9 @@
     if (d.lineas && typeof d.lineas === 'object') {
       Object.entries(d.lineas).forEach(([k, v]) => { if (Array.isArray(v)) lineas[k] = v; });
     }
+    const vistos = Array.isArray(d.consumos_vistos) ? d.consumos_vistos : null;
+    draftSinVistos = !vistos;
+    consumosVistos = new Set(vistos || []);
   }
 
   // Si hay un borrador reciente del usuario, ofrece restaurarlo; si lo rechaza,
@@ -395,6 +404,7 @@
       id: uid(), sku: c.sku || '', nombre: c.pieza_nombre || 'Pieza',
       cant: Number(c.qty || 1), precio: Number(c.precio_unit || 0),
     });
+    if (c.id) consumosVistos.add(c.id); // el borrador recuerda qué consumos ya entraron
     touch();
     if (!silent) { renderEquipos(); renderResumen(); Toast.show('Pieza agregada a la cotización', 'ok'); }
   }
@@ -613,21 +623,13 @@
   const sugeridasCache = new Map();   // eqId → piezas sugeridas por analytics
   const categoriasColapsadas = new Set();
 
-  // modelo_norm con el mismo criterio que el escritor de analytics
-  // (ordenes-equipos._modeloNormEquipo): marca_modelo normalizado.
-  const _norm = (x = '') => String(x).toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-  function modeloNormDe(eq) {
-    const m = _norm(eq?.modelo || '');
-    const b = _norm(eq?.marca || '');
-    return b ? `${b}_${m}` : m;
-  }
-
   async function cargarSugeridas(eq) {
     if (!eq) return [];
     if (sugeridasCache.has(eq.id)) return sugeridasCache.get(eq.id);
     try {
       let out = [];
-      const mnorm = modeloNormDe(eq);
+      // Misma clave que el escritor de analytics (helper único en el service).
+      const mnorm = PiezasService.modeloNormDeEquipo(eq);
       if (mnorm) {
         const rows = await PiezasService.getTopByModelo(mnorm, 8);
         const byId = new Map(piezas.map(p => [p.id, p]));
@@ -906,23 +908,31 @@
     // defaults, para que lo restaurado tenga la última palabra.
     const restaurado = await maybeRestoreDraft();
 
-    // Precarga automática: los consumos de cobro registrados por el técnico
-    // entran como líneas de la cotización (editables). Si se restauró un
-    // borrador NO se precarga, para no duplicar lo ya trabajado.
-    if (!restaurado) {
+    // Precarga automática de los consumos de cobro del técnico:
+    // - Sin borrador: entran todos (y no dispara el autosave — no es un
+    //   cambio del usuario).
+    // - Con borrador restaurado: entran SOLO los no vistos por el borrador
+    //   (consumos_vistos) — piezas registradas después de la última edición.
+    //   Estos sí persisten al borrador (touch corre en addConsumoLine).
+    // - Borrador legacy sin consumos_vistos: no se precarga nada (no hay
+    //   forma segura de saber qué incluyó; queda "Agregar cobrables (n)").
+    if (!restaurado || !draftSinVistos) {
       let precargadas = 0;
       equipos.forEach(eq => {
         consumosDe(eq)
           .filter(c => (c.tipo || 'cobro') === 'cobro')
+          .filter(c => !restaurado || (c.id && !consumosVistos.has(c.id)))
           .forEach(c => { addConsumoLine(eq.id, c, { silent: true }); precargadas++; });
       });
       if (precargadas) {
-        // La precarga no es un cambio del usuario: no dispares el autosave.
-        clearTimeout(draftTimer);
-        draftDirty = false;
-        setTimeout(() => Toast.show(
-          `Se precargaron ${precargadas} pieza${precargadas === 1 ? '' : 's'} registradas por el técnico — revisa y ajusta`, 'ok'
-        ), 400);
+        if (!restaurado) {
+          clearTimeout(draftTimer);
+          draftDirty = false;
+        }
+        const msg = restaurado
+          ? `Se agregaron ${precargadas} pieza${precargadas === 1 ? '' : 's'} nueva${precargadas === 1 ? '' : 's'} registrada${precargadas === 1 ? '' : 's'} por el técnico — revisa y ajusta`
+          : `Se precargaron ${precargadas} pieza${precargadas === 1 ? '' : 's'} registradas por el técnico — revisa y ajusta`;
+        setTimeout(() => Toast.show(msg, 'ok'), 400);
       }
     }
 

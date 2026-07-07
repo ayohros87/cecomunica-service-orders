@@ -724,28 +724,12 @@ let _materialSeleccionada = null;   // pieza elegida en el modal de selección
 let _materialBuscarTimer = null;
 let _materialWired = false;
 
-function _normMaterial(x = "") {
-  return String(x).toLowerCase().trim().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
-}
-
-// modelo_norm con el mismo criterio que el flujo legacy (marca_modelo),
-// para que analytics_piezas_modelo siga acumulando sobre las mismas claves.
-function _modeloNormEquipo(equipo) {
-  const m = _normMaterial(equipo?.modelo || equipo?.MODEL || equipo?.modelo_nombre || "");
-  const b = _normMaterial(equipo?.marca || equipo?.fabricante || "");
-  return b ? `${b}_${m}` : m;
-}
-
 function _nombrePieza(p) {
   return p?.descripcion || p?.nombre || (((p?.marca || "") + " " + (p?.modelo || "")).trim()) || "Pieza";
 }
 
-// Los consumos legacy de equipos sin id se guardaban bajo el número de serie;
-// se conserva ese criterio para que cotizar-orden los siga casando.
 function _consumoKeyEquipoActual() {
-  const e = _resolveEquipoActual();
-  if (!e) return null;
-  return e.id || (e.numero_de_serie || e.serial || e.SERIAL || "").toString() || null;
+  return OrdenesService.consumoKeyDe(_resolveEquipoActual());
 }
 
 function _ordenActualBloqueada() {
@@ -960,7 +944,7 @@ window.confirmarMaterialEquipo = async function() {
 
     // Alimenta las recomendaciones "más usadas por modelo" (analytics).
     if (tipo === "cobro") {
-      try { await PiezasService.incrementarUsoAnalytics(_modeloNormEquipo(equipo), piezaId); }
+      try { await PiezasService.incrementarUsoAnalytics(PiezasService.modeloNormDeEquipo(equipo), piezaId); }
       catch (e) { console.warn("No se pudo registrar analytics de pieza:", e); }
     }
 

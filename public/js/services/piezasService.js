@@ -89,6 +89,21 @@ const PiezasService = {
     }
   },
 
+  // ── Clave modelo_norm de analytics_piezas_modelo ───────────────────────────
+  // ÚNICA fuente de la normalización: la usan el escritor (registro de
+  // consumos en ordenes-equipos → incrementarUsoAnalytics) y el lector
+  // (sugeridas en cotizar-orden → getTopByModelo). Si esto se edita, ambos
+  // lados cambian juntos; nunca copiar esta lógica a una página.
+  _normKey(x = '') {
+    return String(x).toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  },
+
+  modeloNormDeEquipo(equipo = {}) {
+    const m = this._normKey(equipo.modelo || equipo.MODEL || equipo.modelo_nombre || '');
+    const b = this._normKey(equipo.marca || equipo.fabricante || '');
+    return b ? `${b}_${m}` : m;
+  },
+
   async getTopByModelo(modeloNorm, limit = 8) {
     const db = firebase.firestore();
     const snap = await db.collection('analytics_piezas_modelo')

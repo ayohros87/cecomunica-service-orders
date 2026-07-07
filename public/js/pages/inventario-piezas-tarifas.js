@@ -20,7 +20,9 @@ function num(v){ const n = Number(v); return Number.isFinite(n) ? n : 0; }
 // Categorías del catálogo (Tarea 3 — navegación tipo → accesorios en el
 // drawer de cotizar-orden). Campo opcional: sin backfill, los docs sin
 // categoría caen en "Sin categoría" al agrupar.
-const CATEGORIAS_PIEZA = ['Batería','Antena','Cargador','Clip','Fuente','Repuesto interno','Servicio','Otros'];
+// La lista vive en empresa/config.piezas_categorias (editable en
+// admin/config.html); este valor es solo el fallback hasta que cargue.
+let CATEGORIAS_PIEZA = EmpresaService.CONFIG_DEFAULTS.piezas_categorias.slice();
 function categoriaOptions(sel){
   const cur = String(sel||'').trim();
   const opts = ['<option value="">— sin categoría —</option>'];
@@ -48,6 +50,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
       if (e.target.id === 'chk-sin-precio'){ soloSinPrecio = e.target.checked; render(); }
       if (e.target.id === 'chk-por-revisar'){ soloPorRevisar = e.target.checked; render(); }
     });
+
+    // Categorías administrables (empresa/config) — getConfig nunca lanza:
+    // con doc ausente u offline devuelve los defaults.
+    const cfg = await EmpresaService.getConfig();
+    if (Array.isArray(cfg.piezas_categorias) && cfg.piezas_categorias.length) {
+      CATEGORIAS_PIEZA = cfg.piezas_categorias.slice();
+    }
 
     await cargarPiezas();
     render();                               // muestra las piezas de una vez (Firestore, rápido)

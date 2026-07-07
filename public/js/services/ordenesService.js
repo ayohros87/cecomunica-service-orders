@@ -711,6 +711,18 @@ const OrdenesService = {
     return doc.exists ? doc.data() : null;
   },
 
+  // Clave bajo la que se guardan los consumos de un equipo: su id o, para
+  // equipos legacy sin id, su número de serie. Única fuente para el ESCRITOR
+  // (registro de materiales en ordenes-equipos). Los lectores (precarga de
+  // cotizar-orden, snapshot de correo en ordenes-flujo) casan por id Y por
+  // serial porque conviven consumos escritos bajo ambas claves.
+  consumoKeyDe(equipo) {
+    if (!equipo) return null;
+    return equipo.id
+      || String(equipo.numero_de_serie || equipo.serial || equipo.SERIAL || '').trim()
+      || null;
+  },
+
   async getConsumos(ordenId, { tipo, equipoId, orderByField } = {}) {
     const db = firebase.firestore();
     let q = db.collection("ordenes_de_servicio").doc(ordenId).collection("consumos");

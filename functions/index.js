@@ -32,6 +32,7 @@ exports.onOrdenHardDelete             = onOrdenHardDelete;
 exports.onOrdenWriteSearchTokens      = require("./src/triggers/ordenes/onWriteSearchTokens");
 exports.purgePIIRetention             = require("./src/triggers/scheduled/purgePIIRetention");
 exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onOpened");
+exports.onCotizacionEstadoChange      = require("./src/triggers/cotizaciones/onEstadoChange");
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
 exports.recordatorioSeriales          = require("./src/triggers/scheduled/recordatorioSeriales");
 exports.manageUser                    = require("./src/callable/manageUser");
