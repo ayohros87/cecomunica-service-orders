@@ -53,11 +53,7 @@
     if (!Array.isArray(arr)) return DEFAULT_COMUNES.slice();
     return FMT.dedupGrupos(arr);
   }
-  function esc(s) {
-    return (s || '').toString()
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function esc(s) { return FMT.esc(s); } // helper canónico (core/formatting.js)
   function nowTs() {
     const d = new Date();
     return d.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });

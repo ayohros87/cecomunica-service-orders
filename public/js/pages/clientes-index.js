@@ -47,9 +47,7 @@ const pageCursors = { 1: null };
   return !(role==="admin" || role===ROLES.ADMIN || role==="editor" || role===ROLES.RECEPCION);
 }
 // --- Helpers para confirmación bonita y seguridad de HTML ---
-function escapeHtml(s){
-  return (s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-}
+function escapeHtml(s){ return FMT.esc(s); } // helper canónico (core/formatting.js)
 
 // Indicador de guardado por fila: saving (ámbar) → saved (verde, se desvanece) → error (rojo).
 const _savedTimers = {};

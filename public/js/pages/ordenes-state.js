@@ -242,11 +242,7 @@ function normTxt(s) {
     .replace(/[̀-ͯ]/g, "");
 }
 
-function escapeHtml(str) {
-  return (str || "").replace(/[&<>"']/g, (m) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
-  }[m]));
-}
+function escapeHtml(str) { return FMT.esc(str); } // helper canónico (core/formatting.js)
 
 // Denormalized: every order written by nueva-orden.js since the cliente_nombre
 // field landed has the name on the doc directly. `orden.cliente` is a legacy

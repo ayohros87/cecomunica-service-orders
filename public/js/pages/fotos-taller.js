@@ -128,14 +128,7 @@
       select.innerHTML = options.join("");
     }
 
-    function escapeHtml(value) {
-      return String(value || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-    }
+    function escapeHtml(value) { return FMT.esc(value); } // helper canónico (core/formatting.js)
 
     function onImageSelected(file, tipo) {
       if (!file) {

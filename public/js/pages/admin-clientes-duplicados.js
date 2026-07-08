@@ -13,11 +13,7 @@
   const State = { clusters: [] }; // [{ id, miembros:[cliente], refs:{id->{...}} }]
 
   function $(id) { return document.getElementById(id); }
-  function esc(s) {
-    return (s || '').toString()
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function esc(s) { return FMT.esc(s); } // helper canónico (core/formatting.js)
   const Svc = () => window.ClientesDedupService;
 
   async function escanear() {

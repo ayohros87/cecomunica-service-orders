@@ -50,11 +50,7 @@
 
   function $(id) { return document.getElementById(id); }
   function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  function escapeHtml(s) { return FMT.esc(s); } // helper canónico (core/formatting.js)
 
   // ────────── Data loaders ──────────
 

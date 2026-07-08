@@ -19,11 +19,7 @@
 
   function $(id) { return document.getElementById(id); }
   function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
+  function escapeHtml(s) { return FMT.esc(s); } // helper canónico (+ escapa comilla simple, antes faltaba)
 
   function ageDays(v) {
     const d = AdminMetrics.toDate(v);
