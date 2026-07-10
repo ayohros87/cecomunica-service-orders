@@ -113,6 +113,7 @@ window.PocBulk = {
     const user = firebase.auth().currentUser;
     const COL  = PocState.COL;
     let actualizados = 0;
+    const cambiosParaLiberar = [];   // equipos que pasaron a inactivo con SIM
 
     for (const { id, fila } of seleccionados) {
       const celdas    = fila.querySelectorAll('td');
@@ -164,12 +165,25 @@ window.PocBulk = {
         cambios:   { antes: prevData, despues: { ...prevData, ...cleanFields } }
       }).catch(e => console.warn('poc_log write failed (non-critical):', e));
 
+      cambiosParaLiberar.push({ id, antes: prevData, despues: { ...prevData, ...cleanFields } });
+
+      // SIM tecleado a mano en un equipo que sigue activo y que existe
+      // disponible en el pool → marcarlo asignado. Best-effort.
+      if (activo && sim_number &&
+          SimCardsService.normalizarSim(sim_number) !== SimCardsService.normalizarSim(prevData.sim_number)) {
+        SimCardsService.marcarAsignadoSiExiste(sim_number, {
+          id, serial, cliente_nombre: PocState.nombreClienteDe(prevData),
+        }, user);
+      }
+
       fila.style.backgroundColor = '#d4edda';
       setTimeout(() => { fila.style.backgroundColor = 'transparent'; }, 1000);
       actualizados++;
     }
 
     Toast.show(`${actualizados} equipos actualizados.`, 'ok');
+    // Equipos que quedaron inactivos con SIM → ofrecer devolverlos al pool.
+    await SimLiberar.procesarDesactivados(cambiosParaLiberar);
     this._resetButtons();
     this._modo = false;
     PocList.refresh();

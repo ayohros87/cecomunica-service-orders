@@ -31,6 +31,10 @@
   <script src="../js/core/formatting.js"></script>
   <script src="../js/services/pocService.js"></script>
   <script src="../js/services/empresaService.js"></script>
+  <script src="../js/services/simCardsService.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="../js/pages/poc-sim-liberar.js"></script>
   <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
 </head>
 <body>
@@ -167,13 +171,15 @@
     }
 
     async function guardarCambios() {
+      const cambiosParaLiberar = [];   // equipos que pasaron a inactivo con SIM
+
       const updates = equipos.map(async (eq, index) => {
         const simTel = parseSimPhone(document.getElementById(`simtel_${index}`).value);
         const grupos = FMT.dedupGrupos(
           [...document.querySelectorAll(`#gruposContainer_${index} .grupo-input`)].map(i => i.value)
         );
 
-        return PocService.updatePocDevice(eq.id, {
+        const fields = {
           cliente: document.getElementById(`cliente_${index}`).value,
           ip: document.getElementById(`ip_${index}`).value,
           sim_number: simTel.sim,
@@ -185,10 +191,14 @@
           gps: document.getElementById(`gps_${index}`).checked,
           notas: document.getElementById(`notas_${index}`).value,
           updated_at: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        };
+        cambiosParaLiberar.push({ id: eq.id, antes: eq.data, despues: { ...eq.data, ...fields } });
+        return PocService.updatePocDevice(eq.id, fields);
       });
 
       await Promise.all(updates);
+      // Equipos que quedaron inactivos con SIM → ofrecer devolverlos al pool.
+      await SimLiberar.procesarDesactivados(cambiosParaLiberar);
       alert("Cambios guardados correctamente.");
       window.location.href = "index.html";
     }

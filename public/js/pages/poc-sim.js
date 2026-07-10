@@ -72,6 +72,14 @@ window.PocSim = {
         usuario:   user?.email,
         cambios:   { antes: prevData, despues: newData }
       });
+      // SIM pegado a mano que existe disponible en el pool → marcarlo asignado
+      // para que no se ofrezca dos veces. Best-effort, no bloquea el lote.
+      if (newData.sim_number) {
+        SimCardsService.marcarAsignadoSiExiste(newData.sim_number, {
+          id, serial: prevData.serial || '',
+          cliente_nombre: PocState.nombreClienteDe(prevData),
+        }, user);
+      }
       actualizados++;
     }
 

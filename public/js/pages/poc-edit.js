@@ -222,6 +222,25 @@ window.PocEdit = {
         if (!newModeloId) delete mergedData.modelo_id;
       }
 
+      // Equipo desactivado con SIM → ofrecer devolver el SIM al pool.
+      const liberados = await SimLiberar.procesarDesactivados([
+        { id: docId, antes: originalData || {}, despues: mergedData },
+      ]);
+      if (liberados.has(docId)) {
+        mergedData.sim_number = ''; mergedData.sim_phone = ''; mergedData.operador = '';
+      } else if (mergedData.activo !== false) {
+        // SIM tecleado a mano que existe disponible en el pool → marcarlo
+        // asignado para que no se ofrezca dos veces. Best-effort.
+        const simNuevo = SimCardsService.normalizarSim(mergedData.sim_number);
+        const simPrev  = SimCardsService.normalizarSim(originalData?.sim_number);
+        if (simNuevo && simNuevo !== simPrev) {
+          SimCardsService.marcarAsignadoSiExiste(simNuevo, {
+            id: docId, serial: mergedData.serial || '',
+            cliente_nombre: PocState.nombreClienteDe(mergedData),
+          }, user);
+        }
+      }
+
       this.cerrar();
       Toast.show('Cambios guardados', 'ok');
       const newRow = PocList._buildRow(docId, mergedData);

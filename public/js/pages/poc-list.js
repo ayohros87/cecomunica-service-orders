@@ -142,8 +142,12 @@ window.PocList = {
       delBtn.setAttribute('aria-label', 'Eliminar equipo');
       delBtn.innerHTML = '<i data-lucide="trash-2"></i>';
       delBtn.onclick = async () => {
-        if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
-          PocService.softDeletePocDevice(docId).then(() => this.refresh());
+        if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true })) {
+          await PocService.softDeletePocDevice(docId);
+          // Equipo eliminado con SIM → ofrecer devolver el SIM al pool.
+          await SimLiberar.procesarDesactivados([{ id: docId, antes: d, despues: { ...d, deleted: true } }]);
+          this.refresh();
+        }
       };
       actionCell.appendChild(delBtn);
 
@@ -493,8 +497,12 @@ window.PocList = {
         btnElim.setAttribute('aria-label', 'Eliminar equipo');
         btnElim.innerHTML = '<i data-lucide="trash-2"></i>';
         btnElim.onclick = async () => {
-          if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true }))
-            PocService.softDeletePocDevice(d.id).then(() => this.cargar(true));
+          if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true })) {
+            await PocService.softDeletePocDevice(d.id);
+            // Equipo eliminado con SIM → ofrecer devolver el SIM al pool.
+            await SimLiberar.procesarDesactivados([{ id: d.id, antes: d, despues: { ...d, deleted: true } }]);
+            this.cargar(true);
+          }
         };
         acciones.appendChild(btnElim);
 
