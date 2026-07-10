@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>SIM Cards - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+
+  <style>
+    /* Page-local — kit primitives handle the rest */
+    .sim-badge {
+      display:inline-flex; align-items:center; gap:5px;
+      font-size:12px; font-weight:600;
+      padding:3px 10px; border-radius:var(--radius-pill);
+    }
+    .sim-badge-disponible { background:#dcfce7; color:#15803d; }
+    .sim-badge-asignado   { background:#fef9c3; color:#a16207; }
+
+    .sim-asignado-a { font-size:12px; color:var(--fg-3); display:block; }
+
+    /* Tabs de estado (pills) */
+    .sim-tabs { display:flex; gap:var(--sp-2); }
+    .sim-tab {
+      padding:5px 14px; border-radius:var(--radius-pill);
+      border:1px solid var(--border-default); background:var(--surface-sunken);
+      font-size:13px; font-weight:500; color:var(--fg-2); cursor:pointer;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    }
+    .sim-tab:hover { border-color:var(--accent); color:var(--accent); }
+    .sim-tab.is-active { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600; }
+
+    /* Preview del import */
+    #importPreview table td, #importPreview table th { font-size:13px; }
+    .import-stat { display:inline-flex; align-items:center; gap:6px; margin-right:var(--sp-4); font-size:13px; }
+    .import-stat strong { font-size:16px; }
+
+    table.app-table tbody td { font-size:14px; }
+    table.app-table tbody tr:nth-child(even) { background:#f1f5f9; }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/services/usuariosService.js"></script>
+  <script src="../js/services/empresaService.js"></script>
+  <script src="../js/services/pocService.js"></script>
+  <script src="../js/services/simCardsService.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="../js/pages/sim-cards.js" defer></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="credit-card"></i> SIM Cards',
+      back: { label: '<i data-lucide="arrow-left"></i> Equipos PoC', href: 'index.html' },
+      actions: [
+        { label: '<i data-lucide="plus"></i> Agregar SIM', onclick: 'SimCards.abrirAlta()', cls: 'primary', id: 'btnAgregarSim' },
+      ],
+      menu: [
+        { label: '<i data-lucide="upload"></i> Importar Excel', onclick: 'SimCards.abrirImport()', id: 'btnImportarSims' },
+        { label: '<i data-lucide="download"></i> Descargar plantilla', onclick: 'SimCards.descargarPlantilla()', id: 'btnPlantilla' },
+      ],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--full">
+
+    <div class="ds-card">
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="sim-tabs" role="tablist">
+          <button class="sim-tab is-active" data-tab="disponible" onclick="SimCards.setTab('disponible')">Disponibles <span id="countDisponible"></span></button>
+          <button class="sim-tab" data-tab="asignado" onclick="SimCards.setTab('asignado')">Asignados <span id="countAsignado"></span></button>
+          <button class="sim-tab" data-tab="todos" onclick="SimCards.setTab('todos')">Todos <span id="countTodos"></span></button>
+        </div>
+
+        <div class="filter-search" style="max-width:340px;">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" id="simBusqueda" placeholder="Buscar SIM, teléfono o cliente…" aria-label="Buscar SIMs" oninput="SimCards.render()" style="border:none; flex:1;">
+        </div>
+
+        <select id="simFiltroOperador" class="form-select" style="max-width:190px;" onchange="SimCards.render()" aria-label="Filtrar por operador">
+          <option value="">Todos los operadores</option>
+        </select>
+
+        <div style="flex:1;"></div>
+        <button class="btn btn-ghost btn-sm" onclick="SimCards.cargar()" title="Recargar la lista"><i data-lucide="rotate-ccw"></i> Recargar</button>
+      </div>
+
+      <!-- Tabla -->
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table" aria-label="SIM cards">
+          <thead>
+            <tr>
+              <th>SIM (ICCID)</th>
+              <th>Teléfono</th>
+              <th>Operador</th>
+              <th>Estado</th>
+              <th>Asignado a</th>
+              <th>Origen</th>
+              <th style="width:110px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="simTabla">
+            <tr><td colspan="7" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="app-table-footer">
+        <div class="resumen-badge" id="simResumen"></div>
+      </div>
+
+    </div><!-- /.ds-card -->
+
+  </div><!-- /.app-wrap -->
+
+  <!-- Modal: alta manual -->
+  <div id="simAltaModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="plus"></i> Agregar SIM al pool</h3>
+        <button class="modal-close" onclick="Modal.close('simAltaModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="altaSimNumber">Número SIM (ICCID)</label>
+          <input class="form-input" id="altaSimNumber" type="text" placeholder="8950…" style="font-family:var(--font-mono);">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="altaSimPhone">Teléfono <span class="optional">(opcional)</span></label>
+          <input class="form-input" id="altaSimPhone" type="text" placeholder="6123-4567" style="font-family:var(--font-mono);">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="altaSimOperador">Operador</label>
+          <select class="form-select" id="altaSimOperador"><option value="">Seleccione…</option></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('simAltaModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" onclick="SimCards.guardarAlta()"><i data-lucide="check"></i> Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editar teléfono/operador -->
+  <div id="simEditModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="pencil"></i> Editar SIM <span id="editSimLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <button class="modal-close" onclick="Modal.close('simEditModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="editSimPhone">Teléfono</label>
+          <input class="form-input" id="editSimPhone" type="text" style="font-family:var(--font-mono);">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="editSimOperador">Operador</label>
+          <select class="form-select" id="editSimOperador"><option value="">Seleccione…</option></select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('simEditModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" onclick="SimCards.guardarEdicion()"><i data-lucide="check"></i> Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: importar Excel -->
+  <div id="simImportModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="upload"></i> Importar SIMs desde Excel</h3>
+        <button class="modal-close" onclick="SimCards.cerrarImport()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo Excel" style="padding:var(--sp-4); min-height:auto;">
+          <input type="file" id="simImportFile" accept=".xlsx,.xls,.csv" onchange="SimCards.previsualizarImport(this)">
+          <i data-lucide="file-spreadsheet"></i>
+          <p style="margin:0; font-size:13px;"><strong>Arrastra el Excel</strong> o haz clic</p>
+          <span style="font-size:12px; color:var(--fg-3);">Columnas: <code>SIM</code>, <code>TELEFONO</code>, <code>OPERADOR</code> (primera hoja). Todos entran como <strong>disponibles</strong>.</span>
+        </label>
+        <div id="importPreview" style="margin-top:var(--sp-3);"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="SimCards.cerrarImport()"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmarImport" onclick="SimCards.confirmarImport()" disabled><i data-lucide="check"></i> Importar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+</body>
+</html>
