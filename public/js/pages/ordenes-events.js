@@ -412,6 +412,7 @@ function abrirImpresionOrden(ordenId) {
         cargador: !!e.cargador,
         fuente: !!e.fuente,
         antena: !!e.antena,
+        cubrepolvo: !!e.cubrepolvo,
         observaciones: e.observaciones || ''
       }))
     }));
@@ -664,6 +665,7 @@ function verEntregaComprobante(ordenId) {
     if (e.cargador) accs.push('Cargador');
     if (e.fuente)   accs.push('Fuente');
     if (e.antena)   accs.push('Antena');
+    if (e.cubrepolvo) accs.push('Cubre Polvo');
     return `<tr>
         <td class="c-num">${i + 1}</td>
         <td class="c-mono">${esc(serial || '—')}</td>
@@ -787,6 +789,7 @@ function _equiposEntregaRows(o) {
     if (e.cargador) accs.push('Cargador');
     if (e.fuente)   accs.push('Fuente');
     if (e.antena)   accs.push('Antena');
+    if (e.cubrepolvo) accs.push('Cubre Polvo');
     return { serial: serial || '—', modelo: e.modelo || '—', accesorios: accs.length ? accs.join(', ') : '—' };
   });
 }

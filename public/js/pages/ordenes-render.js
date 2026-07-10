@@ -177,6 +177,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
                 <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CARG</span> Cargador</span>
                 <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">FNT</span> Fuente</span>
                 <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">ANT</span> Antena</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CUB</span> Cubre Polvo</span>
                 <span class="separador-leyenda">|</span>
                 <span class="estado-inline"><span class="accesorio-item accesorio-item--chip activo accesorio-item--mini">✓</span> Incluido</span>
                 <span class="estado-inline"><span class="accesorio-item accesorio-item--chip inactivo accesorio-item--mini">✕</span> No incluido</span>
@@ -429,7 +430,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
     const progresoPercent = equipos.length ? Math.round((equiposFinalizados / equipos.length) * 100) : 0;
 
     const equiposAccesoriosCompletos = equipos.filter(e => {
-      return e.bateria && e.clip && e.cargador && e.fuente && e.antena;
+      return e.bateria && e.clip && e.cargador && e.fuente && e.antena && e.cubrepolvo;
     }).length;
 
     const ordenData = APP.state.orders.find(o => o.ordenId === ordenId);
@@ -523,8 +524,8 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
         </thead>
         <tbody>
           ${equipos.map(e => {
-            const accesoriosPresentes = [e.bateria, e.clip, e.cargador, e.fuente, e.antena].filter(Boolean).length;
-            const accesoriosTotal = 5;
+            const accesoriosPresentes = [e.bateria, e.clip, e.cargador, e.fuente, e.antena, e.cubrepolvo].filter(Boolean).length;
+            const accesoriosTotal = 6;
             const accesoriosCompleto = accesoriosPresentes === accesoriosTotal;
             const noDisponible = !!e.intervencion_no_disponible;
             const motivoNoDisponible = (e.motivo_no_disponible || "").toString();
@@ -592,6 +593,7 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
                     <span class="accesorio-item accesorio-item--chip ${e.cargador ? 'activo' : 'inactivo'}" data-campo="cargador" title="${e.cargador ? 'Cargador incluido' : 'Cargador NO incluido'}">CARG</span>
                     <span class="accesorio-item accesorio-item--chip ${e.fuente ? 'activo' : 'inactivo'}" data-campo="fuente" title="${e.fuente ? 'Fuente incluida' : 'Fuente NO incluida'}">FNT</span>
                     <span class="accesorio-item accesorio-item--chip ${e.antena ? 'activo' : 'inactivo'}" data-campo="antena" title="${e.antena ? 'Antena incluida' : 'Antena NO incluida'}">ANT</span>
+                    <span class="accesorio-item accesorio-item--chip ${e.cubrepolvo ? 'activo' : 'inactivo'}" data-campo="cubrepolvo" title="${e.cubrepolvo ? 'Cubre Polvo incluido' : 'Cubre Polvo NO incluido'}">CUB</span>
                   </div>
                   <span class="completitud-badge">${accesoriosPresentes}/${accesoriosTotal}</span>
                 </div>

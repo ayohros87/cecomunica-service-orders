@@ -36,7 +36,8 @@ window.guardarAccesoriosLote = async function(ordenId) {
         { name: 'clip',    icon: 'paperclip' },
         { name: 'cargador',icon: 'plug' },
         { name: 'fuente',  icon: 'zap' },
-        { name: 'antena',  icon: 'radio-tower' }
+        { name: 'antena',  icon: 'radio-tower' },
+        { name: 'cubrepolvo', icon: 'shield' }
       ];
 
       // Leer estado de cada accesorio desde los atributos data-campo
@@ -190,7 +191,7 @@ window.abrirEditorAccesorios = function(id, datosEquipo) {
   equipoEditandoOrdenId = id.split("_")[0];
 
   const form = document.getElementById("formAccesorios");
-  ["bateria", "clip", "cargador", "fuente", "antena"].forEach(campo => {
+  ["bateria", "clip", "cargador", "fuente", "antena", "cubrepolvo"].forEach(campo => {
     form.elements[campo].checked = !!datosEquipo[campo];
   });
 
@@ -199,7 +200,7 @@ window.abrirEditorAccesorios = function(id, datosEquipo) {
 
 
 window.activarModoAccesorios = function (ordenId) {
-  const campos = ["bateria", "clip", "cargador", "fuente", "antena"];
+  const campos = ["bateria", "clip", "cargador", "fuente", "antena", "cubrepolvo"];
   const filaDetalle = document.querySelector(`tr.filaDetalle[data-orden-id="${ordenId}"]`);
   
   if (!filaDetalle) {

@@ -109,6 +109,7 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
     ["cargador", "Cargador"],
     ["fuente",   "Fuente"],
     ["antena",   "Antena"],
+    ["cubrepolvo", "Cubre Polvo"],
   ];
   const accesoriosDe = (e) => {
     const presentes = ACCESORIOS.filter(([k]) => e[k]).map(([, label]) => label);

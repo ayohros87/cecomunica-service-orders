@@ -61,14 +61,15 @@
       // Resumen: cantidad de radios + accesorios (>0). Misma lógica
       // de cuenta que el modal de entrega y las notas de entrega.
       const list = Array.isArray(equipos) ? equipos : [];
-      const tot = { radios: list.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
-      list.forEach(e => { ['bateria','clip','cargador','fuente','antena'].forEach(k => { if (e[k]) tot[k]++; }); });
+      const tot = { radios: list.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0, cubrepolvo: 0 };
+      list.forEach(e => { ['bateria','clip','cargador','fuente','antena','cubrepolvo'].forEach(k => { if (e[k]) tot[k]++; }); });
       const accMap = [
         ['bateria',  'batería',  'baterías'],
         ['clip',     'clip',     'clips'],
         ['cargador', 'cargador', 'cargadores'],
         ['fuente',   'fuente',   'fuentes'],
         ['antena',   'antena',   'antenas'],
+        ['cubrepolvo', 'cubre polvo', 'cubre polvos'],
       ];
       const resumenPartes = [`<strong>${tot.radios}</strong> radio${tot.radios !== 1 ? 's' : ''}`];
       accMap.forEach(([k, sing, plur]) => {
@@ -96,7 +97,7 @@
           <th style="width:40px;">#</th><th>Serie</th><th>Modelo</th>
           <th style="width:60px;">Batería</th><th style="width:60px;">Clip</th>
           <th style="width:60px;">Cargador</th><th style="width:60px;">Fuente</th>
-          <th style="width:60px;">Antena</th><th>Observaciones</th>
+          <th style="width:60px;">Antena</th><th style="width:60px;">Cubre Polvo</th><th>Observaciones</th>
         </tr></thead><tbody>`;
         equipos.forEach((e, i) => {
           tabla += `<tr>
@@ -105,6 +106,7 @@
             <td>${e.bateria ? '✅' : '❌'}</td><td>${e.clip ? '✅' : '❌'}</td>
             <td>${e.cargador ? '✅' : '❌'}</td><td>${e.fuente ? '✅' : '❌'}</td>
             <td>${e.antena ? '✅' : '❌'}</td>
+            <td>${e.cubrepolvo ? '✅' : '❌'}</td>
             <td style="text-align:left;">${e.observaciones || '—'}</td>
           </tr>`;
         });
@@ -162,6 +164,7 @@
           cargador: e.cargador,
           fuente: e.fuente,
           antena: e.antena,
+          cubrepolvo: e.cubrepolvo,
           observaciones: e.observaciones
         })), infoContainer, tablaContainer);
       }).catch((error) => {

@@ -70,7 +70,8 @@
                     bateria: row.bateria ?? false,
                     cargador: row.cargador ?? false,
                     clip: row.clip ?? false,
-                    fuente: row.fuente ?? false
+                    fuente: row.fuente ?? false,
+                    cubrepolvo: row.cubrepolvo ?? false
                   };
 
                   ordenes[id].equipos.push(eq);
@@ -177,7 +178,8 @@
             bateria: true,
             cargador: true,
             clip: true,
-            fuente: true
+            fuente: true,
+            cubrepolvo: true
           }
         ];
 

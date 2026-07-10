@@ -57,6 +57,7 @@
         <label class="chip"><input type="checkbox" class="cargador" ${acc.cargador ? 'checked' : ''}> Cargador</label>
         <label class="chip"><input type="checkbox" class="fuente" ${acc.fuente ? 'checked' : ''}> Fuente</label>
         <label class="chip"><input type="checkbox" class="antena" ${acc.antena ? 'checked' : ''}> Antena</label>
+        <label class="chip"><input type="checkbox" class="cubrepolvo" ${acc.cubrepolvo ? 'checked' : ''}> Cubre Polvo</label>
       </div>
     </div>
 
@@ -125,6 +126,7 @@
       !equipo.querySelector(".cargador")?.checked &&
       !equipo.querySelector(".fuente")?.checked &&
       !equipo.querySelector(".antena")?.checked &&
+      !equipo.querySelector(".cubrepolvo")?.checked &&
       !observacionesInput?.value.trim()
     ) {
       console.log("❌ Equipo ignorado por estar completamente vacío");
@@ -148,6 +150,7 @@
       cargador: equipo.querySelector(".cargador")?.checked || false,
       fuente: equipo.querySelector(".fuente")?.checked || false,
       antena: equipo.querySelector(".antena")?.checked || false,
+      cubrepolvo: equipo.querySelector(".cubrepolvo")?.checked || false,
       observaciones: observacionesInput?.value.trim() || "sin observaciones"
     });
 
@@ -290,6 +293,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
         cargador: ultimo.querySelector(".cargador")?.checked || false,
         fuente:   ultimo.querySelector(".fuente")?.checked || false,
         antena:   ultimo.querySelector(".antena")?.checked || false,
+        cubrepolvo: ultimo.querySelector(".cubrepolvo")?.checked || false,
       };
       const observaciones = ultimo.querySelector(".observaciones")?.value || "";
 

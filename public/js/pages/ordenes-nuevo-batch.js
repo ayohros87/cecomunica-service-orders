@@ -100,6 +100,7 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
         <label title="Cargador"><input type="checkbox" class="cargador" ${acc.cargador ? 'checked' : ''}> Carg</label>
         <label title="Fuente"><input type="checkbox" class="fuente" ${acc.fuente ? 'checked' : ''}> Fte</label>
         <label title="Antena"><input type="checkbox" class="antena" ${acc.antena ? 'checked' : ''}> Ant</label>
+        <label title="Cubre Polvo"><input type="checkbox" class="cubrepolvo" ${acc.cubrepolvo ? 'checked' : ''}> CPolvo</label>
       </div>
     </td>
     <td><input type="text" class="observaciones table-input sm" value="${escAttr(observaciones)}" placeholder="Observaciones"></td>
@@ -336,6 +337,7 @@ function leerComunes() {
       cargador: $("comunCargador").checked,
       fuente:   $("comunFuente").checked,
       antena:   $("comunAntena").checked,
+      cubrepolvo: $("comunCubrePolvo").checked,
     },
     observaciones: $("comunObs").value.trim(),
   };
@@ -358,6 +360,7 @@ window.aplicarComunes = () => {
     if (accesorios.cargador) tr.querySelector(".cargador").checked = true;
     if (accesorios.fuente)   tr.querySelector(".fuente").checked = true;
     if (accesorios.antena)   tr.querySelector(".antena").checked = true;
+    if (accesorios.cubrepolvo) tr.querySelector(".cubrepolvo").checked = true;
     const obs = tr.querySelector(".observaciones");
     if (observaciones && obs && !obs.value.trim()) obs.value = observaciones;
   });
@@ -378,10 +381,11 @@ window.guardarBatch = async () => {
     const cargador = tr.querySelector(".cargador").checked;
     const fuente   = tr.querySelector(".fuente").checked;
     const antena   = tr.querySelector(".antena").checked;
+    const cubrepolvo = tr.querySelector(".cubrepolvo").checked;
     const observaciones = tr.querySelector(".observaciones").value.trim();
 
     // Fila totalmente vacía: se ignora.
-    if (!serial && !modeloId && !bateria && !clip && !cargador && !fuente && !antena && !observaciones) continue;
+    if (!serial && !modeloId && !bateria && !clip && !cargador && !fuente && !antena && !cubrepolvo && !observaciones) continue;
 
     // Una fila con datos pero sin serial no se puede guardar.
     if (!serial) {
@@ -397,7 +401,7 @@ window.guardarBatch = async () => {
       serial,
       // Alias de escritura mantenido mientras los lectores consolidan en `serial`.
       numero_de_serie: serial,
-      bateria, clip, cargador, fuente, antena,
+      bateria, clip, cargador, fuente, antena, cubrepolvo,
       observaciones: observaciones || "sin observaciones",
     }));
   }
@@ -425,7 +429,7 @@ function wireComunTodos() {
   const todos = $("comunTodos");
   if (!todos) return;
   todos.addEventListener("change", function () {
-    ["comunBateria", "comunClip", "comunCargador", "comunFuente", "comunAntena"]
+    ["comunBateria", "comunClip", "comunCargador", "comunFuente", "comunAntena", "comunCubrePolvo"]
       .forEach(idc => { const el = $(idc); if (el) el.checked = this.checked; });
   });
 }

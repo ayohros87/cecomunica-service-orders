@@ -302,8 +302,8 @@
     function _renderResumen(r) {
       if (!r) {
         const eq = data.equipos || [];
-        r = { radios: eq.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
-        eq.forEach(e => { ['bateria','clip','cargador','fuente','antena'].forEach(k => { if (e[k]) r[k]++; }); });
+        r = { radios: eq.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0, cubrepolvo: 0 };
+        eq.forEach(e => { ['bateria','clip','cargador','fuente','antena','cubrepolvo'].forEach(k => { if (e[k]) r[k]++; }); });
       }
       const partes = [`<strong>${r.radios}</strong> radio${r.radios !== 1 ? 's' : ''}`];
       const map = [
@@ -312,6 +312,7 @@
         ['cargador', 'cargador', 'cargadores'],
         ['fuente',   'fuente',   'fuentes'],
         ['antena',   'antena',   'antenas'],
+        ['cubrepolvo', 'cubre polvo', 'cubre polvos'],
       ];
       map.forEach(([k, sing, plur]) => {
         if (r[k] > 0) partes.push(`<strong>${r[k]}</strong> ${r[k] === 1 ? sing : plur}`);

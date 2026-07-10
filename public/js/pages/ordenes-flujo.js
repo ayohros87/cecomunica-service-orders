@@ -263,6 +263,7 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
       cargador: !!e.cargador,
       fuente:   !!e.fuente,
       antena:   !!e.antena,
+      cubrepolvo: !!e.cubrepolvo,
     };
     if (incluirIntervencion) {
       item.intervencion = String(e.trabajo_tecnico || "").trim();
@@ -281,13 +282,14 @@ function prepararEquiposParaNota(orden, incluirIntervencion = false) {
 function computeResumenTotales(equiposLike) {
   const list = (Array.isArray(equiposLike) ? equiposLike : [])
     .filter(e => e && e.eliminado !== true);
-  const r = { radios: list.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
+  const r = { radios: list.length, bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0, cubrepolvo: 0 };
   list.forEach(e => {
     if (e.bateria)  r.bateria++;
     if (e.clip)     r.clip++;
     if (e.cargador) r.cargador++;
     if (e.fuente)   r.fuente++;
     if (e.antena)   r.antena++;
+    if (e.cubrepolvo) r.cubrepolvo++;
   });
   return r;
 }
@@ -463,8 +465,9 @@ window.copiarSeriales = function (ordenId) {
       { key: 'cargador', short: 'Carg', plural: 'cargadores' },
       { key: 'fuente',   short: 'Fnt',  plural: 'fuentes'    },
       { key: 'antena',   short: 'Ant',  plural: 'antenas'    },
+      { key: 'cubrepolvo', short: 'CPolvo', plural: 'cubre polvos' },
     ];
-    const totales = { bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0 };
+    const totales = { bateria: 0, clip: 0, cargador: 0, fuente: 0, antena: 0, cubrepolvo: 0 };
 
     ul.innerHTML = equipos.length
       ? equipos.map((e, i) => {
@@ -768,6 +771,7 @@ window.copiarSeriales = function (ordenId) {
         cargador: !!e.cargador,
         fuente:   !!e.fuente,
         antena:   !!e.antena,
+        cubrepolvo: !!e.cubrepolvo,
         // Repuestos/accesorios usados por el técnico (tabla por equipo).
         consumos: consumosDe(e),
       }));
