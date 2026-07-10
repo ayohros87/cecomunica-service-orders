@@ -202,10 +202,7 @@ window.PocEdit = {
       await PocService.updatePocDevice(docId, updatePayload);
 
       // Clean snapshot for the UI row and audit log — strip FieldValue sentinels.
-      const FV = firebase.firestore.FieldValue;
-      const cleanFields = Object.fromEntries(
-        Object.entries(updatePayload).filter(([, v]) => !(v instanceof FV))
-      );
+      const cleanFields = PocService.stripSentinels(updatePayload);
 
       PocService.addLog({
         equipo_id: docId,

@@ -38,6 +38,17 @@ const PocService = {
     return db.collection('poc_logs').add(data);
   },
 
+  // FieldValue sentinels (delete/serverTimestamp) no pueden ir ANIDADOS dentro
+  // de un .add()/.set() — este helper limpia un payload de update antes de
+  // embeberlo en un poc_log (cambios.antes/despues). Única definición; usada
+  // por poc-edit, poc-bulk y poc-sim-liberar.
+  stripSentinels(obj) {
+    const FV = firebase.firestore.FieldValue;
+    return Object.fromEntries(
+      Object.entries(obj || {}).filter(([, v]) => !(v instanceof FV))
+    );
+  },
+
   async findByField(field, value) {
     const db = firebase.firestore();
     const snap = await db.collection('poc_devices').where(field, '==', value).get();

@@ -22,12 +22,11 @@ const SimCardsService = {
     return { id: doc.id, ...doc.data() };
   },
 
-  // Lista con filtros de igualdad (sin índice compuesto). Orden client-side.
-  async listar({ estado = null, operador = null } = {}) {
+  // Lista (opcionalmente filtrada por estado). Orden client-side.
+  async listar({ estado = null } = {}) {
     const db = firebase.firestore();
     let q = db.collection('sim_cards');
-    if (estado)   q = q.where('estado', '==', estado);
-    if (operador) q = q.where('operador', '==', operador);
+    if (estado) q = q.where('estado', '==', estado);
     const snap = await q.get();
     return snap.docs
       .map(d => ({ id: d.id, ...d.data() }))
@@ -42,6 +41,23 @@ const SimCardsService = {
     };
   },
 
+  // Payload completo de un SIM nuevo — única definición del esquema del doc.
+  _docNuevo({ sim_number, sim_phone = '', operador = '' }, origen, user, liberado_de = null) {
+    return {
+      sim_number,
+      sim_phone:  (sim_phone || '').toString().trim(),
+      operador:   (operador  || '').toString().trim(),
+      estado:     'disponible',
+      origen,
+      asignado_a: null,
+      liberado_de,
+      created_at:       firebase.firestore.FieldValue.serverTimestamp(),
+      creado_por_uid:   user?.uid   || null,
+      creado_por_email: user?.email || null,
+      ...this._autoria(user),
+    };
+  },
+
   // Alta manual de un SIM disponible. Falla si el SIM ya existe.
   async agregar({ sim_number, sim_phone = '', operador = '' }, user) {
     const sim = this.normalizarSim(sim_number);
@@ -50,19 +66,7 @@ const SimCardsService = {
     const ref = db.collection('sim_cards').doc(sim);
     const existente = await ref.get();
     if (existente.exists) { const e = new Error('El SIM ya está registrado'); e.code = 'sim-existe'; throw e; }
-    await ref.set({
-      sim_number: sim,
-      sim_phone:  (sim_phone || '').toString().trim(),
-      operador:   (operador  || '').toString().trim(),
-      estado:     'disponible',
-      origen:     'manual',
-      asignado_a: null,
-      liberado_de: null,
-      created_at:       firebase.firestore.FieldValue.serverTimestamp(),
-      creado_por_uid:   user?.uid   || null,
-      creado_por_email: user?.email || null,
-      ...this._autoria(user),
-    });
+    await ref.set(this._docNuevo({ sim_number: sim, sim_phone, operador }, 'manual', user));
     return sim;
   },
 
@@ -85,15 +89,19 @@ const SimCardsService = {
       });
     }
 
-    // Existencia en chunks de 10 vía documentId() in — 1 lectura por chunk.
+    // Existencia en chunks de 10 vía documentId() in — 1 lectura por chunk,
+    // lanzadas en paralelo (los chunks son independientes).
     const existentes = new Set();
+    const chunks = [];
     for (let i = 0; i < validos.length; i += 10) {
-      const ids = validos.slice(i, i + 10).map(v => v.sim_number);
-      const snap = await db.collection('sim_cards')
-        .where(firebase.firestore.FieldPath.documentId(), 'in', ids).get();
-      snap.docs.forEach(d => existentes.add(d.id));
-      if (onProgress) onProgress(Math.min(i + 10, validos.length), validos.length, 'verificando');
+      chunks.push(validos.slice(i, i + 10).map(v => v.sim_number));
     }
+    const snaps = await Promise.all(chunks.map(ids =>
+      db.collection('sim_cards')
+        .where(firebase.firestore.FieldPath.documentId(), 'in', ids).get()
+    ));
+    snaps.forEach(snap => snap.docs.forEach(d => existentes.add(d.id)));
+    if (onProgress) onProgress(validos.length, validos.length, 'verificando');
 
     const nuevos = validos.filter(v => !existentes.has(v.sim_number));
     resultado.existentes = validos.length - nuevos.length;
@@ -102,17 +110,7 @@ const SimCardsService = {
     for (let i = 0; i < nuevos.length; i += CHUNK) {
       const batch = db.batch();
       for (const v of nuevos.slice(i, i + CHUNK)) {
-        batch.set(db.collection('sim_cards').doc(v.sim_number), {
-          ...v,
-          estado:     'disponible',
-          origen:     'excel',
-          asignado_a: null,
-          liberado_de: null,
-          created_at:       firebase.firestore.FieldValue.serverTimestamp(),
-          creado_por_uid:   user?.uid   || null,
-          creado_por_email: user?.email || null,
-          ...this._autoria(user),
-        });
+        batch.set(db.collection('sim_cards').doc(v.sim_number), this._docNuevo(v, 'excel', user));
       }
       await batch.commit();
       resultado.nuevos += Math.min(CHUNK, nuevos.length - i);
@@ -121,9 +119,12 @@ const SimCardsService = {
     return resultado;
   },
 
-  // Devuelve un SIM al pool (equipo desactivado/eliminado). Upsert: si el doc
-  // no existe se crea con origen 'liberado'; si existe se marca disponible
-  // conservando su origen. `desde` = { device_id, serial, cliente_nombre }.
+  // Devuelve un SIM al pool SOLO del lado del pool (no toca el equipo).
+  // Upsert: si el doc no existe se crea con origen 'liberado'. OJO: no valida
+  // a quién estaba asignado — el caller debe garantizar que el SIM pertenece
+  // al equipo que lo suelta (ver el guard en poc-sim-pool.procesar). Para el
+  // flujo de desactivación usa liberarDeEquipo(), que sí valida y además
+  // limpia el equipo en la misma transacción.
   async liberar({ sim_number, sim_phone = '', operador = '', desde = null }, user) {
     const sim = this.normalizarSim(sim_number);
     if (!this.esSimValido(sim)) { const e = new Error('SIM inválido'); e.code = 'sim-invalido'; throw e; }
@@ -140,21 +141,52 @@ const SimCardsService = {
         ...this._autoria(user),
       }, { merge: true });
     } else {
-      await ref.set({
-        sim_number: sim,
-        sim_phone:  (sim_phone || '').toString().trim(),
-        operador:   (operador  || '').toString().trim(),
-        estado:     'disponible',
-        origen:     'liberado',
-        asignado_a: null,
-        liberado_de: desde || null,
-        created_at:       firebase.firestore.FieldValue.serverTimestamp(),
-        creado_por_uid:   user?.uid   || null,
-        creado_por_email: user?.email || null,
-        ...this._autoria(user),
-      });
+      await ref.set(this._docNuevo({ sim_number: sim, sim_phone, operador }, 'liberado', user, desde || null));
     }
     return sim;
+  },
+
+  // Libera el SIM de un equipo desactivado/eliminado: en UNA transacción
+  // limpia sim/teléfono/operador del equipo y marca el SIM disponible en el
+  // pool — pero SOLO si el doc del pool no está asignado a OTRO equipo (data
+  // divergente: en ese caso el pool no se toca para no huérfanar la otra
+  // asignación, y se limpia solo el equipo).
+  // `desde` = { device_id, serial, cliente_nombre }.
+  // Retorna 'liberado' | 'pool-ajeno'.
+  async liberarDeEquipo({ sim_number, sim_phone = '', operador = '', desde }, user) {
+    const sim = this.normalizarSim(sim_number);
+    if (!this.esSimValido(sim)) { const e = new Error('SIM inválido'); e.code = 'sim-invalido'; throw e; }
+    const db     = firebase.firestore();
+    const simRef = db.collection('sim_cards').doc(sim);
+    const devRef = db.collection('poc_devices').doc(desde.device_id);
+    return db.runTransaction(async tx => {
+      const simSnap = await tx.get(simRef);
+
+      tx.update(devRef, {
+        sim_number: '', sim_phone: '', operador: '',
+        ...this._autoria(user),
+      });
+
+      const ajeno = simSnap.exists
+        && simSnap.data().estado === 'asignado'
+        && simSnap.data().asignado_a
+        && simSnap.data().asignado_a.device_id !== desde.device_id;
+      if (ajeno) return 'pool-ajeno';
+
+      if (simSnap.exists) {
+        tx.set(simRef, {
+          sim_phone:  (sim_phone || simSnap.data().sim_phone || '').toString().trim(),
+          operador:   (operador  || simSnap.data().operador  || '').toString().trim(),
+          estado:     'disponible',
+          asignado_a: null,
+          liberado_de: desde,
+          ...this._autoria(user),
+        }, { merge: true });
+      } else {
+        tx.set(simRef, this._docNuevo({ sim_number: sim, sim_phone, operador }, 'liberado', user, desde));
+      }
+      return 'liberado';
+    });
   },
 
   // Asigna un SIM disponible a un equipo POC. Transacción: re-verifica que el
@@ -184,39 +216,46 @@ const SimCardsService = {
         },
         ...this._autoria(user),
       });
-      tx.update(devRef, {
+      // sim_number/sim_phone siempre se pisan (son del SIM nuevo); el operador
+      // solo si el SIM lo trae — un SIM importado sin operador no debe borrar
+      // el operador que el equipo ya tenía.
+      const devUpdate = {
         sim_number: s.sim_number,
         sim_phone:  s.sim_phone || '',
-        operador:   s.operador  || '',
         updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
         updated_by:       user?.uid   || null,
         updated_by_email: user?.email || null,
-      });
-      return { sim_number: s.sim_number, sim_phone: s.sim_phone || '', operador: s.operador || '' };
+      };
+      if (s.operador) devUpdate.operador = s.operador;
+      tx.update(devRef, devUpdate);
+      return { sim_number: s.sim_number, sim_phone: s.sim_phone || '', ...(s.operador ? { operador: s.operador } : {}) };
     });
   },
 
-  // Consistencia con los flujos manuales (modal de pegar, drawer): si un SIM
-  // tecleado a mano existe en el pool como disponible, se marca asignado para
-  // que no aparezca ofrecido dos veces. Best-effort: nunca lanza.
+  // Consistencia con los flujos manuales (modal de pegar, drawer, imports): si
+  // un SIM tecleado a mano existe en el pool como disponible, se marca asignado
+  // para que no aparezca ofrecido dos veces. Transaccional (dos capturas
+  // concurrentes del mismo SIM no se pisan) pero best-effort: nunca lanza.
   async marcarAsignadoSiExiste(simNumber, device, user) {
     try {
       const sim = this.normalizarSim(simNumber);
       if (!this.esSimValido(sim)) return false;
       const db  = firebase.firestore();
       const ref = db.collection('sim_cards').doc(sim);
-      const snap = await ref.get();
-      if (!snap.exists || snap.data().estado !== 'disponible') return false;
-      await ref.update({
-        estado: 'asignado',
-        asignado_a: {
-          device_id:      device.id,
-          serial:         device.serial || '',
-          cliente_nombre: device.cliente_nombre || '',
-        },
-        ...this._autoria(user),
+      return await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        if (!snap.exists || snap.data().estado !== 'disponible') return false;
+        tx.update(ref, {
+          estado: 'asignado',
+          asignado_a: {
+            device_id:      device.id,
+            serial:         device.serial || '',
+            cliente_nombre: device.cliente_nombre || '',
+          },
+          ...this._autoria(user),
+        });
+        return true;
       });
-      return true;
     } catch (e) {
       console.warn('marcarAsignadoSiExiste falló (no crítico):', e?.code || e);
       return false;

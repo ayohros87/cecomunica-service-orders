@@ -17,13 +17,14 @@ window.PocSimPool = {
     if (seleccionados.length === 0) { Toast.show('Selecciona al menos un equipo.', 'bad'); return; }
 
     try {
-      // Data fresca de cada equipo (serial/cliente para el registro y el log).
-      this._devices = [];
-      for (const { id } of seleccionados) {
-        const d = await PocService.getPocDevice(id);
-        if (d) this._devices.push(d);
-      }
-      this._sims = await SimCardsService.listar({ estado: 'disponible' });
+      // Data fresca de cada equipo (serial/cliente para el registro y el log),
+      // en paralelo — el orden de `seleccionados` (orden de tabla) se preserva.
+      const [devices, sims] = await Promise.all([
+        Promise.all(seleccionados.map(({ id }) => PocService.getPocDevice(id))),
+        SimCardsService.listar({ estado: 'disponible' }),
+      ]);
+      this._devices = devices.filter(Boolean);
+      this._sims = sims;
     } catch (e) {
       console.error('Error al abrir el pool de SIMs:', e);
       Toast.show('Error al cargar los SIMs disponibles: ' + (e.message || e), 'bad');
@@ -125,13 +126,24 @@ window.PocSimPool = {
     for (let i = 0; i < this._devices.length; i++) {
       const device = this._devices[i];
       const clienteNombre = PocState.nombreClienteDe(device);
+      let simAsignado;
       try {
-        const simAsignado = await SimCardsService.asignar(simIds[i], {
+        simAsignado = await SimCardsService.asignar(simIds[i], {
           id: device.id,
           serial: device.serial || '',
           cliente_nombre: clienteNombre,
         }, user);
+        ok++;
+      } catch (e) {
+        console.error(`Fallo asignando SIM ${simIds[i]} a ${device.serial}:`, e);
+        fallidos.push(simIds[i]);
+        continue;
+      }
 
+      // Trabajo POST-commit: la asignación ya persistió — un fallo aquí no
+      // debe contarla como fallida (el toast de "lo tomó otra sesión" sería
+      // falso). Solo se loguea a consola.
+      try {
         // Si el equipo tenía otro SIM y ese SIM estaba en el pool asignado a
         // este equipo, vuelve como disponible (SIM físicamente intercambiado).
         const prevSim = SimCardsService.normalizarSim(device.sim_number);
@@ -154,10 +166,8 @@ window.PocSimPool = {
             despues: { ...device, ...simAsignado },
           },
         }).catch(e => console.warn('poc_log write failed (non-critical):', e));
-        ok++;
       } catch (e) {
-        console.error(`Fallo asignando SIM ${simIds[i]} a ${device.serial}:`, e);
-        fallidos.push(simIds[i]);
+        console.warn(`Asignación de ${simIds[i]} OK, pero falló la liberación del SIM anterior o el log:`, e);
       }
     }
 

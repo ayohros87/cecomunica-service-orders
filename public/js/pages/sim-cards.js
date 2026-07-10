@@ -31,22 +31,10 @@ window.SimCards = {
   },
 
   async cargarOperadores() {
-    // Mismo origen que el POC: empresa/operadores con fallback a los usados.
-    try {
-      let arr = [];
-      const snap = await EmpresaService.getOperadores();
-      if (snap) {
-        if (Array.isArray(snap.list)) arr = snap.list;
-        else if (Array.isArray(snap.operadores)) arr = snap.operadores;
-      }
-      if (!arr.length) arr = await PocService.getUniqueOperadores(1000);
-      this.listaOperadores = (arr || [])
-        .map(v => v.toString().trim()).filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
-    } catch (e) {
-      console.error('Error al cargar operadores:', e);
-      this.listaOperadores = [];
-    }
+    // Mismo catálogo que el POC — la lógica vive en PocState.cargarOperadores
+    // (empresa/operadores con fallback a los usados en poc_devices).
+    await PocState.cargarOperadores();
+    this.listaOperadores = PocState.listaOperadores;
     // Poblar los selects que dependen de la lista
     ['simFiltroOperador', 'altaSimOperador', 'editSimOperador'].forEach(id => {
       const sel = document.getElementById(id);
@@ -226,15 +214,16 @@ window.SimCards = {
   },
 
   // Encuentra la columna del archivo cuyo header calza con los alias conocidos.
+  // El teléfono se detecta PRIMERO y su columna se excluye del match de SIM:
+  // un header como "TEL SIMCARD" contiene "simcard" y sin la exclusión se
+  // elegiría como columna de ICCIDs.
   _mapearColumnas(headers) {
-    const norm = h => (h || '').toString().trim().toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '');
-    const buscar = (alias) => headers.find(h => alias.some(a => norm(h).includes(a)));
-    return {
-      sim:      buscar(['iccid', 'simcard', 'sim card', 'sim']),
-      telefono: buscar(['telefono', 'tel simcard', 'phone', 'tel']),
-      operador: buscar(['operador', 'operator', 'proveedor']),
-    };
+    const buscar = (alias, excluir = []) => headers.find(h =>
+      !excluir.includes(h) && alias.some(a => FMT.normalize(h).includes(a)));
+    const telefono = buscar(['telefono', 'tel simcard', 'phone', 'tel']);
+    const sim      = buscar(['iccid', 'simcard', 'sim card', 'sim'], [telefono]);
+    const operador = buscar(['operador', 'operator', 'proveedor'], [telefono, sim]);
+    return { sim, telefono, operador };
   },
 
   async previsualizarImport(input) {
