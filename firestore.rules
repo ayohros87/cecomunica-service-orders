@@ -247,6 +247,15 @@ service cloud.firestore {
       match /{sub=**} { allow read, write: if isSignedIn(); }
     }
 
+    // Pool de SIM cards (POC/sim-cards.html + asignación desde la lista POC).
+    // Doc ID = ICCID. Mismo criterio de escritura que poc_devices (recepción
+    // opera el pool); hard-delete solo admin (SIMs cargados por error).
+    match /sim_cards/{simId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
     // Modelos: catálogo + tarifas de facturación (info sensible). Lectura para
     // cualquier autenticado (inventario cuenta stock, contratos eligen modelo).
     // Escritura SOLO admin/contabilidad (modelo-de-radio.html ya es admin-only).
