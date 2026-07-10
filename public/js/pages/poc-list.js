@@ -218,8 +218,10 @@ window.PocList = {
       }
       this._lastDoc = lastDoc;
       const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
+      const soloInactivos   = document.getElementById('soloInactivos')?.checked;
 
       docs.forEach(d => {
+        if (soloInactivos && d.activo) return;
         if (soloIncompletos) {
           const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           if (!crit.some(v => !v || v.trim?.() === '')) return;
@@ -292,6 +294,7 @@ window.PocList = {
 
     const idsVistos = new Set();
     const soloActivos     = document.getElementById('soloActivos')?.checked;
+    const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
 
     PocService.getAll({ sortField: 'created_at', sortAsc: false }).then(docs => {
@@ -318,7 +321,7 @@ window.PocList = {
           else if (Array.isArray(d[campo])) contenido = d[campo].join(' ').toLowerCase();
           else                              contenido = String(d[campo] ?? '').toLowerCase();
 
-          if (!soloActivos || d.activo === true) {
+          if ((!soloActivos || d.activo === true) && (!soloInactivos || !d.activo)) {
             if (contenido.includes(valor)) {
               total++;
               if (d.activo) activos++;
@@ -366,6 +369,21 @@ window.PocList = {
   },
 
   manejarCambioActivos() {
+    // Mutuamente excluyente con "Solo inactivos" (juntos = lista vacía).
+    if (document.getElementById('soloActivos')?.checked) {
+      const inactivos = document.getElementById('soloInactivos');
+      if (inactivos) inactivos.checked = false;
+    }
+    const valorFiltro = document.getElementById('filtroValor').value.trim();
+    if (valorFiltro) this.filtrar(); else this.cargar(true);
+  },
+
+  manejarCambioInactivos() {
+    // Mutuamente excluyente con "Solo activos".
+    if (document.getElementById('soloInactivos')?.checked) {
+      const activos = document.getElementById('soloActivos');
+      if (activos) activos.checked = false;
+    }
     const valorFiltro = document.getElementById('filtroValor').value.trim();
     if (valorFiltro) this.filtrar(); else this.cargar(true);
   },
@@ -386,6 +404,7 @@ window.PocList = {
     if (btnCargar) btnCargar.style.display = 'none';
 
     const soloActivos     = document.getElementById('soloActivos')?.checked;
+    const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
 
     PocService.getAll({
@@ -393,6 +412,7 @@ window.PocList = {
       onlyActivos: soloActivos,
     }).then(docs => {
       docs.forEach(d => {
+        if (soloInactivos && d.activo) return;
         if (soloIncompletos) {
           const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           if (!crit.some(v => !v || v.trim?.() === '')) return;
