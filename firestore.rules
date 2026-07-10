@@ -239,14 +239,23 @@ service cloud.firestore {
 
     match /ordenes_de_servicio/{docId} {
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      // create/update solo para los roles que operan órdenes (permiso 'crear-orden'
+      // en roles.js): admin/vendedor/recepción/técnico/técnico_operativo/jefe_taller.
+      // Excluye gerente/inventario/contabilidad/vista, que no editan órdenes.
+      allow create, update: if isSignedIn()
+        && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"];
       // El cliente nunca hace hard-delete de una orden a nivel doc (verificado:
       // solo borra líneas de la subcolección `consumos`; los borrados de orden
       // pasan por consola/admin SDK y la CF onOrdenHardDelete limpia después).
       // Restringir delete a admin/gerente cierra el borrado de órdenes de negocio
       // por cualquier rol, sin afectar el borrado de consumos (regla sub=** abajo).
       allow delete: if isSignedIn() && userRole() in ["administrador","gerente"];
-      match /{sub=**} { allow read, write: if isSignedIn(); }   // consumos, equipos_meta
+      // Subcolecciones EXPLÍCITAS (no un {sub=**} recursivo): en rules_version 2 el
+      // wildcard recursivo también matchea el DOC PADRE, y su `write` sombreaba las
+      // restricciones de create/update/delete de la orden — anulándolas por el OR.
+      match /consumos/{c}              { allow read, write: if isSignedIn(); }
+      match /equipos_meta/{m}          { allow read, write: if isSignedIn(); }
+      match /borradores_cotizacion/{b} { allow read, write: if isSignedIn(); }
     }
 
     match /poc_devices/{docId} {
@@ -255,7 +264,9 @@ service cloud.firestore {
       // El cliente solo hace soft-delete (update deleted:true); el hard-delete a
       // nivel doc queda para admin.
       allow delete: if isAdmin();
-      match /{sub=**} { allow read, write: if isSignedIn(); }
+      // sub=** SOLO lectura: poc_devices no tiene subcolecciones escritas, y un
+      // {sub=**} con write sombreaba el delete:isAdmin de arriba (ver órdenes).
+      match /{sub=**} { allow read: if isSignedIn(); }
     }
 
     // Pool de SIM cards (POC/sim-cards.html + asignación desde la lista POC).
@@ -297,8 +308,20 @@ service cloud.firestore {
       allow read:  if isSignedIn();
       allow write: if isSignedIn() && (docId != "config" || isAdmin());
     }
-    match /inventario_actual/{docId}  { allow read, write: if isSignedIn(); }
-    match /ultimo_inventario/{docId}  { allow read, write: if isSignedIn(); }
+    // Conteo de inventario: lo escriben SOLO las páginas de inventario
+    // (cargar-inventario/inventario-index), gated a admin/inventario. Restringir
+    // aquí cierra que cualquier rol corrompa los conteos.
+    match /inventario_actual/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && userRole() in ["administrador","inventario"];
+    }
+    match /ultimo_inventario/{docId} {
+      allow read:  if isSignedIn();
+      allow write: if isSignedIn() && userRole() in ["administrador","inventario"];
+    }
+    // inventario_piezas queda ABIERTA a propósito: además del catálogo
+    // (admin/contabilidad) la escribe el flujo de órdenes al consumir piezas
+    // (PiezasService.ajustarDelta) — restringirla rompería el ajuste de stock.
     match /inventario_piezas/{docId}  { allow read, write: if isSignedIn(); }
     match /poc_logs/{docId}           { allow read, write: if isSignedIn(); }
     match /analytics_piezas_modelo/{docId} { allow read, write: if isSignedIn(); }
@@ -312,9 +335,13 @@ service cloud.firestore {
       allow create:         if isSignedIn();
       allow update, delete: if isSignedIn() && userRole() in ["administrador","gerente"];
     }
+    // Solo lo escribe Cloud Functions (onComplete, admin SDK). El frontend
+    // únicamente lo LEE (UsuariosService.getTecnicoStats → .get()). Cerramos la
+    // escritura de cliente: ningún rol puede inflar/corromper stats de técnicos.
     match /tecnico_stats/{docId} {
-      allow read, write: if isSignedIn();
-      match /{sub=**} { allow read, write: if isSignedIn(); }   // mensual, semanal
+      allow read:  if isSignedIn();
+      allow write: if false;
+      match /{sub=**} { allow read: if isSignedIn(); allow write: if false; }   // mensual, semanal, eventos
     }
 
     // Collection-group query sobre `eventos` (ranking de progreso-tecnicos:
