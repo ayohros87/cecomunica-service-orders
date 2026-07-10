@@ -5,6 +5,7 @@
   let rawDoc = null;       // doc Firestore crudo (para enqueueAprobacionMail)
   let catalogos = null;
   let userRol = null;
+  let soloLectura = false; // supervisor (allowlist) viendo una cotización ajena: sin acciones
   let policyCfg = null;    // { descuentoMaxPct, totalMax } desde empresa/config
   let polEnvio = { requiere: false, motivos: [] }; // recalculado en cada render()
 
@@ -119,11 +120,11 @@
           <p>${esc(cli.razon || '—')} · ${FMT.money(t.total)} · ${cot.items.length} renglones</p>
         </div>
         <div class="app-page-header-actions">
-          ${botonAccionPrincipal(cot.estado)}
-          <button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>
-          ${(cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
-          ${(cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
-          ${CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}
+          ${soloLectura ? '' : botonAccionPrincipal(cot.estado)}
+          ${soloLectura ? '' : '<button class="btn btn-ghost" id="btnDuplicar"><i data-lucide="copy"></i> Duplicar</button>'}
+          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada' || cot.estado === 'convertida') ? '<button class="btn btn-ghost" id="btnEnviar"><i data-lucide="send"></i> Reenviar al cliente</button>' : ''}
+          ${!soloLectura && (cot.estado === 'aprobada' || cot.estado === 'enviada') ? '<button class="btn btn-secondary" id="btnCerrar" style="background:#0B2A47; color:#fff; border-color:#0B2A47;"><i data-lucide="flag"></i> Cerrar cotización</button>' : ''}
+          ${!soloLectura && CotState.esEditable(cot.estado) ? '<button class="btn btn-secondary" id="btnEditar"><i data-lucide="pencil"></i> Editar</button>' : ''}
           <button class="btn btn-primary" id="btnImprimir"><i data-lucide="printer"></i> Imprimir / PDF</button>
         </div>
       </div>
@@ -241,7 +242,8 @@
       </div>
     `;
 
-    $('btnDuplicar').addEventListener('click', duplicar);
+    const btnDup = $('btnDuplicar');
+    if (btnDup) btnDup.addEventListener('click', duplicar);
     const btnEnv = $('btnEnviar');
     if (btnEnv) btnEnv.addEventListener('click', () => enviarPorCorreo(cli, ej));
     const btnCer = $('btnCerrar');
@@ -283,6 +285,10 @@
 
   function renderTransiciones() {
     const cont = $('panelTransiciones');
+    if (soloLectura) {
+      cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0;">Vista de supervisión — solo lectura.</p>';
+      return;
+    }
     if (cot.estado === 'borrador') {
       let txt;
       if (puedeAprobarCotizacion(userRol, cot)) {
@@ -460,8 +466,13 @@
     if (!user) { location.href = '../login.html'; return; }
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
+      // Supervisores (empresa/config.cotizaciones_supervisores): pueden abrir
+      // cualquier cotización sin importar su rol, en solo-lectura.
+      const cfg = window.EMPRESA_CONFIG || await EmpresaService.getConfig();
+      const esSupervisor = (cfg.cotizaciones_supervisores || [])
+        .some(e => String(e).toLowerCase() === (user.email || '').toLowerCase());
       const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.RECEPCION, ROLES.GERENTE];
-      if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
+      if (!permitidos.includes(rol) && !esSupervisor) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
       const params = new URLSearchParams(location.search);
       const docId = params.get('id');
@@ -469,16 +480,22 @@
       const doc = await CotizacionesService.getCotizacion(docId);
       if (!doc) { Toast.show('No encontrada', 'bad'); location.href = 'index.html'; return; }
 
-      // Vendedor solo ve las propias
-      if (rol === ROLES.VENDEDOR && doc.creado_por_uid && doc.creado_por_uid !== user.uid) {
+      // Vendedor solo ve las propias (un supervisor sí ve las ajenas)
+      if (rol === ROLES.VENDEDOR && !esSupervisor && doc.creado_por_uid && doc.creado_por_uid !== user.uid) {
         Toast.show('Solo el creador o un administrador puede ver esta cotización.', 'bad');
         location.href = 'index.html';
         return;
       }
 
+      // Modo supervisión: una cotización ajena abierta gracias a la allowlist se
+      // muestra sin acciones — las reglas de Firestore denegarían la escritura.
+      soloLectura = esSupervisor
+        && ![ROLES.ADMIN, ROLES.JEFE_TALLER, ROLES.GERENTE].includes(rol)
+        && doc.creado_por_uid !== user.uid;
+
       catalogos = await CotState.bootstrapCatalogos();
       rawDoc = doc;
-      try { policyCfg = T.policyFromConfig(await EmpresaService.getConfig()); }
+      try { policyCfg = T.policyFromConfig(cfg); }
       catch (e) { policyCfg = T.POLICY_DEFAULT; }
       cot = CotState.toUi(doc);
       render();

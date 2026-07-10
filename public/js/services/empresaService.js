@@ -20,6 +20,8 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   seriales_editores_extra:   [],   // emails habilitados a EDITAR seriales ya "asignados" (además de admin). [] = solo administradores
   cotizacion_descuento_max_pct: 15, // descuento % máximo que un vendedor puede enviar sin aprobación
   cotizacion_total_max:      5000, // total máximo (USD) que un vendedor puede enviar sin aprobación
+  cotizaciones_supervisores: [],   // emails habilitados a VER todas las cotizaciones en solo-lectura, sin importar su rol (coordinación de ventas). [] = solo admin/jefe_taller/gerente ven todas
+  mail_bcc_cotizacion:       [],   // emails en copia oculta (BCC) de cada cotización enviada al cliente ([] = sin copia)
   alertas:                   [],  // array de {id, kind, threshold, severity, message, enabled} — ver AdminMetrics.evaluateAlertas
   // Categorías del catálogo de piezas (select en piezas-tarifas; el drawer de
   // cotizar-orden agrupa por el string libre del doc, así que una categoría

@@ -59,6 +59,7 @@ module.exports = onDocumentWritten(
       await sendEmail({
         to:          after.to,
         cc:          after.cc          || undefined,
+        bcc:         after.bcc         || undefined,
         subject:     after.subject,
         html,
         text:        after.text        || undefined,

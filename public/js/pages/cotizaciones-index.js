@@ -10,6 +10,7 @@
   let userUid = null;
   let userRol = null;
   let soloMias = false;     // toggle "Solo mis cotizaciones" (admins; forzado para vendedores)
+  let esSupervisor = false; // email en empresa/config.cotizaciones_supervisores → ve todas (solo lectura)
   let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
 
   const $ = (id) => document.getElementById(id);
@@ -134,6 +135,15 @@
     return `<span class="chip-estado ${e.chip}">${e.label}</span>`;
   }
 
+  // ¿El usuario puede operar esta fila? Los roles con vista global mantienen sus
+  // acciones sobre cualquier fila; el resto solo sobre las propias. Un supervisor
+  // (allowlist cotizaciones_supervisores) ve todas las filas pero las ajenas en
+  // solo-lectura — las reglas de Firestore le denegarían la escritura de todos modos.
+  function puedeMutarFila(c) {
+    return [ROLES.ADMIN, ROLES.JEFE_TALLER, ROLES.GERENTE].includes(userRol)
+        || c.creado_por_uid === userUid;
+  }
+
   // Botón de fila para un borrador, según rol + política de envío (espejo del
   // header de detalle-cotizacion): aprobar (aprobador) · enviar directo (vendedor
   // dentro de política) · solicitar aprobación (vendedor fuera de política).
@@ -156,6 +166,7 @@
     tbody.innerHTML = lista.map(c => {
       const id = c.cotizacion_id || c.id;
       const total = FMT.money(Number(c.total || 0));
+      const mutable = puedeMutarFila(c);
       return `
         <tr data-id="${c.id}">
           <td><span class="cc-cell-num">${id}</span></td>
@@ -169,14 +180,14 @@
           <td class="cc-cell-total">${total}</td>
           <td class="td-actions">
             <span class="cc-row-actions">
-              ${botonBorrador(c)}
-              ${(c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
+              ${mutable ? botonBorrador(c) : ''}
+              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Cerrar cotización" data-action="cerrar"><i data-lucide="flag"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Ver" data-action="detalle"><i data-lucide="eye"></i></button>
-              ${CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
-              ${(c.estado === 'aprobada' || c.estado === 'enviada' || c.estado === 'convertida') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Reenviar al cliente" data-action="enviar"><i data-lucide="send"></i></button>` : ''}
-              <button class="btn btn-ghost btn-icon btn-sm" title="Duplicar" data-action="duplicar"><i data-lucide="copy"></i></button>
+              ${mutable && CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" data-action="editar"><i data-lucide="pencil"></i></button>` : ''}
+              ${mutable && (c.estado === 'aprobada' || c.estado === 'enviada' || c.estado === 'convertida') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Reenviar al cliente" data-action="enviar"><i data-lucide="send"></i></button>` : ''}
+              ${mutable ? `<button class="btn btn-ghost btn-icon btn-sm" title="Duplicar" data-action="duplicar"><i data-lucide="copy"></i></button>` : ''}
               <button class="btn btn-ghost btn-icon btn-sm" title="Imprimir / PDF" data-action="imprimir"><i data-lucide="printer"></i></button>
-              <button class="btn btn-ghost btn-icon btn-sm" title="Eliminar" data-action="eliminar"><i data-lucide="trash-2"></i></button>
+              ${mutable ? `<button class="btn btn-ghost btn-icon btn-sm" title="Eliminar" data-action="eliminar"><i data-lucide="trash-2"></i></button>` : ''}
             </span>
           </td>
         </tr>
@@ -204,7 +215,7 @@
           </div>
           <div class="responsive-card-actions">
             <button class="btn btn-ghost btn-sm" data-action="detalle"><i data-lucide="eye"></i> Ver</button>
-            ${CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-sm" data-action="editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
+            ${puedeMutarFila(c) && CotState.esEditable(c.estado) ? `<button class="btn btn-ghost btn-sm" data-action="editar"><i data-lucide="pencil"></i> Editar</button>` : ''}
             <button class="btn btn-ghost btn-sm" data-action="imprimir"><i data-lucide="printer"></i> Imprimir</button>
           </div>
         </div>
@@ -520,6 +531,7 @@
           await MailService.enqueue({
             to: dest,
             cc: doc.creado_por_email || null,
+            bcc: await CotizacionesService.bccSupervision(),
             subject,
             html,
             attachments,
@@ -616,11 +628,17 @@
     userUid = user.uid;
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       userRol = rol;
+      // Supervisores (empresa/config.cotizaciones_supervisores): entran sin
+      // importar su rol y ven TODAS las cotizaciones en solo-lectura.
+      // EMPRESA_CONFIG lo deja cargado firebase-init antes de este callback.
+      const cfg = window.EMPRESA_CONFIG || await EmpresaService.getConfig();
+      esSupervisor = (cfg.cotizaciones_supervisores || [])
+        .some(e => String(e).toLowerCase() === (user.email || '').toLowerCase());
       const permitidos = [ROLES.ADMIN, ROLES.VENDEDOR, ROLES.JEFE_TALLER, ROLES.GERENTE];
-      if (!permitidos.includes(rol)) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
+      if (!permitidos.includes(rol) && !esSupervisor) { Toast.show('Sin acceso', 'bad'); location.href = '../index.html'; return; }
 
-      // Vendedor: forzar "solo mías" y ocultar el toggle. Admin: mostrarlo.
-      if (rol === ROLES.VENDEDOR) {
+      // Vendedor: forzar "solo mías" y ocultar el toggle (salvo supervisor). Admin: mostrarlo.
+      if (rol === ROLES.VENDEDOR && !esSupervisor) {
         soloMias = true;
         $('wrapToggleMias').style.display = 'none';
       } else {
@@ -628,7 +646,7 @@
         soloMias = false;
       }
 
-      try { policyCfg = window.CotizacionTotales.policyFromConfig(await EmpresaService.getConfig()); }
+      try { policyCfg = window.CotizacionTotales.policyFromConfig(cfg); }
       catch (e) { policyCfg = window.CotizacionTotales.POLICY_DEFAULT; }
 
       bindEvents();

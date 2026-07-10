@@ -110,6 +110,18 @@ const CotizacionesService = {
     });
   },
 
+  // Copia oculta de supervisión (empresa/config.mail_bcc_cotizacion) para cada
+  // cotización que sale al cliente. Best-effort: si la config no carga, el
+  // envío sale sin BCC en lugar de fallar.
+  async bccSupervision() {
+    if (typeof EmpresaService === 'undefined') return null;
+    try {
+      const cfg = await EmpresaService.getConfig();
+      const list = (Array.isArray(cfg.mail_bcc_cotizacion) ? cfg.mail_bcc_cotizacion : []).filter(Boolean);
+      return list.length ? list : null;
+    } catch (_) { return null; }
+  },
+
   // Encola un correo con la cotización adjunta/embebida. Marca estado=enviada.
   // payload: { to, cc?, subject, html, attachments? }
   // Forma del doc compatible con onMailQueued: campos to/subject/html al top-level.
@@ -117,6 +129,7 @@ const CotizacionesService = {
     await MailService.enqueue({
       to: payload.to,
       cc: payload.cc || null,
+      bcc: await this.bccSupervision(),
       subject: payload.subject,
       html: payload.html,
       attachments: payload.attachments || [],

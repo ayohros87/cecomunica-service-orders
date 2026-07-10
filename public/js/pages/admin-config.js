@@ -32,7 +32,13 @@
     { key: 'cotizacion_aprobacion_to', section: 'facturacion', label: 'Aprobadores de cotización (notificación)',
       type: 'user-picker', emptyHint: 'se notificará a ventas@cecomunica.com',
       hint: 'Usuarios que reciben la solicitud de aprobación cuando se prepara una cotización. Filtra por rol y selecciona uno o varios. Vacío = se notifica a ventas@cecomunica.com.' },
+    { key: 'cotizaciones_supervisores', section: 'facturacion', label: 'Supervisión de cotizaciones (ver todas)',
+      type: 'user-picker', emptyHint: 'solo admin, gerente y jefe de taller ven todas',
+      hint: 'Usuarios habilitados a VER todas las cotizaciones (listado y detalle) sin importar su rol — p.ej. coordinación de ventas. Es acceso de solo lectura: no otorga edición, aprobación ni envío.' },
 
+    { key: 'mail_bcc_cotizacion', section: 'correos', label: 'Copia oculta (BCC) — Cotizaciones enviadas al cliente',
+      type: 'emails',
+      hint: 'Uno por línea. Cada cotización que se envía al cliente lleva copia oculta a estos correos (el cliente no los ve). Útil para que coordinación de ventas reciba cada propuesta al momento.' },
     { key: 'mail_cc_orden_completada', section: 'correos', label: 'Copia (CC) — Emails al completar orden',
       type: 'emails',
       hint: 'Uno por línea. Se añaden a cada email de "orden completada".' },

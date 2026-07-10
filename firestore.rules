@@ -36,6 +36,17 @@ service cloud.firestore {
     //   gerente: incluido para que pueda revisar y aprobar cotizaciones comerciales.
     function puedeCotizar() { return isSignedIn() && userRole() in ["administrador", "vendedor", "jefe_taller", "recepcion", "gerente"]; }
     function verTodasCot()  { return isSignedIn() && userRole() in ["administrador", "jefe_taller", "gerente"]; }
+    // Supervisión de cotizaciones (coordinación de ventas): emails en
+    // empresa/config.cotizaciones_supervisores pueden VER todas las
+    // cotizaciones (get/list) sin importar su rol. Solo lectura: no se
+    // concede en create/update/delete. La allowlist guarda emails en
+    // minúsculas (admin-config los normaliza al guardar).
+    function esSupervisorCot() {
+      return isSignedIn()
+        && ("email" in request.auth.token)
+        && request.auth.token.email.lower()
+             in get(/databases/$(database)/documents/empresa/config).data.get("cotizaciones_supervisores", []);
+    }
     // Gestión de seriales del contrato (subcolecciones seriales/seriales_estado/
     // seriales_historial). Refleja el permiso 'gestionar-seriales' de roles.js.
     // Cierra el hueco por el que CUALQUIER autenticado podía escribir seriales.
@@ -121,10 +132,10 @@ service cloud.firestore {
         return request.resource.data.get("origen", "comercial") == "orden";
       }
 
-      allow get:  if verTodasCot() || esDueno();
+      allow get:  if verTodasCot() || esDueno() || esSupervisorCot();
       // `list` lo usa la generación del correlativo (nextCotizacionId); se concede
       // también a técnicos de taller para que el id no colisione al preparar.
-      allow list: if puedeCotizar() || esTecnicoTaller();
+      allow list: if puedeCotizar() || esTecnicoTaller() || esSupervisorCot();
 
       allow create: if (puedeCotizar() || (esTecnicoTaller() && entranteEsServicio()))
                      && request.resource.data.creado_por_uid == request.auth.uid
