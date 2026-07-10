@@ -479,3 +479,126 @@ a.recent-card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm);
 }
 .sp-row-title { font-size: 14px; font-weight: 600; }
 .sp-row-sub   { font-size: 12px; color: var(--fg-3); margin-top: 2px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   admin/config — configuración por secciones (agrupado + nav + save sticky)
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Nav de secciones: sticky justo debajo del topbar canónico (57px, z 1000). */
+.cfg-nav {
+  position: sticky;
+  top: 56px;
+  z-index: 20;
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: var(--sp-2) 0;
+  margin-bottom: var(--sp-3);
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.cfg-nav a {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  font-size: 12px; font-weight: 600; color: var(--fg-2);
+  text-decoration: none;
+  transition: border-color var(--dur-fast), color var(--dur-fast);
+}
+.cfg-nav a:hover { border-color: var(--accent); color: var(--accent); }
+.cfg-nav a .lucide { width: 14px; height: 14px; }
+
+.cfg-section {
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
+  scroll-margin-top: 108px; /* topbar (56) + nav sticky (~52) para el anclaje */
+}
+.cfg-section-head {
+  display: flex; align-items: center; gap: 8px;
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.cfg-section-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700; font-size: 16px;
+  color: var(--fg-1);
+}
+.cfg-section-head .lucide { width: 18px; height: 18px; color: var(--accent); }
+.cfg-section-body { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+.cfg-field { margin-bottom: 0; }
+.cfg-hint { margin-top: 4px; max-width: 62ch; line-height: 1.45; }
+
+/* user-picker compacto: resumen con chips + panel plegable */
+.up-summary { display: flex; align-items: flex-start; gap: 8px; }
+.up-chips {
+  flex: 1; min-height: 30px;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.up-empty { font-size: 12px; color: var(--fg-3); font-style: italic; }
+.up-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  font-size: 12px; font-weight: 600; color: var(--navy);
+}
+.up-chip-x {
+  border: none; background: none; cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 0 3px;
+  color: var(--fg-3);
+}
+.up-chip-x:hover { color: #b91c1c; }
+.up-toggle { flex: 0 0 auto; }
+.up-toggle .lucide { width: 13px; height: 13px; }
+
+.up-panel { margin-top: 10px; }
+.up-root.is-collapsed .up-panel { display: none; }
+.up-filters { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.up-list {
+  max-height: 260px; overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+}
+.up-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer; font-size: 13px;
+}
+.up-item:last-child { border-bottom: none; }
+.up-item:hover { background: var(--surface-sunken); }
+.up-item input { width: 16px; height: 16px; flex: 0 0 auto; }
+.up-item .up-name { flex: 1; }
+.up-item .up-item-meta { white-space: nowrap; }
+
+/* Barra sticky de guardado — solo visible con cambios pendientes. */
+.cfg-savebar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+  display: none; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-card);
+  border-top: 1px solid var(--border-default);
+  box-shadow: 0 -4px 16px rgba(0,0,0,.09);
+}
+.cfg-savebar.is-visible { display: flex; }
+.cfg-savebar .msg {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: #b45309;
+}
+.cfg-savebar .msg .lucide { width: 16px; height: 16px; }
+
+/* Botón Guardar del toolbar resaltado cuando hay cambios. */
+#btnSave.has-changes { box-shadow: 0 0 0 3px var(--accent-soft); }
+
+@media (max-width: 560px) {
+  .cfg-nav { top: 0; } /* en móvil el topbar suele envolver; evita solaparse */
+  .up-summary { flex-direction: column; align-items: stretch; }
+  .up-toggle { align-self: flex-end; }
+}
