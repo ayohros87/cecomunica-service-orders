@@ -155,6 +155,7 @@ window.PocState = {
     if (this.esLectura()) {
       document.getElementById('btnBatch')?.remove();
       document.getElementById('btnSim')?.remove();
+      document.getElementById('btnSimPool')?.remove();
       document.getElementById('btnImportar')?.remove();
       document.getElementById('btnAdminGrupos')?.remove();  // solo admin/recepcion administran grupos
       document.querySelector('.check-all')?.setAttribute('disabled', 'disabled');

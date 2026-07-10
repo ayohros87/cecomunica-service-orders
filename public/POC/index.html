@@ -172,6 +172,7 @@
   <script src="../js/services/modelosService.js"></script>
   <script src="../js/services/clientesService.js"></script>
   <script src="../js/services/empresaService.js"></script>
+  <script src="../js/services/simCardsService.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="../js/ui/toast.js"></script>
   <script src="../js/ui/modal.js"></script>
@@ -179,6 +180,7 @@
   <script src="../js/pages/poc-edit.js" defer></script>
   <script src="../js/pages/poc-bulk.js" defer></script>
   <script src="../js/pages/poc-sim.js" defer></script>
+  <script src="../js/pages/poc-sim-pool.js" defer></script>
   <script src="../js/pages/poc-list.js" defer></script>
   <script src="../js/pages/poc-index.js" defer></script>
   <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
@@ -204,6 +206,7 @@
     <div class="poc-sticky-controls">
       <div class="app-toolbar poc-toolbar">
         <button id="btnSim" class="btn btn-secondary btn-sm" onclick="PocSim.abrir()"><i data-lucide="smartphone"></i> SIM/Teléfono</button>
+        <button id="btnSimPool" class="btn btn-secondary btn-sm" title="Asigna SIMs disponibles del pool a los equipos seleccionados" onclick="PocSimPool.abrir()"><i data-lucide="credit-card"></i> Asignar del pool</button>
         <button id="btnImprimir" class="btn btn-secondary btn-sm" onclick="PocList.irAImpresion()"><i data-lucide="printer"></i> Imprimir</button>
         <button id="btnCopiarSeriales" class="btn btn-secondary btn-sm" title="Copia los seriales de los equipos seleccionados (uno por línea)" onclick="PocList.copiarSerialesSeleccionados()"><i data-lucide="clipboard"></i> Copiar seriales</button>
         <button id="btnEditarMasivo" class="btn btn-secondary btn-sm" title="Máximo 25 equipos por edición masiva" onclick="PocBulk.activar()"><i data-lucide="pencil"></i> Editar en masa</button>
@@ -406,6 +409,42 @@
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="PocSim.cerrar()"><i data-lucide="x"></i> Cancelar</button>
           <button class="btn btn-primary" onclick="PocSim.procesar()"><i data-lucide="check"></i> Aplicar cambios</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Asignar SIMs del pool -->
+    <div id="simPoolModal" class="modal-backdrop" style="display:none;">
+      <div class="modal" style="max-width:620px;">
+        <div class="modal-header">
+          <h3 class="modal-title"><i data-lucide="credit-card"></i> Asignar SIMs del pool</h3>
+          <button class="modal-close" onclick="PocSimPool.cerrar()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+        </div>
+        <div class="modal-body">
+          <p id="poolEquiposResumen" style="margin:0 0 var(--sp-3); font-size:14px;"></p>
+
+          <div style="display:flex; gap:var(--sp-2); align-items:center; margin-bottom:var(--sp-2); flex-wrap:wrap;">
+            <input type="search" class="form-input" id="poolBusqueda" placeholder="Buscar SIM, teléfono…"
+                   oninput="PocSimPool.render()" style="flex:1; min-width:160px;">
+            <select class="form-select" id="poolFiltroOperador" onchange="PocSimPool.render()" style="max-width:180px;"></select>
+            <button class="btn btn-secondary btn-sm" onclick="PocSimPool.autoSeleccionar()"
+                    title="Marca los primeros SIMs visibles, uno por equipo seleccionado"><i data-lucide="list-checks"></i> Auto-seleccionar</button>
+          </div>
+
+          <div class="app-table-wrap" style="max-height:300px; overflow:auto;">
+            <table class="app-table compact" aria-label="SIMs disponibles">
+              <thead><tr><th style="width:34px;"></th><th>SIM (ICCID)</th><th>Teléfono</th><th>Operador</th></tr></thead>
+              <tbody id="poolTabla"></tbody>
+            </table>
+          </div>
+
+          <p style="margin:var(--sp-2) 0 0; font-size:13px;"><span id="poolContador"></span>
+            <span class="form-hint" style="display:block;">Los SIMs se asignan en orden: primer SIM marcado → primer equipo de la tabla. El operador del equipo se toma del SIM.</span>
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="PocSimPool.cerrar()"><i data-lucide="x"></i> Cancelar</button>
+          <button class="btn btn-primary" onclick="PocSimPool.procesar()"><i data-lucide="check"></i> Asignar</button>
         </div>
       </div>
     </div>
