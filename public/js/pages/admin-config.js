@@ -2,7 +2,8 @@
  * admin-config.js — editor for empresa/config (admin-tunable parameters).
  *
  * Loads current values via EmpresaService.getConfig() (defaults applied),
- * presents an editable form, validates client-side, saves via setConfig().
+ * presents an editable form grouped by section, validates client-side, saves
+ * via setConfig().
  *
  * The defaults live in EmpresaService.CONFIG_DEFAULTS — single source of
  * truth shared with consumers (see empresaService.js comment).
@@ -10,58 +11,77 @@
 (function () {
   'use strict';
 
+  // Secciones temáticas (orden = orden de render + del nav). Cada campo declara
+  // su `section`; un campo con section desconocida cae en la última.
+  const SECTIONS = [
+    { key: 'facturacion', label: 'Facturación y cotizaciones', icon: 'calculator' },
+    { key: 'correos',     label: 'Correos y notificaciones',   icon: 'mail' },
+    { key: 'inventario',  label: 'Inventario y piezas',        icon: 'package' },
+    { key: 'seriales',    label: 'Seriales',                   icon: 'hash' },
+    { key: 'operacion',   label: 'Operación',                  icon: 'activity' },
+    { key: 'pii',         label: 'Privacidad (PII)',           icon: 'shield' },
+  ];
+
   const FIELDS = [
-    { key: 'itbms_rate',                label: 'Tasa ITBMS',
+    { key: 'itbms_rate',                section: 'facturacion', label: 'Tasa ITBMS',
       type: 'rate', min: 0,     max: 0.25,  step: 0.001,
       hint: 'Rango 0–25% (0.07 = 7%). Cambia inmediatamente cálculos en cotizaciones, contratos y órdenes.' },
-    { key: 'cotizacion_validez_dias',   label: 'Validez por defecto de cotización (días)',
+    { key: 'cotizacion_validez_dias',   section: 'facturacion', label: 'Validez por defecto de cotización (días)',
       type: 'int',  min: 1,     max: 365,
       hint: 'Aplicado a cotizaciones nuevas. No afecta las ya creadas.' },
-    { key: 'pii_retention_dias',        label: 'Retención PII (días)',
-      type: 'int',  min: 30,    max: 730,
-      hint: 'Días antes de purgar fotos de identificación. Verifica con legal antes de bajar de 60.' },
-    { key: 'pii_purge_enabled',         label: 'Purga PII habilitada',
-      type: 'bool',
-      hint: 'Kill-switch global: cuando está apagado, el callable purgePIIRetention rechaza ejecuciones reales (preview sigue funcionando). También editable desde admin/pii.html.' },
-    { key: 'stock_minimo_default',      label: 'Stock mínimo por defecto (piezas nuevas)',
-      type: 'int',  min: 0,     max: 1000,
-      hint: 'Placeholder usado al crear una pieza nueva. No modifica las existentes.' },
-    { key: 'orden_stale_dias',          label: 'Días para marcar orden como "sin movimiento"',
-      type: 'int',  min: 3,     max: 60,
-      hint: 'Umbral usado en el panel de Operación para flag de stale.' },
-    { key: 'mail_cc_orden_completada', label: 'Copia (CC) — Emails al completar orden',
-      type: 'emails',
-      hint: 'Uno por línea. Se añaden a cada email de "orden completada".' },
-    { key: 'mail_cc_contrato_aprobado', label: 'Copia (CC) — Emails al aprobar contrato',
-      type: 'emails',
-      hint: 'Uno por línea. Se añaden a cada email de aprobación de contrato.' },
-    { key: 'email_recepcion_entregas', label: 'Buzón de recepción (entregas)',
-      type: 'email',
-      hint: 'Correo único que recibe copia de cada nota de entrega (recepción lleva el control). Vacío = no se copia a recepción.' },
-    { key: 'email_taller', label: 'Taller — Notificaciones (jefe de taller)',
-      type: 'user-picker', emptyHint: 'no se copia al taller',
-      hint: 'Usuarios que reciben copia del correo de orden COMPLETADA y de cada nota de entrega (típicamente el jefe de taller). Filtra por rol "Jefe de taller" para encontrarlo rápido. Vacío = no se copia al taller.' },
-    { key: 'cotizacion_aprobacion_to', label: 'Aprobadores de cotización (notificación)',
+    { key: 'cotizacion_aprobacion_to', section: 'facturacion', label: 'Aprobadores de cotización (notificación)',
       type: 'user-picker', emptyHint: 'se notificará a ventas@cecomunica.com',
       hint: 'Usuarios que reciben la solicitud de aprobación cuando se prepara una cotización. Filtra por rol y selecciona uno o varios. Vacío = se notifica a ventas@cecomunica.com.' },
-    { key: 'email_solicitud_seriales', label: 'Inventario — Solicitud de seriales',
-      type: 'user-picker', emptyHint: 'se usa inventario@cecomunica.com',
-      hint: 'Usuarios que reciben el correo "Solicitud de seriales" cuando se aprueba un contrato con equipos. Selecciona uno o varios. Vacío = se usa inventario@cecomunica.com.' },
-    { key: 'seriales_recordatorio_dias', label: 'Recordatorio de seriales (días)',
-      type: 'int', min: 1, max: 30,
-      hint: 'Cada cuántos días se le recuerda a inventario un contrato con seriales pendientes (hasta 4 veces). El badge "Seriales pendientes" en la lista queda como recordatorio permanente.' },
-    { key: 'piezas_categorias', label: 'Inventario — Categorías de piezas',
+
+    { key: 'mail_cc_orden_completada', section: 'correos', label: 'Copia (CC) — Emails al completar orden',
+      type: 'emails',
+      hint: 'Uno por línea. Se añaden a cada email de "orden completada".' },
+    { key: 'mail_cc_contrato_aprobado', section: 'correos', label: 'Copia (CC) — Emails al aprobar contrato',
+      type: 'emails',
+      hint: 'Uno por línea. Se añaden a cada email de aprobación de contrato.' },
+    { key: 'email_recepcion_entregas', section: 'correos', label: 'Buzón de recepción (entregas)',
+      type: 'email',
+      hint: 'Correo único que recibe copia de cada nota de entrega (recepción lleva el control). Vacío = no se copia a recepción.' },
+    { key: 'email_taller', section: 'correos', label: 'Taller — Notificaciones (jefe de taller)',
+      type: 'user-picker', emptyHint: 'no se copia al taller',
+      hint: 'Usuarios que reciben copia del correo de orden COMPLETADA y de cada nota de entrega (típicamente el jefe de taller). Filtra por rol "Jefe de taller" para encontrarlo rápido. Vacío = no se copia al taller.' },
+
+    { key: 'stock_minimo_default',      section: 'inventario', label: 'Stock mínimo por defecto (piezas nuevas)',
+      type: 'int',  min: 0,     max: 1000,
+      hint: 'Placeholder usado al crear una pieza nueva. No modifica las existentes.' },
+    { key: 'piezas_categorias', section: 'inventario', label: 'Categorías de piezas',
       type: 'lines',
       hint: 'Una por línea. Alimentan el selector de categoría en Piezas y Tarifas y los grupos del catálogo al cotizar una orden. Quitar una categoría no toca las piezas que ya la tienen (se conservan como valor legacy).' },
-    { key: 'seriales_editores_extra', label: 'Seriales — Editar tras "asignados" (además de admin)',
+
+    { key: 'email_solicitud_seriales', section: 'seriales', label: 'Solicitud de seriales (notificación)',
+      type: 'user-picker', emptyHint: 'se usa inventario@cecomunica.com',
+      hint: 'Usuarios que reciben el correo "Solicitud de seriales" cuando se aprueba un contrato con equipos. Selecciona uno o varios. Vacío = se usa inventario@cecomunica.com.' },
+    { key: 'seriales_recordatorio_dias', section: 'seriales', label: 'Recordatorio de seriales (días)',
+      type: 'int', min: 1, max: 30,
+      hint: 'Cada cuántos días se le recuerda a inventario un contrato con seriales pendientes (hasta 4 veces). El badge "Seriales pendientes" en la lista queda como recordatorio permanente.' },
+    { key: 'seriales_editores_extra', section: 'seriales', label: 'Editar seriales tras "asignados" (además de admin)',
       type: 'user-picker', emptyHint: 'solo administradores',
       hint: 'Cuando los seriales de un contrato quedan "asignados", la pantalla se bloquea en solo-lectura para evitar cambios accidentales. Los administradores siempre pueden reabrir y editar; aquí puedes habilitar usuarios específicos (aunque no sean admin) para reabrir y editar seriales ya asignados. Vacío = solo administradores.' },
+
+    { key: 'orden_stale_dias',          section: 'operacion', label: 'Días para marcar orden como "sin movimiento"',
+      type: 'int',  min: 3,     max: 60,
+      hint: 'Umbral usado en el panel de Operación para flag de stale.' },
+
+    { key: 'pii_retention_dias',        section: 'pii', label: 'Retención PII (días)',
+      type: 'int',  min: 30,    max: 730,
+      hint: 'Días antes de purgar fotos de identificación. Verifica con legal antes de bajar de 60.' },
+    { key: 'pii_purge_enabled',         section: 'pii', label: 'Purga PII habilitada',
+      type: 'bool',
+      hint: 'Kill-switch global: cuando está apagado, el callable purgePIIRetention rechaza ejecuciones reales (preview sigue funcionando). También editable desde admin/pii.html.' },
   ];
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // Cargado una vez en load() para alimentar los campos tipo 'user-picker'.
   let _users = [];
+
+  // Cambios sin guardar: alimenta la barra sticky y el aviso al salir.
+  let dirty = false;
 
   const ROL_LABELS = {
     administrador: 'Administrador', gerente: 'Gerente', vendedor: 'Vendedor',
@@ -74,41 +94,74 @@
   function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
+  // ── Render: nav de secciones + tarjetas por sección ────────────────────────
   function renderForm(current) {
     const form = $('configForm');
     if (!form) return;
-    form.innerHTML = FIELDS.map(f => {
-      const v = current[f.key];
-      let input;
-      if (f.type === 'user-picker') {
-        input = renderUserPicker(f.key, Array.isArray(v) ? v : [], f.emptyHint);
-      } else if (f.type === 'emails' || f.type === 'lines') {
-        const text = Array.isArray(v) ? v.join('\n') : '';
-        const rows = f.type === 'lines' ? 6 : 3;
-        input = `<textarea id="fld-${f.key}" class="form-input" rows="${rows}" style="font-family:inherit;font-size:13px;">${esc(text)}</textarea>`;
-      } else if (f.type === 'email') {
-        const val = (typeof v === 'string' ? v : '');
-        input = `<input type="email" id="fld-${f.key}" class="form-input" value="${val}" placeholder="recepcion@cecomunica.com" style="width:280px;">`;
-      } else if (f.type === 'rate') {
-        input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="${f.step}" value="${v}" style="width:140px;">`;
-      } else if (f.type === 'bool') {
-        const checked = v === true ? 'checked' : '';
-        input = `<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="checkbox" id="fld-${f.key}" ${checked} style="width:18px;height:18px;"> Habilitada</label>`;
-      } else {
-        input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="1" value="${v}" style="width:140px;">`;
-      }
+
+    const bySection = new Map(SECTIONS.map(s => [s.key, []]));
+    const fallback = SECTIONS[SECTIONS.length - 1].key;
+    FIELDS.forEach(f => (bySection.get(f.section) || bySection.get(fallback)).push(f));
+
+    form.innerHTML = SECTIONS.map(s => {
+      const fields = bySection.get(s.key) || [];
+      if (!fields.length) return '';
       return `
-        <div class="form-field" style="margin-bottom:var(--sp-4);">
-          <label class="form-label" for="fld-${f.key}">${f.label}</label>
-          ${input}
-          <div class="ts" style="margin-top:4px;">${f.hint}</div>
-          <div class="ts fld-error" data-for="${f.key}" style="display:none;color:#b91c1c;margin-top:4px;"></div>
-        </div>`;
+        <section class="cfg-section" id="sec-${s.key}">
+          <div class="cfg-section-head">
+            <i data-lucide="${s.icon}"></i>
+            <h2>${esc(s.label)}</h2>
+          </div>
+          <div class="cfg-section-body">
+            ${fields.map(f => fieldHtml(current, f)).join('')}
+          </div>
+        </section>`;
     }).join('');
+
+    renderNav();
   }
 
-  // ── user-picker: lista filtrable de usuarios activos (multi-selección) ──────
-  // Guarda un array de emails. Pre-marca los que ya estaban configurados.
+  function renderNav() {
+    const nav = $('configNav');
+    if (!nav) return;
+    nav.innerHTML = SECTIONS
+      .filter(s => FIELDS.some(f => f.section === s.key))
+      .map(s => `<a href="#sec-${s.key}"><i data-lucide="${s.icon}"></i> ${esc(s.label)}</a>`)
+      .join('');
+  }
+
+  function fieldHtml(current, f) {
+    const v = current[f.key];
+    let input;
+    if (f.type === 'user-picker') {
+      input = renderUserPicker(f.key, Array.isArray(v) ? v : [], f.emptyHint);
+    } else if (f.type === 'emails' || f.type === 'lines') {
+      const text = Array.isArray(v) ? v.join('\n') : '';
+      const rows = f.type === 'lines' ? 6 : 3;
+      input = `<textarea id="fld-${f.key}" class="form-input" rows="${rows}" style="font-family:inherit;font-size:13px;">${esc(text)}</textarea>`;
+    } else if (f.type === 'email') {
+      const val = (typeof v === 'string' ? v : '');
+      input = `<input type="email" id="fld-${f.key}" class="form-input" value="${esc(val)}" placeholder="recepcion@cecomunica.com" style="max-width:320px;">`;
+    } else if (f.type === 'rate') {
+      input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="${f.step}" value="${esc(v)}" style="width:140px;">`;
+    } else if (f.type === 'bool') {
+      const checked = v === true ? 'checked' : '';
+      input = `<label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="checkbox" id="fld-${f.key}" ${checked} style="width:18px;height:18px;"> Habilitada</label>`;
+    } else {
+      input = `<input type="number" id="fld-${f.key}" class="form-input" min="${f.min}" max="${f.max}" step="1" value="${esc(v)}" style="width:140px;">`;
+    }
+    return `
+      <div class="form-field cfg-field">
+        <label class="form-label" for="fld-${f.key}">${esc(f.label)}</label>
+        ${input}
+        <div class="ts cfg-hint">${esc(f.hint)}</div>
+        <div class="ts fld-error" data-for="${f.key}" style="display:none;color:#b91c1c;margin-top:4px;"></div>
+      </div>`;
+  }
+
+  // ── user-picker compacto: resumen con chips + panel plegable ───────────────
+  // Guarda un array de emails. Los checkboxes siguen siendo la fuente de verdad
+  // (readForm lee :checked); los chips son solo una vista del estado marcado.
   function renderUserPicker(key, selectedEmails, emptyHint) {
     const sel = new Set((selectedEmails || []).map(e => String(e).toLowerCase()));
     const usables = _users
@@ -126,21 +179,26 @@
 
     const items = usables.map(u => {
       const checked = sel.has(String(u.email).toLowerCase()) ? 'checked' : '';
-      return `<label class="up-item" data-rol="${esc(u.rol || '')}" data-search="${esc((u.nombre || '') + ' ' + (u.email || '')).toLowerCase()}"
-          style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);cursor:pointer;font-size:13px;">
-        <input type="checkbox" value="${esc(u.email)}" ${checked} style="width:16px;height:16px;">
-        <span style="flex:1;">${esc(u.nombre || u.email)}</span>
-        <span class="ts" style="white-space:nowrap;">${esc(u.email)} · ${esc(rolLabel(u.rol))}</span>
+      return `<label class="up-item" data-rol="${esc(u.rol || '')}" data-search="${esc((u.nombre || '') + ' ' + (u.email || '')).toLowerCase()}">
+        <input type="checkbox" value="${esc(u.email)}" ${checked}>
+        <span class="up-name">${esc(u.nombre || u.email)}</span>
+        <span class="ts up-item-meta">${esc(u.email)} · ${esc(rolLabel(u.rol))}</span>
       </label>`;
     }).join('');
 
-    return `<div id="fld-${key}" class="up-root" data-key="${key}" data-empty-hint="${esc(emptyHint || 'se notificará a ventas@cecomunica.com')}">
-      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
-        <select class="form-input up-filter-rol" style="width:200px;">${rolOpts}</select>
-        <input type="text" class="form-input up-filter-q" placeholder="Buscar nombre o email…" style="flex:1;min-width:180px;">
+    return `<div id="fld-${key}" class="up-root is-collapsed" data-key="${key}" data-empty-hint="${esc(emptyHint || 'se notificará a ventas@cecomunica.com')}">
+      <div class="up-summary">
+        <div class="up-chips"></div>
+        <button type="button" class="btn btn-ghost btn-sm up-toggle"><i data-lucide="pencil"></i> Editar</button>
       </div>
-      <div class="up-list" style="max-height:260px;overflow:auto;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;">${items}</div>
-      <div class="ts up-count" style="margin-top:6px;"></div>
+      <div class="up-panel">
+        <div class="up-filters">
+          <select class="form-input up-filter-rol" style="width:200px;">${rolOpts}</select>
+          <input type="text" class="form-input up-filter-q" placeholder="Buscar nombre o email…" style="flex:1;min-width:180px;">
+        </div>
+        <div class="up-list">${items}</div>
+        <div class="ts up-count" style="margin-top:6px;"></div>
+      </div>
     </div>`;
   }
 
@@ -150,8 +208,10 @@
       const filterQ   = root.querySelector('.up-filter-q');
       const items     = [...root.querySelectorAll('.up-item')];
       const countEl   = root.querySelector('.up-count');
+      const chipsEl   = root.querySelector('.up-chips');
+      const emptyHint = root.getAttribute('data-empty-hint') || 'se notificará a ventas@cecomunica.com';
 
-      const apply = () => {
+      const applyFilter = () => {
         const r = (filterRol?.value || '').trim();
         const q = (filterQ?.value || '').trim().toLowerCase();
         items.forEach(it => {
@@ -159,18 +219,38 @@
           const okQ   = !q || (it.dataset.search || '').includes(q);
           it.style.display = (okRol && okQ) ? '' : 'none';
         });
-        updateCount();
-      };
-      const emptyHint = root.getAttribute('data-empty-hint') || 'se notificará a ventas@cecomunica.com';
-      const updateCount = () => {
-        const total = items.filter(i => i.querySelector('input').checked).length;
-        if (countEl) countEl.textContent = total ? `${total} seleccionado${total === 1 ? '' : 's'}` : `Sin selección — ${emptyHint}`;
       };
 
-      filterRol?.addEventListener('change', apply);
-      filterQ?.addEventListener('input', apply);
-      root.addEventListener('change', e => { if (e.target.matches('input[type="checkbox"]')) updateCount(); });
-      updateCount();
+      const refresh = () => {
+        const checked = items.filter(i => i.querySelector('input').checked);
+        if (countEl) countEl.textContent = checked.length ? `${checked.length} seleccionado${checked.length === 1 ? '' : 's'}` : `Sin selección — ${emptyHint}`;
+        if (chipsEl) {
+          chipsEl.innerHTML = checked.length
+            ? checked.map(it => {
+                const email = it.querySelector('input').value;
+                const name = it.querySelector('.up-name')?.textContent || email;
+                return `<span class="up-chip"><span>${esc(name)}</span><button type="button" class="up-chip-x" data-email="${esc(email)}" title="Quitar">×</button></span>`;
+              }).join('')
+            : `<span class="up-empty">${esc(emptyHint)}</span>`;
+        }
+      };
+
+      root.querySelector('.up-toggle')?.addEventListener('click', () => {
+        root.classList.toggle('is-collapsed');
+        if (!root.classList.contains('is-collapsed')) setTimeout(() => filterQ?.focus(), 30);
+      });
+      filterRol?.addEventListener('change', applyFilter);
+      filterQ?.addEventListener('input', applyFilter);
+      root.addEventListener('change', e => { if (e.target.matches('input[type="checkbox"]')) refresh(); });
+      // Quitar un chip = desmarcar el checkbox correspondiente.
+      chipsEl?.addEventListener('click', e => {
+        const btn = e.target.closest('.up-chip-x');
+        if (!btn) return;
+        const cb = items.map(i => i.querySelector('input')).find(c => c.value === btn.dataset.email);
+        if (cb) { cb.checked = false; refresh(); markDirty(); }
+      });
+
+      refresh();
     });
   }
 
@@ -186,7 +266,7 @@
         if (el.dataset.empty === '1') continue;
         const emails = [...el.querySelectorAll('input[type="checkbox"]:checked')].map(c => c.value.trim()).filter(Boolean);
         const uniq = [...new Set(emails.map(e => e.toLowerCase()))];
-        if (uniq.length > 20) errors[f.key] = 'Máximo 20 aprobadores.';
+        if (uniq.length > 20) errors[f.key] = 'Máximo 20 usuarios.';
         out[f.key] = uniq;
         continue;
       } else if (f.type === 'bool') {
@@ -228,7 +308,20 @@
       if (el) { el.style.display = ''; el.textContent = errors[key]; }
       if (!firstField) firstField = $('fld-' + key);
     }
-    if (firstField) firstField.focus();
+    if (firstField) {
+      // Abre el user-picker si el error está adentro, para que el foco se vea.
+      firstField.closest('.up-root')?.classList.remove('is-collapsed');
+      firstField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      firstField.focus({ preventScroll: true });
+    }
+  }
+
+  // ── Cambios sin guardar ────────────────────────────────────────────────────
+  function markDirty() { if (!dirty) { dirty = true; updateDirtyUI(); } }
+  function clearDirty() { dirty = false; updateDirtyUI(); }
+  function updateDirtyUI() {
+    $('cfgSavebar')?.classList.toggle('is-visible', dirty);
+    $('btnSave')?.classList.toggle('has-changes', dirty);
   }
 
   async function load() {
@@ -240,15 +333,17 @@
       ]);
       renderForm(cfg);
       wireUserPickers();
+      clearDirty();
       const meta = $('configMeta');
       if (meta) {
         const ts = cfg.updated_at;
         const who = cfg.updated_by;
         meta.innerHTML = ts
-          ? `Última edición: ${new Date(ts.toMillis ? ts.toMillis() : ts).toLocaleString('es-PA', { hour12: false })} por <code>${who || '—'}</code>`
+          ? `Última edición: ${new Date(ts.toMillis ? ts.toMillis() : ts).toLocaleString('es-PA', { hour12: false })} por <code>${esc(who || '—')}</code>`
           : 'Sin ediciones registradas (usando valores por defecto).';
       }
       setText('lastUpdate', `Actualizado ${new Date().toLocaleTimeString('es-PA', { hour12: false })}`);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (err) {
       console.error('[admin/config] load:', err);
       if (window.Toast) Toast.show('Error cargando configuración: ' + (err.message || err.code || err), 'bad');
@@ -270,12 +365,25 @@
     if (!ok) return;
     try {
       await EmpresaService.setConfig(values);
+      clearDirty();
       if (window.Toast) Toast.show('Configuración guardada.', 'ok');
       await load();
     } catch (err) {
       console.error('[admin/config] save:', err);
       if (window.Toast) Toast.show('Error guardando: ' + (err.message || err.code || err), 'bad');
     }
+  }
+
+  async function descartar() {
+    if (!dirty) return;
+    const ok = await Modal.confirm({
+      title: 'Descartar cambios',
+      message: 'Se perderán los cambios sin guardar y se recargarán los valores actuales. ¿Continuar?',
+      danger: true,
+      confirmLabel: 'Descartar',
+    });
+    if (!ok) return;
+    await load();
   }
 
   async function exportSnapshot() {
@@ -308,8 +416,33 @@
 
   function wireUI() {
     $('btnSave')?.addEventListener('click', save);
-    $('btnReload')?.addEventListener('click', load);
+    $('btnSaveBar')?.addEventListener('click', save);
+    $('btnDiscardBar')?.addEventListener('click', descartar);
+    $('btnReload')?.addEventListener('click', async () => {
+      if (dirty && !await Modal.confirm({ title: 'Recargar', message: 'Hay cambios sin guardar. ¿Recargar y descartarlos?', danger: true, confirmLabel: 'Recargar' })) return;
+      load();
+    });
     $('btnExport')?.addEventListener('click', exportSnapshot);
+
+    // Marca "sucio" ante cualquier edición dentro del formulario.
+    const form = $('configForm');
+    if (form) {
+      form.addEventListener('input', markDirty);
+      form.addEventListener('change', markDirty);
+    }
+
+    // Aviso del navegador al salir con cambios pendientes.
+    window.addEventListener('beforeunload', (e) => {
+      if (dirty) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    // Nav de secciones: scroll suave respetando el offset del topbar sticky.
+    $('configNav')?.addEventListener('click', (e) => {
+      const a = e.target.closest('a[href^="#sec-"]');
+      if (!a) return;
+      e.preventDefault();
+      document.getElementById(a.getAttribute('href').slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', () => {

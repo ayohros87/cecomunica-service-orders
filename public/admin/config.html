@@ -70,15 +70,23 @@
       </div>
     </div>
 
-    <div class="ds-card" style="padding:var(--sp-4);">
-      <form id="configForm" onsubmit="event.preventDefault(); return false;">
-        <!-- Renderizado por admin-config.js -->
-        <div class="empty-state-hint" style="text-align:center;color:var(--fg-3);padding:var(--sp-4);">
-          Cargando…
-        </div>
-      </form>
-    </div>
+    <!-- Navegación por secciones (sticky bajo el topbar) -->
+    <nav id="configNav" class="cfg-nav" aria-label="Secciones de configuración"></nav>
 
+    <form id="configForm" onsubmit="event.preventDefault(); return false;">
+      <!-- Renderizado por admin-config.js: una .cfg-section por grupo -->
+      <div class="empty-state-hint" style="text-align:center;color:var(--fg-3);padding:var(--sp-4);">
+        Cargando…
+      </div>
+    </form>
+
+  </div>
+
+  <!-- Barra sticky de guardado: aparece solo cuando hay cambios pendientes -->
+  <div id="cfgSavebar" class="cfg-savebar">
+    <span class="msg"><i data-lucide="alert-circle"></i> Tienes cambios sin guardar</span>
+    <button id="btnDiscardBar" class="btn btn-ghost btn-sm"><i data-lucide="undo-2"></i> Descartar</button>
+    <button id="btnSaveBar" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Guardar cambios</button>
   </div>
 
   <script>
