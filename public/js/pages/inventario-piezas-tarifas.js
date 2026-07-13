@@ -142,11 +142,12 @@ function render(){
   if (soloSinPrecio) data = data.filter(p => !(num(p.precio_venta) > 0));
   if (soloPorRevisar) data = data.filter(p => p.revision_estado === 'por_revisar');
   if (term) data = data.filter(p =>
+    (p.nombre||'').toLowerCase().includes(term) ||
     (p.descripcion||'').toLowerCase().includes(term) ||
     (p.marca||'').toLowerCase().includes(term) ||
     (p.sku||'').toLowerCase().includes(term));
 
-  data.sort((a,b)=> String(a.descripcion||a.marca||'').localeCompare(String(b.descripcion||b.marca||''), 'es', {numeric:true, sensitivity:'base'}));
+  data.sort((a,b)=> String(a.nombre||a.descripcion||a.marca||'').localeCompare(String(b.nombre||b.descripcion||b.marca||''), 'es', {numeric:true, sensitivity:'base'}));
 
   tbody.innerHTML = '';
   if (data.length === 0){
@@ -168,7 +169,13 @@ function renderRow(p){
   tr.innerHTML = `
     <td class="sticky-col pieza-cell">
       <span class="row-status"></span>
-      ${esc(p.descripcion||'(sin descripción)')} ${origenBadge(p)}<span class="pieza-sub">${esc(p.marca||'')}${p.sku?(' · '+esc(p.sku)):''}</span>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <input type="text" class="td-input td-nombre" data-field="nombre" value="${esc(p.nombre||'')}"
+          placeholder="Nombre corto (lo ven los técnicos)" title="Nombre corto que ven los técnicos al cotizar">
+        ${origenBadge(p)}
+      </div>
+      <span class="pieza-sub" title="${esc(p.descripcion||'')}">${esc(p.descripcion||'(sin descripción)')}</span>
+      <span class="pieza-sub">${esc(p.marca||'')}${p.sku?(' · '+esc(p.sku)):''}</span>
       ${p.revision_estado==='por_revisar' && p.qbo_pendiente ? `
         <div style="margin-top:4px; font-size:11px; background:#FFFBEB; border:1px solid #FDE68A; border-radius:6px; padding:4px 6px; white-space:normal;">
           <b>⚠ Por revisar</b> — QBO propone: "${esc(p.qbo_pendiente.descripcion||'')}"${p.qbo_pendiente.sku?(' · SKU '+esc(p.qbo_pendiente.sku)):''}
@@ -189,6 +196,12 @@ function renderRow(p){
     <td class="map-cell"><span class="map-badge ${b.cls}">${b.label}</span></td>
     <td style="text-align:center"><label class="toggle-switch" title="Activo"><input type="checkbox" data-field="activo" ${p.activo!==false?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>`;
 
+  tr.querySelectorAll('input[type="text"][data-field]').forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      setRowStatus(id,'saving');
+      onInlineUpdate(id, { [inp.dataset.field]: inp.value.trim() });
+    });
+  });
   tr.querySelectorAll('input[type="number"]').forEach(inp=>{
     inp.addEventListener('input', ()=>{
       setRowStatus(id,'saving');
@@ -272,10 +285,10 @@ const onInlineUpdate = debounce(async (id, partial)=>{
 /* ===== Exportar ===== */
 function exportarExcel(){
   const wb = XLSX.utils.book_new();
-  const ws = [["Marca","SKU","Descripción","Categoría","Precio venta","Costo","Margen","Item QBO","Estado","Activo"]];
+  const ws = [["Nombre","Marca","SKU","Descripción","Categoría","Precio venta","Costo","Margen","Item QBO","Estado","Activo"]];
   (listaPiezas||[]).forEach(p=>{
     const mg = margenInfo(p);
-    ws.push([ p.marca||'', p.sku||'', p.descripcion||'', p.categoria||'',
+    ws.push([ p.nombre||'', p.marca||'', p.sku||'', p.descripcion||'', p.categoria||'',
       Number.isFinite(p.precio_venta)?p.precio_venta:'', Number.isFinite(p.costo_unitario)?p.costo_unitario:'',
       mg.txt, p.qbo_item_id||'', mapeoBadge(p).label, (p.activo!==false)?'Sí':'No' ]);
   });

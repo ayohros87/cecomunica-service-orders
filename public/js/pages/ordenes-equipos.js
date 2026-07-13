@@ -726,7 +726,9 @@ let _materialBuscarTimer = null;
 let _materialWired = false;
 
 function _nombrePieza(p) {
-  return p?.descripcion || p?.nombre || (((p?.marca || "") + " " + (p?.modelo || "")).trim()) || "Pieza";
+  // Prioriza el nombre corto del catálogo; la descripción (texto largo de QBO)
+  // es el fallback — misma prioridad que el drawer de cotizar-orden.
+  return p?.nombre || p?.descripcion || (((p?.marca || "") + " " + (p?.modelo || "")).trim()) || "Pieza";
 }
 
 function _consumoKeyEquipoActual() {

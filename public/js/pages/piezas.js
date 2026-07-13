@@ -222,9 +222,9 @@ function parseDelimited(text){
 
 function descargarPlantillaCSV(){
   const contenido = [
-    'marca,sku,descripcion,precio_venta,costo_unitario,cantidad,minimo,unidad,ubicacion,equipos_asociados,activo,notas',
-    'Hytera,CN-PD786-BAT,Batería Li-Ion 2000mAh,35,21,10,3,pieza,Estante A3,Radio-123|Base-Oficina,true,',
-    'Genérico,,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|Sucursal-Colon,true,carrete de 100m'
+    'marca,sku,nombre,descripcion,precio_venta,costo_unitario,cantidad,minimo,unidad,ubicacion,equipos_asociados,activo,notas',
+    'Hytera,CN-PD786-BAT,Batería PD786,Batería Li-Ion 2000mAh,35,21,10,3,pieza,Estante A3,Radio-123|Base-Oficina,true,',
+    'Genérico,,Cable coaxial RG58,Cable coaxial RG58 por metro,1.2,0.6,100,10,metro,Bodega 1,Camion-5|Sucursal-Colon,true,carrete de 100m'
   ].join('\n');
   const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -264,6 +264,7 @@ async function guardarBatch(){
 const map = {
   marca: ['marca','brand'],
   sku: ['sku','codigo','código'],
+  nombre: ['nombre','nombre_corto','name'],
   descripcion: ['descripcion','descripción','description','desc'],
   precio_venta: ['precio_venta','precio','precio venta','precio_venta_usd'],
   costo_unitario: ['costo_unitario','costo','costo unitario'],
@@ -299,7 +300,7 @@ const map = {
     const row = rows[i];
 // 1) payload base
 const payload = {
-  marca: '', sku: '', descripcion: '',
+  marca: '', sku: '', nombre: '', descripcion: '',
   precio_venta: 0, costo_unitario: 0, cantidad: 0, minimo: 5,
   unidad: 'pieza', ubicacion: '', equipos_asociados: [],
   notas: '', activo: true
@@ -321,6 +322,7 @@ if ((payload.minimo === undefined || payload.minimo === '' || payload.minimo ===
 
 payload.marca = String(payload.marca || '').trim();
 payload.sku = String(payload.sku || '').trim();
+payload.nombre = String(payload.nombre || '').trim();
 payload.descripcion = String(payload.descripcion || '').trim();
 
 payload.precio_venta   = parseNumberSafe(payload.precio_venta, 0);
@@ -465,11 +467,12 @@ function render() {
   const q = (document.getElementById('filtroNombre').value||'').toLowerCase().trim();
   if (q) {
     data = data.filter(p => {
+    const nombre = (p.nombre||'').toLowerCase();
     const marca = (p.marca||'').toLowerCase();
     const sku = (p.sku||'').toLowerCase();
     const desc = (p.descripcion||'').toLowerCase();
       const equipos = Array.isArray(p.equipos_asociados) ? p.equipos_asociados.map(x=>String(x).toLowerCase()) : [];
-      return marca.includes(q) || sku.includes(q) || desc.includes(q) || equipos.some(e=>e.includes(q));
+      return nombre.includes(q) || marca.includes(q) || sku.includes(q) || desc.includes(q) || equipos.some(e=>e.includes(q));
     });
   }
 
@@ -514,6 +517,7 @@ function render() {
     const sku = p.sku || '-';
     const marca = p.marca || '';
     const desc = p.descripcion || '';
+    const nombre = p.nombre || '';
     const equipos = Array.isArray(p.equipos_asociados) ? p.equipos_asociados : [];
     const control = p.sin_control_inventario
   ? '<span class="badge warn">Libre</span>'
@@ -541,7 +545,11 @@ function render() {
       <tr>
         <td class="truncate" title="${marca}">${marca}</td>
         <td class="td-primary col-sku ${hiddenCols.has('sku') ? 'hidden-col':''}">${sku}</td>
-        <td class="truncate" title="${desc}">${desc || '—'}</td>
+        <td class="truncate" title="${nombre ? nombre + (desc ? ' — ' + desc : '') : desc}">
+          ${nombre
+            ? `${nombre}${desc ? `<span class="muted" style="display:block; font-size:11px;">${desc}</span>` : ''}`
+            : (desc || '—')}
+        </td>
         <td class="td-amount">$${precio.toFixed(2)}</td>
         <td class="td-amount col-costo ${hiddenCols.has('costo') ? 'hidden-col':''}">$${costo.toFixed(2)}</td>
         <td>
@@ -618,7 +626,7 @@ function abrirModal(id = null){
 
   document.getElementById('modalTitle').innerText = creando ? 'Nueva pieza' : 'Editar pieza';
 // Reset
-setVal('f-marca',''); setVal('f-sku',''); setVal('f-descripcion','');
+setVal('f-marca',''); setVal('f-sku',''); setVal('f-nombre',''); setVal('f-descripcion','');
 setVal('f-precio',''); setVal('f-costo','');
 setVal('f-cantidad',''); setVal('f-minimo','5'); setVal('f-unidad','pieza'); setVal('f-ubicacion','');
 setVal('f-equipos','');
@@ -632,6 +640,7 @@ setVal('f-notas','');
     if (pieza){
       setVal('f-marca', pieza.marca || '');
       setVal('f-sku', pieza.sku || '');
+      setVal('f-nombre', pieza.nombre || '');
       setVal('f-descripcion', pieza.descripcion || '');
       setVal('f-precio', Number(pieza.precio_venta||0));
       setVal('f-costo', Number(pieza.costo_unitario||0));
@@ -658,6 +667,7 @@ function setVal(id, val){ const el = document.getElementById(id); if (el) el.val
 async function guardarPieza(){
   const marca = (document.getElementById('f-marca').value || '').trim();
   const sku = (document.getElementById('f-sku').value || '').trim();
+  const nombre = (document.getElementById('f-nombre').value || '').trim();
   const descripcion = (document.getElementById('f-descripcion').value || '').trim();
 
   const precio = Number(document.getElementById('f-precio').value || 0);
@@ -681,7 +691,7 @@ async function guardarPieza(){
   }
 
   const payload = {
-    marca, sku, descripcion,
+    marca, sku, nombre, descripcion,
     precio_venta: precio,
     costo_unitario: costo,
     cantidad, minimo, unidad, ubicacion,
@@ -739,6 +749,7 @@ async function duplicar(id) {
     await PiezasService.addPieza({
       marca: pieza.marca || '',
       sku: pieza.sku || '',
+      nombre: pieza.nombre || '',
       descripcion: pieza.descripcion || '',
       precio_venta: Number(pieza.precio_venta||0),
       costo_unitario: Number(pieza.costo_unitario||0),

@@ -112,7 +112,7 @@
     <div class="filter-bar">
       <div class="filter-search" style="max-width:340px;">
         <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="filtroNombre" type="search" placeholder="Buscar marca, SKU o equipo…" aria-label="Buscar piezas">
+        <input id="filtroNombre" type="search" placeholder="Buscar nombre, marca, SKU o equipo…" aria-label="Buscar piezas">
       </div>
       <div style="flex:1;"></div>
       <label class="toggle-pill"><input type="checkbox" id="chkConStock" onchange="onTogglePiezas(this)"> Solo con stock</label>
@@ -124,7 +124,7 @@
           <tr>
             <th data-sort="marca" onclick="sortBy('marca')">Marca <span class="sort" id="s-marca">↕</span></th>
             <th class="col-sku" data-sort="sku" onclick="sortBy('sku')">SKU <span class="sort" id="s-sku">↕</span></th>
-            <th data-sort="descripcion" onclick="sortBy('descripcion')">Descripción <span class="sort" id="s-descripcion">↕</span></th>
+            <th data-sort="nombre" onclick="sortBy('nombre')">Nombre / Descripción <span class="sort" id="s-nombre">↕</span></th>
             <th data-sort="precio_venta" onclick="sortBy('precio_venta')" style="text-align:right;">Precio venta <span class="sort" id="s-precio_venta">↕</span></th>
             <th class="col-costo" data-sort="costo_unitario" onclick="sortBy('costo_unitario')" style="text-align:right;">Costo <span class="sort" id="s-costo_unitario">↕</span></th>
             <th data-sort="cantidad" onclick="sortBy('cantidad')">Cant. <span class="sort" id="s-cantidad">↕</span></th>
@@ -164,8 +164,13 @@
           <input class="form-input" id="f-sku" placeholder="SKU (opcional)" style="font-family:var(--font-mono);">
         </div>
         <div class="form-field" style="grid-column:1 / -1;">
-          <label class="form-label" for="f-descripcion">Descripción</label>
-          <input class="form-input" id="f-descripcion" placeholder="Descripción corta de la pieza">
+          <label class="form-label" for="f-nombre">Nombre corto</label>
+          <input class="form-input" id="f-nombre" placeholder="Ej. Front cover PNC370">
+          <span class="form-hint">Es el nombre que ven los técnicos al cotizar y registrar materiales.</span>
+        </div>
+        <div class="form-field" style="grid-column:1 / -1;">
+          <label class="form-label" for="f-descripcion">Descripción (texto largo, ej. el de QuickBooks)</label>
+          <input class="form-input" id="f-descripcion" placeholder="Descripción detallada de la pieza">
         </div>
 
         <div class="form-field">

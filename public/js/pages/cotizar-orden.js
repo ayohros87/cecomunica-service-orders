@@ -714,9 +714,12 @@
 
     let html = '';
     if (q) {
-      // Búsqueda: filtra globalmente (lista plana, sin grupos).
+      // Búsqueda: filtra globalmente (lista plana, sin grupos). Cubre el nombre
+      // corto, la descripción larga (texto QBO) y el SKU.
       const rows = piezas
-        .filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))
+        .filter(p => (p.nombre || '').toLowerCase().includes(q)
+          || (p.descripcion || '').toLowerCase().includes(q)
+          || (p.sku || '').toLowerCase().includes(q))
         .slice(0, 200);
       html = rows.length ? rows.map(itemCatalogoHtml).join('') : '<div class="co-cat-empty">Sin coincidencias.</div>';
     } else {

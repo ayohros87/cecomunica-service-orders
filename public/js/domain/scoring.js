@@ -6,19 +6,21 @@ window.PiezaSearch = {
     return String(p?.equipos_asociados || '').toLowerCase();
   },
 
-  // SKU exact >>> SKU partial >>> description >>> brand >>> associated equipment
+  // SKU exact >>> SKU partial >>> name >>> description >>> brand >>> associated equipment
   score(p, q) {
     if (!q) return -Infinity;
-    const sku   = String(p?.sku  || '').toLowerCase();
-    const desc  = String(p?.descripcion || p?.nombre || '').toLowerCase();
-    const marca = String(p?.marca || '').toLowerCase();
-    const equip = this._equiposStr(p);
+    const sku    = String(p?.sku  || '').toLowerCase();
+    const nombre = String(p?.nombre || '').toLowerCase();
+    const desc   = String(p?.descripcion || '').toLowerCase();
+    const marca  = String(p?.marca || '').toLowerCase();
+    const equip  = this._equiposStr(p);
     if (sku === q) return 1000;
     let s = 0;
-    if (sku.includes(q))   s += 80;
-    if (desc.includes(q))  s += 60;
-    if (marca.includes(q)) s += 40;
-    if (equip.includes(q)) s += 20;
+    if (sku.includes(q))    s += 80;
+    if (nombre.includes(q)) s += 70;
+    if (desc.includes(q))   s += 60;
+    if (marca.includes(q))  s += 40;
+    if (equip.includes(q))  s += 20;
     return s;
   },
 

@@ -48,7 +48,8 @@
     #tabla .toggle-switch { display: inline-block; vertical-align: middle; }
 
     .pieza-cell { position: relative; padding-left: 16px !important; font-weight: 600; }
-    .pieza-sub  { display:block; font-weight:400; font-size:11px; color: var(--fg-4); }
+    .pieza-sub  { display:block; font-weight:400; font-size:11px; color: var(--fg-4); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .td-nombre  { flex:1; min-width:180px; font-weight:600; }
 
     .row-status {
       position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
@@ -82,7 +83,7 @@
     leftSlot: `
       <div class="filter-search" style="max-width:300px;">
         <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="q" type="search" placeholder="Buscar marca, SKU o descripción…" aria-label="Buscar piezas">
+        <input id="q" type="search" placeholder="Buscar nombre, marca, SKU o descripción…" aria-label="Buscar piezas">
       </div>`,
     actions: [
       { label: '<i data-lucide="download"></i> Importar de QuickBooks', cls: 'primary', onclick: "importarDeQBO()" },
