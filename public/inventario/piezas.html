@@ -91,11 +91,8 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
-  <div class="app-card">
-    <div class="app-table-footer" style="border-top:0; padding:var(--sp-3) var(--sp-4);">
-      <p id="resumen" class="resumen" style="margin:0;"></p>
-    </div>
-    <div class="app-table-wrap" data-density="roomy" style="border:none; box-shadow:none; border-radius:0;">
+  <div class="ds-card">
+    <div class="app-table-wrap app-table-wrap--sticky" data-density="roomy" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:145px;">
       <table class="app-table">
         <thead>
           <tr>
@@ -116,6 +113,9 @@
         </thead>
         <tbody id="tb"></tbody>
       </table>
+    </div>
+    <div class="app-table-footer">
+      <p id="resumen" class="resumen" style="margin:0;"></p>
     </div>
   </div>
 </div>

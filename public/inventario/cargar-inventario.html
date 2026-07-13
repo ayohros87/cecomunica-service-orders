@@ -32,7 +32,7 @@
 <div id="topbar-mount"></div>
 <script>
   Layout.renderTopbarFor('index', {
-    title: '<i data-lucide="calendar"></i> Cargar Inventario',
+    title: '<i data-lucide="package"></i> Cargar Inventario',
     actions: [
       { label: '<i data-lucide="save"></i> Guardar inventario',
         cls: 'primary',
@@ -46,7 +46,7 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
-  <div class="app-card">
+  <div class="ds-card" style="overflow:hidden;">
     <div class="filter-bar">
       <div class="filter-search">
         <span class="search-icon"><i data-lucide="search"></i></span>
@@ -62,7 +62,7 @@
       <span id="resumenCargar" class="resumen">Cargando modelos…</span>
     </div>
 
-    <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+    <div class="app-table-wrap app-table-wrap--sticky" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:155px;">
       <table class="app-table">
         <thead id="headerModelos"></thead>
         <tbody id="tablaModelos"></tbody>

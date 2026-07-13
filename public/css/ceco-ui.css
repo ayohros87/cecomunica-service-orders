@@ -369,6 +369,16 @@ tbody tr:hover{ background:#f0f9ff; }
   box-shadow: var(--shadow-sm);
   overflow-x: auto; /* horizontal scroll; overflow-y becomes auto per spec */
 }
+/* Variante con scroll interno — el thead sticky de .app-table ancla en
+   top:0 del contenedor de scroll; si el wrap crece sin límite el scroll
+   vertical ocurre en la página y el sticky nunca actúa. Esta variante
+   limita la altura al viewport para que el wrap sea quien scrollea.
+   Ajusta el offset (topbar + barras propias de la página) con
+   --sticky-table-offset en el elemento. */
+.app-table-wrap--sticky {
+  max-height: calc(100vh - var(--sticky-table-offset, 150px));
+  overflow: auto;
+}
 table.app-table {
   width: 100%;
   border-collapse: collapse;

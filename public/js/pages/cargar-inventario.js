@@ -125,7 +125,7 @@ ordenados.forEach((modelo, index) => {
       <td>${tipoTexto}</td>
       <td>${estadoTexto}</td>
       <td>${modelo.alto_movimiento ? "✅" : "❌"}</td>
-      <td><input type="number" id="qty_${index}" min="0" /></td>
+      <td><input type="number" id="qty_${index}" min="0" class="form-input" style="max-width:120px;" placeholder="0" /></td>
     </tr>
   `;
 });
