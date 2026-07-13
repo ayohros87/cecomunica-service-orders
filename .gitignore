@@ -90,3 +90,6 @@ backups/
 
 # Manuales / documentos binarios — no se versionan en el repo
 Manual_Facturacion_CECOMUNICA.pdf
+
+# Prompts de trabajo one-shot (notas locales, no son parte del código)
+PROMPT_*.md
