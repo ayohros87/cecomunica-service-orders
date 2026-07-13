@@ -8,10 +8,7 @@
   'use strict';
 
   function $(id) { return document.getElementById(id); }
-  function escapeHtml(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
+  function escapeHtml(s) { return FMT.esc(s); } // helper canónico (+ escapa " y ', antes faltaban)
 
   function renderResult(action, dryRun, data) {
     const target = $(`result-${action}`);

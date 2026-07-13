@@ -98,7 +98,7 @@
 
   function $(id) { return document.getElementById(id); }
   function setText(id, txt) { const el = $(id); if (el) el.textContent = txt; }
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function esc(s) { return FMT.esc(s); } // helper canónico (core/formatting.js)
 
   // ── Render: nav de secciones + tarjetas por sección ────────────────────────
   function renderForm(current) {

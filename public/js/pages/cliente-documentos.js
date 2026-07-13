@@ -28,9 +28,7 @@
   const $pct    = document.getElementById("docUploadPct");
   const $list   = document.getElementById("docList");
 
-  function escapeHtml(s) {
-    return (s || "").replace(/[&<>"']/g, m => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;" }[m]));
-  }
+  function escapeHtml(s) { return FMT.esc(s); } // helper canónico (core/formatting.js)
   function fmtSize(bytes) {
     if (!bytes) return "";
     const kb = bytes / 1024;
