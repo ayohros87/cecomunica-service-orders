@@ -10,6 +10,7 @@
   <meta charset="UTF-8" />
   <title>Inventario de Piezas - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/app-kit-extras.css">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 
   <style>
@@ -66,11 +67,6 @@
 <script>
   Layout.renderTopbarFor('index', {
     title: '<i data-lucide="layers"></i> Inventario de Piezas',
-    leftSlot: `
-      <div class="filter-search" style="max-width:320px;">
-        <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="filtroNombre" type="search" placeholder="Buscar marca, SKU o equipo…" aria-label="Buscar piezas">
-      </div>`,
     actions: [
       { id: 'btnNueva', cls: 'primary', onclick: 'abrirModal()',
         label: '<i data-lucide="plus"></i> Nueva pieza' }
@@ -91,16 +87,46 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
+
+  <div class="kpi-grid" style="margin:var(--sp-4) 0;">
+    <div class="kpi-card">
+      <span class="kpi-card-label">Total piezas</span>
+      <span class="kpi-card-value" id="kpiTotal">—</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Activas</span>
+      <span class="kpi-card-value kpi-ok" id="kpiActivas">—</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Sin stock</span>
+      <span class="kpi-card-value kpi-crit" id="kpiSinStock">—</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Stock bajo</span>
+      <span class="kpi-card-value kpi-warn" id="kpiBajas">—</span>
+      <span class="kpi-card-sub">bajo el mínimo</span>
+    </div>
+  </div>
+
   <div class="ds-card">
-    <div class="app-table-wrap app-table-wrap--sticky" data-density="roomy" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:145px;">
+    <div class="filter-bar">
+      <div class="filter-search" style="max-width:340px;">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input id="filtroNombre" type="search" placeholder="Buscar marca, SKU o equipo…" aria-label="Buscar piezas">
+      </div>
+      <div style="flex:1;"></div>
+      <label class="toggle-pill"><input type="checkbox" id="chkConStock" onchange="onTogglePiezas(this)"> Solo con stock</label>
+      <label class="toggle-pill"><input type="checkbox" id="chkStockBajo" onchange="onTogglePiezas(this)"> Stock bajo</label>
+    </div>
+    <div class="app-table-wrap app-table-wrap--sticky" data-density="roomy" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:200px;">
       <table class="app-table">
         <thead>
           <tr>
             <th data-sort="marca" onclick="sortBy('marca')">Marca <span class="sort" id="s-marca">↕</span></th>
             <th class="col-sku" data-sort="sku" onclick="sortBy('sku')">SKU <span class="sort" id="s-sku">↕</span></th>
             <th data-sort="descripcion" onclick="sortBy('descripcion')">Descripción <span class="sort" id="s-descripcion">↕</span></th>
-            <th data-sort="precio_venta" onclick="sortBy('precio_venta')">Precio venta <span class="sort" id="s-precio_venta">↕</span></th>
-            <th class="col-costo" data-sort="costo_unitario" onclick="sortBy('costo_unitario')">Costo <span class="sort" id="s-costo_unitario">↕</span></th>
+            <th data-sort="precio_venta" onclick="sortBy('precio_venta')" style="text-align:right;">Precio venta <span class="sort" id="s-precio_venta">↕</span></th>
+            <th class="col-costo" data-sort="costo_unitario" onclick="sortBy('costo_unitario')" style="text-align:right;">Costo <span class="sort" id="s-costo_unitario">↕</span></th>
             <th data-sort="cantidad" onclick="sortBy('cantidad')">Cant. <span class="sort" id="s-cantidad">↕</span></th>
             <th data-sort="minimo" onclick="sortBy('minimo')">Mín. <span class="sort" id="s-minimo">↕</span></th>
             <th data-sort="unidad" onclick="sortBy('unidad')">Unidad <span class="sort" id="s-unidad">↕</span></th>
@@ -108,7 +134,7 @@
             <th data-sort="equipos_asociados" onclick="sortBy('equipos_asociados')">Equipos asociados <span class="sort" id="s-equipos_asociados">↕</span></th>
             <th data-sort="activo" onclick="sortBy('activo')">Estado <span class="sort" id="s-activo">↕</span></th>
             <th>Inventario</th>
-            <th class="actions">Acciones</th>
+            <th class="actions" style="text-align:right;">Acciones</th>
           </tr>
         </thead>
         <tbody id="tb"></tbody>

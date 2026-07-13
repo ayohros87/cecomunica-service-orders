@@ -11,6 +11,7 @@
   <title>Inventario de Radios - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/app-kit-extras.css">
 
   <style>
     /* Page-local — el resto vive en el kit */
@@ -64,11 +65,6 @@
 <script>
   Layout.renderTopbarFor('index', {
     title: '<i data-lucide="package"></i> Inventario de Radios',
-    leftSlot: `
-      <div class="filter-search" style="max-width:320px;">
-        <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="buscador" type="search" placeholder="Buscar marca, modelo o tipo…" aria-label="Buscar inventario">
-      </div>`,
     actions: [
       { label: '<i data-lucide="plus"></i> Cargar inventario',
         cls: 'primary',
@@ -92,8 +88,45 @@
 </div>
 
 <div class="app-wrap app-wrap--full">
+
+  <div class="kpi-grid" style="margin:var(--sp-4) 0;">
+    <div class="kpi-card">
+      <span class="kpi-card-label">Modelos listados</span>
+      <span class="kpi-card-value" id="kpiModelos">—</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Unidades totales</span>
+      <span class="kpi-card-value kpi-accent" id="kpiUnidades">—</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Alto movimiento</span>
+      <span class="kpi-card-value" id="kpiAltoMov">—</span>
+      <span class="kpi-card-sub">modelos priorizados</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-card-label">Stock bajo</span>
+      <span class="kpi-card-value kpi-warn" id="kpiStockBajo">—</span>
+      <span class="kpi-card-sub">&lt; 5 unidades</span>
+    </div>
+  </div>
+
   <div class="ds-card">
-    <div class="app-table-wrap app-table-wrap--sticky" id="wrapTabla" data-density="roomy" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:145px;">
+    <div class="filter-bar">
+      <div class="filter-search" style="max-width:320px;">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input id="buscador" type="search" placeholder="Buscar marca, modelo o tipo…" aria-label="Buscar inventario">
+      </div>
+      <div class="filter-chips" id="chipsTipo">
+        <button type="button" class="filter-chip active" data-tipo="" onclick="setFiltroTipo('')">Todos</button>
+        <button type="button" class="filter-chip" data-tipo="P" onclick="setFiltroTipo('P')">Portátil</button>
+        <button type="button" class="filter-chip" data-tipo="B" onclick="setFiltroTipo('B')">Base</button>
+        <button type="button" class="filter-chip" data-tipo="C" onclick="setFiltroTipo('C')">Cámara</button>
+      </div>
+      <div style="flex:1;"></div>
+      <label class="toggle-pill"><input type="checkbox" id="chkAltoMov" onchange="onToggleFiltro(this)"> Solo alto movimiento</label>
+      <label class="toggle-pill"><input type="checkbox" id="chkStockBajo" onchange="onToggleFiltro(this)"> Stock bajo</label>
+    </div>
+    <div class="app-table-wrap app-table-wrap--sticky" id="wrapTabla" data-density="roomy" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:200px;">
       <table class="app-table">
         <thead id="headerInventario"></thead>
         <tbody id="inventarioTable"></tbody>

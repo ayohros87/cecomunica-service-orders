@@ -441,12 +441,19 @@ function showSkeleton(){
 function renderResumen(){
   const total = piezas.length;
   const activas = piezas.filter(p => p.activo === true).length;
-  const criticas = piezas.filter(p => (p.cantidad || 0) <= 0).length;
-  const bajas = piezas.filter(p => (p.cantidad || 0) > 0 && (p.cantidad || 0) < (p.minimo || 5)).length;
+  const criticas = piezas.filter(p => !p.sin_control_inventario && (p.cantidad || 0) <= 0).length;
+  const bajas = piezas.filter(p => !p.sin_control_inventario && (p.cantidad || 0) > 0 && (p.cantidad || 0) < (p.minimo || 5)).length;
 
-  document.getElementById('resumen').innerHTML =
-    `Total piezas: <strong>${total}</strong> · Activas: <strong>${activas}</strong> · ` +
-    `Sin stock: <strong>${criticas}</strong> · Stock bajo: <strong>${bajas}</strong>`;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('kpiTotal', total);
+  set('kpiActivas', activas);
+  set('kpiSinStock', criticas);
+  set('kpiBajas', bajas);
+}
+
+function onTogglePiezas(inp){
+  inp.closest('.toggle-pill')?.classList.toggle('is-on', inp.checked);
+  render();
 }
 
 function render() {
@@ -465,6 +472,12 @@ function render() {
       return marca.includes(q) || sku.includes(q) || desc.includes(q) || equipos.some(e=>e.includes(q));
     });
   }
+
+  // Toggles de stock (las piezas sin control de inventario no cuentan como agotadas)
+  if (document.getElementById('chkConStock')?.checked)
+    data = data.filter(p => p.sin_control_inventario || Number(p.cantidad || 0) > 0);
+  if (document.getElementById('chkStockBajo')?.checked)
+    data = data.filter(p => !p.sin_control_inventario && Number(p.cantidad || 0) < Number(p.minimo || 5));
 
   // sort
   data = applySort(data);
@@ -485,6 +498,8 @@ function render() {
           </div>
         </td>
       </tr>`;
+    const resumenVacio = document.getElementById('resumen');
+    if (resumenVacio) resumenVacio.innerHTML = `Mostrando <strong>0</strong> de <strong>${piezas.length}</strong> piezas`;
     if (window.lucide) lucide.createIcons({ nodes: [tb] });
     return;
   }
@@ -525,15 +540,15 @@ function render() {
     return `
       <tr>
         <td class="truncate" title="${marca}">${marca}</td>
-        <td class="mono col-sku ${hiddenCols.has('sku') ? 'hidden-col':''}">${sku}</td>
+        <td class="td-primary col-sku ${hiddenCols.has('sku') ? 'hidden-col':''}">${sku}</td>
         <td class="truncate" title="${desc}">${desc || '—'}</td>
-        <td>$${precio.toFixed(2)}</td>
-        <td class="col-costo ${hiddenCols.has('costo') ? 'hidden-col':''}">$${costo.toFixed(2)}</td>
+        <td class="td-amount">$${precio.toFixed(2)}</td>
+        <td class="td-amount col-costo ${hiddenCols.has('costo') ? 'hidden-col':''}">$${costo.toFixed(2)}</td>
         <td>
           <div class="table-actions">
             ${chipCant}
-            <button class="btn sm" aria-label="Sumar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', 1)"><i data-lucide="plus"></i></button>
-            <button class="btn sm" aria-label="Restar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', -1)"><i data-lucide="minus"></i></button>
+            <button class="btn btn-ghost btn-sm" title="Sumar 1" aria-label="Sumar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', 1)"><i data-lucide="plus"></i></button>
+            <button class="btn btn-ghost btn-sm" title="Restar 1" aria-label="Restar" ${disableEdicion ? 'disabled' : ''} onclick="ajustarStock('${p.id}', -1)"><i data-lucide="minus"></i></button>
           </div>
         </td>
         <td>${min}</td>
@@ -542,13 +557,13 @@ function render() {
         <td>${equiposHtml}</td>
         <td>${estado}</td>
         <td>${control}</td>
-        <td class="actions">
+        <td class="td-actions">
           <div class="table-actions">
-            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="abrirModal('${p.id}')"><i data-lucide="pencil"></i> Editar</button>
-            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="toggleActivo('${p.id}', ${!!p.activo})">${p.activo ? 'Desactivar' : 'Activar'}</button>
-            <button class="btn sm" ${disableEdicion ? 'disabled' : ''} onclick="duplicar('${p.id}')"><i data-lucide="copy"></i> Duplicar</button>
+            <button class="btn btn-ghost btn-sm" title="Editar" aria-label="Editar" ${disableEdicion ? 'disabled' : ''} onclick="abrirModal('${p.id}')"><i data-lucide="pencil"></i></button>
+            <button class="btn btn-ghost btn-sm" title="${p.activo ? 'Desactivar' : 'Activar'}" aria-label="${p.activo ? 'Desactivar' : 'Activar'}" ${disableEdicion ? 'disabled' : ''} onclick="toggleActivo('${p.id}', ${!!p.activo})"><i data-lucide="power"></i></button>
+            <button class="btn btn-ghost btn-sm" title="Duplicar" aria-label="Duplicar" ${disableEdicion ? 'disabled' : ''} onclick="duplicar('${p.id}')"><i data-lucide="copy"></i></button>
             ${rolActual === ROLES.ADMIN
-              ? `<button class="btn sm danger" onclick="eliminarPieza('${p.id}', '${(marca + (sku ? ' ' + sku : '')).replace(/"/g,'&quot;')}')"><i data-lucide="trash-2"></i> Eliminar</button>`
+              ? `<button class="btn btn-ghost btn-sm" style="color:var(--bad);" title="Eliminar" aria-label="Eliminar" onclick="eliminarPieza('${p.id}', '${(marca + (sku ? ' ' + sku : '')).replace(/"/g,'&quot;')}')"><i data-lucide="trash-2"></i></button>`
               : ''
             }
           </div>
@@ -556,6 +571,11 @@ function render() {
       </tr>
     `;
   }).join('');
+
+  // Footer: conteo filtrado vs total
+  const resumenEl = document.getElementById('resumen');
+  if (resumenEl) resumenEl.innerHTML = `Mostrando <strong>${data.length}</strong> de <strong>${piezas.length}</strong> piezas`;
+
   applyColumnVisibility();
   applyDensity();
   if (window.lucide) lucide.createIcons({ nodes: [tb] });

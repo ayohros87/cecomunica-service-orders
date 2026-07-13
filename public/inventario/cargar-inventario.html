@@ -50,13 +50,12 @@
     <div class="filter-bar">
       <div class="filter-search">
         <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="filtroMarca" type="search" placeholder="Buscar por marca" aria-label="Filtrar por marca">
+        <input id="filtroMarca" type="search" placeholder="Buscar por marca" aria-label="Filtrar por marca" oninput="filtrar()">
       </div>
       <div class="filter-search">
         <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="filtroModelo" type="search" placeholder="Buscar por modelo" aria-label="Filtrar por modelo">
+        <input id="filtroModelo" type="search" placeholder="Buscar por modelo" aria-label="Filtrar por modelo" oninput="filtrar()">
       </div>
-      <button class="btn btn-primary btn-sm" onclick="filtrar()"><i data-lucide="search"></i> Buscar</button>
       <button class="btn btn-ghost btn-sm" onclick="limpiarFiltro()"><i data-lucide="refresh-cw"></i> Limpiar</button>
       <div style="flex:1;"></div>
       <span id="resumenCargar" class="resumen">Cargando modelos…</span>
@@ -65,7 +64,13 @@
     <div class="app-table-wrap app-table-wrap--sticky" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:155px;">
       <table class="app-table">
         <thead id="headerModelos"></thead>
-        <tbody id="tablaModelos"></tbody>
+        <tbody id="tablaModelos">
+          <tr><td style="padding:var(--sp-4);">
+            <div class="skeleton" style="width:55%; height:12px; margin-bottom:10px;"></div>
+            <div class="skeleton" style="width:70%; height:12px; margin-bottom:10px;"></div>
+            <div class="skeleton" style="width:45%; height:12px;"></div>
+          </td></tr>
+        </tbody>
       </table>
     </div>
   </div>

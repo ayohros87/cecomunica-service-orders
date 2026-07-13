@@ -1,8 +1,14 @@
 // @ts-nocheck
     let modelos = [];
     let modelosFiltrados = [];
+    const cantidades = {}; // modeloId → valor tecleado; sobrevive filtros/re-renders
     let ordenCampo = "alto_movimiento";
     let ordenAsc = false;
+
+    function setCantidad(modeloId, valor) {
+      if (valor === '' || valor === null) delete cantidades[modeloId];
+      else cantidades[modeloId] = valor;
+    }
 
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return window.location.href = "../login.html";
@@ -72,11 +78,9 @@ function renderizarTabla() {
   header.innerHTML = `
     <tr>
       ${columnas.map(c => {
-        let clase = "sortable";
-        if (c.campo === ordenCampo) {
-          clase = ordenAsc ? "ordenado-asc" : "ordenado-desc";
-        }
-        return `<th onclick="ordenarPor('${c.campo}')" class="${clase}">${c.label}</th>`;
+        const isCurr = c.campo === ordenCampo;
+        const arrow = isCurr ? (ordenAsc ? "↑" : "↓") : "↕";
+        return `<th onclick="ordenarPor('${c.campo}')" class="sortable">${c.label} <span style="font-size:12px; opacity:.6;">${arrow}</span></th>`;
       }).join("")}
       <th>Cantidad</th>
     </tr>
@@ -107,42 +111,44 @@ function renderizarTabla() {
     }
   });
 
-ordenados.forEach((modelo, index) => {
-  // Mostrar nombres completos
-  let tipoTexto = "-";
-  if (modelo.tipo === "P") tipoTexto = "Portátil";
-  else if (modelo.tipo === "C") tipoTexto = "Cámara";
-  else if (modelo.tipo === "B") tipoTexto = "Base";
+  tbody.innerHTML = ordenados.map((modelo, index) => {
+    // Mostrar nombres completos
+    let tipoTexto = "-";
+    if (modelo.tipo === "P") tipoTexto = "Portátil";
+    else if (modelo.tipo === "C") tipoTexto = "Cámara";
+    else if (modelo.tipo === "B") tipoTexto = "Base";
 
-  let estadoTexto = "-";
-  if (modelo.estado === "N") estadoTexto = "Nuevo";
-  else if (modelo.estado === "R") estadoTexto = "Reuso";
+    let estadoTexto = "-";
+    if (modelo.estado === "N") estadoTexto = "Nuevo";
+    else if (modelo.estado === "R") estadoTexto = "Reuso";
 
-  tbody.innerHTML += `
+    const am = modelo.alto_movimiento
+      ? '<span class="badge asignar">Alto</span>'
+      : '<span style="color:var(--fg-4);">—</span>';
+
+    return `
     <tr>
       <td>${modelo.marca}</td>
-      <td>${modelo.modelo}</td>
+      <td class="td-primary">${modelo.modelo}</td>
       <td>${tipoTexto}</td>
       <td>${estadoTexto}</td>
-      <td>${modelo.alto_movimiento ? "✅" : "❌"}</td>
-      <td><input type="number" id="qty_${index}" min="0" class="form-input" style="max-width:120px;" placeholder="0" /></td>
+      <td>${am}</td>
+      <td><input type="number" min="0" class="form-input" style="max-width:120px;" placeholder="0"
+            value="${cantidades[modelo.id] ?? ''}" oninput="setCantidad('${modelo.id}', this.value)" /></td>
     </tr>
   `;
-});
+  }).join('');
 
-
-  // Actualiza modelos ordenados global
-  modelos = ordenados;
+  // No sobreescribe `modelos`: antes, filtrar y luego limpiar perdía modelos de la vista.
   actualizarResumenCargar(ordenados);
 }
 
     window.guardarSemana = async function () {
     const entries = [];
-    for (let index = 0; index < modelos.length; index++) {
-      const modelo = modelos[index];
-      const cantidad = parseInt(document.getElementById("qty_" + index).value);
+    for (const [modeloId, valor] of Object.entries(cantidades)) {
+      const cantidad = parseInt(valor);
       if (!isNaN(cantidad) && cantidad >= 0) {
-        entries.push({ modeloId: modelo.id, cantidad });
+        entries.push({ modeloId, cantidad });
       }
     }
     try {

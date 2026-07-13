@@ -74,6 +74,7 @@ datos.sort((a, b) => {
 
 // Mostrar ordenado
 inventarioDatos = datos;
+renderKPIs();
 renderizarTabla(inventarioDatos);
 
   } catch (err) {
@@ -102,24 +103,48 @@ async function verHistorico(modeloId) {
 let inventarioDatos = [];
 let ordenCampo = 'alto_movimiento';
 let ordenAsc = false;
+let filtroTipo = '';
 
-function filtrarInventario() {
-  const marca = document.getElementById("filtroMarca").value.toLowerCase();
-  const modelo = document.getElementById("filtroModelo").value.toLowerCase();
-
-  const filtrados = inventarioDatos.filter(({ data, modelo: m }) => {
-    const marcaOk = m.marca?.toLowerCase().includes(marca);
-    const modeloOk = m.modelo?.toLowerCase().includes(modelo);
-    return marcaOk && modeloOk;
-  });
-
-  renderizarTabla(filtrados);
+// KPIs sobre el dataset completo (no el filtrado)
+function renderKPIs() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('kpiModelos', inventarioDatos.length);
+  set('kpiUnidades', inventarioDatos.reduce((s, { data }) => s + Number(data.cantidad ?? 0), 0).toLocaleString());
+  set('kpiAltoMov', inventarioDatos.filter(({ modelo }) => modelo.alto_movimiento === true).length);
+  set('kpiStockBajo', inventarioDatos.filter(({ data }) => Number(data.cantidad ?? 0) < 5).length);
 }
 
-function limpiarFiltro() {
-  document.getElementById("filtroMarca").value = "";
-  document.getElementById("filtroModelo").value = "";
-  renderizarTabla(inventarioDatos);
+// Filtro unificado: búsqueda + chip de tipo + toggles
+function datosFiltrados() {
+  const q = (document.getElementById('buscador')?.value || '').toLowerCase().trim();
+  const soloAM = !!document.getElementById('chkAltoMov')?.checked;
+  const soloSB = !!document.getElementById('chkStockBajo')?.checked;
+  return inventarioDatos.filter(({ data, modelo }) => {
+    if (filtroTipo && modelo.tipo !== filtroTipo) return false;
+    if (soloAM && modelo.alto_movimiento !== true) return false;
+    if (soloSB && Number(data.cantidad ?? 0) >= 5) return false;
+    if (q) {
+      const marca = (modelo.marca || '').toLowerCase();
+      const mod = (modelo.modelo || '').toLowerCase();
+      const tipo = (modelo.tipo || '').toLowerCase();
+      if (!(marca.includes(q) || mod.includes(q) || tipo.includes(q))) return false;
+    }
+    return true;
+  });
+}
+
+function refrescarTabla() { renderizarTabla(datosFiltrados()); }
+
+function setFiltroTipo(t) {
+  filtroTipo = t;
+  document.querySelectorAll('#chipsTipo .filter-chip').forEach(b =>
+    b.classList.toggle('active', b.dataset.tipo === t));
+  refrescarTabla();
+}
+
+function onToggleFiltro(inp) {
+  inp.closest('.toggle-pill')?.classList.toggle('is-on', inp.checked);
+  refrescarTabla();
 }
 
 function ordenarPor(campo) {
@@ -129,7 +154,7 @@ function ordenarPor(campo) {
     ordenAsc = true;
   }
 
-  renderizarTabla(inventarioDatos);
+  refrescarTabla();
 }
 function renderizarTabla(datos) {
   const tabla = document.getElementById("inventarioTable");
@@ -156,7 +181,7 @@ function renderizarTabla(datos) {
         const arrow = isCurr ? (ordenAsc ? '↑' : '↓') : '↕';
         return `<th data-sort="${c.campo}" class="${c.cls||''}" onclick="ordenarPor('${c.campo}')">${c.label} <span class="sort">${arrow}</span></th>`;
       }).join('')}
-      <th>Acciones</th>
+      <th style="text-align:right;">Acciones</th>
     </tr>`;
 
   // Orden
@@ -199,30 +224,30 @@ function renderizarTabla(datos) {
     const ua = data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-";
     const pa = data.penultima_actualizacion ? data.penultima_actualizacion.toDate().toLocaleString() : "-";
     const am = modelo.alto_movimiento
-      ? '<span style="color:#10b981"><i data-lucide="check-circle"></i></span>'
-      : '<span style="color:#ef4444"><i data-lucide="x-circle"></i></span>';
+      ? '<span class="badge asignar">Alto</span>'
+      : '<span style="color:var(--fg-4);">—</span>';
 
     return `
       <tr>
         <td>${modelo.marca || "-"}</td>
-        <td>${modelo.modelo || "-"}</td>
+        <td class="td-primary">${modelo.modelo || "-"}</td>
         <td>${tipoTxt}</td>
         <td>${estadoTxt}</td>
         <td>${am}</td>
         <td>${minBadge}</td>
-        <td class="col-anterior">${data.cantidad_anterior ?? "-"}</td>
-        <td>${ua}</td>
-        <td class="col-penultima">${pa}</td>
-        <td><button class="btn" onclick="verHistorico('${data.modelo_id}')"><i data-lucide="bar-chart-2"></i> Histórico</button></td>
+        <td class="col-anterior td-muted">${data.cantidad_anterior ?? "-"}</td>
+        <td class="td-muted">${ua}</td>
+        <td class="col-penultima td-muted">${pa}</td>
+        <td class="td-actions"><button class="btn btn-ghost btn-sm" title="Ver histórico" aria-label="Ver histórico" onclick="verHistorico('${data.modelo_id}')"><i data-lucide="bar-chart-2"></i></button></td>
       </tr>`;
   }).join('');
   if (typeof lucide !== 'undefined') lucide.createIcons();
 
-  // Resumen
+  // Resumen (footer): filtrados vs total
   const total = datos.length;
   const altoMov = datos.filter(({modelo})=>modelo.alto_movimiento===true).length;
   const resumen = document.getElementById("resumenInv");
-  if (resumen) resumen.innerHTML = `<strong>${total}</strong> modelos · <span class="badge completo">${altoMov}</span> alto mov.`;
+  if (resumen) resumen.innerHTML = `Mostrando <strong>${total}</strong> de <strong>${inventarioDatos.length}</strong> modelos · <strong>${altoMov}</strong> alto mov.`;
 
   // Aplica visibilidad/densidad
   applyColumnVisibility(); applyDensity();
@@ -315,13 +340,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
   applyDensity();
 });
 function aplicarFiltroRapido(){
-  const q = (document.getElementById('buscador')?.value || '').toLowerCase().trim();
   if (!Array.isArray(inventarioDatos)){ Toast.show('Inventario aún no cargado','warn'); return; }
-  const filtrados = inventarioDatos.filter(({modelo})=>{
-    const marca = (modelo.marca||'').toLowerCase();
-    const mod = (modelo.modelo||'').toLowerCase();
-    const tipo = (modelo.tipo||'').toLowerCase();
-    return marca.includes(q) || mod.includes(q) || tipo.includes(q);
-  });
-  renderizarTabla(filtrados);
+  refrescarTabla();
 }
