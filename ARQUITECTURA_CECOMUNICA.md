@@ -168,6 +168,7 @@ Cada servicio encapsula todo el I/O de Firestore para su colección. Las página
 | `mailService.js` | `mail_queue` | `enqueue(payload)` — estampa `createdAt: serverTimestamp()` automáticamente |
 | `usuariosService.js` | `usuarios` | `getUsuario`, `getUsuariosByRol`, `getVendedores` |
 | `empresaService.js` | `empresa` | `getOperadores`, `getDoc`, `setDoc` |
+| `kpiReportsService.js` | `kpi_reports` | `getMes`, `listAll`, `upsertMes`, `upsertBatch`, `setEstado`, `updateComentarios` — solo admin (rules) |
 
 ### 3.5 Llamadas directas a Firestore — estado consolidado (2026-05-19)
 
@@ -359,6 +360,8 @@ Páginas (todas en `public/admin/`):
 | `config.html` | Editor de `empresa/config` (ver §5.7). Form con validación inline; modal de confirmación al guardar; rastro de `updated_at` + `updated_by`. Botón "Snapshot JSON" exporta un archivo `cecomunica_empresa_config_YYYY-MM-DD.json` con `{defaults, config, operadores, exported_at, exported_by}` para backup o transferencia entre environments. | `EmpresaService.getConfig` / `setConfig` / `getDoc('operadores')` |
 | `alertas.html` | Editor del array `empresa/config.alertas[]`. Tabla inline con tipo (dropdown), umbral, severidad, mensaje opcional y toggle "activa" por fila. "Agregar" / "Eliminar" / "Guardar todo". Botón "Probar contra métricas actuales" carga los KPIs reales y muestra qué reglas dispararían sin guardar. | `EmpresaService`, KPIs services, `AdminMetrics.evaluateAlertas` |
 | `backfills.html` | UI runner para migraciones one-shot. Cada tarjeta tiene descripción + botones "Dry-run" + "Ejecutar" que llaman al callable `runBackfill({action, dryRun})`. Resultado inline con contadores (escaneados/skip/escritos/errores). Primer backfill expuesto: `searchTokens` en órdenes. | callable `runBackfill` |
+| `kpi-reportes.html` | Archivo mensual del **reporte ejecutivo de KPIs a la junta** (colección `kpi_reports`, un doc por mes): importación del Financial Report xlsx con preview/diff idempotente, captura/edición manual con validación de conciliación, comentarios de gerencia por sección, publicar/despublicar. | `KpiReportsService`, `KpiImport`, `KpiDerived`, SheetJS |
+| `kpi-reporte-print.html` | El reporte ejecutivo con el rediseño de junta (`?mes=YYYY-MM`): render desde `kpi_reports`, gráficas SVG vanilla, YTD/comparativos vs año anterior (`KpiDerived`), marca de agua BORRADOR, descarga = imprimir a PDF (letter). CSS autónomo (print template). | `KpiReportsService`, `KpiDerived` |
 | `email-preview.html` | Renderiza templates con datos dummy en iframe sandbox — útil para validar cambios al renderer sin enviar correos. Select de template + dropdown de variantes (ej. nota_entrega normal vs noRecibido) + JSON textarea editable con sample pre-cargado + botón "Renderizar" → iframe muestra el HTML. | callable `previewEmail` |
 
 Servicios nuevos vinculados al panel:
@@ -415,6 +418,7 @@ Seguridad — defensa en profundidad:
 | `poc_logs` | Historial de cambios por equipo PoC | `pocService` |
 | `mail_queue` | Cola de emails salientes | `mailService` (escritura) + `mailQueueService` (lectura/retry desde admin) |
 | `verificaciones` | Registros de verificación pública de contratos | Solo escribe CF |
+| `kpi_reports` | Reporte ejecutivo de KPIs a la junta — un doc por mes (`YYYY-MM`) con métricas del Financial Report + comentarios de gerencia; **read/write solo admin** | `kpiReportsService` |
 | `usuarios_audit` | Audit trail de operaciones del portal de usuarios (CREATE / UPDATE_ROL / DEACTIVATE / REACTIVATE / RESET_PASSWORD) — un doc por mutación, lo escribe el callable `manageUser` | Solo escribe CF; `auditoriaService` lo lee para el timeline del panel admin |
 
 ### 5.2 Campos críticos — no renombrar

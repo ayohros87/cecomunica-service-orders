@@ -1,5 +1,22 @@
 # Changelog
 
+## [Módulo Reporte KPIs Junta — archivo mensual + reporte ejecutivo] — 2026-07-13
+
+> Driver: `PLAN_KPI_REPORT.md`. Convierte el reporte mensual a la junta (Excel a mano + rediseño HTML one-off) en un módulo del panel admin. Commit `5e791d5`. DESPLEGADO (rules + hosting) y backfilleado.
+
+- **Colección `kpi_reports`** — un doc por mes (ID `YYYY-MM`) con métricas del Financial Report (recurrente Kenwood/Hytera, ventas, otros, ajustes, total, subs, brutas/bajas, churn) + `comentarios{ingresos,recurrente,suscriptores}` + `estado` borrador/publicado + `concilia`. Reglas: read/write solo admin (data financiera de junta — protección real, no solo UI).
+- **`admin/kpi-reportes.html`** — archivo del módulo: lista de meses, importación del xlsx con preview/diff (nuevo/cambiado/igual; conserva comentarios y estado; idempotente), captura/edición manual con validación de conciliación en vivo, publicar/despublicar.
+- **`admin/kpi-reporte-print.html`** — el reporte ejecutivo con el rediseño (`?mes=YYYY-MM`): port vanilla de las 4 gráficas SVG (sin React), YTD/comparativos vs año anterior calculados, marca de agua BORRADOR, descarga = imprimir a PDF (letter portrait). CSS autónomo como los demás print templates.
+- **Dominio**: `kpiDerived.js` (YTD, variaciones, series 12m, ARPU, netas — puro) y `kpiImport.js` (parser del workbook, compartido frontend/backfill). Hallazgos de la fuente codificados: la fila que alimenta el total es "Otros" (no "Otros Ingresos", vacía); Mar-2025 sin brutas → derivada de netas+bajas; solo 2022+ es confiable.
+- **Backfill ejecutado**: `functions/backfill-kpi-reports.js` (patrón `backfill-*.js`, ADC) — 54 meses 2022-01→2026-06, todos concilian, re-run = 0 cambios. Históricos `publicado`; 2026-06 `borrador` con los comentarios del rediseño (placeholders `[detallar…]` pendientes de gerencia).
+- **Seguridad**: `public/brand/kpi report/` (xlsx confidencial) excluida del deploy de hosting (`firebase.json`) y de git (`.gitignore`); verificado 404 en producción.
+
+### QA targets
+- Como admin: Panel → "Reporte KPIs Junta" → tabla con 54 meses; "Ver" en Junio 2026 → reporte con cifras del rediseño ($1,038,045 YTD, −1.0%, 3,957 subs) y marca BORRADOR; Imprimir → PDF carta.
+- Editar Junio 2026 → completar placeholders de comentarios → Publicar → la marca desaparece.
+- Re-importar el mismo xlsx → preview muestra "54 sin cambios", botón deshabilitado.
+- Como no-admin: /admin/kpi-reportes.html redirige; lectura de `kpi_reports` denegada por rules.
+
 ## [Mejoras a "Cotizar desde orden" — feedback de taller (Solangel)] — 2026-07-06
 
 > Driver: `PROMPT_FIX_COTIZAR_ORDEN_SOLANGEL.md` (correo de Solangel Ho Sang 2026-07-03, 6 hallazgos). Rama `feat/cotizar-orden-solangel`, un commit por tarea. NO desplegado — pendiente de revisión.
