@@ -329,6 +329,80 @@
     document.title = `Reporte Ejecutivo KPIs — ${K().labelLargo(mes)} — Cecomunica`;
   }
 
+  // ── snapshot PDF (callable kpiReportSnapshot) ────────────────────────────
+  // Arma un documento HTML autónomo con el render actual: mismo CSS de esta
+  // página (#report-css), logo embebido como data URI (el server no depende
+  // del hosting) y marca de agua si el mes sigue en borrador. El callable lo
+  // convierte a PDF (Puppeteer) y lo archiva en Storage.
+  async function buildStandaloneHtml() {
+    const css = document.getElementById('report-css')?.textContent || '';
+    let inner = $('reporte').innerHTML;
+    try {
+      const resp = await fetch('../brand/logo-lockup-horizontal.svg');
+      if (resp.ok) {
+        const svg = await resp.text();
+        const dataUri = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+        inner = inner.replace('src="../brand/logo-lockup-horizontal.svg"', `src="${dataUri}"`);
+      }
+    } catch (_) { /* sin logo embebido el PDF sale con alt text — no bloquea */ }
+    const borrador = state.byId[state.mes]?.estado !== 'publicado';
+    const sinComentarios = document.body.classList.contains('sin-comentarios');
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>${css}</style></head>
+<body${sinComentarios ? ' class="sin-comentarios"' : ''}>
+<div class="sheet">
+${borrador ? '<div class="watermark"><span>BORRADOR</span></div>' : ''}
+<div style="position:relative;z-index:2;">${inner}</div>
+</div>
+</body></html>`;
+  }
+
+  function renderPdfInfo() {
+    const d = state.byId[state.mes];
+    const el = $('pdfInfo');
+    if (!d?.pdf_path) { el.textContent = ''; return; }
+    const cuando = d.pdf_generated_at?.toDate
+      ? d.pdf_generated_at.toDate().toLocaleDateString('es-PA') : '';
+    el.innerHTML = `PDF archivado${cuando ? ' el ' + cuando : ''} · <a href="#" id="lnkVerPdf">ver</a>`;
+    document.getElementById('lnkVerPdf').addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.target.textContent = 'abriendo…';
+      try {
+        const { data } = await firebase.functions().httpsCallable('kpiReportSnapshot')({ action: 'url', mes: state.mes });
+        // Navegación en la misma pestaña: window.open tras un await suele ser
+        // bloqueado como popup.
+        location.href = data.url;
+      } catch (err) {
+        e.target.textContent = 'ver';
+        alert('No pude obtener el PDF: ' + (err.message || err));
+      }
+    });
+  }
+
+  async function archivarPdf() {
+    const btn = $('btnSnapshot');
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = 'Generando…';
+    try {
+      const html = await buildStandaloneHtml();
+      const { data } = await firebase.functions().httpsCallable('kpiReportSnapshot')({
+        action: 'generate', mes: state.mes, html,
+      });
+      // Refresca el doc local para que pdfInfo muestre el nuevo snapshot.
+      state.byId[state.mes].pdf_path = data.path;
+      state.byId[state.mes].pdf_generated_at = null;
+      $('pdfInfo').innerHTML = `PDF archivado ✓ · <a href="${data.url}" target="_blank" rel="noopener">descargar</a>`;
+    } catch (err) {
+      console.error(err);
+      alert('Error al archivar el PDF: ' + (err.message || err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prev;
+    }
+  }
+
   // ── init ─────────────────────────────────────────────────────────────────
   function populateSelect() {
     $('selMes').innerHTML = [...state.docs].reverse()
@@ -359,14 +433,24 @@
       $('sheet').style.display = '';
       populateSelect();
       render(state.mes);
+      renderPdfInfo();
 
       $('selMes').addEventListener('change', (e) => {
         history.replaceState(null, '', `?mes=${e.target.value}`);
         render(e.target.value);
+        renderPdfInfo();
       });
       $('chkComentarios').addEventListener('change', (e) => {
         document.body.classList.toggle('sin-comentarios', !e.target.checked);
       });
+      $('btnSnapshot').addEventListener('click', archivarPdf);
+
+      // ?archivar=1: llega del flujo "Publicar" del archivo — genera el
+      // snapshot del mes recién publicado sin clic adicional.
+      if (new URLSearchParams(location.search).get('archivar') === '1') {
+        history.replaceState(null, '', `?mes=${state.mes}`);
+        archivarPdf();
+      }
     });
   });
 })();

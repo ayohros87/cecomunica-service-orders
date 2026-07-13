@@ -41,6 +41,7 @@ exports.runBackfill                   = require("./src/callable/runBackfill");
 exports.previewEmail                  = require("./src/callable/previewEmail");
 exports.getIdentificacionUrl          = require("./src/callable/getIdentificacionUrl");
 exports.getClienteDocUrl              = require("./src/callable/getClienteDocUrl");
+exports.kpiReportSnapshot             = require("./src/callable/kpiReportSnapshot");
 exports.listQBOItems                  = require("./src/callable/listQBOItems");
 exports.listQBOPiezas                 = require("./src/callable/listQBOPiezas");
 exports.listQBOEquipos                = require("./src/callable/listQBOEquipos");

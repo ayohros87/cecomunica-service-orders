@@ -131,6 +131,14 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // ── Reporte KPIs junta (snapshots PDF + Excel fuente) ────────────────
+    // Data financiera de junta directiva: NINGÚN acceso de cliente, ni
+    // lectura. Escritura y lectura pasan solo por el callable
+    // kpiReportSnapshot (admin SDK, gated a rol administrador), que emite
+    // URLs firmadas de corta vida — mismo criterio que los paths PII.
+    match /kpi_reports/{mes}/{file}    { allow read, write: if false; }
+    match /kpi_reports_fuentes/{file}  { allow read, write: if false; }
+
     // Any other path is denied by default (no match block → no allow → deny).
   }
 }

@@ -19,6 +19,7 @@
   const state = {
     docs: [],        // kpi_reports completos, orden ascendente
     wb: null,        // workbook cargado en el modal de import
+    fileBuffer: null, // bytes del archivo para respaldo en Storage
     fileName: '',
     parsed: null,    // { meses, avisos } de la hoja seleccionada
     diff: [],        // [{ mes, data, status }]
@@ -68,6 +69,9 @@
           <button class="btn btn-ghost btn-sm" data-act="edit" title="Editar métricas y comentarios">
             <i data-lucide="pencil"></i>
           </button>
+          ${d.pdf_path ? `<button class="btn btn-ghost btn-sm" data-act="pdf" title="Abrir el PDF archivado (snapshot)">
+            <i data-lucide="file-check"></i>
+          </button>` : ''}
           <button class="btn btn-ghost btn-sm" data-act="toggle-estado" title="${publicado ? 'Volver a borrador' : 'Marcar como publicado'}">
             <i data-lucide="${publicado ? 'undo-2' : 'check-circle'}"></i>
           </button>
@@ -88,17 +92,36 @@
 
     if (btn.dataset.act === 'edit') { openEdit(doc); return; }
 
+    if (btn.dataset.act === 'pdf') {
+      btn.disabled = true;
+      try {
+        const { data } = await firebase.functions().httpsCallable('kpiReportSnapshot')({ action: 'url', mes });
+        // Misma pestaña: window.open tras el await sería bloqueado como popup.
+        location.href = data.url;
+      } catch (err) {
+        console.error(err);
+        Toast.show('No pude obtener el PDF: ' + (err.message || err), 'bad');
+        btn.disabled = false;
+      }
+      return;
+    }
+
     if (btn.dataset.act === 'toggle-estado') {
       const publicar = doc.estado !== 'publicado';
       const ok = await Modal.confirm({
         title: publicar ? 'Publicar mes' : 'Volver a borrador',
         message: publicar
-          ? `¿Marcar ${K().labelLargo(mes)} como publicado? El reporte dejará de mostrar la marca BORRADOR.`
+          ? `¿Marcar ${K().labelLargo(mes)} como publicado? Se abrirá el reporte para archivar el PDF (snapshot de lo presentado a la junta).`
           : `¿Regresar ${K().labelLargo(mes)} a borrador?`,
       });
       if (!ok) return;
       await KpiReportsService.setEstado(mes, publicar ? 'publicado' : 'borrador');
-      Toast.show(publicar ? 'Mes publicado.' : 'Mes en borrador.', 'ok');
+      if (publicar) {
+        // El snapshot se genera desde la página del reporte (dueña del render).
+        location.href = `kpi-reporte-print.html?mes=${mes}&archivar=1`;
+        return;
+      }
+      Toast.show('Mes en borrador.', 'ok');
       loadAll();
     }
   }
@@ -112,6 +135,7 @@
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
+        state.fileBuffer = ev.target.result;   // para respaldar la fuente en Storage
         state.wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
         populateSheetSelect();
         parseSelectedSheet();
@@ -215,10 +239,34 @@
       Modal.close('modalImport');
       Toast.show(`Importados ${items.length} mes(es).`, 'ok');
       loadAll();
+      archivarFuente();   // respaldo best-effort, no bloquea el import
     } catch (err) {
       console.error(err);
       Toast.show('Error al importar: ' + err.message, 'bad');
       $('btnConfirmImport').disabled = false;
+    }
+  }
+
+  // Respalda el workbook fuente en Storage (kpi_reports_fuentes/, vía callable
+  // admin-only). Best-effort: la data ya quedó en Firestore; si el respaldo
+  // falla solo se avisa.
+  async function archivarFuente() {
+    if (!state.fileBuffer) return;
+    try {
+      const bytes = new Uint8Array(state.fileBuffer);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      await firebase.functions().httpsCallable('kpiReportSnapshot')({
+        action: 'archiveSource', fileName: state.fileName, dataBase64: btoa(bin),
+      });
+      Toast.show('Excel fuente respaldado en Storage.', 'ok');
+    } catch (err) {
+      console.error(err);
+      Toast.show('Meses importados, pero no pude respaldar el Excel fuente: ' + (err.message || err), 'warn');
+    } finally {
+      state.fileBuffer = null;
     }
   }
 
@@ -265,6 +313,25 @@
     XLSX.utils.book_append_sheet(wb, wsKpis, 'KPIs');
     XLSX.utils.book_append_sheet(wb, wsInfo, 'Instrucciones');
     XLSX.writeFile(wb, 'Plantilla KPIs Junta.xlsx');
+  }
+
+  // Exporta TODO el histórico archivado en el formato de la plantilla (re-importable)
+  // + columnas informativas (estado, comentarios — el import las ignora).
+  function exportarHistorico() {
+    if (!state.docs.length) { Toast.show('No hay meses archivados aún.', 'warn'); return; }
+    const headers = ['Mes', 'Ingreso recurrente', 'Recurrente Kenwood', 'Recurrente Hytera / LTE',
+      'Ventas de equipos', 'Otros ingresos', 'Ajustes', 'Total ingresos',
+      'Activaciones brutas', 'Bajas', 'Suscriptores totales', 'Churn',
+      'Estado', 'Comentario ingresos', 'Comentario recurrente', 'Comentario suscriptores'];
+    const filas = state.docs.map((d) => [d.id, d.recurrente, d.kenwood, d.hytera, d.ventas,
+      d.otros, d.ajustes, d.total_ingresos, d.act_brutas, d.bajas, d.total_subs, d.churn,
+      d.estado ?? '', d.comentarios?.ingresos ?? '', d.comentarios?.recurrente ?? '', d.comentarios?.suscriptores ?? '']);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...filas]);
+    ws['!cols'] = headers.map((h, i) => ({ wch: i === 0 ? 10 : Math.max(h.length + 2, 14) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'KPIs');
+    const hoy = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Historico KPIs Junta ${hoy}.xlsx`);
   }
 
   // ── captura / edición manual ─────────────────────────────────────────────
@@ -349,6 +416,7 @@
       $('btnConfirmImport').addEventListener('click', confirmImport);
       $('btnCapturar').addEventListener('click', () => openEdit(null));
       $('btnPlantilla').addEventListener('click', descargarPlantilla);
+      $('btnExportar').addEventListener('click', exportarHistorico);
       $('btnSaveEdit').addEventListener('click', saveEdit);
       $('tbodyMeses').addEventListener('click', onTableClick);
       document.querySelectorAll('.form-grid-kpi input')

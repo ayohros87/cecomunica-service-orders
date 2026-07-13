@@ -1,5 +1,17 @@
 # Changelog
 
+## [KPIs Junta — fase 4: snapshot PDF server-side + respaldos] — 2026-07-13
+
+> Driver: `PLAN_KPI_REPORT.md` F4. DESPLEGADO (functions + storage + hosting).
+
+- **Callable `kpiReportSnapshot`** (admin-only, 1GiB/120s): `generate` recibe el HTML ya renderizado de la página del reporte (única fuente de verdad del render), lo convierte a PDF con Puppeteer (carta, `preferCSSPageSize`) y lo archiva en `kpi_reports/{mes}/…pdf` estampando `pdf_path`/`pdf_generated_at`/`_by`; `url` firma una URL v4 de 10 min; `archiveSource` respalda el xlsx fuente en `kpi_reports_fuentes/` (valida magic PK + tamaño).
+- **storage.rules**: `kpi_reports/**` y `kpi_reports_fuentes/**` con `read, write: if false` — los bytes solo se alcanzan por las URLs firmadas del callable (mismo criterio que los paths PII).
+- **Flujo publicar**: al publicar un mes desde el archivo se navega a `kpi-reporte-print.html?mes=X&archivar=1`, que genera el snapshot automáticamente tras el render. La página del reporte gana botón "Archivar PDF" + indicador "PDF archivado el … · ver"; el archivo muestra botón PDF en las filas con snapshot. El snapshot de un mes en borrador conserva la marca de agua.
+- **Respaldo del Excel fuente**: tras un import exitoso se sube el workbook original vía `archiveSource` (best-effort, no bloquea).
+- **Exportar histórico**: botón en el archivo que genera `Historico KPIs Junta AAAA-MM-DD.xlsx` (formato plantilla re-importable + columnas estado/comentarios, que el import ignora).
+- **Fix de datos vs reporte viejo**: el Excel era internamente inconsistente en activaciones brutas YTD 2025 (388 no cuadra con bajas 240 + netas +242); la serie mensual derivada (Mar-2025 = 94, consistente con la base de suscriptores 4016→4070) da 482, que es lo que muestra el módulo.
+- Snapshot E2E validado localmente (Chrome local + Storage real): `kpi_reports/2026-06/…pdf` generado — 3 páginas, marca BORRADOR, gráficas y tipografía correctas.
+
 ## [Módulo Reporte KPIs Junta — archivo mensual + reporte ejecutivo] — 2026-07-13
 
 > Driver: `PLAN_KPI_REPORT.md`. Convierte el reporte mensual a la junta (Excel a mano + rediseño HTML one-off) en un módulo del panel admin. Commit `5e791d5`. DESPLEGADO (rules + hosting) y backfilleado.
