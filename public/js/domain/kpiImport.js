@@ -42,7 +42,12 @@ const KpiImport = {
       if (y < 2000) return null;
       return `${y}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
     }
-    const m = String(v).trim().toLowerCase().match(/^([a-záéí]{3,4})[-\s]?(\d{2,4})$/i);
+    const s = String(v).trim().toLowerCase();
+    // Formato ISO de la plantilla: "2026-06" (también "2026/06" o "2026-6").
+    const iso = s.match(/^(\d{4})[-/](\d{1,2})$/);
+    if (iso && +iso[2] >= 1 && +iso[2] <= 12) return `${iso[1]}-${String(+iso[2]).padStart(2, '0')}`;
+    // "Jun-26", "Ago-25", "junio 2026", …
+    const m = s.match(/^([a-záéí]{3,12})[-\s]?(\d{2,4})$/i);
     if (!m) return null;
     const mon = this.MESES[m[1].slice(0, 3)];
     if (!mon) return null;
@@ -50,9 +55,117 @@ const KpiImport = {
     return `${y}-${String(mon).padStart(2, '0')}`;
   },
 
+  // Columnas del formato PLANTILLA (tabular: una fila por mes). Se identifican
+  // por regex sobre el header normalizado (minúsculas, sin acentos).
+  COL_MAP: [
+    { key: 'mes',            re: /^mes/ },
+    { key: 'kenwood',        re: /kenwood/ },
+    { key: 'hytera',         re: /hytera/ },
+    { key: 'recurrente',     re: /recurrente/ },          // tras kenwood/hytera
+    { key: 'ventas',         re: /ventas/ },
+    { key: 'ajustes',        re: /ajuste/ },
+    { key: 'otros',          re: /^otros/ },              // tras ajustes ("Otros - Ajustes")
+    { key: 'total_ingresos', re: /^total/ },
+    { key: 'act_brutas',     re: /bruta|activacion/ },
+    { key: 'bajas',          re: /^bajas/ },
+    { key: 'total_subs',     re: /suscriptor|^subs/ },
+    { key: 'churn',          re: /churn/ },
+  ],
+
+  _norm(s) {
+    return String(s ?? '').trim().toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');   // sin acentos
+  },
+
+  // Validación compartida: conciliación + consistencia de netas.
+  _validar(mes, d, netasSrc, avisos) {
+    const r2 = (x) => Math.round(x * 100) / 100;
+    const suma = r2((d.recurrente ?? 0) + d.ventas + d.otros - d.ajustes);
+    if (d.total_ingresos == null) {
+      // La plantilla permite omitir el total: se calcula de los componentes.
+      d.total_ingresos = suma;
+      d.concilia = true;
+    } else {
+      d.concilia = Math.abs(suma - d.total_ingresos) <= 1;
+      if (!d.concilia) avisos.push(`${mes}: NO concilia — componentes suman ${suma} vs total ${d.total_ingresos}`);
+    }
+    if (netasSrc != null && (d.act_brutas - d.bajas) !== netasSrc) {
+      avisos.push(`${mes}: netas de la fuente (${netasSrc}) ≠ brutas−bajas (${d.act_brutas - d.bajas})`);
+    }
+  },
+
   // rows → { meses: {"YYYY-MM": {métricas..., concilia}}, avisos: [string] }
-  // Lanza Error si la hoja no tiene la estructura esperada.
+  // Detecta el formato: PLANTILLA (header "Mes | Ingreso recurrente | …", una
+  // fila por mes) o LEGACY (Financial Report: meses como columnas, métricas
+  // como filas). Lanza Error si la hoja no tiene ninguna de las dos estructuras.
   parse(rows) {
+    for (let i = 0; i < Math.min(rows.length, 5); i++) {
+      const cells = (rows[i] || []).map((c) => this._norm(c));
+      if (cells.some((c) => /^mes/.test(c)) && cells.some((c) => /recurrente/.test(c))) {
+        return this.parseTabular(rows, i);
+      }
+    }
+    return this.parseLegacy(rows);
+  },
+
+  // ── formato PLANTILLA ────────────────────────────────────────────────────
+  parseTabular(rows, headerIdx) {
+    const avisos = [];
+    const cols = {};
+    (rows[headerIdx] || []).forEach((h, c) => {
+      const n = this._norm(h);
+      if (!n) return;
+      for (const { key, re } of this.COL_MAP) {
+        if (cols[key] == null && re.test(n)) { cols[key] = c; break; }
+      }
+    });
+    for (const req of ['mes', 'recurrente', 'total_subs']) {
+      if (cols[req] == null) throw new Error(`Falta la columna "${req}" en la plantilla`);
+    }
+
+    const num = (row, key) => {
+      if (cols[key] == null) return null;
+      const v = row[cols[key]];
+      return typeof v === 'number' && isFinite(v) ? v : null;
+    };
+
+    const meses = {};
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+      const row = rows[i] || [];
+      if (row.every((c) => c == null || c === '')) continue;
+      const mes = this.parseMonthLabel(row[cols.mes]);
+      if (!mes) {
+        avisos.push(`Fila ${i + 1}: mes no reconocido ("${row[cols.mes] ?? ''}") — se omite`);
+        continue;
+      }
+      if (mes < this.DESDE) { avisos.push(`${mes}: anterior a ${this.DESDE} — se omite`); continue; }
+      if (meses[mes]) { avisos.push(`${mes}: fila duplicada — se usa la última`); }
+      const d = {
+        recurrente: num(row, 'recurrente'),
+        kenwood: num(row, 'kenwood'),
+        hytera: num(row, 'hytera'),
+        ventas: num(row, 'ventas') ?? 0,
+        otros: num(row, 'otros') ?? 0,
+        ajustes: num(row, 'ajustes') ?? 0,
+        total_ingresos: num(row, 'total_ingresos'),
+        act_brutas: num(row, 'act_brutas') ?? 0,
+        bajas: num(row, 'bajas') ?? 0,
+        total_subs: num(row, 'total_subs'),
+        churn: num(row, 'churn'),
+      };
+      if (d.recurrente == null || d.total_subs == null) {
+        avisos.push(`${mes}: falta ingreso recurrente o suscriptores — se omite`);
+        continue;
+      }
+      this._validar(mes, d, null, avisos);
+      meses[mes] = d;
+    }
+    if (!Object.keys(meses).length) throw new Error('La plantilla no tiene filas de meses válidas');
+    return { meses, avisos };
+  },
+
+  // ── formato LEGACY (Financial Report) ────────────────────────────────────
+  parseLegacy(rows) {
     const avisos = [];
 
     // Fila de encabezado: la primera (entre las 10 primeras) con >20 labels de mes.

@@ -10,6 +10,7 @@
 - **Dominio**: `kpiDerived.js` (YTD, variaciones, series 12m, ARPU, netas — puro) y `kpiImport.js` (parser del workbook, compartido frontend/backfill). Hallazgos de la fuente codificados: la fila que alimenta el total es "Otros" (no "Otros Ingresos", vacía); Mar-2025 sin brutas → derivada de netas+bajas; solo 2022+ es confiable.
 - **Backfill ejecutado**: `functions/backfill-kpi-reports.js` (patrón `backfill-*.js`, ADC) — 54 meses 2022-01→2026-06, todos concilian, re-run = 0 cambios. Históricos `publicado`; 2026-06 `borrador` con los comentarios del rediseño (placeholders `[detallar…]` pendientes de gerencia).
 - **Seguridad**: `public/brand/kpi report/` (xlsx confidencial) excluida del deploy de hosting (`firebase.json`) y de git (`.gitignore`); verificado 404 en producción.
+- **Plantilla de carga** (follow-up mismo día): botón "Plantilla" en kpi-reportes descarga `Plantilla KPIs Junta.xlsx` (hoja KPIs: una fila por mes con headers claros y los últimos 2 meses archivados como ejemplo + hoja Instrucciones). `KpiImport` ahora auto-detecta formato: PLANTILLA (tabular) o Financial Report legacy. En la plantilla el total es opcional (se calcula de los componentes); mes acepta `AAAA-MM`, `jul-26` o celda fecha; pre-2022 se omite con aviso.
 
 ### QA targets
 - Como admin: Panel → "Reporte KPIs Junta" → tabla con 54 meses; "Ver" en Junio 2026 → reporte con cifras del rediseño ($1,038,045 YTD, −1.0%, 3,957 subs) y marca BORRADOR; Imprimir → PDF carta.

@@ -222,6 +222,51 @@
     }
   }
 
+  // ── plantilla descargable ────────────────────────────────────────────────
+  // Formato tabular cómodo (una fila por mes) que KpiImport.parseTabular
+  // acepta además del Financial Report legacy. Los headers deben seguir
+  // matcheando KpiImport.COL_MAP si se editan.
+  function descargarPlantilla() {
+    const headers = ['Mes', 'Ingreso recurrente', 'Recurrente Kenwood', 'Recurrente Hytera / LTE',
+      'Ventas de equipos', 'Otros ingresos', 'Ajustes', 'Total ingresos (opcional)',
+      'Activaciones brutas', 'Bajas', 'Suscriptores totales', 'Churn (opcional)'];
+
+    // Filas de ejemplo: los últimos 2 meses archivados (o dummy si aún no hay).
+    const ejemplo = state.docs.slice(-2);
+    const filas = ejemplo.length
+      ? ejemplo.map((d) => [d.id, d.recurrente, d.kenwood, d.hytera, d.ventas, d.otros,
+          d.ajustes, d.total_ingresos, d.act_brutas, d.bajas, d.total_subs, d.churn])
+      : [['2026-06', 74575.35, 20007.45, 54567.90, 250653.79, 11361.79, 105.00, 336485.93, 73, 113, 3957, 0.0289]];
+
+    const wsKpis = XLSX.utils.aoa_to_sheet([headers, ...filas]);
+    wsKpis['!cols'] = [{ wch: 10 }, ...headers.slice(1).map((h) => ({ wch: Math.max(h.length + 2, 14) }))];
+
+    const wsInfo = XLSX.utils.aoa_to_sheet([
+      ['Plantilla de carga — Reporte KPIs Junta (Cecomunica)'],
+      [],
+      ['Cómo llenarla:'],
+      ['• Una fila por mes. Puedes incluir un solo mes o varios: al importar solo se escriben los meses nuevos o cambiados.'],
+      ['• Mes: en formato AAAA-MM (ej. 2026-07). También se aceptan "jul-26" o una celda con fecha.'],
+      ['• Cifras en US$, solo números (sin "$" ni separadores de miles escritos a mano).'],
+      ['• Ajustes: en positivo — el sistema lo RESTA del total.'],
+      ['• Total ingresos es opcional: si se deja vacío se calcula como recurrente + ventas + otros − ajustes.'],
+      ['  Si se llena, el sistema valida que concilie con los componentes (tolerancia $1).'],
+      ['• Churn es opcional, en fracción (0.029 = 2.9%).'],
+      ['• Obligatorios por mes: Mes, Ingreso recurrente y Suscriptores totales. El resto vacío cuenta como 0.'],
+      ['• Solo se aceptan meses desde 2022-01.'],
+      [],
+      ['Al importar en Admin → Reporte KPIs Junta verás un preview con lo que se va a crear/cambiar antes de guardar.'],
+      ['Los comentarios de gerencia y el estado publicado/borrador NO se tocan al importar: se editan en el módulo.'],
+      ['También se acepta el "Financial Report" original (hoja CC Executive Report) — el sistema detecta el formato.'],
+    ]);
+    wsInfo['!cols'] = [{ wch: 110 }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsKpis, 'KPIs');
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Instrucciones');
+    XLSX.writeFile(wb, 'Plantilla KPIs Junta.xlsx');
+  }
+
   // ── captura / edición manual ─────────────────────────────────────────────
   function openEdit(doc) {
     state.editingMes = doc ? doc.id : null;
@@ -303,6 +348,7 @@
       $('selSheet').addEventListener('change', parseSelectedSheet);
       $('btnConfirmImport').addEventListener('click', confirmImport);
       $('btnCapturar').addEventListener('click', () => openEdit(null));
+      $('btnPlantilla').addEventListener('click', descargarPlantilla);
       $('btnSaveEdit').addEventListener('click', saveEdit);
       $('tbodyMeses').addEventListener('click', onTableClick);
       document.querySelectorAll('.form-grid-kpi input')
