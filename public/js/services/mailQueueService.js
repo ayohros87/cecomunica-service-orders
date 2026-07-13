@@ -72,6 +72,9 @@ const MailQueueService = {
       error:      firebase.firestore.FieldValue.delete(),
       sent_at:    firebase.firestore.FieldValue.delete(),
       status:     firebase.firestore.FieldValue.delete(),
+      // Resetea el contador de auto-retries de onMailQueued para que el
+      // reintento manual vuelva a tener los 5 intentos automáticos.
+      intentos:   firebase.firestore.FieldValue.delete(),
       retried_at: firebase.firestore.FieldValue.serverTimestamp(),
       retried_by: uid,
     });

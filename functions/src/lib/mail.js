@@ -46,7 +46,12 @@ function getTransporter() {
       port: Number(process.env.SMTP_PORT) || 587,
       secure: String(process.env.SMTP_SECURE).toLowerCase() === "true",
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      pool: true
+      pool: true,
+      // Office 365 rechaza con "432 4.3.2 Concurrent connections limit
+      // exceeded" cuando el buzón tiene >~3 conexiones SMTP simultáneas.
+      // Una sola conexión por instancia, reutilizada entre envíos.
+      maxConnections: 1,
+      maxMessages: 100
     });
   }
   return _transporter;
