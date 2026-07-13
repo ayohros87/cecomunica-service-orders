@@ -360,6 +360,14 @@ service cloud.firestore {
     // fallan silenciosamente (best-effort, try/catch). Se preserva ese estado.
     match /reset_requests/{docId}     { allow read, write: if isSignedIn(); }
 
+    // ── Reporte KPIs junta directiva (admin/kpi-reportes) ─────────────────
+    // Un doc por mes (ID YYYY-MM) con las métricas del reporte ejecutivo a la
+    // junta (ingresos QBO, suscriptores, churn) + comentarios de gerencia.
+    // Data financiera sensible: lectura Y escritura solo administradores.
+    match /kpi_reports/{mes} {
+      allow read, write: if isAdmin();
+    }
+
     // ── Integración QuickBooks — SOLO Cloud Functions (admin SDK) ──────────
     // `integraciones/quickbooks` guarda tokens OAuth (access/refresh) y realmId;
     // `integraciones_qbo_oauth_states` son states CSRF efímeros;

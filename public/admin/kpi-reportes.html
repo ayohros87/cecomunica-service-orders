@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin · Reporte KPIs Junta — Cecomunica</title>
+
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/admin-panel.css">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/ui/toast.js"></script>
+  <script src="../js/ui/modal.js"></script>
+  <script src="../js/services/kpiReportsService.js"></script>
+  <script src="../js/domain/kpiDerived.js"></script>
+  <script src="../js/domain/kpiImport.js"></script>
+  <script src="../js/pages/admin-kpi-reportes.js" defer></script>
+  <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
+
+  <style>
+    /* Badges de estado / conciliación del archivo KPI */
+    .kpi-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 9px; border-radius: var(--radius-pill);
+      font-size: 12px; font-weight: 600; white-space: nowrap;
+    }
+    .kpi-badge.publicado { background: #E7F6EE; color: #1FA56B; }
+    .kpi-badge.borrador  { background: #FDF3E0; color: #B07818; }
+    .kpi-badge.ok        { background: #E7F6EE; color: #1FA56B; }
+    .kpi-badge.warn      { background: #FBEAEA; color: #D24545; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    #tblMeses th.num { text-align: right; }
+    .import-diff { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+    .import-diff table { margin: 0; }
+    .avisos-box {
+      background: #FDF3E0; border: 1px solid #EAD9AE; border-radius: 8px;
+      padding: 8px 12px; font-size: 12.5px; margin: 10px 0; max-height: 120px; overflow: auto;
+    }
+    .form-grid-kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 14px; }
+    .form-grid-kpi label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--fg-2); }
+    .form-grid-kpi input { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums; }
+    .coment-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--fg-2); margin: 12px 0 4px; }
+    .coment-input { width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; font-family: inherit; resize: vertical; }
+    @media (max-width: 768px) { .form-grid-kpi { grid-template-columns: 1fr 1fr; } }
+  </style>
+
+  <script>
+    function cerrarSesion() {
+      firebase.auth().signOut().then(() => { window.location.href = "../login.html"; });
+    }
+  </script>
+</head>
+<body>
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="presentation"></i> Reporte KPIs Junta',
+      back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <div class="admin-toolbar">
+      <button id="btnImport" class="btn btn-primary btn-sm">
+        <i data-lucide="upload"></i> Importar Excel
+      </button>
+      <input type="file" id="fileImport" accept=".xlsx,.xls" style="display:none;">
+      <button id="btnCapturar" class="btn btn-ghost btn-sm">
+        <i data-lucide="plus"></i> Capturar mes
+      </button>
+      <span class="spacer"></span>
+      <span id="countLabel" class="ts">—</span>
+    </div>
+
+    <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
+      <i data-lucide="info"></i>
+      <div>
+        Archivo mensual del <strong>reporte ejecutivo a la junta directiva</strong>. Cada mes: importa el
+        <em>Financial Report</em> actualizado (trae el histórico completo; solo cambia/agrega lo nuevo),
+        edita los comentarios de gerencia del mes y márcalo como <strong>publicado</strong>.
+        "Ver" abre el reporte listo para imprimir/guardar en PDF.
+      </div>
+    </div>
+
+    <div class="app-card">
+      <div class="app-table-wrap">
+        <table id="tblMeses" class="app-table">
+          <thead>
+            <tr>
+              <th>Mes</th>
+              <th class="num">Total ingresos</th>
+              <th class="num">Recurrente</th>
+              <th class="num">Ventas equipos</th>
+              <th class="num">Subs</th>
+              <th class="num">Netas</th>
+              <th>Concilia</th>
+              <th>Estado</th>
+              <th>Actualizado</th>
+              <th style="text-align:right;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyMeses">
+            <tr><td colspan="10" style="text-align:center;color:var(--fg-3);padding:24px;">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: preview de importación ── -->
+  <div class="overlay" id="modalImport">
+    <div class="modal" style="max-width:760px;">
+      <h3 style="margin:0 0 10px;"><i data-lucide="upload"></i> Importar Financial Report</h3>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <label for="selSheet" style="font-size:13px;font-weight:600;">Hoja:</label>
+        <select id="selSheet" class="search-input" style="flex:0 1 320px;"></select>
+        <span id="importResumen" class="ts"></span>
+      </div>
+      <div id="importAvisos" class="avisos-box" style="display:none;"></div>
+      <div class="import-diff">
+        <table class="app-table">
+          <thead>
+            <tr><th>Mes</th><th class="num">Total ingresos</th><th class="num">Subs</th><th>Concilia</th><th>Resultado</th></tr>
+          </thead>
+          <tbody id="importTbody"></tbody>
+        </table>
+      </div>
+      <p class="ts" style="margin:10px 0 0;">
+        Solo se escriben los meses <strong>nuevos</strong> y <strong>cambiados</strong>. Los comentarios de
+        gerencia y el estado de publicación existentes se conservan.
+      </p>
+      <div class="footer">
+        <button class="btn btn-ghost" onclick="Modal.close('modalImport')">Cancelar</button>
+        <button id="btnConfirmImport" class="btn btn-primary">Importar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: capturar / editar mes ── -->
+  <div class="overlay" id="modalEdit">
+    <div class="modal" style="max-width:720px;">
+      <h3 id="editTitle" style="margin:0 0 12px;"><i data-lucide="pencil"></i> Editar mes</h3>
+      <div id="editMesRow" style="margin-bottom:12px;">
+        <label style="font-size:12.5px;font-weight:600;color:var(--fg-2);">Mes
+          <input type="month" id="editMes" class="search-input" style="display:block;margin-top:4px;">
+        </label>
+      </div>
+      <div class="form-grid-kpi">
+        <label>Ingreso recurrente <input type="number" step="0.01" id="f_recurrente"></label>
+        <label>· Kenwood <input type="number" step="0.01" id="f_kenwood"></label>
+        <label>· Hytera / LTE <input type="number" step="0.01" id="f_hytera"></label>
+        <label>Ventas de equipos <input type="number" step="0.01" id="f_ventas"></label>
+        <label>Otros ingresos <input type="number" step="0.01" id="f_otros"></label>
+        <label>Ajustes (resta) <input type="number" step="0.01" id="f_ajustes"></label>
+        <label>Total ingresos <input type="number" step="0.01" id="f_total_ingresos"></label>
+        <label>Activaciones brutas <input type="number" step="1" id="f_act_brutas"></label>
+        <label>Bajas <input type="number" step="1" id="f_bajas"></label>
+        <label>Suscriptores totales <input type="number" step="1" id="f_total_subs"></label>
+        <label>Churn (fracción, ej. 0.029) <input type="number" step="0.0001" id="f_churn"></label>
+      </div>
+      <div id="editConcilia" class="ts" style="margin-top:8px;"></div>
+
+      <label class="coment-label" for="c_ingresos">Comentario de gerencia — Ingresos</label>
+      <textarea id="c_ingresos" class="coment-input"></textarea>
+      <label class="coment-label" for="c_recurrente">Comentario — Ingreso recurrente (Kenwood vs Hytera)</label>
+      <textarea id="c_recurrente" class="coment-input"></textarea>
+      <label class="coment-label" for="c_suscriptores">Comentario — Suscriptores y actividad</label>
+      <textarea id="c_suscriptores" class="coment-input"></textarea>
+
+      <div class="footer">
+        <button class="btn btn-ghost" onclick="Modal.close('modalEdit')">Cancelar</button>
+        <button id="btnSaveEdit" class="btn btn-primary">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

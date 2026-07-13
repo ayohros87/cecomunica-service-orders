@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reporte Ejecutivo de KPIs — Cecomunica</title>
+
+  <!-- Página print standalone (como los demás print templates): NO carga
+       ceco-ui.css; su CSS es autónomo para fidelidad de impresión, portado
+       1:1 del rediseño "Reporte Ejecutivo KPIs.dc.html". -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-init.js"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script src="../js/services/kpiReportsService.js"></script>
+  <script src="../js/domain/kpiDerived.js"></script>
+  <script src="../js/pages/admin-kpi-reporte-print.js" defer></script>
+
+  <style>
+    :root {
+      --navy: #0B2A47; --ink: #0E1418; --body: #2F3942; --gris: #4A5560;
+      --muted: #6B7884; --line: #DDE4EB; --row: #F7F9FB;
+      --azul: #005781; --rojo: #D24545; --verde: #1FA56B;
+      --hytera: #00B4D8; --kenwood: #9AA7B4; --bar: #A1D5F7;
+      --sans: 'IBM Plex Sans', sans-serif;
+      --display: 'Barlow', sans-serif;
+      --mono: 'IBM Plex Mono', monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #EEF1F4; font-family: var(--sans); color: var(--body); }
+
+    /* ── Toolbar en pantalla (no imprime) ── */
+    .toolbar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      background: #fff; border-bottom: 1px solid var(--line);
+      padding: 10px 18px; font-size: 13.5px;
+    }
+    .toolbar a { color: var(--azul); text-decoration: none; font-weight: 600; }
+    .toolbar a:hover { text-decoration: underline; }
+    .toolbar select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+    .toolbar .sp { flex: 1; }
+    .toolbar label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+    .btn-print {
+      background: var(--navy); color: #fff; border: 0; border-radius: 8px;
+      padding: 7px 16px; font: inherit; font-weight: 600; cursor: pointer;
+    }
+    .btn-print:hover { background: #0d3358; }
+    .badge-borrador {
+      background: #FDF3E0; color: #B07818; border-radius: 999px;
+      padding: 3px 12px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+    }
+
+    /* ── Hoja ── */
+    .sheet {
+      width: 8.5in; max-width: 100%; margin: 20px auto; padding: 0.65in;
+      background: #fff; box-shadow: 0 2px 14px rgba(11, 42, 71, 0.12);
+      position: relative; overflow: hidden;
+    }
+    .watermark {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      pointer-events: none; z-index: 1;
+    }
+    .watermark span {
+      font-family: var(--display); font-weight: 700; font-size: 110px; letter-spacing: 0.1em;
+      color: rgba(210, 69, 69, 0.07); transform: rotate(-30deg); white-space: nowrap;
+    }
+
+    /* ── Masthead ── */
+    .masthead {
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+      padding-bottom: 16px; border-bottom: 3px solid var(--navy);
+    }
+    .masthead img { height: 34px; width: auto; display: block; margin-bottom: 10px; }
+    .kicker {
+      font-weight: 600; font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--azul);
+    }
+    .fechas { text-align: right; font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+    h1 {
+      font-family: var(--display); font-weight: 700; font-size: 34px; line-height: 1.15;
+      letter-spacing: -0.01em; color: var(--ink); margin: 22px 0 4px;
+    }
+    .subtitle { font-size: 14px; line-height: 1.55; color: var(--gris); margin: 0 0 24px; }
+
+    .section-label {
+      font-weight: 600; font-size: 11px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--azul); margin: 8px 0 10px;
+    }
+
+    /* ── KPI tiles ── */
+    .tile-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .kpi-tile { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: #fff; }
+    .kpi-tile .lbl { font-size: 12px; font-weight: 500; color: var(--muted); }
+    .kpi-tile .val {
+      font-family: var(--display); font-weight: 700; font-size: 27px;
+      letter-spacing: -0.01em; color: var(--ink); margin-top: 2px; font-feature-settings: 'tnum' 1;
+    }
+    .kpi-tile .val.sm { font-size: 22px; }
+    .kpi-tile .delta { font-size: 12px; font-weight: 600; margin-top: 2px; }
+    .kpi-tile .delta .ctx { font-weight: 400; color: var(--muted); }
+    .kpi-tile .note { font-size: 11px; color: var(--muted); }
+    .up { color: var(--verde); } .down { color: var(--rojo); } .flat { color: var(--muted); }
+
+    /* ── Tablas ── */
+    table.rpt {
+      width: 100%; border-collapse: collapse; font-size: 13px; color: var(--body);
+      font-feature-settings: 'tnum' 1; margin-bottom: 14px;
+    }
+    table.rpt th {
+      background: var(--navy); color: #fff; font-weight: 600; padding: 8px 12px;
+      border: 1px solid var(--navy); text-align: right;
+    }
+    table.rpt th:first-child { text-align: left; }
+    table.rpt td { padding: 7px 12px; border: 1px solid var(--line); text-align: right; }
+    table.rpt td:first-child { text-align: left; }
+    table.rpt td.strong { font-weight: 600; color: var(--ink); }
+    table.rpt td.sub { padding-left: 28px; color: var(--gris); }
+    table.rpt td.subval { color: var(--gris); }
+    table.rpt tr.total { background: var(--row); }
+    table.rpt tr.total td { padding: 8px 12px; font-weight: 700; color: var(--ink); }
+    .var-pos { color: var(--verde); font-weight: 600; }
+    .var-neg { color: var(--rojo); font-weight: 600; }
+    .var-flat { color: var(--muted); }
+
+    /* ── Charts y comentarios ── */
+    .chart-block {
+      border: 1px solid var(--line); border-radius: 10px;
+      padding: 14px 16px 10px; background: #fff; margin-bottom: 14px;
+    }
+    .chart-title { font-size: 12px; font-weight: 600; color: var(--body); margin-bottom: 8px; }
+    .chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .legend { display: flex; gap: 16px; font-size: 11px; color: var(--gris); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .comment-box {
+      border: 1px solid var(--line); border-radius: 10px; background: var(--row);
+      padding: 12px 16px; margin-bottom: 26px;
+    }
+    .comment-box .tag {
+      font-weight: 600; font-size: 10px; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--azul); margin-bottom: 4px;
+    }
+    .comment-box p { font-size: 13px; line-height: 1.55; margin: 0; }
+    .nota { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 6px; }
+    .nota p { font-size: 11px; line-height: 1.5; color: var(--muted); margin: 0; }
+    body.sin-comentarios .comment-box { display: none; }
+
+    .kpi-tile, .comment-box, .chart-block, table.rpt { break-inside: avoid; }
+    p { orphans: 3; widows: 3; }
+
+    #estadoVacio { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 15px; }
+
+    @media print {
+      @page { size: letter portrait; margin: 0.65in; }
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; overflow: visible; }
+      .watermark { position: fixed; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <a href="kpi-reportes.html">← Archivo KPIs</a>
+    <select id="selMes" title="Mes de corte"></select>
+    <span id="badgeEstado"></span>
+    <span class="sp"></span>
+    <label><input type="checkbox" id="chkComentarios" checked> Comentarios de gerencia</label>
+    <button class="btn-print" onclick="window.print()">Imprimir / PDF</button>
+  </div>
+
+  <div class="sheet" id="sheet" style="display:none;">
+    <div class="watermark" id="watermark" style="display:none;"><span>BORRADOR</span></div>
+    <div id="reporte" style="position:relative;z-index:2;"></div>
+  </div>
+  <div id="estadoVacio" style="display:none;"></div>
+
+</body>
+</html>
