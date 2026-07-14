@@ -25,7 +25,7 @@ window.MODULOS = (() => {
     tecnico:       ["ordenes", "poc", "firma"],
     jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],
     recepcion:     ["ordenes", "poc", "vendedores", "contratos", "clientes", "firma"],
-    vendedor:      ["ordenes", "vendedores", "contratos", "cotizaciones", "clientes", "firma"],
+    vendedor:      ["ordenes", "vendedores", "contratos", "cotizaciones", "firma"],
     tecnico_operativo: ["ordenes", "firma"]
   };
 
