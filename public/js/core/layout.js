@@ -135,5 +135,146 @@ const Layout = (() => {
     });
   }
 
-  return { renderTopbar, renderTopbarFor, wireMenuToggle: _wireMenuToggle };
+  /* =============================================================
+     renderShell — shell del rediseño "Command Center" (rail navy +
+     topbar claro). Lo usan las páginas MIGRADAS al rediseño (F2+ del
+     PLAN_REDISENO_COMMAND_CENTER.md); renderTopbar sigue intacto para
+     las demás. Requiere js/core/modulos.js cargado antes.
+
+     La página aporta el esqueleto y los mounts:
+       <div class="app">
+         <div id="rail-mount"></div>
+         <main class="work">
+           <div id="shelltop-mount"></div>
+           <div class="work__body"> …contenido… </div>
+         </main>
+       </div>
+
+     Layout.renderShell({
+       active: 'ordenes',          // módulo activo en el rail
+       rol, userName,              // pie del rail (rol real, no efectivo)
+       title, titleIcon,           // topbar
+       back: { href },             // botón volver opcional
+       actions: [...],             // mismos specs que renderTopbar
+     });
+     ============================================================= */
+
+  const _RAIL_CATALOGO = [
+    { grupo: 'Operación', items: [
+      { id: 'ordenes',     label: 'Órdenes',          icon: 'settings-2',  href: '/ordenes/index.html' },
+      { id: 'poc',         label: 'Base PoC',          icon: 'radio-tower', href: '/POC/index.html' },
+      { id: 'vendedores',  label: 'Registro (Ventas)', icon: 'briefcase',   href: '/POC/vendedores-batch.html' },
+    ]},
+    { grupo: 'Comercial', items: [
+      { id: 'cotizaciones', label: 'Cotizaciones', icon: 'receipt',   href: '/cotizaciones/index.html' },
+      { id: 'contratos',    label: 'Contratos',    icon: 'file-text', href: '/contratos/index.html' },
+      { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
+    ]},
+    { grupo: 'Almacén · finanzas', items: [
+      { id: 'inventario',  label: 'Inventario',  icon: 'package',    href: '/inventario/index.html' },
+      { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',     href: '/inventario/piezas.html' },
+      { id: 'facturacion', label: 'Facturación', icon: 'calculator', href: '/facturacion/index.html' },
+    ]},
+  ];
+
+  const _ROL_LABELS = {
+    administrador: 'Administración', gerente: 'Gerencia', recepcion: 'Recepción',
+    jefe_taller: 'Jefe de taller', tecnico: 'Técnico', tecnico_operativo: 'Técnico operativo',
+    vendedor: 'Ventas', inventario: 'Inventario', contabilidad: 'Contabilidad', vista: 'Solo lectura',
+  };
+
+  function renderShell(opts = {}) {
+    const {
+      active = '', rol = '', userName = '',
+      title = '', titleIcon = '', back = null, actions = [],
+    } = opts;
+
+    const visibles = (window.MODULOS && MODULOS.deRol(rol)) || [];
+    const grupos = _RAIL_CATALOGO.map(g => {
+      const items = g.items.filter(it => visibles.includes(it.id));
+      if (!items.length) return '';
+      return `<div class="rail__group">${g.grupo}</div>` + items.map(it => `
+        <a class="rail__link${it.id === active ? ' is-active' : ''}" href="${it.href}">
+          <i data-lucide="${it.icon}"></i> ${it.label}
+          <span class="badge" data-rail-badge="${it.id}" style="display:none"></span>
+        </a>`).join('');
+    }).join('');
+
+    const adminLink = rol === 'administrador'
+      ? `<div class="rail__group">Administración</div>
+         <a class="rail__link${active === 'admin' ? ' is-active' : ''}" href="/admin/index.html"><i data-lucide="shield"></i> Panel admin</a>`
+      : '';
+
+    const iniciales = (userName || '?').trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
+
+    const railHtml = `
+<aside class="rail" id="ccRail">
+  <div class="rail__brand">
+    ${BRAND_MARK}
+    <div class="wm"><b>CECOMUNICA</b><span>Centro de gestión</span></div>
+  </div>
+  <nav class="rail__nav">
+    <a class="rail__link${active === 'inicio' ? ' is-active' : ''}" href="/index.html"><i data-lucide="layout-grid"></i> Inicio</a>
+    ${grupos}
+    ${adminLink}
+  </nav>
+  <div class="rail__foot">
+    <div class="rail__avatar">${iniciales}</div>
+    <div class="rail__who"><b>${userName || ''}</b><span>${_ROL_LABELS[rol] || rol || ''}</span></div>
+  </div>
+</aside>
+<div class="rail-scrim" id="ccRailScrim"></div>`;
+
+    const btnHtml = (a) => {
+      if (a.html) return a.html;
+      const id = a.id ? ` id="${a.id}"` : '';
+      const cls = a.cls ? ` ${a.cls}` : '';
+      const click = a.onclick ? ` onclick="${a.onclick}"` : '';
+      if (a.href) return `<a href="${a.href}" class="btn${cls}"${id}>${a.label}</a>`;
+      return `<button class="btn${cls}"${id}${click}>${a.label}</button>`;
+    };
+    const backBtn = back
+      ? `<a class="btn btn--ghost btn--icon" href="${back.href}" aria-label="Volver"><i data-lucide="arrow-left"></i></a>`
+      : '';
+
+    const topHtml = `
+<div class="topbar">
+  <button class="btn btn--ghost btn--icon rail__toggle" id="ccRailToggle" aria-label="Menú"><i data-lucide="menu"></i></button>
+  ${backBtn}
+  <div class="topbar__title">${titleIcon ? `<i data-lucide="${titleIcon}"></i> ` : ''}${title}</div>
+  <div class="topbar__spacer"></div>
+  ${actions.map(btnHtml).join('')}
+</div>`;
+
+    const railMount = document.getElementById('rail-mount');
+    const topMount = document.getElementById('shelltop-mount');
+    if (railMount) railMount.outerHTML = railHtml;
+    if (topMount) topMount.outerHTML = topHtml;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // drawer móvil
+    const rail = document.getElementById('ccRail');
+    const scrim = document.getElementById('ccRailScrim');
+    const toggle = document.getElementById('ccRailToggle');
+    if (rail && toggle) {
+      toggle.addEventListener('click', () => {
+        rail.classList.toggle('is-open');
+        scrim?.classList.toggle('is-open', rail.classList.contains('is-open'));
+      });
+      scrim?.addEventListener('click', () => {
+        rail.classList.remove('is-open');
+        scrim.classList.remove('is-open');
+      });
+    }
+  }
+
+  /* Pinta un conteo en el badge de un módulo del rail (oculto si n falsy). */
+  function setRailBadge(moduloId, n) {
+    document.querySelectorAll(`[data-rail-badge="${moduloId}"]`).forEach(el => {
+      if (n) { el.textContent = String(n); el.style.display = ''; }
+      else { el.style.display = 'none'; }
+    });
+  }
+
+  return { renderTopbar, renderTopbarFor, renderShell, setRailBadge, wireMenuToggle: _wireMenuToggle };
 })();
