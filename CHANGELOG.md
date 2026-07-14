@@ -1,5 +1,78 @@
 # Changelog
 
+## [Contratos — renovación sin equipo no pide seriales a inventario] — 2026-07-14
+
+> Reporte de operaciones: en una renovación sin equipo, bodega recibía la
+> "Solicitud de seriales" (confusión: no hay equipo físico que asignar) y, como
+> nadie asignaba, el contrato quedaba trabado y ACTIVACIONES nunca recibía el
+> correo del contrato aprobado (caso Silverking ALQ20260713-04).
+
+- **`functions/src/triggers/contratos/onApproval.js`** —
+  `onContratoAprobadoSolicitaSeriales`: si `accion === 'Renovación'` y
+  `renovacion_sin_equipo`, se salta la solicitud a inventario (las líneas de
+  equipos son renglones de alquiler, no entregas) y auto-completa la señal de
+  seriales, igual que los contratos sin unidades. Con eso
+  `onSerialesAsignadasSendPdf` envía de inmediato a activaciones el correo
+  "Contrato APROBADO" con el banner de modalidad de renovación + PDF.
+- **`js/pages/contratos-list.js`** — `serialesBtn`: renovación sin equipo ya no
+  muestra el CTA ámbar "Seriales pendientes" (no aplica).
+- **`functions/fix-renov-sin-equipo-atascados.js`** — one-off para destrabar
+  contratos sin-equipo ya atascados en `seriales_estado: 'pendiente'`: escribe
+  la señal `asignados` (dispara el correo a activaciones, idempotente) y limpia
+  contadores de recordatorio. Dry-run por defecto; `--apply` / `--id=<docId>`.
+- Sin cambios en el recordatorio diario a inventario: filtra por
+  `seriales_estado == 'pendiente'`, que estos contratos ya no alcanzan.
+
+### Deploy
+- `firebase deploy --only functions:onContratoAprobadoSolicitaSeriales` + hosting.
+- Tras el deploy: `node functions/fix-renov-sin-equipo-atascados.js --apply`
+  para que a activaciones le llegue la renovación de Silverking.
+
+## [Rediseño Command Center — F0 fundaciones + F1 home con señales por rol] — 2026-07-13
+
+> Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F0+F1). Dirección aprobada sobre las
+> maquetas de `Cecomunica Design System/rediseño pagina cecomunica command center/propuesta/`.
+> NO desplegado — pendiente de revisión visual del usuario.
+
+- **`css/ceco-command.css`** — sistema del rediseño (tokens de marca + shell rail
+  navy/workspace claro + señales `sig--*`, chips, KPIs con shimmer, stepper `flow`,
+  launcher del home). Convive con `ceco-ui.css`; las páginas migran una a una.
+  Inputs como `.cc-input` para no colisionar con `.input` del kit viejo.
+- **`js/core/modulos.js`** — `window.MODULOS`: mapa rol→módulos extraído del home
+  (fuente única para tarjetas, rail y señales) + `rolEfectivo()` ("Ver como").
+  Se añade `gerente` al mapa (ausente del literal histórico del home).
+- **`js/core/layout.js`** — nuevo `Layout.renderShell({active, rol, userName, title,
+  back, actions})`: rail navy con grupos filtrados por `MODULOS` + topbar claro +
+  drawer móvil + `setRailBadge()`. `renderTopbar` intacto (lo siguen usando las
+  páginas no migradas).
+- **`js/services/senalesService.js`** — conteos con agregados `count()` (compat
+  ≥9.16; `aggregatesDisponibles()` degrada en silencio). Piso de permisos
+  documentado contra firestore.rules (sin cambios de rules). Limitación v1
+  aceptada: los conteos de órdenes incluyen soft-deleted (raros).
+- **`js/pages/home-signals.js`** — fila de señales del home. Gating doble: lista
+  por rol (`POR_ROL`) **y** gate de módulo (`MODULOS.puedeVer`) sobre el rol
+  efectivo; una consulta que falle quita su tarjeta sin romper el home. Cache
+  sessionStorage TTL 5 min por (uid, rol). Matriz: admin/gerente/jefe_taller
+  S1·S3·S4·S6; recepción S1·S2·S4·S8 (sin cotizaciones); vendedor S7·S8·S1·S4;
+  técnicos S5·S4P (solo lo suyo vía `tecnico_uid`); inventario S9; vista S1·S3·S4;
+  contabilidad sin fila.
+- **`index.html`** — home rediseñado en claro: franja navy compacta (saludo por
+  hora + rol + fecha, botones perfil/admin/salir), señales, buscador con atajos
+  visibles, módulos agrupados por área (Operación/Comercial/Almacén y
+  finanzas/Personal, grupos vacíos se ocultan). Conserva: visibilidad por rol,
+  skeletons, buscador, atajos O/P/I/C/V/Q/X/F, banner "Ver como" (ahora vía
+  `MODULOS.rolEfectivo`). Nuevas tarjetas Mi Perfil (todos) y Panel de
+  Administración (solo admin, oculto al impersonar).
+
+### QA targets
+- Login recepción: señales Por asignar / Mostrador / Completadas / Contratos por
+  activar; sin tarjeta ni señal de cotizaciones/inventario/facturación.
+- Login técnico: solo "Mis órdenes asignadas" y "Mis completadas" (conteos propios).
+- Login contabilidad: sin fila de señales; solo Facturación + Personal.
+- Admin con `?as=tecnico`: banner "modo visual", señales y tarjetas del técnico
+  (los conteos "míos" del admin serán 0 — correcto, es su uid real).
+- Segunda visita al home en la misma sesión: señales instantáneas (cache 5 min).
+
 ## [KPIs Junta — fase 4: snapshot PDF server-side + respaldos] — 2026-07-13
 
 > Driver: `PLAN_KPI_REPORT.md` F4. DESPLEGADO (functions + storage + hosting).

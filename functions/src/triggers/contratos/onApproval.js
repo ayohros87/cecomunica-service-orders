@@ -139,15 +139,24 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
     const contratoRef = event.data.after.ref;
     const unidades    = unidadesSerializables(after);
 
+    // Renovación sin equipo: las líneas de equipos son renglones de alquiler
+    // (cantidad > 0) pero NO se entrega equipo físico — no hay seriales que
+    // asignar. Pedirlos a inventario solo confunde a bodega y deja el contrato
+    // trabado sin llegar nunca a activaciones (caso Silverking ALQ20260713-04).
+    const esRenovSinEquipo = after.accion === "Renovación" && !!after.renovacion_sin_equipo;
+
     // Sin equipos que serializar → completa la señal y deja que el trigger de
-    // activaciones envíe el correo (sin seriales).
-    if (unidades <= 0) {
+    // activaciones envíe el correo (sin seriales, con la modalidad de renovación).
+    if (unidades <= 0 || esRenovSinEquipo) {
       await contratoRef.collection("seriales_estado").doc("current").set({
         estado: "asignados",
         omisiones: [],
         por: "system",
         at: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      logger.info("[onContratoAprobadoSolicitaSeriales] Sin seriales que pedir — directo a activaciones", {
+        contratoId: after.contrato_id || docId, unidades, esRenovSinEquipo
+      });
       return null;
     }
 

@@ -30,6 +30,9 @@ window.ContratosLista = {
     if (data.seriales_estado === 'legacy') {
       return `<button class="btn btn-sm" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;" onclick="location.href='seriales.html?id=${id}'" title="Contrato histórico — registrar seriales para referencia (no se envía a activaciones)"><i data-lucide="archive" style="width:14px;height:14px;"></i> Seriales · histórico</button>`;
     }
+    // Renovación sin equipo: los renglones de equipos son solo de alquiler
+    // (no se entrega equipo físico) — no hay seriales que asignar.
+    if (data.accion === 'Renovación' && data.renovacion_sin_equipo) return '';
     const total = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
     const activos = Math.max(0, total - Number(data.baja_cancelado_total || 0));
     if (activos === 0) return '';
