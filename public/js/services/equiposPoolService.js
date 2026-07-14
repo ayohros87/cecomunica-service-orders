@@ -77,10 +77,13 @@ const EquiposPoolService = {
     const lb = this._tightLabel(modeloLabel).replace(/r$/, '');
     if (la && lb) {
       if (la === lb) return true;
-      // Marca opcional: una fuente guarda "PNC360S" y otra "HYTERA PNC360S" —
-      // si el corto es sufijo del largo (≥4 chars) es el mismo modelo.
+      // Texto de modelo desparejo entre fuentes: con marca o sin marca ("HYTERA
+      // PNC360S" vs "PNC360S"), truncado ("PD6" vs "PD606"), o variantes G/U/S
+      // ("PD606G" vs "PD606"). Con el MISMO serial, un texto contenido en el
+      // otro (≥3 chars) es la misma unidad; la colisión real tipo Kenwood
+      // (NX420 vs NX920) no tiene contención.
       const [corto, largo] = la.length <= lb.length ? [la, lb] : [lb, la];
-      return corto.length >= 4 && largo.endsWith(corto);
+      return corto.length >= 3 && largo.includes(corto);
     }
     // Sin labels comparables: desempata por id; sin ningún dato → misma unidad.
     if (data.modelo_id && modeloId) return data.modelo_id === modeloId;
