@@ -201,6 +201,7 @@
       const toolbar = document.createElement('div');
       toolbar.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; margin-bottom:var(--sp-3,12px);';
       toolbar.innerHTML =
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="tomar-pool"><i data-lucide="scan-barcode"></i> Tomar del pool (bodega)</button>' +
         '<button type="button" class="btn btn-ghost btn-sm" data-action="jalar-poc"><i data-lucide="download"></i> Jalar desde POC</button>' +
         '<button type="button" class="btn btn-ghost btn-sm" data-action="jalar-os"><i data-lucide="clipboard-list"></i> Jalar desde órdenes</button>';
       $('serialesBody').prepend(toolbar);
@@ -323,6 +324,7 @@
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.getAttribute('data-action');
+      if (action === 'tomar-pool') { tomarDelPool(); return; }
       if (action === 'jalar-poc') { jalarDesdePoc(); return; }
       if (action === 'jalar-os')  { jalarDesdeOS();  return; }
       const grupo = btn.closest('.serial-group');
@@ -538,6 +540,7 @@
     const btn = $('btnGuardar');
     btn.disabled = true;
     try {
+      if (!await confirmarAvisosPool(collect().seriales)) { btn.disabled = false; return; }
       // Al corregir seriales YA asignados preservamos 'asignados' (no se degrada a
       // 'pendiente' ni se reenvía a activaciones: el trigger solo dispara en la
       // transición a 'asignados'). En el flujo normal se guarda como 'pendiente'.
@@ -580,6 +583,7 @@
     const btn = $('btnReemplazo');
     btn.disabled = true;
     try {
+      if (!await confirmarAvisosPool(collect().seriales)) { btn.disabled = false; return; }
       await persistir('asignados');
       const uid = firebase.auth().currentUser?.uid || null;
       await db().collection('contratos').doc(contratoDocId)
@@ -601,6 +605,7 @@
   async function confirmar() {
     const error = validarCompleto();
     if (error) { Toast.show(error, 'warn'); return; }
+    if (!await confirmarAvisosPool(collect().seriales)) return;
     if (!window.confirm('¿Confirmar los seriales y enviar a activaciones? El contrato continuará el proceso.')) return;
 
     const btn = $('btnConfirmar');
@@ -670,6 +675,66 @@
     if (sinCupo)    partes.push(`${sinCupo} sin cupo`);
     if (sinModelo)  partes.push(`${sinModelo} sin modelo en el contrato`);
     Toast.show(`Jalado desde ${origen}: ${partes.join(' · ')}.`, agregados ? 'ok' : 'warn');
+  }
+
+  // Toma unidades DISPONIBLES (en_bodega) del pool de equipos serializados y
+  // rellena los slots vacíos por modelo. La transición del pool a
+  // asignado_contrato la hace el trigger onSerialWrite al Guardar/Confirmar
+  // (server-side, con validación de contrato) — aquí solo se llena el formulario.
+  async function tomarDelPool() {
+    if (typeof EquiposPoolService === 'undefined') { Toast.show('El pool de equipos no está disponible.', 'bad'); return; }
+    try {
+      const enBodega = await EquiposPoolService.listar({ estado: EquiposPoolService.ESTADOS.EN_BODEGA });
+      if (!enBodega.length) { Toast.show('No hay equipos disponibles en bodega. Recibe equipos en Inventario · Equipos por serial.', 'warn'); return; }
+      const items = enBodega.map(d => ({
+        serial: d.serial || d.serial_norm,
+        modelo: d.modelo_label || '',
+        modeloId: d.modelo_id || '',
+      }));
+      jalarItems(items, 'pool de bodega');
+    } catch (e) {
+      console.error('Error consultando el pool:', e);
+      Toast.show('No se pudo consultar el pool de equipos.', 'bad');
+    }
+  }
+
+  // Validación SUAVE contra el pool antes de persistir (fase de transición del
+  // plan PLAN_POOL_EQUIPOS_SERIAL.md: avisar, nunca bloquear). Revisa solo los
+  // seriales nuevos vs lo ya guardado y devuelve una lista de avisos:
+  //   · el serial está en el pool pero en OTRO estado / asignado a otro cliente
+  //   · el serial existe solo en OTRO modelo (colisión tipo Kenwood NX420/NX920)
+  // Un serial que no está en el pool no genera aviso: entra por migración por
+  // contacto (el trigger lo crea sin verificar).
+  async function advertenciasPool(seriales) {
+    if (typeof EquiposPoolService === 'undefined') return [];
+    const guardados = new Set((ctx._saved || []).map(s => norm(s.serial)));
+    const nuevos = (seriales || []).filter(s => !guardados.has(norm(s.serial)));
+    const avisos = [];
+    for (const s of nuevos) {
+      try {
+        const docs = await EquiposPoolService.findBySerial(s.serial);
+        if (!docs.length) continue;
+        const mismo = docs.find(d => EquiposPoolService._mismoModelo(d, s.modelo_id, s.modelo));
+        if (!mismo) {
+          const otros = docs.map(d => d.modelo_label || 'sin modelo').join(', ');
+          avisos.push(`${s.serial}: en el pool está registrado como ${otros} — verifica que sea el ${s.modelo}`);
+          continue;
+        }
+        if (mismo.estado !== EquiposPoolService.ESTADOS.EN_BODEGA
+            && mismo.asignacion?.contrato_doc_id !== contratoDocId) {
+          const est = EquiposPoolService.ESTADO_LABELS[mismo.estado] || mismo.estado;
+          const quien = mismo.asignacion?.cliente_nombre ? ` con ${mismo.asignacion.cliente_nombre}` : '';
+          avisos.push(`${s.serial}: en el pool figura "${est}"${quien}`);
+        }
+      } catch (e) { /* validación best-effort: nunca bloquea el guardado */ }
+    }
+    return avisos;
+  }
+
+  async function confirmarAvisosPool(seriales) {
+    const avisos = await advertenciasPool(seriales);
+    if (!avisos.length) return true;
+    return window.confirm(`Avisos del pool de equipos:\n\n- ${avisos.join('\n- ')}\n\n¿Continuar de todos modos?`);
   }
 
   async function jalarDesdePoc() {
