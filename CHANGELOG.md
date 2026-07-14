@@ -1,5 +1,24 @@
 # Changelog
 
+## [Rediseño Command Center — unificación cromática de estados de orden] — 2026-07-14
+
+> Backlog del rediseño. Hallazgo: chips de filtro y badges de fila estaban en
+> DESACUERDO (chip Completado azul vs badge verde; chip Entregado verde vs
+> badge gris). Ahora chip, badge y KPI comparten la paleta de señal:
+> **POR ASIGNAR rojo · RECIBIDO violeta · ASIGNADO azul · COMPLETADO verde ·
+> ENTREGADO gris.**
+
+- `ceco-ui.css`: tokens + clase `chip-porasignar` (rojo señal de acción).
+- `ordenes-state.js` `getEstadoClass()`: POR ASIGNAR→rojo, RECIBIDO→violeta
+  (chip-diagnostico), ASIGNADO→azul (chip-recibida), COMPLETADO/ENTREGADO sin
+  cambio; estados legacy/extendidos → `chip-espera` neutral (antes azul).
+- `ordenes-index.css`: dots y estados activos de los chips a la misma paleta.
+- Cache bump `?v=cc6` en la bandeja (ceco-ui, ordenes-index, ordenes-state).
+
+### QA targets
+- Bandeja: color del chip activo = color de los badges que filtra.
+- Orden con estado legacy (DIAGNÓSTICO/EN ESPERA): badge gris neutral.
+
 ## [Rediseño Command Center — F5: rail en panel admin y subpáginas de flujo] — 2026-07-14
 
 > Driver: backlog del rediseño. Cobertura total del rail en páginas estándar

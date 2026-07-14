@@ -253,14 +253,19 @@ function nombreClienteDe(orden) {
   return orden.cliente_nombre || orden.cliente || "—";
 }
 
+// Paleta unificada del sistema de señales (Command Center): el badge de la
+// fila, el chip de filtro y el KPI usan el MISMO color por estado.
+//   POR ASIGNAR rojo (pide acción) · RECIBIDO violeta · ASIGNADO azul ·
+//   COMPLETADO verde · ENTREGADO gris. Las clases chip-* son tokens de
+//   paleta de ceco-ui (nombradas por el flujo de cotización histórico).
 function getEstadoClass(estado) {
   const e = (estado || "").toUpperCase();
-  if (e === "POR ASIGNAR") return "chip-recibida";
-  if (e === "RECIBIDO EN MOSTRADOR") return "chip-recibida";
-  if (e === "ASIGNADO") return "chip-reparacion";
-  if (e === "COMPLETADO (EN OFICINA)") return "chip-lista";
-  if (e === "ENTREGADO AL CLIENTE") return "chip-entregada";
-  return "chip-recibida";
+  if (e === "POR ASIGNAR") return "chip-porasignar";        // rojo
+  if (e === "RECIBIDO EN MOSTRADOR") return "chip-diagnostico"; // violeta
+  if (e === "ASIGNADO") return "chip-recibida";             // azul
+  if (e === "COMPLETADO (EN OFICINA)") return "chip-lista"; // verde
+  if (e === "ENTREGADO AL CLIENTE") return "chip-entregada"; // gris
+  return "chip-espera"; // estados legacy/extendidos: neutral
 }
 
 function tipoChip(tipo) {

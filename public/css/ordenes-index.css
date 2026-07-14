@@ -3461,13 +3461,15 @@ tr.activo:hover { background: #f0f9ff !important; }
   font-variant-numeric: tabular-nums;
 }
 
-/* Per-estado palette — active state fills with the matching status
-   color so chip + estado-pill in the rows below visually correspond. */
+/* Per-estado palette — paleta unificada del sistema de señales (Command
+   Center): chip de filtro, badge de fila (getEstadoClass) y KPI comparten
+   color por estado. POR ASIGNAR rojo · RECIBIDO violeta · ASIGNADO azul ·
+   COMPLETADO verde · ENTREGADO gris. */
 .estado-chip--por-asignar .dot { background: var(--status-critical); }
-.estado-chip--recibido    .dot { background: #0EA5E9; }
-.estado-chip--asignado    .dot { background: var(--status-warning); }
-.estado-chip--completado  .dot { background: var(--accent); }
-.estado-chip--entregado   .dot { background: var(--status-online); }
+.estado-chip--recibido    .dot { background: #6D28D9; }
+.estado-chip--asignado    .dot { background: #2563EB; }
+.estado-chip--completado  .dot { background: #16A34A; }
+.estado-chip--entregado   .dot { background: var(--gray-500); }
 
 .estado-chip.active {
   font-weight: 600;
@@ -3486,24 +3488,24 @@ tr.activo:hover { background: #f0f9ff !important; }
   color: #8A1F1F;
 }
 .estado-chip--recibido.active {
-  background: #E0F2FE;
-  border-color: #0EA5E9;
-  color: #075985;
+  background: #F5F3FF;
+  border-color: #6D28D9;
+  color: #6D28D9;
 }
 .estado-chip--asignado.active {
-  background: #FAF1DB;
-  border-color: var(--status-warning);
-  color: #7A5510;
+  background: #EFF6FF;
+  border-color: #2563EB;
+  color: #1D4ED8;
 }
 .estado-chip--completado.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent-press);
+  background: #F0FDF4;
+  border-color: #16A34A;
+  color: #166534;
 }
 .estado-chip--entregado.active {
-  background: #E6F4ED;
-  border-color: var(--status-online);
-  color: #0F6E47;
+  background: var(--gray-100);
+  border-color: var(--gray-400);
+  color: var(--gray-600);
 }
 
 /* Hide-the-old-select hook */

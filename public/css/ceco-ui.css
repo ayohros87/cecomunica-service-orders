@@ -100,6 +100,8 @@
   --chip-entregada-bg:  var(--gray-100); --chip-entregada-fg: var(--gray-600); --chip-entregada-bd: var(--gray-200);
   --chip-cancelada-bg:  #FEF2F2; --chip-cancelada-fg:  #991B1B; --chip-cancelada-bd:  #FECACA;
   --chip-espera-bg:     #F8FAFC; --chip-espera-fg:     var(--gray-600); --chip-espera-bd: var(--gray-300);
+  /* POR ASIGNAR = señal de acción (rojo) — sistema de señales Command Center */
+  --chip-porasignar-bg: #FAEAEA; --chip-porasignar-fg: #991B1B; --chip-porasignar-bd: #FECACA;
 
   /* Spacing scale on 4px base */
   --sp-1:4px;  --sp-2:8px;  --sp-3:12px; --sp-4:16px; --sp-5:20px;
@@ -310,6 +312,7 @@ body{
 .chip-estado.chip-entregada  { background: var(--chip-entregada-bg);  color: var(--chip-entregada-fg);  border-color: var(--chip-entregada-bd); }
 .chip-estado.chip-cancelada  { background: var(--chip-cancelada-bg);  color: var(--chip-cancelada-fg);  border-color: var(--chip-cancelada-bd); }
 .chip-estado.chip-espera     { background: var(--chip-espera-bg);     color: var(--chip-espera-fg);     border-color: var(--chip-espera-bd); }
+.chip-estado.chip-porasignar { background: var(--chip-porasignar-bg); color: var(--chip-porasignar-fg); border-color: var(--chip-porasignar-bd); }
 
 /* Priority chips */
 .chip-prioridad {
