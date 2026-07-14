@@ -17,8 +17,25 @@ if (!firebase.apps.length) {
 // enablePersistence is deprecated in SDK 10.x but not removed — the replacement
 // (persistentLocalCache) is only available via the modular SDK, not the compat CDN build.
 // Revisit when migrating off the compat SDK.
-firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch((err) => {
+firebase.firestore().enablePersistence({ synchronizeTabs: true }).catch(async (err) => {
   console.warn("Persistence no habilitada:", err.code || err);
+  // Auto-reparación: si el IndexedDB quedó escrito por un SDK más nuevo que el
+  // actual, la persistencia queda deshabilitada para siempre (todas las lecturas
+  // van a la red). Se limpia el caché una única vez por pestaña y se recarga;
+  // al volver, enablePersistence crea el caché con el formato de este SDK.
+  const esDowngrade = err.code === "failed-precondition" && /newer version/i.test(err.message || "");
+  if (esDowngrade && !sessionStorage.getItem("fsCacheReset")) {
+    sessionStorage.setItem("fsCacheReset", "1");
+    try {
+      await firebase.firestore().terminate();
+      await firebase.firestore().clearPersistence();
+      location.reload();
+    } catch (e) {
+      // p.ej. otra pestaña abierta impide clearPersistence — se sigue con
+      // caché en memoria y se reintentará en la próxima sesión.
+      console.warn("No se pudo limpiar el caché de Firestore:", e?.code || e);
+    }
+  }
 });
 const db = firebase.firestore();
 
