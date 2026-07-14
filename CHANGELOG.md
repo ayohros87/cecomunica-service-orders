@@ -1,5 +1,30 @@
 # Changelog
 
+## [Rediseño Command Center — F4: rail en todas las bandejas] — 2026-07-14
+
+> Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F4). Cierra la cobertura del rail
+> en las bandejas de módulos con el mismo patrón híbrido de F2/F3 (desktop-only,
+> cero cambios de lógica por página).
+
+- **`Layout.initRail(active)`** — bootstrapping compartido del rail: espera
+  auth (los scripts de Firebase cargan con defer), resuelve nombre con cache
+  de sesión y pinta el rail con el rol efectivo. Las páginas de órdenes (F2/F3)
+  quedaron deduplicadas a una línea.
+- **Rail aplicado a 8 bandejas**: cotizaciones, contratos, clientes,
+  inventario (radios y piezas), Base PoC, facturación y registro de equipos
+  (vendedores-batch). Por página: `ceco-rail.css` + `modulos.js` + wrapper
+  `.cc-app` + `Layout.initRail('<modulo>')` en DOMContentLoaded.
+- Verificado con mocks: rail de vendedor en cotizaciones (sin PoC) y de admin
+  en contratos (todos los grupos + Panel admin); en ≤1024px cada página queda
+  idéntica a antes.
+
+### QA targets
+- Cada bandeja en desktop: rail con el módulo activo resaltado y solo los
+  módulos del rol; navegación entre módulos por el rail.
+- Roles restringidos (p.ej. inventario) navegando a una bandeja ajena por URL:
+  el rail no muestra el módulo, y la protección real sigue siendo rules +
+  redirect de la página (sin cambios).
+
 ## [Rediseño Command Center — F3: detalle de orden con stepper + rail en "Ver como"] — 2026-07-14
 
 > Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F3). Misma estrategia híbrida que F2.

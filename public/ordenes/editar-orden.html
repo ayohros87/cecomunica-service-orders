@@ -237,25 +237,9 @@
       }
     };
 
-    // Rail Command Center — nav lateral con módulos del rol (respeta ?as= visual).
-    // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
-    document.addEventListener('DOMContentLoaded', () => {
-    verificarAccesoYAplicarVisibilidad(async (rol) => {
-      const user = firebase.auth().currentUser;
-      if (!user) return;
-      let nombre = sessionStorage.getItem('ccUserName:' + user.uid) || '';
-      if (!nombre) {
-        try {
-          const u = await UsuariosService.getUsuario(user.uid);
-          nombre = (u && (u.nombre || u.name)) || user.displayName || (user.email || '').split('@')[0];
-          sessionStorage.setItem('ccUserName:' + user.uid, nombre);
-        } catch {
-          nombre = user.displayName || (user.email || '').split('@')[0];
-        }
-      }
-      Layout.renderRail({ active: 'ordenes', rol: MODULOS.rolEfectivo(rol), userName: nombre });
-    });
-    });
+    // Rail Command Center — Layout.initRail espera auth (scripts defer) y
+    // pinta el rail con el rol efectivo (respeta ?as= visual).
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('ordenes'));
   </script>
 
   <script src="../js/pages/editar-orden.js" defer></script>

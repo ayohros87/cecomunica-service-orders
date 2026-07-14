@@ -280,6 +280,30 @@ const Layout = (() => {
     renderRail({ active, rol, userName });
   }
 
+  /* Bootstrapping estándar del rail para páginas híbridas: espera auth,
+     resuelve el nombre (cache de sesión) y pinta el rail con el rol
+     efectivo ("Ver como"). Llamar tras DOMContentLoaded — los scripts de
+     Firebase cargan con defer y este helper los necesita ya ejecutados. */
+  function initRail(active) {
+    if (typeof verificarAccesoYAplicarVisibilidad !== 'function') return;
+    verificarAccesoYAplicarVisibilidad(async (rol) => {
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+      let nombre = sessionStorage.getItem('ccUserName:' + user.uid) || '';
+      if (!nombre) {
+        try {
+          const u = window.UsuariosService ? await UsuariosService.getUsuario(user.uid) : null;
+          nombre = (u && (u.nombre || u.name)) || user.displayName || (user.email || '').split('@')[0];
+          sessionStorage.setItem('ccUserName:' + user.uid, nombre);
+        } catch {
+          nombre = user.displayName || (user.email || '').split('@')[0];
+        }
+      }
+      const rolFx = window.MODULOS ? MODULOS.rolEfectivo(rol) : rol;
+      renderRail({ active, rol: rolFx, userName: nombre });
+    });
+  }
+
   /* Pinta un conteo en el badge de un módulo del rail (oculto si n falsy). */
   function setRailBadge(moduloId, n) {
     document.querySelectorAll(`[data-rail-badge="${moduloId}"]`).forEach(el => {
@@ -288,5 +312,5 @@ const Layout = (() => {
     });
   }
 
-  return { renderTopbar, renderTopbarFor, renderShell, renderRail, setRailBadge, wireMenuToggle: _wireMenuToggle };
+  return { renderTopbar, renderTopbarFor, renderShell, renderRail, initRail, setRailBadge, wireMenuToggle: _wireMenuToggle };
 })();

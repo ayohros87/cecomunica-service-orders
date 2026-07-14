@@ -741,28 +741,9 @@
   </div> <!-- /cc-app -->
 
   <script>
-    // Rail Command Center (F2) — nav lateral con módulos del rol.
-    // Segundo listener de auth además del de ordenes-index.js: solo pinta
-    // el rail, no toca el estado de la página.
-    // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
-    document.addEventListener('DOMContentLoaded', () => {
-    verificarAccesoYAplicarVisibilidad(async (rol) => {
-      const user = firebase.auth().currentUser;
-      if (!user) return;
-      let nombre = sessionStorage.getItem('ccUserName:' + user.uid) || '';
-      if (!nombre) {
-        try {
-          const u = await UsuariosService.getUsuario(user.uid);
-          nombre = (u && (u.nombre || u.name)) || user.displayName || (user.email || '').split('@')[0];
-          sessionStorage.setItem('ccUserName:' + user.uid, nombre);
-        } catch {
-          nombre = user.displayName || (user.email || '').split('@')[0];
-        }
-      }
-      // rolEfectivo: el rail respeta el modo "Ver como" (?as=ROL, solo visual).
-      Layout.renderRail({ active: 'ordenes', rol: MODULOS.rolEfectivo(rol), userName: nombre });
-    });
-    });
+    // Rail Command Center (F2) — Layout.initRail espera auth (scripts defer)
+    // y pinta el rail con el rol efectivo. No toca el estado de la página.
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('ordenes'));
   </script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
