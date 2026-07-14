@@ -9,6 +9,7 @@ window.VB = {
   clientesCargados:       false,
   gruposClienteCache:     new Map(),
   _draftKey:              null,
+  DRAFT_TTL_MS:           3 * 24 * 60 * 60 * 1000,
   _timeoutCliente:        null,
   _autosaveTimer:         null,
   _iconTimer:             null,
@@ -463,6 +464,9 @@ window.VB = {
     this.actualizarResumenBatch();
     this.resetTablaEdicion();
     this.setStep('prep');
+    // "Limpiar todo" es intención explícita de empezar de cero: el borrador
+    // guardado también se descarta, si no reaparece al recargar la página.
+    this.clearDraft(true);
   },
 
   // ---- Export / review ----
@@ -549,6 +553,9 @@ window.VB = {
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
     this.setStep('exp');
+    // El JSON para recepción es el final del flujo: el lote ya salió, así que
+    // el borrador deja de ser trabajo pendiente y no debe restaurarse después.
+    this.clearDraft(true);
   },
 
   // ---- Draft autosave ----
@@ -568,7 +575,7 @@ window.VB = {
   },
   _writeDraft(draft) {
     if (!this._draftKey) return;
-    localStorage.setItem(this._draftKey, JSON.stringify(draft));
+    localStorage.setItem(this._draftKey, JSON.stringify({ ...draft, ts: Date.now() }));
   },
   _setAutosaveStatus(state) {
     const el = document.getElementById('autosaveStatus');
@@ -608,6 +615,12 @@ window.VB = {
       const raw = localStorage.getItem(this._draftKey);
       if (!raw) return;
       const d = JSON.parse(raw);
+      // Borradores sin timestamp (formato viejo) o con más de 3 días se descartan:
+      // un lote a medias tan antiguo ya no es trabajo en curso, es basura que confunde.
+      if (!d.ts || Date.now() - d.ts > this.DRAFT_TTL_MS) {
+        localStorage.removeItem(this._draftKey);
+        return;
+      }
       document.getElementById('clienteGlobal').value  = d.cliente || '';
       document.getElementById('modeloGlobal').value   = d.modelo  || '';
       document.getElementById('grupoInput').value     = d.grupos  || '';
@@ -638,12 +651,12 @@ window.VB = {
     } catch (e) { console.warn('No se pudo restaurar borrador', e); }
   },
 
-  clearDraft() {
+  clearDraft(silencioso = false) {
     if (!this._draftKey) return;
     clearTimeout(this._autosaveTimer);
     localStorage.removeItem(this._draftKey);
     this._setAutosaveStatus('idle');
-    Toast.show('Borrador eliminado', 'warn');
+    if (!silencioso) Toast.show('Borrador eliminado', 'warn');
   },
 
   // ---- Step badges ----
