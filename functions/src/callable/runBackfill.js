@@ -731,17 +731,14 @@ async function backfillSeedPoolEquipos(dryRun) {
   };
 
   // Resuelve contra el mapa en memoria (espejo de poolLib.resolver, sin queries).
+  // poolLib.mismoModelo es tolerante a datos desparejos (id vs label del mismo
+  // modelo, lados sin modelo) — solo una diferencia REAL de modelo colisiona.
   // Retorna { existente | null, docId, colision }.
   const resolverLocal = (norm, modeloId, modeloLabel) => {
     const docs = enPool.get(norm) || [];
     if (!docs.length) return { existente: null, docId: norm, colision: false };
     const exacto = docs.find((d) => poolLib.mismoModelo(d, modeloId, modeloLabel));
     if (exacto) return { existente: exacto, docId: exacto.id, colision: false };
-    const sinModelo = docs.find((d) => poolLib.modeloKey(d.modelo_id, d.modelo_label) === "sinmodelo");
-    if (sinModelo) return { existente: sinModelo, docId: sinModelo.id, colision: false };
-    if (poolLib.modeloKey(modeloId, modeloLabel) === "sinmodelo" && docs.length === 1) {
-      return { existente: docs[0], docId: docs[0].id, colision: false };
-    }
     return { existente: null, docId: `${norm}__${poolLib.modeloKey(modeloId, modeloLabel)}`, colision: true };
   };
 

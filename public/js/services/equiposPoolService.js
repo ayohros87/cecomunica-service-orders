@@ -48,22 +48,32 @@ const EquiposPoolService = {
     return /^[A-Z0-9]{3,30}$/.test(serialNorm);
   },
 
-  // Componente de modelo para el ID sufijado del failsafe y para comparar
-  // "¿mismo modelo?" entre docs. Prioriza la FK al catálogo; cae al label
-  // normalizado para data de migración sin modelo_id. La normalización quita
-  // TODO lo no alfanumérico ("NX-420" == "NX 420" == "NX420"), mismo criterio
-  // que _tightModelo del backfill linkModeloIdPoc.
+  // Componente de modelo para el ID sufijado del failsafe. La normalización
+  // quita TODO lo no alfanumérico ("NX-420" == "NX 420" == "NX420"), mismo
+  // criterio que _tightModelo del backfill linkModeloIdPoc.
   modeloKey(modeloId, modeloLabel) {
     if (modeloId) return modeloId;
-    const norm = (modeloLabel || '').toString().toLowerCase()
-      .normalize('NFD').replace(/[^\x00-\x7f]/g, '')
-      .replace(/[^a-z0-9]+/g, '');
+    const norm = this._tightLabel(modeloLabel);
     return norm ? `m_${norm}` : 'sinmodelo';
   },
 
+  _tightLabel(label) {
+    return (label || '').toString().toLowerCase()
+      .normalize('NFD').replace(/[^\x00-\x7f]/g, '')
+      .replace(/[^a-z0-9]+/g, '');
+  },
+
+  // ¿Es la misma unidad-modelo? Comparación TOLERANTE a datos desparejos entre
+  // fuentes (== functions/src/domain/equiposPool.js — mantener sincronizadas):
+  // ids solo cuando ambos lados los tienen; si no, labels normalizados; si a un
+  // lado le falta todo el dato de modelo, se asume la misma unidad (adoptar es
+  // mejor que duplicar — una colisión real tipo Kenwood trae modelo en ambos).
   _mismoModelo(data, modeloId, modeloLabel) {
-    return this.modeloKey(data.modelo_id, data.modelo_label)
-      === this.modeloKey(modeloId, modeloLabel);
+    if (data.modelo_id && modeloId) return data.modelo_id === modeloId;
+    const la = this._tightLabel(data.modelo_label);
+    const lb = this._tightLabel(modeloLabel);
+    if (la && lb) return la === lb;
+    return true;
   },
 
   _autoria(user) {
@@ -136,14 +146,11 @@ const EquiposPoolService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
-  // Resuelve la unidad de un serial+modelo. Si el modelo no calza con ninguno
-  // pero hay UN solo doc del serial, lo devuelve (data de migración sin FK).
+  // Resuelve la unidad de un serial+modelo (_mismoModelo ya es tolerante a
+  // datos desparejos; si no hay match es una colisión real entre modelos).
   async resolver(serial, modeloId, modeloLabel) {
     const docs = await this.findBySerial(serial);
-    if (!docs.length) return null;
-    const match = docs.find(d => this._mismoModelo(d, modeloId, modeloLabel));
-    if (match) return match;
-    return docs.length === 1 ? docs[0] : null;
+    return docs.find(d => this._mismoModelo(d, modeloId, modeloLabel)) || null;
   },
 
   async listar({ estado = null, modeloId = null } = {}) {

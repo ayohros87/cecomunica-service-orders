@@ -28,17 +28,35 @@ function esSerialValido(serialNorm) {
   return /^[A-Z0-9]{3,30}$/.test(serialNorm);
 }
 
-// Clave de modelo para el failsafe de colisión. (== frontend modeloKey)
+// Clave de modelo para el ID sufijado del failsafe. (== frontend modeloKey)
 function modeloKey(modeloId, modeloLabel) {
   if (modeloId) return modeloId;
-  const norm = (modeloLabel || "").toString().toLowerCase()
-    .normalize("NFD").replace(/[^\x00-\x7f]/g, "")
-    .replace(/[^a-z0-9]+/g, "");
+  const norm = _tightLabel(modeloLabel);
   return norm ? `m_${norm}` : "sinmodelo";
 }
 
+function _tightLabel(label) {
+  return (label || "").toString().toLowerCase()
+    .normalize("NFD").replace(/[^\x00-\x7f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+// ¿Es la misma unidad-modelo? Las fuentes traen datos desparejos (contrato con
+// FK al catálogo, POC/órdenes a veces solo texto), así que la comparación es
+// tolerante — comparar solo modeloKey producía falsas colisiones masivas
+// (id vs label del MISMO modelo):
+//   · ambos lados con modelo_id → compara ids (filas distintas del catálogo son
+//     modelos distintos aunque el label coincida)
+//   · si no, ambos con label → compara labels normalizados ("NX-420"=="NX420")
+//   · si a un lado le falta toda la información de modelo → se asume la misma
+//     unidad (adoptar es mejor que duplicar; una colisión real tipo Kenwood
+//     siempre trae modelo en ambos lados)
 function mismoModelo(data, modeloId, modeloLabel) {
-  return modeloKey(data.modelo_id, data.modelo_label) === modeloKey(modeloId, modeloLabel);
+  if (data.modelo_id && modeloId) return data.modelo_id === modeloId;
+  const la = _tightLabel(data.modelo_label);
+  const lb = _tightLabel(modeloLabel);
+  if (la && lb) return la === lb;
+  return true;
 }
 
 function _movimiento({ tipo, de_estado = null, a_estado = null, ref = null, notas = "" }) {
@@ -96,18 +114,9 @@ async function resolver(serial, modeloId, modeloLabel) {
 
   if (!docs.length) return { ref: col.doc(norm), data: null, colisionConId: null };
 
+  // mismoModelo ya es tolerante (adopta docs/flujos sin datos de modelo).
   const exacto = docs.find((d) => mismoModelo(d, modeloId, modeloLabel));
   if (exacto) return { ref: col.doc(exacto.id), data: exacto, colisionConId: null };
-
-  // Doc de migración sin modelo: se adopta como la misma unidad (el flujo que
-  // llega ahora trae mejor dato de modelo que el que lo creó).
-  const sinModelo = docs.find((d) => modeloKey(d.modelo_id, d.modelo_label) === "sinmodelo");
-  if (sinModelo) return { ref: col.doc(sinModelo.id), data: sinModelo, colisionConId: null };
-
-  // Si el flujo que llega NO trae modelo y hay un único doc, es esa unidad.
-  if (modeloKey(modeloId, modeloLabel) === "sinmodelo" && docs.length === 1) {
-    return { ref: col.doc(docs[0].id), data: docs[0], colisionConId: null };
-  }
 
   // Colisión entre modelos (caso Kenwood NX420/NX920): el nuevo doc va sufijado.
   const sufijado = `${norm}__${modeloKey(modeloId, modeloLabel)}`;
@@ -157,6 +166,11 @@ async function upsertContacto(opts) {
     const actual = snap.data();
     const de = actual.estado;
     const update = { ...(opts.extra || {}), updated_at: admin.firestore.FieldValue.serverTimestamp() };
+    // Enriquecer modelo cuando el doc lo tiene incompleto y el flujo lo trae.
+    if (!actual.modelo_id && opts.modelo_id) update.modelo_id = opts.modelo_id;
+    if (!(actual.modelo_label || "").trim() && (opts.modelo_label || "").trim()) {
+      update.modelo_label = opts.modelo_label.trim();
+    }
 
     // La baja es terminal: nunca se revive por contacto (se resuelve a mano).
     if (de === ESTADOS.BAJA) return "sin-cambio";
