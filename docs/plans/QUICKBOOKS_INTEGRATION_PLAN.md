@@ -119,7 +119,7 @@ poc_devices/{id}   (uno por serial)
 > conservan (inventario necesita stock separado por condición); el doc "R" gana
 > `variante_de: <id base>` y la resolución a `modelo_id` base + `condicion` ocurre
 > **al crear la unidad facturable** (solo datos nuevos). Los históricos no se tocan.
-> Plan completo: `public/mejoras solicitadas/07_modelos_variante_refurbished.md`.
+> Plan completo: `docs/mejoras-solicitadas/07_modelos_variante_refurbished.md`.
 
 ### Contrato (acuerdo comercial — sigue siendo la autoridad)
 

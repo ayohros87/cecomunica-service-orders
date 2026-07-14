@@ -229,7 +229,7 @@ A small ops dashboard surfacing `mail_queue.status === "error"`, CF error rates,
 - `ORDENES_INDEX_IMPROVEMENTS.md` — folded in (most items shipped; outstanding moved here)
 - `REFACTOR_LOOK_FEEL.md` — folded in (none of the 7 phases have started; all here)
 - `REFACTOR_STRATEGY.md` — folded in (Phase 0 partially done; Phase 1+ here)
-- `CSS_IMPROVEMENTS.md` — now redundant. Everything its §13 listed is either shipped (token bridge in `212f3af`, P0 sticky-offset, focus-ring consolidation, motion preferences, the 4,362→3,315 cleanup) or tracked under §3.1 / §3.7 above. Safe to delete; left in place pending explicit OK so anyone with a bookmark still finds it.
+- `docs/CSS_IMPROVEMENTS.md` — now redundant. Everything its §13 listed is either shipped (token bridge in `212f3af`, P0 sticky-offset, focus-ring consolidation, motion preferences, the 4,362→3,315 cleanup) or tracked under §3.1 / §3.7 above. Safe to delete; left in place pending explicit OK so anyone with a bookmark still finds it.
 - Plus historical: `CONTRACT_SUMMARIES_OPTIMIZATION.md`, `DEEP_IMPROVEMENTS_ALL_PAGES.md`, etc. — also candidates for retirement once their items are verified shipped or moved here.
 
 ---
@@ -262,4 +262,4 @@ Do **not** refactor these in early phases. Backward compatibility is non-negotia
 
 - **`CHANGELOG.md`** — every commit / batch annotated, newest at top. Search for §-numbers (e.g. `§4.2`) to find when an item landed.
 - **`ARQUITECTURA_CECOMUNICA.md`** — current architecture, not aspirational. Updated whenever a shipped change altered the topology.
-- **`CSS_IMPROVEMENTS.md`** — earlier token-bridge work (predates this consolidation; may also retire once verified).
+- **`docs/CSS_IMPROVEMENTS.md`** — earlier token-bridge work (predates this consolidation; may also retire once verified).

@@ -13,9 +13,7 @@
       "**/.*",
       "**/node_modules/**",
       "tools/**",
-      "mejoras solicitadas/**",
-      "brand/kpi report/**",
-      "notes.txt"
+      "brand/kpi report/**"
     ],
     "rewrites": [
       {
