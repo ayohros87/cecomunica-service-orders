@@ -1,8 +1,15 @@
 @echo off
 setlocal enabledelayedexpansion
 
+:: ============================================================
+:: Backup local de cecomunica-service-orders (v4)
+:: Estructura actual: public/ (frontend), functions/ (src, scripts,
+:: templates, tests), docs/, design-system/ y config raiz.
+:: Excluye node_modules, .git, .firebase y backups/.
+:: ============================================================
+
 :: === Fecha y hora para nombre del backup ===
-for /f %%i in ('powershell -command "Get-Date -Format yyyy-MM-dd_HH-mm"') do set datetime=%%i
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH-mm"') do set datetime=%%i
 set "folderName=backup_%datetime%"
 
 :: Carpeta destino de backups
@@ -16,65 +23,57 @@ set "zipPath=%backupDir%\%folderName%.zip"
 echo Creando carpeta temporal "%fullPath%" ...
 mkdir "%fullPath%"
 
-:: === Copia raíz del proyecto ===
-echo Copiando archivos raíz...
-copy /Y *.html "%fullPath%" 
-copy /Y *.css "%fullPath%" 
-copy /Y *.js "%fullPath%" 
-copy /Y *.json "%fullPath%" 
-copy /Y *.txt "%fullPath%" 
-copy /Y *.md "%fullPath%" 
-copy /Y firebase.json "%fullPath%" 
-copy /Y .firebaserc "%fullPath%" 
-copy /Y firestore.rules "%fullPath%" 
-copy /Y firestore.indexes.json "%fullPath%" 
-copy /Y storage.rules "%fullPath%" 
-copy /Y package*.json "%fullPath%" 
-copy /Y .gcloudignore "%fullPath%" 
-copy /Y .gitignore "%fullPath%" 
+:: === Config y docs de la raiz ===
+echo Copiando archivos raiz...
+copy /Y firebase.json "%fullPath%" >nul
+copy /Y .firebaserc "%fullPath%" >nul
+copy /Y firestore.rules "%fullPath%" >nul
+copy /Y firestore.indexes.json "%fullPath%" >nul
+copy /Y storage.rules "%fullPath%" >nul
+copy /Y jsconfig.json "%fullPath%" >nul
+copy /Y .gitignore "%fullPath%" >nul
+copy /Y .gitattributes "%fullPath%" >nul
+copy /Y *.md "%fullPath%" >nul
+copy /Y *.local.json "%fullPath%" >nul 2>nul
+copy /Y backup_cecomunica_v3.bat "%fullPath%" >nul
 
-:: === Carpetas de frontend comunes ===
-echo Copiando frontend...
-xcopy "public"     "%fullPath%\public"     /E /I /Y
-xcopy "js"         "%fullPath%\js"         /E /I /Y
-xcopy "css"        "%fullPath%\css"        /E /I /Y
-if exist "public\img"   xcopy "public\img"   "%fullPath%\public\img"   /E /I /Y
-if exist "public\fonts" xcopy "public\fonts" "%fullPath%\public\fonts" /E /I /Y
+:: === Frontend completo (incluye brand/kpi report, que NO esta en git) ===
+echo Copiando public...
+xcopy "public" "%fullPath%\public" /E /I /Y /Q
 
-:: === Copia carpetas de módulos ===
-echo Copiando módulos...
-if exist "ordenes"    xcopy "ordenes"    "%fullPath%\ordenes"    /E /I /Y
-if exist "POC"        xcopy "POC"        "%fullPath%\POC"        /E /I /Y
-if exist "inventario" xcopy "inventario" "%fullPath%\inventario" /E /I /Y
-if exist "contratos"  xcopy "contratos"  "%fullPath%\contratos"  /E /I /Y
+:: === Documentacion ===
+if exist "docs" xcopy "docs" "%fullPath%\docs" /E /I /Y /Q
 
-:: === Copia solo lo esencial de Cloud Functions ===
+:: === Design system ===
+if exist "design-system" xcopy "design-system" "%fullPath%\design-system" /E /I /Y /Q
+
+:: === Cloud Functions (sin node_modules) ===
 if exist "functions" (
-  echo Copiando funciones esenciales...
+  echo Copiando functions...
   mkdir "%fullPath%\functions" >nul 2>&1
-  for %%f in (index.js *.js) do (
-    if exist "functions\%%f" copy "functions\%%f" "%fullPath%\functions" >nul
-  )
-  if exist "functions\package.json" copy "functions\package.json" "%fullPath%\functions" >nul
-  if exist "functions\package-lock.json" copy "functions\package-lock.json" "%fullPath%\functions" >nul
-  if exist "functions\templates" xcopy "functions\templates" "%fullPath%\functions\templates" /E /I /Y
-  if exist "functions\utils"     xcopy "functions\utils"     "%fullPath%\functions\utils"     /E /I /Y
-  echo ✅ Functions copiadas.
+  copy /Y "functions\index.js" "%fullPath%\functions" >nul
+  copy /Y "functions\package.json" "%fullPath%\functions" >nul
+  copy /Y "functions\package-lock.json" "%fullPath%\functions" >nul
+  copy /Y "functions\eslint.config.js" "%fullPath%\functions" >nul 2>nul
+  if exist "functions\src"           xcopy "functions\src"           "%fullPath%\functions\src"           /E /I /Y /Q
+  if exist "functions\scripts"       xcopy "functions\scripts"       "%fullPath%\functions\scripts"       /E /I /Y /Q
+  if exist "functions\templates"     xcopy "functions\templates"     "%fullPath%\functions\templates"     /E /I /Y /Q
+  if exist "functions\test"          xcopy "functions\test"          "%fullPath%\functions\test"          /E /I /Y /Q
+  if exist "functions\test-emulator" xcopy "functions\test-emulator" "%fullPath%\functions\test-emulator" /E /I /Y /Q
 ) else (
-  echo ⚠️  Carpeta "functions" no encontrada, se omite.
+  echo AVISO: carpeta "functions" no encontrada, se omite.
 )
+
 :: === Crear archivo ZIP con PowerShell ===
 echo Comprimiendo backup en "%zipPath%" ...
-powershell -NoLogo -NoProfile -Command ^
- "& { Compress-Archive -Path \"%fullPath%\*\" -DestinationPath \"%zipPath%\" -Force }"
+powershell -NoLogo -NoProfile -Command "Compress-Archive -Path '%fullPath%\*' -DestinationPath '%zipPath%' -Force"
 
 if exist "%zipPath%" (
   rmdir /s /q "%fullPath%"
   echo.
-  echo ✅ Backup completo creado: "%zipPath%"
+  echo OK - Backup completo creado: "%zipPath%"
 ) else (
-  echo ❌ Error creando ZIP. Carpeta temporal preservada: "%fullPath%"
+  echo ERROR creando ZIP. Carpeta temporal preservada: "%fullPath%"
 )
 
 pause
-
