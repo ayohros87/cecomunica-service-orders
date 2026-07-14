@@ -51,11 +51,29 @@
         ]
       },
       {
-        "source": "**/*.@(js|css|html)",
+        "source": "**/*.html",
         "headers": [
           {
             "key": "Cache-Control",
             "value": "no-cache"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(js|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=600, stale-while-revalidate=3600"
+          }
+        ]
+      },
+      {
+        "source": "**/*.@(png|svg|jpg|jpeg|webp|ico|woff|woff2|webmanifest)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=604800"
           }
         ]
       }
