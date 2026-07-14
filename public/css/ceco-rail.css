@@ -1,0 +1,91 @@
+/* =============================================================
+   ceco-rail.css — rail de navegación Command Center para páginas
+   HÍBRIDAS: conservan ceco-ui.css (topbar, botones, modales) y
+   solo suman el rail lateral + fila de KPIs de señal.
+   PLAN_REDISENO_COMMAND_CENTER.md (F2).
+
+   Sin colisiones con ceco-ui.css: solo se definen .cc-app, .cc-work,
+   .rail*, .rail-scrim y .os-kpi* (verificado: no existen allá).
+   Las páginas totalmente migradas usan ceco-command.css, que trae
+   su propia copia del rail (misma marca visual).
+
+   El rail es DESKTOP-ONLY aquí (≤1024px se oculta): las páginas
+   híbridas ya tienen su navegación móvil propia (bottom nav/drawer).
+   ============================================================= */
+
+:root{
+  --cc-rail-w:236px;
+  --cc-navy-700:#0F3A5F; --cc-navy-800:#0B2A47; --cc-navy-900:#061829; --cc-navy-950:#03101C;
+  --cc-cyan-400:#43AAEF; --cc-blue-500:#0091D7;
+}
+
+/* ---- Grid del shell ---- */
+.cc-app{display:grid;grid-template-columns:var(--cc-rail-w) 1fr;min-height:100vh}
+.cc-work{min-width:0}
+
+/* Con rail visible (solo desktop), la marca del topbar viejo es redundante */
+@media (min-width:1025px){
+  .cc-app .topbar-brand{display:none}
+}
+
+/* ---- Rail ---- */
+.rail{
+  position:sticky;top:0;height:100vh;background:var(--cc-navy-900);color:#fff;
+  display:flex;flex-direction:column;border-right:1px solid var(--cc-navy-950);
+  background-image:radial-gradient(circle at 1px 1px,rgba(120,200,255,.10) 1px,transparent 0);
+  background-size:22px 22px;background-position:0 64px;z-index:30;
+}
+.rail__brand{display:flex;align-items:center;gap:10px;padding:16px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.rail__brand svg,.rail__brand img{width:34px;height:34px;border-radius:8px;flex:none;display:block}
+.rail__brand .wm{display:flex;flex-direction:column;line-height:1}
+.rail__brand .wm b{font:800 16px/1 var(--font-display,"Barlow",sans-serif);letter-spacing:.02em;color:#fff}
+.rail__brand .wm span{font-size:9px;letter-spacing:.16em;color:rgba(255,255,255,.55);text-transform:uppercase;margin-top:4px}
+.rail__nav{padding:10px 12px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1}
+.rail__group{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.4);padding:14px 12px 6px}
+.rail__link{
+  display:flex;align-items:center;gap:11px;padding:8px 12px;border-radius:8px;color:rgba(255,255,255,.75);
+  font:500 13.5px/1.3 var(--font-body,"IBM Plex Sans",sans-serif);text-decoration:none;
+  transition:background .15s,color .15s;position:relative;cursor:pointer;
+}
+.rail__link i,.rail__link svg{width:17px;height:17px}
+.rail__link:hover{background:rgba(255,255,255,.07);color:#fff}
+.rail__link.is-active{background:linear-gradient(90deg,rgba(0,145,215,.25),rgba(0,145,215,.05));color:#fff}
+.rail__link.is-active::before{content:"";position:absolute;left:-12px;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--cc-cyan-400);box-shadow:0 0 12px rgba(67,170,239,.8)}
+.rail__link .badge{margin-left:auto;background:rgba(255,255,255,.12);color:#fff;font:600 11px/1 var(--font-mono,"IBM Plex Mono",monospace);padding:3px 7px;border-radius:999px}
+.rail__link.is-active .badge{background:var(--cc-blue-500)}
+.rail__foot{padding:12px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:10px}
+.rail__avatar{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--cc-blue-500),var(--cc-navy-700));display:grid;place-items:center;font:700 13px var(--font-display,"Barlow",sans-serif);color:#fff;flex:none}
+.rail__who{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.rail__who b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+.rail__who span{font-size:11px;color:rgba(255,255,255,.55)}
+.rail-scrim{display:none}
+
+/* ---- Fila de KPIs de señal (bandeja de órdenes) ----
+   Los <button> llevan data-action="filtrar-estado-chip" (mismo handler
+   delegado que los chips) y los valores son [data-count] dentro de un
+   contenedor .estado-chips-bar, así actualizarResumen() los llena solo. */
+.os-kpis.estado-chips-bar,
+.os-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0 0 16px;padding:0;border:none}
+.os-kpi{
+  background:var(--surface,#fff);border:1px solid var(--line,#DDE4EB);border-radius:10px;
+  padding:14px 16px;text-align:left;cursor:pointer;font-family:inherit;
+  display:flex;flex-direction:column;gap:0;transition:border-color .15s,box-shadow .15s;
+}
+.os-kpi:hover{border-color:var(--accent,#0091D7);box-shadow:0 4px 10px rgba(6,24,41,.07)}
+.os-kpi__label{font-size:12px;color:var(--fg-3,#6B7884);font-weight:500;display:flex;align-items:center;gap:7px}
+.os-kpi__label i{width:15px;height:15px;color:var(--fg-4,#9AA7B4);flex:none}
+.os-kpi__val{font:700 28px/1.05 var(--font-display,"Barlow",sans-serif);letter-spacing:-.02em;margin-top:8px;color:var(--fg-1,#0E1418)}
+.os-kpi__sub{font:600 11.5px/1 var(--font-mono,"IBM Plex Mono",monospace);margin-top:7px;color:var(--fg-3,#6B7884)}
+.os-kpi--alert{border-left:3px solid var(--status-critical,#D24545)}
+.os-kpi--alert .os-kpi__val{color:var(--status-critical,#D24545)}
+
+/* ---- Responsive: rail y KPIs solo en desktop ---- */
+@media (max-width:1180px){
+  .os-kpis{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:1024px){
+  .cc-app{grid-template-columns:1fr}
+  .rail,.rail-scrim{display:none}
+  .os-kpis.estado-chips-bar,
+  .os-kpis{display:none}
+}

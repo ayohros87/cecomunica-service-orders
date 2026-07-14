@@ -12,6 +12,9 @@
   <title>Órdenes de Servicio - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <link rel="stylesheet" href="../css/ordenes-index.css">
+  <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
+       conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
+  <link rel="stylesheet" href="../css/ceco-rail.css">
   
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -20,6 +23,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
 <script src="../js/firebase-init.js"></script>
 <script src="../js/core/roles.js"></script>
+<script src="../js/core/modulos.js"></script>
+<script src="../js/core/layout.js"></script>
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script src="../js/services/clientesService.js"></script>
@@ -45,6 +50,9 @@
 <script src="../js/pages/ordenes-index.js"></script>
 </head>
 <body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
   <div class="topbar topbar--desktop" id="desktopTopbar">
     <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><defs><linearGradient id="ccPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4267"/><stop offset="0.5" stop-color="#0B2A47"/><stop offset="1" stop-color="#06203A"/></linearGradient><linearGradient id="ccSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient><linearGradient id="ccWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C4D2E0"/></linearGradient><linearGradient id="ccCyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD3EE"/><stop offset="1" stop-color="#0091B0"/></linearGradient><radialGradient id="ccGlow"><stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"/><stop offset="1" stop-color="#7FE3FF" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccPlate)"/><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccSheen)"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#ccWhite)" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#ccCyan)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="32" cy="32" r="6" fill="url(#ccGlow)"/><rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"/></svg>
     <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
@@ -122,6 +130,32 @@
   <div class="mh-sub" id="mobileResumen" role="status" aria-live="polite" aria-atomic="true">
     <!-- we will mirror resumenOrdenes content here via JS -->
   </div>
+</div>
+
+<!-- KPIs de señal (desktop). El contenedor lleva .estado-chips-bar para que
+     actualizarResumen() llene los [data-count]; los botones disparan el mismo
+     handler delegado de los chips (filtrar-estado-chip). Cero JS nuevo. -->
+<div class="os-kpis estado-chips-bar" id="ordenesKpis">
+  <button type="button" class="os-kpi os-kpi--alert" data-action="filtrar-estado-chip" data-estado="POR ASIGNAR">
+    <span class="os-kpi__label"><i data-lucide="alert-circle"></i> Por asignar</span>
+    <span class="os-kpi__val" data-count="POR ASIGNAR">0</span>
+    <span class="os-kpi__sub">requieren técnico</span>
+  </button>
+  <button type="button" class="os-kpi" data-action="filtrar-estado-chip" data-estado="ASIGNADO">
+    <span class="os-kpi__label"><i data-lucide="hammer"></i> Asignadas</span>
+    <span class="os-kpi__val" data-count="ASIGNADO">0</span>
+    <span class="os-kpi__sub">en taller</span>
+  </button>
+  <button type="button" class="os-kpi" data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)">
+    <span class="os-kpi__label"><i data-lucide="package-check"></i> Completadas (en oficina)</span>
+    <span class="os-kpi__val" data-count="COMPLETADO (EN OFICINA)">0</span>
+    <span class="os-kpi__sub">para entregar</span>
+  </button>
+  <button type="button" class="os-kpi" data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
+    <span class="os-kpi__label"><i data-lucide="handshake"></i> Entregadas</span>
+    <span class="os-kpi__val" data-count="ENTREGADO AL CLIENTE">0</span>
+    <span class="os-kpi__sub">al cliente</span>
+  </button>
 </div>
 
 <!-- Tarjeta de filtros -->
@@ -703,6 +737,29 @@
   </button>
 </div>
 
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+
+  <script>
+    // Rail Command Center (F2) — nav lateral con módulos del rol.
+    // Segundo listener de auth además del de ordenes-index.js: solo pinta
+    // el rail, no toca el estado de la página.
+    verificarAccesoYAplicarVisibilidad(async (rol) => {
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+      let nombre = sessionStorage.getItem('ccUserName:' + user.uid) || '';
+      if (!nombre) {
+        try {
+          const u = await UsuariosService.getUsuario(user.uid);
+          nombre = (u && (u.nombre || u.name)) || user.displayName || (user.email || '').split('@')[0];
+          sessionStorage.setItem('ccUserName:' + user.uid, nombre);
+        } catch {
+          nombre = user.displayName || (user.email || '').split('@')[0];
+        }
+      }
+      Layout.renderRail({ active: 'ordenes', rol, userName: nombre });
+    });
+  </script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
 </body>
 </html>

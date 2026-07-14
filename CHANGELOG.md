@@ -1,5 +1,37 @@
 # Changelog
 
+## [Rediseño Command Center — F2: bandeja de órdenes con rail y KPIs de señal] — 2026-07-14
+
+> Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F2). Integración HÍBRIDA de mínimo
+> riesgo: la página conserva ceco-ui.css/ordenes-index.css y toda su lógica
+> (`ordenes-*.js` sin cambios); solo suma shell y cabecera de señales.
+
+- **`css/ceco-rail.css`** — rail Command Center para páginas híbridas, sin
+  colisiones con ceco-ui (solo define `.cc-app`, `.cc-work`, `.rail*`,
+  `.os-kpi*`). Desktop-only: ≤1024px el rail y los KPIs se ocultan y la página
+  queda exactamente como antes (la nav móvil propia — bottom nav + drawer —
+  sigue intacta). La marca del topbar se oculta solo cuando el rail es visible.
+- **`js/core/layout.js`** — `renderRail()` extraído de `renderShell` (que ahora
+  delega): pinta solo el rail con los módulos del rol vía `MODULOS`; wirea el
+  drawer móvil únicamente si la página trae `#ccRailToggle`.
+- **`ordenes/index.html`** — wrapper `.cc-app` (rail + `.cc-work` con todo lo
+  existente), fila de 4 KPIs de señal (Por asignar en rojo / Asignadas /
+  Completadas / Entregadas) y script de rail al autenticar. Los KPIs no traen
+  JS nuevo: el contenedor lleva `.estado-chips-bar` para que
+  `actualizarResumen()` llene los `[data-count]`, y cada tile dispara el mismo
+  handler delegado de los chips (`data-action="filtrar-estado-chip"`).
+- Colores de chips de estado y badges de tabla se conservan tal cual (la
+  unificación cromática con el sistema `sig--*` queda para una pasada de polish
+  con feedback de uso).
+
+### QA targets
+- Desktop (>1024px): rail con módulos del rol (Órdenes activa), KPIs con los
+  conteos del dataset cargado; clic en un KPI aplica el filtro de estado (los
+  chips reflejan el activo); todo el flujo existente (asignar, entregar,
+  intervención, presets, scan) intacto.
+- Tablet/móvil (≤1024px): sin rail ni KPIs; página idéntica a antes del F2,
+  con su chip bar y bottom nav.
+
 ## [Contratos — renovación sin equipo no pide seriales a inventario] — 2026-07-14
 
 > Reporte de operaciones: en una renovación sin equipo, bodega recibía la

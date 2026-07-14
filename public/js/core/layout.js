@@ -183,11 +183,11 @@ const Layout = (() => {
     vendedor: 'Ventas', inventario: 'Inventario', contabilidad: 'Contabilidad', vista: 'Solo lectura',
   };
 
-  function renderShell(opts = {}) {
-    const {
-      active = '', rol = '', userName = '',
-      title = '', titleIcon = '', back = null, actions = [],
-    } = opts;
+  /* Rail solo (sin topbar) — para páginas HÍBRIDAS que conservan su
+     topbar/estilos de ceco-ui y solo suman la navegación lateral (cargan
+     css/ceco-rail.css). renderShell lo reutiliza para páginas migradas. */
+  function renderRail(opts = {}) {
+    const { active = '', rol = '', userName = '' } = opts;
 
     const visibles = (window.MODULOS && MODULOS.deRol(rol)) || [];
     const grupos = _RAIL_CATALOGO.map(g => {
@@ -225,6 +225,33 @@ const Layout = (() => {
 </aside>
 <div class="rail-scrim" id="ccRailScrim"></div>`;
 
+    const railMount = document.getElementById('rail-mount');
+    if (railMount) railMount.outerHTML = railHtml;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // drawer móvil — solo si la página trae el botón (renderShell lo emite;
+    // las híbridas desktop-only no lo tienen y el rail se oculta por CSS).
+    const rail = document.getElementById('ccRail');
+    const scrim = document.getElementById('ccRailScrim');
+    const toggle = document.getElementById('ccRailToggle');
+    if (rail && toggle) {
+      toggle.addEventListener('click', () => {
+        rail.classList.toggle('is-open');
+        scrim?.classList.toggle('is-open', rail.classList.contains('is-open'));
+      });
+      scrim?.addEventListener('click', () => {
+        rail.classList.remove('is-open');
+        scrim.classList.remove('is-open');
+      });
+    }
+  }
+
+  function renderShell(opts = {}) {
+    const {
+      active = '', rol = '', userName = '',
+      title = '', titleIcon = '', back = null, actions = [],
+    } = opts;
+
     const btnHtml = (a) => {
       if (a.html) return a.html;
       const id = a.id ? ` id="${a.id}"` : '';
@@ -246,26 +273,11 @@ const Layout = (() => {
   ${actions.map(btnHtml).join('')}
 </div>`;
 
-    const railMount = document.getElementById('rail-mount');
+    // Topbar primero (emite #ccRailToggle), luego el rail — renderRail
+    // encuentra el toggle ya en el DOM y wirea el drawer móvil.
     const topMount = document.getElementById('shelltop-mount');
-    if (railMount) railMount.outerHTML = railHtml;
     if (topMount) topMount.outerHTML = topHtml;
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-
-    // drawer móvil
-    const rail = document.getElementById('ccRail');
-    const scrim = document.getElementById('ccRailScrim');
-    const toggle = document.getElementById('ccRailToggle');
-    if (rail && toggle) {
-      toggle.addEventListener('click', () => {
-        rail.classList.toggle('is-open');
-        scrim?.classList.toggle('is-open', rail.classList.contains('is-open'));
-      });
-      scrim?.addEventListener('click', () => {
-        rail.classList.remove('is-open');
-        scrim.classList.remove('is-open');
-      });
-    }
+    renderRail({ active, rol, userName });
   }
 
   /* Pinta un conteo en el badge de un módulo del rail (oculto si n falsy). */
@@ -276,5 +288,5 @@ const Layout = (() => {
     });
   }
 
-  return { renderTopbar, renderTopbarFor, renderShell, setRailBadge, wireMenuToggle: _wireMenuToggle };
+  return { renderTopbar, renderTopbarFor, renderShell, renderRail, setRailBadge, wireMenuToggle: _wireMenuToggle };
 })();
