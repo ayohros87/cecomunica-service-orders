@@ -17,9 +17,9 @@ window.MODULOS = (() => {
   // (aprueba cotizaciones comerciales, aprueba/anula contratos) y tiene
   // ver-inventario/ver-progreso en roles.js.
   const visiblesPorRol = {
-    administrador: ["ordenes", "poc", "inventario", "facturacion", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
-    gerente:       ["ordenes", "poc", "inventario", "contratos", "cotizaciones", "clientes", "firma"],
-    inventario:    ["inventario", "piezas", "firma"],
+    administrador: ["ordenes", "poc", "inventario", "equipos", "facturacion", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
+    gerente:       ["ordenes", "poc", "inventario", "equipos", "contratos", "cotizaciones", "clientes", "firma"],
+    inventario:    ["inventario", "equipos", "piezas", "firma"],
     contabilidad:  ["facturacion", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],

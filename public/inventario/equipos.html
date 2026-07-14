@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Equipos por serial - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <!-- Rediseño Command Center: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
+
+  <style>
+    /* Page-local — kit primitives handle the rest */
+    .eq-badge {
+      display:inline-flex; align-items:center; gap:5px;
+      font-size:12px; font-weight:600;
+      padding:3px 10px; border-radius:var(--radius-pill);
+      border:1px solid transparent;
+    }
+    .eq-badge-en_bodega         { background:#dcfce7; color:#15803d; }
+    .eq-badge-asignado_contrato { background:#dbeafe; color:#1d4ed8; }
+    .eq-badge-en_cliente        { background:#e0e7ff; color:#4338ca; }
+    .eq-badge-en_taller         { background:#fef9c3; color:#a16207; }
+    .eq-badge-en_poc            { background:#fae8ff; color:#a21caf; }
+    .eq-badge-devuelto_revision { background:#ffedd5; color:#c2410c; }
+    .eq-badge-baja              { background:#f1f5f9; color:#64748b; }
+
+    .eq-compartido {
+      display:inline-flex; align-items:center;
+      font-size:10px; font-weight:700; letter-spacing:.02em;
+      padding:1px 6px; border-radius:var(--radius-pill);
+      background:#fee2e2; color:#b91c1c; margin-left:6px;
+      cursor:help;
+    }
+    .eq-noverif {
+      display:inline-flex; align-items:center;
+      font-size:10px; font-weight:700;
+      padding:1px 6px; border-radius:var(--radius-pill);
+      background:#fef3c7; color:#92400e; margin-left:6px;
+    }
+    .eq-sub { font-size:12px; color:var(--fg-3); display:block; }
+
+    /* Tabs de estado (pills) — mismo patrón que sim-cards */
+    .eq-tabs { display:flex; gap:var(--sp-2); flex-wrap:wrap; }
+    .eq-tab {
+      padding:5px 14px; border-radius:var(--radius-pill);
+      border:1px solid var(--border-default); background:var(--surface-sunken);
+      font-size:13px; font-weight:500; color:var(--fg-2); cursor:pointer;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    }
+    .eq-tab:hover { border-color:var(--accent); color:var(--accent); }
+    .eq-tab.is-active { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); font-weight:600; }
+
+    /* Timeline de movimientos (modal Historia) */
+    .mov-item { display:flex; gap:var(--sp-3); padding:var(--sp-2) 0; border-bottom:1px solid var(--border-default); }
+    .mov-item:last-child { border-bottom:none; }
+    .mov-icon { flex:0 0 28px; height:28px; border-radius:50%; background:var(--surface-sunken);
+                display:flex; align-items:center; justify-content:center; }
+    .mov-icon i { width:15px; height:15px; }
+    .mov-body { flex:1; font-size:13px; }
+    .mov-meta { font-size:11.5px; color:var(--fg-3); }
+
+    .import-stat { display:inline-flex; align-items:center; gap:6px; margin-right:var(--sp-4); font-size:13px; }
+    .import-stat strong { font-size:16px; }
+
+    table.app-table tbody td { font-size:14px; }
+    table.app-table tbody tr:nth-child(even) { background:#f1f5f9; }
+  </style>
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js"></script>
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js?v=cc5"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script defer src="../js/services/modelosService.js"></script>
+  <script defer src="../js/services/equiposPoolService.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/ui/modal.js"></script>
+  <script src="../js/pages/inventario-equipos.js" defer></script>
+  <script src="/js/vendor/lucide.min.js"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="scan-barcode"></i> Equipos por serial',
+      back: { label: '<i data-lucide="arrow-left"></i> Inventario', href: 'index.html' },
+      actions: [
+        { label: '<i data-lucide="package-plus"></i> Recibir equipos', onclick: 'EquiposPool.abrirRecibir()', cls: 'primary', id: 'btnRecibir' },
+      ],
+      menu: [
+        { label: '<i data-lucide="upload"></i> Importar Excel', onclick: 'EquiposPool.abrirImport()', id: 'btnImportar' },
+        { label: '<i data-lucide="download"></i> Descargar plantilla', onclick: 'EquiposPool.descargarPlantilla()', id: 'btnPlantilla' },
+        { label: '<i data-lucide="file-down"></i> Exportar Excel', onclick: 'EquiposPool.exportarExcel()' },
+      ],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--full">
+
+    <div class="kpi-grid" style="margin:var(--sp-4) 0;">
+      <div class="kpi-card">
+        <span class="kpi-card-label">En bodega</span>
+        <span class="kpi-card-value kpi-accent" id="kpiBodega">—</span>
+        <span class="kpi-card-sub">disponibles para asignar</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Asignados / En cliente</span>
+        <span class="kpi-card-value" id="kpiAfuera">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">En taller</span>
+        <span class="kpi-card-value" id="kpiTaller">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-card-label">Por verificar</span>
+        <span class="kpi-card-value kpi-warn" id="kpiVerificar">—</span>
+        <span class="kpi-card-sub">creados por migración</span>
+      </div>
+    </div>
+
+    <div class="ds-card">
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="eq-tabs" role="tablist">
+          <button class="eq-tab is-active" data-tab="en_bodega" onclick="EquiposPool.setTab('en_bodega')">Bodega <span id="countBodega"></span></button>
+          <button class="eq-tab" data-tab="asignado_contrato" onclick="EquiposPool.setTab('asignado_contrato')">Asignados <span id="countAsignados"></span></button>
+          <button class="eq-tab" data-tab="en_cliente" onclick="EquiposPool.setTab('en_cliente')">En cliente <span id="countCliente"></span></button>
+          <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')">Taller <span id="countTaller"></span></button>
+          <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')">Otros <span id="countOtros"></span></button>
+          <button class="eq-tab" data-tab="por_verificar" onclick="EquiposPool.setTab('por_verificar')">Por verificar <span id="countVerificar"></span></button>
+          <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>
+        </div>
+
+        <div class="filter-search" style="max-width:320px;">
+          <span class="search-icon"><i data-lucide="search"></i></span>
+          <input type="search" id="eqBusqueda" placeholder="Buscar serial, modelo o cliente…" aria-label="Buscar equipos" oninput="EquiposPool.render()" style="border:none; flex:1;">
+        </div>
+
+        <select id="eqFiltroModelo" class="form-select" style="max-width:230px;" onchange="EquiposPool.render()" aria-label="Filtrar por modelo">
+          <option value="">Todos los modelos</option>
+        </select>
+
+        <div style="flex:1;"></div>
+        <button class="btn btn-ghost btn-sm" onclick="EquiposPool.cargar()" title="Recargar la lista"><i data-lucide="rotate-ccw"></i> Recargar</button>
+      </div>
+
+      <!-- Tabla -->
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="app-table" aria-label="Equipos del pool">
+          <thead>
+            <tr>
+              <th>Serial</th>
+              <th>Modelo</th>
+              <th>Cond.</th>
+              <th>Estado</th>
+              <th>Asignado a</th>
+              <th>Origen</th>
+              <th style="width:150px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="eqTabla">
+            <tr><td colspan="7" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="app-table-footer">
+        <div class="resumen-badge" id="eqResumen"></div>
+      </div>
+
+    </div><!-- /.ds-card -->
+
+  </div><!-- /.app-wrap -->
+
+  <!-- Modal: recibir equipos -->
+  <div id="eqRecibirModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="package-plus"></i> Recibir equipos en bodega</h3>
+        <button class="modal-close" onclick="Modal.close('eqRecibirModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="recModelo">Modelo</label>
+          <select class="form-select" id="recModelo"><option value="">Seleccione…</option></select>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="recSeriales">Seriales <span class="optional">(uno por línea — acepta lector de código de barras)</span></label>
+          <textarea class="form-input" id="recSeriales" rows="6" placeholder="B12345678&#10;B12345679&#10;…" style="font-family:var(--font-mono);"></textarea>
+        </div>
+        <div style="display:flex; gap:var(--sp-3);">
+          <div class="form-field" style="flex:1;">
+            <label class="form-label" for="recCondicion">Condición</label>
+            <select class="form-select" id="recCondicion">
+              <option value="nuevo">Nuevo</option>
+              <option value="reuso">Reuso</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:2;">
+            <label class="form-label" for="recProveedor">Proveedor / factura <span class="optional">(opcional)</span></label>
+            <input class="form-input" id="recProveedor" type="text">
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="recNotas">Notas <span class="optional">(opcional)</span></label>
+          <input class="form-input" id="recNotas" type="text">
+        </div>
+        <label class="toggle-pill" style="margin-top:var(--sp-1);">
+          <input type="checkbox" id="recTomaFisica"> Toma física inicial (migración del stock existente)
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqRecibirModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardarRecibir" onclick="EquiposPool.guardarRecibir()"><i data-lucide="check"></i> Recibir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: editar equipo -->
+  <div id="eqEditModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:460px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="pencil"></i> Editar <span id="editSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <button class="modal-close" onclick="Modal.close('eqEditModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="editModelo">Modelo</label>
+          <select class="form-select" id="editModelo"><option value="">Sin modelo</option></select>
+        </div>
+        <div style="display:flex; gap:var(--sp-3);">
+          <div class="form-field" style="flex:1;">
+            <label class="form-label" for="editCondicion">Condición</label>
+            <select class="form-select" id="editCondicion">
+              <option value="nuevo">Nuevo</option>
+              <option value="reuso">Reuso</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:2;">
+            <label class="form-label" for="editProveedor">Proveedor / factura</label>
+            <input class="form-input" id="editProveedor" type="text">
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="editNotas">Notas</label>
+          <input class="form-input" id="editNotas" type="text">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqEditModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" onclick="EquiposPool.guardarEdicion()"><i data-lucide="check"></i> Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: historia (kardex del serial) -->
+  <div id="eqHistoriaModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="history"></i> Historia <span id="histSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <button class="modal-close" onclick="Modal.close('eqHistoriaModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div id="histResumen" style="margin-bottom:var(--sp-3);"></div>
+        <div id="histMovimientos" style="max-height:360px; overflow:auto;">Cargando…</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqHistoriaModal')"><i data-lucide="x"></i> Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: importar Excel -->
+  <div id="eqImportModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="upload"></i> Importar seriales desde Excel</h3>
+        <button class="modal-close" onclick="EquiposPool.cerrarImport()" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label class="form-label" for="impModelo">Modelo (se aplica a todo el archivo)</label>
+          <select class="form-select" id="impModelo"><option value="">Seleccione…</option></select>
+        </div>
+        <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo Excel" style="padding:var(--sp-4); min-height:auto;">
+          <input type="file" id="eqImportFile" accept=".xlsx,.xls,.csv" onchange="EquiposPool.previsualizarImport(this)">
+          <i data-lucide="file-spreadsheet"></i>
+          <p style="margin:0; font-size:13px;"><strong>Arrastra el Excel</strong> o haz clic</p>
+          <span style="font-size:12px; color:var(--fg-3);">Columna requerida: <code>SERIAL</code> (primera hoja). Todos entran <strong>en bodega</strong>.</span>
+        </label>
+        <div id="eqImportPreview" style="margin-top:var(--sp-3);"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="EquiposPool.cerrarImport()"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmarImport" onclick="EquiposPool.confirmarImport()" disabled><i data-lucide="check"></i> Importar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    // Rail Command Center — espera auth (scripts defer) y pinta el rail del rol efectivo.
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('equipos'));
+  </script>
+</body>
+</html>

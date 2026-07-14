@@ -278,6 +278,27 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Pool de equipos serializados (inventario/equipos.html; asignación a
+    // contratos desde contratos/seriales.html). Doc ID = serial normalizado,
+    // con failsafe de colisión entre modelos vía ID sufijado `serial__modelo`
+    // (ver docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md). Alta/recepción en bodega:
+    // admin/inventario. Transiciones desde el flujo de seriales de contrato:
+    // puedeGestionarSeriales(). Los cruces con órdenes/entregas/POC los
+    // escriben Cloud Functions (Admin SDK — saltan estas reglas). Nunca se
+    // borra un doc: la salida es baja lógica (estado 'baja').
+    match /equipos_pool/{docId} {
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && userRole() in ["administrador", "inventario"];
+      allow update: if puedeGestionarSeriales();
+      allow delete: if false;
+      // Kardex append-only: los movimientos nunca se editan ni se borran.
+      match /movimientos/{mid} {
+        allow read:   if isSignedIn();
+        allow create: if puedeGestionarSeriales();
+        allow update, delete: if false;
+      }
+    }
+
     // Modelos: catálogo + tarifas de facturación (info sensible). Lectura para
     // cualquier autenticado (inventario cuenta stock, contratos eligen modelo).
     // Escritura SOLO admin/contabilidad (modelo-de-radio.html ya es admin-only).

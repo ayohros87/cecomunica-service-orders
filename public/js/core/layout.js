@@ -171,9 +171,10 @@ const Layout = (() => {
       { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
     ]},
     { grupo: 'Almacén · finanzas', items: [
-      { id: 'inventario',  label: 'Inventario',  icon: 'package',    href: '/inventario/index.html' },
-      { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',     href: '/inventario/piezas.html' },
-      { id: 'facturacion', label: 'Facturación', icon: 'calculator', href: '/facturacion/index.html' },
+      { id: 'inventario',  label: 'Inventario',  icon: 'package',      href: '/inventario/index.html' },
+      { id: 'equipos',     label: 'Equipos (serial)', icon: 'scan-barcode', href: '/inventario/equipos.html' },
+      { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
+      { id: 'facturacion', label: 'Facturación', icon: 'calculator',   href: '/facturacion/index.html' },
     ]},
   ];
 
