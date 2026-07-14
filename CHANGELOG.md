@@ -1,5 +1,38 @@
 # Changelog
 
+## [Pool de equipos por serial (F1–F4)] — 2026-07-14
+
+> Trazabilidad de cada equipo físico por serial desde que entra a bodega:
+> entradas, asignación a contratos desde el pool, entregas, taller y bajas.
+> Plan y decisiones: `docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md`. SIN desplegar.
+
+- **F1 — Fundación** (`e7a46be`): colección `equipos_pool` (doc ID = serial
+  normalizado, patrón sim_cards) con **failsafe de colisión entre modelos**
+  (seriales Kenwood repetidos NX420/NX920: segundo doc sufijado
+  `serial__modelo` + flag `serial_compartido`; búsqueda canónica por campo
+  `serial_norm`). Kardex append-only en subcolección `movimientos`. Estados:
+  en_bodega → asignado_contrato → en_cliente → en_taller (+ en_poc,
+  devuelto_revision, baja). `EquiposPoolService` + página
+  `inventario/equipos.html` (tabs, KPIs, recibir con lector de barras / toma
+  física, import/export Excel, historia, verificar/inspección/baja) + reglas +
+  navegación (rail/módulos/home; visible admin/gerente/inventario).
+- **F2 — Migración por contacto** (`7a8c652`): el pool se puebla solo cuando un
+  serial toca los flujos existentes (docs `verificado:false`, origen
+  `migracion_*`). `functions/src/domain/equiposPool.js` (espejo de la
+  normalización del frontend — mantener sincronizados) + `onSerialWrite`
+  extendido (alta→asignado/en_cliente; removido→en_bodega sin verificar) +
+  triggers nuevos `onEntregaPool`, `onOrdenWritePool`, `onPocDeviceWritePool`.
+- **F3 — Carga inicial** (`d5367ae`): backfill `seedPoolEquipos` en
+  `runBackfill` (dry-run; precedencia contrato > POC > orden; reporta
+  colisiones y grafías sospechosas) + tarjeta en admin/backfills +
+  **conciliación pool vs conteo manual** en la página del pool (la métrica de
+  avance de la migración; el conteo semanal sigue vivo hasta cuadrar).
+- **F4 — Asignar desde el pool** (`ca51d71`): botón "Tomar del pool (bodega)"
+  en `contratos/seriales.html` + validación suave (avisa si el serial figura en
+  otro estado/cliente u otro modelo; nunca bloquea durante la transición).
+- **F5 — Endurecimiento**: NO implementada a propósito — se dispara cuando la
+  conciliación quede en cero 3–4 semanas (ver plan §4.4/§4.5).
+
 ## [Brand y design-system: separar lo vigente de lo histórico] — 2026-07-14
 
 > Objetivo: que al abrir `public/brand/` o `design-system/` quede claro cuál ES
