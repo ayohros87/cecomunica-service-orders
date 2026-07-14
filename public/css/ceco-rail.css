@@ -19,13 +19,20 @@
   --cc-cyan-400:#43AAEF; --cc-blue-500:#0091D7;
 }
 
-/* ---- Grid del shell ---- */
-.cc-app{display:grid;grid-template-columns:var(--cc-rail-w) 1fr;min-height:100vh}
+/* ---- Grid del shell ----
+   Sin rail montado (pre-auth) la página ocupa todo el ancho; renderRail
+   añade .has-rail. El usuario puede contraerlo a modo mini (64px, solo
+   iconos) — persistido en localStorage (cc_rail_mini). */
+.cc-app{display:grid;grid-template-columns:1fr;min-height:100vh}
+.cc-app.has-rail{grid-template-columns:var(--cc-rail-w) 1fr}
+.cc-app.has-rail.rail-mini{grid-template-columns:64px 1fr}
 .cc-work{min-width:0}
 
-/* Con rail visible (solo desktop), la marca del topbar viejo es redundante */
+/* Con rail visible (solo desktop), la marca del topbar viejo es redundante.
+   Scoped a .cc-work: el monograma del rail (BRAND_MARK) comparte la clase
+   .topbar-brand y NO debe ocultarse. */
 @media (min-width:1025px){
-  .cc-app .topbar-brand{display:none}
+  .cc-work .topbar-brand{display:none}
 }
 
 /* ---- Rail ---- */
@@ -59,6 +66,33 @@
 .rail__who b{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
 .rail__who span{font-size:11px;color:rgba(255,255,255,.55)}
 .rail-scrim{display:none}
+
+/* botón contraer/expandir */
+.rail__collapse{
+  display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  background:transparent;border:none;border-top:1px solid rgba(255,255,255,.08);
+  color:rgba(255,255,255,.55);padding:10px;cursor:pointer;
+  font:600 11px/1 var(--font-body,"IBM Plex Sans",sans-serif);letter-spacing:.08em;text-transform:uppercase;
+  transition:color .15s,background .15s;
+}
+.rail__collapse:hover{color:#fff;background:rgba(255,255,255,.06)}
+.rail__collapse i,.rail__collapse svg{width:16px;height:16px;transition:transform .2s}
+
+/* ---- Modo mini (solo iconos) ---- */
+.rail--mini .rail__brand{justify-content:center;padding:14px 8px}
+.rail--mini .rail__brand .wm{display:none}
+.rail--mini .rail__group{padding:12px 0 4px;text-align:center;overflow:hidden;white-space:nowrap;font-size:0}
+.rail--mini .rail__group::before{content:"·";font-size:12px;color:rgba(255,255,255,.3)}
+.rail--mini .rail__txt{display:none}
+.rail--mini .rail__link{justify-content:center;padding:10px 0}
+.rail--mini .rail__link .badge{
+  position:absolute;top:2px;right:6px;margin:0;padding:2px 5px;font-size:9.5px;
+}
+.rail--mini .rail__link.is-active::before{left:-12px}
+.rail--mini .rail__foot{justify-content:center;padding:10px 6px}
+.rail--mini .rail__who{display:none}
+.rail--mini .rail__collapse .rail__txt{display:none}
+.rail--mini .rail__collapse i,.rail--mini .rail__collapse svg{transform:rotate(180deg)}
 
 /* ---- Fila de KPIs de señal (bandeja de órdenes) ----
    Los <button> llevan data-action="filtrar-estado-chip" (mismo handler
@@ -104,7 +138,7 @@
   .os-kpis{grid-template-columns:repeat(2,1fr)}
 }
 @media (max-width:1024px){
-  .cc-app{grid-template-columns:1fr}
+  .cc-app,.cc-app.has-rail,.cc-app.has-rail.rail-mini{grid-template-columns:1fr}
   .rail,.rail-scrim{display:none}
   .os-kpis.estado-chips-bar,
   .os-kpis{display:none}

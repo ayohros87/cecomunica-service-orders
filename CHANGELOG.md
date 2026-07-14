@@ -1,5 +1,26 @@
 # Changelog
 
+## [Rediseño Command Center — rail colapsable (modo mini)] — 2026-07-14
+
+> Feedback de uso: en módulos con tablas anchas el rail de 236px estorba.
+
+- **Modo mini (64px, solo iconos)**: botón "« Contraer" sobre el pie del rail;
+  la elección persiste por navegador en `localStorage` (`cc_rail_mini`) y
+  aplica en todos los módulos. Tooltips (`title`) en los links; badge compacto
+  arriba del icono; "»" para expandir.
+- **Sin columna fantasma pre-auth**: el grid abre la columna del rail solo
+  cuando `renderRail` monta (`.has-rail`) — antes había 236px vacíos mientras
+  resolvía la autenticación.
+- **Fix**: el monograma del rail no se veía desde F2 — el SVG `BRAND_MARK`
+  comparte la clase `.topbar-brand` y la regla que oculta la marca del topbar
+  viejo lo alcanzaba; ahora scoped a `.cc-work`.
+- Cache bump `?v=cc5` (layout.js + ceco-rail.css) en las 10 páginas con rail.
+
+### QA targets
+- Contraer en órdenes → navegar a contratos: sigue contraído; expandir persiste.
+- Modo mini: tooltips al pasar el mouse, módulo activo resaltado, badge visible.
+- Pre-login/redirect: la página no muestra franja vacía a la izquierda.
+
 ## [Rediseño Command Center — F4: rail en todas las bandejas] — 2026-07-14
 
 > Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F4). Cierra la cobertura del rail

@@ -194,15 +194,15 @@ const Layout = (() => {
       const items = g.items.filter(it => visibles.includes(it.id));
       if (!items.length) return '';
       return `<div class="rail__group">${g.grupo}</div>` + items.map(it => `
-        <a class="rail__link${it.id === active ? ' is-active' : ''}" href="${it.href}">
-          <i data-lucide="${it.icon}"></i> ${it.label}
+        <a class="rail__link${it.id === active ? ' is-active' : ''}" href="${it.href}" title="${it.label}">
+          <i data-lucide="${it.icon}"></i> <span class="rail__txt">${it.label}</span>
           <span class="badge" data-rail-badge="${it.id}" style="display:none"></span>
         </a>`).join('');
     }).join('');
 
     const adminLink = rol === 'administrador'
       ? `<div class="rail__group">Administración</div>
-         <a class="rail__link${active === 'admin' ? ' is-active' : ''}" href="/admin/index.html"><i data-lucide="shield"></i> Panel admin</a>`
+         <a class="rail__link${active === 'admin' ? ' is-active' : ''}" href="/admin/index.html" title="Panel admin"><i data-lucide="shield"></i> <span class="rail__txt">Panel admin</span></a>`
       : '';
 
     const iniciales = (userName || '?').trim().split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
@@ -214,10 +214,13 @@ const Layout = (() => {
     <div class="wm"><b>CECOMUNICA</b><span>Centro de gestión</span></div>
   </div>
   <nav class="rail__nav">
-    <a class="rail__link${active === 'inicio' ? ' is-active' : ''}" href="/index.html"><i data-lucide="layout-grid"></i> Inicio</a>
+    <a class="rail__link${active === 'inicio' ? ' is-active' : ''}" href="/index.html" title="Inicio"><i data-lucide="layout-grid"></i> <span class="rail__txt">Inicio</span></a>
     ${grupos}
     ${adminLink}
   </nav>
+  <button class="rail__collapse" id="ccRailCollapse" type="button" title="Contraer / expandir menú">
+    <i data-lucide="chevrons-left"></i> <span class="rail__txt">Contraer</span>
+  </button>
   <div class="rail__foot">
     <div class="rail__avatar">${iniciales}</div>
     <div class="rail__who"><b>${userName || ''}</b><span>${_ROL_LABELS[rol] || rol || ''}</span></div>
@@ -228,6 +231,26 @@ const Layout = (() => {
     const railMount = document.getElementById('rail-mount');
     if (railMount) railMount.outerHTML = railHtml;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Con rail montado, el grid abre su columna (.has-rail). Modo mini
+    // (solo iconos) persistido por usuario del navegador en localStorage.
+    const appEl = document.querySelector('.cc-app') || document.querySelector('.app');
+    const railEl = document.getElementById('ccRail');
+    const collapseBtn = document.getElementById('ccRailCollapse');
+    const MINI_KEY = 'cc_rail_mini';
+    const applyMini = (mini) => {
+      appEl?.classList.toggle('rail-mini', mini);
+      railEl?.classList.toggle('rail--mini', mini);
+    };
+    appEl?.classList.add('has-rail');
+    let mini = false;
+    try { mini = localStorage.getItem(MINI_KEY) === '1'; } catch { /* sin storage */ }
+    applyMini(mini);
+    collapseBtn?.addEventListener('click', () => {
+      mini = !mini;
+      applyMini(mini);
+      try { localStorage.setItem(MINI_KEY, mini ? '1' : '0'); } catch { /* sin storage */ }
+    });
 
     // drawer móvil — solo si la página trae el botón (renderShell lo emite;
     // las híbridas desktop-only no lo tienen y el rail se oculta por CSS).
