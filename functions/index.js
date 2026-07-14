@@ -25,6 +25,10 @@ exports.onContratoAnuladoNotify       = require("./src/triggers/contratos/onAnnu
 exports.onCancelacionWrite            = require("./src/triggers/cancelaciones/onCancelacionWrite");
 exports.onSerialWrite                 = require("./src/triggers/contratos/onSerialWrite");
 exports.onSerialCambio                = require("./src/triggers/contratos/onSerialCambio");
+// Pool de equipos por serial — migración por contacto (PLAN_POOL_EQUIPOS_SERIAL.md)
+exports.onEntregaPool                 = require("./src/triggers/contratos/onEntregaPool");
+exports.onOrdenWritePool              = require("./src/triggers/ordenes/onOrdenWritePool");
+exports.onPocDeviceWritePool          = require("./src/triggers/poc/onPocDeviceWritePool");
 exports.onOrdenCompletada             = require("./src/triggers/ordenes/onComplete");
 exports.onContratoOrdenWrite          = onContratoOrdenWrite;
 exports.onOrdenWriteSyncContratoCache = onOrdenWriteSyncContratoCache;
