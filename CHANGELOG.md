@@ -1,5 +1,29 @@
 # Changelog
 
+## [Rediseño Command Center — señales v2: delta diario + contratos por aprobar] — 2026-07-14
+
+> Cierra el backlog de señales del home (PLAN §3, notas).
+
+- **Delta diario "▲/▼ N vs ayer"**: snapshot de conteos por día en
+  `localStorage` (aproximación por navegador); el delta solo aparece si el
+  snapshot previo es exactamente de ayer. En señales de backlog
+  (`moreIsBad`: por asignar, por aprobar) subir pinta rojo y bajar verde;
+  el resto neutral.
+- **Nueva señal S10 "Contratos por aprobar"** (`estado == 'pendiente_aprobacion'`,
+  legible por cualquier autenticado según rules): asignada a **gerente**, cuya
+  fila pasa a S1 · S10 · S6 · S8 — su trabajo real de aprobación.
+- **Decisión documentada**: "cotizaciones fuera de umbral por aprobar" NO es
+  contable server-side — `requiereAprobacion` se calcula al vuelo
+  (CotizacionTotales) y no se persiste. Si se quiere esa señal, primero hay
+  que estampar el flag al guardar (feature aparte, fuera de este rediseño).
+- Cache bump `?v=cc6` en el home (ceco-command.css + home-signals.js).
+
+### QA targets
+- Gerente: fila con Por asignar / Contratos por aprobar / Cotizaciones enviadas /
+  Contratos por activar.
+- Segunda visita en días consecutivos: deltas "vs ayer" con color según señal.
+- Primer día (sin snapshot previo): tiles sin delta, solo el subtítulo.
+
 ## [Rediseño Command Center — unificación cromática de estados de orden] — 2026-07-14
 
 > Backlog del rediseño. Hallazgo: chips de filtro y badges de fila estaban en

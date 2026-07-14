@@ -163,7 +163,7 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 .kpi__label i{width:15px;height:15px;color:var(--fg-4);flex:none}
 .kpi__val{font:700 29px/1.05 var(--font-display);letter-spacing:-.02em;margin-top:9px;color:var(--fg-1)}
 .kpi__delta{font:600 12px/1 var(--font-mono);margin-top:7px;display:inline-flex;gap:4px;align-items:center;color:var(--fg-3)}
-.kpi__delta.up{color:var(--ok)} .kpi__delta.down{color:var(--bad)}
+.kpi__delta.up,.kpi__delta .up{color:var(--ok)} .kpi__delta.down,.kpi__delta .down{color:var(--bad)}
 .kpi--alert{border-left:3px solid var(--bad)}
 .kpi--alert .kpi__val{color:var(--bad)}
 /* mientras carga el conteo */

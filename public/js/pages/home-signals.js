@@ -33,7 +33,7 @@ window.HomeSignals = (() => {
   // Catálogo. `modulo` = gate de visibilidad; `count(ctx)` → Promise<number>.
   const SIGNALS = {
     S1: {
-      modulo: 'ordenes', icon: 'alert-circle', alert: true,
+      modulo: 'ordenes', icon: 'alert-circle', alert: true, moreIsBad: true,
       label: 'Órdenes por asignar', sub: 'requieren asignar técnico',
       href: 'ordenes/index.html',
       count: () => SenalesService.countOrdenesPorEstado(EST.POR_ASIGNAR),
@@ -86,6 +86,16 @@ window.HomeSignals = (() => {
       href: 'contratos/index.html',
       count: () => SenalesService.countContratosPorEstado('aprobado'),
     },
+    S10: {
+      modulo: 'contratos', icon: 'stamp', moreIsBad: true,
+      label: 'Contratos por aprobar', sub: 'esperando gerencia',
+      href: 'contratos/index.html',
+      count: () => SenalesService.countContratosPorEstado('pendiente_aprobacion'),
+    },
+    // Nota: "cotizaciones fuera de umbral por aprobar" NO es contable
+    // server-side hoy — requiereAprobacion se calcula al vuelo
+    // (CotizacionTotales) y no se persiste en el doc. Si se quiere esa
+    // señal, primero hay que estampar el flag al guardar (feature aparte).
     S9: {
       modulo: 'piezas', icon: 'puzzle',
       label: 'Piezas sin stock', sub: 'reponer inventario',
@@ -99,7 +109,7 @@ window.HomeSignals = (() => {
   // que el rol no ve.
   const POR_ROL = {
     administrador:     ['S1', 'S3', 'S4', 'S6'],
-    gerente:           ['S1', 'S3', 'S4', 'S6'],
+    gerente:           ['S1', 'S10', 'S6', 'S8'],
     jefe_taller:       ['S1', 'S3', 'S4', 'S6'],
     recepcion:         ['S1', 'S2', 'S4', 'S8'],
     vendedor:          ['S7', 'S8', 'S1', 'S4'],
@@ -126,6 +136,52 @@ window.HomeSignals = (() => {
     try {
       sessionStorage.setItem(_cacheKey(uid, rol), JSON.stringify({ t: Date.now(), counts }));
     } catch { /* storage lleno/bloqueado: sin cache */ }
+  }
+
+  /* ---- Delta diario ("▲ N vs ayer") ----
+     Snapshot por día en localStorage (aproximación por navegador): la
+     primera visita del día guarda los conteos como snapshot de HOY y
+     rota el anterior. El delta solo se muestra si el snapshot previo
+     es exactamente de AYER. */
+  const SNAP_KEY = (uid, rol) => `ccSignalsSnap:v1:${uid}:${rol}`;
+
+  function _localDate(offsetDays = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  /** Rota el snapshot si cambió el día y devuelve los conteos de ayer (o null). */
+  function _rotateSnapshot(uid, rol, counts) {
+    try {
+      const key = SNAP_KEY(uid, rol);
+      const raw = localStorage.getItem(key);
+      const snap = raw ? JSON.parse(raw) : null;
+      const today = _localDate();
+      if (!snap || snap.today?.date !== today) {
+        localStorage.setItem(key, JSON.stringify({
+          today: { date: today, counts },
+          prev: snap?.today || null,
+        }));
+        return (snap?.today?.date === _localDate(-1)) ? snap.today.counts : null;
+      }
+      return (snap.prev?.date === _localDate(-1)) ? snap.prev.counts : null;
+    } catch { return null; }
+  }
+
+  function _applyDeltas(mount, ids, counts, prevCounts) {
+    if (!prevCounts) return;
+    ids.forEach(id => {
+      if (typeof counts[id] !== 'number' || typeof prevCounts[id] !== 'number') return;
+      const diff = counts[id] - prevCounts[id];
+      if (diff === 0) return;
+      const tile = mount.querySelector(`[data-signal="${id}"] .kpi__delta`);
+      if (!tile) return;
+      const up = diff > 0;
+      // Para señales de backlog (moreIsBad) subir es malo (rojo) y bajar bueno.
+      const cls = SIGNALS[id].moreIsBad ? (up ? 'down' : 'up') : '';
+      tile.innerHTML = `<span class="${cls}">${up ? '▲' : '▼'} ${Math.abs(diff)} vs ayer</span> · ${SIGNALS[id].sub}`;
+    });
   }
 
   function _tileHtml(id, sig) {
@@ -178,6 +234,7 @@ window.HomeSignals = (() => {
         if (typeof cached[id] === 'number') setVal(id, cached[id]);
         else dropTile(id);
       });
+      _applyDeltas(mount, ids, cached, _rotateSnapshot(uid, rolEfectivo, cached));
       return;
     }
 
@@ -193,6 +250,7 @@ window.HomeSignals = (() => {
       }
     }));
     _writeCache(uid, rolEfectivo, counts);
+    _applyDeltas(mount, ids, counts, _rotateSnapshot(uid, rolEfectivo, counts));
   }
 
   return { render, SIGNALS, POR_ROL };
