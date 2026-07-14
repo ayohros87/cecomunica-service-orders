@@ -42,20 +42,28 @@ function _tightLabel(label) {
 }
 
 // ¿Es la misma unidad-modelo? Las fuentes traen datos desparejos (contrato con
-// FK al catálogo, POC/órdenes a veces solo texto), así que la comparación es
-// tolerante — comparar solo modeloKey producía falsas colisiones masivas
-// (id vs label del MISMO modelo):
-//   · ambos lados con modelo_id → compara ids (filas distintas del catálogo son
-//     modelos distintos aunque el label coincida)
-//   · si no, ambos con label → compara labels normalizados ("NX-420"=="NX420")
-//   · si a un lado le falta toda la información de modelo → se asume la misma
-//     unidad (adoptar es mejor que duplicar; una colisión real tipo Kenwood
-//     siempre trae modelo en ambos lados)
+// FK al catálogo, POC/órdenes a veces solo texto; el catálogo además modela
+// NUEVO y REUSO como filas distintas: "PNC360S" vs "PNC360S-R"), así que la
+// identidad de la unidad se compara por LABEL normalizado ignorando el sufijo
+// de reuso — el mismo serial como "PNC360S" en el contrato y "PNC360S-R" en
+// POC es el mismo radio físico (la condición vive en `condicion`, no parte la
+// identidad). Los ids solo desempatan cuando falta el label; si a un lado le
+// falta todo dato de modelo se asume la misma unidad (adoptar > duplicar; una
+// colisión real tipo Kenwood NX420/NX920 trae modelo en ambos lados).
 function mismoModelo(data, modeloId, modeloLabel) {
+  // Misma fila del catálogo → misma unidad, sin importar cómo esté el label.
+  if (data.modelo_id && modeloId && data.modelo_id === modeloId) return true;
+  const la = _tightLabel(data.modelo_label).replace(/r$/, "");
+  const lb = _tightLabel(modeloLabel).replace(/r$/, "");
+  if (la && lb) {
+    if (la === lb) return true;
+    // Marca opcional: una fuente guarda "PNC360S" y otra "HYTERA PNC360S" —
+    // si el corto es sufijo del largo (≥4 chars) es el mismo modelo.
+    const [corto, largo] = la.length <= lb.length ? [la, lb] : [lb, la];
+    return corto.length >= 4 && largo.endsWith(corto);
+  }
+  // Sin labels comparables: desempata por id; sin ningún dato → misma unidad.
   if (data.modelo_id && modeloId) return data.modelo_id === modeloId;
-  const la = _tightLabel(data.modelo_label);
-  const lb = _tightLabel(modeloLabel);
-  if (la && lb) return la === lb;
   return true;
 }
 

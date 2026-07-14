@@ -65,14 +65,25 @@ const EquiposPoolService = {
 
   // ¿Es la misma unidad-modelo? Comparación TOLERANTE a datos desparejos entre
   // fuentes (== functions/src/domain/equiposPool.js — mantener sincronizadas):
-  // ids solo cuando ambos lados los tienen; si no, labels normalizados; si a un
-  // lado le falta todo el dato de modelo, se asume la misma unidad (adoptar es
-  // mejor que duplicar — una colisión real tipo Kenwood trae modelo en ambos).
+  // labels normalizados ignorando el sufijo de reuso ("PNC360S-R" ≡ "PNC360S":
+  // el catálogo modela N/R como filas distintas pero es el mismo radio físico);
+  // ids solo desempatan cuando falta el label; si a un lado le falta todo el
+  // dato de modelo se asume la misma unidad (adoptar > duplicar — una colisión
+  // real tipo Kenwood trae modelo en ambos lados).
   _mismoModelo(data, modeloId, modeloLabel) {
+    // Misma fila del catálogo → misma unidad, sin importar cómo esté el label.
+    if (data.modelo_id && modeloId && data.modelo_id === modeloId) return true;
+    const la = this._tightLabel(data.modelo_label).replace(/r$/, '');
+    const lb = this._tightLabel(modeloLabel).replace(/r$/, '');
+    if (la && lb) {
+      if (la === lb) return true;
+      // Marca opcional: una fuente guarda "PNC360S" y otra "HYTERA PNC360S" —
+      // si el corto es sufijo del largo (≥4 chars) es el mismo modelo.
+      const [corto, largo] = la.length <= lb.length ? [la, lb] : [lb, la];
+      return corto.length >= 4 && largo.endsWith(corto);
+    }
+    // Sin labels comparables: desempata por id; sin ningún dato → misma unidad.
     if (data.modelo_id && modeloId) return data.modelo_id === modeloId;
-    const la = this._tightLabel(data.modelo_label);
-    const lb = this._tightLabel(modeloLabel);
-    if (la && lb) return la === lb;
     return true;
   },
 

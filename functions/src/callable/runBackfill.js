@@ -778,7 +778,11 @@ async function backfillSeedPoolEquipos(dryRun) {
       batch.set(db.collection("equipos_pool").doc(norm), { serial_compartido: true }, { merge: true });
       opsInBatch++;
       r.colisiones++;
-      if (muestraColisiones.length < 25) muestraColisiones.push(`${norm}: ${modeloLabel || modeloId}`);
+      if (muestraColisiones.length < 25) {
+        const contra = (enPool.get(norm) || [])
+          .map((d) => d.modelo_label || d.modelo_id || "sin modelo").join(" / ");
+        muestraColisiones.push(`${norm}: ${modeloLabel || modeloId} vs ${contra}`);
+      }
     }
     r.creados[fuente]++;
     const nuevo = { id: docId, modelo_id: modeloId || null, modelo_label: modeloLabel || "", serial };
@@ -948,3 +952,7 @@ module.exports = onCall(
     return { action, dryRun, ...result };
   }
 );
+
+// Para scripts one-off locales (functions/scripts/*): misma lógica que la
+// acción del callable, sin pasar por auth de onCall.
+module.exports.backfillSeedPoolEquipos = backfillSeedPoolEquipos;
