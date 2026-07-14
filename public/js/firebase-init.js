@@ -57,13 +57,16 @@ const db = firebase.firestore();
     }
 
     try {
-      const doc = await db.collection("usuarios").doc(user.uid).get();
+      // Rol y config de empresa en paralelo — son lecturas independientes
+      // y ahorran un round-trip a Firestore en cada carga de página.
+      const [doc] = await Promise.all([
+        db.collection("usuarios").doc(user.uid).get(),
+        // Best-effort config apply — never blocks the page if it fails.
+        _applyEmpresaConfig(),
+      ]);
       const rol = doc.exists ? doc.data().rol : null;
 
       window.userRole = rol;
-
-      // Best-effort config apply — never blocks the page if it fails.
-      await _applyEmpresaConfig();
 
       if (typeof callback === "function") {
         callback(rol); // Aplica lógica personalizada en cada página
