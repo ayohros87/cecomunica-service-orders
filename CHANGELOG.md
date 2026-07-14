@@ -32,7 +32,7 @@
 
 > Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F0+F1). Dirección aprobada sobre las
 > maquetas de `Cecomunica Design System/rediseño pagina cecomunica command center/propuesta/`.
-> NO desplegado — pendiente de revisión visual del usuario.
+> Commits `3c2f801` (docs) + `0531689` (feat). DESPLEGADO (hosting) 2026-07-14.
 
 - **`css/ceco-command.css`** — sistema del rediseño (tokens de marca + shell rail
   navy/workspace claro + señales `sig--*`, chips, KPIs con shimmer, stepper `flow`,
