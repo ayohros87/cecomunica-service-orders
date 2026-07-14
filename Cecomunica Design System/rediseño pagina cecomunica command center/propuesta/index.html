@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Propuesta CeComunica · Índice</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ceco-command.css">
+<script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<div class="hub">
+  <div class="hub__brandbar">
+    <img src="../../assets/logo-monogram-mark.svg" alt="CeComunica">
+    <div class="wm"><b>CeComunica</b><span>Sistema interno · Propuesta de rediseño</span></div>
+  </div>
+
+  <h1>Command Center, en claro</h1>
+  <p class="hub__lead">
+    La misma dirección de consola de operaciones — rail de señal en navy, estado tratado como
+    señal viva, mono para datos — pero con <strong>todo el espacio de trabajo en claro</strong>,
+    porque este sistema se usa 8 horas al día. El navy queda reservado al rail de navegación
+    y a acentos de marca. Las plantillas ancla están construidas sobre las pantallas
+    <em>reales de hoy</em>: los 5 estados de la bandeja, los módulos por rol del home
+    y el flujo de intervención que reemplazó a la antigua página «Trabajar orden».
+  </p>
+
+  <div class="hub__grid">
+    <a class="tile" href="home.html">
+      <div class="tile__ico"><i data-lucide="layout-grid"></i></div>
+      <div class="tile__k">Portal · inicio</div>
+      <h3>Centro de gestión</h3>
+      <p>El home real: señales accionables arriba (por asignar, cotizaciones por aprobar), módulos agrupados por área con visibilidad por rol, buscador y atajos de teclado.</p>
+      <div class="tile__go">Ver plantilla <i data-lucide="arrow-right"></i></div>
+    </a>
+    <a class="tile" href="ordenes.html">
+      <div class="tile__ico"><i data-lucide="clipboard-list"></i></div>
+      <div class="tile__k">Bandeja</div>
+      <h3>Órdenes de servicio</h3>
+      <p>La pantalla más usada, con los 5 estados reales como chips de señal — Por asignar, Recibido en mostrador, Asignado, Completado (en oficina), Entregado — KPIs y tabla escaneable.</p>
+      <div class="tile__go">Ver plantilla <i data-lucide="arrow-right"></i></div>
+    </a>
+    <a class="tile" href="detalle-orden.html">
+      <div class="tile__ico"><i data-lucide="wrench"></i></div>
+      <div class="tile__k">Operación · taller</div>
+      <h3>Detalle de orden + intervención</h3>
+      <p>El sucesor real de «Trabajar orden»: stepper del ciclo de vida, equipos con su intervención en modal (materiales incluidos), fotos y historial.</p>
+      <div class="tile__go">Ver plantilla <i data-lucide="arrow-right"></i></div>
+    </a>
+    <div class="tile tile--soon">
+      <div class="tile__ico"><i data-lucide="file-text"></i></div>
+      <div class="tile__k">Formulario</div>
+      <h3>Nueva cotización</h3>
+      <p>Ítems editables, umbral de auto-envío del vendedor (15% / $5,000), aprobación por tipo (servicio → jefe de taller, comercial → gerente) e ITBMS 7% en vivo.</p>
+      <div class="tile__go">Tras aprobar dirección</div>
+    </div>
+    <div class="tile tile--soon">
+      <div class="tile__ico"><i data-lucide="lock"></i></div>
+      <div class="tile__k">Patrón · solo lectura</div>
+      <h3>Seriales con candado</h3>
+      <p>El patrón de vista bloqueada tras «asignados»: campos en solo lectura, quién puede editar (admin / allowlist) y el historial de cambios visible.</p>
+      <div class="tile__go">Tras aprobar dirección</div>
+    </div>
+    <div class="tile tile--soon">
+      <div class="tile__ico"><i data-lucide="printer"></i></div>
+      <div class="tile__k">Impresión · PDF</div>
+      <h3>Documentos imprimibles</h3>
+      <p>Cotización formal, contrato, nota de entrega y reporte KPI ejecutivo — familia completa con membrete y QR de verificación pública.</p>
+      <div class="tile__go">Tras aprobar dirección</div>
+    </div>
+  </div>
+
+  <div class="hub__note">
+    <i data-lucide="info"></i>
+    <span>Familias restantes que heredan este sistema: bandejas de contratos, cotizaciones,
+    clientes, inventario (radios y piezas), PoC y SIM cards; panel de administración
+    (17 páginas, incluye Reporte KPIs); verificación pública por QR; y las 7 plantillas
+    de correo ya entregadas en el Design System, que comparten estos mismos tokens.</span>
+  </div>
+</div>
+
+<script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

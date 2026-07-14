@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CeComunica · Órdenes de Servicio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ceco-command.css">
+<script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ RAIL DE SEÑAL (navy) ============ -->
+  <aside class="rail">
+    <div class="rail__brand">
+      <img src="../../assets/logo-monogram-mark-inverse.svg" alt="CeComunica">
+      <div class="wm"><b>CECOMUNICA</b><span>Centro de gestión</span></div>
+    </div>
+    <nav class="rail__nav">
+      <a class="rail__link" href="home.html"><i data-lucide="layout-grid"></i> Inicio</a>
+      <div class="rail__group">Operación</div>
+      <a class="rail__link is-active" href="ordenes.html"><i data-lucide="settings-2"></i> Órdenes <span class="badge">42</span></a>
+      <a class="rail__link" href="#"><i data-lucide="radio-tower"></i> Base PoC</a>
+      <a class="rail__link" href="#"><i data-lucide="briefcase"></i> Registro (Ventas)</a>
+      <div class="rail__group">Comercial</div>
+      <a class="rail__link" href="#"><i data-lucide="receipt"></i> Cotizaciones <span class="badge">4</span></a>
+      <a class="rail__link" href="#"><i data-lucide="file-text"></i> Contratos</a>
+      <a class="rail__link" href="#"><i data-lucide="users"></i> Clientes</a>
+      <div class="rail__group">Almacén · finanzas</div>
+      <a class="rail__link" href="#"><i data-lucide="package"></i> Inventario</a>
+      <a class="rail__link" href="#"><i data-lucide="puzzle"></i> Piezas</a>
+      <a class="rail__link" href="#"><i data-lucide="calculator"></i> Facturación</a>
+    </nav>
+    <div class="rail__foot">
+      <div class="rail__avatar">SV</div>
+      <div class="rail__who"><b>Solangel V.</b><span>Recepción</span></div>
+    </div>
+  </aside>
+
+  <!-- ============ WORKSPACE (claro) ============ -->
+  <main class="work">
+    <div class="topbar">
+      <button class="btn btn--ghost btn--icon rail__toggle" aria-label="Menú"><i data-lucide="menu"></i></button>
+      <div class="topbar__title"><i data-lucide="settings-2"></i> Órdenes de Servicio</div>
+      <div class="topbar__spacer"></div>
+      <div class="input-group search desktop-only">
+        <i data-lucide="search"></i>
+        <input class="input" type="search" placeholder="Buscar por # orden, cliente o serial…">
+      </div>
+      <button class="btn"><i data-lucide="download"></i><span class="desktop-only">Exportar</span></button>
+      <a class="btn btn--primary" href="#"><i data-lucide="plus"></i> Nueva orden</a>
+    </div>
+
+    <div class="work__body">
+
+      <!-- KPIs del día -->
+      <div class="kpis">
+        <div class="kpi kpi--alert">
+          <div class="kpi__label"><i data-lucide="alert-circle"></i> Por asignar</div>
+          <div class="kpi__val num">7</div>
+          <div class="kpi__delta down">▲ 3 desde ayer</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__label"><i data-lucide="hammer"></i> Asignadas</div>
+          <div class="kpi__val num">23</div>
+          <div class="kpi__delta">4 técnicos activos</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__label"><i data-lucide="package-check"></i> Completadas (en oficina)</div>
+          <div class="kpi__val num">5</div>
+          <div class="kpi__delta up">2 con cliente avisado</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi__label"><i data-lucide="calendar-check"></i> Entregadas · julio</div>
+          <div class="kpi__val num">61</div>
+          <div class="kpi__delta up">▲ 12% vs jun</div>
+        </div>
+      </div>
+
+      <!-- Filtros por estado (los 5 estados reales) -->
+      <div class="chipbar mt-6">
+        <button class="chip is-active"><span class="dot"></span> Todas <span class="ct">42</span></button>
+        <button class="chip"><span class="dot dot--bad"></span> Por asignar <span class="ct">7</span></button>
+        <button class="chip"><span class="dot dot--vio"></span> Recibido en mostrador <span class="ct">3</span></button>
+        <button class="chip"><span class="dot dot--blue"></span> Asignado <span class="ct">23</span></button>
+        <button class="chip"><span class="dot dot--ok"></span> Completado (en oficina) <span class="ct">5</span></button>
+        <button class="chip"><span class="dot dot--gray"></span> Entregado al cliente <span class="ct">4</span></button>
+        <span style="flex:1"></span>
+        <button class="chip desktop-only"><i data-lucide="filter" style="width:14px;height:14px"></i> Más filtros</button>
+      </div>
+
+      <!-- Tabla -->
+      <div class="tbl-wrap mt-4">
+        <div class="tbl-scroll">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th># Orden</th>
+              <th>Cliente</th>
+              <th>Equipos</th>
+              <th>Técnico</th>
+              <th>Estado</th>
+              <th>Ingreso</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr onclick="location.href='detalle-orden.html'">
+              <td><span class="id">OS-2647</span></td>
+              <td><span class="primary">Transporte Colón S.A.</span><br><span class="sub">Contrato CT-0389</span></td>
+              <td><span class="num">4</span> <span class="sub">Motorola R7</span></td>
+              <td><span class="sub">—</span></td>
+              <td><span class="sig sig--por-asignar sig--live"><span class="dot"></span> POR ASIGNAR</span></td>
+              <td><span class="num sub">11 jul</span></td>
+              <td class="cell-actions"><button class="btn btn--ghost btn--icon btn--sm"><i data-lucide="chevron-right"></i></button></td>
+            </tr>
+            <tr onclick="location.href='detalle-orden.html'">
+              <td><span class="id">OS-2646</span></td>
+              <td><span class="primary">Seguridad Delta</span><br><span class="sub">Walk-in · mostrador</span></td>
+              <td><span class="num">1</span> <span class="sub">Hytera HP605</span></td>
+              <td><span class="sub">—</span></td>
+              <td><span class="sig sig--mostrador sig--live"><span class="dot"></span> RECIBIDO EN MOSTRADOR</span></td>
+              <td><span class="num sub">11 jul</span></td>
+              <td class="cell-actions"><button class="btn btn--ghost btn--icon btn--sm"><i data-lucide="chevron-right"></i></button></td>
+            </tr>
+            <tr onclick="location.href='detalle-orden.html'">
+              <td><span class="id">OS-2643</span></td>
+              <td><span class="primary">Constructora Pacífico</span><br><span class="sub">Contrato CT-0412</span></td>
+              <td><span class="num">12</span> <span class="sub">Kenwood NX-1300</span></td>
+              <td><span class="tech"><span class="avatar-xs">JM</span> J. Morales</span></td>
+              <td><span class="sig sig--asignado"><span class="dot"></span> ASIGNADO</span></td>
+              <td><span class="num sub">09 jul</span></td>
+              <td class="cell-actions"><button class="btn btn--ghost btn--icon btn--sm"><i data-lucide="chevron-right"></i></button></td>
+            </tr>
+            <tr onclick="location.href='detalle-orden.html'">
+              <td><span class="id">OS-2640</span></td>
+              <td><span class="primary">Agro Chiriquí</span><br><span class="sub">Contrato CT-0298</span></td>
+              <td><span class="num">2</span> <span class="sub">Motorola DGP 5550e</span></td>
+              <td><span class="tech"><span class="avatar-xs">RC</span> R. Castillo</span></td>
+              <td><span class="sig sig--asignado"><span class="dot"></span> ASIGNADO</span></td>
+              <td><span class="num sub">08 jul</span></td>
+              <td class="cell-actions"><button class="btn btn--ghost btn--icon btn--sm"><i data-lucide="chevron-right"></i></button></td>
+            </tr>
+            <tr onclick="location.href='detalle-orden.html'">
+              <td><span class="id">OS-2635</span></td>
+              <td><span class="primary">Puertos de Panamá</span><br><span class="sub">Contrato CT-0105</span></td>
+              <td><span class="num">6</span> <span class="sub">Motorola R7 · repetidora</span></td>
+              <td><span class="tech"><span class="avatar-xs">JM</span> J. Morales</span></td>
+              <td><span class="sig sig--completado"><span class="dot"></span> COMPLETADO (EN OFICINA)</span></td>
+              <td><span class="num sub">04 jul</span></td>
+              <td class="cell-actions"><button class="btn btn--ghost btn--icon btn--sm"><i data-lucide="chevron-right"></i></button></td>
+            </tr>
+            <tr onclick="location.href='detalle-orden.html'">
+              <td><span class="id">OS-2629</span></td>
+              <td><span class="primary">Minera Cobre Azul</span><br><span class="sub">Contrato CT-0377</span></td>
+              <td><span class="num">8</span> <span class="sub">Hytera PD786</span></td>
+              <td><span class="tech"><span class="avatar-xs">AV</span> A. Vega</span></td>
+              <td><span class="sig sig--entregado"><span class="dot"></span> ENTREGADO AL CLIENTE</span></td>
+              <td><span class="num sub">01 jul</span></td>
+              <td class="cell-actions"><button class="btn btn--ghost btn--icon btn--sm"><i data-lucide="chevron-right"></i></button></td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="row between mt-4">
+        <span class="muted" style="font-size:13px">Mostrando 6 de 42 órdenes</span>
+        <div class="row gap-2">
+          <button class="btn btn--sm" disabled><i data-lucide="chevron-left"></i> Anterior</button>
+          <button class="btn btn--sm">Siguiente <i data-lucide="chevron-right"></i></button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CeComunica · Centro de Gestión</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ceco-command.css">
+<script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
+<style>
+  /* franja hero compacta: la única zona navy del home */
+  .launch__hero{border-radius:0}
+  .launch__signals{max-width:1120px;margin:-46px auto 0;padding:0 28px}
+  .launch__hero{padding-bottom:64px}
+  .launch__search{max-width:1120px;margin:22px auto 26px;padding:0 28px;display:flex;gap:12px;align-items:center}
+  .launch__search .hint-keys{font-size:12px;color:var(--fg-4);white-space:nowrap}
+  .launch__search .hint-keys kbd{font:600 11px/1 var(--font-mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:2px 6px;background:var(--surface);color:var(--fg-3);margin:0 2px}
+</style>
+</head>
+<body>
+
+<!-- ============ FRANJA DE MARCA (única zona navy) ============ -->
+<div class="launch__hero">
+  <div class="launch__hero-top" style="max-width:1120px;margin:0 auto;padding:0 28px;">
+    <img src="../../assets/logo-monogram-mark-inverse.svg" alt="CeComunica">
+    <div class="wm"><b>CECOMUNICA</b><span>Centro de gestión</span></div>
+    <div class="launch__hi">
+      <b>Buenos días, Solangel</b>
+      <span>Recepción · lunes 13 jul 2026</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SEÑALES ACCIONABLES (solapan la franja) ============ -->
+<div class="launch__signals">
+  <div class="kpis">
+    <a class="kpi kpi--alert" href="ordenes.html">
+      <div class="kpi__label"><i data-lucide="alert-circle"></i> Órdenes por asignar</div>
+      <div class="kpi__val num">7</div>
+      <div class="kpi__delta down">▲ 3 desde ayer</div>
+    </a>
+    <a class="kpi" href="ordenes.html">
+      <div class="kpi__label"><i data-lucide="hammer"></i> En taller (asignadas)</div>
+      <div class="kpi__val num">23</div>
+      <div class="kpi__delta">4 técnicos activos</div>
+    </a>
+    <a class="kpi" href="#">
+      <div class="kpi__label"><i data-lucide="package-check"></i> Completadas (en oficina)</div>
+      <div class="kpi__val num">5</div>
+      <div class="kpi__delta up">2 con cliente avisado</div>
+    </a>
+    <a class="kpi" href="#">
+      <div class="kpi__label"><i data-lucide="file-clock"></i> Cotizaciones en espera</div>
+      <div class="kpi__val num">4</div>
+      <div class="kpi__delta">2 requieren aprobación</div>
+    </a>
+  </div>
+</div>
+
+<!-- ============ BUSCADOR ============ -->
+<div class="launch__search">
+  <div class="input-group search">
+    <i data-lucide="search"></i>
+    <input class="input" type="search" placeholder="Buscar módulo (ej: inventario, poc, órdenes)…">
+  </div>
+  <div class="hint-keys desktop-only">Atajos: <kbd>O</kbd> Órdenes <kbd>Q</kbd> Cotizaciones <kbd>C</kbd> Contratos <kbd>P</kbd> PoC</div>
+</div>
+
+<!-- ============ MÓDULOS POR ÁREA (visibilidad por rol) ============ -->
+<div class="launch">
+  <div class="module-groups">
+
+    <section>
+      <h2 class="mgroup__t">Operación</h2>
+      <div class="mgrid">
+        <a class="mcard" href="ordenes.html">
+          <div class="mcard__ico"><i data-lucide="settings-2"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Órdenes de Servicio</span>
+            <span class="mcard__s">Recepción, técnicos, estados y equipos</span>
+          </div>
+          <span class="mcard__key">O</span>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="radio-tower"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Base de Datos PoC</span>
+            <span class="mcard__s">Radios, SIM, IP, grupos y notas</span>
+          </div>
+          <span class="mcard__key">P</span>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="briefcase"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Registro de Equipos (Ventas)</span>
+            <span class="mcard__s">Carga rápida por vendedor</span>
+          </div>
+          <span class="mcard__key">V</span>
+        </a>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mgroup__t">Comercial</h2>
+      <div class="mgrid">
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="receipt"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Cotizaciones</span>
+            <span class="mcard__s">Crear, editar e imprimir</span>
+          </div>
+          <span class="mcard__key">Q</span>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="file-text"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Contratos</span>
+            <span class="mcard__s">Altas, renovaciones, seriales y estados</span>
+          </div>
+          <span class="mcard__key">C</span>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="users"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Clientes</span>
+            <span class="mcard__s">Listado y edición masiva</span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mgroup__t">Almacén y finanzas</h2>
+      <div class="mgrid">
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="package"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Inventario de Radios</span>
+            <span class="mcard__s">Ingresos, salidas y existencias</span>
+          </div>
+          <span class="mcard__key">I</span>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="puzzle"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Inventario de Piezas</span>
+            <span class="mcard__s">Repuestos y precios para servicio</span>
+          </div>
+          <span class="mcard__key">X</span>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="calculator"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Facturación</span>
+            <span class="mcard__s">Equipos, tarifas, cargos y QuickBooks</span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mgroup__t">Personal</h2>
+      <div class="mgrid">
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="mail"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Mi Firma de Correo</span>
+            <span class="mcard__s">Genera tu firma oficial y cópiala</span>
+          </div>
+          <span class="mcard__key">F</span>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="user"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Mi Perfil</span>
+            <span class="mcard__s">Datos personales y sesión</span>
+          </div>
+        </a>
+        <a class="mcard" href="#">
+          <div class="mcard__ico"><i data-lucide="shield"></i></div>
+          <div class="mcard__meta">
+            <span class="mcard__t">Panel de Administración</span>
+            <span class="mcard__s">Solo administradores</span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>

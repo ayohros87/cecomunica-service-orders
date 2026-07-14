@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CeComunica · Orden OS-2643</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ceco-command.css">
+<script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>
+<style>
+  .equip{display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line-soft)}
+  .equip:last-child{border-bottom:none}
+  .equip__ico{width:38px;height:38px;border-radius:9px;background:var(--gray-100);display:grid;place-items:center;color:var(--fg-3);flex:none}
+  .equip__ico i{width:19px;height:19px}
+  .equip__meta{min-width:0;flex:1}
+  .equip__t{font:600 14px/1.2 var(--font-body);color:var(--fg-1)}
+  .equip__s{font:500 12px/1.4 var(--font-mono);color:var(--fg-3)}
+  .fotos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .foto{aspect-ratio:4/3;border-radius:var(--r-md);background:var(--gray-150);display:grid;place-items:center;color:var(--fg-4);border:1px solid var(--line)}
+  .foto i{width:22px;height:22px}
+  .layout-2col{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+  @media (max-width:1024px){.layout-2col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ RAIL ============ -->
+  <aside class="rail">
+    <div class="rail__brand">
+      <img src="../../assets/logo-monogram-mark-inverse.svg" alt="CeComunica">
+      <div class="wm"><b>CECOMUNICA</b><span>Centro de gestión</span></div>
+    </div>
+    <nav class="rail__nav">
+      <a class="rail__link" href="home.html"><i data-lucide="layout-grid"></i> Inicio</a>
+      <div class="rail__group">Operación</div>
+      <a class="rail__link is-active" href="ordenes.html"><i data-lucide="settings-2"></i> Órdenes <span class="badge">42</span></a>
+      <a class="rail__link" href="#"><i data-lucide="radio-tower"></i> Base PoC</a>
+      <a class="rail__link" href="#"><i data-lucide="briefcase"></i> Registro (Ventas)</a>
+      <div class="rail__group">Comercial</div>
+      <a class="rail__link" href="#"><i data-lucide="receipt"></i> Cotizaciones <span class="badge">4</span></a>
+      <a class="rail__link" href="#"><i data-lucide="file-text"></i> Contratos</a>
+      <a class="rail__link" href="#"><i data-lucide="users"></i> Clientes</a>
+      <div class="rail__group">Almacén · finanzas</div>
+      <a class="rail__link" href="#"><i data-lucide="package"></i> Inventario</a>
+      <a class="rail__link" href="#"><i data-lucide="puzzle"></i> Piezas</a>
+      <a class="rail__link" href="#"><i data-lucide="calculator"></i> Facturación</a>
+    </nav>
+    <div class="rail__foot">
+      <div class="rail__avatar">JM</div>
+      <div class="rail__who"><b>José Morales</b><span>Técnico</span></div>
+    </div>
+  </aside>
+
+  <!-- ============ WORKSPACE ============ -->
+  <main class="work">
+    <div class="topbar">
+      <button class="btn btn--ghost btn--icon rail__toggle" aria-label="Menú"><i data-lucide="menu"></i></button>
+      <a class="btn btn--ghost btn--icon" href="ordenes.html" aria-label="Volver"><i data-lucide="arrow-left"></i></a>
+      <div class="topbar__title">Orden <span class="font-mono" style="color:var(--accent)">OS-2643</span></div>
+      <span class="sig sig--asignado"><span class="dot"></span> ASIGNADO</span>
+      <div class="topbar__spacer"></div>
+      <button class="btn"><i data-lucide="printer"></i><span class="desktop-only">Imprimir</span></button>
+      <button class="btn btn--primary"><i data-lucide="check-circle-2"></i> Completar orden</button>
+    </div>
+
+    <div class="work__body">
+
+      <!-- Ciclo de vida real -->
+      <div class="card card__pad">
+        <div class="flow">
+          <div class="flow__step done">
+            <div class="flow__dot"><i data-lucide="inbox"></i></div>
+            <div class="flow__lbl">Recibido en mostrador</div>
+          </div>
+          <div class="flow__step done">
+            <div class="flow__dot"><i data-lucide="user-x"></i></div>
+            <div class="flow__lbl">Por asignar</div>
+          </div>
+          <div class="flow__step current">
+            <div class="flow__dot"><i data-lucide="hammer"></i></div>
+            <div class="flow__lbl">Asignado</div>
+          </div>
+          <div class="flow__step">
+            <div class="flow__dot"><i data-lucide="package-check"></i></div>
+            <div class="flow__lbl">Completado (en oficina)</div>
+          </div>
+          <div class="flow__step">
+            <div class="flow__dot"><i data-lucide="handshake"></i></div>
+            <div class="flow__lbl">Entregado al cliente</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="layout-2col mt-6">
+
+        <!-- Columna principal -->
+        <div class="stack gap-6">
+
+          <!-- Equipos con intervención -->
+          <div class="card">
+            <div class="card__head">
+              <h3>Equipos <span class="muted">· 12 unidades</span></h3>
+              <span style="flex:1"></span>
+              <button class="btn btn--sm"><i data-lucide="plus"></i> Agregar equipo</button>
+            </div>
+            <div class="equip">
+              <div class="equip__ico"><i data-lucide="radio"></i></div>
+              <div class="equip__meta">
+                <div class="equip__t">Kenwood NX-1300 DK5</div>
+                <div class="equip__s">Serial 21400388 · POC-1187</div>
+              </div>
+              <span class="sig sig--aprobada"><span class="dot"></span> Intervenido</span>
+              <button class="btn btn--sm"><i data-lucide="wrench"></i> Ver intervención</button>
+            </div>
+            <div class="equip">
+              <div class="equip__ico"><i data-lucide="radio"></i></div>
+              <div class="equip__meta">
+                <div class="equip__t">Kenwood NX-1300 DK5</div>
+                <div class="equip__s">Serial 21400391 · POC-1188</div>
+              </div>
+              <span class="sig sig--espera"><span class="dot"></span> Pendiente</span>
+              <button class="btn btn--sm btn--primary"><i data-lucide="wrench"></i> Intervenir</button>
+            </div>
+            <div class="equip">
+              <div class="equip__ico"><i data-lucide="radio"></i></div>
+              <div class="equip__meta">
+                <div class="equip__t">Kenwood NX-1300 DK5</div>
+                <div class="equip__s">Serial 21400402 · POC-1191</div>
+              </div>
+              <span class="sig sig--espera"><span class="dot"></span> Pendiente</span>
+              <button class="btn btn--sm btn--primary"><i data-lucide="wrench"></i> Intervenir</button>
+            </div>
+          </div>
+
+          <!-- Modal de intervención (mostrado inline como demo del patrón) -->
+          <div>
+            <span class="eyebrow eyebrow--mute" style="display:block;margin-bottom:10px">Patrón · modal de intervención (sucesor de «Trabajar orden»)</span>
+            <div class="modal-demo">
+              <div style="height:700px;background:var(--gray-100)"></div>
+              <div class="modal-demo__scrim"></div>
+              <div class="modal" style="position:absolute;inset:0;margin:26px auto;max-width:640px;height:fit-content">
+                <div class="modal__head">
+                  <i data-lucide="wrench" style="color:var(--accent);width:19px;height:19px"></i>
+                  <h3>Intervención · Serial <span class="font-mono">21400391</span></h3>
+                  <button class="btn btn--ghost btn--icon btn--sm x"><i data-lucide="x"></i></button>
+                </div>
+                <div class="modal__body">
+                  <div class="field">
+                    <label class="label">Diagnóstico / trabajo realizado</label>
+                    <textarea class="textarea">Cambio de flex de antena y ajuste de squelch. Prueba de recepción OK en los 3 canales del cliente.</textarea>
+                  </div>
+                  <div class="field">
+                    <label class="label">Materiales utilizados</label>
+                    <div class="tbl-wrap">
+                      <table class="tbl">
+                        <thead><tr><th>Pieza</th><th>Cant.</th><th>Stock</th></tr></thead>
+                        <tbody>
+                          <tr><td><span class="primary">Flex antena NX-1300</span><br><span class="sub font-mono">PZ-0214</span></td><td><span class="num">1</span></td><td><span class="num sub">14 → 13</span></td></tr>
+                          <tr><td><span class="primary">Perilla volumen</span><br><span class="sub font-mono">PZ-0087</span></td><td><span class="num">1</span></td><td><span class="num sub">6 → 5</span></td></tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="row gap-3">
+                    <button class="btn btn--sm"><i data-lucide="camera"></i> Agregar foto</button>
+                    <span class="muted" style="font-size:12.5px">2 fotos adjuntas</span>
+                  </div>
+                </div>
+                <div class="modal__foot">
+                  <button class="btn">Cancelar</button>
+                  <button class="btn btn--ok"><i data-lucide="check"></i> Guardar intervención</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fotos del taller -->
+          <div class="card">
+            <div class="card__head">
+              <h3>Fotos del taller</h3>
+              <span style="flex:1"></span>
+              <button class="btn btn--sm"><i data-lucide="camera"></i> Subir</button>
+            </div>
+            <div class="card__pad">
+              <div class="fotos">
+                <div class="foto"><i data-lucide="image"></i></div>
+                <div class="foto"><i data-lucide="image"></i></div>
+                <div class="foto"><i data-lucide="image"></i></div>
+                <div class="foto"><i data-lucide="image-plus"></i></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Columna lateral -->
+        <div class="stack gap-6">
+
+          <div class="card">
+            <div class="card__head"><h3>Cliente</h3></div>
+            <div class="card__pad" style="padding-top:16px">
+              <div class="stack gap-2">
+                <b style="font:600 15px var(--font-body)">Constructora Pacífico</b>
+                <span class="muted" style="font-size:13px">Contrato <a href="#" class="id font-mono" style="text-decoration:none">CT-0412</a></span>
+                <span class="muted" style="font-size:13px"><i data-lucide="phone" style="width:13px;height:13px;vertical-align:-2px"></i> 6412-8890 · Ing. Batista</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><h3>Cotización</h3></div>
+            <div class="card__pad" style="padding-top:16px">
+              <div class="row between">
+                <span class="id font-mono">COT-1204</span>
+                <span class="sig sig--aprobada"><span class="dot"></span> APROBADA</span>
+              </div>
+              <div class="alert alert--info mt-4">
+                <i data-lucide="lock"></i>
+                <span>Cotización aprobada: los equipos y materiales de esta orden quedaron protegidos contra edición (candado automático).</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><h3>Historial</h3></div>
+            <div class="card__pad" style="padding-top:12px">
+              <ul class="tl">
+                <li><span class="tl__dot"></span><div class="tl__t"><b>J. Morales</b> registró intervención en serial 21400388<span class="tl__when">hoy · 10:42</span></div></li>
+                <li><span class="tl__dot"></span><div class="tl__t"><b>COT-1204</b> aprobada por el cliente — orden protegida<span class="tl__when">10 jul · 15:20</span></div></li>
+                <li><span class="tl__dot"></span><div class="tl__t"><b>Solangel V.</b> asignó la orden a J. Morales<span class="tl__when">09 jul · 09:15</span></div></li>
+                <li><span class="tl__dot"></span><div class="tl__t"><b>Recepción</b> creó la orden con 12 equipos<span class="tl__when">09 jul · 08:47</span></div></li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<script>if (window.lucide) lucide.createIcons();</script>
+</body>
+</html>
