@@ -30,6 +30,15 @@
       ['Ambiguos (distintos)', data.ambiguosDistintos],
       ['Huérfanos',          data.huerfanos],
       ['Huérfanos (distintos)', data.huerfanosDistintos],
+      // seedPoolEquipos:
+      ['Creados (contratos)', data.creados?.contratos],
+      ['Creados (PoC)',       data.creados?.poc],
+      ['Creados (órdenes)',   data.creados?.ordenes],
+      ['Ya en pool',          data.yaExistia],
+      ['Colisiones serial',   data.colisiones],
+      ['PoC enlazados',       data.pocEnlazados],
+      ['Órdenes viejas skip', data.ordenesViejasSaltadas],
+      ['Inválidos',           data.invalidos],
       ['Escritos',           data.written],
       ['Errores',            data.errors],
     ].filter(([_, v]) => v != null).map(([k, v]) => `<span class="pill" style="margin-right:6px;">${k}: <strong>${v}</strong></span>`).join('');
@@ -54,7 +63,7 @@
   function renderHuerfanos(detalle) {
     if (!detalle) return '';
     const bloques = Object.entries(detalle).map(([col, d]) => {
-      const ej = (d.muestraHuerfanos || []);
+      const ej = (d.muestraHuerfanos || d.muestra || []);
       if (!ej.length) return '';
       const titulo = d.titulo || `${col} — ${d.huerfanos ?? ej.length} sin enlazar`;
       return `<div style="margin-top:8px;"><span class="ts">${escapeHtml(titulo)}, ej.:</span><br>` +

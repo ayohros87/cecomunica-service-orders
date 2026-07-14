@@ -82,6 +82,7 @@
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/modelosService.js"></script>
+  <script defer src="../js/services/inventarioService.js"></script>
   <script defer src="../js/services/equiposPoolService.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script defer src="../js/ui/toast.js"></script>
@@ -105,6 +106,8 @@
         { label: '<i data-lucide="upload"></i> Importar Excel', onclick: 'EquiposPool.abrirImport()', id: 'btnImportar' },
         { label: '<i data-lucide="download"></i> Descargar plantilla', onclick: 'EquiposPool.descargarPlantilla()', id: 'btnPlantilla' },
         { label: '<i data-lucide="file-down"></i> Exportar Excel', onclick: 'EquiposPool.exportarExcel()' },
+        { divider: true },
+        { label: '<i data-lucide="scale"></i> Conciliación vs conteo', onclick: 'EquiposPool.abrirConciliacion()' },
       ],
       showHome: true, homeHref: '../index.html', showLogout: true
     });
@@ -282,6 +285,28 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="Modal.close('eqHistoriaModal')"><i data-lucide="x"></i> Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: conciliación pool vs conteo manual -->
+  <div id="eqConcilModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:640px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="scale"></i> Conciliación: pool vs conteo manual</h3>
+        <button class="modal-close" onclick="Modal.close('eqConcilModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px; color:var(--fg-2); margin:0 0 var(--sp-3);">
+          Compara el conteo semanal de inventario (<code>inventario_actual</code>) contra las
+          unidades <strong>en bodega</strong> del pool. La diferencia es la métrica de avance de la
+          migración: cuando quede en cero varias semanas seguidas, el pool pasa a ser la fuente y el
+          conteo manual queda como auditoría periódica.
+        </p>
+        <div id="concilTabla" style="max-height:380px; overflow:auto;">Cargando…</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqConcilModal')"><i data-lucide="x"></i> Cerrar</button>
       </div>
     </div>
   </div>

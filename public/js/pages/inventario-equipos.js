@@ -411,6 +411,73 @@ window.EquiposPool = {
     }
   },
 
+  // ── Conciliación pool vs conteo manual ───────────────────────────────
+  async abrirConciliacion() {
+    const cont = document.getElementById('concilTabla');
+    cont.innerHTML = 'Cargando…';
+    Modal.open('eqConcilModal');
+    try {
+      const conteos = await InventarioService.getInventarioActual();
+      const esc = FMT.esc;
+
+      // Pool en_bodega agrupado por modelo (sobre lo ya cargado en memoria).
+      const pool = new Map();
+      for (const eq of this._equipos.filter(e => e.estado === 'en_bodega')) {
+        const key = eq.modelo_id || EquiposPoolService.modeloKey(null, eq.modelo_label);
+        const cur = pool.get(key) || { label: eq.modelo_label, n: 0 };
+        cur.n++;
+        pool.set(key, cur);
+      }
+
+      // Unión de modelos con conteo manual o con unidades en el pool.
+      const filas = new Map();
+      for (const c of conteos) {
+        filas.set(c.id, {
+          label: this._modeloLabel(c.id) || c.id,
+          conteo: c.cantidad ?? 0,
+          pool: pool.get(c.id)?.n ?? 0,
+        });
+        pool.delete(c.id);
+      }
+      for (const [key, p] of pool) {
+        filas.set(key, { label: p.label || key, conteo: 0, pool: p.n });
+      }
+
+      const rows = [...filas.values()]
+        .map(f => ({ ...f, diff: f.conteo - f.pool }))
+        .filter(f => f.conteo || f.pool)
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff) || a.label.localeCompare(b.label));
+
+      if (!rows.length) {
+        cont.innerHTML = '<p style="color:var(--fg-3); font-size:13px;">Sin datos: no hay conteo manual ni unidades en bodega todavía.</p>';
+        return;
+      }
+      const cuadrados = rows.filter(f => f.diff === 0).length;
+      cont.innerHTML = `
+        <div style="margin-bottom:var(--sp-2); font-size:13px;">
+          <strong>${cuadrados}/${rows.length}</strong> modelos cuadrados
+        </div>
+        <table class="app-table compact">
+          <thead><tr><th>Modelo</th><th style="text-align:right;">Conteo manual</th><th style="text-align:right;">Pool (bodega)</th><th style="text-align:right;">Diferencia</th></tr></thead>
+          <tbody>
+            ${rows.map(f => `<tr>
+              <td>${esc(f.label)}</td>
+              <td style="text-align:right;">${f.conteo}</td>
+              <td style="text-align:right;">${f.pool}</td>
+              <td style="text-align:right; font-weight:600; color:${f.diff === 0 ? '#15803d' : '#b91c1c'};">${f.diff > 0 ? '+' + f.diff : f.diff}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        <p style="font-size:12px; color:var(--fg-3); margin:var(--sp-2) 0 0;">
+          Diferencia positiva = unidades contadas que aún no están en el pool (captúralas con
+          "Recibir equipos" en modo toma física). Negativa = el pool tiene más que el conteo
+          (posible doble registro o conteo desactualizado).
+        </p>`;
+    } catch (e) {
+      cont.innerHTML = `<p style="color:#b91c1c; font-size:13px;">Error: ${FMT.esc(e.message || e)}</p>`;
+    }
+  },
+
   // ── Export ───────────────────────────────────────────────────────────
   exportarExcel() {
     const rows = this._filtrados().map(eq => ({

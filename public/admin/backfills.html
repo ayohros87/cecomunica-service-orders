@@ -215,6 +215,35 @@
       <div id="result-linkModeloIdPoc" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: seedPoolEquipos -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="scan-barcode"></i> Carga inicial del pool de equipos por serial</span>
+        <span class="hint">Siembra <code>equipos_pool</code> desde contratos, PoC y órdenes vivas</span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        Puebla el <strong>pool de equipos serializados</strong> (inventario/equipos.html) desde las
+        tres fuentes existentes, con precedencia <strong>contrato &gt; PoC &gt; orden</strong>:
+        seriales de contratos activos/aprobados → <em>asignado/en cliente</em>; equipos PoC con
+        serial → <em>en PoC</em> (si ya existe por contrato solo enlaza el device); equipos de
+        órdenes vivas (&lt; 1 año, no entregadas) → <em>en taller</em>. Todo entra
+        <strong>sin verificar</strong> (se confirma después desde la página del pool). Idempotente:
+        los serial+modelo ya presentes se saltan. Reporta <strong>colisiones</strong> (mismo serial
+        en 2+ modelos — failsafe con doc sufijado) y <strong>sospechosos</strong> (mismo serial con
+        grafía distinta entre fuentes). El stock físico de bodega NO sale de aquí: se captura con la
+        "toma física" en la página del pool. Usa <strong>Dry-run</strong> primero.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="seedPoolEquipos" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (preview)
+        </button>
+        <button class="btn btn-primary" data-bf-action="seedPoolEquipos" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-seedPoolEquipos" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>

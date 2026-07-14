@@ -672,6 +672,240 @@ async function backfillLinkModeloIdPoc(dryRun) {
   };
 }
 
+// ─────────── seedPoolEquipos ───────────
+//
+// Carga inicial del pool de equipos serializados (equipos_pool) desde las tres
+// fuentes existentes, en orden de precedencia contrato > POC > orden (plan
+// docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md §4.3):
+//   1. contratos/*/seriales (collectionGroup) de contratos activos/aprobados →
+//      en_cliente si entrega confirmada o contrato legacy, si no asignado_contrato.
+//   2. poc_devices con serial (no deleted) → en_poc (si la unidad ya existe por
+//      un contrato, solo se enlaza poc_device_id sin tocar estado).
+//   3. órdenes vivas (< 365 días, no ENTREGADO, no eliminadas) → en_taller.
+// Todos los docs nacen verificado:false (origen migracion_*). Failsafe de
+// colisión entre modelos: mismo criterio que domain/equiposPool.js (doc sufijado
+// + serial_compartido en ambos). Mismo serial con GRAFÍA distinta entre fuentes
+// se reporta como "sospechoso" (no bloquea: gana la primera grafía).
+// Idempotente: los serial+modelo ya presentes en el pool se saltan.
+
+const poolLib = require("../domain/equiposPool");
+
+async function backfillSeedPoolEquipos(dryRun) {
+  const startedAt = Date.now();
+  const r = {
+    creados: { contratos: 0, poc: 0, ordenes: 0 },
+    yaExistia: 0, invalidos: 0, colisiones: 0,
+    pocEnlazados: 0, ordenesViejasSaltadas: 0, errors: 0,
+  };
+  const sospechosos = new Map();   // serial_norm → Set<grafías>
+  const muestraColisiones = [];
+
+  // Estado actual del pool en memoria: serial_norm → [{id, modelo_id, modelo_label, serial}]
+  const poolSnap = await db.collection("equipos_pool").get();
+  const enPool = new Map();
+  poolSnap.forEach((d) => {
+    const data = d.data();
+    const arr = enPool.get(data.serial_norm) || [];
+    arr.push({ id: d.id, modelo_id: data.modelo_id, modelo_label: data.modelo_label, serial: data.serial });
+    enPool.set(data.serial_norm, arr);
+  });
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) { batch = db.batch(); opsInBatch = 0; return; }
+    try { await batch.commit(); }
+    catch (err) {
+      logger.error("[runBackfill.seedPoolEquipos] batch commit failed", { err: err.message });
+      r.errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  const anotarGrafia = (norm, raw) => {
+    const set = sospechosos.get(norm) || new Set();
+    set.add(raw);
+    sospechosos.set(norm, set);
+  };
+
+  // Resuelve contra el mapa en memoria (espejo de poolLib.resolver, sin queries).
+  // Retorna { existente | null, docId, colision }.
+  const resolverLocal = (norm, modeloId, modeloLabel) => {
+    const docs = enPool.get(norm) || [];
+    if (!docs.length) return { existente: null, docId: norm, colision: false };
+    const exacto = docs.find((d) => poolLib.mismoModelo(d, modeloId, modeloLabel));
+    if (exacto) return { existente: exacto, docId: exacto.id, colision: false };
+    const sinModelo = docs.find((d) => poolLib.modeloKey(d.modelo_id, d.modelo_label) === "sinmodelo");
+    if (sinModelo) return { existente: sinModelo, docId: sinModelo.id, colision: false };
+    if (poolLib.modeloKey(modeloId, modeloLabel) === "sinmodelo" && docs.length === 1) {
+      return { existente: docs[0], docId: docs[0].id, colision: false };
+    }
+    return { existente: null, docId: `${norm}__${poolLib.modeloKey(modeloId, modeloLabel)}`, colision: true };
+  };
+
+  const crear = ({ norm, serial, modeloId, modeloLabel, estado, origen, asignacion = null,
+                   pocDeviceId = null, ordenActualId = null, refMov, fuente }) => {
+    const { existente, docId, colision } = resolverLocal(norm, modeloId, modeloLabel);
+    if (existente) {
+      if ((existente.serial || "") !== serial) {
+        anotarGrafia(norm, existente.serial || "");
+        anotarGrafia(norm, serial);
+      }
+      r.yaExistia++;
+      return existente;
+    }
+    const ref = db.collection("equipos_pool").doc(docId);
+    batch.set(ref, {
+      serial, serial_norm: norm, serial_compartido: colision,
+      modelo_id: modeloId || null, modelo_label: modeloLabel || "",
+      condicion: "reuso", estado,
+      asignacion, poc_device_id: pocDeviceId, orden_actual_id: ordenActualId,
+      origen, verificado: false, ingreso_bodega_at: null,
+      proveedor: "", notas: "", baja_motivo: null,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      creado_por_uid: null, creado_por_email: null,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      updated_by: null, updated_by_email: null,
+    });
+    batch.set(ref.collection("movimientos").doc(), {
+      at: admin.firestore.FieldValue.serverTimestamp(),
+      por: "system", por_email: null,
+      tipo: "migracion", de_estado: null, a_estado: estado,
+      ref: refMov, notas: "Backfill seedPoolEquipos",
+    });
+    opsInBatch += 2;
+    if (colision) {
+      // Marca el doc con ID limpio como compartido (existe: por eso hay colisión).
+      batch.set(db.collection("equipos_pool").doc(norm), { serial_compartido: true }, { merge: true });
+      opsInBatch++;
+      r.colisiones++;
+      if (muestraColisiones.length < 25) muestraColisiones.push(`${norm}: ${modeloLabel || modeloId}`);
+    }
+    r.creados[fuente]++;
+    const nuevo = { id: docId, modelo_id: modeloId || null, modelo_label: modeloLabel || "", serial };
+    enPool.set(norm, [...(enPool.get(norm) || []), nuevo]);
+    return null;
+  };
+
+  // ── Fuente 1: contratos/*/seriales ──
+  const contratosSnap = await db.collection("contratos").get();
+  const contratos = new Map();
+  contratosSnap.forEach((d) => contratos.set(d.id, d.data()));
+
+  const serialesSnap = await db.collectionGroup("seriales").get();
+  let scannedContratos = 0;
+  for (const doc of serialesSnap.docs) {
+    // collectionGroup matchea cualquier subcol "seriales"; valida que sea de contratos.
+    const parentContrato = doc.ref.parent.parent;
+    if (!parentContrato || doc.ref.parent.parent.parent.id !== "contratos") continue;
+    scannedContratos++;
+    const s = doc.data();
+    const serial = (s.serial || "").toString().trim();
+    const norm = poolLib.normSerial(serial);
+    if (!poolLib.esSerialValido(norm)) { r.invalidos++; continue; }
+    const c = contratos.get(parentContrato.id) || {};
+    if (c.deleted === true || !["activo", "aprobado"].includes(c.estado)) continue;
+    const entregado = c.entrega_confirmada === true || c.seriales_estado === "legacy";
+    crear({
+      norm, serial,
+      modeloId: s.modelo_id || null, modeloLabel: s.modelo || "",
+      estado: entregado ? poolLib.ESTADOS.EN_CLIENTE : poolLib.ESTADOS.ASIGNADO,
+      origen: "migracion_contrato",
+      asignacion: {
+        contrato_doc_id: parentContrato.id,
+        contrato_id: s.contrato_id || c.contrato_id || "",
+        cliente_id: s.cliente_id || c.cliente_id || "",
+        cliente_nombre: s.cliente_nombre || c.cliente_nombre || "",
+      },
+      refMov: { tipo: "contrato", id: parentContrato.id, label: s.contrato_id || c.contrato_id || "" },
+      fuente: "contratos",
+    });
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+
+  // ── Fuente 2: poc_devices ──
+  const pocSnap = await db.collection("poc_devices").get();
+  let scannedPoc = 0;
+  for (const doc of pocSnap.docs) {
+    const d = doc.data();
+    if (d.deleted === true) continue;
+    const serial = (d.serial || "").toString().trim();
+    const norm = poolLib.normSerial(serial);
+    if (!serial) continue;
+    scannedPoc++;
+    if (!poolLib.esSerialValido(norm)) { r.invalidos++; continue; }
+    const existente = crear({
+      norm, serial,
+      modeloId: d.modelo_id || null, modeloLabel: d.modelo_label || d.modelo || "",
+      estado: poolLib.ESTADOS.EN_POC,
+      origen: "migracion_poc",
+      pocDeviceId: doc.id,
+      refMov: { tipo: "poc", id: doc.id, label: d.radio_name || d.unit_id || "" },
+      fuente: "poc",
+    });
+    // Ya existía por contrato → solo enlaza el device (sin tocar estado).
+    if (existente) {
+      batch.set(db.collection("equipos_pool").doc(existente.id), { poc_device_id: doc.id }, { merge: true });
+      opsInBatch++;
+      r.pocEnlazados++;
+      r.yaExistia--; // ya contado dentro de crear(); aquí es un enlace, no un skip
+    }
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+
+  // ── Fuente 3: órdenes vivas ──
+  const ordenesSnap = await db.collection("ordenes_de_servicio").get();
+  const hace365 = Date.now() - 365 * 24 * 60 * 60 * 1000;
+  let scannedOrdenes = 0;
+  for (const doc of ordenesSnap.docs) {
+    const d = doc.data();
+    if (d.eliminado === true) continue;
+    const estado = String(d.estado_reparacion || "").trim().toUpperCase();
+    if (estado === "ENTREGADO AL CLIENTE") continue;
+    const creada = d.fecha_creacion?.toDate ? d.fecha_creacion.toDate().getTime() : null;
+    if (creada && creada < hace365) { r.ordenesViejasSaltadas++; continue; }
+    for (const e of (d.equipos || [])) {
+      if (!e || e.eliminado) continue;
+      const serial = (e.serial || e.SERIAL || e.numero_de_serie || "").toString().trim();
+      if (!serial) continue;
+      scannedOrdenes++;
+      const norm = poolLib.normSerial(serial);
+      if (!poolLib.esSerialValido(norm)) { r.invalidos++; continue; }
+      crear({
+        norm, serial,
+        modeloId: e.modelo_id || null,
+        modeloLabel: (e.modelo || e.MODEL || e.modelo_nombre || "").toString().trim(),
+        estado: poolLib.ESTADOS.EN_TALLER,
+        origen: "migracion_orden",
+        ordenActualId: doc.id,
+        refMov: { tipo: "orden", id: doc.id, label: d.numero_orden || doc.id },
+        fuente: "ordenes",
+      });
+      if (opsInBatch >= BATCH_SIZE) await flushBatch();
+    }
+  }
+  await flushBatch();
+
+  const grafias = [...sospechosos.entries()].filter(([, set]) => set.size > 0);
+  const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+  return {
+    scanned: scannedContratos + scannedPoc + scannedOrdenes,
+    ...r,
+    written: r.creados.contratos + r.creados.poc + r.creados.ordenes,
+    elapsedSec,
+    detalle: {
+      fuentes: { contratos: scannedContratos, poc: scannedPoc, ordenes: scannedOrdenes },
+      colisiones: { titulo: `Seriales compartidos entre modelos — ${r.colisiones}`, muestra: muestraColisiones },
+      sospechosos: {
+        titulo: `Mismo serial con grafía distinta entre fuentes — ${grafias.length}`,
+        muestra: grafias.slice(0, 25).map(([norm, set]) => `${norm}: ${[...set].join(" | ")}`),
+      },
+    },
+  };
+}
+
 // ─────────── dispatcher ───────────
 
 module.exports = onCall(
@@ -705,6 +939,9 @@ module.exports = onCall(
         break;
       case "linkModeloIdPoc":
         result = await backfillLinkModeloIdPoc(dryRun);
+        break;
+      case "seedPoolEquipos":
+        result = await backfillSeedPoolEquipos(dryRun);
         break;
       default:
         throw new HttpsError("invalid-argument", `Acción desconocida: ${action}`);
