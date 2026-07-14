@@ -28,19 +28,25 @@ window.VB = {
   },
 
   // ---- Model loading ----
+  // Normaliza, filtra activos, ordena por marca/modelo y agrega label — única
+  // ruta de preparación, compartida por la carga inicial y el refresco.
+  _mapModelos(lista) {
+    return lista
+      .map(m => ({ id: m.id, marca: m.marca || '', modelo: m.modelo || '', tipo: m.tipo || '', estado: m.estado || '', alto_movimiento: !!m.alto_movimiento, activo: m.activo !== false }))
+      .filter(m => m.activo)
+      .sort((a, b) => {
+        const ma = a.marca.toLowerCase(), mb = b.marca.toLowerCase();
+        if (ma !== mb) return ma.localeCompare(mb);
+        return a.modelo.toLowerCase().localeCompare(b.modelo.toLowerCase());
+      })
+      .map(m => ({ ...m, label: `${m.marca} ${m.modelo}`.trim() }));
+  },
+
   async cargarModelos() {
     const cached = this.lsGet('cache_modelos_v1');
     if (cached) { this.modelosDisponibles = cached; return; }
     try {
-      const lista = await ModelosService.getModelos();
-      this.modelosDisponibles = lista
-        .map(m => ({ id: m.id, marca: m.marca || '', modelo: m.modelo || '', tipo: m.tipo || '', estado: m.estado || '', alto_movimiento: !!m.alto_movimiento, activo: m.activo !== false }))
-        .filter(m => m.activo)
-        .sort((a, b) => {
-          if (a.marca.toLowerCase() !== b.marca.toLowerCase()) return a.marca.toLowerCase().localeCompare(b.marca.toLowerCase());
-          return a.modelo.toLowerCase().localeCompare(b.modelo.toLowerCase());
-        })
-        .map(m => ({ ...m, label: `${m.marca} ${m.modelo}`.trim() }));
+      this.modelosDisponibles = this._mapModelos(await ModelosService.getModelos());
       this.lsSet('cache_modelos_v1', this.modelosDisponibles);
     } catch (e) { console.error('Error al cargar modelos:', e); this.modelosDisponibles = []; }
   },
@@ -49,22 +55,14 @@ window.VB = {
     const sel = document.getElementById('modeloGlobal');
     if (!sel) return;
     sel.innerHTML = ['<option value="">— Selecciona modelo —</option>',
-      ...this.modelosDisponibles.map(m => `<option value="${m.id}">${m.label}</option>`)
+      ...this.modelosDisponibles.map(m => `<option value="${m.id}">${this._esc(m.label)}</option>`)
     ].join('');
   },
 
   async refrescarModelos() {
     localStorage.removeItem('cache_modelos_v1');
     try {
-      const lista = await ModelosService.getModelos({ source: 'server' });
-      this.modelosDisponibles = lista
-        .map(m => ({ id: m.id, marca: m.marca || '', modelo: m.modelo || '', tipo: m.tipo || '', estado: m.estado || '', alto_movimiento: !!m.alto_movimiento, activo: m.activo !== false }))
-        .filter(m => m.activo)
-        .sort((a, b) => {
-          if (a.marca.toLowerCase() !== b.marca.toLowerCase()) return a.marca.toLowerCase().localeCompare(b.marca.toLowerCase());
-          return a.modelo.toLowerCase().localeCompare(b.modelo.toLowerCase());
-        })
-        .map(m => ({ ...m, label: `${m.marca} ${m.modelo}`.trim() }));
+      this.modelosDisponibles = this._mapModelos(await ModelosService.getModelos({ source: 'server' }));
       this.poblarDropdownModeloGlobal();
       this.lsSet('cache_modelos_v1', this.modelosDisponibles);
       Toast.show('Lista de modelos actualizada ✅', 'ok');
@@ -108,7 +106,7 @@ window.VB = {
         .filter(c => c.norm.includes(needle))
         .map(c => ({ id: c.id, nombre: c.nombre, pos: c.norm.indexOf(needle) }));
       matches.sort((a, b) => a.pos !== b.pos ? a.pos - b.pos : a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
-      this.renderSugerencias(matches, contenedor, inputEl);
+      this.renderSugerencias(matches.slice(0, 30), contenedor, inputEl);
     }, 200);
   },
 
@@ -273,7 +271,7 @@ window.VB = {
     // quita de ESTE batch (no toca el catálogo). Para crear grupos nuevos se usa
     // Admin · Grupos.
     cont.innerHTML = arr.length
-      ? arr.map((g, i) => `<span class="chip-x">${g} <button title="Quitar del batch" onclick="VB.quitarGrupo(${i})">×</button></span>`).join('')
+      ? arr.map((g, i) => `<span class="chip-x">${this._esc(g)} <button title="Quitar del batch" onclick="VB.quitarGrupo(${i})">×</button></span>`).join('')
       : '<span class="chips-empty">Selecciona un cliente para cargar sus grupos.</span>';
     this.scheduleAutosave();
   },
@@ -281,10 +279,15 @@ window.VB = {
   quitarGrupo(index) {
     const input = document.getElementById('grupoInput');
     const arr   = FMT.dedupGrupos(input.value.split(','));
+    const grupo = arr[index];
     arr.splice(index, 1);
     input.value = arr.join(', ');
     this.renderGrupoChips();
-    if (document.getElementById('tablaEquipos').style.display !== 'none') this.generarTabla();
+    // Quitar el grupo de las filas ya generadas SIN regenerar la tabla:
+    // regenerarla borraría GPS/modelo/chips editados y las filas agregadas a mano.
+    document.querySelectorAll('#cuerpoTabla .chip').forEach(c => { if (c.dataset.grupo === grupo) c.remove(); });
+    this._renderBulkBar();
+    this.scheduleAutosave();
   },
 
   // ---- Batch table ----
@@ -294,11 +297,15 @@ window.VB = {
       Toast.show('El nombre del cliente contiene caracteres no permitidos: / # [ ] $', 'bad');
       return;
     }
+    const nombres = document.getElementById('serialesPaste').value.trim().split('\n').map(s => s.trim()).filter(Boolean);
+    if (!nombres.length) { Toast.show('Pega los nombres de los equipos (uno por línea) antes de generar la tabla.', 'warn'); return; }
+    const cuerpoPrevio = document.getElementById('cuerpoTabla');
+    if (cuerpoPrevio.children.length &&
+        !confirm('La tabla ya tiene filas trabajadas; generarla de nuevo las reemplaza y se pierden los cambios. ¿Continuar?')) return;
+
     const input = document.getElementById('grupoInput').value;
     VB.grupos = input.split(',').map(g => g.trim()).filter(Boolean);
-    const grupos = VB.grupos;
 
-    const nombres = document.getElementById('serialesPaste').value.trim().split('\n').map(s => s.trim()).filter(Boolean);
     document.getElementById('encabezadoTabla').innerHTML = `
       <th>Nombre del Radio</th>
       <th style="text-align:center;">GPS</th>
@@ -370,7 +377,7 @@ window.VB = {
       <td>
         <select class="table-input table-select modelo">
           <option value="">— Selecciona modelo —</option>
-          ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${m.label}</option>`).join('')}
+          ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${VB._esc(m.label)}</option>`).join('')}
         </select>
       </td>
       <td><button class="btn btn-ghost btn-sm" title="Quitar fila" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave();"><i data-lucide="trash-2"></i></button></td>
@@ -381,8 +388,8 @@ window.VB = {
     this.actualizarResumenBatch();
     this.scheduleAutosave();
     this._renderIcons();
-    fila.addEventListener('click', () => fila.classList.toggle('selected'));
-    fila.addEventListener('keydown', e => { if (e.key === 'Delete') { fila.remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave(); } });
+    // Sin atajo de teclado para borrar fila: la tecla Supr burbujeaba desde los
+    // inputs y eliminaba la fila mientras se editaba texto. Solo el botón 🗑.
   },
 
   // Aplica (o quita) un grupo en TODAS las filas — desde la barra "Aplicar a todas".
@@ -428,7 +435,7 @@ window.VB = {
     const filas      = document.querySelectorAll('#cuerpoTabla tr').length;
     const gruposArr  = (document.getElementById('grupoInput').value || '').split(',').map(g => g.trim()).filter(Boolean);
     const tooltip    = gruposArr.length ? gruposArr.join(', ') : 'Sin grupos';
-    resumenEl.innerHTML = `<strong>${filas}</strong> filas · <span class="badge completo" title="${tooltip}">${gruposArr.length}</span>`;
+    resumenEl.innerHTML = `<strong>${filas}</strong> filas · <span class="badge completo" title="${this._esc(tooltip)}">${gruposArr.length}</span>`;
     // Badge del paso 4: "Listo" cuando hay filas para exportar.
     const be = document.getElementById('badgeExport');
     if (be) { be.textContent = filas ? 'Listo' : 'Pendiente'; be.className = filas ? 'badge completo' : 'badge pending'; }
@@ -470,17 +477,27 @@ window.VB = {
   },
 
   // ---- Export / review ----
-  generarJSON() {
+  async generarJSON() {
     const filas      = document.querySelectorAll('#cuerpoTabla tr');
     const inputNombre = (document.getElementById('clienteGlobal').value || '').trim();
     let cid = this.clienteIDSeleccionado || null;
     let cn  = this.clienteNombreSeleccionado || inputNombre;
-    if (!cid && cn && this.clientesCache.length) {
-      const needle = FMT.normalize(cn);
-      const hit    = this.clientesCache.find(c => c.norm === needle);
-      if (hit) { cid = hit.id; cn = hit.nombre; }
-    }
     if (!cn) { Toast.show('Escribe el nombre del cliente o selecciónalo de la lista.', 'bad'); return []; }
+    if (!cid) {
+      // Resolver el ID por nombre contra la lista completa (cargándola si hace
+      // falta): un JSON sin cliente_id crea equipos colgantes que después hay
+      // que sanear a mano en Admin · Clientes duplicados.
+      if (!this.clientesCargados) { try { await this.cargarClientesCache(); } catch (_) {} }
+      const needle = FMT.normalize(cn);
+      const hit    = (this.clientesCache || []).find(c => c.norm === needle);
+      if (hit) {
+        cid = hit.id; cn = hit.nombre;
+        this.clienteIDSeleccionado     = cid;
+        this.clienteNombreSeleccionado = cn;
+      } else {
+        Toast.show('Cliente no encontrado en la lista: el archivo saldrá sin ID de cliente.', 'warn');
+      }
+    }
     const datos = [];
     filas.forEach(fila => {
       const nombre   = (fila.querySelector('.nombre')?.value || '').trim();
@@ -495,8 +512,9 @@ window.VB = {
     return datos;
   },
 
-  mostrarTablaResultado() {
-    const datos  = this.generarJSON();
+  async mostrarTablaResultado() {
+    const datos  = await this.generarJSON();
+    if (!datos.length) { Toast.show('No hay filas con nombre para revisar.', 'warn'); return; }
     const salida = document.getElementById('salida');
     salida.innerHTML = `
       <div class="table-wrap compact">
@@ -505,11 +523,11 @@ window.VB = {
           <tbody>
             ${datos.map(d => `
               <tr>
-                <td>${d.cliente_nombre}</td>
-                <td>${d.radio_name}</td>
+                <td>${this._esc(d.cliente_nombre)}</td>
+                <td>${this._esc(d.radio_name)}</td>
                 <td>${d.gps ? '✅' : ''}</td>
-                <td>${d.modelo_label || ''}</td>
-                <td class="col-grupos">${(d.grupos || []).join(', ')}</td>
+                <td>${this._esc(d.modelo_label || '')}</td>
+                <td class="col-grupos">${this._esc((d.grupos || []).join(', '))}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -520,6 +538,11 @@ window.VB = {
   },
 
   descargarExcel() {
+    // XLSX viene de un CDN externo: si no cargó, avisar en vez de tronar en silencio.
+    if (typeof XLSX === 'undefined') {
+      Toast.show('No se pudo cargar el componente de Excel. Revisa tu conexión y recarga la página.', 'bad');
+      return;
+    }
     const filas   = document.querySelectorAll('#cuerpoTabla tr');
     const cliente = (this.clienteNombreSeleccionado || document.getElementById('clienteGlobal').value || '').trim();
     const datos   = [];
@@ -543,8 +566,8 @@ window.VB = {
     this.setStep('exp');
   },
 
-  descargarJSON() {
-    const datos = this.generarJSON();
+  async descargarJSON() {
+    const datos = await this.generarJSON();
     if (!datos.length) { Toast.show('No hay datos para descargar.', 'bad'); return; }
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -561,6 +584,7 @@ window.VB = {
   // ---- Draft autosave ----
   _collectDraft() {
     return {
+      clienteId: this.clienteIDSeleccionado || null,
       cliente: document.getElementById('clienteGlobal').value || '',
       modelo:  document.getElementById('modeloGlobal').value  || '',
       grupos:  document.getElementById('grupoInput').value    || '',
@@ -625,6 +649,12 @@ window.VB = {
       document.getElementById('modeloGlobal').value   = d.modelo  || '';
       document.getElementById('grupoInput').value     = d.grupos  || '';
       document.getElementById('serialesPaste').value  = d.lista   || '';
+      // Restaurar también la selección de cliente: sin esto el JSON exportado
+      // desde un borrador salía con cliente_id null (equipos colgantes).
+      if (d.clienteId) {
+        this.clienteIDSeleccionado     = d.clienteId;
+        this.clienteNombreSeleccionado = d.cliente || '';
+      }
       this.renderGrupoChips();
       if ((d.tabla || []).length) {
         VB.grupos = (d.grupos || '').split(',').map(s => s.trim()).filter(Boolean);
@@ -648,6 +678,7 @@ window.VB = {
         this.actualizarResumenBatch();
         Toast.show('Borrador restaurado', 'ok');
       }
+      this.updateStepBadges();
     } catch (e) { console.warn('No se pudo restaurar borrador', e); }
   },
 
@@ -698,6 +729,26 @@ window.VB = {
     // para que un clic en una sugerencia gane la selección primero).
     const clienteEl = document.getElementById('clienteGlobal');
     if (clienteEl) clienteEl.addEventListener('blur', () => setTimeout(() => VB.intentarCargarGruposAuto(), 200));
+
+    // Navegación con teclado en las sugerencias de cliente: ↑/↓ mueven el
+    // resaltado, Enter selecciona, Esc cierra la lista.
+    if (clienteEl) clienteEl.addEventListener('keydown', e => {
+      const box   = document.getElementById('sugerenciasClientes');
+      const items = box ? Array.from(box.querySelectorAll('.suggest-item')) : [];
+      if (!items.length) return;
+      const idx = items.findIndex(li => li.classList.contains('active'));
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const next = e.key === 'ArrowDown' ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
+        items.forEach((li, i) => li.classList.toggle('active', i === next));
+        items[next].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && idx >= 0) {
+        e.preventDefault();
+        items[idx].click();
+      } else if (e.key === 'Escape') {
+        box.innerHTML = '';
+      }
+    });
 
     // Autoguardado al editar cualquier celda de la tabla (delegación).
     const cuerpo = document.getElementById('cuerpoTabla');
