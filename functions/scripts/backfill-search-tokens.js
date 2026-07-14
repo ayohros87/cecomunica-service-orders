@@ -31,7 +31,7 @@
  */
 
 const admin = require("firebase-admin");
-const { buildOrderSearchTokens, tokensEqual } = require("./src/lib/searchTokens");
+const { buildOrderSearchTokens, tokensEqual } = require("../src/lib/searchTokens");
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const BATCH_SIZE = 400;

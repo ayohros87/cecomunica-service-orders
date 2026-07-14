@@ -379,7 +379,7 @@ const OrdenesService = {
    * Primary path: `where('searchTokens', 'array-contains-any', [...])`.
    * Tokens are maintained per-order by the `onOrdenWriteSearchTokens`
    * Cloud Function (functions/src/triggers/ordenes/onWriteSearchTokens.js)
-   * and seeded for legacy orders by `functions/backfill-search-tokens.js`.
+   * and seeded for legacy orders by `functions/scripts/backfill-search-tokens.js`.
    * ORDENES_INDEX_IMPROVEMENTS.md §1.1.
    *
    * Fallback path: full-collection scan with the legacy substring logic.

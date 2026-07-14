@@ -91,9 +91,7 @@
         ".eslintcache",
         "test",
         "test-emulator",
-        "backfill-*.js",
-        "migrate-*.js",
-        "rebuild-*.js",
+        "scripts",
         "serviceAccountKey.json"
       ]
     }

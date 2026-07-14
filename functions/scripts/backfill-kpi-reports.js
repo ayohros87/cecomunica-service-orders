@@ -28,7 +28,7 @@ const XLSX = require("xlsx");
 
 // El parser del frontend expone window.KpiImport — se emula window.
 global.window = {};
-require(path.join(__dirname, "../public/js/domain/kpiImport.js"));
+require(path.join(__dirname, "../../public/js/domain/kpiImport.js"));
 const KpiImport = global.window.KpiImport;
 
 const DRY_RUN = process.argv.includes("--dry-run");
