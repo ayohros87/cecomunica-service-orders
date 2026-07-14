@@ -11,6 +11,8 @@
   <title>Nuevo batch de equipos - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
   <style>
     /* Celda de accesorios compacta — kit primitives manejan el resto */
     .batch-acc { display:flex; flex-wrap:wrap; gap:8px 10px; }
@@ -48,11 +50,15 @@
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
   <script defer src="../js/domain/equipoNormalize.js"></script>
-  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js?v=cc5"></script>
   <script src="../js/pages/ordenes-nuevo-batch.js" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
 
   <div id="topbar-mount"></div>
   <script>
@@ -187,5 +193,11 @@
   </div>
 
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('ordenes'));
+  </script>
 </body>
 </html>

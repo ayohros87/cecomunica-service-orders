@@ -8,6 +8,8 @@
   <title>Clientes ↔ QuickBooks - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
   <link rel="stylesheet" href="../css/app-kit-extras.css">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -15,7 +17,8 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script defer src="../js/firebase-init.js"></script>
-  <script src="../js/core/layout.js"></script>
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js?v=cc5"></script>
   <script src="../js/core/roles.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/clientesService.js"></script>
@@ -23,6 +26,9 @@
 
 </head>
 <body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
 
 <div id="topbar-mount"></div>
 <script>
@@ -52,5 +58,11 @@
 <script defer src="../js/ui/toast.js"></script>
 <script src="../js/pages/facturacion-clientes-qbo.js" defer></script>
 <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion'));
+  </script>
 </body>
 </html>

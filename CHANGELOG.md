@@ -1,5 +1,25 @@
 # Changelog
 
+## [Rediseño Command Center — F5: rail en panel admin y subpáginas de flujo] — 2026-07-14
+
+> Driver: backlog del rediseño. Cobertura total del rail en páginas estándar
+> autenticadas (46 páginas): panel admin completo (16), flujos de órdenes (11),
+> cotizaciones (3, incl. nueva/editar con `<body data-modo>`), contratos (5),
+> PoC (4), facturación (2), inventario (4) y perfil.
+
+- Mismo patrón híbrido F2-F4 vía script con verificación de marcadores únicos
+  (las páginas no uniformes se saltan y se aplican a mano).
+- Excluidas a propósito: páginas de impresión, verificación pública, login,
+  firma-correo y `firmar-entrega` (flujo de firma en tablet).
+- Propiedad de seguridad: sin `.has-rail` el grid es 1 columna — si initRail
+  no corre (JS viejo cacheado, error), la página queda exactamente como antes.
+- `active` del rail por módulo; admin resalta "Panel admin"; perfil sin activo.
+
+### QA targets
+- Panel admin: rail completo con "Panel admin" activo; cada subpágina admin igual.
+- Nueva cotización como vendedor: rail sin PoC, Cotizaciones activa, formulario intacto.
+- Contraer el rail en una subpágina → persiste al volver a la bandeja.
+
 ## [Rediseño Command Center — rail colapsable (modo mini)] — 2026-07-14
 
 > Feedback de uso: en módulos con tablas anchas el rail de 236px estorba.
