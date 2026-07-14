@@ -1,5 +1,30 @@
 # Changelog
 
+## [Reorganización de archivos y carpetas del repo] — 2026-07-14
+
+> Solo movimientos/renombres (git mv, historia preservada) + rutas actualizadas.
+> Cero cambios de lógica; lint 0 errores y unit tests 6/6 tras el cambio.
+
+- **Docs → `docs/`**: planes (`PLAN_*`, QUICKBOOKS_INTEGRATION, DS_ADOPTION,
+  FACTURACION_ACTIVACION) en `docs/plans/`; referencia (AUDITORIA,
+  CSS_IMPROVEMENTS, FACTURACION_COMO_FUNCIONA, EMAIL_QUICKBOOKS_EQUIPO) en
+  `docs/`. En raíz quedan solo los vivos: CHANGELOG, ARQUITECTURA, OUTSTANDING,
+  NEXT.
+- **`public/mejoras solicitadas/` y `public/notes.txt` → `docs/`**: eran
+  documentación dentro de hosting; se retiran sus entradas de
+  `firebase.json → hosting.ignore`.
+- **Scripts one-shot → `functions/scripts/`**: backfill-*, migrate-*,
+  rebuild-* y fix-renov-sin-equipo-atascados; requires relativos ajustados.
+  Fix real: `fix-renov-*.js` no estaba cubierto por ningún patrón de ignore y
+  se subía en cada deploy de functions — ahora `"scripts"` cubre todo.
+- **`Cecomunica Design System/` → `design-system/`**: 126 archivos; el nombre
+  con espacios/ñ generaba paths entrecomillados en git. Referencias de ruta
+  actualizadas en `public/css/*.css` y docs vivos (este changelog se deja
+  histórico).
+- **`backup_cecomunica_v3.bat`** actualizado a la estructura actual (copiaba
+  `js/`, `css/`, `ordenes/` de la raíz que ya no existen; no copiaba
+  `functions/src`); quoting del zip corregido.
+
 ## [Rediseño Command Center — señales v2: delta diario + contratos por aprobar] — 2026-07-14
 
 > Cierra el backlog de señales del home (PLAN §3, notas).
