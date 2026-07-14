@@ -94,6 +94,7 @@ Manual_Facturacion_CECOMUNICA.pdf
 # Prompts de trabajo one-shot (notas locales, no son parte del código)
 PROMPT_*.md
 
-# Data financiera confidencial de junta (fuente del módulo KPI) — nunca al repo
-# (también excluida del deploy de hosting vía firebase.json → hosting.ignore)
-public/brand/kpi report/
+# Data local-only (confidencial o irreproducible): fuente Excel del módulo KPI,
+# referencias de diseño con data real. Vive fuera de public/ para no depender
+# del hosting.ignore; el backup .bat SÍ la respalda.
+local-data/

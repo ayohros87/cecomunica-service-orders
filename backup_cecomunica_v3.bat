@@ -37,12 +37,15 @@ copy /Y *.md "%fullPath%" >nul
 copy /Y *.local.json "%fullPath%" >nul 2>nul
 copy /Y backup_cecomunica_v3.bat "%fullPath%" >nul
 
-:: === Frontend completo (incluye brand/kpi report, que NO esta en git) ===
+:: === Frontend completo ===
 echo Copiando public...
 xcopy "public" "%fullPath%\public" /E /I /Y /Q
 
 :: === Documentacion ===
 if exist "docs" xcopy "docs" "%fullPath%\docs" /E /I /Y /Q
+
+:: === Data local-only (NO esta en git ni en GitHub: lo mas critico del backup) ===
+if exist "local-data" xcopy "local-data" "%fullPath%\local-data" /E /I /Y /Q
 
 :: === Design system ===
 if exist "design-system" xcopy "design-system" "%fullPath%\design-system" /E /I /Y /Q

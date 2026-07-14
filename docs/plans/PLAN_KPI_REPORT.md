@@ -3,8 +3,8 @@
 > **Estado:** EJECUTADO COMPLETO (F1–F4) el 2026-07-13 — commits `5e791d5` (módulo + backfill),
 > `ccc8077` (plantilla + import tabular), `44d1db6` (snapshot PDF + respaldos + export).
 > Ver CHANGELOG.md para el detalle de lo entregado; este documento queda como registro del diseño.
-> **Insumos:** nuevo diseño en `public/brand/kpi report/Rediseño reporte KPIs ejecutivo/Reporte Ejecutivo KPIs.dc.html`;
-> reporte viejo `public/brand/kpi report/Financial Report 06-2026.xlsx` (hoja `CC Executive Report (9)`).
+> **Insumos:** nuevo diseño en `local-data/kpi-report/Rediseño reporte KPIs ejecutivo/Reporte Ejecutivo KPIs.dc.html`;
+> reporte viejo `local-data/kpi-report/Financial Report 06-2026.xlsx` (hoja `CC Executive Report (9)`).
 
 ---
 

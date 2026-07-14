@@ -1,5 +1,26 @@
 # Changelog
 
+## [Brand y design-system: separar lo vigente de lo histórico] — 2026-07-14
+
+> Objetivo: que al abrir `public/brand/` o `design-system/` quede claro cuál ES
+> el branding/look actual, sin material que parezca un rediseño pendiente.
+
+- **`design-system/archivo/`** nuevo: ahí van las propuestas ya implementadas o
+  descartadas — `logo-concepts/`, `new-logo/` (era copia byte-idéntica de los
+  app-icons ya shippeados), `rediseno-command-center/` (implementado 2026-07-14),
+  `cotizacion/`, `firma-y-cotizacion/`, `emails/` (portadas a public/css y
+  functions/templates). Su README documenta dónde vive hoy cada pieza.
+- **`design-system/README.md`**: nota de estado al inicio (sistema implementado
+  y vigente, no propuesta) + índice actualizado (faltaban ui_kits/app y mobile).
+- **`public/brand/LEEME.md`** nuevo: qué es cada asset (monograma, lockups,
+  wordmark, app-icons) y por qué `logo_cecomunica.png` y los favicons viven en
+  la raíz de `public/` (URLs absolutas en emails enviados / convención web).
+- **`public/brand/kpi report/` → `local-data/kpi-report/`**: la data financiera
+  confidencial no era branding y vivía dentro de hosting dependiendo de un
+  ignore; ahora está fuera de `public/` por completo. Actualizados `.gitignore`
+  (entrada `local-data/`), `firebase.json` (se retira el ignore) y el backup
+  .bat (respalda `local-data/`, que es lo único irreproducible).
+
 ## [Reorganización de archivos y carpetas del repo] — 2026-07-14
 
 > Solo movimientos/renombres (git mv, historia preservada) + rutas actualizadas.

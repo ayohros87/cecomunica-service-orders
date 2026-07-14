@@ -1,7 +1,7 @@
 # Plan — Rediseño "Command Center, en claro"
 
 > **Estado:** aprobado en dirección (2026-07-13). Maquetas navegables en
-> `design-system/rediseño pagina cecomunica command center/propuesta/`
+> `design-system/archivo/rediseno-command-center/propuesta/`
 > (`home.html`, `ordenes.html`, `detalle-orden.html` + `ceco-command.css` + `LEEME.md`).
 > Este plan lleva esa propuesta a `public/` por fases, sin big-bang.
 

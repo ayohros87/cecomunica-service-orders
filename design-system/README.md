@@ -2,6 +2,13 @@
 
 > Mission‑critical communications, from Panama. Two‑way radios, TETRA, Push‑to‑Talk over Cellular, telecom infrastructure and enterprise communication for ports, logistics, industrial operations and critical infrastructure.
 
+> **Estado (2026-07):** este design system está **implementado y vigente** — no es
+> una propuesta. El branding oficial vive en `public/brand/` (monograma, lockups,
+> app-icons) y el look de la app está portado a `public/css/` (`ceco-ui.css`,
+> `ceco-command.css`, etc.), que son la fuente de verdad en producción. Las
+> exploraciones y entregas ya cerradas están en [`archivo/`](archivo/README.md)
+> y **no** representan trabajo pendiente.
+
 ---
 
 ## 1 · Company context
@@ -50,11 +57,16 @@ Public site (referenced on collateral): **www.cecomunica.com** · social: `@ceco
 ├── colors_and_type.css        ← all design tokens (CSS variables)
 ├── assets/                    ← logos, hero imagery, business cards
 ├── preview/                   ← cards rendered in the Design System tab
-└── ui_kits/
-    └── website/               ← marketing-website UI kit
-        ├── README.md
-        ├── index.html         ← clickable demo
-        └── components/        ← Header, Hero, ProductCard, Footer, …
+├── ui_kits/
+│   ├── MIGRATION.md           ← how the kit maps to the shipped app CSS
+│   ├── app/                   ← service-orders app UI kit (source of ceco-ui)
+│   ├── app-mobile/            ← mobile variants
+│   └── website/               ← marketing-website UI kit
+│       ├── README.md
+│       ├── index.html         ← clickable demo
+│       └── components/        ← Header, Hero, ProductCard, Footer, …
+└── archivo/                   ← closed proposals & deliveries (see its README;
+                                  everything there is shipped or discarded)
 ```
 
 To use a token in any HTML file:

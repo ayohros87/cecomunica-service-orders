@@ -12,8 +12,7 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
-      "tools/**",
-      "brand/kpi report/**"
+      "tools/**"
     ],
     "rewrites": [
       {
