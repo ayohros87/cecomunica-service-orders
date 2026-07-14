@@ -11,12 +11,16 @@
   <title>Editar Orden - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="../css/ceco-ui.css">
+  <!-- Rediseño Command Center F3: rail + stepper del ciclo de vida (híbrido).
+       PLAN_REDISENO_COMMAND_CENTER.md -->
+  <link rel="stylesheet" href="../css/ceco-rail.css">
 
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-init.js"></script>
   <script src="../js/core/roles.js"></script>
+  <script src="../js/core/modulos.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
   <script src="../js/services/contratosService.js"></script>
@@ -59,6 +63,9 @@
   </style>
 </head>
 <body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
 
   <div id="topbar-mount"></div>
   <script>
@@ -76,6 +83,31 @@
       <h1>Editar Orden de Servicio</h1>
       <p>Modifique los datos de la orden seleccionada.</p>
       <div class="order-id-badge" id="orderIdDisplay"></div>
+
+      <!-- Stepper del ciclo de vida — lo marca OrdenStepper.update() al cargar
+           la orden; estados fuera del ciclo canónico lo dejan oculto. -->
+      <div class="os-flow" id="ordenFlow" style="display:none">
+        <div class="os-flow__step" data-step="RECIBIDO EN MOSTRADOR">
+          <div class="os-flow__dot"><i data-lucide="inbox"></i></div>
+          <div class="os-flow__lbl">Recibido en mostrador</div>
+        </div>
+        <div class="os-flow__step" data-step="POR ASIGNAR">
+          <div class="os-flow__dot"><i data-lucide="user-x"></i></div>
+          <div class="os-flow__lbl">Por asignar</div>
+        </div>
+        <div class="os-flow__step" data-step="ASIGNADO">
+          <div class="os-flow__dot"><i data-lucide="hammer"></i></div>
+          <div class="os-flow__lbl">Asignado</div>
+        </div>
+        <div class="os-flow__step" data-step="COMPLETADO (EN OFICINA)">
+          <div class="os-flow__dot"><i data-lucide="package-check"></i></div>
+          <div class="os-flow__lbl">Completado (en oficina)</div>
+        </div>
+        <div class="os-flow__step" data-step="ENTREGADO AL CLIENTE">
+          <div class="os-flow__dot"><i data-lucide="handshake"></i></div>
+          <div class="os-flow__lbl">Entregado al cliente</div>
+        </div>
+      </div>
     </div>
 
     <form id="ordenForm">
@@ -184,6 +216,44 @@
     <p id="mensaje" class="resumen"></p>
 
   </div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+
+  <script>
+    // Stepper del ciclo de vida — editar-orden.js llama update() al pintar la orden.
+    window.OrdenStepper = {
+      ORDER: ['RECIBIDO EN MOSTRADOR', 'POR ASIGNAR', 'ASIGNADO', 'COMPLETADO (EN OFICINA)', 'ENTREGADO AL CLIENTE'],
+      update(estado) {
+        const flow = document.getElementById('ordenFlow');
+        if (!flow) return;
+        const idx = this.ORDER.indexOf((estado || '').toUpperCase().trim());
+        if (idx === -1) { flow.style.display = 'none'; return; } // estado legacy/extendido
+        flow.style.display = '';
+        flow.querySelectorAll('.os-flow__step').forEach((el, i) => {
+          el.classList.toggle('done', i < idx);
+          el.classList.toggle('current', i === idx);
+        });
+      }
+    };
+
+    // Rail Command Center — nav lateral con módulos del rol (respeta ?as= visual).
+    verificarAccesoYAplicarVisibilidad(async (rol) => {
+      const user = firebase.auth().currentUser;
+      if (!user) return;
+      let nombre = sessionStorage.getItem('ccUserName:' + user.uid) || '';
+      if (!nombre) {
+        try {
+          const u = await UsuariosService.getUsuario(user.uid);
+          nombre = (u && (u.nombre || u.name)) || user.displayName || (user.email || '').split('@')[0];
+          sessionStorage.setItem('ccUserName:' + user.uid, nombre);
+        } catch {
+          nombre = user.displayName || (user.email || '').split('@')[0];
+        }
+      }
+      Layout.renderRail({ active: 'ordenes', rol: MODULOS.rolEfectivo(rol), userName: nombre });
+    });
+  </script>
 
   <script src="../js/pages/editar-orden.js" defer></script>
   <script src="https://unpkg.com/lucide@1.23.0/dist/umd/lucide.min.js"></script>

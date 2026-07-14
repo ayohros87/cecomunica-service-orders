@@ -273,6 +273,8 @@
         document.getElementById("tecnico").value = d.tecnico_asignado || "";
         await cargarEstados();
         document.getElementById("estado").value = d.estado_reparacion || "POR ASIGNAR";
+        // Stepper del ciclo de vida (Command Center F3) — presentación pura.
+        if (window.OrdenStepper) OrdenStepper.update(d.estado_reparacion || "POR ASIGNAR");
         document.getElementById("observaciones").value = d.observaciones || "";
       } else {
         mostrarToast("Orden no encontrada.", "error");

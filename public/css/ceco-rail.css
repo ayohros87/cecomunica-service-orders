@@ -79,6 +79,26 @@
 .os-kpi--alert{border-left:3px solid var(--status-critical,#D24545)}
 .os-kpi--alert .os-kpi__val{color:var(--status-critical,#D24545)}
 
+/* ---- Stepper del ciclo de vida (detalle de orden, F3) ----
+   Marcado por window.OrdenStepper según estado_reparacion; estados
+   fuera del ciclo canónico de 5 → el stepper se oculta. */
+.os-flow{display:flex;align-items:flex-start;width:100%;margin:20px auto 4px;max-width:780px}
+.os-flow__step{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;position:relative;text-align:center}
+.os-flow__step::before{content:"";position:absolute;top:13px;left:-50%;width:100%;height:2px;background:var(--line,#DDE4EB);z-index:0}
+.os-flow__step:first-child::before{display:none}
+.os-flow__dot{width:28px;height:28px;border-radius:50%;background:#fff;border:2px solid var(--line,#DDE4EB);display:grid;place-items:center;z-index:1;color:var(--fg-4,#9AA7B4);transition:.2s}
+.os-flow__dot i{width:14px;height:14px}
+.os-flow__lbl{font-size:11.5px;font-weight:600;color:var(--fg-4,#9AA7B4);max-width:96px;line-height:1.25}
+.os-flow__step.done .os-flow__dot{background:#1FA56B;border-color:#1FA56B;color:#fff}
+.os-flow__step.done::before{background:#1FA56B}
+.os-flow__step.done .os-flow__lbl{color:var(--fg-2,#2F3942)}
+.os-flow__step.current .os-flow__dot{background:var(--accent,#0091D7);border-color:var(--accent,#0091D7);color:#fff;box-shadow:0 0 0 4px rgba(0,145,215,.15)}
+.os-flow__step.current .os-flow__lbl{color:var(--accent,#0091D7)}
+.os-flow__step.current::before{background:#1FA56B}
+@media (max-width:640px){
+  .os-flow__lbl{font-size:10.5px;max-width:70px}
+}
+
 /* ---- Responsive: rail y KPIs solo en desktop ---- */
 @media (max-width:1180px){
   .os-kpis{grid-template-columns:repeat(2,1fr)}

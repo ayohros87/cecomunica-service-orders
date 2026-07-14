@@ -1,5 +1,27 @@
 # Changelog
 
+## [Rediseño Command Center — F3: detalle de orden con stepper + rail en "Ver como"] — 2026-07-14
+
+> Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F3). Misma estrategia híbrida que F2.
+
+- **`ordenes/editar-orden.html`** — rail Command Center (wrapper `.cc-app` +
+  `ceco-rail.css`) y **stepper del ciclo de vida** bajo el encabezado: los 5
+  estados canónicos con done/current según `estado_reparacion`; un estado
+  legacy/extendido (DIAGNÓSTICO, EN ESPERA, …) deja el stepper oculto en vez
+  de pintarlo mal. `window.OrdenStepper` definido inline (presentación pura).
+- **`js/pages/editar-orden.js`** — hook de 1 línea: `OrdenStepper.update()` al
+  pintar la orden. Nada más cambió en la lógica.
+- **`css/ceco-rail.css`** — estilos `.os-flow*` del stepper (sin colisiones).
+- **Rail respeta "Ver como"**: `renderRail` recibe `MODULOS.rolEfectivo(rol)`
+  en la bandeja y el detalle (aplica si la URL lleva `?as=ROL` y el rol real
+  es admin; solo visual, igual que en el home).
+
+### QA targets
+- Abrir una orden ASIGNADO: stepper con Recibido/Por asignar en verde y
+  Asignado en azul; guardar cambios funciona igual.
+- Abrir una orden con estado legacy (p.ej. DIAGNÓSTICO): sin stepper, página normal.
+- `ordenes/index.html?as=tecnico` como admin: rail muestra solo Órdenes + PoC.
+
 ## [Rediseño Command Center — F2: bandeja de órdenes con rail y KPIs de señal] — 2026-07-14
 
 > Driver: `PLAN_REDISENO_COMMAND_CENTER.md` (F2). Integración HÍBRIDA de mínimo

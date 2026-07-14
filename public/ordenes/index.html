@@ -757,7 +757,8 @@
           nombre = user.displayName || (user.email || '').split('@')[0];
         }
       }
-      Layout.renderRail({ active: 'ordenes', rol, userName: nombre });
+      // rolEfectivo: el rail respeta el modo "Ver como" (?as=ROL, solo visual).
+      Layout.renderRail({ active: 'ordenes', rol: MODULOS.rolEfectivo(rol), userName: nombre });
     });
   </script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
