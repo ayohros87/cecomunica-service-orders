@@ -38,7 +38,9 @@ window.PocEdit = {
         : 'Toca un grupo del catálogo para añadir o quitar. Para crear uno nuevo, ve a <strong>Administrar grupos</strong> (menú “Más” en POC).';
     }
     // Catálogo del cliente → chips toggle encima del input (async, no bloquea).
-    this._cargarCatalogo(data.cliente_id);
+    // Equipos legacy no traen cliente_id → se resuelve por nombre contra
+    // clientesMap para que también vean los grupos nuevos del catálogo.
+    this._cargarCatalogo(this._resolverClienteId(data));
     document.getElementById('drawer-activo').checked   = data.activo !== false;
     document.getElementById('drawer-sim-number').value = data.sim_number || '';
     document.getElementById('drawer-sim-phone').value  = data.sim_phone  || '';
@@ -72,16 +74,30 @@ window.PocEdit = {
     this._catalogo = [];
   },
 
+  // cliente_id del equipo, o para legacy (solo `cliente` string) el id del
+  // cliente cuyo nombre coincide (accent/case-insensitive) en clientesMap.
+  _resolverClienteId(data) {
+    if (data?.cliente_id) return data.cliente_id;
+    const nombre = FMT.normalize(data?.cliente || '');
+    if (!nombre) return null;
+    for (const [id, n] of Object.entries(PocState.clientesMap || {})) {
+      if (FMT.normalize(n) === nombre) return id;
+    }
+    return null;
+  },
+
   // ── Catálogo de grupos del cliente ──────────────────────────────────
-  // Carga clientes/{id}.poc_grupos y pinta chips toggle. Legacy sin
-  // cliente_id → sin catálogo (solo chips de los grupos que ya trae el equipo).
+  // Carga clientes/{id}.poc_grupos y pinta chips toggle. Sin cliente
+  // resoluble → sin catálogo (solo chips de los grupos que ya trae el equipo).
   async _cargarCatalogo(clienteId) {
     this._catalogo = [];
     this._prefijo = null;
     try {
       if (clienteId) {
+        // fresh: la caché del SDK puede no tener los grupos que recepción/admin
+        // acaba de crear en otra sesión (mismo motivo que vendedores-batch).
         const [cat, pfx] = await Promise.all([
-          PocService.getCatalogoGrupos(clienteId),
+          PocService.getCatalogoGrupos(clienteId, { fresh: true }),
           PocService.getGrupoPrefix(clienteId),
         ]);
         this._catalogo = Array.isArray(cat) ? cat : [];
