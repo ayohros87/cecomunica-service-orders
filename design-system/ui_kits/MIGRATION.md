@@ -142,7 +142,7 @@ cd public && python -m http.server 8765 # para smoke test rápido
 ```
 
 Abre `http://localhost:8765/inventario/index.html` y compáralo lado a lado con
-`http://localhost:8765/../Cecomunica Design System/ui_kits/app/inventario.html`
+`http://localhost:8765/../design-system/ui_kits/app/inventario.html`
 (applied list reference) en otra pestaña.
 
 ### 📊 Métricas de progreso
@@ -181,8 +181,8 @@ responsive-cards, module-grid, auth-shell, page-header-centered).
 | Archivo | Líneas | Rol |
 |---------|------:|-----|
 | `public/css/ceco-ui.css` | 2,352 | CSS producción — ya referencia tokens del DS via "bridge" (fases 1-6 de DS adoption) |
-| `Cecomunica Design System/colors_and_type.css` | — | Tokens del DS (colores, fuentes, spacing, radius, shadows) |
-| `Cecomunica Design System/ui_kits/app/app.css` | 3,133 | Kit completo (incluye los 10 primitivos R3 nuevos) |
+| `design-system/colors_and_type.css` | — | Tokens del DS (colores, fuentes, spacing, radius, shadows) |
+| `design-system/ui_kits/app/app.css` | 3,133 | Kit completo (incluye los 10 primitivos R3 nuevos) |
 
 `ceco-ui.css` ya cubre la mayoría de primitivos básicos (`.btn`, `.chip-estado`,
 `.app-table`, `.form-input`, `.modal`, etc.). Lo que **falta en `ceco-ui.css`**
@@ -215,7 +215,7 @@ duplicar lo que ya existe.
 
 ```css
 /* Al final de public/css/ceco-ui.css */
-@import url('../../Cecomunica Design System/ui_kits/app/app.css');
+@import url('../../design-system/ui_kits/app/app.css');
 ```
 
 **Pros**: las páginas ya importan `ceco-ui.css`, no hay que tocarlas.

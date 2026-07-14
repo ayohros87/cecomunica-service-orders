@@ -1,8 +1,8 @@
 # Design System Adoption Plan — cecomunica-service-orders
 
 > **Scope:** Fully align `public/css/ceco-ui.css` and the HTML pages with the canonical
-> **Cecomunica Design System** defined in `Cecomunica Design System/colors_and_type.css`
-> and the App UI Kit in `Cecomunica Design System/ui_kits/app/`.
+> **Cecomunica Design System** defined in `design-system/colors_and_type.css`
+> and the App UI Kit in `design-system/ui_kits/app/`.
 >
 > **Current state:** Token bridge partially shipped (colors, fonts, spacing, shadows,
 > focus rings). Class naming and component patterns diverge from the DS App UI Kit.

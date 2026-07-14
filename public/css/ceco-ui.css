@@ -1,6 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-/* Primitivos R3 del UI Kit (ver Cecomunica Design System/ui_kits/MIGRATION.md) */
+/* Primitivos R3 del UI Kit (ver design-system/ui_kits/MIGRATION.md) */
 @import url('./app-kit-extras.css');
 
 /* ==== Cecomunica UI (base) ==== */
@@ -36,7 +36,7 @@
      bridge above, so updates to the design-system layer propagate
      automatically. Every page references these names directly.)
 
-     Design-system semantics (see `Cecomunica Design System/colors_and_type.css`):
+     Design-system semantics (see `design-system/colors_and_type.css`):
        --brand  = corporate navy anchor (footers, headers, dark surfaces)
        --accent = signal cyan #0091D7 (primary buttons, links, focus, active)
      Phase C complete: --brand now resolves to navy. No production code

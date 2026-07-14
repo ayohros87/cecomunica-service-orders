@@ -3,7 +3,7 @@
 > **Estado:** post-refactor Phases 0–5f + capa de servicios completa + migración Phase 6 (Layout.renderTopbar) en 24 páginas + **migración al UI Kit del Design System en 45 páginas** (Phase R3, completada 2026-05-28).
 > Para el plan de trabajo pendiente ver `OUTSTANDING.md`.
 > Para el historial de cambios ver `CHANGELOG.md`.
-> Para el plan y estado de la migración al UI Kit ver `Cecomunica Design System/ui_kits/MIGRATION.md`.
+> Para el plan y estado de la migración al UI Kit ver `design-system/ui_kits/MIGRATION.md`.
 
 ---
 
@@ -90,10 +90,10 @@ public/
     ordenes-index.css          ← estilos de la página de órdenes
 ```
 
-El Design System vive separado del runtime en `Cecomunica Design System/`:
+El Design System vive separado del runtime en `design-system/`:
 
 ```
-Cecomunica Design System/
+design-system/
   colors_and_type.css                       ← tokens base (colores, tipografía, spacing)
   ui_kits/
     app/                                    ← kit desktop con portal de 7 áreas
@@ -212,7 +212,7 @@ El coordinador es delgado (≤ 110 líneas); cada módulo expone sus funciones p
 
 ### 3.7 Design System y UI Kit (Phase R3 — 2026-05-27/28)
 
-El Design System vive en `Cecomunica Design System/` (ver árbol en §3.1) y es la
+El Design System vive en `design-system/` (ver árbol en §3.1) y es la
 **fuente de verdad de diseño**. Los kits HTML (`ui_kits/app/*.html`,
 `ui_kits/app-mobile/*.html`) son demos navegables que muestran cada primitivo
 en uso real y sirven como referencia 1:1 para las páginas de `public/`.
@@ -237,7 +237,7 @@ todas las páginas de `public/` heredan los primitivos del kit sin tocar sus
 
 #### 3.7.2 Primitivos R3 nuevos (vs versión pre-migración)
 
-Documentados en `Cecomunica Design System/ui_kits/app/foundations.html` y
+Documentados en `design-system/ui_kits/app/foundations.html` y
 disponibles globalmente vía `app-kit-extras.css`:
 
 | Primitivo | Clase | Uso |

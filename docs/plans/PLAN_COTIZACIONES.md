@@ -1,4 +1,4 @@
-# Plan — Módulo de Cotizaciones (basado en UI Kit `Cecomunica Design System/cotizacion/`)
+# Plan — Módulo de Cotizaciones (basado en UI Kit `design-system/cotizacion/`)
 
 > Migración del prototipo React (Babel-standalone) del Design System a JS vanilla, integrando los servicios, CSS y helpers ya existentes en producción. Se reemplaza el módulo de cotizaciones actual (`public/cotizaciones/`) por una versión más completa: list con stats + filtros por estado, editor con catálogo, vista de detalle con historial, y print branded.
 
@@ -6,7 +6,7 @@
 
 ## 1. Verificación del UI Kit
 
-Carpeta: `Cecomunica Design System/cotizacion/cotizaciones/`
+Carpeta: `design-system/cotizacion/cotizaciones/`
 
 | Archivo | Rol | Notas para migración |
 |---|---|---|
