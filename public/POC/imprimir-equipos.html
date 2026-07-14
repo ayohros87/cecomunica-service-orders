@@ -85,13 +85,13 @@
     }
   </style>
 
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script src="../js/firebase-init.js"></script>
-  <script src="../js/services/pocService.js"></script>
-  <script src="../js/services/clientesService.js"></script>
-  <script src="../js/services/modelosService.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js"></script>
+  <script defer src="../js/services/pocService.js"></script>
+  <script defer src="../js/services/clientesService.js"></script>
+  <script defer src="../js/services/modelosService.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -233,9 +233,12 @@
       }
     }
 
+    // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
+    document.addEventListener('DOMContentLoaded', () => {
     firebase.auth().onAuthStateChanged(user => {
       if (user) cargarEquipos();
       else window.location.href = "/login.html";
+    });
     });
   </script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>

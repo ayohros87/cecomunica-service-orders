@@ -15,19 +15,19 @@
        PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css">
 
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script src="../js/firebase-init.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/modulos.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
-  <script src="../js/services/contratosService.js"></script>
-  <script src="../js/services/usuariosService.js"></script>
-  <script src="../js/services/ordenesService.js"></script>
-  <script src="../js/services/clientesService.js"></script>
-  <script src="../js/services/empresaService.js"></script>
+  <script defer src="../js/services/contratosService.js"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script defer src="../js/services/ordenesService.js"></script>
+  <script defer src="../js/services/clientesService.js"></script>
+  <script defer src="../js/services/empresaService.js"></script>
   <script src="../js/core/layout.js"></script>
 
   <script>
@@ -238,6 +238,8 @@
     };
 
     // Rail Command Center — nav lateral con módulos del rol (respeta ?as= visual).
+    // Los scripts de Firebase cargan con defer: registrar tras DOMContentLoaded.
+    document.addEventListener('DOMContentLoaded', () => {
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       const user = firebase.auth().currentUser;
       if (!user) return;
@@ -252,6 +254,7 @@
         }
       }
       Layout.renderRail({ active: 'ordenes', rol: MODULOS.rolEfectivo(rol), userName: nombre });
+    });
     });
   </script>
 
