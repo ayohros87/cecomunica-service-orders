@@ -91,7 +91,9 @@ function _docNuevo({ serial, serialNorm, modelo_id, modelo_label, estado,
     serial_compartido: false,
     modelo_id:    modelo_id || null,
     modelo_label: (modelo_label || "").toString().trim(),
-    condicion: "reuso",           // ya circula en la operación — no es unidad nueva
+    // Condición según la variante del modelo (convención del catálogo: la fila
+    // reuso lleva sufijo -R en el nombre). Sin sufijo → se colocó como nuevo.
+    condicion: /[\s-]r$/i.test((modelo_label || "").toString().trim()) ? "reuso" : "nuevo",
     // 'cecomunica' (flota propia: alquiler/demo/POC/bodega) | 'cliente' (equipo
     // del cliente: contratos "Propio"/venta, o traído a taller) | 'desconocida'
     propiedad,
