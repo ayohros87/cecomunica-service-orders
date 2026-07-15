@@ -8,8 +8,11 @@
  *      cecomunica.
  *   2. Vinculada a un poc_device → cecomunica (flota PoC propia).
  *   3. Origen bodega / toma_fisica / import_excel → cecomunica.
- *   4. Resto (entró solo por orden de servicio) → desconocida — el taller la
- *      clasifica al verla (candidata a equipo del cliente).
+ *   4. Entró solo por orden de servicio y su serial NO existe en POC ni está
+ *      amparado por contrato → cliente (la flota propia siempre vive en POC o
+ *      en un contrato; lo que solo se ve en taller es equipo del cliente).
+ *   5. Resto (p.ej. serial presente en POC sin vínculo — modelo conflictivo)
+ *      → desconocida, para revisión humana.
  * Nunca pisa una propiedad ya definida distinta de 'desconocida'. Idempotente.
  *
  * USAGE (desde functions/):
@@ -23,19 +26,26 @@ const db = admin.firestore();
 const dryRun = !process.argv.includes("--write");
 
 (async () => {
-  const [poolSnap, contratosSnap] = await Promise.all([
+  const poolLib = require("../src/domain/equiposPool");
+  const [poolSnap, contratosSnap, pocSnap] = await Promise.all([
     db.collection("equipos_pool").get(),
     db.collection("contratos").get(),
+    db.collection("poc_devices").get(),
   ]);
   const contratos = new Map();
   contratosSnap.forEach((d) => contratos.set(d.id, d.data()));
+  const serialesEnPoc = new Set();
+  pocSnap.forEach((d) => {
+    const v = d.data();
+    if (v.deleted !== true && v.serial) serialesEnPoc.add(poolLib.normSerial(v.serial));
+  });
 
   let batch = db.batch(), ops = 0;
   const flush = async () => { if (ops && !dryRun) await batch.commit(); batch = db.batch(); ops = 0; };
 
   const r = { revisados: poolSnap.size, yaClasificados: 0,
     cecomunicaPorContrato: 0, clientePorContrato: 0, cecomunicaPorPoc: 0,
-    cecomunicaPorBodega: 0, desconocida: 0 };
+    cecomunicaPorBodega: 0, clienteSoloTaller: 0, desconocida: 0 };
 
   for (const doc of poolSnap.docs) {
     const v = doc.data();
@@ -51,6 +61,8 @@ const dryRun = !process.argv.includes("--write");
       propiedad = "cecomunica"; r.cecomunicaPorPoc++;
     } else if (["bodega", "toma_fisica", "import_excel"].includes(v.origen)) {
       propiedad = "cecomunica"; r.cecomunicaPorBodega++;
+    } else if (v.origen === "migracion_orden" && !serialesEnPoc.has(v.serial_norm)) {
+      propiedad = "cliente"; r.clienteSoloTaller++;
     } else {
       propiedad = "desconocida"; r.desconocida++;
     }

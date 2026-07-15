@@ -81,7 +81,11 @@ module.exports = onDocumentWritten(
       const nuevos = despues.filter((x) => !keysAntes.has(pool.normSerial(x.serial)));
       for (const e of nuevos) {
         const contrato = after.contrato || {};
+        // Serial que aparece por primera vez en una orden SIN contrato: es
+        // equipo del cliente (la flota propia ya existiría en el pool vía POC
+        // o contrato). Con contrato vinculado, onSerialWrite refina después.
         const extra = { orden_actual_id: ordenId };
+        if (!(contrato.aplica && contrato.contrato_doc_id)) extra.propiedad = "cliente";
         if (contrato.aplica && contrato.contrato_doc_id) {
           extra.asignacion = {
             contrato_doc_id: contrato.contrato_doc_id,
