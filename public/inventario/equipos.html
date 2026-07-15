@@ -131,8 +131,9 @@
         <span class="kpi-card-sub">disponibles para asignar</span>
       </div>
       <div class="kpi-card">
-        <span class="kpi-card-label">Asignados / En cliente</span>
-        <span class="kpi-card-value" id="kpiAfuera">—</span>
+        <span class="kpi-card-label">Flota propia en campo</span>
+        <span class="kpi-card-value" id="kpiFlotaCampo">—</span>
+        <span class="kpi-card-sub">alquiler, demo y POC con clientes</span>
       </div>
       <div class="kpi-card">
         <span class="kpi-card-label">En taller</span>
@@ -154,8 +155,8 @@
           <button class="eq-tab" data-tab="asignado_contrato" onclick="EquiposPool.setTab('asignado_contrato')">Asignados <span id="countAsignados"></span></button>
           <button class="eq-tab" data-tab="en_cliente" onclick="EquiposPool.setTab('en_cliente')">En cliente <span id="countCliente"></span></button>
           <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')">Taller <span id="countTaller"></span></button>
+          <button class="eq-tab" data-tab="en_poc" onclick="EquiposPool.setTab('en_poc')">POC <span id="countPoc"></span></button>
           <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')">Otros <span id="countOtros"></span></button>
-          <button class="eq-tab" data-tab="por_verificar" onclick="EquiposPool.setTab('por_verificar')">Por verificar <span id="countVerificar"></span></button>
           <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>
         </div>
 
@@ -174,6 +175,10 @@
           <option value="cliente">De cliente</option>
           <option value="desconocida">Desconocida</option>
         </select>
+
+        <label class="toggle-pill" title="Fichas creadas por migración pendientes de confirmar con el equipo a la vista"><input type="checkbox" id="chkSinVerificar" onchange="EquiposPool.render()"> Sin verificar</label>
+        <label class="toggle-pill" title="Seriales que existen en más de un modelo — requieren depuración física"><input type="checkbox" id="chkCompartidos" onchange="EquiposPool.render()"> 2+ modelos</label>
+        <label class="toggle-pill" title="Unidades sin cliente ni contrato rastreable"><input type="checkbox" id="chkSinCliente" onchange="EquiposPool.render()"> Sin cliente</label>
 
         <div style="flex:1;"></div>
         <button class="btn btn-ghost btn-sm" onclick="EquiposPool.cargar()" title="Recargar la lista"><i data-lucide="rotate-ccw"></i> Recargar</button>

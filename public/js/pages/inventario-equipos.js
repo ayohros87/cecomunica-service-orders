@@ -16,7 +16,7 @@ window.EquiposPool = {
   _editandoId: null,
   _importRows: null,
 
-  ESTADOS_OTROS: ['en_poc', 'devuelto_revision', 'baja'],
+  ESTADOS_OTROS: ['devuelto_revision', 'baja'],
 
   PROP_LABELS: { cecomunica: 'Flota', cliente: 'Cliente', desconocida: '?' },
 
@@ -69,19 +69,28 @@ window.EquiposPool = {
 
   _enTab(eq, tab) {
     if (tab === 'todos') return true;
-    if (tab === 'por_verificar') return eq.verificado === false;
     if (tab === 'otros') return this.ESTADOS_OTROS.includes(eq.estado);
     return eq.estado === tab;
+  },
+
+  _sinCliente(eq) {
+    return !(eq.asignacion?.cliente_nombre || eq.asignacion?.cliente_id);
   },
 
   _filtrados() {
     const q = (document.getElementById('eqBusqueda')?.value || '').trim().toLowerCase();
     const mod = document.getElementById('eqFiltroModelo')?.value || '';
     const prop = document.getElementById('eqFiltroPropiedad')?.value || '';
+    const soloSinVerificar = document.getElementById('chkSinVerificar')?.checked;
+    const soloCompartidos = document.getElementById('chkCompartidos')?.checked;
+    const soloSinCliente = document.getElementById('chkSinCliente')?.checked;
     return this._equipos.filter(eq => {
       if (!this._enTab(eq, this._tab)) return false;
       if (mod && eq.modelo_id !== mod) return false;
       if (prop && (eq.propiedad || 'desconocida') !== prop) return false;
+      if (soloSinVerificar && eq.verificado !== false) return false;
+      if (soloCompartidos && !eq.serial_compartido) return false;
+      if (soloSinCliente && !this._sinCliente(eq)) return false;
       if (q) {
         const blob = [eq.serial, eq.serial_norm, eq.modelo_label,
           eq.asignacion?.cliente_nombre, eq.asignacion?.contrato_id, eq.notas]
@@ -102,17 +111,19 @@ window.EquiposPool = {
     const n = estado => this._equipos.filter(e => e.estado === estado).length;
     const nVerificar = this._equipos.filter(e => e.verificado === false).length;
     const nOtros = this._equipos.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length;
+    const flotaCampo = this._equipos.filter(e => e.propiedad === 'cecomunica'
+      && ['asignado_contrato', 'en_cliente', 'en_poc'].includes(e.estado)).length;
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('kpiBodega', n('en_bodega'));
-    set('kpiAfuera', n('asignado_contrato') + n('en_cliente'));
+    set('kpiFlotaCampo', flotaCampo);
     set('kpiTaller', n('en_taller'));
     set('kpiVerificar', nVerificar);
     set('countBodega', `(${n('en_bodega')})`);
     set('countAsignados', `(${n('asignado_contrato')})`);
     set('countCliente', `(${n('en_cliente')})`);
     set('countTaller', `(${n('en_taller')})`);
+    set('countPoc', `(${n('en_poc')})`);
     set('countOtros', `(${nOtros})`);
-    set('countVerificar', `(${nVerificar})`);
     set('countTodos', `(${this._equipos.length})`);
 
     if (!lista.length) {
