@@ -177,6 +177,53 @@ window.EquiposPool = {
     return this._equipos.filter(eq => this._enTab(eq, this._tab) && this._pasaFiltrosSecundarios(eq, f));
   },
 
+  // ── Chips de filtros activos ─────────────────────────────────────────
+  PROP_FILTRO_LABELS: { cecomunica: 'Flota Cecomunica', cliente: 'De cliente', desconocida: 'Desconocida' },
+
+  quitarFiltro(tipo) {
+    const el = {
+      modelo: 'eqFiltroModelo', propiedad: 'eqFiltroPropiedad', busqueda: 'eqBusqueda',
+      sinVerificar: 'chkSinVerificar', compartidos: 'chkCompartidos', sinCliente: 'chkSinCliente',
+    }[tipo];
+    const node = document.getElementById(el);
+    if (!node) return;
+    if (node.type === 'checkbox') node.checked = false;
+    else node.value = '';
+    this.render();
+  },
+
+  limpiarFiltros() {
+    ['eqFiltroModelo', 'eqFiltroPropiedad', 'eqBusqueda'].forEach(id => {
+      const n = document.getElementById(id); if (n) n.value = '';
+    });
+    ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente'].forEach(id => {
+      const n = document.getElementById(id); if (n) n.checked = false;
+    });
+    this.render();
+  },
+
+  _renderFiltrosActivos(f, nMostrados, nOcultos) {
+    const bar = document.getElementById('eqFiltrosActivos');
+    if (!bar) return;
+    const esc = FMT.esc;
+    const chips = [];
+    const chip = (tipo, texto) =>
+      `<span class="eq-chip">${esc(texto)}<button title="Quitar este filtro" onclick="EquiposPool.quitarFiltro('${tipo}')">✕</button></span>`;
+    if (f.prop) chips.push(chip('propiedad', `Propiedad: ${this.PROP_FILTRO_LABELS[f.prop] || f.prop}`));
+    if (f.mod) chips.push(chip('modelo', `Modelo: ${this._familias?.get(f.mod)?.label || f.mod}`));
+    if (f.sinVerificar) chips.push(chip('sinVerificar', 'Solo sin verificar'));
+    if (f.compartidos) chips.push(chip('compartidos', 'Solo 2+ modelos'));
+    if (f.sinCliente) chips.push(chip('sinCliente', 'Solo sin cliente'));
+    if (f.q) chips.push(chip('busqueda', `Búsqueda: "${f.q}"`));
+    if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.style.display = '';
+    bar.innerHTML = `<i data-lucide="filter" style="width:14px;height:14px;flex:none;color:#92400e;"></i>
+      <span style="color:#92400e;">Viendo:</span> ${chips.join(' ')}
+      <span style="color:var(--fg-3);">· ${nOcultos} equipos ocultos por estos filtros</span>
+      <span style="flex:1;"></span>
+      <button class="btn btn-ghost btn-sm" onclick="EquiposPool.limpiarFiltros()">Limpiar todo</button>`;
+  },
+
   render() {
     const tbody = document.getElementById('eqTabla');
     if (!tbody) return;
@@ -205,6 +252,10 @@ window.EquiposPool = {
     set('countPoc', `(${n('en_poc')})`);
     set('countOtros', `(${filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length})`);
     set('countTodos', `(${filtrables.length})`);
+
+    // Barra "Viendo: …" — hace obvios los filtros activos sin abrir dropdowns.
+    const enTabTotal = this._equipos.filter(e => this._enTab(e, this._tab)).length;
+    this._renderFiltrosActivos(fAct, lista.length, enTabTotal - lista.length);
 
     if (!lista.length) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">
