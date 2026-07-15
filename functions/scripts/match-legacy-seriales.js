@@ -32,6 +32,11 @@ const db = admin.firestore();
 const pool = require("../src/domain/equiposPool");
 
 const dryRun = !process.argv.includes("--write");
+// Tier C (--con-fechas): además de órdenes vinculadas y POC, usa órdenes del
+// cliente SIN vínculo cuya fecha cae en la vigencia del contrato (evidencia
+// circunstancial — el cliente tenía ese radio en esas fechas). Mismas reglas
+// estrictas; fichas con source 'auto-match-fecha'.
+const conFechas = process.argv.includes("--con-fechas");
 const csvIdx = process.argv.indexOf("--csv");
 const csvOut = csvIdx > -1 ? process.argv[csvIdx + 1] : null;
 
@@ -105,15 +110,17 @@ const fechaDe = (t) => (t?.toDate ? t.toDate() : (t ? new Date(t) : null));
   });
   const cidsPendientes = new Set(contratos.map((c) => c.id));
 
-  // Órdenes VINCULADAS a contratos legacy pendientes (evidencia directa Tier A;
-  // todas las órdenes, incluidas entregadas/viejas). Más reciente primero.
+  // Órdenes: las VINCULADAS a contratos legacy pendientes son evidencia
+  // directa (Tier A; más reciente primero). Las vinculadas a CUALQUIER otro
+  // contrato reservan sus seriales (no elegibles por fecha). Las libres del
+  // cliente alimentan el Tier C por fecha.
   const ordenesPorContrato = new Map(); // cid → [{fecha, numero, equipos[]}]
+  const ordenesLibresDe = new Map();    // clave cliente → [{fecha, numero, equipos[]}]
+  const reservadoPorVinculo = new Set(); // norm en órdenes vinculadas a otros contratos
   const evidenciaSerial = new Map();    // norm → Set(cid) — conflictos si ≥2
   ordenesSnap.docs.forEach((d) => {
     const o = d.data();
     if (o.eliminado === true) return;
-    const cid = o.contrato?.aplica && o.contrato?.contrato_doc_id ? o.contrato.contrato_doc_id : null;
-    if (!cid || !cidsPendientes.has(cid)) return;
     const equipos = (o.equipos || [])
       .filter((e) => e && !e.eliminado)
       .map((e) => ({
@@ -123,21 +130,30 @@ const fechaDe = (t) => (t?.toDate ? t.toDate() : (t ? new Date(t) : null));
       }))
       .filter((e) => e.serial && pool.esSerialValido(pool.normSerial(e.serial)));
     if (!equipos.length) return;
-    (ordenesPorContrato.get(cid) || ordenesPorContrato.set(cid, []).get(cid))
-      .push({ fecha: fechaDe(o.fecha_creacion), numero: o.numero_orden || d.id, equipos });
-    equipos.forEach((e) => {
-      const n = pool.normSerial(e.serial);
-      (evidenciaSerial.get(n) || evidenciaSerial.set(n, new Set()).get(n)).add(cid);
-    });
+    const cid = o.contrato?.aplica && o.contrato?.contrato_doc_id ? o.contrato.contrato_doc_id : null;
+    const item = { fecha: fechaDe(o.fecha_creacion), numero: o.numero_orden || d.id, equipos };
+    if (cid && cidsPendientes.has(cid)) {
+      (ordenesPorContrato.get(cid) || ordenesPorContrato.set(cid, []).get(cid)).push(item);
+      equipos.forEach((e) => {
+        const n = pool.normSerial(e.serial);
+        (evidenciaSerial.get(n) || evidenciaSerial.set(n, new Set()).get(n)).add(cid);
+      });
+    } else if (cid) {
+      equipos.forEach((e) => reservadoPorVinculo.add(pool.normSerial(e.serial)));
+    } else {
+      const k = claveCliente(o.cliente_id, o.cliente_nombre);
+      if (k) (ordenesLibresDe.get(k) || ordenesLibresDe.set(k, []).get(k)).push(item);
+    }
   });
   ordenesPorContrato.forEach((arr) => arr.sort((a, b) => (b.fecha?.getTime() || 0) - (a.fecha?.getTime() || 0)));
+  ordenesLibresDe.forEach((arr) => arr.sort((a, b) => (b.fecha?.getTime() || 0) - (a.fecha?.getTime() || 0)));
   const serialConflictivo = (n) => (evidenciaSerial.get(n)?.size || 0) > 1;
 
   // ── Match por cliente ──
   const asignaciones = []; // {cid, contrato_id, cliente, renglon, serial, unit}
   const reporte = [];      // filas detalle (también para CSV)
   const stats = { contratosTotales: contratos.length, contratosConAsignacion: 0,
-    unidadesAsignadas: 0, unidadesPorOrdenes: 0, unidadesPorPoc: 0,
+    unidadesAsignadas: 0, unidadesPorOrdenes: 0, unidadesPorPoc: 0, unidadesPorFecha: 0,
     serialesConflictivosExcluidos: 0, renglonesAmbiguoMultiContrato: 0,
     renglonesSobranCandidatos: 0, renglonesSinCandidatos: 0, renglonesNoAplica: 0 };
 
@@ -240,6 +256,49 @@ const fechaDe = (t) => (t?.toDate ? t.toDate() : (t ? new Date(t) : null));
       stats.unidadesAsignadas += candidatos.length;
       reporte.push({ ...base, resultado: `ASIGNA ${candidatos.length} por POC${candidatos.length === r.faltan ? " (completa el renglón)" : " (parcial)"}`,
         seriales: candidatos.map((x) => x.serial).join(" ") });
+      r.faltan -= candidatos.length;
+    }
+
+    // ── Tier C (--con-fechas): órdenes libres del cliente en la vigencia ──
+    if (conFechas) {
+      const libres = ordenesLibresDe.get(kCliente) || [];
+      for (const r of renglones) {
+        if (!r.faltan || !libres.length) continue;
+        const rivales = renglones.filter((o) => o !== r && o.c.id !== r.c.id && o.faltan > 0
+          && mm(o.modelo_id, o.modelo, r.modelo_id, r.modelo));
+        if (rivales.length) continue; // ya reportado por el tier POC
+        const ini = fechaDe(r.c.fecha_creacion);
+        const desde = ini ? new Date(ini.getTime() - 30 * 24 * 3600 * 1000) : null;
+        const vistos = new Set();
+        const candidatos = [];
+        for (const o of libres) {
+          if (desde && (!o.fecha || o.fecha < desde)) continue;
+          for (const e of o.equipos) {
+            const n = pool.normSerial(e.serial);
+            if (vistos.has(n)) continue;
+            vistos.add(n);
+            if (usados.has(n) || reservadoPorVinculo.has(n) || serialConflictivo(n)) continue;
+            if (yaAmparado(e.serial, e.modelo_id, e.modelo)) continue;
+            if (!mm(e.modelo_id, e.modelo, r.modelo_id, r.modelo)) continue;
+            candidatos.push({ ...e, orden: o.numero });
+          }
+        }
+        if (!candidatos.length || candidatos.length > r.faltan) continue; // ya reportado antes
+        for (const e of candidatos) {
+          usados.add(pool.normSerial(e.serial));
+          asignaciones.push({ cid: r.c.id, contrato_id: r.c.contrato_id || r.c.id,
+            cliente_id: r.c.cliente_id || "", cliente_nombre: r.c.cliente_nombre || "",
+            modelo: r.modelo, modelo_id: r.modelo_id, serial: e.serial,
+            source: "auto-match-fecha", orden: e.orden });
+        }
+        stats.unidadesPorFecha += candidatos.length;
+        stats.unidadesAsignadas += candidatos.length;
+        reporte.push({ contrato: r.c.contrato_id || r.c.id, cliente: r.c.cliente_nombre || "",
+          renglon: r.modelo, faltan: r.faltan, candidatos: candidatos.length,
+          resultado: `ASIGNA ${candidatos.length} por FECHA${candidatos.length === r.faltan ? " (completa el renglón)" : " (parcial)"}`,
+          seriales: candidatos.map((x) => `${x.serial}(OS ${x.orden})`).join(" ") });
+        r.faltan -= candidatos.length;
+      }
     }
   }
 
