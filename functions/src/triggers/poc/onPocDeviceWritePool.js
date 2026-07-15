@@ -32,7 +32,18 @@ module.exports = onDocumentWritten(
         tipo: "prestamo_poc",
         refMov: { tipo: "poc", id: deviceId, label: after.radio_name || after.unit_id || "" },
         origen: "migracion_poc",
-        extra: { poc_device_id: deviceId, propiedad: "cecomunica" },
+        extra: {
+          poc_device_id: deviceId, propiedad: "cecomunica",
+          // Custodia: el device sabe con qué cliente está (solo si la unidad
+          // no tiene ya una asignación de contrato).
+          ...((after.cliente_nombre || after.cliente || after.cliente_id) ? {
+            asignacionSiFalta: {
+              contrato_doc_id: null, contrato_id: "",
+              cliente_id: after.cliente_id || "",
+              cliente_nombre: after.cliente_nombre || after.cliente || "",
+            },
+          } : {}),
+        },
       });
       if (r === "creado") logger.info("[onPocDeviceWritePool] Serial nuevo en pool desde POC", { deviceId, serial });
     } catch (e) {

@@ -45,11 +45,18 @@ module.exports = onDocumentWritten(
       const eliminada = !after || after.eliminado === true;
 
       const refMov = { tipo: "orden", id: ordenId, label: after?.numero_orden || before?.numero_orden || ordenId };
+      // Custodia del cliente de la orden — se estampa solo si la unidad no
+      // tiene ya una asignación (nunca pisa la de un contrato).
+      const fuente = after || before || {};
+      const custodiaCliente = (fuente.cliente_nombre || fuente.cliente_id) ? {
+        contrato_doc_id: null, contrato_id: "",
+        cliente_id: fuente.cliente_id || "", cliente_nombre: fuente.cliente_nombre || "",
+      } : null;
 
       // Salida de taller: entrega de la orden, soft-delete, o borrado del doc.
       if (entregadaAhora || (eliminada && before?.eliminado !== true)) {
-        const fuente = despues.length ? despues : antes;
-        for (const e of fuente) {
+        const equiposFuente = despues.length ? despues : antes;
+        for (const e of equiposFuente) {
           await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
             aEstado: pool.ESTADOS.EN_CLIENTE,
             soloDesde: [pool.ESTADOS.EN_TALLER],
@@ -57,7 +64,7 @@ module.exports = onDocumentWritten(
             tipo: "salida_taller",
             refMov,
             notas: entregadaAhora ? "" : "Orden eliminada",
-            extra: { orden_actual_id: null },
+            extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
           });
         }
         return null;
@@ -73,7 +80,7 @@ module.exports = onDocumentWritten(
           tipo: "salida_taller",
           refMov,
           notas: "Equipo removido de la orden",
-          extra: { orden_actual_id: null },
+          extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
         });
       }
 
@@ -85,7 +92,10 @@ module.exports = onDocumentWritten(
         // equipo del cliente (la flota propia ya existiría en el pool vía POC
         // o contrato). Con contrato vinculado, onSerialWrite refina después.
         const extra = { orden_actual_id: ordenId };
-        if (!(contrato.aplica && contrato.contrato_doc_id)) extra.propiedad = "cliente";
+        if (!(contrato.aplica && contrato.contrato_doc_id)) {
+          extra.propiedad = "cliente";
+          if (custodiaCliente) extra.asignacionSiFalta = custodiaCliente;
+        }
         if (contrato.aplica && contrato.contrato_doc_id) {
           extra.asignacion = {
             contrato_doc_id: contrato.contrato_doc_id,

@@ -159,11 +159,16 @@ async function upsertContacto(opts) {
     const snap = await tx.get(ref);
 
     if (!snap.exists) {
+      const extraCreate = { ...(opts.extra || {}) };
+      if (extraCreate.asignacionSiFalta) {
+        extraCreate.asignacion = extraCreate.asignacion || extraCreate.asignacionSiFalta;
+        delete extraCreate.asignacionSiFalta;
+      }
       const doc = _docNuevo({
         serial: opts.serial, serialNorm: norm,
         modelo_id: opts.modelo_id, modelo_label: opts.modelo_label,
         estado: opts.estado, origen: opts.origen, notas: opts.notas || "",
-        ...(opts.extra || {}),
+        ...extraCreate,
       });
       if (colisionConId) {
         doc.serial_compartido = true;
@@ -190,6 +195,12 @@ async function upsertContacto(opts) {
     // nunca pisa una clasificación existente (pudo ponerla un humano).
     if (update.propiedad && actual.propiedad && actual.propiedad !== "desconocida") {
       delete update.propiedad;
+    }
+    // asignacionSiFalta: custodia (cliente sin contrato) que solo aplica si el
+    // doc no tiene ya una asignación — nunca pisa la de un contrato.
+    if (update.asignacionSiFalta) {
+      if (!actual.asignacion) update.asignacion = update.asignacionSiFalta;
+      delete update.asignacionSiFalta;
     }
 
     // La baja es terminal: nunca se revive por contacto (se resuelve a mano).
@@ -232,7 +243,12 @@ async function transicionar(serial, modeloId, modeloLabel,
     if (soloDesde && !soloDesde.includes(de)) return "sin-cambio";
     if (condicion && !condicion(actual)) return "sin-cambio";
 
-    tx.set(ref, { estado: aEstado, ...extra, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    const cambios = { ...extra };
+    if (cambios.asignacionSiFalta) {
+      if (!actual.asignacion) cambios.asignacion = cambios.asignacionSiFalta;
+      delete cambios.asignacionSiFalta;
+    }
+    tx.set(ref, { estado: aEstado, ...cambios, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo, de_estado: de, a_estado: aEstado, ref: refMov, notas,
     }));
