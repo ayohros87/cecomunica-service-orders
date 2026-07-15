@@ -11,10 +11,16 @@ function cerrarSesion() {
 window.EquiposPool = {
   _equipos: [],
   _modelos: [],
-  _tab: 'en_bodega',
+  _tab: 'en_cliente',
   _rol: null,
   _editandoId: null,
   _importRows: null,
+
+  // Filtros persistidos por usuario (localStorage). Default de primera visita:
+  // la flota de Cecomunica que está con clientes.
+  FILTROS_KEY: 'eqpool_filtros_v1',
+  FILTROS_DEFAULT: { tab: 'en_cliente', propiedad: 'cecomunica', modelo: '',
+                     sinVerificar: false, compartidos: false, sinCliente: false },
 
   ESTADOS_OTROS: ['devuelto_revision', 'baja'],
 
@@ -57,6 +63,38 @@ window.EquiposPool = {
 
   _modeloLabel(modeloId) {
     return this._modelos.find(m => m.id === modeloId)?.label || '';
+  },
+
+  // ── Filtros persistidos ──────────────────────────────────────────────
+  _restaurarFiltros() {
+    let f = this.FILTROS_DEFAULT;
+    try {
+      const raw = localStorage.getItem(this.FILTROS_KEY);
+      if (raw) f = { ...this.FILTROS_DEFAULT, ...JSON.parse(raw) };
+    } catch (e) { /* localStorage bloqueado → defaults */ }
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    setVal('eqFiltroModelo', f.modelo || '');
+    setVal('eqFiltroPropiedad', f.propiedad || '');
+    setChk('chkSinVerificar', f.sinVerificar);
+    setChk('chkCompartidos', f.compartidos);
+    setChk('chkSinCliente', f.sinCliente);
+    this._tab = f.tab || 'en_cliente';
+    document.querySelectorAll('.eq-tab').forEach(b =>
+      b.classList.toggle('is-active', b.dataset.tab === this._tab));
+  },
+
+  _guardarFiltros() {
+    try {
+      localStorage.setItem(this.FILTROS_KEY, JSON.stringify({
+        tab: this._tab,
+        modelo: document.getElementById('eqFiltroModelo')?.value || '',
+        propiedad: document.getElementById('eqFiltroPropiedad')?.value || '',
+        sinVerificar: !!document.getElementById('chkSinVerificar')?.checked,
+        compartidos: !!document.getElementById('chkCompartidos')?.checked,
+        sinCliente: !!document.getElementById('chkSinCliente')?.checked,
+      }));
+    } catch (e) { /* localStorage bloqueado → sin persistencia */ }
   },
 
   // ── Render ───────────────────────────────────────────────────────────
@@ -165,6 +203,7 @@ window.EquiposPool = {
     const resumen = document.getElementById('eqResumen');
     if (resumen) resumen.innerHTML =
       `<strong>${lista.length}</strong> <span style="color:var(--muted);font-size:12px;">equipos mostrados</span>`;
+    this._guardarFiltros();
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
@@ -538,6 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('btnPlantilla')?.remove();
     }
     await EquiposPool.cargarModelos();
+    EquiposPool._restaurarFiltros();
     await EquiposPool.cargar();
   });
 });
