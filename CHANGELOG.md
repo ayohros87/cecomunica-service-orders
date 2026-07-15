@@ -1,5 +1,16 @@
 # Changelog
 
+## [Pool de equipos: liberar seriales al anular contrato] — 2026-07-15
+
+> Hueco de F2: anular un contrato solo actualizaba el doc del contrato (los
+> docs de `contratos/{id}/seriales` se conservan como historial), así que
+> `onSerialWrite` nunca liberaba las unidades del pool — quedaban en
+> `asignado_contrato`/`en_cliente` apuntando al contrato muerto (inventario
+> fantasma). Ahora `onAnnulment` recorre la subcolección de seriales y libera
+> cada unidad cuya asignación apunte a ese contrato: → `en_bodega`,
+> `verificado:false`, movimiento `liberacion` con el motivo de anulación
+> ("verificar físicamente"). No crítico: un fallo no bloquea el correo.
+
 ## [Pool de equipos por serial (F1–F4)] — 2026-07-14
 
 > Trazabilidad de cada equipo físico por serial desde que entra a bodega:

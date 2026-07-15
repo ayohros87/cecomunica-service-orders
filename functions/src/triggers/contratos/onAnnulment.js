@@ -1,6 +1,7 @@
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
+const pool = require("../../domain/equiposPool");
 
 module.exports = onDocumentUpdated(
   {
@@ -21,6 +22,43 @@ module.exports = onDocumentUpdated(
 
     const contratoId      = after.contrato_id || event.params.docId;
     const motivoAnulacion = String(after.anulado_motivo || "No especificado");
+
+    // Liberar del pool de equipos las unidades asignadas a ESTE contrato.
+    // Los docs de contratos/{id}/seriales NO se borran (historial del contrato
+    // anulado), así que onSerialWrite nunca dispara la liberación — se hace
+    // aquí. Misma convención que la remoción de serial: en_bodega +
+    // verificado:false ("verificar físicamente"). No crítico: un fallo no debe
+    // bloquear el correo de anulación.
+    try {
+      const cid = event.params.docId;
+      const serialesSnap = await db.collection("contratos").doc(cid)
+        .collection("seriales").get();
+      let liberados = 0;
+      for (const d of serialesSnap.docs) {
+        const s = d.data() || {};
+        const serial = (s.serial || "").toString().trim();
+        if (!serial) continue;
+        const r = await pool.transicionar(serial, s.modelo_id, s.modelo, {
+          aEstado: pool.ESTADOS.EN_BODEGA,
+          soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
+          condicion: (data) => data.asignacion?.contrato_doc_id === cid,
+          tipo: "liberacion",
+          refMov: { tipo: "contrato", id: cid, label: contratoId },
+          notas: `Contrato anulado (${motivoAnulacion}) — verificar físicamente que el equipo volvió a bodega`,
+          extra: { asignacion: null, verificado: false },
+        });
+        if (r === "transicion") liberados++;
+      }
+      if (serialesSnap.size) {
+        logger.info("[onContratoAnuladoNotify] Pool: seriales liberados por anulación", {
+          contratoId, total: serialesSnap.size, liberados
+        });
+      }
+    } catch (e) {
+      logger.warn("[onContratoAnuladoNotify] Pool: liberación por anulación falló (no crítico)", {
+        contratoId, message: e.message
+      });
+    }
 
     const escapeHtml = (value) => String(value ?? "").replace(/[<>&]/g, (ch) => ({
       "<": "&lt;", ">": "&gt;", "&": "&amp;"
