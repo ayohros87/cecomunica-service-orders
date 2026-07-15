@@ -23,7 +23,9 @@ const dryRun = !process.argv.includes("--write");
 
 const tight = (s) => (s || "").toString().toLowerCase()
   .normalize("NFD").replace(/[^\x00-\x7f]/g, "").replace(/[^a-z0-9]+/g, "");
-const esR = (label) => /[\s-]r$/i.test((label || "").toString().trim());
+// Variante reuso por el NOMBRE (no por el campo estado del catálogo, que a
+// veces está mal): "-R", " R" o la R pegada al número ("PNC360R").
+const esR = (label) => /[\d\s-]r$/i.test((label || "").toString().trim());
 const base = (label) => tight(label).replace(/r$/, "");
 
 (async () => {
@@ -33,29 +35,40 @@ const base = (label) => tight(label).replace(/r$/, "");
     db.collection("equipos_pool").get(),
   ]);
 
-  // Catálogo: byId + índice por base de label para resolución sin FK.
+  // Catálogo: byId + índice por base de label (y de aliases) para resolución.
   const porId = new Map();
-  const porBase = new Map(); // base → [rows]
+  const entradas = []; // { b: base, row, r: esR del texto que originó la entrada }
   modelosSnap.forEach((d) => {
     const m = d.data();
     const label = `${m.marca || ""} ${m.modelo || ""}`.trim();
-    const row = { id: d.id, label, estado: (m.estado || "").toUpperCase() };
+    const row = { id: d.id, label };
     porId.set(d.id, row);
-    const b = base(label);
-    if (b) (porBase.get(b) || porBase.set(b, []).get(b)).push(row);
+    if (base(label)) entradas.push({ b: base(label), row, r: esR(label) });
+    for (const a of (m.aliases || [])) {
+      if (base(a)) entradas.push({ b: base(a), row, r: esR(a) });
+    }
   });
 
-  // Resuelve la fila única para un label sin FK, respetando la variante N/R.
+  // Resuelve la fila única para un label sin FK:
+  //   1. candidatos por contención de base (label o alias del catálogo)
+  //   2. filtra por variante N/R según el SUFIJO del nombre
+  //   3. si la variante no existe pero la familia tiene UNA sola fila, se
+  //      adopta (catálogos con solo la fila -R: TK-3000-R, BD506U-R, …)
   const resolver = (label) => {
     const lb = base(label);
     if (!lb || lb.length < 3) return null;
-    const candidatos = [];
-    for (const [b, rows] of porBase) {
-      if (b === lb || b.endsWith(lb)) candidatos.push(...rows);
+    const candidatos = entradas.filter((e) => e.b === lb || e.b.endsWith(lb) || e.b.includes(lb));
+    if (!candidatos.length) return null;
+    const variante = esR(label);
+    const filtrados = candidatos.filter((e) => e.r === variante);
+    const unicos = (arr) => [...new Map(arr.map((e) => [e.row.id, e.row])).values()];
+    const porVariante = unicos(filtrados);
+    if (porVariante.length === 1) return porVariante[0];
+    if (porVariante.length === 0) {
+      const familia = unicos(candidatos);
+      if (familia.length === 1) return familia[0];
     }
-    const variante = esR(label) ? "R" : "N";
-    const filtrados = candidatos.filter((r) => (r.estado || "N") === variante);
-    return filtrados.length === 1 ? filtrados[0] : null;
+    return null;
   };
 
   let batch = db.batch(), ops = 0;
