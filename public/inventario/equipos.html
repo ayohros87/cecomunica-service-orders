@@ -37,6 +37,15 @@
       background:#fee2e2; color:#b91c1c; margin-left:6px;
       cursor:help;
     }
+    .eq-prop {
+      display:inline-flex; align-items:center;
+      font-size:11px; font-weight:600;
+      padding:2px 8px; border-radius:var(--radius-pill);
+    }
+    .eq-prop-cecomunica  { background:#e0f2fe; color:#075985; }
+    .eq-prop-cliente     { background:#f3e8ff; color:#6b21a8; }
+    .eq-prop-desconocida { background:#f1f5f9; color:#64748b; }
+
     .eq-noverif {
       display:inline-flex; align-items:center;
       font-size:10px; font-weight:700;
@@ -159,6 +168,13 @@
           <option value="">Todos los modelos</option>
         </select>
 
+        <select id="eqFiltroPropiedad" class="form-select" style="max-width:170px;" onchange="EquiposPool.render()" aria-label="Filtrar por propiedad">
+          <option value="">Toda propiedad</option>
+          <option value="cecomunica">Flota Cecomunica</option>
+          <option value="cliente">De cliente</option>
+          <option value="desconocida">Desconocida</option>
+        </select>
+
         <div style="flex:1;"></div>
         <button class="btn btn-ghost btn-sm" onclick="EquiposPool.cargar()" title="Recargar la lista"><i data-lucide="rotate-ccw"></i> Recargar</button>
       </div>
@@ -171,6 +187,7 @@
               <th>Serial</th>
               <th>Modelo</th>
               <th>Cond.</th>
+              <th>Propiedad</th>
               <th>Estado</th>
               <th>Asignado a</th>
               <th>Origen</th>
@@ -178,7 +195,7 @@
             </tr>
           </thead>
           <tbody id="eqTabla">
-            <tr><td colspan="7" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">Cargando…</td></tr>
+            <tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">Cargando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -255,7 +272,15 @@
               <option value="reuso">Reuso</option>
             </select>
           </div>
-          <div class="form-field" style="flex:2;">
+          <div class="form-field" style="flex:1;">
+            <label class="form-label" for="editPropiedad">Propiedad</label>
+            <select class="form-select" id="editPropiedad">
+              <option value="cecomunica">Flota Cecomunica</option>
+              <option value="cliente">De cliente</option>
+              <option value="desconocida">Desconocida</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:1.5;">
             <label class="form-label" for="editProveedor">Proveedor / factura</label>
             <input class="form-input" id="editProveedor" type="text">
           </div>

@@ -102,7 +102,7 @@ const EquiposPoolService = {
   _docNuevo({ serial, serial_norm, modelo_id = null, modelo_label = '',
               condicion = 'nuevo', estado, asignacion = null,
               poc_device_id = null, orden_actual_id = null,
-              proveedor = '', notas = '' }, origen, user) {
+              propiedad = 'cecomunica', proveedor = '', notas = '' }, origen, user) {
     return {
       serial: (serial || '').toString().trim(),
       serial_norm,
@@ -110,6 +110,10 @@ const EquiposPoolService = {
       modelo_id:    modelo_id || null,
       modelo_label: (modelo_label || '').toString().trim(),
       condicion,
+      // 'cecomunica' (flota propia) | 'cliente' (equipo del cliente: contratos
+      // "Propio"/venta o traído a taller) | 'desconocida'. Lo que entra por
+      // bodega es flota propia por definición.
+      propiedad,
       estado,
       asignacion,
       poc_device_id,
@@ -397,11 +401,11 @@ const EquiposPoolService = {
       .update({ verificado: true, ...this._autoria(user) });
   },
 
-  // Corrección de datos de captura (modelo, condición, notas, serial "crudo").
+  // Corrección de datos de captura (modelo, condición, propiedad, notas, serial).
   async actualizar(id, fields, user) {
     const db = firebase.firestore();
     const permitidos = {};
-    ['modelo_id', 'modelo_label', 'condicion', 'proveedor', 'notas', 'serial']
+    ['modelo_id', 'modelo_label', 'condicion', 'propiedad', 'proveedor', 'notas', 'serial']
       .forEach(k => { if (fields[k] !== undefined) permitidos[k] = fields[k]; });
     return db.collection('equipos_pool').doc(id)
       .update({ ...permitidos, ...this._autoria(user) });

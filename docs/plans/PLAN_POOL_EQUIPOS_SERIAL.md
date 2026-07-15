@@ -90,6 +90,12 @@ serial_compartido: bool         // true si este serial existe en más de un mode
 modelo_id: string | null        // FK a catálogo modelos
 modelo_label: string            // snapshot "Marca Modelo"
 condicion: "nuevo" | "reuso"    // espejo del N/R del catálogo
+propiedad: "cecomunica" | "cliente" | "desconocida"
+                                // flota propia (alquiler/demo/POC/bodega) vs
+                                // equipo del cliente (contratos "Propio" = venta
+                                // con contrato de servicio, o traído a taller).
+                                // Inferida por triggers/backfill; editable en la
+                                // ficha; la inferencia nunca pisa lo ya definido
 estado: string                  // máquina de estados — ver 2.2
 asignacion: {                   // asignación VIGENTE (null si en bodega)
   contrato_doc_id, contrato_id,

@@ -68,6 +68,11 @@ module.exports = onDocumentWritten(
       if (serialDespues && (!before || !mismo)) {
         const c = await getContrato();
         const entregado = c.entrega_confirmada === true || c.seriales_estado === "legacy";
+        // Propiedad de la unidad según el tipo de contrato: "Propio" (venta con
+        // contrato de servicio) = equipo del cliente; Alquiler/Temporal/Demo/
+        // Reemplazo = flota Cecomunica.
+        const propiedad = (c.tipo_contrato === "Propio" || c.codigo_tipo === "PROP")
+          ? "cliente" : "cecomunica";
         const r = await pool.upsertContacto({
           serial: serialDespues,
           modelo_id: after.modelo_id || null,
@@ -78,6 +83,7 @@ module.exports = onDocumentWritten(
           refMov: { tipo: "contrato", id: cid, label: after.contrato_id || "" },
           origen: "migracion_contrato",
           extra: {
+            propiedad,
             asignacion: {
               contrato_doc_id: cid,
               contrato_id:     after.contrato_id || c.contrato_id || "",

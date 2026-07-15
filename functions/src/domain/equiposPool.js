@@ -84,7 +84,7 @@ function _movimiento({ tipo, de_estado = null, a_estado = null, ref = null, nota
 
 function _docNuevo({ serial, serialNorm, modelo_id, modelo_label, estado,
                      asignacion = null, poc_device_id = null, orden_actual_id = null,
-                     origen, notas = "" }) {
+                     propiedad = "desconocida", origen, notas = "" }) {
   return {
     serial: (serial || "").toString().trim(),
     serial_norm: serialNorm,
@@ -92,6 +92,9 @@ function _docNuevo({ serial, serialNorm, modelo_id, modelo_label, estado,
     modelo_id:    modelo_id || null,
     modelo_label: (modelo_label || "").toString().trim(),
     condicion: "reuso",           // ya circula en la operación — no es unidad nueva
+    // 'cecomunica' (flota propia: alquiler/demo/POC/bodega) | 'cliente' (equipo
+    // del cliente: contratos "Propio"/venta, o traído a taller) | 'desconocida'
+    propiedad,
     estado,
     asignacion,
     poc_device_id,
@@ -182,6 +185,11 @@ async function upsertContacto(opts) {
     if (!actual.modelo_id && opts.modelo_id) update.modelo_id = opts.modelo_id;
     if (!(actual.modelo_label || "").trim() && (opts.modelo_label || "").trim()) {
       update.modelo_label = opts.modelo_label.trim();
+    }
+    // La propiedad inferida solo se estampa si el doc no la tiene definida —
+    // nunca pisa una clasificación existente (pudo ponerla un humano).
+    if (update.propiedad && actual.propiedad && actual.propiedad !== "desconocida") {
+      delete update.propiedad;
     }
 
     // La baja es terminal: nunca se revive por contacto (se resuelve a mano).

@@ -32,7 +32,7 @@ module.exports = onDocumentWritten(
         tipo: "prestamo_poc",
         refMov: { tipo: "poc", id: deviceId, label: after.radio_name || after.unit_id || "" },
         origen: "migracion_poc",
-        extra: { poc_device_id: deviceId },
+        extra: { poc_device_id: deviceId, propiedad: "cecomunica" },
       });
       if (r === "creado") logger.info("[onPocDeviceWritePool] Serial nuevo en pool desde POC", { deviceId, serial });
     } catch (e) {

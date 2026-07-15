@@ -18,6 +18,8 @@ window.EquiposPool = {
 
   ESTADOS_OTROS: ['en_poc', 'devuelto_revision', 'baja'],
 
+  PROP_LABELS: { cecomunica: 'Flota', cliente: 'Cliente', desconocida: '?' },
+
   puedeEscribir() {
     return this._rol === ROLES.ADMIN || this._rol === ROLES.INVENTARIO;
   },
@@ -75,9 +77,11 @@ window.EquiposPool = {
   _filtrados() {
     const q = (document.getElementById('eqBusqueda')?.value || '').trim().toLowerCase();
     const mod = document.getElementById('eqFiltroModelo')?.value || '';
+    const prop = document.getElementById('eqFiltroPropiedad')?.value || '';
     return this._equipos.filter(eq => {
       if (!this._enTab(eq, this._tab)) return false;
       if (mod && eq.modelo_id !== mod) return false;
+      if (prop && (eq.propiedad || 'desconocida') !== prop) return false;
       if (q) {
         const blob = [eq.serial, eq.serial_norm, eq.modelo_label,
           eq.asignacion?.cliente_nombre, eq.asignacion?.contrato_id, eq.notas]
@@ -112,7 +116,7 @@ window.EquiposPool = {
     set('countTodos', `(${this._equipos.length})`);
 
     if (!lista.length) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">
         ${this._equipos.length ? 'Sin resultados con el filtro actual.' : 'No hay equipos en el pool. Usa "Recibir equipos" o "Importar Excel".'}
       </td></tr>`;
     } else {
@@ -133,10 +137,12 @@ window.EquiposPool = {
           (puede && eq.estado === 'devuelto_revision') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Inspección OK → regresa a bodega" onclick="EquiposPool.inspeccionOk('${esc(eq.id)}')"><i data-lucide="check-circle-2"></i></button>` : '',
           (esAdmin && eq.estado !== 'baja') ? `<button class="btn btn-danger btn-icon btn-sm" title="Dar de baja" onclick="EquiposPool.darDeBaja('${esc(eq.id)}')"><i data-lucide="archive-x"></i></button>` : '',
         ].join('');
+        const prop = eq.propiedad || 'desconocida';
         return `<tr>
           <td class="td-mono">${esc(eq.serial || eq.serial_norm)}${compartido}${noVerif}</td>
           <td>${esc(eq.modelo_label || '—')}</td>
           <td>${eq.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
+          <td><span class="eq-prop eq-prop-${esc(prop)}" title="${prop === 'cecomunica' ? 'Flota propia de Cecomunica' : prop === 'cliente' ? 'Equipo propiedad del cliente' : 'Propiedad sin clasificar'}">${esc(this.PROP_LABELS[prop] || prop)}</span></td>
           <td><span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span></td>
           <td>${asignadoA}</td>
           <td style="font-size:12px; color:var(--fg-3);">${esc(eq.origen || '—')}</td>
@@ -207,6 +213,7 @@ window.EquiposPool = {
     }
     sel.value = eq.modelo_id || '';
     document.getElementById('editCondicion').value = eq.condicion === 'reuso' ? 'reuso' : 'nuevo';
+    document.getElementById('editPropiedad').value = eq.propiedad || 'desconocida';
     document.getElementById('editProveedor').value = eq.proveedor || '';
     document.getElementById('editNotas').value = eq.notas || '';
     Modal.open('eqEditModal');
@@ -220,6 +227,7 @@ window.EquiposPool = {
         modelo_id:    modeloId,
         modelo_label: modeloId ? this._modeloLabel(modeloId) : '',
         condicion:    document.getElementById('editCondicion').value,
+        propiedad:    document.getElementById('editPropiedad').value,
         proveedor:    document.getElementById('editProveedor').value,
         notas:        document.getElementById('editNotas').value,
       }, firebase.auth().currentUser);
@@ -484,6 +492,7 @@ window.EquiposPool = {
       SERIAL:    eq.serial || eq.serial_norm,
       MODELO:    eq.modelo_label || '',
       CONDICION: eq.condicion || '',
+      PROPIEDAD: eq.propiedad === 'cecomunica' ? 'Flota Cecomunica' : eq.propiedad === 'cliente' ? 'De cliente' : 'Desconocida',
       ESTADO:    EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado,
       CLIENTE:   eq.asignacion?.cliente_nombre || '',
       CONTRATO:  eq.asignacion?.contrato_id || '',
