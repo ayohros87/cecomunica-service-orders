@@ -52,13 +52,42 @@ window.EquiposPool = {
       console.warn('No se pudo cargar el catálogo de modelos:', e);
       this._modelos = [];
     }
+    // Modales (recibir/editar/import): fila EXACTA del catálogo (N y R aparte).
     const opts = this._modelos
       .map(m => `<option value="${FMT.esc(m.id)}">${FMT.esc(m.label)}</option>`).join('');
-    ['eqFiltroModelo', 'recModelo', 'editModelo', 'impModelo'].forEach(id => {
+    ['recModelo', 'editModelo', 'impModelo'].forEach(id => {
       const sel = document.getElementById(id);
       if (!sel) return;
       sel.innerHTML = (sel.options[0]?.outerHTML || '') + opts;
     });
+    // Filtro: por FAMILIA de modelo — el catálogo no tiene FK nuevo↔reuso, la
+    // conexión es la convención del sufijo -R, así que "PNC360S" y "PNC360S-R"
+    // se agrupan en una sola opción (la condición N/R se ve por columna).
+    this._familias = new Map(); // key → { label, ids: Set }
+    for (const m of this._modelos) {
+      const key = EquiposPoolService._tightLabel(m.label).replace(/r$/, '');
+      if (!key) continue;
+      const fam = this._familias.get(key) || { label: m.label, ids: new Set() };
+      fam.ids.add(m.id);
+      // Prefiere como etiqueta la variante SIN sufijo -R (la base).
+      if (m.label.length < fam.label.length) fam.label = m.label;
+      this._familias.set(key, fam);
+    }
+    const selFam = document.getElementById('eqFiltroModelo');
+    if (selFam) {
+      selFam.innerHTML = (selFam.options[0]?.outerHTML || '') +
+        [...this._familias.entries()]
+          .sort((a, b) => a[1].label.localeCompare(b[1].label))
+          .map(([key, f]) => `<option value="${FMT.esc(key)}">${FMT.esc(f.label)}</option>`).join('');
+    }
+  },
+
+  // ¿La unidad pertenece a la familia de modelo seleccionada en el filtro?
+  _enFamilia(eq, famKey) {
+    const fam = this._familias?.get(famKey);
+    if (!fam) return true;
+    if (eq.modelo_id && fam.ids.has(eq.modelo_id)) return true;
+    return EquiposPoolService._mismoModelo(eq, null, fam.label);
   },
 
   _modeloLabel(modeloId) {
@@ -115,28 +144,37 @@ window.EquiposPool = {
     return !(eq.asignacion?.cliente_nombre || eq.asignacion?.cliente_id);
   },
 
+  // Filtros secundarios (todo menos la pestaña de estado) — se leen UNA vez
+  // por render y se usan también para los contadores de las pestañas.
+  _filtrosActivos() {
+    return {
+      q: (document.getElementById('eqBusqueda')?.value || '').trim().toLowerCase(),
+      mod: document.getElementById('eqFiltroModelo')?.value || '',
+      prop: document.getElementById('eqFiltroPropiedad')?.value || '',
+      sinVerificar: !!document.getElementById('chkSinVerificar')?.checked,
+      compartidos: !!document.getElementById('chkCompartidos')?.checked,
+      sinCliente: !!document.getElementById('chkSinCliente')?.checked,
+    };
+  },
+
+  _pasaFiltrosSecundarios(eq, f) {
+    if (f.mod && !this._enFamilia(eq, f.mod)) return false;
+    if (f.prop && (eq.propiedad || 'desconocida') !== f.prop) return false;
+    if (f.sinVerificar && eq.verificado !== false) return false;
+    if (f.compartidos && !eq.serial_compartido) return false;
+    if (f.sinCliente && !this._sinCliente(eq)) return false;
+    if (f.q) {
+      const blob = [eq.serial, eq.serial_norm, eq.modelo_label,
+        eq.asignacion?.cliente_nombre, eq.asignacion?.contrato_id, eq.notas]
+        .map(x => (x || '').toString().toLowerCase()).join(' ');
+      if (!blob.includes(f.q)) return false;
+    }
+    return true;
+  },
+
   _filtrados() {
-    const q = (document.getElementById('eqBusqueda')?.value || '').trim().toLowerCase();
-    const mod = document.getElementById('eqFiltroModelo')?.value || '';
-    const prop = document.getElementById('eqFiltroPropiedad')?.value || '';
-    const soloSinVerificar = document.getElementById('chkSinVerificar')?.checked;
-    const soloCompartidos = document.getElementById('chkCompartidos')?.checked;
-    const soloSinCliente = document.getElementById('chkSinCliente')?.checked;
-    return this._equipos.filter(eq => {
-      if (!this._enTab(eq, this._tab)) return false;
-      if (mod && eq.modelo_id !== mod) return false;
-      if (prop && (eq.propiedad || 'desconocida') !== prop) return false;
-      if (soloSinVerificar && eq.verificado !== false) return false;
-      if (soloCompartidos && !eq.serial_compartido) return false;
-      if (soloSinCliente && !this._sinCliente(eq)) return false;
-      if (q) {
-        const blob = [eq.serial, eq.serial_norm, eq.modelo_label,
-          eq.asignacion?.cliente_nombre, eq.asignacion?.contrato_id, eq.notas]
-          .map(x => (x || '').toString().toLowerCase()).join(' ');
-        if (!blob.includes(q)) return false;
-      }
-      return true;
-    });
+    const f = this._filtrosActivos();
+    return this._equipos.filter(eq => this._enTab(eq, this._tab) && this._pasaFiltrosSecundarios(eq, f));
   },
 
   render() {
@@ -145,24 +183,28 @@ window.EquiposPool = {
     const lista = this._filtrados();
     const esc = FMT.esc;
 
-    // KPIs + contadores de tabs (sobre el total, no sobre el filtro)
-    const n = estado => this._equipos.filter(e => e.estado === estado).length;
+    // KPIs: métricas GLOBALES del pool (no cambian con los filtros).
     const nVerificar = this._equipos.filter(e => e.verificado === false).length;
-    const nOtros = this._equipos.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length;
     const flotaCampo = this._equipos.filter(e => e.propiedad === 'cecomunica'
       && ['asignado_contrato', 'en_cliente', 'en_poc'].includes(e.estado)).length;
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('kpiBodega', n('en_bodega'));
+    set('kpiBodega', this._equipos.filter(e => e.estado === 'en_bodega').length);
     set('kpiFlotaCampo', flotaCampo);
-    set('kpiTaller', n('en_taller'));
+    set('kpiTaller', this._equipos.filter(e => e.estado === 'en_taller').length);
     set('kpiVerificar', nVerificar);
+
+    // Contadores de pestañas: respetan los filtros activos (modelo/propiedad/
+    // toggles/búsqueda) para que el número de la pestaña calce con la tabla.
+    const fAct = this._filtrosActivos();
+    const filtrables = this._equipos.filter(e => this._pasaFiltrosSecundarios(e, fAct));
+    const n = estado => filtrables.filter(e => e.estado === estado).length;
     set('countBodega', `(${n('en_bodega')})`);
     set('countAsignados', `(${n('asignado_contrato')})`);
     set('countCliente', `(${n('en_cliente')})`);
     set('countTaller', `(${n('en_taller')})`);
     set('countPoc', `(${n('en_poc')})`);
-    set('countOtros', `(${nOtros})`);
-    set('countTodos', `(${this._equipos.length})`);
+    set('countOtros', `(${filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length})`);
+    set('countTodos', `(${filtrables.length})`);
 
     if (!lista.length) {
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">
