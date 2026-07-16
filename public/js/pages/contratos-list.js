@@ -155,6 +155,17 @@ window.ContratosLista = {
     if ((esAdmin || esRecepcion) && data.estado === 'aprobado'
         && data.seriales_estado !== 'legacy' && Number(data.seriales_count || 0) > 0)
       items.push(I('scan-barcode', 'Solicitar cambio de serial', `ContratosSerialCambio.abrir('${id}')`));
+    // Transición de equipos (renovación/adición/reemplazo): mapear salientes ↔
+    // entrantes y marcar pendientes de devolución (PLAN_CICLO_VIDA_EQUIPOS.md C.4).
+    if (esActivoOAprobado
+        && (data.accion === 'Renovación' || data.accion === 'Adición' || data.codigo_tipo === 'REEMP'))
+      items.push(I('arrow-left-right', 'Transición de equipos', `window.location.href='transicion.html?id=${id}'`));
+    // Crear orden de programación precargada (cliente + contrato) cuando los
+    // seriales ya están y la entrega aún no se confirma (Fase D.2). La orden
+    // sigue siendo decisión humana: esto solo abre el formulario preparado.
+    if (esActivoOAprobado && data.seriales_estado !== 'legacy'
+        && Number(data.seriales_count || 0) > 0 && !data.entrega_confirmada)
+      items.push(I('calendar-plus', 'Crear orden de programación', `window.location.href='../ordenes/nueva-orden.html?cliente_id=${encodeURIComponent(data.cliente_id || '')}&contrato_doc_id=${id}&tipo=PROGRAMACION'`));
     // Firmado
     if (yaFirmado) {
       items.push(A('file-text', 'Ver firmado', data.firmado_url));

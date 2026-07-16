@@ -1,6 +1,8 @@
 # Plan — Ciclo de vida completo del equipo (todo conectado)
 
-**Fecha:** 2026-07-16 · **Estado:** propuesta
+**Fecha:** 2026-07-16 · **Estado:** en ejecución
+**Avance:** Fase A ✅ (48ec4c8) · Fase B ✅ (032e597) · Fase C núcleo ✅ + Fase D ✅ (este commit).
+**Diferido de C (siguiente pasada):** C.5 sugerencia de cierre del contrato viejo al completarse las devoluciones · C.6 cola de revisión de renovaciones/adiciones históricas sin enlace · C.7 digitalizar legacy dentro del flujo de transición (mientras tanto: el equipo faltante se regulariza recibiéndolo en Equipos por serial).
 **Basado en:** auditoría completa del flujo real (4 barridos de código, 2026-07-16), `docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md` (F1–F4 implementadas) y `docs/mejoras-solicitadas/05b_diseno_reemplazos_poc.md` (diseño de reemplazos, no implementado).
 
 **Objetivo:** que cada equipo físico tenga UNA historia continua y navegable — recepción → contrato → entrega → cliente → taller → devolución → renovación/reemplazo → baja — y que esa historia se VEA donde el personal trabaja, sin estorbar: chips, enlaces y paneles informativos; nunca bloqueos nuevos durante la transición.

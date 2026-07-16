@@ -40,6 +40,7 @@ window.NCForm = {
       }
     }
     this.refreshRenovacionModeUI();
+    this.refreshOrigenUI();
     this.updateContratoBadges();
   },
 
@@ -75,6 +76,56 @@ window.NCForm = {
 
   toggleOtraDuracion(valor) {
     document.getElementById('otraDuracionLabel').style.display = (valor === 'Otro') ? 'block' : 'none';
+  },
+
+  // ── Vínculo al contrato original (Renovación / Adición / Reemplazo) ────
+  // PLAN_CICLO_VIDA_EQUIPOS.md C.1: enlace SUAVE — si no se elige nada queda
+  // origen_tipo 'ninguno'; los contratos históricos en papel se marcan legacy
+  // con una referencia libre.
+  _origenAplica() {
+    const accion = document.getElementById('accion')?.value;
+    const tipo   = document.getElementById('tipo_contrato')?.value;
+    return accion === 'Renovación' || accion === 'Adición' || tipo === 'REEMP';
+  },
+
+  refreshOrigenUI() {
+    const box = document.getElementById('origenBox');
+    if (!box) return;
+    const aplica = this._origenAplica();
+    box.style.display = aplica ? 'block' : 'none';
+    const chk = document.getElementById('origenLegacyChk');
+    const sel = document.getElementById('origenContrato');
+    const ref = document.getElementById('origenLegacyRef');
+    if (chk && sel && ref) {
+      sel.disabled = chk.checked;
+      ref.style.display = chk.checked ? 'block' : 'none';
+    }
+    if (aplica) this.cargarContratosOrigen();
+  },
+
+  _origenClienteCargado: null,
+  async cargarContratosOrigen() {
+    const clienteId = document.getElementById('cliente')?.value || '';
+    const sel = document.getElementById('origenContrato');
+    if (!sel) return;
+    if (!clienteId) {
+      sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>';
+      this._origenClienteCargado = null;
+      return;
+    }
+    if (this._origenClienteCargado === clienteId) return; // ya cargado para este cliente
+    this._origenClienteCargado = clienteId;
+    sel.innerHTML = '<option value="">Cargando contratos del cliente…</option>';
+    try {
+      const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
+      sel.innerHTML = contratos.length
+        ? '<option value="">Sin vincular (elegir después)</option>' + contratos.map(c =>
+            `<option value="${NC.escapeHtml(c.id)}" data-ref="${NC.escapeHtml(c.contrato_id || c.id)}">${NC.escapeHtml(c.contrato_id || c.id)} · ${NC.escapeHtml(c.tipo_contrato || '')} · ${NC.escapeHtml(c.estado || '')}</option>`).join('')
+        : '<option value="">El cliente no tiene contratos vigentes en el sistema</option>';
+    } catch (e) {
+      console.warn('No se pudieron cargar los contratos del cliente', e);
+      sel.innerHTML = '<option value="">No se pudieron cargar los contratos</option>';
+    }
   },
 
   agregarFilaEquipo() {
@@ -188,8 +239,10 @@ window.NCForm = {
         const sel = document.getElementById('accion');
         if (sel && !sel.disabled) sel.dataset.prevValue = sel.value || '';
         self.refreshRenovacionModeUI();
+        self.refreshOrigenUI();
         self.updateContratoBadges();
       });
+      document.getElementById('origenLegacyChk')?.addEventListener('change', () => self.refreshOrigenUI());
       document.getElementById('renovacion_sin_equipo')?.addEventListener('change', () => self.refreshRenovacionModeUI());
       document.getElementById('renovacion_refurbished_componentes')?.addEventListener('change', () => self.refreshRenovacionModeUI());
       document.getElementById('duracion')?.addEventListener('change', () => self.updateContratoBadges());

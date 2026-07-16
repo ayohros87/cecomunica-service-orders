@@ -228,6 +228,16 @@ const EquiposPoolService = {
     return `${base}?serial=${encodeURIComponent((serial || '').toString().trim())}`;
   },
 
+  // Chip "pendiente de devolución" (transición renovación/reemplazo). Solo
+  // aplica mientras la unidad sigue con el cliente: al registrarse la ENTRADA
+  // la unidad pasa a devuelto_revision y el flag deja de mostrarse (no hay
+  // limpieza — la condición es computada).
+  chipPendienteDevolucionHtml(eq) {
+    if (!eq?.pendiente_devolucion) return '';
+    if (eq.estado !== this.ESTADOS.EN_CLIENTE && eq.estado !== this.ESTADOS.ASIGNADO) return '';
+    return '<span class="eqpool-chip" style="background:#fef3c7;color:#92400e;" title="En transición de renovación/reemplazo — el cliente aún lo tiene; registra su devolución como Entrada">pendiente de devolución</span>';
+  },
+
   async getMovimientos(id) {
     const db = firebase.firestore();
     const snap = await db.collection('equipos_pool').doc(id)

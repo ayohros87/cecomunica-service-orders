@@ -115,6 +115,14 @@ window.NCGuardar = {
                precio: parseFloat(row.querySelector('.precio').value || 0) };
     });
 
+    // Vínculo suave al contrato original (Renovación/Adición/Reemplazo) —
+    // PLAN_CICLO_VIDA_EQUIPOS.md C.1. 'ninguno' = aplica pero no se eligió.
+    const origenAplica = NCForm._origenAplica();
+    const origenSel    = document.getElementById('origenContrato');
+    const origenLegacy = origenAplica && !!document.getElementById('origenLegacyChk')?.checked;
+    const origenId     = (origenAplica && !origenLegacy && origenSel?.value) ? origenSel.value : null;
+    const origenRef    = origenId ? (origenSel.options[origenSel.selectedIndex]?.getAttribute('data-ref') || '') : '';
+
     const clienteData     = NC.listaClientes[clienteId];
     const duracionSel     = document.getElementById('duracion').value;
     const otraDuracion    = document.getElementById('otra_duracion').value;
@@ -141,6 +149,10 @@ window.NCGuardar = {
       renovacion_sin_equipo: sinEquipo,
       renovacion_refurbished_componentes: refurb,
       renovacion_modalidad: esRenov ? (sinEquipo ? 'Renovación sin equipo' : 'Renovación con equipo') : '',
+      origen_tipo: !origenAplica ? '' : (origenLegacy ? 'legacy' : (origenId ? 'interno' : 'ninguno')),
+      contrato_origen_id: origenId,
+      contrato_origen_ref: origenRef,
+      origen_legacy_ref: origenLegacy ? (document.getElementById('origenLegacyRef')?.value || '').trim() : '',
       estado: 'pendiente_aprobacion',
       observaciones: document.getElementById('observaciones').value.trim(),
       equipos,

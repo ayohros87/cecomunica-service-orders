@@ -5,6 +5,7 @@
     let modelos = [];
 
     let contador = 0;
+    let ordenClienteId = "";   // para el aviso "este serial figura con otro cliente"
 
     // Escapes mínimos para inyectar valores de usuario en el markup del fieldset.
     const escAttr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -218,8 +219,53 @@
 
     clienteInput.value = nombreCliente;
     tipoInput.value = data.tipo_de_servicio || data.tipo || "";
+    ordenClienteId = data.cliente_id || "";
   }
 }
+
+// ── Autocompletar por serial desde el pool de equipos ────────────────────
+// Al salir del campo Serie (teclear o escanear), busca la unidad en
+// equipos_pool: si existe, llena el modelo automáticamente (si está vacío) y
+// avisa —suave, nunca bloquea— si la unidad figura asignada a OTRO cliente.
+// focusout (a diferencia de blur) burbujea, así que un solo listener cubre
+// todos los fieldsets presentes y futuros. (PLAN_CICLO_VIDA_EQUIPOS.md D.3)
+const normName2 = (s) => String(s ?? "").trim().toLowerCase()
+  .normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "").replace(/\s+/g, " ");
+
+container.addEventListener("focusout", async (e) => {
+  const input = e.target;
+  if (!input.classList?.contains("serie")) return;
+  const serial = input.value.trim();
+  if (!serial || typeof EquiposPoolService === "undefined") return;
+  if (input.dataset.poolChecked === serial) return; // ya consultado sin cambios
+  input.dataset.poolChecked = serial;
+
+  let docs = [];
+  try { docs = await EquiposPoolService.findBySerial(serial); } catch (err) { return; }
+  if (!docs.length) return;
+
+  const fieldset = input.closest("fieldset");
+  const modeloSel = fieldset?.querySelector(".modelo");
+
+  // Con colisión de serial entre modelos, prioriza el doc del modelo elegido.
+  const unidad = docs.length === 1 ? docs[0]
+    : (docs.find(d => modeloSel?.value && d.modelo_id === modeloSel.value) || docs[0]);
+
+  if (modeloSel && !modeloSel.value) {
+    const porId = modelos.find(m => m.id === unidad.modelo_id);
+    const porNombre = porId ? null : modelos.find(m => normName2(m.nombre) === normName2(unidad.modelo_label || ""));
+    const match = porId || porNombre;
+    if (match) {
+      modeloSel.value = match.id;
+      Toast.show(`Serial reconocido en el pool: ${match.nombre}.`, "ok");
+    }
+  }
+
+  const clientePool = unidad.asignacion?.cliente_id || "";
+  if (clientePool && ordenClienteId && clientePool !== ordenClienteId) {
+    Toast.show(`Ojo: en el pool ${serial} figura con ${unidad.asignacion?.cliente_nombre || "otro cliente"} — verifica el serial.`, "warn");
+  }
+});
 
 
 

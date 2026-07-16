@@ -129,6 +129,8 @@ window.NCCombo = {
       selItbms.value = d.itbms_exento ? 'false' : 'true';
       NCForm.recalcularTotalesContrato();
     }
+    // Cambió el cliente → recargar sus contratos para el vínculo de origen.
+    if (window.NCForm) { NCForm._origenClienteCargado = null; NCForm.refreshOrigenUI(); }
     NCForm.updateContratoBadges();
   },
 

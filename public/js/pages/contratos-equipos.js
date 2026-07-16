@@ -118,7 +118,7 @@ window.ContratosEquipos = {
           ${u.verificado === false ? '<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">SIN VERIFICAR</span>' : ''}
         </td>
         <td style="border:1px solid var(--line); padding:6px;">${esc(u.modelo_label || '—')}</td>
-        <td style="border:1px solid var(--line); padding:6px;">${EquiposPoolService.chipEstadoHtml(u.estado)}</td>
+        <td style="border:1px solid var(--line); padding:6px;">${EquiposPoolService.chipEstadoHtml(u.estado)} ${EquiposPoolService.chipPendienteDevolucionHtml(u)}</td>
         <td style="border:1px solid var(--line); padding:6px;">${u.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
       </tr>`).join('');
 

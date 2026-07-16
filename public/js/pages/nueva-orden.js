@@ -260,8 +260,45 @@
         await cargarClientes();
         await cargarTiposDeServicio();
         await generarNumeroOrden();
+        await aplicarPrefillDesdeParams();
       }
     });
+
+    // Precarga desde query params (?cliente_id=&contrato_doc_id=&tipo=) — CTA
+    // "Crear orden de programación" desde la lista de contratos (Fase D.2).
+    // Solo prepara el formulario: crear la orden sigue siendo decisión humana.
+    async function aplicarPrefillDesdeParams() {
+      const p = new URLSearchParams(window.location.search);
+      const cid           = p.get("cliente_id");
+      const contratoDocId = p.get("contrato_doc_id");
+      const tipo          = p.get("tipo");
+      if (!cid && !tipo && !contratoDocId) return;
+
+      if (cid && [...clienteSelect.options].some(o => o.value === cid)) {
+        clienteSelect.value = cid;
+        clienteSelect.dispatchEvent(new Event("change")); // carga el vendedor asignado
+      }
+      if (tipo) {
+        // Las opciones vienen de empresa/tipo_de_servicio (con tildes); el
+        // parámetro llega normalizado — matchear ambos normalizados.
+        const opt = [...tipoSelect.options].find(o => normalizarTipo(o.value) === normalizarTipo(tipo));
+        if (opt) tipoSelect.value = opt.value;
+      }
+      // Bloque de contrato: mismo setup que el change handler de tipo, pero en
+      // línea para poder esperar la carga y preseleccionar el contrato.
+      if (esProgramacion(tipoSelect.value)) {
+        contratoBlock.style.display = "block";
+        contratoNoAplica.checked = false;
+        contratoSelect.disabled = false;
+        contratoSelect.required = true;
+        contratoLabel.classList.add("req");
+        contratoMotivoField.style.display = "none";
+        if (clienteSelect.value) await cargarContratosDelCliente(clienteSelect.value);
+        if (contratoDocId && [...contratoSelect.options].some(o => o.value === contratoDocId)) {
+          contratoSelect.value = contratoDocId;
+        }
+      }
+    }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();

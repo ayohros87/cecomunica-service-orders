@@ -219,6 +219,16 @@ service cloud.firestore {
         allow update: if puedeGestionarSeriales();
         allow delete: if isAdmin();
       }
+
+      // Mapeos de transición (renovación/reemplazo): registro durable
+      // saliente→entrante por serial (PLAN_CICLO_VIDA_EQUIPOS.md C.2). El
+      // trigger onMapeoWrite aplica el linaje al pool (reemplaza_a +
+      // pendiente_devolucion) con Admin SDK. Append-only: corregir = admin.
+      match /mapeos/{mapeoId} {
+        allow create: if puedeGestionarSeriales();
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
     }
 
     // ── Verificaciones de contratos (público, sin cambios) ────────────────

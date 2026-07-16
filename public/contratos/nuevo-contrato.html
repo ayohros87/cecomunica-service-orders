@@ -227,6 +227,23 @@
             </div>
           </div>
 
+          <!-- Vínculo al contrato original (Renovación / Adición / Reemplazo).
+               Enlace SUAVE: se puede omitir y vincular después. -->
+          <div class="form-field" id="origenBox" style="display:none; grid-column:1/-1;">
+            <label class="form-label" for="origenContrato">Contrato original (al que renueva / adiciona / reemplaza)</label>
+            <select class="form-select" id="origenContrato">
+              <option value="">Selecciona el cliente primero…</option>
+            </select>
+            <label class="form-check" style="margin-top:6px;">
+              <input type="checkbox" id="origenLegacyChk">
+              <span><span class="form-check-label">El contrato original es de papel / no está en el sistema</span></span>
+            </label>
+            <input class="form-input" type="text" id="origenLegacyRef"
+                   placeholder="Referencia del contrato en papel (número, año…)"
+                   style="display:none; margin-top:6px;">
+            <span class="form-hint">Conecta este contrato con el original para la transición de equipos. Si no lo eliges ahora, se puede vincular después.</span>
+          </div>
+
           <div class="form-field">
             <label class="form-label" for="duracion">Duración del contrato <span class="req">*</span></label>
             <select class="form-select" id="duracion" required onchange="NCForm.toggleOtraDuracion(this.value)">

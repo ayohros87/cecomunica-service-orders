@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transición de equipos - Cecomunica</title>
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js"></script>
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js?v=cc5"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script defer src="../js/services/contratosService.js"></script>
+  <script defer src="../js/services/equiposPoolService.js"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script src="/js/vendor/lucide.min.js"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="arrow-left-right"></i> Transición de equipos',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
+      showHome: true,
+      homeHref: '../index.html',
+      showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap app-wrap--wide">
+
+    <nav class="app-breadcrumbs" aria-label="Breadcrumb">
+      <a href="../index.html">Inicio</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <a href="index.html">Contratos</a>
+      <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
+      <span class="app-breadcrumbs-current" id="bc-contrato-id">—</span>
+    </nav>
+
+    <div class="app-page-header">
+      <div>
+        <h1>Transición de equipos</h1>
+        <p id="ph-subtitle">Mapea los equipos salientes del cliente con los entrantes del contrato nuevo.</p>
+      </div>
+    </div>
+
+    <div id="transBody">
+      <div class="ds-card ds-card-padded" style="text-align:center; color:var(--fg-3);">Cargando…</div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toast-region" aria-live="polite"></div>
+
+  <script src="../js/pages/contrato-transicion-page.js" defer></script>
+  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('contratos'));
+  </script>
+</body>
+</html>

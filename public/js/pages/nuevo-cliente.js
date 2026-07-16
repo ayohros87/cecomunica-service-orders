@@ -207,7 +207,7 @@ async function cargarEquiposCliente(clienteId) {
         <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" title="Ver historia (kardex) en Equipos por serial">${esc(u.serial || u.serial_norm)}</a>
       </td>
       <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">${esc(u.modelo_label || "—")}</td>
-      <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">${EquiposPoolService.chipEstadoHtml(u.estado)}</td>
+      <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">${EquiposPoolService.chipEstadoHtml(u.estado)} ${EquiposPoolService.chipPendienteDevolucionHtml(u)}</td>
       <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">
         ${u.asignacion?.contrato_id
           ? `<a class="eq-link" href="index.html?buscar=${encodeURIComponent(u.asignacion.contrato_id)}" title="Buscar el contrato en la lista">${esc(u.asignacion.contrato_id)}</a>`

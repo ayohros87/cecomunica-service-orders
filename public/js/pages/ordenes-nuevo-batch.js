@@ -14,6 +14,8 @@ let modelos = [];
 let ordenId = "";
 let clienteId = "";
 let clienteNombre = "";
+let contratoDocId = "";      // contrato vinculado a la orden (si aplica)
+let contratoIdVisible = "";
 
 let filaSeq = 0;
 
@@ -68,6 +70,12 @@ async function cargarOrden() {
   clienteId = data.cliente_id || "";
   $("cliente").value = nombreCliente || "—";
   $("tipo").value = data.tipo_de_servicio || data.tipo || "";
+
+  // Orden con contrato vinculado (PROGRAMACIÓN) → ofrecer "Jalar del contrato".
+  contratoDocId = (data.contrato?.aplica && data.contrato?.contrato_doc_id) ? data.contrato.contrato_doc_id : "";
+  contratoIdVisible = data.contrato?.contrato_id || "";
+  const btnContrato = $("btnJalarContrato");
+  if (btnContrato && contratoDocId) btnContrato.style.display = "";
 
   // Modelo común (defaults para filas pegadas / "aplicar a todas").
   $("comunModelo").innerHTML = `<option value="">— Sin modelo —</option>` +
@@ -128,6 +136,47 @@ function renumber() {
 }
 
 window.agregarFila = () => addRow({ focus: true });
+
+// Trae los seriales asignados al CONTRATO vinculado a la orden (subcolección
+// contratos/{id}/seriales) — el caso típico de una orden de PROGRAMACIÓN para
+// entrega: los seriales ya se eligieron en el contrato y aquí no se re-teclean.
+// El modelo entra por modelo_id del contrato (misma FK del catálogo) o, en su
+// defecto, por nombre normalizado.
+window.jalarSerialesDesdeContrato = async () => {
+  if (!contratoDocId) { Toast.show("La orden no tiene contrato vinculado.", "warn"); return; }
+  const btn = $("btnJalarContrato");
+  if (btn) btn.disabled = true;
+  try {
+    const seriales = await ContratosService.getSerialesManual(contratoDocId);
+    const conSerial = (seriales || []).filter(s => String(s.serial || "").trim());
+    if (!conSerial.length) { Toast.show("El contrato no tiene seriales asignados todavía.", "warn"); return; }
+
+    const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
+    const idsValidos = new Set(modelos.map(m => m.id));
+    const presentes = serialesActuales();
+    let agregados = 0, omitidos = 0;
+    for (const s of conSerial) {
+      const serial = String(s.serial).trim();
+      const key = serial.toLowerCase();
+      if (presentes.has(key)) { omitidos++; continue; }
+      const modeloId = (s.modelo_id && idsValidos.has(s.modelo_id))
+        ? s.modelo_id
+        : (modeloPorNombre.get(normName(s.modelo || "")) || "");
+      addRow({ serial, modeloId });
+      presentes.add(key);
+      agregados++;
+    }
+    if (agregados) mostrarOrigenEquipos(`Jalado del contrato${contratoIdVisible ? ` ${contratoIdVisible}` : ""}`);
+    let msg = `${agregados} equipo(s) jalados del contrato.`;
+    if (omitidos) msg += ` ${omitidos} ya estaban en la tabla.`;
+    Toast.show(agregados ? msg : "Esos seriales ya estaban en la tabla.", agregados ? "ok" : "warn");
+  } catch (e) {
+    console.error("Error jalando seriales del contrato:", e);
+    Toast.show("No se pudieron traer los seriales del contrato.", "bad");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
 
 // Trae los seriales del cliente desde POC. Un cliente puede tener cientos de
 // equipos acumulados de importaciones viejas, pero al crear una orden normalmente
