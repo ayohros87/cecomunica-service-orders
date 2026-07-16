@@ -244,6 +244,33 @@
       <div id="result-seedPoolEquipos" style="margin-top:var(--sp-3);"></div>
     </div>
 
+    <!-- Backfill: linkContratoPoc -->
+    <div class="ds-card" style="padding:var(--sp-4); margin-bottom:var(--sp-3);">
+      <div class="admin-section-head" style="margin-bottom:var(--sp-2);">
+        <span class="title" style="font-size:15px;"><i data-lucide="file-check-2"></i> Vincular contrato en equipos PoC</span>
+        <span class="hint">Agrega <code>contrato_doc_id</code> + <code>contrato_id</code> cruzando el serial contra el pool</span>
+      </div>
+      <p class="ts" style="margin:0 0 var(--sp-3); line-height:1.5;">
+        Los equipos PoC históricos conocen al cliente pero <strong>no al contrato</strong>. El pool
+        de equipos (<code>equipos_pool</code>) sí sabe a qué contrato pertenece cada serial (sembrado
+        desde los contratos), así que este backfill cruza por <strong>serial normalizado</strong> y
+        estampa el vínculo en el device. Conservador — nunca adivina: se salta los ya vinculados,
+        reporta <strong>ambiguos</strong> (serial que mapea a 2+ contratos) y
+        <strong>sospechosos</strong> (el cliente del pool no coincide con el del PoC) sin
+        escribirlos. Los batches nuevos ya nacen vinculados desde PoC · Nuevo batch. Aditivo e
+        idempotente. Usa <strong>Dry-run</strong> para revisar números y muestras antes de escribir.
+      </p>
+      <div style="display:flex; gap:var(--sp-2); flex-wrap:wrap;">
+        <button class="btn btn-ghost" data-bf-action="linkContratoPoc" data-bf-mode="dry">
+          <i data-lucide="eye"></i> Dry-run (preview)
+        </button>
+        <button class="btn btn-primary" data-bf-action="linkContratoPoc" data-bf-mode="run">
+          <i data-lucide="play"></i> Ejecutar
+        </button>
+      </div>
+      <div id="result-linkContratoPoc" style="margin-top:var(--sp-3);"></div>
+    </div>
+
   </div>
 
   <script>

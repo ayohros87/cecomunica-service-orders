@@ -83,6 +83,18 @@ window.PocList = {
     tdCliente.innerHTML = algunoVacio
       ? `<span style="color:var(--status-critical);" data-incomplete="true" title="Falta completar campos obligatorios"><i data-lucide="alert-circle"></i></span> <strong>${FMT.esc(nombreCliente)}</strong>`
       : `<strong>${FMT.esc(nombreCliente)}</strong>`;
+    // Vínculo POC↔contrato: sub-línea bajo el cliente (sin columna nueva para
+    // no mover los índices de PocState.COL ni el export/bulk-edit).
+    if (d.contrato_id || d.contrato_doc_id) {
+      const sub = document.createElement('a');
+      sub.className = 'eq-link';
+      sub.href = `../contratos/index.html?buscar=${encodeURIComponent(d.contrato_id || d.contrato_doc_id)}`;
+      sub.title = 'Contrato vinculado — buscar en la lista de contratos';
+      sub.textContent = d.contrato_id || 'contrato';
+      sub.style.cssText = 'display:inline-block;font-size:11px;color:var(--fg-3);font-family:var(--font-mono,monospace);margin-top:2px;';
+      tdCliente.appendChild(document.createElement('br'));
+      tdCliente.appendChild(sub);
+    }
     row.appendChild(tdCliente);
 
     // operador (2) — stamp raw value on the cell so bulk edit can pre-select.
@@ -219,9 +231,11 @@ window.PocList = {
       this._lastDoc = lastDoc;
       const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
       const soloInactivos   = document.getElementById('soloInactivos')?.checked;
+      const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
 
       docs.forEach(d => {
         if (soloInactivos && d.activo) return;
+        if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
         if (soloIncompletos) {
           const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           if (!crit.some(v => !v || v.trim?.() === '')) return;
@@ -296,6 +310,7 @@ window.PocList = {
     const soloActivos     = document.getElementById('soloActivos')?.checked;
     const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
+    const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
 
     PocService.getAll({ sortField: 'created_at', sortAsc: false }).then(docs => {
         if (ejecucionID !== this._filtroID) return;
@@ -309,6 +324,7 @@ window.PocList = {
           const camposCrit    = [nombreCliente, d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           const algunoVacio   = camposCrit.some(v => !v || v.trim?.() === '');
 
+          if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
           if (soloIncompletos) {
             if (!algunoVacio) return;
             incompletos++;
@@ -393,6 +409,11 @@ window.PocList = {
     if (valorFiltro) this.filtrar(); else this.cargar(true);
   },
 
+  manejarCambioSinContrato() {
+    const valorFiltro = document.getElementById('filtroValor').value.trim();
+    if (valorFiltro) this.filtrar(); else this.cargar(true);
+  },
+
   // ── Show-all (no pagination) ─────────────────────────────────────
   mostrarTodo() {
     const tbody = document.getElementById('devicesTable');
@@ -406,6 +427,7 @@ window.PocList = {
     const soloActivos     = document.getElementById('soloActivos')?.checked;
     const soloInactivos   = document.getElementById('soloInactivos')?.checked;
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
+    const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
 
     PocService.getAll({
       sortField: this._campoOrden, sortAsc: this._direccionAsc,
@@ -413,6 +435,7 @@ window.PocList = {
     }).then(docs => {
       docs.forEach(d => {
         if (soloInactivos && d.activo) return;
+        if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
         if (soloIncompletos) {
           const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
           if (!crit.some(v => !v || v.trim?.() === '')) return;

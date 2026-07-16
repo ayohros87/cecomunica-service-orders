@@ -30,6 +30,12 @@
       ['Ambiguos (distintos)', data.ambiguosDistintos],
       ['Huérfanos',          data.huerfanos],
       ['Huérfanos (distintos)', data.huerfanosDistintos],
+      // linkContratoPoc:
+      ['Ya vinculados',       data.yaVinculados],
+      ['Vinculados',          data.vinculados],
+      ['Sin contrato en pool', data.sinContrato],
+      ['Sospechosos',         data.sospechosos],
+      ['Sin serial',          data.sinSerial],
       // seedPoolEquipos:
       ['Creados (contratos)', data.creados?.contratos],
       ['Creados (PoC)',       data.creados?.poc],

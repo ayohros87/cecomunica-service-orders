@@ -36,6 +36,13 @@ const { buildOrderSearchTokens, tokensEqual } = require("../lib/searchTokens");
  *       resolving. Additive (never deletes the legacy text) and idempotent
  *       (skips docs that already have a modelo FK). Reports `ambiguos` (text that
  *       maps to 2+ models) and `huerfanos` (text with no catalog match).
+ *   { action: "linkContratoPoc", dryRun? }
+ *     - Links poc_devices to their contract (`contrato_doc_id` + `contrato_id`)
+ *       by crossing the device serial against `equipos_pool.asignacion` (the
+ *       pool already knows each unit's contract). Skips devices already linked;
+ *       reports `sospechosos` (pool client differs from device client) and
+ *       `ambiguos` (serial shared across models mapping to 2+ contracts) — those
+ *       are never written. PLAN_CICLO_VIDA_EQUIPOS.md, sección POC.
  *
  * Returns {action, dryRun, scanned, ...counters}. All actions are
  * idempotent — safe to re-run.
@@ -907,6 +914,129 @@ async function backfillSeedPoolEquipos(dryRun) {
   };
 }
 
+// ─────────── linkContratoPoc ───────────
+//
+// Vincula poc_devices a su CONTRATO (`contrato_doc_id` + `contrato_id`)
+// cruzando el serial del device contra `equipos_pool.asignacion` — el pool ya
+// sabe a qué contrato pertenece cada unidad (sembrado desde contratos con
+// precedencia sobre POC). Cierra el hueco histórico "POC no conoce el
+// contrato" para el parque existente; los batches nuevos ya nacen vinculados
+// (POC/nuevo-batch, 2026-07-16).
+//
+// Conservador — NUNCA adivina:
+//   · device ya vinculado (contrato_doc_id)                    → se salta
+//   · serial no está en el pool o sin asignación de contrato   → sinContrato
+//   · 2+ docs del pool con ese serial y contratos DISTINTOS    → ambiguo
+//   · cliente del pool ≠ cliente del device (cliente_id)       → sospechoso
+// Ambiguos y sospechosos se reportan con muestra y no se escriben.
+// Aditivo e idempotente. El trigger onPocDeviceWritePool no re-dispara por
+// este write (solo reacciona a cambios de serial).
+
+function _normSerialBf(raw) {
+  return (raw ?? "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+async function backfillLinkContratoPoc(dryRun) {
+  const startedAt = Date.now();
+
+  // Índice serial_norm → contratos asignados en el pool (Set de contrato_doc_id
+  // para detectar ambigüedad por colisión de serial entre modelos).
+  const poolSnap = await db.collection("equipos_pool").get();
+  const porSerial = new Map(); // norm -> Map<contrato_doc_id, {contrato_id, cliente_id, cliente_nombre}>
+  for (const doc of poolSnap.docs) {
+    const u = doc.data() || {};
+    const cid = u.asignacion?.contrato_doc_id;
+    const norm = u.serial_norm || _normSerialBf(u.serial);
+    if (!cid || !norm) continue;
+    if (!porSerial.has(norm)) porSerial.set(norm, new Map());
+    porSerial.get(norm).set(cid, {
+      contrato_id: u.asignacion?.contrato_id || "",
+      cliente_id: u.asignacion?.cliente_id || "",
+      cliente_nombre: u.asignacion?.cliente_nombre || "",
+    });
+  }
+
+  let scanned = 0, skippedDeleted = 0, yaVinculados = 0, sinSerial = 0;
+  let sinContrato = 0, ambiguos = 0, sospechosos = 0, vinculados = 0;
+  let written = 0, errors = 0;
+  const muestraAmbiguos = [];
+  const muestraSospechosos = [];
+
+  let batch = db.batch();
+  let opsInBatch = 0;
+  const flushBatch = async () => {
+    if (opsInBatch === 0) return;
+    if (dryRun) { written += opsInBatch; batch = db.batch(); opsInBatch = 0; return; }
+    try { await batch.commit(); written += opsInBatch; }
+    catch (err) {
+      logger.error("[runBackfill.linkContratoPoc] batch commit failed", { err: err.message });
+      errors += opsInBatch;
+    }
+    batch = db.batch();
+    opsInBatch = 0;
+  };
+
+  const snap = await db.collection("poc_devices").get();
+  for (const doc of snap.docs) {
+    const d = doc.data() || {};
+    if (d.deleted === true) { skippedDeleted++; continue; }
+    scanned++;
+    if ((d.contrato_doc_id || "").toString().trim()) { yaVinculados++; continue; }
+
+    const norm = _normSerialBf(d.serial);
+    if (!norm) { sinSerial++; continue; }
+
+    const candidatos = porSerial.get(norm);
+    if (!candidatos || candidatos.size === 0) { sinContrato++; continue; }
+    if (candidatos.size > 1) {
+      ambiguos++;
+      if (muestraAmbiguos.length < 25) {
+        muestraAmbiguos.push(`${d.serial}: ${[...candidatos.values()].map(c => c.contrato_id || "?").join(" / ")}`);
+      }
+      continue;
+    }
+
+    const [contratoDocId] = candidatos.keys();
+    const info = candidatos.get(contratoDocId);
+    // Coherencia de cliente: si ambos lados tienen cliente_id y difieren, es un
+    // posible serial repetido/mal asignado — a revisión humana, no se escribe.
+    if (info.cliente_id && d.cliente_id && info.cliente_id !== d.cliente_id) {
+      sospechosos++;
+      if (muestraSospechosos.length < 25) {
+        muestraSospechosos.push(`${d.serial}: POC=${d.cliente_nombre || d.cliente_id} vs pool=${info.cliente_nombre || info.cliente_id} (${info.contrato_id || contratoDocId})`);
+      }
+      continue;
+    }
+
+    vinculados++;
+    batch.set(doc.ref, {
+      contrato_doc_id: contratoDocId,
+      contrato_id: info.contrato_id || null,
+      contrato_vinculado_por: "backfill_linkContratoPoc",
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    opsInBatch++;
+    if (opsInBatch >= BATCH_SIZE) await flushBatch();
+  }
+  await flushBatch();
+
+  // `detalle` con el shape que renderiza admin-backfills.js (titulo + muestra).
+  const detalle = {};
+  if (muestraAmbiguos.length) {
+    detalle.ambiguos = { titulo: `Ambiguos — ${ambiguos} serial(es) con 2+ contratos en el pool`, muestra: muestraAmbiguos };
+  }
+  if (muestraSospechosos.length) {
+    detalle.sospechosos = { titulo: `Sospechosos — ${sospechosos} con cliente distinto entre PoC y pool`, muestra: muestraSospechosos };
+  }
+
+  return {
+    scanned, skippedDeleted, yaVinculados, sinSerial,
+    sinContrato, ambiguos, sospechosos, vinculados, written, errors,
+    detalle,
+    elapsedSec: Math.round((Date.now() - startedAt) / 1000),
+  };
+}
+
 // ─────────── dispatcher ───────────
 
 module.exports = onCall(
@@ -923,6 +1053,9 @@ module.exports = onCall(
 
     let result;
     switch (action) {
+      case "linkContratoPoc":
+        result = await backfillLinkContratoPoc(dryRun);
+        break;
       case "searchTokens":
         result = await backfillSearchTokens(dryRun);
         break;
