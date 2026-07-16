@@ -1095,3 +1095,4 @@ module.exports = onCall(
 // Para scripts one-off locales (functions/scripts/*): misma lógica que la
 // acción del callable, sin pasar por auth de onCall.
 module.exports.backfillSeedPoolEquipos = backfillSeedPoolEquipos;
+module.exports.backfillLinkContratoPoc = backfillLinkContratoPoc;
