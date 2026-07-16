@@ -690,7 +690,7 @@ window.PocList = {
         ['operador','Operador'],['serial','Serial'],['unit_id','Unit ID'],
         ['sim_number','SIM'],['sim_phone','Teléfono'],['ip','IP'],
         ['gps','GPS'],['activo','Activo'],['radio_name','Nombre del Radio'],
-        ['grupos','Grupos'],['notas','Notas'],
+        ['modelo','Modelo'],['grupos','Grupos'],['notas','Notas'],
         ['created_at_fmt','Creado'],['updated_at_fmt','Modificado'],['updated_by_email','Actualizado por']
       ];
       const registros = [];
@@ -703,7 +703,8 @@ window.PocList = {
           serial: d.serial || '', unit_id: d.unit_id || '',
           sim_number: d.sim_number || '', sim_phone: d.sim_phone || '', ip: d.ip || '',
           gps: d.gps === true ? 'Sí' : 'No', activo: d.activo === false ? 'No' : 'Sí',
-          radio_name: d.radio_name || '', grupos: gruposTxt, notas: d.notas || '',
+          radio_name: d.radio_name || '', modelo: PocState.obtenerModeloTexto(d),
+          grupos: gruposTxt, notas: d.notas || '',
           created_at_fmt: f(d.created_at), updated_at_fmt: f(d.updated_at),
           updated_by_email: d.updated_by_email || ''
         });
