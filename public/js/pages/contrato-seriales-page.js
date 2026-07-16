@@ -677,34 +677,189 @@
     Toast.show(`Jalado desde ${origen}: ${partes.join(' · ')}.`, agregados ? 'ok' : 'warn');
   }
 
-  // Toma unidades DISPONIBLES (en_bodega) del pool de equipos serializados y
-  // rellena los slots vacíos por modelo. La transición del pool a
-  // asignado_contrato la hace el trigger onSerialWrite al Guardar/Confirmar
-  // (server-side, con validación de contrato) — aquí solo se llena el formulario.
+  // Toma unidades DISPONIBLES (en_bodega) del pool de equipos serializados.
+  // Abre un picker donde el usuario ESCOGE qué unidades asignar — o pulsa
+  // "Selección automática" (las más antiguas en bodega por modelo). La
+  // transición del pool a asignado_contrato la hace el trigger onSerialWrite
+  // al Guardar/Confirmar (server-side, con validación de contrato) — aquí solo
+  // se llena el formulario.
   async function tomarDelPool() {
     if (typeof EquiposPoolService === 'undefined') { Toast.show('El pool de equipos no está disponible.', 'bad'); return; }
+    let enBodega;
     try {
-      const enBodega = await EquiposPoolService.listar({ estado: EquiposPoolService.ESTADOS.EN_BODEGA });
-      if (!enBodega.length) { Toast.show('No hay equipos disponibles en bodega. Recibe equipos en Inventario · Equipos por serial.', 'warn'); return; }
-      const items = enBodega.map(d => ({
-        serial: d.serial || d.serial_norm,
-        modelo: d.modelo_label || '',
-        modeloId: d.modelo_id || '',
-      }));
-      jalarItems(items, 'pool de bodega');
+      enBodega = await EquiposPoolService.listar({ estado: EquiposPoolService.ESTADOS.EN_BODEGA });
     } catch (e) {
       console.error('Error consultando el pool:', e);
       Toast.show('No se pudo consultar el pool de equipos.', 'bad');
+      return;
     }
+    if (!enBodega.length) { Toast.show('No hay equipos disponibles en bodega. Recibe equipos en Inventario · Equipos por serial.', 'warn'); return; }
+    abrirPickerPool(enBodega);
+  }
+
+  // Picker del pool: una sección por modelo del contrato con cupos vacíos,
+  // listando sus unidades en_bodega (match tolerante _mismoModelo, orden FIFO
+  // por ingreso a bodega). Los seriales ya tecleados en el formulario no se
+  // ofrecen. "Aplicar" pasa la selección por el mismo jalarItems del resto de
+  // orígenes (dedupe/match por modelo/reporte).
+  function abrirPickerPool(enBodega) {
+    const grupos = [...document.querySelectorAll('#serialesBody .serial-group')];
+    if (!grupos.length) { Toast.show('No hay modelos que serializar en este contrato.', 'warn'); return; }
+
+    const presentes = new Set();
+    document.querySelectorAll('#serialesBody .serial-input').forEach(i => {
+      const v = norm(i.value); if (v) presentes.add(v);
+    });
+
+    const secciones = [];
+    grupos.forEach(g => {
+      const modelo = g.getAttribute('data-modelo') || '';
+      const modeloId = g.getAttribute('data-modelo-id') || '';
+      const cupos = [...g.querySelectorAll('.serial-row')].filter(row => {
+        const inp = row.querySelector('.serial-input');
+        const omit = row.querySelector('.omit-toggle')?.checked;
+        return inp && !inp.disabled && !omit && !inp.value.trim();
+      }).length;
+      if (!cupos) return;
+      const unidades = enBodega
+        .filter(d => EquiposPoolService._mismoModelo(d, modeloId, modelo)
+                  && !presentes.has(norm(d.serial || d.serial_norm)))
+        .sort((a, b) => (a.ingreso_bodega_at?.toMillis?.() || 0) - (b.ingreso_bodega_at?.toMillis?.() || 0)
+          || String(a.serial || '').localeCompare(String(b.serial || '')));
+      secciones.push({ modelo, modeloId, cupos, unidades });
+    });
+
+    if (!secciones.length) { Toast.show('No hay cupos vacíos que llenar: todos los seriales están colocados u omitidos.', 'warn'); return; }
+    if (!secciones.some(s => s.unidades.length)) {
+      Toast.show('En bodega no hay unidades de los modelos de este contrato. Recibe equipos en Inventario · Equipos por serial.', 'warn');
+      return;
+    }
+
+    const seccionesHtml = secciones.map((s, si) => {
+      const filas = s.unidades.map(u => `
+        <label class="pp-item" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border-subtle,#eee);cursor:pointer;font-size:13px;">
+          <input type="checkbox" class="pp-check" value="${esc(u.serial || u.serial_norm)}" data-grupo="${si}" style="width:16px;height:16px;">
+          <span class="pp-serial" style="font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</span>
+          <span style="margin-left:auto;color:var(--fg-3);font-size:12px;">${u.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</span>
+        </label>`).join('');
+      return `
+        <div class="pp-grupo" data-grupo="${si}" style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0;">
+            <div style="font-weight:600;">${esc(s.modelo)}</div>
+            <div class="pp-progreso" style="color:var(--fg-3);font-size:12px;">0/${s.cupos} · ${s.unidades.length} disponible(s)</div>
+          </div>
+          ${s.unidades.length
+            ? `<div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;overflow:hidden;">${filas}</div>`
+            : `<div style="border:1px dashed var(--border-subtle,#e5e7eb);border-radius:8px;padding:10px;color:var(--fg-3);font-size:13px;">Sin unidades en bodega de este modelo.</div>`}
+        </div>`;
+    }).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'overlayPoolPicker';
+    overlay.className = 'modal-backdrop';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:640px;width:100%;">
+        <div class="modal-header">
+          <h3 class="modal-title"><i data-lucide="scan-barcode"></i> Tomar del pool (bodega)</h3>
+          <button type="button" class="modal-close" data-pp="cerrar" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+        </div>
+        <div class="modal-body" style="max-height:56vh;overflow:auto;">
+          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-3);">
+            Marca las unidades que vas a asignar a este contrato, o usa
+            <b>Selección automática</b> (toma las más antiguas en bodega por modelo).
+          </p>
+          <input type="search" id="ppBuscar" class="form-input" placeholder="Filtrar por serial…" style="width:100%;margin-bottom:12px;height:36px;font-family:var(--font-mono,monospace);">
+          ${seccionesHtml}
+        </div>
+        <div class="modal-footer">
+          <span id="ppCount" class="ts" style="margin-right:auto;align-self:center;">Sin selección</span>
+          <button type="button" class="btn btn-ghost" data-pp="auto"><i data-lucide="list-checks"></i> Selección automática</button>
+          <button type="button" class="btn btn-ghost" data-pp="cerrar">Cancelar</button>
+          <button type="button" class="btn btn-primary" data-pp="aplicar"><i data-lucide="check"></i> Asignar seleccionados</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const cerrar = () => overlay.remove();
+
+    const refrescarConteos = () => {
+      let total = 0;
+      secciones.forEach((s, si) => {
+        const n = overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length;
+        total += n;
+        const el = overlay.querySelector(`.pp-grupo[data-grupo="${si}"] .pp-progreso`);
+        if (el) el.textContent = `${n}/${s.cupos} · ${s.unidades.length} disponible(s)`;
+      });
+      const c = overlay.querySelector('#ppCount');
+      if (c) c.textContent = total ? `${total} unidad(es) seleccionada(s)` : 'Sin selección';
+    };
+
+    overlay.addEventListener('change', (e) => {
+      const chk = e.target;
+      if (!chk.classList || !chk.classList.contains('pp-check')) return;
+      const si = Number(chk.getAttribute('data-grupo'));
+      const s = secciones[si];
+      if (chk.checked && s && overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length > s.cupos) {
+        chk.checked = false;
+        Toast.show(`${s.modelo}: solo hay ${s.cupos} cupo(s) vacío(s).`, 'warn');
+      }
+      refrescarConteos();
+    });
+
+    overlay.querySelector('#ppBuscar').addEventListener('input', (e) => {
+      const q = norm(e.target.value);
+      overlay.querySelectorAll('.pp-item').forEach(item => {
+        const serial = norm(item.querySelector('.pp-serial')?.textContent);
+        item.style.display = (!q || serial.includes(q)) ? '' : 'none';
+      });
+    });
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) { cerrar(); return; }
+      const btn = e.target.closest('[data-pp]');
+      if (!btn) return;
+      const act = btn.getAttribute('data-pp');
+      if (act === 'cerrar') { cerrar(); return; }
+      if (act === 'auto') {
+        // Completa cada modelo hasta su cupo con las primeras disponibles
+        // (FIFO por ingreso a bodega), respetando lo ya marcado a mano.
+        secciones.forEach((s, si) => {
+          const checks = [...overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]`)];
+          let n = checks.filter(c => c.checked).length;
+          for (const c of checks) {
+            if (n >= s.cupos) break;
+            if (!c.checked) { c.checked = true; n++; }
+          }
+        });
+        refrescarConteos();
+        return;
+      }
+      if (act === 'aplicar') {
+        const items = [...overlay.querySelectorAll('.pp-check:checked')].map(c => {
+          const s = secciones[Number(c.getAttribute('data-grupo'))] || {};
+          return { serial: c.value, modelo: s.modelo || '', modeloId: s.modeloId || '' };
+        });
+        if (!items.length) { Toast.show('Marca al menos una unidad para asignar.', 'warn'); return; }
+        cerrar();
+        jalarItems(items, 'pool de bodega');
+      }
+    });
+
+    if (window.lucide) lucide.createIcons();
+    refrescarConteos();
   }
 
   // Validación SUAVE contra el pool antes de persistir (fase de transición del
   // plan PLAN_POOL_EQUIPOS_SERIAL.md: avisar, nunca bloquear). Revisa solo los
   // seriales nuevos vs lo ya guardado y devuelve una lista de avisos:
+  //   · el serial NO está en el pool — posible typo o equipo sin recibir; si se
+  //     guarda igual, el trigger lo crea por migración por contacto sin verificar
   //   · el serial está en el pool pero en OTRO estado / asignado a otro cliente
   //   · el serial existe solo en OTRO modelo (colisión tipo Kenwood NX420/NX920)
-  // Un serial que no está en el pool no genera aviso: entra por migración por
-  // contacto (el trigger lo crea sin verificar).
+  // En contratos legacy (registro histórico) no se avisa el "no está": esos
+  // equipos llevan años con el cliente y nunca pasaron por bodega.
   async function advertenciasPool(seriales) {
     if (typeof EquiposPoolService === 'undefined') return [];
     const guardados = new Set((ctx._saved || []).map(s => norm(s.serial)));
@@ -713,7 +868,10 @@
     for (const s of nuevos) {
       try {
         const docs = await EquiposPoolService.findBySerial(s.serial);
-        if (!docs.length) continue;
+        if (!docs.length) {
+          if (!ctx.esLegacy) avisos.push(`${s.serial}: no está registrado en el pool de equipos — verifica que esté bien escrito, o recíbelo antes en Inventario · Equipos por serial`);
+          continue;
+        }
         const mismo = docs.find(d => EquiposPoolService._mismoModelo(d, s.modelo_id, s.modelo));
         if (!mismo) {
           const otros = docs.map(d => d.modelo_label || 'sin modelo').join(', ');
