@@ -18,6 +18,7 @@ const admin = require("firebase-admin");
 const { db } = require("../../lib/admin");
 const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
 const { activacionesEmailTo }             = require("../../lib/mailRecipients");
+const pool = require("../../domain/equiposPool");
 
 function escapeHtml(v) {
   return String(v == null ? "" : v).replace(/[&<>"']/g, s => (
@@ -133,6 +134,36 @@ module.exports = onDocumentWritten(
       if (!reemplazos.length) {
         logger.info("[onSerialCambio] Resuelto sin reemplazos — no se notifica a activaciones", { cid, reqId });
         return null;
+      }
+
+      // Equipo defectuoso: la unidad saliente entra en cuarentena de inspección
+      // (devuelto_revision — "Entrada") en vez de quedar como stock bueno.
+      // Converge sin importar el orden con onSerialWrite (que libera el serial
+      // removido a en_bodega): en_bodega también está en soloDesde, y si esta
+      // transición gana la carrera, la liberación posterior no aplica (su
+      // condición exige asignación a este contrato, que aquí se limpia).
+      if (after.motivo_tipo === "Equipo defectuoso") {
+        for (const r of reemplazos) {
+          if (!r?.anterior) continue;
+          try {
+            const res = await pool.transicionar(r.anterior, null, r.modelo || "", {
+              aEstado: pool.ESTADOS.DEVUELTO,
+              soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.EN_BODEGA],
+              condicion: (d) => !d.asignacion || d.asignacion?.contrato_doc_id === cid,
+              tipo: "devolucion",
+              refMov: { tipo: "contrato", id: cid, label: contratoIdVis },
+              notas: "Entrada por cambio de serial (equipo defectuoso) — pendiente de inspección",
+              extra: {
+                asignacion: null,
+                verificado: false,
+                entrada: { condicion: "danado", cambio_req_id: reqId },
+              },
+            });
+            logger.info("[onSerialCambio] Saliente defectuoso a inspección", { cid, serial: r.anterior, res });
+          } catch (e) {
+            logger.warn("[onSerialCambio] Cuarentena del saliente falló (no crítico)", { cid, serial: r.anterior, message: e.message });
+          }
+        }
       }
       const rows = reemplazos.map(r => `
         <tr>

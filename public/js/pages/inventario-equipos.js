@@ -22,7 +22,8 @@ window.EquiposPool = {
   FILTROS_DEFAULT: { tab: 'en_cliente', propiedad: 'cecomunica', modelo: '',
                      sinVerificar: false, compartidos: false, sinCliente: false },
 
-  ESTADOS_OTROS: ['devuelto_revision', 'baja'],
+  // Pestaña "Baja": devuelto_revision ya tiene pestaña propia ("Entradas").
+  ESTADOS_OTROS: ['baja'],
 
   PROP_LABELS: { cecomunica: 'Flota', cliente: 'Cliente', desconocida: '?' },
 
@@ -250,6 +251,7 @@ window.EquiposPool = {
     set('countCliente', `(${n('en_cliente')})`);
     set('countTaller', `(${n('en_taller')})`);
     set('countPoc', `(${n('en_poc')})`);
+    set('countEntradas', `(${n('devuelto_revision')})`);
     set('countOtros', `(${filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length})`);
     set('countTodos', `(${filtrables.length})`);
 

@@ -34,7 +34,7 @@ const EquiposPoolService = {
     en_cliente:        'En cliente',
     en_taller:         'En taller',
     en_poc:            'En POC',
-    devuelto_revision: 'Devuelto (revisión)',
+    devuelto_revision: 'Entrada (por inspeccionar)',
     baja:              'Baja',
   },
 

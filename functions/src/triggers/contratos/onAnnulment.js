@@ -23,12 +23,13 @@ module.exports = onDocumentUpdated(
     const contratoId      = after.contrato_id || event.params.docId;
     const motivoAnulacion = String(after.anulado_motivo || "No especificado");
 
-    // Liberar del pool de equipos las unidades asignadas a ESTE contrato.
-    // Los docs de contratos/{id}/seriales NO se borran (historial del contrato
-    // anulado), así que onSerialWrite nunca dispara la liberación — se hace
-    // aquí. Misma convención que la remoción de serial: en_bodega +
-    // verificado:false ("verificar físicamente"). No crítico: un fallo no debe
-    // bloquear el correo de anulación.
+    // Pool de equipos: las unidades asignadas a ESTE contrato entran en
+    // cuarentena de inspección (devuelto_revision — "Entrada"): todo lo que
+    // regresa de un cliente se inspecciona antes de volver a bodega
+    // (PLAN_CICLO_VIDA_EQUIPOS.md §3.2). Los docs de contratos/{id}/seriales
+    // NO se borran (historial del contrato anulado), así que onSerialWrite
+    // nunca dispara esta transición — se hace aquí. No crítico: un fallo no
+    // debe bloquear el correo de anulación.
     try {
       const cid = event.params.docId;
       const serialesSnap = await db.collection("contratos").doc(cid)
@@ -39,18 +40,18 @@ module.exports = onDocumentUpdated(
         const serial = (s.serial || "").toString().trim();
         if (!serial) continue;
         const r = await pool.transicionar(serial, s.modelo_id, s.modelo, {
-          aEstado: pool.ESTADOS.EN_BODEGA,
+          aEstado: pool.ESTADOS.DEVUELTO,
           soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
           condicion: (data) => data.asignacion?.contrato_doc_id === cid,
-          tipo: "liberacion",
+          tipo: "devolucion",
           refMov: { tipo: "contrato", id: cid, label: contratoId },
-          notas: `Contrato anulado (${motivoAnulacion}) — verificar físicamente que el equipo volvió a bodega`,
+          notas: `Entrada por anulación de contrato (${motivoAnulacion}) — pendiente de inspección`,
           extra: { asignacion: null, verificado: false },
         });
         if (r === "transicion") liberados++;
       }
       if (serialesSnap.size) {
-        logger.info("[onContratoAnuladoNotify] Pool: seriales liberados por anulación", {
+        logger.info("[onContratoAnuladoNotify] Pool: seriales a inspección por anulación", {
           contratoId, total: serialesSnap.size, liberados
         });
       }

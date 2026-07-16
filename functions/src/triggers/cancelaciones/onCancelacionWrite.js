@@ -1,6 +1,7 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
+const pool = require("../../domain/equiposPool");
 
 // Notifica y deriva el estado del contrato cuando una enmienda (baja/terminación)
 // se crea / aprueba / rechaza / cierra. Usa admin SDK: las escrituras al contrato
@@ -127,6 +128,39 @@ module.exports = onDocumentWritten(
         }
       } catch (e) {
         logger.warn("[onCancelacionWrite] No se pudo derivar el contrato", { contratoDocId, message: e.message });
+      }
+    }
+
+    // ── 1b) Entradas de equipos al cierre → cuarentena de inspección ────────
+    // El checklist del cierre (cancelaciones.js) trae las unidades del pool que
+    // el cliente devolvió (`entradas`: pool_doc_id + condición). Aquí se
+    // transicionan a devuelto_revision ("Entrada — por inspeccionar"); la
+    // salida es la inspección en Inventario · Equipos por serial (→ bodega o
+    // baja). Server-side por diseño: los cruces al pool van con Admin SDK.
+    if (closed && Array.isArray(after.entradas) && after.entradas.length) {
+      const COND_LABEL = { bueno: "buen estado", danado: "dañado" };
+      for (const ent of after.entradas) {
+        if (!ent || !ent.pool_doc_id) continue;
+        try {
+          const r = await pool.transicionarPorId(String(ent.pool_doc_id), {
+            aEstado: pool.ESTADOS.DEVUELTO,
+            soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
+            tipo: "devolucion",
+            refMov: { tipo: "cancelacion", id, label: contratoId },
+            notas: `Entrada por ${tipoLabel.toLowerCase()} — ${COND_LABEL[ent.condicion] || ent.condicion || "condición sin registrar"}. Pendiente de inspección.`,
+            extra: {
+              asignacion: null,
+              entrada: {
+                condicion: ent.condicion || null,
+                solicitud_id: id,
+                at: admin.firestore.FieldValue.serverTimestamp(),
+              },
+            },
+          });
+          logger.info("[onCancelacionWrite] Entrada al pool", { id, pool_doc_id: ent.pool_doc_id, resultado: r });
+        } catch (e) {
+          logger.warn("[onCancelacionWrite] Entrada al pool falló (no crítico)", { id, pool_doc_id: ent.pool_doc_id, message: e.message });
+        }
       }
     }
 

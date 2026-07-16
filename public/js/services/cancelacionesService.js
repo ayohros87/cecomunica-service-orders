@@ -87,15 +87,19 @@ const CancelacionesService = {
     });
   },
 
-  // Cierre del circuito físico: equipos recuperados/inspeccionados. Solo sobre
-  // enmiendas aprobadas. (La inspección detallada por serial llega con el registro.)
-  async cerrar(id, cerradoPorUid, { equiposRecibidos = true, condicionNotas = '' } = {}) {
+  // Cierre del circuito físico: equipos recuperados. Solo sobre enmiendas
+  // aprobadas. `entradas` = unidades del pool que el cliente devolvió
+  // ([{ pool_doc_id, serial, modelo, condicion: 'bueno'|'danado' }]); el
+  // trigger onCancelacionWrite las transiciona a devuelto_revision ("Entrada —
+  // por inspeccionar") con Admin SDK. Vacío en contratos sin unidades en pool.
+  async cerrar(id, cerradoPorUid, { equiposRecibidos = true, condicionNotas = '', entradas = [] } = {}) {
     const db = firebase.firestore();
     return db.collection('solicitudes_cancelacion').doc(id).update({
       estado: 'cerrada',
       cerrado_por: cerradoPorUid,
       equipos_recibidos: !!equiposRecibidos,
       condicion_notas: condicionNotas || '',
+      entradas: Array.isArray(entradas) ? entradas : [],
       fecha_cierre: firebase.firestore.FieldValue.serverTimestamp(),
     });
   },

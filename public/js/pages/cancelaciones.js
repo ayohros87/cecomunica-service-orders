@@ -227,6 +227,7 @@ window.Cancelaciones = {
     try { rows = await CancelacionesService.listar({ estado: this.filtro || null }); }
     catch (e) { console.error(e); cont.innerHTML = '<p style="color:#b91c1c;">Error al cargar.</p>'; return; }
 
+    this._rows = rows; // para que cerrar() encuentre la solicitud sin re-consultar
     document.getElementById('colaResumen').textContent = `${rows.length} enmienda(s)`;
     if (!rows.length) { cont.innerHTML = '<p style="color:var(--fg-3);">No hay enmiendas.</p>'; return; }
 
@@ -297,12 +298,152 @@ window.Cancelaciones = {
     catch (e) { console.error(e); Toast.show('No se pudo rechazar', 'bad'); }
   },
 
+  // Cierre con registro de ENTRADA por serial: lista las unidades del pool
+  // asignadas al contrato para marcar cuáles regresaron y en qué condición; el
+  // trigger onCancelacionWrite las pasa a "Entrada — por inspeccionar"
+  // (devuelto_revision) con Admin SDK. Contratos sin unidades en el pool
+  // (p.ej. legacy sin seriales): cierre simple, como siempre.
   async cerrar(id) {
     if (!this.puedeCerrar()) return;
+    const sol = (this._rows || []).find(r => r.id === id);
+    let unidades = [];
+    if (typeof EquiposPoolService !== 'undefined' && sol?.contrato_doc_id) {
+      try {
+        unidades = (await EquiposPoolService.listarPorContrato(sol.contrato_doc_id))
+          .filter(u => u.estado === EquiposPoolService.ESTADOS.ASIGNADO
+                    || u.estado === EquiposPoolService.ESTADOS.EN_CLIENTE);
+      } catch (e) { console.warn('No se pudo consultar el pool para el cierre', e); }
+    }
+    if (!unidades.length) { await this._cerrarSimple(id); return; }
+    this._abrirModalEntrada(id, sol, unidades);
+  },
+
+  async _cerrarSimple(id) {
     if (!window.confirm('¿Confirmas que los equipos fueron recuperados? Esto cierra la enmienda.')) return;
     const cond = window.prompt('Condición de los equipos recibidos (opcional):') || '';
     try { await CancelacionesService.cerrar(id, firebase.auth().currentUser?.uid, { equiposRecibidos: true, condicionNotas: cond }); Toast.show('Enmienda cerrada', 'ok'); this.cargarCola(); }
     catch (e) { console.error(e); Toast.show('No se pudo cerrar', 'bad'); }
+  },
+
+  _abrirModalEntrada(id, sol, unidades) {
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+    const esperadas = (sol.items || []).reduce((s, it) => s + Number(it.cantidad || 0), 0);
+    const esTotal = sol.tipo === 'terminacion_total';
+
+    const filas = unidades.map(u => `
+      <tr>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);">
+          <input type="checkbox" class="ent-check" value="${esc(u.id)}"
+                 data-serial="${esc(u.serial || u.serial_norm)}" data-modelo="${esc(u.modelo_label || '')}"
+                 style="width:16px;height:16px;">
+        </td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);">${esc(u.modelo_label || '—')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);">${EquiposPoolService.chipEstadoHtml(u.estado)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);">
+          <select class="ent-cond form-select" disabled style="height:30px;font-size:12px;">
+            <option value="bueno">Buen estado</option>
+            <option value="danado">Dañado</option>
+          </select>
+        </td>
+      </tr>`).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'overlayEntradaEquipos';
+    overlay.className = 'modal-backdrop';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:680px;width:100%;">
+        <div class="modal-header">
+          <h3 class="modal-title"><i data-lucide="package-check"></i> Registrar entrada de equipos</h3>
+          <button type="button" class="modal-close" data-ent="cancelar" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+        </div>
+        <div class="modal-body" style="max-height:56vh;overflow:auto;">
+          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-3);">
+            <b>${esc(sol.contrato_id || sol.contrato_doc_id)}</b> · ${esc(sol.cliente_nombre || '')} ·
+            ${esTotal ? 'terminación total' : `baja parcial de <b>${esperadas}</b> unidad(es)`}.
+            Marca las unidades que el cliente devolvió y su condición; pasarán a
+            <b>"Entrada — por inspeccionar"</b> en Equipos por serial.
+          </p>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px;">
+            <thead>
+              <tr style="text-align:left;color:var(--fg-3);font-size:12px;">
+                <th style="padding:6px 8px;"></th>
+                <th style="padding:6px 8px;">Serial</th>
+                <th style="padding:6px 8px;">Modelo</th>
+                <th style="padding:6px 8px;">Estado</th>
+                <th style="padding:6px 8px;">Condición</th>
+              </tr>
+            </thead>
+            <tbody>${filas}</tbody>
+          </table>
+          <div style="margin-top:12px;">
+            <label class="form-label" for="entNotas">Notas de la entrada (opcional)</label>
+            <textarea id="entNotas" class="form-input" rows="2" placeholder="Ej: falta antena en una unidad, cargadores no devueltos…" style="width:100%;font-family:inherit;font-size:13px;"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span id="entCount" class="ts" style="margin-right:auto;align-self:center;">0 de ${unidades.length} marcadas</span>
+          <button type="button" class="btn btn-ghost" data-ent="cancelar">Cancelar</button>
+          <button type="button" class="btn btn-primary" data-ent="confirmar"><i data-lucide="check"></i> Registrar entrada y cerrar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const refrescar = () => {
+      const n = overlay.querySelectorAll('.ent-check:checked').length;
+      const c = overlay.querySelector('#entCount');
+      if (c) c.textContent = `${n} de ${unidades.length} marcadas` +
+        (esperadas && !esTotal ? ` · la enmienda da de baja ${esperadas}` : '');
+    };
+    overlay.addEventListener('change', (e) => {
+      if (!e.target.classList?.contains('ent-check')) return;
+      const sel = e.target.closest('tr')?.querySelector('.ent-cond');
+      if (sel) sel.disabled = !e.target.checked;
+      refrescar();
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) { overlay.remove(); return; }
+      const btn = e.target.closest('[data-ent]');
+      if (!btn) return;
+      if (btn.getAttribute('data-ent') === 'cancelar') { overlay.remove(); return; }
+      if (btn.getAttribute('data-ent') === 'confirmar') this._confirmarEntrada(id);
+    });
+    if (window.lucide) lucide.createIcons();
+  },
+
+  async _confirmarEntrada(id) {
+    const overlay = document.getElementById('overlayEntradaEquipos');
+    if (!overlay) return;
+    const entradas = [...overlay.querySelectorAll('.ent-check:checked')].map(c => ({
+      pool_doc_id: c.value,
+      serial: c.getAttribute('data-serial') || '',
+      modelo: c.getAttribute('data-modelo') || '',
+      condicion: c.closest('tr')?.querySelector('.ent-cond')?.value || 'bueno',
+    }));
+    if (!entradas.length
+        && !window.confirm('No marcaste ninguna unidad recibida. ¿Cerrar la enmienda sin registrar entradas?')) return;
+    const notas = (overlay.querySelector('#entNotas')?.value || '').trim();
+    const btn = overlay.querySelector('[data-ent="confirmar"]');
+    if (btn) btn.disabled = true;
+    try {
+      await CancelacionesService.cerrar(id, firebase.auth().currentUser?.uid, {
+        equiposRecibidos: entradas.length > 0,
+        condicionNotas: notas,
+        entradas,
+      });
+      overlay.remove();
+      Toast.show(entradas.length
+        ? `Enmienda cerrada. ${entradas.length} unidad(es) pasan a "Entrada — por inspeccionar".`
+        : 'Enmienda cerrada.', 'ok');
+      this.cargarCola();
+    } catch (e) {
+      console.error(e);
+      Toast.show('No se pudo cerrar', 'bad');
+      if (btn) btn.disabled = false;
+    }
   },
 };
 

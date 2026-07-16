@@ -258,4 +258,26 @@ async function transicionar(serial, modeloId, modeloLabel,
   });
 }
 
-module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver, upsertContacto, transicionar };
+// Transición por ID de doc — para flujos que ya identificaron la unidad exacta
+// (p.ej. el checklist de entrada al cerrar una enmienda, que lista las unidades
+// del pool y manda sus doc IDs). Mismo contrato de retorno que transicionar().
+async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
+                                          refMov = null, notas = "", extra = {} }) {
+  const ref = db.collection("equipos_pool").doc(docId);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "no-existe";
+    const actual = snap.data();
+    const de = actual.estado;
+    if (de === aEstado) return "sin-cambio";
+    if (de === ESTADOS.BAJA) return "sin-cambio";
+    if (soloDesde && !soloDesde.includes(de)) return "sin-cambio";
+    tx.set(ref, { estado: aEstado, ...extra, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(ref.collection("movimientos").doc(), _movimiento({
+      tipo, de_estado: de, a_estado: aEstado, ref: refMov, notas,
+    }));
+    return "transicion";
+  });
+}
+
+module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver, upsertContacto, transicionar, transicionarPorId };
