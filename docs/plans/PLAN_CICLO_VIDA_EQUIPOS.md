@@ -153,6 +153,12 @@ Cuando la conciliación esté en 0 sostenido:
 
 ---
 
+### Fase UX — Claridad del proceso (auditoría 2026-07-16, implementada)
+El ciclo funcionaba pero los "siguientes pasos" no eran evidentes. Correcciones:
+1. **CTAs guiadas en la lista de contratos** (nueva precedencia): baja pendiente → aprobar → subir firmado → **Transición de equipos** (renovación/adición/reemplazo con equipo, vigente, sin mapeos — señal `transicion_mapeos_count` estampada por onMapeoWrite) → **Crear orden** (seriales completos + sin entrega + sin OS vinculada) → ver. Los pasos del ciclo dejan de vivir solo en el menú ⋯.
+2. **Señales del home aterrizan exacto**: deep-links `?tab=` y `?verificar=1` en el pool (en bodega → pestaña Bodega; por verificar → todos+toggle; entradas → pestaña Entradas).
+3. **El pool enseña su propio ciclo**: tira visual "Ciclo: En bodega → Asignado → En cliente ⇄ Taller/POC → Entrada → bodega/Baja" con los mismos chips de color, y estados vacíos por pestaña que explican qué cae ahí y qué flujo la alimenta.
+
 ## 5. Lineamientos visuales (aplican a todas las fases)
 
 - **Un solo lenguaje de estado**: chips con la paleta de estados unificada del Command Center; los 7 estados del pool + flags (`pendiente_devolucion` ámbar, `sin verificar` gris punteado) se definen UNA vez (helper compartido) y se usan idénticos en pool, contrato, cliente, orden y home.

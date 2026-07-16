@@ -102,23 +102,24 @@ window.HomeSignals = (() => {
       href: 'inventario/piezas.html',
       count: () => SenalesService.countPiezasSinStock(),
     },
-    // Pool de equipos serializados (PLAN_CICLO_VIDA_EQUIPOS.md, Fase A).
+    // Pool de equipos serializados (PLAN_CICLO_VIDA_EQUIPOS.md, Fase A). Los
+    // href aterrizan en la pestaña/filtro EXACTOS de la señal (deep-links).
     S11: {
       modulo: 'equipos', icon: 'warehouse',
       label: 'Equipos en bodega', sub: 'disponibles para asignar',
-      href: 'inventario/equipos.html',
+      href: 'inventario/equipos.html?tab=en_bodega',
       count: () => SenalesService.countEquiposPoolPorEstado('en_bodega'),
     },
     S12: {
       modulo: 'equipos', icon: 'search-check', moreIsBad: true,
       label: 'Equipos por verificar', sub: 'creados por migración automática',
-      href: 'inventario/equipos.html',
+      href: 'inventario/equipos.html?tab=todos&verificar=1',
       count: () => SenalesService.countEquiposPoolSinVerificar(),
     },
     S13: {
       modulo: 'equipos', icon: 'package-search', moreIsBad: true,
       label: 'Entradas por inspeccionar', sub: 'regresaron de cliente, esperan inspección',
-      href: 'inventario/equipos.html',
+      href: 'inventario/equipos.html?tab=devuelto_revision',
       count: () => SenalesService.countEquiposPoolPorEstado('devuelto_revision'),
     },
   };

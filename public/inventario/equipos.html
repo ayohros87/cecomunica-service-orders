@@ -167,6 +167,20 @@
 
     <div class="ds-card">
 
+      <!-- Guía del ciclo del equipo: una línea con el mismo lenguaje de chips
+           que usan todas las páginas — orienta sin estorbar. -->
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:var(--sp-3); font-size:12px; color:var(--fg-3);">
+        <i data-lucide="route" style="width:14px;height:14px;flex:none;"></i>
+        <span>Ciclo:</span>
+        <span class="eqpool-chip eqpool-chip-en_bodega">En bodega</span><span>→</span>
+        <span class="eqpool-chip eqpool-chip-asignado_contrato" title="Se asigna en Seriales del contrato">Asignado a contrato</span><span>→</span>
+        <span class="eqpool-chip eqpool-chip-en_cliente" title="La orden de programación se marca entregada">En cliente</span>
+        <span title="Mientras está con el cliente puede pasar por taller (orden de servicio) o POC">⇄ <span class="eqpool-chip eqpool-chip-en_taller">En taller</span>/<span class="eqpool-chip eqpool-chip-en_poc">En POC</span></span>
+        <span>→</span>
+        <span class="eqpool-chip eqpool-chip-devuelto_revision" title="El cliente devolvió el equipo: cierre de enmienda, anulación o cambio por defectuoso">Entrada (por inspeccionar)</span><span>→</span>
+        <span>bodega (reuso) o</span> <span class="eqpool-chip eqpool-chip-baja">Baja</span>
+      </div>
+
       <!-- Filter bar -->
       <div class="filter-bar">
         <div class="eq-tabs" role="tablist">

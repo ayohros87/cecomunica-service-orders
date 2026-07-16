@@ -260,9 +260,22 @@ window.EquiposPool = {
     this._renderFiltrosActivos(fAct, lista.length, enTabTotal - lista.length);
 
     if (!lista.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6);">
-        ${this._equipos.length ? 'Sin resultados con el filtro actual.' : 'No hay equipos en el pool. Usa "Recibir equipos" o "Importar Excel".'}
-      </td></tr>`;
+      // Estado vacío que EXPLICA la pestaña: qué cae aquí y cuál es el paso
+      // que la alimenta/vacía — la página enseña el ciclo sola.
+      const VACIO_POR_TAB = {
+        en_bodega: 'No hay equipos disponibles en bodega. Entran con "Recibir equipos" / "Importar Excel", o cuando una entrada pasa la inspección.',
+        asignado_contrato: 'No hay unidades reservadas por contrato. Se asignan desde la página de Seriales del contrato (picker "Tomar del pool") y salen al confirmarse la entrega.',
+        en_cliente: 'No hay unidades en clientes. Llegan aquí cuando la orden de programación se marca "Entregado al cliente".',
+        en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
+        en_poc: 'No hay unidades en préstamo POC.',
+        devuelto_revision: 'No hay entradas pendientes de inspección. Las devoluciones de clientes (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí; con "Inspección OK" regresan a bodega como reuso, o se dan de baja.',
+        otros: 'No hay unidades dadas de baja.',
+      };
+      const hayFiltros = !!(fAct.q || fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente);
+      const msg = !this._equipos.length
+        ? 'No hay equipos en el pool. Usa "Recibir equipos" o "Importar Excel".'
+        : (hayFiltros ? 'Sin resultados con el filtro actual.' : (VACIO_POR_TAB[this._tab] || 'Sin resultados.'));
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
     } else {
       const puede = this.puedeEscribir();
       const esAdmin = this._rol === ROLES.ADMIN;
@@ -686,22 +699,42 @@ document.addEventListener('DOMContentLoaded', () => {
     await EquiposPool.cargarModelos();
     EquiposPool._restaurarFiltros();
 
-    // Deep-link ?serial= (desde contrato/cliente/orden): abre el pool enfocado
-    // en esa unidad — pestaña "todos", sin filtros secundarios y con la
-    // búsqueda precargada (la búsqueda no se persiste entre visitas).
-    const serialParam = new URLSearchParams(location.search).get('serial');
-    if (serialParam) {
-      EquiposPool._tab = 'todos';
+    // Deep-links de entrada al pool:
+    //   ?serial=  (desde contrato/cliente/orden) → pestaña "todos" + búsqueda
+    //   ?tab=     (señales del home)             → abre esa pestaña de estado
+    //   ?verificar=1 (señal "por verificar")     → toggle "solo sin verificar"
+    // En todos los casos se limpian los filtros secundarios para que lo pedido
+    // se vea sí o sí (la búsqueda no se persiste entre visitas).
+    const qp = new URLSearchParams(location.search);
+    const serialParam = qp.get('serial');
+    const tabParam = qp.get('tab');
+    const verifParam = qp.get('verificar');
+    const setTabUI = (tab) => {
+      EquiposPool._tab = tab;
       document.querySelectorAll('.eq-tab').forEach(b =>
-        b.classList.toggle('is-active', b.dataset.tab === 'todos'));
-      const q = document.getElementById('eqBusqueda');
-      if (q) q.value = serialParam;
+        b.classList.toggle('is-active', b.dataset.tab === tab));
+    };
+    const limpiarSecundarios = () => {
       ['eqFiltroModelo', 'eqFiltroPropiedad'].forEach(id => {
         const n = document.getElementById(id); if (n) n.value = '';
       });
       ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente'].forEach(id => {
         const n = document.getElementById(id); if (n) n.checked = false;
       });
+    };
+    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'en_poc', 'devuelto_revision', 'otros', 'todos'];
+    if (serialParam) {
+      setTabUI('todos');
+      limpiarSecundarios();
+      const q = document.getElementById('eqBusqueda');
+      if (q) q.value = serialParam;
+    } else if (tabParam || verifParam) {
+      limpiarSecundarios();
+      setTabUI(TABS_VALIDAS.includes(tabParam) ? tabParam : 'todos');
+      if (verifParam) {
+        const chk = document.getElementById('chkSinVerificar');
+        if (chk) chk.checked = true;
+      }
     }
 
     await EquiposPool.cargar();

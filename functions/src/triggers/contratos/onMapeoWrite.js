@@ -78,6 +78,19 @@ module.exports = onDocumentWritten(
       }
     }
 
+    // ── Señal en el contrato para la lista ───────────────────────────────
+    // `transicion_mapeos_count` alimenta la CTA "Transición de equipos" de la
+    // lista de contratos: con 0 mapeos la CTA insiste (ámbar); con 1+ deja de
+    // ser el siguiente paso. Admin SDK: esquiva el guard touchesCFOwnedFields.
+    try {
+      await db.collection("contratos").doc(cid).set({
+        transicion_mapeos_count: admin.firestore.FieldValue.increment(creado ? 1 : -1),
+        transicion_ultimo_mapeo_at: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      logger.warn("[onMapeoWrite] No se pudo estampar el contador en el contrato", { cid, message: e.message });
+    }
+
     // ── Saliente: pendiente de devolución ────────────────────────────────
     if (serialSaliente) {
       try {

@@ -100,16 +100,36 @@ window.ContratosLista = {
     const esAprobadorBaja = esAdmin || esGerente;
     const puedeSolicitarBaja = esActivoOAprobado && (esAdmin || esVendedor || esRecepcion || esGerente);
 
+    // Guía del ciclo de equipos (PLAN_CICLO_VIDA_EQUIPOS.md): los "siguientes
+    // pasos" salen del menú ⋯ y se vuelven CTA visible cuando tocan.
+    //   · Transición pendiente: renovación/adición/reemplazo CON equipo, vigente,
+    //     sin ningún mapeo registrado (transicion_mapeos_count lo estampa el
+    //     trigger onMapeoWrite).
+    //   · Crear orden de programación: seriales completos, sin entrega
+    //     confirmada y sin órdenes vinculadas todavía.
+    const esTransicionable = esActivoOAprobado && !data.renovacion_sin_equipo
+      && (data.accion === 'Renovación' || data.accion === 'Adición' || data.codigo_tipo === 'REEMP');
+    const transicionPendiente = esTransicionable && !Number(data.transicion_mapeos_count || 0);
+    const totalEq   = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
+    const activosEq = Math.max(0, totalEq - Number(data.baja_cancelado_total || 0));
+    const serialesResueltos = Number(data.seriales_count || 0) + Number(data.seriales_omitidos_count || 0);
+    const osVinculada = !!(data.os_linked || data.tiene_os || (data.os_count ?? 0) > 0);
+    const puedeCrearOrdenProg = esActivoOAprobado && data.seriales_estado !== 'legacy'
+      && activosEq > 0 && serialesResueltos >= activosEq
+      && !data.entrega_confirmada && !osVinculada;
+    const urlOrdenProg = `../ordenes/nueva-orden.html?cliente_id=${encodeURIComponent(data.cliente_id || '')}&contrato_doc_id=${id}&tipo=PROGRAMACION`;
+
     const ctaCls = 'btn btn-sm';
+    const amber = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;text-decoration:none;';
 
     // ── CTA primaria (precedencia) ──────────────────────────────────
     // 1) baja pendiente (lo más urgente) → 2) aprobar contrato →
-    // 3) subir firmado → 4) ver/imprimir.
+    // 3) subir firmado → 4) transición de equipos pendiente →
+    // 5) crear orden de programación → 6) ver/imprimir.
     let primaryHtml = '';
     let primaryKind = '';
     if (bajaPendiente) {
       primaryKind = 'baja';
-      const amber = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;text-decoration:none;';
       // Ambos van a la cola (default: filtro 'pendiente'); el aprobador ve los
       // botones Aprobar/Rechazar, el solicitante solo el estado. No usamos
       // ?contrato= porque eso abre el formulario de nueva solicitud, no la cola.
@@ -122,6 +142,12 @@ window.ContratosLista = {
     } else if (puedeSubirFirmado && !yaFirmado) {
       primaryKind = 'subir-firmado';
       primaryHtml = `<button class="${ctaCls}" onclick="ContratosFirmado.subir('${id}')" title="Subir contrato firmado"><i data-lucide="upload" style="width:14px;height:14px;"></i> Subir firmado</button>`;
+    } else if (transicionPendiente) {
+      primaryKind = 'transicion';
+      primaryHtml = `<a class="${ctaCls}" style="${amber}" href="transicion.html?id=${id}" title="Renovación/reemplazo sin transición registrada: mapea qué equipos salen y cuáles los sustituyen"><i data-lucide="arrow-left-right" style="width:14px;height:14px;"></i> Transición de equipos</a>`;
+    } else if (puedeCrearOrdenProg) {
+      primaryKind = 'orden-prog';
+      primaryHtml = `<a class="${ctaCls}" style="${amber}" href="${urlOrdenProg}" title="Seriales listos y sin orden vinculada: crea la orden de programación para la entrega (formulario precargado)"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Crear orden</a>`;
     } else if (data.contrato_id) {
       primaryKind = 'ver';
       primaryHtml = `<button class="${ctaCls}" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver / Imprimir"><i data-lucide="printer" style="width:14px;height:14px;"></i> Ver</button>`;
@@ -155,17 +181,17 @@ window.ContratosLista = {
     if ((esAdmin || esRecepcion) && data.estado === 'aprobado'
         && data.seriales_estado !== 'legacy' && Number(data.seriales_count || 0) > 0)
       items.push(I('scan-barcode', 'Solicitar cambio de serial', `ContratosSerialCambio.abrir('${id}')`));
-    // Transición de equipos (renovación/adición/reemplazo): mapear salientes ↔
-    // entrantes y marcar pendientes de devolución (PLAN_CICLO_VIDA_EQUIPOS.md C.4).
-    if (esActivoOAprobado
-        && (data.accion === 'Renovación' || data.accion === 'Adición' || data.codigo_tipo === 'REEMP'))
+    // Transición de equipos (renovación/adición/reemplazo) — en el menú solo si
+    // NO es ya la CTA primaria (queda accesible aun con mapeos registrados,
+    // para agregar más o revisar).
+    if (esTransicionable && primaryKind !== 'transicion')
       items.push(I('arrow-left-right', 'Transición de equipos', `window.location.href='transicion.html?id=${id}'`));
-    // Crear orden de programación precargada (cliente + contrato) cuando los
-    // seriales ya están y la entrega aún no se confirma (Fase D.2). La orden
-    // sigue siendo decisión humana: esto solo abre el formulario preparado.
+    // Crear orden de programación precargada — en el menú cuando no es la CTA
+    // (p.ej. ya hay una orden vinculada pero se necesita otra).
     if (esActivoOAprobado && data.seriales_estado !== 'legacy'
-        && Number(data.seriales_count || 0) > 0 && !data.entrega_confirmada)
-      items.push(I('calendar-plus', 'Crear orden de programación', `window.location.href='../ordenes/nueva-orden.html?cliente_id=${encodeURIComponent(data.cliente_id || '')}&contrato_doc_id=${id}&tipo=PROGRAMACION'`));
+        && Number(data.seriales_count || 0) > 0 && !data.entrega_confirmada
+        && primaryKind !== 'orden-prog')
+      items.push(I('calendar-plus', 'Crear orden de programación', `window.location.href='${urlOrdenProg}'`));
     // Firmado
     if (yaFirmado) {
       items.push(A('file-text', 'Ver firmado', data.firmado_url));
