@@ -39,6 +39,32 @@ module.exports = onDocumentWritten(
       const keysDespues = new Set(despues.map((e) => pool.normSerial(e.serial)));
       const keysAntes   = new Set(antes.map((e) => pool.normSerial(e.serial)));
 
+      // Órdenes de INSPECCIÓN de entrada (creadas automáticamente al cerrar
+      // una enmienda o anular un contrato — lib/ordenEntrada.js): sus equipos
+      // están en cuarentena (devuelto_revision) y DEBEN seguir ahí durante la
+      // inspección; jamás pasan a en_taller ni a en_cliente por esta orden.
+      // Aquí solo se enlaza/limpia orden_actual_id (link visible en el pool).
+      const esInspeccion = !!(after?.entrada_inspeccion || before?.entrada_inspeccion);
+      if (esInspeccion) {
+        const cerrada = !after || after.eliminado === true
+          || norm(after.estado_reparacion) === ENTREGADO;
+        const equiposRef = (despues.length ? despues : antes);
+        for (const e of equiposRef) {
+          try {
+            const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+            if (!data) continue;
+            if (cerrada) {
+              if (data.orden_actual_id === ordenId) {
+                await ref.set({ orden_actual_id: null }, { merge: true });
+              }
+            } else if (data.orden_actual_id !== ordenId) {
+              await ref.set({ orden_actual_id: ordenId }, { merge: true });
+            }
+          } catch (err) { /* best-effort por unidad */ }
+        }
+        return null;
+      }
+
       const entregadaAhora = after && norm(after.estado_reparacion) === ENTREGADO
         && norm(before?.estado_reparacion) !== ENTREGADO;
       const yaEntregada = after && norm(after.estado_reparacion) === ENTREGADO;

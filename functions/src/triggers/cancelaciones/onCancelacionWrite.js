@@ -2,6 +2,7 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
+const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
 
 // Notifica y deriva el estado del contrato cuando una enmienda (baja/terminación)
 // se crea / aprueba / rechaza / cierra. Usa admin SDK: las escrituras al contrato
@@ -160,6 +161,37 @@ module.exports = onDocumentWritten(
           logger.info("[onCancelacionWrite] Entrada al pool", { id, pool_doc_id: ent.pool_doc_id, resultado: r });
         } catch (e) {
           logger.warn("[onCancelacionWrite] Entrada al pool falló (no crítico)", { id, pool_doc_id: ent.pool_doc_id, message: e.message });
+        }
+      }
+
+      // Orden de servicio de ENTRADA: el taller inspecciona los devueltos en su
+      // cola normal. Idempotente: si la solicitud ya tiene orden, no se duplica.
+      if (!after.orden_entrada_id) {
+        try {
+          // La solicitud guarda solo cliente_nombre; el cliente_id (para la
+          // orden y el vendedor asignado) sale del contrato.
+          let clienteIdSol = after.cliente_id || null;
+          if (!clienteIdSol && contratoDocId) {
+            try {
+              const c = await db.collection("contratos").doc(contratoDocId).get();
+              clienteIdSol = c.exists ? (c.data().cliente_id || null) : null;
+            } catch (e) { /* sin cliente_id: la orden sale igual, sin vendedor en CC */ }
+          }
+          const ordenId = await crearOrdenEntrada({
+            clienteId: clienteIdSol,
+            clienteNombre: cliente,
+            contratoDocId,
+            contratoId,
+            unidades: after.entradas,
+            motivo: `${tipoLabel} (enmienda cerrada)`,
+            refEntrada: { tipo: "cancelacion", id },
+          });
+          if (ordenId) {
+            await db.collection("solicitudes_cancelacion").doc(id)
+              .set({ orden_entrada_id: ordenId }, { merge: true });
+          }
+        } catch (e) {
+          logger.warn("[onCancelacionWrite] Orden de entrada falló (no crítico)", { id, message: e.message });
         }
       }
     }

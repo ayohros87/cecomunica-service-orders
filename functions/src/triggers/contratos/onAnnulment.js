@@ -2,6 +2,7 @@ const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
+const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
 
 module.exports = onDocumentUpdated(
   {
@@ -35,6 +36,7 @@ module.exports = onDocumentUpdated(
       const serialesSnap = await db.collection("contratos").doc(cid)
         .collection("seriales").get();
       let liberados = 0;
+      const devueltos = []; // para la orden de ENTRADA (inspección en taller)
       for (const d of serialesSnap.docs) {
         const s = d.data() || {};
         const serial = (s.serial || "").toString().trim();
@@ -48,12 +50,37 @@ module.exports = onDocumentUpdated(
           notas: `Entrada por anulación de contrato (${motivoAnulacion}) — pendiente de inspección`,
           extra: { asignacion: null, verificado: false },
         });
-        if (r === "transicion") liberados++;
+        if (r === "transicion") {
+          liberados++;
+          devueltos.push({ serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null });
+        }
       }
       if (serialesSnap.size) {
         logger.info("[onContratoAnuladoNotify] Pool: seriales a inspección por anulación", {
           contratoId, total: serialesSnap.size, liberados
         });
+      }
+
+      // Orden de ENTRADA para el taller (inspección de los devueltos) + correo
+      // a recepción y al vendedor. Solo si alguna unidad entró en cuarentena.
+      if (devueltos.length && !after.orden_entrada_id) {
+        try {
+          const ordenId = await crearOrdenEntrada({
+            clienteId: after.cliente_id || null,
+            clienteNombre: after.cliente_nombre || "",
+            contratoDocId: cid,
+            contratoId,
+            unidades: devueltos,
+            motivo: `Anulación de contrato (${motivoAnulacion})`,
+            refEntrada: { tipo: "anulacion", id: cid },
+          });
+          if (ordenId) {
+            await db.collection("contratos").doc(cid)
+              .set({ orden_entrada_id: ordenId }, { merge: true });
+          }
+        } catch (e) {
+          logger.warn("[onContratoAnuladoNotify] Orden de entrada falló (no crítico)", { contratoId, message: e.message });
+        }
       }
     } catch (e) {
       logger.warn("[onContratoAnuladoNotify] Pool: liberación por anulación falló (no crítico)", {

@@ -336,6 +336,7 @@ window.Cancelaciones = {
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);">
           <input type="checkbox" class="ent-check" value="${esc(u.id)}"
                  data-serial="${esc(u.serial || u.serial_norm)}" data-modelo="${esc(u.modelo_label || '')}"
+                 data-modelo-id="${esc(u.modelo_id || '')}"
                  style="width:16px;height:16px;">
         </td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#eee);font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</td>
@@ -365,7 +366,9 @@ window.Cancelaciones = {
             <b>${esc(sol.contrato_id || sol.contrato_doc_id)}</b> · ${esc(sol.cliente_nombre || '')} ·
             ${esTotal ? 'terminación total' : `baja parcial de <b>${esperadas}</b> unidad(es)`}.
             Marca las unidades que el cliente devolvió y su condición; pasarán a
-            <b>"Entrada — por inspeccionar"</b> en Equipos por serial.
+            <b>"Entrada — por inspeccionar"</b> y se creará automáticamente una
+            <b>orden de ENTRADA</b> en la cola del taller (recepción y el vendedor
+            reciben el aviso por correo).
           </p>
           <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px;">
             <thead>
@@ -421,6 +424,7 @@ window.Cancelaciones = {
       pool_doc_id: c.value,
       serial: c.getAttribute('data-serial') || '',
       modelo: c.getAttribute('data-modelo') || '',
+      modelo_id: c.getAttribute('data-modelo-id') || null,
       condicion: c.closest('tr')?.querySelector('.ent-cond')?.value || 'bueno',
     }));
     if (!entradas.length
@@ -436,7 +440,7 @@ window.Cancelaciones = {
       });
       overlay.remove();
       Toast.show(entradas.length
-        ? `Enmienda cerrada. ${entradas.length} unidad(es) pasan a "Entrada — por inspeccionar".`
+        ? `Enmienda cerrada. ${entradas.length} unidad(es) a inspección — se creó la orden de ENTRADA para el taller.`
         : 'Enmienda cerrada.', 'ok');
       this.cargarCola();
     } catch (e) {
