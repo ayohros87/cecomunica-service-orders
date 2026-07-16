@@ -265,9 +265,21 @@ window.EquiposPool = {
       const puede = this.puedeEscribir();
       const esAdmin = this._rol === ROLES.ADMIN;
       tbody.innerHTML = lista.map(eq => {
-        const asignadoA = eq.asignacion
-          ? `${esc(eq.asignacion.cliente_nombre || '—')}<span class="eq-sub">${esc(eq.asignacion.contrato_id || '')}</span>`
-          : (eq.orden_actual_id ? `<span class="eq-sub">orden en taller</span>` : '—');
+        // "Asignado a" navegable: cliente → ficha, contrato → lista con búsqueda
+        // precargada (?buscar=), orden → editar-orden. Puede haber asignación Y
+        // orden a la vez (unidad de contrato que está en taller): se muestran ambas.
+        const linkCliente = eq.asignacion
+          ? (eq.asignacion.cliente_id
+              ? `<a class="eq-link" href="../clientes/editar.html?id=${encodeURIComponent(eq.asignacion.cliente_id)}" title="Abrir ficha del cliente">${esc(eq.asignacion.cliente_nombre || '—')}</a>`
+              : esc(eq.asignacion.cliente_nombre || '—'))
+          : '';
+        const linkContrato = (eq.asignacion && eq.asignacion.contrato_id)
+          ? `<a class="eq-sub eq-link" href="../contratos/index.html?buscar=${encodeURIComponent(eq.asignacion.contrato_id)}" title="Buscar el contrato en la lista">${esc(eq.asignacion.contrato_id)}</a>`
+          : '';
+        const linkOrden = eq.orden_actual_id
+          ? `<a class="eq-sub eq-link" href="../ordenes/editar-orden.html?id=${encodeURIComponent(eq.orden_actual_id)}" title="Abrir la orden de servicio">orden en taller</a>`
+          : '';
+        const asignadoA = (linkCliente + linkContrato + linkOrden) || '—';
         const compartido = eq.serial_compartido
           ? `<span class="eq-compartido" title="Este serial existe en más de un modelo — verifica el modelo antes de operar">2+ MODELOS</span>` : '';
         const noVerif = eq.verificado === false
@@ -671,6 +683,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     await EquiposPool.cargarModelos();
     EquiposPool._restaurarFiltros();
+
+    // Deep-link ?serial= (desde contrato/cliente/orden): abre el pool enfocado
+    // en esa unidad — pestaña "todos", sin filtros secundarios y con la
+    // búsqueda precargada (la búsqueda no se persiste entre visitas).
+    const serialParam = new URLSearchParams(location.search).get('serial');
+    if (serialParam) {
+      EquiposPool._tab = 'todos';
+      document.querySelectorAll('.eq-tab').forEach(b =>
+        b.classList.toggle('is-active', b.dataset.tab === 'todos'));
+      const q = document.getElementById('eqBusqueda');
+      if (q) q.value = serialParam;
+      ['eqFiltroModelo', 'eqFiltroPropiedad'].forEach(id => {
+        const n = document.getElementById(id); if (n) n.value = '';
+      });
+      ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente'].forEach(id => {
+        const n = document.getElementById(id); if (n) n.checked = false;
+      });
+    }
+
     await EquiposPool.cargar();
   });
 });

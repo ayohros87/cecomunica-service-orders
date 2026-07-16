@@ -43,10 +43,19 @@ auth.onAuthStateChanged(async user => {
   aplicarRestriccionesPorRol(rol);
   mostrarBadgeCancelaciones(rol);
   await CS.cargarUsuarios();
+
+  const params = new URLSearchParams(location.search);
+  // Deep-link ?buscar= (p.ej. desde Equipos por serial): precarga la búsqueda
+  // antes de la carga inicial — el filtro ya resuelve por cliente o contrato_id.
+  const buscar = params.get('buscar');
+  if (buscar) {
+    const inp = document.getElementById('filtroCliente');
+    if (inp) inp.value = buscar;
+  }
+
   await ContratosLista.cargar(true);
   ContratosLista.updateBtnCargarMas(false);
 
-  const params    = new URLSearchParams(location.search);
   const aprobarId = params.get('aprobar');
   if (aprobarId) {
     if (rol === ROLES.ADMIN) {

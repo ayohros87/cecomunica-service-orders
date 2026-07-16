@@ -189,6 +189,45 @@ const EquiposPoolService = {
     return todos.filter(d => this._mismoModelo(d, modeloId, modeloLabel));
   },
 
+  // Unidades actualmente asignadas a un contrato / con un cliente — para los
+  // paneles "Equipos" en contrato y cliente. Solo asignación VIGENTE (liberar/
+  // baja limpian `asignacion`, así que lo histórico no aparece).
+  async listarPorContrato(contratoDocId) {
+    if (!contratoDocId) return [];
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool')
+      .where('asignacion.contrato_doc_id', '==', contratoDocId).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
+        || (a.serial || '').localeCompare(b.serial || ''));
+  },
+
+  async listarPorCliente(clienteId) {
+    if (!clienteId) return [];
+    const db = firebase.firestore();
+    const snap = await db.collection('equipos_pool')
+      .where('asignacion.cliente_id', '==', clienteId).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
+        || (a.serial || '').localeCompare(b.serial || ''));
+  },
+
+  // Chip de estado compartido (clases .eqpool-chip en ceco-ui.css) — mismo
+  // lenguaje visual del estado en todas las páginas que muestran unidades.
+  chipEstadoHtml(estado) {
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
+    const cls = this.ESTADO_LABELS[estado] ? estado : 'desconocido';
+    return `<span class="eqpool-chip eqpool-chip-${esc(cls)}">${esc(this.ESTADO_LABELS[estado] || estado || '—')}</span>`;
+  },
+
+  // Link al kardex de una unidad: la página del pool con ?serial= abre la
+  // pestaña "todos" con la búsqueda precargada.
+  kardexUrl(serial, { desdeRaiz = false } = {}) {
+    const base = desdeRaiz ? 'inventario/equipos.html' : '../inventario/equipos.html';
+    return `${base}?serial=${encodeURIComponent((serial || '').toString().trim())}`;
+  },
+
   async getMovimientos(id) {
     const db = firebase.firestore();
     const snap = await db.collection('equipos_pool').doc(id)

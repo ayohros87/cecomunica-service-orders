@@ -2222,6 +2222,36 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 .sig-pad.confirmed .sig-canvas { cursor: not-allowed; opacity: 0.8; }
 .sig-pad.confirmed .sig-pad-label { background: #ECFDF5; color: var(--status-online); border-color: #A7F3D0; }
 
+/* ── Pool de equipos: chips de estado compartidos ───────────────────
+   Un solo lenguaje visual para el estado físico de una unidad
+   (equipos_pool) en TODAS las páginas: pool, contrato, cliente, orden
+   y home. Paleta = la original de inventario/equipos.html (.eq-badge).
+   Render: EquiposPoolService.chipEstadoHtml(estado). */
+.eqpool-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+.eqpool-chip-en_bodega         { background: #dcfce7; color: #15803d; }
+.eqpool-chip-asignado_contrato { background: #dbeafe; color: #1d4ed8; }
+.eqpool-chip-en_cliente        { background: #e0e7ff; color: #4338ca; }
+.eqpool-chip-en_taller         { background: #fef9c3; color: #a16207; }
+.eqpool-chip-en_poc            { background: #fae8ff; color: #a21caf; }
+.eqpool-chip-devuelto_revision { background: #ffedd5; color: #c2410c; }
+.eqpool-chip-baja              { background: #f1f5f9; color: #64748b; }
+.eqpool-chip-desconocido       { background: #f1f5f9; color: #64748b; }
+/* Link discreto hacia una entidad (kardex, contrato, cliente, orden). */
+.eq-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--fg-3); }
+.eq-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+/* Marca "sin verificar" (doc creado por migración automática). */
+.eqpool-noverif {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: var(--radius-pill);
+  background: #fef3c7; color: #92400e; margin-left: 6px;
+}
+
 /* ── Toggle / switch ────────────────────────────────────────── */
 .toggle-wrap { display: flex; align-items: flex-start; gap: var(--sp-3); cursor: pointer; }
 .toggle-switch { position: relative; flex-shrink: 0; width: 36px; height: 20px; margin-top: 1px; }

@@ -620,6 +620,67 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 
   filaDetalle.setAttribute("data-equipos-loaded", "true");
   APP.utils.lucideRefresh(filaDetalle);
+  decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle);
+}
+
+// Decora la columna Serie con el estado de la unidad en el pool de equipos
+// serializados (equipos_pool): chip de estado con link al kardex y, si el
+// serial figura asignado a OTRO cliente, un aviso — ayuda a detectar equipos
+// mal identificados al recibirlos en taller. Best-effort y asíncrono: si el
+// servicio no está o la consulta falla, la tabla queda igual que siempre.
+async function decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle) {
+  if (typeof EquiposPoolService === 'undefined') return;
+  const conSerial = (equipos || [])
+    .map(e => ({ e, norm: EquiposPoolService.normalizarSerial(e.numero_de_serie || e.serial || '') }))
+    .filter(x => x.norm);
+  if (!conSerial.length) return;
+
+  // Una query por chunk de 10 (limite del operador `in`) sobre serial_norm.
+  const norms = [...new Set(conSerial.map(x => x.norm))];
+  const docs = [];
+  try {
+    const db = firebase.firestore();
+    for (let i = 0; i < norms.length; i += 10) {
+      const snap = await db.collection('equipos_pool')
+        .where('serial_norm', 'in', norms.slice(i, i + 10)).get();
+      snap.docs.forEach(d => docs.push({ id: d.id, ...d.data() }));
+    }
+  } catch (err) { return; }
+  if (!docs.length) return;
+
+  const ordenData = APP.state.orders.find(o => o.ordenId === ordenId);
+  const clienteOrdenId = ordenData?.cliente_id || '';
+
+  for (const { e, norm } of conSerial) {
+    const candidatos = docs.filter(d => d.serial_norm === norm);
+    if (!candidatos.length) continue;
+    // Con colisión de serial entre modelos, elige el doc del modelo del equipo.
+    const unidad = candidatos.length === 1 ? candidatos[0]
+      : (candidatos.find(d => EquiposPoolService._mismoModelo(d, e.modelo_id || null, e.modelo || '')) || candidatos[0]);
+
+    const celda = filaDetalle.querySelector(`tr[data-equipo-id="${ordenId}_${e.id}"] .col-serie .celda-editable`);
+    if (!celda) continue;
+    celda.querySelectorAll('.eqpool-chip').forEach(n => n.remove());
+
+    const chip = document.createElement('a');
+    chip.className = `eqpool-chip eqpool-chip-${EquiposPoolService.ESTADO_LABELS[unidad.estado] ? unidad.estado : 'desconocido'}`;
+    chip.href = EquiposPoolService.kardexUrl(unidad.serial || unidad.serial_norm);
+    chip.style.textDecoration = 'none';
+    chip.title = 'Estado en el pool de equipos — click para ver su historia (kardex)';
+    chip.textContent = EquiposPoolService.ESTADO_LABELS[unidad.estado] || unidad.estado || '';
+    celda.appendChild(chip);
+
+    // Aviso suave: el pool dice que esta unidad esta con OTRO cliente.
+    const clientePool = unidad.asignacion?.cliente_id || '';
+    if (clientePool && clienteOrdenId && clientePool !== clienteOrdenId) {
+      const warn = document.createElement('span');
+      warn.className = 'eqpool-chip';
+      warn.style.cssText = 'background:#fef3c7;color:#92400e;';
+      warn.title = `En el pool esta unidad figura con ${unidad.asignacion?.cliente_nombre || 'otro cliente'} — verifica el serial`;
+      warn.textContent = 'otro cliente';
+      celda.appendChild(warn);
+    }
+  }
 }
 
 function refrescarEquiposDeOrden(ordenId) {

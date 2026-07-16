@@ -162,6 +162,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (selExento) selExento.value = d.itbms_exento ? "true" : "false";
     const motivoInput = document.getElementById("itbms_motivo_exencion");
     if (motivoInput) motivoInput.value = d.itbms_motivo_exencion || "";
+
+    cargarEquiposCliente(clienteId); // no bloquea el resto del formulario
   }
 
   // Cargar lista de bloques IP (preseleccionando el del cliente en edición).
@@ -184,6 +186,58 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("nombre").focus();
 });
+
+// Sección "Equipos del cliente" (solo edición): unidades del pool de equipos
+// serializados asignadas a este cliente, con estado actual, link al contrato y
+// al kardex. Best-effort: si el servicio no está o la consulta falla (o no hay
+// unidades), la sección simplemente no se muestra.
+async function cargarEquiposCliente(clienteId) {
+  if (typeof EquiposPoolService === "undefined") return;
+  let unidades = [];
+  try { unidades = await EquiposPoolService.listarPorCliente(clienteId); }
+  catch (e) { return; }
+  if (!unidades.length) return;
+
+  const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
+
+  const filas = unidades.map(u => `
+    <tr>
+      <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle); font-family:var(--font-mono,monospace);">
+        <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" title="Ver historia (kardex) en Equipos por serial">${esc(u.serial || u.serial_norm)}</a>
+      </td>
+      <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">${esc(u.modelo_label || "—")}</td>
+      <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">${EquiposPoolService.chipEstadoHtml(u.estado)}</td>
+      <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">
+        ${u.asignacion?.contrato_id
+          ? `<a class="eq-link" href="index.html?buscar=${encodeURIComponent(u.asignacion.contrato_id)}" title="Buscar el contrato en la lista">${esc(u.asignacion.contrato_id)}</a>`
+          : "—"}
+      </td>
+    </tr>`).join("");
+
+  const body = document.getElementById("equiposClienteBody");
+  const section = document.getElementById("equiposClienteSection");
+  if (!body || !section) return;
+  body.innerHTML = `
+    <p class="form-hint" style="margin-top:0;">
+      ${unidades.length} unidad(es) registradas a este cliente en el pool de equipos serializados.
+      El serial abre su historia (kardex).
+    </p>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:520px;">
+        <thead>
+          <tr style="text-align:left; color:var(--fg-3); font-size:12px;">
+            <th style="padding:6px 10px;">Serial</th>
+            <th style="padding:6px 10px;">Modelo</th>
+            <th style="padding:6px 10px;">Estado</th>
+            <th style="padding:6px 10px;">Contrato</th>
+          </tr>
+        </thead>
+        <tbody>${filas}</tbody>
+      </table>
+    </div>`;
+  section.style.display = "";
+}
 
 function volverAContrato() {
   const params = new URLSearchParams(window.location.search);

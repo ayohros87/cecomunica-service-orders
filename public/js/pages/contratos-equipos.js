@@ -92,11 +92,62 @@ window.ContratosEquipos = {
     if (this._tipEl) this._tipEl.style.display = 'none';
   },
 
+  // Sección "unidades del pool": el estado FÍSICO actual de cada unidad
+  // asignada a este contrato (equipos_pool), con serial → kardex. Best-effort:
+  // si el servicio no está, el rol no puede leer el pool o la consulta falla,
+  // simplemente no se muestra (el modal de órdenes sigue funcionando igual).
+  async _seccionPool(id) {
+    if (typeof EquiposPoolService === 'undefined') return '';
+    let unidades = [];
+    try { unidades = await EquiposPoolService.listarPorContrato(id); }
+    catch (e) { return ''; }
+    if (!unidades.length) return '';
+    const esc = CS.esc.bind(CS);
+
+    // Resumen por estado ("2 en cliente · 1 en taller") antes del detalle.
+    const porEstado = new Map();
+    unidades.forEach(u => porEstado.set(u.estado, (porEstado.get(u.estado) || 0) + 1));
+    const resumen = [...porEstado.entries()]
+      .map(([est, n]) => `<span style="white-space:nowrap;"><b>${n}</b> ${EquiposPoolService.chipEstadoHtml(est)}</span>`)
+      .join(' <span style="color:var(--fg-3);">·</span> ');
+
+    const filas = unidades.map(u => `
+      <tr>
+        <td style="border:1px solid var(--line); padding:6px; font-family:var(--font-mono,monospace);">
+          <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" title="Ver historia (kardex) en Equipos por serial">${esc(u.serial || u.serial_norm)}</a>
+          ${u.verificado === false ? '<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">SIN VERIFICAR</span>' : ''}
+        </td>
+        <td style="border:1px solid var(--line); padding:6px;">${esc(u.modelo_label || '—')}</td>
+        <td style="border:1px solid var(--line); padding:6px;">${EquiposPoolService.chipEstadoHtml(u.estado)}</td>
+        <td style="border:1px solid var(--line); padding:6px;">${u.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
+      </tr>`).join('');
+
+    return `
+      <div style="margin-bottom:6px; font-weight:700;">Unidades del contrato — estado actual (${unidades.length})</div>
+      <div style="margin-bottom:10px; font-size:13px;">${resumen}</div>
+      <div class="table-scroll" style="margin-bottom:18px;">
+        <table style="width:100%; border-collapse:collapse; font-size:14px; min-width:560px;">
+          <thead style="background:#f5f5f5;">
+            <tr>
+              <th style="border:1px solid var(--line); padding:6px;">Serial</th>
+              <th style="border:1px solid var(--line); padding:6px;">Modelo</th>
+              <th style="border:1px solid var(--line); padding:6px;">Estado</th>
+              <th style="border:1px solid var(--line); padding:6px;">Condición</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>`;
+  },
+
   // ── Equipos modal ───────────────────────────────────────────────
   async abrirModal(id) {
     const esc = CS.esc.bind(CS);
     try {
-      const ordenes = await ContratosService.getOrdenesDeContratoCompleto(id);
+      const [seccionPool, ordenes] = await Promise.all([
+        this._seccionPool(id),
+        ContratosService.getOrdenesDeContratoCompleto(id),
+      ]);
       const rows = [];
       for (const x of ordenes) {
         const orden = await OrdenesService.getOrder(x.id);
@@ -112,7 +163,8 @@ window.ContratosEquipos = {
         });
       }
       document.getElementById('modalEquiposBody').innerHTML = `
-        <div style="margin-bottom:10px; font-weight:700;">Equipos asociados (${rows.length})</div>
+        ${seccionPool}
+        <div style="margin-bottom:10px; font-weight:700;">Equipos en órdenes vinculadas (${rows.length})</div>
         <div class="table-scroll">
           <table style="width:100%; border-collapse:collapse; font-size:14px; min-width:720px;">
             <thead style="background:#f5f5f5;">

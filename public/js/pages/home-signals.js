@@ -102,6 +102,25 @@ window.HomeSignals = (() => {
       href: 'inventario/piezas.html',
       count: () => SenalesService.countPiezasSinStock(),
     },
+    // Pool de equipos serializados (PLAN_CICLO_VIDA_EQUIPOS.md, Fase A).
+    S11: {
+      modulo: 'equipos', icon: 'warehouse',
+      label: 'Equipos en bodega', sub: 'disponibles para asignar',
+      href: 'inventario/equipos.html',
+      count: () => SenalesService.countEquiposPoolPorEstado('en_bodega'),
+    },
+    S12: {
+      modulo: 'equipos', icon: 'search-check', moreIsBad: true,
+      label: 'Equipos por verificar', sub: 'creados por migración automática',
+      href: 'inventario/equipos.html',
+      count: () => SenalesService.countEquiposPoolSinVerificar(),
+    },
+    S13: {
+      modulo: 'equipos', icon: 'package-search', moreIsBad: true,
+      label: 'Entradas por inspeccionar', sub: 'regresaron de cliente, esperan inspección',
+      href: 'inventario/equipos.html',
+      count: () => SenalesService.countEquiposPoolPorEstado('devuelto_revision'),
+    },
   };
 
   // Rol efectivo → señales (máx. 4). Cada señal pasa ADEMÁS por el gate de
@@ -115,7 +134,7 @@ window.HomeSignals = (() => {
     vendedor:          ['S7', 'S8', 'S1', 'S4'],
     tecnico:           ['S5', 'S4P'],
     tecnico_operativo: ['S5', 'S4P'],
-    inventario:        ['S9'],
+    inventario:        ['S11', 'S13', 'S12', 'S9'],
     vista:             ['S1', 'S3', 'S4'],
     contabilidad:      [],
   };

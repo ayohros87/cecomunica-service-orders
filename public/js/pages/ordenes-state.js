@@ -39,9 +39,12 @@ window.CONFIG = {
     MAIL_QUEUE: 'mail_queue'
   },
   
-  // Estados de orden
+  // Estados de orden (máquina completa: POR ASIGNAR → RECIBIDO EN MOSTRADOR
+  // → ASIGNADO → COMPLETADO → ENTREGADO; los strings canónicos viven en
+  // empresa/estado_de_reparacion).
   ESTADOS: {
     POR_ASIGNAR: 'POR ASIGNAR',
+    RECIBIDO: 'RECIBIDO EN MOSTRADOR',
     ASIGNADO: 'ASIGNADO',
     COMPLETADO: 'COMPLETADO (EN OFICINA)',
     ENTREGADO: 'ENTREGADO AL CLIENTE'

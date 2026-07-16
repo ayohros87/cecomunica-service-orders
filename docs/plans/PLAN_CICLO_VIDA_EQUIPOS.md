@@ -68,13 +68,20 @@ Leyenda: ✅ funciona · 🟡 funciona con huecos · ❌ no existe.
 
 ---
 
-## 3. Decisiones a fijar (bloquean fases)
+## 3. Decisiones (fijadas 2026-07-16)
 
-### 3.1 Ancla del linaje de reemplazos: `equipos_pool` (propuesta, actualiza a 05b)
-El diseño 05b fijó "fuente de verdad = POC" en un mundo sin pool. Hoy propongo: **la identidad y el linaje físico viven en `equipos_pool`** (`reemplaza_a`, estados de devolución) y POC sigue siendo la fuente de la programación (SIM, grupos), enlazada vía `poc_device_id`. Ventajas: el pool ya tiene kardex, failsafe de colisión y triggers de todos los flujos; POC no cubre equipos que nunca pasaron por POC (venta directa, taller). El resto de 05b (cola de revisión, digitalizar legacy bajo demanda, enlace suave de contratos) se conserva tal cual. **Requiere ok del negocio.**
+### 3.1 Ancla del linaje de reemplazos: `equipos_pool` — ✅ CONFIRMADA
+El diseño 05b fijó "fuente de verdad = POC" en un mundo sin pool. Decisión: **la identidad y el linaje físico viven en `equipos_pool`** (`reemplaza_a`, estados de devolución) y POC sigue siendo la fuente de la programación (SIM, grupos), enlazada vía `poc_device_id`. Ventajas: el pool ya tiene kardex, failsafe de colisión y triggers de todos los flujos; POC no cubre equipos que nunca pasaron por POC (venta directa, taller). El resto de 05b (cola de revisión, digitalizar legacy bajo demanda, enlace suave de contratos) se conserva tal cual.
 
-### 3.2 ¿Cuarentena universal o selectiva?
-Propuesta: toda unidad que REGRESA de un cliente entra a `devuelto_revision` (cancelación, anulación, reemplazo, fin de demo). Solo la remoción de serial pre-entrega (typo) sigue yendo directo a `en_bodega` (nunca salió físicamente). Inventario ya tiene el botón "Inspección OK → bodega" — por fin tendrá qué inspeccionar.
+### 3.2 Cuarentena universal — ✅ CONFIRMADA · terminología: "ENTRADA"
+Toda unidad que REGRESA de un cliente pasa por inspección (`devuelto_revision`): cancelación, anulación, reemplazo, fin de demo. Solo la remoción de serial pre-entrega (typo) sigue yendo directo a `en_bodega` (nunca salió físicamente). Inventario ya tiene el botón "Inspección OK → bodega" — por fin tendrá qué inspeccionar.
+**Terminología de UI:** el personal llama a este proceso **"entrada"** — toda la interfaz debe decir "Entrada" (registrar entrada, entradas pendientes de inspección), no "devolución". Los nombres internos de datos (`devuelto_revision`, movimiento `devolucion`) no cambian.
+
+### 3.4 Mapeo asimétrico en renovaciones/reemplazos (restricción de negocio)
+Una renovación o reemplazo puede tener **menos o más equipos** que el contrato original. La pantalla de transición (C.4) NO asume mapeo 1:1:
+- **Saliente sin entrante**: el equipo se devuelve sin sustituto (renovación con menos unidades) → se marca `pendiente_devolucion` sin `mapeos`; su entrada se registra igual.
+- **Entrante sin saliente**: unidad neta nueva (renovación con más unidades) → entra normal, sin linaje.
+- **Sin contrato original** (legacy en papel o inexistente): la transición funciona anclada en los equipos reales del cliente en el pool (`asignacion.cliente_id`), no en la cadena de contratos; `origen_tipo='legacy'` + referencia libre, o `'ninguno'`.
 
 ### 3.3 Reserva estricta de serial (pendiente de 05b)
 ¿Un serial `asignado_contrato`/`en_cliente` puede aparecer en otro contrato? Hoy sí (aviso suave). Propuesta: mantener suave hasta la fase de endurecimiento (F5 del plan pool) y ahí decidir con datos de conciliación.

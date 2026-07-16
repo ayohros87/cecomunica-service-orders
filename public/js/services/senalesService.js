@@ -76,6 +76,21 @@ const SenalesService = {
       db.collection('inventario_piezas').where('cantidad', '<=', 0)
     );
   },
+
+  // Pool de equipos serializados (equipos_pool — read isSignedIn()).
+  countEquiposPoolPorEstado(estado) {
+    const db = firebase.firestore();
+    return this._count(
+      db.collection('equipos_pool').where('estado', '==', estado)
+    );
+  },
+
+  countEquiposPoolSinVerificar() {
+    const db = firebase.firestore();
+    return this._count(
+      db.collection('equipos_pool').where('verificado', '==', false)
+    );
+  },
 };
 
 window.SenalesService = SenalesService;
