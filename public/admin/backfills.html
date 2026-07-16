@@ -254,7 +254,9 @@
         Los equipos PoC históricos conocen al cliente pero <strong>no al contrato</strong>. El pool
         de equipos (<code>equipos_pool</code>) sí sabe a qué contrato pertenece cada serial (sembrado
         desde los contratos), así que este backfill cruza por <strong>serial normalizado</strong> y
-        estampa el vínculo en el device. Conservador — nunca adivina: se salta los ya vinculados,
+        estampa el vínculo en el device. <strong>Solo devices activos</strong> (los inactivos ya no
+        están en servicio y su serial puede pertenecer hoy al contrato de otro cliente). Conservador
+        — nunca adivina: se salta los ya vinculados,
         reporta <strong>ambiguos</strong> (serial que mapea a 2+ contratos) y
         <strong>sospechosos</strong> (el cliente del pool no coincide con el del PoC) sin
         escribirlos. Los batches nuevos ya nacen vinculados desde PoC · Nuevo batch. Aditivo e

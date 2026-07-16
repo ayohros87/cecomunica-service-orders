@@ -31,6 +31,7 @@
       ['Huérfanos',          data.huerfanos],
       ['Huérfanos (distintos)', data.huerfanosDistintos],
       // linkContratoPoc:
+      ['Skip (inactivos)',    data.skippedInactivos],
       ['Ya vinculados',       data.yaVinculados],
       ['Vinculados',          data.vinculados],
       ['Sin contrato en pool', data.sinContrato],

@@ -924,6 +924,9 @@ async function backfillSeedPoolEquipos(dryRun) {
 // (POC/nuevo-batch, 2026-07-16).
 //
 // Conservador — NUNCA adivina:
+//   · device NO activo (activo !== true) o borrado             → se salta
+//     (un radio fuera de servicio no debe amarrarse a un contrato vigente;
+//     su serial puede estar hoy amparado por el contrato de otro cliente)
 //   · device ya vinculado (contrato_doc_id)                    → se salta
 //   · serial no está en el pool o sin asignación de contrato   → sinContrato
 //   · 2+ docs del pool con ese serial y contratos DISTINTOS    → ambiguo
@@ -956,7 +959,7 @@ async function backfillLinkContratoPoc(dryRun) {
     });
   }
 
-  let scanned = 0, skippedDeleted = 0, yaVinculados = 0, sinSerial = 0;
+  let scanned = 0, skippedDeleted = 0, skippedInactivos = 0, yaVinculados = 0, sinSerial = 0;
   let sinContrato = 0, ambiguos = 0, sospechosos = 0, vinculados = 0;
   let written = 0, errors = 0;
   const muestraAmbiguos = [];
@@ -980,6 +983,9 @@ async function backfillLinkContratoPoc(dryRun) {
   for (const doc of snap.docs) {
     const d = doc.data() || {};
     if (d.deleted === true) { skippedDeleted++; continue; }
+    // Solo devices ACTIVOS: los inactivos ya no están en servicio y no deben
+    // amarrarse a un contrato (los sin campo `activo` también se saltan).
+    if (d.activo !== true) { skippedInactivos++; continue; }
     scanned++;
     if ((d.contrato_doc_id || "").toString().trim()) { yaVinculados++; continue; }
 
@@ -1030,7 +1036,7 @@ async function backfillLinkContratoPoc(dryRun) {
   }
 
   return {
-    scanned, skippedDeleted, yaVinculados, sinSerial,
+    scanned, skippedDeleted, skippedInactivos, yaVinculados, sinSerial,
     sinContrato, ambiguos, sospechosos, vinculados, written, errors,
     detalle,
     elapsedSec: Math.round((Date.now() - startedAt) / 1000),
