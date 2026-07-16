@@ -132,6 +132,18 @@ Implementa 05b adaptado a §3.1. Aditivo: campos nuevos, cero cambios a flujos e
 1. **Adición conectada**: mantener "Adición = contrato nuevo" (decisión de negocio existente) pero con `contrato_origen_id` (C.1) para que la ficha del original muestre el total real de equipos del cliente. Alternativa mayor (editar `equipos[]` post-activación con enmienda de adición) queda explícitamente FUERA de este plan salvo que negocio la pida.
 2. **Baja parcial con seriales** (extiende B.1): al SOLICITAR la baja, opcionalmente elegir QUÉ seriales salen (checkbox de los `en_cliente` del contrato); al cerrar, el checklist llega pre-marcado. `baja_cancelado` sigue por cantidad (compatibilidad).
 
+### Fase POC — Conectar POC con contratos y el resto del sistema
+Hoy `poc_devices` conoce al cliente pero NO al contrato; el pool enlaza `poc_device_id` pero la relación POC↔contrato no existe en datos. Implementado 2026-07-16:
+1. **Vínculo en el alta de batch POC**: selector "Contrato del cliente" en POC/nuevo-batch — vincula el batch (`poc_devices.contrato_doc_id`/`contrato_id`, el campo que 05b pedía en su Fase 0) y botón "Jalar seriales" que trae los del contrato sin re-teclear.
+2. **El pool hereda el vínculo**: `onPocDeviceWritePool` estampa la asignación con contrato (antes solo cliente) cuando la unidad no tiene ya una asignación.
+
+Pendiente (propuesta, siguiente pasada):
+3. **Chip de contrato en la lista POC** (`poc-list.js` tiene cambios locales del usuario — no tocado) + filtro "sin contrato".
+4. **Backfill `linkContratoPoc`**: inferir `contrato_doc_id` para devices existentes cruzando por serial contra `equipos_pool.asignacion` (el pool ya conoce el contrato de 5,787 unidades) — cola de sospechosos para lo ambiguo, mismo patrón que `linkModeloIdPoc`.
+5. **Editar-batch POC**: poder vincular/corregir el contrato de un batch existente.
+6. **Al convertir POC en contrato** (jalar desde POC en seriales del contrato): estampar de vuelta `contrato_doc_id` en los devices jalados — cierra el ciclo demo→contrato.
+7. Con 4+6, la vista "Equipos del cliente" y la transición de renovación pueden mostrar también la programación del radio (grupos, SIM) vía `poc_device_id`.
+
 ### Fase F — Endurecimiento y conciliación (= F5 del plan pool, ampliada)
 Cuando la conciliación esté en 0 sostenido:
 1. Validación de seriales al asignar: el aviso "no está en el pool" se vuelve bloqueante (con excepción admin), y la doble asignación se bloquea (§3.3).

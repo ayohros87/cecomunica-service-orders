@@ -34,11 +34,14 @@ module.exports = onDocumentWritten(
         origen: "migracion_poc",
         extra: {
           poc_device_id: deviceId, propiedad: "cecomunica",
-          // Custodia: el device sabe con qué cliente está (solo si la unidad
-          // no tiene ya una asignación de contrato).
+          // Custodia: el device sabe con qué cliente está — y desde 2026-07-16
+          // puede traer también el CONTRATO al que pertenece el batch
+          // (poc_devices.contrato_doc_id, vínculo POC↔contrato). Solo si la
+          // unidad no tiene ya una asignación de contrato.
           ...((after.cliente_nombre || after.cliente || after.cliente_id) ? {
             asignacionSiFalta: {
-              contrato_doc_id: null, contrato_id: "",
+              contrato_doc_id: after.contrato_doc_id || null,
+              contrato_id: after.contrato_id || "",
               cliente_id: after.cliente_id || "",
               cliente_nombre: after.cliente_nombre || after.cliente || "",
             },

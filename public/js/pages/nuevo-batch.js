@@ -90,6 +90,60 @@ function onClienteChange() {
     ipSelect.value = "";
     if (aviso) aviso.style.display = "";
   }
+  cargarContratosDelCliente();
+}
+
+// ── Vínculo POC ↔ contrato (PLAN_CICLO_VIDA_EQUIPOS.md, conexión POC) ──────
+// Carga los contratos vigentes del cliente en el select "contratoJalar". Elegir
+// uno vincula el BATCH completo al contrato (contrato_doc_id/contrato_id en
+// cada device) y habilita "Jalar seriales" para no re-teclearlos.
+async function cargarContratosDelCliente() {
+  const sel = document.getElementById("contratoJalar");
+  if (!sel) return;
+  const clienteId = document.getElementById("cliente")?.value || "";
+  if (!clienteId) { sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>'; return; }
+  sel.innerHTML = '<option value="">Cargando contratos…</option>';
+  try {
+    const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
+    sel.innerHTML = contratos.length
+      ? '<option value="">Sin vincular a contrato</option>' + contratos.map(c => {
+          const label = `${c.contrato_id || c.id} · ${c.tipo_contrato || ''} · ${c.estado || ''}`;
+          return `<option value="${c.id}" data-ref="${(c.contrato_id || c.id).replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
+        }).join('')
+      : '<option value="">El cliente no tiene contratos vigentes</option>';
+  } catch (e) {
+    console.warn("No se pudieron cargar los contratos del cliente", e);
+    sel.innerHTML = '<option value="">No se pudieron cargar los contratos</option>';
+  }
+}
+
+// Trae los seriales asignados al contrato elegido y los agrega al textarea
+// (dedupe contra lo ya pegado). No pisa lo existente: agrega al final.
+async function jalarSerialesDesdeContrato() {
+  const sel = document.getElementById("contratoJalar");
+  const contratoDocId = sel?.value || "";
+  if (!contratoDocId) { Toast.show('Elige primero un contrato del cliente.', 'warn'); return; }
+  const btn = document.getElementById("btnJalarContrato");
+  if (btn) btn.disabled = true;
+  try {
+    const seriales = await ContratosService.getSerialesManual(contratoDocId);
+    const conSerial = (seriales || []).map(s => String(s.serial || "").trim()).filter(Boolean);
+    if (!conSerial.length) { Toast.show('El contrato no tiene seriales asignados todavía.', 'warn'); return; }
+
+    const ta = document.getElementById("seriales");
+    const actuales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+    const vistos = new Set(actuales.map(s => s.toLowerCase()));
+    const nuevos = conSerial.filter(s => !vistos.has(s.toLowerCase()));
+    ta.value = [...actuales, ...nuevos].join('\n');
+    Toast.show(nuevos.length
+      ? `${nuevos.length} serial(es) jalados del contrato.${conSerial.length - nuevos.length ? ` ${conSerial.length - nuevos.length} ya estaban.` : ''}`
+      : 'Todos los seriales del contrato ya estaban en la lista.', nuevos.length ? 'ok' : 'warn');
+  } catch (e) {
+    console.error("Error jalando seriales del contrato:", e);
+    Toast.show('No se pudieron traer los seriales del contrato.', 'bad');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 
@@ -118,6 +172,7 @@ function onClienteChange() {
 
         // Auto-jalar el IP asignado del cliente al elegirlo.
         document.getElementById("cliente").addEventListener("change", onClienteChange);
+        document.getElementById("btnJalarContrato")?.addEventListener("click", jalarSerialesDesdeContrato);
 document.getElementById("addCliente").onclick = async () => {
   const nombre = prompt("Ingrese el nombre del nuevo cliente:");
   if (!nombre) return;
@@ -211,11 +266,21 @@ document.getElementById("addCliente").onclick = async () => {
           return;
         }
 
+        // Vínculo POC ↔ contrato: si el batch se asoció a un contrato, cada
+        // device lo referencia (contrato_doc_id/contrato_id). Es el ancla que
+        // conecta POC con contratos y con el pool de equipos.
+        const contratoSel   = document.getElementById("contratoJalar");
+        const contratoDocId = contratoSel?.value || null;
+        const contratoRef   = contratoDocId
+          ? (contratoSel.selectedOptions[0]?.getAttribute("data-ref") || null) : null;
+
         for (let i = 0; i < seriales.length; i++) {
          const detalle = normalizarDetalleBatch(detallesBatch?.[i] || {});
          const data = {
         cliente_id: cliente,
         cliente_nombre: document.getElementById("cliente").selectedOptions[0].textContent,
+        contrato_doc_id: contratoDocId,
+        contrato_id: contratoRef,
         ip: document.getElementById("ip").value,
         serial: seriales[i],
         unit_id: String(unitIdInicial + i), // Unit ID consecutivo

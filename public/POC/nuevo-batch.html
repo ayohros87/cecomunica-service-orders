@@ -43,6 +43,7 @@
   <script defer src="../js/services/pocService.js"></script>
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
+  <script defer src="../js/services/contratosService.js"></script>
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
@@ -94,6 +95,20 @@
                 style="font-family:var(--font-mono); font-size:13px;"
                 placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
               <span class="form-hint">Un serial por línea. Líneas en blanco se ignoran.</span>
+            </div>
+
+            <!-- Jalar seriales desde un contrato del cliente (y vincular el batch a él) -->
+            <div class="form-field" style="grid-column:1 / -1;">
+              <label class="form-label" for="contratoJalar">Contrato del cliente <span class="optional">(opcional — vincula el batch y permite jalar sus seriales)</span></label>
+              <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
+                <select class="form-select" id="contratoJalar" style="flex:1;">
+                  <option value="">Selecciona el cliente primero…</option>
+                </select>
+                <button type="button" id="btnJalarContrato" class="btn btn-secondary" title="Traer los seriales asignados al contrato">
+                  <i data-lucide="download"></i> Jalar seriales
+                </button>
+              </div>
+              <span class="form-hint">Los equipos del batch quedarán vinculados a este contrato en POC y en el pool de equipos.</span>
             </div>
 
             <div class="form-field">
