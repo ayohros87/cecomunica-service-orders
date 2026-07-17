@@ -416,10 +416,16 @@
       try {
         await OrdenesService.setOrder(id, data);
         
-        // ✅ Enviar notificación al jefe de taller
+        // ✅ Enviar notificación de orden creada. Destinatarios configurables
+        // en empresa/config.mail_orden_creada_to (primero = to, resto = cc);
+        // el literal es el fallback ante config vacía o Firestore caído.
 try {
+const destinos = (window.EMPRESA_CONFIG?.mail_orden_creada_to || []).filter(Boolean);
+const to = destinos[0] || "tecnico@cecomunica.com";
+const cc = destinos.slice(1);
 await MailService.enqueue({
-  to: "tecnico@cecomunica.com",
+  to,
+  ...(cc.length ? { cc } : {}),
   subject: `Nueva Orden Creada – ${id}`,
   text: `
 Se ha creado una nueva Orden de Servicio.
@@ -446,7 +452,7 @@ ${window.location.origin}/ordenes/index.html
   createdAt: firebase.firestore.FieldValue.serverTimestamp()
 });
 
-  console.log("📧 Email encolado a taller@cecomunica.com");
+  console.log("📧 Email de orden creada encolado a", to);
 } catch (err) {
   console.error("❌ Error encolando email:", err);
 }

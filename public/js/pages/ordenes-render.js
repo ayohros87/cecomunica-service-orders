@@ -733,6 +733,21 @@ function botonesFlujo(ordenId, estado, ordenData) {
     return html || "<em>-</em>";
   }
 
+  // Visitas vistas por roles fuera del flujo de campo (vendedor, vista…):
+  // solo consulta. Sin este corte, un vendedor vería "Entregar" en una
+  // visita en COMPLETADO y la sacaría por el terminal equivocado
+  // (ENTREGADO AL CLIENTE en vez de CERRADA (VISITA)).
+  if (esVisita) {
+    if ((estado || "").toUpperCase() === "CERRADA (VISITA)") {
+      html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver cierre de visita" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver cierre</button>`;
+    }
+    if ((estado || "").toUpperCase().includes("ENTREGAD")
+        && (od.firma_url || od.receptor_nombre || od.fecha_entrega || od.firma_recepcion_url || od.fecha_recepcion)) {
+      html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver entrega" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver entrega</button>`;
+    }
+    return html || "<em>-</em>";
+  }
+
   // jefe_taller (supervisor de taller) comparte el flujo completo con
   // admin/recepción: recibir → asignar → completar → entregar. Tiene el
   // permiso 'asignar-tecnico' en roles.js, así que debe ver el botón de

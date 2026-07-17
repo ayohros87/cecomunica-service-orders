@@ -51,11 +51,12 @@
 
     function renderOrden(datos, equipos, infoContainer, tablaContainer) {
       const tituloEquipos = document.getElementById("tituloEquipos");
+      const esVisita = (datos.tipo_de_servicio || "").toLowerCase().includes("visita");
       switch ((datos.tipo_de_servicio || "").toUpperCase()) {
         case "ENTRADA":     tituloEquipos.textContent = "Equipos en Entrada"; break;
         case "REPARACIÓN":  tituloEquipos.textContent = "Equipos en Reparación"; break;
         case "PROGRAMACIÓN":tituloEquipos.textContent = "Equipos a Programar"; break;
-        default:            tituloEquipos.textContent = "Equipos Asociados";
+        default:            tituloEquipos.textContent = esVisita ? "Informe de visita técnica" : "Equipos Asociados";
       }
 
       // Resumen: cantidad de radios + accesorios (>0). Misma lógica
@@ -86,10 +87,39 @@
           <div class="info-item"><span class="info-label">Tipo Servicio:</span> <span class="info-value">${datos.tipo_de_servicio || '—'}</span></div>
           <div class="info-item"><span class="info-label">Técnico:</span> <span class="info-value">${datos.tecnico_asignado || 'Sin asignar'}</span></div>
           <div class="info-item"><span class="info-label">Estado:</span> <span class="info-value">${datos.estado_reparacion || 'POR ASIGNAR'}</span></div>
-          <div class="info-item full"><span class="info-label">Resumen:</span> <span class="info-value">${resumenHtml}</span></div>
+          ${esVisita ? '' : `<div class="info-item full"><span class="info-label">Resumen:</span> <span class="info-value">${resumenHtml}</span></div>`}
+          ${esVisita && datos.visita?.sitio ? `<div class="info-item full"><span class="info-label">Sitio:</span> <span class="info-value">${datos.visita.sitio}</span></div>` : ''}
+          ${esVisita && datos.visita?.contacto_sitio ? `<div class="info-item"><span class="info-label">Contacto en sitio:</span> <span class="info-value">${datos.visita.contacto_sitio}</span></div>` : ''}
           ${datos.observaciones ? `<div class="info-item full"><span class="info-label">Observaciones Generales:</span> <span class="info-value">${datos.observaciones}</span></div>` : ''}
         </div>
       `;
+      // Las visitas técnicas no llevan tabla de equipos: su contenido es el
+      // informe estructurado (motivo, trabajo, hallazgos, elementos de sitio).
+      if (esVisita) {
+        const inf = datos.informe_visita;
+        if (!inf || (!inf.trabajo_realizado && !inf.hallazgos && !(inf.elementos || []).length)) {
+          tablaContainer.innerHTML = `<div class="alert-box">⚠️ Visita sin informe registrado todavía</div>`;
+        } else {
+          let html = `<div class="info-grid" style="margin-bottom:12px;">
+            ${inf.fecha_visita ? `<div class="info-item"><span class="info-label">Fecha de visita:</span> <span class="info-value">${inf.fecha_visita}</span></div>` : ''}
+            ${inf.motivo ? `<div class="info-item"><span class="info-label">Motivo:</span> <span class="info-value">${inf.motivo}</span></div>` : ''}
+            ${inf.trabajo_realizado ? `<div class="info-item full"><span class="info-label">Trabajo realizado:</span> <span class="info-value">${inf.trabajo_realizado}</span></div>` : ''}
+            ${inf.hallazgos ? `<div class="info-item full"><span class="info-label">Hallazgos:</span> <span class="info-value">${inf.hallazgos}</span></div>` : ''}
+          </div>`;
+          const els = inf.elementos || [];
+          if (els.length) {
+            html += `<table class="equipos-table"><thead><tr>
+              <th style="width:40px;">#</th><th>Elemento</th><th>Detalle</th><th>Serial</th>
+            </tr></thead><tbody>`;
+            els.forEach((el, i) => {
+              html += `<tr><td><strong>${i + 1}</strong></td><td>${el.tipo || '—'}</td><td style="text-align:left;">${el.detalle || '—'}</td><td>${el.serial || '—'}</td></tr>`;
+            });
+            html += `</tbody></table>`;
+          }
+          tablaContainer.innerHTML = html;
+        }
+        return;
+      }
       if (!equipos || equipos.length === 0) {
         tablaContainer.innerHTML = `<div class="alert-box">⚠️ No hay equipos asociados a esta orden</div>`;
       } else {
@@ -132,6 +162,8 @@
               estado_reparacion: d.estado_reparacion,
               observaciones: d.observaciones,
               cliente: d.cliente,
+              visita: d.visita || null,
+              informe_visita: d.informe_visita || null,
               fechaCreacion: d.fecha_creacion ? d.fecha_creacion.slice(0, 10) : '—',
               fechaEntrega: d.fecha_entrega ? d.fecha_entrega.slice(0, 10) : '—'
             }, d.equipos || [], infoContainer, tablaContainer);
@@ -154,6 +186,8 @@
           estado_reparacion: o.estado_reparacion,
           observaciones: o.observaciones,
           cliente: nombreCliente,
+          visita: o.visita || null,
+          informe_visita: o.informe_visita || null,
           fechaCreacion: o.fecha_creacion?.toDate ? o.fecha_creacion.toDate().toISOString().slice(0,10) : '—',
           fechaEntrega: o.fecha_entrega?.toDate ? o.fecha_entrega.toDate().toISOString().slice(0,10) : '—'
         }, equipos.map(e => ({

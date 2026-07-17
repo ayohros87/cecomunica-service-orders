@@ -414,6 +414,21 @@ function abrirImpresionOrden(ordenId) {
       cliente: (typeof nombreClienteDe === 'function' ? nombreClienteDe(orden) : (orden.cliente_nombre || '')),
       fecha_creacion: orden.fecha_creacion?.toDate?.()?.toISOString?.() ?? null,
       fecha_entrega: orden.fecha_entrega?.toDate?.()?.toISOString?.() ?? null,
+      // Visita técnica: sitio + informe estructurado viajan al print
+      // (updated_at es Timestamp y no se necesita en papel, se omite).
+      visita: orden.visita ? {
+        sitio: orden.visita.sitio || '',
+        contacto_sitio: orden.visita.contacto_sitio || ''
+      } : null,
+      informe_visita: orden.informe_visita ? {
+        fecha_visita: orden.informe_visita.fecha_visita || null,
+        motivo: orden.informe_visita.motivo || '',
+        trabajo_realizado: orden.informe_visita.trabajo_realizado || '',
+        hallazgos: orden.informe_visita.hallazgos || '',
+        elementos: (orden.informe_visita.elementos || []).map(el => ({
+          tipo: el.tipo || '', detalle: el.detalle || '', serial: el.serial || ''
+        }))
+      } : null,
       equipos: (orden.equipos || []).filter(e => !e.eliminado).map(e => ({
         numero_de_serie: e.numero_de_serie || '',
         modelo: e.modelo || '',

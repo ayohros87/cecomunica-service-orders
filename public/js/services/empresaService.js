@@ -12,6 +12,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   orden_sin_asignar_max_dias: 30,  // umbral superior — > N días sin asignar se considera legacy noise (no alerta)
   mail_cc_orden_completada:  [],
   mail_cc_contrato_aprobado: [],
+  mail_orden_creada_to:      [],   // destinatarios del aviso "Nueva orden creada" ([] = fallback tecnico@cecomunica.com)
   email_recepcion_entregas:  '',   // buzón único que recibe copia de cada nota de entrega ('' = no copiar)
   email_recepcion:           [],   // avisos de órdenes de ENTRADA automáticas (equipos devueltos). [] = todos los usuarios con rol recepción
   email_taller:              [],   // emails del taller (jefe_taller) copiados en orden COMPLETADA y nota de entrega ([] = no copiar)
