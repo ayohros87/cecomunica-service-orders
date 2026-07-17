@@ -231,19 +231,6 @@ const OrdenesService = {
   },
 
   /**
-   * Mark order as delivered to client
-   * @param {string} ordenId - Order ID
-   * @returns {Promise<void>}
-   */
-  async deliverOrder(ordenId) {
-    const db = firebase.firestore();
-    await db.collection("ordenes_de_servicio").doc(ordenId).update({
-      estado_reparacion: "ENTREGADO AL CLIENTE",
-      fecha_entrega_real: firebase.firestore.FieldValue.serverTimestamp()
-    });
-  },
-
-  /**
    * Soft delete order
    * @param {string} ordenId - Order ID
    * @returns {Promise<void>}

@@ -821,6 +821,9 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   const estadoUpper = (estado || "").toUpperCase();
 
   const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
+  // trabajo_estado ya no tiene escritor (lo escribía trabajar-orden, página
+  // eliminada 2026-07-06); se conserva la lectura solo porque órdenes legacy
+  // pueden traer el valor guardado — no agregar consumidores nuevos.
   const trabajo = (o.trabajo_estado) || (o.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
   const tieneNota = o.nota_tecnica && o.nota_tecnica.trim() !== "";
   const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(o);
