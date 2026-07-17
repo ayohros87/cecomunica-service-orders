@@ -47,9 +47,12 @@
       meta: fmtFechaAny(cot.fecha_creacion || cot.fecha) + ' · ' + (cot.ejecutivo_nombre || '—'),
     }];
     if (cot.fecha_aprobacion) {
+      // aprobado_por_email existe desde 2026-07-17; docs previos no lo traen
+      // y no se inventa el rol (antes decía "por administrador" fijo aunque
+      // aprobara jefe de taller o gerente).
       h.push({
         act: 'Aprobada internamente',
-        meta: fmtFechaAny(cot.fecha_aprobacion) + ' · por administrador',
+        meta: fmtFechaAny(cot.fecha_aprobacion) + (cot.aprobado_por_email ? ' · por ' + cot.aprobado_por_email : ''),
       });
     }
     if (cot.enviada_en) {
@@ -349,17 +352,42 @@
   }
 
   async function cambiarEstado(nuevo) {
-    const ok = await Modal.confirm({
-      title: 'Cambiar estado',
-      message: `¿Cambiar el estado a "${CotState.ESTADOS[nuevo].label}"?`,
-    });
+    // "Marcar Enviada" desde este panel solo registra el estado (p.ej. la
+    // propuesta salió por otro canal) — NO envía correo. Se advierte para
+    // que nadie lo confunda con "Reenviar al cliente".
+    const msg = nuevo === 'enviada'
+      ? 'Esto SOLO registra el estado "Enviada" — no envía ningún correo al cliente. Para enviar de verdad usa "Reenviar al cliente". ¿Continuar?'
+      : `¿Cambiar el estado a "${CotState.ESTADOS[nuevo].label}"?`;
+    const ok = await Modal.confirm({ title: 'Cambiar estado', message: msg, danger: nuevo === 'enviada' });
     if (!ok) return;
     try {
-      await CotizacionesService.updateCotizacion(cot._docId, {
+      const uid = firebase.auth().currentUser?.uid || null;
+      const now = firebase.firestore.Timestamp.now();
+      const patch = {
         estado: nuevo,
         fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      };
+      // Trazabilidad: estampar los mismos sellos que los flujos dedicados
+      // (cerrarCotizacion / aprobar-y-enviar) para que el historial y los
+      // reportes no pierdan los eventos hechos desde este panel.
+      if (nuevo === 'convertida') { patch.fecha_conversion = now; patch.convertida_por_uid = uid; }
+      if (nuevo === 'rechazada')  { patch.fecha_rechazo = now;    patch.rechazado_por_uid = uid; }
+      if (nuevo === 'vencida')    { patch.fecha_vencimiento = now; patch.vencida_manual = true; }
+      if (nuevo === 'enviada')    { patch.enviada_en = now;        patch.enviada_manual = true; }
+      // Reabrir a borrador: limpiar los sellos del desenlace anterior para
+      // que el borrador reabierto no siga mostrando "Rechazada"/"Vencida".
+      if (nuevo === 'borrador') {
+        const del = firebase.firestore.FieldValue.delete();
+        patch.fecha_rechazo = del; patch.rechazado_por_uid = del;
+        patch.fecha_vencimiento = del; patch.vencida_auto = del; patch.vencida_manual = del;
+      }
+      await CotizacionesService.updateCotizacion(cot._docId, patch);
       cot.estado = nuevo;
+      if (nuevo === 'convertida') { cot.fecha_conversion = now; }
+      if (nuevo === 'rechazada')  { cot.fecha_rechazo = now; }
+      if (nuevo === 'vencida')    { cot.fecha_vencimiento = now; }
+      if (nuevo === 'enviada')    { cot.enviada_en = now; }
+      if (nuevo === 'borrador')   { delete cot.fecha_rechazo; delete cot.fecha_vencimiento; delete cot.vencida_auto; delete cot.vencida_manual; }
       Toast.show('Estado actualizado', 'ok');
       render();
     } catch (err) {

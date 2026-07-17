@@ -348,8 +348,9 @@
     copia.creado_por_uid = user?.uid || null;
     copia.creado_por_email = user?.email || null;
     // Reset de timestamps del ciclo de vida — la copia arranca limpia.
-    ['enviada_en', 'fecha_aprobacion', 'fecha_conversion', 'fecha_rechazo',
-     'aprobado_por_uid', 'convertida_por_uid', 'rechazado_por_uid']
+    ['enviada_en', 'enviada_manual', 'fecha_aprobacion', 'fecha_conversion', 'fecha_rechazo',
+     'fecha_vencimiento', 'vencida_auto', 'vencida_manual',
+     'aprobado_por_uid', 'aprobado_por_email', 'convertida_por_uid', 'rechazado_por_uid']
       .forEach(k => { delete copia[k]; });
     const ref = await CotizacionesService.addCotizacion(copia);
     // La cotización duplicada también requiere aprobación → notificar a ventas.
@@ -484,19 +485,37 @@
         Toast.show('Solo se pueden aprobar cotizaciones en borrador.', 'bad'); return;
       }
 
-      // 1) Marcar como aprobada
+      // 1) Marcar como aprobada. El email queda para que el historial muestre
+      // quién aprobó de verdad (antes decía "por administrador" fijo).
       await CotizacionesService.updateCotizacion(_aprobId, {
         estado: 'aprobada',
         fecha_aprobacion: firebase.firestore.Timestamp.now(),
         aprobado_por_uid: userUid,
+        aprobado_por_email: firebase.auth().currentUser?.email || null,
       });
 
       // 2) Crear link público (mirror) + enviar correo a cliente y vendedor
       try {
         const link = await ensureLinkPublico(_aprobId);
-        const dest = doc.dirigido_email;
+        let dest = doc.dirigido_email;
         if (!dest) {
-          Toast.show('✅ Aprobada, pero falta "Email destinatario" para enviar. Edita la cotización y agrégalo.', 'warn');
+          // Sin destinatario la cotización quedaba "aprobada" durmiente (ya no
+          // editable). Pedir el email aquí evita el desvío por Duplicar.
+          const email = await Modal.prompt({
+            title: 'Falta el email del destinatario',
+            message: 'La cotización no tiene "Email destinatario". Escríbelo para enviarla ahora, o cancela para dejarla aprobada sin enviar.',
+          });
+          const limpio = (email || '').trim();
+          if (limpio && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpio)) {
+            dest = limpio;
+            await CotizacionesService.updateCotizacion(_aprobId, { dirigido_email: dest });
+            doc.dirigido_email = dest;
+          } else if (limpio) {
+            Toast.show('Email inválido — quedó aprobada sin enviar.', 'warn');
+          }
+        }
+        if (!dest) {
+          Toast.show('✅ Aprobada, pero falta "Email destinatario" para enviar. Usa "Reenviar al cliente" desde el detalle cuando lo tengas.', 'warn');
         } else {
           const subject = `Cotización ${doc.cotizacion_id} aprobada · CeComunica`;
           const intro = (doc.intro || 'Adjuntamos la cotización solicitada.')

@@ -193,7 +193,7 @@
       ejecutivoId: ui.ejecutivoId,
       ejecutivo_nombre: ejec.nombre || '',
       fecha: ui.fecha,
-      validezDias: Number(ui.validezDias || 15),
+      validezDias: Number(ui.validezDias) || Number(window.EMPRESA_CONFIG?.cotizacion_validez_dias) || 15,
       moneda: ui.moneda || 'USD',
       descuentoPct: Number(ui.descuentoPct || 0),
       // Campos canónicos ITBMS (mismo esquema que contratos)
@@ -267,7 +267,9 @@
       clienteId: clienteId || '',
       ejecutivoId: ejecutivoId || '',
       fecha: new Date().toISOString().slice(0, 10),
-      validezDias: 15,
+      // Configurable en empresa/config.cotizacion_validez_dias (admin/config);
+      // el literal 15 es el fallback ante config vacía o Firestore caído.
+      validezDias: Number(window.EMPRESA_CONFIG?.cotizacion_validez_dias) || 15,
       moneda: 'USD',
       descuentoPct: 0,
       itbmsPct: Math.round(FMT.ITBMS_RATE * 100),

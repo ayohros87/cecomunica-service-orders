@@ -113,7 +113,7 @@ service cloud.firestore {
         let after = request.resource.data;
         let changed = after.diff(resource.data).affectedKeys();
         return (after.estado == "aprobada" && resource.data.estado != "aprobada")
-            || changed.hasAny(["fecha_aprobacion", "aprobado_por_uid"]);
+            || changed.hasAny(["fecha_aprobacion", "aprobado_por_uid", "aprobado_por_email"]);
       }
       // Tipo de cotización: 'orden' (servicio, sale de una orden de taller) vs
       // comercial. Las legacy sin `origen` se tratan como comerciales. Se lee del
