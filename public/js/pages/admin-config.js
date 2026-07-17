@@ -51,17 +51,17 @@
       hint: 'Usuarios habilitados a VER todas las cotizaciones (listado y detalle) sin importar su rol — p.ej. coordinación de ventas. Es acceso de solo lectura: no otorga edición, aprobación ni envío.' },
 
     { key: 'mail_bcc_cotizacion', section: 'correos', label: 'Cotización enviada al cliente → copia oculta (BCC)',
-      type: 'emails',
-      hint: 'Uno por línea. Cada cotización que se envía al cliente lleva copia oculta a estos correos (el cliente no los ve). Útil para que coordinación de ventas reciba cada propuesta al momento.' },
+      type: 'user-picker', emptyHint: 'sin copia oculta',
+      hint: 'Cada cotización que se envía al cliente lleva copia oculta a estos correos (el cliente no los ve). Selecciona usuarios o agrega un buzón externo (ej. un grupo). Útil para que coordinación de ventas reciba cada propuesta al momento.' },
     { key: 'mail_cc_orden_completada', section: 'correos', label: 'Orden de servicio completada → copias (CC)',
-      type: 'emails',
-      hint: 'Uno por línea. Se añaden en copia al correo que avisa que una orden quedó COMPLETADA (en oficina).' },
+      type: 'user-picker', emptyHint: 'sin copias adicionales',
+      hint: 'Se añaden en copia al correo que avisa que una orden quedó COMPLETADA (en oficina). Selecciona usuarios o agrega un buzón externo.' },
     { key: 'mail_cc_contrato_aprobado', section: 'correos', label: 'Contrato aprobado (PDF interno) → copias (CC)',
-      type: 'emails',
-      hint: 'Uno por línea. Se añaden en copia al correo interno "Contrato APROBADO" (el del PDF que va a activaciones con copia al vendedor). No aplica al reenvío manual del PDF al cliente.' },
+      type: 'user-picker', emptyHint: 'sin copias adicionales',
+      hint: 'Se añaden en copia al correo interno "Contrato APROBADO" (el del PDF que va a activaciones con copia al vendedor). No aplica al reenvío manual del PDF al cliente. Selecciona usuarios o agrega un buzón externo.' },
     { key: 'email_recepcion_entregas', section: 'correos', label: 'Nota de ENTREGA al cliente → copia a recepción',
       type: 'email',
-      hint: 'Correo único que recibe copia de cada nota de entrega de una orden (recepción lleva el control de lo que sale). No confundir con "equipos devueltos" (campo siguiente). Vacío = no se copia.' },
+      hint: 'Correo ÚNICO (por eso no es selector) que recibe copia de cada nota de entrega de una orden — recepción lleva el control de lo que sale. No confundir con "equipos devueltos" (campo siguiente). Vacío = no se copia.' },
     { key: 'email_recepcion', section: 'correos', label: 'Equipos DEVUELTOS por el cliente → recepción',
       type: 'user-picker', emptyHint: 'se notifica a todos los usuarios con rol Recepción',
       hint: 'Quién de recepción recibe: (1) la orden de ENTRADA que se crea sola cuando un cliente devuelve equipos (baja o anulación), y (2) los avisos de equipos pendientes de devolución (transiciones de renovación/reemplazo + recordatorio semanal). El vendedor del cliente siempre va incluido. Vacío = todos los usuarios con rol Recepción.' },
@@ -185,7 +185,10 @@
 
   // ── user-picker compacto: resumen con chips + panel plegable ───────────────
   // Guarda un array de emails. Los checkboxes siguen siendo la fuente de verdad
-  // (readForm lee :checked); los chips son solo una vista del estado marcado.
+  // para usuarios (readForm lee :checked); los correos EXTERNOS (buzones que no
+  // son usuarios de la plataforma, ej. grupos) viven en root._externos y se
+  // agregan con el campo "correo externo" del panel. Los valores guardados que
+  // no coinciden con ningún usuario se preservan como externos (no se pierden).
   function renderUserPicker(key, selectedEmails, emptyHint) {
     const sel = new Set((selectedEmails || []).map(e => String(e).toLowerCase()));
     const usables = _users
@@ -196,6 +199,9 @@
       return `<div id="fld-${key}" class="up-root ts" data-empty="1" style="color:var(--fg-3);">
         No se pudieron cargar usuarios (o ninguno tiene email). Recarga la página.</div>`;
     }
+
+    const userEmails = new Set(usables.map(u => String(u.email).toLowerCase()));
+    const externos = [...sel].filter(e => !userEmails.has(e));
 
     const roles = [...new Set(usables.map(u => u.rol).filter(Boolean))].sort();
     const rolOpts = ['<option value="">Todos los roles</option>']
@@ -210,7 +216,7 @@
       </label>`;
     }).join('');
 
-    return `<div id="fld-${key}" class="up-root is-collapsed" data-key="${key}" data-empty-hint="${esc(emptyHint || 'se notificará a ventas@cecomunica.com')}">
+    return `<div id="fld-${key}" class="up-root is-collapsed" data-key="${key}" data-externos="${esc(JSON.stringify(externos))}" data-empty-hint="${esc(emptyHint || 'se notificará a ventas@cecomunica.com')}">
       <div class="up-summary">
         <div class="up-chips"></div>
         <button type="button" class="btn btn-ghost btn-sm up-toggle"><i data-lucide="pencil"></i> Editar</button>
@@ -221,6 +227,10 @@
           <input type="text" class="form-input up-filter-q" placeholder="Buscar nombre o email…" style="flex:1;min-width:180px;">
         </div>
         <div class="up-list">${items}</div>
+        <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
+          <input type="email" class="form-input up-ext-input" placeholder="O agrega un correo externo (ej. grupo@cecomunica.com)…" style="flex:1; height:34px; font-size:13px;">
+          <button type="button" class="btn btn-ghost btn-sm up-ext-add"><i data-lucide="plus"></i> Agregar</button>
+        </div>
         <div class="ts up-count" style="margin-top:6px;"></div>
       </div>
     </div>`;
@@ -245,17 +255,25 @@
         });
       };
 
+      // Correos externos (buzones que no son usuarios) — fuente: root._externos.
+      try { root._externos = JSON.parse(root.dataset.externos || '[]'); }
+      catch (e) { root._externos = []; }
+
       const refresh = () => {
         const checked = items.filter(i => i.querySelector('input').checked);
-        if (countEl) countEl.textContent = checked.length ? `${checked.length} seleccionado${checked.length === 1 ? '' : 's'}` : `Sin selección — ${emptyHint}`;
+        const ext = root._externos || [];
+        const total = checked.length + ext.length;
+        if (countEl) countEl.textContent = total ? `${total} seleccionado${total === 1 ? '' : 's'}${ext.length ? ` (${ext.length} externo${ext.length === 1 ? '' : 's'})` : ''}` : `Sin selección — ${emptyHint}`;
         if (chipsEl) {
-          chipsEl.innerHTML = checked.length
-            ? checked.map(it => {
-                const email = it.querySelector('input').value;
-                const name = it.querySelector('.up-name')?.textContent || email;
-                return `<span class="up-chip"><span>${esc(name)}</span><button type="button" class="up-chip-x" data-email="${esc(email)}" title="Quitar">×</button></span>`;
-              }).join('')
-            : `<span class="up-empty">${esc(emptyHint)}</span>`;
+          const chipsUsuarios = checked.map(it => {
+            const email = it.querySelector('input').value;
+            const name = it.querySelector('.up-name')?.textContent || email;
+            return `<span class="up-chip"><span>${esc(name)}</span><button type="button" class="up-chip-x" data-email="${esc(email)}" title="Quitar">×</button></span>`;
+          }).join('');
+          const chipsExternos = ext.map(e =>
+            `<span class="up-chip" title="Correo externo (no es usuario de la plataforma)" style="background:#eef2ff;"><span>${esc(e)}</span><button type="button" class="up-chip-x" data-ext="1" data-email="${esc(e)}" title="Quitar">×</button></span>`
+          ).join('');
+          chipsEl.innerHTML = (chipsUsuarios + chipsExternos) || `<span class="up-empty">${esc(emptyHint)}</span>`;
         }
       };
 
@@ -266,12 +284,35 @@
       filterRol?.addEventListener('change', applyFilter);
       filterQ?.addEventListener('input', applyFilter);
       root.addEventListener('change', e => { if (e.target.matches('input[type="checkbox"]')) refresh(); });
-      // Quitar un chip = desmarcar el checkbox correspondiente.
+      // Quitar un chip = desmarcar el checkbox (usuario) o sacar de la lista (externo).
       chipsEl?.addEventListener('click', e => {
         const btn = e.target.closest('.up-chip-x');
         if (!btn) return;
+        if (btn.dataset.ext) {
+          root._externos = (root._externos || []).filter(x => x !== btn.dataset.email);
+          refresh(); markDirty();
+          return;
+        }
         const cb = items.map(i => i.querySelector('input')).find(c => c.value === btn.dataset.email);
         if (cb) { cb.checked = false; refresh(); markDirty(); }
+      });
+
+      // Agregar correo externo (Enter o botón). Si el correo resulta ser de un
+      // usuario de la lista, se marca su checkbox en vez de duplicarlo.
+      const extInput = root.querySelector('.up-ext-input');
+      const agregarExterno = () => {
+        const v = (extInput?.value || '').trim().toLowerCase();
+        if (!v) return;
+        if (!EMAIL_RE.test(v)) { if (window.Toast) Toast.show(`Email inválido: ${v}`, 'bad'); return; }
+        const cbUsuario = items.map(i => i.querySelector('input')).find(c => c.value.toLowerCase() === v);
+        if (cbUsuario) cbUsuario.checked = true;
+        else if (!(root._externos || []).includes(v)) root._externos = [...(root._externos || []), v];
+        extInput.value = '';
+        refresh(); markDirty();
+      };
+      root.querySelector('.up-ext-add')?.addEventListener('click', agregarExterno);
+      extInput?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); agregarExterno(); }
       });
 
       refresh();
@@ -288,9 +329,15 @@
       if (f.type === 'user-picker') {
         // Si la lista no cargó, no tocar el valor guardado (setConfig hace merge).
         if (el.dataset.empty === '1') continue;
-        const emails = [...el.querySelectorAll('input[type="checkbox"]:checked')].map(c => c.value.trim()).filter(Boolean);
-        const uniq = [...new Set(emails.map(e => e.toLowerCase()))];
-        if (uniq.length > 20) errors[f.key] = 'Máximo 20 usuarios.';
+        const emails = [...el.querySelectorAll('input[type="checkbox"]:checked')]
+          .map(c => c.value.trim()).filter(Boolean);
+        // Correos externos agregados a mano (buzones que no son usuarios).
+        let externos = Array.isArray(el._externos) ? el._externos : null;
+        if (externos === null) {
+          try { externos = JSON.parse(el.dataset.externos || '[]'); } catch (e) { externos = []; }
+        }
+        const uniq = [...new Set([...emails, ...externos].map(e => String(e).toLowerCase()))];
+        if (uniq.length > 20) errors[f.key] = 'Máximo 20 destinatarios.';
         out[f.key] = uniq;
         continue;
       } else if (f.type === 'bool') {
