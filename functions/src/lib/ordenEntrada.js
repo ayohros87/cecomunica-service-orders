@@ -39,13 +39,18 @@ async function _siguienteOrdenId() {
 }
 
 // Destinatarios: recepción (empresa/config.email_recepcion o todos los usuarios
-// con rol recepcion) + el vendedor asignado del cliente. Nunca lanza.
+// con rol recepcion) + jefe de taller (empresa/config.email_taller — es quien
+// debe ASIGNAR la orden) + el vendedor asignado del cliente. Nunca lanza.
 async function _destinatarios(clienteId) {
   const emails = new Set();
   try {
     const cfg = await configEmailTo("recepcion", "");
     if (cfg) cfg.split(",").map(s => s.trim().toLowerCase()).filter(isEmail).forEach(e => emails.add(e));
   } catch (e) { /* fallback abajo */ }
+  try {
+    const taller = await configEmailTo("taller", "");
+    if (taller) taller.split(",").map(s => s.trim().toLowerCase()).filter(isEmail).forEach(e => emails.add(e));
+  } catch (e) { /* sin taller configurado: recepción cubre el aviso */ }
   if (!emails.size) {
     try {
       const snap = await db.collection("usuarios").where("rol", "==", "recepcion").get();

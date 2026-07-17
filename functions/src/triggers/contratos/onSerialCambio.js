@@ -111,10 +111,15 @@ module.exports = onDocumentWritten(
         </table>`;
 
       const to = await inventarioEmailTo();
-      const cc = await vendedorEmail(contrato.creado_por_uid);
+      // CC: vendedor del contrato + solicitante (recepción) — quien pidió el
+      // cambio recibe la confirmación de que la solicitud llegó a inventario.
+      const ccAlta = [...new Set([
+        await vendedorEmail(contrato.creado_por_uid),
+        after.solicitado_por_email || null,
+      ].filter(Boolean).map(e => String(e).toLowerCase()))].join(",");
       await db.collection("mail_queue").add({
         to,
-        ...(cc ? { cc } : {}),
+        ...(ccAlta ? { cc: ccAlta } : {}),
         subject:   `Cambio de serial solicitado: ${contratoIdVis} – ${clienteNombre}`,
         preheader: `Reemplaza ${items.length} serial(es) del contrato ${contratoIdVis}`,
         bodyContent,
@@ -187,10 +192,15 @@ module.exports = onDocumentWritten(
           <tbody>${rows}</tbody>
         </table>`;
 
-      const cc = await vendedorEmail(contrato.creado_por_uid);
+      // CC: vendedor + quien SOLICITÓ el cambio (recepción) — cierra el ciclo
+      // de la solicitud: el solicitante se entera de que ya se resolvió.
+      const ccResuelto = [...new Set([
+        await vendedorEmail(contrato.creado_por_uid),
+        after.solicitado_por_email || null,
+      ].filter(Boolean).map(e => String(e).toLowerCase()))].join(",");
       await db.collection("mail_queue").add({
         to: await activacionesEmailTo(),
-        ...(cc ? { cc } : {}),
+        ...(ccResuelto ? { cc: ccResuelto } : {}),
         subject:   `Corrección de seriales: ${contratoIdVis} – ${clienteNombre}`,
         preheader: `Se corrigieron ${reemplazos.length} serial(es) del contrato ${contratoIdVis}`,
         bodyContent,
