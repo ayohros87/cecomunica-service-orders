@@ -15,7 +15,21 @@
   // su `section`; un campo con section desconocida cae en la última.
   const SECTIONS = [
     { key: 'facturacion', label: 'Facturación y cotizaciones', icon: 'calculator' },
-    { key: 'correos',     label: 'Correos y notificaciones',   icon: 'mail' },
+    { key: 'correos',     label: 'Correos y notificaciones',   icon: 'mail',
+      // Panorama para el admin: qué correos son fijos (se mandan solos) y dónde
+      // se configuran los que no viven en esta sección. HTML literal propio.
+      intro: `
+        <p style="margin:0 0 8px;"><b>Cada campo dice qué correo afecta y quién lo recibe.</b>
+        Estos correos se envían <b>solos, sin configuración</b> (destinatarios automáticos):</p>
+        <ul style="margin:0 0 8px 18px; padding:0; line-height:1.7;">
+          <li><b>Contrato creado</b> → ventas@cecomunica.com + quien lo creó</li>
+          <li><b>Enmiendas de baja</b> (creada/aprobada/rechazada/cerrada) → aprobadores y solicitante</li>
+          <li><b>Cambio de serial</b> → inventario + vendedor + quien lo solicitó</li>
+          <li><b>Anulación de contrato</b> → quien anuló + quien elaboró el contrato</li>
+          <li><b>Equipos por devolver</b> (al registrar transición y recordatorio semanal de los lunes) → vendedor del cliente + recepción + ventas@cecomunica.com</li>
+        </ul>
+        <p style="margin:0;">Otros correos se configuran en su propia sección:
+        <b>solicitud de seriales</b> en “Seriales”, <b>aprobadores de cotización</b> en “Facturación y cotizaciones”.</p>` },
     { key: 'inventario',  label: 'Inventario y piezas',        icon: 'package' },
     { key: 'seriales',    label: 'Seriales',                   icon: 'hash' },
     { key: 'operacion',   label: 'Operación',                  icon: 'activity' },
@@ -36,24 +50,24 @@
       type: 'user-picker', emptyHint: 'solo admin, gerente y jefe de taller ven todas',
       hint: 'Usuarios habilitados a VER todas las cotizaciones (listado y detalle) sin importar su rol — p.ej. coordinación de ventas. Es acceso de solo lectura: no otorga edición, aprobación ni envío.' },
 
-    { key: 'mail_bcc_cotizacion', section: 'correos', label: 'Copia oculta (BCC) — Cotizaciones enviadas al cliente',
+    { key: 'mail_bcc_cotizacion', section: 'correos', label: 'Cotización enviada al cliente → copia oculta (BCC)',
       type: 'emails',
       hint: 'Uno por línea. Cada cotización que se envía al cliente lleva copia oculta a estos correos (el cliente no los ve). Útil para que coordinación de ventas reciba cada propuesta al momento.' },
-    { key: 'mail_cc_orden_completada', section: 'correos', label: 'Copia (CC) — Emails al completar orden',
+    { key: 'mail_cc_orden_completada', section: 'correos', label: 'Orden de servicio completada → copias (CC)',
       type: 'emails',
-      hint: 'Uno por línea. Se añaden a cada email de "orden completada".' },
-    { key: 'mail_cc_contrato_aprobado', section: 'correos', label: 'Copia (CC) — Correo "Contrato APROBADO"',
+      hint: 'Uno por línea. Se añaden en copia al correo que avisa que una orden quedó COMPLETADA (en oficina).' },
+    { key: 'mail_cc_contrato_aprobado', section: 'correos', label: 'Contrato aprobado (PDF interno) → copias (CC)',
       type: 'emails',
-      hint: 'Uno por línea. Se añaden en copia al correo interno "Contrato APROBADO" (el del PDF que va a activaciones con CC al vendedor). No aplica al reenvío manual del PDF al cliente.' },
-    { key: 'email_recepcion_entregas', section: 'correos', label: 'Buzón de recepción (entregas)',
+      hint: 'Uno por línea. Se añaden en copia al correo interno "Contrato APROBADO" (el del PDF que va a activaciones con copia al vendedor). No aplica al reenvío manual del PDF al cliente.' },
+    { key: 'email_recepcion_entregas', section: 'correos', label: 'Nota de ENTREGA al cliente → copia a recepción',
       type: 'email',
-      hint: 'Correo único que recibe copia de cada nota de entrega (recepción lleva el control). Vacío = no se copia a recepción.' },
-    { key: 'email_recepcion', section: 'correos', label: 'Recepción — Órdenes de ENTRADA (equipos devueltos)',
+      hint: 'Correo único que recibe copia de cada nota de entrega de una orden (recepción lleva el control de lo que sale). No confundir con "equipos devueltos" (campo siguiente). Vacío = no se copia.' },
+    { key: 'email_recepcion', section: 'correos', label: 'Equipos DEVUELTOS por el cliente → recepción',
       type: 'user-picker', emptyHint: 'se notifica a todos los usuarios con rol Recepción',
-      hint: 'Usuarios que reciben el aviso cuando el sistema crea automáticamente una orden de ENTRADA (equipos devueltos por baja o anulación de contrato). El vendedor asignado del cliente siempre va en copia. Vacío = se notifica a todos los usuarios con rol Recepción.' },
-    { key: 'email_taller', section: 'correos', label: 'Taller — Notificaciones (jefe de taller)',
+      hint: 'Quién de recepción recibe: (1) la orden de ENTRADA que se crea sola cuando un cliente devuelve equipos (baja o anulación), y (2) los avisos de equipos pendientes de devolución (transiciones de renovación/reemplazo + recordatorio semanal). El vendedor del cliente siempre va incluido. Vacío = todos los usuarios con rol Recepción.' },
+    { key: 'email_taller', section: 'correos', label: 'Avisos al taller (jefe de taller) → CC',
       type: 'user-picker', emptyHint: 'no se copia al taller',
-      hint: 'Usuarios que reciben copia del correo de orden COMPLETADA y de cada nota de entrega (típicamente el jefe de taller). Filtra por rol "Jefe de taller" para encontrarlo rápido. Vacío = no se copia al taller.' },
+      hint: 'Usuarios que reciben copia de: orden COMPLETADA, cada nota de entrega, y las órdenes de ENTRADA (equipos devueltos que hay que inspeccionar). Típicamente el jefe de taller — filtra por ese rol para encontrarlo rápido. Vacío = no se copia al taller.' },
 
     { key: 'stock_minimo_default',      section: 'inventario', label: 'Stock mínimo por defecto (piezas nuevas)',
       type: 'int',  min: 0,     max: 1000,
@@ -121,6 +135,7 @@
             <i data-lucide="${s.icon}"></i>
             <h2>${esc(s.label)}</h2>
           </div>
+          ${s.intro ? `<div class="ts cfg-section-intro" style="margin:0 0 var(--sp-3); padding:12px 14px; border:1px solid var(--border-subtle,#e5e7eb); border-radius:10px; background:var(--surface-sunken,#f8fafc); color:var(--fg-2); line-height:1.6;">${s.intro}</div>` : ''}
           <div class="cfg-section-body">
             ${fields.map(f => fieldHtml(current, f)).join('')}
           </div>
