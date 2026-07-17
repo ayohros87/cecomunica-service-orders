@@ -16,6 +16,10 @@ const ESTADOS = {
   EN_TALLER:  "en_taller",
   EN_POC:     "en_poc",
   DEVUELTO:   "devuelto_revision",
+  // Venta directa sin contrato (facturada en QuickBooks): la unidad sale de
+  // bodega y pasa a propiedad del cliente. NO es terminal como baja — el radio
+  // vendido puede volver a taller por una orden de servicio (contacto normal).
+  VENDIDO:    "vendido",
   BAJA:       "baja",
 };
 

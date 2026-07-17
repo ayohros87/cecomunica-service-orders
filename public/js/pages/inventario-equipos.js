@@ -22,8 +22,9 @@ window.EquiposPool = {
   FILTROS_DEFAULT: { tab: 'en_cliente', propiedad: 'cecomunica', modelo: '',
                      sinVerificar: false, compartidos: false, sinCliente: false },
 
-  // Pestaña "Baja": devuelto_revision ya tiene pestaña propia ("Entradas").
-  ESTADOS_OTROS: ['baja'],
+  // Pestaña "Baja / Venta": estados que sacaron la unidad de la flota.
+  // devuelto_revision ya tiene pestaña propia ("Entradas").
+  ESTADOS_OTROS: ['baja', 'vendido'],
 
   PROP_LABELS: { cecomunica: 'Flota', cliente: 'Cliente', desconocida: '?' },
 
@@ -269,7 +270,7 @@ window.EquiposPool = {
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
         en_poc: 'No hay unidades en préstamo POC.',
         devuelto_revision: 'No hay entradas pendientes de inspección. Las devoluciones de clientes (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí; con "Inspección OK" regresan a bodega como reuso, o se dan de baja.',
-        otros: 'No hay unidades dadas de baja.',
+        otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega.',
       };
       const hayFiltros = !!(fAct.q || fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente);
       const msg = !this._equipos.length
@@ -304,7 +305,8 @@ window.EquiposPool = {
           (puede && eq.verificado === false) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Marcar como verificado" onclick="EquiposPool.verificar('${esc(eq.id)}')"><i data-lucide="badge-check"></i></button>` : '',
           puede ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" onclick="EquiposPool.abrirEdicion('${esc(eq.id)}')"><i data-lucide="pencil"></i></button>` : '',
           (puede && eq.estado === 'devuelto_revision') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Inspección OK → regresa a bodega" onclick="EquiposPool.inspeccionOk('${esc(eq.id)}')"><i data-lucide="check-circle-2"></i></button>` : '',
-          (esAdmin && eq.estado !== 'baja') ? `<button class="btn btn-danger btn-icon btn-sm" title="Dar de baja" onclick="EquiposPool.darDeBaja('${esc(eq.id)}')"><i data-lucide="archive-x"></i></button>` : '',
+          (puede && eq.estado === 'en_bodega') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Registrar venta (facturada en QuickBooks)" onclick="EquiposPool.abrirVenta('${esc(eq.id)}')"><i data-lucide="banknote"></i></button>` : '',
+          (esAdmin && !['baja', 'vendido'].includes(eq.estado)) ? `<button class="btn btn-danger btn-icon btn-sm" title="Dar de baja" onclick="EquiposPool.darDeBaja('${esc(eq.id)}')"><i data-lucide="archive-x"></i></button>` : '',
         ].join('');
         const prop = eq.propiedad || 'desconocida';
         return `<tr>
@@ -452,12 +454,104 @@ window.EquiposPool = {
     }
   },
 
+  // ── Registrar venta (venta directa facturada en QuickBooks) ──────────
+  // La factura ya existe en QBO; aquí solo se descuenta la unidad de bodega
+  // (estado vendido, propiedad cliente) con el vínculo a esa factura.
+  abrirVenta(id = null) {
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden registrar ventas.', 'bad'); return; }
+    this._ventaDesdeId = id;
+    const eq = id ? this._equipos.find(x => x.id === id) : null;
+    document.getElementById('ventaSeriales').value = eq ? (eq.serial || eq.serial_norm) : '';
+    document.getElementById('ventaCliente').value = '';
+    document.getElementById('ventaFactura').value = '';
+    document.getElementById('ventaNotas').value = '';
+    Modal.open('eqVentaModal');
+  },
+
+  async guardarVenta() {
+    const cliente = document.getElementById('ventaCliente').value.trim();
+    const factura = document.getElementById('ventaFactura').value.trim();
+    const notas   = document.getElementById('ventaNotas').value.trim();
+    const seriales = document.getElementById('ventaSeriales').value
+      .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!seriales.length) { Toast.show('Pega o escanea al menos un serial.', 'bad'); return; }
+    if (!cliente) { Toast.show('Indica a quién se vendió (el cliente de la factura).', 'bad'); return; }
+
+    const btn = document.getElementById('btnGuardarVenta');
+    btn.disabled = true;
+    try {
+      const esc = FMT.esc;
+      // Validación previa: solo se venden unidades EN BODEGA. Lo demás se
+      // reporta (no está en el pool / otro estado / colisión ambigua) y la
+      // venta puede seguir con las válidas.
+      const vendibles = [], problemas = [];
+      const vistos = new Set();
+      for (const s of seriales) {
+        const norm = EquiposPoolService.normalizarSerial(s);
+        if (!EquiposPoolService.esSerialValido(norm)) { problemas.push(`${esc(s)}: serial inválido`); continue; }
+        if (vistos.has(norm)) continue;
+        vistos.add(norm);
+        const docs = await EquiposPoolService.findBySerial(s);
+        if (!docs.length) { problemas.push(`${esc(norm)}: no está en el pool`); continue; }
+        const enBodega = docs.filter(d => d.estado === 'en_bodega');
+        if (!enBodega.length) {
+          const estados = docs.map(d => EquiposPoolService.ESTADO_LABELS[d.estado] || d.estado).join(', ');
+          problemas.push(`${esc(norm)}: no está en bodega (${esc(estados)})`);
+          continue;
+        }
+        // Serial compartido con 2+ unidades en bodega: solo es inequívoco si la
+        // venta se abrió desde la fila de una unidad concreta.
+        const unidad = enBodega.length === 1 ? enBodega[0]
+          : enBodega.find(d => d.id === this._ventaDesdeId);
+        if (!unidad) { problemas.push(`${esc(norm)}: serial en 2+ modelos en bodega — regístralo desde el botón de venta de su fila`); continue; }
+        vendibles.push(unidad);
+      }
+
+      if (!vendibles.length) {
+        Toast.show('Ningún serial se puede vender: ' + problemas.join(' · ').replace(/<[^>]*>/g, ''), 'bad');
+        return;
+      }
+      const detalle = vendibles.map(u =>
+        `<span style="font-family:var(--font-mono);">${esc(u.serial || u.serial_norm)}</span> (${esc(u.modelo_label || 'sin modelo')})`).join('<br>');
+      const avisos = problemas.length
+        ? `<br><br><strong>${problemas.length} serial(es) NO se venderán:</strong><br>${problemas.join('<br>')}` : '';
+      if (!await Modal.confirm({
+        title: 'Registrar venta',
+        message: `Venta a <strong>${esc(cliente)}</strong>${factura ? ` — factura QBO <strong>${esc(factura)}</strong>` : ''}.<br>
+          Salen de bodega de forma permanente:<br><br>${detalle}${avisos}`,
+        confirmLabel: `Vender ${vendibles.length} equipo(s)`,
+      })) return;
+
+      let ok = 0; const errores = [];
+      for (const u of vendibles) {
+        try {
+          await EquiposPoolService.vender(u.id, { factura, cliente_nombre: cliente, notas },
+            firebase.auth().currentUser);
+          ok++;
+        } catch (e) {
+          errores.push(`${u.serial || u.id}: ${e.message || e}`);
+        }
+      }
+      Modal.close('eqVentaModal');
+      let msg = `${ok} equipo(s) registrados como vendidos.`;
+      if (errores.length) msg += ` ${errores.length} fallaron: ${errores.join(' · ')}`;
+      Toast.show(msg, errores.length ? 'warn' : 'ok');
+      this.cargar();
+    } catch (e) {
+      console.error('Error al registrar la venta:', e);
+      Toast.show('Error al registrar la venta: ' + (e.message || e), 'bad');
+    } finally {
+      btn.disabled = false;
+    }
+  },
+
   // ── Historia (kardex) ────────────────────────────────────────────────
   _MOV_ICONS: {
     ingreso_bodega: 'package-plus', asignacion_contrato: 'file-text',
     liberacion: 'undo-2', entrega: 'truck', ingreso_taller: 'wrench',
     salida_taller: 'log-out', prestamo_poc: 'radio-tower', devolucion: 'corner-down-left',
-    inspeccion: 'search-check', baja: 'archive-x', correccion_serial: 'pencil',
+    inspeccion: 'search-check', baja: 'archive-x', venta: 'banknote',
+    correccion_serial: 'pencil',
     migracion: 'database', cambio_estado: 'arrow-right-left',
   },
 
@@ -693,6 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!EquiposPool.puedeEscribir()) {
       document.getElementById('btnRecibir')?.remove();
+      document.getElementById('btnVenta')?.remove();
       document.getElementById('btnImportar')?.remove();
       document.getElementById('btnPlantilla')?.remove();
     }

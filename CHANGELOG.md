@@ -1,5 +1,21 @@
 # Changelog
 
+## [Ventas directas: estado `vendido` + "Registrar venta" en el pool] — 2026-07-17
+
+> Fase 0 de la conexión con las ventas de QuickBooks: un equipo vendido SIN
+> contrato de servicio se factura solo en QBO y no tocaba la app — si el serial
+> estaba `en_bodega` quedaba como disponible para siempre. Ahora Inventario ·
+> Equipos tiene "Registrar venta" (menú y botón por fila en Bodega): pega los
+> seriales + cliente + nº de factura QBO → cada unidad pasa a **`vendido`**
+> (propiedad `cliente`, `asignacion.cliente_nombre` = comprador, campo `venta`
+> con el vínculo a la factura, movimiento `venta` en el kardex). Solo se venden
+> unidades `en_bodega` (validación previa con resumen de lo que no aplica;
+> `esperado` en la transacción evita ventas dobles). `vendido` NO es terminal
+> como `baja`: el radio vendido puede volver a taller por una orden (contacto
+> normal). Pestaña "Baja / Venta", chips en CSS compartido, `ESTADOS.VENDIDO`
+> espejado en functions. Sin cambios de reglas. Fase 1 (bandeja alimentada por
+> el webhook `Invoice:Create` de QBO, que ya recibe eventos) queda pendiente.
+
 ## [Pool de equipos: liberar seriales al anular contrato] — 2026-07-15
 
 > Hueco de F2: anular un contrato solo actualizaba el doc del contrato (los

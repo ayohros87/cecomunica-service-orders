@@ -2239,6 +2239,7 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 .eqpool-chip-en_taller         { background: #fef9c3; color: #a16207; }
 .eqpool-chip-en_poc            { background: #fae8ff; color: #a21caf; }
 .eqpool-chip-devuelto_revision { background: #ffedd5; color: #c2410c; }
+.eqpool-chip-vendido           { background: #ccfbf1; color: #0f766e; }
 .eqpool-chip-baja              { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-desconocido       { background: #f1f5f9; color: #64748b; }
 /* Link discreto hacia una entidad (kardex, contrato, cliente, orden). */

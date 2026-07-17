@@ -28,6 +28,7 @@
     .eq-badge-en_taller         { background:#fef9c3; color:#a16207; }
     .eq-badge-en_poc            { background:#fae8ff; color:#a21caf; }
     .eq-badge-devuelto_revision { background:#ffedd5; color:#c2410c; }
+    .eq-badge-vendido           { background:#ccfbf1; color:#0f766e; }
     .eq-badge-baja              { background:#f1f5f9; color:#64748b; }
 
     .eq-compartido {
@@ -131,6 +132,7 @@
         { label: '<i data-lucide="package-plus"></i> Recibir equipos', onclick: 'EquiposPool.abrirRecibir()', cls: 'primary', id: 'btnRecibir' },
       ],
       menu: [
+        { label: '<i data-lucide="banknote"></i> Registrar venta (factura QBO)', onclick: 'EquiposPool.abrirVenta()', id: 'btnVenta' },
         { label: '<i data-lucide="upload"></i> Importar Excel', onclick: 'EquiposPool.abrirImport()', id: 'btnImportar' },
         { label: '<i data-lucide="download"></i> Descargar plantilla', onclick: 'EquiposPool.descargarPlantilla()', id: 'btnPlantilla' },
         { label: '<i data-lucide="file-down"></i> Exportar Excel', onclick: 'EquiposPool.exportarExcel()' },
@@ -179,6 +181,7 @@
         <span>→</span>
         <span class="eqpool-chip eqpool-chip-devuelto_revision" title="El cliente devolvió el equipo: cierre de enmienda, anulación o cambio por defectuoso">Entrada (por inspeccionar)</span><span>→</span>
         <span>bodega (reuso) o</span> <span class="eqpool-chip eqpool-chip-baja">Baja</span>
+        <span style="margin-left:6px;" title="Venta directa sin contrato: la factura se emite en QuickBooks y aquí se descuenta el equipo de bodega">· venta directa: bodega → <span class="eqpool-chip eqpool-chip-vendido">Vendido</span></span>
       </div>
 
       <!-- Filter bar -->
@@ -190,7 +193,7 @@
           <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')">Taller <span id="countTaller"></span></button>
           <button class="eq-tab" data-tab="en_poc" onclick="EquiposPool.setTab('en_poc')">POC <span id="countPoc"></span></button>
           <button class="eq-tab" data-tab="devuelto_revision" onclick="EquiposPool.setTab('devuelto_revision')" title="Unidades que regresaron de un cliente y esperan inspección">Entradas <span id="countEntradas"></span></button>
-          <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')">Baja <span id="countOtros"></span></button>
+          <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')" title="Unidades que salieron de la flota: dadas de baja o vendidas">Baja / Venta <span id="countOtros"></span></button>
           <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>
         </div>
 
@@ -290,6 +293,45 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="Modal.close('eqRecibirModal')"><i data-lucide="x"></i> Cancelar</button>
         <button class="btn btn-primary" id="btnGuardarRecibir" onclick="EquiposPool.guardarRecibir()"><i data-lucide="check"></i> Recibir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: registrar venta directa (facturada en QuickBooks) -->
+  <div id="eqVentaModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="banknote"></i> Registrar venta de equipos</h3>
+        <button class="modal-close" onclick="Modal.close('eqVentaModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px; color:var(--fg-2); margin:0 0 var(--sp-3);">
+          Para equipos <strong>vendidos sin contrato de servicio</strong>: la factura ya se emitió en
+          QuickBooks; aquí solo se descuentan de bodega. Solo se venden unidades
+          <span class="eqpool-chip eqpool-chip-en_bodega">En bodega</span> — lo demás se avisa antes de confirmar.
+        </p>
+        <div class="form-field">
+          <label class="form-label" for="ventaSeriales">Seriales <span class="optional">(uno por línea — acepta lector de código de barras)</span></label>
+          <textarea class="form-input" id="ventaSeriales" rows="5" placeholder="B12345678&#10;B12345679&#10;…" style="font-family:var(--font-mono);"></textarea>
+        </div>
+        <div style="display:flex; gap:var(--sp-3);">
+          <div class="form-field" style="flex:2;">
+            <label class="form-label" for="ventaCliente">Cliente (de la factura)</label>
+            <input class="form-input" id="ventaCliente" type="text" placeholder="Nombre del cliente en QuickBooks">
+          </div>
+          <div class="form-field" style="flex:1.2;">
+            <label class="form-label" for="ventaFactura">Factura QBO <span class="optional">(recomendado)</span></label>
+            <input class="form-input" id="ventaFactura" type="text" placeholder="001-0000010274">
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="ventaNotas">Notas <span class="optional">(opcional)</span></label>
+          <input class="form-input" id="ventaNotas" type="text">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqVentaModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardarVenta" onclick="EquiposPool.guardarVenta()"><i data-lucide="check"></i> Registrar venta</button>
       </div>
     </div>
   </div>

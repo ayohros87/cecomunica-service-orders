@@ -25,6 +25,10 @@ const EquiposPoolService = {
     EN_TALLER:  'en_taller',
     EN_POC:     'en_poc',
     DEVUELTO:   'devuelto_revision',
+    // Venta directa sin contrato (facturada en QuickBooks): sale de bodega y
+    // pasa a propiedad del cliente. No es terminal como baja — el radio
+    // vendido puede volver a taller por una orden de servicio.
+    VENDIDO:    'vendido',
     BAJA:       'baja',
   },
 
@@ -35,6 +39,7 @@ const EquiposPoolService = {
     en_taller:         'En taller',
     en_poc:            'En POC',
     devuelto_revision: 'Entrada (por inspeccionar)',
+    vendido:           'Vendido',
     baja:              'Baja',
   },
 
@@ -440,6 +445,31 @@ const EquiposPoolService = {
     return this.cambiarEstado(id, this.ESTADOS.BAJA, {
       tipo: 'baja', notas: motivo,
       extra: { baja_motivo: motivo, asignacion: null, orden_actual_id: null },
+    }, user);
+  },
+
+  // Venta directa sin contrato: la factura ya se emitió en QuickBooks y aquí
+  // solo se descuenta la unidad de bodega. `esperado: EN_BODEGA` evita vender
+  // dos veces (o vender algo que otro flujo ya movió). La asignación guarda a
+  // quién se vendió (cliente_id vacío: el comprador QBO no siempre existe como
+  // cliente de la app); `venta` conserva el vínculo a la factura.
+  async vender(id, { factura = '', cliente_nombre = '', notas = '' } = {}, user) {
+    const fact = (factura || '').toString().trim();
+    const cli  = (cliente_nombre || '').toString().trim();
+    return this.cambiarEstado(id, this.ESTADOS.VENDIDO, {
+      esperado: this.ESTADOS.EN_BODEGA,
+      tipo: 'venta',
+      ref: fact ? { tipo: 'factura_qbo', id: fact, label: fact } : null,
+      notas: notas || `Venta directa${cli ? ` a ${cli}` : ''}${fact ? ` — factura QBO ${fact}` : ''}`,
+      extra: {
+        propiedad: 'cliente',
+        asignacion: { contrato_doc_id: null, contrato_id: '', cliente_id: '', cliente_nombre: cli },
+        venta: {
+          factura: fact,
+          cliente_nombre: cli,
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+      },
     }, user);
   },
 
