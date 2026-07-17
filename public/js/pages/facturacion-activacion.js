@@ -80,7 +80,10 @@ function readiness(c){
   }
   const entrega = c.entrega_confirmada===true;
   const act = activosDe(c);
-  const seriales = act>0 && Number(c.seriales_count||0) >= act;
+  // Mismo criterio que contratos-list (serialesBtn): las unidades omitidas
+  // con motivo ("sin serial") cuentan como resueltas — antes este check las
+  // ignoraba y el contrato se veía completo en la lista pero incompleto aquí.
+  const seriales = act>0 && (Number(c.seriales_count||0) + Number(c.seriales_omitidos_count||0)) >= act;
   const firmado = !!c.firmado_url;
   return { vigente, mapeo, entrega, seriales, firmado, requeridosOk: vigente && mapeo };
 }

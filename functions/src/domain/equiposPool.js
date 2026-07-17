@@ -218,6 +218,11 @@ async function upsertContacto(opts) {
       return de === opts.estado ? "sin-cambio" : "actualizado";
     }
 
+    // La unidad regresó (entrada/bodega): el flag puesto por los mapeos de
+    // transición ya cumplió — se borra para no dejar dato obsoleto en el doc.
+    if ((opts.estado === ESTADOS.DEVUELTO || opts.estado === ESTADOS.EN_BODEGA) && actual.pendiente_devolucion) {
+      update.pendiente_devolucion = admin.firestore.FieldValue.delete();
+    }
     tx.set(ref, { estado: opts.estado, ...update }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo: opts.tipo || "cambio_estado", de_estado: de, a_estado: opts.estado,
@@ -254,6 +259,11 @@ async function transicionar(serial, modeloId, modeloLabel,
       if (!actual.asignacion) cambios.asignacion = cambios.asignacionSiFalta;
       delete cambios.asignacionSiFalta;
     }
+    // La unidad regresó (entrada/bodega): el flag puesto por los mapeos de
+    // transición ya cumplió — se borra para no dejar dato obsoleto en el doc.
+    if ((aEstado === ESTADOS.DEVUELTO || aEstado === ESTADOS.EN_BODEGA) && actual.pendiente_devolucion) {
+      cambios.pendiente_devolucion = admin.firestore.FieldValue.delete();
+    }
     tx.set(ref, { estado: aEstado, ...cambios, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo, de_estado: de, a_estado: aEstado, ref: refMov, notas,
@@ -276,7 +286,11 @@ async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
     if (de === aEstado) return "sin-cambio";
     if (de === ESTADOS.BAJA) return "sin-cambio";
     if (soloDesde && !soloDesde.includes(de)) return "sin-cambio";
-    tx.set(ref, { estado: aEstado, ...extra, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    const cambios = { ...extra };
+    if ((aEstado === ESTADOS.DEVUELTO || aEstado === ESTADOS.EN_BODEGA) && actual.pendiente_devolucion) {
+      cambios.pendiente_devolucion = admin.firestore.FieldValue.delete();
+    }
+    tx.set(ref, { estado: aEstado, ...cambios, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo, de_estado: de, a_estado: aEstado, ref: refMov, notas,
     }));

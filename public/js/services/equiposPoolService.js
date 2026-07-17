@@ -434,17 +434,21 @@ const EquiposPoolService = {
   },
 
   // Devuelve una unidad al pool (se soltó de un contrato, o pasó inspección).
+  // Limpia pendiente_devolucion: la unidad ya regresó, el flag de los mapeos
+  // de transición cumplió su propósito.
   async liberar(id, { ref = null, notas = '' } = {}, user) {
     return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
       tipo: 'liberacion', ref, notas,
-      extra: { asignacion: null, orden_actual_id: null, condicion: 'reuso' },
+      extra: { asignacion: null, orden_actual_id: null, condicion: 'reuso',
+               pendiente_devolucion: firebase.firestore.FieldValue.delete() },
     }, user);
   },
 
   async darDeBaja(id, motivo, user) {
     return this.cambiarEstado(id, this.ESTADOS.BAJA, {
       tipo: 'baja', notas: motivo,
-      extra: { baja_motivo: motivo, asignacion: null, orden_actual_id: null },
+      extra: { baja_motivo: motivo, asignacion: null, orden_actual_id: null,
+               pendiente_devolucion: firebase.firestore.FieldValue.delete() },
     }, user);
   },
 

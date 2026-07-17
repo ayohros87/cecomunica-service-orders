@@ -7,7 +7,7 @@ admin.initializeApp();
 // triggers dispare instancias sin tope (costo). 10 es holgado para uso interno.
 setGlobalOptions({ maxInstances: 10 });
 
-const { onContratoActivado, onContratoAprobadoSolicitaSeriales, onSerialesAsignadasSendPdf, onContratoActivadoSendPdf } = require("./src/triggers/contratos/onApproval");
+const { onContratoActivado, onContratoAprobadoSolicitaSeriales, onSerialesAsignadasSendPdf } = require("./src/triggers/contratos/onApproval");
 const { onContratoOrdenWrite, onOrdenWriteSyncContratoCache, onOrdenHardDelete }     = require("./src/triggers/ordenes/onWriteCacheSync");
 
 exports.sendMail                      = require("./src/http/sendMail");
@@ -17,9 +17,8 @@ exports.quickbooksWebhook             = require("./src/http/quickbooksWebhook");
 exports.onContratoActivado                 = onContratoActivado;
 exports.onContratoAprobadoSolicitaSeriales = onContratoAprobadoSolicitaSeriales;
 exports.onSerialesAsignadasSendPdf         = onSerialesAsignadasSendPdf;
-// Conservada pero deshabilitada (no envía) — borrado pendiente. Se mantiene
-// exportada para que el deploy NO la elimine todavía.
-exports.onContratoActivadoSendPdf          = onContratoActivadoSendPdf;
+// onContratoActivadoSendPdf retirada 2026-07-17 (no-op desde el cambio a envío
+// post-seriales): el próximo deploy de functions pedirá borrar el CF — aceptar.
 exports.onMailQueued                  = require("./src/triggers/mail/onMailQueued");
 exports.onContratoAnuladoNotify       = require("./src/triggers/contratos/onAnnulment");
 exports.onCancelacionWrite            = require("./src/triggers/cancelaciones/onCancelacionWrite");

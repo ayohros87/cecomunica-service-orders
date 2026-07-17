@@ -24,6 +24,24 @@ module.exports = onDocumentUpdated(
     const contratoId      = after.contrato_id || event.params.docId;
     const motivoAnulacion = String(after.anulado_motivo || "No especificado");
 
+    // Cerrar el ciclo de facturación: un contrato anulado no debe quedar con
+    // facturacion_estado 'activa'/'en_espera' colgado (hoy invisible porque
+    // los consumidores filtran por estado, pero es trampa latente para el
+    // facturador mensual futuro). Se preserva el estado previo para auditoría.
+    if (["activa", "en_espera"].includes(after.facturacion_estado)) {
+      try {
+        await db.collection("contratos").doc(event.params.docId).set({
+          facturacion_estado: "no_aplica",
+          facturacion_estado_previo: after.facturacion_estado,
+          facturacion_cerrada_por_anulacion_at: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch (e) {
+        logger.warn("[onContratoAnuladoNotify] No se pudo cerrar facturacion_estado (no crítico)", {
+          contratoId, message: e.message
+        });
+      }
+    }
+
     // Pool de equipos: las unidades asignadas a ESTE contrato entran en
     // cuarentena de inspección (devuelto_revision — "Entrada"): todo lo que
     // regresa de un cliente se inspecciona antes de volver a bodega

@@ -26,7 +26,9 @@ function readiness(c, modelosById, modelosByName) {
   const total = (c.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
   const activos = Math.max(0, total - Number(c.baja_cancelado_total || 0));
   const entrega = c.entrega_confirmada === true;
-  const seriales = activos > 0 && Number(c.seriales_count || 0) >= activos;
+  // Mismo criterio que contratos-list y facturacion-activacion: las unidades
+  // omitidas con motivo ("sin serial") cuentan como resueltas.
+  const seriales = activos > 0 && (Number(c.seriales_count || 0) + Number(c.seriales_omitidos_count || 0)) >= activos;
   return { vigente, mapeo, entrega, seriales, activos, requeridosOk: vigente && mapeo };
 }
 
