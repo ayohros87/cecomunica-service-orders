@@ -29,4 +29,41 @@ const activacionesEmailTo    = () => configEmailTo("activaciones", FALLBACKS.act
 const atencionClienteEmailTo = () => configEmailTo("atencion_cliente", FALLBACKS.atencion_cliente);
 const tallerEmailTo          = () => configEmailTo("taller", FALLBACKS.taller);
 
-module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, tallerEmailTo, FALLBACKS };
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Recepción como ARRAY de emails: empresa/config.email_recepcion o, si está
+// vacío, todos los usuarios con rol recepcion. Puede devolver []. Nunca lanza.
+async function recepcionEmails() {
+  const out = new Set();
+  try {
+    const cfg = await configEmailTo("recepcion", "");
+    if (cfg) cfg.split(",").map(s => s.trim().toLowerCase()).filter(e => EMAIL_RE.test(e)).forEach(e => out.add(e));
+  } catch (e) { /* cae al rol */ }
+  if (!out.size) {
+    try {
+      const snap = await db.collection("usuarios").where("rol", "==", "recepcion").get();
+      snap.forEach(d => {
+        const e = String(d.data()?.email || "").trim().toLowerCase();
+        if (EMAIL_RE.test(e)) out.add(e);
+      });
+    } catch (e) {
+      logger.warn("[mailRecipients] usuarios rol recepcion no leídos", { message: e.message });
+    }
+  }
+  return [...out];
+}
+
+// CC extra del correo "Contrato APROBADO" (empresa/config.mail_cc_contrato_aprobado,
+// editable en Admin · Configuración). Array; [] si no hay o falla la lectura.
+async function ccContratoAprobado() {
+  try {
+    const snap = await db.collection("empresa").doc("config").get();
+    const v = snap.exists ? snap.data().mail_cc_contrato_aprobado : null;
+    if (Array.isArray(v)) return v.map(s => String(s).trim().toLowerCase()).filter(e => EMAIL_RE.test(e));
+  } catch (e) {
+    logger.warn("[mailRecipients] mail_cc_contrato_aprobado no leído", { message: e.message });
+  }
+  return [];
+}
+
+module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, tallerEmailTo, recepcionEmails, ccContratoAprobado, FALLBACKS };

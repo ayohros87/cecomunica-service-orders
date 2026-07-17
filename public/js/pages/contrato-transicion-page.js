@@ -327,16 +327,9 @@
     if (!salientes.length) return; // solo entrantes netos: no hay nada que recuperar
     const c = ctx.contrato;
     try {
-      const emails = new Set();
-      try {
-        const cfg = (typeof EmpresaService !== 'undefined') ? await EmpresaService.getConfig() : {};
-        (Array.isArray(cfg.email_recepcion) ? cfg.email_recepcion : [])
-          .forEach(e => { if (e) emails.add(String(e).toLowerCase()); });
-      } catch (e) { /* cae al rol */ }
-      if (!emails.size) {
-        const qs = await db().collection('usuarios').where('rol', '==', 'recepcion').get();
-        qs.forEach(d => { const e = d.data()?.email; if (e) emails.add(String(e).toLowerCase()); });
-      }
+      // TO: el vendedor asignado del cliente (dueño de la relación — es quien
+      // coordina la recuperación). CC: recepción + ventas@ (administración).
+      let vendedor = null;
       try {
         if (c.cliente_id) {
           const cli = await db().collection('clientes').doc(c.cliente_id).get();
@@ -344,11 +337,23 @@
           if (uidV) {
             const u = await db().collection('usuarios').doc(uidV).get();
             const e = u.exists ? u.data().email : null;
-            if (e) emails.add(String(e).toLowerCase());
+            if (e) vendedor = String(e).toLowerCase();
           }
         }
       } catch (e) { /* sin vendedor asignado */ }
-      const lista = [...emails];
+
+      const copias = new Set(['ventas@cecomunica.com']);
+      try {
+        const cfg = (typeof EmpresaService !== 'undefined') ? await EmpresaService.getConfig() : {};
+        (Array.isArray(cfg.email_recepcion) ? cfg.email_recepcion : [])
+          .forEach(e => { if (e) copias.add(String(e).toLowerCase()); });
+      } catch (e) { /* cae al rol */ }
+      if (copias.size === 1) { // solo ventas@: resolver recepción por rol
+        const qs = await db().collection('usuarios').where('rol', '==', 'recepcion').get();
+        qs.forEach(d => { const e = d.data()?.email; if (e) copias.add(String(e).toLowerCase()); });
+      }
+      if (vendedor) copias.delete(vendedor);
+      const lista = vendedor ? [vendedor, ...copias] : [...copias];
       if (!lista.length) return;
 
       const filas = salientes.map(m => `

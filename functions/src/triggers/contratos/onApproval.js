@@ -7,7 +7,7 @@ const { sendEmail, recordSendFailure }                      = require("../../lib
 const { buildEmailFromBase, escapeHtml }                    = require("../../domain/emailRenderer");
 const { attachVerificationFromMirror, buildContractHtmlForPdf } = require("../../domain/pdfRenderer");
 const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
-const { activacionesEmailTo }             = require("../../lib/mailRecipients");
+const { activacionesEmailTo, ccContratoAprobado } = require("../../lib/mailRecipients");
 
 const HMAC_SECRET = process.env.FIRMA_SECRET || "MISSING_SECRET";
 
@@ -412,7 +412,8 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
       mailContext = {
         ...mailContext,
         to:      await activacionesEmailTo(),
-        cc:      vendedorInfo?.email || undefined,
+        // CC: vendedor + copias del panel (empresa/config.mail_cc_contrato_aprobado)
+        cc:      [vendedorInfo?.email, ...(await ccContratoAprobado())].filter(Boolean).join(",") || undefined,
         subject: `Contrato APROBADO: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
       };
 
@@ -574,7 +575,8 @@ const onContratoActivadoSendPdf = onDocumentUpdated(
       mailContext = {
         ...mailContext,
         to:      await activacionesEmailTo(),
-        cc:      vendedorInfo?.email || undefined,
+        // CC: vendedor + copias del panel (empresa/config.mail_cc_contrato_aprobado)
+        cc:      [vendedorInfo?.email, ...(await ccContratoAprobado())].filter(Boolean).join(",") || undefined,
         subject: `Contrato APROBADO: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
       };
 
