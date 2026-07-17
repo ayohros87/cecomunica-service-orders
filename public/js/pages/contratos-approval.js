@@ -91,8 +91,13 @@ window.ContratosAprobacion = {
 
   async confirmar() {
     if (!this._pendienteId) { Toast.show('No hay contrato seleccionado para aprobar.', 'bad'); return; }
-    const btn = document.querySelector('#overlayAprobacion .btn-accent');
-    if (btn) btn.disabled = true;
+    const btn = document.querySelector('#overlayAprobacion .btn-primary');
+    const btnHtmlOriginal = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i data-lucide="loader"></i> Aprobando…';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
     try {
       const c = await ContratosService.getContrato(this._pendienteId);
       if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
@@ -105,14 +110,31 @@ window.ContratosAprobacion = {
         aprobado_por_uid: firebase.auth().currentUser?.uid || null
       });
 
-      this.cerrarOverlay();
-      Toast.show('✅ Contrato aprobado. Enviando PDF por correo en segundo plano…', 'ok');
-      setTimeout(() => location.reload(), 1200);
+      // Mismo criterio que onContratoAprobadoSolicitaSeriales: con unidades
+      // serializables se piden seriales a inventario; sin ellas (o renovación
+      // sin equipo) el contrato va directo a activaciones.
+      const totalUnidades = (c.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const unidades = Math.max(0, totalUnidades - Number(c.baja_cancelado_total || 0));
+      const sinSeriales = unidades <= 0 || (c.accion === 'Renovación' && !!c.renovacion_sin_equipo);
+
+      this.cancelar();
+      Toast.show(sinSeriales
+        ? '✅ Contrato aprobado. Se enviará a activaciones (sin seriales que asignar).'
+        : '✅ Contrato aprobado. Se pidió a inventario asignar los seriales por correo.', 'ok');
+
+      // Refresca la lista en sitio (sin recargar la página): cargar(true)
+      // vuelve a consultar con los filtros activos y hace el swap de la tabla
+      // sin pantallazo en blanco.
+      await ContratosLista.cargar(true);
     } catch (e) {
       console.error(e);
       Toast.show('No se pudo aprobar el contrato.', 'bad');
     } finally {
-      if (btn) btn.disabled = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = btnHtmlOriginal;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      }
     }
   },
 
@@ -123,7 +145,7 @@ window.ContratosAprobacion = {
     Modal.open('overlayAprobacion', { onEscape: false });
     this._boundKeydown = (e) => { if (e.key === 'Escape') this.cerrarOverlay(); };
     document.addEventListener('keydown', this._boundKeydown);
-    const first = ov.querySelector('.btn-accent') || ov.querySelector('button,[href],input,select,textarea');
+    const first = ov.querySelector('.btn-primary') || ov.querySelector('button,[href],input,select,textarea');
     if (first) setTimeout(() => first.focus(), 0);
     this._initSwipeClose(sheet);
   },
