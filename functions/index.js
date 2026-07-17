@@ -42,6 +42,8 @@ exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCo
 exports.recordatorioSeriales          = require("./src/triggers/scheduled/recordatorioSeriales");
 // Semanal: equipos pendientes de devolución por vendedor (CC recepción + ventas)
 exports.recordatorioTransiciones      = require("./src/triggers/scheduled/recordatorioTransiciones");
+// Diario: órdenes estancadas (taller) + cuarentena de entrada sin inspección (recepción)
+exports.recordatorioOperativo         = require("./src/triggers/scheduled/recordatorioOperativo");
 exports.manageUser                    = require("./src/callable/manageUser");
 exports.rebuildContractCache          = require("./src/callable/rebuildContractCache");
 exports.runBackfill                   = require("./src/callable/runBackfill");

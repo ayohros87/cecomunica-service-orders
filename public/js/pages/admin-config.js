@@ -91,7 +91,10 @@
 
     { key: 'orden_stale_dias',          section: 'operacion', label: 'Días para marcar orden como "sin movimiento"',
       type: 'int',  min: 3,     max: 60,
-      hint: 'Umbral usado en el panel de Operación para flag de stale.' },
+      hint: 'Umbral usado en el panel de Operación para el flag de stale y en el correo diario de órdenes estancadas al taller (recordatorioOperativo).' },
+    { key: 'entrada_recordatorio_dias', section: 'operacion', label: 'Aviso de cuarentena sin inspección (días)',
+      type: 'int',  min: 1,     max: 60,
+      hint: 'Días que una unidad puede estar en cuarentena de entrada (devuelto_revision) sin inspección antes de que recepción reciba el aviso diario. La salida de cuarentena es manual: inspección OK → bodega, o baja.' },
 
     { key: 'pii_retention_dias',        section: 'pii', label: 'Retención PII (días)',
       type: 'int',  min: 30,    max: 730,

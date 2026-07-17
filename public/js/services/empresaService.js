@@ -19,6 +19,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   cotizacion_aprobacion_to:  [],   // emails que reciben la solicitud de aprobación de cotización ([] = fallback ventas@)
   email_solicitud_seriales:  [],   // usuarios que reciben "Solicitud de seriales" al aprobar contrato ([] = fallback inventario@)
   seriales_recordatorio_dias: 3,   // cada cuántos días se le recuerda a inventario un contrato con seriales pendientes
+  entrada_recordatorio_dias: 7,    // días en cuarentena (devuelto_revision) sin inspección antes de avisar a recepción
   seriales_editores_extra:   [],   // emails habilitados a EDITAR seriales ya "asignados" (además de admin). [] = solo administradores
   cotizacion_descuento_max_pct: 15, // descuento % máximo que un vendedor puede enviar sin aprobación
   cotizacion_total_max:      5000, // total máximo (USD) que un vendedor puede enviar sin aprobación
