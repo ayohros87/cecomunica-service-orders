@@ -508,8 +508,8 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
           <col style="width: 8%;">
           <col style="width: 8%;">
           <col style="width: 26%;">
-          <col style="width: 18%;">
-          <col style="width: 32%;">
+          <col style="width: 22%;">
+          <col style="width: 28%;">
           <col style="width: 8%;">
         </colgroup>
         <thead>

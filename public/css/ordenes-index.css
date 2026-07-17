@@ -2715,6 +2715,15 @@ tr.activo:hover { background: #f0f9ff !important; }
   gap: 8px;
 }
 
+/* El td vive en una tabla table-layout:fixed con overflow:hidden
+   (.filaDetalle table tbody td): si los 6 chips + el badge no caben
+   en el ancho de la columna, el badge de completitud quedaba
+   recortado. Dejar que baje a una segunda línea en vez de cortarse. */
+.equipos-table .col-accesorios .accesorios-wrapper {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
 .accesorios-wrapper.incompleto { position: relative; }
 
 .accesorios-wrapper.incompleto::before {
