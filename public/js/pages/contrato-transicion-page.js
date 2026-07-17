@@ -305,13 +305,95 @@
         por: uid,
       }));
       await batch.commit();
-      Toast.show(`Transición registrada (${nuevos.length}).`, 'ok');
+      await notificarTransicion(nuevos);
+      Toast.show(`Transición registrada (${nuevos.length}). Se avisó a recepción y al vendedor para coordinar la recuperación.`, 'ok');
       // El trigger tarda un instante en estampar el pool; recargar con margen.
       setTimeout(async () => { await cargarDatos(); render(); }, 1200);
     } catch (e) {
       console.error('Error registrando la transición:', e);
       Toast.show('No se pudo registrar la transición.', 'bad');
       btn.disabled = false;
+    }
+  }
+
+  // Correo al registrar la transición (best-effort, nunca bloquea el guardado):
+  // los SALIENTES quedan "pendiente de devolución" y alguien debe coordinar la
+  // recuperación con el cliente — vendedor asignado + recepción
+  // (empresa/config.email_recepcion, o todos los usuarios con rol recepción).
+  // La devolución física se registra después como ENTRADA (cierre de enmienda /
+  // anulación), que ya dispara la orden de inspección con sus propios avisos.
+  async function notificarTransicion(nuevos) {
+    const salientes = (nuevos || []).filter(m => m.saliente);
+    if (!salientes.length) return; // solo entrantes netos: no hay nada que recuperar
+    const c = ctx.contrato;
+    try {
+      const emails = new Set();
+      try {
+        const cfg = (typeof EmpresaService !== 'undefined') ? await EmpresaService.getConfig() : {};
+        (Array.isArray(cfg.email_recepcion) ? cfg.email_recepcion : [])
+          .forEach(e => { if (e) emails.add(String(e).toLowerCase()); });
+      } catch (e) { /* cae al rol */ }
+      if (!emails.size) {
+        const qs = await db().collection('usuarios').where('rol', '==', 'recepcion').get();
+        qs.forEach(d => { const e = d.data()?.email; if (e) emails.add(String(e).toLowerCase()); });
+      }
+      try {
+        if (c.cliente_id) {
+          const cli = await db().collection('clientes').doc(c.cliente_id).get();
+          const uidV = cli.exists ? cli.data().vendedor_asignado : null;
+          if (uidV) {
+            const u = await db().collection('usuarios').doc(uidV).get();
+            const e = u.exists ? u.data().email : null;
+            if (e) emails.add(String(e).toLowerCase());
+          }
+        }
+      } catch (e) { /* sin vendedor asignado */ }
+      const lista = [...emails];
+      if (!lista.length) return;
+
+      const filas = salientes.map(m => `
+        <tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;">${esc(m.saliente)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(m.modelo || '—')}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #eee;">${m.entrante ? `reemplazado por <b style="font-family:monospace;">${esc(m.entrante)}</b>` : 'sale sin sustituto'}</td>
+        </tr>`).join('');
+
+      await db().collection('mail_queue').add({
+        to: lista[0],
+        cc: lista.length > 1 ? lista.slice(1).join(',') : null,
+        subject: `Transición de equipos: ${c.contrato_id || contratoDocId} – ${c.cliente_nombre || ''} (${salientes.length} por recuperar)`,
+        preheader: `${salientes.length} equipo(s) del cliente quedaron pendientes de devolución`,
+        bodyContent: `
+          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Equipos pendientes de devolución</h2>
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+            Se registró la transición de equipos del contrato <b>${esc(c.contrato_id || contratoDocId)}</b>
+            de <b>${esc(c.cliente_nombre || '—')}</b>. Los siguientes equipos siguen con el cliente y
+            <b>hay que coordinar su recuperación</b>:
+          </p>
+          <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 12px;">
+            <thead><tr>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Serial saliente</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
+              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Situación</th>
+            </tr></thead>
+            <tbody>${filas}</tbody>
+          </table>
+          <p style="margin:0 0 12px;font:13px/1.5 Arial,sans-serif;color:#6b7280;">
+            Cuando el cliente entregue los equipos, regístralo al <b>cerrar la enmienda</b> o
+            <b>anular el contrato original</b> — eso los pasa a inspección y crea la orden de ENTRADA
+            para el taller automáticamente.
+          </p>`,
+        ctaUrl: `${location.origin}/contratos/transicion.html?id=${encodeURIComponent(contratoDocId)}`,
+        ctaLabel: 'Ver transición de equipos',
+        meta: {
+          created_at: firebase.firestore.FieldValue.serverTimestamp(),
+          source: 'transicion-equipos',
+          contrato_id: c.contrato_id || contratoDocId,
+        },
+        status: 'queued',
+      });
+    } catch (e) {
+      console.warn('No se pudo enviar el aviso de transición (no crítico):', e);
     }
   }
 })();
