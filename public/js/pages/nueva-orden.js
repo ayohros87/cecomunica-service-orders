@@ -26,6 +26,24 @@
     function esProgramacion(tipo) {
       return normalizarTipo(tipo) === "PROGRAMACION";
     }
+
+    // VISITA TECNICA: trabajo de campo (torres, repetidores, sitios del
+    // cliente). Pide sitio/contacto al crear; el cierre es en sitio con
+    // firma (ordenes-visita.js), sin entrega posterior.
+    function esVisita(tipo) {
+      return normalizarTipo(tipo).includes("VISITA");
+    }
+
+    const visitaBlock    = document.getElementById("visitaBlock");
+    const visitaSitio    = document.getElementById("visitaSitio");
+    const visitaContacto = document.getElementById("visitaContacto");
+
+    function toggleVisitaBlock(tipo) {
+      const es = esVisita(tipo);
+      visitaBlock.style.display = es ? "block" : "none";
+      visitaSitio.required = es;
+      if (!es) { visitaSitio.value = ""; visitaContacto.value = ""; }
+    }
     
     // Función para cargar contratos del cliente
     async function cargarContratosDelCliente(clienteId) {
@@ -71,7 +89,8 @@
     // Event listener para tipo de servicio
     tipoSelect.addEventListener("change", async function() {
       const tipo = tipoSelect.value;
-      
+      toggleVisitaBlock(tipo);
+
       if (esProgramacion(tipo)) {
         // Mostrar bloque de contrato
         contratoBlock.style.display = "block";
@@ -284,6 +303,7 @@
         const opt = [...tipoSelect.options].find(o => normalizarTipo(o.value) === normalizarTipo(tipo));
         if (opt) tipoSelect.value = opt.value;
       }
+      toggleVisitaBlock(tipoSelect.value);
       // Bloque de contrato: mismo setup que el change handler de tipo, pero en
       // línea para poder esperar la carga y preseleccionar el contrato.
       if (esProgramacion(tipoSelect.value)) {
@@ -307,6 +327,12 @@
         return;
       }
       
+      // Validación específica para VISITA TECNICA
+      if (esVisita(tipoSelect.value) && !visitaSitio.value.trim()) {
+        mostrarMensaje("⚠️ Para VISITA TÉCNICA indique el sitio / ubicación de la visita.", "rojo");
+        return;
+      }
+
       // Validación específica para PROGRAMACIÓN
       if (esProgramacion(tipoSelect.value)) {
         if (!contratoNoAplica.checked) {
@@ -346,6 +372,14 @@
           })
         };
         
+        // Datos de sitio solo si tipo = VISITA TECNICA
+        if (esVisita(tipoSelect.value)) {
+          data.visita = {
+            sitio: visitaSitio.value.trim(),
+            contacto_sitio: visitaContacto.value.trim() || null
+          };
+        }
+
         // Agregar contrato solo si tipo = PROGRAMACION
         if (esProgramacion(tipoSelect.value)) {
           if (contratoNoAplica.checked) {

@@ -98,6 +98,16 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) { closeAllMenus(); abrirModalRecepcion(ordenId); }
     },
+    // Visitas técnicas (ordenes-visita.js): informe estructurado + cierre
+    // en sitio con firma del personal de la empresa visitada.
+    'cerrar-visita': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) { closeAllMenus(); abrirCierreVisita(ordenId); }
+    },
+    'informe-visita': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) { closeAllMenus(); abrirInformeVisita(ordenId); }
+    },
     'eliminar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) eliminarOrden(ordenId);
@@ -527,11 +537,14 @@ function mostrarEntregaRecepcion(ordenId) {
 
   const tieneRecepcion = !!(o.firma_recepcion_url || o.receptor_recepcion_nombre || o.fecha_recepcion);
   const tieneEntrega   = !!(o.firma_url || o.receptor_nombre || o.fecha_entrega || o.sin_id || o.identificacion_path || o.identificacion_url);
+  // Cierre de visita técnica (firma en sitio o motivo) — ordenes-visita.js.
+  const tieneCierreVisita = !!(o.firma_visita_url || o.visita_sin_firma || o.fecha_cierre_visita);
 
   const cabecera = _faseFilas([
     ['Orden', esc(ordenId)],
     ['Cliente', esc(cliente)],
     ['Tipo de servicio', esc(o.tipo_de_servicio || '—')],
+    ['Sitio', esc(o.visita?.sitio || '')],
   ]);
 
   const faseCard = (titulo, icon, inner) => `
@@ -571,6 +584,35 @@ function mostrarEntregaRecepcion(ordenId) {
     ]) + _faseFirma(o.firma_url, 'Firma del receptor') + idHtml
   ) : '';
 
+  // Cierre de visita técnica: quién recibió conforme en el sitio (o el
+  // motivo si se cerró sin firma) + resumen del informe de visita.
+  const inf = o.informe_visita || {};
+  const cierreFirmaHtml = o.visita_sin_firma
+    ? `<div class="muted" style="margin-top:8px;"><i data-lucide="pen-off"></i> Visita cerrada sin firma${o.visita_sin_firma_motivo ? ' — ' + esc(o.visita_sin_firma_motivo) : ''}.</div>`
+    : _faseFirma(o.firma_visita_url, 'Firma de conformidad');
+  const cierreInformeHtml = (inf.trabajo_realizado || inf.fecha_visita)
+    ? `<div style="margin-top:10px;border-top:1px dashed var(--line,#e5e7eb);padding-top:8px;">
+         ${_faseFilas([
+           ['Fecha de la visita', esc(inf.fecha_visita || '—')],
+           ['Motivo', esc(inf.motivo || '—')],
+           ['Elementos', (Array.isArray(inf.elementos) && inf.elementos.length)
+             ? esc(inf.elementos.map(el => [el.tipo, el.detalle].filter(Boolean).join(' ')).join(' · '))
+             : ''],
+         ])}
+         <div class="muted" style="margin-top:4px;">Trabajo realizado</div>
+         <div style="white-space:pre-wrap;">${esc(inf.trabajo_realizado || '—')}</div>
+         ${inf.hallazgos ? `<div class="muted" style="margin-top:6px;">Hallazgos / recomendaciones</div><div style="white-space:pre-wrap;">${esc(inf.hallazgos)}</div>` : ''}
+       </div>`
+    : '';
+  const cierreHtml = tieneCierreVisita ? faseCard('Cierre de visita', 'pen-line',
+    _faseFilas([
+      ['Recibió conforme', esc(o.firma_visita_receptor || '—')],
+      ['Cargo / área', esc(o.firma_visita_cargo || '')],
+      ['Fecha y hora', esc(_entregaFecha(o.fecha_cierre_visita) || '—')],
+      ['Cerrada por', esc(o.completado_por_email || '—')],
+    ]) + cierreFirmaHtml + cierreInformeHtml
+  ) : '';
+
   // Equipos una sola vez (serial/modelo/accesorios).
   const eqs = _equiposEntregaRows(o);
   const equiposRows = eqs.map(e => `<tr>
@@ -591,7 +633,7 @@ function mostrarEntregaRecepcion(ordenId) {
        </div>`
     : '';
 
-  const titulo = tieneEntrega ? 'Entrega' : 'Recepción';
+  const titulo = tieneCierreVisita ? 'Cierre de visita' : (tieneEntrega ? 'Entrega' : 'Recepción');
   const footerBtns = [
     tieneEntrega   ? `<button class="btn btn-primary" data-ver-comprobante="1"><i data-lucide="printer"></i> Imprimir entrega</button>` : '',
     tieneRecepcion ? `<button class="btn" data-ver-acuse="1"><i data-lucide="printer"></i> Imprimir acuse</button>` : '',
@@ -610,6 +652,7 @@ function mostrarEntregaRecepcion(ordenId) {
         ${cabecera}
         ${recepcionHtml}
         ${entregaHtml}
+        ${cierreHtml}
         ${equiposHtml}
       </div>
       <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px 8px;border-top:1px solid var(--line,#eee);">

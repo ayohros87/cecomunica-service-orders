@@ -352,6 +352,68 @@ const OrdenesService = {
   },
 
   /**
+   * Save the structured site-visit report (órdenes de VISITA TECNICA).
+   * Replaces the old habit of dumping the field work narrative into
+   * `nota_tecnica`: fecha real de la visita, motivo, trabajo/hallazgos
+   * separados y elementos de sitio intervenidos (sin serial obligatorio,
+   * y FUERA del array `equipos` para no contaminar equipos_pool).
+   * @param {string} ordenId
+   * @param {{fecha_visita:string, motivo:string, trabajo_realizado:string,
+   *          hallazgos:string, elementos:Array<{tipo:string,detalle:string,serial:string}>}} informe
+   */
+  async saveInformeVisita(ordenId, informe) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      informe_visita: {
+        fecha_visita:      informe.fecha_visita || null,
+        motivo:            informe.motivo || null,
+        trabajo_realizado: informe.trabajo_realizado || "",
+        hallazgos:         informe.hallazgos || "",
+        elementos:         Array.isArray(informe.elementos) ? informe.elementos : [],
+        updated_at:        firebase.firestore.Timestamp.now(),
+        updated_by_uid:    user?.uid || "",
+        updated_by_email:  user?.email || ""
+      },
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'INFORME_VISITA',
+        by: user?.uid || ''
+      })
+    });
+  },
+
+  /**
+   * Close a VISITA TECNICA order in the field. Terminal state for visitas
+   * (no delivery phase follows): requires either the signature of the
+   * client's on-site staff (firmaUrl + receptor) or an explicit waiver
+   * reason. Also stamps `fecha_completado`/`completado_por_*` so existing
+   * sorts and timelines keep working.
+   * @param {string} ordenId
+   * @param {{firmaUrl:string|null, receptorNombre:string, receptorCargo:string,
+   *          sinFirma:boolean, sinFirmaMotivo:string}} payload
+   */
+  async closeVisita(ordenId, { firmaUrl = null, receptorNombre = "", receptorCargo = "", sinFirma = false, sinFirmaMotivo = "" }) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      estado_reparacion: "CERRADA (VISITA)",
+      fecha_cierre_visita: firebase.firestore.FieldValue.serverTimestamp(),
+      fecha_completado: firebase.firestore.FieldValue.serverTimestamp(),
+      completado_por_uid: user?.uid || '',
+      completado_por_email: user?.email || '',
+      firma_visita_url: firmaUrl || null,
+      firma_visita_receptor: receptorNombre || null,
+      firma_visita_cargo: receptorCargo || null,
+      visita_sin_firma: !!sinFirma,
+      visita_sin_firma_motivo: sinFirma ? sinFirmaMotivo : null,
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'CERRAR_VISITA',
+        by: user?.uid || ''
+      })
+    });
+  },
+
+  /**
    * Load technicians for assignment dropdown
    * @returns {Promise<Array<{uid: string, nombre: string}>>}
    */

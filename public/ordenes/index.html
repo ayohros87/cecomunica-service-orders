@@ -11,7 +11,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Órdenes de Servicio - Cecomunica</title>
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc6">
-  <link rel="stylesheet" href="../css/ordenes-index.css?v=cc7">
+  <link rel="stylesheet" href="../css/ordenes-index.css?v=cc8">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
@@ -37,13 +37,14 @@
 <script defer src="../js/domain/scoring.js"></script>
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
-<script defer src="../js/pages/ordenes-state.js?v=cc6"></script>
+<script defer src="../js/pages/ordenes-state.js?v=cc8"></script>
 <script defer src="../js/pages/ordenes-data.js"></script>
-<script defer src="../js/pages/ordenes-render.js?v=cc7"></script>
+<script defer src="../js/pages/ordenes-render.js?v=cc8"></script>
 <script defer src="../js/pages/ordenes-filters.js"></script>
 <script defer src="../js/pages/ordenes-flujo.js"></script>
 <script defer src="../js/pages/ordenes-equipos.js"></script>
 <script defer src="../js/pages/ordenes-notas.js"></script>
+<script defer src="../js/pages/ordenes-visita.js"></script>
 <script defer src="../js/pages/ordenes-ui.js"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
 <script defer src="../js/pages/ordenes-events.js"></script>
@@ -126,6 +127,11 @@
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
     </button>
+    <button type="button" class="estado-chip estado-chip--visita-cerrada"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+    </button>
   </div>
 
   <div class="mh-sub" id="mobileResumen" role="status" aria-live="polite" aria-atomic="true">
@@ -193,6 +199,11 @@
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Entregado <span class="estado-chip__count" data-count="ENTREGADO AL CLIENTE">0</span>
     </button>
+    <button type="button" class="estado-chip estado-chip--visita-cerrada"
+            data-action="filtrar-estado-chip" data-estado="CERRADA (VISITA)"
+            role="tab" aria-selected="false">
+      <span class="dot" aria-hidden="true"></span>Visita cerrada <span class="estado-chip__count" data-count="CERRADA (VISITA)">0</span>
+    </button>
   </div>
 
   <!-- Búsqueda rápida -->
@@ -259,6 +270,7 @@
           <option value="ASIGNADO">ASIGNADO</option>
           <option value="COMPLETADO (EN OFICINA)">COMPLETADO (EN OFICINA)</option>
           <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
+          <option value="CERRADA (VISITA)">CERRADA (VISITA)</option>
         </select>
       </div>
       <div class="filter-field">

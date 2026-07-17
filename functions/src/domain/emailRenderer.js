@@ -55,15 +55,46 @@ function buildEmailFromBase({ preheader, bodyHtml, ctaUrl, ctaLabel }) {
 function buildBodyOrdenCompletada(orden) {
   const chip = v => `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#eef2ff;border:1px solid #e5e7eb;font:12px Arial,sans-serif;">${v}</span>`;
   const cliente = orden.cliente_nombre || orden.cliente || "—";
-  const tecnico = orden.tecnico_nombre || orden.tecnico || "—";
+  const tecnico = orden.tecnico_asignado || orden.tecnico_nombre || orden.tecnico || "—";
   const costo   = isFinite(+orden.costo_estimado) ? `$${Number(orden.costo_estimado).toFixed(2)}` : "—";
   const equipos = Array.isArray(orden.equipos) ? orden.equipos : [];
   const equiposHtml = equipos.map((e, i) =>
     `<li>${e.serial || e.SERIAL || `Equipo #${i+1}`} ${e.modelo ? `– ${e.modelo}` : ""} ${e.gps ? "· GPS" : ""}</li>`
   ).join("");
 
+  // Visitas técnicas de campo: la orden trae informe estructurado
+  // (informe_visita), sitio (visita.sitio) y cierre con firma en sitio o
+  // motivo — se incluyen para que el correo sea el resumen completo.
+  const esVisitaCerrada = /CERRADA \(VISITA\)/i.test(orden.estado_reparacion || "");
+  const inf   = orden.informe_visita || null;
+  const sitio = orden.visita && orden.visita.sitio ? escapeHtml(orden.visita.sitio) : "";
+  let visitaHtml = "";
+  if (esVisitaCerrada || inf) {
+    const filas = [];
+    if (sitio)                      filas.push(["Sitio", sitio]);
+    if (inf && inf.fecha_visita)    filas.push(["Fecha de la visita", escapeHtml(inf.fecha_visita)]);
+    if (inf && inf.motivo)          filas.push(["Motivo", escapeHtml(inf.motivo)]);
+    const cierre = orden.visita_sin_firma
+      ? `Cerrada SIN firma — ${escapeHtml(orden.visita_sin_firma_motivo || "sin motivo registrado")}`
+      : (orden.firma_visita_receptor
+          ? `Recibió conforme: ${escapeHtml(orden.firma_visita_receptor)}${orden.firma_visita_cargo ? ` (${escapeHtml(orden.firma_visita_cargo)})` : ""} · firmada`
+          : "");
+    if (cierre) filas.push(["Cierre", cierre]);
+    const filasHtml = filas.map(([k, v]) =>
+      `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${k}</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${v}</td></tr>`).join("");
+    const elementosHtml = (Array.isArray(inf && inf.elementos) ? inf.elementos : [])
+      .map(el => `<li>${escapeHtml([el.tipo, el.detalle].filter(Boolean).join(" — "))}${el.serial ? ` · S/N ${escapeHtml(el.serial)}` : ""}</li>`)
+      .join("");
+    visitaHtml = `
+    <h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Informe de visita</h4>
+    ${filasHtml ? `<table role="presentation" width="100%" style="font:14px Arial,sans-serif;margin:0 0 12px;">${filasHtml}</table>` : ""}
+    ${inf && inf.trabajo_realizado ? `<p style="margin:0 0 10px;font:14px/1.5 Arial,sans-serif;"><b>Trabajo realizado:</b><br>${escapeHtml(inf.trabajo_realizado).replace(/\n/g, "<br>")}</p>` : ""}
+    ${inf && inf.hallazgos ? `<p style="margin:0 0 10px;font:14px/1.5 Arial,sans-serif;"><b>Hallazgos / recomendaciones:</b><br>${escapeHtml(inf.hallazgos).replace(/\n/g, "<br>")}</p>` : ""}
+    ${elementosHtml ? `<p style="margin:0 0 4px;font:14px Arial,sans-serif;"><b>Elementos intervenidos</b></p><ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${elementosHtml}</ul>` : ""}`;
+  }
+
   return `
-    <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Orden de servicio completada</h2>
+    <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">${esVisitaCerrada ? "Visita técnica cerrada" : "Orden de servicio completada"}</h2>
     <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
       La orden <b>${orden.orden_id || orden.id || "—"}</b> ha sido marcada como ${chip(orden.estado_reparacion || "COMPLETADO")}.
     </p>
@@ -72,6 +103,7 @@ function buildBodyOrdenCompletada(orden) {
       <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Técnico</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${tecnico}</td></tr>
       <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Costo estimado</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${costo}</td></tr>
     </table>
+    ${visitaHtml}
     ${equiposHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Equipos</h4><ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${equiposHtml}</ul>` : ""}
   `;
 }

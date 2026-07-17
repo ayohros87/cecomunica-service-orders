@@ -705,6 +705,34 @@ function botonesFlujo(ordenId, estado, ordenData) {
   const rol = APP.state.userRole || "";
   let html = "";
 
+  const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
+  const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(od);
+
+  // Visitas técnicas (trabajo de campo): no hay recepción en mostrador ni
+  // entrega al cliente. Flujo propio: POR ASIGNAR → Asignar → ASIGNADO →
+  // Cerrar visita (firma del personal de la empresa visitada o motivo).
+  // COMPLETADO (EN OFICINA) cubre visitas legacy completadas sin firma:
+  // también se les ofrece regularizar el cierre.
+  if (esVisita && [ROLES.ADMIN, ROLES.RECEPCION, ROLES.JEFE_TALLER, ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(rol)) {
+    const btnAsignar = `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+    const btnCerrar  = `<button class="btn-flujo btn-flujo--completar" title="Cerrar visita (firma en sitio)" data-action="cerrar-visita" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="pen-line"></i> Cerrar visita</button>`;
+    if ((estado === "POR ASIGNAR" || estado === "RECIBIDO EN MOSTRADOR") && rol !== ROLES.TECNICO_OPERATIVO) {
+      html += btnAsignar;
+    } else if (estado === "ASIGNADO" || estado === "COMPLETADO (EN OFICINA)") {
+      html += btnCerrar;
+    }
+    if ((estado || "").toUpperCase() === "CERRADA (VISITA)") {
+      html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver cierre de visita" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver cierre</button>`;
+    }
+    // Visitas legacy que llegaron a ENTREGADO por el flujo viejo: conservar
+    // el acceso a su comprobante de entrega/recepción.
+    if ((estado || "").toUpperCase().includes("ENTREGAD")
+        && (od.firma_url || od.receptor_nombre || od.fecha_entrega || od.firma_recepcion_url || od.fecha_recepcion)) {
+      html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver entrega" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver entrega</button>`;
+    }
+    return html || "<em>-</em>";
+  }
+
   // jefe_taller (supervisor de taller) comparte el flujo completo con
   // admin/recepción: recibir → asignar → completar → entregar. Tiene el
   // permiso 'asignar-tecnico' en roles.js, así que debe ver el botón de
@@ -755,13 +783,18 @@ function botonesFlujo(ordenId, estado, ordenData) {
   // entrega" vuelve inline (la columna quedaría solo con ⋯). En estados con
   // acción de flujo, "Ver entrega/recepción" vive en el menú ⋯.
   if ((estado || "").toUpperCase().includes("ENTREGAD")) {
-    const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
     const tieneEnt = !!(od.firma_url || od.receptor_nombre || od.fecha_entrega || od.sin_id || od.identificacion_path || od.identificacion_url);
     const tieneRec = !!(od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion);
     if (tieneEnt || tieneRec) {
       const label = tieneEnt ? 'Ver entrega' : 'Ver recepción';
       html += `<button class="btn-flujo btn-flujo--ver-entrega" title="${label}" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> ${label}</button>`;
     }
+  }
+
+  // Visita cerrada vista por roles fuera del flujo de visita (vendedor,
+  // vista): igual pueden consultar el cierre (firma / motivo).
+  if ((estado || "").toUpperCase() === "CERRADA (VISITA)") {
+    html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver cierre de visita" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver cierre</button>`;
   }
 
   return html || "<em>-</em>";
@@ -775,10 +808,25 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
   const trabajo = (o.trabajo_estado) || (o.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
   const tieneNota = o.nota_tecnica && o.nota_tecnica.trim() !== "";
+  const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(o);
 
   let menuItems = [
-    { icon: '<i data-lucide="camera"></i>', label: "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
+    { icon: '<i data-lucide="camera"></i>', label: esVisita ? "Fotos de la visita" : "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
   ];
+
+  // Informe de visita — el registro estructurado del trabajo de campo
+  // (reemplaza el volcado en notas técnicas). Primero en el menú para
+  // que el técnico lo tenga a un tap en móvil.
+  if (esVisita && rol !== ROLES.VISTA) {
+    const tieneInforme = !!(o.informe_visita?.trabajo_realizado || "").trim();
+    menuItems.unshift({
+      icon: '<i data-lucide="clipboard-list"></i>',
+      label: tieneInforme ? "Ver informe de visita" : "Llenar informe de visita",
+      action: "informe-visita",
+      dataAttributes: `data-orden-id="${ordenId}"`,
+      class: "highlighted"
+    });
+  }
 
   // "Ver entrega/recepción" en el menú SOLO cuando todavía hay acción de
   // flujo (no entregada). Si ya fue entregada, el botón va inline (botonesFlujo)
@@ -902,6 +950,7 @@ function actualizarResumen(lista) {
   const asignado           = fullList.filter(o => _statusOf(o) === "ASIGNADO").length;
   const completadoOficina  = fullList.filter(o => _statusOf(o) === "COMPLETADO (EN OFICINA)").length;
   const entregadoCliente   = fullList.filter(o => _statusOf(o) === "ENTREGADO AL CLIENTE").length;
+  const cerradaVisita      = fullList.filter(o => _statusOf(o) === "CERRADA (VISITA)").length;
 
   // Pump counts into BOTH estado chip bars (desktop #estadoChipsBar
    // and mobile #estadoChipsBarMobile). Selecting by .class instead
@@ -917,6 +966,7 @@ function actualizarResumen(lista) {
   chipCount('ASIGNADO', asignado);
   chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
   chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
+  chipCount('CERRADA (VISITA)', cerradaVisita);
   // (The old #mobileHeader .topbar-badges cluster — tbPorAsignar /
   // tbAsignado / tbCompletado / tbEntregado — was a duplicate estado
   // filter and is gone. Its counts now live in the mobile chip bar
@@ -941,6 +991,7 @@ function actualizarResumen(lista) {
           <span class="badge asignado ${estadoActivo === 'ASIGNADO' ? 'active' : ''}" title="Click para filtrar: ASIGNADO" data-action="filtrar-badge" data-estado="ASIGNADO">${asignado}</span>
           <span class="badge completo ${estadoActivo === 'COMPLETADO (EN OFICINA)' ? 'active' : ''}" title="Click para filtrar: COMPLETADO (EN OFICINA)" data-action="filtrar-badge" data-estado="COMPLETADO (EN OFICINA)">${completadoOficina}</span>
           <span class="badge ${estadoActivo === 'ENTREGADO AL CLIENTE' ? 'active' : ''}" style="background:#bbf7d0;" title="Click para filtrar: ENTREGADO AL CLIENTE" data-action="filtrar-badge" data-estado="ENTREGADO AL CLIENTE">${entregadoCliente}</span>
+          <span class="badge ${estadoActivo === 'CERRADA (VISITA)' ? 'active' : ''}" style="background:#a7f3d0;" title="Click para filtrar: CERRADA (VISITA)" data-action="filtrar-badge" data-estado="CERRADA (VISITA)">${cerradaVisita}</span>
         </div>
       </div>
     </div>

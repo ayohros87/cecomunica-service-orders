@@ -919,6 +919,7 @@ tr[data-estado="RECIBIDO EN MOSTRADOR"] td:first-child { border-left: 4px solid 
 tr[data-estado="ASIGNADO"] td:first-child      { border-left: 4px solid #f59e0b; }
 tr[data-estado*="COMPLETADO"] td:first-child   { border-left: 4px solid var(--accent); }
 tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e; }
+tr[data-estado*="CERRADA"] td:first-child      { border-left: 4px solid #10b981; }
 
 /* Tipo de servicio chip */
 .tipo-chip {
@@ -937,6 +938,7 @@ tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e;
 .tipo-chip--programacion  { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
 .tipo-chip--mantenimiento { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
 .tipo-chip--venta         { background: #faf5ff; color: #7c3aed; border-color: #e9d5ff; }
+.tipo-chip--visita        { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
 
 /* ======================================
    EQUIPMENT TABLE (inside expanded row)
@@ -3479,6 +3481,7 @@ tr.activo:hover { background: #f0f9ff !important; }
 .estado-chip--asignado    .dot { background: #2563EB; }
 .estado-chip--completado  .dot { background: #16A34A; }
 .estado-chip--entregado   .dot { background: var(--gray-500); }
+.estado-chip--visita-cerrada .dot { background: #10B981; }
 
 .estado-chip.active {
   font-weight: 600;
@@ -3515,6 +3518,11 @@ tr.activo:hover { background: #f0f9ff !important; }
   background: var(--gray-100);
   border-color: var(--gray-400);
   color: var(--gray-600);
+}
+.estado-chip--visita-cerrada.active {
+  background: #ECFDF5;
+  border-color: #10B981;
+  color: #065F46;
 }
 
 /* Hide-the-old-select hook */

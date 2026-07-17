@@ -16,7 +16,11 @@ module.exports = onDocumentUpdated(
     const estadoDespues = String(after?.estado_reparacion  || "");
     if (estadoAntes === estadoDespues) return null;
 
-    if (!/COMPLETADO/i.test(estadoDespues)) return null;
+    // CERRADA (VISITA) es el terminal de las visitas técnicas de campo
+    // (cierre en sitio con firma o motivo) — cuenta para las estadísticas
+    // del técnico y notifica igual que un COMPLETADO de taller.
+    const esVisitaCerrada = /CERRADA \(VISITA\)/i.test(estadoDespues);
+    if (!/COMPLETADO/i.test(estadoDespues) && !esVisitaCerrada) return null;
 
     // Llavea las estadísticas por UID (identidad estable). Las órdenes sin
     // `tecnico_uid` (viejas) caen al nombre como fallback. NOTA: el lector
@@ -89,7 +93,9 @@ module.exports = onDocumentUpdated(
       // (firma + receptor + equipos).
       const ordenLink   = `https://app.cecomunica.net/ordenes/index.html?entrega=${encodeURIComponent(ordenId)}`;
       const bodyContent = buildBodyOrdenCompletada(after);
-      const preheader   = `Orden ${after.orden_id || ordenId} completada · ${after.cliente_nombre || "Cliente"}`;
+      const preheader   = esVisitaCerrada
+        ? `Visita cerrada ${after.orden_id || ordenId} · ${after.cliente_nombre || "Cliente"}`
+        : `Orden ${after.orden_id || ordenId} completada · ${after.cliente_nombre || "Cliente"}`;
 
       const vendedorUid = after?.vendedor_asignado || null;
       let vendedorEmail = "";
@@ -107,7 +113,9 @@ module.exports = onDocumentUpdated(
 
       await db.collection("mail_queue").add({
         to:       [...toSet].join(","),
-        subject:  `Orden COMPLETADA: ${after.orden_id || ordenId} – ${after.cliente_nombre || "Cliente"}`,
+        subject:  esVisitaCerrada
+          ? `Visita técnica CERRADA: ${after.orden_id || ordenId} – ${after.cliente_nombre || "Cliente"}`
+          : `Orden COMPLETADA: ${after.orden_id || ordenId} – ${after.cliente_nombre || "Cliente"}`,
         preheader,
         bodyContent,
         ctaUrl:   ordenLink,

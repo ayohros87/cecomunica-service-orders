@@ -42,12 +42,16 @@ window.CONFIG = {
   // Estados de orden (máquina completa: POR ASIGNAR → RECIBIDO EN MOSTRADOR
   // → ASIGNADO → COMPLETADO → ENTREGADO; los strings canónicos viven en
   // empresa/estado_de_reparacion).
+  // Las órdenes de VISITA TECNICA (trabajo en sitio, sin equipos que
+  // entregar) tienen su propio estado terminal: ASIGNADO → CERRADA (VISITA),
+  // que se alcanza con firma del personal de la empresa visitada o motivo.
   ESTADOS: {
     POR_ASIGNAR: 'POR ASIGNAR',
     RECIBIDO: 'RECIBIDO EN MOSTRADOR',
     ASIGNADO: 'ASIGNADO',
     COMPLETADO: 'COMPLETADO (EN OFICINA)',
-    ENTREGADO: 'ENTREGADO AL CLIENTE'
+    ENTREGADO: 'ENTREGADO AL CLIENTE',
+    CERRADA_VISITA: 'CERRADA (VISITA)'
   },
   
   // Pagination — per-role page size. Técnicos see far fewer orders
@@ -268,6 +272,7 @@ function getEstadoClass(estado) {
   if (e === "ASIGNADO") return "chip-recibida";             // azul
   if (e === "COMPLETADO (EN OFICINA)") return "chip-lista"; // verde
   if (e === "ENTREGADO AL CLIENTE") return "chip-entregada"; // gris
+  if (e === "CERRADA (VISITA)") return "chip-aprobada";     // esmeralda
   return "chip-espera"; // estados legacy/extendidos: neutral
 }
 
@@ -278,7 +283,8 @@ function tipoChip(tipo) {
     t.includes('REPAR')   ? 'tipo-chip--reparacion'   :
     t.includes('PROGRAM') ? 'tipo-chip--programacion' :
     t.includes('MANTEN')  ? 'tipo-chip--mantenimiento' :
-    t.includes('VENTA')   ? 'tipo-chip--venta'        : '';
+    t.includes('VENTA')   ? 'tipo-chip--venta'        :
+    t.includes('VISITA')  ? 'tipo-chip--visita'       : '';
   return `<span class="tipo-chip ${cls}">${tipo.trim()}</span>`;
 }
 
@@ -287,5 +293,17 @@ function estadoCompacto(estado) {
   if (e === "COMPLETADO (EN OFICINA)") return "COMPLETADO";
   if (e === "ENTREGADO AL CLIENTE") return "ENTREGADO";
   if (e === "RECIBIDO EN MOSTRADOR") return "RECIBIDO";
+  if (e === "CERRADA (VISITA)") return "CERRADA";
   return e;
+}
+
+// Una orden de VISITA TECNICA es trabajo de campo (torres, repetidores,
+// sitios del cliente): no entra equipo al taller ni hay entrega posterior.
+// Su flujo cierra en sitio con firma del personal de la empresa visitada
+// (o motivo de omisión) — ver ordenes-visita.js.
+function esTipoVisita(tipo) {
+  return normTxt(tipo).includes("visita");
+}
+function esOrdenVisita(orden) {
+  return esTipoVisita(orden?.tipo_de_servicio);
 }
