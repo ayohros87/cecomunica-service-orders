@@ -27,11 +27,10 @@
     // lote. Devuelve el fieldset creado.
     function renderEquipoFieldset({ serial = "", modeloId = "", accesorios = {}, observaciones = "", focusSerie = false } = {}) {
       const id = `equipo_${contador}`;
-      const uuid = crypto.randomUUID();
       const acc = accesorios || {};
 
       const html = `
-  <fieldset id="${id}" data-uuid="${uuid}" class="section form">
+  <fieldset id="${id}" class="section form">
     <legend>Equipo ${contador + 1}</legend>
 
     <div class="form-grid cols-2">
@@ -97,10 +96,25 @@
 
     window.agregarEquipo = () => renderEquipoFieldset({ focusSerie: true });
 
+    // Guard contra doble-submit: guardar hace dos viajes a Firestore (leer la
+    // orden + escribir) sin feedback inmediato; cada clic/Enter extra durante
+    // esa ventana re-anexaba los mismos fieldsets a la orden (caso 2026071706:
+    // 5 radios → 115 filas, indeleteables porque compartían id).
+    let guardandoEquipos = false;
+
     form.addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (guardandoEquipos) return;
+
+  const btnSubmit = form.querySelector("button[type='submit']");
+  guardandoEquipos = true;
+  if (btnSubmit) btnSubmit.disabled = true;
+  let exito = false;
+
+  try {
   const equipos = container.querySelectorAll("fieldset");
   let guardados = 0;
+  let omitidos = 0;
   const nuevosEquipos = [];
 
   const ordenId = document.getElementById("orden_id").value;
@@ -113,6 +127,15 @@
   }
 
   const equiposExistentes = ordenData.equipos || [];
+
+  // Seriales vivos ya guardados en la orden: re-guardar el formulario o
+  // re-teclear un serial no debe crear filas duplicadas.
+  const serialesPresentes = new Set(
+    equiposExistentes
+      .filter(eq => !eq.eliminado)
+      .map(eq => String(eq.serial || eq.numero_de_serie || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
 
   for (let equipo of equipos) {
     const serieInput = equipo.querySelector(".serie");
@@ -134,10 +157,18 @@
       continue;
     }
 
+    const serialKey = (serieInput?.value.trim() || "").toLowerCase();
+    if (serialKey && serialesPresentes.has(serialKey)) {
+      omitidos++;
+      continue;
+    }
+
     // Normalize via the shared EquipoNormalize helper so canonical
     // field names (serial / modelo / observaciones) are guaranteed,
     // regardless of which legacy alias an upstream snippet might use.
     const nuevoEquipo = EquipoNormalize.normalize({
+      // id nuevo en cada guardado — nunca reutilizar el del fieldset, que
+      // repetido rompe el borrado por id.
       id: crypto.randomUUID(),
       modelo_id: modeloInput?.value || "",
       modelo: modelos.find(m => m.id === modeloInput?.value)?.nombre || "",
@@ -155,35 +186,41 @@
       observaciones: observacionesInput?.value.trim() || "sin observaciones"
     });
 
-    const equipoId = equipo.dataset.uuid || crypto.randomUUID();
-    nuevoEquipo.id = equipoId;
-
+    if (serialKey) serialesPresentes.add(serialKey);
     nuevosEquipos.push(nuevoEquipo);
     guardados++;
+  }
+
+  if (!nuevosEquipos.length) {
+    Toast.show(omitidos
+      ? `Ese/esos ${omitidos} serial(es) ya están en la orden — nada que guardar.`
+      : "Agrega al menos un equipo con datos.", "warn");
+    return;
   }
 
   await OrdenesService.updateOrder(ordenId, {
     equipos: [...equiposExistentes, ...nuevosEquipos]
   });
 
+  exito = true;
   mensaje.style.color = "green";
-  const toast = document.createElement("div");
-  toast.textContent = `✅ Se guardaron ${guardados} equipo(s) correctamente.`;
-  toast.style.position = "fixed";
-  toast.style.bottom = "20px";
-  toast.style.right = "20px";
-  toast.style.backgroundColor = "#4CAF50";
-  toast.style.color = "white";
-  toast.style.padding = "10px 20px";
-  toast.style.borderRadius = "5px";
-  toast.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    document.body.removeChild(toast);
-    window.location.href = "index.html";
-  }, 2000);
+  let textoToast = `✅ Se guardaron ${guardados} equipo(s) correctamente.`;
+  if (omitidos) textoToast += ` ${omitidos} ya estaban en la orden.`;
+  Toast.show(textoToast, "ok");
+  setTimeout(() => { window.location.href = "index.html"; }, 2000);
   container.innerHTML = "";
   contador = 0;
+  } catch (error) {
+    console.error("❌ Error guardando equipos:", error);
+    Toast.show(`❌ Error al guardar: ${error?.message || error}`, "bad");
+  } finally {
+    // Tras un guardado exitoso la página redirige — el botón se queda
+    // deshabilitado para no reabrir la ventana de doble-submit.
+    if (!exito) {
+      guardandoEquipos = false;
+      if (btnSubmit) btnSubmit.disabled = false;
+    }
+  }
 });
 
     async function cargarOrdenes() {

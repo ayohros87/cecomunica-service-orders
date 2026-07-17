@@ -461,11 +461,31 @@ window.guardarBatch = async () => {
   if (btn) btn.disabled = true;
   try {
     const ordenData = await OrdenesService.getOrder(ordenId);
-    if (!ordenData) { Toast.show("No se encontró la orden.", "bad"); return; }
+    if (!ordenData) { Toast.show("No se encontró la orden.", "bad"); if (btn) btn.disabled = false; return; }
     const equiposExistentes = ordenData.equipos || [];
-    await OrdenesService.updateOrder(ordenId, { equipos: [...equiposExistentes, ...nuevosEquipos] });
 
-    Toast.show(`✅ Se guardaron ${nuevosEquipos.length} equipo(s) en la orden.`, "ok");
+    // La tabla deduplica contra sí misma, pero no contra lo YA guardado en la
+    // orden — un segundo guardado con las mismas filas duplicaría seriales.
+    const presentesEnOrden = new Set(
+      equiposExistentes
+        .filter(e => !e.eliminado)
+        .map(e => String(e.serial || e.numero_de_serie || "").trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const aGuardar = nuevosEquipos.filter(e => !presentesEnOrden.has(String(e.serial).trim().toLowerCase()));
+    const omitidos = nuevosEquipos.length - aGuardar.length;
+
+    if (!aGuardar.length) {
+      Toast.show(`Esos ${omitidos} serial(es) ya están guardados en la orden — nada que agregar.`, "warn");
+      if (btn) btn.disabled = false;
+      return;
+    }
+
+    await OrdenesService.updateOrder(ordenId, { equipos: [...equiposExistentes, ...aGuardar] });
+
+    let msg = `✅ Se guardaron ${aGuardar.length} equipo(s) en la orden.`;
+    if (omitidos) msg += ` ${omitidos} ya estaban guardados.`;
+    Toast.show(msg, "ok");
     setTimeout(() => { window.location.href = "index.html"; }, 1200);
   } catch (e) {
     console.error("Error guardando batch:", e);
