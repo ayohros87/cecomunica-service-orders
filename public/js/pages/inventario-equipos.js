@@ -605,8 +605,18 @@ window.EquiposPool = {
     this._importRows = null;
   },
 
+  // Solo SERIAL es obligatoria. MODELO debe calzar con el catálogo (como se ve
+  // en el filtro/exportación); CONDICION acepta nuevo/reuso. Filas sin MODELO
+  // usan el modelo por defecto del selector del modal.
   descargarPlantilla() {
-    const ws = XLSX.utils.json_to_sheet([{ SERIAL: 'B12345678' }]);
+    const ws = XLSX.utils.json_to_sheet([{
+      SERIAL:    'B12345678',
+      MODELO:    'HYTERA PNC360S',
+      CONDICION: 'nuevo',
+      PROVEEDOR: 'Proveedor S.A.',
+      NOTAS:     'Compra factura 123',
+    }]);
+    ws['!cols'] = [{ wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 20 }, { wch: 28 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'EQUIPOS');
     XLSX.writeFile(wb, 'plantilla-equipos-serial.xlsx');
@@ -624,33 +634,84 @@ window.EquiposPool = {
       if (!jsonData.length) { preview.innerHTML = '<p style="color:var(--fg-3);">El archivo no tiene filas.</p>'; return; }
 
       const headers = Object.keys(jsonData[0]);
-      const colSerial = headers.find(h => FMT.normalize(h).includes('serial'))
-        || headers.find(h => FMT.normalize(h).includes('serie'));
+      const col = (...alias) => headers.find(h => alias.some(a => FMT.normalize(h).includes(a)));
+      const colSerial = col('serial', 'serie');
       if (!colSerial) {
         preview.innerHTML = '<p style="color:#b91c1c;">No se encontró la columna del serial. Se espera un header <code>SERIAL</code>.</p>';
         return;
       }
+      const colModelo = col('modelo');
+      const colCond   = col('condicion');
+      const colProv   = col('proveedor');
+      const colNotas  = col('nota');
 
-      const seriales = jsonData.map(f => (f[colSerial] || '').toString().trim()).filter(Boolean);
-      const validos = seriales.filter(s => EquiposPoolService.esSerialValido(EquiposPoolService.normalizarSerial(s)));
-      this._importRows = seriales;
+      // Índice del catálogo para resolver la columna MODELO fila por fila:
+      // por id exacto o por label compacto (mismo criterio que _tightLabel —
+      // "HYTERA PNC360S" ≡ "Hytera PNC-360S"; N y R siguen siendo filas aparte).
+      const porId = new Map(this._modelos.map(m => [m.id, m]));
+      const porLabel = new Map();
+      for (const m of this._modelos) {
+        const k = EquiposPoolService._tightLabel(m.label);
+        if (k && !porLabel.has(k)) porLabel.set(k, m);
+      }
+
+      const vistos = new Set();
+      const filas = [];
+      for (const f of jsonData) {
+        const serial = (f[colSerial] || '').toString().trim();
+        if (!serial) continue; // fila vacía del Excel
+        const norm = EquiposPoolService.normalizarSerial(serial);
+        const fila = { serial, norm, modelo_id: null, modelo_label: '',
+                       condicion: 'nuevo', proveedor: '', notas: '', problema: '' };
+        if (!EquiposPoolService.esSerialValido(norm)) fila.problema = 'serial inválido';
+        const modeloTxt = colModelo ? (f[colModelo] || '').toString().trim() : '';
+        if (modeloTxt) {
+          const m = porId.get(modeloTxt) || porLabel.get(EquiposPoolService._tightLabel(modeloTxt));
+          if (m) { fila.modelo_id = m.id; fila.modelo_label = m.label; }
+          else if (!fila.problema) fila.problema = `modelo "${modeloTxt}" no está en el catálogo`;
+        }
+        if (colCond) {
+          const c = FMT.normalize((f[colCond] || '').toString().trim());
+          if (c) fila.condicion = (c.startsWith('r') || c === 'usado') ? 'reuso' : 'nuevo';
+        }
+        if (colProv)  fila.proveedor = (f[colProv] || '').toString().trim();
+        if (colNotas) fila.notas = (f[colNotas] || '').toString().trim();
+        const dupKey = `${norm}|${fila.modelo_id || ''}`;
+        if (!fila.problema && vistos.has(dupKey)) fila.problema = 'duplicado en el archivo';
+        vistos.add(dupKey);
+        filas.push(fila);
+      }
+      this._importRows = filas;
+
+      const validas = filas.filter(f => !f.problema);
+      const problemas = filas.filter(f => f.problema);
+      const sinModelo = validas.filter(f => !f.modelo_id).length;
 
       const esc = FMT.esc;
-      const muestra = validos.slice(0, 8).map(s => `<tr><td class="td-mono">${esc(EquiposPoolService.normalizarSerial(s))}</td></tr>`).join('');
+      const muestra = validas.slice(0, 8).map(f => `<tr>
+        <td class="td-mono">${esc(f.norm)}</td>
+        <td>${f.modelo_label ? esc(f.modelo_label) : '<span style="color:var(--fg-3);">(modelo del selector)</span>'}</td>
+        <td>${f.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
+        <td>${esc(f.proveedor || '—')}</td>
+      </tr>`).join('');
+      const listaProblemas = problemas.slice(0, 6)
+        .map(f => `<li><span class="td-mono">${esc(f.serial)}</span>: ${esc(f.problema)}</li>`).join('');
       preview.innerHTML = `
         <div style="margin-bottom:var(--sp-2);">
-          <span class="import-stat"><strong>${seriales.length}</strong> filas</span>
-          <span class="import-stat" style="color:#15803d;"><strong>${validos.length}</strong> válidas</span>
-          <span class="import-stat" style="color:#b91c1c;"><strong>${seriales.length - validos.length}</strong> inválidas</span>
+          <span class="import-stat"><strong>${filas.length}</strong> filas</span>
+          <span class="import-stat" style="color:#15803d;"><strong>${validas.length}</strong> válidas</span>
+          <span class="import-stat" style="color:#b91c1c;"><strong>${problemas.length}</strong> con problema</span>
+          ${sinModelo ? `<span class="import-stat" style="color:#92400e;"><strong>${sinModelo}</strong> sin MODELO (usarán el del selector)</span>` : ''}
         </div>
         <div class="app-table-wrap" style="max-height:220px; overflow:auto;">
           <table class="app-table compact">
-            <thead><tr><th>Serial</th></tr></thead>
+            <thead><tr><th>Serial</th><th>Modelo</th><th>Condición</th><th>Proveedor</th></tr></thead>
             <tbody>${muestra}</tbody>
           </table>
         </div>
-        ${validos.length > 8 ? `<p style="font-size:12px; color:var(--fg-3); margin:var(--sp-2) 0 0;">Mostrando 8 de ${validos.length} filas válidas.</p>` : ''}`;
-      document.getElementById('btnConfirmarImport').disabled = validos.length === 0;
+        ${validas.length > 8 ? `<p style="font-size:12px; color:var(--fg-3); margin:var(--sp-2) 0 0;">Mostrando 8 de ${validas.length} filas válidas.</p>` : ''}
+        ${problemas.length ? `<div style="font-size:12px; color:#b91c1c; margin-top:var(--sp-2);">Filas que NO se importarán:<ul style="margin:4px 0 0; padding-left:18px;">${listaProblemas}</ul>${problemas.length > 6 ? `<span>…y ${problemas.length - 6} más.</span>` : ''}</div>` : ''}`;
+      document.getElementById('btnConfirmarImport').disabled = validas.length === 0;
     } catch (e) {
       console.error('Error al leer el archivo:', e);
       preview.innerHTML = '<p style="color:#b91c1c;">No se pudo leer el archivo. ¿Es un Excel válido?</p>';
@@ -659,17 +720,36 @@ window.EquiposPool = {
 
   async confirmarImport() {
     if (!this._importRows) return;
-    const modeloId = document.getElementById('impModelo').value;
-    if (!modeloId) { Toast.show('Selecciona el modelo del archivo.', 'bad'); return; }
+    const validas = this._importRows.filter(f => !f.problema);
+    if (!validas.length) return;
+    const defaultId = document.getElementById('impModelo').value;
+    if (validas.some(f => !f.modelo_id) && !defaultId) {
+      Toast.show('Hay filas sin columna MODELO: selecciona el modelo por defecto.', 'bad');
+      return;
+    }
     const btn = document.getElementById('btnConfirmarImport');
     btn.disabled = true;
     btn.innerHTML = 'Importando…';
     try {
-      const res = await EquiposPoolService.recibir(this._importRows, {
-        modelo_id: modeloId,
-        modelo_label: this._modeloLabel(modeloId),
-        origen: 'import_excel',
-      }, firebase.auth().currentUser);
+      // Agrupa filas con metadatos idénticos y llama recibir() por grupo — se
+      // conservan los batches, el dedup por chunks y el failsafe de colisión.
+      const grupos = new Map();
+      for (const f of validas) {
+        const modelo_id = f.modelo_id || defaultId;
+        const modelo_label = f.modelo_id ? f.modelo_label : this._modeloLabel(defaultId);
+        const key = JSON.stringify([modelo_id, f.condicion, f.proveedor, f.notas]);
+        const g = grupos.get(key) || { seriales: [], meta: {
+          modelo_id, modelo_label, condicion: f.condicion,
+          proveedor: f.proveedor, notas: f.notas, origen: 'import_excel',
+        } };
+        g.seriales.push(f.serial);
+        grupos.set(key, g);
+      }
+      const res = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0 };
+      for (const g of grupos.values()) {
+        const r = await EquiposPoolService.recibir(g.seriales, g.meta, firebase.auth().currentUser);
+        for (const k of Object.keys(res)) res[k] += r[k];
+      }
       Toast.show(`Import completado: ${res.nuevos} nuevos, ${res.existentes} ya existían, ${res.colisiones} colisiones de serial, ${res.invalidos} inválidos.`, res.colisiones ? 'warn' : 'ok');
       this.cerrarImport();
       this.cargar();

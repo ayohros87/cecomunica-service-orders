@@ -268,7 +268,7 @@ function obtenerValor(obj, campo) {
 function exportarExcel() {
   const wb = XLSX.utils.book_new();
   const wsData = [
-    ["Marca", "Modelo", "Tipo", "Estado", "Alto Movimiento", "Cantidad", "Última actualización"]
+    ["Marca", "Modelo", "Tipo", "Estado", "Alto Movimiento", "Cantidad", "Cant. anterior", "Última actualización", "Penúltima actualización"]
   ];
 
   inventarioDatos.forEach(({ modelo, data }) => {
@@ -279,7 +279,9 @@ function exportarExcel() {
       modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-",
       modelo.alto_movimiento ? "Sí" : "No",
       data.cantidad ?? "-",
-      data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-"
+      data.cantidad_anterior ?? "-",
+      data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-",
+      data.penultima_actualizacion ? data.penultima_actualizacion.toDate().toLocaleString() : "-"
     ]);
   });
 

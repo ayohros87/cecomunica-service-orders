@@ -429,14 +429,14 @@
       </div>
       <div class="modal-body">
         <div class="form-field">
-          <label class="form-label" for="impModelo">Modelo (se aplica a todo el archivo)</label>
+          <label class="form-label" for="impModelo">Modelo por defecto (para filas sin columna <code>MODELO</code>)</label>
           <select class="form-select" id="impModelo"><option value="">Seleccione…</option></select>
         </div>
         <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo Excel" style="padding:var(--sp-4); min-height:auto;">
           <input type="file" id="eqImportFile" accept=".xlsx,.xls,.csv" onchange="EquiposPool.previsualizarImport(this)">
           <i data-lucide="file-spreadsheet"></i>
           <p style="margin:0; font-size:13px;"><strong>Arrastra el Excel</strong> o haz clic</p>
-          <span style="font-size:12px; color:var(--fg-3);">Columna requerida: <code>SERIAL</code> (primera hoja). Todos entran <strong>en bodega</strong>.</span>
+          <span style="font-size:12px; color:var(--fg-3);">Requerida: <code>SERIAL</code> (primera hoja). Opcionales: <code>MODELO</code> (como aparece en el catálogo), <code>CONDICION</code> (nuevo/reuso), <code>PROVEEDOR</code>, <code>NOTAS</code>. Todos entran <strong>en bodega</strong>.</span>
         </label>
         <div id="eqImportPreview" style="margin-top:var(--sp-3);"></div>
       </div>
