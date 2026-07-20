@@ -21,6 +21,10 @@ const pool = require("../../domain/equiposPool");
 // Doc MARCADOR { sin_reemplazos: true, saliente: null, entrante: null, … }:
 // cierra la transición de una adición pura — solo incrementa el contador
 // (las secciones de linaje no aplican al no traer seriales).
+// Doc EXCEPCIÓN { tipo: 'no_devuelve', saliente, motivo_codigo, motivo_detalle }:
+// el saliente NO se devuelve (renovación parcial / vendido / perdido…). No se
+// marca pendiente_devolucion; se estampa `devolucion_excepcion` en la unidad
+// para que el kardex y las conciliaciones sepan por qué sigue con el cliente.
 module.exports = onDocumentWritten(
   { document: "contratos/{cid}/mapeos/{mid}", region: "us-central1" },
   async (event) => {
@@ -94,11 +98,25 @@ module.exports = onDocumentWritten(
       logger.warn("[onMapeoWrite] No se pudo estampar el contador en el contrato", { cid, message: e.message });
     }
 
-    // ── Saliente: pendiente de devolución ────────────────────────────────
+    // ── Saliente: pendiente de devolución o excepción justificada ────────
     if (serialSaliente) {
+      const esExcepcion = m.tipo === "no_devuelve";
       try {
         const ref = await resolverUnidad(m.saliente_pool_id, serialSaliente);
-        if (ref) {
+        if (ref && esExcepcion) {
+          await ref.set({
+            devolucion_excepcion: creado ? {
+              motivo_codigo: m.motivo_codigo || "otro",
+              motivo_detalle: m.motivo_detalle || "",
+              contrato_id: m.contrato_id || cid,
+              at: admin.firestore.FieldValue.serverTimestamp(),
+            } : admin.firestore.FieldValue.delete(),
+            updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          await ref.collection("movimientos").add(movimiento("reemplazo", creado
+            ? `NO se devuelve (${m.motivo_codigo || "otro"}${m.motivo_detalle ? `: ${m.motivo_detalle}` : ""}) — transición de contrato`
+            : "Excepción de devolución eliminada"));
+        } else if (ref) {
           await ref.set({
             pendiente_devolucion: creado ? true : admin.firestore.FieldValue.delete(),
             updated_at: admin.firestore.FieldValue.serverTimestamp(),

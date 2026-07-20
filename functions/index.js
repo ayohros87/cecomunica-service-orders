@@ -26,6 +26,9 @@ exports.onSerialWrite                 = require("./src/triggers/contratos/onSeri
 exports.onSerialCambio                = require("./src/triggers/contratos/onSerialCambio");
 // Transición renovación/reemplazo: aplica linaje del mapeo al pool (PLAN_CICLO_VIDA_EQUIPOS.md C.2)
 exports.onMapeoWrite                  = require("./src/triggers/contratos/onMapeoWrite");
+// Al confirmarse la entrega del contrato nuevo con origen vinculado: auto-registra
+// la devolución de todo el alquiler de los contratos originales (regla 2026-07-20)
+exports.onEntregaTransicion           = require("./src/triggers/contratos/onEntregaTransicion");
 // Pool de equipos por serial — migración por contacto (PLAN_POOL_EQUIPOS_SERIAL.md)
 exports.onEntregaPool                 = require("./src/triggers/contratos/onEntregaPool");
 exports.onOrdenWritePool              = require("./src/triggers/ordenes/onOrdenWritePool");
