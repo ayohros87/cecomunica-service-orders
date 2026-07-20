@@ -80,6 +80,47 @@ async function main() {
   await assertSucceeds(as("administrador").doc("poc_devices/pDel").delete());
   ok("poc_devices: delete solo admin (recepción no) — ahora efectivo");
 
+  // ── ordenes: máquina de estados (transiciones ilegales bloqueadas) ────────
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "POR ASIGNAR" });
+    await db.doc("ordenes_de_servicio/oTerm").set({ estado_reparacion: "ENTREGADO AL CLIENTE" });
+    await db.doc("ordenes_de_servicio/oLegacy").set({ estado_reparacion: "EN TALLER (LEGACY)" });
+    await db.doc("ordenes_de_servicio/oVisita").set({ estado_reparacion: "ASIGNADO" });
+  });
+  await assertFails(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  ok("ordenes: POR ASIGNAR → ENTREGADO directo bloqueado (no-admin)");
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "RECIBIDO EN MOSTRADOR" }, { merge: true }));
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "COMPLETADO (EN OFICINA)" }, { merge: true }));
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  ok("ordenes: cadena recibir→asignar→completar→entregar pasa");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oTerm").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
+  ok("ordenes: reabrir ENTREGADO bloqueado para no-admin");
+  await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oTerm").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
+  ok("ordenes: admin puede revertir (corrección manual)");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oLegacy").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
+  ok("ordenes: estado legacy fuera del enum puede regularizarse");
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oVisita").set({ estado_reparacion: "CERRADA (VISITA)" }, { merge: true }));
+  ok("ordenes: ASIGNADO → CERRADA (VISITA) pasa");
+
+  // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("empresa/config").set({ cotizacion_descuento_max_pct: 15, cotizacion_total_max: 5000 });
+    await db.doc("cotizaciones/cDentro").set({ estado: "borrador", creado_por_uid: "vendedor", total: 1200, descuentoPct: 10 });
+    await db.doc("cotizaciones/cFuera").set({ estado: "borrador", creado_por_uid: "vendedor", total: 9000, descuentoPct: 0 });
+    await db.doc("cotizaciones/cAprobada").set({ estado: "aprobada", creado_por_uid: "vendedor", total: 9000, descuentoPct: 0, fecha_aprobacion: new Date() });
+  });
+  await assertSucceeds(as("vendedor").doc("cotizaciones/cDentro").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: vendedor envía la suya dentro de política");
+  await assertFails(as("vendedor").doc("cotizaciones/cFuera").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: envío fuera de política bloqueado para vendedor");
+  await assertSucceeds(as("vendedor").doc("cotizaciones/cAprobada").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: con aprobación previa el dueño sí puede marcar enviada");
+  await assertSucceeds(as("gerente").doc("cotizaciones/cFuera").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: gerente (aprobador comercial) envía fuera de política");
+
   // ── Regresión: flujos que DEBEN seguir abiertos ───────────────────────────
   await assertSucceeds(as("tecnico").doc("inventario_piezas/p1").set({ cantidad: 3 }));
   await assertSucceeds(as("tecnico").doc("analytics_piezas_modelo/a1").set({ usos: 1 }));
