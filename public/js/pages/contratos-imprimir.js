@@ -425,7 +425,9 @@ function pintarTotalesImpresion(tot) {
       body.innerHTML = tot.cargos.map(cg => `
         <tr><td>${(cg.concepto || '').replace(/</g,'&lt;')}</td>
             <td>${cg.recurrente ? 'Mensual' : 'Único'}</td>
-            <td class="right">${fmt(Number(cg.monto) || 0)}</td></tr>`).join('');
+            <td class="right">${Math.max(1, Number(cg.cantidad) || 1)}</td>
+            <td class="right">${fmt(Number(cg.monto) || 0)}</td>
+            <td class="right">${fmt((Number(cg.monto) || 0) * (Number(cg.cantidad) || 1))}</td></tr>`).join('');
       wrap.style.display = '';
     } else {
       wrap.style.display = 'none';

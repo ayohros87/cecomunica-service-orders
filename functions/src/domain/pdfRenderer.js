@@ -74,14 +74,15 @@ function buildContractHtmlForPdf(contrato, vendedorInfo = {}, aprobadorInfo = {}
   const cargos = Array.isArray(contrato.cargos) ? contrato.cargos : [];
   cargos.forEach((cg) => {
     const monto = Number(cg.monto || 0);
+    const cant  = Math.max(1, Number(cg.cantidad || 1));
     equiposRows += `
       <tr>
         <td>+</td>
         <td>${cg.concepto || "Concepto"} ${cg.recurrente ? "(mensual)" : "(único)"}</td>
         <td>—</td>
-        <td>1</td>
+        <td>${cant}</td>
         <td>$${monto.toFixed(2)}</td>
-        <td>$${monto.toFixed(2)}</td>
+        <td>$${(monto * cant).toFixed(2)}</td>
       </tr>`;
   });
   html = html.replace("{{TABLA_EQUIPOS}}", `<tbody>${equiposRows}</tbody>`);

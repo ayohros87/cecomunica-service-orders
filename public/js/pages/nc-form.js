@@ -194,7 +194,7 @@ window.NCForm = {
     // Otros conceptos (cargos): recurrentes suman al mensual; únicos al primer pago.
     const cargos = (window.NCCargos ? NCCargos.leer() : []);
     let cargosRec = 0, cargosUni = 0;
-    cargos.forEach(c => { if (c.recurrente) cargosRec += Number(c.monto) || 0; else cargosUni += Number(c.monto) || 0; });
+    cargos.forEach(c => { const t = (Number(c.monto) || 0) * (Number(c.cantidad) || 1); if (c.recurrente) cargosRec += t; else cargosUni += t; });
     cargosRec = FMT.round2(cargosRec); cargosUni = FMT.round2(cargosUni);
 
     const mensual = ContractTotals.compute(FMT.round2(equiposSub + cargosRec), itbmsAplica);

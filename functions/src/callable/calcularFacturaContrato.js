@@ -97,7 +97,8 @@ module.exports = onCall(
     const cargos = [];
     for (const cg of (Array.isArray(c.cargos) ? c.cargos : [])) {
       if (!cg.recurrente) continue;
-      cargos.push({ tipo: "cargo", concepto: cg.concepto || "Cargo", importe: r2(cg.monto), cargo_id: cg.cargo_id || "" });
+      const cant = Math.max(1, Number(cg.cantidad || 1));
+      cargos.push({ tipo: "cargo", concepto: cg.concepto || "Cargo", cantidad: cant, precio_unitario: r2(cg.monto), importe: r2(Number(cg.monto || 0) * cant), cargo_id: cg.cargo_id || "" });
     }
 
     const subtotalEquipos = r2(lineas.reduce((s, l) => s + l.importe, 0));

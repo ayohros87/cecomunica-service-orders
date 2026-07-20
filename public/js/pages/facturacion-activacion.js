@@ -247,7 +247,7 @@ function renderFactura(f){
       <td style="text-align:right; font-family:var(--font-mono);">${money(l.importe)}</td>
       <td style="font-size:11px; color:var(--fg-3); white-space:nowrap;">A ${money(l.desglose.alquiler)} · F ${money(l.desglose.frecuencia)} · M ${money(l.desglose.mantenimiento)}</td>
     </tr>`).join('');
-  const cargos=(f.cargos||[]).map(c=>`<tr><td>${esc(c.concepto)} <span style="font-size:11px;color:var(--fg-4);">(cargo)</span></td><td></td><td style="text-align:right; font-family:var(--font-mono);">${money(c.importe)}</td><td></td></tr>`).join('');
+  const cargos=(f.cargos||[]).map(c=>`<tr><td>${esc(c.concepto)} <span style="font-size:11px;color:var(--fg-4);">(cargo)</span></td><td style="text-align:center;">${Number(c.cantidad)||1}</td><td style="text-align:right; font-family:var(--font-mono);">${money(c.importe)}</td><td></td></tr>`).join('');
   document.getElementById('facturaBody').innerHTML=`
     <div style="margin-bottom:8px;"><b>${esc(f.contrato_id)}</b> · ${esc(f.cliente_nombre)} — ${MESES[f.periodo.mes]} ${f.periodo.anio} <span style="color:var(--fg-3);">(${f.periodo.inicio} a ${f.periodo.fin})</span></div>
     <div class="table-scroll" style="max-height:50vh; overflow:auto;">

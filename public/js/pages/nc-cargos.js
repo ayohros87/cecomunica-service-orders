@@ -28,6 +28,13 @@ window.NCCargos = {
     return opts.join('');
   },
 
+  _totalFila(tr) {
+    const cant  = Math.max(1, Math.round(Number(tr.querySelector('.cargo-cant')?.value)) || 1);
+    const monto = Math.max(0, Number(tr.querySelector('.cargo-monto')?.value) || 0);
+    const celda = tr.querySelector('.cargo-total');
+    if (celda) celda.textContent = `$${(cant * monto).toFixed(2)}`;
+  },
+
   async agregarFila(c = {}) {
     await this._ensure();
     const tbody = document.querySelector('#tablaCargos tbody');
@@ -35,16 +42,19 @@ window.NCCargos = {
     const tr = document.createElement('tr');
     tr.classList.add('fila-cargo');
     const rec = c.recurrente === true;
+    const cant = Math.max(1, Math.round(Number(c.cantidad)) || 1);
     tr.innerHTML = `
       <td><select class="cargo-sel">${this._opcionesHtml(c.cargo_id)}</select></td>
+      <td><span class="minput"><input type="number" class="cargo-cant" step="1" min="1" value="${cant}"></span></td>
       <td><span class="minput"><input type="number" class="cargo-monto" step="any" min="0" value="${Number.isFinite(c.monto) ? c.monto : ''}" placeholder="0.00"></span></td>
       <td><select class="cargo-tipo">
             <option value="unico"${rec ? '' : ' selected'}>Único</option>
             <option value="recurrente"${rec ? ' selected' : ''}>Mensual</option>
           </select></td>
+      <td class="cargo-total" style="text-align:right; font-family:var(--font-mono);">$0.00</td>
       <td><button type="button" class="btn-del-fila cargo-del">❌</button></td>`;
     tbody.appendChild(tr);
-    const recalc = () => { if (window.NCForm) NCForm.recalcularTotalesContrato(); };
+    const recalc = () => { this._totalFila(tr); if (window.NCForm) NCForm.recalcularTotalesContrato(); };
 
     const sel = tr.querySelector('.cargo-sel');
     sel.addEventListener('change', () => {
@@ -56,9 +66,10 @@ window.NCCargos = {
       }
       recalc();
     });
+    tr.querySelector('.cargo-cant').addEventListener('input', recalc);
     tr.querySelector('.cargo-monto').addEventListener('input', recalc);
     tr.querySelector('.cargo-tipo').addEventListener('change', recalc);
-    tr.querySelector('.cargo-del').addEventListener('click', () => { tr.remove(); recalc(); });
+    tr.querySelector('.cargo-del').addEventListener('click', () => { tr.remove(); if (window.NCForm) NCForm.recalcularTotalesContrato(); });
     recalc();
   },
 
@@ -77,6 +88,7 @@ window.NCCargos = {
       return {
         cargo_id: sel?.value || '',
         concepto: opt ? (opt.textContent || '').trim() : '',
+        cantidad: Math.max(1, Math.round(Number(tr.querySelector('.cargo-cant')?.value)) || 1),
         monto: Math.max(0, Number(tr.querySelector('.cargo-monto')?.value || 0)),
         recurrente: tr.querySelector('.cargo-tipo')?.value === 'recurrente',
       };

@@ -103,9 +103,9 @@ window.NCPreview = {
       <div class="preview-card">
         <h4>Servicios y otros</h4>
         <table class="preview-table">
-          <thead><tr><th>Concepto</th><th>Tipo</th><th>Monto</th></tr></thead>
+          <thead><tr><th>Concepto</th><th>Tipo</th><th>Cant</th><th>P.Unit</th><th>Total</th></tr></thead>
           <tbody>${draft.cargos.map(c => `
-            <tr><td>${esc(c.concepto || '')}</td><td>${c.recurrente ? 'Mensual' : 'Único'}</td><td style="text-align:right;">$${Number(c.monto || 0).toFixed(2)}</td></tr>
+            <tr><td>${esc(c.concepto || '')}</td><td>${c.recurrente ? 'Mensual' : 'Único'}</td><td style="text-align:right;">${Number(c.cantidad || 1)}</td><td style="text-align:right;">$${Number(c.monto || 0).toFixed(2)}</td><td style="text-align:right;">$${(Number(c.monto || 0) * (Number(c.cantidad) || 1)).toFixed(2)}</td></tr>
           `).join('')}</tbody>
         </table>
       </div>` : ''}
