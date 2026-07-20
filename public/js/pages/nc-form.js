@@ -93,38 +93,42 @@ window.NCForm = {
     if (!box) return;
     const aplica = this._origenAplica();
     box.style.display = aplica ? 'block' : 'none';
-    const chk = document.getElementById('origenLegacyChk');
-    const sel = document.getElementById('origenContrato');
-    const ref = document.getElementById('origenLegacyRef');
-    if (chk && sel && ref) {
-      sel.disabled = chk.checked;
+    const chk  = document.getElementById('origenLegacyChk');
+    const list = document.getElementById('origenContratosList');
+    const ref  = document.getElementById('origenLegacyRef');
+    if (chk && list && ref) {
+      list.style.opacity = chk.checked ? '0.45' : '';
+      list.querySelectorAll('.origen-chk').forEach(c => { c.disabled = chk.checked; });
       ref.style.display = chk.checked ? 'block' : 'none';
     }
     if (aplica) this.cargarContratosOrigen();
   },
 
   _origenClienteCargado: null,
+  // Lista de CHECKBOXES (una renovación puede consolidar varios contratos
+  // viejos — multi-selección). Vacío = 'ninguno' (se puede vincular después).
   async cargarContratosOrigen() {
     const clienteId = document.getElementById('cliente')?.value || '';
-    const sel = document.getElementById('origenContrato');
-    if (!sel) return;
-    if (!clienteId) {
-      sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>';
-      this._origenClienteCargado = null;
-      return;
-    }
+    const list = document.getElementById('origenContratosList');
+    if (!list) return;
+    const hint = (msg) => { list.innerHTML = `<span style="color:var(--fg-3,#6b7280);">${NC.escapeHtml(msg)}</span>`; };
+    if (!clienteId) { hint('Selecciona el cliente primero…'); this._origenClienteCargado = null; return; }
     if (this._origenClienteCargado === clienteId) return; // ya cargado para este cliente
     this._origenClienteCargado = clienteId;
-    sel.innerHTML = '<option value="">Cargando contratos del cliente…</option>';
+    hint('Cargando contratos del cliente…');
     try {
       const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
-      sel.innerHTML = contratos.length
-        ? '<option value="">Sin vincular (elegir después)</option>' + contratos.map(c =>
-            `<option value="${NC.escapeHtml(c.id)}" data-ref="${NC.escapeHtml(c.contrato_id || c.id)}">${NC.escapeHtml(c.contrato_id || c.id)} · ${NC.escapeHtml(c.tipo_contrato || '')} · ${NC.escapeHtml(c.estado || '')}</option>`).join('')
-        : '<option value="">El cliente no tiene contratos vigentes en el sistema</option>';
+      list.innerHTML = contratos.length
+        ? contratos.map(c => `
+            <label class="form-check" style="margin:0;">
+              <input type="checkbox" class="origen-chk" value="${NC.escapeHtml(c.id)}" data-ref="${NC.escapeHtml(c.contrato_id || c.id)}">
+              <span><span class="form-check-label">${NC.escapeHtml(c.contrato_id || c.id)} · ${NC.escapeHtml(c.tipo_contrato || '')} · ${NC.escapeHtml(c.estado || '')}</span></span>
+            </label>`).join('')
+        : '';
+      if (!contratos.length) hint('El cliente no tiene contratos vigentes en el sistema');
     } catch (e) {
       console.warn('No se pudieron cargar los contratos del cliente', e);
-      sel.innerHTML = '<option value="">No se pudieron cargar los contratos</option>';
+      hint('No se pudieron cargar los contratos');
     }
   },
 

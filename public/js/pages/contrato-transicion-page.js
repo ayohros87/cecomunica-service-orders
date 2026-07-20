@@ -57,14 +57,22 @@
   async function cargarDatos() {
     const c = ctx.contrato;
 
-    // SALIENTES: anclados al contrato original si está vinculado; si no (o
-    // legacy/papel), a TODOS los equipos del cliente en el pool — excluyendo
-    // lo asignado al contrato nuevo. Solo unidades aún con el cliente.
+    // SALIENTES: anclados a los contratos originales vinculados (multi: una
+    // renovación puede consolidar varios contratos viejos); si no hay vínculo
+    // (o legacy/papel), a TODOS los equipos del cliente en el pool —
+    // excluyendo lo asignado al contrato nuevo. Solo unidades con el cliente.
     let salientes = [];
     try {
-      salientes = c.contrato_origen_id
-        ? await EquiposPoolService.listarPorContrato(c.contrato_origen_id)
-        : await EquiposPoolService.listarPorCliente(c.cliente_id);
+      const origenIds = (Array.isArray(c.contrato_origen_ids) && c.contrato_origen_ids.length)
+        ? c.contrato_origen_ids
+        : (c.contrato_origen_id ? [c.contrato_origen_id] : []);
+      if (origenIds.length) {
+        const listas = await Promise.all(origenIds.map(id => EquiposPoolService.listarPorContrato(id)));
+        const vistos = new Set();
+        salientes = listas.flat().filter(u => !vistos.has(u.id) && vistos.add(u.id));
+      } else {
+        salientes = await EquiposPoolService.listarPorCliente(c.cliente_id);
+      }
     } catch (e) { console.warn('No se pudieron cargar los equipos salientes', e); }
     ctx.salientes = salientes.filter(u =>
       (u.estado === EquiposPoolService.ESTADOS.ASIGNADO || u.estado === EquiposPoolService.ESTADOS.EN_CLIENTE)
@@ -94,27 +102,49 @@
 
   function render() {
     const c = ctx.contrato;
-    const mapSalientes = new Set(ctx.mapeos.map(m => norm(m.saliente)).filter(Boolean));
+    // Devoluciones/reemplazos vs excepciones (no_devuelve) se separan: las
+    // excepciones NO son "pendientes de devolución" — solo salen de la lista
+    // por resolver y quedan en la tabla "Transición registrada".
+    const mapSalientes = new Set(ctx.mapeos.filter(m => m.tipo !== 'no_devuelve').map(m => norm(m.saliente)).filter(Boolean));
+    const excepSalientes = new Set(ctx.mapeos.filter(m => m.tipo === 'no_devuelve').map(m => norm(m.saliente)).filter(Boolean));
     const mapEntrantes = new Set(ctx.mapeos.map(m => norm(m.entrante)).filter(Boolean));
 
     const entrantesPend = ctx.entrantes.filter(s => !mapEntrantes.has(norm(s.serial)));
     const salientesDisp = ctx.salientes.filter(u =>
-      !mapSalientes.has(norm(u.serial || u.serial_norm)) && !u.pendiente_devolucion);
+      !mapSalientes.has(norm(u.serial || u.serial_norm))
+      && !excepSalientes.has(norm(u.serial || u.serial_norm))
+      && !u.pendiente_devolucion);
     const salientesEnTransicion = ctx.salientes.filter(u =>
       mapSalientes.has(norm(u.serial || u.serial_norm)) || u.pendiente_devolucion);
 
-    // Aviso de ancla: con vínculo al original se listan SUS equipos; sin
-    // vínculo, todos los del cliente (caso legacy/papel — §3.4).
-    const ancla = c.contrato_origen_id
-      ? `Equipos del contrato original <b>${esc(c.contrato_origen_ref || c.contrato_origen_id)}</b>`
+    // Aviso de ancla: con vínculo al/los originales se listan SUS equipos;
+    // sin vínculo, todos los del cliente (caso legacy/papel — §3.4).
+    const origenRefs = (Array.isArray(c.contrato_origen_refs) && c.contrato_origen_refs.length)
+      ? c.contrato_origen_refs
+      : (c.contrato_origen_id ? [c.contrato_origen_ref || c.contrato_origen_id] : []);
+    const ancla = origenRefs.length
+      ? `Equipos ${origenRefs.length > 1 ? 'de los contratos originales' : 'del contrato original'} <b>${origenRefs.map(esc).join('</b>, <b>')}</b>`
       : (c.origen_tipo === 'legacy'
           ? `Contrato original en papel${c.origen_legacy_ref ? ` (<b>${esc(c.origen_legacy_ref)}</b>)` : ''} — se listan todos los equipos del cliente en el pool`
           : 'Sin contrato original vinculado — se listan todos los equipos del cliente en el pool');
 
+    // Propiedad: los equipos PROPIOS del cliente no se devuelven (son suyos);
+    // el default de devolución aplica solo al alquiler. 'desconocida' se trata
+    // como alquiler — lado seguro para el inventario (la excepción se
+    // justifica con un clic si resultara propio).
+    const propios  = salientesDisp.filter(u => u.propiedad === 'cliente');
+    const alquiler = salientesDisp.filter(u => u.propiedad !== 'cliente');
+    const MOTIVOS_NO_DEV = [
+      ['parcial', 'Renovación parcial — sigue en servicio'],
+      ['vendido', 'Se vendió al cliente'],
+      ['perdido', 'Perdido — pendiente de cobro'],
+      ['otro',    'Otro (detallar)'],
+    ];
+
     // Selector de saliente para cada entrante pendiente (mismo modelo primero).
     const opcionesSaliente = (ent) => {
       const compatibles = [], otros = [];
-      salientesDisp.forEach(u => {
+      alquiler.forEach(u => {
         (EquiposPoolService._mismoModelo(u, ent.modelo_id || null, ent.modelo || '') ? compatibles : otros).push(u);
       });
       const opt = (u, grupo) => `<option value="${esc(u.id)}" data-serial="${esc(u.serial || u.serial_norm)}">${esc(u.serial || u.serial_norm)} · ${esc(u.modelo_label || '—')}${grupo ? '' : ' (otro modelo)'}</option>`;
@@ -133,23 +163,38 @@
       </tr>`).join('')
       : `<tr><td colspan="3" style="padding:12px;color:var(--fg-3);">No hay entrantes sin mapear${ctx.entrantes.length ? '' : ' — asigna primero los seriales del contrato en la página de Seriales'}.</td></tr>`;
 
-    const filasSalientes = salientesDisp.length ? salientesDisp.map(u => `
+    // Default: TODO el alquiler se devuelve (checkbox marcado). Desmarcar es
+    // la excepción y exige motivo (renovación parcial / vendido / perdido…).
+    const filasSalientes = alquiler.length ? alquiler.map(u => `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);">
-          <input type="checkbox" class="trans-devolver" value="${esc(u.id)}" data-serial="${esc(u.serial || u.serial_norm)}" style="width:16px;height:16px;">
+          <input type="checkbox" class="trans-devolver" checked value="${esc(u.id)}" data-serial="${esc(u.serial || u.serial_norm)}" style="width:16px;height:16px;">
         </td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono,monospace);">
           <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}">${esc(u.serial || u.serial_norm)}</a>
         </td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);">${esc(u.modelo_label || '—')}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);">${EquiposPoolService.chipEstadoHtml(u.estado)}</td>
+        <td class="celda-motivo" style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);display:none;">
+          <select class="form-select trans-motivo" style="height:30px;font-size:12px;max-width:260px;">
+            <option value="">Motivo de NO devolución…</option>
+            ${MOTIVOS_NO_DEV.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+          </select>
+          <input class="form-input trans-motivo-detalle" placeholder="Detalle" style="display:none;height:30px;font-size:12px;margin-top:4px;max-width:260px;">
+        </td>
       </tr>`).join('')
-      : `<tr><td colspan="4" style="padding:12px;color:var(--fg-3);">No quedan equipos del cliente por resolver.</td></tr>`;
+      : `<tr><td colspan="5" style="padding:12px;color:var(--fg-3);">No quedan equipos de alquiler del cliente por resolver.</td></tr>`;
 
     const filasMapeos = ctx.mapeos.length ? ctx.mapeos.map(m => m.sin_reemplazos ? `
       <tr>
         <td colspan="4" style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);color:var(--fg-3);">
           Cerrada <b>sin reemplazos</b> — los equipos nuevos no sustituyen a ninguno (adición pura)
+        </td>
+      </tr>` : m.tipo === 'no_devuelve' ? `
+      <tr>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono,monospace);">${esc(m.saliente || '—')}</td>
+        <td colspan="3" style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);color:#92400e;">
+          NO se devuelve — ${esc((MOTIVOS_NO_DEV.find(([v]) => v === m.motivo_codigo) || [,'motivo registrado'])[1])}${m.motivo_detalle ? `: ${esc(m.motivo_detalle)}` : ''}
         </td>
       </tr>` : `
       <tr>
@@ -159,15 +204,15 @@
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);color:var(--fg-3);">${esc(m.modelo || '')}</td>
       </tr>`).join('') : '';
 
-    // Vincular el contrato original DESPUÉS de crear el contrato: el form de
-    // nuevo-contrato lo ofrece, pero si se omitió, aquí es donde se descubre
-    // que falta (los salientes salen sin ancla). Solo si hay cliente.
-    const vincularHtml = (!c.contrato_origen_id && c.cliente_id) ? `
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <select id="selOrigenTrans" class="form-select" style="max-width:360px;font-size:13px;">
-          <option value="">Cargando contratos del cliente…</option>
-        </select>
-        <button type="button" class="btn btn-sm" id="btnVincularOrigen"><i data-lucide="link"></i> Vincular original</button>
+    // Vincular contrato(s) original(es) DESPUÉS de crear el contrato: el form
+    // de nuevo-contrato lo ofrece, pero si se omitió, aquí es donde se
+    // descubre que falta (los salientes salen sin ancla). Multi-selección.
+    const vincularHtml = (!origenRefs.length && c.cliente_id) ? `
+      <div style="margin-top:8px;">
+        <div id="listOrigenTrans" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto;border:1px solid var(--border-subtle);border-radius:8px;padding:8px 10px;">
+          <span style="color:var(--fg-3);">Cargando contratos del cliente…</span>
+        </div>
+        <button type="button" class="btn btn-sm" id="btnVincularOrigen" style="margin-top:6px;"><i data-lucide="link"></i> Vincular original(es)</button>
       </div>` : '';
 
     $('transBody').innerHTML = `
@@ -195,17 +240,26 @@
       </div>
 
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
-        <div style="font-weight:600;margin-bottom:8px;">Salientes del cliente sin resolver (${salientesDisp.length})</div>
-        <p style="margin:0 0 8px;font-size:12px;color:var(--fg-3);">Marca los que se <b>devuelven sin sustituto</b> (renovación con menos equipos). Los elegidos arriba como reemplazo no necesitan marcarse.</p>
+        <div style="font-weight:600;margin-bottom:8px;">Equipos de alquiler que se devuelven (${alquiler.length})</div>
+        <p style="margin:0 0 8px;font-size:12px;color:var(--fg-3);"><b>Todos se devuelven por defecto.</b> Desmarca solo la excepción (renovación parcial, vendido, perdido…) — el motivo es obligatorio. Los elegidos arriba como reemplazo se resuelven solos.</p>
         <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px;">
             <thead><tr style="text-align:left;color:var(--fg-3);font-size:12px;">
-              <th style="padding:6px 8px;"></th><th style="padding:6px 8px;">Serial</th><th style="padding:6px 8px;">Modelo</th><th style="padding:6px 8px;">Estado</th>
+              <th style="padding:6px 8px;" title="Se devuelve">↩</th><th style="padding:6px 8px;">Serial</th><th style="padding:6px 8px;">Modelo</th><th style="padding:6px 8px;">Estado</th><th style="padding:6px 8px;">Si NO se devuelve</th>
             </tr></thead>
             <tbody>${filasSalientes}</tbody>
           </table>
         </div>
       </div>
+
+      ${propios.length ? `
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
+        <div style="font-weight:600;margin-bottom:8px;">Equipos PROPIOS del cliente (${propios.length}) — no se devuelven</div>
+        <p style="margin:0 0 8px;font-size:12px;color:var(--fg-3);">Son propiedad del cliente; quedan fuera de la devolución. Solo informativo.</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${propios.map(u => `<span class="eqpool-chip" title="${esc(u.modelo_label || '')}">${esc(u.serial || u.serial_norm)}</span>`).join('')}
+        </div>
+      </div>` : ''}
 
       ${salientesEnTransicion.length ? `
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
@@ -238,6 +292,15 @@
     // Un saliente elegido en un select desaparece de las opciones de los demás
     // y de la lista de "se devuelve sin sustituto" (checkbox se desmarca/oculta).
     document.querySelectorAll('.trans-map').forEach(sel => sel.addEventListener('change', sincronizarSelecciones));
+    // Desmarcar "se devuelve" abre el motivo de la excepción (obligatorio).
+    document.querySelectorAll('.trans-devolver').forEach(chk => chk.addEventListener('change', () => {
+      const celda = chk.closest('tr')?.querySelector('.celda-motivo');
+      if (celda) celda.style.display = (chk.checked || chk.disabled) ? 'none' : '';
+    }));
+    document.querySelectorAll('.trans-motivo').forEach(sel => sel.addEventListener('change', () => {
+      const det = sel.closest('.celda-motivo')?.querySelector('.trans-motivo-detalle');
+      if (det) det.style.display = sel.value === 'otro' ? '' : 'none';
+    }));
     sincronizarSelecciones();
     if (window.lucide) lucide.createIcons();
   }
@@ -257,6 +320,9 @@
       chk.disabled = usado;
       if (usado) chk.checked = false;
       chk.closest('tr').style.opacity = usado ? '0.45' : '';
+      // Resuelto por reemplazo → no es excepción: el motivo no aplica.
+      const celda = chk.closest('tr')?.querySelector('.celda-motivo');
+      if (celda) celda.style.display = (chk.checked || chk.disabled) ? 'none' : '';
     });
   }
 
@@ -290,34 +356,41 @@
   // pero aquí es donde se nota si faltó). Ancla los salientes al original en
   // vez de listar todos los equipos del cliente.
   async function poblarVinculo() {
-    const sel = $('selOrigenTrans');
-    if (!sel) return;
+    const list = $('listOrigenTrans');
+    if (!list) return;
     try {
       const contratos = await ContratosService.getContratosActivosPorCliente(ctx.contrato.cliente_id);
       const otros = (contratos || []).filter(k => k.id !== contratoDocId);
-      sel.innerHTML = otros.length
-        ? '<option value="">Vincular contrato original…</option>' + otros.map(k =>
-            `<option value="${esc(k.id)}" data-ref="${esc(k.contrato_id || k.id)}">${esc(k.contrato_id || k.id)} · ${esc(k.tipo_contrato || '')} · ${esc(k.estado || '')}</option>`).join('')
-        : '<option value="">El cliente no tiene otros contratos vigentes</option>';
+      list.innerHTML = otros.length
+        ? otros.map(k => `
+            <label class="form-check" style="margin:0;">
+              <input type="checkbox" class="origen-trans-chk" value="${esc(k.id)}" data-ref="${esc(k.contrato_id || k.id)}">
+              <span><span class="form-check-label">${esc(k.contrato_id || k.id)} · ${esc(k.tipo_contrato || '')} · ${esc(k.estado || '')}</span></span>
+            </label>`).join('')
+        : '<span style="color:var(--fg-3);">El cliente no tiene otros contratos vigentes</span>';
     } catch (e) {
-      sel.innerHTML = '<option value="">No se pudieron cargar los contratos</option>';
+      list.innerHTML = '<span style="color:var(--fg-3);">No se pudieron cargar los contratos</span>';
     }
   }
 
   async function vincularOrigen() {
-    const sel = $('selOrigenTrans');
-    const id = sel?.value;
-    if (!id) { Toast.show('Elige el contrato original de la lista.', 'warn'); return; }
-    const ref = sel.selectedOptions[0]?.getAttribute('data-ref') || id;
+    const chks = [...document.querySelectorAll('#listOrigenTrans .origen-trans-chk:checked')];
+    if (!chks.length) { Toast.show('Marca al menos un contrato original de la lista.', 'warn'); return; }
+    const ids  = chks.map(c => c.value);
+    const refs = chks.map(c => c.getAttribute('data-ref') || c.value);
     try {
       await ContratosService.updateContrato(contratoDocId, {
-        contrato_origen_id: id,
-        contrato_origen_ref: ref,
+        contrato_origen_id: ids[0],
+        contrato_origen_ref: refs[0],
+        contrato_origen_ids: ids,
+        contrato_origen_refs: refs,
         origen_tipo: 'sistema',
       });
-      ctx.contrato.contrato_origen_id = id;
-      ctx.contrato.contrato_origen_ref = ref;
-      Toast.show(`Vinculado a ${ref} — los salientes ahora se anclan a ese contrato.`, 'ok');
+      Object.assign(ctx.contrato, {
+        contrato_origen_id: ids[0], contrato_origen_ref: refs[0],
+        contrato_origen_ids: ids, contrato_origen_refs: refs,
+      });
+      Toast.show(`Vinculado a ${refs.join(', ')} — los salientes ahora se anclan a ${ids.length > 1 ? 'esos contratos' : 'ese contrato'}.`, 'ok');
       await cargarDatos(); render();
     } catch (e) {
       console.error('Error vinculando el contrato original:', e);
@@ -374,8 +447,36 @@
       });
     });
 
-    if (!nuevos.length) { Toast.show('No hay reemplazos elegidos ni salientes marcados para devolver. Si la adición no sustituye equipos, usa "Cerrar sin reemplazos".', 'warn'); return; }
-    if (!window.confirm(`Se registrarán ${nuevos.length} movimiento(s) de transición. Los salientes quedan pendientes de devolución. ¿Continuar?`)) return;
+    // Excepciones: alquiler desmarcado (y no resuelto por reemplazo) exige
+    // motivo. Se registra como mapeo tipo 'no_devuelve' — auditable, y
+    // onMapeoWrite estampa la excepción en el kardex de la unidad.
+    let sinMotivo = null;
+    document.querySelectorAll('.trans-devolver').forEach(chk => {
+      if (chk.checked || chk.disabled) return;
+      const sal = salientePorId.get(chk.value);
+      if (!sal) return;
+      const fila = chk.closest('tr');
+      const motivo  = fila?.querySelector('.trans-motivo')?.value || '';
+      const detalle = (fila?.querySelector('.trans-motivo-detalle')?.value || '').trim();
+      if (!motivo || (motivo === 'otro' && !detalle)) { sinMotivo = sal.serial || sal.serial_norm; return; }
+      nuevos.push({
+        tipo: 'no_devuelve',
+        saliente: sal.serial || sal.serial_norm,
+        saliente_pool_id: sal.id,
+        entrante: null,
+        entrante_pool_id: null,
+        modelo: sal.modelo_label || '',
+        modelo_id: sal.modelo_id || null,
+        motivo_codigo: motivo,
+        motivo_detalle: detalle,
+      });
+    });
+    if (sinMotivo) { Toast.show(`El serial ${sinMotivo} quedó sin devolver y sin motivo — elige el motivo de la excepción o vuelve a marcarlo.`, 'warn'); return; }
+
+    if (!nuevos.length) { Toast.show('No hay nada que registrar. Si la adición no sustituye equipos, usa "Cerrar sin reemplazos".', 'warn'); return; }
+    const nDevuelven = nuevos.filter(m => m.tipo !== 'no_devuelve' && m.saliente).length;
+    const nExcep = nuevos.filter(m => m.tipo === 'no_devuelve').length;
+    if (!window.confirm(`Se registrarán ${nDevuelven} devolución(es)${nExcep ? ` y ${nExcep} excepción(es) justificada(s)` : ''}. Los que se devuelven quedan pendientes de devolución. ¿Continuar?`)) return;
 
     const btn = $('btnGuardarTrans');
     btn.disabled = true;

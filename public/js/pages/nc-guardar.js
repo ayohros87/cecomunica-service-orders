@@ -117,11 +117,16 @@ window.NCGuardar = {
 
     // Vínculo suave al contrato original (Renovación/Adición/Reemplazo) —
     // PLAN_CICLO_VIDA_EQUIPOS.md C.1. 'ninguno' = aplica pero no se eligió.
+    // Multi-selección: una renovación puede consolidar varios contratos viejos.
+    // contrato_origen_id/_ref (primero de la lista) se conservan por compat.
     const origenAplica = NCForm._origenAplica();
-    const origenSel    = document.getElementById('origenContrato');
     const origenLegacy = origenAplica && !!document.getElementById('origenLegacyChk')?.checked;
-    const origenId     = (origenAplica && !origenLegacy && origenSel?.value) ? origenSel.value : null;
-    const origenRef    = origenId ? (origenSel.options[origenSel.selectedIndex]?.getAttribute('data-ref') || '') : '';
+    const origenChks   = (origenAplica && !origenLegacy)
+      ? [...document.querySelectorAll('#origenContratosList .origen-chk:checked')] : [];
+    const origenIds    = origenChks.map(c => c.value);
+    const origenRefs   = origenChks.map(c => c.getAttribute('data-ref') || c.value);
+    const origenId     = origenIds[0] || null;
+    const origenRef    = origenRefs[0] || '';
 
     const clienteData     = NC.listaClientes[clienteId];
     const duracionSel     = document.getElementById('duracion').value;
@@ -152,6 +157,8 @@ window.NCGuardar = {
       origen_tipo: !origenAplica ? '' : (origenLegacy ? 'legacy' : (origenId ? 'interno' : 'ninguno')),
       contrato_origen_id: origenId,
       contrato_origen_ref: origenRef,
+      contrato_origen_ids: origenIds,
+      contrato_origen_refs: origenRefs,
       origen_legacy_ref: origenLegacy ? (document.getElementById('origenLegacyRef')?.value || '').trim() : '',
       estado: 'pendiente_aprobacion',
       observaciones: document.getElementById('observaciones').value.trim(),

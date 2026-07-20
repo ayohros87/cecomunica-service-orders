@@ -230,10 +230,11 @@
           <!-- Vínculo al contrato original (Renovación / Adición / Reemplazo).
                Enlace SUAVE: se puede omitir y vincular después. -->
           <div class="form-field" id="origenBox" style="display:none; grid-column:1/-1;">
-            <label class="form-label" for="origenContrato">Contrato original (al que renueva / adiciona / reemplaza)</label>
-            <select class="form-select" id="origenContrato">
-              <option value="">Selecciona el cliente primero…</option>
-            </select>
+            <label class="form-label">Contrato(s) original(es) — al que renueva / adiciona / reemplaza (puede ser más de uno)</label>
+            <div id="origenContratosList"
+                 style="display:flex;flex-direction:column;gap:4px;max-height:190px;overflow:auto;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;padding:8px 10px;font-size:13px;">
+              <span style="color:var(--fg-3,#6b7280);">Selecciona el cliente primero…</span>
+            </div>
             <label class="form-check" style="margin-top:6px;">
               <input type="checkbox" id="origenLegacyChk">
               <span><span class="form-check-label">El contrato original es de papel / no está en el sistema</span></span>
