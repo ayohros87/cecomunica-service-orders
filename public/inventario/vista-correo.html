@@ -28,6 +28,7 @@
   <script defer src="../js/firebase-init.js"></script>
   <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
+  <script defer src="../js/services/equiposPoolService.js"></script>
 
   <script>
     window.onload = async () => {
@@ -37,16 +38,37 @@
   const modelosMap = {};
   modelosList.forEach(m => modelosMap[m.id] = m);
 
-  const inventario = await InventarioService.getInventarioActual();
-  if (inventario.length === 0) {
-    tabla.innerHTML = "<tr><td colspan='8'>No hay datos</td></tr>";
+  // Principal = seriales del pool en bodega; el conteo físico es la
+  // verificación manual (mismo criterio que Inventario de Radios).
+  const [inventario, poolMap] = await Promise.all([
+    InventarioService.getInventarioActual(),
+    EquiposPoolService.contarBodegaPorModelo().catch(() => new Map()),
+  ]);
+  if (inventario.length === 0 && poolMap.size === 0) {
+    tabla.innerHTML = "<tr><td colspan='9'>No hay datos</td></tr>";
     return;
   }
 
+  const poolPorId = new Map(), poolPorLabel = new Map();
+  poolMap.forEach(g => {
+    if (g.modelo_id) poolPorId.set(g.modelo_id, g);
+    const tl = EquiposPoolService._tightLabel(g.modelo_label);
+    if (tl && !poolPorLabel.has(tl)) poolPorLabel.set(tl, g);
+  });
+
   const datos = [];
+  const usados = new Set();
   inventario.forEach(data => {
     const modelo = modelosMap[data.modelo_id] || {};
-    datos.push({ modelo, data });
+    const g = poolPorId.get(data.modelo_id)
+      || poolPorLabel.get(EquiposPoolService._tightLabel(modelo.modelo || '')) || null;
+    if (g) usados.add(g);
+    datos.push({ modelo, data, seriales: g ? g.n : 0 });
+  });
+  poolMap.forEach(g => {
+    if (usados.has(g)) return;
+    const modelo = (g.modelo_id && modelosMap[g.modelo_id]) || { modelo: g.modelo_label || '(sin modelo)' };
+    datos.push({ modelo, data: { cantidad: null }, seriales: g.n });
   });
 
   datos.sort((a, b) => {
@@ -68,7 +90,7 @@
 });
 
 
-datos.forEach(({ modelo, data }) => {
+datos.forEach(({ modelo, data, seriales }) => {
   // Convertir tipo y estado a nombres completos
   let tipoTexto = "-";
   if (modelo.tipo === "P") tipoTexto = "Portátil";
@@ -79,6 +101,14 @@ datos.forEach(({ modelo, data }) => {
   if (modelo.estado === "N") estadoTexto = "Nuevo";
   else if (modelo.estado === "R") estadoTexto = "Reuso";
 
+  const n = Number(seriales ?? 0);
+  const tieneConteo = data.cantidad != null;
+  const dif = tieneConteo ? n - Number(data.cantidad) : null;
+  // Inline styles a propósito: deben sobrevivir el copy-paste a Outlook/Gmail.
+  const difTxt = !tieneConteo ? "-"
+    : dif === 0 ? "0"
+    : `<span style="color:${dif > 0 ? '#92400e' : '#b91c1c'};font-weight:bold;">${dif > 0 ? '+' : ''}${dif}</span>`;
+
   tabla.innerHTML += `
     <tr>
       <td>${modelo.marca || "-"}</td>
@@ -86,9 +116,10 @@ datos.forEach(({ modelo, data }) => {
       <td>${tipoTexto}</td>
       <td>${estadoTexto}</td>
       <td>${modelo.alto_movimiento ? "Sí" : "No"}</td>
+      <td style="font-weight:bold;">${n}</td>
       <td>${data.cantidad ?? "-"}</td>
+      <td>${difTxt}</td>
       <td>${data.ultima_actualizacion?.toDate().toLocaleString() ?? "-"}</td>
-      <td>${data.penultima_actualizacion?.toDate().toLocaleString() ?? "-"}</td>
     </tr>`;
 });
 
@@ -98,7 +129,8 @@ datos.forEach(({ modelo, data }) => {
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
-  <h2><i data-lucide="file-text"></i> Inventario para envío por correo</h2>
+  <h2><i data-lucide="file-text"></i> Inventario de radios para envío por correo</h2>
+  <p style="font-size:13px;color:#555;margin:4px 0 10px;">Unidades = seriales en bodega (pool de equipos, reporte principal) · Conteo físico = verificación manual · Dif. = seriales − conteo (meta 0).</p>
   <table>
     <thead>
       <tr>
@@ -107,9 +139,10 @@ datos.forEach(({ modelo, data }) => {
         <th>Tipo</th>
         <th>Estado</th>
         <th>Alto Movimiento</th>
-        <th>Cantidad</th>
-        <th>Última actualización</th>
-        <th>Penúltima actualización</th>
+        <th>Unidades (seriales)</th>
+        <th>Conteo físico</th>
+        <th>Dif.</th>
+        <th>Último conteo</th>
       </tr>
     </thead>
     <tbody id="tablaCorreo"></tbody>
