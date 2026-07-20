@@ -95,6 +95,9 @@
     { key: 'entrada_recordatorio_dias', section: 'operacion', label: 'Aviso de cuarentena sin inspección (días)',
       type: 'int',  min: 1,     max: 60,
       hint: 'Días que una unidad puede estar en cuarentena de entrada (devuelto_revision) sin inspección antes de que recepción reciba el aviso diario. La salida de cuarentena es manual: inspección OK → bodega, o baja.' },
+    { key: 'devolucion_sla_dias', section: 'operacion', label: 'SLA de devoluciones de equipos (días)',
+      type: 'int',  min: 1,     max: 90,
+      hint: 'Días que una orden de DEVOLUCIÓN puede estar abierta con unidades sin resolver antes de escalar en el correo diario a recepción. El mismo correo lista los equipos "pendiente de devolución" que no están en ninguna orden.' },
 
     { key: 'pii_retention_dias',        section: 'pii', label: 'Retención PII (días)',
       type: 'int',  min: 30,    max: 730,

@@ -398,6 +398,57 @@
       [{ key: 'tecnico', label: 'Técnico' }, { key: 'n', label: 'Abiertas', align: 'right' }],
       rowsTec);
 
+    // Devoluciones de equipos — el tiquete de recuperación previo a ENTRADA.
+    // KPIs: abiertas con edad y unidades pendientes; cerradas (90 días) con
+    // ciclo de recuperación y desenlace recibido vs excepción.
+    (function renderDevoluciones() {
+      const el = $('tblDevoluciones');
+      if (!el) return;
+      const devs = d.ordenes.filter(o => (o.tipo_de_servicio || '') === 'DEVOLUCION' && !o.eliminado);
+      if (!devs.length) {
+        el.innerHTML = `<div class="empty-state-hint" style="padding:var(--sp-3);text-align:center;color:var(--fg-3);font-size:13px;">Sin devoluciones registradas todavía.</div>`;
+        return;
+      }
+      const pendDe = (o) => {
+        const pendSer = (o.devolucion?.esperados || []).filter(e => !e.resolucion).length;
+        const pendMod = (o.devolucion?.esperados_por_modelo || [])
+          .reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
+        return pendSer + pendMod;
+      };
+      const abiertas = devs.filter(o => (o.estado_reparacion || '').toUpperCase() !== 'CERRADA (DEVOLUCION)')
+        .map(o => ({ o, dias: AdminMetrics.ageInDays(o.fecha_creacion) ?? 0, pend: pendDe(o) }))
+        .sort((a, b) => b.dias - a.dias);
+      const cerradas90 = devs.filter(o => (o.estado_reparacion || '').toUpperCase() === 'CERRADA (DEVOLUCION)'
+        && (AdminMetrics.ageInDays(o.fecha_completado || o.fecha_creacion) ?? 999) <= 90);
+      let recib = 0, excep = 0, cicloSum = 0, cicloN = 0;
+      cerradas90.forEach(o => {
+        (o.devolucion?.esperados || []).forEach(e => {
+          if (e.resolucion === 'recibido' || e.resolucion === 'nunca_salio') recib++;
+          else if (e.resolucion === 'no_devuelve') excep++;
+        });
+        const ini = AdminMetrics.ageInDays(o.fecha_creacion), fin = AdminMetrics.ageInDays(o.fecha_completado);
+        if (ini != null && fin != null && ini >= fin) { cicloSum += (ini - fin); cicloN++; }
+      });
+      const kpis = `
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-bottom:var(--sp-2);">
+          <span><b>${abiertas.length}</b> abiertas · <b>${abiertas.reduce((s, a) => s + a.pend, 0)}</b> unidades sin resolver</span>
+          <span>Cerradas 90d: <b>${cerradas90.length}</b> · ciclo promedio <b>${cicloN ? (cicloSum / cicloN).toFixed(1) : '—'}</b> días</span>
+          <span>Desenlace 90d: <b>${recib}</b> resueltas · <b>${excep}</b> excepciones</span>
+        </div>`;
+      const filas = abiertas.slice(0, 20).map(({ o, dias, pend }) => `
+        <tr>
+          <td><span class="pill">${escapeHtml(o.numero_orden || o.id || '')}</span></td>
+          <td>${escapeHtml(o.cliente_nombre || '—')}</td>
+          <td>${escapeHtml(o.contrato?.contrato_id || '—')}</td>
+          <td>${o.devolucion?.modo === 'confirmacion' ? 'confirmación' : 'recuperación'}</td>
+          <td style="text-align:right;">${pend}</td>
+          <td style="text-align:right;"><b>${dias}</b></td>
+        </tr>`).join('');
+      el.innerHTML = kpis + (abiertas.length
+        ? `<table class="admin-table"><thead><tr><th>Orden</th><th>Cliente</th><th>Contrato</th><th>Modo</th><th style="text-align:right;">Pend.</th><th style="text-align:right;">Días</th></tr></thead><tbody>${filas}</tbody></table>`
+        : `<div class="empty-state-hint" style="padding:var(--sp-2);color:var(--fg-3);font-size:13px;">Sin devoluciones abiertas.</div>`);
+    })();
+
     // Contratos por estado
     const groupsCt = AdminMetrics.groupByStatus(d.contratos, c => c.estado || 'sin_estado');
     const rowsCt = Object.entries(groupsCt).sort((a, b) => b[1] - a[1]).map(([e, n]) => ({ estado: `<span class="pill">${e}</span>`, n }));

@@ -46,9 +46,12 @@ exports.onCotizacionOpened            = require("./src/triggers/cotizaciones/onO
 exports.onCotizacionEstadoChange      = require("./src/triggers/cotizaciones/onEstadoChange");
 exports.markCotizacionesVencidas      = require("./src/triggers/scheduled/markCotizacionesVencidas");
 exports.recordatorioSeriales          = require("./src/triggers/scheduled/recordatorioSeriales");
-// Semanal: equipos pendientes de devolución por vendedor (CC recepción + ventas)
-exports.recordatorioTransiciones      = require("./src/triggers/scheduled/recordatorioTransiciones");
-// Diario: órdenes estancadas (taller) + cuarentena de entrada sin inspección (recepción)
+// recordatorioTransiciones (semanal de unidades pendiente_devolucion) retirado
+// 2026-07-20: lo reemplaza la sección C de recordatorioOperativo — órdenes de
+// DEVOLUCIÓN vencidas por SLA + unidades sueltas sin orden. Al desplegar,
+// aceptar el borrado del CF cuando el deploy lo pregunte.
+// Diario: órdenes estancadas (taller) + cuarentena sin inspección (recepción)
+// + devoluciones vencidas/sueltas (recepción)
 exports.recordatorioOperativo         = require("./src/triggers/scheduled/recordatorioOperativo");
 exports.manageUser                    = require("./src/callable/manageUser");
 exports.rebuildContractCache          = require("./src/callable/rebuildContractCache");
