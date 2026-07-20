@@ -21,9 +21,25 @@ jobs:
           cache: npm
           cache-dependency-path: functions/package-lock.json
 
+      # El frontend es vanilla sin build step: un paréntesis roto no truena
+      # hasta que un usuario abre la página. node --check lo atrapa aquí.
+      - name: Sintaxis del frontend (public/js) y functions
+        run: |
+          set -e
+          find public/js functions/src functions/index.js functions/test functions/test-emulator \
+            -name '*.js' -not -path '*/node_modules/*' -print0 |
+          while IFS= read -r -d '' f; do
+            node --check "$f" || { echo "::error file=$f::Sintaxis rota"; exit 1; }
+          done
+          echo "Sintaxis OK"
+
       - name: Install functions deps
         working-directory: functions
         run: npm ci
+
+      # Un export roto en index.js tumba el deploy COMPLETO de functions.
+      - name: functions/index.js carga (exports completos)
+        run: node -e "require('./functions/index.js'); console.log('index.js OK')"
 
       - name: Lint functions
         working-directory: functions
