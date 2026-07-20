@@ -465,7 +465,79 @@ window.EquiposPool = {
     document.getElementById('ventaCliente').value = '';
     document.getElementById('ventaFactura').value = '';
     document.getElementById('ventaNotas').value = '';
+    this._ventaClienteSel = null;
+    document.getElementById('ventaClienteSugs').innerHTML = '';
+    this._cargarClientesCache().catch(e => console.error('Error al precargar clientes:', e));
     Modal.open('eqVentaModal');
+  },
+
+  // ── Autocompletado de cliente en la venta ────────────────────────────
+  // Mismo patrón que POC/vendedores-batch: caché local de clientes (6h,
+  // misma clave 'cache_clientes_v1') + sugerencias por subcadena normalizada.
+  // La venta debe quedar ligada a un cliente existente de la app; un nombre
+  // libre solo pasa como excepción confirmada (ver guardarVenta).
+  _clientesCache: null,
+  _ventaClienteSel: null,
+  _ventaCliTimer: null,
+
+  async _cargarClientesCache() {
+    if (this._clientesCache) return this._clientesCache;
+    try {
+      const raw = localStorage.getItem('cache_clientes_v1');
+      if (raw) {
+        const { exp, data } = JSON.parse(raw);
+        if (exp && Date.now() < exp && Array.isArray(data) && data.length) {
+          this._clientesCache = data;
+          return data;
+        }
+      }
+    } catch (_) { /* caché ilegible: se reconstruye */ }
+    const clientes = await ClientesService.getAllClientes();
+    this._clientesCache = clientes.map(c => {
+      const nombre = (c.nombre || '').toString();
+      return { id: c.id, nombre, norm: FMT.normalize(nombre) };
+    });
+    try {
+      localStorage.setItem('cache_clientes_v1',
+        JSON.stringify({ exp: Date.now() + 6 * 60 * 60 * 1000, data: this._clientesCache }));
+    } catch (_) { /* localStorage lleno: seguimos solo en memoria */ }
+    return this._clientesCache;
+  },
+
+  sugerirClienteVenta() {
+    this._ventaClienteSel = null; // editar el texto invalida la selección previa
+    const cont  = document.getElementById('ventaClienteSugs');
+    const input = document.getElementById('ventaCliente');
+    cont.innerHTML = '';
+    const texto = (input.value || '').trim();
+    if (texto.length < 2) return;
+    clearTimeout(this._ventaCliTimer);
+    this._ventaCliTimer = setTimeout(async () => {
+      try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); return; }
+      const needle  = FMT.normalize(texto);
+      const matches = this._clientesCache
+        .filter(c => c.norm.includes(needle))
+        .map(c => ({ ...c, pos: c.norm.indexOf(needle) }))
+        .sort((a, b) => a.pos !== b.pos ? a.pos - b.pos
+          : a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+        .slice(0, 30);
+      cont.innerHTML = '';
+      if (!matches.length) return;
+      const ul = document.createElement('ul');
+      ul.className = 'suggest-list';
+      matches.forEach(m => {
+        const li = document.createElement('li');
+        li.className = 'suggest-item';
+        li.textContent = m.nombre;
+        li.onclick = () => {
+          input.value = m.nombre;
+          this._ventaClienteSel = { id: m.id, nombre: m.nombre };
+          cont.innerHTML = '';
+        };
+        ul.appendChild(li);
+      });
+      cont.appendChild(ul);
+    }, 200);
   },
 
   async guardarVenta() {
@@ -476,6 +548,32 @@ window.EquiposPool = {
       .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (!seriales.length) { Toast.show('Pega o escanea al menos un serial.', 'bad'); return; }
     if (!cliente) { Toast.show('Indica a quién se vendió (el cliente de la factura).', 'bad'); return; }
+
+    // El cliente debe existir en la app: o se eligió de las sugerencias, o el
+    // texto coincide exacto con uno del caché. Un nombre libre solo pasa como
+    // excepción confirmada y la venta queda marcada (cliente_excepcion).
+    let clienteSel = (this._ventaClienteSel && this._ventaClienteSel.nombre === cliente)
+      ? this._ventaClienteSel : null;
+    let clienteExcepcion = false;
+    if (!clienteSel) {
+      try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); }
+      const needle = FMT.normalize(cliente);
+      const hit = (this._clientesCache || []).find(c => c.norm === needle);
+      if (hit) {
+        clienteSel = { id: hit.id, nombre: hit.nombre };
+      } else {
+        if (!await Modal.confirm({
+          title: 'Cliente no registrado',
+          message: `<strong>${FMT.esc(cliente)}</strong> no existe como cliente en la app.<br><br>
+            Lo normal es elegirlo de las sugerencias al escribir. ¿Registrar la venta
+            <strong>por excepción</strong> con este nombre tal cual? Quedará marcada como
+            venta a cliente no registrado.`,
+          confirmLabel: 'Registrar por excepción',
+        })) return;
+        clienteSel = { id: '', nombre: cliente };
+        clienteExcepcion = true;
+      }
+    }
 
     const btn = document.getElementById('btnGuardarVenta');
     btn.disabled = true;
@@ -517,7 +615,7 @@ window.EquiposPool = {
         ? `<br><br><strong>${problemas.length} serial(es) NO se venderán:</strong><br>${problemas.join('<br>')}` : '';
       if (!await Modal.confirm({
         title: 'Registrar venta',
-        message: `Venta a <strong>${esc(cliente)}</strong>${factura ? ` — factura QBO <strong>${esc(factura)}</strong>` : ''}.<br>
+        message: `Venta a <strong>${esc(clienteSel.nombre)}</strong>${clienteExcepcion ? ' <em>(por excepción — no registrado en la app)</em>' : ''}${factura ? ` — factura QBO <strong>${esc(factura)}</strong>` : ''}.<br>
           Salen de bodega de forma permanente:<br><br>${detalle}${avisos}`,
         confirmLabel: `Vender ${vendibles.length} equipo(s)`,
       })) return;
@@ -525,8 +623,11 @@ window.EquiposPool = {
       let ok = 0; const errores = [];
       for (const u of vendibles) {
         try {
-          await EquiposPoolService.vender(u.id, { factura, cliente_nombre: cliente, notas },
-            firebase.auth().currentUser);
+          await EquiposPoolService.vender(u.id, {
+            factura, notas,
+            cliente_id: clienteSel.id, cliente_nombre: clienteSel.nombre,
+            cliente_excepcion: clienteExcepcion,
+          }, firebase.auth().currentUser);
           ok++;
         } catch (e) {
           errores.push(`${u.serial || u.id}: ${e.message || e}`);

@@ -97,6 +97,18 @@
     .import-stat { display:inline-flex; align-items:center; gap:6px; margin-right:var(--sp-4); font-size:13px; }
     .import-stat strong { font-size:16px; }
 
+    /* Desplegable de sugerencias de cliente (modal de venta) — mismo patrón
+       que POC/vendedores-batch.html */
+    .suggest-list {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: var(--surface-card); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+      padding: 6px; margin: 4px 0 0; list-style: none;
+      max-height: 220px; overflow-y: auto; z-index: 2000;
+    }
+    .suggest-item { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
+    .suggest-item:hover { background: var(--surface-sunken); color: var(--accent); }
+
     table.app-table tbody td { font-size:14px; }
     table.app-table tbody tr:nth-child(even) { background:#f1f5f9; }
   </style>
@@ -111,6 +123,7 @@
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/modelosService.js"></script>
+  <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
   <script defer src="../js/services/equiposPoolService.js"></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -317,7 +330,10 @@
         <div style="display:flex; gap:var(--sp-3);">
           <div class="form-field" style="flex:2;">
             <label class="form-label" for="ventaCliente">Cliente (de la factura)</label>
-            <input class="form-input" id="ventaCliente" type="text" placeholder="Nombre del cliente en QuickBooks">
+            <input class="form-input" id="ventaCliente" type="text" placeholder="Escribe para buscar el cliente…"
+                   autocomplete="off" oninput="EquiposPool.sugerirClienteVenta()">
+            <div id="ventaClienteSugs" style="position:relative;"></div>
+            <span class="form-hint">Elígelo de la lista. Si no existe en la app, la venta se registra por excepción.</span>
           </div>
           <div class="form-field" style="flex:1.2;">
             <label class="form-label" for="ventaFactura">Factura QBO <span class="optional">(recomendado)</span></label>

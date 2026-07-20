@@ -455,11 +455,14 @@ const EquiposPoolService = {
   // Venta directa sin contrato: la factura ya se emitió en QuickBooks y aquí
   // solo se descuenta la unidad de bodega. `esperado: EN_BODEGA` evita vender
   // dos veces (o vender algo que otro flujo ya movió). La asignación guarda a
-  // quién se vendió (cliente_id vacío: el comprador QBO no siempre existe como
-  // cliente de la app); `venta` conserva el vínculo a la factura.
-  async vender(id, { factura = '', cliente_nombre = '', notas = '' } = {}, user) {
-    const fact = (factura || '').toString().trim();
-    const cli  = (cliente_nombre || '').toString().trim();
+  // quién se vendió; cliente_id llega del autocompletado de la página y va
+  // vacío solo en ventas por excepción (comprador QBO sin ficha en la app),
+  // que quedan marcadas con cliente_excepcion. `venta` conserva el vínculo a
+  // la factura.
+  async vender(id, { factura = '', cliente_id = '', cliente_nombre = '', cliente_excepcion = false, notas = '' } = {}, user) {
+    const fact  = (factura || '').toString().trim();
+    const cli   = (cliente_nombre || '').toString().trim();
+    const cliId = (cliente_id || '').toString().trim();
     return this.cambiarEstado(id, this.ESTADOS.VENDIDO, {
       esperado: this.ESTADOS.EN_BODEGA,
       tipo: 'venta',
@@ -467,10 +470,12 @@ const EquiposPoolService = {
       notas: notas || `Venta directa${cli ? ` a ${cli}` : ''}${fact ? ` — factura QBO ${fact}` : ''}`,
       extra: {
         propiedad: 'cliente',
-        asignacion: { contrato_doc_id: null, contrato_id: '', cliente_id: '', cliente_nombre: cli },
+        asignacion: { contrato_doc_id: null, contrato_id: '', cliente_id: cliId, cliente_nombre: cli },
         venta: {
           factura: fact,
+          cliente_id: cliId,
           cliente_nombre: cli,
+          cliente_excepcion: !!cliente_excepcion,
           at: firebase.firestore.FieldValue.serverTimestamp(),
         },
       },
