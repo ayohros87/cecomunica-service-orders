@@ -199,6 +199,12 @@ La tarjeta "Emisión de facturas" del hub está deshabilitada ("Próximamente") 
 
 ## 4. Huecos verificados por flujo
 
+> **Estado 2026-07-20 — remediación aplicada (commits 1f99ec1…55758c3):** 19 de los 22 huecos quedaron RESUELTOS en código (pendiente deploy de hosting + functions + rules). Quedan abiertos por decisión:
+> **#3 parcial** — imprimir-orden ya muestra el informe de visita, pero "Cotizar" sigue operando solo sobre `equipos[]` (cotizar una visita requiere decisión de diseño);
+> **#4 parcial** — las rules ahora permiten a admin revertir estados (corrección manual vía consola), pero no hay UI de reversa/reapertura;
+> **#13** — cargos únicos ("primer pago") se cobrarán cuando exista el facturador QBO (§5).
+> Nota: el #14 estaba invertido en el informe original — el generador real era `cotizar-orden.js`; se eliminó `cotizar-orden-formal` (huérfano desde b4cefac).
+
 Marcados por severidad: 🔴 afecta operación/datos · 🟡 inconsistencia funcional · ⚪ deuda/limpieza.
 
 ### Órdenes / visitas
