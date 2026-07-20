@@ -45,7 +45,7 @@ window.NCCargos = {
     const cant = Math.max(1, Math.round(Number(c.cantidad)) || 1);
     tr.innerHTML = `
       <td><select class="cargo-sel">${this._opcionesHtml(c.cargo_id)}</select></td>
-      <td><span class="minput"><input type="number" class="cargo-cant" step="1" min="1" value="${cant}"></span></td>
+      <td><input type="number" class="cargo-cant" step="1" min="1" value="${cant}"></td>
       <td><span class="minput"><input type="number" class="cargo-monto" step="any" min="0" value="${Number.isFinite(c.monto) ? c.monto : ''}" placeholder="0.00"></span></td>
       <td><select class="cargo-tipo">
             <option value="unico"${rec ? '' : ' selected'}>Único</option>
