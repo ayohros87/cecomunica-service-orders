@@ -29,14 +29,27 @@ firebase.auth().onAuthStateChanged(async (user) => {
     const modelosMap = {};
     modelosList.forEach(m => { modelosMap[m.id] = m; });
 
-    // 2. Cargar inventario_actual (con modelo_id como string)
-    const inventario = await InventarioService.getInventarioActual();
+    // 2. Fuente PRINCIPAL: el pool de seriales (unidades reales en bodega).
+    //    El conteo físico (inventario_actual) queda como verificación manual.
+    const [inventario, poolMap] = await Promise.all([
+      InventarioService.getInventarioActual(),
+      EquiposPoolService.contarBodegaPorModelo().catch(e => { console.warn('pool', e); return new Map(); }),
+    ]);
 
-    if (inventario.length === 0) {
+    // Índices del pool para casar contra las filas de conteo (por id de
+    // catálogo o por label normalizado — mismas tolerancias del pool).
+    const poolPorId = new Map(), poolPorLabel = new Map();
+    poolMap.forEach(g => {
+      if (g.modelo_id) poolPorId.set(g.modelo_id, g);
+      const tl = EquiposPoolService._tightLabel(g.modelo_label);
+      if (tl && !poolPorLabel.has(tl)) poolPorLabel.set(tl, g);
+    });
+
+    if (inventario.length === 0 && poolMap.size === 0) {
       tabla.innerHTML = `
       <tr>
-        <td colspan="10" style="text-align:center; padding: 20px; color: #666;">
-          <i data-lucide="alert-triangle"></i> No se encontraron datos en el inventario actual.
+        <td colspan="12" style="text-align:center; padding: 20px; color: #666;">
+          <i data-lucide="alert-triangle"></i> Sin unidades en bodega ni conteos registrados.
         </td>
       </tr>
     `;
@@ -45,10 +58,22 @@ firebase.auth().onAuthStateChanged(async (user) => {
     }
 
     const datos = [];
+    const gruposUsados = new Set();
 
 inventario.forEach(data => {
   const modelo = modelosMap[data.modelo_id] || {};
-  datos.push({ data, modelo });
+  const g = poolPorId.get(data.modelo_id)
+    || poolPorLabel.get(EquiposPoolService._tightLabel(modelo.modelo || '')) || null;
+  if (g) gruposUsados.add(g);
+  datos.push({ data, modelo, seriales: g ? g.n : 0 });
+});
+
+// Modelos con seriales en bodega que el conteo físico aún no lista.
+poolMap.forEach(g => {
+  if (gruposUsados.has(g)) return;
+  const modelo = (g.modelo_id && modelosMap[g.modelo_id])
+    || { modelo: g.modelo_label || '(sin modelo)' };
+  datos.push({ data: { modelo_id: g.modelo_id || null, cantidad: null }, modelo, seriales: g.n, sinConteo: true });
 });
 
 // Ordenar por alto_movimiento (true primero), luego marca, tipo y modelo
@@ -79,7 +104,7 @@ renderizarTabla(inventarioDatos);
 
   } catch (err) {
     console.error("❌ Error al cargar inventario:", err);
-    tabla.innerHTML = "<tr><td colspan='7' style='color:red;'>Error al cargar datos</td></tr>";
+    tabla.innerHTML = "<tr><td colspan='12' style='color:red;'>Error al cargar datos</td></tr>";
   }
 }
 
@@ -105,13 +130,23 @@ let ordenCampo = 'alto_movimiento';
 let ordenAsc = false;
 let filtroTipo = '';
 
-// KPIs sobre el dataset completo (no el filtrado)
+// KPIs sobre el dataset completo (no el filtrado). Principal = seriales del
+// pool; el conteo físico es la verificación manual; la diferencia es la
+// conciliación (0 = bodega cuadrada).
 function renderKPIs() {
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const totalSeriales = inventarioDatos.reduce((s, r) => s + Number(r.seriales ?? 0), 0);
+  const totalConteo = inventarioDatos.reduce((s, { data }) => s + Number(data.cantidad ?? 0), 0);
   set('kpiModelos', inventarioDatos.length);
-  set('kpiUnidades', inventarioDatos.reduce((s, { data }) => s + Number(data.cantidad ?? 0), 0).toLocaleString());
+  set('kpiUnidades', totalSeriales.toLocaleString());
+  set('kpiConteo', totalConteo.toLocaleString());
+  const dif = totalSeriales - totalConteo;
+  set('kpiDif', (dif > 0 ? '+' : '') + dif.toLocaleString());
+  const difEl = document.getElementById('kpiDif');
+  if (difEl) difEl.classList.toggle('kpi-warn', dif !== 0);
+  // Compat: cards viejas si siguieran en el HTML.
   set('kpiAltoMov', inventarioDatos.filter(({ modelo }) => modelo.alto_movimiento === true).length);
-  set('kpiStockBajo', inventarioDatos.filter(({ data }) => Number(data.cantidad ?? 0) < 5).length);
+  set('kpiStockBajo', inventarioDatos.filter(r => Number(r.seriales ?? 0) < 5).length);
 }
 
 // Filtro unificado: búsqueda + chip de tipo + toggles
@@ -119,10 +154,11 @@ function datosFiltrados() {
   const q = (document.getElementById('buscador')?.value || '').toLowerCase().trim();
   const soloAM = !!document.getElementById('chkAltoMov')?.checked;
   const soloSB = !!document.getElementById('chkStockBajo')?.checked;
-  return inventarioDatos.filter(({ data, modelo }) => {
+  return inventarioDatos.filter((r) => {
+    const { data, modelo } = r;
     if (filtroTipo && modelo.tipo !== filtroTipo) return false;
     if (soloAM && modelo.alto_movimiento !== true) return false;
-    if (soloSB && Number(data.cantidad ?? 0) >= 5) return false;
+    if (soloSB && Number(r.seriales ?? 0) >= 5) return false;
     if (q) {
       const marca = (modelo.marca || '').toLowerCase();
       const mod = (modelo.modelo || '').toLowerCase();
@@ -161,16 +197,20 @@ function renderizarTabla(datos) {
   const encabezado = document.getElementById("headerInventario");
   tabla.innerHTML = "";
 
+  // Principal = Unidades (seriales del pool en bodega); el conteo físico es
+  // la verificación manual y la Dif. es la conciliación por modelo.
   const cols = [
     { campo: "marca", label: "Marca" },
     { campo: "modelo", label: "Modelo" },
     { campo: "tipo", label: "Tipo" },
     { campo: "estado", label: "Estado" },
     { campo: "alto_movimiento", label: "Alto Mov." },
-    { campo: "cantidad", label: "Cantidad" },
-    { campo: "cantidad_anterior", label: "Cant. anterior", cls: "col-anterior" },
-    { campo: "ultima_actualizacion", label: "Última actualización" },
-    { campo: "penultima_actualizacion", label: "Penúltima actualización", cls: "col-penultima" },
+    { campo: "seriales", label: "Unidades (seriales)" },
+    { campo: "cantidad", label: "Conteo físico" },
+    { campo: "dif", label: "Dif." },
+    { campo: "cantidad_anterior", label: "Conteo anterior", cls: "col-anterior" },
+    { campo: "ultima_actualizacion", label: "Último conteo" },
+    { campo: "penultima_actualizacion", label: "Penúltimo conteo", cls: "col-penultima" },
   ];
 
   // Header con sort arrow
@@ -206,7 +246,7 @@ function renderizarTabla(datos) {
   // Skeleton si vacío
   if (datos.length === 0){
     tabla.innerHTML = `
-      <tr><td colspan="10" style="padding:20px;">
+      <tr><td colspan="12" style="padding:20px;">
         <div class="skeleton" style="width:60%; height:12px; margin-bottom:8px;"></div>
         <div class="skeleton" style="width:40%; height:12px;"></div>
       </td></tr>`;
@@ -214,11 +254,19 @@ function renderizarTabla(datos) {
   }
 
   // Filas
-  tabla.innerHTML = datos.map(({ data, modelo })=>{
+  tabla.innerHTML = datos.map((r)=>{
+    const { data, modelo } = r;
+    const seriales = Number(r.seriales ?? 0);
+    const tieneConteo = data.cantidad != null;
     const cant = Number(data.cantidad ?? 0);
-    const minBadge = cant <= 0 ? '<span class="badge danger">0</span>'
-                  : cant < 5 ? `<span class="badge pendiente">${cant}</span>`
-                  : `<span class="badge completo">${cant}</span>`;
+    const serialesBadge = seriales <= 0 ? '<span class="badge danger">0</span>'
+                  : seriales < 5 ? `<span class="badge pendiente">${seriales}</span>`
+                  : `<span class="badge completo">${seriales}</span>`;
+    const conteoTxt = tieneConteo ? String(cant) : '<span title="Modelo con seriales en bodega sin fila de conteo físico">—</span>';
+    const dif = tieneConteo ? seriales - cant : null;
+    const difBadge = !tieneConteo ? '<span style="color:var(--fg-4);">—</span>'
+                  : dif === 0 ? '<span class="badge completo">0</span>'
+                  : `<span class="badge ${dif > 0 ? 'pendiente' : 'danger'}" title="${dif > 0 ? 'Seriales capturados que el conteo no vio' : 'Conteo mayor que los seriales — posible unidad sin capturar en el pool'}">${dif > 0 ? '+' : ''}${dif}</span>`;
     const tipoTxt = modelo.tipo === "P" ? "Portátil" : modelo.tipo === "C" ? "Cámara" : modelo.tipo === "B" ? "Base" : "-";
     const estadoTxt = modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-";
     const ua = data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-";
@@ -234,11 +282,13 @@ function renderizarTabla(datos) {
         <td>${tipoTxt}</td>
         <td>${estadoTxt}</td>
         <td>${am}</td>
-        <td>${minBadge}</td>
+        <td>${serialesBadge}</td>
+        <td class="td-muted">${conteoTxt}</td>
+        <td>${difBadge}</td>
         <td class="col-anterior td-muted">${data.cantidad_anterior ?? "-"}</td>
         <td class="td-muted">${ua}</td>
         <td class="col-penultima td-muted">${pa}</td>
-        <td class="td-actions"><button class="btn btn-ghost btn-sm" title="Ver histórico" aria-label="Ver histórico" onclick="verHistorico('${data.modelo_id}')"><i data-lucide="bar-chart-2"></i></button></td>
+        <td class="td-actions">${data.modelo_id ? `<button class="btn btn-ghost btn-sm" title="Ver histórico de conteos" aria-label="Ver histórico de conteos" onclick="verHistorico('${data.modelo_id}')"><i data-lucide="bar-chart-2"></i></button>` : ''}</td>
       </tr>`;
   }).join('');
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -259,6 +309,8 @@ function obtenerValor(obj, campo) {
   if (campo === "tipo") return obj.modelo.tipo || "";
   if (campo === "estado") return obj.modelo.estado || "";
   if (campo === "alto_movimiento") return obj.modelo.alto_movimiento === true ? 1 : 0;
+  if (campo === "seriales") return Number(obj.seriales ?? 0);
+  if (campo === "dif") return obj.data.cantidad != null ? Number(obj.seriales ?? 0) - Number(obj.data.cantidad) : -9999;
   if (campo === "cantidad") return obj.data.cantidad ?? 0;
   if (campo === "cantidad_anterior") return obj.data.cantidad_anterior ?? 0;
   if (campo === "ultima_actualizacion") return obj.data.ultima_actualizacion?.toDate().getTime() ?? 0;
@@ -268,17 +320,21 @@ function obtenerValor(obj, campo) {
 function exportarExcel() {
   const wb = XLSX.utils.book_new();
   const wsData = [
-    ["Marca", "Modelo", "Tipo", "Estado", "Alto Movimiento", "Cantidad", "Cant. anterior", "Última actualización", "Penúltima actualización"]
+    ["Marca", "Modelo", "Tipo", "Estado", "Alto Movimiento", "Unidades (seriales)", "Conteo físico", "Diferencia", "Conteo anterior", "Último conteo", "Penúltimo conteo"]
   ];
 
-  inventarioDatos.forEach(({ modelo, data }) => {
+  inventarioDatos.forEach((r) => {
+    const { modelo, data } = r;
+    const seriales = Number(r.seriales ?? 0);
     wsData.push([
       modelo.marca || "-",
       modelo.modelo || "-",
       modelo.tipo === "P" ? "Portátil" : modelo.tipo === "C" ? "Cámara" : modelo.tipo === "B" ? "Base" : "-",
       modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-",
       modelo.alto_movimiento ? "Sí" : "No",
+      seriales,
       data.cantidad ?? "-",
+      data.cantidad != null ? seriales - Number(data.cantidad) : "-",
       data.cantidad_anterior ?? "-",
       data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-",
       data.penultima_actualizacion ? data.penultima_actualizacion.toDate().toLocaleString() : "-"

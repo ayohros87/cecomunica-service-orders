@@ -56,9 +56,10 @@
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
+  <script defer src="../js/services/equiposPoolService.js"></script>
   <script defer src="../js/ui/toast.js"></script>
 
-  <script src="../js/pages/inventario-index.js" defer></script>
+  <script src="../js/pages/inventario-index.js?v=cc9" defer></script>
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
@@ -72,7 +73,7 @@
   Layout.renderTopbarFor('index', {
     title: '<i data-lucide="package"></i> Inventario de Radios',
     actions: [
-      { label: '<i data-lucide="plus"></i> Cargar inventario',
+      { label: '<i data-lucide="plus"></i> Registrar conteo físico',
         cls: 'primary',
         onclick: "window.location.href='./cargar-inventario.html'" }
     ],
@@ -81,8 +82,8 @@
       { html: '<a href="./vista-correo.html" target="_blank" class="overflow-menu-item"><i data-lucide="mail"></i> Vista correo</a>' },
       { onclick: 'exportarExcel()',  label: '<i data-lucide="download"></i> Excel' },
       { divider: true },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Cant. anterior</label>' },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltima actualización</label>' },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Conteo anterior</label>' },
+      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltimo conteo</label>' },
       { divider: true },
       { onclick: 'toggleDensity()', label: '<i data-lucide="arrow-up-down"></i> Alternar densidad' }
     ]
@@ -101,18 +102,19 @@
       <span class="kpi-card-value" id="kpiModelos">—</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-card-label">Unidades totales</span>
+      <span class="kpi-card-label">Unidades en bodega (seriales)</span>
       <span class="kpi-card-value kpi-accent" id="kpiUnidades">—</span>
+      <span class="kpi-card-sub">reporte principal — pool de equipos</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-card-label">Alto movimiento</span>
-      <span class="kpi-card-value" id="kpiAltoMov">—</span>
-      <span class="kpi-card-sub">modelos priorizados</span>
+      <span class="kpi-card-label">Conteo físico (total)</span>
+      <span class="kpi-card-value" id="kpiConteo">—</span>
+      <span class="kpi-card-sub">verificación manual</span>
     </div>
     <div class="kpi-card">
-      <span class="kpi-card-label">Stock bajo</span>
-      <span class="kpi-card-value kpi-warn" id="kpiStockBajo">—</span>
-      <span class="kpi-card-sub">&lt; 5 unidades</span>
+      <span class="kpi-card-label">Diferencia</span>
+      <span class="kpi-card-value" id="kpiDif">—</span>
+      <span class="kpi-card-sub">seriales − conteo · meta: 0</span>
     </div>
   </div>
 
