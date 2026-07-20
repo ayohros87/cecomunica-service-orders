@@ -51,7 +51,10 @@ window.CONFIG = {
     ASIGNADO: 'ASIGNADO',
     COMPLETADO: 'COMPLETADO (EN OFICINA)',
     ENTREGADO: 'ENTREGADO AL CLIENTE',
-    CERRADA_VISITA: 'CERRADA (VISITA)'
+    CERRADA_VISITA: 'CERRADA (VISITA)',
+    // Órdenes de DEVOLUCIÓN (recuperar equipos del cliente / confirmar
+    // anulación): cierran cuando todos los esperados están resueltos.
+    CERRADA_DEVOLUCION: 'CERRADA (DEVOLUCION)'
   },
   
   // Pagination — per-role page size. Técnicos see far fewer orders
@@ -273,6 +276,7 @@ function getEstadoClass(estado) {
   if (e === "COMPLETADO (EN OFICINA)") return "chip-lista"; // verde
   if (e === "ENTREGADO AL CLIENTE") return "chip-entregada"; // gris
   if (e === "CERRADA (VISITA)") return "chip-aprobada";     // esmeralda
+  if (e === "CERRADA (DEVOLUCION)") return "chip-aprobada"; // esmeralda
   return "chip-espera"; // estados legacy/extendidos: neutral
 }
 
@@ -294,6 +298,7 @@ function estadoCompacto(estado) {
   if (e === "ENTREGADO AL CLIENTE") return "ENTREGADO";
   if (e === "RECIBIDO EN MOSTRADOR") return "RECIBIDO";
   if (e === "CERRADA (VISITA)") return "CERRADA";
+  if (e === "CERRADA (DEVOLUCION)") return "CERRADA";
   return e;
 }
 
@@ -306,4 +311,12 @@ function esTipoVisita(tipo) {
 }
 function esOrdenVisita(orden) {
   return esTipoVisita(orden?.tipo_de_servicio);
+}
+
+// Una orden de DEVOLUCIÓN es el tiquete de recuperar equipos que siguen con
+// el cliente (renovación/baja) o confirmar una anulación (¿salieron o no?).
+// Check-in por serial en ordenes-devolucion.js; el backend
+// (onOrdenDevolucionWrite) aplica cada resolución al pool.
+function esOrdenDevolucion(orden) {
+  return normTxt(orden?.tipo_de_servicio).includes("devolucion");
 }

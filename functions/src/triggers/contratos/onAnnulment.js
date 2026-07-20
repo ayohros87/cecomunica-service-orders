@@ -2,7 +2,7 @@ const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
-const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
+const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 
 module.exports = onDocumentUpdated(
   {
@@ -42,66 +42,60 @@ module.exports = onDocumentUpdated(
       }
     }
 
-    // Pool de equipos: las unidades asignadas a ESTE contrato entran en
-    // cuarentena de inspección (devuelto_revision — "Entrada"): todo lo que
-    // regresa de un cliente se inspecciona antes de volver a bodega
-    // (PLAN_CICLO_VIDA_EQUIPOS.md §3.2). Los docs de contratos/{id}/seriales
-    // NO se borran (historial del contrato anulado), así que onSerialWrite
-    // nunca dispara esta transición — se hace aquí. No crítico: un fallo no
-    // debe bloquear el correo de anulación.
+    // Pool de equipos — cambio 2026-07-20: la anulación YA NO manda las
+    // unidades a cuarentena de inmediato (eso fingía que el cliente devolvió).
+    // El patrón usual de una anulación es que el contrato tuvo un error y los
+    // equipos NUNCA salieron del taller. Ahora se crea una orden de DEVOLUCIÓN
+    // en modo CONFIRMACIÓN: el check-in por unidad decide —
+    //   "nunca salió"  → en_bodega directo (sin inspección)
+    //   "recibido"     → cuarentena + ENTRADA de inspección al cerrar
+    //   "no se devuelve" → excepción justificada
+    // Mientras tanto las unidades quedan pendiente_devolucion (recordatorio
+    // semanal las vigila). No crítico: un fallo no bloquea el correo.
     try {
       const cid = event.params.docId;
-      const serialesSnap = await db.collection("contratos").doc(cid)
-        .collection("seriales").get();
-      let liberados = 0;
-      const devueltos = []; // para la orden de ENTRADA (inspección en taller)
-      for (const d of serialesSnap.docs) {
-        const s = d.data() || {};
-        const serial = (s.serial || "").toString().trim();
-        if (!serial) continue;
-        const r = await pool.transicionar(serial, s.modelo_id, s.modelo, {
-          aEstado: pool.ESTADOS.DEVUELTO,
-          soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
-          condicion: (data) => data.asignacion?.contrato_doc_id === cid,
-          tipo: "devolucion",
-          refMov: { tipo: "contrato", id: cid, label: contratoId },
-          notas: `Entrada por anulación de contrato (${motivoAnulacion}) — pendiente de inspección`,
-          extra: { asignacion: null, verificado: false },
-        });
-        if (r === "transicion") {
-          liberados++;
-          devueltos.push({ serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null });
+      if (!after.orden_devolucion_id) {
+        const serialesSnap = await db.collection("contratos").doc(cid)
+          .collection("seriales").get();
+        const unidades = [];
+        for (const d of serialesSnap.docs) {
+          const s = d.data() || {};
+          const serial = (s.serial || "").toString().trim();
+          if (!serial) continue;
+          try {
+            const { ref, data } = await pool.resolver(serial, s.modelo_id, s.modelo);
+            if (!data) continue;
+            if (![pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE].includes(data.estado)) continue;
+            if (data.asignacion?.contrato_doc_id !== cid) continue;
+            if (data.propiedad === "cliente") continue; // propio del cliente: no se devuelve
+            await ref.set({
+              pendiente_devolucion: true,
+              updated_at: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            unidades.push({ serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null, pool_doc_id: ref.id });
+          } catch (e) { /* unidad no resoluble: se omite */ }
         }
-      }
-      if (serialesSnap.size) {
-        logger.info("[onContratoAnuladoNotify] Pool: seriales a inspección por anulación", {
-          contratoId, total: serialesSnap.size, liberados
-        });
-      }
-
-      // Orden de ENTRADA para el taller (inspección de los devueltos) + correo
-      // a recepción y al vendedor. Solo si alguna unidad entró en cuarentena.
-      if (devueltos.length && !after.orden_entrada_id) {
-        try {
-          const ordenId = await crearOrdenEntrada({
+        if (unidades.length) {
+          const ordenId = await crearOrdenDevolucion({
             clienteId: after.cliente_id || null,
             clienteNombre: after.cliente_nombre || "",
             contratoDocId: cid,
             contratoId,
-            unidades: devueltos,
+            modo: "confirmacion",
+            origen: { tipo: "anulacion", ref_id: cid },
+            unidades,
             motivo: `Anulación de contrato (${motivoAnulacion})`,
-            refEntrada: { tipo: "anulacion", id: cid },
           });
           if (ordenId) {
             await db.collection("contratos").doc(cid)
-              .set({ orden_entrada_id: ordenId }, { merge: true });
+              .set({ orden_devolucion_id: ordenId }, { merge: true });
           }
-        } catch (e) {
-          logger.warn("[onContratoAnuladoNotify] Orden de entrada falló (no crítico)", { contratoId, message: e.message });
+        } else {
+          logger.info("[onContratoAnuladoNotify] Anulación sin unidades rastreadas en el pool", { contratoId });
         }
       }
     } catch (e) {
-      logger.warn("[onContratoAnuladoNotify] Pool: liberación por anulación falló (no crítico)", {
+      logger.warn("[onContratoAnuladoNotify] Orden de devolución falló (no crítico)", {
         contratoId, message: e.message
       });
     }

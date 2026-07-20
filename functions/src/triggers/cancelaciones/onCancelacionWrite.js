@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
+const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 
 // Notifica y deriva el estado del contrato cuando una enmienda (baja/terminación)
 // se crea / aprueba / rechaza / cierra. Usa admin SDK: las escrituras al contrato
@@ -129,6 +130,43 @@ module.exports = onDocumentWritten(
         }
       } catch (e) {
         logger.warn("[onCancelacionWrite] No se pudo derivar el contrato", { contratoDocId, message: e.message });
+      }
+    }
+
+    // ── 1c) Tiquete de DEVOLUCIÓN al APROBARSE la baja ──────────────────────
+    // La baja lista modelos+cantidades (sin serial): la orden nace "por
+    // modelo" y el check-in captura el serial de cada unidad al llegar.
+    // El circuito de cierre de la enmienda (1b, abajo) sigue funcionando; las
+    // transiciones del pool son idempotentes si ambos caminos tocan la misma
+    // unidad (sin-cambio).
+    if (approved && contratoDocId && !after.orden_devolucion_id) {
+      try {
+        let clienteIdDev = after.cliente_id || null;
+        if (!clienteIdDev) {
+          try {
+            const c = await db.collection("contratos").doc(contratoDocId).get();
+            clienteIdDev = c.exists ? (c.data().cliente_id || null) : null;
+          } catch (e) { /* sin cliente_id: la orden sale igual */ }
+        }
+        const ordenId = await crearOrdenDevolucion({
+          clienteId: clienteIdDev,
+          clienteNombre: cliente,
+          contratoDocId,
+          contratoId,
+          modo: "recuperacion",
+          origen: { tipo: "baja", ref_id: id },
+          unidades: [],
+          porModelo: (after.items || []).map(it => ({
+            modelo: it.modelo || "", modelo_id: it.modelo_id || null, cantidad: Number(it.cantidad || 0),
+          })),
+          motivo: `${tipoLabel} aprobada — contrato ${contratoId}`,
+        });
+        if (ordenId) {
+          await db.collection("solicitudes_cancelacion").doc(id)
+            .set({ orden_devolucion_id: ordenId }, { merge: true });
+        }
+      } catch (e) {
+        logger.warn("[onCancelacionWrite] Orden de devolución falló (no crítico)", { id, message: e.message });
       }
     }
 

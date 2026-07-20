@@ -707,6 +707,19 @@ function botonesFlujo(ordenId, estado, ordenData) {
 
   const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
   const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(od);
+  const esDevolucion = typeof esOrdenDevolucion === 'function' && esOrdenDevolucion(od);
+
+  // Órdenes de DEVOLUCIÓN (recuperar equipos del cliente / confirmar
+  // anulación): su flujo es el check-in por serial, no el de taller.
+  if (esDevolucion) {
+    const cerradaDev = (estado || '').toUpperCase() === 'CERRADA (DEVOLUCION)';
+    if (!cerradaDev && rol !== ROLES.VISTA) {
+      html += `<button class="btn-flujo btn-flujo--completar" title="Check-in de equipos devueltos" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Check-in</button>`;
+    } else {
+      html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver devolución" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver devolución</button>`;
+    }
+    return html;
+  }
 
   // Visitas técnicas (trabajo de campo): no hay recepción en mostrador ni
   // entrega al cliente. Flujo propio: POR ASIGNAR → Asignar → ASIGNADO →

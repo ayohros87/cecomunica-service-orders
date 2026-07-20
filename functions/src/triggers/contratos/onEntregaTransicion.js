@@ -23,11 +23,7 @@
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
-const { recepcionEmails } = require("../../lib/mailRecipients");
-const { APP_BASE_URL } = require("../../lib/inventario");
-
-const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, c => (
-  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 
 module.exports = onDocumentUpdated(
   { document: "contratos/{cid}", region: "us-central1" },
@@ -103,56 +99,30 @@ module.exports = onDocumentUpdated(
     await batch.commit();
     logger.info("[onEntregaTransicion] Devolución auto-registrada", { contratoId, unidades: unidades.length });
 
-    // Aviso al vendedor del cliente + recepción (best-effort).
+    // Tiquete de trabajo: orden de DEVOLUCIÓN (modo recuperación) con las
+    // unidades a recuperar — asignable, medible (aging) y con check-in por
+    // serial. El correo a vendedor+recepción lo encola el propio creador.
     try {
-      let vendedor = null;
-      if (after.cliente_id) {
-        const cli = await db.collection("clientes").doc(after.cliente_id).get();
-        const uidV = cli.exists ? cli.data().vendedor_asignado : null;
-        if (uidV) {
-          const u = await db.collection("usuarios").doc(uidV).get();
-          const e = u.exists ? u.data().email : null;
-          if (e) vendedor = String(e).toLowerCase();
-        }
-      }
-      const recep = await recepcionEmails();
-      const to = vendedor || recep[0];
-      if (!to) { logger.warn("[onEntregaTransicion] Sin destinatarios para el aviso", { contratoId }); return null; }
-      const cc = [...new Set([...(vendedor ? recep : recep.slice(1))])].filter(e => e !== to);
-
-      const filas = unidades.slice(0, 40).map(u =>
-        `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;">${esc(u.serial || u.id)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(u.modelo_label || "—")}</td></tr>`).join("");
-      const extra = unidades.length > 40 ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${unidades.length - 40} más.</p>` : "";
-
-      await db.collection("mail_queue").add({
-        to,
-        cc: cc.length ? cc.join(", ") : null,
-        subject: `Equipos por recuperar: ${unidades.length} de ${after.cliente_nombre || "cliente"} (renovación ${contratoId})`,
-        preheader: `La entrega de ${contratoId} activó la devolución de los equipos del contrato anterior`,
-        bodyContent: `
-          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#9A3412;">Equipos por recuperar</h2>
-          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-            Se confirmó la entrega del contrato <b>${esc(contratoId)}</b> de
-            <b>${esc(after.cliente_nombre || "—")}</b>. Los equipos de alquiler del contrato
-            anterior quedaron <b>pendientes de devolución</b> — coordina la recuperación con el cliente.
-            Si alguno NO se devuelve (renovación parcial, venta…), registra la excepción con su motivo
-            en la página de transición.
-          </p>
-          <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
-            <thead><tr>
-              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Serial</th>
-              <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
-            </tr></thead>
-            <tbody>${filas}</tbody>
-          </table>
-          ${extra}`,
-        ctaUrl: `${APP_BASE_URL}/contratos/transicion.html?id=${encodeURIComponent(cid)}`,
-        ctaLabel: "Ver transición / registrar excepciones",
-        meta: { source: "onEntregaTransicion", contrato_id: contratoId, unidades: unidades.length },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      const ordenId = await crearOrdenDevolucion({
+        clienteId: after.cliente_id || null,
+        clienteNombre: after.cliente_nombre || "",
+        contratoDocId: cid,
+        contratoId,
+        modo: "recuperacion",
+        origen: { tipo: "renovacion", ref_id: cid },
+        unidades: unidades.map(u => ({
+          serial: u.serial || u.serial_norm || u.id,
+          modelo: u.modelo_label || "",
+          modelo_id: u.modelo_id || null,
+          pool_doc_id: u.id,
+        })),
+        motivo: `Renovación ${contratoId} entregada — recuperar los equipos del contrato anterior`,
       });
+      if (ordenId) {
+        await db.collection("contratos").doc(cid).set({ orden_devolucion_id: ordenId }, { merge: true });
+      }
     } catch (e) {
-      logger.warn("[onEntregaTransicion] Aviso no enviado (no crítico)", { contratoId, message: e.message });
+      logger.warn("[onEntregaTransicion] No se pudo crear la orden de devolución (no crítico)", { contratoId, message: e.message });
     }
 
     return null;

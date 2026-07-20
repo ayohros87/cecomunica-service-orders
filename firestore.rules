@@ -286,10 +286,11 @@ service cloud.firestore {
         let a  = request.resource.data.get("estado_reparacion", "POR ASIGNAR");
         return de == a
           || !(de in ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO",
-                      "COMPLETADO (EN OFICINA)", "ENTREGADO AL CLIENTE", "CERRADA (VISITA)"])
-          || (de == "POR ASIGNAR" && a in ["RECIBIDO EN MOSTRADOR", "ASIGNADO"])
+                      "COMPLETADO (EN OFICINA)", "ENTREGADO AL CLIENTE",
+                      "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"])
+          || (de == "POR ASIGNAR" && a in ["RECIBIDO EN MOSTRADOR", "ASIGNADO", "CERRADA (DEVOLUCION)"])
           || (de == "RECIBIDO EN MOSTRADOR" && a == "ASIGNADO")
-          || (de == "ASIGNADO" && a in ["COMPLETADO (EN OFICINA)", "CERRADA (VISITA)"])
+          || (de == "ASIGNADO" && a in ["COMPLETADO (EN OFICINA)", "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"])
           || (de == "COMPLETADO (EN OFICINA)" && a in ["ENTREGADO AL CLIENTE", "CERRADA (VISITA)"]);
       }
       allow read: if isSignedIn();

@@ -103,6 +103,13 @@ async function main() {
   ok("ordenes: estado legacy fuera del enum puede regularizarse");
   await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oVisita").set({ estado_reparacion: "CERRADA (VISITA)" }, { merge: true }));
   ok("ordenes: ASIGNADO → CERRADA (VISITA) pasa");
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("ordenes_de_servicio/oDev").set({ estado_reparacion: "POR ASIGNAR", tipo_de_servicio: "DEVOLUCION" });
+  });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oDev").set({ estado_reparacion: "CERRADA (DEVOLUCION)" }, { merge: true }));
+  ok("ordenes: POR ASIGNAR → CERRADA (DEVOLUCION) pasa (check-in cerrado)");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oDev").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
+  ok("ordenes: CERRADA (DEVOLUCION) es terminal para no-admin");
 
   // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {

@@ -77,6 +77,13 @@
     'entrega-sin-id-change': () => _toggleEntregaSinId(),
     'entrega-sin-firma-change': () => _toggleEntregaSinFirma(),
     
+    // Órdenes de DEVOLUCIÓN: check-in por serial (el mismo modal sirve de
+    // vista de solo lectura cuando la orden está cerrada o el rol no opera).
+    'checkin-devolucion': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) { closeAllMenus(); OrdenesDevolucion.abrir(ordenId); }
+    },
+
     // Order actions
     'asignar-tecnico': (el) => {
       const ordenId = el.dataset.ordenId;
