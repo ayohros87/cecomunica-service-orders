@@ -266,7 +266,7 @@ function renderizarTabla(datos) {
                   : seriales < 5 ? `<span class="badge pendiente">${seriales}</span>`
                   : `<span class="badge completo">${seriales}</span>`;
     const urlPool = `./equipos.html?tab=en_bodega${data.modelo_id ? `&modelo=${encodeURIComponent(data.modelo_id)}` : ''}`;
-    const serialesBadge = `<a href="${urlPool}" title="Ver los seriales de este modelo en bodega" style="text-decoration:none;cursor:pointer;">${badgeSer}</a>`;
+    const serialesBadge = `<a href="${urlPool}" class="badge-link" title="Ver los seriales de este modelo en bodega">${badgeSer}<i data-lucide="chevron-right" style="width:12px;height:12px;"></i></a>`;
     const conteoTxt = tieneConteo ? String(cant) : '<span title="Modelo con seriales en bodega sin fila de conteo físico">—</span>';
     const dif = tieneConteo ? seriales - cant : null;
     const difBadge = !tieneConteo ? '<span style="color:var(--fg-4);">—</span>'

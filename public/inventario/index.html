@@ -43,6 +43,14 @@
     .badge.completo  { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
     .badge.pendiente { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
     .badge.danger    { background:#FEF2F2; color:#991B1B; border-color:#FECACA; }
+
+    /* Drill-down de "Unidades (seriales)": afordancia de link — número con
+       subrayado punteado + chevron, realce al hover. */
+    .badge-link { text-decoration: none; display: inline-flex; align-items: center; gap: 2px; color: inherit; }
+    .badge-link .badge { text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer; }
+    .badge-link i, .badge-link svg { opacity: .55; transition: transform .12s ease, opacity .12s ease; }
+    .badge-link:hover .badge { box-shadow: 0 0 0 2px var(--accent-line, #BFDBFE); }
+    .badge-link:hover i, .badge-link:hover svg { opacity: 1; transform: translateX(2px); }
   </style>
 
   <!-- Firebase -->

@@ -1012,11 +1012,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const chk = document.getElementById('chkSinVerificar');
         if (chk) chk.checked = true;
       }
-      // ?modelo=<id> (clic en "Unidades (seriales)" de Inventario de Radios):
-      // prefiltra la familia del modelo. Solo si el id existe en el select.
+      // ?modelo=<id de catálogo> (clic en "Unidades (seriales)" de Inventario
+      // de Radios): el select de filtro usa claves de FAMILIA (no ids), así
+      // que primero se resuelve el id a su familia; si el param ya viene como
+      // clave de familia, también sirve.
       if (modeloParam) {
         const sel = document.getElementById('eqFiltroModelo');
-        if (sel && [...sel.options].some(o => o.value === modeloParam)) sel.value = modeloParam;
+        let famKey = '';
+        for (const [key, fam] of (EquiposPool._familias || new Map()).entries()) {
+          if (key === modeloParam || fam.ids.has(modeloParam)) { famKey = key; break; }
+        }
+        if (sel && famKey && [...sel.options].some(o => o.value === famKey)) sel.value = famKey;
       }
     }
 
