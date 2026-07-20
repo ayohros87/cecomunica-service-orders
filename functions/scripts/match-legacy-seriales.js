@@ -41,6 +41,7 @@ const csvIdx = process.argv.indexOf("--csv");
 const csvOut = csvIdx > -1 ? process.argv[csvIdx + 1] : null;
 
 const normName = (s) => String(s || "").trim().toLowerCase()
+  // eslint-disable-next-line no-control-regex -- intencional: recorta todo lo no-ASCII
   .normalize("NFD").replace(/[^\x00-\x7f]/g, "").replace(/\s+/g, " ");
 const esNoAplica = (m) => {
   const t = String(m || "").toLowerCase().replace(/[^a-z]/g, "");

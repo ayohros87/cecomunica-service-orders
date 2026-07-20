@@ -13,7 +13,14 @@
 
 ---
 
-## 1. Minimum CI — *~1 hour, highest leverage*
+## 1. Minimum CI — *~1 hour, highest leverage* — ✅ HECHO
+
+> **2026-07-20:** `.github/workflows/ci.yml` corre en cada push/PR: sintaxis de
+> todo `public/js` y `functions` (`node --check`), carga de `functions/index.js`,
+> lint + unit tests de functions, y reglas + contador contra el emulador de
+> Firestore. Primer run disparado con el push de 3da9c29.
+
+<details><summary>Propuesta original</summary>
 
 The repo has no automated guard. Recent weeks have shipped hundreds of edits with no syntax/lint check; the only protection has been careful manual review.
 
@@ -49,7 +56,15 @@ If it's working: close this item with a note. If it's not: file a follow-up to e
 
 ---
 
-## 4. PII retention customer notice — *blocked on external (legal/customer-comms)*
+</details>
+
+## 4. PII retention customer notice — *DECISIÓN 2026-07-20: EN PAUSA*
+
+> El negocio decidió **mantener los archivos de identificación — no se borra
+> nada por ahora**. `purgePIIRetention` sigue siendo callable manual y NO debe
+> convertirse a cron ni ejecutarse. Re-evaluar cuando el negocio lo pida.
+
+<details><summary>Contexto original (para cuando se retome)</summary>
 
 The `purgePIIRetention` Cloud Function clears `identificacion_url` from delivery records after 90 days. It's currently a **manual callable** rather than `onSchedule` because stakeholders want a customer-visible retention notice in place before the first automated run.
 

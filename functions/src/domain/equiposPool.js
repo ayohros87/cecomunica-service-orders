@@ -41,6 +41,7 @@ function modeloKey(modeloId, modeloLabel) {
 
 function _tightLabel(label) {
   return (label || "").toString().toLowerCase()
+    // eslint-disable-next-line no-control-regex -- intencional: recorta todo lo no-ASCII
     .normalize("NFD").replace(/[^\x00-\x7f]/g, "")
     .replace(/[^a-z0-9]+/g, "");
 }

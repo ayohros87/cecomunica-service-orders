@@ -22,6 +22,7 @@ const db = admin.firestore();
 const dryRun = !process.argv.includes("--write");
 
 const tight = (s) => (s || "").toString().toLowerCase()
+  // eslint-disable-next-line no-control-regex -- intencional: recorta todo lo no-ASCII
   .normalize("NFD").replace(/[^\x00-\x7f]/g, "").replace(/[^a-z0-9]+/g, "");
 // Variante reuso por el NOMBRE (no por el campo estado del catálogo, que a
 // veces está mal): "-R", " R" o la R pegada al número ("PNC360R").
