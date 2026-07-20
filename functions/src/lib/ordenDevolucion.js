@@ -164,8 +164,8 @@ async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, c
            confirma unidad por unidad con el check-in — "nunca salió" los regresa a bodega directo;
            "recibido" los manda a inspección.`
         : `Estos equipos están <b>con el cliente</b> y deben recuperarse (${escapeHtml(motivo || "")}).
-           Registra cada unidad con el check-in al recibirla; al cerrar la orden se crea sola la
-           orden de ENTRADA para inspección del taller.`;
+           Registra cada unidad con el check-in al recibirla; cada tanda recibida alimenta al
+           instante la orden de ENTRADA de inspección del taller.`;
       await db.collection("mail_queue").add({
         to: destinatarios[0],
         cc: destinatarios.length > 1 ? destinatarios.slice(1).join(",") : null,

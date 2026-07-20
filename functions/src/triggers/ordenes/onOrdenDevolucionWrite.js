@@ -5,15 +5,80 @@
 //   nunca_salio → en_bodega directo (anulación por error: jamás salió)
 //   no_devuelve → devolucion_excepcion en la unidad (sin cambio de estado);
 //                 se limpia pendiente_devolucion (dejamos de perseguirla)
-// Al cerrar la orden (estado → CERRADA (DEVOLUCION)) crea UNA orden de
-// ENTRADA con los recibidos para la cola de inspección del taller.
+// ENTRADA POR TANDA (2026-07-20): el taller revisa lo recibido según va
+// llegando — al PRIMER check-in "recibido" se crea la orden de ENTRADA y las
+// tandas siguientes se le AGREGAN (mismo doc, sin órdenes duplicadas por
+// tanda). Si la ENTRADA ya avanzó a un estado terminal cuando llega otra
+// tanda, se crea una nueva. El cierre de la devolución conserva un fallback
+// por si ninguna tanda alcanzó a crearla.
 // Idempotente: procesa solo resoluciones que CAMBIARON en esta escritura;
 // las transiciones del pool tienen guards (sin-cambio) por si se repite.
+const crypto = require("crypto");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
+
+const ESTADOS_TERMINALES_ORDEN = ["COMPLETADO (EN OFICINA)", "ENTREGADO AL CLIENTE", "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"];
+
+// Crea la ENTRADA (si no existe o la anterior ya cerró) o agrega las unidades
+// de la tanda a la existente. Devuelve el id de la ENTRADA usada, o null.
+async function crearOAlimentarEntrada(ordenId, after, unidades) {
+  const devRef = db.collection("ordenes_de_servicio").doc(ordenId);
+  // Releer el doc: otra tanda concurrente pudo haber creado la ENTRADA ya.
+  const fresh = (await devRef.get()).data() || {};
+  const entradaId = fresh.orden_entrada_id || null;
+
+  if (entradaId) {
+    const entradaRef = db.collection("ordenes_de_servicio").doc(entradaId);
+    const usada = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(entradaRef);
+      if (!snap.exists) return false;
+      const e = snap.data();
+      if (ESTADOS_TERMINALES_ORDEN.includes((e.estado_reparacion || "").toUpperCase())) return false;
+      const actuales = Array.isArray(e.equipos) ? e.equipos : [];
+      const seriales = new Set(actuales.map(x => (x.numero_de_serie || x.serial || "").toUpperCase()));
+      const nuevos = unidades
+        .filter(u => !seriales.has((u.serial || "").toUpperCase()))
+        .map(u => ({
+          id: crypto.randomUUID(),
+          modelo_id: u.modelo_id || null,
+          modelo: u.modelo || "",
+          serial: u.serial, numero_de_serie: u.serial,
+          bateria: false, clip: false, cargador: false, fuente: false, antena: false, cubrepolvo: false,
+          observaciones: `Tanda de devolución ${ordenId} — pendiente de inspección.`,
+          eliminado: false,
+        }));
+      if (nuevos.length) {
+        tx.update(entradaRef, {
+          equipos: [...actuales, ...nuevos],
+          fecha_modificacion: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      return true;
+    });
+    if (usada) {
+      logger.info("[onOrdenDevolucionWrite] Tanda agregada a ENTRADA existente", { ordenId, entradaId, unidades: unidades.length });
+      return entradaId;
+    }
+    // La ENTRADA anterior ya cerró: cae a crear una nueva.
+  }
+
+  const nuevaId = await crearOrdenEntrada({
+    clienteId: after.cliente_id || null,
+    clienteNombre: after.cliente_nombre || "",
+    contratoDocId: after.contrato?.contrato_doc_id || null,
+    contratoId: after.contrato?.contrato_id || null,
+    unidades,
+    motivo: `Devolución ${ordenId} (${after.devolucion?.origen?.tipo || "devolución"})`,
+    refEntrada: { tipo: "devolucion", id: ordenId },
+  });
+  if (nuevaId) {
+    await devRef.set({ orden_entrada_id: nuevaId }, { merge: true });
+  }
+  return nuevaId;
+}
 
 module.exports = onDocumentWritten(
   { document: "ordenes_de_servicio/{ordenId}", region: "us-central1" },
@@ -25,6 +90,7 @@ module.exports = onDocumentWritten(
     const ordenId = event.params.ordenId;
     const dev = after.devolucion || {};
     const antes = new Map(((before?.devolucion?.esperados) || []).map(e => [e.id, e.resolucion || null]));
+    const tandaRecibida = []; // recibidos NUEVOS de esta escritura → ENTRADA por tanda
 
     for (const e of (dev.esperados || [])) {
       const res = e.resolucion || null;
@@ -49,6 +115,7 @@ module.exports = onDocumentWritten(
                 extra: { verificado: false },
               });
           logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r });
+          tandaRecibida.push({ serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id });
         } else if (res === "nunca_salio") {
           // Anulación por error: el equipo jamás salió del taller — vuelve a
           // bodega directo, sin cuarentena ni inspección (no hay qué revisar).
@@ -93,28 +160,29 @@ module.exports = onDocumentWritten(
       }
     }
 
-    // Cierre → orden de ENTRADA con los recibidos (una sola vez).
+    // ENTRADA por tanda: cada lote de recibidos alimenta la inspección del
+    // taller de inmediato (crea la ENTRADA en la primera tanda, agrega en las
+    // siguientes) — no espera al cierre de la devolución.
+    if (tandaRecibida.length) {
+      try {
+        await crearOAlimentarEntrada(ordenId, after, tandaRecibida);
+      } catch (e) {
+        logger.warn("[onOrdenDevolucionWrite] ENTRADA por tanda falló (no crítico)", { ordenId, message: e.message });
+      }
+    }
+
+    // Fallback al cierre: si por alguna razón ninguna tanda creó la ENTRADA
+    // (p.ej. fallos transitorios), se crea aquí con TODOS los recibidos.
     const cerroAhora = before?.estado_reparacion !== "CERRADA (DEVOLUCION)"
       && after.estado_reparacion === "CERRADA (DEVOLUCION)";
-    if (cerroAhora && !after.orden_entrada_id) {
+    if (cerroAhora && !after.orden_entrada_id && !tandaRecibida.length) {
       const recibidos = (dev.esperados || []).filter(e => e.resolucion === "recibido");
       if (recibidos.length) {
         try {
-          const entradaId = await crearOrdenEntrada({
-            clienteId: after.cliente_id || null,
-            clienteNombre: after.cliente_nombre || "",
-            contratoDocId: after.contrato?.contrato_doc_id || null,
-            contratoId: after.contrato?.contrato_id || null,
-            unidades: recibidos.map(e => ({ serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id })),
-            motivo: `Devolución ${ordenId} (${dev.origen?.tipo || "devolución"})`,
-            refEntrada: { tipo: "devolucion", id: ordenId },
-          });
-          if (entradaId) {
-            await db.collection("ordenes_de_servicio").doc(ordenId)
-              .set({ orden_entrada_id: entradaId }, { merge: true });
-          }
+          await crearOAlimentarEntrada(ordenId, after,
+            recibidos.map(e => ({ serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id })));
         } catch (e) {
-          logger.warn("[onOrdenDevolucionWrite] No se pudo crear la ENTRADA (no crítico)", { ordenId, message: e.message });
+          logger.warn("[onOrdenDevolucionWrite] ENTRADA de cierre falló (no crítico)", { ordenId, message: e.message });
         }
       } else {
         logger.info("[onOrdenDevolucionWrite] Cerrada sin recibidos — no se crea ENTRADA", { ordenId });

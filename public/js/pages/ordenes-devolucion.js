@@ -63,7 +63,7 @@
 
     const intro = esConfirmacion
       ? 'Anulación de contrato: lo usual es que los equipos <b>nunca hayan salido</b>. Confirma unidad por unidad — <b>Nunca salió</b> los regresa a bodega directo; <b>Recibido</b> los manda a inspección.'
-      : 'Estos equipos están <b>con el cliente</b>. Marca <b>Recibido</b> cuando cada unidad llegue físicamente; al cerrar la orden se crea sola la ENTRADA de inspección para el taller.';
+      : 'Estos equipos están <b>con el cliente</b>. Marca <b>Recibido</b> cuando cada unidad llegue físicamente — cada tanda recibida alimenta al instante la orden de ENTRADA del taller (inspección), sin esperar a que llegue todo.';
 
     const filas = esperados.map(e => `
       <tr>
@@ -233,7 +233,7 @@
   }
 
   async function cerrarOrden() {
-    if (!window.confirm('¿Cerrar la devolución? Se creará la orden de ENTRADA para inspección con los equipos recibidos (si los hay).')) return;
+    if (!window.confirm('¿Cerrar la devolución? Todas las unidades quedaron resueltas; los equipos recibidos ya están (o quedarán) en la orden de ENTRADA de inspección.')) return;
     const user = firebase.auth().currentUser;
     try {
       await OrdenesService.mergeOrder(_ordenId, {
