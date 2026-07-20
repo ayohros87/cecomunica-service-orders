@@ -985,6 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const serialParam = qp.get('serial');
     const tabParam = qp.get('tab');
     const verifParam = qp.get('verificar');
+    const modeloParam = qp.get('modelo'); // id de catálogo — desde Inventario de Radios
     const setTabUI = (tab) => {
       EquiposPool._tab = tab;
       document.querySelectorAll('.eq-tab').forEach(b =>
@@ -1004,12 +1005,18 @@ document.addEventListener('DOMContentLoaded', () => {
       limpiarSecundarios();
       const q = document.getElementById('eqBusqueda');
       if (q) q.value = serialParam;
-    } else if (tabParam || verifParam) {
+    } else if (tabParam || verifParam || modeloParam) {
       limpiarSecundarios();
       setTabUI(TABS_VALIDAS.includes(tabParam) ? tabParam : 'todos');
       if (verifParam) {
         const chk = document.getElementById('chkSinVerificar');
         if (chk) chk.checked = true;
+      }
+      // ?modelo=<id> (clic en "Unidades (seriales)" de Inventario de Radios):
+      // prefiltra la familia del modelo. Solo si el id existe en el select.
+      if (modeloParam) {
+        const sel = document.getElementById('eqFiltroModelo');
+        if (sel && [...sel.options].some(o => o.value === modeloParam)) sel.value = modeloParam;
       }
     }
 

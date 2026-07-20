@@ -259,9 +259,14 @@ function renderizarTabla(datos) {
     const seriales = Number(r.seriales ?? 0);
     const tieneConteo = data.cantidad != null;
     const cant = Number(data.cantidad ?? 0);
-    const serialesBadge = seriales <= 0 ? '<span class="badge danger">0</span>'
+    // El número es un drill-down: clic → Equipos por serial con la pestaña
+    // "En bodega" y la familia del modelo prefiltradas (los seriales exactos
+    // detrás del agregado — clave para auditar una Dif. distinta de 0).
+    const badgeSer = seriales <= 0 ? '<span class="badge danger">0</span>'
                   : seriales < 5 ? `<span class="badge pendiente">${seriales}</span>`
                   : `<span class="badge completo">${seriales}</span>`;
+    const urlPool = `./equipos.html?tab=en_bodega${data.modelo_id ? `&modelo=${encodeURIComponent(data.modelo_id)}` : ''}`;
+    const serialesBadge = `<a href="${urlPool}" title="Ver los seriales de este modelo en bodega" style="text-decoration:none;cursor:pointer;">${badgeSer}</a>`;
     const conteoTxt = tieneConteo ? String(cant) : '<span title="Modelo con seriales en bodega sin fila de conteo físico">—</span>';
     const dif = tieneConteo ? seriales - cant : null;
     const difBadge = !tieneConteo ? '<span style="color:var(--fg-4);">—</span>'
