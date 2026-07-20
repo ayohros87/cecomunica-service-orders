@@ -39,7 +39,7 @@
 
   const inventario = await InventarioService.getInventarioActual();
   if (inventario.length === 0) {
-    tabla.innerHTML = "<tr><td colspan='9'>No hay datos</td></tr>";
+    tabla.innerHTML = "<tr><td colspan='8'>No hay datos</td></tr>";
     return;
   }
 
@@ -88,6 +88,7 @@ datos.forEach(({ modelo, data }) => {
       <td>${modelo.alto_movimiento ? "Sí" : "No"}</td>
       <td>${data.cantidad ?? "-"}</td>
       <td>${data.ultima_actualizacion?.toDate().toLocaleString() ?? "-"}</td>
+      <td>${data.penultima_actualizacion?.toDate().toLocaleString() ?? "-"}</td>
     </tr>`;
 });
 
@@ -108,6 +109,7 @@ datos.forEach(({ modelo, data }) => {
         <th>Alto Movimiento</th>
         <th>Cantidad</th>
         <th>Última actualización</th>
+        <th>Penúltima actualización</th>
       </tr>
     </thead>
     <tbody id="tablaCorreo"></tbody>
