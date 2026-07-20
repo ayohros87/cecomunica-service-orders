@@ -146,7 +146,12 @@
       </tr>`).join('')
       : `<tr><td colspan="4" style="padding:12px;color:var(--fg-3);">No quedan equipos del cliente por resolver.</td></tr>`;
 
-    const filasMapeos = ctx.mapeos.length ? ctx.mapeos.map(m => `
+    const filasMapeos = ctx.mapeos.length ? ctx.mapeos.map(m => m.sin_reemplazos ? `
+      <tr>
+        <td colspan="4" style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);color:var(--fg-3);">
+          Cerrada <b>sin reemplazos</b> — los equipos nuevos no sustituyen a ninguno (adición pura)
+        </td>
+      </tr>` : `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono,monospace);color:#991b1b;">${esc(m.saliente || '—')}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);text-align:center;">→</td>
@@ -154,12 +159,24 @@
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);color:var(--fg-3);">${esc(m.modelo || '')}</td>
       </tr>`).join('') : '';
 
+    // Vincular el contrato original DESPUÉS de crear el contrato: el form de
+    // nuevo-contrato lo ofrece, pero si se omitió, aquí es donde se descubre
+    // que falta (los salientes salen sin ancla). Solo si hay cliente.
+    const vincularHtml = (!c.contrato_origen_id && c.cliente_id) ? `
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select id="selOrigenTrans" class="form-select" style="max-width:360px;font-size:13px;">
+          <option value="">Cargando contratos del cliente…</option>
+        </select>
+        <button type="button" class="btn btn-sm" id="btnVincularOrigen"><i data-lucide="link"></i> Vincular original</button>
+      </div>` : '';
+
     $('transBody').innerHTML = `
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);font-size:13px;color:var(--fg-2);">
         <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;"></i>
         ${ancla}. Puede haber <b>menos o más</b> entrantes que salientes: mapea lo que aplique.
         Los salientes quedan <b>pendientes de devolución</b> (el cliente los conserva durante la
         transición); su devolución se registra después como <b>Entrada</b> al cerrar la enmienda o anular el contrato original.
+        ${vincularHtml}
       </div>
 
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
@@ -208,12 +225,16 @@
         </div>
       </div>` : ''}
 
-      <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+        ${ctx.mapeos.length ? '<span></span>' : `<button type="button" class="btn btn-ghost" id="btnSinReemplazos" title="Los equipos de este contrato no sustituyen a ninguno (adición pura): cierra la transición sin mapeos"><i data-lucide="circle-slash-2"></i> Cerrar sin reemplazos</button>`}
         <button type="button" class="btn btn-primary" id="btnGuardarTrans"><i data-lucide="check"></i> Registrar transición</button>
       </div>`;
 
     $('btnAutoMapa')?.addEventListener('click', autoProponer);
     $('btnGuardarTrans')?.addEventListener('click', guardar);
+    $('btnSinReemplazos')?.addEventListener('click', cerrarSinReemplazos);
+    $('btnVincularOrigen')?.addEventListener('click', vincularOrigen);
+    poblarVinculo();
     // Un saliente elegido en un select desaparece de las opciones de los demás
     // y de la lista de "se devuelve sin sustituto" (checkbox se desmarca/oculta).
     document.querySelectorAll('.trans-map').forEach(sel => sel.addEventListener('change', sincronizarSelecciones));
@@ -237,6 +258,71 @@
       if (usado) chk.checked = false;
       chk.closest('tr').style.opacity = usado ? '0.45' : '';
     });
+  }
+
+  // Cierre sin reemplazos — para adiciones puras. Antes era un callejón sin
+  // salida: guardar() exige al menos un saliente, así que un contrato cuyos
+  // equipos no sustituyen a ninguno jamás limpiaba la CTA "Transición de
+  // equipos" de la lista. El doc marcador incrementa transicion_mapeos_count
+  // vía onMapeoWrite (que no aplica linaje al no traer seriales).
+  async function cerrarSinReemplazos() {
+    const c = ctx.contrato;
+    if (!window.confirm('Confirma que los equipos de este contrato NO sustituyen a ninguno existente (adición pura).\n\nLa lista dejará de pedir la transición. Si más adelante sí hay reemplazos, puedes registrarlos aquí mismo.')) return;
+    try {
+      await db().collection('contratos').doc(contratoDocId).collection('mapeos').add({
+        sin_reemplazos: true,
+        saliente: null, saliente_pool_id: null,
+        entrante: null, entrante_pool_id: null,
+        contrato_id: c.contrato_id || contratoDocId,
+        contrato_origen_id: c.contrato_origen_id || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+        por: firebase.auth().currentUser?.uid || null,
+      });
+      Toast.show('Transición cerrada sin reemplazos.', 'ok');
+      setTimeout(async () => { await cargarDatos(); render(); }, 1200);
+    } catch (e) {
+      console.error('Error cerrando sin reemplazos:', e);
+      Toast.show('No se pudo cerrar la transición.', 'bad');
+    }
+  }
+
+  // Vincular el contrato original a posteriori (el form lo ofrece al crear,
+  // pero aquí es donde se nota si faltó). Ancla los salientes al original en
+  // vez de listar todos los equipos del cliente.
+  async function poblarVinculo() {
+    const sel = $('selOrigenTrans');
+    if (!sel) return;
+    try {
+      const contratos = await ContratosService.getContratosActivosPorCliente(ctx.contrato.cliente_id);
+      const otros = (contratos || []).filter(k => k.id !== contratoDocId);
+      sel.innerHTML = otros.length
+        ? '<option value="">Vincular contrato original…</option>' + otros.map(k =>
+            `<option value="${esc(k.id)}" data-ref="${esc(k.contrato_id || k.id)}">${esc(k.contrato_id || k.id)} · ${esc(k.tipo_contrato || '')} · ${esc(k.estado || '')}</option>`).join('')
+        : '<option value="">El cliente no tiene otros contratos vigentes</option>';
+    } catch (e) {
+      sel.innerHTML = '<option value="">No se pudieron cargar los contratos</option>';
+    }
+  }
+
+  async function vincularOrigen() {
+    const sel = $('selOrigenTrans');
+    const id = sel?.value;
+    if (!id) { Toast.show('Elige el contrato original de la lista.', 'warn'); return; }
+    const ref = sel.selectedOptions[0]?.getAttribute('data-ref') || id;
+    try {
+      await ContratosService.updateContrato(contratoDocId, {
+        contrato_origen_id: id,
+        contrato_origen_ref: ref,
+        origen_tipo: 'sistema',
+      });
+      ctx.contrato.contrato_origen_id = id;
+      ctx.contrato.contrato_origen_ref = ref;
+      Toast.show(`Vinculado a ${ref} — los salientes ahora se anclan a ese contrato.`, 'ok');
+      await cargarDatos(); render();
+    } catch (e) {
+      console.error('Error vinculando el contrato original:', e);
+      Toast.show('No se pudo vincular el contrato original.', 'bad');
+    }
   }
 
   // Auto-propuesta: para cada entrante sin saliente elegido, toma el primer
@@ -288,7 +374,7 @@
       });
     });
 
-    if (!nuevos.length) { Toast.show('No hay reemplazos elegidos ni salientes marcados para devolver.', 'warn'); return; }
+    if (!nuevos.length) { Toast.show('No hay reemplazos elegidos ni salientes marcados para devolver. Si la adición no sustituye equipos, usa "Cerrar sin reemplazos".', 'warn'); return; }
     if (!window.confirm(`Se registrarán ${nuevos.length} movimiento(s) de transición. Los salientes quedan pendientes de devolución. ¿Continuar?`)) return;
 
     const btn = $('btnGuardarTrans');

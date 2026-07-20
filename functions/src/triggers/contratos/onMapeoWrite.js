@@ -18,6 +18,9 @@ const pool = require("../../domain/equiposPool");
 //
 // Shape del doc: { saliente, saliente_pool_id?, entrante?, entrante_pool_id?,
 //                  modelo?, modelo_id?, contrato_origen_id?, at, por }
+// Doc MARCADOR { sin_reemplazos: true, saliente: null, entrante: null, … }:
+// cierra la transición de una adición pura — solo incrementa el contador
+// (las secciones de linaje no aplican al no traer seriales).
 module.exports = onDocumentWritten(
   { document: "contratos/{cid}/mapeos/{mid}", region: "us-central1" },
   async (event) => {
