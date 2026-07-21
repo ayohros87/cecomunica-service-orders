@@ -482,6 +482,23 @@ const EquiposPoolService = {
     }, user);
   },
 
+  // Amarra la venta con su orden de PROGRAMACIÓN (CTA post-venta en
+  // inventario/equipos.html → nueva-orden con ?origen=venta). No cambia el
+  // estado — la unidad sigue 'vendido' — solo deja la traza factura↔orden en
+  // el doc y una línea en el kardex.
+  async vincularOrdenProgramacion(id, ordenId, user) {
+    const db = firebase.firestore();
+    const ref = db.collection('equipos_pool').doc(id);
+    const batch = db.batch();
+    batch.update(ref, { 'venta.orden_programacion_id': ordenId, ...this._autoria(user) });
+    batch.set(ref.collection('movimientos').doc(), this._movimiento({
+      tipo: 'orden_programacion',
+      ref: { tipo: 'orden', id: ordenId, label: ordenId },
+      notas: `Orden de programación ${ordenId} creada desde la venta`,
+    }, user));
+    return batch.commit();
+  },
+
   // Confirmación humana de un doc creado por migración automática.
   async verificar(id, user) {
     const db = firebase.firestore();

@@ -620,7 +620,7 @@ window.EquiposPool = {
         confirmLabel: `Vender ${vendibles.length} equipo(s)`,
       })) return;
 
-      let ok = 0; const errores = [];
+      let ok = 0; const errores = []; const vendidas = [];
       for (const u of vendibles) {
         try {
           await EquiposPoolService.vender(u.id, {
@@ -629,6 +629,7 @@ window.EquiposPool = {
             cliente_excepcion: clienteExcepcion,
           }, firebase.auth().currentUser);
           ok++;
+          vendidas.push(u);
         } catch (e) {
           errores.push(`${u.serial || u.id}: ${e.message || e}`);
         }
@@ -638,6 +639,31 @@ window.EquiposPool = {
       if (errores.length) msg += ` ${errores.length} fallaron: ${errores.join(' · ')}`;
       Toast.show(msg, errores.length ? 'warn' : 'ok');
       this.cargar();
+
+      // Encadenamiento venta → orden de PROGRAMACIÓN: los radios vendidos casi
+      // siempre pasan por el taller a programarse antes de entregarse. El CTA
+      // lleva a nueva-orden con el formulario precargado (cliente, seriales,
+      // "no aplica contrato" + motivo); crear la orden sigue siendo decisión
+      // humana. Requiere cliente con ficha (el select de la orden usa
+      // cliente_id) y un rol que pueda crear órdenes (inventario no puede).
+      if (ok > 0 && clienteSel.id && !clienteExcepcion && canRole(this._rol, 'crear-orden')) {
+        const crear = await Modal.confirm({
+          title: 'Venta registrada',
+          message: `¿Crear la orden de servicio de <strong>PROGRAMACIÓN</strong> para
+            <strong>${esc(clienteSel.nombre)}</strong> con los ${ok} equipo(s) vendidos?<br>
+            El formulario llega precargado — nada se crea hasta que lo guardes.`,
+          confirmLabel: 'Crear orden de programación',
+        });
+        if (crear) {
+          const qs = new URLSearchParams({
+            tipo: 'PROGRAMACION', origen: 'venta',
+            cliente_id: clienteSel.id,
+            seriales: vendidas.map(u => u.serial || u.serial_norm).join(','),
+          });
+          if (factura) qs.set('factura', factura);
+          window.location.href = `../ordenes/nueva-orden.html?${qs.toString()}`;
+        }
+      }
     } catch (e) {
       console.error('Error al registrar la venta:', e);
       Toast.show('Error al registrar la venta: ' + (e.message || e), 'bad');
@@ -652,7 +678,7 @@ window.EquiposPool = {
     liberacion: 'undo-2', entrega: 'truck', ingreso_taller: 'wrench',
     salida_taller: 'log-out', prestamo_poc: 'radio-tower', devolucion: 'corner-down-left',
     inspeccion: 'search-check', baja: 'archive-x', venta: 'banknote',
-    correccion_serial: 'pencil',
+    correccion_serial: 'pencil', orden_programacion: 'clipboard-list',
     migracion: 'database', cambio_estado: 'arrow-right-left',
   },
 

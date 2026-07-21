@@ -283,14 +283,21 @@
       }
     });
 
+    // Prefill "venta directa" (?origen=venta&factura=&seriales=) — CTA del
+    // registro de venta en inventario/equipos.html. Al guardar, la orden nace
+    // con esos equipos y el vínculo a la factura (ver submit).
+    let prefillVenta = null;
+
     // Precarga desde query params (?cliente_id=&contrato_doc_id=&tipo=) — CTA
-    // "Crear orden de programación" desde la lista de contratos (Fase D.2).
+    // "Crear orden de programación" desde la lista de contratos (Fase D.2) y
+    // CTA post-venta del pool de equipos (?origen=venta).
     // Solo prepara el formulario: crear la orden sigue siendo decisión humana.
     async function aplicarPrefillDesdeParams() {
       const p = new URLSearchParams(window.location.search);
       const cid           = p.get("cliente_id");
       const contratoDocId = p.get("contrato_doc_id");
       const tipo          = p.get("tipo");
+      const origen        = p.get("origen");
       if (!cid && !tipo && !contratoDocId) return;
 
       if (cid && [...clienteSelect.options].some(o => o.value === cid)) {
@@ -308,14 +315,30 @@
       // línea para poder esperar la carga y preseleccionar el contrato.
       if (esProgramacion(tipoSelect.value)) {
         contratoBlock.style.display = "block";
-        contratoNoAplica.checked = false;
-        contratoSelect.disabled = false;
-        contratoSelect.required = true;
-        contratoLabel.classList.add("req");
-        contratoMotivoField.style.display = "none";
-        if (clienteSelect.value) await cargarContratosDelCliente(clienteSelect.value);
-        if (contratoDocId && [...contratoSelect.options].some(o => o.value === contratoDocId)) {
-          contratoSelect.value = contratoDocId;
+        if (origen === "venta") {
+          // Venta directa: sin contrato por definición — "No aplica" con el
+          // motivo autollenado (editable). El change handler arma el resto.
+          const factura = (p.get("factura") || "").trim();
+          contratoNoAplica.checked = true;
+          contratoNoAplica.dispatchEvent(new Event("change"));
+          contratoMotivo.value = factura
+            ? `Venta directa — factura QBO ${factura}` : "Venta directa";
+          const seriales = (p.get("seriales") || "")
+            .split(",").map(s => s.trim()).filter(Boolean);
+          if (seriales.length) {
+            prefillVenta = { factura, seriales };
+            mostrarMensaje(`Orden desde venta directa: al guardar se agregarán ${seriales.length} equipo(s) vendidos (${seriales.join(", ")}).`);
+          }
+        } else {
+          contratoNoAplica.checked = false;
+          contratoSelect.disabled = false;
+          contratoSelect.required = true;
+          contratoLabel.classList.add("req");
+          contratoMotivoField.style.display = "none";
+          if (clienteSelect.value) await cargarContratosDelCliente(clienteSelect.value);
+          if (contratoDocId && [...contratoSelect.options].some(o => o.value === contratoDocId)) {
+            contratoSelect.value = contratoDocId;
+          }
         }
       }
     }
@@ -354,6 +377,34 @@
       const cliente_id = clienteSelect.value;
       const cliente_nombre = clienteSelect.options[clienteSelect.selectedIndex]?.textContent || "";
 
+      // Equipos de la venta directa (prefill ?origen=venta): la orden nace con
+      // los seriales vendidos, con el modelo resuelto desde el pool. Accesorios
+      // en falso y observaciones por defecto — editables en la orden después.
+      const equiposVenta = [];
+      const poolIdsVenta = [];
+      if (prefillVenta) {
+        for (const s of prefillVenta.seriales) {
+          let unidad = null;
+          try {
+            const docs = await EquiposPoolService.findBySerial(s);
+            // Con colisión de serial entre modelos, la unidad recién vendida
+            // es la que está en estado 'vendido'.
+            unidad = docs.find(d => d.estado === "vendido") || docs[0] || null;
+          } catch (e) { console.warn("Pool no disponible para", s, e); }
+          if (unidad) poolIdsVenta.push(unidad.id);
+          equiposVenta.push(EquipoNormalize.normalize({
+            id: crypto.randomUUID(),
+            modelo_id: unidad?.modelo_id || "",
+            modelo: unidad?.modelo_label || "",
+            serial: s,
+            numero_de_serie: s,
+            bateria: false, clip: false, cargador: false,
+            fuente: false, antena: false, cubrepolvo: false,
+            observaciones: "sin observaciones",
+          }));
+        }
+      }
+
         const data = {
           cliente_id,
           cliente_nombre,
@@ -362,7 +413,7 @@
           estado_reparacion: "POR ASIGNAR",
           fecha_creacion: firebase.firestore.FieldValue.serverTimestamp(),
           observaciones: document.getElementById("observaciones").value?.trim() || "",
-          equipos: [],
+          equipos: equiposVenta,
           creado_por_uid: window.currentUser?.uid || "",
           creado_por_email: window.currentUser?.email || "",
           eliminado: false,
@@ -413,8 +464,26 @@
           }
         }
 
+        // Vínculo con la venta directa que originó la orden (trazabilidad
+        // factura QBO ↔ orden; el espejo en el pool se escribe tras guardar).
+        if (prefillVenta) {
+          data.origen_venta = {
+            factura_qbo: prefillVenta.factura || null,
+            seriales: prefillVenta.seriales,
+          };
+        }
+
       try {
         await OrdenesService.setOrder(id, data);
+
+        // Amarre inverso: deja en cada unidad vendida el id de esta orden y una
+        // línea en su kardex. Best-effort — si el rol no puede escribir el pool
+        // (rules: puedeGestionarSeriales), la orden ya quedó creada igual.
+        for (const poolId of poolIdsVenta) {
+          try {
+            await EquiposPoolService.vincularOrdenProgramacion(poolId, id, window.currentUser);
+          } catch (e) { console.warn("No se pudo vincular la orden en el pool:", poolId, e); }
+        }
         
         // ✅ Enviar notificación de orden creada. Destinatarios configurables
         // en empresa/config.mail_orden_creada_to (primero = to, resto = cc);
