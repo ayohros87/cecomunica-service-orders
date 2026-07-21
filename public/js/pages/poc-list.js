@@ -295,6 +295,36 @@ window.PocList = {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
+  // La búsqueda filtrada pinta client-side (getAll por created_at) — este
+  // comparador aplica la columna de orden activa al resultado, imitando el
+  // orden de Firestore de la vista paginada: unit_id ordena por su espejo
+  // numérico (unit_id_num) y los vacíos/no numéricos van primero en asc.
+  _ordenarDocs(docs) {
+    const campo = this._campoOrden || 'cliente';
+    const dir   = this._direccionAsc ? 1 : -1;
+    const val = d => {
+      if (campo === 'unit_id')    return (typeof d.unit_id_num === 'number') ? d.unit_id_num : null;
+      if (campo === 'created_at') return d.created_at?.toMillis ? d.created_at.toMillis() : (d.created_at?.seconds ?? null);
+      if (campo === 'cliente')    return PocState.nombreClienteDe(d) || null;
+      const v = d[campo];
+      return (v === undefined || v === null || v === '') ? null : v;
+    };
+    docs.sort((a, b) => {
+      const va = val(a), vb = val(b);
+      let r;
+      if (va === null && vb === null) r = 0;
+      else if (va === null) r = -1;
+      else if (vb === null) r = 1;
+      else if (typeof va === 'number' && typeof vb === 'number') r = va - vb;
+      else r = String(va).localeCompare(String(vb), 'es', { numeric: true, sensitivity: 'base' });
+      // Desempate estable para unit_id no numéricos (ej. CONSOLA_DSI).
+      if (r === 0 && campo === 'unit_id') {
+        r = String(a.unit_id || '').localeCompare(String(b.unit_id || ''), 'es', { numeric: true });
+      }
+      return r * dir;
+    });
+  },
+
   // ── Filtered search ──────────────────────────────────────────────
   filtrar() {
     const ejecucionID   = ++this._filtroID;
@@ -315,6 +345,7 @@ window.PocList = {
     PocService.getAll({ sortField: 'created_at', sortAsc: false }).then(docs => {
         if (ejecucionID !== this._filtroID) return;
         let total = 0, activos = 0, incompletos = 0;
+        const coincidencias = [];
 
         docs.forEach(d => {
           if (idsVistos.has(d.id)) return;
@@ -341,11 +372,16 @@ window.PocList = {
             if (contenido.includes(valor)) {
               total++;
               if (d.activo) activos++;
-              tbody.appendChild(this._buildRow(d.id, d));
+              coincidencias.push(d);
             }
           }
         });
+        // Respetar la columna de orden activa (antes la vista filtrada quedaba
+        // clavada en created_at desc y "ordenar por Unit ID" no hacía nada).
+        this._ordenarDocs(coincidencias);
+        coincidencias.forEach(d => tbody.appendChild(this._buildRow(d.id, d)));
         PocState.actualizarResumen({ total, activos, incompletos });
+        this.actualizarFlechitas();
         if (typeof lucide !== 'undefined') lucide.createIcons();
       }).catch(err => {
         // Stale-search guard: ignore errors from a superseded query.
