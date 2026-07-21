@@ -369,13 +369,25 @@ document.getElementById("addCliente").onclick = async () => {
           await PocService.addPocDevice(data);
         }
 
-        // Write-back: si el cliente no tenía IP asignado, guardar el elegido en su
-        // ficha para recordarlo la próxima vez. Nunca sobrescribe un IP existente.
-        if (cliente && !ipOriginalCliente && ipElegido) {
-          try {
-            await ClientesService.updateCliente(cliente, { ip: ipElegido });
-          } catch (err) {
-            console.warn("[nuevo-batch] no se pudo guardar el IP en el cliente:", err?.code || err);
+        // Write-back del IP a la ficha del cliente:
+        //  - cliente sin IP → guarda el elegido sin preguntar (comportamiento
+        //    original).
+        //  - cliente CON un IP distinto al elegido → pregunta si corregir la
+        //    ficha, para que la corrección no muera en el lote (antes el único
+        //    camino era el formulario de Editar Cliente).
+        if (cliente && ipElegido && ipElegido !== ipOriginalCliente) {
+          let actualizarFicha = !ipOriginalCliente;
+          if (!actualizarFicha) {
+            actualizarFicha = await Modal.confirm({
+              message: `La empresa tiene asignado el IP "${ipOriginalCliente}" y este lote se creó con "${ipElegido}". ¿Actualizar también el IP asignado de la empresa?`,
+            });
+          }
+          if (actualizarFicha) {
+            try {
+              await ClientesService.updateCliente(cliente, { ip: ipElegido });
+            } catch (err) {
+              console.warn("[nuevo-batch] no se pudo guardar el IP en el cliente:", err?.code || err);
+            }
           }
         }
 
