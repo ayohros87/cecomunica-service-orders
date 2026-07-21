@@ -21,9 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     PocState.aplicarPermisosRol();
-    await PocState.cargarOperadores();
-    await PocState.cargarClientesMap();
-    await PocState.cargarModelosMap();
+    // Los tres mapas son independientes — en paralelo el arranque cuesta la
+    // carga más lenta, no la suma (antes: 3 round-trips seriales).
+    await Promise.all([
+      PocState.cargarOperadores(),
+      PocState.cargarClientesMap(),
+      PocState.cargarModelosMap(),
+    ]);
     PocList.cargar(true);
   });
 

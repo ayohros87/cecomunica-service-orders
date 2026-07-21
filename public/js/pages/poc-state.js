@@ -99,7 +99,12 @@ window.PocState = {
 
   async cargarModelosMap() {
     try {
-      const modelos = await ModelosService.getModelos();
+      // Cache-first (persistencia local habilitada en firebase-init): visitas
+      // repetidas no pagan los ~109 docs. Un mapa levemente desactualizado es
+      // inofensivo — los devices llevan modelo_label de respaldo.
+      let modelos = [];
+      try { modelos = await ModelosService.getModelos({ source: 'cache' }); } catch (_) { /* cache miss */ }
+      if (!modelos.length) modelos = await ModelosService.getModelos();
       this.modelosMap = {};
       modelos.forEach(m => {
         const label = `${(m.marca || '').trim()} ${(m.modelo || '').trim()}`.trim();
@@ -119,10 +124,20 @@ window.PocState = {
 
   async cargarClientesMap() {
     try {
-      const raw = await ClientesService.loadClientes();
+      // Solo se necesita id→nombre: lectura cache-first directa (~413 docs del
+      // servidor solo la primera vez). Nombre desactualizado es inofensivo —
+      // nombreClienteDe cae al d.cliente snapshoteado en el device.
+      const db = firebase.firestore();
+      let snap;
+      try {
+        snap = await db.collection('clientes').get({ source: 'cache' });
+        if (snap.empty) snap = await db.collection('clientes').get();
+      } catch (_) {
+        snap = await db.collection('clientes').get();
+      }
       this.clientesMap = {};
-      raw.forEach((cliente, id) => {
-        this.clientesMap[id] = (cliente.nombre || '').trim() || id;
+      snap.forEach(doc => {
+        this.clientesMap[doc.id] = (doc.data().nombre || '').trim() || doc.id;
       });
     } catch (e) {
       console.error('Error al cargar clientes:', e);
@@ -139,6 +154,10 @@ window.PocState = {
         else if (Array.isArray(snap.operadores)) arr = snap.operadores;
       }
       if (!arr.length) {
+        // Fallback de emergencia — empresa/operadores está sembrado
+        // (2026-07-21), así que esto no debería correr; si corre, lee hasta
+        // 1,000 poc_devices y la página se siente lenta.
+        console.warn('[PocState] empresa/operadores vacío — derivando de poc_devices (lento)');
         arr = await PocService.getUniqueOperadores(1000);
       }
       this.listaOperadores = (arr || [])
