@@ -1,8 +1,6 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
-const pool = require("../../domain/equiposPool");
-const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 
 // Notifica y deriva el estado del contrato cuando una enmienda (baja/terminación)
@@ -135,10 +133,9 @@ module.exports = onDocumentWritten(
 
     // ── 1c) Tiquete de DEVOLUCIÓN al APROBARSE la baja ──────────────────────
     // La baja lista modelos+cantidades (sin serial): la orden nace "por
-    // modelo" y el check-in captura el serial de cada unidad al llegar.
-    // El circuito de cierre de la enmienda (1b, abajo) sigue funcionando; las
-    // transiciones del pool son idempotentes si ambos caminos tocan la misma
-    // unidad (sin-cambio).
+    // modelo" y el check-in captura el serial de cada unidad al llegar; de ahí
+    // salen pool → cuarentena y la ENTRADA de inspección (onOrdenDevolucionWrite).
+    // El cierre de la enmienda es solo administrativo.
     if (approved && contratoDocId && !after.orden_devolucion_id) {
       try {
         let clienteIdDev = after.cliente_id || null;
@@ -167,70 +164,6 @@ module.exports = onDocumentWritten(
         }
       } catch (e) {
         logger.warn("[onCancelacionWrite] Orden de devolución falló (no crítico)", { id, message: e.message });
-      }
-    }
-
-    // ── 1b) Entradas de equipos al cierre → cuarentena de inspección ────────
-    // El checklist del cierre (cancelaciones.js) trae las unidades del pool que
-    // el cliente devolvió (`entradas`: pool_doc_id + condición). Aquí se
-    // transicionan a devuelto_revision ("Entrada — por inspeccionar"); la
-    // salida es la inspección en Inventario · Equipos por serial (→ bodega o
-    // baja). Server-side por diseño: los cruces al pool van con Admin SDK.
-    if (closed && Array.isArray(after.entradas) && after.entradas.length) {
-      const COND_LABEL = { bueno: "buen estado", danado: "dañado" };
-      for (const ent of after.entradas) {
-        if (!ent || !ent.pool_doc_id) continue;
-        try {
-          const r = await pool.transicionarPorId(String(ent.pool_doc_id), {
-            aEstado: pool.ESTADOS.DEVUELTO,
-            soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
-            tipo: "devolucion",
-            refMov: { tipo: "cancelacion", id, label: contratoId },
-            notas: `Entrada por ${tipoLabel.toLowerCase()} — ${COND_LABEL[ent.condicion] || ent.condicion || "condición sin registrar"}. Pendiente de inspección.`,
-            extra: {
-              asignacion: null,
-              entrada: {
-                condicion: ent.condicion || null,
-                solicitud_id: id,
-                at: admin.firestore.FieldValue.serverTimestamp(),
-              },
-            },
-          });
-          logger.info("[onCancelacionWrite] Entrada al pool", { id, pool_doc_id: ent.pool_doc_id, resultado: r });
-        } catch (e) {
-          logger.warn("[onCancelacionWrite] Entrada al pool falló (no crítico)", { id, pool_doc_id: ent.pool_doc_id, message: e.message });
-        }
-      }
-
-      // Orden de servicio de ENTRADA: el taller inspecciona los devueltos en su
-      // cola normal. Idempotente: si la solicitud ya tiene orden, no se duplica.
-      if (!after.orden_entrada_id) {
-        try {
-          // La solicitud guarda solo cliente_nombre; el cliente_id (para la
-          // orden y el vendedor asignado) sale del contrato.
-          let clienteIdSol = after.cliente_id || null;
-          if (!clienteIdSol && contratoDocId) {
-            try {
-              const c = await db.collection("contratos").doc(contratoDocId).get();
-              clienteIdSol = c.exists ? (c.data().cliente_id || null) : null;
-            } catch (e) { /* sin cliente_id: la orden sale igual, sin vendedor en CC */ }
-          }
-          const ordenId = await crearOrdenEntrada({
-            clienteId: clienteIdSol,
-            clienteNombre: cliente,
-            contratoDocId,
-            contratoId,
-            unidades: after.entradas,
-            motivo: `${tipoLabel} (enmienda cerrada)`,
-            refEntrada: { tipo: "cancelacion", id },
-          });
-          if (ordenId) {
-            await db.collection("solicitudes_cancelacion").doc(id)
-              .set({ orden_entrada_id: ordenId }, { merge: true });
-          }
-        } catch (e) {
-          logger.warn("[onCancelacionWrite] Orden de entrada falló (no crítico)", { id, message: e.message });
-        }
       }
     }
 

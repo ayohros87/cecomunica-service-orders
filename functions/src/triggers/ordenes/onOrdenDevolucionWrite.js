@@ -8,9 +8,11 @@
 // ENTRADA POR TANDA (2026-07-20): el taller revisa lo recibido según va
 // llegando — al PRIMER check-in "recibido" se crea la orden de ENTRADA y las
 // tandas siguientes se le AGREGAN (mismo doc, sin órdenes duplicadas por
-// tanda). Si la ENTRADA ya avanzó a un estado terminal cuando llega otra
-// tanda, se crea una nueva. El cierre de la devolución conserva un fallback
-// por si ninguna tanda alcanzó a crearla.
+// tanda) SOLO mientras el taller no la haya tomado (sigue POR ASIGNAR /
+// RECIBIDO EN MOSTRADOR y sin técnico asignado, 2026-07-21): una orden que un
+// técnico ya tiene en mano no debe crecer debajo de él. Si el taller ya la
+// tomó o la cerró, la tanda siguiente abre una ENTRADA nueva. El cierre de la
+// devolución conserva un fallback por si ninguna tanda alcanzó a crearla.
 // Idempotente: procesa solo resoluciones que CAMBIARON en esta escritura;
 // las transiciones del pool tienen guards (sin-cambio) por si se repite.
 const crypto = require("crypto");
@@ -20,10 +22,12 @@ const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
 
-const ESTADOS_TERMINALES_ORDEN = ["COMPLETADO (EN OFICINA)", "ENTREGADO AL CLIENTE", "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"];
+// Estados en los que la ENTRADA aún acepta tandas (el taller no la ha tomado).
+const ESTADOS_APPEND_ENTRADA = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR"];
 
-// Crea la ENTRADA (si no existe o la anterior ya cerró) o agrega las unidades
-// de la tanda a la existente. Devuelve el id de la ENTRADA usada, o null.
+// Crea la ENTRADA (si no existe o el taller ya tomó/cerró la anterior) o
+// agrega las unidades de la tanda a la existente mientras siga sin tomar.
+// Devuelve el id de la ENTRADA usada, o null.
 async function crearOAlimentarEntrada(ordenId, after, unidades) {
   const devRef = db.collection("ordenes_de_servicio").doc(ordenId);
   // Releer el doc: otra tanda concurrente pudo haber creado la ENTRADA ya.
@@ -36,7 +40,8 @@ async function crearOAlimentarEntrada(ordenId, after, unidades) {
       const snap = await tx.get(entradaRef);
       if (!snap.exists) return false;
       const e = snap.data();
-      if (ESTADOS_TERMINALES_ORDEN.includes((e.estado_reparacion || "").toUpperCase())) return false;
+      const estado = (e.estado_reparacion || "POR ASIGNAR").toUpperCase();
+      if (!ESTADOS_APPEND_ENTRADA.includes(estado) || e.tecnico_asignado) return false;
       const actuales = Array.isArray(e.equipos) ? e.equipos : [];
       const seriales = new Set(actuales.map(x => (x.numero_de_serie || x.serial || "").toUpperCase()));
       const nuevos = unidades
@@ -62,7 +67,7 @@ async function crearOAlimentarEntrada(ordenId, after, unidades) {
       logger.info("[onOrdenDevolucionWrite] Tanda agregada a ENTRADA existente", { ordenId, entradaId, unidades: unidades.length });
       return entradaId;
     }
-    // La ENTRADA anterior ya cerró: cae a crear una nueva.
+    // La ENTRADA anterior ya fue tomada por el taller (o cerró): nueva orden.
   }
 
   const nuevaId = await crearOrdenEntrada({
