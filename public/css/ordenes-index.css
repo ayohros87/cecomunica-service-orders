@@ -80,8 +80,11 @@ table thead {
 
 /* Sticky header: each th sticks below the dynamic filter card height.
    --filter-card-h is set by ordenes-index.js via ResizeObserver.
-   Fallback 128px covers the brief window before JS runs. */
-table thead th {
+   Fallback 128px covers the brief window before JS runs.
+   Scoped to .orders-table: on any other table of the page (modales de
+   devolución/QC, tablas anidadas) un th pegado a top:128px de su
+   contenedor de scroll cae ENCIMA del tbody. */
+.orders-table thead th {
   position: sticky;
   top: var(--filter-card-h, 128px);
   z-index: 10;
@@ -2095,17 +2098,9 @@ tr.activo:hover { background: #f0f9ff !important; }
   background: #f8fafc;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
-/* Override the GLOBAL `table thead th { position: sticky; top:
-   var(--filter-card-h, 128px) }` (ordenes-index.css line 105).
-   That global rule pins every <th> of every table to top: 128px
-   of its scroll ancestor — designed for the outer orders-table
-   thead to sit below the filter card. But it also matches the
-   th cells of the equipos table nested in the expand row, where
-   the scroll ancestor is the short .equipos-container — so the
-   "sticky at top: 128px" pinned the th cells BELOW the tbody
-   (and on long lists, they got hidden behind the outer thead's
-   own sticky cells). Render the equipos thead in normal flow
-   instead. */
+/* ceco-ui.css trae un `thead th { position: sticky; top: 0 }` global;
+   dentro del corto .equipos-container ese sticky no aporta y puede
+   solapar filas. Render en flujo normal. */
 .equipos-table thead th {
   position: static;
   top: auto;
