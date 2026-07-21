@@ -54,7 +54,11 @@ window.CONFIG = {
     CERRADA_VISITA: 'CERRADA (VISITA)',
     // Órdenes de DEVOLUCIÓN (recuperar equipos del cliente / confirmar
     // anulación): cierran cuando todos los esperados están resueltos.
-    CERRADA_DEVOLUCION: 'CERRADA (DEVOLUCION)'
+    CERRADA_DEVOLUCION: 'CERRADA (DEVOLUCION)',
+    // Órdenes de ENTRADA (inspección de equipos devueltos): no se entregan
+    // al cliente — la revisión termina, se cotiza si hay daños/faltantes y
+    // las unidades quedan bajo control de inventario (bodega/baja por serial).
+    CERRADA_ENTRADA: 'CERRADA (ENTRADA)'
   },
   
   // Pagination — per-role page size. Técnicos see far fewer orders
@@ -277,6 +281,7 @@ function getEstadoClass(estado) {
   if (e === "ENTREGADO AL CLIENTE") return "chip-entregada"; // gris
   if (e === "CERRADA (VISITA)") return "chip-aprobada";     // esmeralda
   if (e === "CERRADA (DEVOLUCION)") return "chip-aprobada"; // esmeralda
+  if (e === "CERRADA (ENTRADA)") return "chip-aprobada";    // esmeralda
   return "chip-espera"; // estados legacy/extendidos: neutral
 }
 
@@ -299,6 +304,7 @@ function estadoCompacto(estado) {
   if (e === "RECIBIDO EN MOSTRADOR") return "RECIBIDO";
   if (e === "CERRADA (VISITA)") return "CERRADA";
   if (e === "CERRADA (DEVOLUCION)") return "CERRADA";
+  if (e === "CERRADA (ENTRADA)") return "CERRADA";
   return e;
 }
 
@@ -319,4 +325,13 @@ function esOrdenVisita(orden) {
 // (onOrdenDevolucionWrite) aplica cada resolución al pool.
 function esOrdenDevolucion(orden) {
   return normTxt(orden?.tipo_de_servicio).includes("devolucion");
+}
+
+// Una orden de ENTRADA es la inspección de equipos que el cliente DEVOLVIÓ:
+// entran al taller para revisión técnica (y cotización si hay daños o
+// faltantes cobrables) y las unidades quedan bajo control de inventario.
+// NUNCA se entregan al cliente — su terminal es CERRADA (ENTRADA), no
+// ENTREGADO AL CLIENTE (ese terminal generaba la confusión entrada/entregar).
+function esOrdenEntrada(orden) {
+  return normTxt(orden?.tipo_de_servicio).includes("entrada");
 }

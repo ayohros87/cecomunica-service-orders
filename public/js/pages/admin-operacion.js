@@ -195,6 +195,9 @@
     const completadasSinEntregar = d.ordenes.filter(o => {
       const est = (o.estado_reparacion || '').toUpperCase();
       if (est !== 'COMPLETADA') return false;
+      // Las ENTRADA no se entregan (terminal propio: CERRADA (ENTRADA));
+      // sin este corte la alerta las perseguiría eternamente.
+      if ((o.tipo_de_servicio || '').toUpperCase().includes('ENTRADA')) return false;
       const ageC = AdminMetrics.ageInDays(o.fecha_completada || o.fecha_actualizacion, now);
       return ageC != null && ageC >= ctEntDias;
     }).sort((a, b) => (AdminMetrics.ageInDays(b.fecha_completada || b.fecha_actualizacion, now) || 0) -

@@ -24,6 +24,8 @@
     ASIGNAR:                { icon: 'user-check',  color: '#2563eb', label: 'Asignar técnico' },
     COMPLETAR:              { icon: 'check-circle', color: '#15803d', label: 'Completar orden' },
     ENTREGAR:               { icon: 'truck',       color: '#0f766e', label: 'Entregar orden' },
+    CERRAR_ENTRADA:         { icon: 'package-check', color: '#15803d', label: 'Cerrar entrada' },
+    DEVOLUCION_ACUSE:       { icon: 'pen-line',    color: '#0f766e', label: 'Acuse de recepción firmado' },
     APROBAR:                { icon: 'badge-check', color: '#15803d', label: 'Aprobar contrato' },
     ANULAR:                 { icon: 'x-octagon',   color: '#b91c1c', label: 'Anular contrato' },
     PURGAR_ID:              { icon: 'shield-x',    color: '#7c2d12', label: 'Purgar foto ID' },

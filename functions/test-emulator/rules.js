@@ -119,6 +119,16 @@ async function main() {
   ok("ordenes: POR ASIGNAR → CERRADA (DEVOLUCION) pasa (check-in cerrado)");
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oDev").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
   ok("ordenes: CERRADA (DEVOLUCION) es terminal para no-admin");
+  // ENTRADA (inspección de devueltos): terminal propio sin entrega ni QC —
+  // COMPLETADO → CERRADA (ENTRADA) pasa aunque haya qc_requerido, pero
+  // COMPLETADO → ENTREGADO sigue exigiendo el QC aprobado.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("ordenes_de_servicio/oEnt").set({ estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "ENTRADA", qc_requerido: true });
+  });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oEnt").set({ estado_reparacion: "CERRADA (ENTRADA)" }, { merge: true }));
+  ok("ordenes: COMPLETADO → CERRADA (ENTRADA) pasa (cierre de inspección)");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oEnt").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
+  ok("ordenes: CERRADA (ENTRADA) es terminal para no-admin");
 
   // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {

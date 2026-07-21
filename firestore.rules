@@ -287,11 +287,14 @@ service cloud.firestore {
         return de == a
           || !(de in ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO",
                       "COMPLETADO (EN OFICINA)", "ENTREGADO AL CLIENTE",
-                      "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"])
+                      "CERRADA (VISITA)", "CERRADA (DEVOLUCION)", "CERRADA (ENTRADA)"])
           || (de == "POR ASIGNAR" && a in ["RECIBIDO EN MOSTRADOR", "ASIGNADO", "CERRADA (DEVOLUCION)"])
           || (de == "RECIBIDO EN MOSTRADOR" && a == "ASIGNADO")
           || (de == "ASIGNADO" && a in ["COMPLETADO (EN OFICINA)", "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"])
-          || (de == "COMPLETADO (EN OFICINA)" && a == "CERRADA (VISITA)")
+          // CERRADA (ENTRADA): terminal de las órdenes de ENTRADA (inspección
+          // de devueltos) — cierran sin entrega ni QC; las unidades quedan
+          // bajo control de inventario (bodega/baja por serial).
+          || (de == "COMPLETADO (EN OFICINA)" && a in ["CERRADA (VISITA)", "CERRADA (ENTRADA)"])
           // Candado de control de calidad (ordenes-qc.js): las órdenes
           // completadas post-despliegue llevan qc_requerido:true (lo estampa
           // completeOrder) y solo pueden entregarse con qc.resultado ==

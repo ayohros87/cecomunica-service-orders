@@ -13,14 +13,17 @@
 // técnico ya tiene en mano no debe crecer debajo de él. Si el taller ya la
 // tomó o la cerró, la tanda siguiente abre una ENTRADA nueva. El cierre de la
 // devolución conserva un fallback por si ninguna tanda alcanzó a crearla.
+// ACUSE FIRMADO (2026-07-21): el check-in captura por unidad los accesorios
+// entregados y el daño visible, y por tanda la firma del cliente
+// (devolucion.acuses[]); todo viaja a la ENTRADA, que nace RECIBIDO EN
+// MOSTRADOR (los equipos ya están en el taller) con el acuse como recepción.
 // Idempotente: procesa solo resoluciones que CAMBIARON en esta escritura;
 // las transiciones del pool tienen guards (sin-cambio) por si se repite.
-const crypto = require("crypto");
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
-const { crearOrdenEntrada } = require("../../lib/ordenEntrada");
+const { crearOrdenEntrada, equipoDeEntrada } = require("../../lib/ordenEntrada");
 
 // Estados en los que la ENTRADA aún acepta tandas (el taller no la ha tomado).
 const ESTADOS_APPEND_ENTRADA = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR"];
@@ -46,15 +49,9 @@ async function crearOAlimentarEntrada(ordenId, after, unidades) {
       const seriales = new Set(actuales.map(x => (x.numero_de_serie || x.serial || "").toUpperCase()));
       const nuevos = unidades
         .filter(u => !seriales.has((u.serial || "").toUpperCase()))
-        .map(u => ({
-          id: crypto.randomUUID(),
-          modelo_id: u.modelo_id || null,
-          modelo: u.modelo || "",
-          serial: u.serial, numero_de_serie: u.serial,
-          bateria: false, clip: false, cargador: false, fuente: false, antena: false, cubrepolvo: false,
-          observaciones: `Tanda de devolución ${ordenId} — pendiente de inspección.`,
-          eliminado: false,
-        }));
+        .map(u => equipoDeEntrada(u,
+          `Tanda de devolución ${ordenId} — pendiente de inspección.` +
+          (u.dano ? ` Daño visible al recibir: ${u.dano}.` : "")));
       if (nuevos.length) {
         tx.update(entradaRef, {
           equipos: [...actuales, ...nuevos],
@@ -120,7 +117,11 @@ module.exports = onDocumentWritten(
                 extra: { verificado: false },
               });
           logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r });
-          tandaRecibida.push({ serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id });
+          tandaRecibida.push({
+            serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id,
+            accesorios: e.accesorios || null,
+            dano: e.dano_visible || "",
+          });
         } else if (res === "nunca_salio") {
           // Anulación por error: el equipo jamás salió del taller — vuelve a
           // bodega directo, sin cuarentena ni inspección (no hay qué revisar).
@@ -176,6 +177,43 @@ module.exports = onDocumentWritten(
       }
     }
 
+    // Acuse firmado del check-in (devolucion.acuses[]): el cliente firmó la
+    // condición/accesorios de lo que entregó. Se copia a la ENTRADA como su
+    // recepción en mostrador (mismos campos que receiveAtCounter) para que
+    // "Ver recepción" lo muestre desde la orden del taller. Solo el primer
+    // acuse llena los campos; los siguientes quedan en la DEVOLUCIÓN.
+    const acusesAntes = (before?.devolucion?.acuses || []).length;
+    const acusesNuevos = (dev.acuses || []).slice(acusesAntes);
+    if (acusesNuevos.length) {
+      try {
+        // El acuse suele firmarse segundos después del check-in: si la tanda
+        // aún no terminó de estampar orden_entrada_id en este snapshot,
+        // releer el doc fresco antes de rendirse (best-effort).
+        let entradaId = after.orden_entrada_id || null;
+        if (!entradaId) {
+          entradaId = ((await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {}).orden_entrada_id || null;
+        }
+        if (!entradaId) throw new Error("sin orden_entrada_id todavía — el acuse queda en la devolución");
+        const eRef = db.collection("ordenes_de_servicio").doc(entradaId);
+        const eSnap = await eRef.get();
+        const ent = eSnap.exists ? eSnap.data() : null;
+        if (ent && !ent.firma_recepcion_url && !ent.receptor_recepcion_nombre) {
+          const a = acusesNuevos[0];
+          await eRef.set({
+            firma_recepcion_url: a.firma_url || null,
+            receptor_recepcion_nombre: a.nombre_entrega || "",
+            recepcion_sin_firma: !!a.sin_firma,
+            recepcion_sin_firma_motivo: a.sin_firma ? (a.sin_firma_motivo || "") : null,
+            fecha_recepcion: a.at || admin.firestore.FieldValue.serverTimestamp(),
+            recepcion_por_uid: a.por_uid || "system",
+          }, { merge: true });
+          logger.info("[onOrdenDevolucionWrite] Acuse copiado a la ENTRADA", { ordenId, entradaId });
+        }
+      } catch (e) {
+        logger.warn("[onOrdenDevolucionWrite] No se pudo copiar el acuse a la ENTRADA (no crítico)", { ordenId, message: e.message });
+      }
+    }
+
     // Fallback al cierre: si por alguna razón ninguna tanda creó la ENTRADA
     // (p.ej. fallos transitorios), se crea aquí con TODOS los recibidos.
     const cerroAhora = before?.estado_reparacion !== "CERRADA (DEVOLUCION)"
@@ -185,7 +223,10 @@ module.exports = onDocumentWritten(
       if (recibidos.length) {
         try {
           await crearOAlimentarEntrada(ordenId, after,
-            recibidos.map(e => ({ serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id })));
+            recibidos.map(e => ({
+              serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id,
+              accesorios: e.accesorios || null, dano: e.dano_visible || "",
+            })));
         } catch (e) {
           logger.warn("[onOrdenDevolucionWrite] ENTRADA de cierre falló (no crítico)", { ordenId, message: e.message });
         }

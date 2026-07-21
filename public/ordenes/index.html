@@ -28,7 +28,7 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<script defer src="../js/services/ordenesService.js?v=qc1"></script>
+<script defer src="../js/services/ordenesService.js?v=ent1"></script>
 <script defer src="../js/services/empresaService.js"></script>
 <script defer src="../js/services/usuariosService.js"></script>
 <script defer src="../js/services/mailService.js"></script>
@@ -37,19 +37,19 @@
 <script defer src="../js/domain/scoring.js"></script>
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
-<script defer src="../js/pages/ordenes-state.js?v=cc9"></script>
+<script defer src="../js/pages/ordenes-state.js?v=ent1"></script>
 <script defer src="../js/pages/ordenes-data.js"></script>
-<script defer src="../js/pages/ordenes-render.js?v=qc1"></script>
+<script defer src="../js/pages/ordenes-render.js?v=ent1"></script>
 <script defer src="../js/pages/ordenes-filters.js"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=qc2"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=ent1"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=qc2"></script>
 <script defer src="../js/pages/ordenes-equipos.js"></script>
 <script defer src="../js/pages/ordenes-notas.js"></script>
 <script defer src="../js/pages/ordenes-visita.js"></script>
-<script defer src="../js/pages/ordenes-devolucion.js"></script>
+<script defer src="../js/pages/ordenes-devolucion.js?v=ent1"></script>
 <script defer src="../js/pages/ordenes-ui.js"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
-<script defer src="../js/pages/ordenes-events.js?v=qc1"></script>
+<script defer src="../js/pages/ordenes-events.js?v=ent1"></script>
 <script src="/js/vendor/lucide.min.js"></script>
 <script defer src="../js/pages/ordenes-index.js"></script>
 </head>
@@ -273,6 +273,7 @@
           <option value="COMPLETADO (EN OFICINA)">COMPLETADO (EN OFICINA)</option>
           <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
           <option value="CERRADA (VISITA)">CERRADA (VISITA)</option>
+          <option value="CERRADA (ENTRADA)">CERRADA (ENTRADA)</option>
         </select>
       </div>
       <div class="filter-field">
@@ -356,8 +357,9 @@
 <!-- Modal Entrega / Recepción de Equipos.
      `data-modo` toggles entre 'entrega' (default) y 'recepcion' (cliente
      trae equipos al mostrador): el modo recepción reusa el canvas y la
-     lista de equipos, pero esconde los bloques de ID, sin-ID, leyenda
-     ENTRADA y no-recibido — ver _applyModo en ordenes-flujo.js. -->
+     lista de equipos, pero esconde los bloques de ID, sin-ID y no-recibido.
+     La leyenda ENTRADA (descargo de daños/accesorios) aplica en AMBOS modos
+     según el tipo de orden — ver _applyModo en ordenes-flujo.js. -->
 <div id="modalEntrega" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalEntregaTitle" data-modo="entrega">
   <div class="modal modal-entrega">
 

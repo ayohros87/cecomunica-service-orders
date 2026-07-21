@@ -133,8 +133,13 @@ window.confirmarAsignarTecnico = async function (ordenId) {
 window.completarOrden = async function (ordenId) {
   if (!await Modal.confirm({ message: `¿Marcar la orden ${ordenId} como completada?` })) return;
 
+  // Las ENTRADA (inspección de devueltos) no llevan candado de QC: la
+  // revisión ES el trabajo de la orden y nada sale hacia el cliente.
+  const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+  const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(orden);
+
   try {
-    await OrdenesService.completeOrder(ordenId);
+    await OrdenesService.completeOrder(ordenId, { qcRequerido: !esEntrada });
 
     Toast.show("✅ Orden completada", "ok");
     // Live snapshot picks up the change — no manual reload.
@@ -160,6 +165,80 @@ window.entregarOrden = function (ordenId) {
     return;
   }
   abrirModalEntrega(ordenId);
+};
+
+// Cierre de una orden de ENTRADA (inspección de equipos devueltos): la
+// revisión terminó y las unidades quedan bajo control de inventario — el
+// destino final (bodega o baja) se decide por serial en Equipos por serial.
+// Aquí NO hay entrega al cliente. Si la inspección encontró daños o
+// faltantes cobrables, la cotización se emite antes de cerrar (aviso suave,
+// no candado: cerrar sin cotizar es válido cuando no hay nada que cobrar).
+window.cerrarEntrada = function (ordenId) {
+  const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+  const cotizada = !!orden.cotizacion_emitida;
+  const nEquipos = (orden.equipos || []).filter(e => !e.eliminado).length;
+
+  const avisoCot = cotizada
+    ? `<div style="border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">✓ Cotización emitida para esta orden.</div>`
+    : `<div style="border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">Si la revisión encontró <b>daños o faltantes cobrables</b>, emite la cotización antes de cerrar (menú ⋯ → Cotizar). Si no hay nada que cobrar, cierra sin más.</div>`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '9500';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
+      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="package-check"></i> Cerrar entrada — Orden ${escapeHtml(ordenId)}</h3>
+        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
+          La revisión de ${nEquipos || 'los'} equipo(s) terminó. Las unidades quedan bajo control de
+          <b>inventario</b> — el destino final (bodega o baja) se decide por serial en
+          <b>Inventario · Equipos por serial</b>. Esta orden <b>no se entrega al cliente</b>.
+        </p>
+        ${avisoCot}
+        <div class="form-field">
+          <label class="form-label" for="cierreEntradaObs">Observaciones del cierre (opcional)</label>
+          <textarea class="form-input form-textarea" id="cierreEntradaObs" rows="2"
+            placeholder="Ej.: 2 unidades OK, 1 con antena quebrada — cotizado"></textarea>
+        </div>
+      </div>
+      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+        <button class="btn btn-secondary" data-close="1">Cancelar</button>
+        <button class="btn btn-primary" id="cierreEntradaBtn"><i data-lucide="check"></i> Cerrar entrada</button>
+      </div>
+    </div>`;
+
+  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
+  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  document.addEventListener('keydown', kb);
+  document.body.appendChild(overlay);
+  APP.utils.lucideRefresh(overlay);
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  });
+
+  const btn = overlay.querySelector('#cierreEntradaBtn');
+  btn.onclick = async () => {
+    const observaciones = (overlay.querySelector('#cierreEntradaObs')?.value || '').trim();
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+    try {
+      await OrdenesService.closeEntrada(ordenId, { observaciones });
+      cleanup();
+      Toast.show('✅ Entrada cerrada — unidades bajo control de inventario', 'ok');
+      // El snapshot en vivo de ordenes-data.js re-renderiza solo.
+    } catch (err) {
+      console.error('[cerrarEntrada]', err);
+      Toast.show('❌ Error al cerrar la entrada: ' + err.message, 'bad');
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="check"></i> Cerrar entrada';
+      APP.utils.lucideRefresh(btn);
+    }
+  };
 };
 
 window.eliminarOrden = async function (ordenId) {
@@ -606,8 +685,9 @@ window.copiarSeriales = function (ordenId) {
     if (idAlert) idAlert.classList.toggle('hidden', esRecepcion);
     const noRecibidoAlert = root2?.querySelector('.modal-entrega__alert');
     if (noRecibidoAlert) noRecibidoAlert.classList.toggle('hidden', esRecepcion);
-    const legenda = document.getElementById('entregaLegendaEntrada');
-    if (legenda && esRecepcion) legenda.classList.add('hidden');
+    // La leyenda ENTRADA (daños/accesorios no devueltos → cotización) se
+    // decide por tipo de orden en _toggleLegendaEntrada: es el texto que el
+    // cliente firma AL DEJAR los equipos, así que aplica en recepción.
 
     // Notas de entrega solo aplican al flujo de entrega (van en el email).
     // En recepción no se envía email, así que el campo se oculta.
@@ -641,9 +721,10 @@ window.copiarSeriales = function (ordenId) {
 
     const orden = APP.state.orders.find(o => o.ordenId === ordenId) || {};
     _renderResumenEntrega(orden);
-    // En modo recepción la leyenda ENTRADA no aplica (no estamos
-    // entregando radios, los estamos recibiendo); _applyModo ya la ocultó.
-    if (_modo !== 'recepcion') _toggleLegendaEntrada(orden);
+    // La leyenda ENTRADA aplica en AMBOS modos, decidida por tipo de orden:
+    // en recepción es justo el descargo que el cliente firma al dejar los
+    // equipos (daños por mal uso / accesorios no devueltos → cotización).
+    _toggleLegendaEntrada(orden);
     _prefillClienteEmail(orden);
 
     // Modal.open wires Escape, Tab focus-trap, and saves/restores focus.

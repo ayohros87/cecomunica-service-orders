@@ -101,6 +101,12 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) entregarOrden(ordenId);
     },
+    // Órdenes de ENTRADA (inspección de devueltos): terminal propio sin
+    // entrega — las unidades quedan bajo control de inventario.
+    'cerrar-entrada': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) { closeAllMenus(); cerrarEntrada(ordenId); }
+    },
     // Control de calidad (ordenes-qc.js): checklist de jefe_taller/admin
     // sobre órdenes COMPLETADO; solo-lectura en los demás casos (p.ej.
     // técnico consultando el motivo de un rechazo desde ASIGNADO).

@@ -717,6 +717,13 @@ function _btnEntregar(ordenId, od) {
   return `<button class="btn-flujo btn-flujo--entregar${cls}" title="${title}" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
 }
 
+// Órdenes de ENTRADA (inspección de devueltos): la revisión termina y las
+// unidades quedan bajo control de inventario — no hay entrega al cliente,
+// así que su terminal es "Cerrar entrada" (CERRADA (ENTRADA)), no Entregar.
+function _btnCerrarEntrada(ordenId) {
+  return `<button class="btn-flujo btn-flujo--completar" title="Cerrar entrada (los equipos quedan bajo control de inventario)" data-action="cerrar-entrada" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Cerrar entrada</button>`;
+}
+
 // Botón de QC para jefe_taller/admin sobre órdenes COMPLETADO: resaltado
 // mientras está pendiente, "Ver QC" una vez aprobado. También se ofrece en
 // órdenes legacy sin la marca (QC voluntario, sin candado).
@@ -742,6 +749,7 @@ function botonesFlujo(ordenId, estado, ordenData) {
   const od = ordenData || (APP.state.orders || []).find(x => x.ordenId === ordenId) || {};
   const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(od);
   const esDevolucion = typeof esOrdenDevolucion === 'function' && esOrdenDevolucion(od);
+  const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(od);
 
   // Órdenes de DEVOLUCIÓN (recuperar equipos del cliente / confirmar
   // anulación): su flujo es el check-in por serial, no el de taller.
@@ -810,8 +818,14 @@ function botonesFlujo(ordenId, estado, ordenData) {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
       html += _btnQcRechazo(ordenId, od);
     } else if (estado === "COMPLETADO (EN OFICINA)") {
-      html += _btnQc(ordenId, od, rol);
-      html += _btnEntregar(ordenId, od);
+      // ENTRADA (inspección de devueltos): cierra sin entrega ni QC — la
+      // revisión es el trabajo mismo y nada sale hacia el cliente.
+      if (esEntrada) {
+        html += _btnCerrarEntrada(ordenId);
+      } else {
+        html += _btnQc(ordenId, od, rol);
+        html += _btnEntregar(ordenId, od);
+      }
     }
   }
 
@@ -826,7 +840,7 @@ function botonesFlujo(ordenId, estado, ordenData) {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
       html += _btnQcRechazo(ordenId, od);
     } else if (estado === "COMPLETADO (EN OFICINA)") {
-      html += _btnEntregar(ordenId, od);
+      html += esEntrada ? _btnCerrarEntrada(ordenId) : _btnEntregar(ordenId, od);
     }
   }
 
@@ -835,20 +849,24 @@ function botonesFlujo(ordenId, estado, ordenData) {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
       html += _btnQcRechazo(ordenId, od);
     } else if (estado === "COMPLETADO (EN OFICINA)") {
-      html += _btnEntregar(ordenId, od);
+      html += esEntrada ? _btnCerrarEntrada(ordenId) : _btnEntregar(ordenId, od);
     }
   }
 
   else if (rol === ROLES.VENDEDOR) {
     if (estado === "COMPLETADO (EN OFICINA)") {
-      html += _btnEntregar(ordenId, od);
+      // El vendedor entrega órdenes de taller, pero no cierra entradas
+      // (inspección interna del taller/inventario).
+      if (!esEntrada) html += _btnEntregar(ordenId, od);
     }
   }
 
-  // Si la orden ya fue entregada no queda acción de flujo, así que "Ver
-  // entrega" vuelve inline (la columna quedaría solo con ⋯). En estados con
-  // acción de flujo, "Ver entrega/recepción" vive en el menú ⋯.
-  if ((estado || "").toUpperCase().includes("ENTREGAD")) {
+  // Si la orden ya fue entregada (o la ENTRADA ya cerró) no queda acción de
+  // flujo, así que "Ver entrega/recepción" vuelve inline (la columna quedaría
+  // solo con ⋯). En estados con acción de flujo vive en el menú ⋯. En una
+  // ENTRADA cerrada, "Ver recepción" muestra el acuse firmado del cliente.
+  if ((estado || "").toUpperCase().includes("ENTREGAD")
+      || (estado || "").toUpperCase() === "CERRADA (ENTRADA)") {
     const tieneEnt = !!(od.firma_url || od.receptor_nombre || od.fecha_entrega || od.sin_id || od.identificacion_path || od.identificacion_url);
     const tieneRec = !!(od.firma_recepcion_url || od.receptor_recepcion_nombre || od.fecha_recepcion);
     if (tieneEnt || tieneRec) {

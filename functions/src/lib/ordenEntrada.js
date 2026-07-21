@@ -19,6 +19,37 @@ const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
 ));
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
+const COND = { bueno: "buen estado", danado: "DAÑADO" };
+
+// Equipo de la orden a partir de una unidad devuelta. Los booleanos de
+// accesorios reflejan lo que el cliente entregó según el checklist del
+// check-in de la devolución (acuse firmado); sin checklist quedan en false
+// (no consta que lo haya entregado).
+function equipoDeEntrada(u, observaciones) {
+  const acc = u.accesorios || {};
+  const serial = (u.serial || "").toString().trim();
+  return {
+    id: crypto.randomUUID(),
+    modelo_id: u.modelo_id || null,
+    modelo: (u.modelo || "").toString().trim(),
+    serial,
+    numero_de_serie: serial,
+    bateria: !!acc.bateria, clip: !!acc.clip, cargador: !!acc.cargador,
+    fuente: !!acc.fuente, antena: !!acc.antena, cubrepolvo: !!acc.cubrepolvo,
+    observaciones,
+    eliminado: false,
+  };
+}
+
+// Observación estándar del equipo al entrar: condición/daño registrados en
+// el momento del check-in (lo que el cliente firmó), previo a la revisión.
+function obsDeEntrada(u, motivo) {
+  const partes = [`Inspección de entrada — ${motivo}.`];
+  if (u.condicion) partes.push(`Condición reportada: ${COND[u.condicion] || u.condicion}.`);
+  if (u.dano) partes.push(`Daño visible al recibir: ${u.dano}.`);
+  return partes.join(" ");
+}
+
 // Número de orden con el formato de la app (AAAAMMDD + secuencia de 2 dígitos,
 // ej. 2026071604). create() falla si el ID ya existe → reintenta con el
 // siguiente consecutivo (carrera con una creación manual simultánea).
@@ -90,17 +121,7 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
   const lista = (unidades || []).filter(u => (u.serial || "").toString().trim());
   if (!lista.length) return null;
 
-  const COND = { bueno: "buen estado", danado: "DAÑADO" };
-  const equipos = lista.map(u => ({
-    id: crypto.randomUUID(),
-    modelo_id: u.modelo_id || null,
-    modelo: (u.modelo || "").toString().trim(),
-    serial: (u.serial || "").toString().trim(),
-    numero_de_serie: (u.serial || "").toString().trim(),
-    bateria: false, clip: false, cargador: false, fuente: false, antena: false, cubrepolvo: false,
-    observaciones: `Inspección de entrada — ${motivo}. Condición reportada: ${COND[u.condicion] || u.condicion || "sin registrar"}.`,
-    eliminado: false,
-  }));
+  const equipos = lista.map(u => equipoDeEntrada(u, obsDeEntrada(u, motivo)));
 
   const observaciones = `Orden creada automáticamente: inspección de ${lista.length} equipo(s) devuelto(s). ${motivo} — contrato ${contratoId || contratoDocId || "—"}.`;
 
@@ -109,7 +130,14 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
     cliente_nombre: clienteNombre || "",
     vendedor_asignado: "",
     tipo_de_servicio: "ENTRADA",
-    estado_reparacion: "POR ASIGNAR",
+    // Nace RECIBIDO: los equipos ya están físicamente en el taller (los
+    // registró el check-in de la devolución). El acuse firmado del cliente
+    // (firma_recepcion_url / receptor) lo copia onOrdenDevolucionWrite cuando
+    // recepción lo guarda en la orden de DEVOLUCIÓN.
+    estado_reparacion: "RECIBIDO EN MOSTRADOR",
+    fecha_recepcion: admin.firestore.FieldValue.serverTimestamp(),
+    recepcion_por_uid: "system",
+    recepcion_por_email: null,
     fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
     observaciones,
     equipos,
@@ -150,12 +178,16 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
   try {
     const destinatarios = await _destinatarios(clienteId);
     if (destinatarios.length) {
-      const filas = lista.map(u => `
+      const filas = lista.map(u => {
+        const cond = [COND[u.condicion] || u.condicion, u.dano ? `daño visible: ${u.dano}` : ""]
+          .filter(Boolean).join(" · ") || "—";
+        return `
         <tr>
           <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;">${escapeHtml(u.serial)}</td>
           <td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(u.modelo || "—")}</td>
-          <td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(COND[u.condicion] || u.condicion || "—")}</td>
-        </tr>`).join("");
+          <td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(cond)}</td>
+        </tr>`;
+      }).join("");
       await db.collection("mail_queue").add({
         to: destinatarios[0],
         cc: destinatarios.length > 1 ? destinatarios.slice(1).join(",") : null,
@@ -198,4 +230,4 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
   return ordenId;
 }
 
-module.exports = { crearOrdenEntrada };
+module.exports = { crearOrdenEntrada, equipoDeEntrada };

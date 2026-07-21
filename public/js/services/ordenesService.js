@@ -184,9 +184,12 @@ const OrdenesService = {
    * Mark order as completed. Captures `completado_por_email` so the
    * timeline can attribute the action, and appends an `os_logs` entry.
    * @param {string} ordenId - Order ID
+   * @param {{qcRequerido?: boolean}} [opts] - qcRequerido:false para órdenes
+   *   de ENTRADA (inspección de devueltos): no hay entrega posterior que
+   *   proteger con QC — su terminal es CERRADA (ENTRADA).
    * @returns {Promise<void>}
    */
-  async completeOrder(ordenId) {
+  async completeOrder(ordenId, { qcRequerido = true } = {}) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
@@ -197,8 +200,9 @@ const OrdenesService = {
       // Candado de QC: a partir de aquí la entrega exige qc.resultado ==
       // 'aprobado' (rules + UI). Las órdenes completadas ANTES del despliegue
       // no llevan la marca y quedan exentas (corte legacy). Visitas y
-      // devoluciones nunca pasan por completeOrder, así que no la reciben.
-      qc_requerido: true,
+      // devoluciones nunca pasan por completeOrder; las ENTRADA sí pasan
+      // pero quedan exentas (qcRequerido:false — cierran sin entrega).
+      qc_requerido: qcRequerido,
       os_logs: firebase.firestore.FieldValue.arrayUnion({
         action: 'COMPLETAR',
         by: user?.uid || ''
@@ -479,6 +483,30 @@ const OrdenesService = {
       visita_sin_firma_motivo: sinFirma ? sinFirmaMotivo : null,
       os_logs: firebase.firestore.FieldValue.arrayUnion({
         action: 'CERRAR_VISITA',
+        by: user?.uid || ''
+      })
+    });
+  },
+
+  /**
+   * Close an ENTRADA order (inspección de equipos devueltos). Terminal
+   * state for entradas — no delivery phase follows: the units stay under
+   * inventory control (bodega/baja se decide por serial en Equipos por
+   * serial). `fecha_completado` ya la estampó completeOrder, no se toca.
+   * @param {string} ordenId
+   * @param {{observaciones?: string}} [payload]
+   */
+  async closeEntrada(ordenId, { observaciones = "" } = {}) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      estado_reparacion: "CERRADA (ENTRADA)",
+      fecha_cierre_entrada: firebase.firestore.FieldValue.serverTimestamp(),
+      cierre_entrada_por_uid: user?.uid || '',
+      cierre_entrada_por_email: user?.email || '',
+      cierre_entrada_observaciones: observaciones || null,
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'CERRAR_ENTRADA',
         by: user?.uid || ''
       })
     });
