@@ -19,7 +19,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="../js/firebase-init.js"></script>
-  <script defer src="../js/services/pocService.js"></script>
+  <script defer src="../js/services/pocService.js?v=cc10"></script>
   <script defer src="../js/services/simCardsService.js"></script>
   <script src="../js/core/modulos.js"></script>
   <script src="../js/core/layout.js?v=cc5"></script>
@@ -113,17 +113,23 @@ async function importarExcelAFirestore() {
       .map(k => fila[k].toString().trim())
       .filter(g => g.length > 0);
 
+    // Las celdas numéricas del Excel llegan como number — se fuerzan a string
+    // (los unit_id numéricos rompían el orden en Firestore: ordena por tipo).
+    const txt = v => (v ?? "").toString().trim();
+    const unitId = txt(fila["UNIT ID"]);
+
     const nuevoRef = await PocService.addPocDevice({
-      cliente: fila["CLIENTE"] || "",
-      operador: fila["OPERADOR"] || "",
-      sim_number: fila["# SIMCARD"] || "",
-      sim_phone: fila["# TEL SIMCARD"] || "",
-      serial: serialValue,
+      cliente: txt(fila["CLIENTE"]),
+      operador: txt(fila["OPERADOR"]),
+      sim_number: txt(fila["# SIMCARD"]),
+      sim_phone: txt(fila["# TEL SIMCARD"]),
+      serial: serialValue.toString(),
       gps: (fila["GPS"] || '').toString().toLowerCase().includes("true"),
       activo: (fila["ACTIVO"] || '').toString().toUpperCase() !== "NO",
-      ip: fila["IP del Servidor"] || "",
-      unit_id: fila["UNIT ID"] || "",
-      radio_name: fila["Nombre del Radio"] || "",
+      ip: txt(fila["IP del Servidor"]),
+      unit_id: unitId,
+      unit_id_num: PocService.unitIdNum(unitId),
+      radio_name: txt(fila["Nombre del Radio"]),
       grupos,
       notas: fila["DAÑOS"] || "",
       deleted: false,

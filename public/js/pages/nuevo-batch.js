@@ -228,8 +228,18 @@ document.getElementById("addCliente").onclick = async () => {
 
       });
 
+      // Candado anti doble-submit: los lotes de Sociedad Israelita (may/jul-2026)
+      // se crearon 2-3 veces por reenvíos del mismo formulario. Mientras un
+      // guardado está en curso, cualquier submit adicional se ignora y el botón
+      // queda deshabilitado hasta terminar (o hasta fallar una validación).
+      let _guardando = false;
+
       document.getElementById("batchForm").addEventListener("submit", async e => {
         e.preventDefault();
+        if (_guardando) return;
+
+        const btnSubmit = document.querySelector('#batchForm button[type="submit"]');
+        const bloquear = (v) => { _guardando = v; if (btnSubmit) btnSubmit.disabled = v; };
 
         const seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
         const unitIdInicial = parseInt(document.getElementById("unit_id_inicial").value.trim(), 10);
@@ -266,6 +276,61 @@ document.getElementById("addCliente").onclick = async () => {
           return;
         }
 
+        // ── Validación de duplicados (previene lotes repetidos) ──────────
+        // 1) Seriales repetidos dentro del mismo pegado.
+        const vistos = new Set(), repetidosLocal = [];
+        for (const s of seriales) {
+          const k = s.toUpperCase();
+          if (vistos.has(k)) repetidosLocal.push(s); else vistos.add(k);
+        }
+        if (repetidosLocal.length) {
+          Toast.show(`Seriales repetidos en la lista: ${repetidosLocal.join(', ')}`, 'bad');
+          return;
+        }
+
+        bloquear(true);
+        try {
+          // 2) Seriales que YA existen como equipo no borrado (cualquier
+          //    cliente) — un radio físico solo puede estar una vez en la base.
+          const dbq = firebase.firestore();
+          const existentes = [];
+          for (let i = 0; i < seriales.length; i += 10) {
+            const snap = await dbq.collection('poc_devices')
+              .where('serial', 'in', seriales.slice(i, i + 10)).get();
+            snap.forEach(doc => {
+              const v = doc.data();
+              if (v.deleted !== true) existentes.push(`${v.serial} (${v.cliente_nombre || v.cliente || 'sin cliente'})`);
+            });
+          }
+          if (existentes.length) {
+            Toast.show(`Estos seriales ya existen en POC: ${existentes.join(', ')}. Si es un re-registro, borra o edita el equipo existente.`, 'bad');
+            bloquear(false);
+            return;
+          }
+
+          // 3) Unit IDs del rango nuevo ya usados por equipos no borrados del
+          //    mismo cliente.
+          const delCliente = await PocService.getByCliente({ clienteId: cliente, fresh: true });
+          const unitsEnUso = new Set(delCliente
+            .filter(d => d.deleted !== true)
+            .map(d => (d.unit_id ?? '').toString().trim()).filter(Boolean));
+          const choques = [];
+          for (let i = 0; i < seriales.length; i++) {
+            const u = String(unitIdInicial + i);
+            if (unitsEnUso.has(u)) choques.push(u);
+          }
+          if (choques.length) {
+            Toast.show(`Estos Unit ID ya están en uso por este cliente: ${choques.join(', ')}. Cambia el Unit ID inicial.`, 'bad');
+            bloquear(false);
+            return;
+          }
+        } catch (err) {
+          console.error('[nuevo-batch] validación de duplicados falló:', err);
+          Toast.show('No se pudo validar duplicados. Revisa tu conexión e intenta de nuevo.', 'bad');
+          bloquear(false);
+          return;
+        }
+
         // Vínculo POC ↔ contrato: si el batch se asoció a un contrato, cada
         // device lo referencia (contrato_doc_id/contrato_id). Es el ancla que
         // conecta POC con contratos y con el pool de equipos.
@@ -274,6 +339,7 @@ document.getElementById("addCliente").onclick = async () => {
         const contratoRef   = contratoDocId
           ? (contratoSel.selectedOptions[0]?.getAttribute("data-ref") || null) : null;
 
+        try {
         for (let i = 0; i < seriales.length; i++) {
          const detalle = normalizarDetalleBatch(detallesBatch?.[i] || {});
          const data = {
@@ -284,6 +350,7 @@ document.getElementById("addCliente").onclick = async () => {
         ip: document.getElementById("ip").value,
         serial: seriales[i],
         unit_id: String(unitIdInicial + i), // Unit ID consecutivo
+        unit_id_num: unitIdInicial + i,     // espejo numérico para ordenar
         radio_name: "",
         notas: document.getElementById("notas").value,
         creado_por_uid: firebase.auth().currentUser.uid,
@@ -314,6 +381,11 @@ document.getElementById("addCliente").onclick = async () => {
 
         Toast.show('Equipos creados correctamente.', 'ok');
         window.location.href = "index.html";
+        } catch (err) {
+          console.error('[nuevo-batch] error creando equipos:', err);
+          Toast.show('Error al crear los equipos. Revisa la lista antes de reintentar (puede haber quedado un lote parcial).', 'bad');
+          bloquear(false);
+        }
       });
     });
 

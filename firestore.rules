@@ -339,8 +339,18 @@ service cloud.firestore {
     }
 
     match /poc_devices/{docId} {
+      // unit_id SIEMPRE string y unit_id_num su espejo numérico (int|null) para
+      // ordenar — el import de Excel escribía unit_id como number y Firestore
+      // (que ordena por tipo primero) partía la lista en dos bloques. Se evalúa
+      // sobre el doc resultante: toda la colección quedó saneada por el
+      // backfill 2026-07-21, así que ningún update hereda un valor inválido.
+      function pocTiposOk() {
+        let d = request.resource.data;
+        return (!('unit_id' in d) || d.unit_id is string)
+            && (!('unit_id_num' in d) || d.unit_id_num == null || d.unit_id_num is int);
+      }
       allow read: if isSignedIn();
-      allow create, update: if isSignedIn();
+      allow create, update: if isSignedIn() && pocTiposOk();
       // El cliente solo hace soft-delete (update deleted:true); el hard-delete a
       // nivel doc queda para admin.
       allow delete: if isAdmin();

@@ -80,6 +80,15 @@ async function main() {
   await assertSucceeds(as("administrador").doc("poc_devices/pDel").delete());
   ok("poc_devices: delete solo admin (recepción no) — ahora efectivo");
 
+  // ── poc_devices: unit_id SIEMPRE string + espejo unit_id_num int|null ──────
+  // (el import de Excel escribía numbers y Firestore ordena por tipo — la
+  // lista quedaba partida en dos bloques; saneado por backfill 2026-07-21)
+  await assertFails(as("recepcion").doc("poc_devices/pTipo1").set({ unit_id: 1234 }));
+  await assertFails(as("recepcion").doc("poc_devices/pTipo2").set({ unit_id: "1234", unit_id_num: "1234" }));
+  await assertSucceeds(as("recepcion").doc("poc_devices/pTipo3").set({ unit_id: "1234", unit_id_num: 1234 }));
+  await assertSucceeds(as("recepcion").doc("poc_devices/pTipo4").set({ unit_id: "CONSOLA_DSI", unit_id_num: null }));
+  ok("poc_devices: unit_id numérico rechazado; string + espejo int|null pasa");
+
   // ── ordenes: máquina de estados (transiciones ilegales bloqueadas) ────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();

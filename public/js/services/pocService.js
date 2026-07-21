@@ -1,5 +1,22 @@
 const PocService = {
 
+  // unit_id se guarda SIEMPRE como string (candado en rules); unit_id_num es su
+  // espejo numérico para ordenar (Firestore ordena strings alfabéticamente y
+  // separa por tipo, así que "999" > "274206" y los números viejos quedaban en
+  // un bloque aparte). null cuando el unit_id no es numérico (ej. CONSOLA_DSI).
+  // Todo escritor de unit_id DEBE escribir ambos campos.
+  unitIdNum(v) {
+    const s = (v ?? '').toString().trim();
+    return /^\d+$/.test(s) ? parseInt(s, 10) : null;
+  },
+
+  // Los orderBy de unit_id van contra el espejo numérico. Los docs sin el campo
+  // no aparecerían en el orderBy — el backfill 2026-07-21 lo estampó en toda la
+  // colección y los escritores lo mantienen.
+  _sortFieldFor(field) {
+    return field === 'unit_id' ? 'unit_id_num' : field;
+  },
+
   async getPocDevices() {
     const db = firebase.firestore();
     const snap = await db.collection('poc_devices').get();
@@ -13,14 +30,28 @@ const PocService = {
     return { id: doc.id, ...doc.data() };
   },
 
+  // Red de seguridad para TODO caller: unit_id sale string y unit_id_num
+  // siempre acompaña (en create aunque no venga unit_id — un doc sin el campo
+  // no aparecería en el orderBy de la lista). Rules rechazan tipos inválidos.
+  _conUnitIdNormalizado(obj, esCreate) {
+    const out = { ...obj };
+    if ('unit_id' in out) {
+      out.unit_id = (out.unit_id ?? '').toString().trim();
+      out.unit_id_num = this.unitIdNum(out.unit_id);
+    } else if (esCreate) {
+      out.unit_id_num = null;
+    }
+    return out;
+  },
+
   async addPocDevice(data) {
     const db = firebase.firestore();
-    return db.collection('poc_devices').add(data);
+    return db.collection('poc_devices').add(this._conUnitIdNormalizado(data, true));
   },
 
   async updatePocDevice(id, fields) {
     const db = firebase.firestore();
-    return db.collection('poc_devices').doc(id).update(fields);
+    return db.collection('poc_devices').doc(id).update(this._conUnitIdNormalizado(fields, false));
   },
 
   async softDeletePocDevice(id) {
@@ -137,7 +168,7 @@ const PocService = {
     let q = db.collection('poc_devices')
       .where('deleted', '!=', true)
       .orderBy('deleted')
-      .orderBy(sortField, sortAsc ? 'asc' : 'desc')
+      .orderBy(this._sortFieldFor(sortField), sortAsc ? 'asc' : 'desc')
       .limit(limit);
     if (onlyActivos) q = q.where('activo', '==', true);
     if (cursorDoc) q = q.startAfter(cursorDoc);
@@ -167,7 +198,7 @@ const PocService = {
     let q = db.collection('poc_devices')
       .where('deleted', '!=', true)
       .orderBy('deleted')
-      .orderBy(sortField, sortAsc ? 'asc' : 'desc');
+      .orderBy(this._sortFieldFor(sortField), sortAsc ? 'asc' : 'desc');
     if (onlyActivos) q = q.where('activo', '==', true);
     const snap = await q.get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));

@@ -134,7 +134,9 @@ window.PocBulk = {
       const sim_phone  = celdas[COL.sim_tel].querySelector('.sim-phone')?.value  || '';
 
       const newData = {
-        operador, activo, serial, ip, unit_id, radio_name, grupos, sim_number, sim_phone,
+        operador, activo, serial, ip, radio_name, grupos, sim_number, sim_phone,
+        unit_id: unit_id.trim(),
+        unit_id_num: PocService.unitIdNum(unit_id),
         modelo_id:    modelo_id || firebase.firestore.FieldValue.delete(),
         modelo_label,
         updated_at:       firebase.firestore.FieldValue.serverTimestamp(),

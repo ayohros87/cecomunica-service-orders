@@ -181,7 +181,8 @@ window.PocEdit = {
       // Fields sent to Firestore update() — FieldValue sentinels are valid here.
       const updatePayload = {
         serial:           document.getElementById('drawer-serial').value,
-        unit_id:          document.getElementById('drawer-unit-id').value,
+        unit_id:          document.getElementById('drawer-unit-id').value.trim(),
+        unit_id_num:      PocService.unitIdNum(document.getElementById('drawer-unit-id').value),
         radio_name:       document.getElementById('drawer-radio-name').value,
         modelo_id:        newModeloId || firebase.firestore.FieldValue.delete(),
         modelo_label:     newModeloLabel,
