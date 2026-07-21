@@ -701,6 +701,40 @@ function refrescarEquiposDeOrden(ordenId) {
 }
 window.refrescarEquiposDeOrden = refrescarEquiposDeOrden;
 
+// ===== Control de calidad (ordenes-qc.js) =====
+// El botón Entregar queda visualmente bloqueado mientras el QC esté
+// pendiente (qc_requerido sin aprobación vigente); entregarOrden re-valida
+// al click y las rules lo exigen en la transición. Órdenes completadas
+// antes del despliegue no llevan qc_requerido → sin candado (corte legacy).
+function _qcPendiente(od) {
+  return typeof OrdenesQC !== 'undefined' && OrdenesQC.qcPendiente(od);
+}
+
+function _btnEntregar(ordenId, od) {
+  const bloqueado = _qcPendiente(od);
+  const cls   = bloqueado ? ' btn-flujo--bloqueado' : '';
+  const title = bloqueado ? 'Requiere control de calidad aprobado' : 'Entregar al cliente';
+  return `<button class="btn-flujo btn-flujo--entregar${cls}" title="${title}" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+}
+
+// Botón de QC para jefe_taller/admin sobre órdenes COMPLETADO: resaltado
+// mientras está pendiente, "Ver QC" una vez aprobado. También se ofrece en
+// órdenes legacy sin la marca (QC voluntario, sin candado).
+function _btnQc(ordenId, od, rol) {
+  if (typeof OrdenesQC === 'undefined' || !OrdenesQC.puedeHacerQc(rol)) return '';
+  if (OrdenesQC.qcAprobado(od)) {
+    return `<button class="btn-flujo btn-flujo--qc-ok" title="Ver control de calidad aprobado" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-check"></i> Ver QC</button>`;
+  }
+  return `<button class="btn-flujo btn-flujo--qc" title="Realizar control de calidad" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-check"></i> QC</button>`;
+}
+
+// En ASIGNADO tras un rechazo de QC: acceso al motivo para el técnico
+// (modal en solo-lectura fuera de COMPLETADO/rol QC).
+function _btnQcRechazo(ordenId, od) {
+  if (od?.qc?.resultado !== 'rechazado') return '';
+  return `<button class="btn-flujo btn-flujo--qc-rechazo" title="Ver motivo del rechazo de control de calidad" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-x"></i> Rechazo QC</button>`;
+}
+
 function botonesFlujo(ordenId, estado, ordenData) {
   const rol = APP.state.userRole || "";
   let html = "";
@@ -774,8 +808,10 @@ function botonesFlujo(ordenId, estado, ordenData) {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+      html += _btnQcRechazo(ordenId, od);
     } else if (estado === "COMPLETADO (EN OFICINA)") {
-      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+      html += _btnQc(ordenId, od, rol);
+      html += _btnEntregar(ordenId, od);
     }
   }
 
@@ -788,22 +824,24 @@ function botonesFlujo(ordenId, estado, ordenData) {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+      html += _btnQcRechazo(ordenId, od);
     } else if (estado === "COMPLETADO (EN OFICINA)") {
-      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+      html += _btnEntregar(ordenId, od);
     }
   }
 
   else if (rol === ROLES.TECNICO_OPERATIVO) {
     if (estado === "ASIGNADO") {
       html += `<button class="btn-flujo btn-flujo--completar" title="Completar orden" data-action="completar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="check-circle"></i> Completar</button>`;
+      html += _btnQcRechazo(ordenId, od);
     } else if (estado === "COMPLETADO (EN OFICINA)") {
-      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+      html += _btnEntregar(ordenId, od);
     }
   }
 
   else if (rol === ROLES.VENDEDOR) {
     if (estado === "COMPLETADO (EN OFICINA)") {
-      html += `<button class="btn-flujo btn-flujo--entregar" title="Entregar al cliente" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
+      html += _btnEntregar(ordenId, od);
     }
   }
 

@@ -145,6 +145,20 @@ window.completarOrden = async function (ordenId) {
 };
 
 window.entregarOrden = function (ordenId) {
+  // Candado de QC: con control de calidad pendiente no se abre el modal de
+  // entrega (las rules además rechazan la transición). Al rol que puede
+  // ejecutar el QC se le abre directamente el checklist.
+  const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+  if (typeof OrdenesQC !== 'undefined' && OrdenesQC.qcPendiente(orden)) {
+    const rol = APP.state.userRole || '';
+    if (OrdenesQC.puedeHacerQc(rol)) {
+      Toast.show('Esta orden requiere control de calidad antes de entregarse', 'bad');
+      OrdenesQC.abrir(ordenId);
+    } else {
+      Toast.show('⛔ Pendiente de control de calidad (jefe de taller) antes de la entrega', 'bad');
+    }
+    return;
+  }
   abrirModalEntrega(ordenId);
 };
 

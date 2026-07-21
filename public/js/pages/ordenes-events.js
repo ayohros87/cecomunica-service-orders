@@ -101,6 +101,13 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) entregarOrden(ordenId);
     },
+    // Control de calidad (ordenes-qc.js): checklist de jefe_taller/admin
+    // sobre órdenes COMPLETADO; solo-lectura en los demás casos (p.ej.
+    // técnico consultando el motivo de un rechazo desde ASIGNADO).
+    'qc-orden': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) { closeAllMenus(); OrdenesQC.abrir(ordenId); }
+    },
     'recibir-mostrador': (el) => {
       const ordenId = el.dataset.ordenId;
       if (ordenId) { closeAllMenus(); abrirModalRecepcion(ordenId); }

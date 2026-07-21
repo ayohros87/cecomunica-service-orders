@@ -291,7 +291,29 @@ service cloud.firestore {
           || (de == "POR ASIGNAR" && a in ["RECIBIDO EN MOSTRADOR", "ASIGNADO", "CERRADA (DEVOLUCION)"])
           || (de == "RECIBIDO EN MOSTRADOR" && a == "ASIGNADO")
           || (de == "ASIGNADO" && a in ["COMPLETADO (EN OFICINA)", "CERRADA (VISITA)", "CERRADA (DEVOLUCION)"])
-          || (de == "COMPLETADO (EN OFICINA)" && a in ["ENTREGADO AL CLIENTE", "CERRADA (VISITA)"]);
+          || (de == "COMPLETADO (EN OFICINA)" && a == "CERRADA (VISITA)")
+          // Candado de control de calidad (ordenes-qc.js): las órdenes
+          // completadas post-despliegue llevan qc_requerido:true (lo estampa
+          // completeOrder) y solo pueden entregarse con qc.resultado ==
+          // 'aprobado' del jefe de taller. Las completadas ANTES no llevan la
+          // marca y quedan exentas (corte legacy, mismo patrón que seriales).
+          || (de == "COMPLETADO (EN OFICINA)" && a == "ENTREGADO AL CLIENTE"
+              && (resource.data.get("qc_requerido", false) != true
+                  || resource.data.get("qc", {}).get("resultado", "") == "aprobado"))
+          // Rechazo de QC: única reversa permitida del flujo — el MISMO write
+          // debe estampar qc.resultado='rechazado' (saveQcRechazado) y la
+          // orden vuelve al técnico para corrección.
+          || (de == "COMPLETADO (EN OFICINA)" && a == "ASIGNADO"
+              && request.resource.data.get("qc", {}).get("resultado", "") == "rechazado");
+      }
+      // Los campos de QC (resultado vigente + historial) solo los escriben
+      // jefe_taller/admin — el resto de roles puede seguir editando la orden
+      // mientras no los toque. qc_requerido queda fuera del guard: lo estampa
+      // completeOrder, que ejecutan también técnicos y recepción.
+      function qcFieldsUntouchedOrJefe() {
+        return !request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(["qc", "qc_historial"])
+          || userRole() in ["administrador", "jefe_taller"];
       }
       allow read: if isSignedIn();
       // create/update solo para los roles que operan órdenes (permiso 'crear-orden'
@@ -301,7 +323,7 @@ service cloud.firestore {
         && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"];
       allow update: if isSignedIn()
         && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"]
-        && (isAdmin() || ordenTransicionLegal());
+        && (isAdmin() || (ordenTransicionLegal() && qcFieldsUntouchedOrJefe()));
       // El cliente nunca hace hard-delete de una orden a nivel doc (verificado:
       // solo borra líneas de la subcolección `consumos`; los borrados de orden
       // pasan por consola/admin SDK y la CF onOrdenHardDelete limpia después).

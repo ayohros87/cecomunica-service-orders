@@ -194,8 +194,92 @@ const OrdenesService = {
       fecha_completado: firebase.firestore.FieldValue.serverTimestamp(),
       completado_por_uid: user?.uid || '',
       completado_por_email: user?.email || '',
+      // Candado de QC: a partir de aquí la entrega exige qc.resultado ==
+      // 'aprobado' (rules + UI). Las órdenes completadas ANTES del despliegue
+      // no llevan la marca y quedan exentas (corte legacy). Visitas y
+      // devoluciones nunca pasan por completeOrder, así que no la reciben.
+      qc_requerido: true,
       os_logs: firebase.firestore.FieldValue.arrayUnion({
         action: 'COMPLETAR',
+        by: user?.uid || ''
+      })
+    });
+  },
+
+  /**
+   * Control de calidad — aprobar. Estampa `qc` (resultado vigente que
+   * habilita la entrega) y agrega la pasada a `qc_historial` (métricas
+   * por técnico/motivo). Solo jefe_taller/admin (rules protegen el campo).
+   * @param {string} ordenId
+   * @param {{tipo:string, checklist:Object, observaciones?:string}} payload
+   */
+  async saveQcAprobado(ordenId, { tipo, checklist, observaciones = '' }) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const orden = (await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {};
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      qc: {
+        resultado: 'aprobado',
+        tipo,
+        checklist,
+        observaciones,
+        por_uid: user?.uid || '',
+        por_email: user?.email || '',
+        fecha: firebase.firestore.FieldValue.serverTimestamp()
+      },
+      // serverTimestamp no es válido dentro de arrayUnion → fecha ISO local.
+      qc_historial: firebase.firestore.FieldValue.arrayUnion({
+        resultado: 'aprobado',
+        tipo,
+        observaciones,
+        tecnico_uid: orden.tecnico_uid || '',
+        tecnico: orden.tecnico_asignado || '',
+        por_email: user?.email || '',
+        fecha_iso: new Date().toISOString()
+      }),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'QC_APROBADO',
+        by: user?.uid || ''
+      })
+    });
+  },
+
+  /**
+   * Control de calidad — rechazar. Registra el rechazo (motivos por
+   * categoría + observaciones) y devuelve la orden a ASIGNADO para que
+   * el técnico corrija; la transición COMPLETADO→ASIGNADO solo es legal
+   * en rules cuando el mismo write estampa qc.resultado='rechazado'.
+   * @param {string} ordenId
+   * @param {{tipo:string, checklist:Object, motivos:string[], observaciones?:string}} payload
+   */
+  async saveQcRechazado(ordenId, { tipo, checklist, motivos, observaciones = '' }) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const orden = (await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {};
+    await db.collection("ordenes_de_servicio").doc(ordenId).update({
+      estado_reparacion: "ASIGNADO",
+      qc: {
+        resultado: 'rechazado',
+        tipo,
+        checklist,
+        motivos,
+        observaciones,
+        por_uid: user?.uid || '',
+        por_email: user?.email || '',
+        fecha: firebase.firestore.FieldValue.serverTimestamp()
+      },
+      qc_historial: firebase.firestore.FieldValue.arrayUnion({
+        resultado: 'rechazado',
+        tipo,
+        motivos,
+        observaciones,
+        tecnico_uid: orden.tecnico_uid || '',
+        tecnico: orden.tecnico_asignado || '',
+        por_email: user?.email || '',
+        fecha_iso: new Date().toISOString()
+      }),
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'QC_RECHAZADO',
         by: user?.uid || ''
       })
     });

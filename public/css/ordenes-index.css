@@ -1244,6 +1244,16 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
 .btn-flujo--ver-entrega:hover { background: #eff6ff; }
 .btn-flujo--ver-recepcion { color: #075985; border-color: #bae6fd; }
 .btn-flujo--ver-recepcion:hover { background: #f0f9ff; }
+/* Control de calidad: pendiente resaltado (ámbar), aprobado consulta (verde),
+   rechazo consulta del motivo (rojo). El Entregar bloqueado por QC pendiente
+   sigue clickeable — entregarOrden avisa y abre el checklist al rol de QC. */
+.btn-flujo--qc         { color: #92400e; border-color: #fcd34d; background: #fffbeb; }
+.btn-flujo--qc:hover   { background: #fef3c7; }
+.btn-flujo--qc-ok      { color: #065f46; border-color: #6ee7b7; }
+.btn-flujo--qc-ok:hover { background: #ecfdf5; }
+.btn-flujo--qc-rechazo { color: #991b1b; border-color: #fecaca; }
+.btn-flujo--qc-rechazo:hover { background: #fef2f2; }
+.btn-flujo--bloqueado  { opacity: 0.45; }
 .btn-flujo .lucide    { width: 14px; height: 14px; vertical-align: -2px; color: inherit; }
 
 /* Botón ⋯ es secundario (ghost) */
