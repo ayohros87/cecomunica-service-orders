@@ -298,6 +298,11 @@
       </div>
     </div>
 
+    <!-- Leyenda de control de calidad (solo si el QC quedó aprobado) -->
+    <div id="qcVerificado" style="display:none; margin-top:10px; padding:6px 10px; border:1px solid #6ee7b7; border-radius:6px; font-size:12px; color:#065f46;">
+      ✔ Verificado por Control de Calidad<span id="qcVerificadoDetalle"></span>
+    </div>
+
     <div class="footer-info">
       <p>Documento generado: <span id="fechaGeneracion"></span></p>
       <p>Este documento es de control interno para el registro de entrega de equipos con detalle de intervenciones</p>
@@ -335,7 +340,15 @@
       return partes.join(' · ');
     }
     document.getElementById("resumenEquipos").innerHTML = _renderResumen(data.resumen);
-    
+
+    // Leyenda de QC (ordenes-qc.js): presente solo si la orden llegó a la
+    // nota con el control de calidad aprobado.
+    if (data.qc) {
+      const det = [data.qc.por, data.qc.fecha].filter(Boolean).join(' · ');
+      document.getElementById("qcVerificadoDetalle").textContent = det ? ` — ${det}` : '';
+      document.getElementById("qcVerificado").style.display = 'block';
+    }
+
     // Fecha de generación
     const ahora = new Date();
     document.getElementById("fechaGeneracion").textContent = ahora.toLocaleString('es-ES', {

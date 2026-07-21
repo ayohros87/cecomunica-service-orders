@@ -77,6 +77,38 @@
     return rol === ROLES.ADMIN || rol === ROLES.JEFE_TALLER;
   }
 
+  // Correo de rechazo al técnico asignado — best-effort: si falla (sin
+  // email, sin permisos, red) el rechazo ya quedó guardado y el técnico
+  // igual lo ve en su cola (botón "Rechazo QC" en ASIGNADO).
+  async function _notificarRechazo(ordenId, orden, { motivos, observaciones }) {
+    try {
+      if (!orden.tecnico_uid || typeof MailService === 'undefined') return;
+      const uDoc = await firebase.firestore().collection('usuarios').doc(orden.tecnico_uid).get();
+      const email = uDoc.exists ? (uDoc.data().email || '') : '';
+      if (!email) return;
+
+      const motivosLbl = (motivos || [])
+        .map(k => (MOTIVOS_RECHAZO.find(m => m.key === k) || { label: k }).label)
+        .join(', ');
+      await MailService.enqueue({
+        to: email,
+        subject: `QC rechazado — Orden ${ordenId}`,
+        preheader: `La orden ${ordenId} volvió a tu cola por control de calidad`,
+        bodyContent: `
+          <p>Hola ${escapeHtml(orden.tecnico_asignado || '')},</p>
+          <p>El control de calidad de la orden <strong>${escapeHtml(ordenId)}</strong> fue
+          <strong>rechazado</strong> y la orden volvió a tu cola (ASIGNADO) para corrección.</p>
+          ${motivosLbl ? `<p><strong>Motivo:</strong> ${escapeHtml(motivosLbl)}</p>` : ''}
+          ${observaciones ? `<p><strong>Observaciones:</strong> ${escapeHtml(observaciones)}</p>` : ''}
+          <p>Cuando corrijas, marca la orden como completada para que pase de nuevo por QC.</p>`,
+        ctaUrl: `${window.location.origin}/ordenes/index.html`,
+        ctaLabel: 'Ver mis órdenes'
+      });
+    } catch (e) {
+      console.warn('[OrdenesQC] correo de rechazo no enviado:', e);
+    }
+  }
+
   function _itemRowHtml(item, valor) {
     // valor: 'ok' | 'na' | '' — chips mutuamente excluyentes por ítem.
     return `
@@ -280,12 +312,14 @@
       btnRechazar.disabled = true;
       btnRechazar.textContent = 'Guardando…';
       try {
-        await OrdenesService.saveQcRechazado(ordenId, {
+        const payload = {
           tipo,
           checklist: { ...checklist },
           motivos: [...motivosSel],
           observaciones: obs
-        });
+        };
+        await OrdenesService.saveQcRechazado(ordenId, payload);
+        await _notificarRechazo(ordenId, orden, payload);
         cleanup();
         Toast.show('Orden devuelta al técnico con el motivo del rechazo', 'ok');
       } catch (err) {

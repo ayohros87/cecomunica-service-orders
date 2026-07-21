@@ -132,6 +132,86 @@ async function cargarProgresos(dias) {
   });
 }
 
+// ===== Control de calidad (ordenes-qc.js) =====
+// Agrega qc_historial de las órdenes con QC requerido: revisiones y
+// rechazos por técnico + motivos frecuentes, en la misma ventana móvil
+// del ranking. Sección solo para admin / jefe_taller / gerente.
+const QC_MOTIVO_LABEL = {
+  programacion: 'Programación', grupos: 'Grupos', gps: 'GPS',
+  falla: 'Falla no resuelta', fisico: 'Físico / componentes',
+  limpieza: 'Limpieza', otro: 'Otro',
+};
+
+function puedeVerQc(role){
+  return role === ROLES.ADMIN || role === ROLES.JEFE_TALLER || role === ROLES.GERENTE;
+}
+
+async function cargarYRenderQc(dias){
+  const card = document.getElementById('qcCard');
+  if (!card) return;
+  if (!puedeVerQc(currentRole)) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const tbody = document.getElementById('tbodyQc');
+  tbody.innerHTML = `<tr><td colspan="5" style="padding:16px; color:var(--fg-3);">Cargando…</td></tr>`;
+
+  // Una sola query por igualdad (auto-indexada): todas las órdenes que
+  // pasaron por el flujo de QC. El volumen es bajo (post corte 2026-07-21),
+  // el filtrado por ventana se hace en cliente sobre qc_historial.fecha_iso.
+  const snap = await firebase.firestore()
+    .collection('ordenes_de_servicio')
+    .where('qc_requerido', '==', true)
+    .get();
+
+  const since = (dias != null) ? new Date(Date.now() - dias * 86400000) : null;
+  const porTec = new Map();   // clave uid|nombre → {nombre, revisiones, rechazos, motivos:Map}
+
+  snap.forEach(doc => {
+    const hist = doc.data().qc_historial || [];
+    hist.forEach(h => {
+      if (since && (!h.fecha_iso || new Date(h.fecha_iso) < since)) return;
+      const key = h.tecnico_uid || h.tecnico || '(sin técnico)';
+      const agg = porTec.get(key) || { nombre: h.tecnico || key, revisiones: 0, rechazos: 0, motivos: new Map() };
+      agg.revisiones++;
+      if (h.resultado === 'rechazado') {
+        agg.rechazos++;
+        (h.motivos || []).forEach(m => agg.motivos.set(m, (agg.motivos.get(m) || 0) + 1));
+      }
+      porTec.set(key, agg);
+    });
+  });
+
+  const rows = [...porTec.values()].sort((a, b) =>
+    (b.rechazos / Math.max(1, b.revisiones)) - (a.rechazos / Math.max(1, a.revisiones))
+    || b.revisiones - a.revisiones);
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="padding:16px; color:var(--fg-3);">
+      Sin revisiones de QC en este periodo.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = '';
+  rows.forEach(r => {
+    const pct = r.revisiones ? Math.round((r.rechazos / r.revisiones) * 100) : 0;
+    const motivos = [...r.motivos.entries()]
+      .sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([k, n]) => `${QC_MOTIVO_LABEL[k] || k} (${n})`)
+      .join(', ') || '—';
+    // Semáforo alineado con el plan: <5% verde (candidato a muestreo),
+    // 5-10% ámbar, >10% rojo (vuelve/queda al 100%).
+    const color = pct > 10 ? '#dc2626' : pct >= 5 ? '#d97706' : '#16a34a';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="nowrap">${r.nombre}</td>
+      <td class="nowrap">${r.revisiones}</td>
+      <td class="nowrap">${r.rechazos}</td>
+      <td class="nowrap"><strong style="color:${color};">${pct}%</strong></td>
+      <td>${motivos}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
     function renderTabla(periodo='7', filtro=''){
       const tbody = document.getElementById('tbodyRanking');
       tbody.innerHTML = '';
@@ -197,6 +277,10 @@ async function cargarProgresos(dias) {
       renderTabla(periodo, filtro);
       setPeriodoChip(periodo);
       formatStamp();
+
+      // Sección de QC (best-effort: si falla no tumba el ranking).
+      try { await cargarYRenderQc(periodoDias(periodo)); }
+      catch (e) { console.error('[progreso-tecnicos] QC falló', e); }
 
       // Actualiza el encabezado de la columna métrica según el periodo
       const thMetric = document.getElementById('thMetric');

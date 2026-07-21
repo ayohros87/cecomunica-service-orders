@@ -184,6 +184,18 @@ window.nuevoBatch = function (ordenId) {
   window.location.href = `nuevo-batch.html?orden_id=${ordenId}`;
 };
 
+// Leyenda de QC para las notas de entrega: solo cuando el control de
+// calidad quedó aprobado (ordenes-qc.js). La nota impresa la muestra
+// junto al pie — vende el proceso ante el cliente.
+function qcParaNota(orden) {
+  const qc = orden?.qc;
+  if (!qc || qc.resultado !== 'aprobado') return null;
+  return {
+    por: qc.por_email || '',
+    fecha: qc.fecha?.toDate ? qc.fecha.toDate().toLocaleDateString('es-PA') : ''
+  };
+}
+
 window.generarNotaEntrega = function (ordenId) {
   const orden = APP.state.orders.find(o => o.ordenId === ordenId);
   if (!orden) {
@@ -198,7 +210,8 @@ window.generarNotaEntrega = function (ordenId) {
     cliente: nombreClienteDe(orden),
     observaciones: orden.observaciones || "",
     equipos,
-    resumen: computeResumenTotales(equipos)
+    resumen: computeResumenTotales(equipos),
+    qc: qcParaNota(orden)
   };
 
   localStorage.setItem("notaEntregaData", JSON.stringify(data));
@@ -244,7 +257,8 @@ window.generarNotaEntregaIntervenciones = async function (ordenId) {
     cliente: nombreClienteDe(orden),
     observaciones: orden.observaciones || "",
     equipos,
-    resumen: computeResumenTotales(equipos)
+    resumen: computeResumenTotales(equipos),
+    qc: qcParaNota(orden)
   };
 
   localStorage.setItem("notaEntregaData", JSON.stringify(data));

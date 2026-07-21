@@ -131,9 +131,37 @@
       </div>
     </div>
 
+    <!-- Control de calidad (ordenes-qc.js): tasa de rechazo por técnico y
+         motivos frecuentes, agregado de qc_historial. Solo lo ven
+         admin / jefe_taller / gerente (progreso-tecnicos.js lo muestra). -->
+    <div class="ds-card" id="qcCard" style="display:none; margin-top:var(--sp-4);">
+      <div style="padding:12px 14px 0;">
+        <h3 style="margin:0 0 4px; display:flex; align-items:center; gap:6px;">
+          <i data-lucide="clipboard-check"></i> Control de calidad
+        </h3>
+        <p style="margin:0 0 8px; font-size:12px; color:var(--fg-3);" id="qcCaption">
+          Revisiones de QC del periodo seleccionado (órdenes con QC requerido).
+        </p>
+      </div>
+      <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
+        <table class="tbl app-table" style="width:100%;">
+          <thead>
+            <tr>
+              <th>Técnico</th>
+              <th>Revisiones</th>
+              <th>Rechazos</th>
+              <th>% rechazo</th>
+              <th>Motivos frecuentes</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyQc"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
-  <script src="../js/pages/progreso-tecnicos.js" defer></script>
+  <script src="../js/pages/progreso-tecnicos.js?v=qc2" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
