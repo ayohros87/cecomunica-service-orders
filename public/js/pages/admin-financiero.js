@@ -225,9 +225,11 @@
     }
   }
 
-  function exportItbmsXLSX() {
-    if (typeof XLSX === 'undefined') {
-      if (window.Toast) Toast.show('SheetJS no cargado.', 'bad');
+  async function exportItbmsXLSX() {
+    try {
+      await cargarXLSX();   // SheetJS bajo demanda
+    } catch (_) {
+      if (window.Toast) Toast.show('No se pudo cargar la librería de Excel.', 'bad');
       return;
     }
     const all = [...state.cot, ...state.ctActivos];

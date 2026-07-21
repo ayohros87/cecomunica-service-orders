@@ -376,7 +376,8 @@ async function eliminarModelo(){
 }
 
 /* ===== Exportar ===== */
-function exportarExcel(){
+async function exportarExcel(){
+  await cargarXLSX();   // SheetJS bajo demanda
   const wb = XLSX.utils.book_new();
   const ws = [["Marca","Modelo","Tipo","Alquiler","Frecuencia","Item QBO","Bundle QBO","Mapeo","Activo"]];
   (listaModelos||[]).forEach(m=>{

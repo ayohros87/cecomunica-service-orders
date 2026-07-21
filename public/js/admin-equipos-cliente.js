@@ -198,14 +198,16 @@
     if (refs.btnExportarExcel) refs.btnExportarExcel.disabled = false;
   }
 
-  function exportarExcel() {
+  async function exportarExcel() {
     if (!Array.isArray(state.lastResults) || state.lastResults.length === 0) {
       refs.resumen.textContent = 'No hay resultados para exportar';
       if (refs.btnExportarExcel) refs.btnExportarExcel.disabled = true;
       return;
     }
 
-    if (typeof XLSX === 'undefined') {
+    try {
+      await cargarXLSX();   // SheetJS bajo demanda
+    } catch (_) {
       refs.resumen.textContent = 'No se pudo cargar la librería de Excel';
       return;
     }

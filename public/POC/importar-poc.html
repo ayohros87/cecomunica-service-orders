@@ -14,7 +14,8 @@
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
 
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- SheetJS se carga BAJO DEMANDA al importar/exportar (js/core/xlsx-loader.js) -->
+  <script defer src="../js/core/xlsx-loader.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -98,6 +99,7 @@ async function importarExcelAFirestore() {
 
   setEstado("Importando, por favor espera…", "info");
 
+  await cargarXLSX();   // SheetJS bajo demanda
   const data = await archivo.arrayBuffer();
   const workbook = XLSX.read(data);
   const sheet = workbook.Sheets["BD"];
@@ -155,6 +157,7 @@ async function importarExcelAFirestore() {
 async function exportarDispositivos() {
   setEstado("Exportando dispositivos…", "info");
   try {
+    await cargarXLSX();   // SheetJS bajo demanda
     const datos = await PocService.getPocDevices();
     const ws = XLSX.utils.json_to_sheet(datos);
     const wb = XLSX.utils.book_new();

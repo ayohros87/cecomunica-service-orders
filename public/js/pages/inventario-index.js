@@ -322,7 +322,8 @@ function obtenerValor(obj, campo) {
   if (campo === "penultima_actualizacion") return obj.data.penultima_actualizacion?.toDate().getTime() ?? 0;
   return "";
 }
-function exportarExcel() {
+async function exportarExcel() {
+  await cargarXLSX();   // SheetJS bajo demanda
   const wb = XLSX.utils.book_new();
   const wsData = [
     ["Marca", "Modelo", "Tipo", "Estado", "Alto Movimiento", "Unidades (seriales)", "Conteo físico", "Diferencia", "Conteo anterior", "Último conteo", "Penúltimo conteo"]

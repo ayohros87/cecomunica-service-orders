@@ -537,10 +537,12 @@ window.VB = {
     this.setStep('rev');
   },
 
-  descargarExcel() {
-    // XLSX viene de un CDN externo: si no cargó, avisar en vez de tronar en silencio.
-    if (typeof XLSX === 'undefined') {
-      Toast.show('No se pudo cargar el componente de Excel. Revisa tu conexión y recarga la página.', 'bad');
+  async descargarExcel() {
+    // SheetJS bajo demanda (js/core/xlsx-loader.js) — no se descarga al abrir.
+    try {
+      await cargarXLSX();
+    } catch (_) {
+      Toast.show('No se pudo cargar el componente de Excel. Revisa tu conexión e intenta de nuevo.', 'bad');
       return;
     }
     const filas   = document.querySelectorAll('#cuerpoTabla tr');

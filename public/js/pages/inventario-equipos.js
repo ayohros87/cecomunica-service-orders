@@ -709,7 +709,8 @@ window.EquiposPool = {
   // Solo SERIAL es obligatoria. MODELO debe calzar con el catálogo (como se ve
   // en el filtro/exportación); CONDICION acepta nuevo/reuso. Filas sin MODELO
   // usan el modelo por defecto del selector del modal.
-  descargarPlantilla() {
+  async descargarPlantilla() {
+    await cargarXLSX();   // SheetJS bajo demanda
     const ws = XLSX.utils.json_to_sheet([{
       SERIAL:    'B12345678',
       MODELO:    'HYTERA PNC360S',
@@ -728,6 +729,7 @@ window.EquiposPool = {
     if (!archivo) return;
     const preview = document.getElementById('eqImportPreview');
     try {
+      await cargarXLSX();   // SheetJS bajo demanda
       const data = await archivo.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -932,7 +934,8 @@ window.EquiposPool = {
   },
 
   // ── Export ───────────────────────────────────────────────────────────
-  exportarExcel() {
+  async exportarExcel() {
+    await cargarXLSX();   // SheetJS bajo demanda
     const rows = this._filtrados().map(eq => ({
       SERIAL:    eq.serial || eq.serial_norm,
       MODELO:    eq.modelo_label || '',

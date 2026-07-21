@@ -283,7 +283,8 @@ const onInlineUpdate = debounce(async (id, partial)=>{
 }, 600);
 
 /* ===== Exportar ===== */
-function exportarExcel(){
+async function exportarExcel(){
+  await cargarXLSX();   // SheetJS bajo demanda
   const wb = XLSX.utils.book_new();
   const ws = [["Nombre","Marca","SKU","Descripción","Categoría","Precio venta","Costo","Margen","Item QBO","Estado","Activo"]];
   (listaPiezas||[]).forEach(p=>{

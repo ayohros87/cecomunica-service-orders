@@ -133,8 +133,9 @@
     if (!file) return;
     state.fileName = file.name;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
+        await cargarXLSX();   // SheetJS bajo demanda
         state.fileBuffer = ev.target.result;   // para respaldar la fuente en Storage
         state.wb = XLSX.read(new Uint8Array(ev.target.result), { type: 'array' });
         populateSheetSelect();
@@ -274,7 +275,8 @@
   // Formato tabular cómodo (una fila por mes) que KpiImport.parseTabular
   // acepta además del Financial Report legacy. Los headers deben seguir
   // matcheando KpiImport.COL_MAP si se editan.
-  function descargarPlantilla() {
+  async function descargarPlantilla() {
+    await cargarXLSX();   // SheetJS bajo demanda
     const headers = ['Mes', 'Ingreso recurrente', 'Recurrente Kenwood', 'Recurrente Hytera / LTE',
       'Ventas de equipos', 'Otros ingresos', 'Ajustes', 'Total ingresos (opcional)',
       'Activaciones brutas', 'Bajas', 'Suscriptores totales', 'Churn (opcional)'];
@@ -317,7 +319,8 @@
 
   // Exporta TODO el histórico archivado en el formato de la plantilla (re-importable)
   // + columnas informativas (estado, comentarios — el import las ignora).
-  function exportarHistorico() {
+  async function exportarHistorico() {
+    await cargarXLSX();   // SheetJS bajo demanda
     if (!state.docs.length) { Toast.show('No hay meses archivados aún.', 'warn'); return; }
     const headers = ['Mes', 'Ingreso recurrente', 'Recurrente Kenwood', 'Recurrente Hytera / LTE',
       'Ventas de equipos', 'Otros ingresos', 'Ajustes', 'Total ingresos',

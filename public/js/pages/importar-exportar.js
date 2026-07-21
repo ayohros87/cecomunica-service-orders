@@ -37,6 +37,7 @@
         if (!archivoXlsx) { Toast.show('Primero selecciona un archivo .xlsx', 'bad'); return; }
 
         status.textContent = "⏳ Importando archivo...";
+        await cargarXLSX();   // SheetJS bajo demanda
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
@@ -118,6 +119,7 @@
 
       exportarOrdenesBtn.addEventListener("click", async () => {
         try {
+          await cargarXLSX();
           const orders = await OrdenesService.listAll();
           const datos = orders.map(o => {
             const { equipos, ordenId, ...rest } = o;
@@ -135,6 +137,7 @@
 
       exportarEquiposBtn.addEventListener("click", async () => {
         try {
+          await cargarXLSX();
           const orders = await OrdenesService.listAll();
           const datos = orders.flatMap(o => {
             const { equipos = [] } = o;
@@ -150,7 +153,8 @@
         }
       });
 
-      descargarEjemploBtn.addEventListener("click", () => {
+      descargarEjemploBtn.addEventListener("click", async () => {
+        await cargarXLSX();
         const ordenes = [
           {
             tipo: "orden",
