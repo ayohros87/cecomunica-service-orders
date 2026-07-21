@@ -731,6 +731,7 @@ window.PocList = {
     try {
       const seleccionados = this.obtenerSeleccionados();
       if (!seleccionados.length) { Toast.show('Selecciona al menos un equipo para exportar.', 'bad'); return; }
+      await cargarXLSX();   // SheetJS bajo demanda — no se descarga al abrir la página
       const ids = seleccionados.map(s => s.id).filter(Boolean);
       if (ids.length > 2000) {
         Toast.show(`Has seleccionado ${ids.length} equipos. Reduce la selección (máx. 2000) o exporta por partes.`, 'bad');

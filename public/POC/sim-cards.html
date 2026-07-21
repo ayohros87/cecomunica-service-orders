@@ -58,11 +58,12 @@
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/services/pocService.js?v=cc10"></script>
   <script defer src="../js/services/simCardsService.js"></script>
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <!-- SheetJS se carga BAJO DEMANDA al importar/descargar plantilla (js/core/xlsx-loader.js) -->
+  <script defer src="../js/core/xlsx-loader.js"></script>
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
   <script src="../js/pages/poc-state.js?v=cc11" defer></script>
-  <script src="../js/pages/sim-cards.js" defer></script>
+  <script src="../js/pages/sim-cards.js?v=cc11" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>

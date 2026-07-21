@@ -204,7 +204,8 @@ window.SimCards = {
     this._importRows = null;
   },
 
-  descargarPlantilla() {
+  async descargarPlantilla() {
+    await cargarXLSX();   // SheetJS bajo demanda
     const ws = XLSX.utils.json_to_sheet([
       { SIM: '8950701000000000000', TELEFONO: '6123-4567', OPERADOR: 'MAS MOVIL' },
     ]);
@@ -231,6 +232,7 @@ window.SimCards = {
     if (!archivo) return;
     const preview = document.getElementById('importPreview');
     try {
+      await cargarXLSX();   // SheetJS bajo demanda
       const data = await archivo.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
