@@ -284,7 +284,7 @@
   </script>
 
   <script defer src="../js/pages/contratos-state.js"></script>
-  <script defer src="../js/pages/contratos-approval.js"></script>
+  <script defer src="../js/pages/contratos-approval.js?v=cc1"></script>
   <script defer src="../js/pages/contratos-upload.js"></script>
   <script defer src="../js/pages/contratos-equipos.js"></script>
   <script defer src="../js/pages/contratos-seriales-cambio.js"></script>
@@ -319,6 +319,27 @@
               <tbody id="tablaEquiposAprobacion"></tbody>
             </table>
           </div>
+        </fieldset>
+        <fieldset id="fieldsetCargosAprobacion" style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3); margin-top:var(--sp-3); display:none;">
+          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="receipt"></i> Servicios y otros cargos</legend>
+          <div class="table-scroll">
+            <table class="app-table" style="font-size:13px; min-width:520px;">
+              <thead>
+                <tr>
+                  <th>Concepto</th>
+                  <th>Cantidad</th>
+                  <th>Monto</th>
+                  <th>Tipo</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="tablaCargosAprobacion"></tbody>
+            </table>
+          </div>
+        </fieldset>
+        <fieldset id="fieldsetTransicionAprobacion" style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3); margin-top:var(--sp-3); display:none;">
+          <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="repeat"></i> Transición de equipos</legend>
+          <div id="transicionAprobacion" style="font-size:13px;"></div>
         </fieldset>
       </div>
       <div class="modal-footer">

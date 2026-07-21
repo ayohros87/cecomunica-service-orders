@@ -43,14 +43,27 @@ window.ContratosAprobacion = {
     const tot = ContractTotals.fromDoc(c);
     const esc = CS.esc.bind(CS);
 
+    // Vínculo al/los contratos originales (renovación/adición/reemplazo) —
+    // mismos fallbacks de compat que contrato-transicion-page.
+    const origenIds = (Array.isArray(c.contrato_origen_ids) && c.contrato_origen_ids.length)
+      ? c.contrato_origen_ids
+      : (c.contrato_origen_id ? [c.contrato_origen_id] : []);
+    const origenRefs = (Array.isArray(c.contrato_origen_refs) && c.contrato_origen_refs.length)
+      ? c.contrato_origen_refs
+      : (c.contrato_origen_id ? [c.contrato_origen_ref || c.contrato_origen_id] : []);
+    const bajas = Number(c.baja_cancelado_total || 0);
+
     document.getElementById('detallesContrato').innerHTML = `
       <p><strong>Contrato ID:</strong> ${esc(c.contrato_id)}</p>
       <p><strong>Cliente:</strong> ${esc(c.cliente_nombre)}</p>
       <p><strong>Elaborador:</strong> ${esc(elaborador)}</p>
       <p><strong>Tipo:</strong> ${esc(c.tipo_contrato)}</p>
       <p><strong>Acción:</strong> ${esc(c.accion)}</p>
+      <p><strong>Duración:</strong> ${esc(c.duracion || '-')}</p>
       <p><strong>Modalidad renovación:</strong> ${esc(renovacionModalidadTexto)}</p>
       <p><strong>Refurbished batería/antena/clip/piezas:</strong> ${esc(refurbishedTexto)}</p>
+      ${origenRefs.length ? `<p><strong>Contrato(s) origen:</strong> ${origenRefs.map(esc).join(', ')}</p>` : ''}
+      ${bajas > 0 ? `<p><strong>Unidades dadas de baja:</strong> ${bajas} (se descuentan al pedir seriales)</p>` : ''}
       <p><strong>Observaciones:</strong> ${esc(c.observaciones || '-')}</p>
       <div style="margin-top:8px; padding:8px; border:1px dashed var(--line); border-radius:8px; max-width:420px;">
         <div style="display:flex; justify-content:space-between;"><span>Subtotal${tot.tieneCargos ? ' equipos' : ''}</span><strong>${FMT.money(tot.equiposSub)}</strong></div>
@@ -80,7 +93,139 @@ window.ContratosAprobacion = {
       tbody.appendChild(fila);
     });
 
+    // Servicios y otros cargos — línea por línea (la caja de totales solo
+    // trae el agregado; aquí el aprobador ve QUÉ servicios se están cobrando).
+    const fsCargos    = document.getElementById('fieldsetCargosAprobacion');
+    const tbodyCargos = document.getElementById('tablaCargosAprobacion');
+    const cargos = Array.isArray(c.cargos) ? c.cargos : [];
+    if (fsCargos && tbodyCargos) {
+      fsCargos.style.display = cargos.length ? '' : 'none';
+      tbodyCargos.innerHTML = cargos.map(g => {
+        const cant  = Math.max(1, Math.round(Number(g.cantidad)) || 1);
+        const monto = Number(g.monto) || 0;
+        return `
+          <tr>
+            <td style="border:1px solid #ccc; padding:6px;">${esc(g.concepto || '—')}</td>
+            <td style="border:1px solid #ccc; padding:6px;">${cant}</td>
+            <td style="border:1px solid #ccc; padding:6px;">${FMT.money(monto)}</td>
+            <td style="border:1px solid #ccc; padding:6px;">${g.recurrente ? 'Mensual' : 'Único'}</td>
+            <td style="border:1px solid #ccc; padding:6px;">${FMT.money(cant * monto)}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    // Transición de equipos: solo aplica con equipos de por medio — renovación
+    // con equipo, tipo REEMP, o adición vinculada a un original. Los seriales
+    // ENTRANTES aún no existen (aprobar es lo que los pide a inventario); lo
+    // mostrable son los SALIENTES que el cliente ya tiene en el pool.
+    const fsTrans = document.getElementById('fieldsetTransicionAprobacion');
+    const aplicaTransicion = (esRenovacion && !esRenovacionSinEquipo)
+      || c.tipo_contrato === 'REEMP'
+      || (c.accion === 'Adición' && origenIds.length > 0);
+    if (fsTrans) {
+      fsTrans.style.display = aplicaTransicion ? '' : 'none';
+      if (aplicaTransicion) {
+        const cont = document.getElementById('transicionAprobacion');
+        if (cont) cont.innerHTML = '<span style="color:var(--fg-3);">Cargando equipos del cliente…</span>';
+        // Fire-and-forget: el modal abre ya; el bloque se rellena al llegar el pool.
+        this._cargarTransicion(c, id, { origenIds, origenRefs });
+      }
+    }
+
     this.abrirOverlay();
+  },
+
+  // Rellena el bloque "Transición de equipos" del modal. Mismos criterios de
+  // carga que contrato-transicion-page: salientes anclados al/los originales
+  // si hay vínculo; sin vínculo (o legacy/papel), todos los del cliente.
+  async _cargarTransicion(c, id, { origenIds, origenRefs }) {
+    const cont = document.getElementById('transicionAprobacion');
+    if (!cont) return;
+    const esc = CS.esc.bind(CS);
+    try {
+      let unidades = [];
+      if (origenIds.length) {
+        const listas = await Promise.all(origenIds.map(oid => EquiposPoolService.listarPorContrato(oid)));
+        const vistos = new Set();
+        unidades = listas.flat().filter(u => !vistos.has(u.id) && vistos.add(u.id));
+      } else {
+        unidades = await EquiposPoolService.listarPorCliente(c.cliente_id);
+      }
+      if (this._pendienteId !== id) return; // el modal cambió de contrato o se cerró
+
+      const salientes = unidades.filter(u =>
+        (u.estado === EquiposPoolService.ESTADOS.ASIGNADO || u.estado === EquiposPoolService.ESTADOS.EN_CLIENTE)
+        && u.asignacion?.contrato_doc_id !== id);
+      const alquiler = salientes.filter(u => u.propiedad !== 'cliente');
+      const propios  = salientes.filter(u => u.propiedad === 'cliente');
+
+      // Comparativa mensual origen vs nuevo — el delta económico es lo que se
+      // aprueba en una renovación. Best-effort: si falla, el bloque sale igual.
+      let mensualOrigen = null;
+      if (origenIds.length) {
+        try {
+          const docs = await Promise.all(origenIds.map(oid => ContratosService.getContrato(oid)));
+          const validos = docs.filter(Boolean);
+          if (validos.length) {
+            mensualOrigen = FMT.round2(validos.reduce((s, o) => s + ContractTotals.fromDoc(o).totalMensual, 0));
+          }
+        } catch (e) { /* comparativa opcional */ }
+        if (this._pendienteId !== id) return;
+      }
+
+      const totalUnidades = (c.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
+      const entrantes = Math.max(0, totalUnidades - Number(c.baja_cancelado_total || 0));
+
+      const ancla = origenRefs.length
+        ? `Vinculado a ${origenRefs.length > 1 ? 'los contratos originales' : 'el contrato original'} <b>${origenRefs.map(esc).join('</b>, <b>')}</b>.`
+        : (c.origen_tipo === 'legacy'
+            ? `Contrato original en papel${c.origen_legacy_ref ? ` (<b>${esc(c.origen_legacy_ref)}</b>)` : ''} — se listan todos los equipos del cliente en el pool.`
+            : `<span style="color:#92400e;"><b>Sin contrato original vinculado</b> — se listan todos los equipos del cliente en el pool. Si aplica, vincúlalo en la página de Transición tras aprobar.</span>`);
+
+      const filasAlquiler = alquiler.length ? alquiler.map(u => `
+        <tr>
+          <td style="border:1px solid #ccc; padding:6px; font-family:var(--font-mono,monospace);">
+            <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" target="_blank" rel="noopener">${esc(u.serial || u.serial_norm)}</a>
+          </td>
+          <td style="border:1px solid #ccc; padding:6px;">${esc(u.modelo_label || '—')}</td>
+          <td style="border:1px solid #ccc; padding:6px;">${EquiposPoolService.chipEstadoHtml(u.estado)} ${EquiposPoolService.chipPendienteDevolucionHtml(u)}</td>
+        </tr>`).join('')
+        : `<tr><td colspan="3" style="border:1px solid #ccc; padding:8px; color:var(--fg-3);">El cliente no tiene equipos de alquiler en el pool${origenRefs.length ? ' para ese origen' : ''}.</td></tr>`;
+
+      const delta = mensualOrigen != null ? FMT.round2(ContractTotals.fromDoc(c).totalMensual - mensualOrigen) : null;
+
+      cont.innerHTML = `
+        <p style="margin:0 0 8px;">${ancla}</p>
+        <p style="margin:0 0 8px;">
+          Entran <b>${entrantes}</b> unidad(es) nueva(s) · el cliente tiene <b>${alquiler.length}</b> en alquiler
+          que deberán devolverse${propios.length ? ` · <b>${propios.length}</b> propia(s) del cliente (no se devuelven)` : ''}.
+          Los seriales entrantes los asigna inventario <b>después de aprobar</b>; la devolución se registra en la página de Transición.
+        </p>
+        ${mensualOrigen != null ? `
+        <p style="margin:0 0 8px;">
+          Mensual actual (origen): <b>${FMT.money(mensualOrigen)}</b> → nuevo: <b>${FMT.money(ContractTotals.fromDoc(c).totalMensual)}</b>
+          (${delta >= 0 ? '+' : '−'}${FMT.money(Math.abs(delta))})
+        </p>` : ''}
+        <div class="table-scroll">
+          <table class="app-table" style="font-size:13px; min-width:420px;">
+            <thead><tr><th>Serial</th><th>Modelo</th><th>Estado</th></tr></thead>
+            <tbody>${filasAlquiler}</tbody>
+          </table>
+        </div>
+        ${propios.length ? `
+        <div style="margin-top:8px;">
+          <div style="font-weight:600; margin-bottom:4px;">Propios del cliente (no se devuelven)</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            ${propios.map(u => `<span class="eqpool-chip" title="${esc(u.modelo_label || '')}">${esc(u.serial || u.serial_norm)}</span>`).join('')}
+          </div>
+        </div>` : ''}`;
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    } catch (e) {
+      console.warn('No se pudo cargar la transición para el modal de aprobación', e);
+      if (this._pendienteId === id) {
+        cont.innerHTML = '<span style="color:var(--fg-3);">No se pudieron cargar los equipos del cliente. La transición se gestiona tras aprobar, en la página de Transición.</span>';
+      }
+    }
   },
 
   cancelar() {
