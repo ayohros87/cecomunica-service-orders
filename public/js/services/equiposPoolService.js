@@ -452,6 +452,37 @@ const EquiposPoolService = {
     }, user);
   },
 
+  // Reversa de una baja registrada por error: la unidad regresa a bodega como
+  // disponible. `esperado: BAJA` — solo se revive lo que está de baja. La baja
+  // ya limpió asignación/orden, así que si la unidad seguía comprometida hay
+  // que re-asignarla por el flujo normal. El kardex conserva la baja y esta
+  // reactivación: la historia completa queda a la vista.
+  async reactivar(id, motivo, user) {
+    return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
+      esperado: this.ESTADOS.BAJA,
+      tipo: 'reactivacion', notas: motivo,
+      extra: { baja_motivo: null },
+    }, user);
+  },
+
+  // Corrección de un estado heredado mal por la migración por contacto: el
+  // dato fuente estaba viejo (POC nunca devuelto, typo de serial en contrato,
+  // orden que no se cerró) y la unidad REALMENTE está en bodega. Único destino
+  // permitido: en_bodega — cualquier otro estado real se registra por su flujo
+  // normal (seriales de contrato / orden / device POC), que arma los vínculos
+  // correctos y pisa el estado heredado en la dirección correcta. Limpia los
+  // vínculos falsos, deja movimiento 'correccion_migracion' y marca la unidad
+  // como verificada (corregir el estado ES verificarla). No toca `condicion`:
+  // la unidad nunca salió de bodega.
+  async corregirABodega(id, motivo, user) {
+    return this.cambiarEstado(id, this.ESTADOS.EN_BODEGA, {
+      tipo: 'correccion_migracion', notas: motivo,
+      extra: { asignacion: null, poc_device_id: null, orden_actual_id: null,
+               verificado: true,
+               pendiente_devolucion: firebase.firestore.FieldValue.delete() },
+    }, user);
+  },
+
   // Venta directa sin contrato: la factura ya se emitió en QuickBooks y aquí
   // solo se descuenta la unidad de bodega. `esperado: EN_BODEGA` evita vender
   // dos veces (o vender algo que otro flujo ya movió). La asignación guarda a

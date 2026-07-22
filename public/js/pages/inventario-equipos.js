@@ -270,7 +270,7 @@ window.EquiposPool = {
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
         en_poc: 'No hay unidades en préstamo POC.',
         devuelto_revision: 'No hay entradas pendientes de inspección. Las devoluciones de clientes (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí; con "Inspección OK" regresan a bodega como reuso, o se dan de baja.',
-        otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega.',
+        otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Revivir equipo".',
       };
       const hayFiltros = !!(fAct.q || fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente);
       const msg = !this._equipos.length
@@ -307,6 +307,8 @@ window.EquiposPool = {
           (puede && eq.estado === 'devuelto_revision') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Inspección OK → regresa a bodega" onclick="EquiposPool.inspeccionOk('${esc(eq.id)}')"><i data-lucide="check-circle-2"></i></button>` : '',
           (puede && eq.estado === 'en_bodega') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Registrar venta (facturada en QuickBooks)" onclick="EquiposPool.abrirVenta('${esc(eq.id)}')"><i data-lucide="banknote"></i></button>` : '',
           (esAdmin && !['baja', 'vendido'].includes(eq.estado)) ? `<button class="btn btn-danger btn-icon btn-sm" title="Dar de baja" onclick="EquiposPool.darDeBaja('${esc(eq.id)}')"><i data-lucide="archive-x"></i></button>` : '',
+          (esAdmin && eq.estado === 'baja') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Revivir equipo (baja por error) → regresa a bodega" onclick="EquiposPool.revivir('${esc(eq.id)}')"><i data-lucide="archive-restore"></i></button>` : '',
+          (puede && (eq.origen || '').startsWith('migracion') && ['asignado_contrato', 'en_cliente', 'en_taller', 'en_poc'].includes(eq.estado)) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Corregir estado heredado de la migración → En bodega" onclick="EquiposPool.abrirCorregir('${esc(eq.id)}')"><i data-lucide="pencil-ruler"></i></button>` : '',
         ].join('');
         const prop = eq.propiedad || 'desconocida';
         return `<tr>
@@ -441,7 +443,7 @@ window.EquiposPool = {
     const eq = this._equipos.find(x => x.id === id);
     const motivo = await Modal.prompt({
       title: 'Dar de baja',
-      message: `Motivo de la baja de ${eq?.serial || id} (dañado, perdido, vendido…). El equipo sale del pool de forma permanente.`,
+      message: `Motivo de la baja de ${eq?.serial || id} (dañado, perdido, vendido…). El equipo sale del pool; si la baja resulta un error, un administrador puede revivirlo desde la pestaña Baja / Venta.`,
     });
     if (motivo === null) return;
     if (!motivo.trim()) { Toast.show('La baja requiere un motivo.', 'bad'); return; }
@@ -451,6 +453,96 @@ window.EquiposPool = {
       this.cargar();
     } catch (e) {
       Toast.show('Error: ' + (e.message || e), 'bad');
+    }
+  },
+
+  // Reversa de una baja por error — la unidad regresa a bodega como disponible.
+  async revivir(id) {
+    const eq = this._equipos.find(x => x.id === id);
+    const motivo = await Modal.prompt({
+      title: 'Revivir equipo',
+      message: `Motivo de la reactivación de ${eq?.serial || id} (p. ej. baja registrada por error). El equipo regresa a bodega como disponible; si estaba asignado a un contrato u orden, hay que volver a asignarlo por el flujo normal.`,
+    });
+    if (motivo === null) return;
+    if (!motivo.trim()) { Toast.show('La reactivación requiere un motivo.', 'bad'); return; }
+    try {
+      await EquiposPoolService.reactivar(id, motivo.trim(), firebase.auth().currentUser);
+      Toast.show('Equipo reactivado — de vuelta en bodega.', 'ok');
+      this.cargar();
+    } catch (e) {
+      Toast.show('Error: ' + (e.message || e), 'bad');
+    }
+  },
+
+  // ── Corregir estado heredado de la migración ─────────────────────────
+  // Único destino: En bodega. La matriz de casos vive en el comentario de
+  // EquiposPoolService.corregirABodega — todos los demás estados reales se
+  // registran por su flujo normal (contrato/orden/POC), que arma los vínculos.
+  _corrigiendoId: null,
+
+  abrirCorregir(id) {
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden corregir estados.', 'bad'); return; }
+    const eq = this._equipos.find(x => x.id === id);
+    if (!eq) return;
+    this._corrigiendoId = id;
+    const esc = FMT.esc;
+    document.getElementById('corrSerialLabel').textContent = eq.serial || eq.serial_norm;
+    document.getElementById('corrEstadoActual').innerHTML =
+      `<span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>`;
+
+    // Vínculos que la corrección va a limpiar — con link para arreglar también
+    // la FUENTE: si sigue mintiendo (serial en el contrato/orden), una
+    // reedición futura re-impondría el estado falso.
+    const avisos = [];
+    if (eq.asignacion && (eq.asignacion.contrato_id || eq.asignacion.contrato_doc_id)) {
+      avisos.push(`El contrato <a class="eq-link" href="../contratos/index.html?buscar=${encodeURIComponent(eq.asignacion.contrato_id || '')}" target="_blank">${esc(eq.asignacion.contrato_id || eq.asignacion.contrato_doc_id)}</a> seguirá listando este serial: quítalo o corrígelo también en Seriales del contrato, o una edición futura de esos seriales re-asignaría la unidad.`);
+    }
+    if (eq.orden_actual_id) {
+      avisos.push(`La <a class="eq-link" href="../ordenes/editar-orden.html?id=${encodeURIComponent(eq.orden_actual_id)}" target="_blank">orden en taller</a> seguirá listando este serial: remuévelo de la orden si sigue abierta.`);
+    }
+    const divAvisos = document.getElementById('corrAvisos');
+    divAvisos.innerHTML = avisos.map(a => `<p style="margin:0 0 var(--sp-2);">${a}</p>`).join('');
+    divAvisos.style.display = avisos.length ? '' : 'none';
+
+    // Device POC vinculado → ofrecer desactivarlo (soft-delete): si queda
+    // activo, la lista POC sigue mostrando un radio que está en bodega y una
+    // reedición de su serial lo re-marcaría "En POC".
+    const rowPoc = document.getElementById('corrPocRow');
+    rowPoc.style.display = eq.poc_device_id ? '' : 'none';
+    document.getElementById('corrDesactivarPoc').checked = !!eq.poc_device_id;
+
+    document.getElementById('corrMotivo').value = '';
+    Modal.open('eqCorregirModal');
+  },
+
+  async guardarCorreccion() {
+    const id = this._corrigiendoId;
+    const eq = this._equipos.find(x => x.id === id);
+    if (!eq) return;
+    const motivo = document.getElementById('corrMotivo').value.trim();
+    if (!motivo) { Toast.show('La corrección requiere un motivo.', 'bad'); return; }
+    const btn = document.getElementById('btnGuardarCorreccion');
+    btn.disabled = true;
+    try {
+      await EquiposPoolService.corregirABodega(id, motivo, firebase.auth().currentUser);
+      let msg = 'Estado corregido — la unidad quedó en bodega.';
+      if (eq.poc_device_id && document.getElementById('corrDesactivarPoc').checked) {
+        try {
+          await PocService.softDeletePocDevice(eq.poc_device_id);
+          msg += ' Device POC desactivado.';
+        } catch (e2) {
+          console.error('No se pudo desactivar el device POC:', e2);
+          msg += ' OJO: no se pudo desactivar el device POC — hazlo desde la página POC.';
+        }
+      }
+      Modal.close('eqCorregirModal');
+      this._corrigiendoId = null;
+      Toast.show(msg, 'ok');
+      this.cargar();
+    } catch (e) {
+      Toast.show('Error al corregir: ' + (e.message || e), 'bad');
+    } finally {
+      btn.disabled = false;
     }
   },
 
@@ -677,9 +769,11 @@ window.EquiposPool = {
     ingreso_bodega: 'package-plus', asignacion_contrato: 'file-text',
     liberacion: 'undo-2', entrega: 'truck', ingreso_taller: 'wrench',
     salida_taller: 'log-out', prestamo_poc: 'radio-tower', devolucion: 'corner-down-left',
-    inspeccion: 'search-check', baja: 'archive-x', venta: 'banknote',
+    inspeccion: 'search-check', baja: 'archive-x', reactivacion: 'archive-restore',
+    venta: 'banknote', correccion_migracion: 'pencil-ruler',
     correccion_serial: 'pencil', orden_programacion: 'clipboard-list',
     migracion: 'database', cambio_estado: 'arrow-right-left',
+    reasignacion: 'users', fusion_duplicado: 'merge',
   },
 
   async abrirHistoria(id) {

@@ -126,10 +126,12 @@
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
   <script defer src="../js/services/equiposPoolService.js"></script>
+  <script defer src="../js/services/pocService.js"></script> <!-- soft-delete del device en "Corregir estado" -->
+
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/inventario-equipos.js?v=cc11" defer></script>
+  <script src="../js/pages/inventario-equipos.js?v=cc12" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -393,6 +395,42 @@
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="Modal.close('eqEditModal')"><i data-lucide="x"></i> Cancelar</button>
         <button class="btn btn-primary" onclick="EquiposPool.guardarEdicion()"><i data-lucide="check"></i> Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: corregir estado heredado de la migración (único destino: bodega) -->
+  <div id="eqCorregirModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:500px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="pencil-ruler"></i> Corregir estado <span id="corrSerialLabel" style="font-family:var(--font-mono); font-size:14px;"></span></h3>
+        <button class="modal-close" onclick="Modal.close('eqCorregirModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px; color:var(--fg-2); margin:0 0 var(--sp-3);">
+          Para unidades que la migración dejó con un estado equivocado y que
+          <strong>físicamente están en bodega</strong>. Estado actual:
+          <span id="corrEstadoActual"></span> → <strong>En bodega</strong>.<br>
+          Si la unidad en realidad está en otro lado (cliente, taller, POC), no corrijas aquí:
+          regístrala por su flujo normal (seriales del contrato, orden de servicio o device POC)
+          y el pool se actualizará solo con los vínculos correctos.
+        </p>
+        <div id="corrAvisos" style="font-size:13px; color:#92400e; background:#fef3c7; border-radius:8px; padding:var(--sp-3); margin-bottom:var(--sp-3);"></div>
+        <div class="form-field" id="corrPocRow">
+          <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; cursor:pointer;">
+            <input type="checkbox" id="corrDesactivarPoc" checked style="margin-top:2px;">
+            <span>Desactivar también el device en el inventario POC (recomendado). Si queda activo,
+            la lista POC seguirá mostrando este radio y podría volver a marcarlo "En POC".</span>
+          </label>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="corrMotivo">Motivo de la corrección</label>
+          <input class="form-input" id="corrMotivo" type="text" placeholder="p. ej. el POC nunca registró la devolución; verificado físicamente en bodega">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="Modal.close('eqCorregirModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardarCorreccion" onclick="EquiposPool.guardarCorreccion()"><i data-lucide="check"></i> Corregir a En bodega</button>
       </div>
     </div>
   </div>
