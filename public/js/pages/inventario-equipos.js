@@ -307,7 +307,7 @@ window.EquiposPool = {
           (puede && eq.estado === 'devuelto_revision') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Inspección OK → regresa a bodega" onclick="EquiposPool.inspeccionOk('${esc(eq.id)}')"><i data-lucide="check-circle-2"></i></button>` : '',
           (puede && eq.estado === 'en_bodega') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Registrar venta (facturada en QuickBooks)" onclick="EquiposPool.abrirVenta('${esc(eq.id)}')"><i data-lucide="banknote"></i></button>` : '',
           (esAdmin && !['baja', 'vendido'].includes(eq.estado)) ? `<button class="btn btn-danger btn-icon btn-sm" title="Dar de baja" onclick="EquiposPool.darDeBaja('${esc(eq.id)}')"><i data-lucide="archive-x"></i></button>` : '',
-          (esAdmin && eq.estado === 'baja') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Revivir equipo (baja por error) → regresa a bodega" onclick="EquiposPool.revivir('${esc(eq.id)}')"><i data-lucide="archive-restore"></i></button>` : '',
+          (puede && eq.estado === 'baja') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Revivir equipo (baja por error) → regresa a bodega" onclick="EquiposPool.revivir('${esc(eq.id)}')"><i data-lucide="archive-restore"></i></button>` : '',
           (puede && (eq.origen || '').startsWith('migracion') && ['asignado_contrato', 'en_cliente', 'en_taller', 'en_poc'].includes(eq.estado)) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Corregir estado heredado de la migración → En bodega" onclick="EquiposPool.abrirCorregir('${esc(eq.id)}')"><i data-lucide="pencil-ruler"></i></button>` : '',
         ].join('');
         const prop = eq.propiedad || 'desconocida';
@@ -443,7 +443,7 @@ window.EquiposPool = {
     const eq = this._equipos.find(x => x.id === id);
     const motivo = await Modal.prompt({
       title: 'Dar de baja',
-      message: `Motivo de la baja de ${eq?.serial || id} (dañado, perdido, vendido…). El equipo sale del pool; si la baja resulta un error, un administrador puede revivirlo desde la pestaña Baja / Venta.`,
+      message: `Motivo de la baja de ${eq?.serial || id} (dañado, perdido, vendido…). El equipo sale del pool; si la baja resulta un error, administración o inventario pueden revivirlo desde la pestaña Baja / Venta.`,
     });
     if (motivo === null) return;
     if (!motivo.trim()) { Toast.show('La baja requiere un motivo.', 'bad'); return; }
@@ -458,6 +458,7 @@ window.EquiposPool = {
 
   // Reversa de una baja por error — la unidad regresa a bodega como disponible.
   async revivir(id) {
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden revivir equipos.', 'bad'); return; }
     const eq = this._equipos.find(x => x.id === id);
     const motivo = await Modal.prompt({
       title: 'Revivir equipo',
