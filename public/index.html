@@ -12,7 +12,7 @@
   <title>Cecomunica - Plataforma</title>
   <!-- Rediseño Command Center (F1) — esta página usa ceco-command.css.
        Las páginas aún no migradas siguen con ceco-ui.css. -->
-  <link rel="stylesheet" href="css/ceco-command.css?v=cc6">
+  <link rel="stylesheet" href="css/ceco-command.css?v=cc8">
 
   <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -23,6 +23,9 @@
   <script defer src="js/services/usuariosService.js"></script>
   <script defer src="js/services/senalesService.js"></script>
   <script defer src="js/pages/home-signals.js?v=cc6"></script>
+  <script defer src="js/domain/ordenProgPendiente.js"></script>
+  <script defer src="js/services/feedOrdenesService.js"></script>
+  <script defer src="js/pages/home-feed-ordenes.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -48,6 +51,9 @@
 
   <!-- ============ SEÑALES ACCIONABLES (solo lo que el rol puede ver) ============ -->
   <div class="launch__signals" id="signalsRow"></div>
+
+  <!-- ============ ÓRDENES POR CREAR (feed; solo recepción/admin) ============ -->
+  <div class="feed-ordenes" id="feedOrdenes" style="display:none"></div>
 
   <!-- ============ BUSCADOR ============ -->
   <div class="launch__search">
@@ -263,6 +269,9 @@
 
         // Señales accionables — mismas fuentes de gating (módulos + rules).
         HomeSignals.render({ rolEfectivo: effectiveRol, uid: user.uid });
+
+        // Feed "Órdenes por crear" — solo recepción/admin (gate en el módulo).
+        if (window.HomeFeedOrdenes) HomeFeedOrdenes.render({ rolEfectivo: effectiveRol, uid: user.uid });
 
         // Mostrar grid, ocultar skeletons, aplicar filtro inicial
         document.getElementById('gridSkeleton').style.display = 'none';

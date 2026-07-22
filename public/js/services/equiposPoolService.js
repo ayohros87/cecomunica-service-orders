@@ -507,6 +507,12 @@ const EquiposPoolService = {
           cliente_id: cliId,
           cliente_nombre: cli,
           cliente_excepcion: !!cliente_excepcion,
+          // null explícito (no ausente): el feed "Órdenes por crear" del home
+          // consulta == null para hallar ventas sin orden de programación —
+          // Firestore no puede consultar "campo ausente". Lo llena
+          // vincularOrdenProgramacion; ventas previas al campo no aparecen
+          // en el feed (corte legacy).
+          orden_programacion_id: null,
           at: firebase.firestore.FieldValue.serverTimestamp(),
         },
       },

@@ -215,6 +215,34 @@
       ]
     },
     {
+      "collectionGroup": "contratos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "seriales_estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "equipos_pool",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "venta.orden_programacion_id",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "ordenes_de_servicio",
       "queryScope": "COLLECTION",
       "fields": [

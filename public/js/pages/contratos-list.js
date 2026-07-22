@@ -116,13 +116,9 @@ window.ContratosLista = {
     // quiere registrar voluntariamente.
     const transicionPendiente = esTransicionable && data.seriales_estado !== 'legacy'
       && !Number(data.transicion_mapeos_count || 0);
-    const totalEq   = (data.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
-    const activosEq = Math.max(0, totalEq - Number(data.baja_cancelado_total || 0));
-    const serialesResueltos = Number(data.seriales_count || 0) + Number(data.seriales_omitidos_count || 0);
-    const osVinculada = !!(data.os_linked || data.tiene_os || (data.os_count ?? 0) > 0);
-    const puedeCrearOrdenProg = esActivoOAprobado && data.seriales_estado !== 'legacy'
-      && activosEq > 0 && serialesResueltos >= activosEq
-      && !data.entrega_confirmada && !osVinculada;
+    // Predicado compartido con el feed "Órdenes por crear" del home
+    // (js/domain/ordenProgPendiente.js) — un solo criterio para ambos.
+    const puedeCrearOrdenProg = OrdenProgPendiente.contratoNecesitaOrden(data);
     const urlOrdenProg = `../ordenes/nueva-orden.html?cliente_id=${encodeURIComponent(data.cliente_id || '')}&contrato_doc_id=${id}&tipo=PROGRAMACION`;
 
     const ctaCls = 'btn btn-sm';
