@@ -12,6 +12,10 @@
 // como quedó registrado (accesorios/daño), ANTES de la revisión técnica —
 // devolucion.acuses[]. El backend copia el primer acuse a la ENTRADA como su
 // recepción en mostrador ("Ver recepción" en la orden del taller).
+// SIN CONTRATO (2026-07-22): devoluciones de contratos de papel (fuera del
+// sistema) se crean a mano con `nueva()` (modo 'sin_contrato', sin esperados)
+// y los seriales se capturan libres en este mismo check-in — el backend los
+// da de alta en el pool vía upsertContacto (crea el doc si no existe).
 // Las resoluciones son definitivas (el pool se mueve al instante); un error
 // se corrige desde Inventario · Equipos por serial.
 (function () {
@@ -40,8 +44,9 @@
   let _ordenId = null;
   let _overlay = null;
   let _recibiendoId = null; // esperado con el mini-checklist abierto
-  let _draftModelo = null;  // check-in por modelo pendiente de confirmar {idx, serial, modelo, modelo_id}
+  let _draftModelo = null;  // check-in por modelo/libre pendiente de confirmar {idx|null, serial, modelo, modelo_id}
   let _firmaAcuse = null;   // API del canvas del acuse (clear/isEmpty)
+  let _modelos = null;      // catálogo para el datalist de la captura libre (lazy)
 
   function puedeOperar() {
     const rol = window.APP?.state?.userRole || '';
@@ -56,6 +61,18 @@
       _orden = await OrdenesService.getOrder(ordenId);
     } catch (e) { Toast.show('No se pudo cargar la orden.', 'bad'); return; }
     if (!_orden || !_orden.devolucion) { Toast.show('La orden no tiene datos de devolución.', 'bad'); return; }
+    // Captura libre (sin contrato): datalist de modelos del catálogo, para
+    // que la unidad nazca con modelo_id cuando el operador elige uno conocido.
+    if (_orden.devolucion.modo === 'sin_contrato' && !_modelos) {
+      try {
+        _modelos = (typeof ModelosService !== 'undefined')
+          ? (await ModelosService.getModelos())
+              .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || '').trim() }))
+              .filter(m => m.nombre)
+              .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+          : [];
+      } catch (e) { _modelos = []; }
+    }
     render();
   }
 
@@ -155,6 +172,7 @@
     const cerrada = (_orden.estado_reparacion || '').toUpperCase() === 'CERRADA (DEVOLUCION)';
     const editable = !cerrada && puedeOperar();
     const esConfirmacion = dev.modo === 'confirmacion';
+    const esSinContrato = dev.modo === 'sin_contrato';
 
     const pendientes = esperados.filter(e => !e.resolucion).length;
     const modelosPend = porModelo.reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
@@ -162,6 +180,8 @@
 
     const intro = esConfirmacion
       ? 'Anulación de contrato: lo usual es que los equipos <b>nunca hayan salido</b>. Confirma unidad por unidad — <b>Nunca salió</b> los regresa a bodega directo; <b>Recibido</b> los manda a inspección.'
+      : esSinContrato
+      ? 'Devolución <b>sin contrato en el sistema</b> (contrato de papel). Registra cada unidad al recibirla — serial + modelo — con su checklist de accesorios/daño y el <b>acuse firmado</b> del cliente. Las unidades quedan trackeadas en Equipos por serial y alimentan la orden de ENTRADA del taller.'
       : 'Estos equipos están <b>con el cliente</b>. Marca <b>Recibido</b> cuando cada unidad llegue físicamente: registra accesorios y daño visible, y el cliente <b>firma el acuse</b> de lo entregado (antes de la revisión técnica). Cada tanda alimenta al instante la orden de ENTRADA del taller.';
 
     const filas = esperados.map(e => `
@@ -194,6 +214,19 @@
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">${esc(_draftModelo.modelo || '—')}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">${miniFormHtml(_draftModelo.serial)}</td>
       </tr>` : '';
+
+    // Captura libre (modo sin_contrato): la orden nace sin esperados — cada
+    // serial se registra al llegar, con modelo del catálogo si se conoce.
+    const bloqueCapturaLibre = (editable && esSinContrato && !_draftModelo) ? `
+      <div style="margin-top:${esperados.length ? '12px' : '0'};border:1px dashed var(--border-subtle,#cbd5e1);border-radius:10px;padding:10px 12px;">
+        <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Registrar unidad recibida</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <input class="form-input" id="devSerialLibre" placeholder="Serial (tecléalo o escanéalo)" style="height:32px;font-size:12.5px;max-width:220px;" autocomplete="off">
+          <input class="form-input" id="devModeloLibre" list="devModelosList" placeholder="Modelo" style="height:32px;font-size:12.5px;max-width:220px;" autocomplete="off">
+          <datalist id="devModelosList">${(_modelos || []).map(m => `<option value="${esc(m.nombre)}"></option>`).join('')}</datalist>
+          <button type="button" class="btn btn-sm dev-checkin-libre" style="height:32px;">Check-in</button>
+        </div>
+      </div>` : '';
 
     const filasModelo = porModelo.map((m, i) => {
       const falta = Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0));
@@ -279,6 +312,7 @@
               <tbody>${filas}${filaDraft}</tbody>
             </table>
           </div>` : ''}
+          ${bloqueCapturaLibre}
           ${porModelo.length ? `
           <div style="margin-top:${(esperados.length || _draftModelo) ? '14px' : '0'};">
             <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Por modelo (la baja no registró seriales — se capturan al llegar)</div>
@@ -335,6 +369,11 @@
       resolver(sel.dataset.id, 'no_devuelve', sel.value, detalle.trim());
     }));
     _overlay.querySelectorAll('.dev-checkin-modelo').forEach(b => b.addEventListener('click', () => checkinPorModelo(Number(b.dataset.idx))));
+    _overlay.querySelectorAll('.dev-checkin-libre').forEach(b => b.addEventListener('click', checkinLibre));
+    // Enter en el serial libre = Check-in (flujo de escáner de código de barras).
+    _overlay.querySelector('#devSerialLibre')?.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') { ev.preventDefault(); checkinLibre(); }
+    });
 
     // Bloque de acuse: canvas + toggle sin-firma + guardar.
     const cbSin = _overlay.querySelector('#acuseSinFirma');
@@ -458,6 +497,22 @@
     render();
   }
 
+  // Captura libre (modo sin_contrato): serial + modelo sin lista previa de
+  // esperados. Si el modelo coincide con el catálogo, la unidad viaja con
+  // modelo_id (mejor identidad en el pool); texto libre también vale.
+  function checkinLibre() {
+    const serial = (_overlay.querySelector('#devSerialLibre')?.value || '').trim().toUpperCase();
+    const modeloTxt = (_overlay.querySelector('#devModeloLibre')?.value || '').trim();
+    if (!serial) { Toast.show('Escribe o escanea el serial recibido.', 'warn'); return; }
+    if ((_orden.devolucion.esperados || []).some(e => (e.serial || '').toUpperCase() === serial)) {
+      Toast.show('Ese serial ya está registrado en esta orden.', 'warn'); return;
+    }
+    const cat = (_modelos || []).find(m => m.nombre.toLowerCase() === modeloTxt.toLowerCase());
+    _draftModelo = { idx: null, serial, modelo: cat ? cat.nombre : modeloTxt, modelo_id: cat ? cat.id : null };
+    _recibiendoId = null;
+    render();
+  }
+
   // Acuse por tanda: sube la firma, agrega devolucion.acuses[] y estampa
   // acuse_id en cada unidad cubierta. El backend copia el primer acuse a la
   // ENTRADA (recepción en mostrador).
@@ -542,5 +597,147 @@
     }
   }
 
-  window.OrdenesDevolucion = { abrir };
+  // ── Nueva devolución SIN CONTRATO (contrato de papel) ────────────────
+  // Para equipos alquilados con contratos fuera del sistema: crea la orden
+  // de DEVOLUCION en modo 'sin_contrato' (sin esperados) y abre el check-in,
+  // donde los seriales se capturan libres y quedan trackeados en el pool.
+  const ROLES_NUEVA = () => [ROLES.ADMIN, ROLES.RECEPCION, ROLES.JEFE_TALLER, ROLES.VENDEDOR];
+
+  // Consecutivo AAAAMMDDNN — misma convención que nueva-orden.js y el backend
+  // (_siguienteOrdenId): transacción create-if-missing con reintentos por si
+  // hay carrera con otra creación simultánea.
+  async function _crearDocOrden(data) {
+    const db = firebase.firestore();
+    const col = db.collection('ordenes_de_servicio');
+    const hoy = new Date();
+    const fechaBase = `${hoy.getFullYear()}${String(hoy.getMonth() + 1).padStart(2, '0')}${String(hoy.getDate()).padStart(2, '0')}`;
+    const snap = await col
+      .where(firebase.firestore.FieldPath.documentId(), '>=', `${fechaBase}00`)
+      .where(firebase.firestore.FieldPath.documentId(), '<=', `${fechaBase}99`)
+      .get();
+    const usados = snap.docs.map(d => parseInt(d.id.slice(-2), 10)).filter(n => !Number.isNaN(n));
+    const siguiente = usados.length ? Math.max(...usados) + 1 : 1;
+    for (let i = 0; i < 5; i++) {
+      const candidato = `${fechaBase}${String(siguiente + i).padStart(2, '0')}`;
+      const ganado = await db.runTransaction(async (tx) => {
+        const s = await tx.get(col.doc(candidato));
+        if (s.exists) return null;
+        tx.set(col.doc(candidato), data);
+        return candidato;
+      });
+      if (ganado) return ganado;
+    }
+    throw new Error('No se pudo reservar un número de orden — reintenta.');
+  }
+
+  async function nueva() {
+    if (!ROLES_NUEVA().includes(window.APP?.state?.userRole || '')) {
+      Toast.show('Tu rol no puede registrar devoluciones.', 'bad');
+      return;
+    }
+
+    // Autocompletado de clientes (best-effort): texto libre también vale —
+    // el cliente de un contrato de papel puede no existir en el sistema.
+    let clientes = [];
+    try { clientes = [...(await ClientesService.loadClientes()).values()]; } catch (e) { /* datalist vacío */ }
+    const nombres = clientes
+      .map(c => (c.nombre || '').trim()).filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '9400';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:520px;width:min(94vw,520px);">
+        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="package-open"></i> Devolución sin contrato</h3>
+          <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="sheet-body" style="padding:12px 14px;">
+          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">
+            Para equipos alquilados con <b>contrato de papel</b> (fuera del sistema). Se crea el
+            tiquete de devolución y los seriales se registran al recibirlos, con checklist de
+            accesorios/daño y acuse firmado — las unidades quedan trackeadas en Equipos por serial.
+          </p>
+          <div class="form-field" style="margin-bottom:8px;">
+            <label class="form-label" for="devNuevaCliente">Cliente <span class="req">*</span></label>
+            <input class="form-input" id="devNuevaCliente" list="devNuevaClientesList" placeholder="Nombre del cliente (elige o escribe)" autocomplete="off">
+            <datalist id="devNuevaClientesList">${nombres.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+          </div>
+          <div class="form-field" style="margin-bottom:8px;">
+            <label class="form-label" for="devNuevaRef">Referencia del contrato de papel</label>
+            <input class="form-input" id="devNuevaRef" placeholder="Ej.: contrato físico #123 / carpeta 2019" autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="devNuevaObs">Observaciones (opcional)</label>
+            <textarea class="form-input form-textarea" id="devNuevaObs" rows="2" placeholder="Ej.: cliente pasa a dejar 4 radios por fin de alquiler"></textarea>
+          </div>
+        </div>
+        <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+          <button class="btn btn-secondary" data-close="1">Cancelar</button>
+          <button class="btn btn-primary" id="devNuevaCrearBtn"><i data-lucide="plus"></i> Crear devolución</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    if (window.APP?.utils?.lucideRefresh) APP.utils.lucideRefresh(overlay);
+    const cleanup = () => overlay.remove();
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+    });
+
+    const btn = overlay.querySelector('#devNuevaCrearBtn');
+    btn.onclick = async () => {
+      const nombre = (overlay.querySelector('#devNuevaCliente')?.value || '').trim();
+      const refPapel = (overlay.querySelector('#devNuevaRef')?.value || '').trim();
+      const obs = (overlay.querySelector('#devNuevaObs')?.value || '').trim();
+      if (!nombre) { Toast.show('Ingresa el nombre del cliente.', 'bad'); return; }
+      const match = clientes.find(c => (c.nombre || '').trim().toLowerCase() === nombre.toLowerCase());
+      const user = firebase.auth().currentUser;
+
+      btn.disabled = true;
+      btn.textContent = 'Creando…';
+      try {
+        const data = {
+          cliente_id: match?.id || '',
+          cliente_nombre: nombre,
+          vendedor_asignado: '',
+          tipo_de_servicio: 'DEVOLUCION',
+          estado_reparacion: 'POR ASIGNAR',
+          fecha_creacion: firebase.firestore.FieldValue.serverTimestamp(),
+          observaciones: [`Devolución sin contrato en el sistema${refPapel ? ` — ${refPapel}` : ''}.`, obs].filter(Boolean).join(' '),
+          // Sin `equipos[]` a propósito (mismo criterio que ordenDevolucion.js
+          // del backend): las unidades entran al capturarse en el check-in.
+          devolucion: {
+            modo: 'sin_contrato',
+            origen: { tipo: 'contrato_papel', ref_id: null, ref_papel: refPapel || null },
+            esperados: [],
+            esperados_por_modelo: [],
+          },
+          contrato: {
+            aplica: false,
+            contrato_doc_id: null,
+            contrato_id: refPapel || null,
+            motivo_no_aplica: 'Contrato de papel (fuera del sistema)',
+          },
+          creado_por_uid: user?.uid || '',
+          creado_por_email: user?.email || null,
+          eliminado: false,
+          os_logs: [{ action: 'CREAR', by: user?.uid || '' }],
+        };
+        const ordenId = await _crearDocOrden(data);
+        cleanup();
+        Toast.show(`Devolución ${ordenId} creada — registra los seriales al recibirlos.`, 'ok');
+        abrir(ordenId); // directo al check-in, con el cliente en el mostrador
+      } catch (err) {
+        console.error('[OrdenesDevolucion.nueva]', err);
+        Toast.show('No se pudo crear la devolución: ' + err.message, 'bad');
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="plus"></i> Crear devolución';
+        if (window.APP?.utils?.lucideRefresh) APP.utils.lucideRefresh(btn);
+      }
+    };
+  }
+
+  window.OrdenesDevolucion = { abrir, nueva };
 })();

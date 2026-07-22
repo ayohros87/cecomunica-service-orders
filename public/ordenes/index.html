@@ -33,6 +33,7 @@
 <script defer src="../js/services/usuariosService.js"></script>
 <script defer src="../js/services/mailService.js"></script>
 <script defer src="../js/services/piezasService.js"></script>
+<script defer src="../js/services/modelosService.js"></script>
 <script defer src="../js/services/equiposPoolService.js"></script>
 <script defer src="../js/domain/scoring.js"></script>
 <script defer src="../js/ui/toast.js"></script>
@@ -46,10 +47,10 @@
 <script defer src="../js/pages/ordenes-equipos.js"></script>
 <script defer src="../js/pages/ordenes-notas.js"></script>
 <script defer src="../js/pages/ordenes-visita.js"></script>
-<script defer src="../js/pages/ordenes-devolucion.js?v=ent1"></script>
+<script defer src="../js/pages/ordenes-devolucion.js?v=ent2"></script>
 <script defer src="../js/pages/ordenes-ui.js"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
-<script defer src="../js/pages/ordenes-events.js?v=ent1"></script>
+<script defer src="../js/pages/ordenes-events.js?v=ent2"></script>
 <script src="/js/vendor/lucide.min.js"></script>
 <script defer src="../js/pages/ordenes-index.js"></script>
 </head>
@@ -62,6 +63,7 @@
     <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
     <div class="topbar-actions">
       <button class="btn btn-primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
+      <button class="btn btn-secondary" data-action="nueva-devolucion" title="Registrar devolución de equipos con contrato de papel (fuera del sistema)"><i data-lucide="package-open"></i> Devolución sin contrato</button>
       <!-- §4.2 view toggle: table (desktop default) ↔ cards (mobile default) -->
       <div class="view-toggle" role="group" aria-label="Modo de vista">
         <button type="button" class="view-toggle__btn" data-action="set-view-cards" data-view="cards" aria-pressed="false" title="Vista de tarjetas">

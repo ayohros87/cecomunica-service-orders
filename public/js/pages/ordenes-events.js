@@ -83,6 +83,9 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) { closeAllMenus(); OrdenesDevolucion.abrir(ordenId); }
     },
+    // Devolución de equipos con contrato de papel (fuera del sistema):
+    // crea la orden en modo sin_contrato y abre el check-in de captura libre.
+    'nueva-devolucion': () => { OrdenesDevolucion.nueva(); },
 
     // Order actions
     'asignar-tecnico': (el) => {

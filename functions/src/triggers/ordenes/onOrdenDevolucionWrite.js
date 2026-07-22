@@ -17,6 +17,9 @@
 // entregados y el daño visible, y por tanda la firma del cliente
 // (devolucion.acuses[]); todo viaja a la ENTRADA, que nace RECIBIDO EN
 // MOSTRADOR (los equipos ya están en el taller) con el acuse como recepción.
+// SIN CONTRATO (2026-07-22): devoluciones de contratos de papel
+// (devolucion.modo == 'sin_contrato', creadas a mano) — los recibidos entran
+// al pool vía upsertContacto (crea el doc si el serial nunca tocó el sistema).
 // Idempotente: procesa solo resoluciones que CAMBIARON en esta escritura;
 // las transiciones del pool tienen guards (sin-cambio) por si se repite.
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
@@ -101,22 +104,42 @@ module.exports = onDocumentWritten(
       const refMov = { tipo: "orden", id: ordenId, label: `DEVOLUCIÓN ${ordenId}` };
       try {
         if (res === "recibido") {
-          const r = e.pool_doc_id
-            ? await pool.transicionarPorId(e.pool_doc_id, {
-                aEstado: pool.ESTADOS.DEVUELTO,
-                soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
-                tipo: "devolucion", refMov,
-                notas: "Recibido en devolución — pendiente de inspección",
-                extra: { verificado: false },
-              })
-            : await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
-                aEstado: pool.ESTADOS.DEVUELTO,
-                soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
-                tipo: "devolucion", refMov,
-                notas: "Recibido en devolución — pendiente de inspección",
-                extra: { verificado: false },
-              });
-          logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r });
+          let r;
+          if (dev.modo === "sin_contrato") {
+            // Contrato de papel (fuera del sistema): el serial puede no existir
+            // en el pool, o estar en un estado sembrado que no refleja la
+            // realidad. upsertContacto (alta por contacto) crea el doc si falta
+            // — con el failsafe de colisión — o lo transiciona desde cualquier
+            // estado: la devolución física manda. Excepciones: baja (terminal,
+            // guard del pool) y vendido (una devolución de algo vendido amerita
+            // revisión manual, no un pisotón automático).
+            r = await pool.upsertContacto({
+              serial: e.serial, modelo_id: e.modelo_id || null, modelo_label: e.modelo || "",
+              estado: pool.ESTADOS.DEVUELTO,
+              noTocarDesde: [pool.ESTADOS.VENDIDO],
+              tipo: "devolucion", refMov,
+              notas: "Recibido en devolución sin contrato (contrato de papel) — pendiente de inspección",
+              origen: "devolucion_sin_contrato",
+              extra: { verificado: false, propiedad: "cecomunica" },
+            });
+          } else {
+            r = e.pool_doc_id
+              ? await pool.transicionarPorId(e.pool_doc_id, {
+                  aEstado: pool.ESTADOS.DEVUELTO,
+                  soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
+                  tipo: "devolucion", refMov,
+                  notas: "Recibido en devolución — pendiente de inspección",
+                  extra: { verificado: false },
+                })
+              : await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+                  aEstado: pool.ESTADOS.DEVUELTO,
+                  soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
+                  tipo: "devolucion", refMov,
+                  notas: "Recibido en devolución — pendiente de inspección",
+                  extra: { verificado: false },
+                });
+          }
+          logger.info("[onOrdenDevolucionWrite] recibido", { ordenId, serial: e.serial, r, modo: dev.modo || "recuperacion" });
           tandaRecibida.push({
             serial: e.serial, modelo: e.modelo, modelo_id: e.modelo_id,
             accesorios: e.accesorios || null,
