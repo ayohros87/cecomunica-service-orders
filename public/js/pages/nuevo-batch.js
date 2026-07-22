@@ -290,22 +290,36 @@ document.getElementById("addCliente").onclick = async () => {
 
         bloquear(true);
         try {
-          // 2) Seriales que YA existen como equipo no borrado (cualquier
-          //    cliente) — un radio físico solo puede estar una vez en la base.
+          // 2) Seriales que YA existen como equipo no borrado. Para el MISMO
+          //    cliente es un re-registro y se bloquea (borra/edita el existente).
+          //    Para OTRO cliente solo se avisa (decisión 2026-07-22): el radio
+          //    pudo reasignarse por reemplazo/devolución sin que nadie liberara
+          //    el device viejo — quien registra confirma y queda a cargo de
+          //    depurar el anterior para no dejarlo duplicado.
           const dbq = firebase.firestore();
-          const existentes = [];
+          const nombreClienteSel = (clienteSelect.selectedOptions[0]?.textContent || '').trim().toUpperCase();
+          const mismoCliente = [], otroCliente = [];
           for (let i = 0; i < seriales.length; i += 10) {
             const snap = await dbq.collection('poc_devices')
               .where('serial', 'in', seriales.slice(i, i + 10)).get();
             snap.forEach(doc => {
               const v = doc.data();
-              if (v.deleted !== true) existentes.push(`${v.serial} (${v.cliente_nombre || v.cliente || 'sin cliente'})`);
+              if (v.deleted === true) return;
+              const esMismo = v.cliente_id
+                ? v.cliente_id === cliente
+                : (v.cliente_nombre || v.cliente || '').trim().toUpperCase() === nombreClienteSel;
+              (esMismo ? mismoCliente : otroCliente)
+                .push(`${v.serial} (${v.cliente_nombre || v.cliente || 'sin cliente'})`);
             });
           }
-          if (existentes.length) {
-            Toast.show(`Estos seriales ya existen en POC: ${existentes.join(', ')}. Si es un re-registro, borra o edita el equipo existente.`, 'bad');
+          if (mismoCliente.length) {
+            Toast.show(`Estos seriales ya existen en POC para este cliente: ${mismoCliente.join(', ')}. Si es un re-registro, borra o edita el equipo existente.`, 'bad');
             bloquear(false);
             return;
+          }
+          if (otroCliente.length) {
+            const ok = window.confirm(`Estos seriales figuran en POC con OTRO cliente:\n\n- ${otroCliente.join('\n- ')}\n\nSi el radio se reasignó (reemplazo o devolución), continúa — y luego borra o libera el equipo del cliente anterior para no dejarlo duplicado.\n\n¿Continuar de todos modos?`);
+            if (!ok) { bloquear(false); return; }
           }
 
           // 3) Unit IDs del rango nuevo ya usados por equipos no borrados del

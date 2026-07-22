@@ -213,9 +213,30 @@ async function upsertContacto(opts) {
     // La baja es terminal: nunca se revive por contacto (se resuelve a mano).
     if (de === ESTADOS.BAJA) return "sin-cambio";
 
+    // Reasignación: la nueva asignación pisa la de OTRO contrato. Por decisión
+    // de negocio (2026-07-22) esto se permite — los flujos viejos no daban
+    // seguimiento a seriales y el traspaso directo es común — pero tiene que
+    // quedar en el historial quién tenía la unidad antes, para conciliación.
+    const asigVieja = actual.asignacion;
+    const reasignado = update.asignacion && asigVieja
+      && (asigVieja.contrato_doc_id || asigVieja.cliente_id)
+      && update.asignacion.contrato_doc_id !== asigVieja.contrato_doc_id;
+    const notaReasignacion = reasignado
+      ? `Reasignado: antes con ${asigVieja.cliente_nombre || "cliente sin nombre"}`
+        + (asigVieja.contrato_id ? ` (${asigVieja.contrato_id})` : " (sin contrato)")
+      : "";
+
     const noTocar = opts.noTocarDesde || [];
     if (de === opts.estado || noTocar.includes(de)) {
       tx.set(ref, update, { merge: true });
+      // Sin transición de estado no habría movimiento: la reasignación silenciosa
+      // dejaría al cliente anterior sin rastro. Se registra aparte.
+      if (reasignado) {
+        tx.set(ref.collection("movimientos").doc(), _movimiento({
+          tipo: "reasignacion", de_estado: de, a_estado: de,
+          ref: opts.refMov || null, notas: notaReasignacion,
+        }));
+      }
       return de === opts.estado ? "sin-cambio" : "actualizado";
     }
 
@@ -227,7 +248,8 @@ async function upsertContacto(opts) {
     tx.set(ref, { estado: opts.estado, ...update }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo: opts.tipo || "cambio_estado", de_estado: de, a_estado: opts.estado,
-      ref: opts.refMov || null, notas: opts.notas || "",
+      ref: opts.refMov || null,
+      notas: [opts.notas || "", notaReasignacion].filter(Boolean).join(" — "),
     }));
     return "transicion";
   });
