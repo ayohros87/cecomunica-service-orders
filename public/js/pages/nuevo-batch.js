@@ -142,6 +142,9 @@
       const seriales = document.getElementById('seriales').value.split('\n').map(s => s.trim()).filter(Boolean);
       const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
       const escAttr = (s) => esc(s).replace(/"/g, '&quot;');
+      // Cuántos equipos comparten cada modelo (para el botón "copiar a los N …").
+      const conteoModelo = {};
+      detallesBatch.forEach(d => { const k = _modeloKeyDe(d); conteoModelo[k] = (conteoModelo[k] || 0) + 1; });
       let malCount = 0, faltan = 0, sinGrupos = 0;
       const filas = detallesBatch.map((d, i) => {
         const serial = seriales[i] || '';
@@ -154,20 +157,37 @@
         const grupos = Array.isArray(d.grupos) ? d.grupos : [];
         const vacio = grupos.length === 0;
         if (vacio) sinGrupos++;
+        // Chips con tooltip (nombre completo) y texto truncado por CSS si es largo.
         const chips = grupos.map((g, gi) =>
-          `<span class="gchip"><span>${esc(g)}</span><button type="button" title="Quitar" onclick="grupoQuitar(${i},${gi})">×</button></span>`
+          `<span class="gchip" title="${escAttr(g)}"><span class="gchip-txt">${esc(g)}</span>` +
+          `<button type="button" class="gchip-x" title="Quitar grupo" onclick="grupoQuitar(${i},${gi})">×</button></span>`
         ).join('');
         const modeloCorto = esc(modeloLabel).replace('HYTERA ', '');
-        const gruposCell = `<div class="grupos-edit">${chips || '<span class="falta">— sin grupos —</span>'}` +
-          `<input class="gadd" list="catalogoGruposList" placeholder="+ grupo" ` +
-            `onkeydown="if(event.key==='Enter'){event.preventDefault();grupoAgregar(${i},this);}">` +
-          `<button type="button" class="gaplicar" title="Copiar estos grupos a todos los ${escAttr(modeloLabel)}" ` +
-            `onclick="grupoAplicarModelo(${i})">a todo ${modeloCorto}</button></div>`;
+        const sameCount = conteoModelo[_modeloKeyDe(d)] || 1;
+        // Control de agregar: input (Enter) + botón "+ agregar". Permite varios seguidos.
+        const addCtrl =
+          `<span class="gadd-wrap">` +
+            `<input class="gadd" id="gadd-${i}" list="catalogoGruposList" placeholder="escribe o elige un grupo…" ` +
+              `onkeydown="if(event.key==='Enter'){event.preventDefault();grupoAgregar(${i},this);}">` +
+            `<button type="button" class="gadd-btn" title="Agregar el grupo escrito" ` +
+              `onclick="grupoAgregar(${i},document.getElementById('gadd-${i}'))">+ agregar</button>` +
+          `</span>`;
+        // "Copiar a los N del modelo" — solo si la fila ya tiene grupos que copiar.
+        const aplicarBtn = grupos.length
+          ? `<button type="button" class="gaplicar" ` +
+              `title="Copiar estos ${grupos.length} grupo(s) a los ${sameCount} equipos ${escAttr(modeloLabel)}" ` +
+              `onclick="grupoAplicarModelo(${i})">⎘ copiar a los ${sameCount} ${modeloCorto}</button>`
+          : '';
+        const gruposCell =
+          `<div class="grupos-edit">` +
+            `<div class="gchips-row">${chips || '<span class="falta">— sin grupos —</span>'}</div>` +
+            `<div class="gctrl-row">${addCtrl}${aplicarBtn}</div>` +
+          `</div>`;
         return `<tr class="${mal ? 'fila-mal' : ''}${vacio ? ' fila-sin-grupos' : ''}">
           <td>${i + 1}</td>
-          <td class="mono">${serial ? esc(serial) : '<span class="falta">— falta —</span>'}</td>
-          <td>${esc(d.radio_name || '—')}</td>
-          <td>${esc(modeloLabel)}</td>
+          <td class="mono" title="${escAttr(serial)}">${serial ? esc(serial) : '<span class="falta">— falta —</span>'}</td>
+          <td title="${escAttr(d.radio_name || '')}">${esc(d.radio_name || '—')}</td>
+          <td title="${escAttr(modeloLabel)}">${esc(modeloLabel)}</td>
           <td>${d.gps ? '✅' : '—'}</td>
           <td class="grupos-cell">${gruposCell}</td>
         </tr>`;
@@ -198,12 +218,17 @@
     }
     function grupoAgregar(i, inputEl) {
       const val = (inputEl && inputEl.value || '').trim();
-      if (!val || !detallesBatch[i]) return;
+      if (!val || !detallesBatch[i]) { if (inputEl) inputEl.focus(); return; }
       if (!Array.isArray(detallesBatch[i].grupos)) detallesBatch[i].grupos = [];
       const arr = detallesBatch[i].grupos;
       const norm = FMT.normalize(val);
       if (!arr.some(g => FMT.normalize(g) === norm)) arr.push(val);
       renderPreviewCombinado();
+      // Re-enfoca (y limpia) el mismo input para poder agregar VARIOS grupos seguidos
+      // sin volver a hacer clic — el re-render recrea el input, así que hay que
+      // volver a enfocarlo por id.
+      const inp = document.getElementById('gadd-' + i);
+      if (inp) { inp.value = ''; inp.focus(); }
     }
     function grupoAplicarModelo(i) {
       const src = detallesBatch[i];
