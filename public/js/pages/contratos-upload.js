@@ -65,23 +65,37 @@ window.ContratosFirmado = {
           this._contratoId = null;
         },
         async () => {
-          const url = await uploadTask.snapshot.ref.getDownloadURL();
-          await ContratosService.updateContrato(this._contratoId, {
-            firmado: true,
-            firmado_url: url,
-            firmado_nombre: file.name,
-            firmado_storage_path: path,
-            firmado_fecha: firebase.firestore.Timestamp.now(),
-            firmado_por_uid: firebase.auth().currentUser?.uid || null,
-            estado_previo: data.estado,
-            estado: 'activo',
-            fecha_activacion: firebase.firestore.Timestamp.now()
-          });
-          document.getElementById('uploadStatus').style.display = 'none';
-          Toast.show('✅ Contrato firmado subido y guardado.', 'ok');
-          e.target.value = '';
-          this._contratoId = null;
-          location.reload();
+          // OJO: este callback es async; si el write a Firestore falla (p.ej.
+          // reglas), la excepción NO la atrapa el try/catch externo (que ya
+          // retornó) y quedaba como unhandled rejection → la barra se congelaba
+          // en 100% sin avisar y el botón "Subir firmado" no cambiaba a "Ver".
+          // Por eso el guard va AQUÍ, para fallar de forma visible.
+          try {
+            const url = await uploadTask.snapshot.ref.getDownloadURL();
+            await ContratosService.updateContrato(this._contratoId, {
+              firmado: true,
+              firmado_url: url,
+              firmado_nombre: file.name,
+              firmado_storage_path: path,
+              firmado_fecha: firebase.firestore.Timestamp.now(),
+              firmado_por_uid: firebase.auth().currentUser?.uid || null,
+              estado_previo: data.estado,
+              estado: 'activo',
+              fecha_activacion: firebase.firestore.Timestamp.now()
+            });
+            document.getElementById('uploadStatus').style.display = 'none';
+            Toast.show('✅ Contrato firmado subido y guardado.', 'ok');
+            e.target.value = '';
+            this._contratoId = null;
+            location.reload();
+          } catch (err) {
+            console.error(err);
+            Toast.show('El archivo se subió pero no se pudo guardar el contrato: '
+              + (err?.message || err), 'bad', 8000);
+            document.getElementById('uploadStatus').style.display = 'none';
+            e.target.value = '';
+            this._contratoId = null;
+          }
         }
       );
     } catch (err) {

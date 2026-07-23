@@ -204,12 +204,26 @@ service cloud.firestore {
 
     // ── Contratos (intención previa conservada) ───────────────────────────
     match /contratos/{docId} {
+      // Activación por contrato FIRMADO: el vendedor (o admin) sube el PDF
+      // firmado de un contrato APROBADO y ese mismo write lo pasa a 'activo'
+      // (contratos-upload.js — es la vía legítima de activación desde ventas,
+      // y la UI ya ofrece "Subir firmado" a admin/vendedor). El guard general
+      // de abajo reserva el salto a 'activo' a admin/gerente, así que aquí se
+      // exceptúa SOLO cuando el write parte de 'aprobado' y estampa firmado=true
+      // + firmado_url. Cualquier otro salto a 'activo' sigue cerrado.
+      function esActivacionPorFirmado() {
+        return resource.data.estado == "aprobado"
+            && request.resource.data.get("firmado", false) == true
+            && request.resource.data.diff(resource.data).affectedKeys().hasAny(["firmado_url"])
+            && userRole() in ["administrador", "vendedor"];
+      }
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn()
         && !touchesCFOwnedFields()
         && (!(resource.data.estado != "activo" && request.resource.data.estado == "activo")
-            || (userRole() in ["administrador", "gerente"]));
+            || userRole() in ["administrador", "gerente"]
+            || esActivacionPorFirmado());
       allow delete: if isSignedIn() && (userRole() in ["administrador", "gerente"]);
 
       // Lectura de CUALQUIER subcolección de contrato para autenticados (ordenes,
