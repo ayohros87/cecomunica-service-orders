@@ -229,10 +229,18 @@ window.VB = {
     }
   },
 
+  // Descarta grupos basura del catálogo (placeholder de lupa, vacíos, símbolos
+  // sueltos, o con el carácter de reemplazo U+FFFD de importaciones corruptas)
+  // para que el vendedor no los vea ni los marque por error.
+  _grupoValido(g) {
+    const s = (g || '').toString().trim();
+    return s.length > 1 && s !== '🔍' && !/^[🔍]+$/.test(s) && !s.includes('�');
+  },
+
   // Vuelca una lista de grupos al input + chips + feedback. Único punto de
   // pintado para todas las rutas de buscarGruposCliente.
   _pintarGrupos(arr) {
-    const lista = Array.isArray(arr) ? arr : [];
+    const lista = (Array.isArray(arr) ? arr : []).filter(g => this._grupoValido(g));
     document.getElementById('grupoInput').value = lista.join(', ');
     this.renderGrupoChips();           // ya llama a actualizarResumenBatch()
     this.feedbackGrupos(lista.length);
@@ -287,6 +295,7 @@ window.VB = {
     // regenerarla borraría GPS/modelo/chips editados y las filas agregadas a mano.
     document.querySelectorAll('#cuerpoTabla .chip').forEach(c => { if (c.dataset.grupo === grupo) c.remove(); });
     this._renderBulkBar();
+    this._refrescarEstados();
     this.scheduleAutosave();
   },
 
@@ -319,6 +328,7 @@ window.VB = {
     const cuerpo = document.getElementById('cuerpoTabla');
     cuerpo.innerHTML = '';
     nombres.forEach(n => this.agregarFila('', n));
+    this._refrescarEstados();
     document.getElementById('vbStep3').scrollIntoView({ behavior: 'smooth' });
   },
 
@@ -370,22 +380,31 @@ window.VB = {
     const gruposChips = grupos.map(g =>
       `<button type="button" class="chip" data-grupo="${VB._esc(g)}" onclick="event.stopPropagation(); VB.toggleChipFila(this)">${VB._esc(g)}</button>`
     ).join('');
+    // Celda de grupos: chips + contador de marcados + aviso "sin grupo" + acción
+    // "a todo el modelo" (copia los grupos marcados a las filas del mismo modelo).
+    const celdaGrupos = grupos.length
+      ? `<div class="chips">${gruposChips}` +
+          `<span class="gcount"></span>` +
+          `<span class="sin-grupo-flag">— sin grupo —</span>` +
+          `<button type="button" class="gaplicar" title="Copiar los grupos marcados a todas las filas del mismo modelo" onclick="VB.aplicarGruposModelo(this)">⎘ a todo el modelo</button></div>`
+      : '<span class="chips-empty">—</span>';
     fila.innerHTML = `
-      <td><input type="text" class="table-input nombre" value="${VB._esc(nombreRadio)}"></td>
+      <td class="cell-nombre"><span class="rowdot" title=""></span><input type="text" class="table-input nombre" value="${VB._esc(nombreRadio)}"></td>
       <td style="text-align:center;"><input type="checkbox" class="table-checkbox gps"></td>
-      <td class="grupos-cell">${grupos.length ? `<div class="chips">${gruposChips}</div>` : '<span class="chips-empty">—</span>'}</td>
+      <td class="grupos-cell">${celdaGrupos}</td>
       <td>
         <select class="table-input table-select modelo">
           <option value="">— Selecciona modelo —</option>
           ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${VB._esc(m.label)}</option>`).join('')}
         </select>
       </td>
-      <td><button class="btn btn-ghost btn-sm" title="Quitar fila" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB.scheduleAutosave();"><i data-lucide="trash-2"></i></button></td>
+      <td><button class="btn btn-ghost btn-sm" title="Quitar fila" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB._refrescarEstados(); VB.scheduleAutosave();"><i data-lucide="trash-2"></i></button></td>
     `;
     fila.dataset.cliente = cliente;
     document.getElementById('cuerpoTabla').appendChild(fila);
     this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
+    this._refrescarEstados();
     this.scheduleAutosave();
     this._renderIcons();
     // Sin atajo de teclado para borrar fila: la tecla Supr burbujeaba desde los
@@ -397,12 +416,77 @@ window.VB = {
     document.querySelectorAll('#cuerpoTabla .chip').forEach(chip => {
       if (chip.dataset.grupo === grupo) chip.classList.toggle('active', !!on);
     });
+    this._refrescarEstados();
+  },
+
+  // Copia los grupos MARCADOS de una fila a todas las filas del MISMO modelo.
+  // Los radios de un mismo modelo suelen compartir grupos: el vendedor marca uno
+  // y lo replica de un clic (llena bloques que quedarían vacíos, como los PNC460).
+  aplicarGruposModelo(btn) {
+    const tr = btn && btn.closest('tr');
+    if (!tr) return;
+    const modelo = tr.querySelector('.modelo')?.value || '';
+    if (!modelo) { Toast.show('Elige primero el modelo de esta fila para copiar sus grupos a las del mismo modelo.', 'warn'); return; }
+    const activos = new Set(Array.from(tr.querySelectorAll('.chip.active')).map(c => c.dataset.grupo));
+    let n = 0;
+    document.querySelectorAll('#cuerpoTabla tr').forEach(row => {
+      if ((row.querySelector('.modelo')?.value || '') !== modelo) return;
+      row.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', activos.has(c.dataset.grupo)));
+      n++;
+    });
+    this._refrescarEstados();
+    this.scheduleAutosave();
+    const nombreModelo = tr.querySelector('.modelo')?.selectedOptions?.[0]?.textContent?.trim() || 'ese modelo';
+    Toast.show(`Grupos copiados a ${n} equipo(s) de ${nombreModelo}.`, 'ok');
   },
 
   // Toggle de un chip de grupo en una fila concreta.
   toggleChipFila(chip) {
     chip.classList.toggle('active');
+    this._refrescarEstados();
     this.scheduleAutosave();
+  },
+
+  // Recalcula el estado de completitud de cada fila (nombre + modelo + ≥1 grupo),
+  // pinta el punto verde/ámbar, resalta las incompletas, marca en rojo el modelo
+  // faltante, actualiza el contador de grupos por fila y el resumen vivo de arriba.
+  // Único punto de verdad visual; se llama tras cualquier cambio de la tabla.
+  _refrescarEstados() {
+    const filas = Array.from(document.querySelectorAll('#cuerpoTabla tr'));
+    let completos = 0, sinModelo = 0, sinGrupos = 0;
+    filas.forEach(tr => {
+      const nombre  = (tr.querySelector('.nombre')?.value || '').trim();
+      const modelo  = tr.querySelector('.modelo')?.value || '';
+      const nAct    = tr.querySelectorAll('.chip.active').length;
+      const faltaMod = !modelo;
+      const faltaGrp = nAct === 0;
+      const incompleta = !nombre || faltaMod || faltaGrp;
+      tr.classList.toggle('row-incompleta', incompleta);
+      const dot = tr.querySelector('.rowdot');
+      if (dot) {
+        dot.classList.toggle('ok', !incompleta);
+        dot.classList.toggle('warn', incompleta);
+        dot.title = incompleta
+          ? [!nombre ? 'Sin nombre' : '', faltaMod ? 'Falta modelo' : '', faltaGrp ? 'Sin grupos' : ''].filter(Boolean).join(' · ')
+          : 'Completo';
+      }
+      const sel = tr.querySelector('.modelo');
+      if (sel) sel.classList.toggle('falta', faltaMod);
+      const cnt = tr.querySelector('.gcount');
+      if (cnt) cnt.textContent = nAct ? String(nAct) : '';
+      const flag = tr.querySelector('.sin-grupo-flag');
+      if (flag) flag.style.display = faltaGrp ? 'inline' : 'none';
+      if (incompleta) { if (faltaMod) sinModelo++; if (faltaGrp) sinGrupos++; }
+      else completos++;
+    });
+    const el = document.getElementById('vbResumenCompletitud');
+    if (el) {
+      el.innerHTML = filas.length ? [
+        `<span class="vb-pill ok">● ${completos} completos</span>`,
+        sinGrupos ? `<span class="vb-pill warn">▲ ${sinGrupos} sin grupos</span>` : '',
+        sinModelo ? `<span class="vb-pill warn">▲ ${sinModelo} sin modelo</span>` : '',
+      ].filter(Boolean).join('') : '';
+    }
   },
 
   toggleGPS(master) {
@@ -571,6 +655,22 @@ window.VB = {
   async descargarJSON() {
     const datos = await this.generarJSON();
     if (!datos.length) { Toast.show('No hay datos para descargar.', 'bad'); return; }
+
+    // Validación en el origen: avisar de equipos incompletos antes de exportar,
+    // para que a recepción le llegue limpio (previene el caso MIDES: modelos o
+    // grupos faltantes que después había que corregir a mano).
+    const sinModelo = datos.filter(d => !d.modelo_id).length;
+    const sinGrupos = datos.filter(d => !(d.grupos || []).length).length;
+    const nombresNorm = datos.map(d => (d.radio_name || '').trim().toLowerCase());
+    const dupSet = new Set(nombresNorm.filter((n, i) => n && nombresNorm.indexOf(n) !== i));
+    if (sinModelo || sinGrupos || dupSet.size) {
+      const partes = [];
+      if (sinModelo)   partes.push(`${sinModelo} sin modelo`);
+      if (sinGrupos)   partes.push(`${sinGrupos} sin grupos`);
+      if (dupSet.size) partes.push(`${dupSet.size} nombre(s) duplicado(s)`);
+      if (!confirm(`⚠ Hay pendientes en el lote:\n\n- ${partes.join('\n- ')}\n\nRecepción lo recibirá así. Revisa la tabla (los puntos ámbar) antes de enviar.\n\n¿Descargar de todos modos?`)) return;
+    }
+
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -678,6 +778,7 @@ window.VB = {
           tr.querySelectorAll('.chip').forEach((c, idx) => { c.classList.toggle('active', !!(r.grupos || [])[idx]); });
         });
         this.actualizarResumenBatch();
+        this._refrescarEstados();
         Toast.show('Borrador restaurado', 'ok');
       }
       this.updateStepBadges();
@@ -755,8 +856,8 @@ window.VB = {
     // Autoguardado al editar cualquier celda de la tabla (delegación).
     const cuerpo = document.getElementById('cuerpoTabla');
     if (cuerpo) {
-      cuerpo.addEventListener('input',  () => VB.scheduleAutosave());
-      cuerpo.addEventListener('change', () => VB.scheduleAutosave());
+      cuerpo.addEventListener('input',  () => { VB._refrescarEstados(); VB.scheduleAutosave(); });
+      cuerpo.addEventListener('change', () => { VB._refrescarEstados(); VB.scheduleAutosave(); });
     }
 
     document.addEventListener('DOMContentLoaded', () => { VB.setStep('prep'); VB.updateStepBadges(); });

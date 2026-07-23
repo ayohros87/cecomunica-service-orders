@@ -138,6 +138,25 @@
     .grupos-cell .chip { padding: 3px 10px; font-size: 11px; white-space: nowrap; }
     .grupos-cell .chip:hover { transform: none; }   /* sin scale en tabla densa */
 
+    /* ── Estado de completitud por fila (guía visual para el vendedor) ── */
+    .cell-nombre { display: flex; align-items: center; gap: 8px; }
+    .cell-nombre input { flex: 1; min-width: 0; }
+    .rowdot { flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%; background: var(--border-default); }
+    .rowdot.ok   { background: #22c55e; }
+    .rowdot.warn { background: #f59e0b; }
+    #cuerpoTabla tr.row-incompleta td { background: #fff7ed !important; }
+    #wrapTablaEquipos select.modelo.falta { border-color: #ef4444; background: #fef2f2; color: #b42318; }
+    .grupos-cell .gcount { font-size: 10px; color: var(--fg-3); margin-left: 2px; }
+    .grupos-cell .sin-grupo-flag { font-size: 11px; color: #9a3412; font-weight: 600; }
+    .grupos-cell .gaplicar { font-size: 10px; padding: 1px 6px; margin-left: 2px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent-press, var(--accent)); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    .grupos-cell .gaplicar:hover { filter: brightness(0.97); }
+    /* Resumen vivo de completitud (arriba de la tabla) */
+    .vb-resumen { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: var(--sp-2); }
+    .vb-resumen:empty { display: none; }
+    .vb-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid; }
+    .vb-pill.ok   { background: #ECFDF5; color: #065F46; border-color: #A7F3D0; }
+    .vb-pill.warn { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+
     /* Inputs/selects de la tabla con el look del kit. Las reglas del kit están
        atadas a .table-wrap; aquí se replican para #wrapTablaEquipos (.app-table-wrap)
        en vez de añadir la clase (que un breakpoint oculta). */
@@ -284,10 +303,14 @@
         <div class="form-actions" id="tablaToolbar" style="justify-content:flex-start; margin-bottom:var(--sp-2);">
           <button class="btn btn-secondary btn-sm" onclick="VB.agregarFila()"><i data-lucide="plus"></i> Agregar fila</button>
         </div>
+        <!-- Resumen vivo de completitud (JS: VB._refrescarEstados) -->
+        <div id="vbResumenCompletitud" class="vb-resumen"></div>
         <div id="bulkBar" class="vb-bulk-bar" style="display:none;"></div>
         <div id="scrollHintEquipos" class="table-scroll-hint">
-          Toca los grupos de cada equipo en la columna <strong>Grupos</strong>. Usa
-          <strong>“Aplicar a todas”</strong> para marcar un grupo en todas las filas a la vez.
+          Marca los grupos de cada equipo en la columna <strong>Grupos</strong> (usa
+          <strong>“Aplicar a todas”</strong> o <strong>“⎘ a todo el modelo”</strong> para replicarlos).
+          El punto <span style="color:#22c55e;font-weight:700;">●</span> verde = fila completa;
+          <span style="color:#f59e0b;font-weight:700;">●</span> ámbar = le falta modelo o grupos.
         </div>
         <div class="app-table-wrap" id="wrapTablaEquipos">
           <table id="tablaEquipos" class="app-table compact table-sticky-first">
@@ -337,7 +360,7 @@
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/pocService.js"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script src="../js/pages/vendedores-batch.js?v=cc11" defer></script>
+  <script src="../js/pages/vendedores-batch.js?v=cc12" defer></script>
   <script>
     function cerrarSesion() {
       firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
