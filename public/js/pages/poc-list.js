@@ -727,6 +727,116 @@ window.PocList = {
     el.classList.toggle('recibido', n > 0);
   },
 
+  // ── Contratos recientes (selección de un batch completo) ─────────
+  // Llena el menú desplegable con los últimos contratos que tienen equipos POC.
+  // Se llama al ABRIR el menú (lazy) — una lectura acotada, no en la carga de
+  // la página. Cada ítem selecciona de un clic todo el contrato.
+  async cargarMenuContratosRecientes() {
+    const drop = document.getElementById('pocContratosDrop');
+    if (!drop) return;
+    drop.innerHTML =
+      '<div class="overflow-menu-item" aria-disabled="true" style="opacity:.7;cursor:default;">'
+      + '<i data-lucide="loader"></i> Cargando…</div>';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    try {
+      const contratos = await PocService.getContratosRecientes();
+      if (!contratos.length) {
+        drop.innerHTML =
+          '<div class="overflow-menu-item" aria-disabled="true" style="opacity:.7;cursor:default;">'
+          + 'Sin contratos recientes</div>';
+        return;
+      }
+      drop.innerHTML = '';
+      contratos.forEach(c => {
+        const cliente = PocState.nombreClienteDe(c) || 'Sin cliente';
+        const ref     = c.contrato_id || '(sin ref)';
+        const btn = document.createElement('button');
+        btn.className = 'overflow-menu-item';
+        btn.title = `Seleccionar los ${c.count} equipos del contrato ${ref}`;
+        btn.innerHTML =
+          '<i data-lucide="file-check"></i>'
+          + '<span style="flex:1;min-width:0;">'
+          +   `<strong style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${FMT.esc(cliente)}</strong>`
+          +   `<span style="font-size:11px;color:var(--fg-3);font-family:var(--font-mono,monospace);">${FMT.esc(ref)}</span>`
+          + '</span>'
+          + `<span class="badge" style="margin-left:auto;">${c.count}</span>`;
+        btn.addEventListener('click', () => {
+          drop.classList.remove('open');
+          document.getElementById('pocContratosBtn')?.setAttribute('aria-expanded', 'false');
+          this.seleccionarContrato(c);
+        });
+        drop.appendChild(btn);
+      });
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    } catch (err) {
+      console.error('❌ Error al listar contratos recientes:', err);
+      drop.innerHTML =
+        '<div class="overflow-menu-item" aria-disabled="true" style="opacity:.7;cursor:default;color:var(--status-critical);">'
+        + 'Error al cargar. Reintenta.</div>';
+    }
+  },
+
+  // Filtra la tabla al contrato elegido y deja TODOS sus equipos seleccionados
+  // (un clic desde "Contratos recientes"). Re-consulta el contrato completo, así
+  // que la selección es exacta aunque el batch supere la ventana del menú. Para
+  // volver a la lista normal: el botón de limpiar filtro o cualquier toggle
+  // resetea la vista (cargar(true) reactiva la paginación).
+  async seleccionarContrato(c) {
+    const tbody     = document.getElementById('devicesTable');
+    const btnCargar = document.getElementById('btnCargarMas');
+    if (!tbody) return;
+    const ref = c?.contrato_id || '';
+
+    tbody.innerHTML =
+      '<tr><td colspan="12" style="padding:24px;text-align:center;color:var(--muted,#64748b);">'
+      + 'Cargando equipos del contrato…</td></tr>';
+    if (btnCargar) btnCargar.style.display = 'none';
+    // La vista de contrato no pagina: bloquea "Cargar más" hasta el próximo reset.
+    this._noMasDatos = true;
+    this._lastDoc    = null;
+
+    try {
+      const devices = (await PocService.getByContrato({
+        contratoDocId: c?.contrato_doc_id || null,
+        contratoRef:   ref || null,
+      })).filter(d => d.deleted !== true);
+
+      // Respeta la columna de orden activa (igual que la búsqueda filtrada).
+      this._ordenarDocs(devices);
+
+      tbody.innerHTML = '';
+      if (!devices.length) {
+        PocState.actualizarResumen({ total: 0 });
+        Toast.show(`El contrato ${ref} no tiene equipos activos.`, 'warn');
+        return;
+      }
+      devices.forEach(d => tbody.appendChild(this._buildRow(d.id, d)));
+
+      // Marca todos los equipos del contrato.
+      tbody.querySelectorAll('.seleccion-sim').forEach(cb => { cb.checked = true; });
+
+      const COL = PocState.COL;
+      let activos = 0, incompletos = 0;
+      [...tbody.rows].forEach(r => {
+        if (r.cells[COL.activo]?.dataset.activo === 'true') activos++;
+        if (r.cells[COL.cliente]?.querySelector('[data-incomplete]')) incompletos++;
+      });
+      PocState.actualizarResumen({ total: devices.length, activos, incompletos });
+      this.actualizarSeleccion();
+      this.actualizarFlechitas();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+
+      const cliente = PocState.nombreClienteDe(c) || 'contrato';
+      const n = devices.length;
+      Toast.show(`${n} ${n === 1 ? 'equipo seleccionado' : 'equipos seleccionados'} del contrato ${ref} · ${cliente}.`, 'ok');
+    } catch (err) {
+      console.error('❌ Error al seleccionar el contrato:', err);
+      this._mostrarErrorCarga(tbody, btnCargar,
+        'Error al cargar los equipos del contrato',
+        'Revisa tu conexión e intenta de nuevo.');
+    }
+  },
+
   async exportarExcelSeleccionados() {
     try {
       const seleccionados = this.obtenerSeleccionados();

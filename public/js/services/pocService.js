@@ -162,6 +162,66 @@ const PocService = {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
   },
 
+  // Agrupa los equipos más recientes por contrato para el menú "Contratos
+  // recientes" (selección de un batch completo sin marcar uno por uno). Lee una
+  // ventana acotada de los devices más nuevos (created_at desc) y devuelve los
+  // contratos distintos dentro de ella, del más reciente al más viejo, cada uno
+  // con su etiqueta + el conteo de equipos VISTOS EN LA VENTANA. El conteo es un
+  // preview: al elegir el contrato se re-consulta completo (getByContrato), así
+  // que un batch mayor que la ventana igual se selecciona entero.
+  async getContratosRecientes({ windowSize = 600, max = 12 } = {}) {
+    const db = firebase.firestore();
+    const snap = await db.collection('poc_devices')
+      .orderBy('created_at', 'desc').limit(windowSize).get();
+    const orden = [];               // primer-visto = más reciente
+    const porClave = new Map();
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.deleted === true) return;
+      const docId = (d.contrato_doc_id || '').toString();
+      const ref   = (d.contrato_id || '').toString();
+      if (!docId && !ref) return;   // equipos sin contrato → fuera del menú
+      const clave = docId || ref;
+      let entry = porClave.get(clave);
+      if (!entry) {
+        entry = {
+          contrato_doc_id: docId || null,
+          contrato_id: ref || '',
+          cliente_id: d.cliente_id || '',
+          cliente: d.cliente_nombre || d.cliente || '',
+          count: 0,
+        };
+        porClave.set(clave, entry);
+        orden.push(clave);
+      }
+      // Conserva la mejor etiqueta/ref disponible entre los docs del contrato.
+      if (!entry.cliente && (d.cliente_nombre || d.cliente)) entry.cliente = d.cliente_nombre || d.cliente;
+      if (!entry.cliente_id && d.cliente_id) entry.cliente_id = d.cliente_id;
+      if (!entry.contrato_id && ref) entry.contrato_id = ref;
+      entry.count++;
+    });
+    return orden.slice(0, max).map(k => porClave.get(k));
+  },
+
+  // Trae TODOS los equipos de un contrato. Corre la query sobre las anclas
+  // provistas (contrato_doc_id es la precisa; contrato_id es respaldo para docs
+  // estampados antes de existir doc_id) y dedupa por id. Misma forma que
+  // getByCliente. El filtrado de eliminados queda al caller.
+  async getByContrato({ contratoDocId = null, contratoRef = null } = {}) {
+    if (!contratoDocId && !contratoRef) return [];
+    const db = firebase.firestore();
+    const found = new Map();
+    const runQuery = async (field, value) => {
+      const snap = await db.collection('poc_devices').where(field, '==', value).get();
+      snap.docs.forEach(d => { if (!found.has(d.id)) found.set(d.id, { id: d.id, ...d.data() }); });
+    };
+    const tasks = [];
+    if (contratoDocId) tasks.push(runQuery('contrato_doc_id', contratoDocId));
+    if (contratoRef)   tasks.push(runQuery('contrato_id', contratoRef));
+    await Promise.all(tasks);
+    return Array.from(found.values());
+  },
+
   // Paginated sorted list, excluding deleted. Returns { docs, lastDoc }.
   async listPage({ sortField = 'cliente', sortAsc = true, onlyActivos = false, cursorDoc = null, limit = 50 } = {}) {
     const db = firebase.firestore();

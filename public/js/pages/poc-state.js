@@ -178,6 +178,7 @@ window.PocState = {
       document.getElementById('btnImportar')?.remove();
       document.getElementById('btnAdminGrupos')?.remove();  // solo admin/recepcion administran grupos
       document.querySelector('.check-all')?.setAttribute('disabled', 'disabled');
+      document.getElementById('pocContratosWrap')?.remove(); // selección masiva por contrato: mismo criterio que el check-all
     }
   }
 };

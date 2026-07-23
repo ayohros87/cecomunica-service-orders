@@ -170,7 +170,7 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
-  <script defer src="../js/services/pocService.js?v=cc10"></script>
+  <script defer src="../js/services/pocService.js?v=cc11"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/clientesService.js"></script>
@@ -180,13 +180,13 @@
   <script defer src="../js/core/xlsx-loader.js"></script>
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/poc-state.js?v=cc11" defer></script>
+  <script src="../js/pages/poc-state.js?v=cc12" defer></script>
   <script src="../js/pages/poc-sim-liberar.js" defer></script>
   <script src="../js/pages/poc-edit.js?v=cc10" defer></script>
   <script src="../js/pages/poc-bulk.js?v=cc10" defer></script>
   <script src="../js/pages/poc-sim.js" defer></script>
   <script src="../js/pages/poc-sim-pool.js?v=cc1" defer></script>
-  <script src="../js/pages/poc-list.js?v=cc11" defer></script>
+  <script src="../js/pages/poc-list.js?v=cc12" defer></script>
   <script src="../js/pages/poc-index.js?v=cc11" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
@@ -268,6 +268,17 @@
         <label class="toggle-pill"><input type="checkbox" id="soloInactivos" onchange="PocList.manejarCambioInactivos()"> <i data-lucide="x-circle" style="width:14px;height:14px;"></i> Solo inactivos</label>
         <label class="toggle-pill"><input type="checkbox" id="soloIncompletos" onchange="PocList.manejarCambioIncompletos()"> <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Solo incompletos</label>
         <label class="toggle-pill" title="Equipos sin contrato vinculado"><input type="checkbox" id="soloSinContrato" onchange="PocList.manejarCambioSinContrato()"> <i data-lucide="file-x" style="width:14px;height:14px;"></i> Sin contrato</label>
+
+        <!-- Selección rápida por contrato: los últimos contratos con equipos POC.
+             Elegir uno filtra la tabla a ese contrato y deja TODOS seleccionados,
+             listos para Imprimir / Copiar seriales / Exportar. El menú se llena al
+             abrirlo (PocList.cargarMenuContratosRecientes). -->
+        <div class="overflow-menu" id="pocContratosWrap">
+          <button class="btn btn-ghost btn-sm" id="pocContratosBtn" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false" title="Selecciona de un clic todos los equipos de un contrato recién creado">
+            <i data-lucide="file-check"></i> Contratos recientes <i data-lucide="chevron-down" class="menu-caret"></i>
+          </button>
+          <div class="overflow-menu-dropdown" id="pocContratosDrop" style="min-width:260px;"></div>
+        </div>
 
         <div style="flex:1;"></div>
 
@@ -551,7 +562,15 @@
     if (typeof Layout !== 'undefined' && Layout.wireMenuToggle) {
       Layout.wireMenuToggle('pocMasBtn', 'pocMasDrop');
       Layout.wireMenuToggle('pocDupBtn', 'pocDupDrop');
+      Layout.wireMenuToggle('pocContratosBtn', 'pocContratosDrop');
     }
+    // "Contratos recientes" se llena al abrirlo (lazy) y se refresca en cada
+    // apertura, para que un contrato recién creado aparezca sin recargar. El
+    // toggle de wireMenuToggle ya cambió la clase .open cuando corre esto.
+    document.getElementById('pocContratosBtn')?.addEventListener('click', () => {
+      const drop = document.getElementById('pocContratosDrop');
+      if (drop?.classList.contains('open')) PocList.cargarMenuContratosRecientes();
+    });
     // Close the dropdown after choosing an option
     ['pocMasDrop', 'pocDupDrop'].forEach(id => {
       const drop = document.getElementById(id);
