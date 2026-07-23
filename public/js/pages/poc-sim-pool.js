@@ -5,8 +5,11 @@
 // transacción (SimCardsService.asignar) — si otra usuaria tomó un SIM primero,
 // ese par se reporta como fallido sin frenar el resto.
 window.PocSimPool = {
-  _devices: [],   // [{id, ...data}] equipos seleccionados, en orden de tabla
-  _sims: [],      // SIMs disponibles del pool
+  _devices: [],       // [{id, ...data}] equipos seleccionados, en orden de tabla
+  _sims: [],          // SIMs disponibles del pool
+  _marcados: new Set(),// ids de SIMs seleccionados — persiste al cambiar filtro/operador
+                       // (la selección NO puede vivir en el DOM: al filtrar, los SIMs
+                       //  de otro operador se dejan de renderizar y perderían su check)
 
   async abrir() {
     if (PocState.esLectura()) {
@@ -25,6 +28,7 @@ window.PocSimPool = {
       ]);
       this._devices = devices.filter(Boolean);
       this._sims = sims;
+      this._marcados = new Set(); // arranca sin selección
     } catch (e) {
       console.error('Error al abrir el pool de SIMs:', e);
       Toast.show('Error al cargar los SIMs disponibles: ' + (e.message || e), 'bad');
@@ -47,6 +51,7 @@ window.PocSimPool = {
     Modal.close('simPoolModal');
     this._devices = [];
     this._sims = [];
+    this._marcados = new Set();
   },
 
   _simsFiltrados() {
@@ -72,14 +77,15 @@ window.PocSimPool = {
         ${this._devices.map(d => esc(d.serial || d.unit_id || d.id)).join(', ')}
       </span>`;
 
-    // Preserva los checks al re-renderizar (filtros).
-    const marcados = new Set(this.seleccionados());
+    // Los checks salen del Set persistente (this._marcados), no del DOM: así los
+    // SIMs seleccionados de otro operador conservan su selección aunque el filtro
+    // actual no los muestre.
     const lista = this._simsFiltrados();
     const tbody = document.getElementById('poolTabla');
     tbody.innerHTML = lista.length ? lista.map(s => `
       <tr>
         <td style="width:34px;"><input type="checkbox" class="pool-check" value="${esc(s.id)}"
-          ${marcados.has(s.id) ? 'checked' : ''} onchange="PocSimPool.actualizarContador()"></td>
+          ${this._marcados.has(s.id) ? 'checked' : ''} onchange="PocSimPool.toggle(this.value, this.checked)"></td>
         <td class="td-mono">${esc(s.sim_number)}</td>
         <td class="td-mono">${esc(s.sim_phone || '—')}</td>
         <td>${esc(s.operador || '—')}</td>
@@ -90,23 +96,34 @@ window.PocSimPool = {
     this.actualizarContador();
   },
 
+  // Marca/desmarca un SIM en el Set persistente. Lo llama cada checkbox.
+  toggle(id, checked) {
+    if (checked) this._marcados.add(id); else this._marcados.delete(id);
+    this.actualizarContador();
+  },
+
+  // Todos los seleccionados (de cualquier operador), en el orden estable del pool
+  // — no en el orden de clic ni el del filtro — para un emparejamiento SIM↔equipo
+  // determinístico.
   seleccionados() {
-    return [...document.querySelectorAll('#poolTabla .pool-check:checked')].map(c => c.value);
+    return this._sims.filter(s => this._marcados.has(s.id)).map(s => s.id);
   },
 
   actualizarContador() {
-    const n = this.seleccionados().length;
+    const total    = this.seleccionados().length;
+    const visibles = this._simsFiltrados().filter(s => this._marcados.has(s.id)).length;
+    const ocultos  = total - visibles;
     const el = document.getElementById('poolContador');
-    el.textContent = `${n} de ${this._devices.length} SIMs seleccionados`;
-    el.style.color = n === this._devices.length ? '#15803d' : 'var(--fg-2)';
+    el.textContent = `${total} de ${this._devices.length} SIMs seleccionados`
+      + (ocultos ? ` · ${ocultos} en otros operadores` : '');
+    el.style.color = total === this._devices.length ? '#15803d' : 'var(--fg-2)';
   },
 
-  // Marca los primeros N SIMs visibles (N = equipos seleccionados).
+  // Auto-marca los primeros N SIMs del filtro actual (N = equipos seleccionados),
+  // reemplazando la selección previa.
   autoSeleccionar() {
-    const checks = [...document.querySelectorAll('#poolTabla .pool-check')];
-    checks.forEach(c => { c.checked = false; });
-    checks.slice(0, this._devices.length).forEach(c => { c.checked = true; });
-    this.actualizarContador();
+    this._marcados = new Set(this._simsFiltrados().slice(0, this._devices.length).map(s => s.id));
+    this.render();
   },
 
   async procesar() {
