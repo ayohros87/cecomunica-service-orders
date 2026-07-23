@@ -35,7 +35,7 @@
       modeloContratoPorSerial = contratoDocId
         ? await ContratosService.getModeloPorSerial(contratoDocId)
         : new Map();
-      renderPreviewContrato();
+      refrescarPreviews();
       return modeloContratoPorSerial;
     }
 
@@ -61,6 +61,106 @@
       }
       const label = detalle.modelo_label || detalle.modeloLabel || detalle.modelo || '';
       return { modelo_id: detalle.modelo_id || detalle.modeloId || null, modelo_label: label, modelo: label };
+    }
+
+    // Normaliza texto de modelo para comparar (minúsculas, espacios colapsados).
+    // Los modelos son ASCII (HYTERA PNC360S-R, HYT-P50…), no hace falta quitar
+    // acentos.
+    function normModeloTxt(s) {
+      return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    // modelo_id de una fila del archivo del vendedor: usa modelo_id si es válido;
+    // si no, lo resuelve por etiqueta/nombre contra el catálogo.
+    function resolverModeloIdJson(detalle) {
+      if (detalle.modelo_id && modeloById.has(detalle.modelo_id)) return detalle.modelo_id;
+      const txt = normModeloTxt(detalle.modelo_label || detalle.modeloLabel || detalle.modelo || '');
+      if (!txt) return '';
+      for (const [id, v] of modeloById) {
+        if (normModeloTxt(v.label) === txt || normModeloTxt(v.modelo) === txt) return id;
+      }
+      return '';
+    }
+
+    // Reordena el textarea de seriales para que el MODELO de cada serial (según el
+    // contrato) coincida, posición a posición, con el orden de modelos del archivo
+    // del vendedor — así el nombre/GPS/grupos (que van por posición) caen sobre un
+    // serial de su mismo modelo. Requiere archivo cargado + contrato vinculado (para
+    // conocer el modelo de cada serial). Los seriales cuyo modelo no aparece en el
+    // archivo (o sobrantes) quedan al final.
+    function alinearSerialesConJson() {
+      const ta = document.getElementById('seriales');
+      if (!ta) return;
+      const seriales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+      if (!detallesBatch?.length || !modeloContratoPorSerial.size || !seriales.length) return;
+
+      const jsonIds = detallesBatch.map(resolverModeloIdJson);
+      const pools = new Map();                 // modelo_id → [seriales], orden estable
+      for (const s of seriales) {
+        const mid = modeloContratoPorSerial.get(s.toLowerCase())?.modelo_id || '';
+        if (!pools.has(mid)) pools.set(mid, []);
+        pools.get(mid).push(s);
+      }
+      const nuevo = [];
+      for (const mid of jsonIds) {
+        const pool = pools.get(mid);
+        if (pool && pool.length) nuevo.push(pool.shift());
+      }
+      const sobra = [];
+      pools.forEach(arr => sobra.push(...arr));
+      ta.value = [...nuevo, ...sobra].join('\n');
+    }
+
+    // Preview combinado (lo que se creará): una fila por equipo del archivo, con el
+    // serial ya alineado, su nombre, el modelo (del contrato), GPS y grupos. Marca
+    // en rojo las filas donde el modelo del serial no coincide con el del archivo
+    // (indicio de nombre desalineado) o sin serial.
+    function renderPreviewCombinado() {
+      const preview = document.getElementById('previewVendedor');
+      if (!preview) return;
+      if (!detallesBatch?.length) { preview.innerHTML = ''; return; }
+      const seriales = document.getElementById('seriales').value.split('\n').map(s => s.trim()).filter(Boolean);
+      const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      let malCount = 0, faltan = 0;
+      const filas = detallesBatch.map((d, i) => {
+        const serial = seriales[i] || '';
+        if (!serial) faltan++;
+        const c = serial ? modeloContratoPorSerial.get(serial.toLowerCase()) : null;
+        const modeloLabel = c ? labelModelo(c.modelo_id, c.modelo) : (d.modelo_label || d.modelo || '—');
+        const jsonId = resolverModeloIdJson(d);
+        const mal = !!(c && jsonId && c.modelo_id !== jsonId);
+        if (mal) malCount++;
+        return `<tr class="${mal ? 'fila-mal' : ''}">
+          <td>${i + 1}</td>
+          <td class="mono">${serial ? esc(serial) : '<span class="falta">— falta —</span>'}</td>
+          <td>${esc(d.radio_name || '—')}</td>
+          <td>${esc(modeloLabel)}</td>
+          <td>${d.gps ? '✅' : '—'}</td>
+          <td>${esc((d.grupos || []).join(', ') || '—')}</td>
+        </tr>`;
+      }).join('');
+      const aviso = (malCount || faltan)
+        ? `<div class="preview-aviso">⚠ ${[malCount ? `${malCount} sin cuadrar por modelo` : '', faltan ? `${faltan} sin serial` : ''].filter(Boolean).join(' · ')}. Revisa el archivo del vendedor o los seriales del contrato.</div>`
+        : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · seriales alineados al archivo (modelo tomado del contrato)</div>`;
+      preview.innerHTML = `${aviso}<table>
+        <thead><tr><th>#</th><th>Serial</th><th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos</th></tr></thead>
+        <tbody>${filas}</tbody></table>`;
+    }
+
+    // Orquesta los previews: con archivo cargado, alinea los seriales y muestra el
+    // combinado (ocultando el simple del contrato); si solo hay contrato, muestra
+    // el simple serial→modelo.
+    function refrescarPreviews() {
+      const pc = document.getElementById('previewContrato');
+      if (detallesBatch?.length) {
+        alinearSerialesConJson();
+        renderPreviewCombinado();
+        if (pc) pc.innerHTML = '';
+      } else {
+        renderPreviewContrato();
+        const pv = document.getElementById('previewVendedor');
+        if (pv) pv.innerHTML = '';
+      }
     }
 
     async function cargarSelect(ruta, id) {
@@ -164,7 +264,7 @@ function onClienteChange() {
 async function cargarContratosDelCliente() {
   const sel = document.getElementById("contratoJalar");
   if (!sel) return;
-  modeloContratoPorSerial = new Map(); renderPreviewContrato(); // nuevo cliente → limpiar binding del contrato anterior
+  modeloContratoPorSerial = new Map(); refrescarPreviews(); // nuevo cliente → limpiar binding del contrato anterior
   const clienteId = document.getElementById("cliente")?.value || "";
   if (!clienteId) { sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>'; return; }
   sel.innerHTML = '<option value="">Cargando contratos…</option>';
@@ -201,6 +301,7 @@ async function jalarSerialesDesdeContrato() {
     const vistos = new Set(actuales.map(s => s.toLowerCase()));
     const nuevos = conSerial.filter(s => !vistos.has(s.toLowerCase()));
     ta.value = [...actuales, ...nuevos].join('\n');
+    refrescarPreviews(); // si hay archivo cargado, alinea los seriales a su orden
     Toast.show(nuevos.length
       ? `${nuevos.length} serial(es) jalados del contrato con su modelo.${conSerial.length - nuevos.length ? ` ${conSerial.length - nuevos.length} ya estaban.` : ''}`
       : 'Todos los seriales del contrato ya estaban en la lista.', nuevos.length ? 'ok' : 'warn');
@@ -428,8 +529,19 @@ document.getElementById("addCliente").onclick = async () => {
         if (contratoDocId && !modeloContratoPorSerial.size) {
           try { await cargarModeloContrato(contratoDocId); } catch (_) {}
         }
+
+        // Garantía final: alinear los seriales al orden del archivo del vendedor
+        // (por modelo) para que nombre/GPS/grupos casen por posición; luego re-leer
+        // el textarea ya ordenado y usar ESE orden para crear.
+        if (contratoDocId && detallesBatch?.length && modeloContratoPorSerial.size) {
+          alinearSerialesConJson();
+          renderPreviewCombinado();
+        }
+        const serialesFinal = document.getElementById("seriales").value
+          .split('\n').map(s => s.trim()).filter(Boolean);
+
         if (contratoDocId && modeloContratoPorSerial.size) {
-          const fuera = seriales.filter(s => !modeloContratoPorSerial.has(s.toLowerCase()));
+          const fuera = serialesFinal.filter(s => !modeloContratoPorSerial.has(s.toLowerCase()));
           if (fuera.length) {
             const ok = window.confirm(
               `Estos seriales NO están en el contrato seleccionado:\n\n- ${fuera.join('\n- ')}\n\n` +
@@ -437,19 +549,35 @@ document.getElementById("addCliente").onclick = async () => {
               `Lo ideal es corregir el contrato o el pegado. ¿Continuar de todos modos?`);
             if (!ok) { bloquear(false); return; }
           }
+          // Filas donde el modelo del serial no cuadra con el del archivo (nombre
+          // potencialmente desalineado): avisar antes de crear.
+          if (detallesBatch?.length) {
+            let mal = 0;
+            for (let i = 0; i < serialesFinal.length; i++) {
+              const c = modeloContratoPorSerial.get(serialesFinal[i].toLowerCase());
+              const jsonId = resolverModeloIdJson(normalizarDetalleBatch(detallesBatch[i] || {}));
+              if (c && jsonId && c.modelo_id !== jsonId) mal++;
+            }
+            if (mal) {
+              const ok = window.confirm(
+                `${mal} equipo(s) no cuadran por modelo entre el archivo del vendedor y el contrato — ` +
+                `su NOMBRE podría quedar desalineado. Revisa el resumen de abajo. ¿Guardar de todos modos?`);
+              if (!ok) { bloquear(false); return; }
+            }
+          }
         }
 
         try {
-        for (let i = 0; i < seriales.length; i++) {
+        for (let i = 0; i < serialesFinal.length; i++) {
          const detalle = normalizarDetalleBatch(detallesBatch?.[i] || {});
-         const modeloResuelto = resolverModeloSerial(seriales[i], detalle);
+         const modeloResuelto = resolverModeloSerial(serialesFinal[i], detalle);
          const data = {
         cliente_id: cliente,
         cliente_nombre: document.getElementById("cliente").selectedOptions[0].textContent,
         contrato_doc_id: contratoDocId,
         contrato_id: contratoRef,
         ip: document.getElementById("ip").value,
-        serial: seriales[i],
+        serial: serialesFinal[i],
         unit_id: String(unitIdInicial + i), // Unit ID consecutivo
         unit_id_num: unitIdInicial + i,     // espejo numérico para ordenar
         radio_name: "",
@@ -585,35 +713,11 @@ function procesarArchivoJSON(file) {
 
       detallesBatch = data;
 
-      const preview = document.getElementById("previewVendedor");
-      preview.className = "file-preview";
-      preview.innerHTML = `
-        <strong style="color: #155724;">✅ Archivo cargado: ${data.length} equipos detectados</strong>
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre del Radio</th>
-              <th>Modelo</th>
-              <th>GPS</th>
-              <th>Grupos</th>
-              <th>Cliente Referencia</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${data.map(d => `
-              <tr>
-                <td>${d.radio_name || "—"}</td>
-                <td>${d.modelo || "—"}</td>
-                <td>${d.gps ? "✅" : "❌"}</td>
-                <td>${(d.grupos || []).join(", ") || "—"}</td>
-                <td>${d.cliente_nombre || "—"}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      `;
-      
-      Toast.show('Archivo cargado correctamente. Puedes continuar pegando los seriales y eligiendo el cliente correcto.', 'ok');
+      // Alinea los seriales al orden del archivo (por modelo) y pinta el preview
+      // combinado: serial + nombre + modelo + GPS + grupos, fila por fila.
+      refrescarPreviews();
+
+      Toast.show('Archivo cargado. Los seriales se alinearon al orden del archivo por modelo; revisa el resumen de abajo.', 'ok');
     } catch (err) {
       Toast.show('Error al leer el archivo JSON: ' + err, 'bad');
     }

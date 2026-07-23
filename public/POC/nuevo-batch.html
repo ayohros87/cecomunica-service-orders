@@ -28,9 +28,15 @@
       color: var(--navy);
     }
     #previewVendedor:empty { display: none; }
+    #previewVendedor { margin-top: var(--sp-3); }
     #previewVendedor table { width: 100%; border-collapse: collapse; margin-top: var(--sp-2); font-size: 12px; }
     #previewVendedor th { background: var(--surface-card); padding: var(--sp-2); text-align: left; font-weight: 600; border-bottom: 1px solid var(--border-default); }
     #previewVendedor td { padding: var(--sp-1) var(--sp-2); border-bottom: 1px solid var(--border-subtle); }
+    #previewVendedor td.mono { font-family: var(--font-mono); }
+    #previewVendedor tr.fila-mal td { background: #fde8e8; color: #7a271a; }
+    #previewVendedor .falta { color: #b42318; font-weight: 600; }
+    #previewVendedor .preview-aviso { color: #7a271a; background: #fde8e8; border: 1px solid #f3c1bd; border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); font-weight: 600; margin-bottom: var(--sp-1); }
+    #previewVendedor .preview-ok { color: #14663a; font-weight: 600; margin-bottom: var(--sp-1); }
 
     /* Preview serial → modelo jalado del contrato */
     #previewContrato:empty { display: none; }
@@ -127,7 +133,6 @@
                 <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:24px;height:24px;"></i></div>
                 <p style="margin:0; font-size:13px;"><strong>Arrastra el JSON</strong> o haz clic</p>
               </label>
-              <div id="previewVendedor"></div>
             </div>
 
             <div class="form-field">
@@ -140,6 +145,9 @@
               </span>
             </div>
           </div>
+
+          <!-- Preview combinado (lo que se creará): serial alineado al archivo + nombre/modelo/gps/grupos -->
+          <div id="previewVendedor"></div>
         </div>
       </div>
 
@@ -191,7 +199,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc13" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=cc14" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
