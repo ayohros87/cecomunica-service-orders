@@ -17,6 +17,32 @@
     .ultimos-uid { list-style: none; padding: 0; margin: var(--sp-1) 0 0; }
     .ultimos-uid li { font-size: 11px; color: var(--fg-3); padding: 2px 0; font-family: var(--font-mono); }
 
+    /* ── Pasos numerados (procedimiento: cargar → confirmar → revisar) ── */
+    .nb-step { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); margin-bottom: var(--sp-4); }
+    .nb-step-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 16px; background: var(--surface-sunken); border-bottom: 1px solid var(--border-subtle); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+    .nb-step-num { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
+    .nb-step-title { margin: 0; font-size: 15px; font-weight: 600; }
+    .nb-step-note { font-size: 12px; color: var(--fg-3); font-weight: 400; }
+    .nb-step-body { padding: 16px; }
+
+    /* Etiqueta de origen del dato (autocompletado) */
+    .auto-tag { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--accent-press, var(--accent)); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 999px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
+
+    /* Popover de Unit IDs recientes (hover / foco) */
+    .uid-info { position: relative; font-size: 11px; color: var(--fg-3); cursor: help; margin-left: 8px; font-weight: 500; }
+    .uid-pop { display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; min-width: 180px; background: var(--surface-card); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: 0 6px 18px rgba(11,42,71,.14); padding: 8px 10px; }
+    .uid-pop strong { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; color: var(--fg-3); margin-bottom: 3px; }
+    .uid-info:hover .uid-pop, .uid-info:focus .uid-pop, .uid-info:focus-within .uid-pop { display: block; }
+
+    /* Colapsable de seriales manuales (Paso 3) */
+    .nb-adv { margin-top: var(--sp-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-sunken); }
+    .nb-adv summary { cursor: pointer; padding: 10px 12px; font-size: 13px; color: var(--fg-2); font-weight: 500; list-style: none; }
+    .nb-adv summary::-webkit-details-marker { display: none; }
+    .nb-adv summary::before { content: "▸"; display: inline-block; margin-right: 8px; color: var(--fg-3); transition: transform .15s; }
+    .nb-adv[open] summary::before { transform: rotate(90deg); }
+    .nb-adv-note { color: var(--fg-3); font-weight: 400; }
+    .nb-adv-body { padding: 0 12px 12px; }
+
     /* Vendor JSON preview block (rendered by JS into #previewVendedor) */
     #previewVendedor {
       margin-top: var(--sp-2);
@@ -110,105 +136,99 @@
 
     <form id="batchForm">
 
-      <!-- Sección 1: Datos del batch -->
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-        <div class="form-section" style="border:none; padding:0; margin:0;">
-          <div>
-            <p class="form-section-title"><i data-lucide="hash" style="width:16px;height:16px;"></i> Datos del batch</p>
-            <p class="form-section-desc">Liste los seriales (uno por línea) y el Unit ID inicial. Los demás se incrementan automáticamente.</p>
-          </div>
-
-          <div class="form-grid-2">
-            <div class="form-field" style="grid-column:1 / -1;">
-              <label class="form-label" for="seriales">Seriales <span class="req">*</span></label>
-              <textarea class="form-input form-textarea" id="seriales" required rows="8"
-                style="font-family:var(--font-mono); font-size:13px;"
-                placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
-              <span class="form-hint">Un serial por línea. Líneas en blanco se ignoran.</span>
-            </div>
-
-            <!-- Jalar seriales desde un contrato del cliente (y vincular el batch a él) -->
-            <div class="form-field" style="grid-column:1 / -1;">
-              <label class="form-label" for="contratoJalar">Contrato del cliente <span class="optional">(opcional — vincula el batch y permite jalar sus seriales)</span></label>
-              <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
-                <select class="form-select" id="contratoJalar" style="flex:1;">
-                  <option value="">Selecciona el cliente primero…</option>
-                </select>
-                <button type="button" id="btnJalarContrato" class="btn btn-secondary" title="Traer los seriales asignados al contrato">
-                  <i data-lucide="download"></i> Jalar seriales
-                </button>
-              </div>
-              <span class="form-hint">Los equipos del batch quedarán vinculados a este contrato en POC y en el pool de equipos. El <strong>modelo de cada serial se toma del contrato</strong> (no del archivo del vendedor).</span>
-              <div id="previewContrato"></div>
-            </div>
-
-            <div class="form-field">
-              <label class="form-label" for="vendorJson">Cargar archivo JSON del vendedor <span class="optional">(recomendado — cárgalo primero)</span></label>
-              <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo JSON" style="padding:var(--sp-3) var(--sp-4); min-height:auto;">
-                <input type="file" id="vendorJson" accept=".json" onchange="cargarDesdeJSON(this)">
-                <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:24px;height:24px;"></i></div>
-                <p style="margin:0; font-size:13px;"><strong>Arrastra el JSON</strong> o haz clic</p>
-              </label>
-              <span class="form-hint">Autocompleta cliente e IP, propone el Unit ID y jala los seriales del contrato. Solo revisa y guarda.</span>
-            </div>
-
-            <div class="form-field">
-              <label class="form-label" for="unit_id_inicial">Unit ID inicial <span class="req">*</span></label>
-              <input class="form-input" id="unit_id_inicial" type="number" required placeholder="Ejemplo: 5001"
-                style="font-family:var(--font-mono);">
-              <span class="form-hint">
-                Se propone automáticamente (último asignado + 1). Puedes cambiarlo.
-                <ul class="ultimos-uid" id="ultimosUnitIDs"></ul>
-              </span>
-            </div>
-          </div>
-
-          <!-- Preview combinado (lo que se creará): serial alineado al archivo + nombre/modelo/gps/grupos -->
-          <div id="previewVendedor"></div>
+      <!-- PASO 1: Cargar el archivo del vendedor (dispara todo) -->
+      <section class="nb-step">
+        <header class="nb-step-head"><span class="nb-step-num">1</span><h3 class="nb-step-title">Cargar el archivo del vendedor</h3></header>
+        <div class="nb-step-body">
+          <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo JSON" style="padding:var(--sp-4); min-height:auto;">
+            <input type="file" id="vendorJson" accept=".json" onchange="cargarDesdeJSON(this)">
+            <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:28px;height:28px;"></i></div>
+            <p style="margin:0; font-size:14px;"><strong>Arrastra el JSON del vendedor</strong> o haz clic</p>
+          </label>
+          <span class="form-hint">Es el primer paso: autocompleta cliente, IP, contrato y Unit ID, y jala los seriales del contrato. Todo lo de abajo se llena solo — solo revisa y guarda.</span>
         </div>
-      </div>
+      </section>
 
-      <!-- Sección 2: Datos generales -->
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-        <div class="form-section" style="border:none; padding:0; margin:0;">
-          <div>
-            <p class="form-section-title"><i data-lucide="package" style="width:16px;height:16px;"></i> Datos generales</p>
-            <p class="form-section-desc">Se aplican a todos los equipos del batch.</p>
-          </div>
-
+      <!-- PASO 2: Datos del batch (autocompletados, editables) -->
+      <section class="nb-step">
+        <header class="nb-step-head"><span class="nb-step-num">2</span><h3 class="nb-step-title">Datos del batch</h3>
+          <span class="nb-step-note">se autocompletan del archivo — corrígelos si hace falta</span></header>
+        <div class="nb-step-body">
           <div class="form-grid-2">
-            <div class="form-field" style="grid-column:1 / -1;">
-              <label class="form-label" for="cliente">Cliente <span class="req">*</span></label>
+            <div class="form-field">
+              <label class="form-label" for="cliente">Cliente <span class="req">*</span> <span class="auto-tag">del archivo</span></label>
               <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
                 <select class="form-select" id="cliente" required style="flex:1;"></select>
                 <button type="button" id="addCliente" class="btn btn-secondary btn-icon" aria-label="Crear cliente"><i data-lucide="plus"></i></button>
               </div>
             </div>
 
-            <div class="form-field" style="grid-column:1 / -1;">
-              <label class="form-label" for="ip">IP <span class="req">*</span></label>
+            <div class="form-field">
+              <label class="form-label" for="ip">IP <span class="req">*</span> <span class="auto-tag">del cliente</span></label>
               <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
                 <select class="form-select" id="ip" required style="flex:1;"></select>
                 <button type="button" id="addIP" class="btn btn-secondary btn-icon" aria-label="Crear bloque IP"><i data-lucide="plus"></i></button>
               </div>
-              <span class="form-hint">Se rellena con el IP asignado del cliente. Puedes cambiarlo para este batch.</span>
               <p class="form-hint" id="ipSinInfo" style="display:none; color:var(--danger, #b42318); font-weight:600;">
                 <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:-2px;"></i>
                 Sin información de IP — búscala y asígnala. Se guardará en el cliente.
               </p>
             </div>
 
+            <div class="form-field">
+              <label class="form-label" for="contratoJalar">Contrato del cliente <span class="auto-tag">auto-elegido</span></label>
+              <div style="display:flex; gap:var(--sp-2); align-items:stretch;">
+                <select class="form-select" id="contratoJalar" style="flex:1;">
+                  <option value="">Selecciona el cliente primero…</option>
+                </select>
+                <button type="button" id="btnJalarContrato" class="btn btn-secondary" title="Traer los seriales asignados al contrato">
+                  <i data-lucide="download"></i> Jalar</button>
+              </div>
+              <span class="form-hint">El <strong>modelo de cada serial se toma del contrato</strong>. Vincula el batch al contrato y al pool.</span>
+              <div id="previewContrato"></div>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label" for="unit_id_inicial">Unit ID inicial <span class="req">*</span> <span class="auto-tag">propuesto</span>
+                <span class="uid-info" tabindex="0" role="button" aria-label="Ver últimos Unit IDs asignados"><i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px;"></i> recientes
+                  <span class="uid-pop"><strong>Últimos Unit IDs asignados</strong><ul class="ultimos-uid" id="ultimosUnitIDs"></ul></span>
+                </span>
+              </label>
+              <input class="form-input" id="unit_id_inicial" type="number" required placeholder="Ejemplo: 5001"
+                style="font-family:var(--font-mono);">
+              <span class="form-hint">Se propone automáticamente (último asignado + 1). Puedes cambiarlo.</span>
+            </div>
+
             <div class="form-field" style="grid-column:1 / -1;">
               <label class="form-label" for="notas">Notas <span class="optional">(opcional)</span></label>
-              <textarea class="form-input form-textarea" id="notas" rows="3"
+              <textarea class="form-input form-textarea" id="notas" rows="2"
                 placeholder="Lote, instalación coordinada con TI del cliente…"></textarea>
             </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      <!-- PASO 3: Revisar los equipos a crear -->
+      <section class="nb-step">
+        <header class="nb-step-head"><span class="nb-step-num">3</span><h3 class="nb-step-title">Revisar los equipos a crear</h3></header>
+        <div class="nb-step-body">
+          <!-- Preview combinado (lo que se creará): serial alineado + nombre/modelo/gps/grupos editables -->
+          <div id="previewVendedor"></div>
+
+          <details class="nb-adv">
+            <summary>Editar seriales manualmente <span class="nb-adv-note">— normalmente se llenan solos del contrato; ábrelo solo si hace falta</span></summary>
+            <div class="nb-adv-body">
+              <textarea class="form-input form-textarea" id="seriales" rows="8"
+                style="font-family:var(--font-mono); font-size:13px;"
+                placeholder="HYT-PNC-00500&#10;HYT-PNC-00501&#10;HYT-PNC-00502&#10;…"></textarea>
+              <span class="form-hint">Un serial por línea. Se llenan al jalar del contrato y se ordenan según el archivo. Edítalos solo para un batch sin contrato o para corregir alguno faltante.</span>
+            </div>
+          </details>
+        </div>
+      </section>
 
       <div class="form-actions">
-        <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Crear equipos</button>
+        <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="save"></i> Crear equipos</button>
         <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
       </div>
 
@@ -216,7 +236,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc17" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=cc18" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

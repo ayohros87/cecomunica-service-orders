@@ -603,7 +603,8 @@ document.getElementById("addCliente").onclick = async () => {
         }
 
         if (seriales.length === 0) {
-          Toast.show('Debe ingresar al menos un serial.', 'bad');
+          document.querySelector('.nb-adv')?.setAttribute('open', 'open'); // abre "Editar seriales manualmente"
+          Toast.show('No hay seriales. Cárgalos con el archivo (jala del contrato) o ábrelos en "Editar seriales manualmente".', 'bad');
           return;
         }
 
