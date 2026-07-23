@@ -322,12 +322,12 @@ window.VB = {
       <th>Modelo</th>
       <th></th>
     `;
-    this._renderBulkBar();
     this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
     const cuerpo = document.getElementById('cuerpoTabla');
     cuerpo.innerHTML = '';
     nombres.forEach(n => this.agregarFila('', n));
+    this._renderBulkBar();   // tras crear las filas (la barra depende de que existan)
     this._refrescarEstados();
     document.getElementById('vbStep3').scrollIntoView({ behavior: 'smooth' });
   },
@@ -354,22 +354,83 @@ window.VB = {
 
   // Barra "Aplicar a todas las filas": GPS + un toggle por grupo (master).
   // Reemplaza el viejo marcar-toda-la-columna del encabezado de la matriz.
+  // Barra de acciones en lote. Con casillas por fila, aplica MODELO / GPS / grupos
+  // a las filas MARCADAS (o a todas si no hay ninguna marcada). Resuelve el caso
+  // "el lote tiene varios modelos" sin cambiar fila por fila.
   _renderBulkBar() {
     const bar = document.getElementById('bulkBar');
     if (!bar) return;
-    if (!VB.grupos.length) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
+    const hayFilas = document.querySelectorAll('#cuerpoTabla tr').length > 0;
+    if (!hayFilas) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
+    const modeloOpts = ['<option value="">— Modelo —</option>',
+      ...this.modelosDisponibles.map(m => `<option value="${this._esc(m.id)}">${this._esc(m.label)}</option>`)
+    ].join('');
+    const togglesGrupos = VB.grupos.length
+      ? `<span class="vb-bulk-sep"></span>` +
+        `<label class="vb-bulk-item"><input type="checkbox" class="bulk-gps"> GPS</label>` +
+        VB.grupos.map(g => `<label class="vb-bulk-item"><input type="checkbox" class="bulk-grupo" data-grupo="${this._esc(g)}"> ${this._esc(g)}</label>`).join('')
+      : '';
     bar.innerHTML =
-      `<span class="vb-bulk-label">Aplicar a todas:</span>` +
-      `<label class="vb-bulk-item"><input type="checkbox" class="bulk-gps"> GPS</label>` +
-      VB.grupos.map(g =>
-        `<label class="vb-bulk-item"><input type="checkbox" class="bulk-grupo" data-grupo="${this._esc(g)}"> ${this._esc(g)}</label>`
-      ).join('');
+      `<label class="vb-bulk-item"><input type="checkbox" class="bulk-marcar-todas"> Marcar todas</label>` +
+      `<span class="vb-bulk-count" id="bulkCount">ninguna marcada</span>` +
+      `<span class="vb-bulk-sep"></span>` +
+      `<span class="vb-bulk-label">Aplicar a las marcadas (o a todas):</span>` +
+      `<select class="form-select vb-bulk-modelo" id="bulkModelo">${modeloOpts}</select>` +
+      `<button type="button" class="btn btn-secondary btn-sm" onclick="VB.aplicarModeloAMarcadas()"><i data-lucide="check"></i> Aplicar modelo</button>` +
+      togglesGrupos;
+    const marcar = bar.querySelector('.bulk-marcar-todas');
+    if (marcar) marcar.addEventListener('change', e => VB.marcarTodas(e.target.checked));
     const gps = bar.querySelector('.bulk-gps');
     if (gps) gps.addEventListener('change', e => { VB.toggleGPS(e.target); VB.scheduleAutosave(); });
     bar.querySelectorAll('.bulk-grupo').forEach(cb => {
       cb.addEventListener('change', e => { VB.aplicarGrupoATodas(e.target.dataset.grupo, e.target.checked); VB.scheduleAutosave(); });
     });
+    this._actualizarSeleccion();
+    this._renderIcons();
+  },
+
+  // Filas objetivo de las acciones en lote: las MARCADAS, o TODAS si no hay marca.
+  _filasObjetivo() {
+    const todas = Array.from(document.querySelectorAll('#cuerpoTabla tr'));
+    const marcadas = todas.filter(tr => tr.querySelector('.rowsel')?.checked);
+    return marcadas.length ? marcadas : todas;
+  },
+
+  // Actualiza el contador "N marcadas" y el estado del checkbox "Marcar todas".
+  _actualizarSeleccion() {
+    const all  = document.querySelectorAll('#cuerpoTabla .rowsel');
+    const marc = document.querySelectorAll('#cuerpoTabla .rowsel:checked');
+    const count = document.getElementById('bulkCount');
+    if (count) count.textContent = marc.length ? `${marc.length} marcada(s)` : 'ninguna marcada';
+    const master = document.querySelector('.bulk-marcar-todas');
+    if (master) {
+      master.checked = all.length > 0 && marc.length === all.length;
+      master.indeterminate = marc.length > 0 && marc.length < all.length;
+    }
+    // Resalta las filas marcadas (borde izquierdo) para verlas de un vistazo.
+    document.querySelectorAll('#cuerpoTabla tr').forEach(tr => {
+      const cb = tr.querySelector('.rowsel');
+      tr.classList.toggle('fila-marcada', !!(cb && cb.checked));
+    });
+  },
+
+  marcarTodas(check) {
+    document.querySelectorAll('#cuerpoTabla .rowsel').forEach(cb => { cb.checked = check; });
+    this._actualizarSeleccion();
+  },
+
+  // Aplica el modelo elegido en la barra a las filas objetivo (marcadas o todas).
+  aplicarModeloAMarcadas() {
+    const modeloId = document.getElementById('bulkModelo')?.value || '';
+    if (!modeloId) { Toast.show('Elige un modelo en la barra para aplicarlo.', 'warn'); return; }
+    const filas = this._filasObjetivo();
+    filas.forEach(tr => { const sel = tr.querySelector('.modelo'); if (sel) sel.value = modeloId; });
+    this._refrescarEstados();
+    this.scheduleAutosave();
+    const nombre = this.modelosDisponibles.find(m => m.id === modeloId)?.label || 'modelo';
+    const huboMarca = document.querySelectorAll('#cuerpoTabla .rowsel:checked').length > 0;
+    Toast.show(`${nombre} aplicado a ${filas.length} equipo(s)${huboMarca ? ' marcados' : ' (todos)'}.`, 'ok');
   },
 
   agregarFila(_, nombreRadio = '') {
@@ -389,7 +450,7 @@ window.VB = {
           `<button type="button" class="gaplicar" title="Copiar los grupos marcados a todas las filas del mismo modelo" onclick="VB.aplicarGruposModelo(this)">⎘ a todo el modelo</button></div>`
       : '<span class="chips-empty">—</span>';
     fila.innerHTML = `
-      <td class="cell-nombre"><span class="rowdot" title=""></span><input type="text" class="table-input nombre" value="${VB._esc(nombreRadio)}"></td>
+      <td class="cell-nombre"><input type="checkbox" class="rowsel" title="Marcar esta fila" onchange="VB._actualizarSeleccion()"><span class="rowdot" title=""></span><input type="text" class="table-input nombre" value="${VB._esc(nombreRadio)}"></td>
       <td style="text-align:center;"><input type="checkbox" class="table-checkbox gps"></td>
       <td class="grupos-cell">${celdaGrupos}</td>
       <td>
@@ -398,13 +459,17 @@ window.VB = {
           ${VB.modelosDisponibles.map(m => `<option value="${m.id}" ${m.id === modeloGlobal ? 'selected' : ''}>${VB._esc(m.label)}</option>`).join('')}
         </select>
       </td>
-      <td><button class="btn btn-ghost btn-sm" title="Quitar fila" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB._refrescarEstados(); VB.scheduleAutosave();"><i data-lucide="trash-2"></i></button></td>
+      <td><button class="btn btn-ghost btn-sm" title="Quitar fila" onclick="this.closest('tr').remove(); VB.actualizarResumenBatch(); VB._refrescarEstados(); VB._actualizarSeleccion(); VB.scheduleAutosave();"><i data-lucide="trash-2"></i></button></td>
     `;
     fila.dataset.cliente = cliente;
     document.getElementById('cuerpoTabla').appendChild(fila);
     this._mostrarPasosTabla(true);
     this.actualizarResumenBatch();
     this._refrescarEstados();
+    // Asegura la barra en lote (primera fila) sin re-renderizarla si ya existe
+    // (para no perder el modelo elegido en la barra); si ya está, solo el contador.
+    const _bar = document.getElementById('bulkBar');
+    if (_bar && !_bar.innerHTML) this._renderBulkBar(); else this._actualizarSeleccion();
     this.scheduleAutosave();
     this._renderIcons();
     // Sin atajo de teclado para borrar fila: la tecla Supr burbujeaba desde los
@@ -413,8 +478,10 @@ window.VB = {
 
   // Aplica (o quita) un grupo en TODAS las filas — desde la barra "Aplicar a todas".
   aplicarGrupoATodas(grupo, on) {
-    document.querySelectorAll('#cuerpoTabla .chip').forEach(chip => {
-      if (chip.dataset.grupo === grupo) chip.classList.toggle('active', !!on);
+    this._filasObjetivo().forEach(tr => {
+      tr.querySelectorAll('.chip').forEach(chip => {
+        if (chip.dataset.grupo === grupo) chip.classList.toggle('active', !!on);
+      });
     });
     this._refrescarEstados();
   },
@@ -490,7 +557,7 @@ window.VB = {
   },
 
   toggleGPS(master) {
-    document.querySelectorAll('.gps').forEach(c => c.checked = master.checked);
+    this._filasObjetivo().forEach(tr => { const g = tr.querySelector('.gps'); if (g) g.checked = master.checked; });
   },
 
   resetTablaEdicion() {
@@ -765,7 +832,6 @@ window.VB = {
           <th style="text-align:center;">GPS</th>
           <th>Grupos</th>
           <th>Modelo</th><th></th>`;
-        this._renderBulkBar();
         this._mostrarPasosTabla(true);
         const tbody = document.getElementById('cuerpoTabla');
         tbody.innerHTML = '';
@@ -777,6 +843,7 @@ window.VB = {
           if (sel) sel.value = r.modelo || '';
           tr.querySelectorAll('.chip').forEach((c, idx) => { c.classList.toggle('active', !!(r.grupos || [])[idx]); });
         });
+        this._renderBulkBar();
         this.actualizarResumenBatch();
         this._refrescarEstados();
         Toast.show('Borrador restaurado', 'ok');

@@ -131,6 +131,12 @@
     .vb-bulk-label { color: var(--fg-3); font-weight: 700; }
     .vb-bulk-item { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
     .vb-bulk-item input { width: 14px; height: 14px; cursor: pointer; }
+    /* Selección de filas + acciones en lote por modelo */
+    .vb-bulk-count { font-size: 12px; font-weight: 600; color: var(--fg-2); white-space: nowrap; }
+    .vb-bulk-sep { width: 1px; align-self: stretch; min-height: 20px; background: var(--border-default); margin: 0 2px; }
+    .vb-bulk-modelo { max-width: 190px; font-size: 13px; padding: 4px 8px; }
+    .rowsel { flex: 0 0 auto; width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+    #cuerpoTabla tr.fila-marcada td { box-shadow: inset 3px 0 0 var(--accent); }
 
     /* Celda "Grupos" por fila — reusa el .chip/.chip.active del kit; solo
        ajustamos densidad para la tabla. */
@@ -307,10 +313,10 @@
         <div id="vbResumenCompletitud" class="vb-resumen"></div>
         <div id="bulkBar" class="vb-bulk-bar" style="display:none;"></div>
         <div id="scrollHintEquipos" class="table-scroll-hint">
-          Marca los grupos de cada equipo en la columna <strong>Grupos</strong> (usa
-          <strong>“Aplicar a todas”</strong> o <strong>“⎘ a todo el modelo”</strong> para replicarlos).
-          El punto <span style="color:#22c55e;font-weight:700;">●</span> verde = fila completa;
-          <span style="color:#f59e0b;font-weight:700;">●</span> ámbar = le falta modelo o grupos.
+          ¿Varios modelos? <strong>Marca las filas</strong> (casilla a la izquierda del nombre) y usa
+          <strong>“Aplicar modelo”</strong> en la barra para asignárselo solo a esas — GPS y grupos también
+          respetan la selección. El punto <span style="color:#22c55e;font-weight:700;">●</span> verde =
+          fila completa; <span style="color:#f59e0b;font-weight:700;">●</span> ámbar = le falta modelo o grupos.
         </div>
         <div class="app-table-wrap" id="wrapTablaEquipos">
           <table id="tablaEquipos" class="app-table compact table-sticky-first">
@@ -360,7 +366,7 @@
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/pocService.js"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script src="../js/pages/vendedores-batch.js?v=cc12" defer></script>
+  <script src="../js/pages/vendedores-batch.js?v=cc13" defer></script>
   <script>
     function cerrarSesion() {
       firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
