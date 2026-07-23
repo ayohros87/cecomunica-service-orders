@@ -111,17 +111,38 @@
       ta.value = [...nuevo, ...sobra].join('\n');
     }
 
-    // Preview combinado (lo que se creará): una fila por equipo del archivo, con el
-    // serial ya alineado, su nombre, el modelo (del contrato), GPS y grupos. Marca
-    // en rojo las filas donde el modelo del serial no coincide con el del archivo
-    // (indicio de nombre desalineado) o sin serial.
+    // Catálogo de grupos del cliente (para sugerir al agregar y validar). Se carga
+    // al elegir/auto-seleccionar el cliente. Puede quedar vacío (cliente sin
+    // catálogo) — en ese caso las sugerencias salen solo de los grupos del lote.
+    let catalogoGruposCliente = [];
+    async function cargarCatalogoGrupos(clienteId) {
+      catalogoGruposCliente = [];
+      if (!clienteId) return;
+      try {
+        const cat = await PocService.getCatalogoGrupos(clienteId);
+        if (Array.isArray(cat)) catalogoGruposCliente = cat;
+      } catch (e) { console.warn('[nuevo-batch] no se pudo cargar el catálogo de grupos:', e); }
+    }
+
+    // Clave de modelo de una fila (para "aplicar a todo el modelo").
+    function _modeloKeyDe(d) {
+      return (d && d.modelo_id) ? d.modelo_id : normModeloTxt(d?.modelo_label || d?.modelo || '');
+    }
+
+    // Preview combinado y EDITABLE (lo que se creará): una fila por equipo del
+    // archivo, con el serial ya alineado, nombre, modelo, GPS y GRUPOS editables.
+    // Marca en rojo desalineación de modelo / serial faltante, y en ámbar las filas
+    // SIN grupos. Recepción corrige aquí mismo antes de guardar (chips: agregar/
+    // quitar; "a todo el modelo" copia los grupos de la fila a todas las de su
+    // modelo — resuelve faltantes y limpia grupos corruptos de un golpe).
     function renderPreviewCombinado() {
       const preview = document.getElementById('previewVendedor');
       if (!preview) return;
       if (!detallesBatch?.length) { preview.innerHTML = ''; return; }
       const seriales = document.getElementById('seriales').value.split('\n').map(s => s.trim()).filter(Boolean);
       const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-      let malCount = 0, faltan = 0;
+      const escAttr = (s) => esc(s).replace(/"/g, '&quot;');
+      let malCount = 0, faltan = 0, sinGrupos = 0;
       const filas = detallesBatch.map((d, i) => {
         const serial = seriales[i] || '';
         if (!serial) faltan++;
@@ -130,21 +151,69 @@
         const jsonId = resolverModeloIdJson(d);
         const mal = !!(c && jsonId && c.modelo_id !== jsonId);
         if (mal) malCount++;
-        return `<tr class="${mal ? 'fila-mal' : ''}">
+        const grupos = Array.isArray(d.grupos) ? d.grupos : [];
+        const vacio = grupos.length === 0;
+        if (vacio) sinGrupos++;
+        const chips = grupos.map((g, gi) =>
+          `<span class="gchip"><span>${esc(g)}</span><button type="button" title="Quitar" onclick="grupoQuitar(${i},${gi})">×</button></span>`
+        ).join('');
+        const modeloCorto = esc(modeloLabel).replace('HYTERA ', '');
+        const gruposCell = `<div class="grupos-edit">${chips || '<span class="falta">— sin grupos —</span>'}` +
+          `<input class="gadd" list="catalogoGruposList" placeholder="+ grupo" ` +
+            `onkeydown="if(event.key==='Enter'){event.preventDefault();grupoAgregar(${i},this);}">` +
+          `<button type="button" class="gaplicar" title="Copiar estos grupos a todos los ${escAttr(modeloLabel)}" ` +
+            `onclick="grupoAplicarModelo(${i})">a todo ${modeloCorto}</button></div>`;
+        return `<tr class="${mal ? 'fila-mal' : ''}${vacio ? ' fila-sin-grupos' : ''}">
           <td>${i + 1}</td>
           <td class="mono">${serial ? esc(serial) : '<span class="falta">— falta —</span>'}</td>
           <td>${esc(d.radio_name || '—')}</td>
           <td>${esc(modeloLabel)}</td>
           <td>${d.gps ? '✅' : '—'}</td>
-          <td>${esc((d.grupos || []).join(', ') || '—')}</td>
+          <td class="grupos-cell">${gruposCell}</td>
         </tr>`;
       }).join('');
-      const aviso = (malCount || faltan)
-        ? `<div class="preview-aviso">⚠ ${[malCount ? `${malCount} sin cuadrar por modelo` : '', faltan ? `${faltan} sin serial` : ''].filter(Boolean).join(' · ')}. Revisa el archivo del vendedor o los seriales del contrato.</div>`
-        : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · seriales alineados al archivo (modelo tomado del contrato)</div>`;
-      preview.innerHTML = `${aviso}<table>
-        <thead><tr><th>#</th><th>Serial</th><th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos</th></tr></thead>
+
+      // Sugerencias del datalist = catálogo del cliente ∪ grupos ya usados en el lote.
+      const usados = new Set(catalogoGruposCliente);
+      detallesBatch.forEach(d => (d.grupos || []).forEach(g => usados.add(g)));
+      const datalist = `<datalist id="catalogoGruposList">` +
+        [...usados].map(g => `<option value="${escAttr(g)}">`).join('') + `</datalist>`;
+
+      const problemas = [];
+      if (malCount) problemas.push(`${malCount} sin cuadrar por modelo`);
+      if (faltan)   problemas.push(`${faltan} sin serial`);
+      if (sinGrupos) problemas.push(`${sinGrupos} sin grupos`);
+      const aviso = problemas.length
+        ? `<div class="preview-aviso">⚠ ${problemas.join(' · ')}. Corrige abajo antes de guardar — edita los grupos o usa "a todo el modelo" para copiarlos.</div>`
+        : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · seriales alineados y grupos completos</div>`;
+      preview.innerHTML = `${datalist}${aviso}<table>
+        <thead><tr><th>#</th><th>Serial</th><th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos (editables)</th></tr></thead>
         <tbody>${filas}</tbody></table>`;
+    }
+
+    // ── Edición de grupos en el preview (global para los onclick inline) ──────
+    function grupoQuitar(i, gi) {
+      const arr = detallesBatch[i] && detallesBatch[i].grupos;
+      if (Array.isArray(arr)) { arr.splice(gi, 1); renderPreviewCombinado(); }
+    }
+    function grupoAgregar(i, inputEl) {
+      const val = (inputEl && inputEl.value || '').trim();
+      if (!val || !detallesBatch[i]) return;
+      if (!Array.isArray(detallesBatch[i].grupos)) detallesBatch[i].grupos = [];
+      const arr = detallesBatch[i].grupos;
+      const norm = FMT.normalize(val);
+      if (!arr.some(g => FMT.normalize(g) === norm)) arr.push(val);
+      renderPreviewCombinado();
+    }
+    function grupoAplicarModelo(i) {
+      const src = detallesBatch[i];
+      if (!src) return;
+      const key = _modeloKeyDe(src);
+      const grupos = (Array.isArray(src.grupos) ? src.grupos : []).slice();
+      let n = 0;
+      detallesBatch.forEach(d => { if (_modeloKeyDe(d) === key) { d.grupos = grupos.slice(); n++; } });
+      renderPreviewCombinado();
+      Toast.show(`Grupos aplicados a ${n} equipo(s) ${src.modelo_label || src.modelo || ''}.`, 'ok');
     }
 
     // Orquesta los previews: con archivo cargado, alinea los seriales y muestra el
@@ -261,6 +330,8 @@ function aplicarIpDelCliente() {
 // jalar seriales en el flujo automático.
 async function onClienteChange() {
   aplicarIpDelCliente();
+  const clienteId = document.getElementById("cliente")?.value || "";
+  await cargarCatalogoGrupos(clienteId); // sugerencias de grupos al editar el preview
   await cargarContratosDelCliente();
 }
 
@@ -651,6 +722,19 @@ document.getElementById("addCliente").onclick = async () => {
                 `su NOMBRE podría quedar desalineado. Revisa el resumen de abajo. ¿Guardar de todos modos?`);
               if (!ok) { bloquear(false); return; }
             }
+          }
+        }
+
+        // Candado suave: equipos que quedarían SIN grupos (fuente incompleta, como
+        // el JSON de MIDES con los PNC460 vacíos). Se puede completar en el preview
+        // con "a todo el modelo"; si aun así se guarda vacío, se avisa.
+        if (detallesBatch?.length) {
+          const sinGrupos = detallesBatch.filter(d => limpiarGrupos(d.grupos || []).length === 0).length;
+          if (sinGrupos) {
+            const ok = window.confirm(
+              `${sinGrupos} equipo(s) se guardarán SIN grupos. Puedes completarlos en la vista previa ` +
+              `(edita los grupos o usa "a todo el modelo"). ¿Guardar de todos modos?`);
+            if (!ok) { bloquear(false); return; }
           }
         }
 

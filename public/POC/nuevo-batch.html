@@ -37,6 +37,15 @@
     #previewVendedor .falta { color: #b42318; font-weight: 600; }
     #previewVendedor .preview-aviso { color: #7a271a; background: #fde8e8; border: 1px solid #f3c1bd; border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); font-weight: 600; margin-bottom: var(--sp-1); }
     #previewVendedor .preview-ok { color: #14663a; font-weight: 600; margin-bottom: var(--sp-1); }
+    /* Edición de grupos en el preview */
+    #previewVendedor tr.fila-sin-grupos td { background: #fff7ed; }
+    #previewVendedor .grupos-edit { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    #previewVendedor .gchip { display: inline-flex; align-items: center; gap: 2px; background: var(--surface-card); border: 1px solid var(--border-default); border-radius: 999px; padding: 0 3px 0 8px; font-family: var(--font-sans, inherit); }
+    #previewVendedor .gchip button { border: none; background: none; cursor: pointer; color: var(--fg-3); font-size: 14px; line-height: 1; padding: 0 3px; }
+    #previewVendedor .gchip button:hover { color: #b42318; }
+    #previewVendedor .gadd { width: 96px; font-size: 11px; padding: 1px 5px; border: 1px dashed var(--border-default); border-radius: 6px; background: transparent; }
+    #previewVendedor .gaplicar { font-size: 10px; padding: 1px 6px; border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent-press, var(--accent)); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+    #previewVendedor .gaplicar:hover { filter: brightness(0.97); }
 
     /* Preview serial → modelo jalado del contrato */
     #previewContrato:empty { display: none; }
@@ -200,7 +209,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc15" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=cc16" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
