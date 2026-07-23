@@ -236,9 +236,9 @@ async function cargarClientes() {
   });
 }
 
-// Auto-jala el IP del cliente seleccionado al <select id="ip">. Si el cliente no
-// tiene IP, limpia la selección y muestra el aviso "Sin información de IP".
-function onClienteChange() {
+// Aplica el IP asignado del cliente al <select id="ip">. Si el cliente no tiene
+// IP, limpia la selección y muestra el aviso "Sin información de IP".
+function aplicarIpDelCliente() {
   const clienteSelect = document.getElementById("cliente");
   const ipSelect = document.getElementById("ip");
   const aviso = document.getElementById("ipSinInfo");
@@ -254,7 +254,21 @@ function onClienteChange() {
     ipSelect.value = "";
     if (aviso) aviso.style.display = "";
   }
-  cargarContratosDelCliente();
+}
+
+// Cambio de cliente (manual o automático desde el JSON): jala el IP y carga los
+// contratos del cliente. Async para poder esperar los contratos antes de intentar
+// jalar seriales en el flujo automático.
+async function onClienteChange() {
+  aplicarIpDelCliente();
+  await cargarContratosDelCliente();
+}
+
+// Normaliza nombres para comparar (sin acentos, minúsculas, espacios colapsados).
+function normNombreCliente(s) {
+  return String(s ?? "").trim().toLowerCase()
+    .normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "")
+    .replace(/\s+/g, " ");
 }
 
 // ── Vínculo POC ↔ contrato (PLAN_CICLO_VIDA_EQUIPOS.md, conexión POC) ──────
@@ -313,6 +327,78 @@ async function jalarSerialesDesdeContrato() {
   }
 }
 
+// ── Automatización del batch (menos clics para recepción) ─────────────────
+// Al cargar el JSON del vendedor, éste ya trae el cliente: se selecciona solo,
+// se jala su IP, se cargan sus contratos, se propone el próximo Unit ID y se
+// intentan jalar los seriales del contrato — dejando solo revisar y guardar.
+
+// Selecciona el cliente del JSON en el <select> (por cliente_id; si no, por
+// nombre normalizado) y dispara la cascada IP + contratos. Devuelve true si lo
+// encontró y seleccionó.
+async function autoSeleccionarCliente(clienteId, clienteNombre) {
+  const select = document.getElementById("cliente");
+  if (!select) return false;
+  let opt = clienteId ? [...select.options].find(o => o.value === clienteId) : null;
+  if (!opt && clienteNombre) {
+    const objetivo = normNombreCliente(clienteNombre);
+    opt = [...select.options].find(o => normNombreCliente(o.textContent) === objetivo);
+  }
+  if (!opt) {
+    Toast.show(`El archivo es del cliente "${clienteNombre || clienteId}", que no está en la lista. Selecciónalo o créalo manualmente.`, 'warn');
+    return false;
+  }
+  select.value = opt.value;
+  await onClienteChange();   // jala IP + carga contratos (esperado)
+  return true;
+}
+
+// Propone el próximo Unit ID en el campo, sin pisar lo que el usuario ya escribió.
+// Usa el máximo entre los equipos MÁS RECIENTES (no el máximo global: hay clientes
+// legacy con numeraciones altas aparte —p.ej. GIRAG en ~8.01M— que no son la
+// secuencia corriente). Así continúa el número del último batch creado.
+async function proponerProximoUnitId() {
+  const input = document.getElementById("unit_id_inicial");
+  if (!input || input.value.trim()) return;
+  try {
+    const snap = await firebase.firestore().collection('poc_devices')
+      .orderBy('created_at', 'desc').limit(100).get();
+    let max = 0;
+    snap.forEach(d => { const n = d.data().unit_id_num; if (typeof n === 'number' && n > max) max = n; });
+    if (max > 0) input.value = String(max + 1);
+  } catch (e) {
+    console.warn('[nuevo-batch] no se pudo proponer el próximo Unit ID:', e);
+  }
+}
+
+// Intenta elegir el contrato y jalar sus seriales sin intervención. Auto-elige
+// solo si es inequívoco: un único contrato vigente, o —con varios— el único cuyo
+// número de seriales coincide con la cantidad de equipos del archivo. Si es
+// ambiguo, deja el select para que recepción elija. Devuelve el nombre del
+// contrato jalado o null.
+async function autoJalarContrato(cantidadEsperada) {
+  const sel = document.getElementById("contratoJalar");
+  if (!sel) return null;
+  const opciones = [...sel.options].filter(o => o.value); // contratos reales
+  if (!opciones.length) return null;
+  let elegido = null;
+  if (opciones.length === 1) {
+    elegido = opciones[0];
+  } else if (cantidadEsperada) {
+    const matches = [];
+    for (const o of opciones) {
+      try {
+        const mapa = await ContratosService.getModeloPorSerial(o.value);
+        if (mapa.size === cantidadEsperada) matches.push(o);
+      } catch (_) {}
+    }
+    if (matches.length === 1) elegido = matches[0];
+  }
+  if (!elegido) return null;
+  sel.value = elegido.value;
+  await jalarSerialesDesdeContrato();   // llena textarea + alinea + preview
+  return elegido.getAttribute("data-ref") || elegido.value;
+}
+
 
     // Data-sanity validator + normalize-on-write: trim/whitespace-collapse,
     // accent+case insensitive dedup, drop the magnifying-glass placeholder and
@@ -337,6 +423,7 @@ async function jalarSerialesDesdeContrato() {
         await cargarListaSelect("empresa/IPs", "ip");
         await mostrarUltimosUnitIDs();
         await cargarModelosCatalogo();
+        await proponerProximoUnitId(); // prefill del próximo Unit ID al abrir
 
         // Auto-jalar el IP asignado del cliente al elegirlo.
         document.getElementById("cliente").addEventListener("change", onClienteChange);
@@ -696,28 +783,34 @@ function procesarArchivoJSON(file) {
   }
 
   const reader = new FileReader();
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
     try {
-            const dataRaw = JSON.parse(e.target.result);
-          if (!Array.isArray(dataRaw)) throw "Formato inválido";
-          const data = dataRaw.map(normalizarDetalleBatch);
-
-      const clienteSelect = document.getElementById("cliente");
-      const clienteIdSeleccionado = clienteSelect.value;
-      const clienteNombreSeleccionado = clienteSelect.options[clienteSelect.selectedIndex]?.textContent || "";
-
-      if (data.length > 0 && data[0].cliente_id && data[0].cliente_id !== clienteIdSeleccionado) {
-        Toast.show('El cliente seleccionado no coincide con el del archivo JSON. Verifica la selección.', 'bad');
-        return;
-      }
-
+      const dataRaw = JSON.parse(e.target.result);
+      if (!Array.isArray(dataRaw)) throw "Formato inválido";
+      const data = dataRaw.map(normalizarDetalleBatch);
       detallesBatch = data;
 
-      // Alinea los seriales al orden del archivo (por modelo) y pinta el preview
-      // combinado: serial + nombre + modelo + GPS + grupos, fila por fila.
+      // El JSON del vendedor manda: dispara toda la cascada para que recepción
+      // solo revise y guarde.
+      //  1) Auto-seleccionar el cliente del archivo → jala IP + carga contratos.
+      const clienteOk = await autoSeleccionarCliente(data[0]?.cliente_id || "", data[0]?.cliente_nombre || "");
+      //  2) Proponer el próximo Unit ID (si el campo está vacío).
+      await proponerProximoUnitId();
+      //  3) Intentar jalar los seriales del contrato automáticamente.
+      let contratoJalado = null;
+      if (clienteOk) {
+        try { contratoJalado = await autoJalarContrato(data.length); }
+        catch (err) { console.warn('[nuevo-batch] auto-jalar contrato falló:', err); }
+      }
+      //  4) Pintar el preview combinado (auto-jalar ya lo refresca; esto cubre el
+      //     caso sin contrato jalado).
       refrescarPreviews();
 
-      Toast.show('Archivo cargado. Los seriales se alinearon al orden del archivo por modelo; revisa el resumen de abajo.', 'ok');
+      const partes = [`Archivo cargado: ${data.length} equipos`];
+      if (clienteOk) partes.push('cliente e IP autocompletados');
+      if (contratoJalado) partes.push(`seriales jalados del contrato ${contratoJalado}`);
+      else if (clienteOk) partes.push('elige el contrato y jala los seriales');
+      Toast.show(partes.join(' · ') + '.', 'ok');
     } catch (err) {
       Toast.show('Error al leer el archivo JSON: ' + err, 'bad');
     }

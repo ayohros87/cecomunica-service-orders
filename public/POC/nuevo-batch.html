@@ -127,12 +127,13 @@
             </div>
 
             <div class="form-field">
-              <label class="form-label" for="vendorJson">Cargar archivo JSON del vendedor <span class="optional">(opcional)</span></label>
+              <label class="form-label" for="vendorJson">Cargar archivo JSON del vendedor <span class="optional">(recomendado — cárgalo primero)</span></label>
               <label class="form-file-zone" tabindex="0" role="button" aria-label="Subir archivo JSON" style="padding:var(--sp-3) var(--sp-4); min-height:auto;">
                 <input type="file" id="vendorJson" accept=".json" onchange="cargarDesdeJSON(this)">
                 <div class="form-file-zone-icon"><i data-lucide="folder-open" style="width:24px;height:24px;"></i></div>
                 <p style="margin:0; font-size:13px;"><strong>Arrastra el JSON</strong> o haz clic</p>
               </label>
+              <span class="form-hint">Autocompleta cliente e IP, propone el Unit ID y jala los seriales del contrato. Solo revisa y guarda.</span>
             </div>
 
             <div class="form-field">
@@ -140,7 +141,7 @@
               <input class="form-input" id="unit_id_inicial" type="number" required placeholder="Ejemplo: 5001"
                 style="font-family:var(--font-mono);">
               <span class="form-hint">
-                Últimos Unit IDs asignados:
+                Se propone automáticamente (último asignado + 1). Puedes cambiarlo.
                 <ul class="ultimos-uid" id="ultimosUnitIDs"></ul>
               </span>
             </div>
@@ -199,7 +200,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc14" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=cc15" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
