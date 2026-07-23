@@ -89,6 +89,23 @@
             </div>
           </div>
 
+          <!-- Carta de presentación. Solo cotizaciones comerciales: las de taller
+               salen de una orden de servicio, el cliente ya nos conoce. -->
+          ${CotState.esCotizacionDeTaller(draft) ? '' : `
+          <div class="cc-panel">
+            <div class="cc-panel-head"><h3><i data-lucide="file-text"></i> Carta de presentación</h3></div>
+            <div class="cc-panel-body">
+              <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:13px; line-height:1.5;">
+                <input type="checkbox" id="chkCarta" ${draft.incluye_carta !== false ? 'checked' : ''} style="width:18px; height:18px; flex:none; margin-top:1px;">
+                <span>
+                  <b>Incluir carta de presentación</b><br>
+                  <span style="color:var(--fg-3);">Antepone 2 páginas institucionales (quiénes somos, cifras, servicios y sectores) al documento que recibe el cliente. Desmárcala si es un cliente recurrente que ya la conoce.</span>
+                </span>
+              </label>
+            </div>
+          </div>
+          `}
+
           <!-- Adjuntos (brochures / fichas técnicas que viajan con la propuesta) -->
           <div class="cc-panel">
             <div class="cc-panel-head">
@@ -122,6 +139,9 @@
     renderAdjuntos();
     renderSummary();
     bindHeader();
+    // Ausente en cotizaciones de taller (el panel no se renderiza).
+    const chkCarta = $('chkCarta');
+    if (chkCarta) chkCarta.addEventListener('change', (e) => { draft.incluye_carta = e.target.checked; });
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 

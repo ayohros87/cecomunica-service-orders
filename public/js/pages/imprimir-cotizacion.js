@@ -24,11 +24,25 @@
     `;
   }
 
+  // Antepone las 2 hojas de la carta de presentación como hermanas de #cqPage.
+  // Idempotente: un segundo render no duplica las hojas.
+  function anteponerCarta(emisor) {
+    const page = $('cqPage');
+    const stage = page?.parentElement;
+    if (!stage) return;
+    stage.querySelectorAll('.cq-carta').forEach((el) => el.remove());
+    page.insertAdjacentHTML('beforebegin', CartaPresentacion.html({ emisor }));
+  }
+
   function render(cot, cli, ej, emisor, doc) {
     const dirigidoA = doc?.dirigido_a || cli.representante || '';
     const dirigidoEmail = doc?.dirigido_email || cli.email || '';
     const t = T.calcTotales(cot);
     const page = $('cqPage');
+
+    // Solo cotizaciones comerciales con la casilla marcada. Las de taller nunca.
+    if (CotState.llevaCarta(doc)) anteponerCarta(emisor);
+
     page.innerHTML = `
       <div class="cq-hd">
         <div class="cq-lockup">

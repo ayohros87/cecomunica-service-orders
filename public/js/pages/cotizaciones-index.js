@@ -401,6 +401,7 @@
       creado_por_uid: doc.creado_por_uid,
       creado_por_email: doc.creado_por_email,
       total: t.total, moneda: ui.moneda, fecha: ui.fecha, validezDias: ui.validezDias,
+      lleva_carta: CotState.llevaCarta(doc),
       snapshot, emisor: cat.emisor,
     });
     return url;

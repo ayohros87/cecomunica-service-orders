@@ -29,7 +29,15 @@
     `;
   }
 
-  function render(snap, emisor, vCode, docId) {
+  // Antepone las 2 hojas de la carta de presentación como hermanas de #cqPage.
+  function anteponerCarta(emisor) {
+    const page = $('cqPage');
+    const stage = page?.parentElement;
+    if (!stage) return;
+    page.insertAdjacentHTML('beforebegin', CartaPresentacion.html({ emisor }));
+  }
+
+  function render(snap, emisor, vCode, docId, llevaCarta) {
     if (!snap) { showError('La cotización no contiene datos.'); return; }
     const cli = snap.cliente || {};
     const ej = snap.ejecutivo || {};
@@ -38,6 +46,12 @@
 
     $('ptTitle').textContent = snap.id || 'Cotización';
     const page = $('cqPage');
+
+    // La decisión viaja resuelta en el mirror (lleva_carta). Los mirrors creados
+    // antes de esta función no traen el campo → sin carta, que es lo correcto:
+    // un link ya enviado no cambia de contenido a posteriori.
+    if (llevaCarta) anteponerCarta(emisor);
+
     page.innerHTML = `
       <div class="cq-hd">
         <div class="cq-lockup">
@@ -189,7 +203,7 @@
       $('ptMeta').textContent = `Para ${data.cliente_nombre || ''}`;
 
       const emisor = data.emisor || {};
-      render(data.snapshot, emisor, vCode, docId);
+      render(data.snapshot, emisor, vCode, docId, data.lleva_carta === true);
       // Log de apertura (asíncrono, no bloquea render).
       logOpen(docId, vCode, data.cotizacion_id);
     } catch (e) {

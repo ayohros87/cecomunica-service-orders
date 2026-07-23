@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<!-- @dsCard group="Brand" name="Carta de presentación (PDF/print)" subtitle="Documento A4 de 3 páginas para acompañar cotizaciones" -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carta de Presentación · CeComunica</title>
+<link rel="stylesheet" href="ceco-next.css">
+<style>
+  body{background:var(--gray-200)}
+
+  .printbar{position:fixed;top:18px;right:18px;display:flex;gap:10px;z-index:50}
+
+  .sheet{
+    width:816px;min-height:1056px;margin:30px auto;background:#fff;box-shadow:var(--shadow-lg);
+    position:relative;display:flex;flex-direction:column;overflow:hidden;
+  }
+  .sheet__pad{padding:38px 52px;display:flex;flex-direction:column;flex:1}
+
+  /* shared decorative band */
+  .band{position:absolute;left:0;right:0;bottom:0;height:6px;background:linear-gradient(90deg,var(--navy-800),var(--blue-500) 55%,var(--cyan-400));z-index:5}
+
+  /* ============ PAGE 1 · COVER ============ */
+  .cover{background:var(--navy-900);color:#fff;flex-direction:row;padding:0}
+  .cover__main{
+    flex:1;padding:54px 44px 46px;display:flex;flex-direction:column;position:relative;z-index:2;
+    background-image:radial-gradient(circle at 1px 1px,rgba(120,200,255,.10) 1px,transparent 0);
+    background-size:24px 24px;
+  }
+  .cover__brand img{height:42px}
+  .cover__kicker{margin-top:auto;margin-bottom:18px}
+  .cover__kicker .eyebrow{color:var(--cyan-400);letter-spacing:.18em}
+  .cover h1{
+    font:800 37px/1.07 var(--font-display);letter-spacing:-.02em;color:#fff;
+    text-wrap:balance;max-width:14ch;
+  }
+  .cover h1 em{font-style:normal;color:var(--cyan-400)}
+  .cover__lede{margin-top:20px;font-size:15px;line-height:1.62;color:rgba(255,255,255,.78);max-width:40ch}
+  .cover__chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:24px}
+  .pill{
+    display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);
+    border:1px solid rgba(120,200,255,.30);background:rgba(67,170,239,.10);
+    font:600 12.5px/1 var(--font-body);letter-spacing:.04em;color:#fff;white-space:nowrap;
+  }
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan-400);box-shadow:0 0 10px rgba(67,170,239,.9)}
+  .cover__contact{
+    margin-top:34px;padding-top:22px;border-top:1px solid rgba(255,255,255,.14);
+    display:grid;grid-template-columns:1fr 1fr;gap:12px 22px;
+  }
+  .cc{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:rgba(255,255,255,.82)}
+  .cc i{width:16px;height:16px;color:var(--cyan-400);flex:none;margin-top:2px}
+  .cc b{display:block;color:#fff;font-weight:600}
+  .cover__photo{
+    width:352px;flex:none;position:relative;align-self:stretch;
+    background:#1a2733;
+  }
+  .cover__photo img{width:100%;height:100%;object-fit:cover;object-position:42% 6%}
+  .cover__photo::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,var(--navy-900) 0%,rgba(3,16,28,0) 15%)}
+
+  /* ============ DOC HEAD (interior pages) ============ */
+  .doc-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;padding-bottom:18px;border-bottom:2px solid var(--navy-800)}
+  .doc-head__brand img{height:38px}
+  .doc-head__meta{text-align:right}
+  .doc-head__meta .eyebrow{display:block;margin-bottom:5px}
+  .doc-head__meta h2{font:700 19px/1 var(--font-display);color:var(--navy-800);letter-spacing:-.01em}
+
+  /* page 2 — quiénes somos hero (text + portrait) */
+  .qs-hero{display:grid;grid-template-columns:1fr 250px;gap:24px;margin-top:8px;align-items:stretch}
+  .qs-hero__photo{position:relative;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line);min-height:206px;background:#1a2733}
+  .qs-hero__photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:46% 16%}
+  .qs-hero__photo::after{content:"";position:absolute;left:0;right:0;bottom:0;height:80px;background:linear-gradient(0deg,rgba(6,24,41,.80),transparent)}
+  .qs-hero__cap{position:absolute;left:14px;right:14px;bottom:12px;z-index:2;color:#fff;font:600 12px/1.4 var(--font-body);display:flex;align-items:flex-start;gap:8px}
+  .qs-hero__cap i{width:15px;height:15px;color:var(--cyan-400);flex:none;margin-top:1px}
+
+  .section-title{margin-top:24px}
+  .section-title .eyebrow{display:block;margin-bottom:9px}
+  .section-title h3{font:700 22px/1.14 var(--font-display);color:var(--fg-1);letter-spacing:-.01em;max-width:32ch;text-wrap:balance}
+
+  .lead-quote{
+    margin-top:9px;padding:11px 16px;border-left:3px solid var(--accent);background:var(--accent-soft);
+    border-radius:0 var(--r-md) var(--r-md) 0;font-size:14px;line-height:1.5;color:var(--navy-800);
+  }
+  .lead-quote b{font-weight:700}
+
+  .body-copy{margin-top:9px;font-size:13.5px;line-height:1.55;color:var(--fg-2)}
+  .body-copy strong{color:var(--fg-1)}
+
+  /* KPI strip */
+  .stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:10px}
+  .stat{border:1px solid var(--line);border-radius:var(--r-lg);padding:10px 16px;background:var(--surface)}
+  .stat--navy{background:linear-gradient(160deg,var(--navy-800),var(--navy-900));border-color:var(--navy-900);color:#fff;
+    background-image:linear-gradient(160deg,var(--navy-800),var(--navy-900)),radial-gradient(circle at 1px 1px,rgba(120,200,255,.13) 1px,transparent 0);background-size:auto,16px 16px}
+  .stat__val{font:800 30px/1 var(--font-display);letter-spacing:-.02em;color:var(--navy-800)}
+  .stat--navy .stat__val{color:#fff}
+  .stat__val .unit{font-size:14px;font-weight:600;color:var(--fg-3);font-family:var(--font-body);margin-left:3px}
+  .stat--navy .stat__val .unit{color:rgba(255,255,255,.7)}
+  .stat__lbl{margin-top:5px;font-size:12px;line-height:1.35;color:var(--fg-3)}
+  .stat--navy .stat__lbl{color:rgba(255,255,255,.72)}
+
+  /* photo strip */
+  .photo-band{margin-top:20px;height:148px;border-radius:var(--r-lg);overflow:hidden;position:relative;border:1px solid var(--line)}
+  .photo-band img{width:100%;height:100%;object-fit:cover;object-position:center 28%}
+  .photo-band__cap{
+    position:absolute;left:0;bottom:0;right:0;padding:26px 22px 14px;
+    background:linear-gradient(0deg,rgba(6,24,41,.86),transparent);
+    color:#fff;font:600 13px/1.4 var(--font-body);display:flex;align-items:center;gap:9px;
+  }
+  .photo-band__cap i{width:16px;height:16px;color:var(--cyan-400)}
+
+  /* two-column lists */
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:10px}
+  .col-card{border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 20px;background:var(--surface);box-shadow:var(--shadow-xs)}
+  .col-card h4{font:700 12px/1 var(--font-body);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .col-card h4 i{width:16px;height:16px}
+  .check-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+  .check-list li{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.3;color:var(--fg-2)}
+  .check-list i{width:17px;height:17px;color:var(--ok);flex:none;margin-top:1px}
+
+  /* sectors */
+  .sectors{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}
+  .sector{
+    display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:var(--r-pill);
+    border:1px solid var(--line);background:var(--gray-50);font:600 13px/1 var(--font-body);color:var(--fg-2);
+  }
+  .sector i{width:15px;height:15px;color:var(--accent)}
+
+  /* page foot */
+  .pg-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--fg-4);letter-spacing:.04em}
+  .pg-foot .font-mono{font-size:11px;color:var(--fg-3)}
+
+  /* ============ PAGE 3 · CLOSING ============ */
+  .close-hero{
+    margin-top:8px;border-radius:var(--r-xl);overflow:hidden;position:relative;
+    background:var(--navy-900);color:#fff;padding:34px 40px;
+    background-image:radial-gradient(circle at 1px 1px,rgba(120,200,255,.10) 1px,transparent 0);background-size:22px 22px;
+  }
+  .close-hero .eyebrow{color:var(--cyan-400);letter-spacing:.18em;display:block;margin-bottom:14px}
+  .close-hero blockquote{margin:0;font:700 23px/1.32 var(--font-display);letter-spacing:-.01em;color:#fff;text-wrap:balance;max-width:26ch}
+  .close-hero blockquote .q{color:var(--cyan-400)}
+  .close-hero__sign{margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,.16);display:flex;align-items:center;gap:14px}
+  .close-hero__sign img{height:34px}
+
+  .cta-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:22px;margin-top:20px}
+  .cta-card{border:1px solid var(--line);border-radius:var(--r-lg);padding:22px 24px;background:var(--surface);box-shadow:var(--shadow-xs)}
+  .cta-card h4{font:700 16px/1.2 var(--font-display);color:var(--fg-1);margin-bottom:14px}
+  .contact-list{display:flex;flex-direction:column;gap:13px}
+  .contact-list .cc{color:var(--fg-2)}
+  .contact-list .cc i{color:var(--accent)}
+  .contact-list .cc b{color:var(--fg-1)}
+  .next-steps{list-style:none;margin:0;padding:0;counter-reset:step;display:flex;flex-direction:column;gap:14px}
+  .next-steps li{display:flex;gap:13px;align-items:flex-start;font-size:13.5px;line-height:1.45;color:var(--fg-2)}
+  .next-steps li::before{
+    counter-increment:step;content:counter(step);flex:none;width:26px;height:26px;border-radius:50%;
+    background:var(--navy-800);color:#fff;font:700 13px/26px var(--font-mono);text-align:center;
+  }
+  .close-photo{margin-top:24px;height:150px;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line)}
+  .close-photo img{width:100%;height:100%;object-fit:cover;object-position:center 30%}
+
+  /* experience strip + compact closing (2-page layout) */
+  .exp-block{margin-top:10px}
+  .exp-block .eyebrow{display:block;margin-bottom:10px}
+  .close-strip{
+    margin-top:10px;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--navy-900);
+    background:var(--navy-900);color:#fff;display:grid;grid-template-columns:1.45fr 1fr;
+    background-image:radial-gradient(circle at 1px 1px,rgba(120,200,255,.10) 1px,transparent 0);background-size:20px 20px;
+  }
+  .close-strip__q{padding:12px 24px}
+  .close-strip__q .eyebrow{color:var(--cyan-400);letter-spacing:.16em;display:block;margin-bottom:10px}
+  .close-strip__q p{margin:0;font:700 15px/1.36 var(--font-display);letter-spacing:-.01em;color:#fff;text-wrap:balance}
+  .close-strip__q p .q{color:var(--cyan-400)}
+  .close-strip__c{padding:16px 22px;border-left:1px solid rgba(255,255,255,.14);display:flex;flex-direction:column;justify-content:center;gap:12px;background:rgba(255,255,255,.03)}
+  .close-strip__c .cc{color:rgba(255,255,255,.85);font-size:12.5px}
+  .close-strip__c .cc i{color:var(--cyan-400)}
+  .close-strip__c .cc b{color:#fff}
+
+  @media print{
+    html,body{margin:0;padding:0;background:#fff}
+    .printbar{display:none}
+    .sheet{box-shadow:none;margin:0;width:8.5in;height:11in;min-height:0;overflow:hidden;page-break-after:always;break-after:page}
+    .sheet:last-of-type{page-break-after:auto;break-after:auto}
+    @page{size:letter;margin:0}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+<div class="printbar">
+  <button class="btn btn--primary" onclick="window.print()"><i data-lucide="printer"></i> Imprimir / PDF</button>
+</div>
+
+<!-- ============ PÁGINA 1 · PORTADA ============ -->
+<section class="sheet cover">
+  <div class="cover__main">
+    <div class="cover__brand"><img src="assets/lockup-inverse.svg" alt="CeComunica"></div>
+
+    <div class="cover__kicker">
+      <span class="eyebrow">Carta de presentación</span>
+    </div>
+    <h1>Comunicación crítica que <em>no falla</em> cuando más importa.</h1>
+    <p class="cover__lede">Diseñamos, instalamos y damos soporte a redes de radiocomunicación crítica para seguridad pública, transporte, salud y emergencias.</p>
+
+    <div class="cover__chips">
+      <span class="pill"><span class="dot"></span>TETRA</span>
+      <span class="pill"><span class="dot"></span>DMR</span>
+      <span class="pill"><span class="dot"></span>POC sobre LTE</span>
+    </div>
+
+    <div class="cover__contact">
+      <div class="cc"><i data-lucide="map-pin"></i><span><b>Oficina</b>Vía Italia, Punta Paitilla<br>Ciudad de Panamá, Panamá</span></div>
+      <div class="cc"><i data-lucide="phone"></i><span><b>Teléfono</b>+507 279-5570</span></div>
+      <div class="cc"><i data-lucide="mail"></i><span><b>Correo</b>ventas@cecomunica.com</span></div>
+      <div class="cc"><i data-lucide="globe"></i><span><b>Web</b>www.cecomunica.com</span></div>
+    </div>
+  </div>
+  <div class="cover__photo">
+    <img src="assets/photos/team-studio.png" alt="Equipo CeComunica con radio de comunicación crítica">
+  </div>
+  <div class="band"></div>
+</section>
+
+<!-- ============ PÁGINA 2 · QUIÉNES SOMOS ============ -->
+<section class="sheet">
+  <div class="sheet__pad">
+    <header class="doc-head">
+      <div class="doc-head__brand"><img src="assets/lockup.svg" alt="CeComunica"></div>
+      <div class="doc-head__meta">
+        <span class="eyebrow">Acerca de</span>
+        <h2>Quiénes somos</h2>
+      </div>
+    </header>
+
+    <div class="qs-hero">
+      <div class="qs-hero__text">
+        <div class="section-title" style="margin-top:0">
+          <span class="eyebrow">33 años de experiencia</span>
+          <h3>Soluciones de radiocomunicación confiables, hechas en Panamá.</h3>
+        </div>
+
+        <div class="lead-quote">
+          <b>CeComunica</b> es una empresa con <b>33 años de experiencia</b> brindando soluciones de radiocomunicación en Panamá.
+        </div>
+
+        <p class="body-copy"><strong>Nuestro objetivo:</strong> ofrecerle una solución eficiente, confiable y adaptada a sus necesidades, garantizando calidad, soporte técnico y acompañamiento, con propuestas económicas competitivas.</p>
+      </div>
+      <div class="qs-hero__photo">
+        <img src="assets/photos/team-office-woman.png" alt="Asesora CeComunica mostrando un radio">
+        <div class="qs-hero__cap"><i data-lucide="radio"></i>Asesoría y demostración de equipos en sitio.</div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat stat--navy">
+        <div class="stat__val">33<span class="unit">años</span></div>
+        <div class="stat__lbl">De trayectoria en el mercado panameño</div>
+      </div>
+      <div class="stat">
+        <div class="stat__val">+200<span class="unit">clientes</span></div>
+        <div class="stat__lbl">A nivel nacional e internacional</div>
+      </div>
+      <div class="stat">
+        <div class="stat__val">3<span class="unit">tecnologías</span></div>
+        <div class="stat__lbl">TETRA · DMR · POC sobre LTE</div>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="col-card">
+        <h4><i data-lucide="zap"></i>Beneficios</h4>
+        <ul class="check-list">
+          <li><i data-lucide="check"></i>Comunicación instantánea y segura</li>
+          <li><i data-lucide="check"></i>Reducción de tiempos de respuesta</li>
+          <li><i data-lucide="check"></i>Mayor control operativo</li>
+          <li><i data-lucide="check"></i>Integración con sistemas tecnológicos</li>
+          <li><i data-lucide="check"></i>Escalabilidad según el crecimiento</li>
+          <li><i data-lucide="check"></i>Precios competitivos</li>
+        </ul>
+      </div>
+      <div class="col-card">
+        <h4><i data-lucide="wrench"></i>Servicios incluidos</h4>
+        <ul class="check-list">
+          <li><i data-lucide="check"></i>Asesoría personalizada</li>
+          <li><i data-lucide="check"></i>Instalación y configuración</li>
+          <li><i data-lucide="check"></i>Soporte técnico especializado</li>
+          <li><i data-lucide="check"></i>Mantenimiento preventivo y correctivo</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="exp-block">
+      <span class="eyebrow">Experiencia · +200 clientes a nivel nacional e internacional</span>
+      <div class="sectors">
+        <span class="sector"><i data-lucide="shield"></i>Seguridad</span>
+        <span class="sector"><i data-lucide="shopping-cart"></i>Supermercados</span>
+        <span class="sector"><i data-lucide="graduation-cap"></i>Educación</span>
+        <span class="sector"><i data-lucide="landmark"></i>Gobierno</span>
+        <span class="sector"><i data-lucide="bed-double"></i>Hotelería</span>
+        <span class="sector"><i data-lucide="more-horizontal"></i>Y otros servicios</span>
+      </div>
+    </div>
+
+    <div class="close-strip">
+      <div class="close-strip__q">
+        <span class="eyebrow">Nuestro compromiso</span>
+        <p><span class="q">“</span>Estamos preparados para acompañar a su organización con soluciones de comunicación confiables, innovadoras y adaptadas a sus necesidades.<span class="q">”</span></p>
+      </div>
+      <div class="close-strip__c">
+        <div class="cc"><i data-lucide="phone"></i><span><b>+507 279-5570</b>Lun a Vie, 8:00 a.m. – 5:00 p.m.</span></div>
+        <div class="cc"><i data-lucide="mail"></i><span><b>ventas@cecomunica.com</b></span></div>
+        <div class="cc"><i data-lucide="globe"></i><span><b>www.cecomunica.com</b></span></div>
+      </div>
+    </div>
+
+    <footer class="pg-foot">
+      <span>C Comunica, S.A. · Vía Italia, Punta Paitilla, Ciudad de Panamá</span>
+      <span class="font-mono">02 / 02</span>
+    </footer>
+  </div>
+  <div class="band"></div>
+</section>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>if(window.lucide)lucide.createIcons();</script>
+</body>
+</html>

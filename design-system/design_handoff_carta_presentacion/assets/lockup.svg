@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 370 64" width="370" height="64" role="img" aria-label="CECOMUNICA · Soluciones en Comunicaciones">
+  <title>CECOMUNICA horizontal lockup — primary (on light)</title>
+  <g>
+    <rect x="0" y="0" width="64" height="64" rx="10" fill="#0B2A47"></rect>
+    <path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="square"></path>
+    <path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="#00B4D8" stroke-width="6" fill="none" stroke-linecap="square"></path>
+    <rect x="30" y="30" width="4" height="4" fill="#00B4D8"></rect>
+  </g>
+  <line x1="84" y1="14" x2="84" y2="50" stroke="#C2CCD6" stroke-width="1"></line>
+  <text x="100" y="35" font-family="Barlow, &#39;Helvetica Neue&#39;, Arial, sans-serif" font-weight="800" font-size="27" letter-spacing="0.5" fill="#0B2A47">CECOMUNICA</text>
+  <text x="101" y="50" font-family="&#39;IBM Plex Sans&#39;, Arial, sans-serif" font-weight="500" font-size="9.5" letter-spacing="1" fill="#4A5560">SOLUCIONES EN COMUNICACIONES</text>
+</svg>

@@ -10,7 +10,12 @@
   border-bottom: 1px solid var(--border-subtle); box-shadow: var(--shadow-sm);
 }
 .cc-pt-title { font-family: var(--font-mono); font-size: 13px; color: var(--fg-2); font-weight: 600; }
-.cc-print-stage { background: #5b6470; padding: 40px; display: flex; justify-content: center; }
+/* El documento puede traer más de una hoja (carta de presentación + cotización),
+   así que el stage las apila en columna en vez de centrar una sola. */
+.cc-print-stage {
+  background: #5b6470; padding: 40px;
+  display: flex; flex-direction: column; align-items: center; gap: 24px;
+}
 
 .cq-page {
   width: 816px; min-height: 1056px; background: #fff; position: relative;
@@ -107,7 +112,9 @@
 @media print {
   body { background: #fff; }
   .cc-print-toolbar, .app-topbar { display: none !important; }
-  .cc-print-stage { background: #fff; padding: 0; }
+  .cc-print-stage { background: #fff; padding: 0; gap: 0; }
   .cq-page { box-shadow: none; }
+  /* Una hoja = una página. La última no fuerza salto para no dejar una en blanco. */
+  .cq-page:not(:last-child) { page-break-after: always; break-after: page; }
   @page { size: letter; margin: 0; }
 }

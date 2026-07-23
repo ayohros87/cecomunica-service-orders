@@ -166,6 +166,11 @@ const CotizacionesService = {
       moneda: payload.moneda || 'USD',
       fecha: payload.fecha || null,
       validezDias: Number(payload.validezDias || 15),
+      // Decisión ya resuelta de si el documento público antepone la carta de
+      // presentación. Se guarda resuelta (no `origen`) para que la vista pública
+      // no tenga que conocer la semántica comercial/taller. Los mirrors creados
+      // antes de este campo quedan sin él → la vista los renderiza sin carta.
+      lleva_carta: !!payload.lleva_carta,
       // snapshot mínimo necesario para el render público
       snapshot: payload.snapshot || null,
       emisor: payload.emisor || null,

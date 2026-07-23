@@ -18,6 +18,25 @@
   // admin la edita. Para cambiarla se usa "Duplicar", que crea un nuevo borrador.
   function esEditable(estado) { return (estado || 'borrador') === 'borrador'; }
 
+  // ── Carta de presentación ─────────────────────────────────────────────────
+  // Las cotizaciones de taller (nacen de una orden de servicio, cotizar-orden.js
+  // les pone origen 'orden' + orden_id) nunca llevan carta: el cliente ya conoce
+  // a la empresa, su equipo está en el taller. Las comerciales sí, salvo que el
+  // vendedor desmarque la casilla — típicamente al reenviar a un recurrente.
+  //
+  // El `|| !!orden_id` cubre documentos anteriores a que existiera `origen`:
+  // sin él, una cotización de servicio vieja se leería como comercial y se le
+  // antepondría la carta.
+  function esCotizacionDeTaller(doc) {
+    return (doc?.origen || '') === 'orden' || !!doc?.orden_id;
+  }
+
+  // Decisión final para un documento (o su forma UI). `incluye_carta` ausente
+  // se trata como true: el default es incluirla.
+  function llevaCarta(doc) {
+    return !esCotizacionDeTaller(doc) && doc?.incluye_carta !== false;
+  }
+
   // ── Condiciones por defecto + plantillas ──────────────────────────────────
   const CONDICIONES_DEFAULT = [
     { k: 'Tiempo de entrega',   v: '4 – 6 semanas tras orden de compra' },
@@ -158,6 +177,9 @@
       // para que editar una cotización de servicio no la reclasifique como comercial.
       origen: doc.origen || '',
       orden_id: doc.orden_id || '',
+      // Carta de presentación: ausente = true (default ON en cotizaciones
+      // comerciales). El gate por origen lo aplica llevaCarta(), no este campo.
+      incluye_carta: typeof doc.incluye_carta === 'boolean' ? doc.incluye_carta : true,
       creado_por_uid: doc.creado_por_uid || null,
       creado_por_email: doc.creado_por_email || null,
       // Timestamps del ciclo de vida — usados por el historial para mostrar
@@ -231,6 +253,10 @@
       // con 'orden' + orden_id después de toDoc (cotizaciones de servicio).
       origen: ui.origen || 'comercial',
       ...(ui.orden_id ? { orden_id: ui.orden_id } : {}),
+      // Casilla "Incluir carta de presentación" — es solo la preferencia del
+      // vendedor. En las de taller queda en true y sin efecto: el corte por
+      // origen lo aplica llevaCarta(), no este campo.
+      incluye_carta: ui.incluye_carta !== false,
       creado_por_uid: ui.creado_por_uid || null,
       creado_por_email: ui.creado_por_email || null,
       deleted: !!ui.deleted,
@@ -238,25 +264,51 @@
   }
 
   // Genera un id correlativo "COT-YYYY-NNNN" para el año actual.
+  // Correlativo COT-YYYY-NNNN. Antes era un max+1 sobre un scan del año, SIN
+  // atomicidad: dos creaciones simultáneas leían el mismo max y devolvían el
+  // mismo número; y si el scan fallaba caía a 0 → COT-YYYY-0001. Ambas cosas
+  // pasaron en producción — COT-2026-0012 quedó asignado a 3 documentos el mismo
+  // día. Ahora el número se RESERVA en una transacción sobre
+  // contadores/cotizaciones_{año}, que serializa a los concurrentes.
+  //
+  // `piso` = máximo correlativo ya existente en el año. Cumple dos papeles:
+  //   1) auto-siembra el contador la primera vez que se usa en el año (los docs
+  //      creados por el método viejo no dejaron contador) para no reiniciar en 1;
+  //   2) colchón de compatibilidad si el contador quedara por detrás.
+  // El scan es best-effort: una vez sembrado el contador, su fallo es inocuo — a
+  // diferencia de antes, ya no puede producir un 0001 duplicado.
   async function nextCotizacionId() {
-    const now = new Date();
-    const y = now.getFullYear();
+    const db = firebase.firestore();
+    const y = new Date().getFullYear();
     const prefix = `COT-${y}-`;
     const start = new Date(y, 0, 1, 0, 0, 0);
     const end = new Date(y, 11, 31, 23, 59, 59, 999);
 
-    let max = 0;
+    let piso = 0;
     try {
       const docs = await CotizacionesService.getCotizacionesPorFecha(start, end, { limit: 500 });
       docs.forEach(c => {
         const id = c.cotizacion_id || '';
         if (id.startsWith(prefix)) {
           const n = parseInt(id.slice(prefix.length), 10);
-          if (!isNaN(n)) max = Math.max(max, n);
+          if (!isNaN(n)) piso = Math.max(piso, n);
         }
       });
-    } catch (e) { /* fallback abajo */ }
-    return prefix + String(max + 1).padStart(4, '0');
+    } catch (_) { /* el contador sembrado cubre el caso normal; piso queda en 0 */ }
+
+    const ref = db.collection('contadores').doc(`cotizaciones_${y}`);
+    const seq = await db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      const actual = snap.exists ? Number(snap.data().seq || 0) : 0;
+      const siguiente = Math.max(actual, piso) + 1;
+      t.set(ref, {
+        seq: siguiente,
+        anio: y,
+        actualizado_en: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return siguiente;
+    });
+    return prefix + String(seq).padStart(4, '0');
   }
 
   function nuevaCotizacion({ ejecutivoId, clienteId } = {}) {
@@ -279,6 +331,7 @@
       dirigido_a: '',
       dirigido_email: '',
       adjuntos: [],
+      incluye_carta: true,
     };
   }
 
@@ -588,6 +641,7 @@
 
   window.CotState = {
     ESTADOS, ESTADO_ORDEN, esEditable,
+    esCotizacionDeTaller, llevaCarta,
     CONDICIONES_DEFAULT, PLANTILLAS_COND,
     EMISOR_FALLBACK,
     uid,

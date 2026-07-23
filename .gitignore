@@ -94,6 +94,13 @@ Manual_Facturacion_CECOMUNICA.pdf
 # Prompts de trabajo one-shot (notas locales, no son parte del código)
 PROMPT_*.md
 
+# Fotos fuente de los handoffs de diseño: PNG de ~2 MB cada una, pensadas para
+# mirarse una vez y derivar de ellas los assets reales. Las versiones optimizadas
+# que sirve la app (public/img/) sí se versionan — son las que importan. Regla
+# acotada a assets/photos/ a propósito: el resto de PNG de design-system son
+# iconos y logos que sí van al repo.
+design-system/**/assets/photos/
+
 # Data local-only (confidencial o irreproducible): fuente Excel del módulo KPI,
 # referencias de diseño con data real. Vive fuera de public/ para no depender
 # del hosting.ignore; el backup .bat SÍ la respalda.

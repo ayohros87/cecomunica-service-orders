@@ -416,6 +416,9 @@
         ejecutivo_nombre: ej.nombre || '',
         creado_por_uid: cot.creado_por_uid, creado_por_email: cot.creado_por_email,
         total: t.total, moneda: cot.moneda, fecha: cot.fecha, validezDias: cot.validezDias,
+        // Se congela junto al resto: el link ya enviado no cambia de contenido
+        // aunque después se edite la casilla. Un reenvío sí lo regenera.
+        lleva_carta: CotState.llevaCarta(cot),
         snapshot, emisor: catalogos.emisor,
       });
       link = result.url;
