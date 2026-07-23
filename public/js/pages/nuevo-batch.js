@@ -1,4 +1,68 @@
 // @ts-nocheck
+    // ── Modelo por serial desde el CONTRATO (fuente de verdad) ──────────────
+    // Antes el modelo entraba por POSICIÓN del archivo del vendedor
+    // (detallesBatch[i]), lo que desalineaba serial↔modelo si el pegado no seguía
+    // el orden exacto del archivo. Ahora, cuando el batch se vincula a un
+    // contrato, el modelo de cada serial se resuelve POR SERIAL contra
+    // contratos/{id}/seriales — así el modelo del contrato coincide siempre con
+    // lo que se registra, sin importar el orden en que se peguen los seriales.
+    let modeloById = new Map();              // modelo_id → { modelo, label }
+    let modeloContratoPorSerial = new Map(); // serialNorm → { serial, modelo, modelo_id }
+
+    async function cargarModelosCatalogo() {
+      try {
+        const raw = await ModelosService.getModelos();
+        modeloById = new Map((raw || []).map(m => {
+          const modelo = (m.modelo || '').toString().trim();
+          const marca  = (m.marca  || '').toString().trim();
+          return [m.id, { modelo, label: `${marca} ${modelo}`.trim() || modelo }];
+        }));
+      } catch (e) {
+        console.warn('[nuevo-batch] no se pudo cargar el catálogo de modelos:', e);
+      }
+    }
+
+    // modelo_id (+ fallback de texto) → etiqueta completa "MARCA MODELO".
+    function labelModelo(modeloId, modeloFallback) {
+      const cat = modeloId ? modeloById.get(modeloId) : null;
+      return cat ? cat.label : (modeloFallback || '');
+    }
+
+    // Carga el mapa serial→modelo del contrato elegido y pinta el preview. Se
+    // llama al cambiar de contrato y (lazy) antes de guardar, para no depender de
+    // que el usuario haya pulsado "Jalar seriales".
+    async function cargarModeloContrato(contratoDocId) {
+      modeloContratoPorSerial = contratoDocId
+        ? await ContratosService.getModeloPorSerial(contratoDocId)
+        : new Map();
+      renderPreviewContrato();
+      return modeloContratoPorSerial;
+    }
+
+    function renderPreviewContrato() {
+      const cont = document.getElementById('previewContrato');
+      if (!cont) return;
+      if (!modeloContratoPorSerial.size) { cont.innerHTML = ''; return; }
+      const esc = (s) => String(s ?? '').replace(/</g, '&lt;');
+      const filas = Array.from(modeloContratoPorSerial.values())
+        .map(v => `<tr><td>${esc(v.serial)}</td><td>${esc(labelModelo(v.modelo_id, v.modelo))}</td></tr>`)
+        .join('');
+      cont.innerHTML =
+        `<table><thead><tr><th>Serial del contrato (${modeloContratoPorSerial.size})</th><th>Modelo</th></tr></thead><tbody>${filas}</tbody></table>`;
+    }
+
+    // Resuelve el modelo de un serial: PRIMERO el contrato (por serial,
+    // autoritativo); si no está, el archivo del vendedor (posicional, como antes).
+    function resolverModeloSerial(serial, detalle) {
+      const c = modeloContratoPorSerial.get(String(serial || '').trim().toLowerCase());
+      if (c && (c.modelo_id || c.modelo)) {
+        const label = labelModelo(c.modelo_id, c.modelo);
+        return { modelo_id: c.modelo_id || null, modelo_label: label, modelo: label };
+      }
+      const label = detalle.modelo_label || detalle.modeloLabel || detalle.modelo || '';
+      return { modelo_id: detalle.modelo_id || detalle.modeloId || null, modelo_label: label, modelo: label };
+    }
+
     async function cargarSelect(ruta, id) {
       const docId = ruta.split('/')[1];
       const snap = await EmpresaService.getDoc(docId);
@@ -100,6 +164,7 @@ function onClienteChange() {
 async function cargarContratosDelCliente() {
   const sel = document.getElementById("contratoJalar");
   if (!sel) return;
+  modeloContratoPorSerial = new Map(); renderPreviewContrato(); // nuevo cliente → limpiar binding del contrato anterior
   const clienteId = document.getElementById("cliente")?.value || "";
   if (!clienteId) { sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>'; return; }
   sel.innerHTML = '<option value="">Cargando contratos…</option>';
@@ -126,8 +191,9 @@ async function jalarSerialesDesdeContrato() {
   const btn = document.getElementById("btnJalarContrato");
   if (btn) btn.disabled = true;
   try {
-    const seriales = await ContratosService.getSerialesManual(contratoDocId);
-    const conSerial = (seriales || []).map(s => String(s.serial || "").trim()).filter(Boolean);
+    // Trae serial + modelo del contrato (fuente de verdad) y pinta el preview.
+    const mapa = await cargarModeloContrato(contratoDocId);
+    const conSerial = Array.from(mapa.values()).map(s => String(s.serial || "").trim()).filter(Boolean);
     if (!conSerial.length) { Toast.show('El contrato no tiene seriales asignados todavía.', 'warn'); return; }
 
     const ta = document.getElementById("seriales");
@@ -136,7 +202,7 @@ async function jalarSerialesDesdeContrato() {
     const nuevos = conSerial.filter(s => !vistos.has(s.toLowerCase()));
     ta.value = [...actuales, ...nuevos].join('\n');
     Toast.show(nuevos.length
-      ? `${nuevos.length} serial(es) jalados del contrato.${conSerial.length - nuevos.length ? ` ${conSerial.length - nuevos.length} ya estaban.` : ''}`
+      ? `${nuevos.length} serial(es) jalados del contrato con su modelo.${conSerial.length - nuevos.length ? ` ${conSerial.length - nuevos.length} ya estaban.` : ''}`
       : 'Todos los seriales del contrato ya estaban en la lista.', nuevos.length ? 'ok' : 'warn');
   } catch (e) {
     console.error("Error jalando seriales del contrato:", e);
@@ -169,10 +235,13 @@ async function jalarSerialesDesdeContrato() {
         await cargarClientes();
         await cargarListaSelect("empresa/IPs", "ip");
         await mostrarUltimosUnitIDs();
+        await cargarModelosCatalogo();
 
         // Auto-jalar el IP asignado del cliente al elegirlo.
         document.getElementById("cliente").addEventListener("change", onClienteChange);
         document.getElementById("btnJalarContrato")?.addEventListener("click", jalarSerialesDesdeContrato);
+        // Elegir un contrato liga el modelo por serial (aunque no se pulse "Jalar").
+        document.getElementById("contratoJalar")?.addEventListener("change", (e) => cargarModeloContrato(e.target.value || null));
 document.getElementById("addCliente").onclick = async () => {
   const nombre = prompt("Ingrese el nombre del nuevo cliente:");
   if (!nombre) return;
@@ -353,9 +422,27 @@ document.getElementById("addCliente").onclick = async () => {
         const contratoRef   = contratoDocId
           ? (contratoSel.selectedOptions[0]?.getAttribute("data-ref") || null) : null;
 
+        // Modelo autoritativo por serial: con contrato vinculado, el modelo de
+        // cada serial se toma del contrato (no del archivo del vendedor). Carga
+        // lazy por si se eligió el contrato sin pulsar "Jalar seriales".
+        if (contratoDocId && !modeloContratoPorSerial.size) {
+          try { await cargarModeloContrato(contratoDocId); } catch (_) {}
+        }
+        if (contratoDocId && modeloContratoPorSerial.size) {
+          const fuera = seriales.filter(s => !modeloContratoPorSerial.has(s.toLowerCase()));
+          if (fuera.length) {
+            const ok = window.confirm(
+              `Estos seriales NO están en el contrato seleccionado:\n\n- ${fuera.join('\n- ')}\n\n` +
+              `Se guardarán con el modelo del archivo del vendedor (emparejado por posición), que puede quedar equivocado. ` +
+              `Lo ideal es corregir el contrato o el pegado. ¿Continuar de todos modos?`);
+            if (!ok) { bloquear(false); return; }
+          }
+        }
+
         try {
         for (let i = 0; i < seriales.length; i++) {
          const detalle = normalizarDetalleBatch(detallesBatch?.[i] || {});
+         const modeloResuelto = resolverModeloSerial(seriales[i], detalle);
          const data = {
         cliente_id: cliente,
         cliente_nombre: document.getElementById("cliente").selectedOptions[0].textContent,
@@ -373,9 +460,9 @@ document.getElementById("addCliente").onclick = async () => {
         updated_at: firebase.firestore.FieldValue.serverTimestamp(),
         radio_name: detalle.radio_name || "",
         gps: detalle.gps ?? false,
-        modelo: detalle.modelo_label || detalle.modelo || "",
-        modelo_id: detalle.modelo_id || detalle.modeloId || null,
-        modelo_label: detalle.modelo_label || detalle.modeloLabel || detalle.modelo || "",
+        modelo: modeloResuelto.modelo,
+        modelo_id: modeloResuelto.modelo_id,
+        modelo_label: modeloResuelto.modelo_label,
         grupos: limpiarGrupos(detalle.grupos || []),
         activo: true,
         deleted: false

@@ -178,6 +178,41 @@ window.jalarSerialesDesdeContrato = async () => {
   }
 };
 
+// Enforcement del modelo del contrato: con una orden vinculada a contrato, el
+// modelo de cada serial es el del contrato (contratos/{id}/seriales), no el que
+// quedó en la tabla. Corrige por serial cualquier modelo que no coincida y
+// devuelve los seriales que no pertenecen al contrato para avisar. Es la contra-
+// parte del arreglo de POC: en ambos flujos el modelo se liga por serial, no por
+// posición ni por elección manual suelta.
+async function enforceContratoModelos() {
+  if (!contratoDocId) return { corregidos: 0, fuera: [] };
+  let mapa;
+  try {
+    mapa = await ContratosService.getModeloPorSerial(contratoDocId);
+  } catch (e) {
+    console.warn("No se pudo cargar el modelo por serial del contrato:", e);
+    return { corregidos: 0, fuera: [] };
+  }
+  if (!mapa.size) return { corregidos: 0, fuera: [] };
+
+  const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
+  const idsValidos = new Set(modelos.map(m => m.id));
+  let corregidos = 0;
+  const fuera = [];
+  document.querySelectorAll("#filasBatch tr").forEach(tr => {
+    const serial = tr.querySelector(".serie")?.value.trim();
+    if (!serial) return;
+    const c = mapa.get(serial.toLowerCase());
+    if (!c) { fuera.push(serial); return; }
+    const catId = (c.modelo_id && idsValidos.has(c.modelo_id))
+      ? c.modelo_id
+      : (modeloPorNombre.get(normName(c.modelo || "")) || "");
+    const sel = tr.querySelector(".modelo");
+    if (catId && sel && sel.value !== catId) { sel.value = catId; corregidos++; }
+  });
+  return { corregidos, fuera };
+}
+
 // Trae los seriales del cliente desde POC. Un cliente puede tener cientos de
 // equipos acumulados de importaciones viejas, pero al crear una orden normalmente
 // solo interesan los del ÚLTIMO batch importado. Por eso, en vez de volcar TODO,
@@ -418,6 +453,20 @@ window.aplicarComunes = () => {
 
 window.guardarBatch = async () => {
   if (!ordenId) { Toast.show("Falta el número de orden.", "bad"); return; }
+
+  // Con contrato vinculado, el modelo del contrato manda por serial: corrige en
+  // la tabla cualquier modelo que no coincida y avisa de seriales ajenos ANTES
+  // de leer las filas (así se guardan ya corregidas).
+  if (contratoDocId) {
+    const { corregidos, fuera } = await enforceContratoModelos();
+    if (fuera.length) {
+      const ok = window.confirm(
+        `Estos seriales NO están en el contrato vinculado a la orden:\n\n- ${fuera.join("\n- ")}\n\n` +
+        `Se guardarán con el modelo elegido en la tabla. ¿Continuar de todos modos?`);
+      if (!ok) return;
+    }
+    if (corregidos) Toast.show(`${corregidos} modelo(s) ajustados al del contrato.`, "ok");
+  }
 
   const filas = Array.from(document.querySelectorAll("#filasBatch tr"));
   const nuevosEquipos = [];

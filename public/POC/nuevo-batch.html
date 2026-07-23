@@ -31,6 +31,13 @@
     #previewVendedor table { width: 100%; border-collapse: collapse; margin-top: var(--sp-2); font-size: 12px; }
     #previewVendedor th { background: var(--surface-card); padding: var(--sp-2); text-align: left; font-weight: 600; border-bottom: 1px solid var(--border-default); }
     #previewVendedor td { padding: var(--sp-1) var(--sp-2); border-bottom: 1px solid var(--border-subtle); }
+
+    /* Preview serial → modelo jalado del contrato */
+    #previewContrato:empty { display: none; }
+    #previewContrato { margin-top: var(--sp-2); max-height: 220px; overflow: auto; border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+    #previewContrato table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    #previewContrato th { position: sticky; top: 0; background: var(--surface-card); padding: var(--sp-2); text-align: left; font-weight: 600; border-bottom: 1px solid var(--border-default); }
+    #previewContrato td { padding: var(--sp-1) var(--sp-2); border-bottom: 1px solid var(--border-subtle); font-family: var(--font-mono); }
   </style>
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -41,6 +48,7 @@
   <script src="../js/core/layout.js?v=cc5"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/pocService.js?v=cc10"></script>
+  <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/services/contratosService.js"></script>
@@ -108,7 +116,8 @@
                   <i data-lucide="download"></i> Jalar seriales
                 </button>
               </div>
-              <span class="form-hint">Los equipos del batch quedarán vinculados a este contrato en POC y en el pool de equipos.</span>
+              <span class="form-hint">Los equipos del batch quedarán vinculados a este contrato en POC y en el pool de equipos. El <strong>modelo de cada serial se toma del contrato</strong> (no del archivo del vendedor).</span>
+              <div id="previewContrato"></div>
             </div>
 
             <div class="form-field">
@@ -182,7 +191,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc12" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=cc13" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

@@ -195,6 +195,23 @@ const ContratosService = {
       .filter(x => typeof x.serial === 'string' && x.serial.trim());
   },
 
+  // Mapa serial(normalizado) → { serial, modelo, modelo_id } del contrato. Es la
+  // FUENTE DE VERDAD para ligar el MODELO a cada serial al ingresar equipos (POC
+  // y órdenes): el modelo se resuelve por serial (join), NO por posición contra
+  // un archivo del vendedor — así el modelo del contrato coincide siempre con lo
+  // que se registra, aunque los seriales se peguen en otro orden.
+  async getModeloPorSerial(contratoId) {
+    if (!contratoId) return new Map();
+    const rows = await this.getSerialesManual(contratoId);
+    const map = new Map();
+    for (const r of rows) {
+      const serial = String(r.serial || '').trim();
+      if (!serial) continue;
+      map.set(serial.toLowerCase(), { serial, modelo: r.modelo || '', modelo_id: r.modelo_id || '' });
+    }
+    return map;
+  },
+
   // Reconcilia el set deseado contra lo existente: agrega nuevos, actualiza el
   // modelo/asignación de los que siguen, borra los que se quitaron. Conserva
   // created_at (y futuros enlaces de órdenes) en los que permanecen.
