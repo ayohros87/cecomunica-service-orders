@@ -79,6 +79,18 @@ module.exports = onDocumentWritten(
         cliente_id: fuente.cliente_id || "", cliente_nombre: fuente.cliente_nombre || "",
       } : null;
 
+      // Una unidad VENDIDA conserva su estado (la venta es un hecho de
+      // propiedad, no de ubicación) — al cerrar la orden solo se limpia el
+      // enlace orden_actual_id, que transicionar() no toca por soloDesde.
+      const soltarVendido = async (e) => {
+        try {
+          const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+          if (data && data.estado === pool.ESTADOS.VENDIDO && data.orden_actual_id === ordenId) {
+            await ref.set({ orden_actual_id: null }, { merge: true });
+          }
+        } catch (err) { /* best-effort por unidad */ }
+      };
+
       // Salida de taller: entrega de la orden, soft-delete, o borrado del doc.
       if (entregadaAhora || (eliminada && before?.eliminado !== true)) {
         const equiposFuente = despues.length ? despues : antes;
@@ -92,6 +104,7 @@ module.exports = onDocumentWritten(
             notas: entregadaAhora ? "" : "Orden eliminada",
             extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
           });
+          await soltarVendido(e);
         }
         return null;
       }
@@ -108,6 +121,7 @@ module.exports = onDocumentWritten(
           notas: "Equipo removido de la orden",
           extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
         });
+        await soltarVendido(e);
       }
 
       // Equipos nuevos en la orden → entran al taller (upsert por contacto).
@@ -135,6 +149,9 @@ module.exports = onDocumentWritten(
           modelo_id: e.modelo_id,
           modelo_label: e.modelo,
           estado: pool.ESTADOS.EN_TALLER,
+          // Un radio VENDIDO que vuelve por servicio no pierde su venta: el
+          // estado se conserva y solo se enlaza la orden (extra).
+          noTocarDesde: [pool.ESTADOS.VENDIDO],
           tipo: "ingreso_taller",
           refMov,
           origen: "migracion_orden",

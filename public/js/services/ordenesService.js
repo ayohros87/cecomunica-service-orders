@@ -356,6 +356,14 @@ const OrdenesService = {
     }
     
     equipos[equipoIndex][campo] = valor;
+    // El serial vive bajo DOS claves (`serial` es la que leen los triggers del
+    // pool y los renders; `numero_de_serie` es el alias legacy de escritura).
+    // Editar solo una dejaba al pool rastreando el serial viejo — se
+    // sincronizan siempre juntas.
+    if (campo === "numero_de_serie" || campo === "serial") {
+      equipos[equipoIndex].serial = valor;
+      equipos[equipoIndex].numero_de_serie = valor;
+    }
     await ordenRef.update({ equipos });
   },
 
