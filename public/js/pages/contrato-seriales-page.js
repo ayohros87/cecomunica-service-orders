@@ -879,35 +879,87 @@
     if (typeof EquiposPoolService === 'undefined') return [];
     const guardados = new Set((ctx._saved || []).map(s => norm(s.serial)));
     const nuevos = (seriales || []).filter(s => !guardados.has(norm(s.serial)));
-    const avisos = [];
+    const avisos = []; // {serial, chip, detalle}
     for (const s of nuevos) {
       try {
         const docs = await EquiposPoolService.findBySerial(s.serial);
         if (!docs.length) {
-          if (!ctx.esLegacy) avisos.push(`${s.serial}: no está registrado en el pool de equipos — verifica que esté bien escrito, o recíbelo antes en Inventario · Equipos por serial`);
+          if (!ctx.esLegacy) avisos.push({ serial: s.serial, chip: 'sin registro en el pool',
+            chipCss: 'background:transparent;border:1px dashed #cbd5e1;color:#64748b;',
+            detalle: 'Verifica que esté bien escrito, o recíbelo antes en Inventario · Equipos por serial. Se dará de alta al guardar.' });
           continue;
         }
         const mismo = docs.find(d => EquiposPoolService._mismoModelo(d, s.modelo_id, s.modelo));
         if (!mismo) {
           const otros = docs.map(d => d.modelo_label || 'sin modelo').join(', ');
-          avisos.push(`${s.serial}: en el pool está registrado como ${otros} — verifica que sea el ${s.modelo}`);
+          avisos.push({ serial: s.serial, chip: 'modelo distinto en el pool',
+            chipCss: 'background:#fee2e2;color:#b91c1c;',
+            detalle: `El pool lo registra como ${otros} — verifica que sea el ${s.modelo}. Si es el mismo radio, el conflicto se resuelve en Inventario · pestaña Conflictos.` });
           continue;
         }
         if (mismo.estado !== EquiposPoolService.ESTADOS.EN_BODEGA
             && mismo.asignacion?.contrato_doc_id !== contratoDocId) {
           const est = EquiposPoolService.ESTADO_LABELS[mismo.estado] || mismo.estado;
           const quien = mismo.asignacion?.cliente_nombre ? ` con ${mismo.asignacion.cliente_nombre}` : '';
-          avisos.push(`${s.serial}: en el pool figura "${est}"${quien}`);
+          avisos.push({ serial: s.serial, chip: `${est}${quien}`,
+            chipCss: 'background:#fef3c7;color:#92400e;',
+            detalle: 'Al guardar, la unidad se reasignará a este contrato (queda rastro del tenedor anterior en su historia).' });
         }
       } catch (e) { /* validación best-effort: nunca bloquea el guardado */ }
     }
     return avisos;
   }
 
+  // Panel "Revisión de seriales" (P3 auditoría 2026-07-24): reemplaza el
+  // window.confirm de texto plano — con 10+ seriales era ilegible. Lista
+  // operable con chip por fila; guardar NUNCA se bloquea, igual que antes.
+  function panelRevisionSeriales(avisos, totalSeriales) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.style.display = 'flex';
+      const filas = avisos.map(a => `
+        <tr>
+          <td style="font-family:var(--font-mono, monospace); font-size:12.5px; white-space:nowrap; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top;">
+            <a href="#" data-ficha="${esc(a.serial)}" style="color:inherit; text-decoration:none;" title="Ver ficha del equipo">${esc(a.serial)}</a></td>
+          <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:12.5px;">
+            <span class="eqpool-chip" style="${esc(a.chipCss)}">${esc(a.chip)}</span>
+            <div style="color:var(--fg-3); margin-top:3px; line-height:1.45;">${esc(a.detalle)}</div></td>
+        </tr>`).join('');
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:640px; width:min(640px, 94vw);">
+          <div class="sheet-header"><h3 class="sheet-title">Revisión antes de guardar</h3></div>
+          <div class="sheet-body" style="padding:12px 8px;">
+            <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
+              ${totalSeriales} serial(es) · <strong>${avisos.length} aviso(s)</strong> del pool de equipos. Guardar no se bloquea — revisa y decide.</p>
+            <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
+              <table style="border-collapse:collapse; width:100%;">${filas}</table>
+            </div>
+          </div>
+          <div class="footer">
+            <button class="btn btn-ghost" data-action="cancel">Volver a editar</button>
+            <button class="btn btn-primary" data-action="confirm">Guardar con ${avisos.length} aviso(s)</button>
+          </div>
+        </div>`;
+      const cleanup = (r) => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); resolve(r); };
+      const kb = (e) => { if (e.key === 'Escape') cleanup(false); };
+      overlay.addEventListener('click', (e) => {
+        const ficha = e.target.closest('[data-ficha]');
+        if (ficha) { e.preventDefault(); window.EquipoFicha?.abrir(ficha.getAttribute('data-ficha')); return; }
+        const action = e.target.closest('[data-action]')?.dataset?.action;
+        if (action === 'confirm') cleanup(true);
+        else if (action === 'cancel' || e.target === overlay) cleanup(false);
+      });
+      document.addEventListener('keydown', kb);
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+    });
+  }
+
   async function confirmarAvisosPool(seriales) {
     const avisos = await advertenciasPool(seriales);
     if (!avisos.length) return true;
-    return window.confirm(`Avisos del pool de equipos:\n\n- ${avisos.join('\n- ')}\n\n¿Continuar de todos modos?`);
+    return panelRevisionSeriales(avisos, (seriales || []).length);
   }
 
   async function jalarDesdePoc() {
