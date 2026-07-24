@@ -171,7 +171,7 @@
           <input type="checkbox" class="trans-devolver" checked value="${esc(u.id)}" data-serial="${esc(u.serial || u.serial_norm)}" style="width:16px;height:16px;">
         </td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);font-family:var(--font-mono,monospace);">
-          <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}">${esc(u.serial || u.serial_norm)}</a>
+          <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" onclick="if(window.EquipoFicha){event.preventDefault();EquipoFicha.abrir('${esc(u.serial || u.serial_norm)}');}">${esc(u.serial || u.serial_norm)}</a>
         </td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);">${esc(u.modelo_label || '—')}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);">${EquiposPoolService.chipEstadoHtml(u.estado)}</td>

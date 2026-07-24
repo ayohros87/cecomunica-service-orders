@@ -185,7 +185,7 @@ window.ContratosAprobacion = {
       const filasAlquiler = alquiler.length ? alquiler.map(u => `
         <tr>
           <td style="border:1px solid #ccc; padding:6px; font-family:var(--font-mono,monospace);">
-            <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" target="_blank" rel="noopener">${esc(u.serial || u.serial_norm)}</a>
+            <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" target="_blank" rel="noopener" onclick="if(window.EquipoFicha){event.preventDefault();EquipoFicha.abrir('${esc(u.serial || u.serial_norm)}');}">${esc(u.serial || u.serial_norm)}</a>
           </td>
           <td style="border:1px solid #ccc; padding:6px;">${esc(u.modelo_label || '—')}</td>
           <td style="border:1px solid #ccc; padding:6px;">${EquiposPoolService.chipEstadoHtml(u.estado)} ${EquiposPoolService.chipPendienteDevolucionHtml(u)}</td>

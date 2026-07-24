@@ -204,7 +204,7 @@ async function cargarEquiposCliente(clienteId) {
   const filas = unidades.map(u => `
     <tr>
       <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle); font-family:var(--font-mono,monospace);">
-        <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" title="Ver historia (kardex) en Equipos por serial">${esc(u.serial || u.serial_norm)}</a>
+        <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" title="Ver ficha del equipo" onclick="if(window.EquipoFicha){event.preventDefault();EquipoFicha.abrir('${esc(u.serial || u.serial_norm)}');}">${esc(u.serial || u.serial_norm)}</a>
       </td>
       <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">${esc(u.modelo_label || "—")}</td>
       <td style="padding:6px 10px; border-bottom:1px solid var(--border-subtle);">${EquiposPoolService.chipEstadoHtml(u.estado)} ${EquiposPoolService.chipPendienteDevolucionHtml(u)}</td>

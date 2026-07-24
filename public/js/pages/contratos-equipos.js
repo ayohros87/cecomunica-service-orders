@@ -114,7 +114,7 @@ window.ContratosEquipos = {
     const filas = unidades.map(u => `
       <tr>
         <td style="border:1px solid var(--line); padding:6px; font-family:var(--font-mono,monospace);">
-          <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" title="Ver historia (kardex) en Equipos por serial">${esc(u.serial || u.serial_norm)}</a>
+          <a class="eq-link" href="${EquiposPoolService.kardexUrl(u.serial || u.serial_norm)}" title="Ver ficha del equipo" onclick="if(window.EquipoFicha){event.preventDefault();EquipoFicha.abrir('${esc(u.serial || u.serial_norm)}');}">${esc(u.serial || u.serial_norm)}</a>
           ${u.verificado === false ? '<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">SIN VERIFICAR</span>' : ''}
         </td>
         <td style="border:1px solid var(--line); padding:6px;">${esc(u.modelo_label || '—')}</td>

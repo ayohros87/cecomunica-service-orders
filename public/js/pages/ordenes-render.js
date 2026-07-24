@@ -666,8 +666,13 @@ async function decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle) {
     chip.className = `eqpool-chip eqpool-chip-${EquiposPoolService.ESTADO_LABELS[unidad.estado] ? unidad.estado : 'desconocido'}`;
     chip.href = EquiposPoolService.kardexUrl(unidad.serial || unidad.serial_norm);
     chip.style.textDecoration = 'none';
-    chip.title = 'Estado en el pool de equipos — click para ver su historia (kardex)';
+    chip.title = 'Estado en el pool de equipos — click para ver la ficha del equipo';
     chip.textContent = EquiposPoolService.ESTADO_LABELS[unidad.estado] || unidad.estado || '';
+    // La Ficha del equipo es legible por CUALQUIER rol; el kardex de inventario
+    // queda como fallback si el componente no está cargado.
+    chip.addEventListener('click', (ev) => {
+      if (window.EquipoFicha) { ev.preventDefault(); EquipoFicha.abrir(unidad.serial || unidad.serial_norm); }
+    });
     celda.appendChild(chip);
 
     // Aviso suave: el pool dice que esta unidad esta con OTRO cliente.
