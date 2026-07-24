@@ -181,6 +181,20 @@ service cloud.firestore {
       allow delete: if verTodasCot();
     }
 
+    // ── Correlativos secuenciales ─────────────────────────────────────────
+    // contadores/cotizaciones_{año}: número consecutivo del correlativo COT.
+    // nextCotizacionId() (cot-editor-state.js) lo lee e incrementa en una
+    // transacción para que dos creaciones simultáneas no repitan número
+    // (regresión histórica: COT-2026-0012 salió en 3 documentos). Lo escriben los
+    // mismos actores que crean cotizaciones: puedeCotizar() + los técnicos que
+    // PREPARAN cotizaciones de servicio desde una orden. Nunca se borra.
+    match /contadores/{docId} {
+      allow read:           if isSignedIn();
+      allow create, update: if isSignedIn()
+        && userRole() in ["administrador","vendedor","jefe_taller","recepcion","gerente","tecnico","tecnico_operativo"];
+      allow delete:         if false;
+    }
+
     // ── Cotizaciones públicas (sin cambios) ───────────────────────────────
     // Mirror público de cotizaciones aprobadas. Creado por la app autenticada
     // (admin que aprueba); leído por cualquiera con el code en el URL.
