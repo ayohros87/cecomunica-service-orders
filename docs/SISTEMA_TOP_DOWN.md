@@ -172,14 +172,16 @@ enviada ──▶ convertida (venta) | rechazada | vencida (cron 06:00)
                               │     │                 ▲  │
   entrega orden ──────▶ en_cliente ─┤    inspección OK│  │ asignación de seriales
   serial de contrato ─▶ asignado_contrato ──entrega──▶│  ▼
-  POC device ─────────▶ en_poc      │             devuelto_revision ──darDeBaja──▶ baja (TERMINAL)
-  anulación/defectuoso/enmienda ────┴────────────────▶ (cuarentena, salida manual por unidad)
+  anulación/defectuoso/enmienda ────┴─▶ devuelto_revision ──darDeBaja──▶ baja (TERMINAL)
+                                        (cuarentena, salida manual por unidad)
+  (en_poc ELIMINADO 2026-07-24: POC es plataforma, no ubicación — la membresía
+   vive en poc_device_id como atributo; device nuevo crea la ficha en_cliente)
 ```
 
 - `vendido` (commit 7fa3722, fase 0 QBO): venta directa sin contrato desde Inventario · Equipos; solo desde `en_bodega` (evita doble venta); guarda nº de factura QBO ya emitida a mano. Con "trampa de seriales ajenos": excluye seriales que no están en el pool o no están en bodega.
 - Conciliación (`abrirConciliacion`): compara pool `en_bodega` vs conteo manual `inventario_actual` por modelo — herramienta de auditoría, no auto-corrige.
 - **SIMs** (`sim_cards`, ID=ICCID): `disponible`/`asignado`; asignación en lote a equipos POC (transaccional), liberación al desactivar el equipo.
-- **POC** (`poc_devices`): parque instalado de radios en campo (cliente, serial, IP, unit_id, grupos, SIM). Reflejado al pool como `en_poc`. En el plan QBO v5 está previsto como la unidad facturable (aún no implementado — ver §5).
+- **POC** (`poc_devices`): parque instalado de radios en campo (cliente, serial, IP, unit_id, grupos, SIM). Reflejado al pool solo como enlace `poc_device_id` (+ custodia del cliente); el estado físico lo dictan contratos/órdenes. En el plan QBO v5 está previsto como la unidad facturable (aún no implementado — ver §5).
 - Inventario: `modelos` (catálogo + tarifas + mapeo QBO), `inventario_actual` (conteos), `inventario_piezas` (repuestos).
 
 ### 3.5 Facturación (estado actual, pre-QBO)

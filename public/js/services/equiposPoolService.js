@@ -23,7 +23,8 @@ const EquiposPoolService = {
     ASIGNADO:   'asignado_contrato',
     EN_CLIENTE: 'en_cliente',
     EN_TALLER:  'en_taller',
-    EN_POC:     'en_poc',
+    // en_poc ELIMINADO (2026-07-24): POC es la plataforma de airtime, no una
+    // ubicación física — la membresía POC vive en poc_device_id, no en estado.
     DEVUELTO:   'devuelto_revision',
     // Venta directa sin contrato (facturada en QuickBooks): sale de bodega y
     // pasa a propiedad del cliente. No es terminal como baja — el radio
@@ -37,7 +38,7 @@ const EquiposPoolService = {
     asignado_contrato: 'Asignado a contrato',
     en_cliente:        'En cliente',
     en_taller:         'En taller',
-    en_poc:            'En POC',
+    en_poc:            'En POC (histórico)', // solo para kardex/docs sin migrar
     devuelto_revision: 'Entrada (por inspeccionar)',
     vendido:           'Vendido',
     baja:              'Baja',

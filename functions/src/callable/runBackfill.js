@@ -686,8 +686,8 @@ async function backfillLinkModeloIdPoc(dryRun) {
 // docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md §4.3):
 //   1. contratos/*/seriales (collectionGroup) de contratos activos/aprobados →
 //      en_cliente si entrega confirmada o contrato legacy, si no asignado_contrato.
-//   2. poc_devices con serial (no deleted) → en_poc (si la unidad ya existe por
-//      un contrato, solo se enlaza poc_device_id sin tocar estado).
+//   2. poc_devices con serial (no deleted) → en_cliente (si la unidad ya existe
+//      por un contrato, solo se enlaza poc_device_id sin tocar estado).
 //   3. órdenes vivas (< 365 días, no ENTREGADO, no eliminadas) → en_taller.
 // Todos los docs nacen verificado:false (origen migracion_*). Failsafe de
 // colisión entre modelos: mismo criterio que domain/equiposPool.js (doc sufijado
@@ -847,7 +847,8 @@ async function backfillSeedPoolEquipos(dryRun) {
     const existente = crear({
       norm, serial,
       modeloId: d.modelo_id || null, modeloLabel: d.modelo_label || d.modelo || "",
-      estado: poolLib.ESTADOS.EN_POC,
+      // en_poc eliminado (2026-07-24): device POC activo = radio con el cliente.
+      estado: poolLib.ESTADOS.EN_CLIENTE,
       origen: "migracion_poc",
       pocDeviceId: doc.id,
       refMov: { tipo: "poc", id: doc.id, label: d.radio_name || d.unit_id || "" },

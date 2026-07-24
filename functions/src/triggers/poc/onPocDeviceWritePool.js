@@ -3,16 +3,40 @@ const logger = require("firebase-functions/logger");
 const pool = require("../../domain/equiposPool");
 
 // Pool de equipos ↔ inventario POC ("migración por contacto", plan
-// docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md §3.6): cuando un poc_device se crea o
-// se le registra serial, la unidad se refleja en el pool como en_poc (si ya
-// está rastreada por un contrato/orden solo se enlaza poc_device_id sin tocar
-// su estado). El pool nunca escribe de vuelta a poc_devices.
+// docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md §3.6). POC es la PLATAFORMA (base de
+// datos de airtime), no una ubicación física — decisión 2026-07-24: el estado
+// en_poc se eliminó del pool. El registro POC ahora solo:
+//   · enlaza poc_device_id (y custodia del cliente si la unidad no tenía) en la
+//     ficha existente, SIN tocar su estado; si el serial nunca tocó el sistema,
+//     la ficha nace en_cliente (device activo con cliente = radio colocado).
+//   · al borrarse el device (soft-delete o borrado), desenlaza poc_device_id.
+// El pool nunca escribe de vuelta a poc_devices.
 module.exports = onDocumentWritten(
   { document: "poc_devices/{deviceId}", region: "us-central1" },
   async (event) => {
     const deviceId = event.params.deviceId;
     const before = event.data.before?.exists ? event.data.before.data() : null;
     const after  = event.data.after?.exists  ? event.data.after.data()  : null;
+    if (!after && !before) return null;
+
+    // Device eliminado (soft-delete o borrado del doc): desenlazar la ficha.
+    // El estado NO cambia — dónde está el radio lo dicen contratos/órdenes.
+    const borradoAhora = (!after || after.deleted === true) && before && before.deleted !== true;
+    if (borradoAhora) {
+      const serialAntes = (before.serial || "").toString().trim();
+      if (!serialAntes) return null;
+      try {
+        const { ref, data } = await pool.resolver(
+          serialAntes, before.modelo_id || null, before.modelo_label || before.modelo || "");
+        if (data && data.poc_device_id === deviceId) {
+          await ref.set({ poc_device_id: null }, { merge: true });
+          logger.info("[onPocDeviceWritePool] Device POC eliminado — ficha desenlazada", { deviceId, serial: serialAntes });
+        }
+      } catch (e) {
+        logger.warn("[onPocDeviceWritePool] Desenlace falló (no crítico)", { deviceId, message: e.message });
+      }
+      return null;
+    }
     if (!after || after.deleted === true) return null;
 
     const serial = (after.serial || "").toString().trim();
@@ -25,11 +49,12 @@ module.exports = onDocumentWritten(
         serial,
         modelo_id: after.modelo_id || null,
         modelo_label: after.modelo_label || after.modelo || "",
-        estado: pool.ESTADOS.EN_POC,
-        // Si el contrato/orden ya rastrea esta unidad, el registro POC no le
-        // cambia el estado — solo enlaza el device.
-        noTocarDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.EN_TALLER],
-        tipo: "prestamo_poc",
+        // Ficha nueva → en_cliente. Ficha existente → cualquier estado real se
+        // respeta (el contacto POC solo enlaza el device, nunca mueve el radio).
+        estado: pool.ESTADOS.EN_CLIENTE,
+        noTocarDesde: [pool.ESTADOS.EN_BODEGA, pool.ESTADOS.ASIGNADO,
+          pool.ESTADOS.EN_TALLER, pool.ESTADOS.DEVUELTO, pool.ESTADOS.VENDIDO],
+        tipo: "registro_poc",
         refMov: { tipo: "poc", id: deviceId, label: after.radio_name || after.unit_id || "" },
         origen: "migracion_poc",
         extra: {

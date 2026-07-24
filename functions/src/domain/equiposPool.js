@@ -14,7 +14,8 @@ const ESTADOS = {
   ASIGNADO:   "asignado_contrato",
   EN_CLIENTE: "en_cliente",
   EN_TALLER:  "en_taller",
-  EN_POC:     "en_poc",
+  // en_poc ELIMINADO (2026-07-24): POC es la plataforma de airtime, no una
+  // ubicación física — la membresía POC vive en poc_device_id, no en estado.
   DEVUELTO:   "devuelto_revision",
   // Venta directa sin contrato (facturada en QuickBooks): la unidad sale de
   // bodega y pasa a propiedad del cliente. NO es terminal como baja — el radio

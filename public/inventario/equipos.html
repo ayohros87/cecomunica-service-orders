@@ -26,7 +26,6 @@
     .eq-badge-asignado_contrato { background:#dbeafe; color:#1d4ed8; }
     .eq-badge-en_cliente        { background:#e0e7ff; color:#4338ca; }
     .eq-badge-en_taller         { background:#fef9c3; color:#a16207; }
-    .eq-badge-en_poc            { background:#fae8ff; color:#a21caf; }
     .eq-badge-devuelto_revision { background:#ffedd5; color:#c2410c; }
     .eq-badge-vendido           { background:#ccfbf1; color:#0f766e; }
     .eq-badge-baja              { background:#f1f5f9; color:#64748b; }
@@ -192,7 +191,7 @@
         <span class="eqpool-chip eqpool-chip-en_bodega">En bodega</span><span>→</span>
         <span class="eqpool-chip eqpool-chip-asignado_contrato" title="Se asigna en Seriales del contrato">Asignado a contrato</span><span>→</span>
         <span class="eqpool-chip eqpool-chip-en_cliente" title="La orden de programación se marca entregada">En cliente</span>
-        <span title="Mientras está con el cliente puede pasar por taller (orden de servicio) o POC">⇄ <span class="eqpool-chip eqpool-chip-en_taller">En taller</span>/<span class="eqpool-chip eqpool-chip-en_poc">En POC</span></span>
+        <span title="Mientras está con el cliente puede pasar por taller (orden de servicio); si está en la plataforma POC lleva el tag POC como atributo">⇄ <span class="eqpool-chip eqpool-chip-en_taller">En taller</span></span>
         <span>→</span>
         <span class="eqpool-chip eqpool-chip-devuelto_revision" title="El cliente devolvió el equipo: cierre de enmienda, anulación o cambio por defectuoso">Entrada (por inspeccionar)</span><span>→</span>
         <span>bodega (reuso) o</span> <span class="eqpool-chip eqpool-chip-baja">Baja</span>
@@ -206,7 +205,6 @@
           <button class="eq-tab" data-tab="asignado_contrato" onclick="EquiposPool.setTab('asignado_contrato')">Asignados <span id="countAsignados"></span></button>
           <button class="eq-tab is-active" data-tab="en_cliente" onclick="EquiposPool.setTab('en_cliente')">En cliente <span id="countCliente"></span></button>
           <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')">Taller <span id="countTaller"></span></button>
-          <button class="eq-tab" data-tab="en_poc" onclick="EquiposPool.setTab('en_poc')">POC <span id="countPoc"></span></button>
           <button class="eq-tab" data-tab="devuelto_revision" onclick="EquiposPool.setTab('devuelto_revision')" title="Unidades que regresaron de un cliente y esperan inspección">Entradas <span id="countEntradas"></span></button>
           <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')" title="Unidades que salieron de la flota: dadas de baja o vendidas">Baja / Venta <span id="countOtros"></span></button>
           <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>

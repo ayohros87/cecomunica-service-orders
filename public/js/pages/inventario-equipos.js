@@ -235,7 +235,7 @@ window.EquiposPool = {
     // KPIs: métricas GLOBALES del pool (no cambian con los filtros).
     const nVerificar = this._equipos.filter(e => e.verificado === false).length;
     const flotaCampo = this._equipos.filter(e => e.propiedad === 'cecomunica'
-      && ['asignado_contrato', 'en_cliente', 'en_poc'].includes(e.estado)).length;
+      && ['asignado_contrato', 'en_cliente'].includes(e.estado)).length;
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('kpiBodega', this._equipos.filter(e => e.estado === 'en_bodega').length);
     set('kpiFlotaCampo', flotaCampo);
@@ -251,7 +251,6 @@ window.EquiposPool = {
     set('countAsignados', `(${n('asignado_contrato')})`);
     set('countCliente', `(${n('en_cliente')})`);
     set('countTaller', `(${n('en_taller')})`);
-    set('countPoc', `(${n('en_poc')})`);
     set('countEntradas', `(${n('devuelto_revision')})`);
     set('countOtros', `(${filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length})`);
     set('countTodos', `(${filtrables.length})`);
@@ -268,7 +267,6 @@ window.EquiposPool = {
         asignado_contrato: 'No hay unidades reservadas por contrato. Se asignan desde la página de Seriales del contrato (picker "Tomar del pool") y salen al confirmarse la entrega.',
         en_cliente: 'No hay unidades en clientes. Llegan aquí cuando la orden de programación se marca "Entregado al cliente".',
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
-        en_poc: 'No hay unidades en préstamo POC.',
         devuelto_revision: 'No hay entradas pendientes de inspección. Las devoluciones de clientes (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí; con "Inspección OK" regresan a bodega como reuso, o se dan de baja.',
         otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Revivir equipo".',
       };
@@ -294,7 +292,11 @@ window.EquiposPool = {
         const linkOrden = eq.orden_actual_id
           ? `<a class="eq-sub eq-link" href="../ordenes/editar-orden.html?id=${encodeURIComponent(eq.orden_actual_id)}" title="Abrir la orden de servicio">orden en taller</a>`
           : '';
-        const asignadoA = (linkCliente + linkContrato + linkOrden) || '—';
+        // POC es plataforma, no ubicación: la membresía se muestra como
+        // atributo (tag), nunca como estado.
+        const tagPoc = eq.poc_device_id
+          ? `<span class="eq-sub" title="Registrado en la plataforma POC (device ${esc(eq.poc_device_id)})">POC</span>` : '';
+        const asignadoA = (linkCliente + linkContrato + linkOrden + tagPoc) || '—';
         const compartido = eq.serial_compartido
           ? `<span class="eq-compartido" title="Este serial existe en más de un modelo — verifica el modelo antes de operar">2+ MODELOS</span>` : '';
         const noVerif = eq.verificado === false
@@ -307,7 +309,7 @@ window.EquiposPool = {
           (puede && eq.estado === 'en_bodega') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Registrar venta (facturada en QuickBooks)" onclick="EquiposPool.abrirVenta('${esc(eq.id)}')"><i data-lucide="banknote"></i></button>` : '',
           (puede && !['baja', 'vendido'].includes(eq.estado)) ? `<button class="btn btn-danger btn-icon btn-sm" title="Dar de baja" onclick="EquiposPool.darDeBaja('${esc(eq.id)}')"><i data-lucide="archive-x"></i></button>` : '',
           (puede && eq.estado === 'baja') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Revivir equipo (baja por error) → regresa a bodega" onclick="EquiposPool.revivir('${esc(eq.id)}')"><i data-lucide="archive-restore"></i></button>` : '',
-          (puede && (eq.origen || '').startsWith('migracion') && ['asignado_contrato', 'en_cliente', 'en_taller', 'en_poc'].includes(eq.estado)) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Corregir estado heredado de la migración → En bodega" onclick="EquiposPool.abrirCorregir('${esc(eq.id)}')"><i data-lucide="pencil-ruler"></i></button>` : '',
+          (puede && (eq.origen || '').startsWith('migracion') && ['asignado_contrato', 'en_cliente', 'en_taller'].includes(eq.estado)) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Corregir estado heredado de la migración → En bodega" onclick="EquiposPool.abrirCorregir('${esc(eq.id)}')"><i data-lucide="pencil-ruler"></i></button>` : '',
         ].join('');
         const prop = eq.propiedad || 'desconocida';
         return `<tr>
@@ -1123,7 +1125,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const n = document.getElementById(id); if (n) n.checked = false;
       });
     };
-    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'en_poc', 'devuelto_revision', 'otros', 'todos'];
+    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'devuelto_revision', 'otros', 'todos'];
     if (serialParam) {
       setTabUI('todos');
       limpiarSecundarios();

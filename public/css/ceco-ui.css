@@ -2237,7 +2237,6 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 .eqpool-chip-asignado_contrato { background: #dbeafe; color: #1d4ed8; }
 .eqpool-chip-en_cliente        { background: #e0e7ff; color: #4338ca; }
 .eqpool-chip-en_taller         { background: #fef9c3; color: #a16207; }
-.eqpool-chip-en_poc            { background: #fae8ff; color: #a21caf; }
 .eqpool-chip-devuelto_revision { background: #ffedd5; color: #c2410c; }
 .eqpool-chip-vendido           { background: #ccfbf1; color: #0f766e; }
 .eqpool-chip-baja              { background: #f1f5f9; color: #64748b; }
