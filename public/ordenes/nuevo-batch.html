@@ -18,7 +18,29 @@
     .batch-acc { display:flex; flex-wrap:wrap; gap:8px 10px; }
     .batch-acc label { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:var(--fg-2); white-space:nowrap; cursor:pointer; }
     .batch-acc input[type="checkbox"] { margin:0; }
-    .batch-num { text-align:center; color:var(--fg-3); font-variant-numeric:tabular-nums; }
+    .batch-num { text-align:center; color:var(--fg-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+    .batch-num .rowdot { display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--border-default); margin-right:5px; vertical-align:middle; }
+    .batch-num .rowdot.ok { background:#16a34a; } .batch-num .rowdot.warn { background:#f59e0b; } .batch-num .rowdot.bad { background:#ef4444; }
+
+    /* Validación contra el contrato (columna "Según el contrato") */
+    .contrato-cell { font-size:12px; }
+    .contrato-cell .c-val { font-family:var(--font-mono); color:var(--fg-1); margin-right:5px; }
+    .contrato-cell .c-muted { color:var(--fg-3); }
+    .contrato-cell .c-tag { display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:1px 6px; border-radius:999px; border:1px solid; vertical-align:middle; }
+    .contrato-cell .c-tag.ok   { color:#065F46; background:#ECFDF5; border-color:#A7F3D0; }
+    .contrato-cell .c-tag.warn { color:#9A3412; background:#FFF7ED; border-color:#FED7AA; }
+    .contrato-cell .c-tag.bad  { color:#B42318; background:#FEF2F2; border-color:#FBD5D2; }
+    .contrato-cell .c-usar { margin-left:6px; font-size:10.5px; font-weight:600; padding:2px 8px; border:1px solid var(--accent-line); background:var(--accent-soft); color:var(--accent-press, var(--accent)); border-radius:6px; cursor:pointer; white-space:nowrap; }
+    .contrato-cell .c-usar:hover { filter:brightness(.97); }
+    #filasBatch tr.fila-warn td { background:#FFF7ED; }
+    #filasBatch tr.fila-bad  td { background:#FEF2F2; }
+    #filasBatch select.modelo.falta { border-color:#ef4444; background:#FEF2F2; color:#B42318; }
+    .c-resumen { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:var(--sp-2); }
+    .c-resumen:empty { display:none; }
+    .c-pill { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; border:1px solid; }
+    .c-pill.ok   { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    .c-pill.warn { background:#FFF7ED; color:#9A3412; border-color:#FED7AA; }
+    .c-pill.bad  { background:#FEF2F2; color:#B42318; border-color:#FBD5D2; }
     .batch-acciones { text-align:center; }
     #tablaBatch th, #tablaBatch td { vertical-align:middle; }
 
@@ -52,7 +74,7 @@
   <script defer src="../js/domain/equipoNormalize.js"></script>
   <script src="../js/core/modulos.js"></script>
   <script src="../js/core/layout.js?v=cc5"></script>
-  <script src="../js/pages/ordenes-nuevo-batch.js?v=cc1" defer></script>
+  <script src="../js/pages/ordenes-nuevo-batch.js?v=cc2" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -167,6 +189,12 @@
         <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;"></i>
         <span id="origenEquiposTexto"></span>
       </p>
+      <!-- Validación contra el contrato: resumen vivo + corrección masiva -->
+      <div id="resumenContrato" class="c-resumen"></div>
+      <div style="margin-bottom:var(--sp-2);">
+        <button type="button" id="btnUsarContrato" class="btn btn-secondary btn-sm" style="display:none;"
+                onclick="usarContratoEnTodos()"></button>
+      </div>
       <div id="emptyBatch" class="app-empty-state" style="text-align:center; padding:var(--sp-6) var(--sp-4); color:var(--fg-3);">
         <i data-lucide="package-open" style="width:32px;height:32px;"></i>
         <p style="margin:var(--sp-2) 0 0;">Aún no hay equipos. Jala desde POC, pega seriales o agrega una fila.</p>
@@ -175,9 +203,10 @@
         <table id="tablaBatch">
           <thead>
             <tr>
-              <th style="width:44px;">#</th>
+              <th style="width:56px;">#</th>
               <th style="min-width:160px;">Serial</th>
               <th style="min-width:200px;">Modelo</th>
+              <th style="min-width:190px;">Según el contrato</th>
               <th style="min-width:220px;">Accesorios</th>
               <th style="min-width:200px;">Observaciones</th>
               <th style="width:52px;"></th>

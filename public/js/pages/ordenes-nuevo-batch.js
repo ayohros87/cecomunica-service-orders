@@ -16,6 +16,9 @@ let clienteId = "";
 let clienteNombre = "";
 let contratoDocId = "";      // contrato vinculado a la orden (si aplica)
 let contratoIdVisible = "";
+// serialLower -> { serial, modelo, modelo_id } del contrato. Es la verdad del
+// modelo por serial: la tabla la muestra por fila y avisa cuando no coincide.
+let contratoSeriales = new Map();
 
 let filaSeq = 0;
 
@@ -77,6 +80,13 @@ async function cargarOrden() {
   const btnContrato = $("btnJalarContrato");
   if (btnContrato && contratoDocId) btnContrato.style.display = "";
 
+  // Seriales del contrato (serial -> modelo): permite mostrar "Según el contrato"
+  // por fila y avisar de desajustes antes de guardar.
+  if (contratoDocId) {
+    try { contratoSeriales = await ContratosService.getModeloPorSerial(contratoDocId); }
+    catch (e) { console.warn("No se pudieron cargar los seriales del contrato:", e); }
+  }
+
   // Modelo común (defaults para filas pegadas / "aplicar a todas").
   $("comunModelo").innerHTML = `<option value="">— Sin modelo —</option>` +
     modelos.map(m => `<option value="${m.id}">${escHtml(m.nombre)}</option>`).join('');
@@ -98,9 +108,10 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
   const tr = document.createElement("tr");
   tr.id = id;
   tr.innerHTML = `
-    <td class="batch-num"></td>
+    <td class="batch-num"><span class="rowdot" title=""></span><span class="num"></span></td>
     <td><input type="text" class="serie table-input sm" value="${escAttr(serial)}" placeholder="Serial"></td>
     <td><select class="modelo table-select">${modelOptionsHtml(modeloId)}</select></td>
+    <td class="contrato-cell"></td>
     <td>
       <div class="batch-acc">
         <label title="Batería"><input type="checkbox" class="bateria" ${acc.bateria ? 'checked' : ''}> Bat</label>
@@ -128,12 +139,127 @@ window.eliminarFila = (btn) => {
 
 function renumber() {
   const filas = document.querySelectorAll("#filasBatch tr");
-  filas.forEach((tr, i) => { tr.querySelector(".batch-num").textContent = i + 1; });
+  filas.forEach((tr, i) => { const n = tr.querySelector(".batch-num .num"); if (n) n.textContent = i + 1; });
   $("emptyBatch").style.display = filas.length ? "none" : "";
   $("tablaWrap").style.display = filas.length ? "" : "none";
   $("contadorBatch").textContent = filas.length ? `${filas.length} equipo(s)` : "";
   if (!filas.length) mostrarOrigenEquipos("");
+  refrescarContrato();
 }
+
+// ── Validación visual contra el contrato ──────────────────────────────────
+// El contrato define qué modelo es cada serial. Por fila mostramos ese modelo,
+// marcamos el estado (coincide / variante X-vs-X-R / distinto / falta / fuera del
+// contrato) y ofrecemos "usar" para corregir. Antes esto se corregía en silencio
+// al guardar; ahora el técnico lo ve y decide.
+const baseModelo = (s) => normName(s).replace(/-r$/, "").replace(/\s*pro$/, "").trim();
+
+function modeloIdDeContrato(c) {
+  if (!c) return "";
+  const idsValidos = new Set(modelos.map(m => m.id));
+  if (c.modelo_id && idsValidos.has(c.modelo_id)) return c.modelo_id;
+  const porNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
+  return porNombre.get(normName(c.modelo || "")) || "";
+}
+
+function refrescarContrato() {
+  const filas = Array.from(document.querySelectorAll("#filasBatch tr"));
+  const hayContrato = contratoSeriales.size > 0;
+  const btnUsar = `<button type="button" class="c-usar" title="Poner el modelo que dice el contrato" onclick="usarModeloContrato(this)">usar</button>`;
+  let ok = 0, variante = 0, distinto = 0, sinModelo = 0, fuera = 0;
+
+  filas.forEach(tr => {
+    const serial   = (tr.querySelector(".serie")?.value || "").trim();
+    const modeloId = tr.querySelector(".modelo")?.value || "";
+    const celda = tr.querySelector(".contrato-cell");
+    const dot   = tr.querySelector(".rowdot");
+    const sel   = tr.querySelector(".modelo");
+    tr.classList.remove("fila-warn", "fila-bad");
+    if (sel) sel.classList.remove("falta");
+    let estado = "", html = '<span class="c-muted">—</span>', titulo = "";
+
+    if (!hayContrato)      { html = '<span class="c-muted">sin contrato</span>'; }
+    else if (!serial)      { html = '<span class="c-muted">—</span>'; }
+    else {
+      const c = contratoSeriales.get(serial.toLowerCase());
+      if (!c) {
+        estado = "warn"; fuera++;
+        html = '<span class="c-tag warn">no está en el contrato</span>';
+        titulo = "Este serial no aparece en el contrato de la orden";
+      } else {
+        const nombreEsperado = escHtml(c.modelo || "");
+        const esperado = modeloIdDeContrato(c);
+        if (!modeloId) {
+          estado = "bad"; sinModelo++;
+          if (sel) sel.classList.add("falta");
+          html = `<span class="c-val">${nombreEsperado}</span><span class="c-tag bad">falta</span>${btnUsar}`;
+          titulo = "Sin modelo — el contrato dice " + (c.modelo || "");
+        } else if (esperado && modeloId === esperado) {
+          estado = "ok"; ok++;
+          html = `<span class="c-val">${nombreEsperado}</span><span class="c-tag ok">coincide</span>`;
+          titulo = "Coincide con el contrato";
+        } else {
+          const actual = modelos.find(m => m.id === modeloId)?.nombre || "";
+          const esVar = baseModelo(actual) === baseModelo(c.modelo || "");
+          if (esVar) { estado = "warn"; variante++; } else { estado = "bad"; distinto++; }
+          html = `<span class="c-val">${nombreEsperado}</span>` +
+                 `<span class="c-tag ${esVar ? "warn" : "bad"}">${esVar ? "variante" : "distinto"}</span>${btnUsar}`;
+          titulo = esVar ? "Misma familia, distinta variante (X / X-R)" : "El contrato dice otro modelo";
+        }
+      }
+    }
+
+    if (celda) celda.innerHTML = html;
+    if (dot) { dot.className = "rowdot" + (estado ? " " + estado : ""); dot.title = titulo; }
+    if (estado === "warn") tr.classList.add("fila-warn");
+    if (estado === "bad")  tr.classList.add("fila-bad");
+  });
+
+  const resumen = $("resumenContrato");
+  if (resumen) {
+    if (!hayContrato || !filas.length) resumen.innerHTML = "";
+    else {
+      const partes = [`<span class="c-pill ok">● ${ok} coinciden</span>`];
+      if (variante)  partes.push(`<span class="c-pill warn">▲ ${variante} variante (X / X-R)</span>`);
+      if (distinto)  partes.push(`<span class="c-pill bad">▲ ${distinto} modelo distinto</span>`);
+      if (sinModelo) partes.push(`<span class="c-pill bad">▲ ${sinModelo} sin modelo</span>`);
+      if (fuera)     partes.push(`<span class="c-pill warn">▲ ${fuera} fuera del contrato</span>`);
+      resumen.innerHTML = partes.join("");
+    }
+  }
+  const n = variante + distinto + sinModelo;
+  const btnBulk = $("btnUsarContrato");
+  if (btnBulk) {
+    btnBulk.style.display = (hayContrato && n) ? "" : "none";
+    btnBulk.innerHTML = `<i data-lucide="wand-2"></i> Usar los del contrato en los ${n} que no coinciden`;
+    if (typeof lucide !== "undefined") lucide.createIcons();
+  }
+}
+
+// Pone en la fila el modelo que dice el contrato para su serial.
+window.usarModeloContrato = (btn) => {
+  const tr = btn?.closest("tr");
+  if (!tr) return;
+  const serial = (tr.querySelector(".serie")?.value || "").trim();
+  const id = modeloIdDeContrato(contratoSeriales.get(serial.toLowerCase()));
+  if (!id) { Toast.show("El modelo que indica el contrato no está en el catálogo de modelos.", "warn"); return; }
+  const sel = tr.querySelector(".modelo");
+  if (sel) sel.value = id;
+  refrescarContrato();
+};
+
+// Corrige de golpe todas las filas que no coinciden con el contrato.
+window.usarContratoEnTodos = () => {
+  let n = 0;
+  document.querySelectorAll("#filasBatch tr").forEach(tr => {
+    const serial = (tr.querySelector(".serie")?.value || "").trim();
+    const id = modeloIdDeContrato(contratoSeriales.get(serial.toLowerCase()));
+    const sel = tr.querySelector(".modelo");
+    if (id && sel && sel.value !== id) { sel.value = id; n++; }
+  });
+  refrescarContrato();
+  Toast.show(n ? `${n} modelo(s) ajustados al del contrato.` : "Todos ya coincidían con el contrato.", n ? "ok" : "warn");
+};
 
 window.agregarFila = () => addRow({ focus: true });
 
@@ -557,6 +683,12 @@ async function init() {
     await cargarModelos();
     await cargarOrden();
     wireComunTodos();
+    // Editar el serial o el modelo revalida la fila contra el contrato.
+    const cuerpo = $("filasBatch");
+    if (cuerpo) {
+      cuerpo.addEventListener("input",  () => refrescarContrato());
+      cuerpo.addEventListener("change", () => refrescarContrato());
+    }
     renumber();
   } catch (error) {
     console.error("Error al iniciar la página:", error);
