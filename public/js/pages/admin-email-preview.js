@@ -14,6 +14,7 @@
         cliente_nombre:   'ACME Telecom S.A.',
         tecnico_asignado: 'Juan Pérez',
         tipo_de_servicio: 'Reparación',
+        observaciones:    'Contrato #4521 — cliente pidió revisión de antenas',
         equipos: [
           { modelo: 'DGP-8550', numero_de_serie: '912AGW1234', trabajo_tecnico: 'Cambio de batería + diagnóstico', bateria: true, clip: true, cargador: true },
           { modelo: 'XPR-7550', numero_de_serie: '914AKZ5678', trabajo_tecnico: 'Reprogramación', cargador: true, antena: true },

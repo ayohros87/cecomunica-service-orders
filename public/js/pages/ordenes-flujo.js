@@ -888,6 +888,7 @@ window.copiarSeriales = function (ordenId) {
       cliente_nombre:    orden.cliente_nombre    || null,
       tecnico_asignado:  orden.tecnico_asignado  || null,
       tipo_de_servicio:  orden.tipo_de_servicio  || null,
+      observaciones:     orden.observaciones     || null,
       equipos,
     };
   }
