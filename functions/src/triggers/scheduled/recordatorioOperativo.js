@@ -21,6 +21,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const { tallerEmailTo, recepcionEmails } = require("../../lib/mailRecipients");
+const { pendientesDevolucion } = require("../../lib/devolucion");
 
 const ESTADOS_ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
 const STALE_DIAS_DEFAULT = 10;
@@ -207,21 +208,11 @@ module.exports = onSchedule(
           const s = String(e.serial || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
           if (s) cubiertos.add(s);
         });
-        const pendSer = esperados.filter(e => !e.resolucion).length;
-        const pendMod = (o.devolucion?.esperados_por_modelo || [])
-          .reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
-        // Contrato de PAPEL (modo sin_contrato): la orden nace sin esperados
-        // — los seriales se capturan al llegar — así que pendSer/pendMod son
-        // siempre 0 y estas devoluciones NUNCA entraban al aviso aunque el
-        // cliente hubiera devuelto 6 de 9. El faltante sale de total_esperado
-        // (lo declarado al abrir el tiquete) menos lo recibido. Misma fórmula
-        // que pendientesDevolucion() en public/js/pages/ordenes-state.js.
-        let pendPapel = 0;
-        if (o.devolucion?.modo === "sin_contrato") {
-          const total = Number(o.devolucion?.total_esperado || 0);
-          const recibidos = esperados.filter(e => e.resolucion === "recibido").length;
-          if (total > 0) pendPapel = Math.max(0, total - recibidos);
-        }
+        // Incluye el faltante de los contratos de PAPEL (modo sin_contrato):
+        // esas órdenes nacen sin esperados —los seriales se capturan al
+        // llegar— así que el conteo por serial/modelo era siempre 0 y NUNCA
+        // entraban al aviso aunque el cliente hubiera devuelto 6 de 9.
+        const pend = pendientesDevolucion(o.devolucion);
         const edad = edadDias(o.fecha_creacion, now);
         abiertas.push({
           id: d.id,
@@ -230,7 +221,7 @@ module.exports = onSchedule(
           modo: o.devolucion?.modo === "confirmacion" ? "confirmación"
               : o.devolucion?.modo === "sin_contrato" ? "contrato de papel"
               : "recuperación",
-          pendientes: pendSer + pendMod + pendPapel,
+          pendientes: pend,
           dias: edad == null ? 0 : Math.floor(edad),
         });
       });

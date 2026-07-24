@@ -107,7 +107,7 @@ async function _destinatarios(clienteId) {
       const snap = await db.collection("usuarios").where("rol", "==", "recepcion").get();
       snap.forEach(d => { const e = d.data()?.email; if (isEmail(e)) emails.add(e.trim().toLowerCase()); });
     } catch (e) {
-      logger.warn("[ordenEntrada] No se pudieron leer usuarios de recepción", { message: e.message });
+      logger.warn("[ordenEntrada] No se pudieron leer usuarios de recepción", { error: e.message });
     }
   }
   try {
@@ -121,7 +121,7 @@ async function _destinatarios(clienteId) {
       }
     }
   } catch (e) {
-    logger.warn("[ordenEntrada] No se pudo resolver el vendedor del cliente", { clienteId, message: e.message });
+    logger.warn("[ordenEntrada] No se pudo resolver el vendedor del cliente", { clienteId, error: e.message });
   }
   return [...emails];
 }
@@ -244,7 +244,7 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
       logger.warn("[ordenEntrada] Sin destinatarios (recepción/vendedor) — orden creada sin correo", { ordenId });
     }
   } catch (e) {
-    logger.warn("[ordenEntrada] No se pudo encolar el correo (no crítico)", { ordenId, message: e.message });
+    logger.warn("[ordenEntrada] No se pudo encolar el correo (no crítico)", { ordenId, error: e.message });
   }
 
   return ordenId;

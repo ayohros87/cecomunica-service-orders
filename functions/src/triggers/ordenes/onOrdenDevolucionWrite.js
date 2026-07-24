@@ -29,28 +29,12 @@ const pool = require("../../domain/equiposPool");
 const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO } = require("../../lib/ordenEntrada");
 const { recepcionEmails } = require("../../lib/mailRecipients");
 const { APP_BASE_URL } = require("../../lib/inventario");
+const { pendientesDevolucion } = require("../../lib/devolucion");
 
 const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]
 ));
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
-
-// Equipos que el cliente todavía debe. Espeja pendientesDevolucion() de
-// public/js/pages/ordenes-state.js y el cálculo de recordatorioOperativo: si
-// cambia una, cambian las tres.
-function pendientesDevolucion(dev) {
-  const esperados = dev?.esperados || [];
-  const porSerial = esperados.filter(e => !e.resolucion).length;
-  const porModelo = (dev?.esperados_por_modelo || [])
-    .reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
-  let papel = 0;
-  if (dev?.modo === "sin_contrato") {
-    const total = Number(dev.total_esperado || 0);
-    const recibidos = esperados.filter(e => e.resolucion === "recibido").length;
-    if (total > 0) papel = Math.max(0, total - recibidos);
-  }
-  return porSerial + porModelo + papel;
-}
 
 // Recepción + el vendedor asignado del cliente. Nunca lanza.
 async function _destinatariosPendientes(clienteId) {
@@ -67,7 +51,7 @@ async function _destinatariosPendientes(clienteId) {
       }
     }
   } catch (e) {
-    logger.warn("[onOrdenDevolucionWrite] vendedor del cliente no resuelto", { clienteId, message: e.message });
+    logger.warn("[onOrdenDevolucionWrite] vendedor del cliente no resuelto", { clienteId, error: e.message });
   }
   return [...emails];
 }
@@ -299,7 +283,7 @@ module.exports = onDocumentWritten(
         }
       } catch (err) {
         logger.warn("[onOrdenDevolucionWrite] No se pudo aplicar la resolución (no crítico)", {
-          ordenId, serial: e.serial, res, message: err.message,
+          ordenId, serial: e.serial, res, error: err.message,
         });
       }
     }
@@ -311,7 +295,7 @@ module.exports = onDocumentWritten(
       try {
         await crearOAlimentarEntrada(ordenId, after, tandaRecibida);
       } catch (e) {
-        logger.warn("[onOrdenDevolucionWrite] ENTRADA por tanda falló (no crítico)", { ordenId, message: e.message });
+        logger.warn("[onOrdenDevolucionWrite] ENTRADA por tanda falló (no crítico)", { ordenId, error: e.message });
       }
     }
 
@@ -348,7 +332,7 @@ module.exports = onDocumentWritten(
           logger.info("[onOrdenDevolucionWrite] Acuse copiado a la ENTRADA", { ordenId, entradaId });
         }
       } catch (e) {
-        logger.warn("[onOrdenDevolucionWrite] No se pudo copiar el acuse a la ENTRADA (no crítico)", { ordenId, message: e.message });
+        logger.warn("[onOrdenDevolucionWrite] No se pudo copiar el acuse a la ENTRADA (no crítico)", { ordenId, error: e.message });
       }
     }
 
@@ -366,7 +350,7 @@ module.exports = onDocumentWritten(
               accesorios: e.accesorios || null, dano: e.dano_visible || "",
             })));
         } catch (e) {
-          logger.warn("[onOrdenDevolucionWrite] ENTRADA de cierre falló (no crítico)", { ordenId, message: e.message });
+          logger.warn("[onOrdenDevolucionWrite] ENTRADA de cierre falló (no crítico)", { ordenId, error: e.message });
         }
       } else {
         logger.info("[onOrdenDevolucionWrite] Cerrada sin recibidos — no se crea ENTRADA", { ordenId });
@@ -383,7 +367,7 @@ module.exports = onDocumentWritten(
         try {
           await avisarCierreConPendientes(ordenId, after, pendientes);
         } catch (e) {
-          logger.warn("[onOrdenDevolucionWrite] Aviso de cierre con pendientes falló (no crítico)", { ordenId, message: e.message });
+          logger.warn("[onOrdenDevolucionWrite] Aviso de cierre con pendientes falló (no crítico)", { ordenId, error: e.message });
         }
       }
     }

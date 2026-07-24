@@ -31,6 +31,10 @@ module.exports = [
         fetch: "readonly",
         TextEncoder: "readonly",
         TextDecoder: "readonly",
+        // Globales de Node 18+ que usan los tests para simular el DOM
+        // (test/firmaPad.test.js monta un canvas falso).
+        EventTarget: "readonly",
+        Event: "readonly",
       },
     },
     rules: {
