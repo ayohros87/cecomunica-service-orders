@@ -255,6 +255,19 @@
         const pv = document.getElementById('previewVendedor');
         if (pv) pv.innerHTML = '';
       }
+      actualizarAvisoSinContrato();
+    }
+
+    // Aviso NON-BLOCKING: hay material para crear equipos (seriales pegados o
+    // archivo cargado) pero ningún contrato vinculado — quedarían sin ancla al
+    // contrato/pool y con el modelo posicional del archivo. No bloquea: un lote
+    // sin contrato es legítimo (demos, préstamos), solo se advierte.
+    function actualizarAvisoSinContrato() {
+      const aviso = document.getElementById('avisoSinContrato');
+      if (!aviso) return;
+      const sinContrato = !document.getElementById('contratoJalar')?.value;
+      const hayMaterial = !!document.getElementById('seriales')?.value.trim() || !!detallesBatch?.length;
+      aviso.hidden = !(sinContrato && hayMaterial);
     }
 
     async function cargarSelect(ruta, id) {
@@ -526,6 +539,8 @@ async function autoJalarContrato(cantidadEsperada) {
         document.getElementById("btnJalarContrato")?.addEventListener("click", jalarSerialesDesdeContrato);
         // Elegir un contrato liga el modelo por serial (aunque no se pulse "Jalar").
         document.getElementById("contratoJalar")?.addEventListener("change", (e) => cargarModeloContrato(e.target.value || null));
+        // Pegar seriales a mano también debe encender/apagar el aviso sin-contrato.
+        document.getElementById("seriales")?.addEventListener("input", actualizarAvisoSinContrato);
 document.getElementById("addCliente").onclick = async () => {
   const nombre = prompt("Ingrese el nombre del nuevo cliente:");
   if (!nombre) return;
@@ -712,6 +727,12 @@ document.getElementById("addCliente").onclick = async () => {
         // lazy por si se eligió el contrato sin pulsar "Jalar seriales".
         if (contratoDocId && !modeloContratoPorSerial.size) {
           try { await cargarModeloContrato(contratoDocId); } catch (_) {}
+        }
+
+        // Advertencia NON-BLOCKING al crear sin contrato (caso Pandeportes
+        // 2026-07-24: lote re-creado suelto y hubo que vincularlo a mano).
+        if (!contratoDocId) {
+          Toast.show('Ojo: el lote se está creando SIN contrato vinculado. Los equipos no quedarán anclados a ningún contrato.', 'warn');
         }
 
         // Garantía final: alinear los seriales al orden del archivo del vendedor
