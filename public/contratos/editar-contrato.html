@@ -72,9 +72,26 @@
         <p id="ph-subtitle">Modifique los datos del contrato y guarde los cambios.</p>
       </div>
       <div class="app-page-header-actions">
+        <!-- Enlaces del ciclo del equipo (P5): antes había que volver a la
+             lista y saberse el mapa de memoria para llegar a estas páginas. -->
+        <a class="btn btn-ghost btn-sm" id="lnkSeriales" href="#" style="display:none;"><i data-lucide="scan-barcode"></i> Seriales</a>
+        <a class="btn btn-ghost btn-sm" id="lnkTransicion" href="#" style="display:none;"><i data-lucide="repeat"></i> Transición</a>
         <span id="ph-estado-chip" class="chip-estado chip-cotizada">Pendiente Aprobación</span>
       </div>
     </div>
+    <script>
+      // Los enlaces solo necesitan el ?id= de esta misma página.
+      (function () {
+        const id = new URLSearchParams(location.search).get('id');
+        if (!id) return;
+        document.addEventListener('DOMContentLoaded', () => {
+          const s = document.getElementById('lnkSeriales');
+          const t = document.getElementById('lnkTransicion');
+          if (s) { s.href = `seriales.html?id=${encodeURIComponent(id)}`; s.style.display = ''; }
+          if (t) { t.href = `transicion.html?id=${encodeURIComponent(id)}`; t.style.display = ''; }
+        });
+      })();
+    </script>
 
     <form id="formEditar" onsubmit="return false;" novalidate>
 

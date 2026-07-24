@@ -96,11 +96,61 @@ window.ContratosEquipos = {
   // asignada a este contrato (equipos_pool), con serial → kardex. Best-effort:
   // si el servicio no está, el rol no puede leer el pool o la consulta falla,
   // simplemente no se muestra (el modal de órdenes sigue funcionando igual).
-  async _seccionPool(id) {
-    if (typeof EquiposPoolService === 'undefined') return '';
-    let unidades = [];
-    try { unidades = await EquiposPoolService.listarPorContrato(id); }
-    catch (e) { return ''; }
+  async _fetchUnidades(id) {
+    if (typeof EquiposPoolService === 'undefined') return [];
+    try { return await EquiposPoolService.listarPorContrato(id); }
+    catch (e) { return []; }
+  },
+
+  // "Ruta del equipo" (P5 auditoría 2026-07-24): responde "¿en qué paso va
+  // esto?" sin ir al inventario — seriales → programación → entrega →
+  // devolución. El paso pendiente que libera el ciclo queda señalado.
+  _rutaHtml(contrato, ordenes, unidades) {
+    if (!contrato) return '';
+    const esc = CS.esc.bind(CS);
+    const paso = (estado, titulo, detalle) => {
+      const css = estado === 'done' ? 'color:#067647; border-color:#067647; background:#e9f7f0;'
+        : estado === 'now' ? 'color:#92400e; border-color:#f59e0b; background:#fffbeb;'
+        : 'color:var(--fg-3); border-color:var(--line);';
+      const icono = estado === 'done' ? '✓ ' : estado === 'now' ? '● ' : '';
+      return `<span style="display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600;
+        padding:4px 11px; border:1px solid; border-radius:99px; white-space:nowrap; ${css}"
+        title="${esc(detalle || '')}">${icono}${esc(titulo)}</span>`;
+    };
+    const flecha = '<span style="color:var(--fg-3); padding:0 5px;">→</span>';
+
+    const total = Math.max(0, (contrato.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0)
+      - Number(contrato.baja_cancelado_total || 0));
+    const conSerial = Number(contrato.seriales_count || 0) + Number(contrato.seriales_omitidos_count || 0);
+    const serialesOk = contrato.seriales_estado === 'asignados' || contrato.seriales_estado === 'legacy';
+    const p1 = paso(serialesOk ? 'done' : (conSerial > 0 ? 'now' : 'now'),
+      `Seriales ${Math.min(conSerial, total || conSerial)}/${total || '?'}`,
+      serialesOk ? 'Seriales confirmados' : 'Se asignan en la página de Seriales del contrato');
+
+    const ordenesVivas = (ordenes || []).length;
+    const p2 = paso(ordenesVivas ? 'done' : (serialesOk ? 'now' : 'next'),
+      ordenesVivas ? `Programación · ${ordenesVivas} orden(es)` : 'Programación',
+      ordenesVivas ? 'Ya hay órdenes vinculadas' : 'Falta crear la orden de programación');
+
+    const enCliente = (unidades || []).filter(u => u.estado === 'en_cliente').length;
+    const entregaOk = contrato.entrega_confirmada === true;
+    const p3 = paso(entregaOk ? 'done' : (ordenesVivas ? 'now' : 'next'),
+      entregaOk ? 'Entrega registrada' : `Entrega ${enCliente}/${(unidades || []).length || total || '?'}`,
+      entregaOk ? 'La orden se marcó ENTREGADO AL CLIENTE'
+        : 'El paso que libera el ciclo: marcar la orden como ENTREGADO AL CLIENTE cuando el cliente reciba');
+
+    const p4 = contrato.orden_devolucion_id
+      ? flecha + paso('now', 'Devolución de salientes',
+          `Tiquete DEVOLUCIÓN ${contrato.orden_devolucion_id} — pendiente de check-in`)
+      : '';
+
+    return `<div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-bottom:16px;
+      padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-2, #fafafa);">
+      ${p1}${flecha}${p2}${flecha}${p3}${p4}
+    </div>`;
+  },
+
+  _seccionPoolHtml(unidades) {
     if (!unidades.length) return '';
     const esc = CS.esc.bind(CS);
 
@@ -144,10 +194,13 @@ window.ContratosEquipos = {
   async abrirModal(id) {
     const esc = CS.esc.bind(CS);
     try {
-      const [seccionPool, ordenes] = await Promise.all([
-        this._seccionPool(id),
+      const [contrato, unidades, ordenes] = await Promise.all([
+        ContratosService.getContrato(id).catch(() => null),
+        this._fetchUnidades(id),
         ContratosService.getOrdenesDeContratoCompleto(id),
       ]);
+      const seccionPool = this._seccionPoolHtml(unidades);
+      const ruta = this._rutaHtml(contrato, ordenes, unidades);
       const rows = [];
       for (const x of ordenes) {
         const orden = await OrdenesService.getOrder(x.id);
@@ -163,6 +216,7 @@ window.ContratosEquipos = {
         });
       }
       document.getElementById('modalEquiposBody').innerHTML = `
+        ${ruta}
         ${seccionPool}
         <div style="margin-bottom:10px; font-weight:700;">Equipos en órdenes vinculadas (${rows.length})</div>
         <div class="table-scroll">

@@ -276,6 +276,21 @@
         // Stepper del ciclo de vida (Command Center F3) — presentación pura.
         if (window.OrdenStepper) OrdenStepper.update(d.estado_reparacion || "POR ASIGNAR");
         document.getElementById("observaciones").value = d.observaciones || "";
+
+        // Bloque "Equipos de la orden" (P5): resumen + puertas a donde SÍ viven
+        // (la lista expandible y agregar-equipo) — esta página no los edita.
+        const eqs = (Array.isArray(d.equipos) ? d.equipos : []).filter(e => e && !e.eliminado);
+        const conSerial = eqs.filter(e => ((e.numero_de_serie || e.serial || '') + '').trim()).length;
+        const resumenEl = document.getElementById("equiposResumen");
+        if (resumenEl) {
+          resumenEl.textContent = eqs.length
+            ? `${eqs.length} equipo(s) en la orden · ${conSerial} con serial`
+            : "Esta orden aún no tiene equipos registrados.";
+        }
+        const lnkVer = document.getElementById("lnkVerEquipos");
+        if (lnkVer) lnkVer.href = `index.html?orden=${encodeURIComponent(ordenId)}`;
+        const lnkAdd = document.getElementById("lnkAgregarEquipos");
+        if (lnkAdd) lnkAdd.href = `agregar-equipo.html?orden_id=${encodeURIComponent(ordenId)}`;
       } else {
         mostrarToast("Orden no encontrada.", "error");
       }
