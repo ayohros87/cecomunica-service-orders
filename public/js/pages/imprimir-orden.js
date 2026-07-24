@@ -49,6 +49,19 @@
       });
     }
 
+    // Órdenes de ENTRADA creadas por una devolución: la observación
+    // auto-generada quedaba con el conteo de la PRIMERA tanda del check-in
+    // (casi siempre 1) porque las tandas siguientes agregaban equipos sin
+    // reescribirla. El backend ya la mantiene al día, pero las órdenes que ya
+    // existen siguen con el número viejo — el conteo real es el del array de
+    // equipos, así que se corrige aquí al imprimir (con el plural correcto).
+    const RE_INSPECCION = /(inspecci[oó]n de\s+)\d+\s+equipos?(?:\(s\))?\s+devueltos?(?:\(s\))?/gi;
+    function corregirConteoInspeccion(texto, n) {
+      if (!texto) return texto;
+      const s = n === 1 ? '' : 's';
+      return String(texto).replace(RE_INSPECCION, (_m, pre) => `${pre}${n} equipo${s} devuelto${s}`);
+    }
+
     function renderOrden(datos, equipos, infoContainer, tablaContainer) {
       const tituloEquipos = document.getElementById("tituloEquipos");
       const esVisita = (datos.tipo_de_servicio || "").toLowerCase().includes("visita");
@@ -77,6 +90,7 @@
         if (tot[k] > 0) resumenPartes.push(`<strong>${tot[k]}</strong> ${tot[k] === 1 ? sing : plur}`);
       });
       const resumenHtml = resumenPartes.join(' · ');
+      const observaciones = corregirConteoInspeccion(datos.observaciones, tot.radios);
 
       infoContainer.innerHTML = `
         <div class="info-grid">
@@ -90,7 +104,7 @@
           ${esVisita ? '' : `<div class="info-item full"><span class="info-label">Resumen:</span> <span class="info-value">${resumenHtml}</span></div>`}
           ${esVisita && datos.visita?.sitio ? `<div class="info-item full"><span class="info-label">Sitio:</span> <span class="info-value">${datos.visita.sitio}</span></div>` : ''}
           ${esVisita && datos.visita?.contacto_sitio ? `<div class="info-item"><span class="info-label">Contacto en sitio:</span> <span class="info-value">${datos.visita.contacto_sitio}</span></div>` : ''}
-          ${datos.observaciones ? `<div class="info-item full"><span class="info-label">Observaciones Generales:</span> <span class="info-value">${datos.observaciones}</span></div>` : ''}
+          ${observaciones ? `<div class="info-item full"><span class="info-label">Observaciones Generales:</span> <span class="info-value">${observaciones}</span></div>` : ''}
         </div>
       `;
       // Las visitas técnicas no llevan tabla de equipos: su contenido es el

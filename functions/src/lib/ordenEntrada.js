@@ -41,6 +41,26 @@ function equipoDeEntrada(u, observaciones) {
   };
 }
 
+// Conteo de equipos con plural correcto ("1 equipo devuelto" / "6 equipos
+// devueltos"). Este texto termina impreso en la orden de servicio, así que
+// no puede seguir siendo el "equipo(s) devuelto(s)" de plantilla.
+function frasePiezas(n) {
+  const s = Number(n) === 1 ? "" : "s";
+  return `${n} equipo${s} devuelto${s}`;
+}
+
+// Observación general auto-generada de una ENTRADA. Se REGENERA cada vez que
+// una tanda nueva agrega equipos (onOrdenDevolucionWrite): el conteo tiene que
+// seguir al array `equipos`, no quedarse con el de la primera tanda.
+function obsEntradaAuto(n, motivo, contratoLabel) {
+  return `Orden creada automáticamente: inspección de ${frasePiezas(n)}. ${motivo} — contrato ${contratoLabel || "—"}.`;
+}
+
+// Reconoce el encabezado auto-generado (cualquier conteo, con el "(s)" viejo o
+// con el plural nuevo) para poder reescribir el número sin pisar notas que
+// alguien haya agregado a mano.
+const RE_OBS_AUTO = /^Orden creada automáticamente: inspección de \d+ equipos?(?:\(s\))? devueltos?(?:\(s\))?\./i;
+
 // Observación estándar del equipo al entrar: condición/daño registrados en
 // el momento del check-in (lo que el cliente firmó), previo a la revisión.
 function obsDeEntrada(u, motivo) {
@@ -123,7 +143,7 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
 
   const equipos = lista.map(u => equipoDeEntrada(u, obsDeEntrada(u, motivo)));
 
-  const observaciones = `Orden creada automáticamente: inspección de ${lista.length} equipo(s) devuelto(s). ${motivo} — contrato ${contratoId || contratoDocId || "—"}.`;
+  const observaciones = obsEntradaAuto(lista.length, motivo, contratoId || contratoDocId);
 
   const data = {
     cliente_id: clienteId || "",
@@ -192,7 +212,7 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
         to: destinatarios[0],
         cc: destinatarios.length > 1 ? destinatarios.slice(1).join(",") : null,
         subject: `Nueva orden de ENTRADA ${ordenId} – ${clienteNombre || "Cliente"}`,
-        preheader: `${lista.length} equipo(s) devuelto(s) para inspección · ${motivo}`,
+        preheader: `${frasePiezas(lista.length)} para inspección · ${motivo}`,
         bodyContent: `
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Orden de entrada creada</h2>
           <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
@@ -230,4 +250,4 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
   return ordenId;
 }
 
-module.exports = { crearOrdenEntrada, equipoDeEntrada };
+module.exports = { crearOrdenEntrada, equipoDeEntrada, frasePiezas, obsEntradaAuto, RE_OBS_AUTO };

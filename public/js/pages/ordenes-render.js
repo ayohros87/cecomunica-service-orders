@@ -742,6 +742,21 @@ function _btnQcRechazo(ordenId, od) {
   return `<button class="btn-flujo btn-flujo--qc-rechazo" title="Ver motivo del rechazo de control de calidad" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-x"></i> Rechazo QC</button>`;
 }
 
+// Chip "faltan N" de una orden de DEVOLUCIÓN abierta. Se pinta junto al botón
+// de check-in para que el faltante se vea desde el listado — antes había que
+// abrir la orden para enterarse de que el cliente devolvió 6 de 9.
+// El conteo sale de pendientesDevolucion (ordenes-state.js), la misma fórmula
+// que usan el modal de check-in y el recordatorio diario.
+function badgePendientesDevolucion(od) {
+  if (typeof pendientesDevolucion !== 'function') return '';
+  const n = pendientesDevolucion(od);
+  if (!n) return '';
+  return `<span class="chip-estado chip-espera" style="margin-right:4px;white-space:nowrap;"
+    title="El cliente todavía no ha devuelto ${n} equipo${n === 1 ? '' : 's'}">
+    <i data-lucide="package-x" style="width:12px;height:12px;vertical-align:-1px;"></i> Faltan ${n}</span>`;
+}
+window.badgePendientesDevolucion = badgePendientesDevolucion;
+
 function botonesFlujo(ordenId, estado, ordenData) {
   const rol = APP.state.userRole || "";
   let html = "";
@@ -756,6 +771,9 @@ function botonesFlujo(ordenId, estado, ordenData) {
   if (esDevolucion) {
     const cerradaDev = (estado || '').toUpperCase() === 'CERRADA (DEVOLUCION)';
     if (!cerradaDev && rol !== ROLES.VISTA) {
+      // Cuántos radios sigue debiendo el cliente, sin abrir el check-in: es el
+      // dato que se perdía de vista cuando devuelven solo una parte.
+      html += badgePendientesDevolucion(od);
       html += `<button class="btn-flujo btn-flujo--completar" title="Check-in de equipos devueltos" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Check-in</button>`;
     } else {
       html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver devolución" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver devolución</button>`;

@@ -210,13 +210,27 @@ module.exports = onSchedule(
         const pendSer = esperados.filter(e => !e.resolucion).length;
         const pendMod = (o.devolucion?.esperados_por_modelo || [])
           .reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
+        // Contrato de PAPEL (modo sin_contrato): la orden nace sin esperados
+        // — los seriales se capturan al llegar — así que pendSer/pendMod son
+        // siempre 0 y estas devoluciones NUNCA entraban al aviso aunque el
+        // cliente hubiera devuelto 6 de 9. El faltante sale de total_esperado
+        // (lo declarado al abrir el tiquete) menos lo recibido. Misma fórmula
+        // que pendientesDevolucion() en public/js/pages/ordenes-state.js.
+        let pendPapel = 0;
+        if (o.devolucion?.modo === "sin_contrato") {
+          const total = Number(o.devolucion?.total_esperado || 0);
+          const recibidos = esperados.filter(e => e.resolucion === "recibido").length;
+          if (total > 0) pendPapel = Math.max(0, total - recibidos);
+        }
         const edad = edadDias(o.fecha_creacion, now);
         abiertas.push({
           id: d.id,
           cliente: o.cliente_nombre || "—",
           contrato: o.contrato?.contrato_id || "—",
-          modo: o.devolucion?.modo === "confirmacion" ? "confirmación" : "recuperación",
-          pendientes: pendSer + pendMod,
+          modo: o.devolucion?.modo === "confirmacion" ? "confirmación"
+              : o.devolucion?.modo === "sin_contrato" ? "contrato de papel"
+              : "recuperación",
+          pendientes: pendSer + pendMod + pendPapel,
           dias: edad == null ? 0 : Math.floor(edad),
         });
       });

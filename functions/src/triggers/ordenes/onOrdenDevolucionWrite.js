@@ -26,7 +26,110 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
-const { crearOrdenEntrada, equipoDeEntrada } = require("../../lib/ordenEntrada");
+const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO } = require("../../lib/ordenEntrada");
+const { recepcionEmails } = require("../../lib/mailRecipients");
+const { APP_BASE_URL } = require("../../lib/inventario");
+
+const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]
+));
+const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+
+// Equipos que el cliente todavía debe. Espeja pendientesDevolucion() de
+// public/js/pages/ordenes-state.js y el cálculo de recordatorioOperativo: si
+// cambia una, cambian las tres.
+function pendientesDevolucion(dev) {
+  const esperados = dev?.esperados || [];
+  const porSerial = esperados.filter(e => !e.resolucion).length;
+  const porModelo = (dev?.esperados_por_modelo || [])
+    .reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
+  let papel = 0;
+  if (dev?.modo === "sin_contrato") {
+    const total = Number(dev.total_esperado || 0);
+    const recibidos = esperados.filter(e => e.resolucion === "recibido").length;
+    if (total > 0) papel = Math.max(0, total - recibidos);
+  }
+  return porSerial + porModelo + papel;
+}
+
+// Recepción + el vendedor asignado del cliente. Nunca lanza.
+async function _destinatariosPendientes(clienteId) {
+  const emails = new Set();
+  try { (await recepcionEmails()).forEach(e => emails.add(e)); } catch (e) { /* sin recepción */ }
+  try {
+    if (clienteId) {
+      const cli = await db.collection("clientes").doc(clienteId).get();
+      const vendUid = cli.exists ? cli.data().vendedor_asignado : null;
+      if (vendUid) {
+        const v = await db.collection("usuarios").doc(vendUid).get();
+        const e = v.exists ? v.data().email : null;
+        if (isEmail(e)) emails.add(String(e).trim().toLowerCase());
+      }
+    }
+  } catch (e) {
+    logger.warn("[onOrdenDevolucionWrite] vendedor del cliente no resuelto", { clienteId, message: e.message });
+  }
+  return [...emails];
+}
+
+// Aviso inmediato al cerrar una devolución con equipos SIN devolver. El
+// digest diario (recordatorioOperativo §C) solo mira órdenes ABIERTAS, así
+// que sin este correo el faltante se cerraba en silencio y nadie volvía a
+// perseguirlo — justo el caso "devolvió 6 de 9".
+async function avisarCierreConPendientes(ordenId, after, pendientes) {
+  const dev = after.devolucion || {};
+  const esperados = dev.esperados || [];
+  const recibidos = esperados.filter(e => e.resolucion === "recibido").length;
+  const excepciones = esperados.filter(e => e.resolucion === "no_devuelve");
+  const destinatarios = await _destinatariosPendientes(after.cliente_id || null);
+  if (!destinatarios.length) {
+    logger.warn("[onOrdenDevolucionWrite] cierre con pendientes sin destinatarios", { ordenId, pendientes });
+    return;
+  }
+
+  const refPapel = dev.origen?.ref_papel || after.contrato?.contrato_id || "—";
+  const filasExc = excepciones.map(e => `
+    <tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;">${escapeHtml(e.serial)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(e.modelo || "—")}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(e.motivo_codigo || "—")}${e.motivo_detalle ? `: ${escapeHtml(e.motivo_detalle)}` : ""}</td>
+    </tr>`).join("");
+
+  await db.collection("mail_queue").add({
+    to: destinatarios[0],
+    cc: destinatarios.length > 1 ? destinatarios.slice(1).join(", ") : null,
+    subject: `Devolución ${ordenId} cerrada con ${pendientes} equipo${pendientes === 1 ? "" : "s"} SIN devolver – ${after.cliente_nombre || "Cliente"}`,
+    preheader: `${pendientes} equipo(s) siguen con el cliente`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#9A3412;">Equipos que no regresaron</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        La devolución <b>${escapeHtml(ordenId)}</b> de <b>${escapeHtml(after.cliente_nombre || "—")}</b>
+        (${escapeHtml(refPapel)}) se cerró con <b>${pendientes} equipo(s) sin devolver</b>.
+        Se recibieron <b>${recibidos}</b>. Coordinar la recuperación o el cobro con el cliente —
+        la orden ya está cerrada y no volverá a salir en el recordatorio diario.
+      </p>
+      ${filasExc ? `
+      <p style="margin:12px 0 4px;font:14px/1.5 Arial,sans-serif;">Excepciones registradas:</p>
+      <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:4px 0;">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Serial</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Motivo</th>
+        </tr></thead>
+        <tbody>${filasExc}</tbody>
+      </table>` : ""}`,
+    ctaUrl: `${APP_BASE_URL}/ordenes/index.html`,
+    ctaLabel: "Ver la orden",
+    meta: {
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      source: "devolucion-cierre-pendientes",
+      orden_id: ordenId,
+      pendientes,
+    },
+    status: "queued",
+  });
+  logger.info("[onOrdenDevolucionWrite] Aviso de cierre con pendientes encolado", { ordenId, pendientes, to: destinatarios[0] });
+}
 
 // Estados en los que la ENTRADA aún acepta tandas (el taller no la ha tomado).
 const ESTADOS_APPEND_ENTRADA = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR"];
@@ -56,10 +159,22 @@ async function crearOAlimentarEntrada(ordenId, after, unidades) {
           `Tanda de devolución ${ordenId} — pendiente de inspección.` +
           (u.dano ? ` Daño visible al recibir: ${u.dano}.` : "")));
       if (nuevos.length) {
-        tx.update(entradaRef, {
-          equipos: [...actuales, ...nuevos],
+        const equipos = [...actuales, ...nuevos];
+        const update = {
+          equipos,
           fecha_modificacion: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        };
+        // El conteo de la observación auto-generada tiene que seguir al array
+        // de equipos. Sin esto la ENTRADA se queda con el número de la PRIMERA
+        // tanda (casi siempre 1) aunque termine con 6 unidades, y así lo
+        // imprime la orden de servicio. Solo se reescribe si nadie la editó.
+        const obs = String(e.observaciones || "");
+        if (RE_OBS_AUTO.test(obs)) {
+          const total = equipos.filter(x => !x.eliminado).length;
+          update.observaciones = obs.replace(RE_OBS_AUTO,
+            `Orden creada automáticamente: inspección de ${frasePiezas(total)}.`);
+        }
+        tx.update(entradaRef, update);
       }
       return true;
     });
@@ -255,6 +370,21 @@ module.exports = onDocumentWritten(
         }
       } else {
         logger.info("[onOrdenDevolucionWrite] Cerrada sin recibidos — no se crea ENTRADA", { ordenId });
+      }
+    }
+
+    // Cierre con equipos que el cliente NO devolvió: aviso a recepción + el
+    // vendedor del cliente. Se calcula aquí (no se confía en el
+    // devolucion.cierre_pendientes que escribe la UI) para que también cubra
+    // los cierres hechos desde otro camino.
+    if (cerroAhora) {
+      const pendientes = pendientesDevolucion(dev);
+      if (pendientes > 0) {
+        try {
+          await avisarCierreConPendientes(ordenId, after, pendientes);
+        } catch (e) {
+          logger.warn("[onOrdenDevolucionWrite] Aviso de cierre con pendientes falló (no crítico)", { ordenId, message: e.message });
+        }
       }
     }
 

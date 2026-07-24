@@ -327,6 +327,31 @@ function esOrdenDevolucion(orden) {
   return normTxt(orden?.tipo_de_servicio).includes("devolucion");
 }
 
+// Equipos que el cliente todavía NO ha devuelto en una orden de DEVOLUCIÓN.
+// Tres orígenes según cómo nació la orden:
+//   · esperados[]            — lista por serial (contrato en el sistema)
+//   · esperados_por_modelo[] — la baja no registró seriales: faltan por modelo
+//   · total_esperado         — contrato de PAPEL: no hay lista previa, solo la
+//     cantidad que el cliente declaró al abrir el tiquete. Sin este dato la
+//     devolución sin contrato siempre daba 0 pendientes (todo lo que existe
+//     está recibido), así que nada avisaba de los que faltaban.
+// Misma fórmula que recordatorioOperativo (sección C) — si cambia una, cambia
+// la otra.
+function pendientesDevolucion(orden) {
+  const dev = orden?.devolucion || {};
+  const esperados = dev.esperados || [];
+  const porSerial = esperados.filter(e => !e.resolucion).length;
+  const porModelo = (dev.esperados_por_modelo || [])
+    .reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
+  let sinContrato = 0;
+  if (dev.modo === 'sin_contrato') {
+    const total = Number(dev.total_esperado || 0);
+    const recibidos = esperados.filter(e => e.resolucion === 'recibido').length;
+    if (total > 0) sinContrato = Math.max(0, total - recibidos);
+  }
+  return porSerial + porModelo + sinContrato;
+}
+
 // Una orden de ENTRADA es la inspección de equipos que el cliente DEVOLVIÓ:
 // entran al taller para revisión técnica (y cotización si hay daños o
 // faltantes cobrables) y las unidades quedan bajo control de inventario.

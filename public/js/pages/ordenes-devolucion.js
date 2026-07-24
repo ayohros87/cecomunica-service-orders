@@ -45,7 +45,8 @@
   let _overlay = null;
   let _recibiendoId = null; // esperado con el mini-checklist abierto
   let _draftModelo = null;  // check-in por modelo/libre pendiente de confirmar {idx|null, serial, modelo, modelo_id}
-  let _firmaAcuse = null;   // API del canvas del acuse (clear/isEmpty)
+  let _firmaAcuse = null;   // API del canvas del acuse (FirmaPad)
+  let _firmaSnapshot = null;// firma en curso, para sobrevivir a un re-render
   let _modelos = null;      // catálogo para el datalist de la captura libre (lazy)
 
   function puedeOperar() {
@@ -57,6 +58,9 @@
     _ordenId = ordenId;
     _recibiendoId = null;
     _draftModelo = null;
+    _firmaAcuse?.destroy();
+    _firmaAcuse = null;
+    _firmaSnapshot = null;
     try {
       _orden = await OrdenesService.getOrder(ordenId);
     } catch (e) { Toast.show('No se pudo cargar la orden.', 'bad'); return; }
@@ -77,59 +81,40 @@
   }
 
   function cerrarModal() {
+    _firmaAcuse?.destroy();
+    _firmaAcuse = null;
+    _firmaSnapshot = null;
     _overlay?.remove();
     _overlay = null;
     // Refresca la fila en la lista si la página de órdenes está montada.
     if (typeof window.cargarOrdenes === 'function') { try { window.cargarOrdenes(true); } catch (e) {} }
   }
 
-  // Canvas de firma autocontenido — mismo patrón DPR/táctil que el cierre de
-  // visita (ordenes-visita.js): el modal se crea y destruye dinámicamente.
-  function _wireFirmaCanvas(canvas) {
-    const ctx = canvas.getContext('2d');
-    const dpr  = Math.max(1, window.devicePixelRatio || 1);
-    const cssW = canvas.clientWidth || 300;
-    const cssH = canvas.clientHeight || 140;
-    canvas.width  = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, cssW, cssH);
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-
-    let drawing = false;
-    const getPos = e => {
-      const r = canvas.getBoundingClientRect();
-      if (e.touches) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
-      return { x: e.offsetX, y: e.offsetY };
-    };
-    const start = e => { drawing = true; ctx.beginPath(); const p = getPos(e); ctx.moveTo(p.x, p.y); e.preventDefault(); };
-    const move  = e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); };
-    const end   = e => { drawing = false; e.preventDefault(); };
-    canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', move);
-    canvas.addEventListener('mouseup', end);
-    canvas.addEventListener('mouseleave', end);
-    canvas.addEventListener('touchstart', start, { passive: false });
-    canvas.addEventListener('touchmove',  move,  { passive: false });
-    canvas.addEventListener('touchend',   end,   { passive: false });
-
-    return {
-      clear() {
-        ctx.save();
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.restore();
+  // Firma del acuse: la captura vive en FirmaPad (js/ui/firmaPad.js), común a
+  // todos los puntos de firma. Cubre mouse, pantalla táctil y PAD de firma /
+  // lápiz USB con un solo camino (Pointer Events + captura de puntero) —
+  // antes solo escuchaba mouse/touch sin captura y en escritorio el trazo se
+  // cortaba al salir del recuadro, así que había que marcar "sin firma".
+  function _montarFirma(canvas) {
+    if (!window.FirmaPad) {
+      console.error('[OrdenesDevolucion] FirmaPad no cargó — revisa el <script> de js/ui/firmaPad.js');
+      return null;
+    }
+    const pad = FirmaPad.mount(canvas, {
+      alto: 140,
+      onChange: (hayFirma) => {
+        const est = _overlay?.querySelector('#acuseFirmaEstado');
+        if (est) {
+          est.textContent = hayFirma ? '✓ Firma capturada' : 'Firme dentro del recuadro';
+          est.style.color = hayFirma ? '#065F46' : 'var(--fg-3,#6b7280)';
+        }
+        if (hayFirma) _firmaSnapshot = null; // el trazo vivo manda sobre el restaurado
       },
-      isEmpty() {
-        return !ctx.getImageData(0, 0, canvas.width, canvas.height).data.some(v => v !== 255);
-      }
-    };
+    });
+    // El modal se re-renderiza en cada check-in: si el cliente ya había
+    // firmado, se recupera el trazo en vez de perderlo en silencio.
+    if (pad && _firmaSnapshot) pad.restore(_firmaSnapshot);
+    return pad;
   }
 
   // Mini-checklist al recibir: qué entregó el cliente con la unidad + daño
@@ -165,6 +150,10 @@
   }
 
   function render() {
+    // Cada check-in re-renderiza el modal entero. Si el cliente ya trazó su
+    // firma, se guarda para restaurarla en el canvas nuevo.
+    if (_firmaAcuse && !_firmaAcuse.isEmpty()) _firmaSnapshot = _firmaAcuse.snapshot();
+
     const dev = _orden.devolucion || {};
     const esperados = dev.esperados || [];
     const porModelo = dev.esperados_por_modelo || [];
@@ -178,11 +167,43 @@
     const modelosPend = porModelo.reduce((s, m) => s + Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)), 0);
     const sinAcuse = esperados.filter(e => e.resolucion === 'recibido' && !e.acuse_id);
 
+    // Pendientes por devolver. En 'sin_contrato' no hay lista previa: el
+    // pendiente sale de total_esperado (lo que el cliente declaró) menos lo
+    // recibido. Fórmula compartida con la lista de órdenes y con el
+    // recordatorio diario.
+    const recibidos = esperados.filter(e => e.resolucion === 'recibido').length;
+    const totalEsperado = Number(dev.total_esperado || 0);
+    const totalPend = (typeof pendientesDevolucion === 'function')
+      ? pendientesDevolucion(_orden)
+      : pendientes + modelosPend;
+    // Con contrato el cierre exige resolver todo; sin contrato el faltante
+    // puede ser real (el cliente no trajo el resto) y se cierra con constancia.
+    const bloqueaCierre = pendientes + modelosPend > 0;
+
     const intro = esConfirmacion
       ? 'Anulación de contrato: lo usual es que los equipos <b>nunca hayan salido</b>. Confirma unidad por unidad — <b>Nunca salió</b> los regresa a bodega directo; <b>Recibido</b> los manda a inspección.'
       : esSinContrato
       ? 'Devolución <b>sin contrato en el sistema</b> (contrato de papel). Registra cada unidad al recibirla — serial + modelo — con su checklist de accesorios/daño y el <b>acuse firmado</b> del cliente. Las unidades quedan trackeadas en Equipos por serial y alimentan la orden de ENTRADA del taller.'
       : 'Estos equipos están <b>con el cliente</b>. Marca <b>Recibido</b> cuando cada unidad llegue físicamente: registra accesorios y daño visible, y el cliente <b>firma el acuse</b> de lo entregado (antes de la revisión técnica). Cada tanda alimenta al instante la orden de ENTRADA del taller.';
+
+    // Contador de faltantes siempre a la vista: es el dato que se pierde de
+    // vista cuando el cliente trae solo una parte del alquiler.
+    const bannerPendientes = totalPend > 0
+      ? `<div style="margin:0 0 12px;border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+           <i data-lucide="package-x" style="width:16px;height:16px;color:#b45309;"></i>
+           <span style="font-size:13px;color:#78350f;">
+             <b>${totalPend} equipo${totalPend === 1 ? '' : 's'} pendiente${totalPend === 1 ? '' : 's'} por devolver</b>
+             ${esSinContrato && totalEsperado ? ` — recibidos ${recibidos} de ${totalEsperado}.` : '.'}
+             ${cerrada
+               ? 'La orden se cerró así: la recuperación o el cobro se coordina fuera del sistema.'
+               : 'Mientras queden pendientes, la orden sigue apareciendo en el recordatorio diario de devoluciones.'}
+           </span>
+         </div>`
+      : (esSinContrato && totalEsperado
+        ? `<div style="margin:0 0 12px;border:1px solid #A7F3D0;background:#ECFDF5;border-radius:10px;padding:8px 12px;font-size:13px;color:#065F46;">
+             <b>Completo:</b> ${recibidos} de ${totalEsperado} equipos recibidos.
+           </div>`
+        : '');
 
     const filas = esperados.map(e => `
       <tr>
@@ -219,7 +240,14 @@
     // serial se registra al llegar, con modelo del catálogo si se conoce.
     const bloqueCapturaLibre = (editable && esSinContrato && !_draftModelo) ? `
       <div style="margin-top:${esperados.length ? '12px' : '0'};border:1px dashed var(--border-subtle,#cbd5e1);border-radius:10px;padding:10px 12px;">
-        <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Registrar unidad recibida</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+          <span style="font-weight:600;font-size:13px;">Registrar unidad recibida</span>
+          <span style="font-size:12px;color:var(--fg-3,#6b7280);margin-left:auto;">Debe devolver</span>
+          <input class="form-input" id="devTotalEsperado" type="number" min="0" max="999" value="${totalEsperado || ''}"
+                 placeholder="—" title="Cantidad de equipos que el cliente debe devolver según el contrato de papel"
+                 style="height:28px;font-size:12.5px;width:64px;text-align:center;">
+          <span style="font-size:12px;color:var(--fg-3,#6b7280);">equipos</span>
+        </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <input class="form-input" id="devSerialLibre" placeholder="Serial (tecléalo o escanéalo)" style="height:32px;font-size:12.5px;max-width:220px;" autocomplete="off">
           <input class="form-input" id="devModeloLibre" list="devModelosList" placeholder="Modelo" style="height:32px;font-size:12.5px;max-width:220px;" autocomplete="off">
@@ -265,8 +293,14 @@
         </div>
         <div id="acuseFirmaWrap">
           <label class="form-label">Firma</label>
-          <canvas id="acuseFirmaCanvas" style="width:100%;height:140px;border:1px dashed var(--line,#cbd5e1);border-radius:8px;background:#fff;touch-action:none;"></canvas>
-          <button type="button" class="btn btn-ghost btn-sm" id="acuseLimpiarFirma" style="margin-top:2px;padding:3px 8px;font-size:12px;">Limpiar firma</button>
+          <canvas id="acuseFirmaCanvas" style="width:100%;height:140px;border:1px dashed var(--line,#cbd5e1);border-radius:8px;background:#fff;touch-action:none;cursor:crosshair;"></canvas>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:2px;">
+            <button type="button" class="btn btn-ghost btn-sm" id="acuseLimpiarFirma" style="padding:3px 8px;font-size:12px;">Limpiar firma</button>
+            <span id="acuseFirmaEstado" style="font-size:11.5px;color:var(--fg-3,#6b7280);">Firme dentro del recuadro</span>
+          </div>
+          <div style="font-size:11px;color:var(--fg-3,#6b7280);margin-top:2px;">
+            Sirve con dedo, mouse, lápiz o pad de firma USB — mantenga presionado y trace; el trazo continúa aunque se salga del recuadro.
+          </div>
         </div>
         <label class="form-check" style="margin-top:6px;display:flex;align-items:center;gap:8px;font-size:12.5px;">
           <input type="checkbox" id="acuseSinFirma"> <span>Registrar sin firma del cliente</span>
@@ -303,6 +337,7 @@
         </div>
         <div style="padding:14px 18px;overflow:auto;flex:1;">
           <p style="margin:0 0 12px;font-size:13px;color:var(--fg-2,#374151);">${intro}</p>
+          ${bannerPendientes}
           ${(esperados.length || _draftModelo) ? `
           <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
@@ -329,8 +364,10 @@
           ${listaAcuses}
         </div>
         <div class="sheet-footer" style="display:flex;justify-content:space-between;gap:8px;padding:12px 18px;border-top:1px solid var(--border-subtle,#e5e7eb);">
-          <span style="font-size:12px;color:var(--fg-3,#6b7280);align-self:center;">${cerrada ? 'Orden cerrada.' : `${pendientes + modelosPend} unidad(es) sin resolver${sinAcuse.length ? ` · ${sinAcuse.length} sin acuse firmado` : ''}`}</span>
-          ${(!cerrada && puedeOperar()) ? `<button type="button" class="btn btn-primary" id="devCerrarOrden" ${pendientes + modelosPend > 0 ? 'disabled title="Resuelve todas las unidades para cerrar"' : ''}><i data-lucide="check"></i> Cerrar devolución</button>` : ''}
+          <span style="font-size:12px;color:var(--fg-3,#6b7280);align-self:center;">${cerrada
+            ? `Orden cerrada.${Number(dev.cierre_pendientes || 0) ? ` <b style="color:#92400e;">Cerró con ${dev.cierre_pendientes} equipo(s) sin devolver.</b>` : ''}`
+            : `${totalPend} equipo(s) pendiente(s) por devolver${sinAcuse.length ? ` · ${sinAcuse.length} sin acuse firmado` : ''}`}</span>
+          ${(!cerrada && puedeOperar()) ? `<button type="button" class="btn btn-primary" id="devCerrarOrden" ${bloqueaCierre ? 'disabled title="Resuelve todas las unidades para cerrar"' : ''}><i data-lucide="check"></i> Cerrar devolución</button>` : ''}
         </div>
       </div>`;
 
@@ -370,6 +407,9 @@
     }));
     _overlay.querySelectorAll('.dev-checkin-modelo').forEach(b => b.addEventListener('click', () => checkinPorModelo(Number(b.dataset.idx))));
     _overlay.querySelectorAll('.dev-checkin-libre').forEach(b => b.addEventListener('click', checkinLibre));
+    _overlay.querySelector('#devTotalEsperado')?.addEventListener('change', (ev) => {
+      guardarTotalEsperado(ev.target.value);
+    });
     // Enter en el serial libre = Check-in (flujo de escáner de código de barras).
     _overlay.querySelector('#devSerialLibre')?.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter') { ev.preventDefault(); checkinLibre(); }
@@ -381,12 +421,18 @@
       _overlay.querySelector('#acuseSinFirmaBloque')?.classList.toggle('hidden', !cbSin.checked);
       _overlay.querySelector('#acuseFirmaWrap')?.classList.toggle('hidden', cbSin.checked);
     });
-    _overlay.querySelector('#acuseLimpiarFirma')?.addEventListener('click', () => _firmaAcuse?.clear());
+    _overlay.querySelector('#acuseLimpiarFirma')?.addEventListener('click', () => {
+      _firmaSnapshot = null;
+      _firmaAcuse?.clear();
+    });
     _overlay.querySelector('#acuseGuardarBtn')?.addEventListener('click', guardarAcuse);
+    // El re-render descarta el canvas anterior: soltar sus listeners para no
+    // dejar handlers de window colgando por cada check-in.
+    _firmaAcuse?.destroy();
     _firmaAcuse = null;
     const cv = _overlay.querySelector('#acuseFirmaCanvas');
     // El canvas necesita clientWidth real → esperar al layout.
-    if (cv) requestAnimationFrame(() => { _firmaAcuse = _wireFirmaCanvas(cv); });
+    if (cv) requestAnimationFrame(() => { _firmaAcuse = _montarFirma(cv); });
   }
 
   async function _guardarDevolucion(log) {
@@ -455,6 +501,32 @@
       console.error(err);
       e.resolucion = null; e.accesorios = null; e.dano_visible = null; e.resuelto_at = null; e.resuelto_por = null;
       Toast.show('No se pudo registrar el check-in.', 'bad');
+    }
+    render();
+  }
+
+  // Cuántos equipos debe devolver el cliente según el contrato de PAPEL. Es
+  // el único ancla de "cuántos faltan" en el modo sin_contrato: sin él nadie
+  // —ni la lista de órdenes ni el recordatorio diario— puede saber que
+  // quedaron radios afuera. Se puede corregir mientras la orden esté abierta.
+  async function guardarTotalEsperado(valor) {
+    const n = Math.max(0, Math.min(999, Math.floor(Number(valor) || 0)));
+    const dev = _orden.devolucion;
+    const previo = Number(dev.total_esperado || 0);
+    if (n === previo) return;
+    const recibidos = (dev.esperados || []).filter(e => e.resolucion === 'recibido').length;
+    if (n > 0 && n < recibidos) {
+      Toast.show(`Ya se registraron ${recibidos} equipos: el total no puede ser menor.`, 'bad');
+      render();
+      return;
+    }
+    dev.total_esperado = n;
+    try {
+      await _guardarDevolucion('DEVOLUCION_TOTAL_ESPERADO');
+    } catch (err) {
+      console.error(err);
+      dev.total_esperado = previo;
+      Toast.show('No se pudo guardar la cantidad esperada.', 'bad');
     }
     render();
   }
@@ -537,8 +609,8 @@
     try {
       let firmaUrl = null;
       if (!sin) {
-        const canvas = _overlay.querySelector('#acuseFirmaCanvas');
-        const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
+        const blob = await _firmaAcuse.toBlob();
+        if (!blob) throw new Error('La firma quedó vacía al guardar.');
         const path = `ordenes_firmas/${_ordenId}_acuse_${Date.now()}.png`;
         const ref = firebase.storage().ref(path);
         await ref.put(blob, { contentType: 'image/png' });
@@ -563,6 +635,10 @@
       pendientes.forEach(e => { e.acuse_id = acuse.id; });
       try {
         await _guardarDevolucion('DEVOLUCION_ACUSE');
+        // La firma ya quedó archivada en este acuse: el lienzo arranca limpio
+        // para la siguiente tanda (si no, render() la restauraría).
+        _firmaSnapshot = null;
+        _firmaAcuse?.clear();
         Toast.show('Acuse de recepción guardado.', 'ok');
       } catch (err) {
         dev.acuses = dev.acuses.filter(a => a.id !== acuse.id);
@@ -577,15 +653,28 @@
   }
 
   async function cerrarOrden() {
-    const sinAcuse = (_orden.devolucion.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id).length;
+    const dev = _orden.devolucion || {};
+    const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id).length;
+    const pend = (typeof pendientesDevolucion === 'function') ? pendientesDevolucion(_orden) : 0;
     const aviso = sinAcuse ? `\n\nOJO: ${sinAcuse} unidad(es) recibida(s) quedan SIN acuse firmado del cliente.` : '';
-    if (!window.confirm('¿Cerrar la devolución? Todas las unidades quedaron resueltas; los equipos recibidos ya están (o quedarán) en la orden de ENTRADA de inspección.' + aviso)) return;
+    // Sin contrato el cierre con faltantes es legítimo (el cliente no trajo el
+    // resto), pero deja constancia: el número queda en la orden en vez de
+    // desaparecer al cerrar.
+    const base = pend > 0
+      ? `¿Cerrar la devolución con ${pend} equipo(s) SIN devolver?\n\nQuedará registrado en la orden y dejará de aparecer en el recordatorio de pendientes — coordina el cobro o la excepción antes de cerrar.`
+      : '¿Cerrar la devolución? Todas las unidades quedaron resueltas; los equipos recibidos ya están (o quedarán) en la orden de ENTRADA de inspección.';
+    if (!window.confirm(base + aviso)) return;
     const user = firebase.auth().currentUser;
+    const previo = dev.cierre_pendientes;
+    dev.cierre_pendientes = pend;
     try {
+      // `devolucion` va completo: mergeOrder usa set({merge:true}) y una clave
+      // con punto crearía un campo literal "devolucion.cierre_pendientes".
       await OrdenesService.mergeOrder(_ordenId, {
         estado_reparacion: 'CERRADA (DEVOLUCION)',
         fecha_completado: firebase.firestore.FieldValue.serverTimestamp(),
         completado_por_uid: user?.uid || null,
+        devolucion: dev,
         os_logs: firebase.firestore.FieldValue.arrayUnion({ action: 'CERRAR_DEVOLUCION', by: user?.uid || '' }),
       });
       _orden.estado_reparacion = 'CERRADA (DEVOLUCION)';
@@ -593,6 +682,7 @@
       render();
     } catch (e) {
       console.error(e);
+      dev.cierre_pendientes = previo;
       Toast.show('No se pudo cerrar la devolución.', 'bad');
     }
   }
@@ -669,6 +759,15 @@
             <label class="form-label" for="devNuevaRef">Referencia del contrato de papel</label>
             <input class="form-input" id="devNuevaRef" placeholder="Ej.: contrato físico #123 / carpeta 2019" autocomplete="off">
           </div>
+          <div class="form-field" style="margin-bottom:8px;">
+            <label class="form-label" for="devNuevaTotal">¿Cuántos equipos debe devolver? <span class="req">*</span></label>
+            <input class="form-input" id="devNuevaTotal" type="number" min="1" max="999" placeholder="Ej.: 9" style="max-width:120px;" autocomplete="off">
+            <div style="font-size:11.5px;color:var(--fg-3,#6b7280);margin-top:3px;">
+              Total del alquiler según el contrato de papel. Es lo que permite saber cuántos radios
+              quedan pendientes cuando el cliente trae solo una parte, y dispara el aviso diario a
+              recepción. Se puede corregir después.
+            </div>
+          </div>
           <div class="form-field">
             <label class="form-label" for="devNuevaObs">Observaciones (opcional)</label>
             <textarea class="form-input form-textarea" id="devNuevaObs" rows="2" placeholder="Ej.: cliente pasa a dejar 4 radios por fin de alquiler"></textarea>
@@ -691,7 +790,13 @@
       const nombre = (overlay.querySelector('#devNuevaCliente')?.value || '').trim();
       const refPapel = (overlay.querySelector('#devNuevaRef')?.value || '').trim();
       const obs = (overlay.querySelector('#devNuevaObs')?.value || '').trim();
+      const total = Math.floor(Number(overlay.querySelector('#devNuevaTotal')?.value || 0));
       if (!nombre) { Toast.show('Ingresa el nombre del cliente.', 'bad'); return; }
+      if (!(total >= 1 && total <= 999)) {
+        Toast.show('Indica cuántos equipos debe devolver el cliente (1-999).', 'bad');
+        overlay.querySelector('#devNuevaTotal')?.focus();
+        return;
+      }
       const match = clientes.find(c => (c.nombre || '').trim().toLowerCase() === nombre.toLowerCase());
       const user = firebase.auth().currentUser;
 
@@ -705,7 +810,11 @@
           tipo_de_servicio: 'DEVOLUCION',
           estado_reparacion: 'POR ASIGNAR',
           fecha_creacion: firebase.firestore.FieldValue.serverTimestamp(),
-          observaciones: [`Devolución sin contrato en el sistema${refPapel ? ` — ${refPapel}` : ''}.`, obs].filter(Boolean).join(' '),
+          observaciones: [
+            `Devolución sin contrato en el sistema${refPapel ? ` — ${refPapel}` : ''}.`,
+            `El cliente debe devolver ${total} equipo${total === 1 ? '' : 's'}.`,
+            obs,
+          ].filter(Boolean).join(' '),
           // Sin `equipos[]` a propósito (mismo criterio que ordenDevolucion.js
           // del backend): las unidades entran al capturarse en el check-in.
           devolucion: {
@@ -713,6 +822,9 @@
             origen: { tipo: 'contrato_papel', ref_id: null, ref_papel: refPapel || null },
             esperados: [],
             esperados_por_modelo: [],
+            // Único ancla de "cuántos faltan" en papel: no hay lista de
+            // esperados que consultar, solo esta cantidad menos lo recibido.
+            total_esperado: total,
           },
           contrato: {
             aplica: false,
