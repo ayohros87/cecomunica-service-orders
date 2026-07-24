@@ -115,6 +115,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script defer src="../js/firebase-init.js"></script>
   <script src="../js/core/modulos.js"></script>
   <script src="../js/core/layout.js?v=cc5"></script>
@@ -125,12 +126,13 @@
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
   <script defer src="../js/services/equiposPoolService.js"></script>
+  <script defer src="../js/ui/equipo-ficha.js"></script>
   <script defer src="../js/services/pocService.js"></script> <!-- soft-delete del device en "Corregir estado" -->
 
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/inventario-equipos.js?v=cc13" defer></script>
+  <script src="../js/pages/inventario-equipos.js?v=cc14" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -207,6 +209,7 @@
           <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')">Taller <span id="countTaller"></span></button>
           <button class="eq-tab" data-tab="devuelto_revision" onclick="EquiposPool.setTab('devuelto_revision')" title="Unidades que regresaron de un cliente y esperan inspección">Entradas <span id="countEntradas"></span></button>
           <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')" title="Unidades que salieron de la flota: dadas de baja o vendidas">Baja / Venta <span id="countOtros"></span></button>
+          <button class="eq-tab" data-tab="conflictos" onclick="EquiposPool.setTab('conflictos')" title="Seriales con 2+ fichas (el mismo radio registrado con modelos distintos por fuentes distintas) — fusiona o confirma que son radios distintos">Conflictos <span id="countConflictos"></span></button>
           <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>
         </div>
 
@@ -229,6 +232,7 @@
         <label class="toggle-pill" title="Fichas creadas por migración pendientes de confirmar con el equipo a la vista"><input type="checkbox" id="chkSinVerificar" onchange="EquiposPool.render()"> Sin verificar</label>
         <label class="toggle-pill" title="Seriales que existen en más de un modelo — requieren depuración física"><input type="checkbox" id="chkCompartidos" onchange="EquiposPool.render()"> 2+ modelos</label>
         <label class="toggle-pill" title="Unidades sin cliente ni contrato rastreable"><input type="checkbox" id="chkSinCliente" onchange="EquiposPool.render()"> Sin cliente</label>
+        <label class="toggle-pill" title="En taller con la orden ya COMPLETADO (EN OFICINA): el radio está terminado y solo falta registrar la entrega"><input type="checkbox" id="chkListos" onchange="EquiposPool.render()"> Listos para entrega</label>
 
         <div style="flex:1;"></div>
         <button class="btn btn-ghost btn-sm" onclick="EquiposPool.cargar()" title="Recargar la lista"><i data-lucide="rotate-ccw"></i> Recargar</button>

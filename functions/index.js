@@ -69,3 +69,4 @@ exports.facturacionDiaria             = require("./src/triggers/scheduled/factur
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");
 exports.listQBOCustomers              = require("./src/callable/listQBOCustomers");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");
+exports.fusionarPoolFicha             = require("./src/callable/fusionarPoolFicha");

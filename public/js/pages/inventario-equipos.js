@@ -26,6 +26,17 @@ window.EquiposPool = {
   // devuelto_revision ya tiene pestaña propia ("Entradas").
   ESTADOS_OTROS: ['baja', 'vendido'],
 
+  // Etiquetas humanas del origen de la ficha (el valor crudo queda en title).
+  ORIGEN_LABELS: {
+    bodega: 'Recibido en bodega',
+    toma_fisica: 'Toma física',
+    import_excel: 'Importado de Excel',
+    migracion_contrato: 'Migración · contrato',
+    migracion_orden: 'Migración · orden',
+    migracion_poc: 'Migración · POC',
+    venta: 'Venta directa',
+  },
+
   PROP_LABELS: { cecomunica: 'Flota', cliente: 'Cliente', desconocida: '?' },
 
   puedeEscribir() {
@@ -37,10 +48,40 @@ window.EquiposPool = {
     try {
       this._equipos = await EquiposPoolService.listar();
       this.render();
+      // Sub-estado derivado "listo para entrega" (P4a auditoría 2026-07-24):
+      // "En taller" mezclaba radios en trabajo con radios TERMINADOS esperando
+      // que alguien registre la entrega. Se consulta el estado real de la
+      // orden de cada unidad en taller (async, la tabla ya está pintada).
+      await this._cargarEstadosOrdenTaller();
+      this.render();
     } catch (e) {
       console.error('Error al cargar equipos:', e);
       Toast.show('Error al cargar el pool: ' + (e.message || e), 'bad');
     }
+  },
+
+  _ordenEstados: new Map(), // orden_actual_id → estado_reparacion
+
+  async _cargarEstadosOrdenTaller() {
+    const ids = [...new Set(this._equipos
+      .filter(e => e.estado === 'en_taller' && e.orden_actual_id)
+      .map(e => e.orden_actual_id))];
+    if (!ids.length) { this._ordenEstados = new Map(); return; }
+    const db = firebase.firestore();
+    const out = new Map();
+    try {
+      for (let i = 0; i < ids.length; i += 10) {
+        const snap = await db.collection('ordenes_de_servicio')
+          .where(firebase.firestore.FieldPath.documentId(), 'in', ids.slice(i, i + 10)).get();
+        snap.docs.forEach(d => out.set(d.id, (d.data().estado_reparacion || '').trim().toUpperCase()));
+      }
+    } catch (e) { /* best-effort: sin sub-estado */ }
+    this._ordenEstados = out;
+  },
+
+  _listoParaEntrega(eq) {
+    return eq.estado === 'en_taller' && eq.orden_actual_id
+      && this._ordenEstados.get(eq.orden_actual_id) === 'COMPLETADO (EN OFICINA)';
   },
 
   async cargarModelos() {
@@ -139,7 +180,121 @@ window.EquiposPool = {
   _enTab(eq, tab) {
     if (tab === 'todos') return true;
     if (tab === 'otros') return this.ESTADOS_OTROS.includes(eq.estado);
+    if (tab === 'conflictos') return false; // esa pestaña pinta GRUPOS, no filas
     return eq.estado === tab;
+  },
+
+  // ── Conflictos de modelo: mismo serial con 2+ fichas ─────────────────
+  // El failsafe de colisión crea una ficha sufijada cuando las fuentes traen
+  // el modelo distinto (contrato vs POC vs bodega). Casi siempre es el MISMO
+  // radio físico con el dato desparejo — esta cola los resuelve: fusionar en
+  // la ficha real, o marcar que son radios distintos (colisión real Kenwood).
+  _gruposConflicto() {
+    const porNorm = new Map();
+    for (const eq of this._equipos) {
+      const k = eq.serial_norm || (eq.id || '').split('__')[0];
+      if (!porNorm.has(k)) porNorm.set(k, []);
+      porNorm.get(k).push(eq);
+    }
+    const grupos = [];
+    for (const [norm, docs] of porNorm) {
+      if (docs.length < 2) continue;
+      if (docs.every(d => d.conflicto_revisado === true)) continue; // ya revisado
+      grupos.push({ norm, docs });
+    }
+    return grupos.sort((a, b) => a.norm.localeCompare(b.norm));
+  },
+
+  renderConflictos(tbody, q = '') {
+    const esc = FMT.esc;
+    const puede = this.puedeEscribir();
+    let grupos = this._gruposConflicto();
+    if (q) grupos = grupos.filter(g => g.norm.toLowerCase().includes(q));
+    if (!grupos.length) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">
+        No hay seriales con fichas en conflicto pendientes de revisar.<br>
+        Aparecen aquí cuando el mismo serial se registró con modelos distintos desde fuentes distintas (contrato, POC, bodega).</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = grupos.map(({ norm, docs }) => {
+      const cards = docs.map(d => `
+        <label style="display:block; border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:${puede ? 'pointer' : 'default'}; font-size:12.5px;">
+          ${puede ? `<input type="radio" name="confl_${esc(norm)}" value="${esc(d.id)}" style="margin-right:6px;">` : ''}
+          <strong>${esc(d.modelo_label || d.modelo_id || 'sin modelo')}</strong>
+          ${EquiposPoolService.chipEstadoHtml(d.estado)}
+          ${d.conflicto_revisado ? '<span class="eqpool-chip" style="background:#f1f5f9;color:#64748b;">revisado</span>' : ''}
+          <div style="color:var(--fg-3); margin-top:3px;">
+            ${esc(d.asignacion?.cliente_nombre || 'sin asignación')}${d.asignacion?.contrato_id ? ` · ${esc(d.asignacion.contrato_id)}` : ''}
+            · origen ${esc((d.origen || '—').replace(/_/g, ' '))}
+            · <span style="font-family:var(--font-mono, monospace); font-size:11px;">${esc(d.id)}</span>
+          </div>
+        </label>`).join('');
+      return `<tr><td colspan="8" style="padding:12px 14px;">
+        <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+          <span style="font-family:var(--font-mono, monospace); font-weight:600; font-size:14px;">${esc(norm)}</span>
+          <span style="color:var(--fg-3); font-size:12px;">${docs.length} fichas — ¿cuál es el radio real?</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:8px;">${cards}</div>
+        ${puede ? `<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="EquiposPool.marcarDistintos('${esc(norm)}')"
+                  title="Colisión real (dos radios físicos comparten serial, tipo Kenwood NX420 y NX920) — se conservan ambas fichas y el grupo sale de esta cola">
+            Son radios distintos — mantener</button>
+          <button class="btn btn-primary btn-sm" onclick="EquiposPool.fusionarGrupo('${esc(norm)}')"
+                  title="Fusiona las demás fichas en la seleccionada: conserva su historia (kardex) y elimina los duplicados">
+            Fusionar en la seleccionada</button>
+        </div>` : ''}
+      </td></tr>`;
+    }).join('');
+  },
+
+  async fusionarGrupo(norm) {
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden fusionar fichas.', 'bad'); return; }
+    const sel = document.querySelector(`input[name="confl_${norm}"]:checked`);
+    if (!sel) { Toast.show('Selecciona primero la ficha que se conserva (el radio real).', 'warn'); return; }
+    const grupo = this._gruposConflicto().find(g => g.norm === norm);
+    if (!grupo) return;
+    const keeperId = sel.value;
+    const absorbidos = grupo.docs.filter(d => d.id !== keeperId).map(d => d.id);
+    const ok = await Modal.confirm({
+      title: 'Fusionar fichas',
+      message: `Se fusionarán ${absorbidos.length} ficha(s) del serial ${norm} en la seleccionada. `
+        + 'Su historia (kardex) se conserva dentro de la ficha final. Esta acción no se deshace.',
+      confirmLabel: 'Fusionar', danger: true,
+    });
+    if (!ok) return;
+    try {
+      const fn = firebase.functions().httpsCallable('fusionarPoolFicha');
+      const res = await fn({ keeperId, absorbidosIds: absorbidos });
+      Toast.show(`Fusión lista: ${res.data.fusionados} ficha(s) absorbida(s).`, 'ok');
+      await this.cargar();
+    } catch (e) {
+      Toast.show('No se pudo fusionar: ' + (e.message || e), 'bad');
+    }
+  },
+
+  async marcarDistintos(norm) {
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden revisar conflictos.', 'bad'); return; }
+    const grupo = this._gruposConflicto().find(g => g.norm === norm);
+    if (!grupo) return;
+    const ok = await Modal.confirm({
+      title: 'Confirmar radios distintos',
+      message: `Las ${grupo.docs.length} fichas del serial ${norm} quedarán marcadas como radios FÍSICOS distintos `
+        + '(colisión real de serial entre modelos). Salen de esta cola pero conservan el aviso "2+ MODELOS".',
+      confirmLabel: 'Son distintos',
+    });
+    if (!ok) return;
+    try {
+      const db = firebase.firestore();
+      const batch = db.batch();
+      grupo.docs.forEach(d => batch.set(db.collection('equipos_pool').doc(d.id),
+        { conflicto_revisado: true }, { merge: true }));
+      await batch.commit();
+      grupo.docs.forEach(d => { d.conflicto_revisado = true; });
+      Toast.show('Grupo marcado como radios distintos.', 'ok');
+      this.render();
+    } catch (e) {
+      Toast.show('No se pudo marcar: ' + (e.message || e), 'bad');
+    }
   },
 
   _sinCliente(eq) {
@@ -156,6 +311,7 @@ window.EquiposPool = {
       sinVerificar: !!document.getElementById('chkSinVerificar')?.checked,
       compartidos: !!document.getElementById('chkCompartidos')?.checked,
       sinCliente: !!document.getElementById('chkSinCliente')?.checked,
+      listos: !!document.getElementById('chkListos')?.checked,
     };
   },
 
@@ -165,6 +321,7 @@ window.EquiposPool = {
     if (f.sinVerificar && eq.verificado !== false) return false;
     if (f.compartidos && !eq.serial_compartido) return false;
     if (f.sinCliente && !this._sinCliente(eq)) return false;
+    if (f.listos && !this._listoParaEntrega(eq)) return false;
     if (f.q) {
       const blob = [eq.serial, eq.serial_norm, eq.modelo_label,
         eq.asignacion?.cliente_nombre, eq.asignacion?.contrato_id, eq.notas]
@@ -186,6 +343,7 @@ window.EquiposPool = {
     const el = {
       modelo: 'eqFiltroModelo', propiedad: 'eqFiltroPropiedad', busqueda: 'eqBusqueda',
       sinVerificar: 'chkSinVerificar', compartidos: 'chkCompartidos', sinCliente: 'chkSinCliente',
+      listos: 'chkListos',
     }[tipo];
     const node = document.getElementById(el);
     if (!node) return;
@@ -198,7 +356,7 @@ window.EquiposPool = {
     ['eqFiltroModelo', 'eqFiltroPropiedad', 'eqBusqueda'].forEach(id => {
       const n = document.getElementById(id); if (n) n.value = '';
     });
-    ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente'].forEach(id => {
+    ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente', 'chkListos'].forEach(id => {
       const n = document.getElementById(id); if (n) n.checked = false;
     });
     this.render();
@@ -216,6 +374,7 @@ window.EquiposPool = {
     if (f.sinVerificar) chips.push(chip('sinVerificar', 'Solo sin verificar'));
     if (f.compartidos) chips.push(chip('compartidos', 'Solo 2+ modelos'));
     if (f.sinCliente) chips.push(chip('sinCliente', 'Solo sin cliente'));
+    if (f.listos) chips.push(chip('listos', 'Solo listos para entrega'));
     if (f.q) chips.push(chip('busqueda', `Búsqueda: "${f.q}"`));
     if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = '';
@@ -253,7 +412,15 @@ window.EquiposPool = {
     set('countTaller', `(${n('en_taller')})`);
     set('countEntradas', `(${n('devuelto_revision')})`);
     set('countOtros', `(${filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length})`);
+    set('countConflictos', `(${this._gruposConflicto().length})`);
     set('countTodos', `(${filtrables.length})`);
+
+    if (this._tab === 'conflictos') {
+      this._renderFiltrosActivos(fAct, 0, 0);
+      this.renderConflictos(tbody, fAct.q);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      return;
+    }
 
     // Barra "Viendo: …" — hace obvios los filtros activos sin abrir dropdowns.
     const enTabTotal = this._equipos.filter(e => this._enTab(e, this._tab)).length;
@@ -317,9 +484,9 @@ window.EquiposPool = {
           <td>${esc(eq.modelo_label || '—')}</td>
           <td>${eq.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
           <td><span class="eq-prop eq-prop-${esc(prop)}" title="${prop === 'cecomunica' ? 'Flota propia de Cecomunica' : prop === 'cliente' ? 'Equipo propiedad del cliente' : 'Propiedad sin clasificar'}">${esc(this.PROP_LABELS[prop] || prop)}</span></td>
-          <td><span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>${EquiposPoolService.chipPendienteDevolucionHtml(eq)}${eq.reemplaza_a ? `<span class="eq-sub" title="Linaje: esta unidad sustituyó a la anterior en una renovación/reemplazo">reemplaza a ${esc(eq.reemplaza_a)}</span>` : ''}</td>
+          <td><span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>${this._listoParaEntrega(eq) ? `<span class="eqpool-chip" style="background:#e9f7f0;color:#067647;display:inline-block;margin-top:3px;" title="La orden ya está COMPLETADO (EN OFICINA) — el radio está terminado; falta registrar la entrega al cliente">→ listo para entrega</span>` : ''}${EquiposPoolService.chipPendienteDevolucionHtml(eq)}${eq.reemplaza_a ? `<span class="eq-sub" title="Linaje: esta unidad sustituyó a la anterior en una renovación/reemplazo">reemplaza a ${esc(eq.reemplaza_a)}</span>` : ''}</td>
           <td>${asignadoA}</td>
-          <td style="font-size:12px; color:var(--fg-3);">${esc(eq.origen || '—')}</td>
+          <td style="font-size:12px; color:var(--fg-3);" title="${esc(eq.origen || '')}">${esc(this.ORIGEN_LABELS[eq.origen] || eq.origen || '—')}</td>
           <td>${acciones}</td>
         </tr>`;
       }).join('');
@@ -802,7 +969,7 @@ window.EquiposPool = {
         return `<div class="mov-item">
           <div class="mov-icon"><i data-lucide="${this._MOV_ICONS[m.tipo] || 'circle'}"></i></div>
           <div class="mov-body">
-            <strong>${esc((m.tipo || '').replace(/_/g, ' '))}</strong>${transicion}
+            <strong>${esc((window.EquipoFicha?.MOV_LABELS?.[m.tipo]) || (m.tipo || '').replace(/_/g, ' '))}</strong>${transicion}
             ${m.notas ? `<div>${esc(m.notas)}</div>` : ''}
             <div class="mov-meta">${esc(fecha)}${ref}${m.por_email ? ` · ${esc(m.por_email)}` : (m.por === 'system' ? ' · sistema' : '')}</div>
           </div>
@@ -1121,11 +1288,11 @@ document.addEventListener('DOMContentLoaded', () => {
       ['eqFiltroModelo', 'eqFiltroPropiedad'].forEach(id => {
         const n = document.getElementById(id); if (n) n.value = '';
       });
-      ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente'].forEach(id => {
+      ['chkSinVerificar', 'chkCompartidos', 'chkSinCliente', 'chkListos'].forEach(id => {
         const n = document.getElementById(id); if (n) n.checked = false;
       });
     };
-    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'devuelto_revision', 'otros', 'todos'];
+    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'devuelto_revision', 'otros', 'conflictos', 'todos'];
     if (serialParam) {
       setTabUI('todos');
       limpiarSecundarios();
