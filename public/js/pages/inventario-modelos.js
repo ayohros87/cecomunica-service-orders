@@ -203,10 +203,19 @@ function renderRow(m){
   const tr = document.createElement('tr');
   tr.dataset.id = id;
   const pocDis = m.es_poc===true;
+  // Chip del vínculo variante→base: deja ver de un vistazo qué refurbished siguen
+  // sin vincular a su modelo base (plan 07_modelos_variante_refurbished, paso 4).
+  let varChip = '';
+  if ((m.estado||'').toUpperCase() === 'R') {
+    const base = m.variante_de ? (listaModelos||[]).find(x=>x.id===m.variante_de) : null;
+    varChip = base
+      ? `<span class="var-chip" title="Variante refurbished de ${esc(`${base.marca||''} ${base.modelo||''}`.trim())}">R → ${esc(base.modelo||'')}</span>`
+      : `<span class="var-chip falta" title="Refurbished sin vincular a su modelo base">R sin vincular</span>`;
+  }
   tr.innerHTML = `
     <td class="sticky-col modelo-cell">
       <span class="row-status"></span>
-      ${esc(m.modelo||'—')}<span class="modelo-sub">${esc(m.marca||'')}</span>
+      ${esc(m.modelo||'—')}${varChip}<span class="modelo-sub">${esc(m.marca||'')}</span>
     </td>
     <td>${mapTipo(m.tipo)}</td>
     <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
@@ -321,11 +330,51 @@ function abrirModal(id=null){
       setVal('f-notas', m.notas||'');
     }
   }
+  // Vínculo variante→base: se puebla con el tipo ya fijado y solo se muestra si es R.
+  const mEdit = creando ? null : (listaModelos.find(x=>x.id===id) || null);
+  poblarVarianteDe(mEdit ? (mEdit.variante_de||'') : '', document.getElementById('f-tipo').value || '');
+  onEstadoChange();
+
   const ov = document.getElementById('overlay');
   ov.classList.add('show'); ov.style.display = 'flex';
   if (window.lucide) lucide.createIcons();
 }
 function cerrarModal(){ const ov=document.getElementById('overlay'); ov.classList.remove('show'); ov.style.display='none'; modeloEditId=null; }
+
+/* ===== Vínculo variante refurbished → base (plan 07_modelos_variante_refurbished) =====
+   El doc refurbished conserva SU propio precio_alquiler y mapeo QBO (el ítem "R"
+   con costo 0). `variante_de` solo declara de qué modelo base es la versión
+   refurbished, para que la unidad facturable pueda nacer como (base + condición). */
+
+// Llena el selector con los modelos base (estado N, activos), priorizando el
+// mismo tipo. Excluye el propio doc y los que ya son variantes (sin cadenas).
+function poblarVarianteDe(seleccion='', tipoActual=''){
+  const sel = document.getElementById('f-variante-de');
+  if (!sel) return;
+  const bases = (listaModelos||[])
+    .filter(m => (m.estado||'N').toUpperCase()==='N' && m.activo!==false && !m.variante_de && m.id!==modeloEditId)
+    .sort((a,b)=>{
+      const ta=(a.tipo||'')===tipoActual?0:1, tb=(b.tipo||'')===tipoActual?0:1;
+      if(ta!==tb) return ta-tb;
+      return `${a.marca||''} ${a.modelo||''}`.localeCompare(`${b.marca||''} ${b.modelo||''}`,'es',{sensitivity:'base'});
+    });
+  sel.innerHTML = '<option value="">— Sin vincular —</option>' + bases.map(m => {
+    const nom = `${(m.marca||'').trim()} ${(m.modelo||'').trim()}`.trim();
+    const distinto = (m.tipo||'') !== tipoActual ? ` · ${m.tipo||'?'}` : '';
+    return `<option value="${m.id}" ${m.id===seleccion?'selected':''}>${esc(nom)}${distinto}</option>`;
+  }).join('');
+}
+
+// Muestra el selector solo para refurbished (estado R).
+function onEstadoChange(){
+  const esR = (document.getElementById('f-estado')||{}).value === 'R';
+  const wrap = document.getElementById('wrap-variante');
+  if (wrap) wrap.style.display = esR ? '' : 'none';
+  if (esR) poblarVarianteDe(
+    (document.getElementById('f-variante-de')||{}).value || '',
+    (document.getElementById('f-tipo')||{}).value || ''
+  );
+}
 
 async function guardarModelo(){
   const marca=(document.getElementById('f-marca').value||'').trim();
@@ -345,6 +394,19 @@ async function guardarModelo(){
       .split(/[,;]/).map(s=>s.trim()).filter(Boolean))],
     notas: (document.getElementById('f-notas').value||'').trim(),
   };
+  // Vínculo variante→base: solo tiene sentido en refurbished. En "Nuevo" se limpia
+  // para que no queden vínculos colgando si se cambia el estado.
+  const varSel = (document.getElementById('f-variante-de')||{}).value || '';
+  if (payload.estado === 'R') {
+    if (varSel === modeloEditId) { Toast.show('Un modelo no puede ser variante de sí mismo','warn'); return; }
+    const destino = (listaModelos||[]).find(x => x.id === varSel);
+    if (varSel && !destino) { Toast.show('El modelo base elegido ya no existe','warn'); return; }
+    if (destino && (destino.estado||'N').toUpperCase() !== 'N') { Toast.show('La base debe ser un modelo Nuevo (estado N)','warn'); return; }
+    if (destino && destino.variante_de) { Toast.show('La base no puede ser a su vez una variante','warn'); return; }
+    payload.variante_de = varSel;
+  } else {
+    payload.variante_de = '';
+  }
   try{
     if (modeloEditId===null){ await ModelosService.addModelo(payload); Toast.show('Modelo creado','ok'); }
     else { await ModelosService.updateModelo(modeloEditId, payload); Toast.show('Modelo actualizado','ok'); }

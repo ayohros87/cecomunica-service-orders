@@ -55,6 +55,11 @@
 
     .modelo-cell { position: relative; padding-left: 16px !important; font-weight: 600; white-space: nowrap; }
     .modelo-sub  { display:block; font-weight:400; font-size:11px; color: var(--fg-4); }
+    /* Chip del vínculo variante refurbished → modelo base */
+    .var-chip { display:inline-block; margin-left:6px; font-size:9.5px; font-weight:700; text-transform:uppercase;
+                letter-spacing:.03em; padding:1px 6px; border-radius:999px; vertical-align:middle;
+                color:#065F46; background:#ECFDF5; border:1px solid #A7F3D0; }
+    .var-chip.falta { color:#9A3412; background:#FFF7ED; border-color:#FED7AA; }
 
     /* Indicador de guardado por fila */
     .row-status {
@@ -194,10 +199,18 @@
         </div>
         <div class="form-field">
           <label class="form-label" for="f-estado">Estado</label>
-          <select class="form-select" id="f-estado">
+          <select class="form-select" id="f-estado" onchange="onEstadoChange()">
             <option value="N">Nuevo</option>
-            <option value="R">Reuso</option>
+            <option value="R">Refurbished</option>
           </select>
+        </div>
+        <!-- Vínculo variante→base (plan 07_modelos_variante_refurbished §3.1).
+             Solo aplica a los refurbished. El doc R conserva SU propio precio y
+             mapeo QBO (ítem con costo 0); esto solo declara de qué base es variante. -->
+        <div class="form-field" id="wrap-variante" style="display:none;">
+          <label class="form-label" for="f-variante-de">Variante refurbished de…</label>
+          <select class="form-select" id="f-variante-de"></select>
+          <span class="form-hint">El modelo base (Nuevo) del que este es la versión refurbished. No cambia su tarifa ni su mapeo a QuickBooks.</span>
         </div>
         <div class="form-field">
           <label class="form-label" for="f-minimo">Mínimo (alerta inventario)</label>
@@ -267,7 +280,7 @@
 
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
-<script src="../js/pages/inventario-modelos.js?v=cc11" defer></script>
+<script src="../js/pages/inventario-modelos.js?v=cc12" defer></script>
 <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
