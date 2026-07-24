@@ -295,7 +295,7 @@
       el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Están bloqueados para evitar cambios accidentales. Pulsa <strong>“Editar seriales”</strong> para corregirlos.</div>';
     } else {
       el.style.cssText = s('#FCD34D', '#FFFBEB', '#92400E');
-      el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Ya no se pueden editar desde aquí. Si necesitas corregir un serial, contacta a un administrador.</div>';
+      el.innerHTML = '<i data-lucide="lock" style="width:18px;height:18px;flex:none;margin-top:1px;"></i><div><strong>Seriales asignados.</strong> Ya no se pueden editar desde aquí. Para corregir un serial, crea una <strong>solicitud de cambio</strong> desde la lista de Contratos (menú de acciones del contrato → "Solicitar cambio de serial") — un administrador la aprueba y esta página se desbloquea solo en los seriales marcados.</div>';
     }
     return el;
   }

@@ -27,10 +27,12 @@
     ['perdido', 'Perdido — pendiente de cobro'],
     ['otro',    'Otro (detallar)'],
   ];
+  // Paleta PROPIA de resoluciones de devolución (antes reciclaba las clases de
+  // chips de cotizaciones — mismo color, dominio ajeno; auditoría 2026-07-24).
   const RES_LABEL = {
-    recibido: '<span class="chip-estado chip-aprobada">Recibido</span>',
-    nunca_salio: '<span class="chip-estado chip-entregada">Nunca salió</span>',
-    no_devuelve: '<span class="chip-estado chip-espera">No se devuelve</span>',
+    recibido: '<span class="chip-estado" style="background:#e9f7f0;color:#067647;">Recibido</span>',
+    nunca_salio: '<span class="chip-estado" style="background:#eef2ff;color:#4338ca;">Nunca salió</span>',
+    no_devuelve: '<span class="chip-estado" style="background:#fdf3e4;color:#9a5b00;">No se devuelve</span>',
   };
   // Checklist del acuse: qué entregó el cliente con cada unidad. Espeja los
   // booleanos de accesorios del equipo en la orden de ENTRADA (agregar-equipo).

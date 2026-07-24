@@ -81,6 +81,8 @@
   Layout.renderTopbarFor('index', {
     title: '<i data-lucide="package"></i> Inventario de Radios',
     actions: [
+      { label: '<i data-lucide="scan-barcode"></i> Equipos por serial',
+        onclick: "window.location.href='./equipos.html'" },
       { label: '<i data-lucide="plus"></i> Registrar conteo físico',
         cls: 'primary',
         onclick: "window.location.href='./cargar-inventario.html'" }

@@ -846,7 +846,11 @@ window.EquiposPool = {
       // venta puede seguir con las válidas.
       const vendibles = [], problemas = [];
       const vistos = new Set();
+      let revisados = 0;
       for (const s of seriales) {
+        // Progreso visible: con 30+ seriales la validación tarda y el botón
+        // deshabilitado a secas parecía cuelgue.
+        btn.textContent = `Validando ${++revisados}/${seriales.length}…`;
         const norm = EquiposPoolService.normalizarSerial(s);
         if (!EquiposPoolService.esSerialValido(norm)) { problemas.push(`${esc(s)}: serial inválido`); continue; }
         if (vistos.has(norm)) continue;
@@ -931,6 +935,8 @@ window.EquiposPool = {
       Toast.show('Error al registrar la venta: ' + (e.message || e), 'bad');
     } finally {
       btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="check"></i> Registrar venta';
+      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
     }
   },
 

@@ -4,8 +4,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
       const userDoc = await UsuariosService.getUsuario(user.uid);
       const rol = userDoc ? userDoc.rol : null;
 
-      if (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO) {
-        document.body.innerHTML = '<div style="text-align:center; margin-top:100px; color:red;">Acceso restringido: área en construcción.</div>';
+      // Gerencia LEE (mismo criterio que Equipos por serial); el resto de roles
+      // no entra. El mensaje viejo decía "área en construcción" — era un gate,
+      // no una obra.
+      if (rol !== ROLES.ADMIN && rol !== ROLES.INVENTARIO && rol !== ROLES.GERENTE) {
+        document.body.innerHTML = '<div style="text-align:center; margin-top:100px; color:var(--fg-3, #64748b); font-family:system-ui;">'
+          + 'Esta área es de administración e inventario.<br>'
+          + '<a href="../index.html">Volver al inicio</a></div>';
         return;
       }
 

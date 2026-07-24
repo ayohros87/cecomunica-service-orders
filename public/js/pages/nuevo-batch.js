@@ -108,7 +108,14 @@
       }
       const sobra = [];
       pools.forEach(arr => sobra.push(...arr));
-      ta.value = [...nuevo, ...sobra].join('\n');
+      const resultado = [...nuevo, ...sobra];
+      // Aviso visible cuando el orden cambió: antes el reordenamiento era
+      // silencioso y el usuario no sabía por qué su lista quedó distinta.
+      const movidos = resultado.filter((s, i) => s !== seriales[i]).length;
+      ta.value = resultado.join('\n');
+      if (movidos > 0 && typeof Toast !== 'undefined') {
+        Toast.show(`Se reordenaron ${movidos} serial(es) para alinear cada uno con el modelo de su fila en el archivo del vendedor (revisa el preview).`, 'warn');
+      }
     }
 
     // Catálogo de grupos del cliente (para sugerir al agregar y validar). Se carga
@@ -786,7 +793,12 @@ document.getElementById("addCliente").onclick = async () => {
         }
 
         try {
+        const btnSubmitRef = document.querySelector('#batchForm [type="submit"]');
+        const btnLabelOriginal = btnSubmitRef ? btnSubmitRef.innerHTML : '';
         for (let i = 0; i < serialesFinal.length; i++) {
+         // Progreso visible: la creación es secuencial y con 30+ devices el
+         // botón deshabilitado a secas parecía cuelgue.
+         if (btnSubmitRef) btnSubmitRef.textContent = `Guardando ${i + 1}/${serialesFinal.length}…`;
          const detalle = normalizarDetalleBatch(detallesBatch?.[i] || {});
          const modeloResuelto = resolverModeloSerial(serialesFinal[i], detalle);
          const data = {
@@ -843,6 +855,8 @@ document.getElementById("addCliente").onclick = async () => {
         } catch (err) {
           console.error('[nuevo-batch] error creando equipos:', err);
           Toast.show('Error al crear los equipos. Revisa la lista antes de reintentar (puede haber quedado un lote parcial).', 'bad');
+          const b = document.querySelector('#batchForm [type="submit"]');
+          if (b && b.textContent.startsWith('Guardando')) b.textContent = 'Crear equipos';
           bloquear(false);
         }
       });
