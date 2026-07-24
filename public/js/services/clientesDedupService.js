@@ -72,25 +72,50 @@ function _rucSim(a, b){
 const NAME_HIGH = 0.86;  // nombre casi igual (para match SOLO por nombre, sin RUC que corrobore)
 const RUC_HIGH  = 0.88;  // RUC con 1–2 dígitos de diferencia
 const DUP_NAME  = 0.78;  // nombre mínimo para duplicado cuando el RUC coincide.
-// (En los datos reales, los duplicados quedan en 78–100% y las sucursales del
-//  mismo RUC en 52–74%, así que 0.78 las separa: typo = duplicado, sucursal = no.)
+const COLA_TYPO = 0.7;   // similitud mínima entre las COLAS divergentes para leerlas como typo
+
+// ¿Nombres de SUCURSAL y no duplicado? Las sedes comparten el tronco de la
+// razón social y divergen en colas DISTINTAS ("…SHEVET AHIM KSI" vs "…AHIM
+// CIR", "R. SMITH MULTIPLAZA" vs "ALTA PLAZA") — eso dispara similitudes
+// globales de 78–95%, por encima de cualquier umbral útil. Un typo real
+// diverge con colas PARECIDAS ("P.H. THE…" vs "PH THE…"). También cuenta como
+// sede el nombre que EXTIENDE al otro con una palabra sustantiva ("…AHIM" →
+// "…AHIM GAN YELADIM"), salvo boilerplate societario (S.A., CORP…).
+const SUFIJOS_SOCIETARIOS = new Set(["sa", "sdea", "sderl", "inc", "corp", "ltda"]);
+function _sonSucursales(na, nb){
+  const a = _dnorm(na), b = _dnorm(nb);
+  if (!a || !b || a === b) return false;
+  let i = 0;
+  const min = Math.min(a.length, b.length);
+  while (i < min && a[i] === b[i]) i++;
+  const colaA = a.slice(i).trim(), colaB = b.slice(i).trim();
+  if (!colaA && !colaB) return false;
+  if (!colaA || !colaB){
+    const cola = (colaA || colaB).replace(/[^a-z0-9 ]/g, "").trim();
+    if (!cola) return false; // solo puntuación → typo
+    return !cola.split(" ").filter(Boolean).every(t => SUFIJOS_SOCIETARIOS.has(t));
+  }
+  return _ratio(colaA, colaB) < COLA_TYPO;
+}
+
 // Nivel de enlace entre dos clientes: 'exacta' | 'fuzzy' | null.
 // CLAVE: mismo RUC NO basta — una empresa con varias sucursales comparte RUC.
-// Para ser duplicado se exige RUC compatible Y nombre parecido.
+// Para ser duplicado se exige RUC compatible Y nombre parecido, y que la
+// diferencia de nombre parezca typo y no sede (_sonSucursales).
 function _edge(a, b){
   const rs = _rucSim(a, b);
   if (rs !== null && rs < 0.7) return null;       // RUCs distintos → entidades distintas (o RUC mal puesto): no unir
   const ns = _nameSim(a.nombre, b.nombre);
   const mismoNombre = _dnorm(a.nombre) && _dnorm(a.nombre) === _dnorm(b.nombre);
+  if (mismoNombre) return "exacta";
+  if (_sonSucursales(a.nombre, b.nombre)) return null; // sedes del mismo grupo → NO agrupar
   if (rs === 1){
-    // Mismo RUC: duplicado solo si el nombre también se parece. Si no, son
-    // sucursales del mismo RUC o un RUC mal tecleado → NO agrupar.
-    if (mismoNombre || ns >= 0.9) return "exacta";
+    // Mismo RUC: duplicado solo si el nombre también se parece.
+    if (ns >= 0.9) return "exacta";
     if (ns >= DUP_NAME) return "fuzzy";
     return null;
   }
   // RUC compatible (alguno vacío, o parecido por typo).
-  if (mismoNombre) return "exacta";
   if (ns >= NAME_HIGH) return "fuzzy";                       // nombre casi igual (sin RUC que corrobore)
   if (rs !== null && rs >= RUC_HIGH && ns >= DUP_NAME) return "fuzzy"; // RUC con typo + nombre parecido
   return null;
@@ -110,14 +135,21 @@ const ClientesDedupService = {
     const byId = new Map();
     clientes.forEach(c => { parent[c.id] = c.id; byId.set(c.id, c); });
 
-    // Bloques: clientes que comparten prefijo de nombre (3) o de RUC (4 dígitos).
+    // Bloques: clientes que comparten prefijo de nombre (3, solo alfanumérico:
+    // "P.H. X" y "PH X" deben caer juntos), prefijo de RUC (4 dígitos) o algún
+    // token significativo del nombre ("RIBA SMITH" / "R. SMITH" no comparten
+    // prefijo pero sí el token "smith" — sin esto nunca se comparan).
     const buckets = new Map();
     const addBucket = (k, id) => { if (!k) return; if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(id); };
     for (const c of clientes){
-      const nn = _dnorm(c.nombre).replace(/ /g, "");
+      const nn = _dnorm(c.nombre).replace(/[^a-z0-9]/g, "");
       if (nn) addBucket("n:" + nn.slice(0, 3), c.id);
       const rd = _rucDigits(c);
       if (rd) addBucket("r:" + rd.slice(0, 4), c.id);
+      _dnorm(c.nombre).split(" ")
+        .map(t => t.replace(/[^a-z0-9]/g, ""))
+        .filter(t => t.length >= 4)
+        .forEach(t => addBucket("t:" + t, c.id));
     }
 
     // Candidatos: pares dentro de un mismo bloque. Evalúa el enlace una sola vez.
@@ -213,10 +245,13 @@ const ClientesDedupService = {
     return { contratos: c.size, ordenes: o.size, poc: p.size };
   },
 
+  // Trae TODOS los clientes y filtra en memoria: `where deleted == false`
+  // excluiría los docs legacy que no tienen el campo `deleted`, que son
+  // justamente los más propensos a estar duplicados.
   async getClientesActivos(){
     const db = firebase.firestore();
-    const snap = await db.collection("clientes").where("deleted", "==", false).get();
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await db.collection("clientes").get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => c.deleted !== true);
   },
 
   // ── Fusión (Firestore, escribe) ──────────────────────────────────────
