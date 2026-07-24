@@ -23,6 +23,22 @@ window.PocEdit = {
     document.getElementById('drawer-unit-id').value    = data.unit_id    || '';
     document.getElementById('drawer-radio-name').value = data.radio_name || '';
 
+    // SerialField: el drawer era el punto SIN validación alguna del serial —
+    // un dedazo aquí desincronizaba POC↔pool en silencio. El chip persistente
+    // avisa (otro cliente / sin registro / fichas en conflicto) sin bloquear.
+    const serialInput = document.getElementById('drawer-serial');
+    if (typeof SerialField !== 'undefined' && typeof EquiposPoolService !== 'undefined' && serialInput) {
+      SerialField.adjuntar(serialInput, {
+        clienteId: () => this._resolverClienteId(this._data),
+        modelo: () => {
+          const sel = document.getElementById('drawer-modelo');
+          const opt = sel?.selectedOptions?.[0];
+          return (sel?.value && opt) ? { modelo_id: sel.value, modelo_label: opt.textContent || '' } : null;
+        },
+      });
+      serialInput._sfRefrescar?.();
+    }
+
     // Populate the modelo dropdown from the active-models list, preselecting
     // the device's current modelo.
     const modeloIdActual = PocState.obtenerModeloId(data);

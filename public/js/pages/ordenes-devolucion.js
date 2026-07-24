@@ -414,6 +414,13 @@
     _overlay.querySelector('#devSerialLibre')?.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter') { ev.preventDefault(); checkinLibre(); }
     });
+    // SerialField: antes de recibir, el chip dice de quién es y dónde figura
+    // el radio según el pool (clave cuando llegan radios revueltos de varios
+    // clientes) — el check-in no se bloquea, solo se informa.
+    const inpLibre = _overlay.querySelector('#devSerialLibre');
+    if (inpLibre && typeof SerialField !== 'undefined' && typeof EquiposPoolService !== 'undefined') {
+      SerialField.adjuntar(inpLibre, {});
+    }
 
     // Bloque de acuse: canvas + toggle sin-firma + guardar.
     const cbSin = _overlay.querySelector('#acuseSinFirma');

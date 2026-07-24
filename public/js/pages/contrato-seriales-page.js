@@ -345,6 +345,21 @@
       if (e.target.classList.contains('serial-input')) onPasteSerial(e);
     });
 
+    // SerialField: chip persistente con el estado del serial en el pool (en
+    // bodega / con otro cliente / sin registro / fichas en conflicto). El
+    // aviso al guardar (advertenciasPool) se mantiene como segunda red.
+    body.addEventListener('focusout', (e) => {
+      const inp = e.target;
+      if (!inp.classList?.contains('serial-input')) return;
+      if (typeof SerialField === 'undefined' || typeof EquiposPoolService === 'undefined') return;
+      if (inp._sfAdjuntado) return;
+      SerialField.adjuntar(inp, {
+        clienteId: () => ctx.clienteId || null,
+        modelo: () => ({ modelo_id: inp.getAttribute('data-modelo-id') || null,
+                         modelo_label: inp.getAttribute('data-modelo') || '' }),
+      });
+    });
+
     $('btnGuardar').addEventListener('click', () => guardar());
     $('btnConfirmar').addEventListener('click', () => confirmar());
     $('btnEditar')?.addEventListener('click', () => {

@@ -128,7 +128,21 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
   $("filasBatch").appendChild(tr);
   if (typeof lucide !== 'undefined') lucide.createIcons();
   renumber();
-  if (focus) tr.querySelector(".serie")?.focus();
+  const serieInput = tr.querySelector(".serie");
+  // SerialField: la validación viva de esta página era solo CONTRA EL CONTRATO;
+  // el chip agrega la dimensión que faltaba — el estado en el pool (un serial
+  // de otro cliente pasaba de largo aquí).
+  if (serieInput && typeof SerialField !== 'undefined' && typeof EquiposPoolService !== 'undefined') {
+    SerialField.adjuntar(serieInput, {
+      clienteId: () => clienteId || null,
+      modelo: () => {
+        const sel = tr.querySelector('.modelo');
+        const opt = sel?.selectedOptions?.[0];
+        return (sel?.value && opt) ? { modelo_id: sel.value, modelo_label: opt.textContent || '' } : null;
+      },
+    });
+  }
+  if (focus) serieInput?.focus();
   return tr;
 }
 
