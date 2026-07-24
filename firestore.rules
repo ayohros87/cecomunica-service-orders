@@ -510,6 +510,13 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ── Reportes de conciliación (cron conciliacionPool → Admin · Salud) ───
+    // Escritos SOLO por Cloud Functions (admin SDK); el frontend solo lee.
+    match /admin_reportes/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── Integración QuickBooks — SOLO Cloud Functions (admin SDK) ──────────
     // `integraciones/quickbooks` guarda tokens OAuth (access/refresh) y realmId;
     // `integraciones_qbo_oauth_states` son states CSRF efímeros;

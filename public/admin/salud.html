@@ -131,6 +131,22 @@
       </div>
     </div>
 
+    <!-- CONCILIACIÓN DEL POOL DE EQUIPOS (cron semanal conciliacionPool) -->
+    <div class="admin-section">
+      <div class="admin-section-head">
+        <span class="title">Pool de equipos — conciliación semanal</span>
+        <span class="hint" id="concPoolFecha">—</span>
+      </div>
+      <div class="ds-card" style="padding:0;">
+        <div style="padding:var(--sp-2) var(--sp-3);font-size:12px;color:var(--fg-3);">
+          Drift entre <strong>equipos_pool</strong> y sus fuentes (contratos · órdenes · POC). Los triggers
+          son best-effort: lo que falla queda aquí. Corre cada lunes 06:40; el detalle se corrige en
+          <a href="../inventario/equipos.html">Inventario · Equipos por serial</a>.
+        </div>
+        <div id="tblConcPool"></div>
+      </div>
+    </div>
+
   </div>
 
   <script>

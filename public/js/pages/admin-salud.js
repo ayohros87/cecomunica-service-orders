@@ -210,9 +210,41 @@
     }
   }
 
+  // Conciliación semanal del pool de equipos (cron conciliacionPool, L5).
+  async function loadConciliacionPool() {
+    try {
+      const doc = await firebase.firestore().collection('admin_reportes').doc('conciliacion_pool').get();
+      if (!doc.exists) {
+        renderTable('tblConcPool', [{ key: 'chequeo', label: 'Chequeo' }], [],
+          'Aún no corre la primera conciliación (lunes 06:40).');
+        return;
+      }
+      const r = doc.data();
+      setText('concPoolFecha', r.at ? `Último corte: ${fmtTs(r.at)} · ${r.total || 0} caso(s)` : '—');
+      const filas = [
+        { chequeo: 'Serial de contrato vigente sin ficha (o asignada a otro)', n: r.A_contrato_sin_ficha || 0, m: r.A_muestras },
+        { chequeo: 'En taller con la orden ya cerrada', n: r.B_taller_orden_cerrada || 0, m: r.B_muestras },
+        { chequeo: 'Device POC activo sin enlace en la ficha', n: r.C_poc_sin_enlace || 0, m: r.C_muestras },
+        { chequeo: 'Asignada a contrato ANULADO sin devolución', n: r.D_asignada_a_anulado || 0, m: r.D_muestras },
+        { chequeo: 'Vendido con enlace de orden colgante', n: r.E_vendido_orden_cerrada || 0, m: r.E_muestras },
+      ].map(f => ({
+        chequeo: f.chequeo,
+        casos: String(f.n),
+        muestras: (f.m || []).slice(0, 6).map(x => x.serial || x.device || '').filter(Boolean).join(', ') || '—',
+      }));
+      renderTable('tblConcPool', [
+        { key: 'chequeo', label: 'Chequeo' },
+        { key: 'casos', label: 'Casos', align: 'right' },
+        { key: 'muestras', label: 'Muestras' },
+      ], filas, 'Sin drift detectado.');
+    } catch (err) {
+      console.error('[admin/salud] conciliacion pool:', err);
+    }
+  }
+
   async function loadAll() {
     setText('lastUpdate', 'Cargando…');
-    await Promise.all([loadMailQueue(), loadUsuarios(), loadOrdenesSalud()]);
+    await Promise.all([loadMailQueue(), loadUsuarios(), loadOrdenesSalud(), loadConciliacionPool()]);
     setText('lastUpdate', `Actualizado ${new Date().toLocaleTimeString('es-PA', { hour12: false })}`);
     if (window.lucide) lucide.createIcons();
   }
