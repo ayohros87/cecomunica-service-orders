@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
+const { recepcionEmails } = require("../../lib/mailRecipients");
 
 module.exports = onDocumentUpdated(
   {
@@ -127,6 +128,10 @@ module.exports = onDocumentUpdated(
     const recipients = [];
     if (isEmail(anuladorInfo.email))  recipients.push(anuladorInfo.email.trim().toLowerCase());
     if (isEmail(elaboradorInfo.email)) recipients.push(elaboradorInfo.email.trim().toLowerCase());
+    // Recepción siempre se entera de la anulación. El correo de la orden de
+    // DEVOLUCIÓN no basta: no se crea cuando el contrato no tiene unidades
+    // rastreadas en el pool (p.ej. tipo "Propio" — equipos del cliente).
+    try { (await recepcionEmails()).forEach(e => recipients.push(e)); } catch (e) { /* sin recepción */ }
 
     const uniqueRecipients = [...new Set(recipients)];
     if (!uniqueRecipients.length) {
