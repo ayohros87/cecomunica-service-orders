@@ -55,6 +55,33 @@ module.exports = onDocumentUpdated(
     // semanal las vigila). No crítico: un fallo no bloquea el correo.
     try {
       const cid = event.params.docId;
+      // Unidad propiedad del CLIENTE (contrato "Propio" = venta con servicio):
+      // no se devuelve, pero dejar la asignación apuntando a un contrato muerto
+      // la congela para siempre — la ficha sigue diciendo "contratado" y la
+      // conciliación semanal la reporta como drift (chequeo D). Se degrada a
+      // custodia simple: el equipo sigue con su cliente, ya sin contrato.
+      // Escritura directa (no transicionar): una unidad ya en_cliente no
+      // cambiaría de estado y el extra no llegaría a escribirse.
+      const degradarACustodia = async (ref, data) => {
+        const aEstado = pool.ESTADOS.EN_CLIENTE;
+        await ref.set({
+          estado: aEstado,
+          asignacion: {
+            contrato_doc_id: null,
+            contrato_id: "",
+            cliente_id:     data.asignacion?.cliente_id     || after.cliente_id     || "",
+            cliente_nombre: data.asignacion?.cliente_nombre || after.cliente_nombre || "",
+          },
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        await ref.collection("movimientos").add({
+          at: admin.firestore.FieldValue.serverTimestamp(),
+          por: "system", por_email: null, tipo: "liberacion",
+          de_estado: data.estado || null, a_estado: aEstado,
+          ref: { tipo: "contrato", id: cid, label: contratoId },
+          notas: "Contrato anulado — equipo propiedad del cliente: queda en su custodia, sin devolución",
+        });
+      };
       if (!after.orden_devolucion_id) {
         const serialesSnap = await db.collection("contratos").doc(cid)
           .collection("seriales").get();
@@ -68,7 +95,10 @@ module.exports = onDocumentUpdated(
             if (!data) continue;
             if (![pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE].includes(data.estado)) continue;
             if (data.asignacion?.contrato_doc_id !== cid) continue;
-            if (data.propiedad === "cliente") continue; // propio del cliente: no se devuelve
+            if (data.propiedad === "cliente") {   // propio del cliente: no se devuelve
+              await degradarACustodia(ref, data);
+              continue;
+            }
             await ref.set({
               pendiente_devolucion: true,
               updated_at: admin.firestore.FieldValue.serverTimestamp(),

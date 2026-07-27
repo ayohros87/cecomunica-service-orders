@@ -80,6 +80,31 @@ module.exports = onDocumentWritten(
     const tipoLabel     = TIPO_LABEL[after.tipo] || "Baja parcial";
     const motivoLabel   = MOTIVO_LABEL[after.motivo_codigo] || (after.motivo_codigo || "—");
 
+    // El contrato se lee UNA vez (cacheado): su tipo decide si la enmienda
+    // arrastra recuperación de equipos. Un contrato "Propio" es una venta con
+    // servicio — los radios son del cliente (onSerialWrite los marca
+    // propiedad:'cliente' por eso mismo), así que terminar el servicio NO
+    // genera tiquete de devolución. Sin este guard el taller recibía una orden
+    // para ir a recuperar equipos ajenos, y el check-in los habría metido a
+    // cuarentena y de ahí a bodega como si fueran flota propia.
+    // (onAnnulment ya hacía lo equivalente saltando propiedad === "cliente".)
+    let _contrato;
+    const getContrato = async () => {
+      if (_contrato === undefined) {
+        _contrato = null;
+        if (contratoDocId) {
+          try {
+            const c = await db.collection("contratos").doc(contratoDocId).get();
+            if (c.exists) _contrato = c.data();
+          } catch (e) {
+            logger.warn("[onCancelacionWrite] No se pudo leer el contrato", { contratoDocId, message: e.message });
+          }
+        }
+      }
+      return _contrato;
+    };
+    const esContratoPropio = (c) => !!c && (c.tipo_contrato === "Propio" || c.codigo_tipo === "PROP");
+
     // ── 1) Derivar el estado del contrato (admin SDK) ───────────────────────
     if (contratoDocId) {
       try {
@@ -136,31 +161,35 @@ module.exports = onDocumentWritten(
     // modelo" y el check-in captura el serial de cada unidad al llegar; de ahí
     // salen pool → cuarentena y la ENTRADA de inspección (onOrdenDevolucionWrite).
     // El cierre de la enmienda es solo administrativo.
-    if (approved && contratoDocId && !after.orden_devolucion_id) {
+    if (approved && contratoDocId && !after.orden_devolucion_id && !after.devolucion_no_aplica) {
       try {
-        let clienteIdDev = after.cliente_id || null;
-        if (!clienteIdDev) {
-          try {
-            const c = await db.collection("contratos").doc(contratoDocId).get();
-            clienteIdDev = c.exists ? (c.data().cliente_id || null) : null;
-          } catch (e) { /* sin cliente_id: la orden sale igual */ }
-        }
-        const ordenId = await crearOrdenDevolucion({
-          clienteId: clienteIdDev,
-          clienteNombre: cliente,
-          contratoDocId,
-          contratoId,
-          modo: "recuperacion",
-          origen: { tipo: "baja", ref_id: id },
-          unidades: [],
-          porModelo: (after.items || []).map(it => ({
-            modelo: it.modelo || "", modelo_id: it.modelo_id || null, cantidad: Number(it.cantidad || 0),
-          })),
-          motivo: `${tipoLabel} aprobada — contrato ${contratoId}`,
-        });
-        if (ordenId) {
+        const c = await getContrato();
+        if (esContratoPropio(c)) {
+          // Equipos del cliente: la enmienda solo corta servicio y facturación.
+          // Se deja la marca para que la cola y el correo lo expliquen (y para
+          // que este bloque sea idempotente si el doc se vuelve a escribir).
           await db.collection("solicitudes_cancelacion").doc(id)
-            .set({ orden_devolucion_id: ordenId }, { merge: true });
+            .set({ devolucion_no_aplica: "propio" }, { merge: true });
+          logger.info("[onCancelacionWrite] Contrato Propio: sin orden de recuperación", { id, contratoId });
+        } else {
+          const clienteIdDev = after.cliente_id || (c && c.cliente_id) || null;
+          const ordenId = await crearOrdenDevolucion({
+            clienteId: clienteIdDev,
+            clienteNombre: cliente,
+            contratoDocId,
+            contratoId,
+            modo: "recuperacion",
+            origen: { tipo: "baja", ref_id: id },
+            unidades: [],
+            porModelo: (after.items || []).map(it => ({
+              modelo: it.modelo || "", modelo_id: it.modelo_id || null, cantidad: Number(it.cantidad || 0),
+            })),
+            motivo: `${tipoLabel} aprobada — contrato ${contratoId}`,
+          });
+          if (ordenId) {
+            await db.collection("solicitudes_cancelacion").doc(id)
+              .set({ orden_devolucion_id: ordenId }, { merge: true });
+          }
         }
       } catch (e) {
         logger.warn("[onCancelacionWrite] Orden de devolución falló (no crítico)", { id, message: e.message });
@@ -185,6 +214,15 @@ module.exports = onDocumentWritten(
          </p>`
       : "";
 
+    // Contrato Propio: los correos NO deben pedir recuperar equipos del cliente.
+    const propio = esContratoPropio(await getContrato());
+    const notaPropio = propio
+      ? `<div style="margin:0 0 14px;padding:11px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;font:14px/1.5 Arial,sans-serif;color:#1e40af;">
+           <b>Contrato Propio — equipos del cliente.</b> La enmienda termina el servicio y la facturación;
+           <b>no hay recuperación de equipos</b> (los radios son propiedad del cliente).
+         </div>`
+      : "";
+
     let subject, preheader, bodyHtml, ctaLabel, recipients;
 
     if (created) {
@@ -197,7 +235,7 @@ module.exports = onDocumentWritten(
       bodyHtml  = `
         <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Enmienda de contrato</h2>
         <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">Hay una nueva enmienda <b>pendiente de aprobación</b>.</p>
-        ${filaTabla}${liquidHtml}
+        ${notaPropio}${filaTabla}${liquidHtml}
         ${after.motivo_detalle ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#374151;"><b>Observaciones:</b> ${escapeHtml(after.motivo_detalle)}</p>` : ""}
         <p style="margin:0 0 12px;font:13px/1.5 Arial,sans-serif;color:#6b7280;">Solicitó: ${escapeHtml(after.solicitado_por_nombre || "—")}</p>`;
     } else {
@@ -211,16 +249,18 @@ module.exports = onDocumentWritten(
         ctaLabel  = "Ver enmiendas";
         bodyHtml  = `
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065f46;">Enmienda aprobada</h2>
-          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">La enmienda fue <b>aprobada</b>. Se facturará hasta <b>${escapeHtml(finStr)}</b> (último tramo prorrateado). Procede la recuperación de los equipos.</p>
-          ${filaTabla}${liquidHtml}`;
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">La enmienda fue <b>aprobada</b>. Se facturará hasta <b>${escapeHtml(finStr)}</b> (último tramo prorrateado).${propio ? "" : " Procede la recuperación de los equipos."}</p>
+          ${notaPropio}${filaTabla}${liquidHtml}`;
       } else if (closed) {
         subject   = `Enmienda CERRADA: ${contratoId} – ${cliente}`;
-        preheader = `Equipos recuperados · enmienda cerrada`;
+        preheader = propio ? `Enmienda cerrada · sin recuperación de equipos` : `Equipos recuperados · enmienda cerrada`;
         ctaLabel  = "Ver enmiendas";
         bodyHtml  = `
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#1e40af;">Enmienda cerrada</h2>
-          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">Los equipos fueron recuperados y la enmienda quedó <b>cerrada</b>.</p>
-          ${filaTabla}
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">${propio
+            ? "La enmienda quedó <b>cerrada</b>. No hubo recuperación de equipos: son propiedad del cliente."
+            : "Los equipos fueron recuperados y la enmienda quedó <b>cerrada</b>."}</p>
+          ${notaPropio}${filaTabla}
           ${after.condicion_notas ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#374151;"><b>Condición:</b> ${escapeHtml(after.condicion_notas)}</p>` : ""}`;
       } else {
         subject   = `Enmienda RECHAZADA: ${contratoId} – ${cliente}`;

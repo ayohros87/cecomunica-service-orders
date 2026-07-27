@@ -56,6 +56,12 @@
       <h3 style="margin:0 0 4px;"><i data-lucide="file-minus-2" style="width:18px;height:18px;"></i> Enmienda / terminación de contrato</h3>
       <p id="solSub" style="margin:0 0 var(--sp-4); color:var(--fg-3); font-size:13px;"></p>
 
+      <!-- Contrato Propio: los equipos son del cliente, la enmienda no dispara recuperación. -->
+      <div id="solAvisoPropio" style="display:none; margin:0 0 var(--sp-4); padding:11px 14px; border-radius:8px; background:#EFF6FF; border:1px solid #BFDBFE; color:#1E40AF; font-size:13px; line-height:1.5;">
+        <b>Contrato Propio — equipos del cliente.</b> Esta enmienda termina el servicio y la facturación:
+        <b>no se crea orden de recuperación</b> y los radios se quedan con el cliente.
+      </div>
+
       <div class="form-grid-2" style="margin-bottom:var(--sp-3);">
         <div class="form-field">
           <label class="form-label" for="tipo">Tipo de enmienda</label>
@@ -147,7 +153,7 @@
 </div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/cancelaciones.js" defer></script>
+<script src="../js/pages/cancelaciones.js?v=prop1" defer></script>
 <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

@@ -9,6 +9,11 @@ window.Cancelaciones = {
   esAprobador() { return this.rol === ROLES.ADMIN || this.rol === ROLES.GERENTE; },
   puedeCerrar() { return this.esAprobador() || this.rol === ROLES.RECEPCION; },
 
+  // Contrato "Propio" = venta con contrato de servicio: los equipos son del
+  // cliente. La enmienda solo corta servicio/facturación — no hay recuperación
+  // (el trigger onCancelacionWrite tampoco crea la orden de devolución).
+  esPropio(c) { return !!c && (c.tipo_contrato === 'Propio' || c.codigo_tipo === 'PROP'); },
+
   async init() {
     firebase.auth().onAuthStateChanged(async (user) => {
       if (!user) return (window.location.href = '../login.html');
@@ -50,6 +55,13 @@ window.Cancelaciones = {
     document.getElementById('solicitudWrap').style.display = '';
     document.getElementById('solSub').textContent =
       `${c.contrato_id || this.contratoDocId} · ${c.cliente_nombre || 'Cliente'}`;
+    const avisoPropio = document.getElementById('solAvisoPropio');
+    if (avisoPropio) avisoPropio.style.display = this.esPropio(c) ? '' : 'none';
+    if (this.esPropio(c)) {
+      // "devolución de unidades" no aplica cuando el equipo es del cliente.
+      const opt = document.querySelector('#tipo option[value="baja_parcial"]');
+      if (opt) opt.textContent = 'Baja parcial (unidades fuera del servicio)';
+    }
 
     // Motivos tipificados.
     document.getElementById('motivoCodigo').innerHTML =
@@ -276,7 +288,11 @@ window.Cancelaciones = {
               </div>
               ${r.motivo_detalle ? `<div style="font-size:12px; color:var(--fg-3); margin-top:2px;">Obs.: ${r.motivo_detalle}</div>` : ''}
               ${r.condicion_notas ? `<div style="font-size:12px; color:var(--fg-3); margin-top:2px;">Condición: ${r.condicion_notas}</div>` : ''}
-              ${r.orden_devolucion_id ? `<div style="font-size:12px; color:var(--fg-3); margin-top:2px;">Devolución: <a href="../ordenes/index.html" title="El check-in de equipos se hace en Órdenes">orden ${r.orden_devolucion_id}</a></div>` : ''}
+              ${r.orden_devolucion_id
+                ? `<div style="font-size:12px; color:var(--fg-3); margin-top:2px;">Devolución: <a href="../ordenes/index.html" title="El check-in de equipos se hace en Órdenes">orden ${r.orden_devolucion_id}</a></div>`
+                : r.devolucion_no_aplica === 'propio'
+                  ? `<div style="font-size:12px; color:#1E40AF; margin-top:2px;">Sin recuperación: los equipos son propiedad del cliente (contrato Propio)</div>`
+                  : ''}
             </div>
             <div style="text-align:right;">${pill(r.estado)}${acciones}</div>
           </div>
@@ -308,7 +324,9 @@ window.Cancelaciones = {
     const sol = (this._rows || []).find(r => r.id === id);
     const dev = sol?.orden_devolucion_id
       ? `La recuperación de equipos se gestiona en la orden de devolución ${sol.orden_devolucion_id}. `
-      : '';
+      : sol?.devolucion_no_aplica === 'propio'
+        ? 'No hay recuperación: los equipos son propiedad del cliente (contrato Propio). '
+        : '';
     if (!window.confirm(`¿Cerrar la enmienda? ${dev}Esto marca el trámite como terminado.`)) return;
     const cond = window.prompt('Notas de cierre (opcional):') || '';
     try { await CancelacionesService.cerrar(id, firebase.auth().currentUser?.uid, { condicionNotas: cond }); Toast.show('Enmienda cerrada', 'ok'); this.cargarCola(); }
