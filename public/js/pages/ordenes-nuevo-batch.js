@@ -195,7 +195,7 @@ function refrescarContrato() {
     if (!hayContrato)      { html = '<span class="c-muted">sin contrato</span>'; }
     else if (!serial)      { html = '<span class="c-muted">—</span>'; }
     else {
-      const c = contratoSeriales.get(serial.toLowerCase());
+      const c = contratoSeriales.get(ContratosService._serialKey(serial));
       if (!c) {
         estado = "warn"; fuera++;
         html = '<span class="c-tag warn">no está en el contrato</span>';
@@ -255,7 +255,7 @@ window.usarModeloContrato = (btn) => {
   const tr = btn?.closest("tr");
   if (!tr) return;
   const serial = (tr.querySelector(".serie")?.value || "").trim();
-  const id = modeloIdDeContrato(contratoSeriales.get(serial.toLowerCase()));
+  const id = modeloIdDeContrato(contratoSeriales.get(ContratosService._serialKey(serial)));
   if (!id) { Toast.show("El modelo que indica el contrato no está en el catálogo de modelos.", "warn"); return; }
   const sel = tr.querySelector(".modelo");
   if (sel) sel.value = id;
@@ -267,7 +267,7 @@ window.usarContratoEnTodos = () => {
   let n = 0;
   document.querySelectorAll("#filasBatch tr").forEach(tr => {
     const serial = (tr.querySelector(".serie")?.value || "").trim();
-    const id = modeloIdDeContrato(contratoSeriales.get(serial.toLowerCase()));
+    const id = modeloIdDeContrato(contratoSeriales.get(ContratosService._serialKey(serial)));
     const sel = tr.querySelector(".modelo");
     if (id && sel && sel.value !== id) { sel.value = id; n++; }
   });
@@ -342,7 +342,7 @@ async function enforceContratoModelos() {
   document.querySelectorAll("#filasBatch tr").forEach(tr => {
     const serial = tr.querySelector(".serie")?.value.trim();
     if (!serial) return;
-    const c = mapa.get(serial.toLowerCase());
+    const c = mapa.get(ContratosService._serialKey(serial));
     if (!c) { fuera.push(serial); return; }
     const catId = (c.modelo_id && idsValidos.has(c.modelo_id))
       ? c.modelo_id

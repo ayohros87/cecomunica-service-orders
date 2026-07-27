@@ -16,7 +16,10 @@
 
   const db = () => firebase.firestore();
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-  const norm = (s) => String(s || '').trim().toLowerCase();
+  // Identidad de serial = la del pool (L7 2026-07-27): "PD-606" y "PD 606"
+  // ahora se detectan como el MISMO serial (duplicado en rojo) en vez de
+  // colarse como dos filas del contrato.
+  const norm = (s) => ContratosService._serialKey(s);
   const $ = (id) => document.getElementById(id);
 
   // ── Entry ──────────────────────────────────────────────────────────────

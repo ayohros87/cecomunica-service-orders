@@ -17,7 +17,9 @@
 
   const db = () => firebase.firestore();
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-  const norm = (s) => String(s || '').trim().toLowerCase();
+  // Identidad de serial = la del pool (L7 2026-07-27); solo se compara entre
+  // valores ya normalizados, así que el cambio es interno.
+  const norm = (s) => ContratosService._serialKey(s);
   const $ = (id) => document.getElementById(id);
 
   const ctx = { contrato: null, salientes: [], entrantes: [], mapeos: [], poolNuevoPorSerial: new Map() };

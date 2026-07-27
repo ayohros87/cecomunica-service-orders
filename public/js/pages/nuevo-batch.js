@@ -54,7 +54,7 @@
     // Resuelve el modelo de un serial: PRIMERO el contrato (por serial,
     // autoritativo); si no está, el archivo del vendedor (posicional, como antes).
     function resolverModeloSerial(serial, detalle) {
-      const c = modeloContratoPorSerial.get(String(serial || '').trim().toLowerCase());
+      const c = modeloContratoPorSerial.get(ContratosService._serialKey(serial));
       if (c && (c.modelo_id || c.modelo)) {
         const label = labelModelo(c.modelo_id, c.modelo);
         return { modelo_id: c.modelo_id || null, modelo_label: label, modelo: label };
@@ -97,7 +97,7 @@
       const jsonIds = detallesBatch.map(resolverModeloIdJson);
       const pools = new Map();                 // modelo_id → [seriales], orden estable
       for (const s of seriales) {
-        const mid = modeloContratoPorSerial.get(s.toLowerCase())?.modelo_id || '';
+        const mid = modeloContratoPorSerial.get(ContratosService._serialKey(s))?.modelo_id || '';
         if (!pools.has(mid)) pools.set(mid, []);
         pools.get(mid).push(s);
       }
@@ -156,7 +156,7 @@
       const filas = detallesBatch.map((d, i) => {
         const serial = seriales[i] || '';
         if (!serial) faltan++;
-        const c = serial ? modeloContratoPorSerial.get(serial.toLowerCase()) : null;
+        const c = serial ? modeloContratoPorSerial.get(ContratosService._serialKey(serial)) : null;
         const modeloLabel = c ? labelModelo(c.modelo_id, c.modelo) : (d.modelo_label || d.modelo || '—');
         const jsonId = resolverModeloIdJson(d);
         const mal = !!(c && jsonId && c.modelo_id !== jsonId);
@@ -753,7 +753,7 @@ document.getElementById("addCliente").onclick = async () => {
           .split('\n').map(s => s.trim()).filter(Boolean);
 
         if (contratoDocId && modeloContratoPorSerial.size) {
-          const fuera = serialesFinal.filter(s => !modeloContratoPorSerial.has(s.toLowerCase()));
+          const fuera = serialesFinal.filter(s => !modeloContratoPorSerial.has(ContratosService._serialKey(s)));
           if (fuera.length) {
             const ok = window.confirm(
               `Estos seriales NO están en el contrato seleccionado:\n\n- ${fuera.join('\n- ')}\n\n` +
@@ -766,7 +766,7 @@ document.getElementById("addCliente").onclick = async () => {
           if (detallesBatch?.length) {
             let mal = 0;
             for (let i = 0; i < serialesFinal.length; i++) {
-              const c = modeloContratoPorSerial.get(serialesFinal[i].toLowerCase());
+              const c = modeloContratoPorSerial.get(ContratosService._serialKey(serialesFinal[i]));
               const jsonId = resolverModeloIdJson(normalizarDetalleBatch(detallesBatch[i] || {}));
               if (c && jsonId && c.modelo_id !== jsonId) mal++;
             }

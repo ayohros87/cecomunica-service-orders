@@ -200,6 +200,21 @@ const ContratosService = {
   // y órdenes): el modelo se resuelve por serial (join), NO por posición contra
   // un archivo del vendedor — así el modelo del contrato coincide siempre con lo
   // que se registra, aunque los seriales se peguen en otro orden.
+  // Identidad canónica de un serial de contrato (L7 2026-07-27): el MISMO
+  // serial_norm del pool ([A-Z0-9] en mayúsculas) — antes era trim+lowercase,
+  // con lo que "PD-606" y "PD 606" eran dos filas del contrato pero una sola
+  // ficha en equipos_pool (conteo doble + doble contacto del trigger).
+  // Fallback local idéntico a EquiposPoolService.normalizarSerial por si la
+  // página no cargó ese servicio; los seriales patológicos que normalizan a
+  // vacío conservan una clave propia para no colisionar entre sí.
+  _serialKey(s) {
+    const raw = String(s || '').trim();
+    const norm = (typeof EquiposPoolService !== 'undefined')
+      ? EquiposPoolService.normalizarSerial(raw)
+      : raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return norm || (raw ? `raw:${raw.toLowerCase()}` : '');
+  },
+
   async getModeloPorSerial(contratoId) {
     if (!contratoId) return new Map();
     const rows = await this.getSerialesManual(contratoId);
@@ -207,7 +222,7 @@ const ContratosService = {
     for (const r of rows) {
       const serial = String(r.serial || '').trim();
       if (!serial) continue;
-      map.set(serial.toLowerCase(), { serial, modelo: r.modelo || '', modelo_id: r.modelo_id || '' });
+      map.set(this._serialKey(serial), { serial, modelo: r.modelo || '', modelo_id: r.modelo_id || '' });
     }
     return map;
   },
@@ -219,19 +234,20 @@ const ContratosService = {
     const db = firebase.firestore();
     const parent = db.collection('contratos').doc(contratoId);
     const col = parent.collection('seriales');
-    const norm = (s) => String(s || '').trim().toLowerCase();
+    const norm = (s) => this._serialKey(s);
 
     const snap = await col.get();
-    const existing = new Map();                       // serialNorm -> docId
-    const existingData = new Map();                   // serialNorm -> {serial, modelo} (valor anterior)
+    const existing = new Map();                       // serialKey -> [docIds] (puede haber filas gemelas legacy)
+    const existingData = new Map();                   // serialKey -> {serial, modelo} (valor anterior)
     snap.docs.forEach(d => {
       const data = d.data();
       const k = norm(data.serial);
-      existing.set(k, d.id);
+      if (!existing.has(k)) existing.set(k, []);
+      existing.get(k).push(d.id);
       existingData.set(k, { serial: String(data.serial || '').trim(), modelo: data.modelo || '' });
     });
 
-    const desiredMap = new Map();                     // serialNorm -> item (deduplicado)
+    const desiredMap = new Map();                     // serialKey -> item (deduplicado)
     for (const it of (desired || [])) {
       const k = norm(it.serial);
       if (!k) continue;
@@ -256,13 +272,18 @@ const ContratosService = {
         updated_by: uid,
       };
       if (existing.has(k)) {
-        batch.set(col.doc(existing.get(k)), base, { merge: true });
+        // Se actualiza la primera fila; las gemelas legacy (misma unidad
+        // registrada 2+ veces) se eliminan de paso — el trigger no libera la
+        // unidad porque otra fila del contrato sigue listando el serial.
+        const [keeper, ...extras] = existing.get(k);
+        batch.set(col.doc(keeper), base, { merge: true });
+        extras.forEach(docId => batch.delete(col.doc(docId)));
       } else {
         batch.set(col.doc(), { ...base, created_at: now, created_by: uid });
       }
     }
-    for (const [k, docId] of existing) {
-      if (!desiredMap.has(k)) batch.delete(col.doc(docId));
+    for (const [k, docIds] of existing) {
+      if (!desiredMap.has(k)) docIds.forEach(docId => batch.delete(col.doc(docId)));
     }
 
     // Historial (auditoría): registra en cada guardado qué seriales ENTRARON y

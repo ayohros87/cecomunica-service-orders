@@ -22,13 +22,23 @@ module.exports = onDocumentWritten(
     const before = event.data.before?.exists ? event.data.before.data() : null;
     const after  = event.data.after?.exists  ? event.data.after.data()  : null;
 
-    // 1) Recuento (comportamiento original).
+    // 1) Recuento + set de seriales vigentes (post-escritura). El conteo es de
+    //    seriales DISTINTOS por serial_norm (L7 2026-07-27): filas duplicadas
+    //    de la misma unidad ya no inflan seriales_count (readiness de
+    //    facturación). El set alimenta el guard de liberación de abajo.
+    let normsVigentes = null; // Set<serial_norm> | null si la lectura falló
     try {
       const snap = await db.collection("contratos").doc(cid).collection("seriales").get();
-      let count = 0;
-      snap.forEach((d) => { const s = d.data()?.serial; if (typeof s === "string" && s.trim()) count++; });
+      normsVigentes = new Set();
+      let sinNorm = 0;
+      snap.forEach((d) => {
+        const s = d.data()?.serial;
+        if (typeof s !== "string" || !s.trim()) return;
+        const n = pool.normSerial(s);
+        if (n) normsVigentes.add(n); else sinNorm++;
+      });
       await db.collection("contratos").doc(cid).set({
-        seriales_count: count,
+        seriales_count: normsVigentes.size + sinNorm,
         seriales_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     } catch (e) {
@@ -51,7 +61,15 @@ module.exports = onDocumentWritten(
       };
 
       // Serial removido o reemplazado → liberar la unidad vieja de ESTE contrato.
-      if (serialAntes && (!after || !mismo)) {
+      // GUARD (L7 2026-07-27): si OTRA fila del contrato aún lista el mismo
+      // serial (fila duplicada que se está deduplicando), NO se libera — la
+      // unidad sigue contratada. Sin este guard, borrar el duplicado mandaba
+      // la ficha a bodega con el contrato vigente. Si el snapshot de arriba
+      // falló (normsVigentes null), se prefiere NO liberar: un residuo lo
+      // reporta la conciliación semanal; una liberación errónea des-asigna.
+      const normAntes = pool.normSerial(serialAntes);
+      const sigueVigente = normsVigentes === null || (normAntes && normsVigentes.has(normAntes));
+      if (serialAntes && (!after || !mismo) && !sigueVigente) {
         const r = await pool.transicionar(serialAntes, before.modelo_id, before.modelo, {
           aEstado: pool.ESTADOS.EN_BODEGA,
           soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
