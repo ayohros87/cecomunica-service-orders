@@ -63,6 +63,19 @@ window.SerialField = {
       const norm = EquiposPoolService.normalizarSerial(raw);
       slot.innerHTML = '';
       if (!norm || !EquiposPoolService.esSerialValido(norm)) {
+        // Texto que no es un serial (sin un solo dígito): el campo se usa de
+        // cajón de sastre para consolas, GPS, cargadores, celulares del
+        // cliente… Eso ya no entra al inventario por serial, así que se avisa
+        // en vez de callar — si no, el equipo desaparece sin explicación.
+        if (norm.length >= 3 && !/\d/.test(norm)) {
+          const hint = document.createElement('span');
+          hint.className = 'eqpool-chip';
+          hint.style.cssText = 'background:transparent; border:1px dashed var(--border, #cbd5e1); color:var(--fg-3, #64748b);';
+          hint.title = 'Un serial lleva al menos un número. Este texto no se registra en el inventario por serial (sí queda en la orden o el contrato).';
+          hint.textContent = 'no es un serial';
+          slot.appendChild(hint);
+        }
+        slot._sfNorm = null;
         if (opts.onInfo) opts.onInfo({ docs: [], unidad: null });
         return;
       }

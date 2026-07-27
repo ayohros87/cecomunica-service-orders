@@ -29,8 +29,16 @@ function normSerial(raw) {
   return (raw ?? "").toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+// Un serial es 3-30 alfanuméricos Y lleva al menos un dígito. La segunda mitad
+// (2026-07-27) existe porque el campo "serial" se usa como cajón de sastre para
+// lo que no es radio: "CONSOLA" aparecía en 55 devices POC de otros tantos
+// clientes y el pool los colapsaba en UNA ficha; también "GPS", "DEMO",
+// "MICROFONO", "CARGADORESYFUENTE", "CELULARCLIENTE". Sin dígito no entra al
+// pool (el doc de origen no se toca: la línea del equipo sigue en su orden o
+// contrato). Verificado contra las 4 fuentes: 13 textos sin dígito, los 13
+// basura — cero seriales reales perdidos. (== frontend esSerialValido)
 function esSerialValido(serialNorm) {
-  return /^[A-Z0-9]{3,30}$/.test(serialNorm);
+  return /^[A-Z0-9]{3,30}$/.test(serialNorm) && /\d/.test(serialNorm);
 }
 
 // Clave de modelo para el ID sufijado del failsafe. (== frontend modeloKey)

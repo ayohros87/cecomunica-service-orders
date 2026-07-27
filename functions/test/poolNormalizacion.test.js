@@ -40,6 +40,10 @@ const SERIALES = [
   "ABC123", "abc123", "  abc-123  ", "AB C1 23", "NX·420·X1", "áéí-123-XyZ",
   "12345678901234567890123456789012345", // >30 (inválido)
   "AB", "", null, undefined, 12345, "SER/IAL_2024#7",
+  // Textos que la operación mete en el campo serial y NO son seriales
+  // (verificados en producción 2026-07-27) — deben quedar fuera del pool.
+  "CONSOLA", "Consola Monitoreo", "GPS", "DEMO", "MICROFONO", "CELULAR CLIENTE",
+  "CARGADORES Y FUENTE", "MARCOS", "SN16A1", // el último SÍ es válido (lleva dígitos)
 ];
 
 const LABELS = [
@@ -58,6 +62,17 @@ test("esSerialValido coincide sobre el corpus normalizado", () => {
   for (const s of SERIALES) {
     const norm = backend.normSerial(s);
     assert.equal(front.esSerialValido(norm), backend.esSerialValido(norm), `serial: ${JSON.stringify(s)}`);
+  }
+});
+
+test("un texto sin dígitos no es un serial (no entra al pool)", () => {
+  for (const basura of ["CONSOLA", "GPS", "DEMO", "MICROFONO", "MARCOS", "CELULARCLIENTE"]) {
+    assert.equal(backend.esSerialValido(basura), false, `debería rechazar: ${basura}`);
+    assert.equal(front.esSerialValido(basura), false, `front debería rechazar: ${basura}`);
+  }
+  for (const bueno of ["SN16A1", "26123A0780", "B5100077", "407595R", "NS3200A0788"]) {
+    assert.equal(backend.esSerialValido(bueno), true, `debería aceptar: ${bueno}`);
+    assert.equal(front.esSerialValido(bueno), true, `front debería aceptar: ${bueno}`);
   }
 });
 

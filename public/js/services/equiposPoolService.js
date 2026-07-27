@@ -50,8 +50,14 @@ const EquiposPoolService = {
     return (raw ?? '').toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   },
 
+  // 3-30 alfanuméricos Y al menos un dígito. Lo del dígito (2026-07-27): el
+  // campo serial se usa de cajón de sastre para lo que no es radio ("CONSOLA"
+  // estaba en 55 devices POC de clientes distintos y el pool los colapsaba en
+  // una sola ficha; igual "GPS", "DEMO", "MICROFONO"). Sin dígito no es serial
+  // y no entra al pool. DUPLICADO en functions/src/domain/equiposPool.js —
+  // functions/test/poolNormalizacion.test.js exige que sigan idénticos.
   esSerialValido(serialNorm) {
-    return /^[A-Z0-9]{3,30}$/.test(serialNorm);
+    return /^[A-Z0-9]{3,30}$/.test(serialNorm) && /\d/.test(serialNorm);
   },
 
   // Componente de modelo para el ID sufijado del failsafe. La normalización
