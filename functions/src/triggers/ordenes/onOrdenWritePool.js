@@ -79,6 +79,27 @@ module.exports = onDocumentWritten(
         cliente_id: fuente.cliente_id || "", cliente_nombre: fuente.cliente_nombre || "",
       } : null;
 
+      // Venta ↔ orden de PROGRAMACIÓN (fix 2026-07-27): el feed del home
+      // sugiere "crear orden" mientras venta.orden_programacion_id esté vacío,
+      // pero ese enlace solo lo estampaba el CTA venta→orden. Una orden creada
+      // a mano (o ANTES de registrar la venta) dejaba la sugerencia viva para
+      // siempre. Aquí se amarra por contacto: unidad VENDIDA del MISMO cliente
+      // en una PROGRAMACIÓN viva → se estampa el enlace.
+      const esProgramacion = String(after?.tipo_de_servicio || "")
+        .toUpperCase().includes("PROGRAMA");
+      const amarrarVenta = async (e) => {
+        if (!esProgramacion) return;
+        try {
+          const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+          if (!data || data.estado !== pool.ESTADOS.VENDIDO) return;
+          if (!data.venta || data.venta.orden_programacion_id) return;
+          const cv = data.venta.cliente_id || "";
+          if (cv && after.cliente_id && cv !== after.cliente_id) return; // venta de otro cliente
+          await ref.set({ venta: { orden_programacion_id: ordenId } }, { merge: true });
+          logger.info("[onOrdenWritePool] Venta amarrada a orden de programación", { ordenId, serial: e.serial });
+        } catch (err) { /* best-effort por unidad */ }
+      };
+
       // Una unidad VENDIDA conserva su estado (la venta es un hecho de
       // propiedad, no de ubicación) — al cerrar la orden solo se limpia el
       // enlace orden_actual_id, que transicionar() no toca por soloDesde.
@@ -104,6 +125,7 @@ module.exports = onDocumentWritten(
             notas: entregadaAhora ? "" : "Orden eliminada",
             extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
           });
+          if (entregadaAhora) await amarrarVenta(e);
           await soltarVendido(e);
         }
         return null;
@@ -158,6 +180,15 @@ module.exports = onDocumentWritten(
           extra,
         });
         if (r === "creado") logger.info("[onOrdenWritePool] Serial nuevo en pool desde orden", { ordenId, serial: e.serial });
+      }
+
+      // Amarre de ventas: al agregar equipos o al cambiar el estado de la
+      // orden. El segundo caso cubre la venta registrada DESPUÉS de crear la
+      // orden — el próximo avance de la orden la amarra y la sugerencia del
+      // home muere sola.
+      const estadoCambio = norm(before?.estado_reparacion) !== norm(after.estado_reparacion);
+      if (esProgramacion && (nuevos.length || estadoCambio)) {
+        for (const e of despues) await amarrarVenta(e);
       }
     } catch (e) {
       logger.warn("[onOrdenWritePool] Pool sync falló (no crítico)", { ordenId, message: e.message });
