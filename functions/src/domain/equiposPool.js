@@ -129,7 +129,14 @@ function _docNuevo({ serial, serialNorm, modelo_id, modelo_label, estado,
 //   · data == null, colisionConId → el serial existe pero en OTRO(s) modelo(s);
 //                               ref apunta al doc sufijado a crear
 //   · data == null, sin colisión → no existe; ref apunta al ID limpio
-async function resolver(serial, modeloId, modeloLabel) {
+//
+// opts.adoptarSiExiste: el desacuerdo de modelo NO parte la ficha — se adopta
+// la que ya existe. Lo usan las fuentes cuyo texto de modelo no manda sobre la
+// unidad física (hoy solo POC — decisión "el contrato manda sobre POC",
+// 2026-07-27: 35 de los 64 conflictos eran POC contradiciendo al contrato con
+// el mismo radio). Las colisiones reales de serial (Kenwood NX420/NX920)
+// llegan por contrato u orden, que siguen partiendo la ficha.
+async function resolver(serial, modeloId, modeloLabel, opts = {}) {
   const norm = normSerial(serial);
   const col = db.collection("equipos_pool");
   const snap = await col.where("serial_norm", "==", norm).get();
@@ -140,6 +147,14 @@ async function resolver(serial, modeloId, modeloLabel) {
   // mismoModelo ya es tolerante (adopta docs/flujos sin datos de modelo).
   const exacto = docs.find((d) => mismoModelo(d, modeloId, modeloLabel));
   if (exacto) return { ref: col.doc(exacto.id), data: exacto, colisionConId: null };
+
+  if (opts.adoptarSiExiste) {
+    // Sin coincidencia de modelo se adopta la ficha principal del serial (la de
+    // ID limpio; si ya estaba partido, la primera). El modelo del llamante NO
+    // pisa el de la ficha: upsertContacto solo rellena campos vacíos.
+    const principal = docs.find((d) => d.id === norm) || docs[0];
+    return { ref: col.doc(principal.id), data: principal, colisionConId: null };
+  }
 
   // Colisión entre modelos (caso Kenwood NX420/NX920): el nuevo doc va sufijado.
   const sufijado = `${norm}__${modeloKey(modeloId, modeloLabel)}`;
@@ -155,13 +170,16 @@ async function resolver(serial, modeloId, modeloLabel) {
 //   tipo, refMov, notas,    // movimiento
 //   origen,                 // migracion_contrato | migracion_orden | migracion_poc
 //   extra,                  // campos a fusionar (asignacion, poc_device_id, ...)
+//   adoptarSiExiste,        // true: un modelo distinto NO parte la ficha (POC)
 // }
 // Retorna 'creado' | 'transicion' | 'actualizado' | 'sin-cambio' | 'ignorado'.
 async function upsertContacto(opts) {
   const norm = normSerial(opts.serial);
   if (!esSerialValido(norm)) return "ignorado";
 
-  const { ref, data, colisionConId } = await resolver(opts.serial, opts.modelo_id, opts.modelo_label);
+  const { ref, data, colisionConId } = await resolver(
+    opts.serial, opts.modelo_id, opts.modelo_label,
+    { adoptarSiExiste: opts.adoptarSiExiste === true });
 
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);

@@ -27,7 +27,8 @@ module.exports = onDocumentWritten(
       if (!serialAntes) return null;
       try {
         const { ref, data } = await pool.resolver(
-          serialAntes, before.modelo_id || null, before.modelo_label || before.modelo || "");
+          serialAntes, before.modelo_id || null, before.modelo_label || before.modelo || "",
+          { adoptarSiExiste: true });
         if (data && data.poc_device_id === deviceId) {
           await ref.set({ poc_device_id: null }, { merge: true });
           logger.info("[onPocDeviceWritePool] Device POC eliminado — ficha desenlazada", { deviceId, serial: serialAntes });
@@ -57,6 +58,14 @@ module.exports = onDocumentWritten(
         tipo: "registro_poc",
         refMov: { tipo: "poc", id: deviceId, label: after.radio_name || after.unit_id || "" },
         origen: "migracion_poc",
+        // EL CONTRATO MANDA SOBRE POC (decisión 2026-07-27): el texto de modelo
+        // del device POC no es autoridad sobre la unidad física — cuando
+        // discrepa con el contrato/orden se adopta la ficha existente en vez de
+        // partirla. Antes cada desacuerdo minaba una ficha sufijada: 35 de los
+        // 64 conflictos vivos eran exactamente eso (el mismo radio del mismo
+        // cliente, "PNC360S-R" vs "PNC460-R" vs "HYT-P50"). El modelo de la
+        // ficha no se pisa: upsertContacto solo rellena vacíos.
+        adoptarSiExiste: true,
         extra: {
           poc_device_id: deviceId, propiedad: "cecomunica",
           // Custodia: el device sabe con qué cliente está — y desde 2026-07-16
