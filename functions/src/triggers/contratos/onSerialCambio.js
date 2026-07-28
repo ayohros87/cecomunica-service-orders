@@ -204,7 +204,8 @@ module.exports = onDocumentWritten(
         subject:   `Corrección de seriales: ${contratoIdVis} – ${clienteNombre}`,
         preheader: `Se corrigieron ${reemplazos.length} serial(es) del contrato ${contratoIdVis}`,
         bodyContent,
-        ctaUrl:    `${APP_BASE_URL}/contratos/imprimir-contrato.html?id=${encodeURIComponent(contratoIdVis)}`,
+        // Por DOC ID: el número es mutable y no fue único hasta el 2026-07-28.
+        ctaUrl:    `${APP_BASE_URL}/contratos/imprimir-contrato.html?id=${encodeURIComponent(cid)}`,
         ctaLabel:  "Ver contrato",
         meta:      { source: "onSerialCambio.resuelto", contrato_id: contratoIdVis, req_id: reqId },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),

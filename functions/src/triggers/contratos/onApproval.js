@@ -401,7 +401,10 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         ${omisionesTable}
       `;
 
-      const contratoUrl = `https://app.cecomunica.net/contratos/imprimir-contrato.html?id=${encodeURIComponent(contrato.contrato_id)}`;
+      // Enlace por DOC ID, no por número: el número es mutable y no fue único
+      // hasta el 2026-07-28 — un correo viejo con ALQ20260723-01 hoy abre el
+      // contrato de otro cliente. El doc ID nunca cambia.
+      const contratoUrl = `https://app.cecomunica.net/contratos/imprimir-contrato.html?id=${encodeURIComponent(cid)}`;
       const htmlEmail   = buildEmailFromBase({
         preheader,
         bodyHtml,

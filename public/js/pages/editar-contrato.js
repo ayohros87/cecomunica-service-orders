@@ -37,7 +37,7 @@ async function cargarContrato() {
   // 3) Bloquear edición si ya fue aprobado
   if (c.estado === "activo") {
     Toast.show('Este contrato ya fue aprobado y no se puede editar.', 'bad');
-    window.location.href = `imprimir-contrato.html?id=${c.contrato_id || contratoDocId}`;
+    window.location.href = `imprimir-contrato.html?id=${encodeURIComponent(contratoDocId)}`;
     return;
   }
 

@@ -142,7 +142,8 @@ module.exports = onRequest(
           ${equiposHtml2 ? `<h4 style="margin:0 0 8px; font:600 16px Arial, sans-serif;">Equipos</h4><ul style="margin:0 0 16px; padding-left:18px; font:14px/1.5 Arial, sans-serif;">${equiposHtml2}</ul>` : ""}
         `;
 
-        const contratoUrl2 = `https://app.cecomunica.net/contratos/imprimir-contrato.html?id=${encodeURIComponent(contrato.contrato_id)}`;
+        // Por DOC ID: el número es mutable y no fue único hasta el 2026-07-28.
+        const contratoUrl2 = `https://app.cecomunica.net/contratos/imprimir-contrato.html?id=${encodeURIComponent(contractDocId)}`;
         const htmlEmail2   = buildEmailFromBase({
           preheader: preheader2,
           bodyHtml:  bodyHtml2,

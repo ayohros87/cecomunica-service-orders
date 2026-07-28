@@ -152,7 +152,7 @@ window.ContratosLista = {
       primaryHtml = `<a class="${ctaCls}" style="${amber}" href="${urlOrdenProg}" title="Seriales listos y sin orden vinculada: crea la orden de programación para la entrega (formulario precargado)"><i data-lucide="calendar-plus" style="width:14px;height:14px;"></i> Crear orden</a>`;
     } else if (data.contrato_id) {
       primaryKind = 'ver';
-      primaryHtml = `<button class="${ctaCls}" onclick="ContratosLista.ver('${data.contrato_id}')" title="Ver / Imprimir"><i data-lucide="printer" style="width:14px;height:14px;"></i> Ver</button>`;
+      primaryHtml = `<button class="${ctaCls}" onclick="ContratosLista.ver('${id}')" title="Ver / Imprimir"><i data-lucide="printer" style="width:14px;height:14px;"></i> Ver</button>`;
     }
 
     // ── Pill de Seriales (indicador de estado, queda inline) ─────────
@@ -166,7 +166,7 @@ window.ContratosLista = {
       `<a class="overflow-menu-item ${cls}" href="${href}" target="_blank" rel="noopener"><i data-lucide="${icon}"></i> ${label}</a>`;
 
     if (primaryKind !== 'ver' && data.contrato_id)
-      items.push(I('printer', 'Ver / Imprimir', `ContratosLista.ver('${data.contrato_id}')`));
+      items.push(I('printer', 'Ver / Imprimir', `ContratosLista.ver('${id}')`));
     if (puedePanelTrabajo)
       items.push(I('folder-open', 'Panel de trabajo', `ContratosEquipos.abrirPanel('${id}')`));
     if (editable)
@@ -602,8 +602,10 @@ window.ContratosLista = {
     });
   },
 
-  ver(idContrato) {
-    window.open(`imprimir-contrato.html?id=${idContrato}`, '_blank');
+  // Recibe el DOC ID, no el número: el número es mutable y no fue único hasta
+  // el 2026-07-28, así que un enlace por número puede abrir otro contrato.
+  ver(docId) {
+    window.open(`imprimir-contrato.html?id=${encodeURIComponent(docId)}`, '_blank');
   },
 
   ordenarPor(campo) {

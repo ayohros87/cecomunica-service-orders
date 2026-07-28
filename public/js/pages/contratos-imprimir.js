@@ -3,7 +3,10 @@
     const contratoId = params.get("id");
 
 async function cargarContrato() {
-  const data = await ContratosService.getByContratoId(contratoId);
+  // Acepta doc ID (preferido, identidad estable) o número, incl. el anterior a
+  // un renumerado. Antes resolvía SOLO por número con .limit(1): con
+  // ALQ20260723-01 repartido en 3 contratos imprimía el de otro cliente.
+  const data = await ContratosService.resolverContrato(contratoId);
   if (!data) { Toast.show('Contrato no encontrado', 'bad'); return; }
 
   // --- declarar antes de usar ---

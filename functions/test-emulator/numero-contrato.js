@@ -110,6 +110,36 @@ async function main() {
   assert.equal(await numerar("REEMP", f), "REEMP20261001-01");
   console.log("✔ caso 6: series independientes por codigo_tipo");
 
+  // ── 7) resolverContrato: el doc ID manda sobre el número ─────────────────
+  // La página de impresión resolvía SOLO por número con .limit(1), así que con
+  // ALQ20260723-01 repartido en 3 contratos imprimía el de otro cliente.
+  // Números propios de este caso (los de arriba ya existen sin cliente_nombre).
+  const viejo = "ALQ20261123-01";
+  const nuevo = "ALQ20261122-01";
+  const refKeeper = await db.collection("contratos").add({
+    contrato_id: viejo, cliente_nombre: "COPASECUVA", codigo_tipo: "ALQ",
+  });
+  const refRenumerado = await db.collection("contratos").add({
+    contrato_id: nuevo, contrato_id_anterior: viejo,
+    cliente_nombre: "WILLY BUSINESS", codigo_tipo: "ALQ",
+  });
+
+  const porDoc = await ContratosService.resolverContrato(refRenumerado.id);
+  assert.equal(porDoc.cliente_nombre, "WILLY BUSINESS");
+  const porNumero = await ContratosService.resolverContrato(nuevo);
+  assert.equal(porNumero.cliente_nombre, "WILLY BUSINESS");
+  // Un link viejo con el número reasignado cae en quien HOY lo tiene: el número
+  // vigente gana sobre contrato_id_anterior. Por eso los links usan doc ID.
+  const porViejo = await ContratosService.resolverContrato(viejo);
+  assert.equal(porViejo.cliente_nombre, "COPASECUVA");
+  assert.equal(porViejo.id, refKeeper.id);
+  // Y si el número anterior ya no lo usa nadie, encuentra al renumerado.
+  await refKeeper.delete();
+  const porAnterior = await ContratosService.resolverContrato(viejo);
+  assert.equal(porAnterior.cliente_nombre, "WILLY BUSINESS");
+  assert.equal(await ContratosService.resolverContrato("NO-EXISTE-01"), null);
+  console.log("✔ caso 7: resolverContrato prioriza doc ID > número vigente > número anterior");
+
   console.log("\nTODOS LOS CASOS DE NUMERACIÓN PASARON");
 }
 

@@ -24,6 +24,27 @@ const ContratosService = {
     return { id: doc.id, ...doc.data() };
   },
 
+  // Resuelve un contrato desde lo que venga en ?id= : doc ID, número actual o
+  // número ANTERIOR (si se renumeró). El doc ID va primero porque es la única
+  // identidad estable: el número es un campo mutable y no fue único hasta el
+  // 2026-07-28 (ALQ20260723-01 estuvo en 3 contratos). Un link viejo que trae
+  // un número reasignado cae en el contrato que HOY lo tiene — por eso los
+  // enlaces nuevos deben construirse con el doc ID.
+  async resolverContrato(idONumero) {
+    if (!idONumero) return null;
+    const porDoc = await this.getContrato(idONumero).catch(() => null);
+    if (porDoc) return porDoc;
+    const porNumero = await this.getByContratoId(idONumero);
+    if (porNumero) return porNumero;
+
+    const db = firebase.firestore();
+    const snap = await db.collection('contratos')
+      .where('contrato_id_anterior', '==', idONumero)
+      .limit(1)
+      .get();
+    return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+  },
+
   async updateContrato(id, fields) {
     const db = firebase.firestore();
     return db.collection('contratos').doc(id).update(fields);
