@@ -15,8 +15,13 @@
  * queda para revisión humana en la cola de Conflictos.
  *
  * NO toca (por diseño):
- *   · grupos donde el serial está vivo en POC con DOS clientes distintos — ese
- *     es un problema de propiedad, no de modelo.
+ *   · grupos donde el serial está ACTIVO en POC con dos clientes a la vez — ese
+ *     es un problema de propiedad, no de modelo. Ojo con el matiz (2026-07-28):
+ *     un device apagado (`activo: false`) NO cuenta como segundo dueño; es el
+ *     rastro del cliente anterior, que al devolver el radio se desactiva en vez
+ *     de borrarse. Contarlos bloqueaba 19 grupos legítimos — los 12 de ASAMBLEA
+ *     NACIONAL "compartidos" con SOCIEDAD ISRAELITA son eso: Asamblea apagada,
+ *     Sociedad activa, y el contrato vigente es de Sociedad.
  *   · grupos donde la ficha que sobreviviría está en bodega y otra está
  *     colocada — el estado se contradice y lo tiene que ver una persona.
  *
@@ -91,11 +96,12 @@ function rellenar(keeper, otro) {
     dest.get(n).add(m);
   }
 
-  // Seriales vivos en POC con más de un cliente → problema de propiedad.
+  // Seriales ACTIVOS en POC con más de un cliente → problema de propiedad.
+  // El device apagado es historia (cliente anterior), no un segundo dueño.
   const clientesPoc = new Map();
   for (const d of pocSnap.docs) {
     const p = d.data();
-    if (p.deleted === true) continue;
+    if (p.deleted === true || p.activo === false) continue;
     const n = String(p.serial || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     if (!porNorm.has(n) || !p.cliente_id) continue;
     if (!clientesPoc.has(n)) clientesPoc.set(n, new Set());
