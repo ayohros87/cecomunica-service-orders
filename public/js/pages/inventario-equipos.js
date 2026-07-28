@@ -89,7 +89,10 @@ window.EquiposPool = {
       const todos = await ModelosService.getModelos();
       this._modelos = (todos || [])
         .filter(m => m.activo !== false)
-        .map(m => ({ id: m.id, label: `${m.marca || ''} ${m.modelo || ''}`.trim() }))
+        // `estado` (N/R) se conserva: es lo que determina la condición de la
+        // unidad — ver _condicionDeModelo.
+        .map(m => ({ id: m.id, label: `${m.marca || ''} ${m.modelo || ''}`.trim(),
+                     estado: (m.estado || '').toUpperCase() }))
         .sort((a, b) => a.label.localeCompare(b.label));
     } catch (e) {
       console.warn('No se pudo cargar el catálogo de modelos:', e);
@@ -103,6 +106,12 @@ window.EquiposPool = {
       if (!sel) return;
       sel.innerHTML = (sel.options[0]?.outerHTML || '') + opts;
     });
+    // La condición se deriva del modelo, así que sigue al selector.
+    document.getElementById('recModelo')?.addEventListener('change', () =>
+      this._sincronizarCondicion('recModelo', 'recCondicion', 'recCondicionHint'));
+    document.getElementById('editModelo')?.addEventListener('change', () =>
+      this._sincronizarCondicion('editModelo', 'editCondicion', 'editCondicionHint',
+        this._condicionOriginal));
     // Filtro: por FAMILIA de modelo — el catálogo no tiene FK nuevo↔reuso, la
     // conexión es la convención del sufijo -R, así que "PNC360S" y "PNC360S-R"
     // se agrupan en una sola opción (la condición N/R se ve por columna).
@@ -135,6 +144,57 @@ window.EquiposPool = {
 
   _modeloLabel(modeloId) {
     return this._modelos.find(m => m.id === modeloId)?.label || '';
+  },
+
+  // La condición NO se escoge: la determina la fila del catálogo. El catálogo
+  // modela nuevo y reuso como filas distintas ("PNC360S" / "PNC360S-R") porque
+  // `inventario_actual` cuenta por fila y cada una lleva su propio `minimo`.
+  // Dejar elegir modelo y condición por separado permitía guardar fichas que se
+  // contradicen (etiqueta sin -R con condición reuso), que es lo que hubo que
+  // corregir en 70 fichas el 2026-07-28. Mismo criterio que el servidor
+  // (functions/src/domain/equiposPool.js) y que fix-condicion-modelo.js: manda
+  // `estado`, y si falta se cae al sufijo del nombre.
+  // Devuelve null si el modelo no está en el catálogo (fichas de migración con
+  // modelo suelto, o "Sin modelo"): ahí NO hay de dónde derivar, así que el
+  // llamador conserva la condición que ya tenía en vez de degradarla a 'nuevo'.
+  _condicionDeModelo(modeloId) {
+    const m = this._modelos.find(x => x.id === modeloId);
+    if (!m) return null;
+    if (m.estado === 'R') return 'reuso';
+    if (m.estado === 'N') return 'nuevo';
+    return /[\s-]r$/i.test(m.label || '') ? 'reuso' : 'nuevo';
+  },
+
+  // Refleja en el select deshabilitado la condición que impone el modelo. Si la
+  // ficha traía otra (dato viejo), lo dice en vez de cambiarlo en silencio.
+  _sincronizarCondicion(idModelo, idCondicion, idHint, condicionGuardada) {
+    const selModelo = document.getElementById(idModelo);
+    const selCond   = document.getElementById(idCondicion);
+    const hint      = document.getElementById(idHint);
+    if (!selModelo || !selCond) return;
+    const modeloId = selModelo.value;
+    const derivada = this._condicionDeModelo(modeloId);
+    // Sin modelo en el catálogo se respeta lo que ya tenía la ficha.
+    const cond = derivada || condicionGuardada || 'nuevo';
+    selCond.value = cond;
+    if (!hint) return;
+    const etiqueta = (c) => (c === 'reuso' ? 'Reuso' : 'Nuevo');
+    if (!modeloId) {
+      hint.textContent = 'La define el modelo escogido.';
+      hint.style.color = 'var(--fg-3)';
+    } else if (!derivada) {
+      hint.textContent = `Modelo fuera del catálogo: se conserva «${etiqueta(cond)}» de la ficha.`;
+      hint.style.color = 'var(--fg-3)';
+    } else if (condicionGuardada && condicionGuardada !== cond) {
+      hint.textContent = `La ficha decía «${etiqueta(condicionGuardada)}». Al guardar quedará `
+        + `«${etiqueta(cond)}» según el modelo. Si es de reuso, escoge la fila con sufijo -R.`;
+      hint.style.color = '#b45309';
+    } else {
+      hint.textContent = cond === 'reuso'
+        ? 'Reuso: el modelo lleva sufijo -R.'
+        : 'Nuevo: el modelo no lleva sufijo -R.';
+      hint.style.color = 'var(--fg-3)';
+    }
   },
 
   // ── Filtros persistidos ──────────────────────────────────────────────
@@ -506,6 +566,8 @@ window.EquiposPool = {
     document.getElementById('recProveedor').value = '';
     document.getElementById('recNotas').value = '';
     document.getElementById('recTomaFisica').checked = false;
+    document.getElementById('recModelo').value = '';
+    this._sincronizarCondicion('recModelo', 'recCondicion', 'recCondicionHint');
     Modal.open('eqRecibirModal');
   },
 
@@ -522,7 +584,7 @@ window.EquiposPool = {
       const res = await EquiposPoolService.recibir(seriales, {
         modelo_id:    modeloId,
         modelo_label: this._modeloLabel(modeloId),
-        condicion:    document.getElementById('recCondicion').value,
+        condicion:    this._condicionDeModelo(modeloId) || 'nuevo',
         proveedor:    document.getElementById('recProveedor').value,
         notas:        document.getElementById('recNotas').value,
         origen:       document.getElementById('recTomaFisica').checked ? 'toma_fisica' : 'bodega',
@@ -554,7 +616,10 @@ window.EquiposPool = {
       sel.insertAdjacentHTML('beforeend', `<option value="${FMT.esc(eq.modelo_id)}">${FMT.esc(eq.modelo_label || eq.modelo_id)}</option>`);
     }
     sel.value = eq.modelo_id || '';
-    document.getElementById('editCondicion').value = eq.condicion === 'reuso' ? 'reuso' : 'nuevo';
+    // La condición sale del modelo; si la ficha traía otra, el hint lo avisa.
+    this._condicionOriginal = eq.condicion === 'reuso' ? 'reuso' : 'nuevo';
+    this._sincronizarCondicion('editModelo', 'editCondicion', 'editCondicionHint',
+      this._condicionOriginal);
     document.getElementById('editPropiedad').value = eq.propiedad || 'desconocida';
     document.getElementById('editProveedor').value = eq.proveedor || '';
     document.getElementById('editNotas').value = eq.notas || '';
@@ -568,7 +633,8 @@ window.EquiposPool = {
       await EquiposPoolService.actualizar(this._editandoId, {
         modelo_id:    modeloId,
         modelo_label: modeloId ? this._modeloLabel(modeloId) : '',
-        condicion:    document.getElementById('editCondicion').value,
+        // Modelo fuera del catálogo (o sin modelo): se conserva la de la ficha.
+        condicion:    this._condicionDeModelo(modeloId) || this._condicionOriginal || 'nuevo',
         propiedad:    document.getElementById('editPropiedad').value,
         proveedor:    document.getElementById('editProveedor').value,
         notas:        document.getElementById('editNotas').value,
@@ -1061,7 +1127,8 @@ window.EquiposPool = {
         if (!serial) continue; // fila vacía del Excel
         const norm = EquiposPoolService.normalizarSerial(serial);
         const fila = { serial, norm, modelo_id: null, modelo_label: '',
-                       condicion: 'nuevo', proveedor: '', notas: '', problema: '' };
+                       condicion: null, cond_csv: null,
+                       proveedor: '', notas: '', problema: '' };
         if (!EquiposPoolService.esSerialValido(norm)) fila.problema = 'serial inválido';
         const modeloTxt = colModelo ? (f[colModelo] || '').toString().trim() : '';
         if (modeloTxt) {
@@ -1069,9 +1136,13 @@ window.EquiposPool = {
           if (m) { fila.modelo_id = m.id; fila.modelo_label = m.label; }
           else if (!fila.problema) fila.problema = `modelo "${modeloTxt}" no está en el catálogo`;
         }
+        // La condición la impone el modelo, no el archivo — misma regla que los
+        // modales. Si el archivo trae columna CONDICION y contradice al modelo,
+        // se avisa en la vista previa pero manda el catálogo.
+        if (fila.modelo_id) fila.condicion = this._condicionDeModelo(fila.modelo_id);
         if (colCond) {
           const c = FMT.normalize((f[colCond] || '').toString().trim());
-          if (c) fila.condicion = (c.startsWith('r') || c === 'usado') ? 'reuso' : 'nuevo';
+          if (c) fila.cond_csv = (c.startsWith('r') || c === 'usado') ? 'reuso' : 'nuevo';
         }
         if (colProv)  fila.proveedor = (f[colProv] || '').toString().trim();
         if (colNotas) fila.notas = (f[colNotas] || '').toString().trim();
@@ -1085,12 +1156,15 @@ window.EquiposPool = {
       const validas = filas.filter(f => !f.problema);
       const problemas = filas.filter(f => f.problema);
       const sinModelo = validas.filter(f => !f.modelo_id).length;
+      const condChocan = validas.filter(f => f.cond_csv && f.condicion && f.cond_csv !== f.condicion).length;
 
       const esc = FMT.esc;
       const muestra = validas.slice(0, 8).map(f => `<tr>
         <td class="td-mono">${esc(f.norm)}</td>
         <td>${f.modelo_label ? esc(f.modelo_label) : '<span style="color:var(--fg-3);">(modelo del selector)</span>'}</td>
-        <td>${f.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
+        <td>${f.condicion
+          ? (f.condicion === 'reuso' ? 'Reuso' : 'Nuevo')
+          : '<span style="color:var(--fg-3);">(del selector)</span>'}</td>
         <td>${esc(f.proveedor || '—')}</td>
       </tr>`).join('');
       const listaProblemas = problemas.slice(0, 6)
@@ -1101,6 +1175,7 @@ window.EquiposPool = {
           <span class="import-stat" style="color:#15803d;"><strong>${validas.length}</strong> válidas</span>
           <span class="import-stat" style="color:#b91c1c;"><strong>${problemas.length}</strong> con problema</span>
           ${sinModelo ? `<span class="import-stat" style="color:#92400e;"><strong>${sinModelo}</strong> sin MODELO (usarán el del selector)</span>` : ''}
+          ${condChocan ? `<span class="import-stat" style="color:#92400e;"><strong>${condChocan}</strong> con CONDICION distinta a la del modelo (manda el modelo)</span>` : ''}
         </div>
         <div class="app-table-wrap" style="max-height:220px; overflow:auto;">
           <table class="app-table compact">
@@ -1136,9 +1211,12 @@ window.EquiposPool = {
       for (const f of validas) {
         const modelo_id = f.modelo_id || defaultId;
         const modelo_label = f.modelo_id ? f.modelo_label : this._modeloLabel(defaultId);
-        const key = JSON.stringify([modelo_id, f.condicion, f.proveedor, f.notas]);
+        // Las filas sin MODELO heredan el del selector, así que su condición
+        // solo se puede resolver aquí, ya elegido el default.
+        const condicion = this._condicionDeModelo(modelo_id) || 'nuevo';
+        const key = JSON.stringify([modelo_id, condicion, f.proveedor, f.notas]);
         const g = grupos.get(key) || { seriales: [], meta: {
-          modelo_id, modelo_label, condicion: f.condicion,
+          modelo_id, modelo_label, condicion,
           proveedor: f.proveedor, notas: f.notas, origen: 'import_excel',
         } };
         g.seriales.push(f.serial);
