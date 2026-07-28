@@ -72,15 +72,30 @@ window.HomeFeedDevoluciones = (() => {
         estado: v.estado || '',
         orden: cp.orden_numero || cp.orden_entrada_id,
         n: Array.isArray(cp.seriales) ? cp.seriales.length : 0,
+        // Por qué está en la bandeja. Sin el campo (marcas viejas) se infiere:
+        // si hay orden de entrada fue una devolución, si no, un conteo.
+        motivo: cp.motivo || (cp.orden_entrada_id ? 'entrada' : 'conteo_bodega'),
+        dias: cp.dias_sin_cerrar || null,
         at,
       });
     });
     return filas.sort((a, b) => b.at - a.at);
   }
 
+  // Cada motivo cuenta una historia distinta; un texto único mentiría en dos
+  // de los tres casos (p.ej. "0 equipos devueltos" para un temporal vencido).
+  const MOTIVO_TXT = {
+    entrada: (c) => `${c.n} equipo(s) devueltos en la entrada ${esc(c.orden)}`,
+    conteo_bodega: (c) => `${c.n} equipo(s) aparecieron en el conteo de bodega`,
+    temporal_vencido: (c) => c.dias
+      ? `temporal/demo de ${c.dias} días, sin equipo asignado ni devolución registrada`
+      : 'temporal/demo vencido, sin equipo asignado ni devolución registrada',
+  };
+
   function _row(c) {
-    const meta = `${esc(c.contrato_id)} · ${c.n} equipo(s) devueltos en la entrada `
-      + `${esc(c.orden)} · contrato ${esc(c.estado)}${c.at ? ` · ${hace(c.at)}` : ''}`;
+    const detalle = (MOTIVO_TXT[c.motivo] || MOTIVO_TXT.conteo_bodega)(c);
+    const meta = `${esc(c.contrato_id)} · ${detalle} · contrato ${esc(c.estado)}`
+      + `${c.at ? ` · ${hace(c.at)}` : ''}`;
     return `
 <div class="fo-row">
   <span class="fo-ico fo-ico--contrato"><i data-lucide="package-check"></i></span>
