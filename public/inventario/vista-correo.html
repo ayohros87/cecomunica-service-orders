@@ -99,7 +99,7 @@ datos.forEach(({ modelo, data, seriales }) => {
 
   let estadoTexto = "-";
   if (modelo.estado === "N") estadoTexto = "Nuevo";
-  else if (modelo.estado === "R") estadoTexto = "Reuso";
+  else if (modelo.estado === "R") estadoTexto = "Refurbished";
 
   const n = Number(seriales ?? 0);
   const tieneConteo = data.cantidad != null;

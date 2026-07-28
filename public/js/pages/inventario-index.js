@@ -278,7 +278,7 @@ function renderizarTabla(datos) {
                   : dif === 0 ? '<span class="badge completo">0</span>'
                   : `<span class="badge ${dif > 0 ? 'pendiente' : 'danger'}" title="${dif > 0 ? 'Seriales capturados que el conteo no vio' : 'Conteo mayor que los seriales — posible unidad sin capturar en el pool'}">${dif > 0 ? '+' : ''}${dif}</span>`;
     const tipoTxt = modelo.tipo === "P" ? "Portátil" : modelo.tipo === "C" ? "Cámara" : modelo.tipo === "B" ? "Base" : "-";
-    const estadoTxt = modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-";
+    const estadoTxt = modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Refurbished" : "-";
     const ua = data.ultima_actualizacion ? data.ultima_actualizacion.toDate().toLocaleString() : "-";
     const pa = data.penultima_actualizacion ? data.penultima_actualizacion.toDate().toLocaleString() : "-";
     const am = modelo.alto_movimiento
@@ -341,7 +341,7 @@ async function exportarExcel() {
       modelo.marca || "-",
       modelo.modelo || "-",
       modelo.tipo === "P" ? "Portátil" : modelo.tipo === "C" ? "Cámara" : modelo.tipo === "B" ? "Base" : "-",
-      modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Reuso" : "-",
+      modelo.estado === "N" ? "Nuevo" : modelo.estado === "R" ? "Refurbished" : "-",
       modelo.alto_movimiento ? "Sí" : "No",
       seriales,
       data.cantidad ?? "-",

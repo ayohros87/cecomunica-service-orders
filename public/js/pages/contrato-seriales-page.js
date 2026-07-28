@@ -758,7 +758,7 @@
         <label class="pp-item" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border-subtle,#eee);cursor:pointer;font-size:13px;">
           <input type="checkbox" class="pp-check" value="${esc(u.serial || u.serial_norm)}" data-grupo="${si}" style="width:16px;height:16px;">
           <span class="pp-serial" style="font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</span>
-          <span style="margin-left:auto;color:var(--fg-3);font-size:12px;">${u.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</span>
+          <span style="margin-left:auto;color:var(--fg-3);font-size:12px;">${u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</span>
         </label>`).join('');
       return `
         <div class="pp-grupo" data-grupo="${si}" style="margin-bottom:12px;">

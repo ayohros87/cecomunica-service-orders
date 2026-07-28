@@ -187,11 +187,11 @@ window.EquiposPool = {
       hint.style.color = 'var(--fg-3)';
     } else if (condicionGuardada && condicionGuardada !== cond) {
       hint.textContent = `La ficha decía «${etiqueta(condicionGuardada)}». Al guardar quedará `
-        + `«${etiqueta(cond)}» según el modelo. Si es de reuso, escoge la fila con sufijo -R.`;
+        + `«${etiqueta(cond)}» según el modelo. Si es refurbished, escoge la fila con sufijo -R.`;
       hint.style.color = '#b45309';
     } else {
       hint.textContent = cond === 'reuso'
-        ? 'Reuso: el modelo lleva sufijo -R.'
+        ? 'Refurbished: el modelo lleva sufijo -R.'
         : 'Nuevo: el modelo no lleva sufijo -R.';
       hint.style.color = 'var(--fg-3)';
     }

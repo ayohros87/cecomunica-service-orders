@@ -169,7 +169,7 @@ window.ContratosEquipos = {
         </td>
         <td style="border:1px solid var(--line); padding:6px;">${esc(u.modelo_label || '—')}</td>
         <td style="border:1px solid var(--line); padding:6px;">${EquiposPoolService.chipEstadoHtml(u.estado)} ${EquiposPoolService.chipPendienteDevolucionHtml(u)}</td>
-        <td style="border:1px solid var(--line); padding:6px;">${u.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
+        <td style="border:1px solid var(--line); padding:6px;">${u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</td>
       </tr>`).join('');
 
     return `

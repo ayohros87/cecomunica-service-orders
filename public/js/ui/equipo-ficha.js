@@ -127,7 +127,7 @@ window.EquipoFicha = {
       ['Asignado a', linkCliente],
       ['Contrato', linkContrato],
       ['Orden actual', linkOrden],
-      ['Condición', eq.condicion === 'reuso' ? 'Reuso' : 'Nuevo'],
+      ['Condición', eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'],
       ['Propiedad', eq.propiedad === 'cecomunica' ? 'Flota Cecomunica' : eq.propiedad === 'cliente' ? 'Del cliente' : 'Sin clasificar'],
       ['Plataforma POC', eq.poc_device_id ? 'Registrado' : '—'],
       eq.reemplaza_a ? ['Reemplaza a', `<span style="font-family:var(--mono, monospace);">${esc(eq.reemplaza_a)}</span>`] : null,

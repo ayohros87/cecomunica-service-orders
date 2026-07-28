@@ -120,7 +120,7 @@ function renderizarTabla() {
 
     let estadoTexto = "-";
     if (modelo.estado === "N") estadoTexto = "Nuevo";
-    else if (modelo.estado === "R") estadoTexto = "Reuso";
+    else if (modelo.estado === "R") estadoTexto = "Refurbished";
 
     const am = modelo.alto_movimiento
       ? '<span class="badge asignar">Alto</span>'
