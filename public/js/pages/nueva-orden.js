@@ -27,6 +27,19 @@
       return normalizarTipo(tipo) === "PROGRAMACION";
     }
 
+    function esEntrada(tipo) {
+      return normalizarTipo(tipo) === "ENTRADA";
+    }
+
+    // PROGRAMACIÓN entrega equipo bajo un contrato; ENTRADA lo recibe de vuelta.
+    // Las dos puntas del ciclo necesitan saber de qué contrato se trata: sin eso
+    // la devolución no se puede amarrar y la cancelación del contrato queda en el
+    // aire (de 460 ENTRADAs históricas, solo 3 tenían contrato — las que nacieron
+    // automáticamente de una DEVOLUCIÓN).
+    function requiereContrato(tipo) {
+      return esProgramacion(tipo) || esEntrada(tipo);
+    }
+
     // VISITA TECNICA: trabajo de campo (torres, repetidores, sitios del
     // cliente). Pide sitio/contacto al crear; el cierre es en sitio con
     // firma (ordenes-visita.js), sin entrega posterior.
@@ -91,7 +104,7 @@
       const tipo = tipoSelect.value;
       toggleVisitaBlock(tipo);
 
-      if (esProgramacion(tipo)) {
+      if (requiereContrato(tipo)) {
         // Mostrar bloque de contrato
         contratoBlock.style.display = "block";
         
@@ -123,8 +136,8 @@
     
     // Event listener para cambio de cliente
     clienteSelect.addEventListener("change", async function() {
-      // Si el tipo actual es PROGRAMACIÓN, recargar contratos
-      if (esProgramacion(tipoSelect.value) && clienteSelect.value) {
+      // Si el tipo actual pide contrato, recargar los del cliente
+      if (requiereContrato(tipoSelect.value) && clienteSelect.value) {
         contratoSelect.value = ""; // Limpiar selección previa
         await cargarContratosDelCliente(clienteSelect.value);
       }
@@ -313,7 +326,7 @@
       toggleVisitaBlock(tipoSelect.value);
       // Bloque de contrato: mismo setup que el change handler de tipo, pero en
       // línea para poder esperar la carga y preseleccionar el contrato.
-      if (esProgramacion(tipoSelect.value)) {
+      if (requiereContrato(tipoSelect.value)) {
         contratoBlock.style.display = "block";
         if (origen === "venta") {
           // Venta directa: sin contrato por definición — "No aplica" con el
@@ -356,12 +369,13 @@
         return;
       }
 
-      // Validación específica para PROGRAMACIÓN
-      if (esProgramacion(tipoSelect.value)) {
+      // Validación para los tipos que van amarrados a un contrato
+      if (requiereContrato(tipoSelect.value)) {
         if (!contratoNoAplica.checked) {
           // Debe tener contrato seleccionado
           if (!contratoSelect.value) {
-            mostrarMensaje("⚠️ Para PROGRAMACIÓN debe seleccionar un contrato o marcar 'No aplica'.", "rojo");
+            const t = esEntrada(tipoSelect.value) ? "ENTRADA" : "PROGRAMACIÓN";
+            mostrarMensaje(`⚠️ Para ${t} debe seleccionar un contrato o marcar 'No aplica'.`, "rojo");
             return;
           }
         } else {
@@ -431,8 +445,8 @@
           };
         }
 
-        // Agregar contrato solo si tipo = PROGRAMACION
-        if (esProgramacion(tipoSelect.value)) {
+        // El bloque de contrato se guarda para PROGRAMACIÓN y ENTRADA
+        if (requiereContrato(tipoSelect.value)) {
           if (contratoNoAplica.checked) {
             // No aplica contrato
             data.contrato = {

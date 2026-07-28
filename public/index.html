@@ -26,6 +26,7 @@
   <script defer src="js/domain/ordenProgPendiente.js"></script>
   <script defer src="js/services/feedOrdenesService.js"></script>
   <script defer src="js/pages/home-feed-ordenes.js"></script>
+  <script defer src="js/pages/home-feed-devoluciones.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -54,6 +55,7 @@
 
   <!-- ============ ÓRDENES POR CREAR (feed; solo recepción/admin) ============ -->
   <div class="feed-ordenes" id="feedOrdenes" style="display:none"></div>
+  <div class="feed-ordenes" id="feedDevoluciones" style="display:none"></div>
 
   <!-- ============ BUSCADOR ============ -->
   <div class="launch__search">
@@ -272,6 +274,7 @@
 
         // Feed "Órdenes por crear" — solo recepción/admin (gate en el módulo).
         if (window.HomeFeedOrdenes) HomeFeedOrdenes.render({ rolEfectivo: effectiveRol, uid: user.uid });
+        if (window.HomeFeedDevoluciones) HomeFeedDevoluciones.render({ rolEfectivo: effectiveRol, uid: user.uid });
 
         // Mostrar grid, ocultar skeletons, aplicar filtro inicial
         document.getElementById('gridSkeleton').style.display = 'none';

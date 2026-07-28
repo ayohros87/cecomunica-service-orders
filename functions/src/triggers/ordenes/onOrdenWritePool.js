@@ -1,6 +1,7 @@
 const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const pool = require("../../domain/equiposPool");
+const { admin, db } = require("../../lib/admin");
 
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
 // docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md §3.4):
@@ -11,7 +12,11 @@ const pool = require("../../domain/equiposPool");
 //   · equipo removido de la orden → su unidad sale del taller (en_cliente).
 // El serial de la orden es texto libre: nunca bloquea, solo registra.
 const ENTREGADO = "ENTREGADO AL CLIENTE";
+// Terminal propio de las ENTRADA: no se entregan al cliente, se cierran.
+const CERRADA_ENTRADA = "CERRADA (ENTRADA)";
 const norm = (s) => String(s || "").trim().toUpperCase();
+// Contratos que siguen vivos: solo esos vale la pena marcar para cancelar.
+const VIGENTES = new Set(["activo", "aprobado"]);
 
 function equiposDe(data) {
   if (!data || data.eliminado === true) return [];
@@ -39,6 +44,68 @@ module.exports = onDocumentWritten(
       const keysDespues = new Set(despues.map((e) => pool.normSerial(e.serial)));
       const keysAntes   = new Set(antes.map((e) => pool.normSerial(e.serial)));
 
+      // ── Cierre de una ENTRADA ────────────────────────────────────────────
+      // La ENTRADA es el regreso físico del equipo. Mientras está abierta las
+      // unidades siguen en cuarentena (devuelto_revision) porque el taller las
+      // está revisando; al CERRARLA esa revisión terminó, así que aterrizan en
+      // bodega y sueltan la asignación — misma convención que cualquier otra
+      // entrada a bodega del sistema (onSerialWrite, onOrdenDevolucionWrite).
+      // Va ANTES del bloque de inspección para que aplique también a las
+      // ENTRADAs nacidas de una DEVOLUCIÓN, que si no se quedaban en cuarentena
+      // para siempre.
+      const cerroEntrada = after
+        && norm(after.tipo_de_servicio) === "ENTRADA"
+        && norm(after.estado_reparacion) === CERRADA_ENTRADA
+        && norm(before?.estado_reparacion) !== CERRADA_ENTRADA;
+
+      if (cerroEntrada) {
+        const refMovE = { tipo: "orden", id: ordenId, label: after.numero_orden || ordenId };
+        for (const e of despues) {
+          try {
+            await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: pool.ESTADOS.EN_BODEGA,
+              // VENDIDO y BAJA quedan fuera a propósito: son hechos de
+              // propiedad, no de ubicación, y no los revierte una entrada.
+              soloDesde: [pool.ESTADOS.DEVUELTO, pool.ESTADOS.EN_TALLER,
+                          pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.ASIGNADO],
+              tipo: "cierre_entrada",
+              refMov: refMovE,
+              notas: "Entrada cerrada: el equipo queda disponible en bodega",
+              extra: { orden_actual_id: null, asignacion: null, verificado: false },
+            });
+          } catch (err) { /* best-effort por unidad */ }
+        }
+
+        // El equipo volvió, pero el contrato sigue vivo: se marca para que
+        // ventas lo cancele. NO se cancela solo — una ENTRADA también puede ser
+        // una reparación o un reemplazo, y cancelar factura de por medio es
+        // decisión humana (decidido con el usuario 2026-07-28).
+        const c = after.contrato || {};
+        if (c.aplica && c.contrato_doc_id) {
+          try {
+            const ref = db.collection("contratos").doc(c.contrato_doc_id);
+            const snap = await ref.get();
+            const estado = String(snap.exists ? (snap.data().estado || "") : "").toLowerCase();
+            if (snap.exists && VIGENTES.has(estado)) {
+              await ref.set({
+                cancelacion_pendiente: {
+                  orden_entrada_id: ordenId,
+                  orden_numero: after.numero_orden || ordenId,
+                  cliente_nombre: after.cliente_nombre || "",
+                  seriales: despues.map((e) => e.serial),
+                  at: admin.firestore.FieldValue.serverTimestamp(),
+                },
+              }, { merge: true });
+              logger.info("[onOrdenWritePool] Contrato marcado para cancelar tras ENTRADA",
+                { ordenId, contrato: c.contrato_id || c.contrato_doc_id, unidades: despues.length });
+            }
+          } catch (err) {
+            logger.warn("[onOrdenWritePool] No se pudo marcar el contrato", { ordenId, err: String(err) });
+          }
+        }
+        return null;
+      }
+
       // Órdenes de INSPECCIÓN de entrada (creadas automáticamente al cerrar
       // una enmienda o anular un contrato — lib/ordenEntrada.js): sus equipos
       // están en cuarentena (devuelto_revision) y DEBEN seguir ahí durante la
@@ -46,8 +113,11 @@ module.exports = onDocumentWritten(
       // Aquí solo se enlaza/limpia orden_actual_id (link visible en el pool).
       const esInspeccion = !!(after?.entrada_inspeccion || before?.entrada_inspeccion);
       if (esInspeccion) {
+        // CERRADA (ENTRADA) cuenta como cerrada: sin esto el link a la orden
+        // quedaba colgando en el pool para siempre en las entradas ya cerradas.
         const cerrada = !after || after.eliminado === true
-          || norm(after.estado_reparacion) === ENTREGADO;
+          || norm(after.estado_reparacion) === ENTREGADO
+          || norm(after.estado_reparacion) === CERRADA_ENTRADA;
         const equiposRef = (despues.length ? despues : antes);
         for (const e of equiposRef) {
           try {
