@@ -178,7 +178,7 @@ window.EquiposPool = {
     const cond = derivada || condicionGuardada || 'nuevo';
     selCond.value = cond;
     if (!hint) return;
-    const etiqueta = (c) => (c === 'reuso' ? 'Reuso' : 'Nuevo');
+    const etiqueta = (c) => (c === 'reuso' ? 'Refurbished' : 'Nuevo');
     if (!modeloId) {
       hint.textContent = 'La define el modelo escogido.';
       hint.style.color = 'var(--fg-3)';
@@ -542,7 +542,7 @@ window.EquiposPool = {
         return `<tr>
           <td class="td-mono">${esc(eq.serial || eq.serial_norm)}${compartido}${noVerif}</td>
           <td>${esc(eq.modelo_label || '—')}</td>
-          <td>${eq.condicion === 'reuso' ? 'Reuso' : 'Nuevo'}</td>
+          <td>${eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</td>
           <td><span class="eq-prop eq-prop-${esc(prop)}" title="${prop === 'cecomunica' ? 'Flota propia de Cecomunica' : prop === 'cliente' ? 'Equipo propiedad del cliente' : 'Propiedad sin clasificar'}">${esc(this.PROP_LABELS[prop] || prop)}</span></td>
           <td><span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>${this._listoParaEntrega(eq) ? `<span class="eqpool-chip" style="background:#e9f7f0;color:#067647;display:inline-block;margin-top:3px;" title="La orden ya está COMPLETADO (EN OFICINA) — el radio está terminado; falta registrar la entrega al cliente">→ listo para entrega</span>` : ''}${EquiposPoolService.chipPendienteDevolucionHtml(eq)}${eq.reemplaza_a ? `<span class="eq-sub" title="Linaje: esta unidad sustituyó a la anterior en una renovación/reemplazo">reemplaza a ${esc(eq.reemplaza_a)}</span>` : ''}</td>
           <td>${asignadoA}</td>
@@ -1163,7 +1163,7 @@ window.EquiposPool = {
         <td class="td-mono">${esc(f.norm)}</td>
         <td>${f.modelo_label ? esc(f.modelo_label) : '<span style="color:var(--fg-3);">(modelo del selector)</span>'}</td>
         <td>${f.condicion
-          ? (f.condicion === 'reuso' ? 'Reuso' : 'Nuevo')
+          ? (f.condicion === 'reuso' ? 'Refurbished' : 'Nuevo')
           : '<span style="color:var(--fg-3);">(del selector)</span>'}</td>
         <td>${esc(f.proveedor || '—')}</td>
       </tr>`).join('');
