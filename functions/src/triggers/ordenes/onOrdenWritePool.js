@@ -77,7 +77,12 @@ module.exports = onDocumentWritten(
               tipo: "cierre_entrada",
               refMov: refMovE,
               notas: "Entrada cerrada: el equipo queda disponible en bodega",
-              extra: { orden_actual_id: null, asignacion: null, verificado: false },
+              // verificado:true — la ENTRADA ES la orden de inspección del
+              // equipo devuelto: el taller lo tuvo en la mano y lo revisó, así
+              // que eso YA es la confirmación humana. Otras vueltas a bodega
+              // (p.ej. quitar un serial de un contrato, onSerialWrite) sí
+              // dejan verificado:false porque nadie miró la unidad.
+              extra: { orden_actual_id: null, asignacion: null, verificado: true },
             });
           } catch (err) { /* best-effort por unidad */ }
         }
