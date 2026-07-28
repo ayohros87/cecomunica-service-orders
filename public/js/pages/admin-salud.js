@@ -220,13 +220,21 @@
         return;
       }
       const r = doc.data();
-      setText('concPoolFecha', r.at ? `Último corte: ${fmtTs(r.at)} · ${r.total || 0} caso(s)` : '—');
+      // El contador de apagados explica por qué el total es chico: los devices
+      // POC desactivados son el rastro del cliente anterior, no drift.
+      const apagados = Number(r.poc_apagados_ignorados || 0);
+      setText('concPoolFecha', r.at
+        ? `Último corte: ${fmtTs(r.at)} · ${r.total || 0} caso(s)`
+          + (apagados ? ` · ${apagados.toLocaleString('es-PA')} device(s) POC apagados ignorados` : '')
+        : '—');
       const filas = [
         { chequeo: 'Serial de contrato vigente sin ficha (o asignada a otro)', n: r.A_contrato_sin_ficha || 0, m: r.A_muestras },
         { chequeo: 'En taller con la orden ya cerrada', n: r.B_taller_orden_cerrada || 0, m: r.B_muestras },
-        { chequeo: 'Device POC activo sin enlace en la ficha', n: r.C_poc_sin_enlace || 0, m: r.C_muestras },
+        { chequeo: 'Device POC activo sin ninguna ficha del serial', n: r.C_poc_sin_ficha || 0, m: r.C_sin_ficha_muestras },
+        { chequeo: 'Device POC activo con ficha, pero sin enlace', n: r.C_poc_sin_enlace || 0, m: r.C_muestras },
         { chequeo: 'Asignada a contrato ANULADO sin devolución', n: r.D_asignada_a_anulado || 0, m: r.D_muestras },
         { chequeo: 'Vendido con enlace de orden colgante', n: r.E_vendido_orden_cerrada || 0, m: r.E_muestras },
+        { chequeo: 'Mismo serial ACTIVO en POC con dos clientes', n: r.F_serial_dos_clientes || 0, m: r.F_muestras },
       ].map(f => ({
         chequeo: f.chequeo,
         casos: String(f.n),
