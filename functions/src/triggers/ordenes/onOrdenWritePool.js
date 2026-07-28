@@ -6,7 +6,9 @@ const { admin, db } = require("../../lib/admin");
 // Pool de equipos ↔ órdenes de servicio ("migración por contacto", plan
 // docs/plans/PLAN_POOL_EQUIPOS_SERIAL.md §3.4):
 //   · equipo agregado a una orden viva → la unidad pasa a en_taller (si el
-//     serial no existe en el pool se crea con origen migracion_orden).
+//     serial no existe en el pool se crea con origen migracion_orden). NO
+//     aplica a las órdenes que no mueven inventario — inspección y VISITA
+//     TÉCNICA, que ocurre en las instalaciones del cliente.
 //   · orden pasa a "ENTREGADO AL CLIENTE" (o se soft-elimina) → sus unidades
 //     en_taller regresan a en_cliente.
 //   · equipo removido de la orden → su unidad sale del taller (en_cliente).
@@ -14,6 +16,8 @@ const { admin, db } = require("../../lib/admin");
 const ENTREGADO = "ENTREGADO AL CLIENTE";
 // Terminal propio de las ENTRADA: no se entregan al cliente, se cierran.
 const CERRADA_ENTRADA = "CERRADA (ENTRADA)";
+// Terminal de la VISITA TÉCNICA (se cierra en sitio, con firma del cliente).
+const CERRADA_VISITA = "CERRADA (VISITA)";
 const norm = (s) => String(s || "").trim().toUpperCase();
 // Contratos que siguen vivos: solo esos vale la pena marcar para cancelar.
 const VIGENTES = new Set(["activo", "aprobado"]);
@@ -117,18 +121,26 @@ module.exports = onDocumentWritten(
         return null;
       }
 
-      // Órdenes de INSPECCIÓN de entrada (creadas automáticamente al cerrar
-      // una enmienda o anular un contrato — lib/ordenEntrada.js): sus equipos
-      // están en cuarentena (devuelto_revision) y DEBEN seguir ahí durante la
-      // inspección; jamás pasan a en_taller ni a en_cliente por esta orden.
-      // Aquí solo se enlaza/limpia orden_actual_id (link visible en el pool).
+      // Órdenes que NO mueven inventario — solo enlazan/limpian orden_actual_id:
+      //
+      //   · INSPECCIÓN de entrada (creadas al cerrar una enmienda o anular un
+      //     contrato — lib/ordenEntrada.js): sus equipos están en cuarentena
+      //     (devuelto_revision) y DEBEN seguir ahí durante la inspección.
+      //   · VISITA TÉCNICA: el técnico va a las instalaciones del cliente, el
+      //     radio nunca sale de ahí (decisión del usuario 2026-07-28). Antes
+      //     caía en el flujo normal y agregar equipos lo mandaba a en_taller;
+      //     como el terminal de una visita es CERRADA (VISITA) y el retorno
+      //     solo miraba ENTREGADO AL CLIENTE, la unidad se quedaba "en taller"
+      //     para siempre. Las 8 de la orden 2026072701 eran justo eso.
       const esInspeccion = !!(after?.entrada_inspeccion || before?.entrada_inspeccion);
-      if (esInspeccion) {
-        // CERRADA (ENTRADA) cuenta como cerrada: sin esto el link a la orden
-        // quedaba colgando en el pool para siempre en las entradas ya cerradas.
+      const esVisita = /VISITA/.test(norm(after?.tipo_de_servicio || before?.tipo_de_servicio));
+      if (esInspeccion || esVisita) {
+        // Cada tipo cierra con su propio terminal; sin contemplarlos todos, el
+        // link a la orden quedaba colgando en el pool para siempre.
         const cerrada = !after || after.eliminado === true
           || norm(after.estado_reparacion) === ENTREGADO
-          || norm(after.estado_reparacion) === CERRADA_ENTRADA;
+          || norm(after.estado_reparacion) === CERRADA_ENTRADA
+          || norm(after.estado_reparacion) === CERRADA_VISITA;
         const equiposRef = (despues.length ? despues : antes);
         for (const e of equiposRef) {
           try {
