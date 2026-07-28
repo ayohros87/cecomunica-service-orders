@@ -122,6 +122,12 @@ window.HomeSignals = (() => {
       href: 'inventario/equipos.html?tab=devuelto_revision',
       count: () => SenalesService.countEquiposPoolPorEstado('devuelto_revision'),
     },
+    S14: {
+      modulo: 'equipos', icon: 'map-pin-off', moreIsBad: true,
+      label: 'Equipos por clasificar', sub: 'ubicación sin contrato ni orden que la respalde',
+      href: 'inventario/equipos.html?tab=por_clasificar',
+      count: () => SenalesService.countEquiposPoolPorEstado('por_clasificar'),
+    },
   };
 
   // Rol efectivo → señales (máx. 4). Cada señal pasa ADEMÁS por el gate de
@@ -135,7 +141,11 @@ window.HomeSignals = (() => {
     vendedor:          ['S7', 'S8', 'S1', 'S4'],
     tecnico:           ['S5', 'S4P'],
     tecnico_operativo: ['S5', 'S4P'],
-    inventario:        ['S11', 'S13', 'S12', 'S9'],
+    // S14 (por clasificar) entra en lugar de S12 (por verificar): la ubicación
+    // desconocida es un atraso accionable, mientras que "por verificar" es una
+    // marca blanda — y su entrada bajó al marcar verificadas las ENTRADAs.
+    // S12 sigue accesible desde Equipos por serial (filtro "sin verificar").
+    inventario:        ['S11', 'S13', 'S14', 'S9'],
     vista:             ['S1', 'S3', 'S4'],
     contabilidad:      [],
   };

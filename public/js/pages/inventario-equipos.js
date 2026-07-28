@@ -471,6 +471,7 @@ window.EquiposPool = {
     set('countCliente', `(${n('en_cliente')})`);
     set('countTaller', `(${n('en_taller')})`);
     set('countEntradas', `(${n('devuelto_revision')})`);
+    set('countPorClasificar', `(${n('por_clasificar')})`);
     set('countOtros', `(${filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length})`);
     set('countConflictos', `(${this._gruposConflicto().length})`);
     set('countTodos', `(${filtrables.length})`);
@@ -495,6 +496,7 @@ window.EquiposPool = {
         en_cliente: 'No hay unidades en clientes. Llegan aquí cuando la orden de programación se marca "Entregado al cliente".',
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
         devuelto_revision: 'No hay entradas pendientes de inspección. Las devoluciones de clientes (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí; con "Inspección OK" regresan a bodega como reuso, o se dan de baja.',
+        por_clasificar: 'No hay unidades por clasificar. Aquí caen las que el sistema tenía en un cliente sin nada que lo respalde (ni contrato ni orden de servicio). No es una ubicación física: hay que encontrar el radio y moverlo a bodega, o asignarlo al contrato del cliente que lo tenga.',
         otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Revivir equipo".',
       };
       const hayFiltros = !!(fAct.q || fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente);
@@ -1376,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const n = document.getElementById(id); if (n) n.checked = false;
       });
     };
-    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'devuelto_revision', 'otros', 'conflictos', 'todos'];
+    const TABS_VALIDAS = ['en_bodega', 'asignado_contrato', 'en_cliente', 'en_taller', 'devuelto_revision', 'por_clasificar', 'otros', 'conflictos', 'todos'];
     if (serialParam) {
       setTabUI('todos');
       limpiarSecundarios();

@@ -27,6 +27,9 @@
     .eq-badge-en_cliente        { background:#e0e7ff; color:#4338ca; }
     .eq-badge-en_taller         { background:#fef9c3; color:#a16207; }
     .eq-badge-devuelto_revision { background:#ffedd5; color:#c2410c; }
+    /* Ubicación desconocida: rosa, distinto del ámbar de taller y del naranja
+       de entradas — no es una ubicación más, es "hay que ir a buscarlo". */
+    .eq-badge-por_clasificar    { background:#ffe4e6; color:#9f1239; }
     .eq-badge-vendido           { background:#ccfbf1; color:#0f766e; }
     .eq-badge-baja              { background:#f1f5f9; color:#64748b; }
 
@@ -132,7 +135,7 @@
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/inventario-equipos.js?v=cc16" defer></script>
+  <script src="../js/pages/inventario-equipos.js?v=cc17" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -208,6 +211,7 @@
           <button class="eq-tab is-active" data-tab="en_cliente" onclick="EquiposPool.setTab('en_cliente')">En cliente <span id="countCliente"></span></button>
           <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')">Taller <span id="countTaller"></span></button>
           <button class="eq-tab" data-tab="devuelto_revision" onclick="EquiposPool.setTab('devuelto_revision')" title="Unidades que regresaron de un cliente y esperan inspección">Entradas <span id="countEntradas"></span></button>
+          <button class="eq-tab" data-tab="por_clasificar" onclick="EquiposPool.setTab('por_clasificar')" title="Unidades cuya ubicación no está respaldada por ningún contrato ni orden — hay que encontrarlas y clasificarlas">Por clasificar <span id="countPorClasificar"></span></button>
           <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')" title="Unidades que salieron de la flota: dadas de baja o vendidas">Baja / Venta <span id="countOtros"></span></button>
           <button class="eq-tab" data-tab="conflictos" onclick="EquiposPool.setTab('conflictos')" title="Seriales con 2+ fichas (el mismo radio registrado con modelos distintos por fuentes distintas) — fusiona o confirma que son radios distintos">Conflictos <span id="countConflictos"></span></button>
           <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>

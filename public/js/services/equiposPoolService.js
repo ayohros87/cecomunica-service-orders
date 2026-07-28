@@ -26,6 +26,8 @@ const EquiposPoolService = {
     // en_poc ELIMINADO (2026-07-24): POC es la plataforma de airtime, no una
     // ubicación física — la membresía POC vive en poc_device_id, no en estado.
     DEVUELTO:   'devuelto_revision',
+    // Ubicación desconocida — ver equiposPool.js (functions) para el criterio.
+    POR_CLASIFICAR: 'por_clasificar',
     // Venta directa sin contrato (facturada en QuickBooks): sale de bodega y
     // pasa a propiedad del cliente. No es terminal como baja — el radio
     // vendido puede volver a taller por una orden de servicio.
@@ -40,6 +42,7 @@ const EquiposPoolService = {
     en_taller:         'En taller',
     en_poc:            'En POC (histórico)', // solo para kardex/docs sin migrar
     devuelto_revision: 'Entrada (por inspeccionar)',
+    por_clasificar:    'Por clasificar (ubicación desconocida)',
     vendido:           'Vendido',
     baja:              'Baja',
   },

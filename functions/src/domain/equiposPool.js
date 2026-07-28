@@ -17,6 +17,12 @@ const ESTADOS = {
   // en_poc ELIMINADO (2026-07-24): POC es la plataforma de airtime, no una
   // ubicación física — la membresía POC vive en poc_device_id, no en estado.
   DEVUELTO:   "devuelto_revision",
+  // Ubicación desconocida: la ficha decía en_cliente pero nada la respalda
+  // (ni contrato ni orden), o la puso ahí un flujo que resultó estar mal.
+  // NO es una ubicación física — es la bandeja de "hay que ir a buscarlo".
+  // Sale por donde corresponda: bodega si aparece en el estante, o asignada
+  // si se confirma con un cliente.
+  POR_CLASIFICAR: "por_clasificar",
   // Venta directa sin contrato (facturada en QuickBooks): la unidad sale de
   // bodega y pasa a propiedad del cliente. NO es terminal como baja — el radio
   // vendido puede volver a taller por una orden de servicio (contacto normal).
