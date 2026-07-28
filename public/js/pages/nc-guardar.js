@@ -98,13 +98,27 @@ window.NCGuardar = {
     const esRenov    = accion === 'Renovación';
     const sinEquipo  = esRenov && !!document.getElementById('renovacion_sin_equipo')?.checked;
     const refurb     = esRenov && sinEquipo && !!document.getElementById('renovacion_refurbished_componentes')?.checked;
+    // Número del contrato: {TIPO}{YYYYMMDD}-{NN}, con la fecha LOCAL.
+    // Antes el sello salía de toISOString() (UTC) mientras la ventana del
+    // conteo se armaba a medianoche local: en Panamá (UTC-5) un contrato
+    // guardado después de las 19:00 nacía con la fecha de MAÑANA y caía 5 horas
+    // ANTES del inicio de su propia ventana, así que no se contaba nunca. Todos
+    // los de esa franja salían -01, y el primero del día siguiente también
+    // (ALQ20260723-01 quedó en 3 contratos; PROP20260503-01 en 2).
     const hoy        = new Date();
-    const fechaStr   = hoy.toISOString().slice(0, 10).replace(/-/g, '');
-    const inicio     = new Date(fechaStr.slice(0,4), fechaStr.slice(4,6)-1, fechaStr.slice(6,8));
+    const fechaStr   = ContratosService.fechaStrLocal(hoy);
+    const inicio     = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
     const fin        = new Date(inicio); fin.setDate(fin.getDate() + 1);
 
-    const count      = await ContratosService.contarPorTipoYFecha(tipoCorto, inicio, fin);
-    const contrato_id = tipoCorto + fechaStr + '-' + String(count + 1).padStart(2, '0');
+    // El piso es best-effort: siembra el contador el primer contrato del día.
+    // Si falla, el contador ya sembrado cubre el caso normal.
+    let piso = 0;
+    try {
+      piso = await ContratosService.maxSufijoPorTipoYFecha(tipoCorto, inicio, fin);
+    } catch (_) { /* piso 0: la reserva atómica sigue garantizando unicidad */ }
+
+    const seq        = await ContratosService.reservarSufijo(tipoCorto, fechaStr, piso);
+    const contrato_id = tipoCorto + fechaStr + '-' + String(seq).padStart(2, '0');
 
     const equipos = [...document.querySelectorAll('#tablaEquipos tbody tr')].map(row => {
       const modelo_id  = row.querySelector('.modelo').value.trim();

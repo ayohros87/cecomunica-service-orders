@@ -35,15 +35,54 @@ const ContratosService = {
     return db.collection('contratos').add(data);
   },
 
-  // Count contracts matching a codigo_tipo in a date window (used for sequential ID generation).
-  async contarPorTipoYFecha(codigoTipo, inicio, fin) {
+  // Sello YYYYMMDD del número de contrato, en hora LOCAL.
+  // NO usar toISOString(): devuelve la fecha en UTC y en Panamá (UTC-5) todo lo
+  // guardado después de las 19:00 quedaba fechado al día siguiente, además de
+  // caer fuera de la ventana que le contaba el sufijo.
+  fechaStrLocal(d = new Date()) {
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}`;
+  },
+
+  // Mayor sufijo ya emitido para un codigo_tipo dentro de una ventana de fechas.
+  // Sirve de PISO para reservarSufijo(): siembra el contador la primera vez que
+  // se usa un día (los contratos previos al contador no dejaron uno) y hace de
+  // colchón si el contador quedara por detrás. Es max(sufijo), no count: un
+  // borrado ya no recicla un número que estuvo en uso.
+  async maxSufijoPorTipoYFecha(codigoTipo, inicio, fin) {
     const db = firebase.firestore();
     const snap = await db.collection('contratos')
       .where('codigo_tipo', '==', codigoTipo)
       .where('fecha_creacion', '>=', inicio)
       .where('fecha_creacion', '<', fin)
       .get();
-    return snap.size;
+    let max = 0;
+    snap.forEach(d => {
+      const m = String(d.data().contrato_id || '').match(/-(\d+)$/);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+    return max;
+  },
+
+  // Reserva atómica del sufijo del día en contadores/contratos_{TIPO}_{YYYYMMDD}.
+  // Antes el sufijo salía de un count() leído fuera de transacción, así que dos
+  // guardados simultáneos obtenían el mismo número. Mismo patrón que el
+  // correlativo COT (cot-editor-state.js), que ya sufrió esa regresión.
+  async reservarSufijo(codigoTipo, fechaStr, piso = 0) {
+    const db = firebase.firestore();
+    const ref = db.collection('contadores').doc(`contratos_${codigoTipo}_${fechaStr}`);
+    return db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      const actual = snap.exists ? Number(snap.data().seq || 0) : 0;
+      const siguiente = Math.max(actual, piso) + 1;
+      t.set(ref, {
+        seq: siguiente,
+        codigo_tipo: codigoTipo,
+        fecha: fechaStr,
+        actualizado_en: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return siguiente;
+    });
   },
 
   // ── List queries ─────────────────────────────────────────────────────────

@@ -147,6 +147,23 @@ async function main() {
   await assertSucceeds(as("gerente").doc("cotizaciones/cFuera").set({ estado: "enviada" }, { merge: true }));
   ok("cotizaciones: gerente (aprobador comercial) envía fuera de política");
 
+  // ── contadores: correlativos de cotizaciones y contratos ──────────────────
+  // El número de contrato se RESERVA en contadores/contratos_{TIPO}_{YYYYMMDD}
+  // (contratosService.reservarSufijo). Si las reglas bloquearan a quien crea
+  // contratos, guardar reventaría con permission-denied.
+  for (const r of ["administrador","vendedor","recepcion","gerente","jefe_taller"]) {
+    await assertSucceeds(as(r).doc(`contadores/contratos_ALQ_2026072${ROLES.indexOf(r)}`).set({ seq: 1 }));
+  }
+  ok("contadores: los roles que crean contratos pueden reservar el sufijo");
+  await assertSucceeds(as("administrador").doc("contadores/contratos_ALQ_20260728").set({ seq: 2 }, { merge: true }));
+  ok("contadores: el incremento (update) pasa");
+  for (const r of ["inventario","contabilidad","vista"]) {
+    await assertFails(as(r).doc(`contadores/contratos_ALQ_bad_${r}`).set({ seq: 1 }));
+  }
+  ok("contadores: inventario/contabilidad/vista NO escriben correlativos");
+  await assertFails(as("administrador").doc("contadores/contratos_ALQ_20260728").delete());
+  ok("contadores: nadie borra un contador (borrarlo recicla números)");
+
   // ── Regresión: flujos que DEBEN seguir abiertos ───────────────────────────
   await assertSucceeds(as("tecnico").doc("inventario_piezas/p1").set({ cantidad: 3 }));
   await assertSucceeds(as("tecnico").doc("analytics_piezas_modelo/a1").set({ usos: 1 }));

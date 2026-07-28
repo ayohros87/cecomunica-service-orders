@@ -61,6 +61,11 @@ jobs:
       - name: Rules + counter integration (emulator)
         # Proyecto demo-* → el emulador corre sin credenciales. Arrancar el emulador
         # compila las reglas (falla si son inválidas); luego se ejercitan contra
-        # Firestore real: recomputarContadorTx (contador, incl. concurrencia) y el
-        # scoping por rol de las reglas (permitido/denegado por colección).
-        run: firebase emulators:exec --only firestore --project demo-ci "node functions/test-emulator/recompute.js && node functions/test-emulator/rules.js"
+        # Firestore real: recomputarContadorTx (contador, incl. concurrencia), la
+        # numeración de contratos (fecha local + reserva atómica) y el scoping por
+        # rol de las reglas (permitido/denegado por colección).
+        # TZ=America/Panama: la regresión del número de contrato era de zona
+        # horaria y en UTC (default del runner) el caso ni siquiera se reproduce.
+        env:
+          TZ: America/Panama
+        run: firebase emulators:exec --only firestore --project demo-ci "node functions/test-emulator/recompute.js && node functions/test-emulator/numero-contrato.js && node functions/test-emulator/rules.js"
