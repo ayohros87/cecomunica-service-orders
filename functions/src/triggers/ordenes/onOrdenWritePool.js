@@ -53,7 +53,13 @@ module.exports = onDocumentWritten(
       // Va ANTES del bloque de inspección para que aplique también a las
       // ENTRADAs nacidas de una DEVOLUCIÓN, que si no se quedaban en cuarentena
       // para siempre.
+      // `correccion_terminal` marca el backfill de estados históricos
+      // (scripts/fix-entradas-mal-cerradas.js): esas ENTRADAs son de 2025 y se
+      // cerraron mal como "ENTREGADO AL CLIENTE" porque CERRADA (ENTRADA) aún
+      // no existía. Corregir el terminal NO debe mover inventario: dónde está
+      // hoy ese equipo no se deduce de una orden de hace un año.
       const cerroEntrada = after
+        && after.correccion_terminal !== true
         && norm(after.tipo_de_servicio) === "ENTRADA"
         && norm(after.estado_reparacion) === CERRADA_ENTRADA
         && norm(before?.estado_reparacion) !== CERRADA_ENTRADA;

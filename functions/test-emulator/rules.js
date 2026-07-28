@@ -130,6 +130,24 @@ async function main() {
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oEnt").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
   ok("ordenes: CERRADA (ENTRADA) es terminal para no-admin");
 
+  // Una ENTRADA no se entrega al cliente: el equipo vuelve, no sale. Ni con el
+  // QC aprobado. Las 191 ENTRADAs mal cerradas como ENTREGADO AL CLIENTE (todas
+  // anteriores a que existiera CERRADA (ENTRADA)) empujaron sus unidades a
+  // en_cliente vía onOrdenWritePool; esta regla cierra esa puerta.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("ordenes_de_servicio/oEntQc").set({
+      estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "ENTRADA",
+      qc_requerido: true, qc: { resultado: "aprobado" } });
+    await db.doc("ordenes_de_servicio/oRepQc").set({
+      estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "REPARACIÓN",
+      qc_requerido: true, qc: { resultado: "aprobado" } });
+  });
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oEntQc").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  ok("ordenes: ENTRADA NO puede entregarse al cliente ni con QC aprobado");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oRepQc").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  ok("ordenes: REPARACIÓN con QC aprobado sí se entrega (no se rompió el flujo)");
+
   // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();

@@ -330,7 +330,14 @@ service cloud.firestore {
           // completeOrder) y solo pueden entregarse con qc.resultado ==
           // 'aprobado' del jefe de taller. Las completadas ANTES no llevan la
           // marca y quedan exentas (corte legacy, mismo patrón que seriales).
+          // Una ENTRADA NO se entrega al cliente: el equipo vuelve, no sale.
+          // Su terminal es CERRADA (ENTRADA) (arriba). La UI ya oculta el botón
+          // "Entregar" para estas órdenes desde 2026-07-21, pero las reglas lo
+          // seguían permitiendo — y las 191 ENTRADAs anteriores a esa fecha
+          // quedaron mal cerradas, lo que además empujó sus unidades a
+          // en_cliente vía onOrdenWritePool.
           || (de == "COMPLETADO (EN OFICINA)" && a == "ENTREGADO AL CLIENTE"
+              && resource.data.get("tipo_de_servicio", "") != "ENTRADA"
               && (resource.data.get("qc_requerido", false) != true
                   || resource.data.get("qc", {}).get("resultado", "") == "aprobado"))
           // Rechazo de QC: única reversa permitida del flujo — el MISMO write
