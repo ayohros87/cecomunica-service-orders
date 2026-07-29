@@ -119,6 +119,89 @@ async function main() {
   ok("ordenes: POR ASIGNAR → CERRADA (DEVOLUCION) pasa (check-in cerrado)");
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oDev").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
   ok("ordenes: CERRADA (DEVOLUCION) es terminal para no-admin");
+
+  // ── DEVOLUCIÓN: el acuse firmado no se puede borrar para volver a editar ──
+  // Recepción corrige accesorios de una unidad recibida MIENTRAS no haya
+  // firma (candado por unidad en la UI). Lo que las reglas cierran es el
+  // atajo: recortar acuses[] o esperados[] para desbloquearla.
+  const devBase = {
+    estado_reparacion: "POR ASIGNAR", tipo_de_servicio: "DEVOLUCION",
+    devolucion: {
+      modo: "recuperacion",
+      esperados: [
+        { id: "e1", serial: "AAA111", resolucion: "recibido", acuse_id: "a1",
+          accesorios: { bateria: true, cargador: true } },
+        { id: "e2", serial: "BBB222", resolucion: "recibido",
+          accesorios: { bateria: true } },
+      ],
+      acuses: [{ id: "a1", seriales: ["AAA111"], firma_url: "x" }],
+    },
+  };
+  const resetDev = async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc("ordenes_de_servicio/oAcuse")
+        .set(JSON.parse(JSON.stringify(devBase)));
+    });
+  };
+  const clon = (dev) => JSON.parse(JSON.stringify(dev));
+
+  await resetDev();
+  // Corrección legítima: misma cantidad de unidades y de acuses, cambia solo
+  // el checklist de la unidad SIN firmar.
+  {
+    const dev = clon(devBase.devolucion);
+    dev.esperados[1].accesorios = { bateria: true, cargador: false };
+    dev.esperados[1].corregido_at = new Date();
+    await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oAcuse")
+      .set({ devolucion: dev }, { merge: true }));
+  }
+  ok("devolucion: recepcion corrige accesorios de una unidad sin firmar");
+
+  await resetDev();
+  // Borrar el acuse firmado para "desbloquear" la unidad: prohibido.
+  {
+    const dev = clon(devBase.devolucion);
+    dev.acuses = [];
+    await assertFails(as("recepcion").doc("ordenes_de_servicio/oAcuse")
+      .set({ devolucion: dev }, { merge: true }));
+  }
+  ok("devolucion: NO se puede borrar el acuse firmado (acuses[] no se recorta)");
+
+  await resetDev();
+  // Borrar la unidad recibida para volver a registrarla: prohibido.
+  {
+    const dev = clon(devBase.devolucion);
+    dev.esperados = [dev.esperados[1]];
+    await assertFails(as("recepcion").doc("ordenes_de_servicio/oAcuse")
+      .set({ devolucion: dev }, { merge: true }));
+  }
+  ok("devolucion: NO se puede borrar una unidad de esperados[]");
+
+  await resetDev();
+  // Agregar unidades y acuses (check-in por tanda) sigue pasando.
+  {
+    const dev = clon(devBase.devolucion);
+    dev.esperados.push({ id: "e3", serial: "CCC333", resolucion: "recibido", accesorios: {} });
+    dev.acuses.push({ id: "a2", seriales: ["BBB222", "CCC333"], firma_url: "y" });
+    await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oAcuse")
+      .set({ devolucion: dev }, { merge: true }));
+  }
+  ok("devolucion: agregar unidades y acuses (tanda nueva) sigue pasando");
+
+  await resetDev();
+  // Admin sí puede recortar: correcciones manuales de datos.
+  {
+    const dev = clon(devBase.devolucion);
+    dev.acuses = [];
+    await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oAcuse")
+      .set({ devolucion: dev }, { merge: true }));
+  }
+  ok("devolucion: admin queda exento (corrección manual)");
+
+  // Una orden que no es devolución no se ve afectada por el candado.
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/o1")
+    .set({ observaciones: "sin devolucion" }, { merge: true }));
+  ok("devolucion: el candado no estorba a las órdenes sin devolucion");
   // ENTRADA (inspección de devueltos): terminal propio sin entrega ni QC —
   // COMPLETADO → CERRADA (ENTRADA) pasa aunque haya qc_requerido, pero
   // COMPLETADO → ENTREGADO sigue exigiendo el QC aprobado.

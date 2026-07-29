@@ -57,18 +57,21 @@
   let _draftModelo = null;  // check-in por modelo/libre pendiente de confirmar {idx|null, serial, modelo, modelo_id}
   let _pegarAbierto = false;// caja de "pegar lista de seriales" desplegada
   let _draftLote = null;    // filas del lote pegado, en revisión (ver _clasificarLote)
+  let _editandoId = null;   // unidad recibida con el checklist abierto para corregir
   let _firmaAcuse = null;   // API del canvas del acuse (FirmaPad)
   let _firmaSnapshot = null;// firma en curso, para sobrevivir a un re-render
   let _modelos = null;      // catálogo para el datalist de la captura libre (lazy)
 
-  // Los tres caminos de captura (unidad esperada, check-in por modelo/libre y
-  // lote pegado) comparten los IDs del mini-checklist: solo uno puede estar
-  // abierto a la vez o `_leerChecklist` leería casillas de otro formulario.
+  // Los caminos de captura (unidad esperada, check-in por modelo/libre, lote
+  // pegado y corrección de una recibida) comparten los IDs del mini-checklist:
+  // solo uno puede estar abierto a la vez o `_leerChecklist` leería casillas
+  // de otro formulario.
   function _cerrarCapturas() {
     _recibiendoId = null;
     _draftModelo = null;
     _draftLote = null;
     _pegarAbierto = false;
+    _editandoId = null;
   }
 
   function puedeOperar() {
@@ -142,16 +145,20 @@
   // lote pegado. "Todos" (2026-07-29, pedido de recepción) marca los seis de
   // un golpe: el caso normal es que el cliente devuelva el radio completo, y
   // marcar gancho por gancho en cada unidad era el grueso del trabajo.
-  function checklistHtml(titulo) {
+  // `previo` precarga el estado actual — lo usa la corrección de una unidad ya
+  // recibida (si no, corregir el cargador obligaría a volver a marcar los otros
+  // cinco, que es justo el trabajo que "Todos" vino a quitar).
+  function checklistHtml(titulo, previo) {
+    const acc = previo?.accesorios || null;
     return `
       <div style="font-size:12px;font-weight:600;margin-bottom:6px;">${titulo}</div>
       <label style="display:flex;align-items:center;gap:4px;margin:0 0 6px;font-size:12px;font-weight:700;width:max-content;cursor:pointer;">
         <input type="checkbox" id="devAccTodos"> Todos
       </label>
       <div style="display:flex;gap:4px 12px;flex-wrap:wrap;font-size:12px;">
-        ${ACCESORIOS.map(([k, l]) => `<label style="display:flex;align-items:center;gap:4px;margin:0;"><input type="checkbox" class="dev-acc" data-acc="${k}"> ${l}</label>`).join('')}
+        ${ACCESORIOS.map(([k, l]) => `<label style="display:flex;align-items:center;gap:4px;margin:0;"><input type="checkbox" class="dev-acc" data-acc="${k}"${acc && acc[k] ? ' checked' : ''}> ${l}</label>`).join('')}
       </div>
-      <input class="form-input" id="devDano" placeholder="Daño obvio a la vista (opcional) — ej.: carcasa rajada" style="height:30px;font-size:12px;margin-top:6px;width:100%;">`;
+      <input class="form-input" id="devDano" value="${esc(previo?.dano || '')}" placeholder="Daño obvio a la vista (opcional) — ej.: carcasa rajada" style="height:30px;font-size:12px;margin-top:6px;width:100%;">`;
   }
 
   // Mini-checklist al recibir: qué entregó el cliente con la unidad + daño
@@ -164,6 +171,25 @@
         <div style="display:flex;gap:6px;margin-top:8px;">
           <button type="button" class="btn btn-sm" id="devRecibidoConfirm" style="background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;">✓ Confirmar recibido</button>
           <button type="button" class="btn btn-sm" id="devRecibidoCancel">Cancelar</button>
+        </div>
+      </div>`;
+  }
+
+  // Corrección de una unidad YA recibida, precargada con lo registrado. Solo
+  // accesorios y daño: el serial no se toca (ver candado en corregirHtml).
+  function corregirHtml(e) {
+    return `
+      <div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:8px;padding:8px;max-width:440px;">
+        ${checklistHtml(`Corregir lo registrado con ${esc(e.serial)}`, { accesorios: e.accesorios, dano: e.dano_visible })}
+        <div style="font-size:11px;color:#92400e;margin-top:6px;">
+          Esto corrige el <b>acuse</b> de la devolución. La orden de ENTRADA ya recibió su copia
+          cuando entró la tanda, así que si el taller ya la tiene, ajústala también allá.
+          El serial no se cambia desde aquí: ya movió el equipo en el inventario. Si el serial
+          está mal, corrígelo en <b>Inventario · Equipos por serial</b>.
+        </div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button type="button" class="btn btn-sm" id="devCorregirConfirm" style="background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;">✓ Guardar corrección</button>
+          <button type="button" class="btn btn-sm" id="devCorregirCancel">Cancelar</button>
         </div>
       </div>`;
   }
@@ -182,15 +208,27 @@
     const todos = _overlay.querySelector('#devAccTodos');
     if (!todos) return;
     const cajas = [..._overlay.querySelectorAll('.dev-acc')];
+    const sincronizarTodos = () => {
+      const n = cajas.filter(x => x.checked).length;
+      todos.checked = n === cajas.length;
+      todos.indeterminate = n > 0 && n < cajas.length;
+    };
     todos.addEventListener('change', () => {
       cajas.forEach(cb => { cb.checked = todos.checked; });
       todos.indeterminate = false;
     });
-    cajas.forEach(cb => cb.addEventListener('change', () => {
-      const n = cajas.filter(x => x.checked).length;
-      todos.checked = n === cajas.length;
-      todos.indeterminate = n > 0 && n < cajas.length;
-    }));
+    cajas.forEach(cb => cb.addEventListener('change', sincronizarTodos));
+    sincronizarTodos(); // el checklist puede venir precargado (corrección)
+  }
+
+  // ¿Se puede corregir lo registrado de esta unidad? Solo mientras el cliente
+  // NO haya firmado el acuse: la firma es el papel que se lleva, y su copia
+  // (acuses[].unidades) dice exactamente qué accesorios entregó. Editar
+  // después dejaría al sistema diciendo una cosa y al papel del cliente otra.
+  // Después de la firma la corrección va en la orden de ENTRADA, que es el
+  // registro del taller y ahí sí se edita.
+  function puedeCorregir(e, editable) {
+    return !!editable && e.resolucion === 'recibido' && !e.acuse_id;
   }
 
   // Detalle bajo el chip "Recibido": lo que quedó registrado en el check-in
@@ -203,8 +241,22 @@
       det.push(con.length ? `Entregó: ${con.join(', ')}` : 'Sin accesorios');
     }
     if (e.dano_visible) det.push(`Daño: ${esc(e.dano_visible)}`);
+    if (e.corregido_at) det.push('<span title="Los accesorios o el daño se corrigieron después del check-in, antes de la firma.">corregido</span>');
     if (!e.acuse_id && editable) det.push('<b style="color:#92400e;">acuse pendiente de firma</b>');
-    return det.length ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);">${det.join(' · ')}</div>` : '';
+    const linea = det.length ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);">${det.join(' · ')}</div>` : '';
+
+    // Corregir (antes de la firma) o explicar por qué ya no se puede.
+    const accion = puedeCorregir(e, editable)
+      ? `<button type="button" class="btn btn-ghost btn-sm dev-corregir" data-id="${esc(e.id)}"
+                 title="Corregir accesorios o daño de esta unidad — se puede mientras el cliente no firme el acuse"
+                 style="padding:1px 5px;font-size:11px;margin-top:3px;">✎ Corregir</button>`
+      : (editable && e.resolucion === 'recibido' && e.acuse_id
+        ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);margin-top:2px;"
+                title="El acuse firmado del cliente ya dice qué accesorios entregó; cambiarlo aquí lo dejaría distinto al papel que se llevó.">
+             🔒 firmado por el cliente — corrige en la orden de ENTRADA
+           </div>`
+        : '');
+    return linea + accion;
   }
 
   // Tabla de revisión del lote pegado: qué va a entrar, con qué modelo y con
@@ -343,9 +395,11 @@
     const filas = esperados.map(e => `
       <tr>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);font-family:var(--font-mono,monospace);">${esc(e.serial)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">${esc(e.modelo || '—')}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);white-space:nowrap;">${esc(e.modelo || '—')}</td>
         <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">
-          ${e.resolucion
+          ${_editandoId === e.id
+            ? corregirHtml(e)
+            : e.resolucion
             ? (RES_LABEL[e.resolucion] || esc(e.resolucion))
               + (e.motivo_codigo ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);">${esc((MOTIVOS.find(([v]) => v === e.motivo_codigo) || [,''])[1])}${e.motivo_detalle ? ': ' + esc(e.motivo_detalle) : ''}</div>` : '')
               + detalleRecibido(e, editable)
@@ -561,6 +615,17 @@
     _overlay.querySelector('#devRecibidoCancel')?.addEventListener('click', () => {
       _cerrarCapturas(); render();
     });
+    // Corregir una unidad ya recibida (accesorios/daño), antes de la firma.
+    _overlay.querySelectorAll('.dev-corregir').forEach(b => b.addEventListener('click', () => {
+      const id = b.dataset.id;
+      _cerrarCapturas();
+      _editandoId = id;
+      render();
+    }));
+    _overlay.querySelector('#devCorregirConfirm')?.addEventListener('click', confirmarCorreccion);
+    _overlay.querySelector('#devCorregirCancel')?.addEventListener('click', () => {
+      _cerrarCapturas(); render();
+    });
     _wireChecklist();
 
     // Lote pegado: abrir la caja, procesar el texto, revisar y confirmar.
@@ -710,6 +775,44 @@
       console.error(err);
       e.resolucion = null; e.accesorios = null; e.dano_visible = null; e.resuelto_at = null; e.resuelto_por = null;
       Toast.show('No se pudo registrar el check-in.', 'bad');
+    }
+    render();
+  }
+
+  // Corrección de accesorios/daño de una unidad ya recibida (pedido de
+  // recepción 2026-07-29: se marcó "Todos" y uno de los cargadores venía sin
+  // cable). NO toca el serial ni la resolución — el equipo ya se movió en el
+  // inventario y ya entró a la ENTRADA. La ventana se cierra con la firma del
+  // acuse: `puedeCorregir` lo decide y aquí se vuelve a verificar, porque el
+  // acuse puede haberse firmado en otra pestaña mientras el checklist estaba
+  // abierto.
+  async function confirmarCorreccion() {
+    const dev = _orden.devolucion;
+    const e = (dev.esperados || []).find(x => x.id === _editandoId);
+    _editandoId = null;
+    if (!e) { render(); return; }
+    if (!puedeCorregir(e, true)) {
+      Toast.show('Esta unidad ya tiene acuse firmado: la corrección va en la orden de ENTRADA.', 'bad');
+      render();
+      return;
+    }
+    const { accesorios, dano } = _leerChecklist();
+    const antes = { accesorios: e.accesorios || null, dano_visible: e.dano_visible || null };
+    const user = firebase.auth().currentUser;
+    e.accesorios = accesorios;
+    e.dano_visible = dano || null;
+    e.corregido_at = firebase.firestore.Timestamp.now();
+    e.corregido_por = user?.uid || null;
+    try {
+      await _guardarDevolucion('DEVOLUCION_CORRIGE_RECIBIDO');
+      Toast.show(`${e.serial}: corregido.`, 'ok');
+    } catch (err) {
+      console.error(err);
+      e.accesorios = antes.accesorios;
+      e.dano_visible = antes.dano_visible;
+      delete e.corregido_at;
+      delete e.corregido_por;
+      Toast.show('No se pudo guardar la corrección.', 'bad');
     }
     render();
   }
@@ -1093,6 +1196,10 @@
       };
       dev.acuses = [...(dev.acuses || []), acuse];
       pendientes.forEach(e => { e.acuse_id = acuse.id; });
+      // La corrección de una unidad se abre en este mismo modal, arriba del
+      // bloque de firma: si el cliente firmó mientras estaba abierta, esa
+      // unidad ya no se corrige y el formulario tiene que cerrarse solo.
+      _editandoId = null;
       try {
         await _guardarDevolucion('DEVOLUCION_ACUSE');
         // La firma ya quedó archivada en este acuse: el lienzo arranca limpio
