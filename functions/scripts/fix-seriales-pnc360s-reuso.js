@@ -120,6 +120,22 @@ const tight = (s) => (s || "").toString().toLowerCase()
     // ── Ficha(s) existente(s) ──────────────────────────────────────────────
     for (const doc of snap.docs) {
       const v = doc.data();
+
+      // Un serial puede tener VARIAS fichas: el failsafe de colisión crea una
+      // sufijada cuando alguien lo captura con otro modelo. Repuntar esa ficha
+      // al modelo de la lista borraría la distinción y falsearía el contrato
+      // que la referencia. Se salta y se reporta para revisión humana.
+      const label = (v.modelo_label || "").trim();
+      const otraFamilia = label && !/pnc\s*-?\s*360/i.test(label.replace(/\s+/g, ""));
+      if (otraFamilia) {
+        r.otroModelo = (r.otroModelo || 0) + 1;
+        detalle.push({ serial: raw, accion: "SALTADA (otro modelo)",
+          antes: `${label} / ${v.condicion || "?"} / ${v.estado || "?"}`
+            + (v.asignacion?.contrato_id ? ` → contrato ${v.asignacion.contrato_id}` : ""),
+          contrato: dice });
+        continue;
+      }
+
       const yaOk = v.modelo_id === MODELO_ID
         && (v.modelo_label || "").trim() === MODELO_LABEL
         && (v.condicion || "").toLowerCase() === "reuso";
@@ -169,6 +185,7 @@ const tight = (s) => (s || "").toString().toLowerCase()
   console.log(`ya correctos:      ${r.sinCambio}`);
   console.log(`fichas corregidas: ${r.corregidos}`);
   console.log(`fichas creadas:    ${r.creados}`);
+  if (r.otroModelo) console.log(`SALTADAS por ser otro modelo (revisar): ${r.otroModelo}`);
   console.log(`\nde los corregidos, contra lo que dice su contrato:`);
   console.log(`  alinea con el contrato (contrato ya decia -R): ${r.alineaContrato}`);
   console.log(`  diverge del contrato (contrato dice nuevo):    ${r.divergeContrato}`);
