@@ -29,8 +29,14 @@ firebase.auth().onAuthStateChanged(async (user) => {
   tabla.innerHTML = "";
 
   try {
-    // 1. Cargar todos los modelos una sola vez
-    const modelosList = await ModelosService.getModelos();
+    // 1. Cargar los modelos una sola vez. Se excluyen los INACTIVOS: cuando se
+    //    deduplica un modelo la fila perdedora queda `activo:false`, pero si
+    //    conserva su doc de conteo seguía saliendo en la tabla — dos filas
+    //    idénticas, una con conteo y otra sin él (caso HYTERA SC780, 2026-07-29).
+    //    cargar-inventario.js ya filtraba igual, así que nadie puede contar
+    //    sobre una fila muerta; esto alinea la vista con la captura.
+    const modelosList = (await ModelosService.getModelos())
+      .filter(m => m.activo !== false);
     const modelosMap = {};
     modelosList.forEach(m => { modelosMap[m.id] = m; });
 
@@ -66,7 +72,12 @@ firebase.auth().onAuthStateChanged(async (user) => {
     const gruposUsados = new Set();
 
 inventario.forEach(data => {
-  const modelo = modelosMap[data.modelo_id] || {};
+  // Conteo cuyo modelo ya no está en el catálogo activo (fila perdedora de un
+  // dedup, o modelo borrado): sin la ficha del modelo la fila saldría en blanco,
+  // así que se omite. El conteo en sí no se pierde — sigue en inventario_actual
+  // y se recupera al mover el conteo a la fila superviviente.
+  const modelo = modelosMap[data.modelo_id];
+  if (!modelo) return;
   const g = poolPorId.get(data.modelo_id)
     || poolPorLabel.get(EquiposPoolService._tightLabel(modelo.modelo || '')) || null;
   if (g) gruposUsados.add(g);
