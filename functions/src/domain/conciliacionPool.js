@@ -16,7 +16,10 @@
 //   C2) device POC ACTIVO con ficha, pero ninguna enlazada a ese device.
 //   D) ficha asignada a un contrato ANULADO sin pendiente_devolucion (residuo).
 //   E) ficha vendido con orden_actual_id de una orden ya cerrada (colgante).
-//   F) mismo serial ACTIVO en POC con dos clientes distintos (propiedad).
+//   F) mismo serial ACTIVO en POC con dos clientes distintos (propiedad). Los
+//      ya decididos por una persona se cuentan aparte (F_esperando_apagado):
+//      ahí el dato nuestro está bien y lo que falta es apagar el device
+//      sobrante en la plataforma POC.
 const { admin, db } = require("../lib/admin");
 const pool = require("./equiposPool");
 
@@ -61,6 +64,7 @@ async function ejecutar() {
     D_asignada_a_anulado: 0, D_muestras: [],
     E_vendido_orden_cerrada: 0, E_muestras: [],
     F_serial_dos_clientes: 0, F_muestras: [],
+    F_esperando_apagado: 0, F_apagado_muestras: [],
     // Contexto, no drift: cuántos devices se ignoraron por estar apagados.
     poc_apagados_ignorados: 0,
   };
@@ -151,6 +155,18 @@ async function ejecutar() {
   for (const [norm, clientes] of clientesPorSerial) {
     if (clientes.size < 2) continue;
     dosDuenos.add(norm);
+    // Ya decidido por una persona (scripts/resolver-dos-duenos.js): el dato
+    // nuestro está bien y lo que falta es apagar el device sobrante EN LA
+    // PLATAFORMA POC. Repetirlo como conflicto convierte el reporte en ruido;
+    // se cuenta aparte, como tarea pendiente.
+    const resuelto = (porNorm.get(norm) || []).some((f) => f.dos_duenos_resuelto?.dueno);
+    if (resuelto) {
+      R.F_esperando_apagado++;
+      if (R.F_apagado_muestras.length < MAX_MUESTRAS) R.F_apagado_muestras.push({
+        serial: norm, detalle: [...clientes.values()].join(" | "),
+      });
+      continue;
+    }
     R.F_serial_dos_clientes++;
     if (R.F_muestras.length < MAX_MUESTRAS) R.F_muestras.push({
       serial: norm, detalle: [...clientes.values()].join(" | "),
@@ -175,6 +191,9 @@ async function ejecutar() {
     }
   }
 
+  // El total es DRIFT: lo que el sistema no sabe. F_esperando_apagado queda
+  // fuera a propósito — eso ya se decidió y es una tarea en POC, no un dato
+  // roto; sumarlo haría que el reporte nunca bajara y volviera a ser ruido.
   const total = R.A_contrato_sin_ficha + R.B_taller_orden_cerrada
     + R.C_poc_sin_ficha + R.C_poc_sin_enlace
     + R.D_asignada_a_anulado + R.E_vendido_orden_cerrada + R.F_serial_dos_clientes;
