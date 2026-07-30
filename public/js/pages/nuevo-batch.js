@@ -272,9 +272,18 @@
     function actualizarAvisoSinContrato() {
       const aviso = document.getElementById('avisoSinContrato');
       if (!aviso) return;
-      const sinContrato = !document.getElementById('contratoJalar')?.value;
+      const sel = document.getElementById('contratoJalar');
+      const sinContrato = !sel?.value;
       const hayMaterial = !!document.getElementById('seriales')?.value.trim() || !!detallesBatch?.length;
       aviso.hidden = !(sinContrato && hayMaterial);
+      // Si el cliente TIENE contratos vigentes y ninguno está elegido, casi
+      // siempre es un olvido y no un lote suelto legítimo — el aviso lo dice
+      // con el número de opciones disponibles. Sigue sin bloquear el guardado.
+      const disponibles = sel ? [...sel.options].filter(o => o.value).length : 0;
+      const extra = document.getElementById('avisoSinContratoExtra');
+      if (extra) extra.textContent = (!aviso.hidden && disponibles)
+        ? ` Este cliente tiene ${disponibles} contrato(s) vigente(s) sin elegir — revísalo antes de crear los equipos.`
+        : '';
     }
 
     async function cargarSelect(ruta, id) {
@@ -394,9 +403,24 @@ function normNombreCliente(s) {
 async function cargarContratosDelCliente() {
   const sel = document.getElementById("contratoJalar");
   if (!sel) return;
-  modeloContratoPorSerial = new Map(); refrescarPreviews(); // nuevo cliente → limpiar binding del contrato anterior
+  // Conserva el contrato ya elegido cuando el cliente NO cambia. Cargar el
+  // archivo del vendedor re-dispara esta carga (autoSeleccionarCliente →
+  // onClienteChange) y antes reconstruía el <select> desde cero, borrando el
+  // contrato que recepción había vinculado a mano: el lote se creaba sin ancla
+  // al contrato y no hay forma de re-vincularlo desde la UI (UDELAS y Fortaleza
+  // Security, 2026-07-30 — UDELAS necesitó script). El re-enganche automático
+  // (autoJalarContrato) no lo cubría: solo elige si es inequívoco, y ahí había
+  // 3 contratos vigentes y ninguno con las 10 filas del archivo.
+  const contratoPrevio = sel.value || "";
   const clienteId = document.getElementById("cliente")?.value || "";
-  if (!clienteId) { sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>'; return; }
+  const mismoCliente = !!clienteId && clienteId === sel.dataset.clienteId;
+  if (!mismoCliente) { modeloContratoPorSerial = new Map(); refrescarPreviews(); }
+  if (!clienteId) {
+    sel.dataset.clienteId = "";
+    sel.innerHTML = '<option value="">Selecciona el cliente primero…</option>';
+    refrescarPreviews();
+    return;
+  }
   sel.innerHTML = '<option value="">Cargando contratos…</option>';
   try {
     const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
@@ -406,9 +430,20 @@ async function cargarContratosDelCliente() {
           return `<option value="${c.id}" data-ref="${(c.contrato_id || c.id).replace(/"/g, '&quot;')}">${label.replace(/</g, '&lt;')}</option>`;
         }).join('')
       : '<option value="">El cliente no tiene contratos vigentes</option>';
+    sel.dataset.clienteId = clienteId;
+    const restaurado = mismoCliente && contratoPrevio
+      && [...sel.options].some(o => o.value === contratoPrevio);
+    if (restaurado) sel.value = contratoPrevio;
+    // Mismo cliente pero el contrato elegido ya no está en la lista: el binding
+    // serial→modelo quedó huérfano, hay que soltarlo.
+    else if (mismoCliente) modeloContratoPorSerial = new Map();
+    refrescarPreviews();
   } catch (e) {
     console.warn("No se pudieron cargar los contratos del cliente", e);
+    sel.dataset.clienteId = "";
+    modeloContratoPorSerial = new Map();
     sel.innerHTML = '<option value="">No se pudieron cargar los contratos</option>';
+    refrescarPreviews();
   }
 }
 
@@ -494,6 +529,13 @@ async function proponerProximoUnitId() {
 async function autoJalarContrato(cantidadEsperada) {
   const sel = document.getElementById("contratoJalar");
   if (!sel) return null;
+  // Elección manual de recepción (conservada al cargar el archivo): manda. Solo
+  // se jalan sus seriales — la heurística de abajo no debe pisarla con otro
+  // contrato que "cuadre" por cantidad.
+  if (sel.value) {
+    await jalarSerialesDesdeContrato();
+    return sel.selectedOptions[0]?.getAttribute("data-ref") || sel.value;
+  }
   const opciones = [...sel.options].filter(o => o.value); // contratos reales
   if (!opciones.length) return null;
   let elegido = null;
