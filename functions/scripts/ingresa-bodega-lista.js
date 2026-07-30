@@ -13,8 +13,15 @@
  * que aparece en el panel "Contratos por cancelar" del home en vez de quedar
  * en el aire. NO se cancela solo (decisión 2026-07-28).
  *
+ * La PROPIEDAD no se toca por defecto: un radio del cliente puede estar
+ * legítimamente guardado en nuestra bodega. Se corrige solo si se pide con
+ * `--propiedad=` — el caso típico es una devolución vieja que el backfill
+ * clasificó como "cliente" porque entró únicamente por una orden de servicio
+ * (regla 4 de backfill-propiedad.js) sin contrato que la amparara.
+ *
  * USAGE (desde functions/):
  *   node scripts/ingresa-bodega-lista.js <archivo.txt> <modelo_id> [--write] [--email=..]
+ *                                        [--propiedad=cecomunica|cliente|desconocida]
  * Idempotente.
  */
 const fs = require("fs");
@@ -28,10 +35,15 @@ const MODELO_ID = process.argv[3];
 const dryRun    = !process.argv.includes("--write");
 const EMAIL     = (process.argv.find((a) => a.startsWith("--email=")) || "").split("=")[1]
   || "script:ingresa-bodega-lista";
+const PROPIEDAD = (process.argv.find((a) => a.startsWith("--propiedad=")) || "").split("=")[1] || "";
 const VIGENTES  = new Set(["activo", "aprobado"]);
+const PROPIEDADES = new Set(["cecomunica", "cliente", "desconocida"]);
 
 (async () => {
   if (!ARCHIVO || !MODELO_ID) throw new Error("USAGE: <archivo.txt> <modelo_id> [--write]");
+  if (PROPIEDAD && !PROPIEDADES.has(PROPIEDAD)) {
+    throw new Error(`--propiedad debe ser una de: ${[...PROPIEDADES].join(", ")}`);
+  }
 
   const m = await db.collection("modelos").doc(MODELO_ID).get();
   if (!m.exists) throw new Error(`El modelo ${MODELO_ID} no existe en el catálogo`);
@@ -41,6 +53,7 @@ const VIGENTES  = new Set(["activo", "aprobado"]);
   // captura: estado R → reuso.
   const COND = (mv.estado || "").toUpperCase() === "R" ? "reuso" : "nuevo";
   console.log(`Modelo: ${LABEL} (${MODELO_ID}) · estado ${mv.estado} → condicion "${COND}"`);
+  console.log(PROPIEDAD ? `Propiedad: se fuerza a "${PROPIEDAD}"` : "Propiedad: se respeta la que ya tiene");
   console.log(dryRun ? "\n*** DRY-RUN — no se escribe nada ***\n" : "\n*** ESCRIBIENDO ***\n");
 
   const seriales = [...new Set(fs.readFileSync(ARCHIVO, "utf8").split(/\r?\n/)
@@ -60,7 +73,7 @@ const VIGENTES  = new Set(["activo", "aprobado"]);
         batch.set(ref, {
           serial: norm, serial_norm: norm, serial_compartido: false,
           modelo_id: MODELO_ID, modelo_label: LABEL, condicion: COND,
-          propiedad: "cecomunica", estado: pool.ESTADOS.EN_BODEGA,
+          propiedad: PROPIEDAD || "cecomunica", estado: pool.ESTADOS.EN_BODEGA,
           asignacion: null, poc_device_id: null, orden_actual_id: null,
           origen: "toma_fisica", verificado: true,
           ingreso_bodega_at: null, proveedor: "", notas: "", baja_motivo: null,
@@ -87,7 +100,8 @@ const VIGENTES  = new Set(["activo", "aprobado"]);
       const v = doc.data();
       const asig = v.asignacion || null;
       const yaOk = v.modelo_id === MODELO_ID && v.condicion === COND
-        && v.estado === pool.ESTADOS.EN_BODEGA && !v.asignacion && v.verificado === true;
+        && v.estado === pool.ESTADOS.EN_BODEGA && !v.asignacion && v.verificado === true
+        && (!PROPIEDAD || v.propiedad === PROPIEDAD);
       if (yaOk) { r.sinCambio++; continue; }
 
       const moviendo = v.estado !== pool.ESTADOS.EN_BODEGA;
@@ -95,6 +109,7 @@ const VIGENTES  = new Set(["activo", "aprobado"]);
         batch.update(doc.ref, {
           modelo_id: MODELO_ID, modelo_label: LABEL, condicion: COND,
           estado: pool.ESTADOS.EN_BODEGA,
+          ...(PROPIEDAD ? { propiedad: PROPIEDAD } : {}),
           asignacion: null, orden_actual_id: null,
           verificado: true,               // lo contó una persona en el estante
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
