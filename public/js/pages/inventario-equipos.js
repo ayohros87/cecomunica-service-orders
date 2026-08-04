@@ -16,11 +16,26 @@ window.EquiposPool = {
   _editandoId: null,
   _importRows: null,
 
-  // Filtros persistidos por usuario (localStorage). Default de primera visita:
-  // la flota de Cecomunica que está con clientes.
+  // Filtros persistidos por usuario (localStorage).
+  // Default de primera visita (N4, auditoría 2026-08-04): **Bodega, sin filtro
+  // de propiedad**. Antes se abría en "En cliente" con propiedad=cecomunica —
+  // o sea, en la lista más grande (3,279 unidades que están bien) y con un
+  // filtro que el usuario nunca escogió. Bodega es lo accionable: lo que se
+  // puede asignar hoy. Los usuarios que ya tienen preferencia guardada la
+  // conservan (el merge de abajo respeta lo almacenado).
   FILTROS_KEY: 'eqpool_filtros_v1',
-  FILTROS_DEFAULT: { tab: 'en_cliente', propiedad: 'cecomunica', modelo: '',
+  FILTROS_DEFAULT: { tab: 'en_bodega', propiedad: '', modelo: '',
                      sinVerificar: false, compartidos: false, sinCliente: false },
+
+  // Colas de la fila "Pendientes" → a qué estado de la página corresponden.
+  // Reutilizan `_tab` (y el toggle sinVerificar) en vez de introducir un estado
+  // nuevo: son otra puerta de entrada al mismo filtro, no otro modo.
+  COLAS: {
+    por_clasificar:    { tab: 'por_clasificar' },
+    devuelto_revision: { tab: 'devuelto_revision' },
+    conflictos:        { tab: 'conflictos' },
+    sin_verificar:     { tab: 'todos', chk: 'chkSinVerificar' },
+  },
 
   // Pestaña "Baja / Venta": estados que sacaron la unidad de la flota.
   // devuelto_revision ya tiene pestaña propia ("Por inspeccionar").
@@ -211,9 +226,8 @@ window.EquiposPool = {
     setChk('chkSinVerificar', f.sinVerificar);
     setChk('chkCompartidos', f.compartidos);
     setChk('chkSinCliente', f.sinCliente);
-    this._tab = f.tab || 'en_cliente';
-    document.querySelectorAll('.eq-tab').forEach(b =>
-      b.classList.toggle('is-active', b.dataset.tab === this._tab));
+    this._tab = f.tab || this.FILTROS_DEFAULT.tab;
+    this._pintarSeleccion();
   },
 
   _guardarFiltros() {
@@ -232,9 +246,46 @@ window.EquiposPool = {
   // ── Render ───────────────────────────────────────────────────────────
   setTab(tab) {
     this._tab = tab;
-    document.querySelectorAll('.eq-tab').forEach(b =>
-      b.classList.toggle('is-active', b.dataset.tab === tab));
+    // Escoger una ubicación sale de cualquier cola (incluida "Sin verificar",
+    // que no es una pestaña sino un toggle).
+    const chk = document.getElementById('chkSinVerificar');
+    if (chk) chk.checked = false;
+    this._pintarSeleccion();
     this.render();
+  },
+
+  // Tarjetas de "Pendientes". Volver a pulsar la cola activa la apaga y
+  // devuelve a la ubicación por defecto — la tarjeta es un interruptor, no un
+  // callejón: si no, el usuario queda dentro de una cola sin saber cómo salir.
+  setCola(nombre) {
+    const cola = this.COLAS[nombre];
+    if (!cola) return;
+    if (this._colaActiva() === nombre) { this.setTab(this.FILTROS_DEFAULT.tab); return; }
+    const chk = document.getElementById('chkSinVerificar');
+    if (chk) chk.checked = !!cola.chk;
+    this._tab = cola.tab;
+    this._pintarSeleccion();
+    this.render();
+  },
+
+  // Qué cola está activa ahora mismo (o null). "Sin verificar" manda sobre la
+  // pestaña porque es un toggle que se puede combinar con `todos`.
+  _colaActiva() {
+    if (document.getElementById('chkSinVerificar')?.checked) return 'sin_verificar';
+    for (const [nombre, c] of Object.entries(this.COLAS)) {
+      if (!c.chk && c.tab === this._tab) return nombre;
+    }
+    return null;
+  },
+
+  // Un solo lugar que pinta qué está seleccionado (pestaña o tarjeta), para que
+  // las dos filas no puedan contradecirse.
+  _pintarSeleccion() {
+    const cola = this._colaActiva();
+    document.querySelectorAll('.eq-tab').forEach(b =>
+      b.classList.toggle('is-active', !cola && b.dataset.tab === this._tab));
+    document.querySelectorAll('.eq-cola').forEach(b =>
+      b.classList.toggle('is-active', b.dataset.cola === cola));
   },
 
   _enTab(eq, tab) {
@@ -391,9 +442,20 @@ window.EquiposPool = {
     return true;
   },
 
+  // Con búsqueda activa la pestaña NO restringe (N1, auditoría 2026-08-04).
+  // Antes `_filtrados` exigía `_enTab && filtros`, y como la página abre en una
+  // ubicación concreta, buscar un serial que estuviera en otra devolvía "Sin
+  // resultados" — la pregunta más frecuente de la página fallaba en silencio.
+  // Ahora la búsqueda barre el pool entero y la barra "Viendo:" lo dice.
+  _buscando() {
+    return !!(document.getElementById('eqBusqueda')?.value || '').trim();
+  },
+
   _filtrados() {
     const f = this._filtrosActivos();
-    return this._equipos.filter(eq => this._enTab(eq, this._tab) && this._pasaFiltrosSecundarios(eq, f));
+    const global = !!f.q;
+    return this._equipos.filter(eq =>
+      (global || this._enTab(eq, this._tab)) && this._pasaFiltrosSecundarios(eq, f));
   },
 
   // ── Chips de filtros activos ─────────────────────────────────────────
@@ -438,9 +500,14 @@ window.EquiposPool = {
     if (f.q) chips.push(chip('busqueda', `Búsqueda: "${f.q}"`));
     if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = '';
+    // Buscando, la pestaña deja de restringir: hay que DECIRLO, o el usuario
+    // cree que está viendo sólo la ubicación que tiene seleccionada.
+    const nota = f.q
+      ? '<span style="color:#92400e;">· buscando en <b>todo el pool</b>, no sólo en la pestaña</span>'
+      : `<span style="color:var(--fg-3);">· ${nOcultos} equipos ocultos por estos filtros</span>`;
     bar.innerHTML = `<i data-lucide="filter" style="width:14px;height:14px;flex:none;color:#92400e;"></i>
       <span style="color:#92400e;">Viendo:</span> ${chips.join(' ')}
-      <span style="color:var(--fg-3);">· ${nOcultos} equipos ocultos por estos filtros</span>
+      ${nota}
       <span style="flex:1;"></span>
       <button class="btn btn-ghost btn-sm" onclick="EquiposPool.limpiarFiltros()">Limpiar todo</button>`;
   },
@@ -451,32 +518,46 @@ window.EquiposPool = {
     const lista = this._filtrados();
     const esc = FMT.esc;
 
-    // KPIs: métricas GLOBALES del pool (no cambian con los filtros).
-    const nVerificar = this._equipos.filter(e => e.verificado === false).length;
-    const flotaCampo = this._equipos.filter(e => e.propiedad === 'cecomunica'
-      && ['asignado_contrato', 'en_cliente'].includes(e.estado)).length;
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('kpiBodega', this._equipos.filter(e => e.estado === 'en_bodega').length);
-    set('kpiFlotaCampo', flotaCampo);
-    set('kpiTaller', this._equipos.filter(e => e.estado === 'en_taller').length);
-    set('kpiVerificar', nVerificar);
+    const fmt = (v) => v.toLocaleString('es-PA');
+
+    // Tarjetas de "Pendientes": conteos GLOBALES del pool (no los toca ningún
+    // filtro). Es una bandeja de trabajo — tiene que decir cuánto falta de
+    // verdad, no cuánto falta dentro de lo que estés mirando ahora.
+    const nPorClasificar = this._equipos.filter(e => e.estado === 'por_clasificar').length;
+    const nPorInspeccionar = this._equipos.filter(e => e.estado === 'devuelto_revision').length;
+    const nConflictos = this._gruposConflicto().length;
+    const nSinVerificar = this._equipos.filter(e => e.verificado === false).length;
+    set('colaPorClasificar', fmt(nPorClasificar));
+    set('colaPorInspeccionar', fmt(nPorInspeccionar));
+    set('colaConflictos', fmt(nConflictos));
+    set('colaSinVerificar', fmt(nSinVerificar));
+    const apagar = (cola, n) => document.querySelector(`.eq-cola[data-cola="${cola}"]`)
+      ?.classList.toggle('is-vacia', n === 0);
+    apagar('por_clasificar', nPorClasificar);
+    apagar('devuelto_revision', nPorInspeccionar);
+    apagar('conflictos', nConflictos);
+    apagar('sin_verificar', nSinVerificar);
 
     // Contadores de pestañas: respetan los filtros activos (modelo/propiedad/
     // toggles/búsqueda) para que el número de la pestaña calce con la tabla.
+    // Con búsqueda activa se vuelven "cuántos resultados hay en cada ubicación",
+    // que es exactamente lo que uno quiere saber al buscar un serial.
     const fAct = this._filtrosActivos();
     const filtrables = this._equipos.filter(e => this._pasaFiltrosSecundarios(e, fAct));
     const n = estado => filtrables.filter(e => e.estado === estado).length;
-    set('countBodega', `(${n('en_bodega')})`);
-    set('countAsignados', `(${n('asignado_contrato')})`);
-    set('countCliente', `(${n('en_cliente')})`);
-    set('countTaller', `(${n('en_taller')})`);
-    set('countEntradas', `(${n('devuelto_revision')})`);
-    set('countPorClasificar', `(${n('por_clasificar')})`);
-    set('countOtros', `(${filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length})`);
-    set('countConflictos', `(${this._gruposConflicto().length})`);
-    set('countTodos', `(${filtrables.length})`);
+    set('countBodega', `(${fmt(n('en_bodega'))})`);
+    set('countAsignados', `(${fmt(n('asignado_contrato'))})`);
+    set('countCliente', `(${fmt(n('en_cliente'))})`);
+    set('countTaller', `(${fmt(n('en_taller'))})`);
+    set('countOtros', `(${fmt(filtrables.filter(e => this.ESTADOS_OTROS.includes(e.estado)).length)})`);
+    set('countTodos', `(${fmt(filtrables.length)})`);
+    this._pintarSeleccion();
 
-    if (this._tab === 'conflictos') {
+    // La vista de Conflictos pinta GRUPOS, no filas. Cede ante una búsqueda:
+    // si el usuario teclea un serial, quiere resultados del pool entero —
+    // dejarlo dentro de la cola sería reponer la trampa que N1 vino a quitar.
+    if (this._tab === 'conflictos' && !fAct.q) {
       this._renderFiltrosActivos(fAct, 0, 0);
       this.renderConflictos(tbody, fAct.q);
       if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -484,8 +565,11 @@ window.EquiposPool = {
     }
 
     // Barra "Viendo: …" — hace obvios los filtros activos sin abrir dropdowns.
-    const enTabTotal = this._equipos.filter(e => this._enTab(e, this._tab)).length;
-    this._renderFiltrosActivos(fAct, lista.length, enTabTotal - lista.length);
+    // Con búsqueda el universo es el pool entero, no la pestaña.
+    const universo = fAct.q
+      ? this._equipos.length
+      : this._equipos.filter(e => this._enTab(e, this._tab)).length;
+    this._renderFiltrosActivos(fAct, lista.length, universo - lista.length);
 
     if (!lista.length) {
       // Estado vacío que EXPLICA la pestaña: qué cae aquí y cuál es el paso
@@ -499,10 +583,17 @@ window.EquiposPool = {
         por_clasificar: 'No hay unidades por clasificar. Aquí caen las que el sistema tenía en un cliente sin nada que lo respalde (ni contrato ni orden de servicio). No es una ubicación física: hay que encontrar el radio — si aparece en bodega se registra con "Corregir estado"; si lo tiene un cliente, se asigna en Seriales de su contrato.',
         otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Revivir equipo".',
       };
-      const hayFiltros = !!(fAct.q || fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente);
+      const hayOtrosFiltros = !!(fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente || fAct.listos);
+      // Buscar y no encontrar nada ya NO significa "está en otra pestaña" — la
+      // búsqueda barre el pool entero. Así que el mensaje dice lo que de verdad
+      // pasa: ese serial no existe en el inventario, o lo tapa otro filtro.
+      const msgBusqueda = hayOtrosFiltros
+        ? `Ningún equipo del pool coincide con "${esc(fAct.q)}" y los demás filtros activos. Prueba a limpiarlos.`
+        : `Ningún equipo del pool coincide con "${esc(fAct.q)}". Revisa que el serial esté bien escrito — si el equipo es real y nunca pasó por aquí, se dará de alta solo la próxima vez que toque un contrato, una orden o bodega.`;
       const msg = !this._equipos.length
         ? 'No hay equipos en el pool. Usa "Recibir equipos" o "Importar Excel".'
-        : (hayFiltros ? 'Sin resultados con el filtro actual.' : (VACIO_POR_TAB[this._tab] || 'Sin resultados.'));
+        : fAct.q ? msgBusqueda
+        : (hayOtrosFiltros ? 'Sin resultados con el filtro actual.' : (VACIO_POR_TAB[this._tab] || 'Sin resultados.'));
       tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
     } else {
       const puede = this.puedeEscribir();
@@ -1467,10 +1558,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabParam = qp.get('tab');
     const verifParam = qp.get('verificar');
     const modeloParam = qp.get('modelo'); // id de catálogo — desde Inventario de Radios
+    // Los deep-links siguen aceptando ?tab=devuelto_revision / por_clasificar /
+    // conflictos (las señales del home apuntan ahí). Ya no son pestañas, así que
+    // lo que se enciende es su TARJETA de Pendientes — _pintarSeleccion resuelve
+    // cuál de las dos filas marcar.
     const setTabUI = (tab) => {
       EquiposPool._tab = tab;
-      document.querySelectorAll('.eq-tab').forEach(b =>
-        b.classList.toggle('is-active', b.dataset.tab === tab));
+      EquiposPool._pintarSeleccion();
     };
     const limpiarSecundarios = () => {
       ['eqFiltroModelo', 'eqFiltroPropiedad'].forEach(id => {

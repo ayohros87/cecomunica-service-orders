@@ -10,7 +10,7 @@
   <meta charset="UTF-8">
   <title>Equipos por serial - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc18">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc20">
   <!-- Rediseño Command Center: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
 
@@ -23,6 +23,56 @@
        las demás. La paleta canónica vive en css/ceco-ui.css. */
     .eq-sub { font-size:12px; color:var(--fg-3); display:block; }
     /* .eq-link vive en ceco-ui.css (compartido con contrato/cliente/orden) */
+
+    /* Buscador global (arriba de todo). El kit topa .filter-search en 360px
+       porque allí vive dentro de una barra de filtros; aquí es el control
+       principal de la página, así que se le suelta el ancho. */
+    .eq-buscador { display:flex; align-items:center; gap:12px; margin:var(--sp-4) 0 var(--sp-3); }
+    .eq-buscador .filter-search { max-width:640px; }
+    .eq-buscador-nota { font-size:12.5px; color:var(--fg-3); }
+
+    /* Segunda fila de la barra: filtros finos. Separada de las pestañas a
+       propósito — cuando todo iba en una sola fila, el wrap dejaba los toggles
+       y "Recargar" colgando en un renglón huérfano. */
+    .eq-filtros-finos {
+      display:flex; align-items:center; gap:var(--sp-3); flex-wrap:wrap;
+      padding:var(--sp-2) var(--sp-4) var(--sp-3);
+      border-bottom:1px solid var(--border-subtle);
+    }
+
+    /* Etiquetita de sección ("Pendientes", "Dónde están") */
+    .eq-seccion-lbl {
+      display:block; font-size:10.5px; text-transform:uppercase;
+      letter-spacing:.07em; color:var(--fg-3); margin-bottom:6px;
+    }
+
+    /* Tarjetas de cola pendiente — clickeables, cada una es un filtro */
+    .eq-colas {
+      display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+      gap:10px; margin-bottom:var(--sp-4);
+    }
+    .eq-cola {
+      display:flex; flex-direction:column; gap:2px; min-width:0;
+      text-align:left; padding:11px 14px; cursor:pointer;
+      background:var(--surface-card); border:1px solid var(--border-default);
+      border-radius:var(--radius-lg);
+      transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+    }
+    .eq-cola:hover { border-color:var(--accent); }
+    .eq-cola-n   { font-size:22px; font-weight:700; line-height:1.1; color:var(--fg-2); }
+    .eq-cola-lbl { font-size:12.5px; font-weight:600; }
+    .eq-cola-sub { font-size:11px; color:var(--fg-3); }
+    /* Color por cola = el mismo del chip del estado que representa. */
+    .eq-cola[data-cola="por_clasificar"]    .eq-cola-n { color:#9f1239; }
+    .eq-cola[data-cola="devuelto_revision"] .eq-cola-n { color:#c2410c; }
+    .eq-cola[data-cola="conflictos"]        .eq-cola-n { color:#b91c1c; }
+    .eq-cola[data-cola="sin_verificar"]     .eq-cola-n { color:#a16207; }
+    .eq-cola.is-active[data-cola="por_clasificar"]    { border-color:#9f1239; box-shadow:0 0 0 2px #9f123933; }
+    .eq-cola.is-active[data-cola="devuelto_revision"] { border-color:#c2410c; box-shadow:0 0 0 2px #c2410c33; }
+    .eq-cola.is-active[data-cola="conflictos"]        { border-color:#b91c1c; box-shadow:0 0 0 2px #b91c1c33; }
+    .eq-cola.is-active[data-cola="sin_verificar"]     { border-color:#a16207; box-shadow:0 0 0 2px #a1620733; }
+    /* Cola vacía = nada que hacer: se apaga en vez de gritar un 0 de color. */
+    .eq-cola.is-vacia .eq-cola-n { color:var(--fg-3); }
 
     /* Tabs de estado (pills) — mismo patrón que sim-cards */
     .eq-tabs { display:flex; gap:var(--sp-2); flex-wrap:wrap; }
@@ -101,7 +151,7 @@
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/inventario-equipos.js?v=cc19" defer></script>
+  <script src="../js/pages/inventario-equipos.js?v=cc20" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -130,26 +180,50 @@
 
   <div class="app-wrap app-wrap--full">
 
-    <div class="kpi-grid" style="margin:var(--sp-4) 0;">
-      <div class="kpi-card">
-        <span class="kpi-card-label">En bodega</span>
-        <span class="kpi-card-value kpi-accent" id="kpiBodega">—</span>
-        <span class="kpi-card-sub">disponibles para asignar</span>
+    <!-- Buscador. Va ARRIBA y busca en TODO el pool, no dentro de la pestaña
+         activa (auditoría 2026-08-04, N1): "¿dónde está este radio?" es la
+         pregunta más frecuente y antes fallaba en silencio —la página abre en
+         una ubicación y el radio casi nunca está en esa. -->
+    <div class="eq-buscador">
+      <div class="filter-search" style="flex:1; height:44px;">
+        <span class="search-icon"><i data-lucide="search"></i></span>
+        <input type="search" id="eqBusqueda" placeholder="Buscar serial, modelo o cliente en todo el pool…"
+               aria-label="Buscar equipos en todo el pool" oninput="EquiposPool.render()"
+               style="border:none; flex:1; font-size:15px;">
       </div>
-      <div class="kpi-card">
-        <span class="kpi-card-label">Flota propia en campo</span>
-        <span class="kpi-card-value" id="kpiFlotaCampo">—</span>
-        <span class="kpi-card-sub">alquiler, demo y POC con clientes</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-card-label">En taller</span>
-        <span class="kpi-card-value" id="kpiTaller">—</span>
-      </div>
-      <div class="kpi-card">
-        <span class="kpi-card-label">Por verificar</span>
-        <span class="kpi-card-value kpi-warn" id="kpiVerificar">—</span>
-        <span class="kpi-card-sub">creados por migración</span>
-      </div>
+      <span class="eq-buscador-nota">Busca en <b>todo el pool</b>, sin importar la pestaña</span>
+    </div>
+
+    <!-- Pendientes: las colas que necesitan una decisión humana. Sustituyen a
+         la fila de KPIs (N2), que repetía dos contadores de las pestañas de
+         abajo, no era clickeable, y dejaba fuera justo las tres colas reales
+         —incluida "Por clasificar", que es ~23% del pool. -->
+    <span class="eq-seccion-lbl">Pendientes — lo que necesita una decisión</span>
+    <div class="eq-colas" role="group" aria-label="Colas pendientes">
+      <button class="eq-cola" data-cola="por_clasificar" onclick="EquiposPool.setCola('por_clasificar')"
+              title="El sistema las tenía con un cliente pero ningún contrato ni orden lo respalda: hay que encontrar el radio">
+        <span class="eq-cola-n" id="colaPorClasificar">—</span>
+        <span class="eq-cola-lbl">Por clasificar</span>
+        <span class="eq-cola-sub">ubicación sin respaldo</span>
+      </button>
+      <button class="eq-cola" data-cola="devuelto_revision" onclick="EquiposPool.setCola('devuelto_revision')"
+              title="Radios que el cliente devolvió y esperan inspección para volver a bodega o darse de baja">
+        <span class="eq-cola-n" id="colaPorInspeccionar">—</span>
+        <span class="eq-cola-lbl">Por inspeccionar</span>
+        <span class="eq-cola-sub">devueltos del cliente</span>
+      </button>
+      <button class="eq-cola" data-cola="conflictos" onclick="EquiposPool.setCola('conflictos')"
+              title="Un mismo serial con 2+ fichas de modelos distintos: fusionar o confirmar que son radios distintos">
+        <span class="eq-cola-n" id="colaConflictos">—</span>
+        <span class="eq-cola-lbl">Conflictos</span>
+        <span class="eq-cola-sub">1 serial, 2+ modelos</span>
+      </button>
+      <button class="eq-cola" data-cola="sin_verificar" onclick="EquiposPool.setCola('sin_verificar')"
+              title="Fichas creadas por la migración automática, pendientes de confirmar con el equipo a la vista. No corre prisa: la ficha se usa igual.">
+        <span class="eq-cola-n" id="colaSinVerificar">—</span>
+        <span class="eq-cola-lbl">Sin verificar</span>
+        <span class="eq-cola-sub">residuo de la migración</span>
+      </button>
     </div>
 
     <div class="ds-card">
@@ -181,25 +255,24 @@
         </div>
       </details>
 
-      <!-- Filter bar -->
+      <!-- Filter bar. Las pestañas son SOLO ubicaciones (N3): las tres colas
+           (Por inspeccionar / Por clasificar / Conflictos) subieron a las
+           tarjetas de Pendientes, así que esta fila responde una sola pregunta
+           —"¿dónde están?"— en vez de mezclar ubicación, cola y archivo. -->
       <div class="filter-bar">
+        <span class="eq-seccion-lbl" style="margin:0 2px 0 0; align-self:center;">Dónde están</span>
         <div class="eq-tabs" role="tablist">
-          <button class="eq-tab" data-tab="en_bodega" onclick="EquiposPool.setTab('en_bodega')">Bodega <span id="countBodega"></span></button>
-          <button class="eq-tab" data-tab="asignado_contrato" onclick="EquiposPool.setTab('asignado_contrato')">Asignados <span id="countAsignados"></span></button>
-          <button class="eq-tab is-active" data-tab="en_cliente" onclick="EquiposPool.setTab('en_cliente')">En cliente <span id="countCliente"></span></button>
-          <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')">Taller <span id="countTaller"></span></button>
-          <button class="eq-tab" data-tab="devuelto_revision" onclick="EquiposPool.setTab('devuelto_revision')" title="Radios que regresaron de un cliente y esperan inspección (llegaron por una orden de ENTRADA)">Por inspeccionar <span id="countEntradas"></span></button>
-          <button class="eq-tab" data-tab="por_clasificar" onclick="EquiposPool.setTab('por_clasificar')" title="Unidades cuya ubicación no está respaldada por ningún contrato ni orden — hay que encontrarlas y clasificarlas">Por clasificar <span id="countPorClasificar"></span></button>
+          <button class="eq-tab is-active" data-tab="en_bodega" onclick="EquiposPool.setTab('en_bodega')" title="Disponibles para asignar">Bodega <span id="countBodega"></span></button>
+          <button class="eq-tab" data-tab="asignado_contrato" onclick="EquiposPool.setTab('asignado_contrato')" title="Reservadas por un contrato, aún sin entregar">Asignados <span id="countAsignados"></span></button>
+          <button class="eq-tab" data-tab="en_cliente" onclick="EquiposPool.setTab('en_cliente')" title="Entregadas y en poder del cliente">En cliente <span id="countCliente"></span></button>
+          <button class="eq-tab" data-tab="en_taller" onclick="EquiposPool.setTab('en_taller')" title="En una orden de servicio">Taller <span id="countTaller"></span></button>
           <button class="eq-tab" data-tab="otros" onclick="EquiposPool.setTab('otros')" title="Unidades que salieron de la flota: dadas de baja o vendidas">Baja / Venta <span id="countOtros"></span></button>
-          <button class="eq-tab" data-tab="conflictos" onclick="EquiposPool.setTab('conflictos')" title="Seriales con 2+ fichas (el mismo radio registrado con modelos distintos por fuentes distintas) — fusiona o confirma que son radios distintos">Conflictos <span id="countConflictos"></span></button>
           <button class="eq-tab" data-tab="todos" onclick="EquiposPool.setTab('todos')">Todos <span id="countTodos"></span></button>
         </div>
+      </div>
 
-        <div class="filter-search" style="max-width:320px;">
-          <span class="search-icon"><i data-lucide="search"></i></span>
-          <input type="search" id="eqBusqueda" placeholder="Buscar serial, modelo o cliente…" aria-label="Buscar equipos" oninput="EquiposPool.render()" style="border:none; flex:1;">
-        </div>
-
+      <!-- Filtros finos (segunda fila) -->
+      <div class="eq-filtros-finos">
         <select id="eqFiltroModelo" class="form-select" style="max-width:230px;" onchange="EquiposPool.render()" aria-label="Filtrar por modelo">
           <option value="">Todos los modelos</option>
         </select>
@@ -211,8 +284,11 @@
           <option value="desconocida">Desconocida</option>
         </select>
 
-        <label class="toggle-pill" title="Fichas creadas por migración pendientes de confirmar con el equipo a la vista"><input type="checkbox" id="chkSinVerificar" onchange="EquiposPool.render()"> Sin verificar</label>
-        <label class="toggle-pill" title="Seriales que existen en más de un modelo — se resuelven en la pestaña Conflictos"><input type="checkbox" id="chkCompartidos" onchange="EquiposPool.render()"> 2+ modelos</label>
+        <!-- "Sin verificar" ya no es un toggle visible: lo maneja su tarjeta de
+             Pendientes. El input SIGUE aquí (oculto) porque es el portador del
+             estado que usan los filtros, la barra "Viendo:" y la persistencia. -->
+        <label class="toggle-pill" style="display:none;"><input type="checkbox" id="chkSinVerificar" onchange="EquiposPool.render()"> Sin verificar</label>
+        <label class="toggle-pill" title="Seriales que existen en más de un modelo — se resuelven en la cola de Conflictos"><input type="checkbox" id="chkCompartidos" onchange="EquiposPool.render()"> 2+ modelos</label>
         <label class="toggle-pill" title="Unidades sin cliente ni contrato rastreable"><input type="checkbox" id="chkSinCliente" onchange="EquiposPool.render()"> Sin cliente</label>
         <label class="toggle-pill" title="En taller con la orden ya COMPLETADO (EN OFICINA): el radio está terminado y solo falta registrar la entrega"><input type="checkbox" id="chkListos" onchange="EquiposPool.render()"> Listos para entrega</label>
 

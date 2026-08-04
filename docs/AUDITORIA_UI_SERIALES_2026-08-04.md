@@ -311,7 +311,72 @@ filtra a pantalla ("Refurbished" en todas partes). `serial_compartido` se llama
   link a la ficha. Es el equivalente masivo de SerialField; el modelo lo sigue
   mandando el contrato.
 
-**Guardias.** `functions/test/poolChipsYAcciones.test.js` (6 tests, en `npm test`)
-congela los dos invariantes que se rompen solos: que todo estado de `ESTADO_LABELS`
-tenga su color en `ceco-ui.css`, y que la columna de acciones no vuelva a ser un muro
-de iconos sin etiqueta. Verificado que fallan al reintroducir cada defecto.
+### E.1 · Corrección de la propia R1 — la CTA salía en el 78% de las filas
+
+Al mirar la página ya desplegada saltó que el botón ámbar **"Corregir estado"
+aparecía en 5,224 de 6,735 filas**. La precedencia metía *"origen migración + en
+cliente/taller"* como motivo de CTA, pero una unidad migrada que está con su
+cliente y con contrato que lo respalda no tiene nada que corregir: es el estado
+**normal** del pool tras la migración.
+
+Quitarla dejó el problema peor (80%): `verificado === false` cubre **5,378**
+fichas — verificar es el residuo de la migración, la condición por defecto del
+dato, y 5,378 confirmaciones de a una por menú no son un flujo.
+
+La CTA quedó sólo para las dos colas reales — `devuelto_revision` (124) y
+`por_clasificar` (1,578): **1,702 de 6,735 = 25%**, medido con el código de la
+página contra producción. Regla que quedó escrita en el código: *si la condición
+cubre más de ~1 de cada 3 filas, no es una CTA — es un filtro.*
+
+Lección de método: el primer test de esto **daba falsa confianza** porque pasaba
+`estado` y `origen` pero nunca `verificado`, así que no veía el 80%. Ahora lleva
+el censo real (cruce estado × verificado contado en producción) y falla por
+encima de 1 de cada 3.
+
+---
+
+## F. Navegación — 2026-08-04 (N1–N4)
+
+Con los botones ya legibles quedó a la vista el problema de fondo: la página no
+distinguía **inventario que se hojea** de **trabajo que hay que hacer**.
+
+**N1 · La búsqueda escapa de la pestaña.** `_filtrados` exigía
+`_enTab && filtros`, y la página abría en una ubicación concreta: buscar un
+serial que estuviera en otra devolvía "Sin resultados". La pregunta más
+frecuente de la página fallaba en silencio. Ahora la búsqueda barre el pool
+entero, la barra "Viendo:" lo dice, los contadores de pestaña se leen como
+"cuántos resultados hay en cada ubicación", y el estado vacío ya no miente
+(dice que el serial no existe, no que esté en otra pestaña).
+
+**N2 · Tarjetas de Pendientes en vez de KPIs.** La fila de KPIs repetía dos
+contadores de las pestañas de abajo, no era clickeable, y dejaba fuera las tres
+colas reales — incluida **Por clasificar, que es ~23% del pool**. Ahora son
+cuatro tarjetas-filtro (Por clasificar · Por inspeccionar · Conflictos · Sin
+verificar) con conteo global, color del chip del estado que representan, y que
+se apagan cuando están en cero. Volver a pulsarlas las desactiva.
+
+**N3 · Pestañas = sólo ubicaciones (9 → 6).** La fila mezclaba ubicación, cola y
+archivo. Las tres colas subieron a las tarjetas, así que la fila responde una
+sola pregunta: "¿dónde están?".
+
+**N4 · Aterrizaje accionable.** Abría en *En cliente* (3,279 unidades que están
+bien) con `propiedad=cecomunica` pre-aplicado sin que nadie lo escogiera. Ahora
+abre en **Bodega** y sin filtro de propiedad. Quien ya tenga preferencia
+guardada la conserva.
+
+Pendiente y no hecho aquí: **selección múltiple + acción en lote** para las dos
+bandejas grandes (1,578 por clasificar, 5,378 sin verificar) — resolverlas de a
+una no es un flujo. Necesita su propio camino de confirmación y reporte, así que
+va como cambio aparte. Tampoco se tocó la vista de Conflictos (pinta grupos bajo
+cabeceras de tabla que no le aplican, pero son 23 filas) ni el comportamiento en
+móvil (9 columnas = scroll horizontal; conviene preguntar a bodega si trabajan
+desde tablet antes de invertir).
+
+**Guardias.** `functions/test/poolChipsYAcciones.test.js` (12 tests, en `npm test`)
+congela lo que se rompe solo: que todo estado de `ESTADO_LABELS` tenga su color en
+`ceco-ui.css`; que la columna de acciones no vuelva a ser un muro de iconos sin
+etiqueta; que la CTA de aviso no vuelva a cubrir más de 1 de cada 3 filas (pesado
+con el censo real del pool); que la búsqueda no vuelva a quedar atrapada en la
+pestaña; que las pestañas sigan siendo sólo ubicaciones; y que los deep-links de
+las señales del home sigan llevando a alguna vista. Verificado —rompiendo el
+código a propósito— que cada guardia falla cuando se reintroduce su defecto.

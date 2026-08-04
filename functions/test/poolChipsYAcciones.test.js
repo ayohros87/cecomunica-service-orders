@@ -33,12 +33,26 @@ function cargarServicio() {
 }
 
 // ── Carga de la página de inventario (define window.EquiposPool) ───────────
-function cargarPagina() {
+// `campos` permite simular los controles del DOM (búsqueda, selects, checks)
+// para ejercitar el filtrado sin navegador.
+function cargarPagina(campos = {}) {
   const noop = () => {};
+  const nodo = (id) => {
+    if (!(id in campos)) return null;
+    const v = campos[id];
+    return typeof v === "boolean"
+      ? { type: "checkbox", checked: v, classList: { toggle: noop } }
+      : { value: v, classList: { toggle: noop } };
+  };
   const ctx = {
     console,
     window: {},
-    document: { addEventListener: noop, getElementById: () => null, querySelectorAll: () => [] },
+    document: {
+      addEventListener: noop,
+      getElementById: nodo,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    },
     firebase: { auth: () => ({ onAuthStateChanged: noop }), firestore: () => ({}) },
     ROLES: { ADMIN: "administrador", INVENTARIO: "inventario", GERENTE: "gerente", VISTA: "vista" },
     FMT: { esc: (v) => String(v ?? "").replace(/[&<>"']/g, (m) => ({
@@ -190,6 +204,82 @@ test("la CTA de aviso es minoría — no puede volver a inundar la tabla", () =>
     `la CTA de aviso saldría en ${pct.toFixed(0)}% de las filas (${conCta}/${total}): ` +
     `${culpables.join(", ")}. Por encima de ~1 de cada 3 deja de leerse como aviso — ` +
     "esa condición es un FILTRO, no una CTA. La fila normal debe ser neutra (Historia).");
+});
+
+// ── Navegación (auditoría 2026-08-04, N1–N4) ───────────────────────────────
+
+// El bug: `_filtrados` exigía `_enTab && filtros`, la página abría en una
+// ubicación concreta, y buscar un serial que estuviera en OTRA devolvía "Sin
+// resultados". La pregunta más frecuente de la página fallaba en silencio.
+test("buscar un serial lo encuentra aunque esté en otra ubicación", () => {
+  const pool = [
+    { id: "1", serial: "25219A0801", serial_norm: "25219A0801", estado: "en_bodega" },
+    { id: "2", serial: "24O31A0947", serial_norm: "24O31A0947", estado: "en_cliente" },
+    { id: "3", serial: "B12345678",  serial_norm: "B12345678",  estado: "en_taller" },
+  ];
+
+  // Parado en Bodega, buscando un serial que está EN CLIENTE.
+  const page = cargarPagina({ eqBusqueda: "24O31A0947" });
+  page._equipos = pool;
+  page._tab = "en_bodega";
+  const hallados = page._filtrados();
+  assert.equal(hallados.length, 1, "la búsqueda debe escapar de la pestaña activa");
+  assert.equal(hallados[0].serial, "24O31A0947");
+
+  // Sin búsqueda, la pestaña sí manda.
+  const page2 = cargarPagina({ eqBusqueda: "" });
+  page2._equipos = pool;
+  page2._tab = "en_bodega";
+  assert.deepEqual(page2._filtrados().map(e => e.serial), ["25219A0801"],
+    "sin búsqueda la pestaña debe seguir restringiendo");
+});
+
+test("la búsqueda sigue respetando los filtros secundarios", () => {
+  const page = cargarPagina({ eqBusqueda: "PNC360S", eqFiltroPropiedad: "cliente" });
+  page._equipos = [
+    { id: "1", serial: "A1", modelo_label: "HYTERA PNC360S", estado: "en_bodega", propiedad: "cecomunica" },
+    { id: "2", serial: "A2", modelo_label: "HYTERA PNC360S", estado: "en_cliente", propiedad: "cliente" },
+  ];
+  page._tab = "en_bodega";
+  const r = page._filtrados();
+  assert.equal(r.length, 1, "propiedad=cliente debe seguir aplicando durante la búsqueda");
+  assert.equal(r[0].serial, "A2");
+});
+
+test("la página aterriza en Bodega y sin filtro de propiedad impuesto", () => {
+  const page = cargarPagina();
+  assert.equal(page.FILTROS_DEFAULT.tab, "en_bodega",
+    "abrir en 'en_cliente' dejaba al usuario en la lista más grande y menos accionable");
+  assert.equal(page.FILTROS_DEFAULT.propiedad, "",
+    "un filtro de propiedad que el usuario nunca escogió es estado oculto");
+});
+
+test("las pestañas son sólo ubicaciones; las colas viven en las tarjetas", () => {
+  const html = leer("public", "inventario", "equipos.html");
+  const tabs = [...html.matchAll(/class="eq-tab[^"]*"\s+data-tab="([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(tabs.sort(),
+    ["asignado_contrato", "en_bodega", "en_cliente", "en_taller", "otros", "todos"].sort(),
+    "las colas (devuelto_revision/por_clasificar/conflictos) no deben volver a la fila de pestañas");
+
+  const colas = [...html.matchAll(/class="eq-cola"\s+data-cola="([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(colas.sort(),
+    ["conflictos", "devuelto_revision", "por_clasificar", "sin_verificar"].sort());
+
+  const page = cargarPagina();
+  // Toda cola declarada en el HTML tiene que existir en el mapa de la página.
+  for (const c of colas) assert.ok(page.COLAS[c], `la tarjeta "${c}" no tiene entrada en COLAS`);
+});
+
+test("los deep-links de las señales del home siguen siendo válidos", () => {
+  const page = cargarPagina();
+  const señales = leer("public", "js", "pages", "home-signals.js");
+  const destinos = [...señales.matchAll(/inventario\/equipos\.html\?tab=([a-z_]+)/g)].map(m => m[1]);
+  assert.ok(destinos.length, "se esperaban señales apuntando al pool");
+  for (const t of destinos) {
+    const esCola = Object.values(page.COLAS).some(c => c.tab === t);
+    const esUbicacion = ["en_bodega", "asignado_contrato", "en_cliente", "en_taller", "otros", "todos"].includes(t);
+    assert.ok(esCola || esUbicacion, `?tab=${t} ya no lleva a ninguna vista`);
+  }
 });
 
 test("la acción destructiva va al final del menú y marcada como danger", () => {
