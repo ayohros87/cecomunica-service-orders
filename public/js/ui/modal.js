@@ -146,6 +146,10 @@ window.Modal = {
     confirmLabel  = 'Aceptar',
     cancelLabel   = 'Cancelar',
     multiline     = false,
+    // Hook opcional: recibe el <input>/<textarea> ya montado, para decorarlo
+    // (p.ej. SerialField.adjuntar en la edición de un serial). Se llama una
+    // vez, antes del focus. No debe reemplazar el elemento.
+    onMount       = null,
   } = {}) {
     return new Promise(resolve => {
       const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({
@@ -198,6 +202,9 @@ window.Modal = {
       document.addEventListener('keydown', kbHandler);
       document.body.appendChild(overlay);
       document.body.style.overflow = 'hidden';
+      if (typeof onMount === 'function') {
+        try { onMount(input); } catch (e) { /* decorar nunca rompe el prompt */ }
+      }
       input.focus();
       input.select?.();
     });

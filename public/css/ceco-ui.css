@@ -2225,7 +2225,8 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 /* ── Pool de equipos: chips de estado compartidos ───────────────────
    Un solo lenguaje visual para el estado físico de una unidad
    (equipos_pool) en TODAS las páginas: pool, contrato, cliente, orden
-   y home. Paleta = la original de inventario/equipos.html (.eq-badge).
+   y home — incluida la tabla del pool, que hasta 2026-08-04 mantenía su
+   propia copia desincronizada (.eq-badge, ya eliminada).
    Render: EquiposPoolService.chipEstadoHtml(estado). */
 .eqpool-chip {
   display: inline-flex; align-items: center; gap: 4px;
@@ -2233,14 +2234,25 @@ table.app-table.editable tbody tr:hover { background: transparent; }
   padding: 2px 8px; border-radius: var(--radius-pill);
   white-space: nowrap;
 }
+/* La lista DEBE cubrir los 9 estados de EquiposPoolService.ESTADO_LABELS.
+   Auditoría 2026-08-04 (A1): faltaban `por_clasificar` y `en_poc`, así que
+   chipEstadoHtml emitía una clase inexistente y esas unidades se pintaban sin
+   fondo — justo el estado que significa "hay que ir a buscar el radio" era el
+   menos visible. Si se agrega un estado al servicio, agrégalo AQUÍ también. */
 .eqpool-chip-en_bodega         { background: #dcfce7; color: #15803d; }
 .eqpool-chip-asignado_contrato { background: #dbeafe; color: #1d4ed8; }
 .eqpool-chip-en_cliente        { background: #e0e7ff; color: #4338ca; }
 .eqpool-chip-en_taller         { background: #fef9c3; color: #a16207; }
 .eqpool-chip-devuelto_revision { background: #ffedd5; color: #c2410c; }
+/* Ubicación desconocida: rosa, distinto del ámbar de taller y del naranja de
+   las devoluciones — no es una ubicación más, es "hay que ir a buscarlo". */
+.eqpool-chip-por_clasificar    { background: #ffe4e6; color: #9f1239; }
 .eqpool-chip-vendido           { background: #ccfbf1; color: #0f766e; }
 .eqpool-chip-baja              { background: #f1f5f9; color: #64748b; }
+.eqpool-chip-en_poc            { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-desconocido       { background: #f1f5f9; color: #64748b; }
+/* Variante de tabla: mismo lenguaje, un punto más grande para listados densos. */
+.eqpool-chip-lg { font-size: 12px; padding: 3px 10px; }
 /* Link discreto hacia una entidad (kardex, contrato, cliente, orden). */
 .eq-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--fg-3); }
 .eq-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
@@ -2251,6 +2263,24 @@ table.app-table.editable tbody tr:hover { background: transparent; }
   padding: 1px 6px; border-radius: var(--radius-pill);
   background: #fef3c7; color: #92400e; margin-left: 6px;
 }
+/* Marca de serial compartido — MISMO nombre en todas las páginas ("2+ modelos",
+   auditoría 2026-08-04 A4: la condición tenía cuatro nombres distintos). */
+.eqpool-compartido {
+  display: inline-flex; align-items: center;
+  font-size: 10px; font-weight: 700; letter-spacing: .02em;
+  padding: 1px 6px; border-radius: var(--radius-pill);
+  background: #fee2e2; color: #b91c1c; margin-left: 6px;
+  cursor: help;
+}
+/* Propiedad de la unidad: flota propia vs. del cliente. */
+.eqpool-prop {
+  display: inline-flex; align-items: center;
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: var(--radius-pill);
+}
+.eqpool-prop-cecomunica  { background: #e0f2fe; color: #075985; }
+.eqpool-prop-cliente     { background: #f3e8ff; color: #6b21a8; }
+.eqpool-prop-desconocida { background: #f1f5f9; color: #64748b; }
 
 /* ── Toggle / switch ────────────────────────────────────────── */
 .toggle-wrap { display: flex; align-items: flex-start; gap: var(--sp-3); cursor: pointer; }

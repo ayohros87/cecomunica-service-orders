@@ -171,7 +171,7 @@ module.exports = onSchedule(
         await db.collection("mail_queue").add({
           to: dests[0],
           cc: dests.length > 1 ? dests.slice(1).join(", ") : null,
-          subject: `Entradas sin inspeccionar: ${atascadas.length} equipos en cuarentena hace ${entradaDias}+ días`,
+          subject: `Devueltos sin inspeccionar: ${atascadas.length} equipos en cuarentena hace ${entradaDias}+ días`,
           preheader: `${atascadas.length} unidades esperan inspección`,
           bodyContent: `
             <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#9A3412;">Equipos en cuarentena sin inspección</h2>

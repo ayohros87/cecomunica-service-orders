@@ -125,12 +125,31 @@ window.editarCampoEquipo = async function(compuestoId, campo, valorActual = "") 
     ? "Número de serie"
     : (campo === "modelo" ? "Modelo" : "Observaciones");
 
+  // Al editar el SERIAL se decora el campo con SerialField (auditoría
+  // 2026-08-04, R3): este lápiz es la edición de serial más frecuente de la app
+  // y era el único punto de captura sin ninguna señal del pool — el chip que se
+  // ve en la tabla es decoración de lectura, no valida lo que escribes. Ahora
+  // el chip dice, mientras tecleas, de quién es el radio y dónde figura.
+  const esSerial = campo === "numero_de_serie";
   const nuevoValor = await Modal.prompt({
     title: `Editar ${etiqueta}`,
     defaultValue: valorActual ?? "",
-    multiline: campo === "observaciones"
+    multiline: campo === "observaciones",
+    onMount: !esSerial ? null : (input) => {
+      if (typeof SerialField === "undefined" || typeof EquiposPoolService === "undefined") return;
+      SerialField.adjuntar(input, {
+        clienteId: () => target.orden?.cliente_id || null,
+        modelo: () => ({ modelo_id: target.equipo?.modelo_id || null,
+                         modelo_label: target.equipo?.modelo || "" }),
+      });
+    },
   });
   if (nuevoValor === null) return;
+  // El serial cambió: la ficha vieja del pool queda cacheada en SerialField.
+  if (esSerial && typeof SerialField !== "undefined") {
+    SerialField.invalidar(valorActual);
+    SerialField.invalidar(nuevoValor);
+  }
 
   const valorLimpio = String(nuevoValor).trim();
   if (campo !== "observaciones" && !valorLimpio) {

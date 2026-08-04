@@ -35,13 +35,19 @@ const EquiposPoolService = {
     BAJA:       'baja',
   },
 
+  // Etiqueta OPERATIVA de cada estado. Una palabra por concepto (auditoría
+  // 2026-08-04, A2): `devuelto_revision` decía "Entrada", que ya nombra un TIPO
+  // DE ORDEN del taller — tres palabras vecinas (DEVOLUCIÓN el tiquete, ENTRADA
+  // la orden, "Entrada" el estado) para tres cosas distintas. El estado pasa a
+  // "Devuelto · por inspeccionar", que además calza con el nombre del dato.
+  // Si agregas un estado aquí, agrega su color en .eqpool-chip-* (ceco-ui.css).
   ESTADO_LABELS: {
     en_bodega:         'En bodega',
     asignado_contrato: 'Asignado a contrato',
     en_cliente:        'En cliente',
     en_taller:         'En taller',
     en_poc:            'En POC (histórico)', // solo para kardex/docs sin migrar
-    devuelto_revision: 'Entrada (por inspeccionar)',
+    devuelto_revision: 'Devuelto · por inspeccionar',
     por_clasificar:    'Por clasificar (ubicación desconocida)',
     vendido:           'Vendido',
     baja:              'Baja',

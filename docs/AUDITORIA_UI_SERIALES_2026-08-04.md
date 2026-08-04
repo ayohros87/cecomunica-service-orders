@@ -32,9 +32,14 @@ Una unidad física = un doc en `equipos_pool` (ID = serial normalizado, o
 | 5 | Devolución · captura libre | `ordenes-devolucion.js:441` | ⚠️ SerialField sin contexto |
 | 6 | Devolución · check-in por modelo | `ordenes-devolucion.js:486` | ❌ |
 | 7 | **Editar Serie en la tabla de órdenes** | `ordenes-render.js:541` | ❌ |
-| 8 | Transición de equipos | `contratos/transicion.html` | ❌ |
+| 8 | Transición de equipos | `contratos/transicion.html` | n/a — no se teclea serial |
 | 9 | Nuevo batch POC / Importar POC | `POC/nuevo-batch.html`, `importar-poc.html` | ❌ |
 | 10 | Recibir / Importar Excel / Registrar venta | `inventario/equipos.html` | ❌ (textareas) |
+
+> **Corrección tras implementar (§E):** la fila 8 estaba mal clasificada. La
+> página de transición **no captura seriales**: mapea unidades que ya existen en
+> el pool, con checkboxes (`contrato-transicion-page.js:173,369`). No hay campo
+> que decorar, así que no es un hueco.
 
 Ese cuadro es, por sí solo, la raíz de la queja: **el mismo acto (teclear un serial)
 se comporta de cinco maneras distintas según en qué pantalla estés.**
@@ -239,15 +244,74 @@ seriales pero no pueden abrir Inventario · Equipos para ver el pool
 
 | # | Cambio | Dónde | Riesgo |
 |---|---|---|---|
-| **R1** | Reemplazar los 7 iconos por **1 CTA contextual + menú `⋯` con icono y texto**, copiando `contratos-list.js:87-231`. Precedencia sugerida: Inspección OK → Corregir estado → Verificar → Registrar venta → (resto al menú). | `inventario-equipos.js:533-542` | bajo |
-| **R2** | **Un solo vocabulario de chips**: borrar `.eq-badge-*` de `equipos.html`, usar `.eqpool-chip` en la tabla, y agregar `por_clasificar` y `en_poc` a `ceco-ui.css:2236`. | `ceco-ui.css`, `equipos.html:19-34` | bajo, arregla A1 |
-| **R3** | Adjuntar SerialField en los 5 puntos que faltan y pasarle `clienteId`/`modelo` en devoluciones. | `ordenes-render.js:541`, `ordenes-devolucion.js:486,691`, transición, batches POC | medio |
-| **R4** | Jerarquizar el llenado en Asignar seriales: **"Tomar del pool" primario**, POC/órdenes bajo "Otras fuentes ▾", y subir el truco de pegar-en-cascada del párrafo al propio campo. | `contrato-seriales-page.js:203-211` | bajo |
-| **R5** | Sustituir el `window.confirm` de "enviar a activaciones" por una hoja de resumen (N seriales, cliente, contrato, qué correo sale). | `contrato-seriales-page.js:627` | bajo |
-| **R6** | Glosario de una palabra por concepto y aplicarlo: Entrada/Devolución/ENTRADA (A2), reuso→Refurbished (A3, fuga en `:667`), un solo nombre para `serial_compartido` (A4). | transversal | bajo |
-| **R7** | Arreglar la navegación del rol `inventario`: que Volver/breadcrumb/rail de `seriales.html` lleven a un módulo que sí tenga. | `modulos.js:22` o `seriales.html:54,66,112` | bajo |
+| **R1** ✅ | Reemplazar los 7 iconos por **1 CTA contextual + menú `⋯` con icono y texto**, copiando `contratos-list.js:87-231`. Precedencia sugerida: Inspección OK → Corregir estado → Verificar → Registrar venta → (resto al menú). | `inventario-equipos.js:533-542` | bajo |
+| **R2** ✅ | **Un solo vocabulario de chips**: borrar `.eq-badge-*` de `equipos.html`, usar `.eqpool-chip` en la tabla, y agregar `por_clasificar` y `en_poc` a `ceco-ui.css:2236`. | `ceco-ui.css`, `equipos.html:19-34` | bajo, arregla A1 |
+| **R3** ✅ | Adjuntar SerialField en los 5 puntos que faltan y pasarle `clienteId`/`modelo` en devoluciones. | `ordenes-render.js:541`, `ordenes-devolucion.js:486,691`, transición, batches POC | medio |
+| **R4** ✅ | Jerarquizar el llenado en Asignar seriales: **"Tomar del pool" primario**, POC/órdenes bajo "Otras fuentes ▾", y subir el truco de pegar-en-cascada del párrafo al propio campo. | `contrato-seriales-page.js:203-211` | bajo |
+| **R5** ✅ | Sustituir el `window.confirm` de "enviar a activaciones" por una hoja de resumen (N seriales, cliente, contrato, qué correo sale). | `contrato-seriales-page.js:627` | bajo |
+| **R6** ✅ | Glosario de una palabra por concepto y aplicarlo: Entrada/Devolución/ENTRADA (A2), reuso→Refurbished (A3, fuga en `:667`), un solo nombre para `serial_compartido` (A4). | transversal | bajo |
+| **R7** ✅ | Arreglar la navegación del rol `inventario`: que Volver/breadcrumb/rail de `seriales.html` lleven a un módulo que sí tenga. | `modulos.js:22` o `seriales.html:54,66,112` | bajo |
 
 **Orden sugerido:** R2 → R1 → R5 → R4 → R7 → R6 → R3.
 R2 primero porque es CSS y arregla un estado invisible en seis páginas; R1 es el que
 responde literalmente a "muchos botoncitos"; R3 se deja al final porque toca la tabla
 de órdenes, que es la superficie más caliente del sistema.
+
+---
+
+## E. Implementación — 2026-08-04
+
+Las siete recomendaciones quedaron implementadas el mismo día. Qué cambió, por punto:
+
+**R2 · Un solo vocabulario de chips.**
+`ceco-ui.css` completa los 9 estados (agrega `por_clasificar` en rosa y `en_poc`),
+suma `.eqpool-chip-lg` para tablas y sube `.eqpool-compartido` / `.eqpool-prop-*` al
+kit. La paleta local `.eq-badge-*` / `.eq-prop-*` / `.eq-noverif` desapareció de
+`equipos.html`, que ahora usa `chipEstadoHtml` como el resto.
+→ `por_clasificar` ya no sale sin fondo en ninguna página.
+
+**R1 · Acciones de fila.**
+`EquiposPool._accionesHtml(eq, puede)` construye **una CTA con etiqueta** + menú `⋯`
+con icono y texto, reutilizando `.overflow-menu*` del kit. Precedencia de la CTA:
+Inspección OK → Corregir estado → Verificar → Revivir → Historia. Cierre del menú por
+click-fuera/ESC igual que en contratos. La columna pasó a 210 px y las CTA llevan
+`white-space:nowrap`.
+→ De 7 iconos mudos por fila a 1 botón que dice el siguiente paso.
+
+**R5 · Envío a activaciones.**
+`hojaConfirmarEnvio()` sustituye el `window.confirm`: muestra contrato, cliente,
+conteo por modelo, unidades sin serial, y advierte que se dispara el correo y se echa
+el candado. El `window.confirm` desapareció de la página.
+
+**R4 · Llenado de seriales.**
+"Tomar del pool (bodega)" es ahora **primario**; "Jalar desde POC" y "Jalar desde
+órdenes" viven en un desplegable **"Otras fuentes ▾"**. El truco de pegar en cascada
+se dice junto a los botones, no enterrado en el párrafo de intro.
+
+**R7 · Salidas de la página de seriales.**
+Volver, breadcrumb y rail se resuelven por rol: para `inventario` los tres apuntan a
+Inventario · Equipos en vez de a la lista de Contratos, que no puede abrir.
+
+**R6 · Una palabra por concepto.**
+`devuelto_revision` pasa de "Entrada (por inspeccionar)" a **"Devuelto · por
+inspeccionar"** (pestaña "Por inspeccionar", señal del home y asunto del correo de
+cuarentena incluidos) — "ENTRADA" queda reservado para el tipo de orden, y hay un
+glosario desplegable en la página que separa las tres palabras. `reuso` ya no se
+filtra a pantalla ("Refurbished" en todas partes). `serial_compartido` se llama
+**"2+ modelos"** en la fila, en la ficha y junto al input.
+
+**R3 · Señal del pool donde faltaba.**
+- `Modal.prompt` acepta `onMount(input)`, y el lápiz de Serie de la tabla de órdenes
+  lo usa para adjuntar SerialField con cliente y modelo — el punto de captura más
+  usado de la app dejó de ser el único sin validación.
+- Devoluciones: el input libre ya recibe `clienteId`/`modelo` (antes se adjuntaba con
+  `{}`, así que "otro cliente" **no podía dispararse**), y los campos de check-in por
+  modelo se decoran también.
+- Batch POC: el preview avisa qué seriales del lote **figuran con otro cliente**, con
+  link a la ficha. Es el equivalente masivo de SerialField; el modelo lo sigue
+  mandando el contrato.
+
+**Guardias.** `functions/test/poolChipsYAcciones.test.js` (6 tests, en `npm test`)
+congela los dos invariantes que se rompen solos: que todo estado de `ESTADO_LABELS`
+tenga su color en `ceco-ui.css`, y que la columna de acciones no vuelva a ser un muro
+de iconos sin etiqueta. Verificado que fallan al reintroducir cada defecto.

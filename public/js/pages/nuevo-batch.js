@@ -213,9 +213,63 @@
       const aviso = problemas.length
         ? `<div class="preview-aviso">⚠ ${problemas.join(' · ')}. Corrige abajo antes de guardar — edita los grupos o usa "a todo el modelo" para copiarlos.</div>`
         : `<div class="preview-ok">✅ ${detallesBatch.length} equipos · seriales alineados y grupos completos</div>`;
-      preview.innerHTML = `${datalist}${aviso}<table>
+      preview.innerHTML = `${datalist}${aviso}<div id="previewPoolAviso"></div><table>
         <thead><tr><th>#</th><th>Serial</th><th>Nombre</th><th>Modelo</th><th>GPS</th><th>Grupos (editables)</th></tr></thead>
         <tbody>${filas}</tbody></table>`;
+      avisarSerialesAjenos(seriales);
+    }
+
+    // Aviso de seriales AJENOS (auditoría 2026-08-04, R3). Este es el único
+    // punto de captura masiva sin ninguna señal del pool, y es donde más ha
+    // costado: un serial de otro cliente pegado en el lote crea un device POC
+    // a nombre equivocado (incidentes Sociedad Israelita / Municipio). El
+    // modelo lo sigue mandando el CONTRATO —esa regla no cambia—; esto solo
+    // añade "ojo, este radio figura con otro cliente". Best-effort y asíncrono:
+    // si el pool no está o la consulta falla, el preview queda igual que antes.
+    async function avisarSerialesAjenos(seriales) {
+      const caja = document.getElementById('previewPoolAviso');
+      if (!caja || typeof EquiposPoolService === 'undefined') return;
+      const clienteId = document.getElementById('cliente')?.value || '';
+      if (!clienteId) return;
+
+      const norms = [...new Set((seriales || [])
+        .map(s => EquiposPoolService.normalizarSerial(s))
+        .filter(n => n && EquiposPoolService.esSerialValido(n)))];
+      if (!norms.length) { caja.innerHTML = ''; return; }
+
+      const docs = [];
+      try {
+        const db = firebase.firestore();
+        for (let i = 0; i < norms.length; i += 10) {
+          const snap = await db.collection('equipos_pool')
+            .where('serial_norm', 'in', norms.slice(i, i + 10)).get();
+          snap.docs.forEach(d => docs.push(d.data()));
+        }
+      } catch (e) { return; }
+
+      const ajenos = docs.filter(d => d.asignacion?.cliente_id
+        && d.asignacion.cliente_id !== clienteId);
+      if (!ajenos.length) { caja.innerHTML = ''; return; }
+
+      const esc2 = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      const filasAj = ajenos.slice(0, 12).map(d => `
+        <li style="margin:2px 0;">
+          <a href="#" data-ficha="${esc2(d.serial || d.serial_norm)}" style="font-family:var(--font-mono,monospace);color:inherit;">${esc2(d.serial || d.serial_norm)}</a>
+          — figura con <b>${esc2(d.asignacion.cliente_nombre || 'otro cliente')}</b>
+        </li>`).join('');
+      caja.innerHTML = `
+        <div class="preview-aviso" style="text-align:left;">
+          ⚠ ${ajenos.length} serial(es) de este lote figuran en el inventario con OTRO cliente.
+          Verifica que no se hayan colado radios ajenos antes de guardar.
+          <ul style="margin:6px 0 0; padding-left:18px;">${filasAj}</ul>
+          ${ajenos.length > 12 ? `<div style="margin-top:4px;">…y ${ajenos.length - 12} más.</div>` : ''}
+        </div>`;
+      caja.onclick = (ev) => {
+        const a = ev.target.closest('[data-ficha]');
+        if (!a) return;
+        ev.preventDefault();
+        window.EquipoFicha?.abrir(a.getAttribute('data-ficha'));
+      };
     }
 
     // ── Edición de grupos en el preview (global para los onclick inline) ──────

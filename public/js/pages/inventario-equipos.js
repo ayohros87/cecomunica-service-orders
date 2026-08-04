@@ -23,7 +23,7 @@ window.EquiposPool = {
                      sinVerificar: false, compartidos: false, sinCliente: false },
 
   // Pestaña "Baja / Venta": estados que sacaron la unidad de la flota.
-  // devuelto_revision ya tiene pestaña propia ("Entradas").
+  // devuelto_revision ya tiene pestaña propia ("Por inspeccionar").
   ESTADOS_OTROS: ['baja', 'vendido'],
 
   // Etiquetas humanas del origen de la ficha (el valor crudo queda en title).
@@ -495,8 +495,8 @@ window.EquiposPool = {
         asignado_contrato: 'No hay unidades reservadas por contrato. Se asignan desde la página de Seriales del contrato (picker "Tomar del pool") y salen al confirmarse la entrega.',
         en_cliente: 'No hay unidades en clientes. Llegan aquí cuando la orden de programación se marca "Entregado al cliente".',
         en_taller: 'No hay unidades en taller. Entran al agregarse con serial a una orden de servicio y salen al entregarse.',
-        devuelto_revision: 'No hay entradas pendientes de inspección. Las devoluciones de clientes (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí; con "Inspección OK" regresan a bodega como reuso, o se dan de baja.',
-        por_clasificar: 'No hay unidades por clasificar. Aquí caen las que el sistema tenía en un cliente sin nada que lo respalde (ni contrato ni orden de servicio). No es una ubicación física: hay que encontrar el radio y moverlo a bodega, o asignarlo al contrato del cliente que lo tenga.',
+        devuelto_revision: 'No hay radios pendientes de inspección. Los que el cliente devolvió (cierre de enmienda, anulación de contrato o cambio por defectuoso) caen aquí al recibirse por una orden de ENTRADA; con "Inspección OK" regresan a bodega como Refurbished, o se dan de baja.',
+        por_clasificar: 'No hay unidades por clasificar. Aquí caen las que el sistema tenía en un cliente sin nada que lo respalde (ni contrato ni orden de servicio). No es una ubicación física: hay que encontrar el radio — si aparece en bodega se registra con "Corregir estado"; si lo tiene un cliente, se asigna en Seriales de su contrato.',
         otros: 'No hay unidades dadas de baja ni vendidas. Las ventas directas (facturadas en QuickBooks) se registran con "Registrar venta" para descontarlas de bodega; una baja hecha por error se revierte con "Revivir equipo".',
       };
       const hayFiltros = !!(fAct.q || fAct.mod || fAct.prop || fAct.sinVerificar || fAct.compartidos || fAct.sinCliente);
@@ -527,29 +527,19 @@ window.EquiposPool = {
           ? `<span class="eq-sub" title="Registrado en la plataforma POC (device ${esc(eq.poc_device_id)})">POC</span>` : '';
         const asignadoA = (linkCliente + linkContrato + linkOrden + tagPoc) || '—';
         const compartido = eq.serial_compartido
-          ? `<span class="eq-compartido" title="Este serial existe en más de un modelo — verifica el modelo antes de operar">2+ MODELOS</span>` : '';
+          ? `<span class="eqpool-compartido" title="Este serial existe en más de un modelo — verifica el modelo antes de operar. Se resuelve en la pestaña Conflictos.">2+ modelos</span>` : '';
         const noVerif = eq.verificado === false
-          ? `<span class="eq-noverif" title="Creado por migración automática — pendiente de confirmación">SIN VERIFICAR</span>` : '';
-        const acciones = [
-          `<button class="btn btn-ghost btn-icon btn-sm" title="Historia (kardex)" onclick="EquiposPool.abrirHistoria('${esc(eq.id)}')"><i data-lucide="history"></i></button>`,
-          (puede && eq.verificado === false) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Marcar como verificado" onclick="EquiposPool.verificar('${esc(eq.id)}')"><i data-lucide="badge-check"></i></button>` : '',
-          puede ? `<button class="btn btn-ghost btn-icon btn-sm" title="Editar" onclick="EquiposPool.abrirEdicion('${esc(eq.id)}')"><i data-lucide="pencil"></i></button>` : '',
-          (puede && eq.estado === 'devuelto_revision') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Inspección OK → regresa a bodega" onclick="EquiposPool.inspeccionOk('${esc(eq.id)}')"><i data-lucide="check-circle-2"></i></button>` : '',
-          (puede && eq.estado === 'en_bodega') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Registrar venta (facturada en QuickBooks)" onclick="EquiposPool.abrirVenta('${esc(eq.id)}')"><i data-lucide="banknote"></i></button>` : '',
-          (puede && !['baja', 'vendido'].includes(eq.estado)) ? `<button class="btn btn-danger btn-icon btn-sm" title="Dar de baja" onclick="EquiposPool.darDeBaja('${esc(eq.id)}')"><i data-lucide="archive-x"></i></button>` : '',
-          (puede && eq.estado === 'baja') ? `<button class="btn btn-ghost btn-icon btn-sm" title="Revivir equipo (baja por error) → regresa a bodega" onclick="EquiposPool.revivir('${esc(eq.id)}')"><i data-lucide="archive-restore"></i></button>` : '',
-          (puede && (eq.origen || '').startsWith('migracion') && ['asignado_contrato', 'en_cliente', 'en_taller'].includes(eq.estado)) ? `<button class="btn btn-ghost btn-icon btn-sm" title="Corregir estado heredado de la migración → En bodega" onclick="EquiposPool.abrirCorregir('${esc(eq.id)}')"><i data-lucide="pencil-ruler"></i></button>` : '',
-        ].join('');
+          ? `<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">Sin verificar</span>` : '';
         const prop = eq.propiedad || 'desconocida';
         return `<tr>
           <td class="td-mono">${esc(eq.serial || eq.serial_norm)}${compartido}${noVerif}</td>
           <td>${esc(eq.modelo_label || '—')}</td>
           <td>${eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</td>
-          <td><span class="eq-prop eq-prop-${esc(prop)}" title="${prop === 'cecomunica' ? 'Flota propia de Cecomunica' : prop === 'cliente' ? 'Equipo propiedad del cliente' : 'Propiedad sin clasificar'}">${esc(this.PROP_LABELS[prop] || prop)}</span></td>
-          <td><span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>${this._listoParaEntrega(eq) ? `<span class="eqpool-chip" style="background:#e9f7f0;color:#067647;display:inline-block;margin-top:3px;" title="La orden ya está COMPLETADO (EN OFICINA) — el radio está terminado; falta registrar la entrega al cliente">→ listo para entrega</span>` : ''}${EquiposPoolService.chipPendienteDevolucionHtml(eq)}${eq.reemplaza_a ? `<span class="eq-sub" title="Linaje: esta unidad sustituyó a la anterior en una renovación/reemplazo">reemplaza a ${esc(eq.reemplaza_a)}</span>` : ''}</td>
+          <td><span class="eqpool-prop eqpool-prop-${esc(prop)}" title="${prop === 'cecomunica' ? 'Flota propia de Cecomunica' : prop === 'cliente' ? 'Equipo propiedad del cliente' : 'Propiedad sin clasificar'}">${esc(this.PROP_LABELS[prop] || prop)}</span></td>
+          <td><span class="eqpool-chip eqpool-chip-lg eqpool-chip-${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] ? eq.estado : 'desconocido')}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>${this._listoParaEntrega(eq) ? `<span class="eqpool-chip" style="background:#e9f7f0;color:#067647;display:inline-block;margin-top:3px;" title="La orden ya está COMPLETADO (EN OFICINA) — el radio está terminado; falta registrar la entrega al cliente">→ listo para entrega</span>` : ''}${EquiposPoolService.chipPendienteDevolucionHtml(eq)}${eq.reemplaza_a ? `<span class="eq-sub" title="Linaje: esta unidad sustituyó a la anterior en una renovación/reemplazo">reemplaza a ${esc(eq.reemplaza_a)}</span>` : ''}</td>
           <td>${asignadoA}</td>
           <td style="font-size:12px; color:var(--fg-3);" title="${esc(eq.origen || '')}">${esc(this.ORIGEN_LABELS[eq.origen] || eq.origen || '—')}</td>
-          <td>${acciones}</td>
+          <td>${this._accionesHtml(eq, puede)}</td>
         </tr>`;
       }).join('');
     }
@@ -559,6 +549,104 @@ window.EquiposPool = {
       `<strong>${lista.length}</strong> <span style="color:var(--muted);font-size:12px;">equipos mostrados</span>`;
     this._guardarFiltros();
     if (typeof lucide !== 'undefined') lucide.createIcons();
+  },
+
+  // ── Acciones de fila: 1 CTA contextual + menú ⋯ ──────────────────────
+  // Auditoría 2026-08-04 (R1): antes eran hasta 7 botones SOLO-ICONO cuyo
+  // conjunto cambiaba fila por fila — con dos pares de iconos casi gemelos y
+  // semántica opuesta (pencil/pencil-ruler, archive-x/archive-restore). La
+  // columna no se podía escanear: la 3ª posición significaba algo distinto en
+  // cada fila. Se adopta el patrón ya probado en contratos (contratos-list.js):
+  // el SIGUIENTE PASO de esta unidad sale con texto, y todo lo demás vive en un
+  // menú con icono + etiqueta.
+  //
+  // Precedencia de la CTA = qué desbloquea esta unidad, de más urgente a menos:
+  //   1) Entrada por inspeccionar → Inspección OK (vacía la cola de entradas)
+  //   2) Ubicación desconocida    → Corregir estado (hay que ir a buscarla)
+  //   3) Estado heredado de migración dudoso → Corregir estado
+  //   4) Ficha sin verificar      → Verificar
+  //   5) Dada de baja             → Revivir
+  //   6) resto                    → Historia (siempre hay algo que mirar)
+  _accionesHtml(eq, puede) {
+    const esc = FMT.esc;
+    const id = esc(eq.id);
+    const esMigracionDudosa = (eq.origen || '').startsWith('migracion')
+      && ['asignado_contrato', 'en_cliente', 'en_taller'].includes(eq.estado);
+    const puedeCorregir = puede && (eq.estado === 'por_clasificar' || esMigracionDudosa);
+
+    // white-space:nowrap — sin esto "Inspección OK" y "Corregir estado" parten
+    // en dos líneas y la fila crece; la columna está dimensionada para una.
+    const B = (icon, label, onclick, { css = '', title = '' } = {}) =>
+      `<button class="btn btn-sm" style="white-space:nowrap; ${css}" onclick="${onclick}" title="${esc(title)}"><i data-lucide="${icon}" style="width:14px;height:14px;flex:none;"></i> ${esc(label)}</button>`;
+    const ambar = 'background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;';
+    const verde = 'background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;';
+
+    let cta = '', kind = '';
+    if (puede && eq.estado === 'devuelto_revision') {
+      kind = 'inspeccion';
+      cta = B('check-circle-2', 'Inspección OK', `EquiposPool.inspeccionOk('${id}')`,
+        { css: verde, title: 'Pasó inspección: regresa a bodega como disponible (Refurbished)' });
+    } else if (puedeCorregir) {
+      kind = 'corregir';
+      cta = B('pencil-ruler', 'Corregir estado', `EquiposPool.abrirCorregir('${id}')`,
+        { css: ambar, title: eq.estado === 'por_clasificar'
+            ? 'Ubicación desconocida: si la encontraste en bodega, regístralo aquí'
+            : 'Estado heredado de la migración: corrígelo a En bodega si físicamente está ahí' });
+    } else if (puede && eq.verificado === false) {
+      kind = 'verificar';
+      cta = B('badge-check', 'Verificar', `EquiposPool.verificar('${id}')`,
+        { css: ambar, title: 'Confirmar con el equipo a la vista que esta ficha de migración es correcta' });
+    } else if (puede && eq.estado === 'baja') {
+      kind = 'revivir';
+      cta = B('archive-restore', 'Revivir', `EquiposPool.revivir('${id}')`,
+        { title: 'Baja registrada por error: la unidad regresa a bodega' });
+    } else {
+      kind = 'historia';
+      cta = B('history', 'Historia', `EquiposPool.abrirHistoria('${id}')`,
+        { title: 'Kardex: todos los movimientos de esta unidad' });
+    }
+
+    const items = [];
+    const I = (icon, label, onclick, cls = '') =>
+      `<button class="overflow-menu-item ${cls}" onclick="${onclick}"><i data-lucide="${icon}"></i> ${esc(label)}</button>`;
+
+    if (kind !== 'historia') items.push(I('history', 'Historia (kardex)', `EquiposPool.abrirHistoria('${id}')`));
+    if (puede) items.push(I('pencil', 'Editar ficha (modelo, propiedad, notas)', `EquiposPool.abrirEdicion('${id}')`));
+    if (puede && eq.verificado === false && kind !== 'verificar')
+      items.push(I('badge-check', 'Marcar como verificado', `EquiposPool.verificar('${id}')`));
+    if (puede && eq.estado === 'devuelto_revision' && kind !== 'inspeccion')
+      items.push(I('check-circle-2', 'Inspección OK → a bodega', `EquiposPool.inspeccionOk('${id}')`));
+    if (puedeCorregir && kind !== 'corregir')
+      items.push(I('pencil-ruler', 'Corregir estado → En bodega', `EquiposPool.abrirCorregir('${id}')`));
+    if (puede && eq.estado === 'en_bodega')
+      items.push(I('banknote', 'Registrar venta de esta unidad', `EquiposPool.abrirVenta('${id}')`));
+    if (puede && eq.estado === 'baja' && kind !== 'revivir')
+      items.push(I('archive-restore', 'Revivir equipo → a bodega', `EquiposPool.revivir('${id}')`));
+    if (puede && !['baja', 'vendido'].includes(eq.estado)) {
+      items.push('<div class="overflow-menu-divider"></div>');
+      items.push(I('archive-x', 'Dar de baja', `EquiposPool.darDeBaja('${id}')`, 'danger'));
+    }
+
+    const menu = items.length
+      ? `<div class="overflow-menu">
+           <button class="overflow-menu-btn" onclick="EquiposPool.toggleMenu('${id}')" title="Más acciones" aria-label="Más acciones" aria-haspopup="true">⋯</button>
+           <div class="overflow-menu-dropdown" id="eq-menu-${id}">${items.join('')}</div>
+         </div>`
+      : '';
+    return `<div style="display:flex; align-items:center; gap:4px;">${cta}${menu}</div>`;
+  },
+
+  toggleMenu(id) {
+    const menu = document.getElementById(`eq-menu-${id}`);
+    if (!menu) return;
+    const abierto = menu.classList.contains('open');
+    this.cerrarMenus();
+    if (!abierto) menu.classList.add('open');
+  },
+
+  cerrarMenus() {
+    document.querySelectorAll('.overflow-menu-dropdown.open[id^="eq-menu-"]')
+      .forEach(m => m.classList.remove('open'));
   },
 
   // ── Recibir equipos ──────────────────────────────────────────────────
@@ -664,7 +752,7 @@ window.EquiposPool = {
   async inspeccionOk(id) {
     const eq = this._equipos.find(x => x.id === id);
     if (!await Modal.confirm({
-      message: `El equipo ${eq?.serial || id} pasó inspección y regresa a bodega como disponible (condición: reuso). ¿Confirmar?`,
+      message: `El equipo ${eq?.serial || id} pasó inspección y regresa a bodega como disponible (condición: Refurbished). ¿Confirmar?`,
     })) return;
     try {
       await EquiposPoolService.liberar(id, { notas: 'Inspección OK tras devolución' }, firebase.auth().currentUser);
@@ -712,10 +800,12 @@ window.EquiposPool = {
     }
   },
 
-  // ── Corregir estado heredado de la migración ─────────────────────────
+  // ── Corregir estado → En bodega ──────────────────────────────────────
   // Único destino: En bodega. La matriz de casos vive en el comentario de
   // EquiposPoolService.corregirABodega — todos los demás estados reales se
   // registran por su flujo normal (contrato/orden/POC), que arma los vínculos.
+  // Dos entradas (misma corrección, motivo distinto): estado heredado de la
+  // migración, y unidad "Por clasificar" que apareció físicamente en bodega.
   _corrigiendoId: null,
 
   abrirCorregir(id) {
@@ -726,7 +816,16 @@ window.EquiposPool = {
     const esc = FMT.esc;
     document.getElementById('corrSerialLabel').textContent = eq.serial || eq.serial_norm;
     document.getElementById('corrEstadoActual').innerHTML =
-      `<span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>`;
+      EquiposPoolService.chipEstadoHtml(eq.estado);
+
+    // El "por qué estás aquí" cambia según de dónde venga la unidad.
+    const intro = document.getElementById('corrIntro');
+    if (intro) {
+      intro.innerHTML = eq.estado === 'por_clasificar'
+        ? 'Esta unidad estaba <strong>Por clasificar</strong>: el sistema no tenía contrato ni orden que respaldara dónde estaba. '
+          + 'Usa esta corrección solo si <strong>la encontraste físicamente en bodega</strong>.'
+        : 'Para unidades que la migración dejó con un estado equivocado y que <strong>físicamente están en bodega</strong>.';
+    }
 
     // Vínculos que la corrección va a limpiar — con link para arreglar también
     // la FUENTE: si sigue mintiendo (serial en el contrato/orden), una
@@ -1026,7 +1125,7 @@ window.EquiposPool = {
     const esc = FMT.esc;
     document.getElementById('histSerialLabel').textContent = eq.serial || eq.serial_norm;
     document.getElementById('histResumen').innerHTML = `
-      <span class="eq-badge eq-badge-${esc(eq.estado)}">${esc(EquiposPoolService.ESTADO_LABELS[eq.estado] || eq.estado)}</span>
+      ${EquiposPoolService.chipEstadoHtml(eq.estado)}
       <span style="font-size:13px; color:var(--fg-2); margin-left:8px;">${esc(eq.modelo_label || 'sin modelo')}</span>
       ${eq.asignacion ? `<span class="eq-sub" style="display:inline; margin-left:8px;">${esc(eq.asignacion.cliente_nombre || '')} · ${esc(eq.asignacion.contrato_id || '')}</span>` : ''}`;
     const cont = document.getElementById('histMovimientos');
@@ -1404,6 +1503,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sel && famKey && [...sel.options].some(o => o.value === famKey)) sel.value = famKey;
       }
     }
+
+    // Cierre del menú ⋯ de fila: al pulsar un item (tras ejecutar su acción),
+    // al hacer click fuera de cualquier menú, o con ESC. Mismo comportamiento
+    // que el menú de acciones de contratos.
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.overflow-menu-item')) { EquiposPool.cerrarMenus(); return; }
+      if (!e.target.closest('.overflow-menu')) EquiposPool.cerrarMenus();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') EquiposPool.cerrarMenus();
+    });
 
     await EquiposPool.cargar();
   });

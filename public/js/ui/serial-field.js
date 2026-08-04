@@ -112,9 +112,11 @@ window.SerialField = {
       }
 
       if (docs.length > 1) {
-        chip(`⚠ ${docs.length} fichas con este serial — elegir`,
+        // "2+ modelos" = el mismo nombre que usa la fila de Inventario, la
+        // ficha del equipo y la pestaña Conflictos (auditoría 2026-08-04, A4).
+        chip(`⚠ 2+ modelos (${docs.length} fichas) — elegir`,
           'background:#fee2e2; color:#b91c1c;',
-          'El serial existe en más de una ficha (modelos en conflicto). Click para ver y elegir.');
+          'Este serial existe en más de una ficha, con modelos distintos. Click para ver y elegir; se resuelve en Inventario · pestaña Conflictos.');
         if (opts.onInfo) opts.onInfo({ docs, unidad: null });
         return;
       }

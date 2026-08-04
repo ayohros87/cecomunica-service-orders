@@ -686,9 +686,30 @@
     // SerialField: antes de recibir, el chip dice de quién es y dónde figura
     // el radio según el pool (clave cuando llegan radios revueltos de varios
     // clientes) — el check-in no se bloquea, solo se informa.
-    const inpLibre = _overlay.querySelector('#devSerialLibre');
-    if (inpLibre && typeof SerialField !== 'undefined' && typeof EquiposPoolService !== 'undefined') {
-      SerialField.adjuntar(inpLibre, {});
+    //
+    // Auditoría 2026-08-04 (R3): se adjuntaba SIN opciones, así que los chips
+    // "⚠ otro cliente" y "modelo distinto" no podían dispararse nunca —
+    // justo los dos avisos que este flujo necesita. Ahora se le pasa el cliente
+    // de la orden, y se decoran TAMBIÉN los campos de check-in por modelo, que
+    // no tenían ninguna señal del pool.
+    if (typeof SerialField !== 'undefined' && typeof EquiposPoolService !== 'undefined') {
+      const clienteId = () => _orden?.cliente_id || null;
+      const inpLibre = _overlay.querySelector('#devSerialLibre');
+      if (inpLibre) {
+        const inpModeloLibre = _overlay.querySelector('#devModeloLibre');
+        SerialField.adjuntar(inpLibre, {
+          clienteId,
+          modelo: () => ({ modelo_id: null, modelo_label: inpModeloLibre?.value || '' }),
+        });
+      }
+      const porModeloDev = _orden?.devolucion?.esperados_por_modelo || [];
+      _overlay.querySelectorAll('.dev-serial-modelo').forEach(inp => {
+        const m = porModeloDev[Number(inp.dataset.idx)] || {};
+        SerialField.adjuntar(inp, {
+          clienteId,
+          modelo: () => ({ modelo_id: m.modelo_id || null, modelo_label: m.modelo || '' }),
+        });
+      });
     }
 
     // Bloque de acuse: canvas + toggle sin-firma + guardar.

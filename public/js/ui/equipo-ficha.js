@@ -119,8 +119,10 @@ window.EquipoFicha = {
       EquiposPoolService.chipEstadoHtml(eq.estado),
       (typeof EquiposPoolService.chipPendienteDevolucionHtml === 'function'
         ? EquiposPoolService.chipPendienteDevolucionHtml(eq) : ''),
-      eq.serial_compartido ? '<span class="eqpool-chip" style="background:#fef3c7;color:#92400e;" title="Este serial existe en más de una ficha — verifica el modelo">2+ MODELOS</span>' : '',
-      eq.verificado === false ? '<span class="eqpool-chip" style="background:#f1f5f9;color:#64748b;" title="Creado por migración automática — pendiente de confirmación física">SIN VERIFICAR</span>' : '',
+      // Mismas clases y MISMO texto que en Inventario y junto a los inputs
+      // (auditoría 2026-08-04, A4: una condición con cuatro nombres distintos).
+      eq.serial_compartido ? '<span class="eqpool-compartido" title="Este serial existe en más de una ficha — verifica el modelo. Se resuelve en Inventario · pestaña Conflictos.">2+ modelos</span>' : '',
+      eq.verificado === false ? '<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación física">Sin verificar</span>' : '',
     ].join(' ');
 
     const meta = [

@@ -127,7 +127,7 @@ window.HomeSignals = (() => {
     },
     S13: {
       modulo: 'equipos', icon: 'package-search', moreIsBad: true,
-      label: 'Entradas por inspeccionar', sub: 'regresaron de cliente, esperan inspección',
+      label: 'Devueltos por inspeccionar', sub: 'regresaron de cliente, esperan inspección',
       href: 'inventario/equipos.html?tab=devuelto_revision',
       count: () => SenalesService.countEquiposPoolPorEstado('devuelto_revision'),
     },

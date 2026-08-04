@@ -10,7 +10,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Asignar seriales - Cecomunica</title>
-  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc18">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -49,9 +49,14 @@
   <div class="cc-work">
   <div id="topbar-mount"></div>
   <script>
+    // El botón Volver es DINÁMICO (auditoría 2026-08-04, R7): esta página vive
+    // bajo /contratos/ pero su usuario principal es el rol `inventario`, que no
+    // tiene el módulo Contratos (modulos.js) — mandarlo a la lista de contratos
+    // era un callejón sin salida. volverDeSeriales() lo define
+    // contrato-seriales-page.js una vez que conoce el rol.
     Layout.renderTopbar({
       title: '<i data-lucide="scan-barcode"></i> Asignar seriales',
-      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', onclick: 'volverDeSeriales()' },
       showHome: true,
       homeHref: '../index.html',
       showLogout: true
@@ -63,7 +68,9 @@
     <nav class="app-breadcrumbs" aria-label="Breadcrumb">
       <a href="../index.html">Inicio</a>
       <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
-      <a href="index.html">Contratos</a>
+      <!-- El crumb intermedio lo ajusta contrato-seriales-page.js según el rol
+           (Contratos, o Inventario · Equipos para el rol inventario). -->
+      <a href="index.html" id="bc-modulo">Contratos</a>
       <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
       <span class="app-breadcrumbs-current" id="bc-contrato-id">—</span>
     </nav>
@@ -80,9 +87,10 @@
 
     <p style="margin:0 0 16px; font-size:13px; color:var(--fg-3);">
       <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;"></i>
-      Asigna un serial a cada unidad. Puedes <b>copiar una columna desde Excel y pegarla</b>
-      (sobre la primera casilla o con “Pegar columna”). Si una unidad no llevará serial,
-      marca <b>“Sin serial”</b> y escribe el motivo.
+      Una unidad, un serial. Lo normal es <b>“Tomar del pool”</b> (reserva radios que están en bodega);
+      también puedes teclear, escanear o pegar una columna de Excel. Si una unidad no llevará serial,
+      marca <b>“Sin serial”</b> y escribe el motivo. Al terminar, <b>Guardar</b> deja el avance;
+      <b>Confirmar</b> envía a activaciones y cierra la edición.
     </p>
 
     <div id="serialesBody"></div>
@@ -103,13 +111,19 @@
     </div>
   </div>
 
-  <script src="../js/pages/contrato-seriales-page.js" defer></script>
+  <script src="../js/pages/contrato-seriales-page.js?v=cc18" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
-    // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('contratos'));
+    // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del
+    // rol efectivo. El rol `inventario` no tiene el módulo Contratos, así que su
+    // rail se marca en Equipos (R7, auditoría 2026-08-04).
+    document.addEventListener('DOMContentLoaded', () => {
+      verificarAccesoYAplicarVisibilidad((rol) => {
+        Layout.initRail(rol === 'inventario' ? 'equipos' : 'contratos');
+      });
+    });
   </script>
 </body>
 </html>
