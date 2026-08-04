@@ -15,18 +15,36 @@
 
 :root{
   --cc-rail-w:236px;
+  --cc-rail-mini-w:64px;
+  /* Ancho reservado para la columna del rail. El valor real lo fija
+     <html data-cc-rail="full|mini"> en tiempo de parse (js/core/layout.js,
+     síncrono en el <head>). */
+  --cc-rail-cur:var(--cc-rail-w);
   --cc-navy-700:#0F3A5F; --cc-navy-800:#0B2A47; --cc-navy-900:#061829; --cc-navy-950:#03101C;
   --cc-cyan-400:#43AAEF; --cc-blue-500:#0091D7;
 }
+html[data-cc-rail="mini"]{--cc-rail-cur:var(--cc-rail-mini-w)}
 
 /* ---- Grid del shell ----
-   Sin rail montado (pre-auth) la página ocupa todo el ancho; renderRail
-   añade .has-rail. El usuario puede contraerlo a modo mini (64px, solo
-   iconos) — persistido en localStorage (cc_rail_mini). */
-.cc-app{display:grid;grid-template-columns:1fr;min-height:100vh}
-.cc-app.has-rail{grid-template-columns:var(--cc-rail-w) 1fr}
-.cc-app.has-rail.rail-mini{grid-template-columns:64px 1fr}
+   La columna del rail se reserva desde el PRIMER paint: renderRail solo
+   monta el rail cuando resuelve la auth (onAuthStateChanged + lectura de
+   usuarios/{uid}), y si el ancho dependiera de eso la página se pintaría
+   a todo el ancho y saltaría al llegar el rail.
+   El modo mini (solo iconos) se persiste por navegador en localStorage
+   (cc_rail_mini) y se lee en el parse, así tampoco salta 236px→64px.
+   .has-rail / .rail-mini las sigue poniendo layout.js sobre .cc-app; ya no
+   determinan el ancho (lo hace --cc-rail-cur) y se conservan por si algún
+   estilo de página se apoya en ellas. */
+.cc-app{display:grid;grid-template-columns:var(--cc-rail-cur) 1fr;min-height:100vh}
 .cc-work{min-width:0}
+
+/* Marcador de posición: pinta la columna reservada con el fondo del rail
+   mientras renderRail no ha reemplazado el nodo (si no, se vería un hueco
+   blanco del ancho del rail durante la auth). */
+#rail-mount{
+  background:var(--cc-navy-900) radial-gradient(circle at 1px 1px,rgba(120,200,255,.10) 1px,transparent 0) 0 64px/22px 22px;
+  border-right:1px solid var(--cc-navy-950);
+}
 
 /* Con rail visible (solo desktop), la marca del topbar viejo es redundante.
    Scoped a .cc-work: el monograma del rail (BRAND_MARK) comparte la clase
@@ -139,7 +157,7 @@
 }
 @media (max-width:1024px){
   .cc-app,.cc-app.has-rail,.cc-app.has-rail.rail-mini{grid-template-columns:1fr}
-  .rail,.rail-scrim{display:none}
+  .rail,.rail-scrim,#rail-mount{display:none}
   .os-kpis.estado-chips-bar,
   .os-kpis{display:none}
 }

@@ -7,6 +7,19 @@
      'home'   — root home page: logout only, no home link
    ============================================================= */
 
+/* Estado del rail en tiempo de PARSE (este archivo se carga síncrono en el
+   <head> de todas las páginas): marca <html data-cc-rail="full|mini"> para
+   que el CSS reserve la columna del rail en el primer paint. Sin esto la
+   página se pintaba a todo el ancho y solo al montarse el rail —después de
+   onAuthStateChanged + la lectura de usuarios/{uid}— saltaba a su ancho
+   final; los usuarios con el rail contraído sufrían además un segundo salto
+   (236px→64px) al leerse localStorage. */
+(() => {
+  let mini = false;
+  try { mini = localStorage.getItem('cc_rail_mini') === '1'; } catch { /* sin storage */ }
+  document.documentElement.setAttribute('data-cc-rail', mini ? 'mini' : 'full');
+})();
+
 const Layout = (() => {
 
   // CeComunica monogram — acabado completo (placa navy con volumen,
@@ -233,13 +246,15 @@ const Layout = (() => {
     if (railMount) railMount.outerHTML = railHtml;
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
-    // Con rail montado, el grid abre su columna (.has-rail). Modo mini
-    // (solo iconos) persistido por usuario del navegador en localStorage.
+    // El ancho de la columna lo manda <html data-cc-rail> (fijado ya en el
+    // parse, arriba); aquí solo se sincroniza al alternar. Modo mini (solo
+    // iconos) persistido por usuario del navegador en localStorage.
     const appEl = document.querySelector('.cc-app') || document.querySelector('.app');
     const railEl = document.getElementById('ccRail');
     const collapseBtn = document.getElementById('ccRailCollapse');
     const MINI_KEY = 'cc_rail_mini';
     const applyMini = (mini) => {
+      document.documentElement.setAttribute('data-cc-rail', mini ? 'mini' : 'full');
       appEl?.classList.toggle('rail-mini', mini);
       railEl?.classList.toggle('rail--mini', mini);
     };
