@@ -101,13 +101,19 @@ test("cada fila expone UNA CTA con texto, nunca un muro de iconos", () => {
   assert.ok(page && typeof page._accionesHtml === "function", "no se cargó EquiposPool._accionesHtml");
 
   const casos = [
-    { nombre: "entrada por inspeccionar", eq: { id: "A1", estado: "devuelto_revision" }, cta: "Inspección OK" },
-    { nombre: "por clasificar",           eq: { id: "A2", estado: "por_clasificar" },     cta: "Corregir estado" },
-    { nombre: "migración dudosa",         eq: { id: "A3", estado: "en_cliente", origen: "migracion_contrato" }, cta: "Corregir estado" },
-    { nombre: "sin verificar",            eq: { id: "A4", estado: "en_bodega", verificado: false }, cta: "Verificar" },
-    { nombre: "dada de baja",             eq: { id: "A5", estado: "baja" },               cta: "Revivir" },
-    { nombre: "en bodega, nada urgente",  eq: { id: "A6", estado: "en_bodega" },          cta: "Historia" },
-    { nombre: "en cliente, nada urgente", eq: { id: "A7", estado: "en_cliente" },         cta: "Historia" },
+    { nombre: "devuelto por inspeccionar", eq: { id: "A1", estado: "devuelto_revision" }, cta: "Inspección OK" },
+    { nombre: "por clasificar",            eq: { id: "A2", estado: "por_clasificar" },     cta: "Corregir estado" },
+    // "Sin verificar" cubre 5,378 de 6,735 fichas: es el residuo de la
+    // migración, no una cola. Va al menú, nunca a la CTA.
+    { nombre: "sin verificar",             eq: { id: "A4", estado: "en_bodega", verificado: false }, cta: "Historia" },
+    { nombre: "dada de baja",              eq: { id: "A5", estado: "baja" },               cta: "Historia" },
+    { nombre: "en bodega, nada urgente",   eq: { id: "A6", estado: "en_bodega" },          cta: "Historia" },
+    { nombre: "en cliente, nada urgente",  eq: { id: "A7", estado: "en_cliente" },         cta: "Historia" },
+    // La regresión de 2026-08-04: una unidad migrada que está con su cliente es
+    // el estado NORMAL del pool (3,646 de 6,735 fichas). Si vuelve a la
+    // precedencia de la CTA, la columna se llena de ámbar y deja de leerse.
+    { nombre: "migrada y con su cliente",  eq: { id: "A3", estado: "en_cliente", origen: "migracion_contrato" }, cta: "Historia" },
+    { nombre: "migrada y en taller",       eq: { id: "A8", estado: "en_taller", origen: "migracion_orden" },     cta: "Historia" },
   ];
 
   for (const { nombre, eq, cta } of casos) {
@@ -139,6 +145,51 @@ test("sin permiso de escritura la fila solo ofrece la Historia", () => {
   for (const prohibido of ["Inspección OK", "Dar de baja", "Editar ficha", "Verificar", "Registrar venta"]) {
     assert.ok(!html.includes(prohibido), `se filtró una acción de escritura: ${prohibido}`);
   }
+});
+
+// CENSO REAL del pool — cruce estado × verificado, contado contra producción el
+// 2026-08-04 (6,735 fichas). Está aquí porque una CTA de aviso solo comunica si
+// es MINORÍA, y eso no se puede juzgar con casos sueltos: hay que pesarlos por
+// cuántas fichas caen en cada forma. Dos veces seguidas una precedencia que
+// parecía sensata resultó cubrir ~80% de la tabla.
+//   1ª: "origen migración + en cliente/taller" → 5,224 filas (78%)
+//   2ª: "verificado === false"                 → 5,378 filas (80%)
+// Si el pool cambia de forma, actualiza estos números con una query real; no
+// los inventes, que es justo lo que falló.
+const CENSO_POOL = [
+  // [estado, verificado, n, origen]
+  ["en_cliente",        false, 3244, "migracion_poc"],
+  ["por_clasificar",    false, 1575, "migracion_poc"],
+  ["en_bodega",         true,  1204, "bodega"],
+  ["en_taller",         false,  311, "migracion_orden"],
+  ["devuelto_revision", false,  124, "migracion_contrato"],
+  ["en_taller",         true,   107, "bodega"],
+  ["en_bodega",         false,   97, "migracion_contrato"],
+  ["en_cliente",        true,    35, "bodega"],
+  ["asignado_contrato", false,   17, "migracion_contrato"],
+  ["vendido",           false,   10, "venta"],
+  ["baja",              true,     5, "bodega"],
+  ["por_clasificar",    true,     3, "bodega"],
+  ["asignado_contrato", true,     2, "bodega"],
+  ["vendido",           true,     1, "venta"],
+];
+
+test("la CTA de aviso es minoría — no puede volver a inundar la tabla", () => {
+  const page = cargarPagina();
+  let total = 0, conCta = 0;
+  const culpables = [];
+  for (const [estado, verificado, n, origen] of CENSO_POOL) {
+    const html = page._accionesHtml({ id: "x", estado, origen, verificado }, true);
+    const esNeutra = /(?:>|<\/i>) Historia<\/button>/.test(html);
+    total += n;
+    if (!esNeutra) { conCta += n; culpables.push(`${estado}/${verificado ? "verif" : "noVerif"}=${n}`); }
+  }
+  assert.equal(total, 6735, "el censo debe sumar el total contado en producción");
+  const pct = (conCta / total) * 100;
+  assert.ok(pct < 35,
+    `la CTA de aviso saldría en ${pct.toFixed(0)}% de las filas (${conCta}/${total}): ` +
+    `${culpables.join(", ")}. Por encima de ~1 de cada 3 deja de leerse como aviso — ` +
+    "esa condición es un FILTRO, no una CTA. La fila normal debe ser neutra (Historia).");
 });
 
 test("la acción destructiva va al final del menú y marcada como danger", () => {

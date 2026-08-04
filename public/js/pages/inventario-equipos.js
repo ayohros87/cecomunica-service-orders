@@ -560,13 +560,24 @@ window.EquiposPool = {
   // el SIGUIENTE PASO de esta unidad sale con texto, y todo lo demás vive en un
   // menú con icono + etiqueta.
   //
-  // Precedencia de la CTA = qué desbloquea esta unidad, de más urgente a menos:
-  //   1) Entrada por inspeccionar → Inspección OK (vacía la cola de entradas)
-  //   2) Ubicación desconocida    → Corregir estado (hay que ir a buscarla)
-  //   3) Estado heredado de migración dudoso → Corregir estado
-  //   4) Ficha sin verificar      → Verificar
-  //   5) Dada de baja             → Revivir
-  //   6) resto                    → Historia (siempre hay algo que mirar)
+  // Precedencia de la CTA. REGLA: la CTA sale SOLO si la unidad está en una
+  // cola de trabajo real — algo que un humano tiene que decidir. Si no, la fila
+  // es neutra (Historia) y todo lo aplicable vive en el menú.
+  //   1) Devuelto por inspeccionar → Inspección OK   (124 fichas)
+  //   2) Ubicación desconocida     → Corregir estado (1,578 — hay que buscarla)
+  //   3) resto                     → Historia (neutra)
+  //
+  // Los dos descartes salen de MEDIR contra el pool real (censo 2026-08-04,
+  // 6,735 fichas), no de intuición:
+  //   · "origen migración + en cliente/taller" → 5,224 filas (78%). Una unidad
+  //     migrada que está con su cliente y con contrato que lo respalda no tiene
+  //     nada que corregir: es el estado NORMAL del pool tras la migración.
+  //   · "verificado === false" → 5,378 filas (80%). Verificar es el residuo de
+  //     la migración, no una cola: es la condición por defecto del dato, y una
+  //     ficha sin verificar se usa igual. Además 5,378 confirmaciones de a una
+  //     por menú no es un flujo — eso pide selección múltiple, no una CTA.
+  // Ambas siguen disponibles en el menú. Regla para el futuro: si la condición
+  // cubre más de ~1 de cada 3 filas, NO es CTA — es un filtro.
   _accionesHtml(eq, puede) {
     const esc = FMT.esc;
     const id = esc(eq.id);
@@ -586,20 +597,10 @@ window.EquiposPool = {
       kind = 'inspeccion';
       cta = B('check-circle-2', 'Inspección OK', `EquiposPool.inspeccionOk('${id}')`,
         { css: verde, title: 'Pasó inspección: regresa a bodega como disponible (Refurbished)' });
-    } else if (puedeCorregir) {
+    } else if (puede && eq.estado === 'por_clasificar') {
       kind = 'corregir';
       cta = B('pencil-ruler', 'Corregir estado', `EquiposPool.abrirCorregir('${id}')`,
-        { css: ambar, title: eq.estado === 'por_clasificar'
-            ? 'Ubicación desconocida: si la encontraste en bodega, regístralo aquí'
-            : 'Estado heredado de la migración: corrígelo a En bodega si físicamente está ahí' });
-    } else if (puede && eq.verificado === false) {
-      kind = 'verificar';
-      cta = B('badge-check', 'Verificar', `EquiposPool.verificar('${id}')`,
-        { css: ambar, title: 'Confirmar con el equipo a la vista que esta ficha de migración es correcta' });
-    } else if (puede && eq.estado === 'baja') {
-      kind = 'revivir';
-      cta = B('archive-restore', 'Revivir', `EquiposPool.revivir('${id}')`,
-        { title: 'Baja registrada por error: la unidad regresa a bodega' });
+        { css: ambar, title: 'Ubicación desconocida: si la encontraste en bodega, regístralo aquí' });
     } else {
       kind = 'historia';
       cta = B('history', 'Historia', `EquiposPool.abrirHistoria('${id}')`,
@@ -612,7 +613,7 @@ window.EquiposPool = {
 
     if (kind !== 'historia') items.push(I('history', 'Historia (kardex)', `EquiposPool.abrirHistoria('${id}')`));
     if (puede) items.push(I('pencil', 'Editar ficha (modelo, propiedad, notas)', `EquiposPool.abrirEdicion('${id}')`));
-    if (puede && eq.verificado === false && kind !== 'verificar')
+    if (puede && eq.verificado === false)
       items.push(I('badge-check', 'Marcar como verificado', `EquiposPool.verificar('${id}')`));
     if (puede && eq.estado === 'devuelto_revision' && kind !== 'inspeccion')
       items.push(I('check-circle-2', 'Inspección OK → a bodega', `EquiposPool.inspeccionOk('${id}')`));
@@ -620,7 +621,9 @@ window.EquiposPool = {
       items.push(I('pencil-ruler', 'Corregir estado → En bodega', `EquiposPool.abrirCorregir('${id}')`));
     if (puede && eq.estado === 'en_bodega')
       items.push(I('banknote', 'Registrar venta de esta unidad', `EquiposPool.abrirVenta('${id}')`));
-    if (puede && eq.estado === 'baja' && kind !== 'revivir')
+    // Revivir NO es CTA: una baja correcta es terminal, revertirla es la
+    // excepción. Vive en el menú para que no compita con las colas reales.
+    if (puede && eq.estado === 'baja')
       items.push(I('archive-restore', 'Revivir equipo → a bodega', `EquiposPool.revivir('${id}')`));
     if (puede && !['baja', 'vendido'].includes(eq.estado)) {
       items.push('<div class="overflow-menu-divider"></div>');
