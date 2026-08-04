@@ -52,9 +52,18 @@ window.HomeSignals = (() => {
     },
     S4: {
       modulo: 'ordenes', icon: 'package-check',
-      label: 'Completadas (en oficina)', sub: 'listas para entregar',
+      label: 'Completadas (en oficina)', sub: 'terminadas en el taller',
       href: 'ordenes/index.html',
       count: () => SenalesService.countOrdenesPorEstado(EST.COMPLETADO),
+    },
+    // El subconjunto de S4 que NO puede entregarse: el candado de QC lo
+    // impide hasta que el jefe de taller firme. S4 decía "listas para
+    // entregar" y contaba también estas.
+    S4Q: {
+      modulo: 'ordenes', icon: 'clipboard-check',
+      label: 'Esperando control de calidad', sub: 'no pueden entregarse aún',
+      href: 'ordenes/index.html?qc=1',
+      count: () => SenalesService.countOrdenesQcPendiente(),
     },
     S5: {
       modulo: 'ordenes', icon: 'wrench',
@@ -133,10 +142,14 @@ window.HomeSignals = (() => {
   // Rol efectivo → señales (máx. 4). Cada señal pasa ADEMÁS por el gate de
   // módulo, así un error en esta lista nunca muestra datos de un módulo
   // que el rol no ve.
+  // admin y jefe_taller ven S4Q (esperando QC) en lugar de S4 (completadas):
+  // son los dos roles que pueden firmar el QC, así que la cola bloqueada es
+  // accionable para ellos mientras que el total de completadas no lo es.
+  // Recepción conserva S4 — entrega, pero no puede desbloquear.
   const POR_ROL = {
-    administrador:     ['S1', 'S3', 'S4', 'S6'],
+    administrador:     ['S1', 'S3', 'S4Q', 'S6'],
     gerente:           ['S1', 'S10', 'S6', 'S8'],
-    jefe_taller:       ['S1', 'S3', 'S4', 'S6'],
+    jefe_taller:       ['S1', 'S3', 'S4Q', 'S6'],
     recepcion:         ['S1', 'S2', 'S4', 'S8'],
     vendedor:          ['S7', 'S8', 'S1', 'S4'],
     tecnico:           ['S5', 'S4P'],

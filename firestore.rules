@@ -47,6 +47,18 @@ service cloud.firestore {
         && request.auth.token.email.lower()
              in get(/databases/$(database)/documents/empresa/config).data.get("cotizaciones_supervisores", []);
     }
+    // Suplencia del control de calidad del taller. El QC lo firma jefe_taller
+    // (hoy una sola persona: si falta, la cola de entregas se detiene porque
+    // nadie más puede aprobar). Los emails en empresa/config.qc_revisores_extra
+    // pueden firmar QC sin cambiar de rol — mismo patrón de allowlist que
+    // cotizaciones_supervisores y seriales_editores_extra. La UI
+    // (ordenes-qc.js: puedeHacerQc) lee la misma lista.
+    function esRevisorQcExtra() {
+      return isSignedIn()
+        && ("email" in request.auth.token)
+        && request.auth.token.email.lower()
+             in get(/databases/$(database)/documents/empresa/config).data.get("qc_revisores_extra", []);
+    }
     // Gestión de seriales del contrato (subcolecciones seriales/seriales_estado/
     // seriales_historial). Refleja el permiso 'gestionar-seriales' de roles.js.
     // Cierra el hueco por el que CUALQUIER autenticado podía escribir seriales.
@@ -339,12 +351,75 @@ service cloud.firestore {
           || (de == "COMPLETADO (EN OFICINA)" && a == "ENTREGADO AL CLIENTE"
               && resource.data.get("tipo_de_servicio", "") != "ENTRADA"
               && (resource.data.get("qc_requerido", false) != true
-                  || resource.data.get("qc", {}).get("resultado", "") == "aprobado"))
+                  || (resource.data.get("qc", {}).get("resultado", "") == "aprobado"
+                      && qcCubreLosEquipos())))
           // Rechazo de QC: única reversa permitida del flujo — el MISMO write
           // debe estampar qc.resultado='rechazado' (saveQcRechazado) y la
-          // orden vuelve al técnico para corrección.
+          // orden vuelve al técnico para corrección. Exigir que el write TOQUE
+          // `qc` es lo que hace real esa condición: sin ello bastaba con que el
+          // doc arrastrara un rechazo VIEJO (los `set(…,{merge:true})` reenvían
+          // el campo intacto) para que cualquier rol devolviera la orden al
+          // técnico sin una nueva pasada de QC. Y como tocar `qc` exige
+          // jefe_taller/admin (qcFieldsUntouchedOrJefe), la reversa vuelve a ser
+          // exclusiva de quien puede rechazar.
           || (de == "COMPLETADO (EN OFICINA)" && a == "ASIGNADO"
-              && request.resource.data.get("qc", {}).get("resultado", "") == "rechazado");
+              && request.resource.data.get("qc", {}).get("resultado", "") == "rechazado"
+              && request.resource.data.diff(resource.data).affectedKeys().hasAny(["qc"]));
+      }
+      // El QC aprobado cubre los equipos que tenía la orden CUANDO se firmó:
+      // saveQcAprobado estampa qc.equipos_n con ese conteo. "Agregar equipo" y
+      // "Nuevo batch" siguen disponibles en COMPLETADO, así que sin esta
+      // comparación se podía aprobar el QC de 5 radios, sumar un batch de 10 y
+      // entregar los 15 con la leyenda "QC aprobado" en la nota — 10 de ellos
+      // sin revisar. Al cambiar el conteo el QC caduca y hay que repetirlo.
+      // equipos_n ausente (-1) = aprobado antes de este cambio: se acepta para
+      // no bloquear las órdenes que ya estaban esperando entrega.
+      function qcCubreLosEquipos() {
+        let n = resource.data.get("qc", {}).get("equipos_n", -1);
+        return n == -1 || n == resource.data.get("equipos", []).size();
+      }
+      // Una aprobación de QC debe traer el checklist completo. La UI ya
+      // deshabilita "Aprobar" hasta marcar todos los puntos (OK o N/A), pero
+      // eso vivía SOLO en el botón: un write directo podía estampar
+      // qc.resultado='aprobado' con checklist vacío y la nota de entrega
+      // igual imprimía la leyenda ante el cliente.
+      // ⚠️ Los mínimos espejan QC_CHECKLISTS en ordenes-qc.js (programación 5
+      // ítems, reparación 4). Si agregas ítems allá, súbelos aquí.
+      // Solo se evalúa en el write que TOCA `qc`: un `set(…,{merge:true})`
+      // reenvía el campo intacto en cada edición posterior de la orden, así
+      // que sin este corte la validación se aplicaría también a la entrega y
+      // a cualquier otra escritura sobre una orden ya aprobada.
+      function qcAprobadoTraeChecklist() {
+        let qc = request.resource.data.get("qc", {});
+        let n = qc.get("checklist", {}).keys().size();
+        return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["qc"])
+          || qc.get("resultado", "") != "aprobado"
+          || (qc.get("tipo", "") == "programacion" ? n >= 5 : n >= 4);
+      }
+      // qc_requerido es la marca que enciende el candado. Queda FUERA del guard
+      // de campos de QC porque la estampa completeOrder, que corren también
+      // técnicos y recepción — pero solo puede encenderse, nunca apagarse: si
+      // no, bastaban dos escrituras para saltarse el control (1: qc_requerido a
+      // false con el estado intacto; 2: pasar a ENTREGADO, porque el candado
+      // lee `resource.data`, ya sin la marca). La excepción es ENTRADA, que
+      // completa con qcRequerido:false por diseño (cierra sin entrega).
+      // Admin queda exento por el OR de isAdmin() en el allow.
+      function qcRequeridoNoSeApaga() {
+        return resource.data.get("qc_requerido", false) != true
+          || request.resource.data.get("qc_requerido", false) == true
+          || request.resource.data.get("tipo_de_servicio", "") == "ENTRADA";
+      }
+      // La otra mitad del mismo candado: al COMPLETAR, la marca tiene que
+      // quedar encendida. Sin esto el bypass seguía en pie en un solo write
+      // (completar y desactivar el control a la vez), porque qcRequeridoNoSeApaga
+      // mira el documento PREVIO, que todavía no traía la marca.
+      // Excepciones: ENTRADA (cierra sin entrega) y las órdenes que YA estaban
+      // en COMPLETADO antes del corte, que se siguen editando sin la marca.
+      function qcMarcaAlCompletar() {
+        return request.resource.data.get("estado_reparacion", "") != "COMPLETADO (EN OFICINA)"
+          || resource.data.get("estado_reparacion", "") == "COMPLETADO (EN OFICINA)"
+          || request.resource.data.get("qc_requerido", false) == true
+          || request.resource.data.get("tipo_de_servicio", "") == "ENTRADA";
       }
       // Los campos de QC (resultado vigente + historial) solo los escriben
       // jefe_taller/admin — el resto de roles puede seguir editando la orden
@@ -353,7 +428,8 @@ service cloud.firestore {
       function qcFieldsUntouchedOrJefe() {
         return !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(["qc", "qc_historial"])
-          || userRole() in ["administrador", "jefe_taller"];
+          || userRole() in ["administrador", "jefe_taller"]
+          || esRevisorQcExtra();
       }
       // DEVOLUCIÓN — el acuse firmado es el papel que se lleva el cliente, y su
       // copia (devolucion.acuses[].unidades) dice exactamente qué accesorios
@@ -379,7 +455,9 @@ service cloud.firestore {
         && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"];
       allow update: if isSignedIn()
         && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"]
-        && (isAdmin() || (ordenTransicionLegal() && qcFieldsUntouchedOrJefe() && devolucionAppendOnly()));
+        && (isAdmin() || (ordenTransicionLegal() && qcFieldsUntouchedOrJefe()
+                          && qcAprobadoTraeChecklist() && qcRequeridoNoSeApaga()
+                          && qcMarcaAlCompletar() && devolucionAppendOnly()));
       // El cliente nunca hace hard-delete de una orden a nivel doc (verificado:
       // solo borra líneas de la subcolección `consumos`; los borrados de orden
       // pasan por consola/admin SDK y la CF onOrdenHardDelete limpia después).

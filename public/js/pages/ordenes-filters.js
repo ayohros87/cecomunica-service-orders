@@ -76,8 +76,9 @@ function getActiveFilters() {
   const filtroEstado = (document.getElementById("filtroEstado")?.value || "").toString().trim().toUpperCase();
   const filtroTecnico = normTxt(document.getElementById("filtroTecnico")?.value || "");
   const soloMias = !!document.getElementById("toggleMisOrdenes")?.checked;
+  const soloQcPendiente = !!document.getElementById("filtroQcPendiente")?.checked;
 
-  return { filtroOrden, filtroCliente, filtroSerial, filtroTipo, filtroEstado, filtroTecnico, soloMias };
+  return { filtroOrden, filtroCliente, filtroSerial, filtroTipo, filtroEstado, filtroTecnico, soloMias, soloQcPendiente };
 }
 
 function hasActiveFilters(filters) {
@@ -88,7 +89,8 @@ function hasActiveFilters(filters) {
     filters.filtroTipo ||
     filters.filtroEstado ||
     filters.filtroTecnico ||
-    filters.soloMias
+    filters.soloMias ||
+    filters.soloQcPendiente
   );
 }
 
@@ -119,6 +121,13 @@ function matchesAdvancedFilters(order, filters) {
 
   if (filters.filtroEstado && estado !== filters.filtroEstado) return false;
   if (filters.soloMias && !esOrdenMia(order)) return false;
+  // Cola de control de calidad: completadas que no pueden entregarse hasta
+  // que el QC quede aprobado. Las ENTRADA cierran sin QC, así que no son cola.
+  if (filters.soloQcPendiente) {
+    const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(order);
+    const pendiente = typeof OrdenesQC !== 'undefined' && OrdenesQC.qcPendiente(order);
+    if (esEntrada || !pendiente || estado !== "COMPLETADO (EN OFICINA)") return false;
+  }
 
   return true;
 }
@@ -221,6 +230,7 @@ function _syncFiltersToURL() {
     if (val) params.set(key, val);
   }
   if (document.getElementById('toggleMisOrdenes')?.checked) params.set('mias', '1');
+  if (document.getElementById('filtroQcPendiente')?.checked) params.set('qc', '1');
   const sortField = APP.state.sortField;
   if (sortField && sortField !== 'ordenId') params.set('sort', sortField);
   if (APP.state.sortAscending) params.set('asc', '1');
@@ -250,6 +260,12 @@ function _applyURLToFilters() {
     if (t) { t.checked = true; touched = true; }
     const m = document.getElementById('mobileSoloMias');
     if (m) m.checked = true;
+  }
+  // ?qc=1 — cola de control de calidad. Es el destino del CTA del correo
+  // diario (recordatorioOperativo, sección D) y de la señal del home.
+  if (params.get('qc') === '1') {
+    const q = document.getElementById('filtroQcPendiente');
+    if (q) { q.checked = true; touched = true; }
   }
   if (params.has('sort')) {
     APP.state.sortField = params.get('sort');

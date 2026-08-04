@@ -65,6 +65,13 @@ document.addEventListener("DOMContentLoaded", function () {
       APP.state.userId = user.uid || null;
       APP.state.userRole = rol;
 
+      // Allowlist de suplentes de QC (empresa/config.qc_revisores_extra) —
+      // puedeHacerQc() la consulta desde el render SÍNCRONO de botones, así
+      // que debe estar cargada antes de pintar la primera lista.
+      if (typeof OrdenesQC !== 'undefined') {
+        try { await OrdenesQC.precargarRevisoresExtra(); } catch (e) { /* falla cerrado */ }
+      }
+
       const shouldDefaultMine = [ROLES.TECNICO, ROLES.TECNICO_OPERATIVO].includes(rol);
       if (shouldDefaultMine) {
         const toggleMis = document.getElementById("toggleMisOrdenes");

@@ -38,6 +38,33 @@ const SenalesService = {
     );
   },
 
+  /**
+   * Órdenes completadas que el candado de QC no deja entregar (ordenes-qc.js).
+   * NO usa count(): el criterio ("aprobado y además cubriendo los equipos
+   * actuales") no se puede expresar en una query, así que trae los docs con la
+   * marca —volumen bajo por el corte del 2026-07-21— y filtra en cliente.
+   * @returns {Promise<number>}
+   */
+  async countOrdenesQcPendiente() {
+    const db = firebase.firestore();
+    const snap = await db.collection('ordenes_de_servicio')
+      .where('qc_requerido', '==', true).get();
+    let n = 0;
+    snap.forEach(doc => {
+      const o = doc.data() || {};
+      if (o.eliminado === true) return;
+      if ((o.estado_reparacion || '') !== 'COMPLETADO (EN OFICINA)') return;
+      // Las ENTRADA cierran sin QC ni entrega: no son cola de nadie.
+      if ((o.tipo_de_servicio || '') === 'ENTRADA') return;
+      const aprobado = o.qc?.resultado === 'aprobado';
+      const eq = o.qc?.equipos_n;
+      const caducado = aprobado && typeof eq === 'number'
+        && eq !== (Array.isArray(o.equipos) ? o.equipos.length : 0);
+      if (!aprobado || caducado) n++;
+    });
+    return n;
+  },
+
   countMisOrdenes(uid, estado) {
     const db = firebase.firestore();
     return this._count(

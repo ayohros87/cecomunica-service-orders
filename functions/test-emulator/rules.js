@@ -101,9 +101,16 @@ async function main() {
   ok("ordenes: POR ASIGNAR → ENTREGADO directo bloqueado (no-admin)");
   await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "RECIBIDO EN MOSTRADOR" }, { merge: true }));
   await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
-  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "COMPLETADO (EN OFICINA)" }, { merge: true }));
+  // Completar estampa qc_requerido:true — es lo que hace completeOrder, y las
+  // reglas ahora lo exigen (si no, se podía completar apagando el control).
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "COMPLETADO (EN OFICINA)", qc_requerido: true }, { merge: true }));
+  // …y con la marca puesta, la entrega pasa por el QC del jefe de taller.
+  await assertFails(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  await assertSucceeds(as("jefe_taller").doc("ordenes_de_servicio/oFlow").set({
+    qc: { resultado: "aprobado", tipo: "reparacion", checklist: { a: "ok", b: "ok", c: "ok", d: "ok" } },
+  }, { merge: true }));
   await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/oFlow").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
-  ok("ordenes: cadena recibir→asignar→completar→entregar pasa");
+  ok("ordenes: cadena recibir→asignar→completar→QC→entregar pasa");
   await assertFails(as("recepcion").doc("ordenes_de_servicio/oTerm").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
   ok("ordenes: reabrir ENTREGADO bloqueado para no-admin");
   await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oTerm").set({ estado_reparacion: "ASIGNADO" }, { merge: true }));
@@ -230,6 +237,89 @@ async function main() {
   ok("ordenes: ENTRADA NO puede entregarse al cliente ni con QC aprobado");
   await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oRepQc").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
   ok("ordenes: REPARACIÓN con QC aprobado sí se entrega (no se rompió el flujo)");
+
+  // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
+  const COMPLETADO = "COMPLETADO (EN OFICINA)";
+  const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("ordenes_de_servicio/" + id).set({
+      estado_reparacion: COMPLETADO, tipo_de_servicio: "REPARACIÓN", qc_requerido: true, ...data });
+  });
+
+  // A1 — el candado se apagaba en DOS escrituras: primero qc_requerido:false
+  // con el estado intacto, después la entrega (la regla lee resource.data, ya
+  // sin la marca). Ahora la marca solo puede encenderse.
+  await seedOrden("qcA1", {});
+  await assertFails(as("tecnico").doc("ordenes_de_servicio/qcA1").set({ qc_requerido: false }, { merge: true }));
+  ok("qc: qc_requerido NO se puede apagar (cierra el bypass de dos escrituras)");
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/qcA1").set({ observaciones: "x" }, { merge: true }));
+  ok("qc: el guard no estorba a los demás campos de la orden");
+  // La excepción legítima: una ENTRADA completa con qcRequerido:false.
+  await seedOrden("qcA1Ent", { tipo_de_servicio: "ENTRADA" });
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/qcA1Ent").set({ qc_requerido: false }, { merge: true }));
+  ok("qc: ENTRADA sí puede completar con qc_requerido:false (cierra sin entrega)");
+
+  // A1bis — el mismo bypass en UN write: completar desactivando el control.
+  // qcRequeridoNoSeApaga mira el doc PREVIO (que aún no traía la marca), así
+  // que hacía falta exigirla en la propia transición a COMPLETADO.
+  await seedOrden("qcA1uno", { estado_reparacion: "ASIGNADO", qc_requerido: false });
+  await assertFails(as("tecnico").doc("ordenes_de_servicio/qcA1uno")
+    .set({ estado_reparacion: COMPLETADO, qc_requerido: false }, { merge: true }));
+  ok("qc: no se puede completar desactivando el control en el mismo write");
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/qcA1uno")
+    .set({ estado_reparacion: COMPLETADO, qc_requerido: true }, { merge: true }));
+  ok("qc: completar con la marca encendida (completeOrder) pasa");
+  await seedOrden("qcA1unoEnt", { estado_reparacion: "ASIGNADO", tipo_de_servicio: "ENTRADA", qc_requerido: false });
+  await assertSucceeds(as("tecnico").doc("ordenes_de_servicio/qcA1unoEnt")
+    .set({ estado_reparacion: COMPLETADO, qc_requerido: false }, { merge: true }));
+  ok("qc: una ENTRADA sí completa sin marca (cierra sin entrega)");
+  // Las completadas ANTES del corte no tienen la marca y se siguen editando.
+  await seedOrden("qcA1legacy", { qc_requerido: false });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/qcA1legacy")
+    .set({ observaciones: "edición sobre legacy" }, { merge: true }));
+  ok("qc: las completadas legacy (sin marca) se siguen editando");
+
+  // A2 — "aprobado" con checklist vacío: la exigencia vivía solo en el botón.
+  await seedOrden("qcA2", {});
+  await assertFails(as("jefe_taller").doc("ordenes_de_servicio/qcA2")
+    .set({ qc: { resultado: "aprobado", tipo: "reparacion", checklist: {} } }, { merge: true }));
+  ok("qc: aprobar con checklist vacío se rechaza");
+  await assertFails(as("jefe_taller").doc("ordenes_de_servicio/qcA2")
+    .set({ qc: { resultado: "aprobado", tipo: "programacion",
+      checklist: { a: "ok", b: "ok", c: "ok", d: "ok" } } }, { merge: true }));
+  ok("qc: programación exige sus 5 ítems (4 no alcanzan)");
+  await assertSucceeds(as("jefe_taller").doc("ordenes_de_servicio/qcA2")
+    .set({ qc: { resultado: "aprobado", tipo: "reparacion",
+      checklist: { a: "ok", b: "ok", c: "na", d: "ok" } } }, { merge: true }));
+  ok("qc: reparación con sus 4 ítems se aprueba");
+
+  // A3 — la reversa exigía qc.resultado='rechazado' en request.resource, pero
+  // un `merge` arrastra el rechazo VIEJO: cualquier rol devolvía la orden al
+  // técnico sin nueva pasada. Ahora el write tiene que TOCAR qc.
+  await seedOrden("qcA3", { qc: { resultado: "rechazado" } });
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/qcA3")
+    .set({ observaciones: "y", estado_reparacion: "ASIGNADO" }, { merge: true }));
+  ok("qc: un rechazo viejo ya no permite devolver la orden a ASIGNADO");
+  await assertSucceeds(as("jefe_taller").doc("ordenes_de_servicio/qcA3")
+    .set({ estado_reparacion: "ASIGNADO",
+      qc: { resultado: "rechazado", tipo: "reparacion", motivos: ["gps"] } }, { merge: true }));
+  ok("qc: el jefe de taller sí rechaza y devuelve la orden en el mismo write");
+
+  // A4 — el QC aprobado cubre los equipos que había al firmar: agregar un
+  // batch después lo caduca. equipos_n ausente = firmado antes del cambio.
+  await seedOrden("qcA4", { equipos: [{ s: 1 }, { s: 2 }],
+    qc: { resultado: "aprobado", equipos_n: 2 } });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/qcA4")
+    .set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  ok("qc: con el conteo de equipos intacto la entrega pasa");
+  await seedOrden("qcA4b", { equipos: [{ s: 1 }, { s: 2 }, { s: 3 }],
+    qc: { resultado: "aprobado", equipos_n: 2 } });
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/qcA4b")
+    .set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  ok("qc: agregar equipos después de aprobar CADUCA el QC y bloquea la entrega");
+  await seedOrden("qcA4c", { equipos: [{ s: 1 }], qc: { resultado: "aprobado" } });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/qcA4c")
+    .set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
+  ok("qc: las aprobadas sin equipos_n (corte legacy) siguen entregándose");
 
   // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {

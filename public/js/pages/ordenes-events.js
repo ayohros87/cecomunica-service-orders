@@ -355,6 +355,20 @@
         if (sel) sel.value = '';
         limpiarFiltros();
       }
+    },
+    // Cola de control de calidad (ordenes-qc.js): subconjunto de las
+    // completadas que el candado no deja entregar. Es un toggle propio, no un
+    // estado, así que limpia el filtro de estado para no cruzarse con él.
+    'filtrar-qc': () => {
+      const cb = document.getElementById('filtroQcPendiente');
+      if (!cb) return;
+      cb.checked = !cb.checked;
+      if (cb.checked) {
+        const sel = document.getElementById('filtroEstado');
+        if (sel) sel.value = '';
+        if (typeof syncEstadoChipsFromSelect === 'function') syncEstadoChipsFromSelect();
+      }
+      aplicarFiltrosCombinados();
     }
   };
   

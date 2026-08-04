@@ -155,12 +155,14 @@ window.entregarOrden = function (ordenId) {
   // ejecutar el QC se le abre directamente el checklist.
   const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
   if (typeof OrdenesQC !== 'undefined' && OrdenesQC.qcPendiente(orden)) {
-    const rol = APP.state.userRole || '';
-    if (OrdenesQC.puedeHacerQc(rol)) {
-      Toast.show('Esta orden requiere control de calidad antes de entregarse', 'bad');
+    const msg = OrdenesQC.qcCaducado(orden)
+      ? 'El QC aprobado caducó: cambiaron los equipos de la orden. Hay que repetirlo.'
+      : 'Esta orden requiere control de calidad antes de entregarse';
+    if (OrdenesQC.puedeHacerQc(APP.state.userRole || '')) {
+      Toast.show(msg, 'bad');
       OrdenesQC.abrir(ordenId);
     } else {
-      Toast.show('⛔ Pendiente de control de calidad (jefe de taller) antes de la entrega', 'bad');
+      Toast.show('⛔ ' + msg + ' (jefe de taller)', 'bad');
     }
     return;
   }

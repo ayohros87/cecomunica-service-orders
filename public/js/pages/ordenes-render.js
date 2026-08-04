@@ -717,8 +717,11 @@ function _qcPendiente(od) {
 
 function _btnEntregar(ordenId, od) {
   const bloqueado = _qcPendiente(od);
+  const caducado  = typeof OrdenesQC !== 'undefined' && OrdenesQC.qcCaducado(od);
   const cls   = bloqueado ? ' btn-flujo--bloqueado' : '';
-  const title = bloqueado ? 'Requiere control de calidad aprobado' : 'Entregar al cliente';
+  const title = caducado
+    ? 'El QC aprobado caducó: cambiaron los equipos de la orden'
+    : (bloqueado ? 'Requiere control de calidad aprobado' : 'Entregar al cliente');
   return `<button class="btn-flujo btn-flujo--entregar${cls}" title="${title}" data-action="entregar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="send"></i> Entregar</button>`;
 }
 
@@ -736,6 +739,10 @@ function _btnQc(ordenId, od, rol) {
   if (typeof OrdenesQC === 'undefined' || !OrdenesQC.puedeHacerQc(rol)) return '';
   if (OrdenesQC.qcAprobado(od)) {
     return `<button class="btn-flujo btn-flujo--qc-ok" title="Ver control de calidad aprobado" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-check"></i> Ver QC</button>`;
+  }
+  // Caducado = hubo una aprobación pero cambiaron los equipos desde la firma.
+  if (OrdenesQC.qcCaducado(od)) {
+    return `<button class="btn-flujo btn-flujo--qc" title="El QC caducó: cambiaron los equipos de la orden" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-check"></i> Repetir QC</button>`;
   }
   return `<button class="btn-flujo btn-flujo--qc" title="Realizar control de calidad" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-check"></i> QC</button>`;
 }
@@ -1061,6 +1068,14 @@ function actualizarResumen(lista) {
   const completadoOficina  = fullList.filter(o => _statusOf(o) === "COMPLETADO (EN OFICINA)").length;
   const entregadoCliente   = fullList.filter(o => _statusOf(o) === "ENTREGADO AL CLIENTE").length;
   const cerradaVisita      = fullList.filter(o => _statusOf(o) === "CERRADA (VISITA)").length;
+  // Cola de control de calidad: completadas que el candado no deja entregar.
+  // Es un subconjunto de "completadas", no un estado — por eso va como chip
+  // aparte y no en la barra de estados. Sin esto, "Completadas (en oficina)"
+  // se leía como "listas para entregar" cuando parte no lo estaba.
+  const qcPendientes = fullList.filter(o =>
+    _statusOf(o) === "COMPLETADO (EN OFICINA)"
+    && !(typeof esOrdenEntrada === 'function' && esOrdenEntrada(o))
+    && typeof OrdenesQC !== 'undefined' && OrdenesQC.qcPendiente(o)).length;
 
   // Pump counts into BOTH estado chip bars (desktop #estadoChipsBar
    // and mobile #estadoChipsBarMobile). Selecting by .class instead
@@ -1086,7 +1101,8 @@ function actualizarResumen(lista) {
 
   const filtroEstadoSelect = document.getElementById("filtroEstado");
   const estadoActivo = filtroEstadoSelect ? filtroEstadoSelect.value : "";
-  const estadoLabel = estadoActivo || "Todos";
+  const qcActivo = !!document.getElementById("filtroQcPendiente")?.checked;
+  const estadoLabel = qcActivo ? "Pendientes de QC" : (estadoActivo || "Todos");
 
   el.innerHTML = `
     <div class="overflow-menu resumen-menu-wrap">
@@ -1102,6 +1118,7 @@ function actualizarResumen(lista) {
           <span class="badge completo ${estadoActivo === 'COMPLETADO (EN OFICINA)' ? 'active' : ''}" title="Click para filtrar: COMPLETADO (EN OFICINA)" data-action="filtrar-badge" data-estado="COMPLETADO (EN OFICINA)">${completadoOficina}</span>
           <span class="badge ${estadoActivo === 'ENTREGADO AL CLIENTE' ? 'active' : ''}" style="background:#bbf7d0;" title="Click para filtrar: ENTREGADO AL CLIENTE" data-action="filtrar-badge" data-estado="ENTREGADO AL CLIENTE">${entregadoCliente}</span>
           <span class="badge ${estadoActivo === 'CERRADA (VISITA)' ? 'active' : ''}" style="background:#a7f3d0;" title="Click para filtrar: CERRADA (VISITA)" data-action="filtrar-badge" data-estado="CERRADA (VISITA)">${cerradaVisita}</span>
+          ${qcPendientes ? `<span class="badge ${qcActivo ? 'active' : ''}" style="background:#fef3c7;color:#92400e;" title="Click para filtrar: pendientes de control de calidad" data-action="filtrar-qc">QC ${qcPendientes}</span>` : ''}
         </div>
       </div>
     </div>

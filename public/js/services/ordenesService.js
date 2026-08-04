@@ -4,6 +4,26 @@
  * Separates data access from UI logic
  */
 
+/**
+ * Cobertura de una pasada de control de calidad: cuántos equipos tenía la
+ * orden al firmarse y cuáles (por serial).
+ *
+ * ⚠️ El conteo NO filtra `eliminado` a propósito: la regla de entrega compara
+ * contra `equipos.size()` del documento, que tampoco puede filtrar. Filtrar
+ * aquí haría caducar el QC de toda orden que ya tuviera un equipo borrado.
+ * @param {Object} orden - Documento de la orden
+ * @returns {{equipos_n:number, seriales:string[]}}
+ */
+function qcCoberturaDe(orden) {
+  const equipos = Array.isArray(orden?.equipos) ? orden.equipos : [];
+  return {
+    equipos_n: equipos.length,
+    seriales: equipos
+      .map(e => String(e?.numero_de_serie || e?.serial || '').trim())
+      .filter(Boolean)
+  };
+}
+
 const OrdenesService = {
   /**
    * Internal helper: builds the orders query with role-based filtering
@@ -221,12 +241,20 @@ const OrdenesService = {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     const orden = (await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {};
+    const cobertura = qcCoberturaDe(orden);
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
       qc: {
         resultado: 'aprobado',
         tipo,
         checklist,
         observaciones,
+        // Qué cubrió esta firma. equipos_n lo compara la regla de entrega
+        // (qcCubreLosEquipos): si después se agregan equipos, el QC caduca.
+        // seriales deja el rastro de QUÉ unidades se revisaron — el checklist
+        // es por orden, así que sin esto una firma sobre 10 radios no podía
+        // decir cuáles.
+        equipos_n: cobertura.equipos_n,
+        seriales: cobertura.seriales,
         por_uid: user?.uid || '',
         por_email: user?.email || '',
         fecha: firebase.firestore.FieldValue.serverTimestamp()
@@ -235,7 +263,9 @@ const OrdenesService = {
       qc_historial: firebase.firestore.FieldValue.arrayUnion({
         resultado: 'aprobado',
         tipo,
+        checklist,
         observaciones,
+        equipos_n: cobertura.equipos_n,
         tecnico_uid: orden.tecnico_uid || '',
         tecnico: orden.tecnico_asignado || '',
         por_email: user?.email || '',
@@ -260,6 +290,7 @@ const OrdenesService = {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     const orden = (await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {};
+    const cobertura = qcCoberturaDe(orden);
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
       estado_reparacion: "ASIGNADO",
       qc: {
@@ -268,6 +299,8 @@ const OrdenesService = {
         checklist,
         motivos,
         observaciones,
+        equipos_n: cobertura.equipos_n,
+        seriales: cobertura.seriales,
         por_uid: user?.uid || '',
         por_email: user?.email || '',
         fecha: firebase.firestore.FieldValue.serverTimestamp()
@@ -275,8 +308,10 @@ const OrdenesService = {
       qc_historial: firebase.firestore.FieldValue.arrayUnion({
         resultado: 'rechazado',
         tipo,
+        checklist,
         motivos,
         observaciones,
+        equipos_n: cobertura.equipos_n,
         tecnico_uid: orden.tecnico_uid || '',
         tecnico: orden.tecnico_asignado || '',
         por_email: user?.email || '',

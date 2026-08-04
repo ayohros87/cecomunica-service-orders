@@ -28,7 +28,7 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<script defer src="../js/services/ordenesService.js?v=ent1"></script>
+<script defer src="../js/services/ordenesService.js?v=qc3"></script>
 <script defer src="../js/services/empresaService.js"></script>
 <script defer src="../js/services/usuariosService.js"></script>
 <script defer src="../js/services/mailService.js"></script>
@@ -43,19 +43,19 @@
 <script defer src="../js/ui/firmaPad.js?v=dev3"></script>
 <script defer src="../js/pages/ordenes-state.js?v=dev3"></script>
 <script defer src="../js/pages/ordenes-data.js"></script>
-<script defer src="../js/pages/ordenes-render.js?v=dev4"></script>
-<script defer src="../js/pages/ordenes-filters.js"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=ent1"></script>
-<script defer src="../js/pages/ordenes-qc.js?v=qc2"></script>
+<script defer src="../js/pages/ordenes-render.js?v=qc3"></script>
+<script defer src="../js/pages/ordenes-filters.js?v=qc3"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=qc3"></script>
+<script defer src="../js/pages/ordenes-qc.js?v=qc3"></script>
 <script defer src="../js/pages/ordenes-equipos.js"></script>
 <script defer src="../js/pages/ordenes-notas.js"></script>
 <script defer src="../js/pages/ordenes-visita.js"></script>
 <script defer src="../js/pages/ordenes-devolucion.js?v=dev6"></script>
 <script defer src="../js/pages/ordenes-ui.js"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
-<script defer src="../js/pages/ordenes-events.js?v=ent2"></script>
+<script defer src="../js/pages/ordenes-events.js?v=qc3"></script>
 <script src="/js/vendor/lucide.min.js"></script>
-<script defer src="../js/pages/ordenes-index.js"></script>
+<script defer src="../js/pages/ordenes-index.js?v=qc3"></script>
 </head>
 <body>
   <div class="cc-app">
@@ -294,6 +294,10 @@
         <span class="toggle-slider"></span>
         <span class="toggle-label">Mis órdenes</span>
       </label>
+      <!-- Cola de control de calidad. Sin control visible propio: lo togglean
+           el chip "QC n" del resumen (data-action="filtrar-qc") y ?qc=1 en la
+           URL (CTA del correo diario y señal del home). -->
+      <input type="checkbox" id="filtroQcPendiente" hidden>
       <div id="resumenOrdenes" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
   </div>

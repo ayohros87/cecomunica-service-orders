@@ -13,6 +13,11 @@
 //     manual por unidad (inspección OK / baja) y nada avisaba si nadie la hacía.
 //     Destinatario: recepción (email_recepcion o usuarios rol recepcion).
 //
+//  D) QC PENDIENTE: órdenes en COMPLETADO (EN OFICINA) que no pueden
+//     entregarse porque el control de calidad no está aprobado (o caducó al
+//     cambiar los equipos), hace >= empresa/config.qc_recordatorio_dias (3).
+//     La sección A no las ve: solo mira estados abiertos. Destinatario: taller.
+//
 // Solo correos (mail_queue → onMailQueued); no escribe en órdenes ni en el
 // pool. Un correo por sección por día, solo si hay filas.
 
@@ -28,6 +33,7 @@ const STALE_DIAS_DEFAULT = 10;
 const STALE_MAX_DEFAULT = 30;
 const ENTRADA_DIAS_DEFAULT = 7;
 const DEVOLUCION_SLA_DEFAULT = 15;
+const QC_DIAS_DEFAULT = 3;
 const MAX_FILAS = 30; // tope de filas por correo; el resto se resume
 
 function esc(v) {
@@ -65,13 +71,14 @@ module.exports = onSchedule(
     const now = new Date();
 
     // Config con fallbacks (nunca lanza).
-    let staleDias = STALE_DIAS_DEFAULT, staleMax = STALE_MAX_DEFAULT, entradaDias = ENTRADA_DIAS_DEFAULT, devolucionSla = DEVOLUCION_SLA_DEFAULT;
+    let staleDias = STALE_DIAS_DEFAULT, staleMax = STALE_MAX_DEFAULT, entradaDias = ENTRADA_DIAS_DEFAULT, devolucionSla = DEVOLUCION_SLA_DEFAULT, qcDias = QC_DIAS_DEFAULT;
     try {
       const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
       if (Number.isFinite(Number(cfg.orden_stale_dias)) && Number(cfg.orden_stale_dias) >= 1) staleDias = Number(cfg.orden_stale_dias);
       if (Number.isFinite(Number(cfg.orden_stale_max_dias)) && Number(cfg.orden_stale_max_dias) > staleDias) staleMax = Number(cfg.orden_stale_max_dias);
       if (Number.isFinite(Number(cfg.entrada_recordatorio_dias)) && Number(cfg.entrada_recordatorio_dias) >= 1) entradaDias = Number(cfg.entrada_recordatorio_dias);
       if (Number.isFinite(Number(cfg.devolucion_sla_dias)) && Number(cfg.devolucion_sla_dias) >= 1) devolucionSla = Number(cfg.devolucion_sla_dias);
+      if (Number.isFinite(Number(cfg.qc_recordatorio_dias)) && Number(cfg.qc_recordatorio_dias) >= 1) qcDias = Number(cfg.qc_recordatorio_dias);
     } catch (e) { /* defaults */ }
 
     // ── A) Órdenes estancadas ────────────────────────────────────────────
@@ -289,6 +296,76 @@ module.exports = onSchedule(
       });
     } catch (e) {
       logger.error("[recordatorioOperativo] sección devoluciones falló", { message: e.message });
+    }
+
+    // ── D) Órdenes esperando control de calidad ──────────────────────────
+    // La sección A solo mira estados ABIERTOS (POR ASIGNAR / RECIBIDO /
+    // ASIGNADO): una orden parada en COMPLETADO (EN OFICINA) esperando la
+    // firma de QC era invisible para todo el mundo, y el candado impide
+    // entregarla. Hoy el QC lo firma una sola persona, así que su ausencia
+    // detiene la cola en silencio.
+    try {
+      const snap = await db.collection("ordenes_de_servicio")
+        .where("qc_requerido", "==", true)
+        .limit(1000)
+        .get();
+
+      const esperando = [];
+      snap.forEach(d => {
+        const o = d.data() || {};
+        if (o.eliminado) return;
+        if ((o.estado_reparacion || "") !== "COMPLETADO (EN OFICINA)") return;
+        // Las ENTRADA cierran sin QC ni entrega (su terminal es CERRADA
+        // (ENTRADA)); no son cola de nadie aunque arrastren la marca.
+        if ((o.tipo_de_servicio || "") === "ENTRADA") return;
+        const aprobado = o.qc?.resultado === "aprobado";
+        // Un QC aprobado caduca si cambiaron los equipos desde la firma:
+        // vuelve a ser cola (mismo criterio que qcCaducado en ordenes-qc.js).
+        const n = o.qc?.equipos_n;
+        const caducado = aprobado && typeof n === "number"
+          && n !== (Array.isArray(o.equipos) ? o.equipos.length : 0);
+        if (aprobado && !caducado) return;
+        const edad = edadDias(o.fecha_completado, now);
+        if (edad == null || edad < qcDias) return;
+        esperando.push({
+          orden: o.numero_orden || d.id,
+          cliente: o.cliente_nombre || o.cliente || "—",
+          tipo: o.tipo_de_servicio || "—",
+          tecnico: o.tecnico_asignado || "—",
+          estadoQc: caducado ? "Caducado" : (o.qc?.resultado === "rechazado" ? "Rechazado" : "Sin revisar"),
+          dias: Math.floor(edad),
+        });
+      });
+      esperando.sort((a, b) => b.dias - a.dias);
+
+      const to = await tallerEmailTo();
+      if (esperando.length && to) {
+        const filas = esperando.slice(0, MAX_FILAS).map(o => [
+          esc(o.orden), esc(o.cliente), esc(o.tipo), esc(o.tecnico), esc(o.estadoQc), `<b>${o.dias}</b>`,
+        ]);
+        const extra = esperando.length > MAX_FILAS
+          ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${esperando.length - MAX_FILAS} más (ver listado completo en la app).</p>` : "";
+        await db.collection("mail_queue").add({
+          to,
+          subject: `Control de calidad: ${esperando.length} orden(es) esperando hace ${qcDias}+ días`,
+          preheader: `${esperando.length} órdenes completadas que no pueden entregarse sin QC`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#9A3412;">Órdenes esperando control de calidad</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Estas órdenes están <b>completadas en oficina</b> hace <b>${qcDias}+ días</b> y
+              <b>no pueden entregarse</b> hasta que el control de calidad quede aprobado.
+            </p>
+            ${tablaHtml(["Orden", "Cliente", "Tipo", "Técnico", "QC", "Días"], filas)}
+            ${extra}`,
+          ctaUrl: `${APP_BASE_URL}/ordenes/index.html?qc=1`,
+          ctaLabel: "Ver cola de QC",
+          meta: { source: "recordatorioOperativo", seccion: "qc_pendiente", total: esperando.length },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      logger.info("[recordatorioOperativo] qc", { conMarca: snap.size, esperando: esperando.length, notificado: !!(esperando.length && to) });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección qc falló", { message: e.message });
     }
 
     return null;
