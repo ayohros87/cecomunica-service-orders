@@ -364,10 +364,8 @@ bien) con `propiedad=cecomunica` pre-aplicado sin que nadie lo escogiera. Ahora
 abre en **Bodega** y sin filtro de propiedad. Quien ya tenga preferencia
 guardada la conserva.
 
-Pendiente y no hecho aquí: **selección múltiple + acción en lote** para las dos
-bandejas grandes (1,578 por clasificar, 5,378 sin verificar) — resolverlas de a
-una no es un flujo. Necesita su propio camino de confirmación y reporte, así que
-va como cambio aparte. Tampoco se tocó la vista de Conflictos (pinta grupos bajo
+Hecho después, en su propio cambio: **selección múltiple + acción en lote** (§G).
+Tampoco se tocó la vista de Conflictos (pinta grupos bajo
 cabeceras de tabla que no le aplican, pero son 23 filas) ni el comportamiento en
 móvil (9 columnas = scroll horizontal; conviene preguntar a bodega si trabajan
 desde tablet antes de invertir).
@@ -380,3 +378,49 @@ con el censo real del pool); que la búsqueda no vuelva a quedar atrapada en la
 pestaña; que las pestañas sigan siendo sólo ubicaciones; y que los deep-links de
 las señales del home sigan llevando a alguna vista. Verificado —rompiendo el
 código a propósito— que cada guardia falla cuando se reintroduce su defecto.
+
+---
+
+## G. Acciones en lote — 2026-08-04
+
+Las dos bandejas grandes del pool no se pueden resolver de a una: **1,578** por
+clasificar y **5,378** sin verificar. Eso no es un flujo, es una condena. Ahora
+la tabla tiene selección múltiple y tres acciones en lote.
+
+**Qué se puede hacer en lote** (cada una sólo sobre las unidades a las que aplica):
+
+| Acción | Aplica a | Servicio que maneja |
+|---|---|---|
+| Marcar verificados | `verificado === false` | `EquiposPoolService.verificar` |
+| Inspección OK → bodega | `devuelto_revision` | `EquiposPoolService.liberar` |
+| Corregir estado → bodega | `por_clasificar` + migración dudosa | `EquiposPoolService.corregirABodega` |
+
+**Cuatro decisiones que sostienen esto:**
+
+1. **El lote maneja las MISMAS funciones que la fila.** Nunca una copia de la
+   escritura. Cuesta una transacción por unidad —más lento que un `batch()`—
+   pero conserva el guard de estado y el movimiento en el kardex, y evita que
+   dos caminos de escritura diverjan (este repo ya paga eso con la
+   normalización duplicada front/functions). Hay un test que falla si el bloque
+   del lote escribe a Firestore por su cuenta.
+
+2. **Sólo se puede actuar sobre lo que se ve.** En cada render la selección se
+   poda a las filas visibles: si un filtro, una pestaña o una búsqueda esconde
+   una fila, sale del lote. Un lote que incluye filas invisibles es una
+   escopeta.
+
+3. **La selección mixta no actúa en silencio.** El botón dice
+   "*Marcar verificados (12 de 30)*" cuando sólo aplica a parte, y el confirm
+   lista los seriales afectados.
+
+4. **Fallo parcial visible.** Concurrencia acotada (6 a la vez), barra de
+   progreso, botón *Detener* (lo ya escrito queda; sólo evita seguir), y un
+   reporte final que **agrupa los errores por motivo** — 300 errores iguales son
+   un problema, no 300 — con los seriales de cada grupo y un botón para
+   copiarlos. Las que fallaron no se tocaron y se pueden reintentar.
+
+**El lote delicado.** Mover algo a "En bodega" es **afirmar que está físicamente
+ahí**. El confirm lo dice sin rodeos ("no lo uses para limpiar la lista: si un
+radio está con un cliente y lo marcas aquí, el inventario queda mintiendo") y
+exige un motivo que queda en el kardex de cada unidad. El flujo legítimo es
+*"conté este estante y estos son los seriales"*, no *"seleccionar todo"*.

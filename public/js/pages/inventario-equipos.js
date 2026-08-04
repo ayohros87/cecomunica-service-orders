@@ -322,7 +322,7 @@ window.EquiposPool = {
     let grupos = this._gruposConflicto();
     if (q) grupos = grupos.filter(g => g.norm.toLowerCase().includes(q));
     if (!grupos.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">
         No hay seriales con fichas en conflicto pendientes de revisar.<br>
         Aparecen aquí cuando el mismo serial se registró con modelos distintos desde fuentes distintas (contrato, POC, bodega).</td></tr>`;
       return;
@@ -340,7 +340,7 @@ window.EquiposPool = {
             · <span style="font-family:var(--font-mono, monospace); font-size:11px;">${esc(d.id)}</span>
           </div>
         </label>`).join('');
-      return `<tr><td colspan="8" style="padding:12px 14px;">
+      return `<tr><td colspan="9" style="padding:12px 14px;">
         <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
           <span style="font-family:var(--font-mono, monospace); font-weight:600; font-size:14px;">${esc(norm)}</span>
           <span style="color:var(--fg-3); font-size:12px;">${docs.length} fichas — ¿cuál es el radio real?</span>
@@ -559,6 +559,11 @@ window.EquiposPool = {
     // dejarlo dentro de la cola sería reponer la trampa que N1 vino a quitar.
     if (this._tab === 'conflictos' && !fAct.q) {
       this._renderFiltrosActivos(fAct, 0, 0);
+      // Conflictos pinta GRUPOS, no filas seleccionables: la selección que
+      // viniera de otra vista se descarta aquí para que la barra de lote no
+      // quede flotando sobre unidades que ya no están en pantalla.
+      this._sel.clear();
+      this._renderBarraLote();
       this.renderConflictos(tbody, fAct.q);
       if (typeof lucide !== 'undefined') lucide.createIcons();
       return;
@@ -594,7 +599,7 @@ window.EquiposPool = {
         ? 'No hay equipos en el pool. Usa "Recibir equipos" o "Importar Excel".'
         : fAct.q ? msgBusqueda
         : (hayOtrosFiltros ? 'Sin resultados con el filtro actual.' : (VACIO_POR_TAB[this._tab] || 'Sin resultados.'));
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
     } else {
       const puede = this.puedeEscribir();
       tbody.innerHTML = lista.map(eq => {
@@ -622,7 +627,12 @@ window.EquiposPool = {
         const noVerif = eq.verificado === false
           ? `<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">Sin verificar</span>` : '';
         const prop = eq.propiedad || 'desconocida';
+        const casilla = puede
+          ? `<input type="checkbox" class="eq-sel" value="${esc(eq.id)}" ${this._sel.has(eq.id) ? 'checked' : ''}
+                    onchange="EquiposPool.toggleSel('${esc(eq.id)}', this.checked)"
+                    aria-label="Seleccionar ${esc(eq.serial || eq.serial_norm)}">` : '';
         return `<tr>
+          <td class="eq-td-sel">${casilla}</td>
           <td class="td-mono">${esc(eq.serial || eq.serial_norm)}${compartido}${noVerif}</td>
           <td>${esc(eq.modelo_label || '—')}</td>
           <td>${eq.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</td>
@@ -635,11 +645,277 @@ window.EquiposPool = {
       }).join('');
     }
 
+    // Poda de la selección: sólo sobrevive lo que sigue VISIBLE. Si un filtro,
+    // una pestaña o una búsqueda esconde una fila, sale del lote — actuar sobre
+    // filas que el usuario ya no ve es exactamente el accidente que hay que
+    // impedir en una acción masiva.
+    const visibles = new Set(lista.map(e => e.id));
+    [...this._sel].forEach(id => { if (!visibles.has(id)) this._sel.delete(id); });
+    this._renderBarraLote();
+    this._sincronizarSelAll();
+
     const resumen = document.getElementById('eqResumen');
     if (resumen) resumen.innerHTML =
       `<strong>${lista.length}</strong> <span style="color:var(--muted);font-size:12px;">equipos mostrados</span>`;
     this._guardarFiltros();
     if (typeof lucide !== 'undefined') lucide.createIcons();
+  },
+
+  // ── Selección múltiple + acciones en lote ────────────────────────────
+  // Las dos bandejas grandes del pool (1,578 por clasificar y 5,378 sin
+  // verificar, censo 2026-08-04) no se pueden resolver de a una: no es un flujo,
+  // es una condena. Esto agrega selección y acción en lote.
+  //
+  // Dos reglas de diseño que NO se negocian:
+  //   1) El lote maneja las MISMAS funciones de servicio que la acción de una
+  //      fila (verificar / liberar / corregirABodega). Nunca una copia de la
+  //      escritura: este repo ya sufre la normalización duplicada front/back, y
+  //      dos caminos de escritura divergen siempre. Cuesta una transacción por
+  //      unidad —más lento— pero conserva el guard de estado y el kardex.
+  //   2) Sólo se puede actuar sobre lo que se VE. En cada render la selección se
+  //      poda a las filas visibles; si un filtro las esconde, salen del lote.
+  //      Un lote que incluye filas invisibles es una escopeta.
+  _sel: new Set(),
+
+  // Qué puede hacerse a cada unidad. Se usa para ofrecer sólo las acciones
+  // aplicables y para contar cuántas de la selección aplican.
+  LOTE_ACCIONES: {
+    verificar: {
+      label: 'Marcar verificados',
+      icono: 'badge-check',
+      aplica: (eq) => eq.verificado === false,
+      titulo: 'Marcar como verificados',
+      // Cuerpo del confirm; `n` es cuántas unidades aplican.
+      cuerpo: (n) => `Se marcarán <b>${n}</b> ficha(s) como verificadas: confirmas que el dato de la migración `
+        + 'es correcto porque tienes el equipo a la vista.<br><br>'
+        + 'Queda registrado quién y cuándo en cada ficha. <b>No hay deshacer en lote.</b>',
+      pideMotivo: false,
+      correr: (eq) => EquiposPoolService.verificar(eq.id, firebase.auth().currentUser),
+    },
+    inspeccion: {
+      label: 'Inspección OK → bodega',
+      icono: 'check-circle-2',
+      aplica: (eq) => eq.estado === 'devuelto_revision',
+      titulo: 'Inspección OK en lote',
+      cuerpo: (n) => `<b>${n}</b> unidad(es) pasan inspección y vuelven a bodega como disponibles `
+        + '(condición Refurbished).<br><br>Cada una deja su movimiento en el kardex.',
+      pideMotivo: false,
+      correr: (eq) => EquiposPoolService.liberar(eq.id,
+        { notas: 'Inspección OK tras devolución (lote)' }, firebase.auth().currentUser),
+    },
+    corregir: {
+      label: 'Corregir estado → bodega',
+      icono: 'pencil-ruler',
+      aplica: (eq) => eq.estado === 'por_clasificar'
+        || ((eq.origen || '').startsWith('migracion')
+            && ['asignado_contrato', 'en_cliente', 'en_taller'].includes(eq.estado)),
+      titulo: 'Corregir estado en lote',
+      // Este es el lote delicado: mover algo a "En bodega" es AFIRMAR que está
+      // físicamente ahí. El texto lo dice sin rodeos — el flujo legítimo es
+      // "conté este estante y estos son los seriales", no "seleccionar todo".
+      cuerpo: (n) => `<b>${n}</b> unidad(es) pasarán a <b>En bodega</b>.<br><br>`
+        + 'Al confirmar estás <b>afirmando que están físicamente en bodega</b> — normalmente '
+        + 'porque acabas de contarlas. No lo uses para “limpiar la lista”: si un radio está con '
+        + 'un cliente y lo marcas aquí, el inventario queda mintiendo.<br><br>'
+        + 'Se limpian sus vínculos (contrato, orden, device POC) y cada una deja movimiento en el kardex.',
+      pideMotivo: true,
+      motivoPlaceholder: 'p. ej. conteo físico del 4-ago, estante A2',
+      correr: (eq, motivo) => EquiposPoolService.corregirABodega(eq.id, motivo, firebase.auth().currentUser),
+    },
+  },
+
+  _seleccionados() {
+    return this._equipos.filter(e => this._sel.has(e.id));
+  },
+
+  toggleSel(id, on) {
+    if (on) this._sel.add(id); else this._sel.delete(id);
+    this._renderBarraLote();
+    this._sincronizarSelAll();
+  },
+
+  toggleTodos(on) {
+    const visibles = this._filtrados();
+    visibles.forEach(e => { if (on) this._sel.add(e.id); else this._sel.delete(e.id); });
+    document.querySelectorAll('.eq-sel').forEach(c => { c.checked = on; });
+    this._renderBarraLote();
+  },
+
+  limpiarSeleccion() {
+    this._sel.clear();
+    document.querySelectorAll('.eq-sel').forEach(c => { c.checked = false; });
+    this._renderBarraLote();
+    this._sincronizarSelAll();
+  },
+
+  _sincronizarSelAll() {
+    const all = document.getElementById('eqSelAll');
+    if (!all) return;
+    const visibles = this._filtrados();
+    const marcados = visibles.filter(e => this._sel.has(e.id)).length;
+    all.checked = marcados > 0 && marcados === visibles.length;
+    all.indeterminate = marcados > 0 && marcados < visibles.length;
+  },
+
+  _renderBarraLote() {
+    const bar = document.getElementById('eqBarraLote');
+    if (!bar) return;
+    const sel = this._seleccionados();
+    if (!sel.length || !this.puedeEscribir()) {
+      bar.style.display = 'none'; bar.innerHTML = ''; return;
+    }
+    const botones = Object.entries(this.LOTE_ACCIONES).map(([clave, a]) => {
+      const n = sel.filter(a.aplica).length;
+      if (!n) return '';
+      // Si la selección es mixta, el botón dice a cuántas aplica de verdad —
+      // nunca se actúa en silencio sobre un subconjunto.
+      const etiqueta = n === sel.length ? `${a.label} (${n})` : `${a.label} (${n} de ${sel.length})`;
+      return `<button class="btn btn-sm" onclick="EquiposPool.abrirLote('${clave}')">
+        <i data-lucide="${a.icono}" style="width:14px;height:14px;"></i> ${FMT.esc(etiqueta)}</button>`;
+    }).filter(Boolean).join('');
+
+    bar.style.display = '';
+    bar.innerHTML = `
+      <span style="font-weight:600;">${sel.length} seleccionado(s)</span>
+      ${botones || '<span style="color:var(--fg-3);">Ninguna acción en lote aplica a esta selección.</span>'}
+      <span style="flex:1;"></span>
+      <button class="btn btn-ghost btn-sm" onclick="EquiposPool.limpiarSeleccion()">Quitar selección</button>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  },
+
+  // ── Ejecución del lote ───────────────────────────────────────────────
+  _loteCancelado: false,
+
+  abrirLote(clave) {
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden hacer cambios.', 'bad'); return; }
+    const a = this.LOTE_ACCIONES[clave];
+    if (!a) return;
+    const aplican = this._seleccionados().filter(a.aplica);
+    if (!aplican.length) { Toast.show('Ninguna unidad de la selección aplica a esa acción.', 'warn'); return; }
+
+    const esc = FMT.esc;
+    const muestra = aplican.slice(0, 8).map(e => esc(e.serial || e.serial_norm)).join(', ');
+    const resto = aplican.length > 8 ? ` … y ${aplican.length - 8} más` : '';
+    document.getElementById('loteTitulo').textContent = a.titulo;
+    document.getElementById('loteCuerpo').innerHTML = `
+      <p style="margin:0 0 10px; font-size:13.5px; line-height:1.55;">${a.cuerpo(aplican.length)}</p>
+      <div style="font-size:12px; color:var(--fg-3); font-family:var(--font-mono, monospace);
+                  background:var(--surface-sunken); border-radius:8px; padding:8px 10px; line-height:1.5;">
+        ${muestra}${resto}</div>
+      ${a.pideMotivo ? `
+        <div class="form-field" style="margin-top:12px;">
+          <label class="form-label" for="loteMotivo">Motivo (queda en el kardex de cada unidad)</label>
+          <input class="form-input" id="loteMotivo" type="text" placeholder="${esc(a.motivoPlaceholder || '')}">
+        </div>` : ''}`;
+    document.getElementById('loteProgreso').style.display = 'none';
+    document.getElementById('loteBotones').style.display = '';
+    const btn = document.getElementById('btnLoteConfirmar');
+    btn.disabled = false;
+    btn.textContent = `Confirmar (${aplican.length})`;
+    btn.onclick = () => this.correrLote(clave);
+    // Sin cierre por ESC: una vez arrancado el lote, un escape accidental
+    // escondería el progreso mientras las escrituras siguen corriendo. Para
+    // salir están Cancelar (antes) y Detener (durante), que son explícitos.
+    Modal.open('eqLoteModal', { onEscape: false });
+  },
+
+  async correrLote(clave) {
+    const a = this.LOTE_ACCIONES[clave];
+    const aplican = this._seleccionados().filter(a.aplica);
+    if (!aplican.length) return;
+
+    let motivo = '';
+    if (a.pideMotivo) {
+      motivo = (document.getElementById('loteMotivo')?.value || '').trim();
+      if (!motivo) { Toast.show('Esta acción requiere un motivo.', 'bad'); return; }
+    }
+
+    this._loteCancelado = false;
+    document.getElementById('loteBotones').style.display = 'none';
+    const prog = document.getElementById('loteProgreso');
+    prog.style.display = '';
+    const barra = document.getElementById('loteBarra');
+    const texto = document.getElementById('loteTexto');
+    const pintar = (hechos, total) => {
+      barra.style.width = `${Math.round((hechos / total) * 100)}%`;
+      texto.textContent = `${hechos} de ${total}…`;
+    };
+    pintar(0, aplican.length);
+
+    // Concurrencia acotada: cada unidad es su propia transacción (guard de
+    // estado + kardex), así que se lanzan de a 6 en vez de 1,578 de golpe.
+    const resultados = await this._enTandas(aplican, (eq) => a.correr(eq, motivo), {
+      concurrencia: 6,
+      onProgreso: pintar,
+      cancelado: () => this._loteCancelado,
+    });
+
+    const ok = resultados.filter(r => r.ok);
+    const fallidos = resultados.filter(r => !r.ok);
+    const noIntentados = aplican.length - resultados.length;
+    Modal.close('eqLoteModal');
+    this._sel.clear();
+    await this.cargar();
+    this._reporteLote({ accion: a, ok: ok.length, fallidos, noIntentados });
+  },
+
+  cancelarLote() { this._loteCancelado = true; },
+
+  // Corre `fn` sobre `items` con concurrencia acotada. Nunca lanza: cada unidad
+  // devuelve {ok} o {ok:false, error} para poder reportar el fallo parcial —
+  // en un lote de cientos, "algo falló" sin decir qué es inservible.
+  async _enTandas(items, fn, { concurrencia = 6, onProgreso, cancelado } = {}) {
+    const res = [];
+    let i = 0;
+    const worker = async () => {
+      while (i < items.length) {
+        if (cancelado && cancelado()) return;
+        const it = items[i++];
+        try { await fn(it); res.push({ it, ok: true }); }
+        catch (e) { res.push({ it, ok: false, error: (e && e.message) || String(e) }); }
+        if (onProgreso) onProgreso(res.length, items.length);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrencia, items.length) }, worker));
+    return res;
+  },
+
+  _reporteLote({ accion, ok, fallidos, noIntentados }) {
+    if (!fallidos.length && !noIntentados) {
+      Toast.show(`${accion.label}: ${ok} unidad(es) listas.`, 'ok');
+      return;
+    }
+    const esc = FMT.esc;
+    // Los fallos se agrupan por motivo: 300 errores iguales son UN problema, y
+    // listarlos uno por uno esconde el que sí es distinto.
+    const porError = new Map();
+    fallidos.forEach(f => {
+      if (!porError.has(f.error)) porError.set(f.error, []);
+      porError.get(f.error).push(f.it.serial || f.it.serial_norm);
+    });
+    const grupos = [...porError.entries()].sort((a, b) => b[1].length - a[1].length).map(([err, seriales]) => `
+      <div style="margin-bottom:10px;">
+        <div style="font-size:13px; font-weight:600; color:#b91c1c;">${esc(err)} — ${seriales.length}</div>
+        <div style="font-size:11.5px; color:var(--fg-3); font-family:var(--font-mono, monospace); line-height:1.5; word-break:break-all;">
+          ${esc(seriales.join(', '))}</div>
+      </div>`).join('');
+
+    document.getElementById('loteRepCuerpo').innerHTML = `
+      <p style="margin:0 0 12px; font-size:13.5px;">
+        <b style="color:#067647;">${ok}</b> unidad(es) listas ·
+        <b style="color:#b91c1c;">${fallidos.length}</b> con error
+        ${noIntentados ? ` · <b>${noIntentados}</b> sin intentar (cancelado)` : ''}
+      </p>
+      ${fallidos.length ? `<div style="max-height:300px; overflow-y:auto;">${grupos}</div>
+        <p style="margin:10px 0 0; font-size:12px; color:var(--fg-3);">
+          Las que fallaron no se tocaron: puedes volver a seleccionarlas y reintentar.</p>` : ''}`;
+    document.getElementById('btnLoteRepCopiar').onclick = () => {
+      const txt = fallidos.map(f => `${f.it.serial || f.it.serial_norm}\t${f.error}`).join('\n');
+      navigator.clipboard?.writeText(txt)
+        .then(() => Toast.show('Lista de errores copiada.', 'ok'))
+        .catch(() => Toast.show('No se pudo copiar.', 'bad'));
+    };
+    Modal.open('eqLoteReporteModal');
   },
 
   // ── Acciones de fila: 1 CTA contextual + menú ⋯ ──────────────────────
@@ -1543,6 +1819,9 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('btnVenta')?.remove();
       document.getElementById('btnImportar')?.remove();
       document.getElementById('btnPlantilla')?.remove();
+      // Sin permiso de escritura las filas no llevan casilla, así que el
+      // "seleccionar todo" de la cabecera sería un control muerto.
+      document.getElementById('eqSelAll')?.remove();
     }
     await EquiposPool.cargarModelos();
     EquiposPool._restaurarFiltros();

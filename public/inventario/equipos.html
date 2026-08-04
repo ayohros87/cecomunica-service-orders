@@ -10,7 +10,7 @@
   <meta charset="UTF-8">
   <title>Equipos por serial - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc20">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc21">
   <!-- Rediseño Command Center: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc5">
 
@@ -103,6 +103,19 @@
     }
     .eq-chip button:hover { background:#fde68a; }
 
+    /* Selección múltiple */
+    .eq-td-sel { width:34px; text-align:center; }
+    .eq-td-sel input { width:15px; height:15px; cursor:pointer; }
+    /* Barra de lote: verde de acción, para que no se confunda con la barra
+       ámbar de "Viendo:" (filtros) que puede estar justo encima. */
+    .eq-barra-lote {
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      padding:8px 14px; border-bottom:1px solid var(--border-default);
+      background:#ECFDF5; color:#065F46; font-size:12.5px;
+    }
+    .eq-barra-lote .btn { background:var(--surface-card); border:1px solid #A7F3D0; color:#065F46; }
+    .eq-barra-lote .btn:hover { background:#D1FAE5; }
+
     /* Timeline de movimientos (modal Historia) */
     .mov-item { display:flex; gap:var(--sp-3); padding:var(--sp-2) 0; border-bottom:1px solid var(--border-default); }
     .mov-item:last-child { border-bottom:none; }
@@ -151,7 +164,7 @@
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/inventario-equipos.js?v=cc20" defer></script>
+  <script src="../js/pages/inventario-equipos.js?v=cc21" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -299,11 +312,16 @@
       <!-- Filtros activos (visible solo cuando hay filtros aplicados) -->
       <div id="eqFiltrosActivos" class="eq-filtros-activos" style="display:none;"></div>
 
+      <!-- Barra de lote: aparece al seleccionar filas. Sólo ofrece acciones que
+           apliquen a la selección, y dice a cuántas si es mixta. -->
+      <div id="eqBarraLote" class="eq-barra-lote" style="display:none;"></div>
+
       <!-- Tabla -->
       <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
         <table class="app-table" aria-label="Equipos del pool">
           <thead>
             <tr>
+              <th class="eq-td-sel"><input type="checkbox" id="eqSelAll" onchange="EquiposPool.toggleTodos(this.checked)" aria-label="Seleccionar todo lo visible" title="Seleccionar todo lo que se ve ahora"></th>
               <th>Serial</th>
               <th>Modelo</th>
               <th>Cond.</th>
@@ -328,6 +346,51 @@
     </div><!-- /.ds-card -->
 
   </div><!-- /.app-wrap -->
+
+  <!-- Modal: confirmar acción en lote (+ progreso en el mismo sitio) -->
+  <div id="eqLoteModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:540px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="layers"></i> <span id="loteTitulo">Acción en lote</span></h3>
+      </div>
+      <div class="modal-body">
+        <div id="loteCuerpo"></div>
+        <!-- El progreso reemplaza a los botones: mientras corre no hay nada que
+             pulsar salvo cancelar, y cerrar a media escritura sería peor. -->
+        <div id="loteProgreso" style="display:none; margin-top:var(--sp-3);">
+          <div style="height:8px; background:var(--surface-sunken); border-radius:999px; overflow:hidden;">
+            <div id="loteBarra" style="height:100%; width:0%; background:var(--accent); transition:width .2s;"></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px; margin-top:8px;">
+            <span id="loteTexto" style="font-size:13px; color:var(--fg-3);">0 de 0…</span>
+            <span style="flex:1;"></span>
+            <button class="btn btn-ghost btn-sm" onclick="EquiposPool.cancelarLote()">Detener</button>
+          </div>
+          <p style="margin:8px 0 0; font-size:12px; color:var(--fg-3);">
+            Lo ya procesado queda guardado; detener sólo evita seguir con el resto.</p>
+        </div>
+      </div>
+      <div class="modal-footer" id="loteBotones">
+        <button class="btn btn-ghost" onclick="Modal.close('eqLoteModal')"><i data-lucide="x"></i> Cancelar</button>
+        <button class="btn btn-primary" id="btnLoteConfirmar"><i data-lucide="check"></i> Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: reporte del lote (sólo si hubo fallos o cancelación) -->
+  <div id="eqLoteReporteModal" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i data-lucide="clipboard-list"></i> Resultado del lote</h3>
+        <button class="modal-close" onclick="Modal.close('eqLoteReporteModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="modal-body"><div id="loteRepCuerpo"></div></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btnLoteRepCopiar"><i data-lucide="copy"></i> Copiar errores</button>
+        <button class="btn btn-primary" onclick="Modal.close('eqLoteReporteModal')">Cerrar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal: recibir equipos -->
   <div id="eqRecibirModal" class="modal-backdrop" style="display:none;">

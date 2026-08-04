@@ -282,6 +282,92 @@ test("los deep-links de las señales del home siguen siendo válidos", () => {
   }
 });
 
+// ── Acciones en lote ───────────────────────────────────────────────────────
+
+test("cada acción de lote sólo aplica a las unidades que corresponden", () => {
+  const page = cargarPagina();
+  const A = page.LOTE_ACCIONES;
+  const u = (o) => ({ id: "x", ...o });
+
+  // Verificar: sólo fichas sin verificar, sin importar el estado.
+  assert.ok(A.verificar.aplica(u({ estado: "en_bodega", verificado: false })));
+  assert.ok(!A.verificar.aplica(u({ estado: "en_bodega", verificado: true })));
+  assert.ok(!A.verificar.aplica(u({ estado: "en_bodega" })), "verificado indefinido no es 'sin verificar'");
+
+  // Inspección OK: sólo lo devuelto y pendiente de revisar.
+  assert.ok(A.inspeccion.aplica(u({ estado: "devuelto_revision" })));
+  for (const e of ["en_bodega", "en_cliente", "en_taller", "por_clasificar", "baja", "vendido"]) {
+    assert.ok(!A.inspeccion.aplica(u({ estado: e })), `inspección no debe aplicar a ${e}`);
+  }
+
+  // Corregir a bodega: por_clasificar, o migración con ubicación dudosa.
+  assert.ok(A.corregir.aplica(u({ estado: "por_clasificar" })));
+  assert.ok(A.corregir.aplica(u({ estado: "en_cliente", origen: "migracion_poc" })));
+  assert.ok(!A.corregir.aplica(u({ estado: "en_cliente", origen: "bodega" })),
+    "una unidad que NO viene de migración no tiene estado heredado que corregir");
+  assert.ok(!A.corregir.aplica(u({ estado: "baja", origen: "migracion_poc" })),
+    "una baja no se 'corrige' a bodega en lote: eso es revivir, y es individual");
+  assert.ok(!A.corregir.aplica(u({ estado: "en_bodega", origen: "migracion_poc" })),
+    "ya está en bodega");
+});
+
+test("la acción que afirma presencia física exige motivo", () => {
+  const page = cargarPagina();
+  assert.equal(page.LOTE_ACCIONES.corregir.pideMotivo, true,
+    "mover a 'En bodega' es afirmar que el radio está ahí: sin motivo no hay rastro de por qué");
+  // Y el texto del confirm tiene que decirlo, no sólo contar unidades.
+  const cuerpo = page.LOTE_ACCIONES.corregir.cuerpo(40).toLowerCase();
+  assert.match(cuerpo, /físicamente/, "el confirm debe decir que se afirma presencia física");
+});
+
+test("_enTandas no se detiene ante un fallo y reporta cuál falló", async () => {
+  const page = cargarPagina();
+  const items = [1, 2, 3, 4, 5];
+  const res = await page._enTandas(items, async (n) => {
+    if (n % 2 === 0) throw new Error("boom " + n);
+  }, { concurrencia: 2 });
+
+  assert.equal(res.length, 5, "todas las unidades deben intentarse");
+  assert.equal(res.filter(r => r.ok).length, 3);
+  const fallos = res.filter(r => !r.ok);
+  // `res` viene del realm del vm, así que deepStrictEqual choca por prototipo:
+  // se compara el contenido, no la identidad del Array.
+  assert.equal(fallos.map(f => f.it).sort().join(","), "2,4");
+  assert.ok(fallos.every(f => /boom/.test(f.error)), "el motivo del fallo debe conservarse por unidad");
+});
+
+test("_enTandas respeta la cancelación y dice cuántas quedaron sin intentar", async () => {
+  const page = cargarPagina();
+  const items = Array.from({ length: 50 }, (_, i) => i);
+  let hechos = 0, cancelar = false;
+  const res = await page._enTandas(items, async () => { hechos++; if (hechos >= 10) cancelar = true; },
+    { concurrencia: 1, cancelado: () => cancelar });
+  assert.ok(res.length >= 10 && res.length < 50,
+    `debe parar a media lista (procesó ${res.length} de 50)`);
+});
+
+test("_enTandas informa progreso en cada unidad", async () => {
+  const page = cargarPagina();
+  const vistos = [];
+  await page._enTandas([1, 2, 3], async () => {}, {
+    concurrencia: 1, onProgreso: (hechos, total) => vistos.push(`${hechos}/${total}`),
+  });
+  assert.deepEqual(vistos, ["1/3", "2/3", "3/3"]);
+});
+
+test("el lote usa las MISMAS funciones de servicio que la fila", () => {
+  // Si el lote se escribiera aparte, las dos rutas divergen (este repo ya paga
+  // eso con la normalización duplicada front/functions). El guardia es textual
+  // porque lo que importa es que no aparezca un `.update(` propio.
+  const src = leer("public", "js", "pages", "inventario-equipos.js");
+  const bloque = src.slice(src.indexOf("LOTE_ACCIONES:"), src.indexOf("_seleccionados()"));
+  for (const m of ["EquiposPoolService.verificar", "EquiposPoolService.liberar", "EquiposPoolService.corregirABodega"]) {
+    assert.ok(bloque.includes(m), `el lote debe delegar en ${m}`);
+  }
+  assert.ok(!/\.collection\(|\.update\(|batch\(/.test(bloque),
+    "el lote no debe escribir a Firestore por su cuenta: delega en el servicio");
+});
+
 test("la acción destructiva va al final del menú y marcada como danger", () => {
   const page = cargarPagina();
   const html = page._accionesHtml({ id: "C1", estado: "en_bodega" }, true);
