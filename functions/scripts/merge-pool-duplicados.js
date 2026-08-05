@@ -15,16 +15,22 @@
  * queda con un solo doc, serial_compartido vuelve a false. Colisiones reales
  * (modelos distintos, tipo Kenwood NX420/NX920) no se tocan.
  *
+ * `--serial=` acota la corrida a seriales puntuales (coma-separados): un conteo
+ * físico que destapa UN duplicado no tiene por qué arrastrar al resto del pool
+ * en el mismo commit. Sin el flag barre todo, como siempre.
+ *
  * USAGE (desde functions/):
- *   node scripts/merge-pool-duplicados.js            # dry-run
- *   node scripts/merge-pool-duplicados.js --write
+ *   node scripts/merge-pool-duplicados.js            # dry-run, todo el pool
+ *   node scripts/merge-pool-duplicados.js --serial=NS3200A0788 --write
  */
 const admin = require("firebase-admin");
 admin.initializeApp({ projectId: "cecomunica-service-orders" });
 const db = admin.firestore();
-const { mismoModelo } = require("../src/domain/equiposPool");
+const { mismoModelo, normSerial } = require("../src/domain/equiposPool");
 
 const dryRun = !process.argv.includes("--write");
+const SOLO = new Set(((process.argv.find((a) => a.startsWith("--serial=")) || "").split("=")[1] || "")
+  .split(",").map((s) => normSerial(s)).filter(Boolean));
 const ms = (t) => (t?.toDate ? t.toDate().getTime() : 0);
 
 // Campos que el keeper adopta del fantasma solo si le faltan.
@@ -57,6 +63,7 @@ function rellenar(keeper, otro) {
   const r = { grupos: 0, fusionados: 0, colisionesReales: 0 };
   for (const [normKey, docs] of porNorm) {
     if (docs.length < 2) continue;
+    if (SOLO.size && !SOLO.has(normKey)) continue;
     r.grupos++;
 
     // Componentes conexas por mismoModelo (en la práctica: pares).
