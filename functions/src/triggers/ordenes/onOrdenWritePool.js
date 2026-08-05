@@ -9,9 +9,11 @@ const { admin, db } = require("../../lib/admin");
 //     serial no existe en el pool se crea con origen migracion_orden). NO
 //     aplica a las órdenes que no mueven inventario — inspección y VISITA
 //     TÉCNICA, que ocurre en las instalaciones del cliente.
-//   · orden pasa a "ENTREGADO AL CLIENTE" (o se soft-elimina) → sus unidades
-//     en_taller regresan a en_cliente.
-//   · equipo removido de la orden → su unidad sale del taller (en_cliente).
+//   · orden pasa a "ENTREGADO AL CLIENTE" → sus unidades en_taller pasan a
+//     en_cliente (eso sí es una entrega).
+//   · equipo removido de la orden, u orden eliminada → la unidad sale del
+//     taller SIN entregarse: vuelve al estado del que salió (bodega, asignada
+//     al contrato o con el cliente), nunca a en_cliente por defecto.
 // El serial de la orden es texto libre: nunca bloquea, solo registra.
 const ENTREGADO = "ENTREGADO AL CLIENTE";
 // Terminal propio de las ENTRADA: no se entregan al cliente, se cierran.
@@ -205,21 +207,60 @@ module.exports = onDocumentWritten(
         } catch (err) { /* best-effort por unidad */ }
       };
 
+      // Salida del taller SIN entrega (se quitó el equipo de la orden, o la
+      // orden se eliminó): el radio nunca llegó al cliente, así que no puede
+      // quedar en_cliente — eso lo saca del inventario disponible en silencio.
+      // Vuelve a de donde salió: el kardex guarda el estado previo en el
+      // movimiento ingreso_taller de esta misma orden.
+      const devolverAlOrigen = async (e, notas) => {
+        let destino = null;
+        try {
+          const r = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+          if (r.data) {
+            const previo = await pool.estadoPrevioAOrden(r.ref, ordenId);
+            destino = pool.destinoAlSalirDeOrden(r.data, previo);
+          }
+        } catch (err) { /* best-effort por unidad: se cae al destino por defecto */ }
+        const aEstado = destino || pool.ESTADOS.EN_CLIENTE;
+        await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+          aEstado,
+          soloDesde: [pool.ESTADOS.EN_TALLER],
+          condicion: (d) => d.orden_actual_id === ordenId,
+          tipo: "salida_taller",
+          refMov,
+          notas,
+          extra: {
+            orden_actual_id: null,
+            // Nadie miró la unidad al volver al estante: entra a la cola de
+            // "verificar" (misma convención que onSerialWrite).
+            ...(aEstado === pool.ESTADOS.EN_BODEGA ? { verificado: false } : {}),
+            ...(aEstado === pool.ESTADOS.EN_CLIENTE && custodiaCliente
+              ? { asignacionSiFalta: custodiaCliente } : {}),
+          },
+        });
+        await soltarVendido(e);
+      };
+
       // Salida de taller: entrega de la orden, soft-delete, o borrado del doc.
       if (entregadaAhora || (eliminada && before?.eliminado !== true)) {
         const equiposFuente = despues.length ? despues : antes;
         for (const e of equiposFuente) {
-          await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
-            aEstado: pool.ESTADOS.EN_CLIENTE,
-            soloDesde: [pool.ESTADOS.EN_TALLER],
-            condicion: (d) => d.orden_actual_id === ordenId,
-            tipo: "salida_taller",
-            refMov,
-            notas: entregadaAhora ? "" : "Orden eliminada",
-            extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
-          });
-          if (entregadaAhora) await amarrarVenta(e);
-          await soltarVendido(e);
+          // Entrega: el radio SÍ llegó al cliente. Orden eliminada: no.
+          if (entregadaAhora) {
+            await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+              aEstado: pool.ESTADOS.EN_CLIENTE,
+              soloDesde: [pool.ESTADOS.EN_TALLER],
+              condicion: (d) => d.orden_actual_id === ordenId,
+              tipo: "salida_taller",
+              refMov,
+              notas: "",
+              extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
+            });
+            await amarrarVenta(e);
+            await soltarVendido(e);
+          } else {
+            await devolverAlOrigen(e, "Orden eliminada");
+          }
         }
         return null;
       }
@@ -227,16 +268,7 @@ module.exports = onDocumentWritten(
 
       // Equipos removidos de una orden viva → salen del taller.
       for (const e of antes.filter((x) => !keysDespues.has(pool.normSerial(x.serial)))) {
-        await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
-          aEstado: pool.ESTADOS.EN_CLIENTE,
-          soloDesde: [pool.ESTADOS.EN_TALLER],
-          condicion: (d) => d.orden_actual_id === ordenId,
-          tipo: "salida_taller",
-          refMov,
-          notas: "Equipo removido de la orden",
-          extra: { orden_actual_id: null, ...(custodiaCliente ? { asignacionSiFalta: custodiaCliente } : {}) },
-        });
-        await soltarVendido(e);
+        await devolverAlOrigen(e, "Equipo removido de la orden");
       }
 
       // Equipos nuevos en la orden → entran al taller (upsert por contacto).

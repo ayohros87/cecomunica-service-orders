@@ -235,6 +235,7 @@
         { chequeo: 'Asignada a contrato ANULADO sin devolución', n: r.D_asignada_a_anulado || 0, m: r.D_muestras },
         { chequeo: 'Vendido con enlace de orden colgante', n: r.E_vendido_orden_cerrada || 0, m: r.E_muestras },
         { chequeo: 'Mismo serial ACTIVO en POC con dos clientes', n: r.F_serial_dos_clientes || 0, m: r.F_muestras },
+        { chequeo: 'Asignada a un contrato que ya no la lista', n: r.G_asignada_sin_serial || 0, m: r.G_muestras },
         { chequeo: 'Ya decidido — falta apagar el device en POC', n: r.F_esperando_apagado || 0, m: r.F_apagado_muestras },
       ].map(f => ({
         chequeo: f.chequeo,

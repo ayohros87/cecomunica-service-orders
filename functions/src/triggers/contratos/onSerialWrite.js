@@ -15,6 +15,9 @@ const pool = require("../../domain/equiposPool");
 //     verificado:false. Si está en_taller solo se actualiza la asignación.
 //   · serial removido/reemplazado → la unidad vuelve a en_bodega marcada
 //     verificado:false ("verificar físicamente": pudo ser typo o devolución).
+//     Si su estado no admite la vuelta a bodega (en_taller por una orden viva,
+//     vendido…) al menos se SUELTA la asignación: el estado es real, la
+//     pertenencia al contrato ya no.
 module.exports = onDocumentWritten(
   { document: "contratos/{cid}/seriales/{sid}", region: "us-central1" },
   async (event) => {
@@ -70,16 +73,38 @@ module.exports = onDocumentWritten(
       const normAntes = pool.normSerial(serialAntes);
       const sigueVigente = normsVigentes === null || (normAntes && normsVigentes.has(normAntes));
       if (serialAntes && (!after || !mismo) && !sigueVigente) {
+        const refMovLib = { tipo: "contrato", id: cid, label: before.contrato_id || "" };
         const r = await pool.transicionar(serialAntes, before.modelo_id, before.modelo, {
           aEstado: pool.ESTADOS.EN_BODEGA,
           soloDesde: [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE],
           condicion: (d) => d.asignacion?.contrato_doc_id === cid,
           tipo: "liberacion",
-          refMov: { tipo: "contrato", id: cid, label: before.contrato_id || "" },
+          refMov: refMovLib,
           notas: "Serial removido del contrato — verificar físicamente (posible typo o devolución)",
           extra: { asignacion: null, verificado: false },
         });
-        if (r === "transicion") logger.info("[onSerialWrite] Pool: serial liberado", { cid, serial: serialAntes });
+        if (r === "transicion") {
+          logger.info("[onSerialWrite] Pool: serial liberado", { cid, serial: serialAntes });
+        } else {
+          // No volvió a bodega porque su estado no lo permite: en_taller con una
+          // orden viva, vendido, por_clasificar, o ya en bodega. El ESTADO es
+          // real y no se toca — pero la ASIGNACIÓN sí es falsa: el serial ya no
+          // está en el contrato. Sin soltarla la unidad quedaba contratada para
+          // siempre, y encima seguía apareciendo en las consultas por contrato
+          // (onAnnulment, onEntregaTransicion). Es lo que dejó a
+          // PROP20260731-01 con 24 fichas para 12 radios el 2026-08-03:
+          // corrigieron los seriales con la orden de programación ya abierta y
+          // los 12 viejos estaban en_taller, fuera del soloDesde de arriba.
+          const d = await pool.desasignarContrato(serialAntes, before.modelo_id, before.modelo, {
+            cid,
+            refMov: refMovLib,
+            notas: "Serial removido del contrato — la unidad conserva su estado (orden o venta en curso)",
+          });
+          if (d === "liberado") {
+            logger.info("[onSerialWrite] Pool: asignación liberada sin mover el estado",
+              { cid, serial: serialAntes });
+          }
+        }
       }
 
       // Serial agregado o editado → asignar/crear la unidad en el pool.

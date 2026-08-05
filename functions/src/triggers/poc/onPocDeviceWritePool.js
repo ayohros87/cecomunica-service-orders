@@ -19,23 +19,28 @@ module.exports = onDocumentWritten(
     const after  = event.data.after?.exists  ? event.data.after.data()  : null;
     if (!after && !before) return null;
 
-    // Device eliminado (soft-delete o borrado del doc): desenlazar la ficha.
+    // Desenlaza del pool la ficha de un serial que este device ya no lleva.
     // El estado NO cambia — dónde está el radio lo dicen contratos/órdenes.
-    const borradoAhora = (!after || after.deleted === true) && before && before.deleted !== true;
-    if (borradoAhora) {
-      const serialAntes = (before.serial || "").toString().trim();
-      if (!serialAntes) return null;
+    const desenlazar = async (serialViejo, datos, motivo) => {
+      const s = (serialViejo || "").toString().trim();
+      if (!s) return;
       try {
         const { ref, data } = await pool.resolver(
-          serialAntes, before.modelo_id || null, before.modelo_label || before.modelo || "",
+          s, datos.modelo_id || null, datos.modelo_label || datos.modelo || "",
           { adoptarSiExiste: true });
         if (data && data.poc_device_id === deviceId) {
           await ref.set({ poc_device_id: null }, { merge: true });
-          logger.info("[onPocDeviceWritePool] Device POC eliminado — ficha desenlazada", { deviceId, serial: serialAntes });
+          logger.info("[onPocDeviceWritePool] Ficha desenlazada", { deviceId, serial: s, motivo });
         }
       } catch (e) {
         logger.warn("[onPocDeviceWritePool] Desenlace falló (no crítico)", { deviceId, message: e.message });
       }
+    };
+
+    // Device eliminado (soft-delete o borrado del doc): desenlazar la ficha.
+    const borradoAhora = (!after || after.deleted === true) && before && before.deleted !== true;
+    if (borradoAhora) {
+      await desenlazar(before.serial, before, "device eliminado");
       return null;
     }
     if (!after || after.deleted === true) return null;
@@ -44,6 +49,12 @@ module.exports = onDocumentWritten(
     if (!serial) return null;
     // Solo cuando el serial aparece o cambia (no en cada edición del device).
     if (before && pool.normSerial(before.serial) === pool.normSerial(serial)) return null;
+
+    // El serial CAMBIÓ (corrección de un batch mal tecleado): la ficha del
+    // serial viejo se quedaba apuntando a este device, así que el mismo device
+    // acababa enlazado desde DOS fichas y la vieja parecía un radio colocado
+    // más. Los 12 fantasma de PROP20260731-01 arrastraban justo eso.
+    if (before) await desenlazar(before.serial, before, "serial corregido en el device");
 
     try {
       const r = await pool.upsertContacto({

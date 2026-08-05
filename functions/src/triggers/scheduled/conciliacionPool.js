@@ -19,6 +19,7 @@ module.exports = onSchedule(
       total: R.total, A: R.A_contrato_sin_ficha, B: R.B_taller_orden_cerrada,
       C1: R.C_poc_sin_ficha, C2: R.C_poc_sin_enlace, D: R.D_asignada_a_anulado,
       E: R.E_vendido_orden_cerrada, F: R.F_serial_dos_clientes,
+      G: R.G_asignada_sin_serial,
       pocApagadosIgnorados: R.poc_apagados_ignorados,
     });
     return null;

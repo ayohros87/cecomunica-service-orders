@@ -16,6 +16,9 @@
 //   C2) device POC ACTIVO con ficha, pero ninguna enlazada a ese device.
 //   D) ficha asignada a un contrato ANULADO sin pendiente_devolucion (residuo).
 //   E) ficha vendido con orden_actual_id de una orden ya cerrada (colgante).
+//   G) ficha asignada a un contrato VIGENTE que ya no la lista en sus seriales
+//      (el reverso de A: residuo de asignación). Es lo que dejó a
+//      PROP20260731-01 con 24 unidades para 12 radios.
 //   F) mismo serial ACTIVO en POC con dos clientes distintos (propiedad). Los
 //      ya decididos por una persona se cuentan aparte (F_esperando_apagado):
 //      ahí el dato nuestro está bien y lo que falta es apagar el device
@@ -65,12 +68,22 @@ async function ejecutar() {
     E_vendido_orden_cerrada: 0, E_muestras: [],
     F_serial_dos_clientes: 0, F_muestras: [],
     F_esperando_apagado: 0, F_apagado_muestras: [],
+    G_asignada_sin_serial: 0, G_muestras: [],
     // Contexto, no drift: cuántos devices se ignoraron por estar apagados.
     poc_apagados_ignorados: 0,
   };
 
   // ── A: seriales de contratos vigentes ──
   const serSnap = await db.collectionGroup("seriales").get();
+  // Set de seriales por contrato — alimenta también el chequeo G de abajo.
+  const serialesPorContrato = new Map();
+  for (const d of serSnap.docs) {
+    const cid = d.ref.parent.parent.id;
+    const n = pool.normSerial(d.data()?.serial || "");
+    if (!n) continue;
+    if (!serialesPorContrato.has(cid)) serialesPorContrato.set(cid, new Set());
+    serialesPorContrato.get(cid).add(n);
+  }
   for (const d of serSnap.docs) {
     const cid = d.ref.parent.parent.id;
     const c = contratos.get(cid);
@@ -120,6 +133,24 @@ async function ejecutar() {
         R.D_asignada_a_anulado++;
         if (R.D_muestras.length < MAX_MUESTRAS) R.D_muestras.push({
           serial: f.serial, contrato: c.contrato_id || f.asignacion.contrato_doc_id,
+        });
+      }
+    }
+    // ── G: residuo de asignación (el reverso de A) ──
+    // Contratos SIN seriales registrados quedan fuera: ahí no hay nada contra
+    // qué comparar y toda asignación parecería huérfana.
+    if (f.asignacion?.contrato_doc_id) {
+      const c = contratos.get(f.asignacion.contrato_doc_id);
+      const vigente = c && ["aprobado", "activo"].includes(String(c.estado || "").toLowerCase())
+        && c.seriales_estado !== "legacy";
+      const lista = serialesPorContrato.get(f.asignacion.contrato_doc_id);
+      const norm = f.serial_norm || f.id.split("__")[0];
+      if (vigente && lista && lista.size && !lista.has(norm)) {
+        R.G_asignada_sin_serial++;
+        if (R.G_muestras.length < MAX_MUESTRAS) R.G_muestras.push({
+          serial: f.serial, estado: f.estado,
+          contrato: c.contrato_id || f.asignacion.contrato_doc_id,
+          detalle: `el contrato lista ${lista.size} serial(es) y este no está`,
         });
       }
     }
@@ -196,7 +227,8 @@ async function ejecutar() {
   // roto; sumarlo haría que el reporte nunca bajara y volviera a ser ruido.
   const total = R.A_contrato_sin_ficha + R.B_taller_orden_cerrada
     + R.C_poc_sin_ficha + R.C_poc_sin_enlace
-    + R.D_asignada_a_anulado + R.E_vendido_orden_cerrada + R.F_serial_dos_clientes;
+    + R.D_asignada_a_anulado + R.E_vendido_orden_cerrada + R.F_serial_dos_clientes
+    + R.G_asignada_sin_serial;
   await db.collection("admin_reportes").doc("conciliacion_pool").set({ ...R, total });
   return { ...R, total };
 }

@@ -328,6 +328,87 @@ async function transicionar(serial, modeloId, modeloLabel,
   });
 }
 
+// Suelta la asignación a un contrato SIN mover el estado. Existe porque
+// transicionar() exige un cambio de estado: cuando el serial deja de estar en
+// el contrato pero la unidad está donde dice estar (en_taller por una orden
+// viva, vendida, por_clasificar…), no había forma de soltar la asignación y
+// quedaba contratada para siempre. Así se duplicaron los equipos de
+// PROP20260731-01 y -02 (2026-08-03): se corrigieron los seriales con la orden
+// de programación ya abierta, los viejos estaban en_taller, y el contrato
+// terminó con el doble de unidades de las que vendió.
+// Retorna 'liberado' | 'sin-cambio' | 'no-existe'.
+async function desasignarContrato(serial, modeloId, modeloLabel,
+                                  { cid, refMov = null, notas = "", extra = {} }) {
+  const norm = normSerial(serial);
+  if (!esSerialValido(norm)) return "no-existe";
+  const { ref, data } = await resolver(serial, modeloId, modeloLabel);
+  if (!data) return "no-existe";
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "no-existe";
+    const actual = snap.data();
+    if (actual.estado === ESTADOS.BAJA) return "sin-cambio";
+    // Devolución en curso: la asignación es el hilo que la persigue
+    // (onMapeoWrite, recordatorioOperativo C2). No se suelta por una edición
+    // de seriales — se resuelve cuando el equipo vuelve.
+    if (actual.pendiente_devolucion) return "sin-cambio";
+    if (actual.asignacion?.contrato_doc_id !== cid) return "sin-cambio";
+
+    tx.set(ref, { asignacion: null, ...extra,
+      updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(ref.collection("movimientos").doc(), _movimiento({
+      tipo: "liberacion", de_estado: actual.estado, a_estado: actual.estado,
+      ref: refMov, notas,
+    }));
+    return "liberado";
+  });
+}
+
+// Estado desde el que la unidad entró al taller por ESTA orden. El kardex ya lo
+// guarda (de_estado del movimiento ingreso_taller), así que deshacer no
+// necesita campo nuevo. Los movimientos por ficha son pocos: se filtran en
+// memoria para no exigir un índice compuesto.
+// Retorna el estado previo o null si no hay rastro.
+async function estadoPrevioAOrden(ref, ordenId) {
+  try {
+    const snap = await ref.collection("movimientos").get();
+    let mejor = null;
+    snap.forEach((d) => {
+      const m = d.data();
+      if (m.tipo !== "ingreso_taller" || !m.de_estado) return;
+      if (!m.ref || m.ref.id !== ordenId) return;
+      const t = m.at && m.at.toMillis ? m.at.toMillis() : 0;
+      if (!mejor || t >= mejor.t) mejor = { t, de: m.de_estado };
+    });
+    return mejor ? mejor.de : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// ¿A dónde va una unidad que SALE del taller sin haberse entregado (se quitó de
+// la orden, o la orden se eliminó)? Antes iba siempre a en_cliente — el modelo
+// mental era "radio del cliente que vino a reparación y se lo devuelven". Pero
+// el caso frecuente es una CORRECCIÓN de la orden (serial mal tecleado o
+// cambiado): el radio nunca se entregó, y marcarlo en_cliente lo saca del
+// inventario disponible sin que nadie lo note. Los 12 fantasma de
+// PROP20260731-01 y los 3 de -02 salieron justo por aquí.
+// Función pura (se prueba en test/poolSalidaOrden.test.js).
+function destinoAlSalirDeOrden(ficha, estadoPrevio) {
+  const tieneContrato = !!(ficha && ficha.asignacion && ficha.asignacion.contrato_doc_id);
+  if (estadoPrevio && estadoPrevio !== ESTADOS.EN_TALLER) {
+    // asignado_contrato sin contrato es imposible: la asignación se soltó
+    // mientras la unidad estaba en el taller (onSerialWrite) → bodega.
+    if (estadoPrevio === ESTADOS.ASIGNADO && !tieneContrato) return ESTADOS.EN_BODEGA;
+    return estadoPrevio;
+  }
+  // Sin rastro en el kardex se infiere de la propia ficha.
+  if (tieneContrato) return ESTADOS.ASIGNADO;
+  if (ficha && ficha.propiedad === "cliente") return ESTADOS.EN_CLIENTE;
+  return ESTADOS.EN_BODEGA;
+}
+
 // Transición por ID de doc — para flujos que ya identificaron la unidad exacta
 // (p.ej. el checklist de entrada al cerrar una enmienda, que lista las unidades
 // del pool y manda sus doc IDs). Mismo contrato de retorno que transicionar().
@@ -354,4 +435,6 @@ async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
   });
 }
 
-module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver, upsertContacto, transicionar, transicionarPorId };
+module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver,
+  upsertContacto, transicionar, transicionarPorId,
+  desasignarContrato, estadoPrevioAOrden, destinoAlSalirDeOrden };
