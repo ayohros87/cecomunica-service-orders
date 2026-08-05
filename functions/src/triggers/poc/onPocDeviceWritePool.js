@@ -47,14 +47,19 @@ module.exports = onDocumentWritten(
 
     const serial = (after.serial || "").toString().trim();
     if (!serial) return null;
-    // Solo cuando el serial aparece o cambia (no en cada edición del device).
-    if (before && pool.normSerial(before.serial) === pool.normSerial(serial)) return null;
+    // Solo cuando el serial aparece o cambia (no en cada edición del device)…
+    const mismoSerial = before && pool.normSerial(before.serial) === pool.normSerial(serial);
+    // …o cuando el device REVIVE: el borrado soltó el enlace y restaurarlo desde
+    // la lista POC tiene que rehacerlo, o la ficha queda sin su device (lo que
+    // deja el chequeo C2 de la conciliación marcando drift para siempre).
+    const revivido = !!before && before.deleted === true;
+    if (mismoSerial && !revivido) return null;
 
     // El serial CAMBIÓ (corrección de un batch mal tecleado): la ficha del
     // serial viejo se quedaba apuntando a este device, así que el mismo device
     // acababa enlazado desde DOS fichas y la vieja parecía un radio colocado
     // más. Los 12 fantasma de PROP20260731-01 arrastraban justo eso.
-    if (before) await desenlazar(before.serial, before, "serial corregido en el device");
+    if (before && !mismoSerial) await desenlazar(before.serial, before, "serial corregido en el device");
 
     try {
       const r = await pool.upsertContacto({

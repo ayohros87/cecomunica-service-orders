@@ -54,14 +54,45 @@ const PocService = {
     return db.collection('poc_devices').doc(id).update(this._conUnitIdNormalizado(fields, false));
   },
 
-  async softDeletePocDevice(id) {
+  // Borrado y restauración SIEMPRE dejan rastro en poc_logs. Era la única
+  // operación de POC sin log: cuando "Corregir estado → En bodega" desactivó el
+  // device equivocado (RADIO 3 de ERICK REYES, 2026-07-31) la auditoría no tenía
+  // dónde verlo y hubo que reconstruirlo por los movimientos del pool. `antes`
+  // es el doc tal como lo tenía la pantalla; `origen` dice qué flujo lo borró.
+  async softDeletePocDevice(id, { antes = null, user = null, origen = 'poc' } = {}) {
     const db = firebase.firestore();
-    return db.collection('poc_devices').doc(id).update({ deleted: true });
+    await db.collection('poc_devices').doc(id).update({
+      deleted:          true,
+      updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by:       user?.uid   || null,
+      updated_by_email: user?.email || null,
+    });
+    this._logBorrado(id, antes, user, origen, true);
   },
 
-  async restorePocDevice(id) {
+  async restorePocDevice(id, { antes = null, user = null, origen = 'poc' } = {}) {
     const db = firebase.firestore();
-    return db.collection('poc_devices').doc(id).update({ deleted: false });
+    await db.collection('poc_devices').doc(id).update({
+      deleted:          false,
+      updated_at:       firebase.firestore.FieldValue.serverTimestamp(),
+      updated_by:       user?.uid   || null,
+      updated_by_email: user?.email || null,
+    });
+    this._logBorrado(id, antes, user, origen, false);
+  },
+
+  // Best-effort: un log que falle no debe tumbar el borrado (mismo criterio que
+  // PocEdit.guardar). `accion` distingue estas entradas de las ediciones, que
+  // no traen el campo.
+  _logBorrado(id, antes, user, origen, borrado) {
+    this.addLog({
+      equipo_id: id,
+      fecha:     firebase.firestore.FieldValue.serverTimestamp(),
+      usuario:   user?.email || null,
+      accion:    borrado ? 'eliminar' : 'restaurar',
+      origen,
+      cambios:   { antes: antes || {}, despues: { deleted: borrado } },
+    }).catch(e => console.warn('poc_log write failed (non-critical):', e));
   },
 
   async addLog(data) {

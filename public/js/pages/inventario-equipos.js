@@ -1177,6 +1177,7 @@ window.EquiposPool = {
   // Dos entradas (misma corrección, motivo distinto): estado heredado de la
   // migración, y unidad "Por clasificar" que apareció físicamente en bodega.
   _corrigiendoId: null,
+  _corrPocDevice: null,   // device POC vinculado YA verificado contra el serial
 
   abrirCorregir(id) {
     if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden corregir estados.', 'bad'); return; }
@@ -1214,12 +1215,64 @@ window.EquiposPool = {
     // Device POC vinculado → ofrecer desactivarlo (soft-delete): si queda
     // activo, la lista POC sigue mostrando un radio que está en bodega y una
     // reedición de su serial lo re-marcaría "En POC".
+    // OJO: el vínculo puede estar RANCIO — si al device le cambiaron el serial
+    // después de enlazarlo, `poc_device_id` apunta a un radio que ya es OTRO y
+    // desactivarlo borra la programación de un tercero. Así desapareció el
+    // RADIO 3 de ERICK REYES el 2026-07-31: se corrigió a bodega el serial
+    // saliente y el borrado cayó sobre el device que 6 minutos antes había
+    // pasado al serial entrante. El check se premarca solo tras verificarlo.
     const rowPoc = document.getElementById('corrPocRow');
     rowPoc.style.display = eq.poc_device_id ? '' : 'none';
-    document.getElementById('corrDesactivarPoc').checked = !!eq.poc_device_id;
+    this._corrPocDevice = null;
+    const chkPoc = document.getElementById('corrDesactivarPoc');
+    chkPoc.checked = false;
+    chkPoc.disabled = true;
+    const detPoc = document.getElementById('corrPocDetalle');
+    detPoc.style.color = 'var(--fg-2)';
+    detPoc.textContent = eq.poc_device_id ? 'Verificando el device POC vinculado…' : '';
+    if (eq.poc_device_id) {
+      this._verificarPocVinculado(eq).catch(e => {
+        console.error('No se pudo verificar el device POC:', e);
+        detPoc.textContent = 'No se pudo leer el device POC vinculado — no se desactivará desde aquí.';
+      });
+    }
 
     document.getElementById('corrMotivo').value = '';
     Modal.open('eqCorregirModal');
+  },
+
+  // Contrasta el device POC enlazado con el serial de la ficha ANTES de ofrecer
+  // el borrado: solo cuando el device sigue llevando este mismo serial se
+  // habilita (y se premarca) el check.
+  async _verificarPocVinculado(eq) {
+    const dev = await PocService.getPocDevice(eq.poc_device_id, { source: 'server' });
+    if (this._corrigiendoId !== eq.id) return;   // el modal ya cambió de unidad
+    const esc = FMT.esc;
+    const det = document.getElementById('corrPocDetalle');
+    const chk = document.getElementById('corrDesactivarPoc');
+
+    if (!dev || dev.deleted === true) {
+      det.textContent = 'El device POC vinculado ya no está activo — no hay nada que desactivar.';
+      return;
+    }
+    const serialFicha = EquiposPoolService.normalizarSerial(eq.serial || eq.serial_norm || '');
+    const serialDev   = EquiposPoolService.normalizarSerial(dev.serial || '');
+    const quien = `${esc(dev.radio_name || dev.unit_id || '—')}${
+      (dev.cliente_nombre || dev.cliente) ? ' de ' + esc(dev.cliente_nombre || dev.cliente) : ''}`;
+
+    if (serialDev !== serialFicha) {
+      det.style.color = '#b91c1c';
+      det.innerHTML = `<strong>Vínculo desactualizado:</strong> ese device hoy es <strong>${quien}</strong>`
+        + ` con serial <span style="font-family:var(--font-mono);">${esc(dev.serial || '—')}</span>,`
+        + ` no ${esc(eq.serial || eq.serial_norm || '')}. No se va a tocar: desactivarlo borraría la`
+        + ` programación de otro radio. Si este serial quedó suelto en POC, elimínalo desde la página POC.`;
+      return;
+    }
+    det.innerHTML = `Se desactivará <strong>${quien}</strong> (unit ${esc(dev.unit_id || '—')}${
+      dev.sim_number ? ', SIM ' + esc(dev.sim_number) : ''}).`;
+    chk.disabled = false;
+    chk.checked = true;
+    this._corrPocDevice = dev;
   },
 
   async guardarCorreccion() {
@@ -1233,10 +1286,23 @@ window.EquiposPool = {
     try {
       await EquiposPoolService.corregirABodega(id, motivo, firebase.auth().currentUser);
       let msg = 'Estado corregido — la unidad quedó en bodega.';
-      if (eq.poc_device_id && document.getElementById('corrDesactivarPoc').checked) {
+      if (this._corrPocDevice && document.getElementById('corrDesactivarPoc').checked) {
         try {
-          await PocService.softDeletePocDevice(eq.poc_device_id);
-          msg += ' Device POC desactivado.';
+          // Relectura antes de borrar: entre abrir el modal y guardar, otra
+          // sesión pudo cambiarle el serial al device (así nació el caso ERICK
+          // REYES, con 6 minutos entre una cosa y la otra).
+          const fresco = await PocService.getPocDevice(this._corrPocDevice.id, { source: 'server' });
+          const sigueSiendoEste = fresco && fresco.deleted !== true
+            && EquiposPoolService.normalizarSerial(fresco.serial)
+               === EquiposPoolService.normalizarSerial(eq.serial || eq.serial_norm || '');
+          if (!sigueSiendoEste) {
+            msg += ' OJO: el device POC vinculado ya no corresponde a este serial — NO se desactivó.';
+          } else {
+            await PocService.softDeletePocDevice(fresco.id, {
+              antes: fresco, user: firebase.auth().currentUser, origen: 'inventario-correccion',
+            });
+            msg += ' Device POC desactivado.';
+          }
         } catch (e2) {
           console.error('No se pudo desactivar el device POC:', e2);
           msg += ' OJO: no se pudo desactivar el device POC — hazlo desde la página POC.';
@@ -1244,6 +1310,7 @@ window.EquiposPool = {
       }
       Modal.close('eqCorregirModal');
       this._corrigiendoId = null;
+      this._corrPocDevice = null;
       Toast.show(msg, 'ok');
       this.cargar();
     } catch (e) {

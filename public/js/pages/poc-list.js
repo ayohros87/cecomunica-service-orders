@@ -155,7 +155,9 @@ window.PocList = {
       delBtn.innerHTML = '<i data-lucide="trash-2"></i>';
       delBtn.onclick = async () => {
         if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true })) {
-          await PocService.softDeletePocDevice(docId);
+          await PocService.softDeletePocDevice(docId, {
+            antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+          });
           // Equipo eliminado con SIM → ofrecer devolver el SIM al pool.
           await SimLiberar.procesarDesactivados([{ id: docId, antes: d, despues: { ...d, deleted: true } }]);
           this.refresh();
@@ -169,7 +171,9 @@ window.PocList = {
         restBtn.title = 'Restaurar';
         restBtn.setAttribute('aria-label', 'Restaurar equipo');
         restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
-        restBtn.onclick = () => PocService.restorePocDevice(docId).then(() => this.refresh());
+        restBtn.onclick = () => PocService.restorePocDevice(docId, {
+          antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+        }).then(() => this.refresh());
         actionCell.appendChild(restBtn);
       }
     }
@@ -485,7 +489,9 @@ window.PocList = {
             restBtn.title = 'Restaurar';
             restBtn.setAttribute('aria-label', 'Restaurar equipo');
             restBtn.innerHTML = '<i data-lucide="rotate-ccw"></i>';
-            restBtn.onclick = () => PocService.restorePocDevice(d.id).then(() => this.mostrarTodo());
+            restBtn.onclick = () => PocService.restorePocDevice(d.id, {
+              antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+            }).then(() => this.mostrarTodo());
             ac.appendChild(restBtn);
           }
         }
@@ -577,7 +583,9 @@ window.PocList = {
         btnElim.innerHTML = '<i data-lucide="trash-2"></i>';
         btnElim.onclick = async () => {
           if (await Modal.confirm({ message: '¿Seguro que quieres eliminar este equipo?', danger: true })) {
-            await PocService.softDeletePocDevice(d.id);
+            await PocService.softDeletePocDevice(d.id, {
+              antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+            });
             // Equipo eliminado con SIM → ofrecer devolver el SIM al pool.
             await SimLiberar.procesarDesactivados([{ id: d.id, antes: d, despues: { ...d, deleted: true } }]);
             this.cargar(true);
@@ -591,7 +599,9 @@ window.PocList = {
           btnRest.title = 'Restaurar';
           btnRest.setAttribute('aria-label', 'Restaurar equipo');
           btnRest.innerHTML = '<i data-lucide="rotate-ccw"></i>';
-          btnRest.onclick = () => PocService.restorePocDevice(d.id).then(() => this.cargar(true));
+          btnRest.onclick = () => PocService.restorePocDevice(d.id, {
+            antes: d, user: firebase.auth().currentUser, origen: 'poc-lista',
+          }).then(() => this.cargar(true));
           acciones.appendChild(btnRest);
         }
       }
