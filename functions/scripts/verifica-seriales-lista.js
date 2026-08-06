@@ -8,8 +8,14 @@
  * Una ficha con FK a la fila N pero condicion 'reuso' es inconsistente:
  * fix-condicion-modelo.js la volvería a 'nuevo' (deriva del catálogo).
  *
+ * No todas las filas del catálogo tienen pareja: hay modelos que solo existen en
+ * refurbished (fila R suelta, sin fila N ni `variante_de`). Para esos el par
+ * N/R no se puede resolver por nombre, así que se pasa la fila a mano con
+ * `--modelo-id=` y la condición esperada la impone su `estado`.
+ *
  * USAGE (desde functions/):
  *   node scripts/verifica-seriales-lista.js <archivo-seriales.txt> <modeloBase> [condicion]
+ *   node scripts/verifica-seriales-lista.js <archivo-seriales.txt> --modelo-id=<id>
  *   OUT_CSV=ruta.csv para elegir la salida.
  */
 const fs = require("fs");
@@ -19,8 +25,10 @@ const db = admin.firestore();
 const pool = require("../src/domain/equiposPool");
 
 const ARCHIVO    = process.argv[2];
-const MODELO_ESP = process.argv[3] || "PNC360S";
-const COND_ESP   = (process.argv[4] || "reuso").toLowerCase();
+const MODELO_ID  = (process.argv.find((a) => a.startsWith("--modelo-id=")) || "").split("=")[1] || "";
+const args       = process.argv.slice(3).filter((a) => !a.startsWith("--"));
+const MODELO_ESP = args[0] || "PNC360S";
+let   COND_ESP   = (args[1] || "reuso").toLowerCase();
 
 function tight(s) {
   return (s || "").toString().toLowerCase()
@@ -37,15 +45,27 @@ function tight(s) {
   const nombreDe = (m) => (m.nombre || m.modelo || m.label || m.descripcion || "").toString().trim();
   const modelos = [];
   modelosSnap.forEach((d) => modelos.push({ id: d.id, ...d.data() }));
-  const base = modelos.find((m) =>
-    tight(nombreDe(m)) === tight(MODELO_ESP) && (m.estado || "").toUpperCase() === "N");
-  const variante = modelos.find((m) =>
-    (m.estado || "").toUpperCase() === "R" && base && m.variante_de === base.id);
-  const idEsperado = COND_ESP === "reuso" ? (variante && variante.id) : (base && base.id);
-  const nombreEsperado = COND_ESP === "reuso" ? (variante && nombreDe(variante)) : (base && nombreDe(base));
-  console.log(`Catalogo: base=${base ? `${nombreDe(base)} (${base.id})` : "NO ENCONTRADA"}` +
-    ` | reuso=${variante ? `${nombreDe(variante)} (${variante.id})` : "NO ENCONTRADA"}` +
-    ` | esperado modelo_id=${idEsperado || "?"}`);
+  let base, idEsperado, nombreEsperado;
+  if (MODELO_ID) {
+    // Fila señalada a mano: la condición la impone su estado, como en la captura.
+    const fila = modelos.find((m) => m.id === MODELO_ID);
+    if (!fila) throw new Error(`El modelo ${MODELO_ID} no existe en el catálogo`);
+    idEsperado = fila.id;
+    nombreEsperado = `${fila.marca || ""} ${fila.modelo || ""}`.trim() || nombreDe(fila);
+    COND_ESP = (fila.estado || "").toUpperCase() === "R" ? "reuso" : "nuevo";
+    console.log(`Catalogo: fila fijada = ${nombreEsperado} (${fila.id})` +
+      ` · estado ${fila.estado || "?"} → condicion "${COND_ESP}"`);
+  } else {
+    base = modelos.find((m) =>
+      tight(nombreDe(m)) === tight(MODELO_ESP) && (m.estado || "").toUpperCase() === "N");
+    const variante = modelos.find((m) =>
+      (m.estado || "").toUpperCase() === "R" && base && m.variante_de === base.id);
+    idEsperado = COND_ESP === "reuso" ? (variante && variante.id) : (base && base.id);
+    nombreEsperado = COND_ESP === "reuso" ? (variante && nombreDe(variante)) : (base && nombreDe(base));
+    console.log(`Catalogo: base=${base ? `${nombreDe(base)} (${base.id})` : "NO ENCONTRADA"}` +
+      ` | reuso=${variante ? `${nombreDe(variante)} (${variante.id})` : "NO ENCONTRADA"}` +
+      ` | esperado modelo_id=${idEsperado || "?"}`);
+  }
 
   const filas = [];
   for (const raw of lineas) {
@@ -100,7 +120,8 @@ function tight(s) {
 
   const porDiag = {};
   filas.forEach((f) => { porDiag[f.diagnostico] = (porDiag[f.diagnostico] || 0) + 1; });
-  console.log(`\n=== ${lineas.length} seriales | ${filas.length} fichas | esperado ${MODELO_ESP} / ${COND_ESP} ===`);
+  console.log(`\n=== ${lineas.length} seriales | ${filas.length} fichas` +
+    ` | esperado ${nombreEsperado || MODELO_ESP} / ${COND_ESP} ===`);
   Object.entries(porDiag).sort((a, b) => b[1] - a[1])
     .forEach(([k, v]) => console.log(String(v).padStart(3), k));
   console.log(`\nCSV: ${out}`);
