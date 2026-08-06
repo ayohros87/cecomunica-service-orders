@@ -34,4 +34,63 @@ function pendientesDevolucion(dev) {
   return porSerial + porModelo + papel;
 }
 
-module.exports = { pendientesDevolucion };
+// Estados del pool en los que una unidad todavía cuelga de su contrato. Copia
+// deliberada de equiposPool.ESTADOS (este módulo se mantiene sin dependencias
+// de Firestore); bajaPropioRecuperacion.test.js compara ambas y falla si
+// divergen.
+const ESTADOS_COLGANDO = ["asignado_contrato", "en_cliente"];
+
+const _tight = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/**
+ * Unidades de una baja que SÍ deben recuperarse, decidido ficha por ficha.
+ *
+ * El criterio es la propiedad de cada unidad, no el tipo del contrato: un
+ * contrato "Propio" (venta con servicio) normalmente lleva equipos del cliente
+ * —que no se recuperan— pero puede llevar unidades de la flota CeComunica
+ * mezcladas. Decidir por tipo de contrato dejaba esas unidades colgadas del
+ * contrato muerto y fuera del inventario (caso PROP20260805-02, 2026-08-06:
+ * 4 radios salidos de bodega que la baja no reclamó). `desconocida` se
+ * recupera a propósito: si resulta ser del cliente, el check-in tiene la
+ * excepción "no se devuelve"; al revés el equipo se pierde en silencio.
+ *
+ * @param {Object} p
+ * @param {Array}  p.fichas — [{ serial, modelo, modelo_id, pool_doc_id,
+ *        propiedad, estado, contrato_doc_id }] (una por serial del contrato)
+ * @param {string} p.contratoDocId — solo cuentan las fichas que siguen
+ *        apuntando a ESTE contrato (una reasignada ya es de otro)
+ * @param {Array}  [p.items] — [{ modelo, modelo_id, cantidad }] de la enmienda
+ * @param {string} [p.tipo] — 'terminacion_total' recupera todo lo elegible;
+ *        cualquier otro valor (baja parcial) respeta el cupo de `items`
+ * @returns {Array} subconjunto de `fichas`, ordenado por serial (determinista)
+ */
+function unidadesRecuperablesDeBaja({ fichas = [], contratoDocId = null, items = [], tipo = "" } = {}) {
+  const elegibles = fichas
+    .filter(f => f && (f.serial || "").toString().trim())
+    .filter(f => !contratoDocId || f.contrato_doc_id === contratoDocId)
+    .filter(f => ESTADOS_COLGANDO.includes(f.estado))
+    .filter(f => f.propiedad !== "cliente")
+    .sort((a, b) => String(a.serial).localeCompare(String(b.serial)));
+
+  if (tipo === "terminacion_total") return elegibles;
+
+  // Baja parcial: la enmienda cancela cantidades por modelo, no seriales. Se
+  // toman las primeras unidades elegibles de cada modelo hasta su cupo.
+  const cupo = new Map();
+  for (const it of items || []) {
+    const n = Number(it && it.cantidad || 0);
+    if (n <= 0) continue;
+    const k = it.modelo_id || _tight(it.modelo);
+    if (!k) continue;
+    cupo.set(k, Number(cupo.get(k) || 0) + n);
+  }
+  return elegibles.filter((f) => {
+    const k = (f.modelo_id && cupo.has(f.modelo_id)) ? f.modelo_id : _tight(f.modelo);
+    const libre = Number(cupo.get(k) || 0);
+    if (libre <= 0) return false;
+    cupo.set(k, libre - 1);
+    return true;
+  });
+}
+
+module.exports = { pendientesDevolucion, unidadesRecuperablesDeBaja, ESTADOS_COLGANDO };

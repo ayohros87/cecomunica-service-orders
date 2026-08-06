@@ -2,6 +2,8 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
+const { unidadesRecuperablesDeBaja } = require("../../lib/devolucion");
+const pool = require("../../domain/equiposPool");
 
 // Notifica y deriva el estado del contrato cuando una enmienda (baja/terminación)
 // se crea / aprueba / rechaza / cierra. Usa admin SDK: las escrituras al contrato
@@ -80,14 +82,19 @@ module.exports = onDocumentWritten(
     const tipoLabel     = TIPO_LABEL[after.tipo] || "Baja parcial";
     const motivoLabel   = MOTIVO_LABEL[after.motivo_codigo] || (after.motivo_codigo || "—");
 
-    // El contrato se lee UNA vez (cacheado): su tipo decide si la enmienda
-    // arrastra recuperación de equipos. Un contrato "Propio" es una venta con
-    // servicio — los radios son del cliente (onSerialWrite los marca
-    // propiedad:'cliente' por eso mismo), así que terminar el servicio NO
-    // genera tiquete de devolución. Sin este guard el taller recibía una orden
-    // para ir a recuperar equipos ajenos, y el check-in los habría metido a
-    // cuarentena y de ahí a bodega como si fueran flota propia.
-    // (onAnnulment ya hacía lo equivalente saltando propiedad === "cliente".)
+    // El contrato se lee UNA vez (cacheado): su tipo decide CÓMO se evalúa la
+    // recuperación de equipos. Un contrato "Propio" es una venta con servicio
+    // —los radios suelen ser del cliente— así que terminar el servicio no
+    // genera un tiquete para ir a buscarlos. Sin ese guard el taller recibía
+    // una orden para recuperar equipos ajenos, y el check-in los habría metido
+    // a cuarentena y de ahí a bodega como si fueran flota propia.
+    //
+    // Pero "Propio" NO implica que todas las unidades sean del cliente: la
+    // propiedad de la ficha manda (2026-08-06). Un contrato Propio puede
+    // llevar radios de la flota CeComunica mezclados —salidos de bodega y
+    // nunca reclasificados— y saltarse la orden entera los dejaba colgando de
+    // un contrato muerto, fuera del inventario. Ahora se decide ficha por
+    // ficha, igual que onAnnulment (que ya saltaba solo propiedad === "cliente").
     let _contrato;
     const getContrato = async () => {
       if (_contrato === undefined) {
@@ -104,6 +111,10 @@ module.exports = onDocumentWritten(
       return _contrato;
     };
     const esContratoPropio = (c) => !!c && (c.tipo_contrato === "Propio" || c.codigo_tipo === "PROP");
+    // Cuántas unidades de flota resultaron recuperables en un contrato Propio.
+    // null = todavía no se evaluó (eventos distintos de "aprobada"); el correo
+    // usa los campos ya persistidos en esos casos.
+    let recuperadasPropio = null;
 
     // ── 1) Derivar el estado del contrato (admin SDK) ───────────────────────
     if (contratoDocId) {
@@ -157,20 +168,87 @@ module.exports = onDocumentWritten(
     }
 
     // ── 1c) Tiquete de DEVOLUCIÓN al APROBARSE la baja ──────────────────────
-    // La baja lista modelos+cantidades (sin serial): la orden nace "por
-    // modelo" y el check-in captura el serial de cada unidad al llegar; de ahí
-    // salen pool → cuarentena y la ENTRADA de inspección (onOrdenDevolucionWrite).
-    // El cierre de la enmienda es solo administrativo.
+    // Alquiler/Temporal/Demo: la baja lista modelos+cantidades (sin serial), así
+    // que la orden nace "por modelo" y el check-in captura el serial de cada
+    // unidad al llegar; de ahí salen pool → cuarentena y la ENTRADA de
+    // inspección (onOrdenDevolucionWrite). Propio: los seriales YA están en el
+    // contrato, así que la orden nace con las unidades exactas — solo las que no
+    // son del cliente. El cierre de la enmienda es solo administrativo.
     if (approved && contratoDocId && !after.orden_devolucion_id && !after.devolucion_no_aplica) {
       try {
         const c = await getContrato();
         if (esContratoPropio(c)) {
-          // Equipos del cliente: la enmienda solo corta servicio y facturación.
-          // Se deja la marca para que la cola y el correo lo expliquen (y para
-          // que este bloque sea idempotente si el doc se vuelve a escribir).
-          await db.collection("solicitudes_cancelacion").doc(id)
-            .set({ devolucion_no_aplica: "propio" }, { merge: true });
-          logger.info("[onCancelacionWrite] Contrato Propio: sin orden de recuperación", { id, contratoId });
+          // Se resuelve la ficha de cada serial del contrato y se recuperan
+          // SOLO las unidades que no son del cliente.
+          const serialesSnap = await db.collection("contratos").doc(contratoDocId)
+            .collection("seriales").get();
+          const fichas = [];
+          const sinFicha = [];
+          for (const d of serialesSnap.docs) {
+            const s = d.data() || {};
+            const serial = (s.serial || "").toString().trim();
+            if (!serial) continue;
+            try {
+              // adoptarSiExiste: igual que onAnnulment — un desacuerdo de modelo
+              // entre contrato y ficha no puede esconder la unidad.
+              const { ref, data } = await pool.resolver(serial, s.modelo_id, s.modelo, { adoptarSiExiste: true });
+              if (!data) { sinFicha.push(serial); continue; }
+              fichas.push({
+                serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null,
+                pool_doc_id: ref.id, ref,
+                propiedad: data.propiedad, estado: data.estado,
+                contrato_doc_id: data.asignacion?.contrato_doc_id || null,
+              });
+            } catch (e) {
+              sinFicha.push(`${serial} (error: ${e.message})`);
+            }
+          }
+          if (sinFicha.length) {
+            logger.warn("[onCancelacionWrite] Seriales del contrato sin ficha resoluble en el pool",
+              { id, contratoId, seriales: sinFicha.slice(0, 20) });
+          }
+          const recuperables = unidadesRecuperablesDeBaja({
+            fichas, contratoDocId, items: after.items || [], tipo: after.tipo,
+          });
+          recuperadasPropio = recuperables.length;
+
+          if (!recuperables.length) {
+            // Todo es del cliente: la enmienda solo corta servicio y facturación.
+            // Se deja la marca para que la cola y el correo lo expliquen (y para
+            // que este bloque sea idempotente si el doc se vuelve a escribir).
+            await db.collection("solicitudes_cancelacion").doc(id)
+              .set({ devolucion_no_aplica: "propio" }, { merge: true });
+            logger.info("[onCancelacionWrite] Contrato Propio: sin orden de recuperación", { id, contratoId });
+          } else {
+            // Modo según la entrega: sin entrega confirmada lo usual es que los
+            // equipos nunca salieron de bodega, y "nunca salió" —el check-in que
+            // los regresa directo, sin inspección— solo existe en confirmación.
+            const modo = c && c.entrega_confirmada === true ? "recuperacion" : "confirmacion";
+            for (const u of recuperables) {
+              await u.ref.set({
+                pendiente_devolucion: true,
+                updated_at: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+            }
+            const ordenId = await crearOrdenDevolucion({
+              clienteId: after.cliente_id || (c && c.cliente_id) || null,
+              clienteNombre: cliente,
+              contratoDocId,
+              contratoId,
+              modo,
+              origen: { tipo: "baja", ref_id: id },
+              unidades: recuperables.map(u => ({
+                serial: u.serial, modelo: u.modelo, modelo_id: u.modelo_id, pool_doc_id: u.pool_doc_id,
+              })),
+              motivo: `${tipoLabel} aprobada — contrato ${contratoId} (unidades de flota CeComunica)`,
+            });
+            if (ordenId) {
+              await db.collection("solicitudes_cancelacion").doc(id)
+                .set({ orden_devolucion_id: ordenId }, { merge: true });
+            }
+            logger.info("[onCancelacionWrite] Contrato Propio con unidades de flota: orden creada",
+              { id, contratoId, unidades: recuperables.length, modo, ordenId });
+          }
         } else {
           const clienteIdDev = after.cliente_id || (c && c.cliente_id) || null;
           const ordenId = await crearOrdenDevolucion({
@@ -214,14 +292,26 @@ module.exports = onDocumentWritten(
          </p>`
       : "";
 
-    // Contrato Propio: los correos NO deben pedir recuperar equipos del cliente.
+    // Contrato Propio: los correos NO deben pedir recuperar equipos del cliente,
+    // pero sí deben avisar de las unidades de flota que sí se recuperan.
     const propio = esContratoPropio(await getContrato());
-    const notaPropio = propio
+    const sinRecuperacion = propio && (after.devolucion_no_aplica === "propio" || recuperadasPropio === 0);
+    const conFlota = propio && (recuperadasPropio > 0 || (!!after.orden_devolucion_id && !after.devolucion_no_aplica));
+    const notaPropio = !propio ? "" : conFlota
       ? `<div style="margin:0 0 14px;padding:11px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;font:14px/1.5 Arial,sans-serif;color:#1e40af;">
-           <b>Contrato Propio — equipos del cliente.</b> La enmienda termina el servicio y la facturación;
-           <b>no hay recuperación de equipos</b> (los radios son propiedad del cliente).
+           <b>Contrato Propio con equipos de flota.</b> Los radios del cliente se quedan con él, pero
+           ${recuperadasPropio ? `<b>${recuperadasPropio}</b> unidad(es)` : "una o más unidades"} son de la flota CeComunica:
+           se generó su <b>orden de devolución</b>.
          </div>`
-      : "";
+      : sinRecuperacion
+        ? `<div style="margin:0 0 14px;padding:11px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;font:14px/1.5 Arial,sans-serif;color:#1e40af;">
+             <b>Contrato Propio — equipos del cliente.</b> La enmienda termina el servicio y la facturación;
+             <b>no hay recuperación de equipos</b> (los radios son propiedad del cliente).
+           </div>`
+        : `<div style="margin:0 0 14px;padding:11px 14px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;font:14px/1.5 Arial,sans-serif;color:#1e40af;">
+             <b>Contrato Propio.</b> Los equipos del cliente no se recuperan. Si el contrato lleva unidades
+             de la flota CeComunica, su orden de devolución se genera al aprobar la enmienda.
+           </div>`;
 
     let subject, preheader, bodyHtml, ctaLabel, recipients;
 
@@ -249,17 +339,21 @@ module.exports = onDocumentWritten(
         ctaLabel  = "Ver enmiendas";
         bodyHtml  = `
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065f46;">Enmienda aprobada</h2>
-          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">La enmienda fue <b>aprobada</b>. Se facturará hasta <b>${escapeHtml(finStr)}</b> (último tramo prorrateado).${propio ? "" : " Procede la recuperación de los equipos."}</p>
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">La enmienda fue <b>aprobada</b>. Se facturará hasta <b>${escapeHtml(finStr)}</b> (último tramo prorrateado).${
+            !propio ? " Procede la recuperación de los equipos."
+              : conFlota ? " Procede la recuperación de las unidades de flota CeComunica." : ""}</p>
           ${notaPropio}${filaTabla}${liquidHtml}`;
       } else if (closed) {
         subject   = `Enmienda CERRADA: ${contratoId} – ${cliente}`;
-        preheader = propio ? `Enmienda cerrada · sin recuperación de equipos` : `Equipos recuperados · enmienda cerrada`;
+        preheader = sinRecuperacion ? `Enmienda cerrada · sin recuperación de equipos` : `Equipos recuperados · enmienda cerrada`;
         ctaLabel  = "Ver enmiendas";
         bodyHtml  = `
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#1e40af;">Enmienda cerrada</h2>
-          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">${propio
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">${sinRecuperacion
             ? "La enmienda quedó <b>cerrada</b>. No hubo recuperación de equipos: son propiedad del cliente."
-            : "Los equipos fueron recuperados y la enmienda quedó <b>cerrada</b>."}</p>
+            : conFlota
+              ? "Las unidades de flota CeComunica fueron recuperadas y la enmienda quedó <b>cerrada</b>. Los equipos del cliente se quedan con él."
+              : "Los equipos fueron recuperados y la enmienda quedó <b>cerrada</b>."}</p>
           ${notaPropio}${filaTabla}
           ${after.condicion_notas ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#374151;"><b>Condición:</b> ${escapeHtml(after.condicion_notas)}</p>` : ""}`;
       } else {

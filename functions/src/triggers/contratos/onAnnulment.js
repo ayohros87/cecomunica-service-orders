@@ -86,15 +86,28 @@ module.exports = onDocumentUpdated(
         const serialesSnap = await db.collection("contratos").doc(cid)
           .collection("seriales").get();
         const unidades = [];
+        // Lo que la anulación NO tocó, y por qué. Antes cada descarte era un
+        // `continue` mudo: 20919D0708 (PROP20260625-01, 2026-08-06) se quedó
+        // asignada a un contrato anulado porque su ficha decía PD506U-R y el
+        // contrato PD606-R — resolver no la reconoció y nadie se enteró.
+        const omitidas = [];
         for (const d of serialesSnap.docs) {
           const s = d.data() || {};
           const serial = (s.serial || "").toString().trim();
           if (!serial) continue;
           try {
-            const { ref, data } = await pool.resolver(serial, s.modelo_id, s.modelo);
-            if (!data) continue;
-            if (![pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE].includes(data.estado)) continue;
-            if (data.asignacion?.contrato_doc_id !== cid) continue;
+            // adoptarSiExiste: un desacuerdo de modelo entre el contrato y la
+            // ficha NO debe esconder la unidad. Para liberar/reclamar basta
+            // identificarla; el modelo de la ficha no se pisa (lo respeta
+            // upsertContacto) — aquí solo se lee.
+            const { ref, data } = await pool.resolver(serial, s.modelo_id, s.modelo, { adoptarSiExiste: true });
+            if (!data) { omitidas.push({ serial, motivo: "sin ficha en el pool" }); continue; }
+            if (![pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE].includes(data.estado)) {
+              omitidas.push({ serial, motivo: `estado ${data.estado}` }); continue;
+            }
+            if (data.asignacion?.contrato_doc_id !== cid) {
+              omitidas.push({ serial, motivo: `asignada a ${data.asignacion?.contrato_id || "otro contrato"}` }); continue;
+            }
             if (data.propiedad === "cliente") {   // propio del cliente: no se devuelve
               await degradarACustodia(ref, data);
               continue;
@@ -104,7 +117,14 @@ module.exports = onDocumentUpdated(
               updated_at: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
             unidades.push({ serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null, pool_doc_id: ref.id });
-          } catch (e) { /* unidad no resoluble: se omite */ }
+          } catch (e) {
+            omitidas.push({ serial, motivo: `error: ${e.message}` });
+          }
+        }
+        if (omitidas.length) {
+          logger.warn("[onContratoAnuladoNotify] Unidades que la anulación no tocó", {
+            contratoId, omitidas: omitidas.length, detalle: omitidas.slice(0, 20),
+          });
         }
         if (unidades.length) {
           const ordenId = await crearOrdenDevolucion({
