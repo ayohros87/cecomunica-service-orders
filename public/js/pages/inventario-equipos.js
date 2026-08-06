@@ -1051,6 +1051,7 @@ window.EquiposPool = {
       };
       const user = firebase.auth().currentUser;
       const res = await EquiposPoolService.recibir(seriales, opciones, user);
+      let noMovidos = 0;
 
       // Seriales que ya existen con OTRO modelo: se pregunta antes de partir la
       // ficha. Antes se creaban solas y solo lo avisaba un toast de paso — así
@@ -1081,12 +1082,50 @@ window.EquiposPool = {
         }
       }
 
+      // Seriales que YA tienen ficha de este modelo pero que el sistema tenía
+      // en otro lado. Contar un radio es afirmar dónde está, así que se
+      // pregunta y se traen a bodega. Sin esto la recepción decía "N ya
+      // existían" y no movía nada: el conteo no tenía efecto y bodega quedaba
+      // dependiendo de un script (44 NX-420-R así, 2026-08-06).
+      const reubicables = res.reubicables_pendientes || [];
+      if (reubicables.length) {
+        const confirmado = await Modal.confirm({
+          title: 'Equipos que el sistema tenía en otro lado',
+          danger: true,
+          confirmLabel: `Sí, ${reubicables.length === 1 ? 'está' : 'están'} en bodega`,
+          cancelLabel: 'No los muevas',
+          message: this._mensajeReubicacion(reubicables),
+        });
+        if (confirmado) {
+          const res3 = await EquiposPoolService.recibir(
+            reubicables.map(c => c.serial),
+            { ...opciones, confirmarReubicacion: true,
+              motivo: `Toma física de bodega${opciones.notas ? ` — ${opciones.notas}` : ''}` }, user);
+          res.reubicados += res3.reubicados;
+          res.bloqueados = (res.bloqueados || []).concat(res3.bloqueados || []);
+        } else {
+          noMovidos = reubicables.length;
+        }
+      }
+
       Modal.close('eqRecibirModal');
       let msg = `${res.nuevos} equipos recibidos en bodega.`;
-      if (res.existentes) msg += ` ${res.existentes} ya existían.`;
+      if (res.reubicados) msg += ` ${res.reubicados} traídos de vuelta a bodega.`;
+      if (res.existentes) msg += ` ${res.existentes} ya estaban.`;
+      // Decir "ya existían" de algo que sigue figurando con un cliente sería la
+      // misma mentira que este cambio vino a quitar.
+      if (noMovidos) msg += ` ${noMovidos} se dejaron donde estaban.`;
       if (res.colisiones) msg += ` ${res.colisiones} con serial compartido entre modelos.`;
       if (res.invalidos)  msg += ` ${res.invalidos} seriales inválidos.`;
-      Toast.show(msg, res.colisiones ? 'warn' : 'ok');
+      // Baja/vendido/en revisión no se mueven desde aquí: se nombran para que
+      // nadie crea que el conteo los cubrió.
+      const bloq = res.bloqueados || [];
+      if (bloq.length) {
+        msg += ` ${bloq.length} sin mover (${[...new Set(bloq.map(b =>
+          EquiposPoolService.ESTADO_LABELS[b.estado] || b.estado))].join(', ')}):`
+          + ` ${bloq.slice(0, 5).map(b => b.serial).join(', ')}${bloq.length > 5 ? '…' : ''}.`;
+      }
+      Toast.show(msg, (res.colisiones || bloq.length) ? 'warn' : 'ok');
       this.cargar();
     } catch (e) {
       console.error('Error al recibir equipos:', e);
@@ -1105,7 +1144,7 @@ window.EquiposPool = {
       + (c.estado_existente ? ` (${FMT.esc(EquiposPoolService.ESTADO_LABELS[c.estado_existente] || c.estado_existente)})` : '')
     ).join('<br>');
     const resto = pendientes.length > MAX ? `<br>… y ${pendientes.length - MAX} más` : '';
-    return `Estos ${pendientes.length === 1 ? 'seriales ya existe' : `${pendientes.length} seriales ya existen`}`
+    return `${pendientes.length === 1 ? 'Este serial ya existe' : `Estos ${pendientes.length} seriales ya existen`}`
       + ` en el pool con un modelo distinto`
       + (modeloLabel ? ` a <b>${FMT.esc(modeloLabel)}</b>` : ' al que estás recibiendo') + ':'
       + `<br><br>${filas}${resto}<br><br>`
@@ -1113,6 +1152,34 @@ window.EquiposPool = {
       + ` (caso Kenwood NX-420 / NX-920): se creará una ficha aparte para cada uno.`
       + `<br><br>Si el modelo que seleccionaste está equivocado, cancela y corrígelo —`
       + ` crear la ficha aparte cuenta el mismo radio dos veces en el inventario.`;
+  },
+
+  // Texto del diálogo de reubicación. Mismas reglas que el de colisión: va
+  // dentro de un <p>, solo <b>/<br>, todo dato escapado.
+  //
+  // Dice de dónde viene cada unidad —con cliente y contrato— porque ahí está la
+  // decisión: traer a bodega un radio que figura entregado deja al contrato
+  // listándolo. Si la lista no cuadra, se cancela y se revisa, no se confirma.
+  _mensajeReubicacion(pendientes) {
+    const MAX = 12;
+    const filas = pendientes.slice(0, MAX).map(c => {
+      const donde = EquiposPoolService.ESTADO_LABELS[c.estado] || c.estado;
+      const quien = c.cliente ? ` con ${FMT.esc(c.cliente)}` : '';
+      const cont = c.contrato ? ` (${FMT.esc(c.contrato)})` : '';
+      return `<b>${FMT.esc(c.serial)}</b> — el sistema lo tiene en ${FMT.esc(donde)}${quien}${cont}`;
+    }).join('<br>');
+    const resto = pendientes.length > MAX ? `<br>… y ${pendientes.length - MAX} más` : '';
+    const n = pendientes.length;
+    return `${n === 1 ? 'Este serial ya tiene ficha' : `Estos ${n} seriales ya tienen ficha`}`
+      + ` de este modelo, pero el sistema ${n === 1 ? 'no lo tenía' : 'no los tenía'} en bodega:`
+      + `<br><br>${filas}${resto}<br><br>`
+      + `Al confirmar estás <b>afirmando que ${n === 1 ? 'está' : 'están'} físicamente en bodega</b>`
+      + ` porque ${n === 1 ? 'lo acabas' : 'los acabas'} de contar.`
+      + ` ${n === 1 ? 'Pasa' : 'Pasan'} a <b>En bodega</b>, se ${n === 1 ? 'suelta' : 'sueltan'} sus`
+      + ` vínculos (contrato, orden, device POC) y queda movimiento en el kardex.`
+      + `<br><br>Si alguno sigue con un cliente, cancela: el inventario quedaría mintiendo.`
+      + ` Un contrato vigente <b>seguirá listando el serial</b> — hay que corregirlo también`
+      + ` en Seriales del contrato.`;
   },
 
   // ── Edición ──────────────────────────────────────────────────────────

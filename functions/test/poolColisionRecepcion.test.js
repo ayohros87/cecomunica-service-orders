@@ -186,6 +186,93 @@ test("con muchas colisiones el diálogo corta la lista y dice cuántas faltan", 
   assert.ok(!msg.includes("S19"), "solo se listan las primeras 12");
 });
 
+// ── Reubicación: el conteo mueve lo que ya tiene ficha ────────────────────
+// La recepción masiva sólo daba de alta lo que NO existía. Un conteo de radios
+// que ya tenían ficha reportaba "N ya existían" y no movía nada: el inventario
+// seguía diciendo que estaban con el cliente. Así los 44 NX-420-R del
+// 2026-08-06 tuvieron que entrar por script.
+
+test("lo que ya está en bodega no da trabajo", () => {
+  const r = S.clasificarReubicacion([item("A")],
+    mapa([["A", { estado: "en_bodega" }]]));
+  assert.deepEqual(plano(r).enBodega.map(x => x.norm), ["A"]);
+  assert.equal(r.reubicables.length, 0);
+  assert.equal(r.bloqueados.length, 0);
+});
+
+test("en taller / con cliente / por clasificar se pueden traer a bodega", () => {
+  for (const estado of ["en_taller", "en_cliente", "asignado_contrato", "por_clasificar"]) {
+    const r = S.clasificarReubicacion([item("A")], mapa([["A", { estado }]]));
+    assert.equal(r.reubicables.length, 1, estado);
+    assert.equal(r.reubicables[0].estado, estado);
+  }
+});
+
+test("baja, vendido y en revisión NO se mueven desde el conteo", () => {
+  // baja/vendido tienen su propio flujo; devuelto_revision sale a bodega
+  // cuando el taller le da Inspección OK, no cuando alguien lo cuenta.
+  for (const estado of ["baja", "vendido", "devuelto_revision"]) {
+    const r = S.clasificarReubicacion([item("A")], mapa([["A", { estado }]]));
+    assert.equal(r.reubicables.length, 0, estado);
+    assert.equal(r.bloqueados.length, 1, estado);
+  }
+});
+
+test("la reubicación arrastra cliente y contrato para poder preguntar", () => {
+  const r = S.clasificarReubicacion([item("B6C10686")],
+    mapa([["B6C10686", { estado: "en_cliente", asignacion: {
+      cliente_nombre: "HOTELES DECAMERON, S.R.L.", contrato_id: "ALQ20260304-02" } }]]));
+  assert.deepEqual(plano(r.reubicables), [{
+    serial: "B6C10686", norm: "B6C10686", estado: "en_cliente",
+    cliente: "HOTELES DECAMERON, S.R.L.", contrato: "ALQ20260304-02",
+  }]);
+});
+
+test("una ficha sin asignación no inventa cliente ni contrato", () => {
+  const r = S.clasificarReubicacion([item("A")], mapa([["A", { estado: "en_taller" }]]));
+  assert.equal(r.reubicables[0].cliente, "");
+  assert.equal(r.reubicables[0].contrato, "");
+});
+
+test("reubicación: entradas vacías no revientan", () => {
+  assert.deepEqual(plano(S.clasificarReubicacion([], mapa([]))),
+    { enBodega: [], reubicables: [], bloqueados: [] });
+  assert.deepEqual(plano(S.clasificarReubicacion(null, mapa([]))),
+    { enBodega: [], reubicables: [], bloqueados: [] });
+});
+
+test("el diálogo de reubicación dice de dónde viene cada unidad", () => {
+  const msg = cargarPagina()._mensajeReubicacion([
+    { serial: "B6C10686", estado: "en_cliente",
+      cliente: "HOTELES DECAMERON, S.R.L.", contrato: "ALQ20260304-02" },
+  ]);
+  assert.match(msg, /B6C10686/);
+  assert.match(msg, /HOTELES DECAMERON/);
+  assert.match(msg, /ALQ20260304-02/);
+  assert.ok(!msg.includes("en_cliente"), "el estado debe mostrarse con su etiqueta");
+  // Y advierte de lo que el movimiento NO arregla.
+  assert.match(msg, /Seriales del contrato/);
+});
+
+test("el diálogo de reubicación escapa los datos y no mete bloques en el <p>", () => {
+  const msg = cargarPagina()._mensajeReubicacion([
+    { serial: '<img src=x onerror=alert(1)>', estado: "en_taller",
+      cliente: '"><b>ups', contrato: "<script>" },
+  ]);
+  assert.ok(!msg.includes("<img"), "el serial debe ir escapado");
+  assert.ok(!msg.includes("<script"), "el contrato debe ir escapado");
+  assert.equal(/<(div|table|ul|p)\b/.test(msg), false, "solo <b>/<br> dentro del <p>");
+});
+
+test("con muchas reubicaciones el diálogo corta la lista", () => {
+  const muchas = Array.from({ length: 20 }, (_, i) => ({
+    serial: `S${i}`, estado: "en_taller", cliente: "", contrato: "" }));
+  const msg = cargarPagina()._mensajeReubicacion(muchas);
+  assert.match(msg, /Estos 20 seriales/);
+  assert.match(msg, /y 8 más/);
+  assert.ok(!msg.includes("S19"), "solo se listan los primeros 12");
+});
+
 test("una tanda mezclada se separa en sus dos grupos", () => {
   const r = S.clasificarColisiones(
     [item("A"), item("B"), item("C")],

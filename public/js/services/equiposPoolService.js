@@ -368,6 +368,41 @@ const EquiposPoolService = {
     return { mismoModelo, colisiones };
   },
 
+  // Estados desde los que un conteo físico PUEDE traer una unidad de vuelta a
+  // bodega. Son las ubicaciones que el sistema cree saber y el estante
+  // desmiente. Fuera quedan a propósito:
+  //   · baja / vendido → resucitar por una caja de pegado es demasiado; tienen
+  //     su propio flujo (revivir) y una decisión detrás.
+  //   · devuelto_revision → físicamente SÍ está en el estante, pero sale a
+  //     bodega cuando el taller le da "Inspección OK"; adelantarlo la pondría
+  //     disponible para entrega sin revisar (convención 2026-08-05).
+  REUBICABLES_DESDE: ['asignado_contrato', 'en_cliente', 'en_taller', 'por_clasificar'],
+
+  // De los seriales que YA tienen ficha del mismo modelo, cuáles hay que mover.
+  // Pura a propósito, igual que clasificarColisiones.
+  //
+  // Existe porque la recepción masiva sólo daba de alta lo que NO existía: un
+  // conteo de 44 radios que ya tenían ficha decía "44 ya existían" y no movía
+  // nada, con lo que bodega no tenía forma de corregir el inventario desde el
+  // app (agosto 2026 — los conteos salían por script).
+  clasificarReubicacion(items, existentesData) {
+    const enBodega = [], reubicables = [], bloqueados = [];
+    for (const v of items || []) {
+      const data = existentesData.get(v.norm);
+      if (!data) continue;
+      const estado = data.estado || '';
+      if (estado === this.ESTADOS.EN_BODEGA) { enBodega.push(v); continue; }
+      const info = {
+        serial: v.raw, norm: v.norm, estado,
+        cliente: (data.asignacion && data.asignacion.cliente_nombre) || '',
+        contrato: (data.asignacion && data.asignacion.contrato_id) || '',
+      };
+      if (this.REUBICABLES_DESDE.includes(estado)) reubicables.push(info);
+      else bloqueados.push(info);
+    }
+    return { enBodega, reubicables, bloqueados };
+  },
+
   // Recepción masiva de un modelo (pegado multilínea / lector de código de
   // barras / import Excel / toma física). Dedup contra la colección con
   // documentId() in (patrón sim_cards); los seriales que ya existen se
@@ -376,12 +411,21 @@ const EquiposPoolService = {
   // Las colisiones NO se escriben en la primera pasada: vuelven en
   // `colisiones_pendientes` para que la UI las confirme una por una. Con
   // `confirmarColisiones: true` (segunda llamada) sí se crean, sufijadas.
-  // Retorna { nuevos, existentes, colisiones, invalidos, colisiones_pendientes }.
+  //
+  // Los seriales que ya tienen ficha del MISMO modelo pero no están en bodega
+  // vuelven igual en `reubicables_pendientes`: contar un radio es afirmar dónde
+  // está, así que la UI lo pregunta y con `confirmarReubicacion: true` se los
+  // trae a bodega por `corregirABodega` (la misma función que usa la acción en
+  // lote de la página — nunca una segunda ruta de escritura).
+  // Retorna { nuevos, existentes, colisiones, invalidos, reubicados,
+  //           colisiones_pendientes, reubicables_pendientes, bloqueados }.
   async recibir(seriales, { modelo_id = null, modelo_label = '', condicion = 'nuevo',
                             proveedor = '', notas = '', origen = 'bodega',
-                            confirmarColisiones = false }, user, onProgress = null) {
+                            confirmarColisiones = false, confirmarReubicacion = false,
+                            motivo = '' }, user, onProgress = null) {
     const db = firebase.firestore();
-    const resultado = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, colisiones_pendientes: [] };
+    const resultado = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, reubicados: 0,
+      colisiones_pendientes: [], reubicables_pendientes: [], bloqueados: [] };
 
     const vistos = new Set();
     const validos = [];
@@ -433,7 +477,30 @@ const EquiposPoolService = {
     const yaEstaban = validos.filter(x => existentes.has(x.norm));
     const { mismoModelo, colisiones } = this.clasificarColisiones(
       yaEstaban, existentes, modelo_id, modelo_label);
-    resultado.existentes += mismoModelo.length;
+
+    // Del mismo modelo: las que ya están en bodega no dan trabajo; las que el
+    // sistema tenía en otro lado hay que traerlas — con confirmación.
+    const { enBodega, reubicables, bloqueados } =
+      this.clasificarReubicacion(mismoModelo, existentes);
+    resultado.existentes += enBodega.length;
+    resultado.bloqueados = bloqueados;
+
+    if (confirmarReubicacion) {
+      const nota = motivo || 'Toma física de bodega: la unidad está en el estante';
+      for (const v of reubicables) {
+        try {
+          await this.corregirABodega(v.norm, nota, user);
+          resultado.reubicados++;
+        } catch (e) {
+          // Otra sesión pudo moverla entre el conteo y la confirmación: se
+          // reporta como bloqueada en vez de tumbar la tanda entera.
+          bloqueados.push({ ...v, error: e.message || String(e) });
+        }
+        if (onProgress) onProgress(resultado.reubicados, reubicables.length, 'reubicando');
+      }
+    } else {
+      resultado.reubicables_pendientes = reubicables;
+    }
 
     if (!confirmarColisiones) {
       resultado.colisiones_pendientes = colisiones;
