@@ -19,6 +19,14 @@
  * clasificó como "cliente" porque entró únicamente por una orden de servicio
  * (regla 4 de backfill-propiedad.js) sin contrato que la amparara.
  *
+ * SERIALES COMPARTIDOS ENTRE MODELOS (Kenwood NX-420 / NX-920 y compañía): un
+ * serial puede tener DOS fichas, una por modelo, y son dos radios distintos.
+ * Contar el estante del modelo A no dice nada del radio del modelo B, así que
+ * cuando el serial trae varias fichas solo se toca la que ya es de este modelo
+ * y las demás se reportan intactas. Sin este filtro el conteo de NX-420-R del
+ * 2026-08-06 habría repuntado a NX-420-R la ficha NX-920-R de B3900146 —
+ * borrando de la flota 920 un radio que nadie contó.
+ *
  * USAGE (desde functions/):
  *   node scripts/ingresa-bodega-lista.js <archivo.txt> <modelo_id> [--write] [--email=..]
  *                                        [--propiedad=cecomunica|cliente|desconocida]
@@ -59,7 +67,8 @@ const PROPIEDADES = new Set(["cecomunica", "cliente", "desconocida"]);
   const seriales = [...new Set(fs.readFileSync(ARCHIVO, "utf8").split(/\r?\n/)
     .map((s) => pool.normSerial(s.trim())).filter(Boolean))];
 
-  const r = { creadas: 0, movidas: 0, soloModelo: 0, sinCambio: 0, contratos: new Map() };
+  const r = { creadas: 0, movidas: 0, soloModelo: 0, sinCambio: 0, otroModelo: 0,
+    ambiguos: [], contratos: new Map() };
   const detalle = [];
   let batch = db.batch(), ops = 0;
   const flush = async () => { if (ops && !dryRun) await batch.commit(); batch = db.batch(); ops = 0; };
@@ -96,7 +105,22 @@ const PROPIEDADES = new Set(["cecomunica", "cliente", "desconocida"]);
       continue;
     }
 
-    for (const doc of snap.docs) {
+    // Serial con varias fichas = colisión entre modelos: solo es de este conteo
+    // la que ya es de este modelo. Si ninguna lo es, nadie puede decidir desde
+    // aquí cuál era el radio que estaba en el estante.
+    let docs = snap.docs;
+    if (snap.size > 1) {
+      const propias = snap.docs.filter((d) => pool.mismoModelo(d.data(), MODELO_ID, LABEL));
+      r.otroModelo += snap.size - propias.length;
+      if (!propias.length) {
+        r.ambiguos.push({ serial: norm,
+          fichas: snap.docs.map((d) => `${d.data().modelo_label || "(sin modelo)"} [${d.id}]`) });
+        continue;
+      }
+      docs = propias;
+    }
+
+    for (const doc of docs) {
       const v = doc.data();
       const asig = v.asignacion || null;
       const yaOk = v.modelo_id === MODELO_ID && v.condicion === COND
@@ -164,6 +188,11 @@ const PROPIEDADES = new Set(["cecomunica", "cliente", "desconocida"]);
   console.log(`movidas a bodega:      ${r.movidas}`);
   console.log(`solo modelo/verificado: ${r.soloModelo}`);
   console.log(`sin cambio:            ${r.sinCambio}`);
+  if (r.otroModelo) console.log(`fichas de OTRO modelo (mismo serial), intactas: ${r.otroModelo}`);
+  if (r.ambiguos.length) {
+    console.log(`\nseriales con fichas SOLO de otros modelos — sin tocar, revisar a mano:`);
+    r.ambiguos.forEach((a) => console.log(`  ${a.serial}: ${a.fichas.join(" | ")}`));
+  }
   console.log(`contratos VIGENTES marcados para cancelar: ${marcados}`);
   if (dryRun) console.log("\n*** DRY-RUN — volver a correr con --write para aplicar ***");
   process.exit(0);
