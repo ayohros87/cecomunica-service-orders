@@ -338,15 +338,50 @@ const EquiposPoolService = {
     });
   },
 
+  // Separa los seriales que YA existen en dos grupos: los del mismo modelo
+  // (nada que hacer) y los que chocan con otro modelo. Pura a propósito —
+  // poolColisionRecepcion.test.js la ejercita sin Firestore.
+  //
+  // La colisión tiene dos causas que se ven idénticas y terminan distinto:
+  //   · serie realmente compartida entre modelos (Kenwood NX-420 / NX-920):
+  //     son dos radios físicos → la ficha aparte es correcta.
+  //   · modelo mal capturado en el conteo: es el MISMO radio → la ficha aparte
+  //     duplica el inventario (2026-07/08: 8 fichas así, 5 en circulación y
+  //     una llegó a facturarse).
+  // El sistema no puede distinguirlas; quien cuenta, sí. Por eso se devuelven
+  // para que la UI pregunte en vez de partir la ficha en silencio.
+  clasificarColisiones(items, existentesData, modeloId, modeloLabel) {
+    const mismoModelo = [], colisiones = [];
+    for (const v of items || []) {
+      const data = existentesData.get(v.norm);
+      if (!data) continue;
+      if (this._mismoModelo(data, modeloId, modeloLabel)) {
+        mismoModelo.push(v);
+      } else {
+        colisiones.push({
+          serial: v.raw, norm: v.norm,
+          modelo_existente: (data.modelo_label || '').trim() || '(sin modelo)',
+          estado_existente: data.estado || '',
+        });
+      }
+    }
+    return { mismoModelo, colisiones };
+  },
+
   // Recepción masiva de un modelo (pegado multilínea / lector de código de
   // barras / import Excel / toma física). Dedup contra la colección con
   // documentId() in (patrón sim_cards); los seriales que ya existen se
-  // resuelven uno a uno para aplicar el failsafe de colisión.
-  // Retorna { nuevos, existentes, colisiones, invalidos }.
+  // clasifican con `clasificarColisiones`.
+  //
+  // Las colisiones NO se escriben en la primera pasada: vuelven en
+  // `colisiones_pendientes` para que la UI las confirme una por una. Con
+  // `confirmarColisiones: true` (segunda llamada) sí se crean, sufijadas.
+  // Retorna { nuevos, existentes, colisiones, invalidos, colisiones_pendientes }.
   async recibir(seriales, { modelo_id = null, modelo_label = '', condicion = 'nuevo',
-                            proveedor = '', notas = '', origen = 'bodega' }, user, onProgress = null) {
+                            proveedor = '', notas = '', origen = 'bodega',
+                            confirmarColisiones = false }, user, onProgress = null) {
     const db = firebase.firestore();
-    const resultado = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0 };
+    const resultado = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, colisiones_pendientes: [] };
 
     const vistos = new Set();
     const validos = [];
@@ -358,8 +393,10 @@ const EquiposPoolService = {
     }
     if (!validos.length) return resultado;
 
-    // Existencia del ID limpio en chunks de 10 (1 lectura por chunk).
-    const existentes = new Set();
+    // Existencia del ID limpio en chunks de 10 (1 lectura por chunk). Se
+    // guardan los datos, no solo el id: el modelo de la ficha existente decide
+    // si esto es una colisión que hay que consultar.
+    const existentes = new Map();
     const chunks = [];
     for (let i = 0; i < validos.length; i += 10) {
       chunks.push(validos.slice(i, i + 10).map(v => v.norm));
@@ -368,7 +405,7 @@ const EquiposPoolService = {
       db.collection('equipos_pool')
         .where(firebase.firestore.FieldPath.documentId(), 'in', ids).get()
     ));
-    snaps.forEach(snap => snap.docs.forEach(d => existentes.add(d.id)));
+    snaps.forEach(snap => snap.docs.forEach(d => existentes.set(d.id, d.data())));
 
     // Los inexistentes entran en batches (doc + movimiento = 2 writes c/u).
     const nuevos = validos.filter(v => !existentes.has(v.norm));
@@ -391,11 +428,24 @@ const EquiposPoolService = {
       if (onProgress) onProgress(resultado.nuevos, validos.length, 'guardando');
     }
 
-    // Los que ya existen pasan por el failsafe uno a uno (colisiones son raras).
-    for (const v of validos.filter(x => existentes.has(x.norm))) {
+    // Los que ya existen: mismo modelo = nada que hacer; modelo distinto =
+    // decisión de quien cuenta.
+    const yaEstaban = validos.filter(x => existentes.has(x.norm));
+    const { mismoModelo, colisiones } = this.clasificarColisiones(
+      yaEstaban, existentes, modelo_id, modelo_label);
+    resultado.existentes += mismoModelo.length;
+
+    if (!confirmarColisiones) {
+      resultado.colisiones_pendientes = colisiones;
+      return resultado;
+    }
+
+    // Confirmadas: se crean sufijadas por el failsafe de `agregar` (una a una,
+    // en transacción — puede haber ya una sufijada de ese mismo modelo).
+    for (const c of colisiones) {
       try {
         const r = await this.agregar({
-          serial: v.raw, modelo_id, modelo_label, condicion, proveedor, notas, origen,
+          serial: c.serial, modelo_id, modelo_label, condicion, proveedor, notas, origen,
         }, user);
         if (r.colision) resultado.colisiones++; else resultado.nuevos++;
       } catch (e) {

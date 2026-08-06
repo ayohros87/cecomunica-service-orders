@@ -1041,18 +1041,50 @@ window.EquiposPool = {
     const btn = document.getElementById('btnGuardarRecibir');
     btn.disabled = true;
     try {
-      const res = await EquiposPoolService.recibir(seriales, {
+      const opciones = {
         modelo_id:    modeloId,
         modelo_label: this._modeloLabel(modeloId),
         condicion:    this._condicionDeModelo(modeloId) || 'nuevo',
         proveedor:    document.getElementById('recProveedor').value,
         notas:        document.getElementById('recNotas').value,
         origen:       document.getElementById('recTomaFisica').checked ? 'toma_fisica' : 'bodega',
-      }, firebase.auth().currentUser);
+      };
+      const user = firebase.auth().currentUser;
+      const res = await EquiposPoolService.recibir(seriales, opciones, user);
+
+      // Seriales que ya existen con OTRO modelo: se pregunta antes de partir la
+      // ficha. Antes se creaban solas y solo lo avisaba un toast de paso — así
+      // entraron 8 fichas duplicadas al inventario entre julio y agosto 2026.
+      const pendientes = res.colisiones_pendientes || [];
+      if (pendientes.length) {
+        const confirmado = await Modal.confirm({
+          title: 'Seriales que ya existen con otro modelo',
+          danger: true,
+          confirmLabel: `Sí, son ${pendientes.length === 1 ? 'otro equipo' : 'otros equipos'}`,
+          cancelLabel: 'No, voy a corregir el modelo',
+          message: this._mensajeColisiones(pendientes, opciones.modelo_label),
+        });
+        if (confirmado) {
+          const res2 = await EquiposPoolService.recibir(
+            pendientes.map(c => c.serial), { ...opciones, confirmarColisiones: true }, user);
+          res.nuevos     += res2.nuevos;
+          res.existentes += res2.existentes;
+          res.colisiones += res2.colisiones;
+        } else {
+          // El modal de recepción queda abierto con los datos puestos para
+          // corregir el modelo y volver a intentar.
+          let parcial = `${res.nuevos} equipos recibidos. ${pendientes.length} sin registrar:`
+            + ` corrige el modelo y vuelve a guardar.`;
+          Toast.show(parcial, 'warn');
+          this.cargar();
+          return;
+        }
+      }
+
       Modal.close('eqRecibirModal');
       let msg = `${res.nuevos} equipos recibidos en bodega.`;
       if (res.existentes) msg += ` ${res.existentes} ya existían.`;
-      if (res.colisiones) msg += ` ${res.colisiones} con serial compartido entre modelos (revisar).`;
+      if (res.colisiones) msg += ` ${res.colisiones} con serial compartido entre modelos.`;
       if (res.invalidos)  msg += ` ${res.invalidos} seriales inválidos.`;
       Toast.show(msg, res.colisiones ? 'warn' : 'ok');
       this.cargar();
@@ -1062,6 +1094,25 @@ window.EquiposPool = {
     } finally {
       btn.disabled = false;
     }
+  },
+
+  // Texto del diálogo de colisión. Se inyecta como HTML dentro de un <p>, así
+  // que solo <b>/<br> (nada de bloques) y todo dato va escapado.
+  _mensajeColisiones(pendientes, modeloLabel) {
+    const MAX = 12;
+    const filas = pendientes.slice(0, MAX).map(c =>
+      `<b>${FMT.esc(c.serial)}</b> — ya registrado como ${FMT.esc(c.modelo_existente)}`
+      + (c.estado_existente ? ` (${FMT.esc(EquiposPoolService.ESTADO_LABELS[c.estado_existente] || c.estado_existente)})` : '')
+    ).join('<br>');
+    const resto = pendientes.length > MAX ? `<br>… y ${pendientes.length - MAX} más` : '';
+    return `Estos ${pendientes.length === 1 ? 'seriales ya existe' : `${pendientes.length} seriales ya existen`}`
+      + ` en el pool con un modelo distinto`
+      + (modeloLabel ? ` a <b>${FMT.esc(modeloLabel)}</b>` : ' al que estás recibiendo') + ':'
+      + `<br><br>${filas}${resto}<br><br>`
+      + `Continúa <b>solo si de verdad son equipos distintos</b> que comparten numeración`
+      + ` (caso Kenwood NX-420 / NX-920): se creará una ficha aparte para cada uno.`
+      + `<br><br>Si el modelo que seleccionaste está equivocado, cancela y corrígelo —`
+      + ` crear la ficha aparte cuenta el mismo radio dos veces en el inventario.`;
   },
 
   // ── Edición ──────────────────────────────────────────────────────────
@@ -1760,12 +1811,41 @@ window.EquiposPool = {
         g.seriales.push(f.serial);
         grupos.set(key, g);
       }
+      const user = firebase.auth().currentUser;
       const res = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0 };
+      // Las colisiones de modelo no se crean solas: se juntan las de todos los
+      // grupos y se preguntan una vez, como en la recepción manual.
+      const porGrupo = [];
       for (const g of grupos.values()) {
-        const r = await EquiposPoolService.recibir(g.seriales, g.meta, firebase.auth().currentUser);
+        const r = await EquiposPoolService.recibir(g.seriales, g.meta, user);
         for (const k of Object.keys(res)) res[k] += r[k];
+        if ((r.colisiones_pendientes || []).length) {
+          porGrupo.push({ meta: g.meta, pendientes: r.colisiones_pendientes });
+        }
       }
-      Toast.show(`Import completado: ${res.nuevos} nuevos, ${res.existentes} ya existían, ${res.colisiones} colisiones de serial, ${res.invalidos} inválidos.`, res.colisiones ? 'warn' : 'ok');
+      const pendientes = porGrupo.flatMap(x => x.pendientes);
+      let sinImportar = 0;
+      if (pendientes.length) {
+        const confirmado = await Modal.confirm({
+          title: 'Seriales que ya existen con otro modelo',
+          danger: true,
+          confirmLabel: `Sí, son ${pendientes.length === 1 ? 'otro equipo' : 'otros equipos'}`,
+          cancelLabel: 'No, no los importes',
+          message: this._mensajeColisiones(pendientes, null),
+        });
+        if (confirmado) {
+          for (const g of porGrupo) {
+            const r2 = await EquiposPoolService.recibir(
+              g.pendientes.map(c => c.serial), { ...g.meta, confirmarColisiones: true }, user);
+            for (const k of Object.keys(res)) res[k] += r2[k];
+          }
+        } else {
+          sinImportar = pendientes.length;
+        }
+      }
+      Toast.show(`Import completado: ${res.nuevos} nuevos, ${res.existentes} ya existían, ${res.colisiones} colisiones de serial, ${res.invalidos} inválidos.`
+        + (sinImportar ? ` ${sinImportar} sin importar por modelo distinto — corrige el archivo.` : ''),
+        (res.colisiones || sinImportar) ? 'warn' : 'ok');
       this.cerrarImport();
       this.cargar();
     } catch (e) {
