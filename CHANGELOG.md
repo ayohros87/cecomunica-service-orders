@@ -37,9 +37,26 @@
 > trigger sobre `equipos_pool` (hoy no hay ninguno) y su valor depende de cuántos
 > `sin_registro` sobrevivan al trabajo de vinculación.
 >
-> Verificado: 136/136 tests (22 nuevos), lint sin errores, 54 grupos de reglas
+> **El chip gris exige evidencia de que hubo equipo.** Al medir contra
+> producción tras el backfill, el gris salía **86 veces y 80 eran anulados** —
+> pero 73 de esos 80 no tenían entrega confirmada NI un solo serial. El patrón
+> normal de la anulación es "se capturó mal y se rehizo el mismo día": nunca
+> salió un radio. Una bandeja que da falsa alarma 9 de cada 10 veces se deja de
+> mirar en una semana, así que `sin_registro` pide además `huboEquipo()`
+> (`seriales_count > 0` o `entrega_confirmada`). Las líneas de equipo cotizadas
+> NO cuentan: que el contrato liste 5 radios no prueba que salieran.
+> Resultado: **86 → 12 grises** (7 anulados + 5 renovaciones), todos reales.
+>
+> Esto también respondió la pregunta abierta de los legacy: excluirlos solo
+> quitaba 9 de 86, no era la palanca. La palanca era la evidencia de entrega.
+>
+> **DESPLEGADO 2026-08-07** (rules + 5 functions + hosting ×2). Backfills
+> corridos: 7 contratos origen con back-pointer, 4 contratos con espejo
+> (3 pendiente, 1 completa). Estado final en producción: 16 filas con chip de
+> 497 contratos — 3 pendiente, 1 completa, 12 sin registro.
+>
+> Verificado: 139/139 tests (25 nuevos), lint sin errores, 54 grupos de reglas
 > verdes contra el emulador, y render real de la lista en jsdom + Chrome headless.
-> **SIN DESPLEGAR** — faltan rules+functions+hosting y los dos backfills.
 
 ## [Bandeja: cola de transiciones apagada + diagnóstico del atraso] — 2026-08-07
 

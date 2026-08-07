@@ -331,9 +331,41 @@ hizo de entrada porque destruye información que hoy alguien puede estar usando.
 - Render real de `contratos-list.js` en jsdom + captura en Chrome headless: 7 filas, los 6
   estados del chip, 11 celdas alineadas con 11 encabezados.
 
-### Pendiente antes de dar esto por cerrado
+### Lo que enseñó producción (2026-08-07, tras el backfill)
 
-1. Desplegar `firestore.rules` + `functions` + `hosting`.
-2. Correr los backfills **en ese orden**, con `--dry` primero:
-   `backfill-linaje-back-pointer.js` → `backfill-devolucion-espejo.js`.
-3. Mirar cuántos `sin_registro` quedan y decidir si los legacy se excluyen.
+El chip gris salía **86 veces**, y **80 eran contratos anulados** — no
+renovaciones, como asumía el plan. Al segmentarlos por evidencia de que el
+equipo hubiera salido:
+
+| anulados sin tiquete | total |
+|---|---|
+| NO entregado + sin seriales | **73** ← nada salió |
+| NO entregado + con seriales | 5 |
+| entregado + con seriales | 1 |
+| entregado + sin seriales | 1 |
+
+El patrón normal de la anulación es "se capturó mal y se rehizo el mismo día".
+Por eso `sin_registro` exige ahora `huboEquipo()` — `seriales_count > 0` o
+`entrega_confirmada` — y las líneas de equipo cotizadas NO cuentan: que el
+contrato liste 5 radios no prueba que salieran. **86 → 12 grises.**
+
+Eso además respondió la pregunta abierta §7 sobre los legacy: excluirlos solo
+quitaba 9 de 86, no era la palanca. La palanca era la evidencia de entrega, y
+los legacy con entrega confirmada SÍ deben verse.
+
+**Estado en producción:** 16 filas con chip de 497 contratos — 3 pendiente,
+1 completa, 12 sin registro (7 anulados + 5 renovaciones).
+
+### Desplegado
+
+**2026-08-07**: `firestore.rules` + 5 functions (`onLinajeWrite` creada;
+`onOrdenDevolucionWrite`, `onEntregaTransicion`, `onContratoAnuladoNotify`,
+`onCancelacionWrite` actualizadas) + hosting ×2. Backfills corridos con `--dry`
+previo: 7 contratos origen con back-pointer, 4 contratos con espejo.
+
+### Pendiente
+
+1. **Push a `origin/main`** — commiteado y desplegado, sin subir.
+2. Vincular a mano los 42 contratos con transición pendiente; cada vínculo
+   convierte un gris en un ámbar o un verde real.
+3. Revisar los 12 grises uno por uno: son pocos y ahora todos tienen evidencia.
