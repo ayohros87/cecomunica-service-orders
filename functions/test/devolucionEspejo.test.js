@@ -204,14 +204,41 @@ test("navegador — contrato vigente y sin espejo: SIN chip", () => {
     "ser una renovación no significa que ESTE contrato deba devolver: devuelve su ORIGEN");
 });
 
-test("navegador — sin_registro: murió o fue renovado, pero nunca hubo tiquete", () => {
+test("navegador — sin_registro: murió o fue renovado TENIENDO equipo, sin tiquete", () => {
   const DC = cargarDevolucionContrato();
-  assert.equal(DC.estado({ estado: "anulado" }), "sin_registro");
-  assert.equal(DC.estado({ estado: "activo", baja_estado: "aprobada" }), "sin_registro");
-  assert.equal(DC.estado({ estado: "activo", terminacion_total: true }), "sin_registro");
-  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: ["otro"] }), "sin_registro");
-  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: [] }), null,
+  const conEquipo = { seriales_count: 4 };
+  assert.equal(DC.estado({ estado: "anulado", ...conEquipo }), "sin_registro");
+  assert.equal(DC.estado({ estado: "activo", baja_estado: "aprobada", ...conEquipo }), "sin_registro");
+  assert.equal(DC.estado({ estado: "activo", terminacion_total: true, ...conEquipo }), "sin_registro");
+  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: ["otro"], ...conEquipo }), "sin_registro");
+  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: [], ...conEquipo }), null,
     "un array vacío no es señal de nada");
+});
+
+test("navegador — el contrato anulado que nunca tuvo equipo NO pinta chip", () => {
+  // 73 de 80 anulados en producción (2026-08-07): capturados mal y rehechos el
+  // mismo día. Sin seriales ni entrega, no hay nada que devolver.
+  const DC = cargarDevolucionContrato();
+  assert.equal(DC.estado({ estado: "anulado" }), null);
+  assert.equal(DC.estado({ estado: "anulado", seriales_count: 0 }), null);
+  assert.equal(DC.estado({ estado: "anulado", equipos: [{ cantidad: 5 }] }), null,
+    "líneas de equipo cotizadas no prueban que el equipo saliera");
+});
+
+test("navegador — basta la entrega confirmada, aunque no haya seriales", () => {
+  // Contratos viejos o legacy: el equipo salió pero nadie registró seriales.
+  const DC = cargarDevolucionContrato();
+  assert.equal(DC.estado({ estado: "anulado", entrega_confirmada: true }), "sin_registro");
+  assert.equal(DC.huboEquipo({ entrega_confirmada: true }), true);
+  assert.equal(DC.huboEquipo({ seriales_count: 1 }), true);
+  assert.equal(DC.huboEquipo({ seriales_count: 0, entrega_confirmada: false }), false);
+  assert.equal(DC.huboEquipo(null), false);
+});
+
+test("navegador — el espejo GANA sobre la falta de evidencia", () => {
+  // Si hay tiquete, hubo equipo por definición: el conteo manda.
+  const DC = cargarDevolucionContrato();
+  assert.equal(DC.estado({ estado: "anulado", devolucion_estado: "pendiente" }), "pendiente");
 });
 
 test("navegador — la baja PENDIENTE todavía no obliga a devolver", () => {

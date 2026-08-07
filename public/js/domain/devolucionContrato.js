@@ -24,18 +24,32 @@ window.DevolucionContrato = {
         || (Array.isArray(data.renovado_por_ids) && data.renovado_por_ids.length > 0);
   },
 
+  // ¿Hay evidencia de que este contrato llegó a tener equipo físico afuera?
+  //
+  // Un contrato anulado el mismo día de crearlo —el patrón normal: se capturó
+  // mal y se rehízo— nunca asignó seriales ni confirmó entrega. No hay nada que
+  // devolver, y marcarlo "sin registro" es una falsa alarma.
+  //
+  // Medido contra producción (2026-08-07): de 80 anulados sin tiquete, **73 no
+  // tenían entrega confirmada NI un solo serial**. Sin este filtro el chip gris
+  // habría salido 80 veces para señalar 7 casos reales — y una bandeja que
+  // miente 9 de cada 10 veces se deja de mirar en una semana.
+  huboEquipo(data) {
+    if (!data) return false;
+    return Number(data.seriales_count || 0) > 0 || data.entrega_confirmada === true;
+  },
+
   // 'pendiente' | 'completa' | 'cerrada_con_faltantes' | 'no_aplica'
   //            | 'sin_registro' | null (sin chip)
   //
-  // 'sin_registro' es el estado más frecuente hoy y el más importante: el
-  // contrato debería estar devolviendo pero nunca se creó el tiquete (el
-  // vínculo de origen no se registró, o la baja es anterior al circuito).
-  // Pintarlo como 'completa' sería mentir — el sistema no sabe si el cliente
-  // devolvió. Ver PLAN_DEVOLUCION_EN_CONTRATOS.md §7.
+  // 'sin_registro' = el contrato terminó (o fue renovado) teniendo equipo
+  // afuera, pero nunca se creó el tiquete: el vínculo de origen no se registró,
+  // o la baja es anterior al circuito. Pintarlo 'completa' sería mentir — el
+  // sistema no sabe si el cliente devolvió. Ver PLAN_DEVOLUCION_EN_CONTRATOS.md §7.
   estado(data) {
     if (!data) return null;
     if (data.devolucion_estado) return data.devolucion_estado;
-    return this.enModoDevolucion(data) ? 'sin_registro' : null;
+    return (this.enModoDevolucion(data) && this.huboEquipo(data)) ? 'sin_registro' : null;
   },
 
   // Cuántos equipos faltan (0 si no aplica o no se sabe).
