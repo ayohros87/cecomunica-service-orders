@@ -129,7 +129,9 @@
               title="Todo el trabajo pendiente, del más viejo al más nuevo">
         <span class="pi-cola-n" id="cola-todas">—</span>
         <span class="pi-cola-lbl">Todo</span>
-        <span class="pi-cola-sub">las tres colas juntas</span>
+        <!-- Neutral a propósito: decía "las tres colas juntas" y la de
+             transiciones puede estar apagada (COLA_TRANSICIONES_ACTIVA). -->
+        <span class="pi-cola-sub">todo el trabajo pendiente</span>
       </button>
       <button class="pi-cola" data-cola="seriales" onclick="ColaInventario.setCola('seriales')"
               title="Contratos aprobados esperando que inventario asigne los seriales de los equipos">
