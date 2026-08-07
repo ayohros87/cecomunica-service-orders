@@ -69,7 +69,7 @@ async function _destinatarios(clienteId) {
  * @param {string} p.motivo — texto para observaciones y correo
  * @returns {string|null} ordenId, o null (best-effort).
  */
-async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, contratoId, modo, origen, unidades, porModelo, motivo }) {
+async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, contratoId, contratoOrigenIds, modo, origen, unidades, porModelo, motivo }) {
   const lista = (unidades || []).filter(u => (u.serial || "").toString().trim());
   const modelos = (porModelo || []).filter(m => Number(m.cantidad || 0) > 0);
   if (!lista.length && !modelos.length) return null;
@@ -119,6 +119,11 @@ async function crearOrdenDevolucion({ clienteId, clienteNombre, contratoDocId, c
       aplica: true,
       contrato_doc_id: contratoDocId || null,
       contrato_id: contratoId || null,
+      // Contratos ORIGEN del titular (renovación/reemplazo). Los equipos que
+      // este tiquete reclama son físicamente de ELLOS, así que el espejo
+      // (onOrdenDevolucionWrite) también marca su fila. Se denormaliza aquí
+      // para que el trigger no tenga que hacer la consulta inversa.
+      contrato_origen_ids: Array.isArray(contratoOrigenIds) ? contratoOrigenIds : [],
       motivo_no_aplica: null,
     },
     creado_por_uid: "system",

@@ -34,6 +34,77 @@ function pendientesDevolucion(dev) {
   return porSerial + porModelo + papel;
 }
 
+const ESTADO_CERRADA = "CERRADA (DEVOLUCION)";
+
+/**
+ * Cuántos equipos reclama en total el tiquete. Espejo de los tres orígenes de
+ * `pendientesDevolucion`, para poder decir "faltan 3 de 8" y no solo "faltan 3".
+ * @param {Object} dev — el subdocumento `devolucion` de la orden
+ * @returns {number}
+ */
+function esperadosDevolucion(dev) {
+  const d = dev || {};
+  if (d.modo === "sin_contrato") {
+    // El contrato de papel no tiene lista previa: manda la cantidad declarada
+    // al abrir el tiquete. Si alguien registró MÁS unidades de las declaradas,
+    // el total honesto es el mayor de los dos.
+    return Math.max(Number(d.total_esperado || 0), (d.esperados || []).length);
+  }
+  const porModelo = (d.esperados_por_modelo || [])
+    .reduce((s, m) => s + Number(m.cantidad || 0), 0);
+  return (d.esperados || []).length + porModelo;
+}
+
+/**
+ * Contribución de UNA orden de DEVOLUCIÓN al espejo del contrato.
+ * Lo consume onOrdenDevolucionWrite (por cada contrato afectado) y el backfill.
+ * @param {Object} orden — doc completo de la orden
+ * @returns {{pendientes:number, esperado:number, abierta:boolean}}
+ */
+function resumenDevolucion(orden) {
+  const o = orden || {};
+  const dev = o.devolucion || {};
+  return {
+    pendientes: pendientesDevolucion(dev),
+    esperado:   esperadosDevolucion(dev),
+    abierta:    o.estado_reparacion !== ESTADO_CERRADA,
+  };
+}
+
+/**
+ * Consolida el mapa `devolucion_tiquetes` del contrato en los campos planos que
+ * lee la lista (un contrato puede ser reclamado por más de un tiquete:
+ * multi-origen, o baja + renovación).
+ *
+ * `cerrada_con_faltantes` gana sobre `completa` cuando conviven tiquetes de los
+ * dos tipos: que un tiquete haya cerrado limpio no borra que otro dejó equipos
+ * afuera. Y `pendiente` gana sobre todo lo demás — hay trabajo vivo.
+ *
+ * @param {Object} tiquetes — { [ordenId]: {pendientes, esperado, abierta} }
+ * @returns {{pendientes:number, esperado:number, estado:string|null}}
+ */
+function derivarEstadoDevolucion(tiquetes) {
+  const filas = Object.values(tiquetes || {}).filter(t => t && typeof t === "object");
+  if (!filas.length) return { pendientes: 0, esperado: 0, estado: null };
+
+  const pendientes = filas.reduce((s, t) => s + Number(t.pendientes || 0), 0);
+  const esperado   = filas.reduce((s, t) => s + Number(t.esperado   || 0), 0);
+  const hayAbierta = filas.some(t => t.abierta);
+
+  let estado;
+  if (hayAbierta && pendientes > 0)        estado = "pendiente";
+  else if (!hayAbierta && pendientes > 0)  estado = "cerrada_con_faltantes";
+  else if (hayAbierta)                     estado = "pendiente_sin_faltantes";
+  else                                     estado = "completa";
+
+  // `pendiente_sin_faltantes` = tiquete abierto al que ya se le resolvió todo
+  // (falta cerrarlo administrativamente). Para la fila es "completa": el
+  // cliente ya no debe nada, y perseguirlo sería ruido.
+  if (estado === "pendiente_sin_faltantes") estado = "completa";
+
+  return { pendientes, esperado, estado };
+}
+
 // Estados del pool en los que una unidad todavía cuelga de su contrato. Copia
 // deliberada de equiposPool.ESTADOS (este módulo se mantiene sin dependencias
 // de Firestore); bajaPropioRecuperacion.test.js compara ambas y falla si
@@ -93,4 +164,8 @@ function unidadesRecuperablesDeBaja({ fichas = [], contratoDocId = null, items =
   });
 }
 
-module.exports = { pendientesDevolucion, unidadesRecuperablesDeBaja, ESTADOS_COLGANDO };
+module.exports = {
+  pendientesDevolucion, esperadosDevolucion, resumenDevolucion,
+  derivarEstadoDevolucion, unidadesRecuperablesDeBaja,
+  ESTADOS_COLGANDO, ESTADO_CERRADA,
+};

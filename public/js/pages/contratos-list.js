@@ -72,6 +72,62 @@ window.ContratosLista = {
     return '';
   },
 
+  // Columna "Devolución": ¿el cliente todavía tiene equipos de este contrato?
+  // Los conteos los denormaliza onOrdenDevolucionWrite desde la orden de
+  // DEVOLUCIÓN; el predicado vive en js/domain/devolucionContrato.js.
+  //
+  // Va en columna propia y no apilado en Estado a propósito: la fila ya puede
+  // llevar 3 chips (estado + baja + cambio de serial) y el pedido del equipo
+  // es escanear la lista en vertical buscando quién debe equipos.
+  devolucionPill(data, id) {
+    const estado = DevolucionContrato.estado(data);
+    if (!estado) return '';
+    const cid = id || data.id || '';
+
+    const faltan = DevolucionContrato.pendientes(data);
+    const total  = DevolucionContrato.esperados(data);
+    const ordenId = DevolucionContrato.ordenUnica(data);
+
+    let css, icon, label, title, href = '';
+    if (estado === 'pendiente') {
+      css = 'background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;';
+      icon = 'package-minus';
+      label = `Faltan ${faltan} de ${total}`;
+      title = `Devolución abierta · ${faltan} de ${total} equipo(s) siguen con el cliente`;
+      if (ordenId) href = `../ordenes/index.html?buscar=${encodeURIComponent(ordenId)}`;
+    } else if (estado === 'completa') {
+      css = 'background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;';
+      icon = 'check';
+      label = `Devuelto${total ? ` (${total})` : ''}`;
+      title = `Devolución cerrada · ${total || 'todos los'} equipo(s) regresaron`;
+      if (ordenId) href = `../ordenes/index.html?buscar=${encodeURIComponent(ordenId)}`;
+    } else if (estado === 'cerrada_con_faltantes') {
+      css = 'background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;';
+      icon = 'alert-triangle';
+      label = `${faltan} sin devolver`;
+      title = `Devolución cerrada con faltantes · ${faltan} de ${total} equipo(s) no regresaron`;
+      if (ordenId) href = `../ordenes/index.html?buscar=${encodeURIComponent(ordenId)}`;
+    } else if (estado === 'no_aplica') {
+      css = 'background:#EEF2F6;color:#4A5560;border:1px solid #DDE4EB;';
+      icon = 'minus-circle';
+      label = 'No aplica';
+      title = 'Contrato Propio — los equipos son del cliente, no hay nada que recuperar';
+    } else { // sin_registro
+      css = 'background:#F8FAFC;color:#6B7884;border:1px dashed #C2CCD6;';
+      icon = 'help-circle';
+      label = 'Sin registro';
+      title = data.estado === 'anulado' || data.baja_estado === 'aprobada' || data.terminacion_total
+        ? 'El contrato terminó pero nunca se registró la devolución — el sistema no sabe si los equipos regresaron'
+        : 'Fue renovado pero nunca se registró la transición — el sistema no sabe si los equipos regresaron';
+      href = `transicion.html?id=${cid}`;
+    }
+
+    const chip = `<span class="chip-estado" style="${css}" title="${title}"><i data-lucide="${icon}" style="width:12px;height:12px;"></i> ${label}</span>`;
+    return href
+      ? `<a href="${href}" style="text-decoration:none;" title="${title}">${chip}</a>`
+      : chip;
+  },
+
   // Chip informativo: hay una solicitud de cambio de serial PENDIENTE de que
   // inventario introduzca los reemplazos. El flag lo mantiene el trigger
   // onSerialCambio en el contrato (seriales_cambio_pendiente).
@@ -282,6 +338,7 @@ window.ContratosLista = {
           ${ContratosLista.cambioSerialPill(data)}
         </div>
       </td>
+      <td>${ContratosLista.devolucionPill(data, id)}</td>
       <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
       <td class="td-muted">${esc(CS.mapaUsuarios[data.creado_por_uid] || '-')}</td>
       <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">${FMT.money(tot.totalConITBMS)}</td>
@@ -327,6 +384,7 @@ window.ContratosLista = {
           <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
           ${ContratosLista.bajaPill(data)}
           ${ContratosLista.cambioSerialPill(data)}
+          ${ContratosLista.devolucionPill(data, data.id)}
         </div>
       </div>
       <div class="row">
@@ -341,9 +399,29 @@ window.ContratosLista = {
   // ── Filtering / sorting helpers ──────────────────────────────────
   filtrarLocal(data) {
     const mostrarInactivos = document.getElementById('chkMostrarInactivos')?.checked;
-    return data.filter(doc =>
-      mostrarInactivos ? true : !['inactivo','anulado'].includes(doc.estado)
-    );
+    const soloDevolucion   = document.getElementById('chkSoloDevolucion')?.checked;
+
+    return data.filter(doc => {
+      if (soloDevolucion) {
+        // Los anulados son justo donde más duele un equipo olvidado, así que
+        // este filtro ignora "Mostrar inactivos": esconderlos vaciaría la
+        // bandeja de los casos que más importan.
+        const estado = DevolucionContrato.estado(doc);
+        return estado === 'pendiente'
+            || estado === 'cerrada_con_faltantes'
+            || estado === 'sin_registro';
+      }
+      return mostrarInactivos ? true : !['inactivo','anulado'].includes(doc.estado);
+    });
+  },
+
+  // El filtro de devolución corre sobre lo YA CARGADO, no sobre la colección:
+  // "sin registro" es la AUSENCIA de devolucion_estado, y Firestore no puede
+  // consultar por un campo que no existe. Decirlo evita que la bandeja se lea
+  // como "estos son todos" cuando solo son los de las páginas cargadas.
+  avisoAlcanceDevolucion() {
+    if (!document.getElementById('chkSoloDevolucion')?.checked) return '';
+    return ` · <span class="td-muted" title="El filtro se aplica a los contratos ya cargados. Usa «Cargar más» para ampliar el alcance.">de ${CS.contratos.length} cargado(s)</span>`;
   },
 
   getSearchRange(searchText) {
@@ -527,6 +605,7 @@ window.ContratosLista = {
           <span class="badge pendiente" title="Pendientes">${pendientes}</span>
           <span class="badge aprobado" title="Aprobados">${aprobados}</span>
           <span class="badge completo" title="Activos">${activos}</span>
+          ${this.avisoAlcanceDevolucion()}
         `;
       }
 
@@ -579,6 +658,7 @@ window.ContratosLista = {
         <span class="badge pendiente" title="Pendientes">${pendientes}</span>
         <span class="badge aprobado" title="Aprobados">${aprobados}</span>
         <span class="badge completo" title="Activos">${activos}</span>
+        ${this.avisoAlcanceDevolucion()}
       `;
     }
     this.updateBtnCargarMas(false);
@@ -802,10 +882,12 @@ window.ContratosLista = {
         const sel    = document.getElementById('filtroEstado');
         const chkPnd = document.getElementById('chkSoloPendientes');
         const chkIna = document.getElementById('chkMostrarInactivos');
+        const chkDev = document.getElementById('chkSoloDevolucion');
         if (inp)    inp.value    = '';
         if (sel)    sel.value    = '';
         if (chkPnd) chkPnd.checked = false;
         if (chkIna) chkIna.checked = false;
+        if (chkDev) chkDev.checked = false;
         self.cargar(true);
       });
     }
@@ -813,6 +895,11 @@ window.ContratosLista = {
     const chkMostrarInactivos = document.getElementById('chkMostrarInactivos');
     if (chkMostrarInactivos) {
       chkMostrarInactivos.addEventListener('change', () => self.cargar(true));
+    }
+
+    const chkSoloDevolucion = document.getElementById('chkSoloDevolucion');
+    if (chkSoloDevolucion) {
+      chkSoloDevolucion.addEventListener('change', () => self.cargar(true));
     }
 
     const filtroClienteInput = document.getElementById('filtroCliente');

@@ -164,6 +164,7 @@
         <div style="flex:1;"></div>
 
         <label class="toggle-pill"><input type="checkbox" id="chkSoloPendientes"> <i data-lucide="clock" style="width:14px;height:14px;"></i> Solo pendientes</label>
+        <label class="toggle-pill" title="Contratos con equipos que el cliente todavía no devuelve, o sin registro de devolución. Incluye anulados aunque «Mostrar inactivos» esté apagado."><input type="checkbox" id="chkSoloDevolucion"> <i data-lucide="package-minus" style="width:14px;height:14px;"></i> Devolución pendiente</label>
         <label class="toggle-pill"><input type="checkbox" id="chkMostrarInactivos"> <i data-lucide="archive" style="width:14px;height:14px;"></i> Mostrar inactivos</label>
 
         <button id="btnLimpiarBusqueda" class="btn btn-ghost btn-sm" aria-label="Limpiar búsqueda"><i data-lucide="rotate-ccw"></i> Limpiar</button>
@@ -182,6 +183,7 @@
               <th>Acción</th>
               <th style="width:72px; text-align:center;">Equipos</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('estado')" style="width:140px;">Estado</th>
+              <th class="sortable" onclick="ContratosLista.ordenarPor('devolucion_pendientes')" style="width:150px;">Devolución</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('fecha_creacion')" style="width:110px;">Fecha</th>
               <th>Creado por</th>
               <th class="sortable" onclick="ContratosLista.ordenarPor('total')" style="width:110px; text-align:right;">Total</th>
@@ -197,6 +199,7 @@
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:110px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
@@ -209,6 +212,7 @@
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:110px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
@@ -221,6 +225,7 @@
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:32px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:100px; border-radius:999px;">&nbsp;</span></td>
+              <td><span class="skeleton" style="width:110px; border-radius:999px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:80px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:90px;">&nbsp;</span></td>
               <td><span class="skeleton" style="width:70px;">&nbsp;</span></td>
@@ -286,12 +291,13 @@
 
   <script defer src="../js/domain/ordenProgPendiente.js"></script>
   <script defer src="../js/domain/transicionPendiente.js"></script>
+  <script defer src="../js/domain/devolucionContrato.js"></script>
   <script defer src="../js/pages/contratos-state.js"></script>
   <script defer src="../js/pages/contratos-approval.js?v=cc1"></script>
   <script defer src="../js/pages/contratos-upload.js"></script>
   <script defer src="../js/pages/contratos-equipos.js"></script>
   <script defer src="../js/pages/contratos-seriales-cambio.js"></script>
-  <script defer src="../js/pages/contratos-list.js?v=num2"></script>
+  <script defer src="../js/pages/contratos-list.js?v=dev1"></script>
   <script src="../js/pages/contratos-index.js" defer></script>
 
   <!-- Aprobación overlay -->

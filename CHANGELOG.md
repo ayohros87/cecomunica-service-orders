@@ -1,5 +1,46 @@
 # Changelog
 
+## [Contratos: columna "Devolución" en la lista] — 2026-08-07
+
+> El equipo pidió saber **desde el index** si un contrato que fue renovación o
+> reemplazo —o que se anuló/dio de baja— todavía tiene equipos con el cliente.
+> El dato ya existía y era correcto (`pendientesDevolucion()` sobre la orden de
+> DEVOLUCIÓN); lo que faltaba era llevarlo a la fila sin una lectura por renglón.
+>
+> **Espejo denormalizado.** `onOrdenDevolucionWrite` estampa en el contrato
+> `devolucion_tiquetes` (mapa por id de orden) más los derivados planos
+> `devolucion_estado` / `devolucion_pendientes` / `devolucion_esperado`. El mapa
+> —y no un contador suelto— porque un contrato puede ser reclamado por VARIOS
+> tiquetes (multi-origen, o una baja parcial y luego una renovación): escribir
+> solo la clave de esta orden hace la operación idempotente sin consultar todas
+> las órdenes. Transacción, por dos check-ins simultáneos sobre el mismo contrato.
+>
+> **El chip se marca en los DOS contratos.** Los equipos pendientes son del
+> contrato VIEJO, pero el tiquete cuelga del NUEVO. `crearOrdenDevolucion` ahora
+> recibe `contratoOrigenIds` y lo denormaliza en la orden, así que el espejo
+> también marca la fila del origen. Para que el origen se entere de que fue
+> renovado hizo falta un back-pointer: trigger nuevo `onLinajeWrite` →
+> `renovado_por_ids[]`.
+>
+> **Estado "sin registro" (gris punteado).** Es el más importante de los cinco:
+> con 5 de 232 contratos transicionables vinculados, la enorme mayoría cae ahí.
+> Pintarlos verde sería mentir — el sistema no sabe si el cliente devolvió. Esa
+> columna es, de hecho, la cola de trabajo de vinculación.
+>
+> **El filtro no puede ser server-side**: `sin_registro` es la AUSENCIA del campo
+> y Firestore no consulta por eso. El toggle filtra sobre lo ya cargado y el
+> resumen del pie lo dice ("de N cargado(s)"); además ignora "Mostrar inactivos",
+> porque esconder los anulados vaciaría la bandeja de los casos más caros.
+>
+> Fases 0–2 del plan (`docs/plans/PLAN_DEVOLUCION_EN_CONTRATOS.md`). La Fase 3
+> —contar sin tiquete, leyendo el pool— queda diferida a propósito: pide un
+> trigger sobre `equipos_pool` (hoy no hay ninguno) y su valor depende de cuántos
+> `sin_registro` sobrevivan al trabajo de vinculación.
+>
+> Verificado: 136/136 tests (22 nuevos), lint sin errores, 54 grupos de reglas
+> verdes contra el emulador, y render real de la lista en jsdom + Chrome headless.
+> **SIN DESPLEGAR** — faltan rules+functions+hosting y los dos backfills.
+
 ## [Bandeja: cola de transiciones apagada + diagnóstico del atraso] — 2026-08-07
 
 > `ColaInventarioService.COLA_TRANSICIONES_ACTIVA = false`: la tercera cola de

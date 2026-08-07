@@ -24,6 +24,7 @@ const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
+const { origenIdsDe } = require("../../lib/linaje");
 
 module.exports = onDocumentUpdated(
   { document: "contratos/{cid}", region: "us-central1" },
@@ -41,9 +42,7 @@ module.exports = onDocumentUpdated(
     // Solo transicionables con origen vinculado, sin mapeos previos, no legacy.
     const esTransicionable = !after.renovacion_sin_equipo
       && (after.accion === "Renovación" || after.accion === "Adición" || after.codigo_tipo === "REEMP");
-    const origenIds = (Array.isArray(after.contrato_origen_ids) && after.contrato_origen_ids.length)
-      ? after.contrato_origen_ids
-      : (after.contrato_origen_id ? [after.contrato_origen_id] : []);
+    const origenIds = origenIdsDe(after);
     if (!esTransicionable || !origenIds.length) return null;
     if (after.seriales_estado === "legacy") return null;
     if (Number(after.transicion_mapeos_count || 0) > 0) return null; // ya hay registro manual
@@ -108,6 +107,7 @@ module.exports = onDocumentUpdated(
         clienteNombre: after.cliente_nombre || "",
         contratoDocId: cid,
         contratoId,
+        contratoOrigenIds: origenIds,
         modo: "recuperacion",
         origen: { tipo: "renovacion", ref_id: cid },
         unidades: unidades.map(u => ({

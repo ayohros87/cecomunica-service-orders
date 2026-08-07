@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 const { unidadesRecuperablesDeBaja } = require("../../lib/devolucion");
+const { origenIdsDe } = require("../../lib/linaje");
 const pool = require("../../domain/equiposPool");
 
 // Notifica y deriva el estado del contrato cuando una enmienda (baja/terminación)
@@ -218,6 +219,12 @@ module.exports = onDocumentWritten(
             // que este bloque sea idempotente si el doc se vuelve a escribir).
             await db.collection("solicitudes_cancelacion").doc(id)
               .set({ devolucion_no_aplica: "propio" }, { merge: true });
+            // El contrato también lo marca: su fila debe decir "no aplica" en vez
+            // de "sin registro", que mandaría a alguien a perseguir equipos ajenos.
+            await db.collection("contratos").doc(contratoDocId).set({
+              devolucion_estado: "no_aplica",
+              devolucion_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
             logger.info("[onCancelacionWrite] Contrato Propio: sin orden de recuperación", { id, contratoId });
           } else {
             // Modo según la entrega: sin entrega confirmada lo usual es que los
@@ -235,6 +242,7 @@ module.exports = onDocumentWritten(
               clienteNombre: cliente,
               contratoDocId,
               contratoId,
+              contratoOrigenIds: origenIdsDe(c),
               modo,
               origen: { tipo: "baja", ref_id: id },
               unidades: recuperables.map(u => ({
@@ -256,6 +264,7 @@ module.exports = onDocumentWritten(
             clienteNombre: cliente,
             contratoDocId,
             contratoId,
+            contratoOrigenIds: origenIdsDe(c),
             modo: "recuperacion",
             origen: { tipo: "baja", ref_id: id },
             unidades: [],

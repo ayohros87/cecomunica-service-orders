@@ -4,6 +4,7 @@ const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 const { recepcionEmails } = require("../../lib/mailRecipients");
+const { origenIdsDe } = require("../../lib/linaje");
 
 module.exports = onDocumentUpdated(
   {
@@ -132,6 +133,7 @@ module.exports = onDocumentUpdated(
             clienteNombre: after.cliente_nombre || "",
             contratoDocId: cid,
             contratoId,
+            contratoOrigenIds: origenIdsDe(after),
             modo: "confirmacion",
             origen: { tipo: "anulacion", ref_id: cid },
             unidades,

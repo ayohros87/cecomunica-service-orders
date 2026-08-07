@@ -29,7 +29,7 @@ const pool = require("../../domain/equiposPool");
 const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO } = require("../../lib/ordenEntrada");
 const { recepcionEmails } = require("../../lib/mailRecipients");
 const { APP_BASE_URL } = require("../../lib/inventario");
-const { pendientesDevolucion } = require("../../lib/devolucion");
+const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion } = require("../../lib/devolucion");
 
 const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]
@@ -113,6 +113,63 @@ async function avisarCierreConPendientes(ordenId, after, pendientes) {
     status: "queued",
   });
   logger.info("[onOrdenDevolucionWrite] Aviso de cierre con pendientes encolado", { ordenId, pendientes, to: destinatarios[0] });
+}
+
+// ── Espejo del tiquete en el contrato ────────────────────────────────────
+// La lista de contratos no puede abrir la orden por cada fila para saber si
+// quedan equipos afuera, así que el conteo se denormaliza en el contrato —
+// mismo patrón que `seriales_count` (onSerialWrite) o `baja_cancelado_total`
+// (onCancelacionWrite).
+//
+// El mapa `devolucion_tiquetes` está indexado por id de orden porque un
+// contrato puede ser reclamado por VARIOS tiquetes (multi-origen, o una baja
+// parcial y luego una renovación). Escribir solo la clave de esta orden hace
+// la operación idempotente sin tener que consultar todas las órdenes del
+// contrato. La transacción protege el caso —raro pero real— de dos check-ins
+// simultáneos sobre tiquetes distintos del mismo contrato.
+//
+// Se marcan DOS clases de contrato: el titular (`contrato.contrato_doc_id`) y
+// cada ORIGEN de una renovación (`contrato.contrato_origen_ids`). Los equipos
+// que el tiquete reclama son físicamente de los orígenes, y esa es la fila que
+// el personal abre cuando busca al cliente.
+async function estamparEspejo(ordenId, orden) {
+  const c = orden.contrato || {};
+  const destinos = [];
+  if (c.contrato_doc_id) destinos.push({ id: c.contrato_doc_id, rol: "titular" });
+  for (const origenId of (Array.isArray(c.contrato_origen_ids) ? c.contrato_origen_ids : [])) {
+    if (origenId && origenId !== c.contrato_doc_id) destinos.push({ id: origenId, rol: "origen" });
+  }
+  if (!destinos.length) return;
+
+  const resumen = resumenDevolucion(orden);
+
+  for (const destino of destinos) {
+    try {
+      await db.runTransaction(async (tx) => {
+        const ref  = db.collection("contratos").doc(destino.id);
+        const snap = await tx.get(ref);
+        if (!snap.exists) return;               // contrato borrado: nada que marcar
+
+        const tiquetes = { ...(snap.data().devolucion_tiquetes || {}) };
+        tiquetes[ordenId] = { ...resumen, rol: destino.rol };
+        const { pendientes, esperado, estado } = derivarEstadoDevolucion(tiquetes);
+
+        tx.set(ref, {
+          devolucion_tiquetes:       tiquetes,
+          devolucion_pendientes:     pendientes,
+          devolucion_esperado:       esperado,
+          devolucion_estado:         estado,
+          devolucion_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      });
+    } catch (e) {
+      // No crítico: el pool ya quedó aplicado y la orden es la fuente de
+      // verdad. Lo que se pierde es el chip de la lista, que el backfill rehace.
+      logger.warn("[onOrdenDevolucionWrite] No se pudo estampar el espejo en el contrato", {
+        ordenId, contrato: destino.id, rol: destino.rol, error: e.message,
+      });
+    }
+  }
 }
 
 // Estados en los que la ENTRADA aún acepta tandas (el taller no la ha tomado).
@@ -371,6 +428,11 @@ module.exports = onDocumentWritten(
         }
       }
     }
+
+    // Espejo en el/los contrato(s). Corre SIEMPRE, no solo cuando hubo
+    // resoluciones: la creación del tiquete es justo cuando el chip debe
+    // aparecer, y el cierre es cuando debe volverse verde.
+    await estamparEspejo(ordenId, after);
 
     return null;
   }

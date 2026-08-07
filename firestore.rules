@@ -83,7 +83,12 @@ service cloud.firestore {
         "firma_codigo", "firma_hash", "firma_url",
         "os_count", "equipos_total", "tiene_os", "os_linked",
         "os_serials_preview", "os_has_equipos", "os_last_orden_id",
-        "os_equipos_count_last", "os_dirty"
+        "os_equipos_count_last", "os_dirty",
+        // Espejo del pendiente de devolución (onOrdenDevolucionWrite) y
+        // back-pointer de linaje (onLinajeWrite): la lista de contratos los
+        // lee para el chip, así que nadie debe poder falsear "ya devolvió".
+        "devolucion_tiquetes", "devolucion_pendientes", "devolucion_esperado",
+        "devolucion_estado", "devolucion_actualizado_at", "renovado_por_ids"
       ]);
     }
 

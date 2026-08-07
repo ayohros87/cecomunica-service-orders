@@ -29,6 +29,9 @@ exports.onMapeoWrite                  = require("./src/triggers/contratos/onMape
 // Al confirmarse la entrega del contrato nuevo con origen vinculado: auto-registra
 // la devolución de todo el alquiler de los contratos originales (regla 2026-07-20)
 exports.onEntregaTransicion           = require("./src/triggers/contratos/onEntregaTransicion");
+// Back-pointer del linaje: el contrato ORIGEN queda marcado con renovado_por_ids
+// para que su propia fila pueda decir "debería estar devolviendo equipos"
+exports.onLinajeWrite                 = require("./src/triggers/contratos/onLinajeWrite");
 // Pool de equipos por serial — migración por contacto (PLAN_POOL_EQUIPOS_SERIAL.md)
 exports.onEntregaPool                 = require("./src/triggers/contratos/onEntregaPool");
 exports.onOrdenWritePool              = require("./src/triggers/ordenes/onOrdenWritePool");
