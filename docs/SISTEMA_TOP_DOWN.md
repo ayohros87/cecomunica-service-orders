@@ -159,6 +159,7 @@ enviada ──▶ convertida (venta) | rechazada | vencida (cron 06:00)
 - Transición/renovación (`contratos/transicion.html`): mapeos salientes↔entrantes append-only en `contratos/{id}/mapeos`; `onMapeoWrite` aplica linaje al pool (`reemplaza_a`, `pendiente_devolucion`). Recordatorio semanal a vendedores.
 - Cambio de serial post-asignación: solicitud en `seriales_cambios` → inventario corrige (candado parcial: solo los seriales solicitados) → correo de corrección a activaciones. "Equipo defectuoso" manda el serial anterior a cuarentena.
 - **Legacy**: ~310 contratos viejos con `seriales_estado='legacy'` (backfill `marcarSerialesLegacy`): fuera del flujo automático de seriales/activaciones; pueden registrar seriales como histórico (solo Guardar; el correo a activaciones queda bloqueado por backstop).
+- **Bandeja de bodega** (`inventario/pendientes.html`, módulo `pendientes`): las tres colas anteriores que le tocan a inventario —seriales por asignar, cambios de serial, transiciones sin mapear— vistas desde Inventario, sin el módulo Contratos y sin precios (proyección en `js/services/colaInventarioService.js`). Es un límite de UI: `contratos` sigue siendo `read: if isSignedIn()`.
 - Enmiendas/bajas/terminaciones: `solicitudes_cancelacion` + `onCancelacionWrite` (deriva estados `baja_estado`, `terminacion_total` y mueve equipos a cuarentena al cierre).
 
 ### 3.4 Pool de equipos, inventario, SIMs y POC

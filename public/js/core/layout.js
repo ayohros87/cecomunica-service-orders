@@ -184,6 +184,7 @@ const Layout = (() => {
       { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
     ]},
     { grupo: 'Almacén · finanzas', items: [
+      { id: 'pendientes',  label: 'Pendientes',  icon: 'inbox',        href: '/inventario/pendientes.html' },
       { id: 'inventario',  label: 'Inventario',  icon: 'package',      href: '/inventario/index.html' },
       { id: 'equipos',     label: 'Equipos (serial)', icon: 'scan-barcode', href: '/inventario/equipos.html' },
       { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
@@ -245,6 +246,13 @@ const Layout = (() => {
     const railMount = document.getElementById('rail-mount');
     if (railMount) railMount.outerHTML = railHtml;
     if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // Badge de la bandeja de bodega. Doble guarda a propósito: solo cuenta si
+    // el rol TIENE el módulo y si la página cargó el servicio — así el conteo
+    // lo pagan las páginas de inventario y nadie más.
+    if (visibles.includes('pendientes') && window.ColaInventarioService) {
+      ColaInventarioService.pintarBadgeRail();
+    }
 
     // El ancho de la columna lo manda <html data-cc-rail> (fijado ya en el
     // parse, arriba); aquí solo se sincroniza al alternar. Modo mini (solo

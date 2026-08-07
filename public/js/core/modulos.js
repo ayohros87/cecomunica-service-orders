@@ -16,10 +16,14 @@ window.MODULOS = (() => {
   // gerente (ausente del mapa histórico del home): supervisa comercial
   // (aprueba cotizaciones comerciales, aprueba/anula contratos) y tiene
   // ver-inventario/ver-progreso en roles.js.
+  // "pendientes" (bandeja de trabajo de bodega, inventario/pendientes.html):
+  // es la vía por la que `inventario` ve el trabajo que nace en un contrato
+  // SIN darle el módulo Contratos — de ahí que lo tengan justo los dos roles
+  // que trabajan esa cola.
   const visiblesPorRol = {
-    administrador: ["ordenes", "poc", "inventario", "equipos", "facturacion", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
+    administrador: ["ordenes", "poc", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
     gerente:       ["ordenes", "poc", "inventario", "equipos", "contratos", "cotizaciones", "clientes", "firma"],
-    inventario:    ["inventario", "equipos", "piezas", "firma"],
+    inventario:    ["inventario", "equipos", "pendientes", "piezas", "firma"],
     contabilidad:  ["facturacion", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],

@@ -137,6 +137,14 @@ window.HomeSignals = (() => {
       href: 'inventario/equipos.html?tab=por_clasificar',
       count: () => SenalesService.countEquiposPoolPorEstado('por_clasificar'),
     },
+    // Bandeja de bodega (inventario/pendientes.html): el trabajo que nace en
+    // un contrato y que hasta ahora solo llegaba por correo.
+    S15: {
+      modulo: 'pendientes', icon: 'scan-barcode', alert: true, moreIsBad: true,
+      label: 'Seriales por asignar', sub: 'contratos aprobados esperando bodega',
+      href: 'inventario/pendientes.html',
+      count: () => SenalesService.countSerialesPorAsignar(),
+    },
   };
 
   // Rol efectivo → señales (máx. 4). Cada señal pasa ADEMÁS por el gate de
@@ -158,7 +166,10 @@ window.HomeSignals = (() => {
     // desconocida es un atraso accionable, mientras que "por verificar" es una
     // marca blanda — y su entrada bajó al marcar verificadas las ENTRADAs.
     // S12 sigue accesible desde Equipos por serial (filtro "sin verificar").
-    inventario:        ['S11', 'S13', 'S14', 'S9'],
+    // S15 (seriales por asignar) desplaza a S11 (equipos en bodega): S11 es un
+    // dato de estado —ya está en los KPI de Inventario— y S15 es una cola con
+    // gente esperando. El tope de la fila son 4 señales.
+    inventario:        ['S15', 'S13', 'S14', 'S9'],
     vista:             ['S1', 'S3', 'S4'],
     contabilidad:      [],
   };

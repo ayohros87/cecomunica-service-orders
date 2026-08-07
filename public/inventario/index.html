@@ -65,6 +65,8 @@
   <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
   <script defer src="../js/services/equiposPoolService.js"></script>
+  <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->
+  <script defer src="../js/services/colaInventarioService.js"></script>
   <script defer src="../js/ui/toast.js"></script>
 
   <script src="../js/pages/inventario-index.js?v=cc13" defer></script>
@@ -88,6 +90,7 @@
         onclick: "window.location.href='./cargar-inventario.html'" }
     ],
     menu: [
+      { href: './pendientes.html',   label: '<i data-lucide="inbox"></i> Pendientes de inventario' },
       { href: './piezas.html',       label: '<i data-lucide="layers"></i> Piezas' },
       { html: '<a href="./vista-correo.html" target="_blank" class="overflow-menu-item"><i data-lucide="mail"></i> Vista correo</a>' },
       { onclick: 'exportarExcel()',  label: '<i data-lucide="download"></i> Excel' },

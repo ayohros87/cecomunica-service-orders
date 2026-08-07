@@ -97,6 +97,20 @@ const SenalesService = {
     );
   },
 
+  // Cola de bodega: contratos vigentes esperando que inventario asigne los
+  // seriales (la marca la estampa onContratoAprobadoSolicitaSeriales). Es el
+  // conteo exacto de la primera cola de inventario/pendientes.html; las otras
+  // dos colas de esa bandeja no entran aquí (la de transición necesita filtro
+  // en cliente y no se puede contar con un agregado).
+  countSerialesPorAsignar() {
+    const db = firebase.firestore();
+    return this._count(
+      db.collection('contratos')
+        .where('seriales_estado', '==', 'pendiente')
+        .where('estado', 'in', ['aprobado', 'activo'])
+    );
+  },
+
   countPiezasSinStock() {
     const db = firebase.firestore();
     return this._count(

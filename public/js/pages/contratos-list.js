@@ -107,15 +107,11 @@ window.ContratosLista = {
     //     trigger onMapeoWrite).
     //   · Crear orden de programación: seriales completos, sin entrega
     //     confirmada y sin órdenes vinculadas todavía.
-    const esTransicionable = esActivoOAprobado && !data.renovacion_sin_equipo
-      && (data.accion === 'Renovación' || data.accion === 'Adición' || data.codigo_tipo === 'REEMP');
-    // Corte legacy (mismo criterio que seriales): a los contratos del backfill
-    // 'legacy' NO se les exige transición — su intercambio físico ocurrió antes
-    // del pool y ya no es reconstruible (auditoría 2026-07-20: 191/206 de la
-    // cola eran legacy). La acción sigue disponible en el menú ⋯ por si se
-    // quiere registrar voluntariamente.
-    const transicionPendiente = esTransicionable && data.seriales_estado !== 'legacy'
-      && !Number(data.transicion_mapeos_count || 0);
+    // Ambos predicados son compartidos (js/domain/): el de transición lo usa
+    // además la bandeja "Pendientes de inventario", y el de la orden el feed
+    // "Órdenes por crear" del home. Un solo criterio para cada uno.
+    const esTransicionable = TransicionPendiente.esTransicionable(data);
+    const transicionPendiente = TransicionPendiente.contratoNecesitaTransicion(data);
     // Predicado compartido con el feed "Órdenes por crear" del home
     // (js/domain/ordenProgPendiente.js) — un solo criterio para ambos.
     const puedeCrearOrdenProg = OrdenProgPendiente.contratoNecesitaOrden(data);

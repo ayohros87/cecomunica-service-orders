@@ -161,6 +161,8 @@
        esta página y el servicio cambian juntos: la confirmación de colisión de
        modelo necesita las dos mitades de la misma versión. -->
   <script defer src="../js/services/equiposPoolService.js?v=cc24"></script>
+  <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->
+  <script defer src="../js/services/colaInventarioService.js"></script>
   <script defer src="../js/ui/equipo-ficha.js"></script>
   <script defer src="../js/services/pocService.js?v=cc12"></script> <!-- soft-delete del device en "Corregir estado" -->
 
@@ -183,6 +185,8 @@
         { label: '<i data-lucide="package-plus"></i> Recibir equipos', onclick: 'EquiposPool.abrirRecibir()', cls: 'primary', id: 'btnRecibir' },
       ],
       menu: [
+        { href: './pendientes.html', label: '<i data-lucide="inbox"></i> Pendientes de inventario' },
+        { divider: true },
         { label: '<i data-lucide="banknote"></i> Registrar venta (factura QBO)', onclick: 'EquiposPool.abrirVenta()', id: 'btnVenta' },
         { label: '<i data-lucide="upload"></i> Importar Excel', onclick: 'EquiposPool.abrirImport()', id: 'btnImportar' },
         { label: '<i data-lucide="download"></i> Descargar plantilla', onclick: 'EquiposPool.descargarPlantilla()', id: 'btnPlantilla' },

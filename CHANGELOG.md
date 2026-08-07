@@ -1,5 +1,38 @@
 # Changelog
 
+## [Pendientes de inventario: bandeja de bodega sin el módulo Contratos] — 2026-08-06
+
+> El rol `inventario` no tiene el módulo Contratos (`js/core/modulos.js`), pero
+> tres colas de trabajo suyas nacen DENTRO de un contrato y solo le llegaban por
+> correo: si el correo se borraba, el trabajo desaparecía de su vista. Nueva
+> página **`inventario/pendientes.html`** que las junta:
+>
+> 1. **Seriales por asignar** — `seriales_estado == 'pendiente'` (lo estampa
+>    `onContratoAprobadoSolicitaSeriales`).
+> 2. **Cambios de serial** — `seriales_cambio_pendiente` (lo mantiene
+>    `onSerialCambio`); el detalle (qué seriales y por qué) sale de la
+>    subcolección `seriales_cambios`.
+> 3. **Transiciones** — renovación/adición/reemplazo sin mapeo registrado.
+>
+> La proyección (`js/services/colaInventarioService.js`) copia solo lo
+> operativo —contrato, cliente, modelo, cantidad, progreso, antigüedad— y **no**
+> los precios de `equipos[]` ni los totales; el test
+> `functions/test/colaInventarioPendientes.test.js` lo congela. Nuevo módulo de
+> visibilidad `pendientes` (admin + inventario) con entrada de rail, badge
+> (agregados `count()`, cache 5 min) y tarjeta en el home; la señal **S15
+> "Seriales por asignar"** desplaza a S11 en la fila de inventario. El predicado
+> de transición se extrajo a `js/domain/transicionPendiente.js` — antes estaba
+> inlineado en `contratos-list.js` y la bandeja lo habría duplicado.
+>
+> **Es un límite de UI, no un candado**: `contratos` sigue siendo
+> `read: if isSignedIn()` en las reglas, así que el doc completo (con precios)
+> sigue viajando al navegador y `/contratos/index.html` se abre escribiendo la
+> URL. El candado real —proyección server-side mantenida por trigger + cerrar el
+> read de `contratos` por rol— es una fase aparte: obliga a auditar TODOS los
+> lectores de la colección (fichas de equipo, órdenes, POC, facturación). Sin
+> cambios de reglas ni de índices (la compuesta `seriales_estado + estado` ya
+> existía).
+
 ## [Ventas directas: estado `vendido` + "Registrar venta" en el pool] — 2026-07-17
 
 > Fase 0 de la conexión con las ventas de QuickBooks: un equipo vendido SIN
