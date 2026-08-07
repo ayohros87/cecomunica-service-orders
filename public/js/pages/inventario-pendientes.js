@@ -126,6 +126,16 @@ window.ColaInventario = (() => {
     return { seriales: 'seriales', cambio: 'cambios', transicion: 'transiciones' }[cola] || cola;
   }
 
+  // La tarjeta de transiciones se oculta mientras la cola esté apagada en el
+  // servicio (COLA_TRANSICIONES_ACTIVA). Ocultar y no borrar: encenderla es
+  // cambiar un booleano, no reconstruir la pantalla.
+  function aplicarColasActivas() {
+    if (ColaInventarioService.COLA_TRANSICIONES_ACTIVA) return;
+    const card = document.querySelector('.pi-cola[data-cola="transicion"]');
+    if (card) card.style.display = 'none';
+    if (ctx.cola === 'transicion') ctx.cola = '';
+  }
+
   function pintarColas() {
     const d = ctx.datos || { seriales: [], cambios: [], transiciones: [] };
     const n = { seriales: d.seriales.length, cambio: d.cambios.length, transicion: d.transiciones.length };
@@ -181,6 +191,7 @@ window.ColaInventario = (() => {
   async function cargar() {
     const loader = $('loader');
     if (loader) loader.style.display = '';
+    aplicarColasActivas();
     try {
       ctx.datos = await ColaInventarioService.todo();
       const aviso = $('avisoFallidas');

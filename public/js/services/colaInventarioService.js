@@ -24,6 +24,16 @@
 // el read de contratos por rol) es una fase aparte.
 const ColaInventarioService = {
 
+  // La cola de transiciones nace APAGADA (2026-08-07). El diagnóstico contra
+  // producción encontró 42 contratos pendientes que no son trabajo del día de
+  // bodega, sino un atraso acumulado: la pantalla de transición no se ha usado
+  // nunca (1 registro en 232 transicionables) y el auto-registro de
+  // onEntregaTransicion no puede rescatarlos porque exige `contrato_origen_ids`,
+  // que solo tienen 5 de 232. Mostrárselo a bodega sin triar convierte la
+  // bandeja en una lista de reproches. Se enciende poniendo esto en true —
+  // el resto del circuito (query, fila, CTA, tarjeta) queda intacto y probado.
+  COLA_TRANSICIONES_ACTIVA: false,
+
   ESTADOS_VIGENTES: ['aprobado', 'activo'],
   LIMITE: 200,
   // La cola de transición no se puede filtrar server-side (el criterio mira
@@ -160,7 +170,10 @@ const ColaInventarioService = {
     const [seriales, cambios, transiciones] = await Promise.all([
       this.serialesPorAsignar().catch(e => { console.warn('[ColaInventario] seriales:', e?.code || e); return null; }),
       this.cambiosDeSerial().catch(e => { console.warn('[ColaInventario] cambios:', e?.code || e); return null; }),
-      this.transicionesPorRegistrar().catch(e => { console.warn('[ColaInventario] transiciones:', e?.code || e); return null; }),
+      // Apagada: ni siquiera se consulta (son 300 docs por carga de página).
+      this.COLA_TRANSICIONES_ACTIVA
+        ? this.transicionesPorRegistrar().catch(e => { console.warn('[ColaInventario] transiciones:', e?.code || e); return null; })
+        : Promise.resolve([]),
     ]);
     return {
       seriales: seriales || [],

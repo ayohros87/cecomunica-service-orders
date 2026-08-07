@@ -246,7 +246,7 @@ test("la señal del home y la tarjeta apuntan al mismo módulo que existe", () =
 });
 
 // ── Render de la tabla ─────────────────────────────────────────────────────
-function cargarPagina(datos) {
+function cargarPagina(datos, transicionesActivas = true) {
   const nodos = {};
   const nodo = (id) => (nodos[id] = nodos[id] || { innerHTML: "", textContent: "", style: {} });
   ["tablaPendientes", "estadoVacio", "wrapTabla", "resumenPendientes", "loader",
@@ -261,10 +261,14 @@ function cargarPagina(datos) {
     document: {
       addEventListener: (ev, cb) => { if (ev === "DOMContentLoaded") onReady = cb; },
       getElementById: (id) => nodos[id] || null,
-      querySelector: () => ({ classList: { toggle: noop } }),
+      querySelector: () => ({ classList: { toggle: noop }, style: {} }),
       querySelectorAll: () => [],
     },
-    ColaInventarioService: { todo: async () => datos, refrescarBadge: noop },
+    ColaInventarioService: {
+      todo: async () => datos,
+      refrescarBadge: noop,
+      COLA_TRANSICIONES_ACTIVA: transicionesActivas,
+    },
     Toast: { show: noop },
     canRole: (rol) => ["administrador", "inventario", "recepcion", "vendedor", "gerente"].includes(rol),
     verificarAccesoYAplicarVisibilidad: (cb) => { ctx._init = cb; },
@@ -332,6 +336,38 @@ test("una cola que falló se avisa en vez de contarse como cero", async () => {
   await api.recargar();
   assert.equal(nodos.avisoFallidas.style.display, "");
   assert.match(nodos.avisoFallidas.innerHTML, /cambios/);
+});
+
+// La cola de transiciones va apagada mientras se tría el atraso (42 contratos
+// que nadie ha trabajado nunca). Apagada = ni se consulta ni se ve.
+test("con la cola de transiciones apagada no se consulta ni se cuenta", async () => {
+  const svc = cargarServicio({
+    seriales_estado: [{ id: "c1", data: CONTRATO_SERIALES }],
+    seriales_cambio_pendiente: [],
+  });
+  assert.equal(svc.COLA_TRANSICIONES_ACTIVA, false,
+    "la cola de transiciones se encendió sin triar el atraso");
+
+  let llamada = false;
+  svc.transicionesPorRegistrar = async () => { llamada = true; return [{ tipo: "transicion" }]; };
+  const datos = await svc.todo();
+  assert.equal(llamada, false, "se consultó la cola apagada (300 docs por carga)");
+  assert.equal(datos.transiciones.length, 0);
+  assert.equal(datos.fallidas.length, 0, "una cola apagada no es una cola caída");
+
+  // Y encendida vuelve a entrar, sin tocar nada más.
+  svc.COLA_TRANSICIONES_ACTIVA = true;
+  const conCola = await svc.todo();
+  assert.equal(conCola.transiciones.length, 1);
+});
+
+test("la tarjeta de transiciones se oculta cuando la cola está apagada", async () => {
+  const { api } = cargarPagina(
+    { seriales: [], cambios: [], transiciones: [], fallidas: [] }, false);
+  // No revienta y no deja el filtro colgado en una cola invisible.
+  await api.recargar();
+  api.setCola("transicion");
+  await api.recargar();
 });
 
 test("sin permiso de gestionar seriales la bandeja no se carga", () => {

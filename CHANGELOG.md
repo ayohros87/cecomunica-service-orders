@@ -1,5 +1,37 @@
 # Changelog
 
+## [Bandeja: cola de transiciones apagada + diagnóstico del atraso] — 2026-08-07
+
+> `ColaInventarioService.COLA_TRANSICIONES_ACTIVA = false`: la tercera cola de
+> la bandeja de bodega nace apagada (ni se consulta ni se ve). No es trabajo del
+> día, es un atraso acumulado que no le corresponde a bodega descubrir.
+>
+> Diagnóstico contra producción (solo lectura, 2026-08-07). De **232 contratos
+> transicionables** vigentes: 189 legacy, **1 con mapeos registrados**, **42
+> pendientes**. Y **solo 5 de 232 tienen contrato de origen vinculado** — que es
+> justo lo que `onEntregaTransicion` exige para auto-registrar, así que el
+> rediseño del 2026-07-20 ("caso estándar = cero pasos") casi nunca se dispara:
+> 32 de los 42 pendientes son POSTERIORES a ese deploy, o sea que la cola sigue
+> creciendo.
+>
+> Por qué falta el origen (`origen_tipo` de los 42): `ninguno` 16 — el vendedor
+> abrió el selector y no eligió (el formulario lo deja opcional, `nc-guardar.js`);
+> vacío 12 — anteriores al selector; `legacy` 10 — el original es de papel y no
+> hay nada que vincular; `interno` 4. Por acción: Renovación 16, Adición 15,
+> Reemplazo 10. El callejón sin salida de las adiciones puras YA estaba resuelto
+> (`cerrarSinReemplazos()` escribe un marcador y limpia el CTA) y el origen se
+> puede vincular a posteriori desde la misma página: las herramientas están, el
+> uso no.
+>
+> Consecuencia: sin transición registrada el saliente nunca queda
+> `pendiente_devolucion` y el cliente figura con los radios de los dos contratos
+> a la vez (46 unidades marcadas en el pool contra 42 contratos sin registrar).
+>
+> Corrección de raíz pendiente de decidir: volver **obligatorio** el contrato de
+> origen en Renovación/Reemplazo cuando el cliente tiene contratos vigentes en la
+> app. Mientras tanto, el atraso se tría aparte y la cola se enciende cambiando
+> el booleano.
+
 ## [Pendientes de inventario: bandeja de bodega sin el módulo Contratos] — 2026-08-06
 
 > El rol `inventario` no tiene el módulo Contratos (`js/core/modulos.js`), pero
