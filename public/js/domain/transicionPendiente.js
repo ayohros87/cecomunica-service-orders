@@ -20,14 +20,26 @@ window.TransicionPendiente = {
   },
 
   // Pendiente = aplica y no hay NINGÚN mapeo registrado todavía.
-  // Corte legacy (mismo criterio que seriales): a los contratos del backfill
-  // 'legacy' NO se les exige transición — su intercambio físico ocurrió antes
-  // del pool y ya no es reconstruible (auditoría 2026-07-20: 191/206 de la
-  // cola eran legacy). La acción sigue disponible en el menú ⋯ de la lista
-  // por si se quiere registrar voluntariamente.
+  //
+  // Dos exenciones, y las dos por la misma razón de fondo: el equipo anterior
+  // no existe como ficha en el pool, así que la pantalla de transición no
+  // tendría un solo saliente que ofrecer. Pedir el paso ahí es pedir papeleo.
+  //
+  //   · seriales_estado 'legacy' — contratos del backfill: su intercambio
+  //     físico ocurrió antes del pool y ya no es reconstruible (auditoría
+  //     2026-07-20: 191/206 de la cola eran legacy).
+  //   · origen_tipo 'legacy' — el vendedor MARCÓ en el formulario "el contrato
+  //     original es de papel / no está en el sistema" (nc-guardar.js). El
+  //     formulario hacía la pregunta y el predicado ignoraba la respuesta:
+  //     10 contratos quedaban pidiendo para siempre un paso imposible
+  //     (diagnóstico 2026-08-07).
+  //
+  // La acción sigue disponible en el menú ⋯ de la lista por si se quiere
+  // registrar voluntariamente.
   contratoNecesitaTransicion(data) {
     return this.esTransicionable(data)
       && data.seriales_estado !== 'legacy'
+      && data.origen_tipo !== 'legacy'
       && !Number(data.transicion_mapeos_count || 0);
   },
 };

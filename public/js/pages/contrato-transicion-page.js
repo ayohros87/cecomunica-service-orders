@@ -190,7 +190,7 @@
     const filasMapeos = ctx.mapeos.length ? ctx.mapeos.map(m => m.sin_reemplazos ? `
       <tr>
         <td colspan="4" style="padding:6px 8px;border-bottom:1px solid var(--border-subtle);color:var(--fg-3);">
-          Cerrada <b>sin reemplazos</b> — los equipos nuevos no sustituyen a ninguno (adición pura)
+          Cerrada <b>sin reemplazos</b> — ${esc(m.cierre_nota || 'los equipos nuevos no sustituyen a ninguno (adición pura)')}
         </td>
       </tr>` : m.tipo === 'no_devuelve' ? `
       <tr>

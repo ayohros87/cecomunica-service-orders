@@ -185,6 +185,13 @@ test("el predicado de transición es el compartido de js/domain", () => {
   assert.equal(TP.contratoNecesitaTransicion({ ...base, transicion_mapeos_count: 1 }), false);
   assert.equal(TP.contratoNecesitaTransicion({ ...base, seriales_estado: "legacy" }), false);
   assert.equal(TP.contratoNecesitaTransicion({ ...base, renovacion_sin_equipo: true }), false);
+  // El formulario pregunta si el original es de papel (origenLegacyChk): si la
+  // respuesta es que sí, el equipo viejo no tiene ficha en el pool y la
+  // pantalla de transición no tendría un solo saliente que ofrecer. Ignorar
+  // esa respuesta dejaba 10 contratos pidiendo un paso imposible.
+  assert.equal(TP.contratoNecesitaTransicion({ ...base, origen_tipo: "legacy" }), false);
+  assert.equal(TP.contratoNecesitaTransicion({ ...base, origen_tipo: "ninguno" }), true);
+  assert.equal(TP.contratoNecesitaTransicion({ ...base, origen_tipo: "interno" }), true);
   assert.equal(TP.contratoNecesitaTransicion({ ...base, estado: "borrador" }), false);
   assert.equal(TP.contratoNecesitaTransicion({ estado: "activo", codigo_tipo: "REEMP" }), true);
   assert.equal(TP.contratoNecesitaTransicion({ estado: "activo", accion: "Nuevo" }), false);
