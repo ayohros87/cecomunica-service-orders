@@ -8,20 +8,31 @@
 >
 > Diagnóstico contra producción (solo lectura, 2026-08-07). De **232 contratos
 > transicionables** vigentes: 189 legacy, **1 con mapeos registrados**, **42
-> pendientes**. Y **solo 5 de 232 tienen contrato de origen vinculado** — que es
-> justo lo que `onEntregaTransicion` exige para auto-registrar, así que el
-> rediseño del 2026-07-20 ("caso estándar = cero pasos") casi nunca se dispara:
-> 32 de los 42 pendientes son POSTERIORES a ese deploy, o sea que la cola sigue
-> creciendo.
+> pendientes**.
 >
-> Por qué falta el origen (`origen_tipo` de los 42): `ninguno` 16 — el vendedor
-> abrió el selector y no eligió (el formulario lo deja opcional, `nc-guardar.js`);
-> vacío 12 — anteriores al selector; `legacy` 10 — el original es de papel y no
-> hay nada que vincular; `interno` 4. Por acción: Renovación 16, Adición 15,
-> Reemplazo 10. El callejón sin salida de las adiciones puras YA estaba resuelto
-> (`cerrarSinReemplazos()` escribe un marcador y limpia el CTA) y el origen se
-> puede vincular a posteriori desde la misma página: las herramientas están, el
-> uso no.
+> **Ojo con el denominador**: los 232 mezclan tres poblaciones. El selector de
+> contrato de origen existe desde el **2026-07-16** (`544889d`) y el multi-origen
+> desde el 2026-07-20 (`dfdd9b4`); antes nadie pudo vincular nada, y los legacy
+> están fuera del circuito por diseño. Repartidos por fecha de creación:
+>
+> | población | total | vinculados |
+> |---|---|---|
+> | legacy (fuera del circuito) | 189 | 0 |
+> | no legacy, anteriores al selector | 12 | 0 |
+> | **no legacy, desde el selector** | **31** | **5 (16%)** |
+>
+> Y de esos 31, otros **10 llevan `origen_tipo: 'legacy'`** — el vendedor SÍ hizo
+> el paso, marcó "el contrato original es de papel". O sea: **15 de 31 bien
+> resueltos, 16 saltados** — y de los 16, **14 tenían el contrato original a la
+> vista en la lista** (el resto no tenía nada que elegir y le faltó marcar la
+> casilla de papel). El caso peor es COMPAÑÍA GOLY, con 16 contratos vigentes en
+> el selector: elegir entre 16 sin orden ni filtro empuja a "ninguno".
+>
+> Nada de esto lo rescata `onEntregaTransicion`, que exige `contrato_origen_ids`
+> para auto-registrar. El callejón sin salida de las adiciones puras YA estaba
+> resuelto (`cerrarSinReemplazos()` escribe un marcador y limpia el CTA) y el
+> origen se puede vincular a posteriori desde la misma página: las herramientas
+> están, el uso no.
 >
 > Consecuencia: sin transición registrada el saliente nunca queda
 > `pendiente_devolucion` y el cliente figura con los radios de los dos contratos
