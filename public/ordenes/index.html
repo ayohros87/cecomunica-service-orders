@@ -315,7 +315,12 @@
   <col style="width: 12%;">  <!-- Estado -->
   <col style="width: 10%;">   <!-- Fecha creación -->
   <col style="width: 10%;" class="col-fecha-entrega">   <!-- Fecha entrega -->
-  <col style="width: 10%;">  <!-- Acciones -->
+  <!-- Acciones va en px, no en %: la celda puede llevar dos botones de flujo
+       + el menú ⋯ ("Ver QC"+"Entregar", "Completar"+"Rechazo QC",
+       "Faltan N"+"Check-in") y .app-table-wrap tiene overflow visible para
+       que el desplegable escape — con un % la fila se salía de la tabla en
+       vez de recortarse. El peor caso real mide 270px + 16px de padding. -->
+  <col style="width: 296px;">  <!-- Acciones -->
   </colgroup>
  <thead>
   <tr>
