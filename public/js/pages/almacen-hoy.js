@@ -20,11 +20,20 @@ window.AlmacenPage = {
     document.getElementById('tab-hoy').style.display = tab === 'hoy' ? '' : 'none';
     document.getElementById('tab-existencias').style.display = tab === 'existencias' ? '' : 'none';
     if (window.WorkspaceTabs) WorkspaceTabs.setActive(tab);
+    // Existencias carga bajo demanda la primera vez (pool completo).
+    if (tab === 'existencias' && window.AlmacenExistencias) AlmacenExistencias.activar();
     try {
       const url = new URL(location.href);
       if (tab === 'hoy') url.searchParams.delete('tab'); else url.searchParams.set('tab', tab);
       history.replaceState(null, '', url);
     } catch { /* la pestaña cambió igual */ }
+  },
+
+  // "Recargar" del menú: refresca la pestaña que se está viendo.
+  recargar() {
+    const ex = document.getElementById('tab-existencias');
+    if (ex && ex.style.display !== 'none' && window.AlmacenExistencias) return AlmacenExistencias.recargar();
+    return AlmacenHoy.recargar();
   },
 };
 
@@ -301,6 +310,8 @@ window.AlmacenHoy = (() => {
 
   function init(rol) {
     ctx.rol = rol;
+    // EquipoFicha decide su footer ("Abrir en Inventario") con window.userRole.
+    window.userRole = rol;
     // Mismo criterio que las páginas del área: operan admin/inventario, lee
     // gerencia; y quien puede gestionar seriales (recepción/vendedor) puede
     // ver su cola aquí igual que podía en la bandeja vieja.

@@ -62,6 +62,52 @@
     }
     .hy-vacio { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
     .hy-vacio svg { width: 34px; height: 34px; color: #16A34A; }
+
+    /* Existencias (E2) — fila expandible + chips de serial con punto de estado */
+    tr.ex-fila td { font-variant-numeric: tabular-nums; }
+    tr.ex-fila.is-abierta td { background: var(--surface-sunken); }
+    tr.ex-expansion > td {
+      background: var(--surface-sunken); padding: 10px 14px 12px;
+      border-bottom: 2px solid var(--border-default);
+    }
+    .ex-bloque { margin-bottom: 8px; }
+    .ex-bloque:last-of-type { margin-bottom: 0; }
+    .ex-bloque-t {
+      display: block; font-size: 10.5px; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--fg-3); margin-bottom: 4px;
+    }
+    .ex-serial {
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      margin: 0 4px 4px 0; padding: 2px 9px;
+      background: var(--surface-card); border: 1px solid var(--border-default);
+      border-radius: var(--radius-pill);
+      font-family: var(--mono, monospace); font-size: 11.5px; color: var(--fg-1, inherit);
+    }
+    .ex-serial:hover { border-color: var(--accent); color: var(--accent); }
+    .ex-serial i {
+      width: 7px; height: 7px; border-radius: 50%; display: block;
+      background: var(--fg-4);
+    }
+    .ex-serial[data-dot="en_bodega"] i         { background: #16A34A; }
+    .ex-serial[data-dot="asignado_contrato"] i { background: #2563EB; }
+    .ex-serial[data-dot="en_cliente"] i        { background: #0891B2; }
+    .ex-serial[data-dot="en_taller"] i         { background: #7C3AED; }
+    .ex-serial[data-dot="devuelto_revision"] i { background: #D97706; }
+    .ex-serial[data-dot="vendido"] i           { background: #64748B; }
+    .ex-serial[data-dot="baja"] i              { background: #991B1B; }
+    .ex-serial[data-dot="por_clasificar"] i    { background: #9F1239; }
+    .ex-mas { font-size: 12px; margin-left: 4px; white-space: nowrap; }
+    .ex-expansion-pie { margin-top: 8px; font-size: 12.5px; }
+
+    /* Badges Dif. (mismo alias del tablero de Inventario) */
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 999px; padding: 0 8px; height: 22px;
+      font-size: 12px; font-weight: 600; border: 1px solid transparent;
+    }
+    .badge.completo  { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+    .badge.pendiente { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
+    .badge.danger    { background:#FEF2F2; color:#991B1B; border-color:#FECACA; }
   </style>
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -80,7 +126,10 @@
   <script defer src="../js/domain/stockAgg.js"></script>
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/workspace-tabs.js"></script>
+  <script defer src="../js/ui/equipo-ficha.js"></script>
+  <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/pages/almacen-hoy.js"></script>
+  <script defer src="../js/pages/almacen-existencias.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>
@@ -101,7 +150,7 @@
           onclick: "window.location.href='../inventario/equipos.html?accion=vender'" },
       ],
       menu: [
-        { onclick: 'AlmacenHoy.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
+        { onclick: 'AlmacenPage.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
         { divider: true },
         { href: '../inventario/index.html',   label: '<i data-lucide="package"></i> Inventario de Radios' },
         { href: '../inventario/equipos.html', label: '<i data-lucide="scan-barcode"></i> Equipos por serial' },
@@ -128,14 +177,81 @@
       </div>
     </section>
 
-    <!-- ============ EXISTENCIAS (se llena en E2) ============ -->
+    <!-- ============ EXISTENCIAS — grid unificado modelo → serial → ficha ============ -->
     <section id="tab-existencias" style="display:none;">
-      <div class="ds-card ds-card-padded">
-        <p style="margin:0 0 8px;"><b>Existencias unificadas</b> — en construcción (etapa E2 de la propuesta).</p>
-        <p style="margin:0; font-size:13.5px; color:var(--fg-3);">
-          Mientras tanto: <a href="../inventario/index.html">Inventario de Radios</a> (por modelo)
-          · <a href="../inventario/equipos.html">Equipos por serial</a> (por unidad).
-        </p>
+
+      <div class="kpi-grid" style="margin:0 0 var(--sp-4);">
+        <div class="kpi-card">
+          <span class="kpi-card-label">En bodega</span>
+          <span class="kpi-card-value kpi-accent" id="exKpiBodega">—</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Con clientes</span>
+          <span class="kpi-card-value" id="exKpiCliente">—</span>
+          <span class="kpi-card-sub">asignados + entregados</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">En taller</span>
+          <span class="kpi-card-value" id="exKpiTaller">—</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Cuarentena</span>
+          <span class="kpi-card-value" id="exKpiCuarentena">—</span>
+          <span class="kpi-card-sub">devueltos por inspeccionar</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-card-label">Modelos con diferencia</span>
+          <span class="kpi-card-value" id="exKpiDif">—</span>
+          <span class="kpi-card-sub">pool vs conteo · meta: 0</span>
+        </div>
+      </div>
+
+      <div class="ds-card">
+        <div class="filter-bar">
+          <div class="filter-search" style="max-width:360px;">
+            <span class="search-icon"><i data-lucide="search"></i></span>
+            <input id="exBuscador" type="search"
+              placeholder="Modelo… o serial (Enter abre la ficha)"
+              aria-label="Buscar modelo o serial"
+              oninput="AlmacenExistencias.onBuscar(this.value)"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();AlmacenExistencias.onBuscarEnter();}">
+          </div>
+          <select class="cc-input" style="max-width:190px;" aria-label="Filtrar por estado"
+            onchange="AlmacenExistencias.setFiltroEstado(this.value)">
+            <option value="">Con unidades en…</option>
+            <option value="en_bodega">Bodega</option>
+            <option value="asignado_contrato">Asignado</option>
+            <option value="en_cliente">En cliente</option>
+            <option value="en_taller">Taller</option>
+            <option value="devuelto_revision">Cuarentena</option>
+            <option value="otros">Otros (venta/baja/clasificar)</option>
+          </select>
+          <label class="toggle-pill"><input type="checkbox" onchange="AlmacenExistencias.toggleSoloDif(this)"> Solo con diferencia</label>
+          <div style="flex:1;"></div>
+          <button class="btn btn-sm" onclick="AlmacenExistencias.copiarReporte()"><i data-lucide="mail"></i> Copiar reporte</button>
+          <button class="btn btn-sm" onclick="AlmacenExistencias.exportarExcel()"><i data-lucide="download"></i> Excel</button>
+        </div>
+        <div class="app-table-wrap app-table-wrap--sticky" style="border:none; box-shadow:none; border-radius:0;">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th>Modelo</th>
+                <th style="text-align:right;">Bodega</th>
+                <th style="text-align:right;">Asignado</th>
+                <th style="text-align:right;">Cliente</th>
+                <th style="text-align:right;">Taller</th>
+                <th style="text-align:right;">Cuarent.</th>
+                <th style="text-align:right;" title="Vendidos, bajas y por clasificar">Otros</th>
+                <th style="text-align:right;">Conteo</th>
+                <th style="text-align:right;" title="Bodega − conteo físico (meta 0)">Dif.</th>
+              </tr>
+            </thead>
+            <tbody id="exTabla"></tbody>
+          </table>
+        </div>
+        <div class="app-table-footer">
+          <p id="exResumen" class="resumen" style="margin:0;"></p>
+        </div>
       </div>
     </section>
 
