@@ -328,18 +328,13 @@ window.AlmacenHoy = (() => {
       return;
     }
 
-    WorkspaceTabs.render('wsTabs-mount', {
-      active: 'hoy',
-      tabs: [
-        { id: 'hoy', label: 'Hoy', icon: 'inbox', onclick: "AlmacenPage.setTab('hoy')" },
-        { id: 'existencias', label: 'Existencias', icon: 'package', onclick: "AlmacenPage.setTab('existencias')" },
-        { id: 'piezas', label: 'Piezas', icon: 'puzzle', href: '../inventario/piezas.html' },
-      ],
-    });
-
-    const tabParam = new URLSearchParams(location.search).get('tab');
-    if (tabParam === 'existencias') AlmacenPage.setTab('existencias');
-
+    // La barra de pestañas y el deep-link ?tab= se resuelven en el parse
+    // (scripts inline de la página) para que nada brinque; aquí solo se
+    // dispara la carga de datos de la pestaña que quedó visible.
+    const ex = document.getElementById('tab-existencias');
+    if (ex && ex.style.display !== 'none' && window.AlmacenExistencias) {
+      AlmacenExistencias.activar();
+    }
     cargar();
   }
 

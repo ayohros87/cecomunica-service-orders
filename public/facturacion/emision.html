@@ -55,7 +55,7 @@
 
   <!-- Navegación del espacio Finanzas (propuesta 2026-08, E4) -->
   <div id="wsTabs-mount"></div>
-  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('emision'));</script>
+  <script>FinanzasNav.render('emision'); // en el parse: la barra sale en el primer frame</script>
 
   <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
     <h3 style="margin:0 0 6px;"><i data-lucide="info" style="width:16px;height:16px;vertical-align:-2px;"></i>

@@ -117,7 +117,7 @@
   <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
   <div id="wsTabs-mount"></div>
   <div id="wsSubTabs-mount"></div>
-  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('catalogo', 'piezas'));</script>
+  <script>FinanzasNav.render('catalogo', 'piezas'); // en el parse: la barra sale en el primer frame</script>
   <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3); display:flex; align-items:center; gap:6px;">
     <i data-lucide="info" style="width:14px;height:14px;"></i>
     Aquí se administran <b>precio, costo y mapeo QuickBooks</b>. El stock, los mínimos y la ficha

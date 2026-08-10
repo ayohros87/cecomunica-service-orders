@@ -45,7 +45,7 @@
 
   <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
   <div id="wsTabs-mount"></div>
-  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('quickbooks'));</script>
+  <script>FinanzasNav.render('quickbooks'); // en el parse: la barra sale en el primer frame</script>
 
   <!-- Estado de la conexión (callable qboStatus) — hace visible el riesgo del
        refresh token de Intuit (~100 días), que antes moría en silencio. -->

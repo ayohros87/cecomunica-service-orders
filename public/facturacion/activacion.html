@@ -52,7 +52,7 @@
 
   <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
   <div id="wsTabs-mount"></div>
-  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('activacion'));</script>
+  <script>FinanzasNav.render('activacion'); // en el parse: la barra sale en el primer frame</script>
   <p style="color:var(--fg-3); margin:0 0 var(--sp-3); font-size:13px;">
     Requeridos para activar: <b>contrato vigente</b> + <b>mapeo QuickBooks</b>. Entrega, seriales y firmado son recomendados (no bloquean).
     La facturación no se emite todavía — esto solo marca qué contratos están listos.

@@ -59,7 +59,7 @@
 
     <!-- Pestaña Panorama del espacio Finanzas (propuesta 2026-08, E4) -->
     <div id="wsTabs-mount"></div>
-    <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('panorama'));</script>
+    <script>FinanzasNav.render('panorama'); // en el parse: la barra sale en el primer frame</script>
 
     <div class="admin-toolbar">
       <label class="ts" for="selMonth">Mes:</label>

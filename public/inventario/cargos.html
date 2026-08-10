@@ -79,7 +79,7 @@
   <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
   <div id="wsTabs-mount"></div>
   <div id="wsSubTabs-mount"></div>
-  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('catalogo', 'cargos'));</script>
+  <script>FinanzasNav.render('catalogo', 'cargos'); // en el parse: la barra sale en el primer frame</script>
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <p id="resumen" class="md-stats" style="margin:0;">Cargando…</p>

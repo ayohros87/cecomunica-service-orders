@@ -63,6 +63,14 @@
     .hy-vacio { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
     .hy-vacio svg { width: 34px; height: 34px; color: #16A34A; }
 
+    /* El loader del kit vive en el flujo (min-height 200px) y empujaba los
+       títulos hacia abajo mientras cargaba cada pestaña. Aquí es un overlay
+       fijo: aparece y desaparece sin mover una sola línea del layout. */
+    #loader {
+      position: fixed; inset: 0; min-height: 0; z-index: 60;
+      pointer-events: none; background: transparent;
+    }
+
     /* Existencias (E2) — fila expandible + chips de serial con punto de estado */
     tr.ex-fila td { font-variant-numeric: tabular-nums; }
     tr.ex-fila.is-abierta td { background: var(--surface-sunken); }
@@ -125,7 +133,9 @@
   <script defer src="../js/services/equiposPoolService.js?v=cc24"></script>
   <script defer src="../js/domain/stockAgg.js"></script>
   <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/workspace-tabs.js"></script>
+  <!-- Síncrono a propósito: las pestañas se pintan en el parse (ver abajo)
+       para que no aparezcan tarde empujando el contenido. -->
+  <script src="../js/ui/workspace-tabs.js"></script>
   <script defer src="../js/ui/equipo-ficha.js"></script>
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/pages/almacen-hoy.js"></script>
@@ -166,6 +176,19 @@
   <div class="app-wrap app-wrap--full" id="bodyAlmacen">
 
     <div id="wsTabs-mount"></div>
+    <script>
+      // Pintado EN EL PARSE (no en DOMContentLoaded ni tras auth): la barra
+      // sale en el primer frame y el contenido no brinca. Los onclick se
+      // evalúan al hacer clic, cuando almacen-hoy.js (defer) ya cargó.
+      WorkspaceTabs.render('wsTabs-mount', {
+        active: 'hoy',
+        tabs: [
+          { id: 'hoy', label: 'Hoy', icon: 'inbox', onclick: "AlmacenPage.setTab('hoy')" },
+          { id: 'existencias', label: 'Existencias', icon: 'package', onclick: "AlmacenPage.setTab('existencias')" },
+          { id: 'piezas', label: 'Piezas', icon: 'puzzle', href: '../inventario/piezas.html' },
+        ],
+      });
+    </script>
 
     <!-- ============ HOY — bandeja unificada de trabajo ============ -->
     <section id="tab-hoy">
@@ -254,6 +277,17 @@
         </div>
       </div>
     </section>
+
+    <script>
+      // Deep-link ?tab=existencias resuelto EN EL PARSE (las secciones ya
+      // existen aquí): la pestaña correcta desde el primer frame, sin brinco.
+      // Los datos los carga init() cuando el auth resuelve.
+      if (new URLSearchParams(location.search).get('tab') === 'existencias') {
+        document.getElementById('tab-hoy').style.display = 'none';
+        document.getElementById('tab-existencias').style.display = '';
+        WorkspaceTabs.setActive('existencias');
+      }
+    </script>
 
   </div>
 

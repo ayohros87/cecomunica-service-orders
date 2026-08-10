@@ -98,14 +98,14 @@
 
   <!-- Pestañas del espacio Almacén (propuesta 2026-08, E3) -->
   <div id="wsTabs-mount"></div>
-  <script>document.addEventListener('DOMContentLoaded', () => WorkspaceTabs.render('wsTabs-mount', {
+  <script>WorkspaceTabs.render('wsTabs-mount', { // en el parse: sin brinco
     active: 'piezas',
     tabs: [
       { id: 'hoy', label: 'Hoy', icon: 'inbox', href: '../almacen/index.html' },
       { id: 'existencias', label: 'Existencias', icon: 'package', href: '../almacen/index.html?tab=existencias' },
       { id: 'piezas', label: 'Piezas', icon: 'puzzle' },
     ],
-  }));</script>
+  });</script>
   <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3); display:flex; align-items:center; gap:6px;">
     <i data-lucide="info" style="width:14px;height:14px;"></i>
     El <b>precio de venta, costo y mapeo QuickBooks</b> también se administran en
