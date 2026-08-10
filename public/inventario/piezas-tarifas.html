@@ -10,6 +10,9 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+  <script src="../js/ui/workspace-tabs.js"></script>
+  <script src="../js/ui/finanzas-nav.js"></script>
 
   <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -110,6 +113,17 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
+
+  <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
+  <div id="wsTabs-mount"></div>
+  <div id="wsSubTabs-mount"></div>
+  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('catalogo', 'piezas'));</script>
+  <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 var(--sp-3); display:flex; align-items:center; gap:6px;">
+    <i data-lucide="info" style="width:14px;height:14px;"></i>
+    Aquí se administran <b>precio, costo y mapeo QuickBooks</b>. El stock, los mínimos y la ficha
+    completa viven en <a href="../almacen/index.html">Almacén</a> · <a href="./piezas.html">Piezas</a>
+    (rol inventario) — misma colección, cuidado con pisarse los precios.
+  </p>
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <p id="resumenPiezas" class="md-stats" style="margin:0;">Cargando…</p>
@@ -158,7 +172,7 @@
   </div> <!-- /cc-app -->
   <script>
     // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('piezas'));
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion'));
   </script>
 </body>
 </html>

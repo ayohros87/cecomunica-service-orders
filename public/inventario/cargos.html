@@ -10,6 +10,9 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+  <script src="../js/ui/workspace-tabs.js"></script>
+  <script src="../js/ui/finanzas-nav.js"></script>
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -72,6 +75,11 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
+
+  <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
+  <div id="wsTabs-mount"></div>
+  <div id="wsSubTabs-mount"></div>
+  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('catalogo', 'cargos'));</script>
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <p id="resumen" class="md-stats" style="margin:0;">Cargando…</p>

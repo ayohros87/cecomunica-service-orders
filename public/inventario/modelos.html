@@ -13,6 +13,9 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+  <script src="../js/ui/workspace-tabs.js"></script>
+  <script src="../js/ui/finanzas-nav.js"></script>
 
   <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -121,6 +124,11 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
+
+  <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
+  <div id="wsTabs-mount"></div>
+  <div id="wsSubTabs-mount"></div>
+  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('catalogo', 'modelos'));</script>
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -286,7 +294,7 @@
   </div> <!-- /cc-app -->
   <script>
     // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('inventario'));
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion'));
   </script>
 </body>
 </html>
