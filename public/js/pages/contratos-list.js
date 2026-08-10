@@ -111,14 +111,16 @@ window.ContratosLista = {
       css = 'background:#EEF2F6;color:#4A5560;border:1px solid #DDE4EB;';
       icon = 'minus-circle';
       label = 'No aplica';
-      title = 'Contrato Propio — los equipos son del cliente, no hay nada que recuperar';
+      // Dos causas distintas, las dos verificadas contra el pool — no es un
+      // "no sé" disfrazado, por eso no lleva el borde punteado del gris.
+      title = data.devolucion_no_aplica_motivo === 'sin_unidades'
+        ? 'Se revisó el pool al entregarse la renovación: no queda ningún equipo de CeComunica por recuperar'
+        : 'Contrato Propio — los equipos son del cliente, no hay nada que recuperar';
     } else { // sin_registro
       css = 'background:#F8FAFC;color:#6B7884;border:1px dashed #C2CCD6;';
       icon = 'help-circle';
       label = 'Sin registro';
-      title = data.estado === 'anulado' || data.baja_estado === 'aprobada' || data.terminacion_total
-        ? 'El contrato terminó pero nunca se registró la devolución — el sistema no sabe si los equipos regresaron'
-        : 'Fue renovado pero nunca se registró la transición — el sistema no sabe si los equipos regresaron';
+      title = 'El contrato terminó teniendo equipo afuera, pero nunca se registró la devolución — el sistema no sabe si los equipos regresaron';
       href = `transicion.html?id=${cid}`;
     }
 

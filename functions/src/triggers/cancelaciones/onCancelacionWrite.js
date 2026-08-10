@@ -223,6 +223,7 @@ module.exports = onDocumentWritten(
             // de "sin registro", que mandaría a alguien a perseguir equipos ajenos.
             await db.collection("contratos").doc(contratoDocId).set({
               devolucion_estado: "no_aplica",
+              devolucion_no_aplica_motivo: "propio",
               devolucion_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
             logger.info("[onCancelacionWrite] Contrato Propio: sin orden de recuperación", { id, contratoId });

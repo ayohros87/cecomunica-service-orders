@@ -83,10 +83,32 @@ module.exports = onDocumentUpdated(
           notas: "Contrato anulado — equipo propiedad del cliente: queda en su custodia, sin devolución",
         });
       };
+
+      // Unidad reservada que nunca se entregó: vuelve a bodega sin pasar por
+      // cuarentena ni por el check-in de una orden de DEVOLUCIÓN. No hay nada
+      // que inspeccionar — el equipo no se movió de la empresa.
+      const liberarABodega = async (ref, data, serial) => {
+        const r = await pool.transicionarPorId(ref.id, {
+          aEstado: pool.ESTADOS.EN_BODEGA,
+          soloDesde: [pool.ESTADOS.ASIGNADO],
+          tipo: "liberacion",
+          refMov: { tipo: "contrato", id: cid, label: contratoId },
+          // `pendiente_devolucion` lo limpia el propio transicionarPorId al
+          // entrar a bodega; aquí solo hay que soltar la asignación.
+          notas: "Contrato anulado sin entrega confirmada — la unidad nunca salió: vuelve a bodega",
+          extra: { asignacion: null },
+        });
+        logger.info("[onContratoAnuladoNotify] Unidad nunca entregada liberada a bodega",
+          { contratoId, serial, r });
+      };
       if (!after.orden_devolucion_id) {
         const serialesSnap = await db.collection("contratos").doc(cid)
           .collection("seriales").get();
         const unidades = [];
+        // Fichas que SÍ se resolvieron sin necesitar devolución (custodia del
+        // cliente o liberadas a bodega). Sirven para distinguir "revisé y no
+        // hay nada que recuperar" de "no sé nada de este contrato".
+        let resueltasSinDevolucion = 0;
         // Lo que la anulación NO tocó, y por qué. Antes cada descarte era un
         // `continue` mudo: 20919D0708 (PROP20260625-01, 2026-08-06) se quedó
         // asignada a un contrato anulado porque su ficha decía PD506U-R y el
@@ -111,6 +133,23 @@ module.exports = onDocumentUpdated(
             }
             if (data.propiedad === "cliente") {   // propio del cliente: no se devuelve
               await degradarACustodia(ref, data);
+              resueltasSinDevolucion++;
+              continue;
+            }
+            // NUNCA SALIÓ: la unidad está RESERVADA para el contrato
+            // (asignado_contrato, no en_cliente) y la entrega jamás se
+            // confirmó. El equipo nunca cruzó la puerta, así que no hay
+            // devolución que confirmar — se suelta a bodega y ya.
+            //
+            // Esto NO revive el comportamiento retirado el 2026-07-20: aquello
+            // mandaba a cuarentena FINGIENDO que el cliente había devuelto.
+            // Aquí no se finge nada — el pool distingue "reservado" de
+            // "entregado", y pedirle a un humano que confirme lo que el dato ya
+            // dice es trabajo inventado. Lo que sí salió (en_cliente, o entrega
+            // confirmada) sigue pasando por el check-in de la orden.
+            if (data.estado === pool.ESTADOS.ASIGNADO && after.entrega_confirmada !== true) {
+              await liberarABodega(ref, data, serial);
+              resueltasSinDevolucion++;
               continue;
             }
             await ref.set({
@@ -143,6 +182,18 @@ module.exports = onDocumentUpdated(
             await db.collection("contratos").doc(cid)
               .set({ orden_devolucion_id: ordenId }, { merge: true });
           }
+        } else if (resueltasSinDevolucion > 0) {
+          // Se revisó ficha por ficha y ninguna requiere devolución: o son del
+          // cliente, o nunca salieron y ya están en bodega. Eso es una
+          // RESPUESTA, no un hueco — se estampa para que la fila diga "no
+          // aplica" verificado en vez de "sin registro" ("no se sabe").
+          await db.collection("contratos").doc(cid).set({
+            devolucion_estado: "no_aplica",
+            devolucion_no_aplica_motivo: "nada_que_recuperar",
+            devolucion_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+          logger.info("[onContratoAnuladoNotify] Anulación resuelta sin devolución",
+            { contratoId, resueltas: resueltasSinDevolucion });
         } else {
           logger.info("[onContratoAnuladoNotify] Anulación sin unidades rastreadas en el pool", { contratoId });
         }

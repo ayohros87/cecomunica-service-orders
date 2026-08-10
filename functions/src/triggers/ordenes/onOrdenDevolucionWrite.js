@@ -141,7 +141,12 @@ async function estamparEspejo(ordenId, orden) {
   }
   if (!destinos.length) return;
 
-  const resumen = resumenDevolucion(orden);
+  // Orden borrada (soft delete): deja de reclamar equipo. Sin esto el chip
+  // sobrevivía a la orden — la limpieza de las devoluciones falsas de Adición
+  // (2026-08-10) borró la orden y el propio trigger volvió a estampar el
+  // tiquete al reaccionar a esa misma escritura.
+  const borrada = orden.eliminado === true;
+  const resumen = borrada ? null : resumenDevolucion(orden);
 
   for (const destino of destinos) {
     try {
@@ -151,9 +156,26 @@ async function estamparEspejo(ordenId, orden) {
         if (!snap.exists) return;               // contrato borrado: nada que marcar
 
         const tiquetes = { ...(snap.data().devolucion_tiquetes || {}) };
-        tiquetes[ordenId] = { ...resumen, rol: destino.rol };
-        const { pendientes, esperado, estado } = derivarEstadoDevolucion(tiquetes);
+        if (borrada) {
+          if (!(ordenId in tiquetes)) return;   // nada que quitar
+          delete tiquetes[ordenId];
+        } else {
+          tiquetes[ordenId] = { ...resumen, rol: destino.rol };
+        }
 
+        // Sin tiquetes no quedan campos a medias: la fila vuelve a no mostrar
+        // chip, en vez de quedarse en "completa · 0 de 0".
+        if (!Object.keys(tiquetes).length) {
+          const del = admin.firestore.FieldValue.delete();
+          tx.set(ref, {
+            devolucion_tiquetes: del, devolucion_pendientes: del,
+            devolucion_esperado: del, devolucion_estado: del,
+            devolucion_actualizado_at: del,
+          }, { merge: true });
+          return;
+        }
+
+        const { pendientes, esperado, estado } = derivarEstadoDevolucion(tiquetes);
         tx.set(ref, {
           devolucion_tiquetes:       tiquetes,
           devolucion_pendientes:     pendientes,
@@ -249,6 +271,14 @@ module.exports = onDocumentWritten(
     if (!after || after.tipo_de_servicio !== "DEVOLUCION") return null;
 
     const ordenId = event.params.ordenId;
+
+    // Orden borrada: no se aplica nada al pool ni se crea ENTRADA — solo se
+    // suelta el chip del contrato. Una orden eliminada no reclama equipo.
+    if (after.eliminado === true) {
+      await estamparEspejo(ordenId, after);
+      return null;
+    }
+
     const dev = after.devolucion || {};
     const antes = new Map(((before?.devolucion?.esperados) || []).map(e => [e.id, e.resolucion || null]));
     const tandaRecibida = []; // recibidos NUEVOS de esta escritura → ENTRADA por tanda

@@ -39,9 +39,22 @@ module.exports = onDocumentUpdated(
     const cid = event.params.cid;
     const contratoId = after.contrato_id || cid;
 
-    // Solo transicionables con origen vinculado, sin mapeos previos, no legacy.
+    // Solo REEMPLAZOS: renovación y reemplazo SUSTITUYEN el equipo del origen,
+    // así que lo viejo se devuelve.
+    //
+    // "Adición" queda FUERA a propósito (2026-08-10). Una adición AGREGA
+    // unidades a un contrato que sigue vigente — el cliente se queda con las de
+    // antes y con las nuevas. Tratarla como renovación abrió órdenes de
+    // recuperación falsas pidiendo equipo que el cliente tiene con todo derecho
+    // (NADCAR ALQ20260803-01: 8 radios añadidos y el sistema reclamó los 10 del
+    // contrato original, que sigue activo; también DESARROLLO ACQUA TRES).
+    //
+    // OJO: "Adición" SÍ sigue en js/domain/transicionPendiente.js — ese
+    // predicado es el del CTA, y una adición pura necesita poder cerrarse con
+    // `cerrarSinReemplazos()`. Los dos predicados divergen a propósito: uno
+    // decide "¿hay que registrar algo?", este decide "¿se devuelve el origen?".
     const esTransicionable = !after.renovacion_sin_equipo
-      && (after.accion === "Renovación" || after.accion === "Adición" || after.codigo_tipo === "REEMP");
+      && (after.accion === "Renovación" || after.codigo_tipo === "REEMP");
     const origenIds = origenIdsDe(after);
     if (!esTransicionable || !origenIds.length) return null;
     if (after.seriales_estado === "legacy") return null;
@@ -68,9 +81,25 @@ module.exports = onDocumentUpdated(
     }
 
     if (!unidades.length) {
-      // Origen vinculado pero sin unidades rastreadas (p.ej. origen legacy sin
-      // seriales) — no se auto-cierra: la revisión queda manual en la página.
-      logger.info("[onEntregaTransicion] Origen sin unidades en el pool; sin auto-registro", { contratoId, origenIds });
+      // Origen vinculado pero sin unidades nuestras colgando: o son del cliente
+      // (Propio), o ya volvieron, o el origen es legacy sin seriales. En los
+      // tres casos NO hay nada que recuperar, y eso es una respuesta — no un
+      // hueco. Se estampa en el origen para que su fila diga "no aplica"
+      // VERIFICADO en vez de "sin registro" (que significa "no se sabe").
+      // La revisión manual sigue disponible en la página de transición.
+      const marca = {
+        devolucion_estado: "no_aplica",
+        devolucion_no_aplica_motivo: "sin_unidades",
+        devolucion_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      for (const origenId of origenIds) {
+        try {
+          await db.collection("contratos").doc(origenId).set(marca, { merge: true });
+        } catch (e) {
+          logger.warn("[onEntregaTransicion] No se pudo marcar el origen sin unidades", { origenId, message: e.message });
+        }
+      }
+      logger.info("[onEntregaTransicion] Origen sin unidades en el pool; marcado no_aplica", { contratoId, origenIds });
       return null;
     }
 

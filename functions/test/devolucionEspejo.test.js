@@ -177,6 +177,24 @@ test("derivarEstado — todos cerrados y limpios: completa con el total sumado",
   assert.deepEqual(r, { pendientes: 0, esperado: 9, estado: "completa" });
 });
 
+test("el trigger suelta el chip cuando la orden se elimina", () => {
+  // Bug encontrado al limpiar las devoluciones falsas (2026-08-10): el script
+  // borraba la orden y el propio trigger, al reaccionar a ESA escritura, volvía
+  // a estampar el tiquete. El chip sobrevivía a la orden que lo justificaba.
+  const src = fs.readFileSync(
+    path.join(__dirname, "..", "src", "triggers", "ordenes", "onOrdenDevolucionWrite.js"), "utf8");
+  assert.ok(/eliminado === true/.test(src),
+    "onOrdenDevolucionWrite debe mirar `eliminado` antes de estampar el espejo");
+  assert.ok(/delete tiquetes\[ordenId\]/.test(src),
+    "una orden eliminada tiene que QUITAR su tiquete, no dejarlo congelado");
+});
+
+test("derivarEstado — un contrato sin tiquetes no queda en 'completa · 0 de 0'", () => {
+  // El trigger borra los campos en vez de escribir un cero que se lee como
+  // "ya devolvió todo"; esta es la mitad pura de esa decisión.
+  assert.equal(derivarEstadoDevolucion({}).estado, null);
+});
+
 // ── origenIdsDe ────────────────────────────────────────────────────────────
 
 test("origenIdsDe — prefiere el array, cae al campo simple, deduplica", () => {
@@ -204,15 +222,26 @@ test("navegador — contrato vigente y sin espejo: SIN chip", () => {
     "ser una renovación no significa que ESTE contrato deba devolver: devuelve su ORIGEN");
 });
 
-test("navegador — sin_registro: murió o fue renovado TENIENDO equipo, sin tiquete", () => {
+test("navegador — sin_registro: el contrato MURIÓ teniendo equipo, sin tiquete", () => {
   const DC = cargarDevolucionContrato();
   const conEquipo = { seriales_count: 4 };
   assert.equal(DC.estado({ estado: "anulado", ...conEquipo }), "sin_registro");
   assert.equal(DC.estado({ estado: "activo", baja_estado: "aprobada", ...conEquipo }), "sin_registro");
   assert.equal(DC.estado({ estado: "activo", terminacion_total: true, ...conEquipo }), "sin_registro");
-  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: ["otro"], ...conEquipo }), "sin_registro");
-  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: [], ...conEquipo }), null,
-    "un array vacío no es señal de nada");
+});
+
+test("navegador — ser origen de una renovación NO basta para pedir devolución", () => {
+  // Medido en producción (2026-08-10): la regla fallaba en 5 de 6. Tres tenían
+  // la renovación sin entregar (el cliente conserva su equipo con derecho) y
+  // dos no tenían una sola ficha colgando. El momento en que el origen empieza
+  // a deber es la ENTREGA de la renovación, y de eso se encarga
+  // onEntregaTransicion: crea el tiquete o marca no_aplica contra el pool.
+  const DC = cargarDevolucionContrato();
+  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: ["otro"], seriales_count: 5 }), null);
+  assert.equal(DC.enModoDevolucion({ estado: "activo", renovado_por_ids: ["otro"] }), false);
+  // Pero si onEntregaTransicion ya se pronunció, el espejo manda.
+  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: ["otro"], devolucion_estado: "pendiente" }), "pendiente");
+  assert.equal(DC.estado({ estado: "activo", renovado_por_ids: ["otro"], devolucion_estado: "no_aplica" }), "no_aplica");
 });
 
 test("navegador — el contrato anulado que nunca tuvo equipo NO pinta chip", () => {
@@ -244,6 +273,28 @@ test("navegador — el espejo GANA sobre la falta de evidencia", () => {
 test("navegador — la baja PENDIENTE todavía no obliga a devolver", () => {
   const DC = cargarDevolucionContrato();
   assert.equal(DC.estado({ estado: "activo", baja_estado: "pendiente" }), null);
+});
+
+test("una Adición NO devuelve el equipo del origen (predicado del auto-registro)", () => {
+  // Fuente del bug NADCAR: onEntregaTransicion metía 'Adición' en el mismo saco
+  // que Renovación/REEMP y reclamaba TODAS las unidades del contrato original,
+  // que sigue vigente. Una adición AGREGA; no sustituye nada.
+  const src = fs.readFileSync(
+    path.join(__dirname, "..", "src", "triggers", "contratos", "onEntregaTransicion.js"), "utf8");
+  const m = src.match(/const esTransicionable = ([\s\S]*?);\n/);
+  assert.ok(m, "no se encontró el predicado esTransicionable");
+  assert.ok(!/"Adición"/.test(m[1]),
+    "el auto-registro de devolución NO debe disparar con accion === 'Adición'");
+  assert.ok(/"Renovación"/.test(m[1]) && /REEMP/.test(m[1]),
+    "renovación y reemplazo sí sustituyen equipo: deben seguir disparando");
+});
+
+test("el CTA de transición SÍ conserva 'Adición' (los predicados divergen a propósito)", () => {
+  // Una adición pura necesita poder cerrarse con cerrarSinReemplazos().
+  const src = fs.readFileSync(
+    path.join(RAIZ_PUBLIC, "js", "domain", "transicionPendiente.js"), "utf8");
+  assert.ok(/'Adición'/.test(src),
+    "transicionPendiente.js es el predicado del CTA: la adición debe seguir ahí");
 });
 
 test("navegador — ordenUnica solo enlaza cuando hay UN tiquete", () => {

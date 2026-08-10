@@ -1,5 +1,59 @@
 # Changelog
 
+## [Devolución: cuatro reglas que decidían por tipo en vez de por evidencia] — 2026-08-10
+
+> La columna nueva destapó tres casos que el equipo mandó a revisar. Ninguno lo
+> causó la columna: los tres ya estaban en producción, y el chip fue lo que los
+> hizo visibles.
+>
+> **1. Una Adición no devuelve nada (bug).** `onEntregaTransicion` metía
+> `accion === 'Adición'` en el mismo saco que Renovación/Reemplazo y, al
+> confirmarse la entrega, reclamaba TODAS las unidades del contrato original.
+> Pero una adición AGREGA equipo a un contrato que sigue vigente. NADCAR
+> (ALQ20260803-01) añadió 8 radios y el sistema abrió una orden pidiendo los 10
+> del contrato original —que sigue ACTIVO— y marcó las 10 fichas
+> `pendiente_devolucion`. Deshecho con `fix-adicion-devolucion-falsa.js`.
+> **`Adición` sigue en `transicionPendiente.js`**: ese predicado es el del CTA y
+> una adición pura necesita cerrarse con `cerrarSinReemplazos()`. Los dos
+> divergen a propósito — uno pregunta "¿hay que registrar algo?", el otro
+> "¿se devuelve el origen?".
+>
+> **2. La anulación sin entrega devuelve a bodega sola.** El pool ya distingue
+> `asignado_contrato` (reservado, nunca salió) de `en_cliente` (entregado). Si
+> el contrato anulado nunca confirmó entrega, el equipo no cruzó la puerta:
+> pedirle a un humano que confirme lo que el dato ya dice es trabajo inventado.
+> Ahora se libera solo. **No revive lo retirado el 2026-07-20** —aquello mandaba
+> a cuarentena FINGIENDO una devolución—; esto suelta una reserva. Lo que sí
+> salió sigue pasando por el check-in.
+>
+> **3. Ser origen de una renovación no es deber equipo.** El chip gris salía por
+> `renovado_por_ids`, y medido contra producción la regla fallaba en **5 de 6**:
+> tres tenían la renovación SIN ENTREGAR (el cliente conserva su equipo con todo
+> derecho hasta recibir el nuevo) y dos no tenían una sola ficha colgando. El
+> momento en que el origen empieza a deber es la ENTREGA, y de eso ya se encarga
+> `onEntregaTransicion`: crea el tiquete, o marca el origen `no_aplica`
+> **verificado contra el pool** en vez de dejar que la UI adivine.
+>
+> **4. Una orden eliminada seguía reclamando equipo.** Encontrado al limpiar:
+> el script borraba la orden y `onOrdenDevolucionWrite`, al reaccionar a ESA
+> escritura, volvía a estampar el tiquete. El chip sobrevivía a la orden que lo
+> justificaba. Ahora `eliminado: true` quita el tiquete y, si era el último,
+> borra los campos — la fila vuelve a no mostrar chip en vez de quedarse en
+> "completa · 0 de 0".
+>
+> El hilo común es el mismo de la corrección del 2026-08-07: **derivar del tipo
+> de contrato en vez de mirar la evidencia**. Los cuatro arreglos van en el
+> trigger, no en el chip.
+>
+> Datos: 10 fichas de NADCAR liberadas, 4 de ACQUA TRES a bodega, 2 órdenes
+> falsas eliminadas. El dry-run evitó un error propio — el primer filtro habría
+> borrado también una orden legítima nacida de una anulación, así que la firma
+> del bug pasó a ser `origen.tipo === 'renovacion'` **y** contrato de Adición.
+>
+> **Estado final: 10 filas con chip de 497** (1 pendiente, 1 completa,
+> 1 no aplica, 7 sin registro) — contra 16 antes, y ahora cada una es real.
+> DESPLEGADO 2026-08-10. 144/144 tests, 54 grupos de reglas verdes.
+
 ## [Contratos: columna "Devolución" en la lista] — 2026-08-07
 
 > El equipo pidió saber **desde el index** si un contrato que fue renovación o

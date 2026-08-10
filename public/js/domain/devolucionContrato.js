@@ -10,18 +10,24 @@
 // el contrato que debería estar devolviendo pero nunca generó tiquete.
 window.DevolucionContrato = {
 
-  // Universo de contratos a los que la devolución APLICA: el contrato murió
-  // (anulado / baja aprobada / terminación total) o fue renovado por otro.
+  // Universo de contratos a los que la devolución APLICA sin que haya tiquete:
+  // el contrato MURIÓ (anulado / baja aprobada / terminación total) y por tanto
+  // ya no debería tener equipo afuera.
   //
-  // `renovado_por_ids` lo estampa onLinajeWrite en el contrato ORIGEN. Es la
-  // única señal de que un contrato vigente debería estar devolviendo: sin
-  // ella el sistema no distingue "renovado hace meses" de "en curso".
+  // Ser origen de una renovación (`renovado_por_ids`) NO entra aquí, aunque
+  // suene lógico. Medido contra producción (2026-08-10), la regla fallaba en 5
+  // de 6 casos: tres tenían la renovación todavía SIN ENTREGAR —el cliente
+  // conserva su equipo con todo derecho hasta que reciba el nuevo— y dos no
+  // tenían una sola ficha colgando. El momento en que el origen empieza a deber
+  // no es la firma de la renovación, es su ENTREGA, y de eso se encarga
+  // onEntregaTransicion: al confirmarse la entrega crea el tiquete (chip real)
+  // o marca el origen `no_aplica` verificado contra el pool. Adivinarlo aquí
+  // solo producía falsas alarmas.
   enModoDevolucion(data) {
     if (!data) return false;
     return data.estado === 'anulado'
         || data.baja_estado === 'aprobada'
-        || !!data.terminacion_total
-        || (Array.isArray(data.renovado_por_ids) && data.renovado_por_ids.length > 0);
+        || !!data.terminacion_total;
   },
 
   // ¿Hay evidencia de que este contrato llegó a tener equipo físico afuera?
