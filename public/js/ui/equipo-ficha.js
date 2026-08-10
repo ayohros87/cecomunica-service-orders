@@ -18,6 +18,11 @@
 window.EquipoFicha = {
 
   _ROLES_INVENTARIO: ['administrador', 'inventario', 'gerente'],
+  // Acciones de escritura: mismo gate que la página de Equipos (gerente lee).
+  _ROLES_ACCIONES: ['administrador', 'inventario'],
+  // Hook de refresco: la página que abrió la ficha lo asigna para re-pintar
+  // sus listas cuando una acción cambia el estado de la unidad.
+  onCambio: null,
 
   MOV_LABELS: {
     migracion:            'Alta por migración',
@@ -161,6 +166,10 @@ window.EquipoFicha = {
     const footerInv = puedeInventario
       ? `<a class="btn btn-ghost" href="${EquiposPoolService.kardexUrl(eq.serial || eq.serial_norm)}">Abrir en Inventario</a>`
       : '';
+    // Fase A (propuesta Almacén 2026-08): la ficha deja de ser solo-lectura.
+    // Acciones contextuales por estado, llamando directo al servicio — el
+    // mismo que usan las acciones de fila de Equipos por serial.
+    const footerAcciones = this._accionesHtml(eq);
 
     this._render(`
       <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
@@ -171,7 +180,76 @@ window.EquipoFicha = {
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px 16px; margin-bottom:14px;">${meta}</div>
       <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3); margin-bottom:8px;">Historia</div>
       <ul style="list-style:none; margin:0; padding:0; max-height:290px; overflow-y:auto;">${historia}</ul>`,
-      footerInv);
+      footerAcciones + footerInv);
+  },
+
+  // ── Acciones contextuales (Fase A) ─────────────────────────────────────
+  _accionesHtml(eq) {
+    if (!this._ROLES_ACCIONES.includes(window.userRole)) return '';
+    const btn = (accion, label, cls = 'btn-ghost') =>
+      `<button type="button" class="btn ${cls}" onclick="EquipoFicha._accion('${this._esc(eq.id)}','${accion}')">${label}</button>`;
+    const a = [];
+    if (eq.estado === 'devuelto_revision') {
+      a.push(btn('inspeccion_ok', '✓ Inspección OK → bodega', 'btn-accent'));
+      a.push(btn('baja', 'Dar de baja'));
+    } else if (eq.estado === 'por_clasificar') {
+      a.push(btn('corregir', 'Corregir a bodega', 'btn-accent'));
+      a.push(btn('baja', 'Dar de baja'));
+    } else if (eq.estado === 'en_bodega') {
+      if (window.AsistenteVenta) a.push(btn('vender', 'Registrar venta'));
+      a.push(btn('baja', 'Dar de baja'));
+    } else if (eq.estado === 'baja') {
+      a.push(btn('reactivar', 'Reactivar → bodega', 'btn-accent'));
+    }
+    if (eq.verificado === false) a.push(btn('verificar', 'Marcar verificado'));
+    return a.join('');
+  },
+
+  async _accion(docId, accion) {
+    const user = firebase.auth().currentUser;
+    const doc = await firebase.firestore().collection('equipos_pool').doc(docId).get();
+    if (!doc.exists) return;
+    const eq = { id: doc.id, ...doc.data() };
+    const serial = eq.serial || eq.serial_norm;
+    const aviso = (msg, tipo = 'ok') => { if (window.Toast) Toast.show(msg, tipo); };
+    try {
+      if (accion === 'inspeccion_ok') {
+        if (!confirm(`¿Inspección OK? ${serial} regresa a bodega como disponible (condición reuso).`)) return;
+        await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK desde la ficha (Almacén)' }, user);
+        aviso(`${serial} → en bodega.`);
+      } else if (accion === 'corregir') {
+        const motivo = prompt(`Corregir ${serial} a bodega — la unidad está físicamente en bodega y su estado era heredado.\nMotivo (opcional):`);
+        if (motivo === null) return;
+        await EquiposPoolService.corregirABodega(eq.id, motivo || 'Corrección desde la ficha (Almacén)', user);
+        aviso(`${serial} → en bodega (verificado).`);
+      } else if (accion === 'baja') {
+        const motivo = prompt(`Dar de baja ${serial} — sale de la flota (reversible con "Reactivar").\nMotivo (obligatorio):`);
+        if (!motivo) return;
+        await EquiposPoolService.darDeBaja(eq.id, motivo, user);
+        aviso(`${serial} dado de baja.`);
+      } else if (accion === 'reactivar') {
+        const motivo = prompt(`Reactivar ${serial} — regresa a bodega como disponible.\nMotivo:`);
+        if (!motivo) return;
+        await EquiposPoolService.reactivar(eq.id, motivo, user);
+        aviso(`${serial} → en bodega.`);
+      } else if (accion === 'verificar') {
+        await EquiposPoolService.verificar(eq.id, user);
+        aviso(`${serial} marcado como verificado.`);
+      } else if (accion === 'vender') {
+        document.getElementById('equipoFichaOverlay')?.remove();
+        document.body.style.overflow = '';
+        if (window.AsistenteVenta) {
+          AsistenteVenta.abrir({ user, serialesPrefill: [serial], onDone: () => { if (typeof this.onCambio === 'function') this.onCambio(); } });
+        }
+        return;
+      } else {
+        return;
+      }
+      await this.abrirPorId(eq.id);                       // re-pinta la ficha ya movida
+      if (typeof this.onCambio === 'function') this.onCambio();
+    } catch (e) {
+      aviso(e.message || String(e), 'bad');
+    }
   },
 
   _render(bodyHtml, footerExtra = '') {

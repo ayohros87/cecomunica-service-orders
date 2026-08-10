@@ -35,6 +35,26 @@ window.AlmacenPage = {
     if (ex && ex.style.display !== 'none' && window.AlmacenExistencias) return AlmacenExistencias.recargar();
     return AlmacenHoy.recargar();
   },
+
+  recargarTodo() {
+    AlmacenHoy.recargar();
+    if (window.AlmacenExistencias) AlmacenExistencias.refrescarSiCargado();
+  },
+
+  // Asistentes (Fase B): componentes propios del espacio. Mientras alguno no
+  // esté cargado (transición), cae al deep-link de la página de Equipos.
+  abrirConteo() {
+    if (!window.AsistenteConteo) { location.href = '../inventario/cargar-inventario.html?volver=almacen'; return; }
+    AsistenteConteo.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
+  },
+  abrirRecibir() {
+    if (!window.AsistenteRecibir) { location.href = '../inventario/equipos.html?accion=recibir&volver=almacen'; return; }
+    AsistenteRecibir.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
+  },
+  abrirVenta() {
+    if (!window.AsistenteVenta) { location.href = '../inventario/equipos.html?accion=vender&volver=almacen'; return; }
+    AsistenteVenta.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
+  },
 };
 
 window.AlmacenHoy = (() => {
@@ -247,7 +267,8 @@ window.AlmacenHoy = (() => {
       poolHtml += conMas(d.conflictos, (g) => fila({
         chip: 'Conflicto', chipCls: 'conflicto',
         txt: `<b>${esc(g.norm)}</b> — ${g.docs.length} fichas: ${esc(g.docs.map(x => x.modelo_label || '¿?').join(' ↔ '))}`,
-        ctaHtml: cta(vol(`${EQUIPOS}?tab=conflictos`), 'git-merge', 'Resolver'),
+        ctaHtml: `<button type="button" class="btn btn-sm btn-accent hy-cta" onclick="AlmacenHoy.abrirConflicto('${esc(g.norm).replace(/'/g, "\\'")}')">
+          <i data-lucide="git-merge" style="width:14px;height:14px;"></i> Resolver</button>`,
       }), vol(`${EQUIPOS}?tab=conflictos`), 'conflictos');
     }
 
@@ -276,8 +297,8 @@ window.AlmacenHoy = (() => {
     const difsViejas = difsTodas.length - difs.length;
     const notaConteosViejos = difsViejas > 0
       ? `<p class="hy-nota">${difsViejas} modelos más tienen diferencia contra conteos de hace
-         más de ${UMBRAL_CONTEO_DIAS} días — se cuadran recontando, no son trabajo de hoy.
-         <a href="${vol('../inventario/index.html')}">Ver el tablero →</a></p>` : '';
+         más de ${UMBRAL_CONTEO_DIAS} días — se cuadran recontando (Conteo físico), no son trabajo de hoy.
+         <a href="#" onclick="event.preventDefault(); AlmacenPage.setTab('existencias')">Ver Existencias →</a></p>` : '';
     total += difs.length;
     partes.push(grupo('De conteos', difs.length,
       conMas(difs, (f) => fila({
@@ -285,7 +306,7 @@ window.AlmacenHoy = (() => {
         txt: `<b>${esc(f.modelo?.modelo || f.label)}</b> — pool ${f.seriales} vs conteo ${f.conteo} (${f.dif > 0 ? '+' : ''}${f.dif})`,
         at: f.data?.ultima_actualizacion?.toMillis?.() || null,
         ctaHtml: cta(vol(`${EQUIPOS}?tab=en_bodega${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`), 'diff', 'Revisar'),
-      }), vol('../inventario/index.html'), 'el tablero'),
+      }), './index.html?tab=existencias', 'Existencias'),
       notaConteosViejos,
     ));
 
@@ -321,6 +342,103 @@ window.AlmacenHoy = (() => {
 
   function recargar() { return cargar(); }
 
+  // ── Conflictos: resolver desde la bandeja (Fase C) ─────────────────────
+  // Mismo circuito que la cola de Equipos: elegir la ficha real → callable
+  // fusionarPoolFicha (conserva kardex, absorbe duplicados), o marcar que son
+  // radios físicos distintos (colisión real tipo Kenwood).
+  function abrirConflicto(norm) {
+    const g = (ctx.datos?.conflictos || []).find(x => x.norm === norm);
+    if (!g) return;
+    if (!(ctx.rol === ROLES.ADMIN || ctx.rol === ROLES.INVENTARIO)) {
+      if (window.Toast) Toast.show('Solo administración o inventario resuelven conflictos.', 'warn');
+      return;
+    }
+    const cards = g.docs.map(d => `
+      <label style="display:block; border:1px solid var(--border-default); border-radius:var(--radius-md); padding:10px 12px; cursor:pointer;">
+        <input type="radio" name="hyConfl" value="${esc(d.id)}" style="margin-right:8px;">
+        <b>${esc(d.modelo_label || 'sin modelo')}</b>
+        <span style="color:var(--fg-3); font-size:12px; display:block; margin-left:22px;">
+          estado: ${esc(EquiposPoolService.ESTADO_LABELS[d.estado] || d.estado)}
+          · origen: ${esc(d.origen || '—')}
+          ${d.asignacion?.cliente_nombre ? ` · ${esc(d.asignacion.cliente_nombre)}` : ''}
+          ${d.verificado === false ? ' · sin verificar' : ''}
+        </span>
+      </label>`).join('');
+    _modalConflicto(`
+      <p style="font-size:13px; color:var(--fg-3); margin:0 0 10px;">
+        El serial <b style="font-family:var(--mono, monospace);">${esc(norm)}</b> tiene ${g.docs.length} fichas
+        (modelos distintos registrados por fuentes distintas). Elige el radio REAL para fusionar
+        las demás en él (su kardex se conserva) — o confirma que son radios físicos distintos.
+      </p>
+      <div style="display:flex; flex-direction:column; gap:8px;">${cards}</div>`,
+      `<button class="btn btn-ghost" onclick="AlmacenHoy._conflictoDistintos('${esc(norm).replace(/'/g, "\\'")}')">Son radios distintos</button>
+       <button class="btn btn-primary" onclick="AlmacenHoy._conflictoFusionar('${esc(norm).replace(/'/g, "\\'")}', this)">Fusionar en la seleccionada</button>`);
+  }
+
+  async function _conflictoFusionar(norm, btn) {
+    const g = (ctx.datos?.conflictos || []).find(x => x.norm === norm);
+    const sel = document.querySelector('input[name="hyConfl"]:checked');
+    if (!g || !sel) { if (window.Toast) Toast.show('Selecciona primero la ficha que se conserva.', 'warn'); return; }
+    const keeperId = sel.value;
+    const absorbidosIds = g.docs.map(d => d.id).filter(id => id !== keeperId);
+    if (!confirm(`Fusionar ${absorbidosIds.length} ficha(s) en la seleccionada. Sus kardex se conservan. ¿Continuar?`)) return;
+    btn.disabled = true;
+    try {
+      const res = await firebase.functions().httpsCallable('fusionarPoolFicha')({ keeperId, absorbidosIds });
+      if (window.Toast) Toast.show(`Fusión lista: ${res.data.fusionados} ficha(s) absorbida(s).`, 'ok');
+      _cerrarConflicto();
+      cargar();
+    } catch (e) {
+      btn.disabled = false;
+      if (window.Toast) Toast.show('No se pudo fusionar: ' + (e.message || e), 'bad');
+    }
+  }
+
+  async function _conflictoDistintos(norm) {
+    const g = (ctx.datos?.conflictos || []).find(x => x.norm === norm);
+    if (!g) return;
+    if (!confirm(`Las ${g.docs.length} fichas del serial ${norm} quedarán marcadas como radios FÍSICOS distintos (salen de la cola, conservan el aviso "2+ modelos"). ¿Continuar?`)) return;
+    try {
+      const db = firebase.firestore();
+      const batch = db.batch();
+      g.docs.forEach(d => batch.set(db.collection('equipos_pool').doc(d.id), { conflicto_revisado: true }, { merge: true }));
+      await batch.commit();
+      if (window.Toast) Toast.show('Grupo marcado como radios distintos.', 'ok');
+      _cerrarConflicto();
+      cargar();
+    } catch (e) {
+      if (window.Toast) Toast.show('No se pudo marcar: ' + (e.message || e), 'bad');
+    }
+  }
+
+  function _modalConflicto(bodyHtml, footerHtml) {
+    document.getElementById('hyConflOverlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'hyConflOverlay';
+    overlay.className = 'overlay';
+    overlay.style.display = 'flex';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:560px; width:min(560px, 94vw);">
+        <div class="sheet-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 class="sheet-title" style="margin:0;">Fichas en conflicto</h3>
+          <button class="btn btn-ghost btn-icon" data-action="cerrar" aria-label="Cerrar">✕</button>
+        </div>
+        <div class="sheet-body" style="padding:14px 10px;">${bodyHtml}</div>
+        <div class="footer" style="display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap;">
+          ${footerHtml}
+          <button class="btn btn-ghost" data-action="cerrar">Cancelar</button>
+        </div>
+      </div>`;
+    overlay.addEventListener('click', (e) => { if (e.target.closest('[data-action="cerrar"]')) _cerrarConflicto(); });
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+  }
+
+  function _cerrarConflicto() {
+    document.getElementById('hyConflOverlay')?.remove();
+    document.body.style.overflow = '';
+  }
+
   // ── Entry ─────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     verificarAccesoYAplicarVisibilidad(init);
@@ -353,8 +471,15 @@ window.AlmacenHoy = (() => {
     if (ex && ex.style.display !== 'none' && window.AlmacenExistencias) {
       AlmacenExistencias.activar();
     }
+    // Una acción de la ficha (inspección, baja, venta…) refresca las listas.
+    if (window.EquipoFicha) EquipoFicha.onCambio = () => AlmacenPage.recargarTodo();
+    // ?accion=conteo|recibir|vender — deep-links de los asistentes.
+    const accion = new URLSearchParams(location.search).get('accion');
+    if (accion === 'conteo') AlmacenPage.abrirConteo();
+    else if (accion === 'recibir') AlmacenPage.abrirRecibir();
+    else if (accion === 'vender') AlmacenPage.abrirVenta();
     cargar();
   }
 
-  return { recargar, render };
+  return { recargar, render, abrirConflicto, _conflictoFusionar, _conflictoDistintos };
 })();

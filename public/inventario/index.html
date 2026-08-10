@@ -1,180 +1,20 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0B2A47">
-  <meta charset="UTF-8" />
-  <title>Inventario de Radios - Cecomunica</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css">
-  <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
-  <link rel="stylesheet" href="../css/app-kit-extras.css">
-
-  <style>
-    /* Page-local — el resto vive en el kit */
-
-    /* Density toggle (JS aplica data-density="dense"/"roomy") */
-    .app-table-wrap[data-density="dense"] table { font-size: 12.5px; }
-    .app-table-wrap[data-density="dense"] th,
-    .app-table-wrap[data-density="dense"] td { padding: 6px 8px; }
-    .app-table-wrap[data-density="roomy"] table { font-size: 14.5px; }
-    .app-table-wrap[data-density="roomy"] th,
-    .app-table-wrap[data-density="roomy"] td { padding: 10px 12px; }
-
-    /* Sortable column header arrow */
-    th[data-sort] { cursor: pointer; user-select: none; }
-    th .sort { font-size: 12px; opacity: .6; margin-left: 4px; }
-
-    /* Helper para ocultar columnas vía menú */
-    .hidden-col { display: none; }
-
-    /* Stock badges — alias a tokens de status (rendereadas por inventario-index.js) */
-    .badge {
-      display: inline-flex; align-items: center; justify-content: center;
-      border-radius: 999px; padding: 0 8px; height: 22px;
-      font-size: 12px; font-weight: 600;
-      border: 1px solid transparent;
-    }
-    .badge.completo  { background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
-    .badge.pendiente { background:#FFFBEB; color:#92400E; border-color:#FDE68A; }
-    .badge.danger    { background:#FEF2F2; color:#991B1B; border-color:#FECACA; }
-
-    /* Drill-down de "Unidades (seriales)": afordancia de link — número con
-       subrayado punteado + chevron, realce al hover. */
-    .badge-link { text-decoration: none; display: inline-flex; align-items: center; gap: 2px; color: inherit; }
-    .badge-link .badge { text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer; }
-    .badge-link i, .badge-link svg { opacity: .55; transition: transform .12s ease, opacity .12s ease; }
-    .badge-link:hover .badge { box-shadow: 0 0 0 2px var(--accent-line, #BFDBFE); }
-    .badge-link:hover i, .badge-link:hover svg { opacity: 1; transform: translateX(2px); }
-  </style>
-
-  <!-- Firebase -->
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="../js/firebase-init.js"></script>
-  <script src="../js/core/modulos.js"></script>
-  <script src="../js/core/layout.js?v=cc8"></script>
-  <script src="../js/core/roles.js"></script>
-  <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/modelosService.js"></script>
-  <script defer src="../js/services/inventarioService.js"></script>
-  <script defer src="../js/services/equiposPoolService.js"></script>
-  <!-- Join único conteo↔pool (tablero, conciliación y reporte por correo). -->
-  <script defer src="../js/domain/stockAgg.js"></script>
-  <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->
-  <script defer src="../js/services/colaInventarioService.js"></script>
-  <script defer src="../js/ui/toast.js"></script>
-
-  <script src="../js/pages/inventario-index.js?v=cc14" defer></script>
-  <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
-  <script src="/js/vendor/lucide.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Almacén · Existencias - Cecomunica</title>
+  <!-- ABSORBIDA (Fase D, propuesta Almacén 2026-08): el tablero por modelo es
+       la pestaña Existencias del espacio Almacén (mismo join StockAgg, con
+       columnas por estado, drill-down a seriales, ficha con kardex, histórico
+       de conteos, Copiar reporte y Excel). -->
+  <meta http-equiv="refresh" content="0;url=../almacen/index.html?tab=existencias">
+  <script>location.replace('../almacen/index.html?tab=existencias');</script>
 </head>
 <body>
-  <div class="cc-app">
-  <div id="rail-mount"></div>
-  <div class="cc-work">
-
-<div id="topbar-mount"></div>
-<script>
-  Layout.renderTopbarFor('index', {
-    title: '<i data-lucide="package"></i> Inventario de Radios',
-    actions: [
-      { label: '<i data-lucide="scan-barcode"></i> Equipos por serial',
-        onclick: "window.location.href='./equipos.html'" },
-      { label: '<i data-lucide="plus"></i> Registrar conteo físico',
-        cls: 'primary',
-        onclick: "window.location.href='./cargar-inventario.html'" }
-    ],
-    menu: [
-      { href: '../almacen/index.html', label: '<i data-lucide="inbox"></i> Almacén · Hoy (bandeja)' },
-      { href: './piezas.html',       label: '<i data-lucide="layers"></i> Piezas' },
-      { onclick: 'copiarReporte()',  label: '<i data-lucide="mail"></i> Copiar reporte (correo)' },
-      { onclick: 'exportarExcel()',  label: '<i data-lucide="download"></i> Excel' },
-      { divider: true },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Conteo anterior</label>' },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-penultima"> Penúltimo conteo</label>' },
-      { divider: true },
-      { onclick: 'toggleDensity()', label: '<i data-lucide="arrow-up-down"></i> Alternar densidad' }
-    ]
-  });
-</script>
-
-<div id="loader" style="display:none;" class="loader-center">
-  <div class="loader"></div>
-</div>
-
-<div class="app-wrap app-wrap--full">
-
-  <div class="kpi-grid" style="margin:var(--sp-4) 0;">
-    <div class="kpi-card">
-      <span class="kpi-card-label">Modelos listados</span>
-      <span class="kpi-card-value" id="kpiModelos">—</span>
-    </div>
-    <div class="kpi-card">
-      <span class="kpi-card-label">Unidades en bodega (seriales)</span>
-      <span class="kpi-card-value kpi-accent" id="kpiUnidades">—</span>
-      <span class="kpi-card-sub">reporte principal — pool de equipos</span>
-    </div>
-    <div class="kpi-card">
-      <span class="kpi-card-label">Conteo físico (total)</span>
-      <span class="kpi-card-value" id="kpiConteo">—</span>
-      <span class="kpi-card-sub">verificación manual</span>
-    </div>
-    <div class="kpi-card">
-      <span class="kpi-card-label">Diferencia</span>
-      <span class="kpi-card-value" id="kpiDif">—</span>
-      <span class="kpi-card-sub">seriales − conteo · meta: 0</span>
-    </div>
-  </div>
-
-  <div class="ds-card">
-    <div class="filter-bar">
-      <div class="filter-search" style="max-width:320px;">
-        <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="buscador" type="search" placeholder="Buscar marca, modelo o tipo…" aria-label="Buscar inventario">
-      </div>
-      <div class="filter-chips" id="chipsTipo">
-        <button type="button" class="filter-chip active" data-tipo="" onclick="setFiltroTipo('')">Todos</button>
-        <button type="button" class="filter-chip" data-tipo="P" onclick="setFiltroTipo('P')">Portátil</button>
-        <button type="button" class="filter-chip" data-tipo="B" onclick="setFiltroTipo('B')">Base</button>
-        <button type="button" class="filter-chip" data-tipo="C" onclick="setFiltroTipo('C')">Cámara</button>
-      </div>
-      <div style="flex:1;"></div>
-      <label class="toggle-pill"><input type="checkbox" id="chkAltoMov" onchange="onToggleFiltro(this)"> Solo alto movimiento</label>
-      <label class="toggle-pill"><input type="checkbox" id="chkStockBajo" onchange="onToggleFiltro(this)"> Stock bajo</label>
-    </div>
-    <div class="app-table-wrap app-table-wrap--sticky" id="wrapTabla" data-density="roomy" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:200px;">
-      <table class="app-table">
-        <thead id="headerInventario"></thead>
-        <tbody id="inventarioTable"></tbody>
-      </table>
-    </div>
-    <div class="app-table-footer">
-      <p id="resumenInv" class="resumen" style="margin:0;"></p>
-    </div>
-  </div>
-</div>
-
-<p id="contadorInventario"></p>
-
-<script>
-  function cerrarSesion() {
-    firebase.auth().signOut().then(() => { window.location.href = '../login.html'; });
-  }
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-  // Layout.renderTopbar auto-wires the overflow-menu toggle.
-</script>
-  </div> <!-- /cc-work -->
-  </div> <!-- /cc-app -->
-  <script>
-    // Rail Command Center (F4) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('inventario'));
-  </script>
+  <p style="font-family:system-ui;margin:40px;text-align:center;">
+    El inventario de radios ahora vive en
+    <a href="../almacen/index.html?tab=existencias">Almacén · Existencias</a>.
+  </p>
 </body>
 </html>

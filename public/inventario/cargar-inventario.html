@@ -1,93 +1,20 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0B2A47">
-  <meta charset="UTF-8" />
-  <title>Conteo físico de radios - Cecomunica</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css">
-  <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
-
-  <!-- Firebase -->
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="../js/firebase-init.js"></script>
-  <script src="../js/core/modulos.js"></script>
-  <script src="../js/core/layout.js?v=cc8"></script>
-  <script src="../js/core/roles.js"></script>
-  <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/services/modelosService.js"></script>
-  <script defer src="../js/services/inventarioService.js"></script>
-  <script defer src="../js/ui/toast.js"></script>
-
-  <script src="../js/pages/cargar-inventario.js" defer></script>
-  <script src="/js/vendor/lucide.min.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conteo físico - Cecomunica</title>
+  <!-- ABSORBIDA (Fase B, propuesta Almacén 2026-08): el conteo físico ahora es
+       un asistente dentro del espacio Almacén (js/ui/asistente-conteo.js), con
+       diff contra el pool ANTES de guardar y las diferencias cayendo a la
+       bandeja Hoy. -->
+  <meta http-equiv="refresh" content="0;url=../almacen/index.html?accion=conteo">
+  <script>location.replace('../almacen/index.html?accion=conteo');</script>
 </head>
 <body>
-  <div class="cc-app">
-  <div id="rail-mount"></div>
-  <div class="cc-work">
-
-<div id="topbar-mount"></div>
-<script>
-  Layout.renderTopbarFor('index', {
-    title: '<i data-lucide="package"></i> Conteo físico de radios',
-    actions: [
-      { label: '<i data-lucide="save"></i> Guardar inventario',
-        cls: 'primary',
-        onclick: "guardarSemana()" }
-    ],
-    menu: [
-      { href: './index.html',   label: '<i data-lucide="package"></i> Ver inventario' },
-      { href: './modelos.html', label: '<i data-lucide="book-open"></i> Modelos' }
-    ]
-  });
-</script>
-
-<div class="app-wrap app-wrap--full">
-  <div class="ds-card" style="overflow:hidden;">
-    <div class="filter-bar">
-      <div class="filter-search">
-        <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="filtroMarca" type="search" placeholder="Buscar por marca" aria-label="Filtrar por marca" oninput="filtrar()">
-      </div>
-      <div class="filter-search">
-        <span class="search-icon"><i data-lucide="search"></i></span>
-        <input id="filtroModelo" type="search" placeholder="Buscar por modelo" aria-label="Filtrar por modelo" oninput="filtrar()">
-      </div>
-      <button class="btn btn-ghost btn-sm" onclick="limpiarFiltro()"><i data-lucide="refresh-cw"></i> Limpiar</button>
-      <div style="flex:1;"></div>
-      <span id="resumenCargar" class="resumen">Cargando modelos…</span>
-    </div>
-
-    <div class="app-table-wrap app-table-wrap--sticky" style="border:none; box-shadow:none; border-radius:0; --sticky-table-offset:155px;">
-      <table class="app-table">
-        <thead id="headerModelos"></thead>
-        <tbody id="tablaModelos">
-          <tr><td style="padding:var(--sp-4);">
-            <div class="skeleton" style="width:55%; height:12px; margin-bottom:10px;"></div>
-            <div class="skeleton" style="width:70%; height:12px; margin-bottom:10px;"></div>
-            <div class="skeleton" style="width:45%; height:12px;"></div>
-          </td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
-  </div> <!-- /cc-work -->
-  </div> <!-- /cc-app -->
-  <script>
-    // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('inventario'));
-  </script>
+  <p style="font-family:system-ui;margin:40px;text-align:center;">
+    El conteo físico ahora vive en
+    <a href="../almacen/index.html?accion=conteo">Almacén → Conteo físico</a>.
+  </p>
 </body>
 </html>

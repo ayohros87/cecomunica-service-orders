@@ -199,11 +199,11 @@ const Layout = (() => {
       { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
     ]},
     { grupo: 'Almacén · finanzas', items: [
-      // 'almacen' absorbe la bandeja ('pendientes' se retiró del rail); los
-      // demás módulos viejos siguen mientras dura la migración al espacio.
+      // Consolidación 2026-08: 'almacen' absorbió pendientes + inventario
+      // (tablero) + el trabajo diario de equipos; la página de Equipos por
+      // serial sigue viva como herramienta avanzada (menú de Almacén y
+      // deep-links de señales/correos), pero ya no ocupa rail.
       { id: 'almacen',     label: 'Almacén',     icon: 'warehouse',    href: '/almacen/index.html' },
-      { id: 'inventario',  label: 'Inventario',  icon: 'package',      href: '/inventario/index.html' },
-      { id: 'equipos',     label: 'Equipos (serial)', icon: 'scan-barcode', href: '/inventario/equipos.html' },
       { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
       { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/facturacion/activacion.html' },
     ]},

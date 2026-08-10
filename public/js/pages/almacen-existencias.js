@@ -168,7 +168,7 @@ window.AlmacenExistencias = (() => {
     const tbody = $('exTabla');
     if (!tbody) return;
     if (!filas.length) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-5);">
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--fg-3); padding:var(--sp-5);">
         Sin modelos que cumplan el filtro.</td></tr>`;
     } else {
       tbody.innerHTML = filas.map(filaHtml).join('');
@@ -224,6 +224,7 @@ window.AlmacenExistencias = (() => {
         ${celda(otros)}
         <td style="text-align:right; color:var(--fg-3);">${f.conteo ?? '—'}</td>
         ${difHtml}
+        <td style="text-align:right; color:var(--fg-4); font-size:12px; white-space:nowrap;">${f.data?.ultima_actualizacion?.toDate ? f.data.ultima_actualizacion.toDate().toLocaleDateString('es-PA') : '—'}</td>
       </tr>`;
     return fila + (abierta ? expansionHtml(f) : '');
   }
@@ -246,18 +247,39 @@ window.AlmacenExistencias = (() => {
       const resto = docs.length - MAX_CHIPS;
       const mas = resto > 0
         ? `<a class="ex-mas" href="${vol(`${EQUIPOS}?tab=${encodeURIComponent(estado)}${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`)}">+${resto} más →</a>` : '';
+      // Acciones de LOTE por bloque (Fase C): aplican a TODAS las unidades de
+      // ese estado en este modelo — la forma de atacar el atraso por tandas.
+      const puede = ['administrador', 'inventario'].includes(window.userRole);
+      let lote = '';
+      if (puede && estado === 'devuelto_revision') {
+        lote = `<button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
+          onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'inspeccion_ok')">
+          ✓ Inspección OK (${docs.length})</button>`;
+      } else if (puede && estado === 'por_clasificar') {
+        lote = `<button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
+          onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'corregir')">
+          Corregir a bodega (${docs.length})</button>`;
+      }
+      const sinVerif = puede ? docs.filter(x => x.verificado === false).length : 0;
+      const loteVerif = sinVerif ? `<button type="button" class="btn btn-sm" style="margin-left:6px;"
+        onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'verificar')">
+        Marcar verificados (${sinVerif})</button>` : '';
       return `<div class="ex-bloque">
-        <span class="ex-bloque-t">${esc(EquiposPoolService.ESTADO_LABELS[estado] || estado)} · ${docs.length}</span>
+        <span class="ex-bloque-t">${esc(EquiposPoolService.ESTADO_LABELS[estado] || estado)} · ${docs.length}${lote}${loteVerif}</span>
         ${chips}${mas}
       </div>`;
     }).join('');
     const linkEquipos = vol(`${EQUIPOS}?tab=todos${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`);
+    const linkHistorico = f.modelo_id
+      ? ` · <a href="#" onclick="event.preventDefault(); event.stopPropagation(); AlmacenExistencias.verHistorico('${esc(f.modelo_id).replace(/'/g, "\\'")}')">
+          <i data-lucide="bar-chart-2" style="width:13px;height:13px;"></i> Histórico de conteos</a>` : '';
     return `
-      <tr class="ex-expansion"><td colspan="9">
+      <tr class="ex-expansion"><td colspan="10">
         ${bloques || '<span style="color:var(--fg-3); font-size:13px;">Sin unidades en el pool (solo conteo físico).</span>'}
         <div class="ex-expansion-pie">
           <a href="${linkEquipos}"><i data-lucide="scan-barcode" style="width:13px;height:13px;"></i>
-            Gestionar en Equipos por serial →</a>
+            Gestionar en Equipos por serial (avanzado) →</a>${linkHistorico}
+          <span id="exHistorico-${esc(f.modelo_id || '')}"></span>
         </div>
       </td></tr>`;
   }
@@ -316,5 +338,59 @@ window.AlmacenExistencias = (() => {
     return activar();
   }
 
-  return { activar, recargar, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte };
+  // Refresco desde hooks externos (ficha, asistentes): solo si ya se cargó.
+  function refrescarSiCargado() {
+    if (ctx.cargado) recargar();
+  }
+
+  // Histórico de conteos del modelo (absorbe el verHistorico del tablero —
+  // que era un alert()): se pinta inline en la expansión.
+  async function verHistorico(modeloId) {
+    const cont = document.getElementById(`exHistorico-${modeloId}`);
+    if (!cont) return;
+    cont.innerHTML = ' <span style="color:var(--fg-3);">cargando…</span>';
+    try {
+      const hist = await InventarioService.getHistorialModelo(modeloId);
+      if (!hist.length) { cont.innerHTML = ' <span style="color:var(--fg-3);">— sin conteos registrados</span>'; return; }
+      cont.innerHTML = '<span style="display:block; margin-top:6px; font-size:12px; color:var(--fg-3);">'
+        + hist.slice(0, 8).map(h =>
+          `${h.timestamp?.toDate ? h.timestamp.toDate().toLocaleDateString('es-PA') : '—'}: <b>${h.cantidad}</b>`
+        ).join(' · ')
+        + (hist.length > 8 ? ` · +${hist.length - 8} más` : '') + '</span>';
+    } catch (e) {
+      cont.innerHTML = ' <span style="color:#b91c1c;">no se pudo cargar</span>';
+    }
+  }
+
+  // ── Acciones de lote por bloque (Fase C) ────────────────────────────────
+  // Reutiliza las mismas funciones unitarias del servicio que las acciones de
+  // fila — igual que hacía la página de Equipos con sus lotes.
+  async function loteAccion(key, estado, accion) {
+    const f = ctx.filas.find(x => x.key === key);
+    if (!f) return;
+    const docs = f.docs.filter(eq => eq.estado === estado
+      && (accion !== 'verificar' || eq.verificado === false));
+    if (!docs.length) return;
+    const user = firebase.auth().currentUser;
+    const msgs = {
+      inspeccion_ok: `¿Inspección OK para las ${docs.length} unidades de ${f.label} en cuarentena? Regresan a bodega como disponibles (reuso).`,
+      corregir: `¿Corregir a bodega las ${docs.length} unidades de ${f.label} en "por clasificar"? Quedan disponibles y verificadas.`,
+      verificar: `¿Marcar verificadas ${docs.length} unidades de ${f.label}?`,
+    };
+    if (!confirm(msgs[accion])) return;
+    let ok = 0, err = 0;
+    for (const eq of docs) {
+      try {
+        if (accion === 'inspeccion_ok') await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK en lote (Almacén · Existencias)' }, user);
+        else if (accion === 'corregir') await EquiposPoolService.corregirABodega(eq.id, 'Corrección en lote (Almacén · Existencias)', user);
+        else if (accion === 'verificar') await EquiposPoolService.verificar(eq.id, user);
+        ok++;
+      } catch (e) { err++; console.warn('[lote]', eq.id, e?.code || e); }
+    }
+    if (window.Toast) Toast.show(`Lote: ${ok} unidades procesadas${err ? `, ${err} fallaron` : ''}.`, err ? 'warn' : 'ok');
+    await recargar();
+    if (window.AlmacenHoy) AlmacenHoy.recargar();
+  }
+
+  return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, verHistorico };
 })();

@@ -128,17 +128,8 @@
     .import-stat { display:inline-flex; align-items:center; gap:6px; margin-right:var(--sp-4); font-size:13px; }
     .import-stat strong { font-size:16px; }
 
-    /* Desplegable de sugerencias de cliente (modal de venta) — mismo patrón
-       que POC/vendedores-batch.html */
-    .suggest-list {
-      position: absolute; top: 100%; left: 0; right: 0;
-      background: var(--surface-card); border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md); box-shadow: var(--shadow-md);
-      padding: 6px; margin: 4px 0 0; list-style: none;
-      max-height: 220px; overflow-y: auto; z-index: 2000;
-    }
-    .suggest-item { padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
-    .suggest-item:hover { background: var(--surface-sunken); color: var(--accent); }
+    /* El desplegable de sugerencias de cliente vive con el asistente de venta
+       (js/ui/asistente-venta.js inyecta su propio CSS acotado). */
 
     table.app-table tbody td { font-size:14px; }
     table.app-table tbody tr:nth-child(even) { background:#f1f5f9; }
@@ -150,7 +141,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script defer src="../js/firebase-init.js"></script>
   <script src="../js/core/modulos.js"></script>
-  <script src="../js/core/layout.js?v=cc8"></script>
+  <script src="../js/core/layout.js?v=cc9"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
@@ -166,6 +157,11 @@
   <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->
   <script defer src="../js/services/colaInventarioService.js"></script>
   <script defer src="../js/ui/equipo-ficha.js"></script>
+  <!-- Asistentes extraídos de esta página (2026-08-10): componentes con
+       overlay propio, compartidos con el espacio Almacén. La página delega
+       en ellos (EquiposPool.abrirRecibir / abrirVenta). -->
+  <script defer src="../js/ui/asistente-recibir.js"></script>
+  <script defer src="../js/ui/asistente-venta.js"></script>
   <script defer src="../js/services/pocService.js?v=cc12"></script> <!-- soft-delete del device en "Corregir estado" -->
 
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
@@ -401,97 +397,9 @@
     </div>
   </div>
 
-  <!-- Modal: recibir equipos -->
-  <div id="eqRecibirModal" class="modal-backdrop" style="display:none;">
-    <div class="modal" style="max-width:520px;">
-      <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="package-plus"></i> Recibir equipos en bodega</h3>
-        <button class="modal-close" onclick="Modal.close('eqRecibirModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-      </div>
-      <div class="modal-body">
-        <div class="form-field">
-          <label class="form-label" for="recModelo">Modelo</label>
-          <select class="form-select" id="recModelo"><option value="">Seleccione…</option></select>
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="recSeriales">Seriales <span class="optional">(uno por línea — acepta lector de código de barras)</span></label>
-          <textarea class="form-input" id="recSeriales" rows="6" placeholder="B12345678&#10;B12345679&#10;…" style="font-family:var(--font-mono);"></textarea>
-          <p style="font-size:12px; color:var(--fg-3); margin:4px 0 0;">
-            Sirve para contar el estante: los seriales que no existan se dan de alta y los que el
-            sistema tenga en otro lado se preguntan antes de traerlos a bodega.</p>
-        </div>
-        <div style="display:flex; gap:var(--sp-3);">
-          <div class="form-field" style="flex:1;">
-            <label class="form-label" for="recCondicion">Condición</label>
-            <select class="form-select" id="recCondicion" disabled
-                    title="La determina el modelo: las filas con sufijo -R son refurbished.">
-              <option value="nuevo">Nuevo</option>
-              <option value="reuso">Refurbished</option>
-            </select>
-            <p id="recCondicionHint" style="font-size:12px; color:var(--fg-3); margin:4px 0 0;">
-              La define el modelo escogido.</p>
-          </div>
-          <div class="form-field" style="flex:2;">
-            <label class="form-label" for="recProveedor">Proveedor / factura <span class="optional">(opcional)</span></label>
-            <input class="form-input" id="recProveedor" type="text">
-          </div>
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="recNotas">Notas <span class="optional">(opcional)</span></label>
-          <input class="form-input" id="recNotas" type="text">
-        </div>
-        <label class="toggle-pill" style="margin-top:var(--sp-1);">
-          <input type="checkbox" id="recTomaFisica"> Toma física inicial (migración del stock existente)
-        </label>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="Modal.close('eqRecibirModal')"><i data-lucide="x"></i> Cancelar</button>
-        <button class="btn btn-primary" id="btnGuardarRecibir" onclick="EquiposPool.guardarRecibir()"><i data-lucide="check"></i> Recibir</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal: registrar venta directa (facturada en QuickBooks) -->
-  <div id="eqVentaModal" class="modal-backdrop" style="display:none;">
-    <div class="modal" style="max-width:520px;">
-      <div class="modal-header">
-        <h3 class="modal-title"><i data-lucide="banknote"></i> Registrar venta de equipos</h3>
-        <button class="modal-close" onclick="Modal.close('eqVentaModal')" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-      </div>
-      <div class="modal-body">
-        <p style="font-size:13px; color:var(--fg-2); margin:0 0 var(--sp-3);">
-          Para equipos <strong>vendidos sin contrato de servicio</strong>: la factura ya se emitió en
-          QuickBooks; aquí solo se descuentan de bodega. Solo se venden unidades
-          <span class="eqpool-chip eqpool-chip-en_bodega">En bodega</span> — lo demás se avisa antes de confirmar.
-        </p>
-        <div class="form-field">
-          <label class="form-label" for="ventaSeriales">Seriales <span class="optional">(uno por línea — acepta lector de código de barras)</span></label>
-          <textarea class="form-input" id="ventaSeriales" rows="5" placeholder="B12345678&#10;B12345679&#10;…" style="font-family:var(--font-mono);"></textarea>
-        </div>
-        <div style="display:flex; gap:var(--sp-3);">
-          <div class="form-field" style="flex:2;">
-            <label class="form-label" for="ventaCliente">Cliente (de la factura)</label>
-            <input class="form-input" id="ventaCliente" type="text" placeholder="Escribe para buscar el cliente…"
-                   autocomplete="off" oninput="EquiposPool.sugerirClienteVenta()">
-            <div id="ventaClienteSugs" style="position:relative;"></div>
-            <span class="form-hint">Elígelo de la lista. Si no existe en la app, la venta se registra por excepción.</span>
-          </div>
-          <div class="form-field" style="flex:1.2;">
-            <label class="form-label" for="ventaFactura">Factura QBO <span class="optional">(recomendado)</span></label>
-            <input class="form-input" id="ventaFactura" type="text" placeholder="001-0000010274">
-          </div>
-        </div>
-        <div class="form-field">
-          <label class="form-label" for="ventaNotas">Notas <span class="optional">(opcional)</span></label>
-          <input class="form-input" id="ventaNotas" type="text">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="Modal.close('eqVentaModal')"><i data-lucide="x"></i> Cancelar</button>
-        <button class="btn btn-primary" id="btnGuardarVenta" onclick="EquiposPool.guardarVenta()"><i data-lucide="check"></i> Registrar venta</button>
-      </div>
-    </div>
-  </div>
+  <!-- Los modales de "Recibir equipos" y "Registrar venta" ya no viven aquí:
+       son componentes con overlay propio (js/ui/asistente-recibir.js y
+       js/ui/asistente-venta.js), compartidos con el espacio Almacén. -->
 
   <!-- Modal: editar equipo -->
   <div id="eqEditModal" class="modal-backdrop" style="display:none;">

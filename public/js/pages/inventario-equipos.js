@@ -113,17 +113,16 @@ window.EquiposPool = {
       console.warn('No se pudo cargar el catálogo de modelos:', e);
       this._modelos = [];
     }
-    // Modales (recibir/editar/import): fila EXACTA del catálogo (N y R aparte).
+    // Modales (editar/import): fila EXACTA del catálogo (N y R aparte). El de
+    // recibir vive en js/ui/asistente-recibir.js y carga su propio catálogo.
     const opts = this._modelos
       .map(m => `<option value="${FMT.esc(m.id)}">${FMT.esc(m.label)}</option>`).join('');
-    ['recModelo', 'editModelo', 'impModelo'].forEach(id => {
+    ['editModelo', 'impModelo'].forEach(id => {
       const sel = document.getElementById(id);
       if (!sel) return;
       sel.innerHTML = (sel.options[0]?.outerHTML || '') + opts;
     });
     // La condición se deriva del modelo, así que sigue al selector.
-    document.getElementById('recModelo')?.addEventListener('change', () =>
-      this._sincronizarCondicion('recModelo', 'recCondicion', 'recCondicionHint'));
     document.getElementById('editModelo')?.addEventListener('change', () =>
       this._sincronizarCondicion('editModelo', 'editCondicion', 'editCondicionHint',
         this._condicionOriginal));
@@ -1020,166 +1019,15 @@ window.EquiposPool = {
   },
 
   // ── Recibir equipos ──────────────────────────────────────────────────
+  // El asistente completo (formulario, colisiones y reubicación en fases)
+  // vive en js/ui/asistente-recibir.js — componente compartido con el espacio
+  // Almacén. Aquí solo se gatea el rol y se refresca la tabla al terminar.
   abrirRecibir() {
     if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden recibir equipos.', 'bad'); return; }
-    document.getElementById('recSeriales').value = '';
-    document.getElementById('recProveedor').value = '';
-    document.getElementById('recNotas').value = '';
-    document.getElementById('recTomaFisica').checked = false;
-    document.getElementById('recModelo').value = '';
-    this._sincronizarCondicion('recModelo', 'recCondicion', 'recCondicionHint');
-    Modal.open('eqRecibirModal');
-  },
-
-  async guardarRecibir() {
-    const modeloId = document.getElementById('recModelo').value;
-    if (!modeloId) { Toast.show('Selecciona el modelo de los equipos.', 'bad'); return; }
-    const seriales = document.getElementById('recSeriales').value
-      .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    if (!seriales.length) { Toast.show('Pega o escanea al menos un serial.', 'bad'); return; }
-
-    const btn = document.getElementById('btnGuardarRecibir');
-    btn.disabled = true;
-    try {
-      const opciones = {
-        modelo_id:    modeloId,
-        modelo_label: this._modeloLabel(modeloId),
-        condicion:    this._condicionDeModelo(modeloId) || 'nuevo',
-        proveedor:    document.getElementById('recProveedor').value,
-        notas:        document.getElementById('recNotas').value,
-        origen:       document.getElementById('recTomaFisica').checked ? 'toma_fisica' : 'bodega',
-      };
-      const user = firebase.auth().currentUser;
-      const res = await EquiposPoolService.recibir(seriales, opciones, user);
-      let noMovidos = 0;
-
-      // Seriales que ya existen con OTRO modelo: se pregunta antes de partir la
-      // ficha. Antes se creaban solas y solo lo avisaba un toast de paso — así
-      // entraron 8 fichas duplicadas al inventario entre julio y agosto 2026.
-      const pendientes = res.colisiones_pendientes || [];
-      if (pendientes.length) {
-        const confirmado = await Modal.confirm({
-          title: 'Seriales que ya existen con otro modelo',
-          danger: true,
-          confirmLabel: `Sí, son ${pendientes.length === 1 ? 'otro equipo' : 'otros equipos'}`,
-          cancelLabel: 'No, voy a corregir el modelo',
-          message: this._mensajeColisiones(pendientes, opciones.modelo_label),
-        });
-        if (confirmado) {
-          const res2 = await EquiposPoolService.recibir(
-            pendientes.map(c => c.serial), { ...opciones, confirmarColisiones: true }, user);
-          res.nuevos     += res2.nuevos;
-          res.existentes += res2.existentes;
-          res.colisiones += res2.colisiones;
-        } else {
-          // El modal de recepción queda abierto con los datos puestos para
-          // corregir el modelo y volver a intentar.
-          let parcial = `${res.nuevos} equipos recibidos. ${pendientes.length} sin registrar:`
-            + ` corrige el modelo y vuelve a guardar.`;
-          Toast.show(parcial, 'warn');
-          this.cargar();
-          return;
-        }
-      }
-
-      // Seriales que YA tienen ficha de este modelo pero que el sistema tenía
-      // en otro lado. Contar un radio es afirmar dónde está, así que se
-      // pregunta y se traen a bodega. Sin esto la recepción decía "N ya
-      // existían" y no movía nada: el conteo no tenía efecto y bodega quedaba
-      // dependiendo de un script (44 NX-420-R así, 2026-08-06).
-      const reubicables = res.reubicables_pendientes || [];
-      if (reubicables.length) {
-        const confirmado = await Modal.confirm({
-          title: 'Equipos que el sistema tenía en otro lado',
-          danger: true,
-          confirmLabel: `Sí, ${reubicables.length === 1 ? 'está' : 'están'} en bodega`,
-          cancelLabel: 'No los muevas',
-          message: this._mensajeReubicacion(reubicables),
-        });
-        if (confirmado) {
-          const res3 = await EquiposPoolService.recibir(
-            reubicables.map(c => c.serial),
-            { ...opciones, confirmarReubicacion: true,
-              motivo: `Toma física de bodega${opciones.notas ? ` — ${opciones.notas}` : ''}` }, user);
-          res.reubicados += res3.reubicados;
-          res.bloqueados = (res.bloqueados || []).concat(res3.bloqueados || []);
-        } else {
-          noMovidos = reubicables.length;
-        }
-      }
-
-      Modal.close('eqRecibirModal');
-      let msg = `${res.nuevos} equipos recibidos en bodega.`;
-      if (res.reubicados) msg += ` ${res.reubicados} traídos de vuelta a bodega.`;
-      if (res.existentes) msg += ` ${res.existentes} ya estaban.`;
-      // Decir "ya existían" de algo que sigue figurando con un cliente sería la
-      // misma mentira que este cambio vino a quitar.
-      if (noMovidos) msg += ` ${noMovidos} se dejaron donde estaban.`;
-      if (res.colisiones) msg += ` ${res.colisiones} con serial compartido entre modelos.`;
-      if (res.invalidos)  msg += ` ${res.invalidos} seriales inválidos.`;
-      // Baja/vendido/en revisión no se mueven desde aquí: se nombran para que
-      // nadie crea que el conteo los cubrió.
-      const bloq = res.bloqueados || [];
-      if (bloq.length) {
-        msg += ` ${bloq.length} sin mover (${[...new Set(bloq.map(b =>
-          EquiposPoolService.ESTADO_LABELS[b.estado] || b.estado))].join(', ')}):`
-          + ` ${bloq.slice(0, 5).map(b => b.serial).join(', ')}${bloq.length > 5 ? '…' : ''}.`;
-      }
-      Toast.show(msg, (res.colisiones || bloq.length) ? 'warn' : 'ok');
-      this.cargar();
-    } catch (e) {
-      console.error('Error al recibir equipos:', e);
-      Toast.show('Error al recibir: ' + (e.message || e), 'bad');
-    } finally {
-      btn.disabled = false;
-    }
-  },
-
-  // Texto del diálogo de colisión. Se inyecta como HTML dentro de un <p>, así
-  // que solo <b>/<br> (nada de bloques) y todo dato va escapado.
-  _mensajeColisiones(pendientes, modeloLabel) {
-    const MAX = 12;
-    const filas = pendientes.slice(0, MAX).map(c =>
-      `<b>${FMT.esc(c.serial)}</b> — ya registrado como ${FMT.esc(c.modelo_existente)}`
-      + (c.estado_existente ? ` (${FMT.esc(EquiposPoolService.ESTADO_LABELS[c.estado_existente] || c.estado_existente)})` : '')
-    ).join('<br>');
-    const resto = pendientes.length > MAX ? `<br>… y ${pendientes.length - MAX} más` : '';
-    return `${pendientes.length === 1 ? 'Este serial ya existe' : `Estos ${pendientes.length} seriales ya existen`}`
-      + ` en el pool con un modelo distinto`
-      + (modeloLabel ? ` a <b>${FMT.esc(modeloLabel)}</b>` : ' al que estás recibiendo') + ':'
-      + `<br><br>${filas}${resto}<br><br>`
-      + `Continúa <b>solo si de verdad son equipos distintos</b> que comparten numeración`
-      + ` (caso Kenwood NX-420 / NX-920): se creará una ficha aparte para cada uno.`
-      + `<br><br>Si el modelo que seleccionaste está equivocado, cancela y corrígelo —`
-      + ` crear la ficha aparte cuenta el mismo radio dos veces en el inventario.`;
-  },
-
-  // Texto del diálogo de reubicación. Mismas reglas que el de colisión: va
-  // dentro de un <p>, solo <b>/<br>, todo dato escapado.
-  //
-  // Dice de dónde viene cada unidad —con cliente y contrato— porque ahí está la
-  // decisión: traer a bodega un radio que figura entregado deja al contrato
-  // listándolo. Si la lista no cuadra, se cancela y se revisa, no se confirma.
-  _mensajeReubicacion(pendientes) {
-    const MAX = 12;
-    const filas = pendientes.slice(0, MAX).map(c => {
-      const donde = EquiposPoolService.ESTADO_LABELS[c.estado] || c.estado;
-      const quien = c.cliente ? ` con ${FMT.esc(c.cliente)}` : '';
-      const cont = c.contrato ? ` (${FMT.esc(c.contrato)})` : '';
-      return `<b>${FMT.esc(c.serial)}</b> — el sistema lo tiene en ${FMT.esc(donde)}${quien}${cont}`;
-    }).join('<br>');
-    const resto = pendientes.length > MAX ? `<br>… y ${pendientes.length - MAX} más` : '';
-    const n = pendientes.length;
-    return `${n === 1 ? 'Este serial ya tiene ficha' : `Estos ${n} seriales ya tienen ficha`}`
-      + ` de este modelo, pero el sistema ${n === 1 ? 'no lo tenía' : 'no los tenía'} en bodega:`
-      + `<br><br>${filas}${resto}<br><br>`
-      + `Al confirmar estás <b>afirmando que ${n === 1 ? 'está' : 'están'} físicamente en bodega</b>`
-      + ` porque ${n === 1 ? 'lo acabas' : 'los acabas'} de contar.`
-      + ` ${n === 1 ? 'Pasa' : 'Pasan'} a <b>En bodega</b>, se ${n === 1 ? 'suelta' : 'sueltan'} sus`
-      + ` vínculos (contrato, orden, device POC) y queda movimiento en el kardex.`
-      + `<br><br>Si alguno sigue con un cliente, cancela: el inventario quedaría mintiendo.`
-      + ` Un contrato vigente <b>seguirá listando el serial</b> — hay que corregirlo también`
-      + ` en Seriales del contrato.`;
+    AsistenteRecibir.abrir({
+      user: firebase.auth().currentUser,
+      onDone: () => this.cargar(),
+    });
   },
 
   // ── Edición ──────────────────────────────────────────────────────────
@@ -1439,227 +1287,21 @@ window.EquiposPool = {
   },
 
   // ── Registrar venta (venta directa facturada en QuickBooks) ──────────
-  // La factura ya existe en QBO; aquí solo se descuenta la unidad de bodega
-  // (estado vendido, propiedad cliente) con el vínculo a esa factura.
+  // El asistente completo (validación bodega/ajenos, autocompletado de
+  // cliente, excepción, venta por unidad y CTA a la orden de PROGRAMACIÓN)
+  // vive en js/ui/asistente-venta.js — componente compartido con el espacio
+  // Almacén. `id` (fila) pre-llena ese serial y desambigua seriales
+  // compartidos con 2+ unidades en bodega.
   abrirVenta(id = null) {
     if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden registrar ventas.', 'bad'); return; }
-    this._ventaDesdeId = id;
     const eq = id ? this._equipos.find(x => x.id === id) : null;
-    document.getElementById('ventaSeriales').value = eq ? (eq.serial || eq.serial_norm) : '';
-    document.getElementById('ventaCliente').value = '';
-    document.getElementById('ventaFactura').value = '';
-    document.getElementById('ventaNotas').value = '';
-    this._ventaClienteSel = null;
-    document.getElementById('ventaClienteSugs').innerHTML = '';
-    this._cargarClientesCache().catch(e => console.error('Error al precargar clientes:', e));
-    Modal.open('eqVentaModal');
-  },
-
-  // ── Autocompletado de cliente en la venta ────────────────────────────
-  // Mismo patrón que POC/vendedores-batch: caché local de clientes (6h,
-  // misma clave 'cache_clientes_v1') + sugerencias por subcadena normalizada.
-  // La venta debe quedar ligada a un cliente existente de la app; un nombre
-  // libre solo pasa como excepción confirmada (ver guardarVenta).
-  _clientesCache: null,
-  _ventaClienteSel: null,
-  _ventaCliTimer: null,
-
-  async _cargarClientesCache() {
-    if (this._clientesCache) return this._clientesCache;
-    try {
-      const raw = localStorage.getItem('cache_clientes_v1');
-      if (raw) {
-        const { exp, data } = JSON.parse(raw);
-        if (exp && Date.now() < exp && Array.isArray(data) && data.length) {
-          this._clientesCache = data;
-          return data;
-        }
-      }
-    } catch (_) { /* caché ilegible: se reconstruye */ }
-    const clientes = await ClientesService.getAllClientes();
-    this._clientesCache = clientes.map(c => {
-      const nombre = (c.nombre || '').toString();
-      return { id: c.id, nombre, norm: FMT.normalize(nombre) };
+    AsistenteVenta.abrir({
+      user: firebase.auth().currentUser,
+      rol: this._rol,
+      serialesPrefill: eq ? [eq.serial || eq.serial_norm] : [],
+      desdeUnidadId: eq ? eq.id : null,
+      onDone: () => this.cargar(),
     });
-    try {
-      localStorage.setItem('cache_clientes_v1',
-        JSON.stringify({ exp: Date.now() + 6 * 60 * 60 * 1000, data: this._clientesCache }));
-    } catch (_) { /* localStorage lleno: seguimos solo en memoria */ }
-    return this._clientesCache;
-  },
-
-  sugerirClienteVenta() {
-    this._ventaClienteSel = null; // editar el texto invalida la selección previa
-    const cont  = document.getElementById('ventaClienteSugs');
-    const input = document.getElementById('ventaCliente');
-    cont.innerHTML = '';
-    const texto = (input.value || '').trim();
-    if (texto.length < 2) return;
-    clearTimeout(this._ventaCliTimer);
-    this._ventaCliTimer = setTimeout(async () => {
-      try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); return; }
-      const needle  = FMT.normalize(texto);
-      const matches = this._clientesCache
-        .filter(c => c.norm.includes(needle))
-        .map(c => ({ ...c, pos: c.norm.indexOf(needle) }))
-        .sort((a, b) => a.pos !== b.pos ? a.pos - b.pos
-          : a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
-        .slice(0, 30);
-      cont.innerHTML = '';
-      if (!matches.length) return;
-      const ul = document.createElement('ul');
-      ul.className = 'suggest-list';
-      matches.forEach(m => {
-        const li = document.createElement('li');
-        li.className = 'suggest-item';
-        li.textContent = m.nombre;
-        li.onclick = () => {
-          input.value = m.nombre;
-          this._ventaClienteSel = { id: m.id, nombre: m.nombre };
-          cont.innerHTML = '';
-        };
-        ul.appendChild(li);
-      });
-      cont.appendChild(ul);
-    }, 200);
-  },
-
-  async guardarVenta() {
-    const cliente = document.getElementById('ventaCliente').value.trim();
-    const factura = document.getElementById('ventaFactura').value.trim();
-    const notas   = document.getElementById('ventaNotas').value.trim();
-    const seriales = document.getElementById('ventaSeriales').value
-      .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    if (!seriales.length) { Toast.show('Pega o escanea al menos un serial.', 'bad'); return; }
-    if (!cliente) { Toast.show('Indica a quién se vendió (el cliente de la factura).', 'bad'); return; }
-
-    // El cliente debe existir en la app: o se eligió de las sugerencias, o el
-    // texto coincide exacto con uno del caché. Un nombre libre solo pasa como
-    // excepción confirmada y la venta queda marcada (cliente_excepcion).
-    let clienteSel = (this._ventaClienteSel && this._ventaClienteSel.nombre === cliente)
-      ? this._ventaClienteSel : null;
-    let clienteExcepcion = false;
-    if (!clienteSel) {
-      try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); }
-      const needle = FMT.normalize(cliente);
-      const hit = (this._clientesCache || []).find(c => c.norm === needle);
-      if (hit) {
-        clienteSel = { id: hit.id, nombre: hit.nombre };
-      } else {
-        if (!await Modal.confirm({
-          title: 'Cliente no registrado',
-          message: `<strong>${FMT.esc(cliente)}</strong> no existe como cliente en la app.<br><br>
-            Lo normal es elegirlo de las sugerencias al escribir. ¿Registrar la venta
-            <strong>por excepción</strong> con este nombre tal cual? Quedará marcada como
-            venta a cliente no registrado.`,
-          confirmLabel: 'Registrar por excepción',
-        })) return;
-        clienteSel = { id: '', nombre: cliente };
-        clienteExcepcion = true;
-      }
-    }
-
-    const btn = document.getElementById('btnGuardarVenta');
-    btn.disabled = true;
-    try {
-      const esc = FMT.esc;
-      // Validación previa: solo se venden unidades EN BODEGA. Lo demás se
-      // reporta (no está en el pool / otro estado / colisión ambigua) y la
-      // venta puede seguir con las válidas.
-      const vendibles = [], problemas = [];
-      const vistos = new Set();
-      let revisados = 0;
-      for (const s of seriales) {
-        // Progreso visible: con 30+ seriales la validación tarda y el botón
-        // deshabilitado a secas parecía cuelgue.
-        btn.textContent = `Validando ${++revisados}/${seriales.length}…`;
-        const norm = EquiposPoolService.normalizarSerial(s);
-        if (!EquiposPoolService.esSerialValido(norm)) { problemas.push(`${esc(s)}: serial inválido`); continue; }
-        if (vistos.has(norm)) continue;
-        vistos.add(norm);
-        const docs = await EquiposPoolService.findBySerial(s);
-        if (!docs.length) { problemas.push(`${esc(norm)}: no está en el pool`); continue; }
-        const enBodega = docs.filter(d => d.estado === 'en_bodega');
-        if (!enBodega.length) {
-          const estados = docs.map(d => EquiposPoolService.ESTADO_LABELS[d.estado] || d.estado).join(', ');
-          problemas.push(`${esc(norm)}: no está en bodega (${esc(estados)})`);
-          continue;
-        }
-        // Serial compartido con 2+ unidades en bodega: solo es inequívoco si la
-        // venta se abrió desde la fila de una unidad concreta.
-        const unidad = enBodega.length === 1 ? enBodega[0]
-          : enBodega.find(d => d.id === this._ventaDesdeId);
-        if (!unidad) { problemas.push(`${esc(norm)}: serial en 2+ modelos en bodega — regístralo desde el botón de venta de su fila`); continue; }
-        vendibles.push(unidad);
-      }
-
-      if (!vendibles.length) {
-        Toast.show('Ningún serial se puede vender: ' + problemas.join(' · ').replace(/<[^>]*>/g, ''), 'bad');
-        return;
-      }
-      const detalle = vendibles.map(u =>
-        `<span style="font-family:var(--font-mono);">${esc(u.serial || u.serial_norm)}</span> (${esc(u.modelo_label || 'sin modelo')})`).join('<br>');
-      const avisos = problemas.length
-        ? `<br><br><strong>${problemas.length} serial(es) NO se venderán:</strong><br>${problemas.join('<br>')}` : '';
-      if (!await Modal.confirm({
-        title: 'Registrar venta',
-        message: `Venta a <strong>${esc(clienteSel.nombre)}</strong>${clienteExcepcion ? ' <em>(por excepción — no registrado en la app)</em>' : ''}${factura ? ` — factura QBO <strong>${esc(factura)}</strong>` : ''}.<br>
-          Salen de bodega de forma permanente:<br><br>${detalle}${avisos}`,
-        confirmLabel: `Vender ${vendibles.length} equipo(s)`,
-      })) return;
-
-      let ok = 0; const errores = []; const vendidas = [];
-      for (const u of vendibles) {
-        try {
-          await EquiposPoolService.vender(u.id, {
-            factura, notas,
-            cliente_id: clienteSel.id, cliente_nombre: clienteSel.nombre,
-            cliente_excepcion: clienteExcepcion,
-          }, firebase.auth().currentUser);
-          ok++;
-          vendidas.push(u);
-        } catch (e) {
-          errores.push(`${u.serial || u.id}: ${e.message || e}`);
-        }
-      }
-      Modal.close('eqVentaModal');
-      let msg = `${ok} equipo(s) registrados como vendidos.`;
-      if (errores.length) msg += ` ${errores.length} fallaron: ${errores.join(' · ')}`;
-      Toast.show(msg, errores.length ? 'warn' : 'ok');
-      this.cargar();
-
-      // Encadenamiento venta → orden de PROGRAMACIÓN: los radios vendidos casi
-      // siempre pasan por el taller a programarse antes de entregarse. El CTA
-      // lleva a nueva-orden con el formulario precargado (cliente, seriales,
-      // "no aplica contrato" + motivo); crear la orden sigue siendo decisión
-      // humana. Requiere cliente con ficha (el select de la orden usa
-      // cliente_id) y un rol que pueda crear órdenes (inventario no puede).
-      if (ok > 0 && clienteSel.id && !clienteExcepcion && canRole(this._rol, 'crear-orden')) {
-        const crear = await Modal.confirm({
-          title: 'Venta registrada',
-          message: `¿Crear la orden de servicio de <strong>PROGRAMACIÓN</strong> para
-            <strong>${esc(clienteSel.nombre)}</strong> con los ${ok} equipo(s) vendidos?<br>
-            El formulario llega precargado — nada se crea hasta que lo guardes.`,
-          confirmLabel: 'Crear orden de programación',
-        });
-        if (crear) {
-          const qs = new URLSearchParams({
-            tipo: 'PROGRAMACION', origen: 'venta',
-            cliente_id: clienteSel.id,
-            seriales: vendidas.map(u => u.serial || u.serial_norm).join(','),
-          });
-          if (factura) qs.set('factura', factura);
-          window.location.href = `../ordenes/nueva-orden.html?${qs.toString()}`;
-        }
-      }
-    } catch (e) {
-      console.error('Error al registrar la venta:', e);
-      Toast.show('Error al registrar la venta: ' + (e.message || e), 'bad');
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="check"></i> Registrar venta';
-      if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
-    }
   },
 
   // ── Historia (kardex) ────────────────────────────────────────────────
@@ -1898,7 +1540,7 @@ window.EquiposPool = {
           danger: true,
           confirmLabel: `Sí, son ${pendientes.length === 1 ? 'otro equipo' : 'otros equipos'}`,
           cancelLabel: 'No, no los importes',
-          message: this._mensajeColisiones(pendientes, null),
+          message: AsistenteRecibir.mensajeColisiones(pendientes, null),
         });
         if (confirmado) {
           for (const g of porGrupo) {

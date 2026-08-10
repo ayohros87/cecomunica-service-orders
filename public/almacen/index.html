@@ -121,10 +121,14 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <!-- functions-compat: fusionar fichas en conflicto (callable fusionarPoolFicha) -->
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script defer src="../js/firebase-init.js"></script>
   <script src="../js/core/modulos.js"></script>
-  <script src="../js/core/layout.js?v=cc8"></script>
+  <script src="../js/core/layout.js?v=cc9"></script>
   <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script> <!-- FMT: lo usan los asistentes -->
+  <script defer src="../js/ui/modal.js"></script> <!-- confirmaciones de los asistentes -->
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/domain/transicionPendiente.js"></script>
   <script defer src="../js/services/colaInventarioService.js?v=cc2"></script>
@@ -136,7 +140,11 @@
   <!-- Síncrono a propósito: las pestañas se pintan en el parse (ver abajo)
        para que no aparezcan tarde empujando el contenido. -->
   <script src="../js/ui/workspace-tabs.js"></script>
-  <script defer src="../js/ui/equipo-ficha.js"></script>
+  <script defer src="../js/ui/equipo-ficha.js?v=cc2"></script>
+  <script defer src="../js/ui/asistente-conteo.js"></script>
+  <script defer src="../js/ui/asistente-recibir.js"></script>
+  <script defer src="../js/ui/asistente-venta.js"></script>
+  <script defer src="../js/services/clientesService.js"></script> <!-- autocomplete del asistente de venta -->
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/pages/almacen-hoy.js"></script>
   <script defer src="../js/pages/almacen-existencias.js"></script>
@@ -153,17 +161,16 @@
       title: '<i data-lucide="warehouse"></i> Almacén',
       actions: [
         { label: '<i data-lucide="plus"></i> Recibir equipos', cls: 'primary',
-          onclick: "window.location.href='../inventario/equipos.html?accion=recibir&volver=almacen'" },
+          onclick: "AlmacenPage.abrirRecibir()" },
         { label: '<i data-lucide="clipboard-list"></i> Conteo físico',
-          onclick: "window.location.href='../inventario/cargar-inventario.html?volver=almacen'" },
+          onclick: "AlmacenPage.abrirConteo()" },
         { label: '<i data-lucide="banknote"></i> Registrar venta',
-          onclick: "window.location.href='../inventario/equipos.html?accion=vender&volver=almacen'" },
+          onclick: "AlmacenPage.abrirVenta()" },
       ],
       menu: [
         { onclick: 'AlmacenPage.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
         { divider: true },
-        { href: '../inventario/index.html?volver=almacen',   label: '<i data-lucide="package"></i> Inventario de Radios' },
-        { href: '../inventario/equipos.html?volver=almacen', label: '<i data-lucide="scan-barcode"></i> Equipos por serial' },
+        { href: '../inventario/equipos.html?volver=almacen', label: '<i data-lucide="scan-barcode"></i> Equipos por serial (avanzado)' },
       ],
       showHome: true, homeHref: '../index.html', showLogout: true
     });
@@ -267,6 +274,7 @@
                 <th style="text-align:right;" title="Vendidos, bajas y por clasificar">Otros</th>
                 <th style="text-align:right;">Conteo</th>
                 <th style="text-align:right;" title="Bodega − conteo físico (meta 0)">Dif.</th>
+                <th style="text-align:right;">Últ. conteo</th>
               </tr>
             </thead>
             <tbody id="exTabla"></tbody>

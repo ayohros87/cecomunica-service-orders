@@ -127,28 +127,18 @@ test("entradas vacías no revientan", () => {
 // ── El diálogo que ve quien cuenta ────────────────────────────────────────
 // El mensaje se inyecta como HTML dentro de un <p> (Modal.confirm), así que
 // tiene que ir escapado y sin etiquetas de bloque.
-function cargarPagina() {
-  const noop = () => {};
-  const ctx = {
-    console, window: {},
-    document: { addEventListener: noop, getElementById: () => null,
-      querySelector: () => null, querySelectorAll: () => [] },
-    firebase: { auth: () => ({ onAuthStateChanged: noop }), firestore: () => ({}) },
-    ROLES: { ADMIN: "administrador", INVENTARIO: "inventario", GERENTE: "gerente", VISTA: "vista" },
-    FMT: { esc: (v) => String(v ?? "").replace(/[&<>"']/g, (m) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m])) },
-    Toast: { show: noop },
-    localStorage: { getItem: () => null, setItem: noop },
-    EquiposPoolService: S,
-  };
+// Vive en el asistente de recepción (js/ui/asistente-recibir.js), extraído de
+// inventario-equipos.js el 2026-08-10 para compartirlo con el espacio Almacén.
+function cargarAsistente() {
+  const ctx = { console, window: {}, EquiposPoolService: S };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(
-    path.join(__dirname, "..", "..", "public", "js", "pages", "inventario-equipos.js"), "utf8"), ctx);
-  return ctx.window.EquiposPool;
+    path.join(__dirname, "..", "..", "public", "js", "ui", "asistente-recibir.js"), "utf8"), ctx);
+  return ctx.window.AsistenteRecibir;
 }
 
 test("el diálogo nombra cada serial, su modelo actual y el que se recibe", () => {
-  const msg = cargarPagina()._mensajeColisiones([
+  const msg = cargarAsistente().mensajeColisiones([
     { serial: "18617A0035", modelo_existente: "HYTERA PD606-R", estado_existente: "en_cliente" },
   ], "HYTERA PD506U-R");
   assert.match(msg, /18617A0035/);
@@ -161,7 +151,7 @@ test("el diálogo nombra cada serial, su modelo actual y el que se recibe", () =
 });
 
 test("el diálogo escapa los datos y no mete bloques dentro del <p>", () => {
-  const msg = cargarPagina()._mensajeColisiones([
+  const msg = cargarAsistente().mensajeColisiones([
     { serial: '<img src=x onerror=alert(1)>', modelo_existente: '"><b>ups', estado_existente: "" },
   ], "<script>");
   assert.ok(!msg.includes("<img"), "el serial debe ir escapado");
@@ -171,7 +161,7 @@ test("el diálogo escapa los datos y no mete bloques dentro del <p>", () => {
 });
 
 test("sin un modelo único (import de Excel) el diálogo no inventa uno", () => {
-  const msg = cargarPagina()._mensajeColisiones(
+  const msg = cargarAsistente().mensajeColisiones(
     [{ serial: "A1", modelo_existente: "PNC460", estado_existente: "en_bodega" }], null);
   assert.match(msg, /distinto al que estás recibiendo/);
   assert.ok(!msg.includes("(sin modelo)"), "no debe aparecer un modelo de relleno");
@@ -180,7 +170,7 @@ test("sin un modelo único (import de Excel) el diálogo no inventa uno", () => 
 test("con muchas colisiones el diálogo corta la lista y dice cuántas faltan", () => {
   const muchas = Array.from({ length: 20 }, (_, i) => ({
     serial: `S${i}`, modelo_existente: "PNC460", estado_existente: "en_bodega" }));
-  const msg = cargarPagina()._mensajeColisiones(muchas, "SC780-R");
+  const msg = cargarAsistente().mensajeColisiones(muchas, "SC780-R");
   assert.match(msg, /20 seriales ya existen/);
   assert.match(msg, /y 8 más/);
   assert.ok(!msg.includes("S19"), "solo se listan las primeras 12");
@@ -242,7 +232,7 @@ test("reubicación: entradas vacías no revientan", () => {
 });
 
 test("el diálogo de reubicación dice de dónde viene cada unidad", () => {
-  const msg = cargarPagina()._mensajeReubicacion([
+  const msg = cargarAsistente()._mensajeReubicacion([
     { serial: "B6C10686", estado: "en_cliente",
       cliente: "HOTELES DECAMERON, S.R.L.", contrato: "ALQ20260304-02" },
   ]);
@@ -255,7 +245,7 @@ test("el diálogo de reubicación dice de dónde viene cada unidad", () => {
 });
 
 test("el diálogo de reubicación escapa los datos y no mete bloques en el <p>", () => {
-  const msg = cargarPagina()._mensajeReubicacion([
+  const msg = cargarAsistente()._mensajeReubicacion([
     { serial: '<img src=x onerror=alert(1)>', estado: "en_taller",
       cliente: '"><b>ups', contrato: "<script>" },
   ]);
@@ -267,7 +257,7 @@ test("el diálogo de reubicación escapa los datos y no mete bloques en el <p>",
 test("con muchas reubicaciones el diálogo corta la lista", () => {
   const muchas = Array.from({ length: 20 }, (_, i) => ({
     serial: `S${i}`, estado: "en_taller", cliente: "", contrato: "" }));
-  const msg = cargarPagina()._mensajeReubicacion(muchas);
+  const msg = cargarAsistente()._mensajeReubicacion(muchas);
   assert.match(msg, /Estos 20 seriales/);
   assert.match(msg, /y 8 más/);
   assert.ok(!msg.includes("S19"), "solo se listan los primeros 12");
