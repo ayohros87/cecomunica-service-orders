@@ -2,9 +2,23 @@
 
 > **Fecha:** 2026-08-10 · **Alcance:** auditoría de procesos de los módulos del grupo "Almacén y finanzas"
 > del home (inventario + facturación) y propuesta de rediseño de UI partiendo de cero.
-> **Qué NO es:** un plan de implementación detallado. Los flujos se documentan a nivel de proceso;
-> el objetivo es que la arquitectura de UI quede sólida antes de construir.
 > Complementa a `SISTEMA_TOP_DOWN.md` (arquitectura) y `FACTURACION_COMO_FUNCIONA.md` (desactualizado en sub-clientes).
+
+## Estado de implementación (2026-08-10, misma fecha — commits 812ba95…e6b0046)
+
+| Etapa | Estado | Notas |
+|---|---|---|
+| E0 — cálculo único de stock + retiro de vista-correo | ✅ HECHO | `js/domain/stockAgg.js`; "Copiar reporte (correo)" en el tablero; conciliación con el mismo join y signo |
+| E1 — Almacén · Hoy + home a 2 tarjetas | ✅ HECHO | `/almacen/` con bandeja unificada; `pendientes.html` → redirect; rail/señales actualizados |
+| E2 — Almacén · Existencias | ✅ HECHO (vista) | Grid modelo→serial→ficha con drawer y búsqueda; las MUTACIONES siguen en `equipos.html` a un clic (asistentes vía `?accion=`) — absorberlas es trabajo posterior |
+| E3 — Piezas + Catálogo | ⚙️ PARCIAL | Anclaje a espacios (barra Finanzas en modelos/piezas-tarifas/cargos, barra Almacén en piezas), rail coherente, avisos de visibilidad cruzada. **Pendiente: el grid único parametrizado con permisos por columna** |
+| E4 — Finanzas completo | ✅ HECHO | Pestañas en todo el espacio; hub → redirect a Activación; `emision.html` placeholder honesto; tarjeta de estado QBO (callable `qboStatus`); Panorama con fuente etiquetada + acceso contabilidad |
+| Transversal — reglas H8 | ✅ HECHO | 4 candados validados en emulador (60 grupos); hallazgo extra: wildcard v2 `/{sub=**}` alcanzaba el doc padre |
+| **Deploy** | ⏳ PENDIENTE | hosting + functions (`qboStatus`) + firestore.rules — nada de esto está en producción aún |
+
+Pendientes de diseño que siguen abiertos: F14 "corrección en drawer sin salir de Activación"
+(hoy los CTA siguen navegando a la página del catálogo, ya con pestañas), y la absorción
+plena de los asistentes de equipos.html dentro de Existencias.
 
 ---
 
