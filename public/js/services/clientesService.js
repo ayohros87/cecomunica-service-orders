@@ -371,7 +371,12 @@ const ClientesService = {
   },
 
   // Full client list for autocomplete/local cache — cache-first then network, 500 per page.
-  async getAllClientes() {
+  // `fresh` salta la caché y lee del servidor, igual que PocService.getDevices.
+  // Hace falta porque el fallback a red solo dispara cuando la página vuelve
+  // VACÍA: con cientos de clientes en IndexedDB la primera página nunca lo está,
+  // así que un cliente creado hoy en otra máquina no aparece nunca. Eso dejó a
+  // bodega sin poder facturar una venta el 2026-08-10.
+  async getAllClientes({ fresh = false } = {}) {
     const db = firebase.firestore();
     const baseQ = db.collection('clientes').where('deleted', '==', false).orderBy('nombre');
     const PAGE = 500;
@@ -379,8 +384,8 @@ const ClientesService = {
     const results = [];
     while (true) {
       let q = lastDoc ? baseQ.startAfter(lastDoc).limit(PAGE) : baseQ.limit(PAGE);
-      let snap = await q.get({ source: 'cache' });
-      if (snap.empty) snap = await q.get();
+      let snap = fresh ? await q.get() : await q.get({ source: 'cache' });
+      if (!fresh && snap.empty) snap = await q.get();
       if (snap.empty) break;
       snap.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
       lastDoc = snap.docs[snap.docs.length - 1];

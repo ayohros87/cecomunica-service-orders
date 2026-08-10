@@ -11,6 +11,7 @@ admin.initializeApp({ projectId: "cecomunica-service-orders" });
 const db = admin.firestore();
 
 const tight = (l) => (l || "").toString().toLowerCase()
+  // eslint-disable-next-line no-control-regex -- intencional: recorta lo no-ASCII
   .normalize("NFD").replace(/[^\x00-\x7f]/g, "").replace(/[^a-z0-9]+/g, "");
 const dias = (ts) => ts && ts.toMillis ? Math.floor((Date.now() - ts.toMillis()) / 86400000) : null;
 const bucketDias = (d) => d == null ? "sin fecha" : d <= 7 ? "≤7d" : d <= 30 ? "8-30d" : d <= 90 ? "31-90d" : ">90d";

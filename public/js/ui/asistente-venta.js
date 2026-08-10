@@ -45,6 +45,7 @@ window.AsistenteVenta = {
   _clientesCache: null,
   _clienteSel: null,
   _cliTimer: null,
+  _cliRefrescado: false, // ya se releyó del servidor en esta apertura
 
   _esc(s) {
     if (window.FMT && typeof FMT.esc === 'function') return FMT.esc(s);
@@ -61,6 +62,7 @@ window.AsistenteVenta = {
     this._opts = opts || {};
     this._desdeUnidadId = opts.desdeUnidadId || null;
     this._clienteSel = null;
+    this._cliRefrescado = false;
     this._render();
     const pref = opts.serialesPrefill;
     this._el.querySelector('#asvSeriales').value =
@@ -68,19 +70,24 @@ window.AsistenteVenta = {
     this._cargarClientesCache().catch(e => console.error('Error al precargar clientes:', e));
   },
 
-  async _cargarClientesCache() {
-    if (this._clientesCache) return this._clientesCache;
-    try {
-      const raw = localStorage.getItem('cache_clientes_v1');
-      if (raw) {
-        const { exp, data } = JSON.parse(raw);
-        if (exp && Date.now() < exp && Array.isArray(data) && data.length) {
-          this._clientesCache = data;
-          return data;
+  // `fresh` ignora las DOS cachés (memoria y localStorage) y relee del servidor.
+  // Un cliente recién creado en otra máquina no está en ninguna de las dos, y
+  // hasta 2026-08-10 eso lo volvía invisible aquí durante horas.
+  async _cargarClientesCache(fresh = false) {
+    if (this._clientesCache && !fresh) return this._clientesCache;
+    if (!fresh) {
+      try {
+        const raw = localStorage.getItem('cache_clientes_v1');
+        if (raw) {
+          const { exp, data } = JSON.parse(raw);
+          if (exp && Date.now() < exp && Array.isArray(data) && data.length) {
+            this._clientesCache = data;
+            return data;
+          }
         }
-      }
-    } catch (_) { /* caché ilegible: se reconstruye */ }
-    const clientes = await ClientesService.getAllClientes();
+      } catch (_) { /* caché ilegible: se reconstruye */ }
+    }
+    const clientes = await ClientesService.getAllClientes({ fresh });
     this._clientesCache = clientes.map(c => {
       const nombre = (c.nombre || '').toString();
       return { id: c.id, nombre, norm: FMT.normalize(nombre) };
@@ -104,8 +111,15 @@ window.AsistenteVenta = {
     this._cliTimer = setTimeout(async () => {
       try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); return; }
       const needle  = FMT.normalize(texto);
-      const matches = this._clientesCache
-        .filter(c => c.norm.includes(needle))
+      const filtrar = () => this._clientesCache.filter(c => c.norm.includes(needle));
+      // Cero coincidencias puede ser un cliente creado después de que se llenó
+      // la caché. Se relee del servidor UNA vez por apertura antes de decir que
+      // no existe — es la diferencia entre facturar y no poder facturar.
+      if (!filtrar().length && !this._cliRefrescado) {
+        this._cliRefrescado = true;
+        try { await this._cargarClientesCache(true); } catch (e) { console.error('Error al refrescar clientes:', e); }
+      }
+      const matches = filtrar()
         .map(c => ({ ...c, pos: c.norm.indexOf(needle) }))
         .sort((a, b) => a.pos !== b.pos ? a.pos - b.pos
           : a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
@@ -148,7 +162,15 @@ window.AsistenteVenta = {
     if (!clienteSel) {
       try { await this._cargarClientesCache(); } catch (e) { console.error('Error al cargar clientes:', e); }
       const needle = FMT.normalize(cliente);
-      const hit = (this._clientesCache || []).find(c => c.norm === needle);
+      const buscar = () => (this._clientesCache || []).find(c => c.norm === needle);
+      // Nunca marcar "cliente no registrado" contra una caché vieja: antes de
+      // ofrecer la excepción se relee del servidor.
+      let hit = buscar();
+      if (!hit && !this._cliRefrescado) {
+        this._cliRefrescado = true;
+        try { await this._cargarClientesCache(true); } catch (e) { console.error('Error al refrescar clientes:', e); }
+        hit = buscar();
+      }
       if (hit) {
         clienteSel = { id: hit.id, nombre: hit.nombre };
       } else {
