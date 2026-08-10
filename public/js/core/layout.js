@@ -184,11 +184,13 @@ const Layout = (() => {
       { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
     ]},
     { grupo: 'Almacén · finanzas', items: [
-      { id: 'pendientes',  label: 'Pendientes',  icon: 'inbox',        href: '/inventario/pendientes.html' },
+      // 'almacen' absorbe la bandeja ('pendientes' se retiró del rail); los
+      // demás módulos viejos siguen mientras dura la migración al espacio.
+      { id: 'almacen',     label: 'Almacén',     icon: 'warehouse',    href: '/almacen/index.html' },
       { id: 'inventario',  label: 'Inventario',  icon: 'package',      href: '/inventario/index.html' },
       { id: 'equipos',     label: 'Equipos (serial)', icon: 'scan-barcode', href: '/inventario/equipos.html' },
       { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
-      { id: 'facturacion', label: 'Facturación', icon: 'calculator',   href: '/facturacion/index.html' },
+      { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/facturacion/index.html' },
     ]},
   ];
 
@@ -250,7 +252,7 @@ const Layout = (() => {
     // Badge de la bandeja de bodega. Doble guarda a propósito: solo cuenta si
     // el rol TIENE el módulo y si la página cargó el servicio — así el conteo
     // lo pagan las páginas de inventario y nadie más.
-    if (visibles.includes('pendientes') && window.ColaInventarioService) {
+    if ((visibles.includes('almacen') || visibles.includes('pendientes')) && window.ColaInventarioService) {
       ColaInventarioService.pintarBadgeRail();
     }
 

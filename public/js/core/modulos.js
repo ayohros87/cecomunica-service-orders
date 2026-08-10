@@ -20,10 +20,14 @@ window.MODULOS = (() => {
   // es la vía por la que `inventario` ve el trabajo que nace en un contrato
   // SIN darle el módulo Contratos — de ahí que lo tengan justo los dos roles
   // que trabajan esa cola.
+  // "almacen" (espacio de trabajo /almacen/, propuesta 2026-08): absorbe la
+  // bandeja de pendientes y es la entrada primaria de bodega; los módulos
+  // viejos (inventario/equipos/piezas/pendientes) siguen vivos durante la
+  // migración para el rail de sus páginas.
   const visiblesPorRol = {
-    administrador: ["ordenes", "poc", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
-    gerente:       ["ordenes", "poc", "inventario", "equipos", "contratos", "cotizaciones", "clientes", "firma"],
-    inventario:    ["inventario", "equipos", "pendientes", "piezas", "firma"],
+    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
+    gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "contratos", "cotizaciones", "clientes", "firma"],
+    inventario:    ["almacen", "inventario", "equipos", "pendientes", "piezas", "firma"],
     contabilidad:  ["facturacion", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],

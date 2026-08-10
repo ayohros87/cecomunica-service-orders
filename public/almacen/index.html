@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Almacén - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc21">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+
+  <style>
+    /* Page-local — bandeja "Hoy" (propuesta Almacén/Finanzas 2026-08, E1). */
+    .hy-grupo { margin-bottom: var(--sp-5); }
+    .hy-grupo-t {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--fg-3); margin: 0 0 8px;
+    }
+    .hy-grupo-t .hy-n {
+      background: var(--surface-sunken); border-radius: 999px; padding: 0 8px;
+      font-size: 11px; letter-spacing: 0;
+    }
+    .hy-row {
+      display: flex; align-items: center; gap: 10px; min-width: 0;
+      background: var(--surface-card); border: 1px solid var(--border-default);
+      border-radius: var(--radius-md); padding: 8px 12px; margin-bottom: 6px;
+    }
+    .hy-txt { flex: 1; min-width: 0; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hy-txt b { font-weight: 600; }
+    .hy-chip {
+      flex: none; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 9px;
+      white-space: nowrap;
+    }
+    .hy-chip--seriales   { background: #FEF3C7; color: #92400E; }
+    .hy-chip--cambio     { background: #EFF6FF; color: #1E3A8A; }
+    .hy-chip--transicion { background: #FFEDD5; color: #7C2D12; }
+    .hy-chip--inspeccion { background: #FEF3C7; color: #92400E; }
+    .hy-chip--clasificar { background: var(--surface-sunken); color: var(--fg-3); }
+    .hy-chip--conflicto  { background: #FEF2F2; color: #991B1B; }
+    .hy-chip--diferencia { background: #FEF2F2; color: #991B1B; }
+    .hy-age { flex: none; font-size: 12px; color: var(--fg-3); white-space: nowrap; }
+    .hy-age.warn { color: #92400E; font-weight: 600; }
+    .hy-age.bad  { color: #991B1B; font-weight: 600; }
+    .hy-cta { flex: none; white-space: nowrap; }
+    .hy-mas { font-size: 12.5px; margin: 2px 0 0 4px; }
+    .hy-nota { font-size: 12px; color: var(--fg-3); margin: 4px 0 0 4px; }
+    .hy-eq {
+      display: inline-block; margin: 0 4px 0 0; padding: 0 7px;
+      background: var(--surface-sunken); border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-pill); font-size: 12px; white-space: nowrap;
+    }
+    .hy-aviso {
+      display: flex; align-items: center; gap: 8px; margin-bottom: var(--sp-3);
+      padding: 9px 12px; border-radius: var(--radius-md); font-size: 13px;
+      background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA;
+    }
+    .hy-vacio { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
+    .hy-vacio svg { width: 34px; height: 34px; color: #16A34A; }
+  </style>
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js"></script>
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js?v=cc7"></script>
+  <script src="../js/core/roles.js"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script defer src="../js/domain/transicionPendiente.js"></script>
+  <script defer src="../js/services/colaInventarioService.js?v=cc2"></script>
+  <script defer src="../js/services/modelosService.js"></script>
+  <script defer src="../js/services/inventarioService.js"></script>
+  <script defer src="../js/services/equiposPoolService.js?v=cc24"></script>
+  <script defer src="../js/domain/stockAgg.js"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/ui/workspace-tabs.js"></script>
+  <script defer src="../js/pages/almacen-hoy.js"></script>
+  <script src="/js/vendor/lucide.min.js"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="warehouse"></i> Almacén',
+      actions: [
+        { label: '<i data-lucide="plus"></i> Recibir equipos', cls: 'primary',
+          onclick: "window.location.href='../inventario/equipos.html?accion=recibir'" },
+        { label: '<i data-lucide="clipboard-list"></i> Conteo físico',
+          onclick: "window.location.href='../inventario/cargar-inventario.html'" },
+        { label: '<i data-lucide="banknote"></i> Registrar venta',
+          onclick: "window.location.href='../inventario/equipos.html?accion=vender'" },
+      ],
+      menu: [
+        { onclick: 'AlmacenHoy.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
+        { divider: true },
+        { href: '../inventario/index.html',   label: '<i data-lucide="package"></i> Inventario de Radios' },
+        { href: '../inventario/equipos.html', label: '<i data-lucide="scan-barcode"></i> Equipos por serial' },
+      ],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div id="loader" style="display:none;" class="loader-center">
+    <div class="loader"></div>
+  </div>
+
+  <div class="app-wrap app-wrap--full" id="bodyAlmacen">
+
+    <div id="wsTabs-mount"></div>
+
+    <!-- ============ HOY — bandeja unificada de trabajo ============ -->
+    <section id="tab-hoy">
+      <div id="avisoFallidas" class="hy-aviso" style="display:none;"></div>
+      <div id="hoyGrupos"></div>
+      <div class="hy-vacio" id="hoyVacio" style="display:none;">
+        <i data-lucide="check-circle-2"></i>
+        <p>Nada pendiente. Bodega al día.</p>
+      </div>
+    </section>
+
+    <!-- ============ EXISTENCIAS (se llena en E2) ============ -->
+    <section id="tab-existencias" style="display:none;">
+      <div class="ds-card ds-card-padded">
+        <p style="margin:0 0 8px;"><b>Existencias unificadas</b> — en construcción (etapa E2 de la propuesta).</p>
+        <p style="margin:0; font-size:13.5px; color:var(--fg-3);">
+          Mientras tanto: <a href="../inventario/index.html">Inventario de Radios</a> (por modelo)
+          · <a href="../inventario/equipos.html">Equipos por serial</a> (por unidad).
+        </p>
+      </div>
+    </section>
+
+  </div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('almacen'));
+  </script>
+</body>
+</html>

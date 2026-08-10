@@ -141,44 +141,25 @@
         </div>
       </section>
 
+      <!-- Consolidación 2026-08 (propuesta Almacén/Finanzas): las 5 tarjetas
+           del grupo pasaron a 2 espacios. Las páginas viejas siguen vivas y
+           accesibles desde dentro de cada espacio durante la migración. -->
       <section class="mgroup">
         <h2 class="mgroup__t">Almacén y finanzas</h2>
         <div class="mgrid">
-          <a class="mcard" data-keywords="pendientes bandeja cola bodega seriales asignar cambio transicion" data-mod="pendientes" data-visible="false" href="inventario/pendientes.html">
-            <span class="mcard__ico"><i data-lucide="inbox"></i></span>
+          <a class="mcard" data-keywords="almacen inventario bodega radios stock equipos serial pool kardex pendientes bandeja seriales piezas repuestos conteo" data-mod="almacen" data-visible="false" href="almacen/index.html">
+            <span class="mcard__ico"><i data-lucide="warehouse"></i></span>
             <span class="mcard__meta">
-              <span class="mcard__t">Pendientes de inventario</span>
-              <span class="mcard__s">Seriales, cambios y transiciones por trabajar</span>
-            </span>
-          </a>
-          <a class="mcard" data-keywords="inventario radios stock modelos almacen" data-mod="inventario" data-visible="false" href="inventario/index.html">
-            <span class="mcard__ico"><i data-lucide="package"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Inventario de Radios</span>
-              <span class="mcard__s">Ingresos, salidas y existencias</span>
+              <span class="mcard__t">Almacén</span>
+              <span class="mcard__s">Hoy · Existencias · Piezas</span>
             </span>
             <span class="mcard__key">I</span>
           </a>
-          <a class="mcard" data-keywords="equipos serial pool bodega kardex trazabilidad seriales" data-mod="equipos" data-visible="false" href="inventario/equipos.html">
-            <span class="mcard__ico"><i data-lucide="scan-barcode"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Equipos por serial</span>
-              <span class="mcard__s">Pool de bodega y trazabilidad</span>
-            </span>
-          </a>
-          <a class="mcard" data-keywords="piezas repuestos stock inventario taller servicio" data-mod="piezas" data-visible="false" href="inventario/piezas.html">
-            <span class="mcard__ico"><i data-lucide="puzzle"></i></span>
-            <span class="mcard__meta">
-              <span class="mcard__t">Inventario de Piezas</span>
-              <span class="mcard__s">Repuestos y precios para servicio</span>
-            </span>
-            <span class="mcard__key">X</span>
-          </a>
-          <a class="mcard" data-keywords="facturacion contabilidad tarifas alquiler cargos modelos quickbooks activacion" data-mod="facturacion" data-visible="false" href="facturacion/index.html">
+          <a class="mcard" data-keywords="finanzas facturacion contabilidad tarifas alquiler cargos modelos quickbooks activacion" data-mod="facturacion" data-visible="false" href="facturacion/index.html">
             <span class="mcard__ico"><i data-lucide="calculator"></i></span>
             <span class="mcard__meta">
-              <span class="mcard__t">Facturación</span>
-              <span class="mcard__s">Equipos, tarifas, cargos y QuickBooks</span>
+              <span class="mcard__t">Finanzas</span>
+              <span class="mcard__s">Activación · Catálogo · QuickBooks</span>
             </span>
           </a>
         </div>
@@ -331,11 +312,10 @@
       };
       if (e.key === "o") go("ordenes");
       if (e.key === "p") go("poc");
-      if (e.key === "i") go("inventario");
+      if (e.key === "i") go("almacen");
       if (e.key === "c") go("contratos");
       if (e.key === "v") go("vendedores");
       if (e.key === "q") go("cotizaciones");
-      if (e.key === "x") go("piezas");
       if (e.key === "f") go("firma");
     });
     if (typeof lucide !== 'undefined') lucide.createIcons();

@@ -2091,5 +2091,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     await EquiposPool.cargar();
+
+    // ?accion=recibir|vender — CTAs del espacio Almacén (propuesta 2026-08):
+    // el botón vive allá, el asistente probado sigue viviendo aquí. Solo para
+    // roles con escritura (a los demás ya se les quitaron los botones).
+    const accionParam = qp.get('accion');
+    if (accionParam && EquiposPool.puedeEscribir()) {
+      if (accionParam === 'recibir') EquiposPool.abrirRecibir();
+      else if (accionParam === 'vender') EquiposPool.abrirVenta();
+    }
   });
 });

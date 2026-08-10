@@ -212,9 +212,18 @@ const ColaInventarioService = {
 
   // Pinta el badge del rail. Cache de 5 min en sessionStorage para no repetir
   // los agregados en cada navegación dentro del módulo. La llama renderRail
-  // (js/core/layout.js) solo si el rol tiene el módulo 'pendientes' Y esta
-  // página cargó el servicio — el resto del sistema no paga nada.
+  // (js/core/layout.js) solo si el rol tiene el módulo 'almacen' (o el viejo
+  // 'pendientes') Y esta página cargó el servicio — el resto no paga nada.
   TTL_BADGE_MS: 5 * 60 * 1000,
+
+  // El badge vive en la entrada 'almacen' del rail (la bandeja es su pestaña
+  // "Hoy"); se pinta también en 'pendientes' por si el rail viejo sigue en
+  // caché durante la migración.
+  _pintarBadge(n) {
+    if (typeof Layout === 'undefined' || !Layout.setRailBadge) return;
+    Layout.setRailBadge('almacen', n);
+    Layout.setRailBadge('pendientes', n);
+  },
 
   async pintarBadgeRail() {
     if (typeof Layout === 'undefined' || !Layout.setRailBadge) return;
@@ -225,14 +234,14 @@ const ColaInventarioService = {
       if (raw) {
         const cached = JSON.parse(raw);
         if (Date.now() - cached.t < this.TTL_BADGE_MS) {
-          Layout.setRailBadge('pendientes', cached.n);
+          this._pintarBadge(cached.n);
           return;
         }
       }
     } catch { /* sin storage: se cuenta y ya */ }
     try {
       const n = await this.contarParaBadge();
-      Layout.setRailBadge('pendientes', n);
+      this._pintarBadge(n);
       try { sessionStorage.setItem(key, JSON.stringify({ t: Date.now(), n })); } catch { /* ok */ }
     } catch (e) {
       // Un badge nunca rompe una página.
@@ -244,7 +253,7 @@ const ColaInventarioService = {
   refrescarBadge(n) {
     const uid = firebase.auth().currentUser?.uid || 'anon';
     try { sessionStorage.setItem(`ccColaInv:v1:${uid}`, JSON.stringify({ t: Date.now(), n })); } catch { /* ok */ }
-    if (typeof Layout !== 'undefined' && Layout.setRailBadge) Layout.setRailBadge('pendientes', n);
+    this._pintarBadge(n);
   },
 };
 

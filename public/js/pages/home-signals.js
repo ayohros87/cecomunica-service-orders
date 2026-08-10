@@ -137,12 +137,13 @@ window.HomeSignals = (() => {
       href: 'inventario/equipos.html?tab=por_clasificar',
       count: () => SenalesService.countEquiposPoolPorEstado('por_clasificar'),
     },
-    // Bandeja de bodega (inventario/pendientes.html): el trabajo que nace en
-    // un contrato y que hasta ahora solo llegaba por correo.
+    // Bandeja de bodega (Almacén · Hoy): el trabajo que nace en un contrato y
+    // que hasta ahora solo llegaba por correo. El gate acepta el módulo nuevo
+    // o el viejo para no perder la señal a mitad de la migración.
     S15: {
-      modulo: 'pendientes', icon: 'scan-barcode', alert: true, moreIsBad: true,
+      modulo: ['almacen', 'pendientes'], icon: 'scan-barcode', alert: true, moreIsBad: true,
       label: 'Seriales por asignar', sub: 'contratos aprobados esperando bodega',
-      href: 'inventario/pendientes.html',
+      href: 'almacen/index.html',
       count: () => SenalesService.countSerialesPorAsignar(),
     },
   };
@@ -260,7 +261,10 @@ window.HomeSignals = (() => {
 
     const ids = (POR_ROL[rolEfectivo] || []).filter(id => {
       const sig = SIGNALS[id];
-      return sig && window.MODULOS && MODULOS.puedeVer(rolEfectivo, sig.modulo);
+      if (!sig || !window.MODULOS) return false;
+      // `modulo` puede ser string o lista (señales que migran de módulo, S15).
+      const mods = Array.isArray(sig.modulo) ? sig.modulo : [sig.modulo];
+      return mods.some(m => MODULOS.puedeVer(rolEfectivo, m));
     });
 
     if (!ids.length || !SenalesService.aggregatesDisponibles()) {

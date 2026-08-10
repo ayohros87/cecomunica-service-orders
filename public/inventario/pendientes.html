@@ -1,187 +1,20 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <title>Pendientes de inventario - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc21">
-  <!-- Rediseño Command Center: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
-
-  <style>
-    /* Page-local — el resto lo pone el kit.
-       Las tarjetas de cola son las mismas de Equipos por serial (.eq-cola):
-       se replican con prefijo propio para no acoplar dos páginas por CSS. */
-    .pi-colas {
-      display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
-      gap:10px; margin-bottom:var(--sp-4);
-    }
-    .pi-cola {
-      display:flex; flex-direction:column; gap:2px; min-width:0;
-      text-align:left; padding:11px 14px; cursor:pointer;
-      background:var(--surface-card); border:1px solid var(--border-default);
-      border-radius:var(--radius-lg);
-      transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
-    }
-    .pi-cola:hover { border-color:var(--accent); }
-    .pi-cola-n   { font-size:22px; font-weight:700; line-height:1.1; color:var(--fg-2); }
-    .pi-cola-lbl { font-size:12.5px; font-weight:600; }
-    .pi-cola-sub { font-size:11px; color:var(--fg-3); }
-    .pi-cola[data-cola="seriales"]   .pi-cola-n { color:#92400E; }
-    .pi-cola[data-cola="cambio"]     .pi-cola-n { color:#1E3A8A; }
-    .pi-cola[data-cola="transicion"] .pi-cola-n { color:#7C2D12; }
-    .pi-cola.is-active[data-cola="seriales"]   { border-color:#92400E; box-shadow:0 0 0 2px #92400E33; }
-    .pi-cola.is-active[data-cola="cambio"]     { border-color:#1E3A8A; box-shadow:0 0 0 2px #1E3A8A33; }
-    .pi-cola.is-active[data-cola="transicion"] { border-color:#7C2D12; box-shadow:0 0 0 2px #7C2D1233; }
-    .pi-cola.is-active[data-cola=""]           { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-line, #BFDBFE); }
-    /* Cola vacía = nada que hacer: se apaga en vez de gritar un 0 de color. */
-    .pi-cola.is-vacia .pi-cola-n { color:var(--fg-3); }
-
-    /* Chips de la tabla */
-    .pi-eq {
-      display:inline-block; margin:1px 4px 1px 0; padding:1px 7px;
-      background:var(--surface-sunken); border:1px solid var(--border-subtle);
-      border-radius:var(--radius-pill); font-size:12px; white-space:nowrap;
-    }
-    .pi-accion { font-size:12.5px; color:var(--fg-3); }
-    .pi-prog {
-      display:inline-block; padding:1px 9px; border-radius:999px;
-      font-size:12px; font-weight:600;
-    }
-    .pi-motivo { font-size:12px; color:var(--fg-3); }
-
-    /* La CTA no se parte en dos renglones: "Registrar transición" desbordaba
-       el botón cuando la columna se estrechaba. */
-    .pi-cta { text-align:right; white-space:nowrap; }
-
-    .pi-aviso {
-      display:flex; align-items:center; gap:8px; margin-bottom:var(--sp-3);
-      padding:9px 12px; border-radius:var(--radius-md); font-size:13px;
-      background:#FEF2F2; color:#991B1B; border:1px solid #FECACA;
-    }
-    .pi-aviso svg { width:16px; height:16px; flex:none; }
-
-    /* Nota de alcance: la bandeja no es el módulo de contratos y conviene
-       decirlo, tanto para bodega como para quien audite la página. */
-    .pi-nota {
-      display:flex; align-items:flex-start; gap:8px;
-      margin-bottom:var(--sp-4); font-size:12px; color:var(--fg-3); line-height:1.5;
-    }
-    .pi-nota svg { width:14px; height:14px; flex:none; margin-top:2px; }
-
-    table.app-table tbody td { font-size:14px; vertical-align:middle; }
-  </style>
-
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="../js/firebase-init.js"></script>
-  <script src="../js/core/modulos.js"></script>
-  <script src="../js/core/layout.js?v=cc6"></script>
-  <script src="../js/core/roles.js"></script>
-  <script defer src="../js/services/usuariosService.js"></script>
-  <script defer src="../js/domain/transicionPendiente.js"></script>
-  <script defer src="../js/services/colaInventarioService.js"></script>
-  <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/pages/inventario-pendientes.js"></script>
-  <script src="/js/vendor/lucide.min.js"></script>
+  <title>Almacén · Hoy - Cecomunica</title>
+  <!-- ABSORBIDA (E1, propuesta Almacén/Finanzas 2026-08): la bandeja de
+       pendientes ahora es la pestaña "Hoy" del espacio Almacén, junto con las
+       colas del pool y las diferencias de conteo. La lógica sigue viva en
+       js/services/colaInventarioService.js + js/pages/almacen-hoy.js. -->
+  <meta http-equiv="refresh" content="0;url=../almacen/index.html">
+  <script>location.replace('../almacen/index.html');</script>
 </head>
 <body>
-  <div class="cc-app">
-  <div id="rail-mount"></div>
-  <div class="cc-work">
-
-  <div id="topbar-mount"></div>
-  <script>
-    Layout.renderTopbar({
-      title: '<i data-lucide="inbox"></i> Pendientes de inventario',
-      back: { label: '<i data-lucide="arrow-left"></i> Inventario', href: 'index.html' },
-      actions: [
-        { label: '<i data-lucide="refresh-cw"></i> Recargar', onclick: 'ColaInventario.recargar()' }
-      ],
-      showHome: true, homeHref: '../index.html', showLogout: true
-    });
-  </script>
-
-  <div id="loader" style="display:none;" class="loader-center">
-    <div class="loader"></div>
-  </div>
-
-  <div class="app-wrap app-wrap--full" id="bodyPendientes">
-
-    <div id="avisoFallidas" class="pi-aviso" style="display:none;"></div>
-
-    <p class="pi-nota">
-      <i data-lucide="info"></i>
-      <span>Trabajo de bodega que nace en un contrato: qué equipos hay que serializar,
-      reemplazar o mapear. Muestra solo modelo, cantidad y progreso — las condiciones
-      comerciales del contrato no viven aquí.</span>
-    </p>
-
-    <div class="pi-colas" role="group" aria-label="Colas pendientes">
-      <button class="pi-cola is-active" data-cola="" onclick="ColaInventario.setCola('')"
-              title="Todo el trabajo pendiente, del más viejo al más nuevo">
-        <span class="pi-cola-n" id="cola-todas">—</span>
-        <span class="pi-cola-lbl">Todo</span>
-        <!-- Neutral a propósito: decía "las tres colas juntas" y la de
-             transiciones puede estar apagada (COLA_TRANSICIONES_ACTIVA). -->
-        <span class="pi-cola-sub">todo el trabajo pendiente</span>
-      </button>
-      <button class="pi-cola" data-cola="seriales" onclick="ColaInventario.setCola('seriales')"
-              title="Contratos aprobados esperando que inventario asigne los seriales de los equipos">
-        <span class="pi-cola-n" id="cola-seriales">—</span>
-        <span class="pi-cola-lbl">Seriales por asignar</span>
-        <span class="pi-cola-sub">contratos aprobados</span>
-      </button>
-      <button class="pi-cola" data-cola="cambio" onclick="ColaInventario.setCola('cambio')"
-              title="Recepción o administración pidió cambiar un serial ya asignado: hay que poner el reemplazo">
-        <span class="pi-cola-n" id="cola-cambio">—</span>
-        <span class="pi-cola-lbl">Cambios de serial</span>
-        <span class="pi-cola-sub">reemplazo solicitado</span>
-      </button>
-      <button class="pi-cola" data-cola="transicion" onclick="ColaInventario.setCola('transicion')"
-              title="Renovación, adición o reemplazo sin registrar qué equipos salieron y cuáles los sustituyen">
-        <span class="pi-cola-n" id="cola-transicion">—</span>
-        <span class="pi-cola-lbl">Transiciones</span>
-        <span class="pi-cola-sub">equipos que entran y salen</span>
-      </button>
-    </div>
-
-    <div class="ds-card">
-      <div class="app-table-wrap app-table-wrap--sticky" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0;">
-        <table class="app-table">
-          <thead>
-            <tr>
-              <th>Contrato</th>
-              <th>Cliente</th>
-              <th>Tipo</th>
-              <th>Equipos</th>
-              <th style="text-align:center;">Seriales</th>
-              <th style="text-align:center;">Esperando</th>
-              <th style="text-align:right;">Acción</th>
-            </tr>
-          </thead>
-          <tbody id="tablaPendientes"></tbody>
-        </table>
-      </div>
-      <div class="app-empty-state" id="estadoVacio" style="display:none;"></div>
-      <div class="app-table-footer">
-        <p id="resumenPendientes" class="resumen" style="margin:0;"></p>
-      </div>
-    </div>
-  </div>
-
-  </div> <!-- /cc-work -->
-  </div> <!-- /cc-app -->
-  <script>
-    // Rail Command Center — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('pendientes'));
-  </script>
+  <p style="font-family:system-ui;margin:40px;text-align:center;">
+    La bandeja de pendientes ahora vive en
+    <a href="../almacen/index.html">Almacén · Hoy</a>.
+  </p>
 </body>
 </html>
