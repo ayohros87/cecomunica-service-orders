@@ -222,21 +222,18 @@ window.AlmacenHoy = (() => {
       }), `${EQUIPOS}?tab=devuelto_revision`, 'devueltos');
     }
 
+    // Por clasificar NO se cuenta como trabajo del día: es deuda de migración
+    // (diagnóstico 2026-08-10: 1,541 unidades, 1,280 sin modelo — nada lo
+    // produce en runtime, solo scripts/backfills). Mismo criterio que la cola
+    // de transiciones apagada: mostrarlo entero convierte la bandeja en una
+    // lista de reproches. Va como nota, con su tamaño real y su CTA.
+    let notaClasificar = '';
     if (d.clasificar === null) fallidas.push('por clasificar');
     else if (d.clasificar.length) {
-      // Agrupado por modelo: la acción (salir a buscarlos / corregir a bodega)
-      // se hace por lote en Equipos por serial.
-      const porModelo = new Map();
-      d.clasificar.forEach(eq => {
-        const k = eq.modelo_label || 'Sin modelo';
-        porModelo.set(k, (porModelo.get(k) || 0) + 1);
-      });
-      poolN += d.clasificar.length;
-      poolHtml += [...porModelo.entries()].map(([modelo, n]) => fila({
-        chip: 'Clasificar', chipCls: 'clasificar',
-        txt: `<b>${esc(modelo)}</b> — ${n} ${n === 1 ? 'unidad' : 'unidades'} sin ubicación conocida`,
-        ctaHtml: cta(`${EQUIPOS}?tab=por_clasificar`, 'map-pin', 'Clasificar'),
-      })).join('');
+      const sinModelo = d.clasificar.filter(eq => !eq.modelo_label).length;
+      notaClasificar = `<p class="hy-nota">${d.clasificar.length.toLocaleString()} unidades en
+        "por clasificar" (deuda de migración — ubicación sin respaldo${sinModelo ? `, ${sinModelo.toLocaleString()} sin modelo` : ''})
+        — <a href="${EQUIPOS}?tab=por_clasificar">revisar por lotes →</a></p>`;
     }
 
     if (d.conflictos === null) fallidas.push('conflictos');
@@ -256,11 +253,26 @@ window.AlmacenHoy = (() => {
       notaVerificar = `<p class="hy-nota">${d.sinVerificarN.toLocaleString()} fichas de migración sin verificar
         (deuda, no trabajo del día) — <a href="${EQUIPOS}?tab=todos&verificar=1">revisar por lotes →</a></p>`;
     }
-    partes.push(grupo('Del pool', poolN, poolHtml, notaVerificar));
+    partes.push(grupo('Del pool', poolN, poolHtml, notaClasificar + notaVerificar));
 
     // ── De conteos ──
+    // Solo diferencias contra un conteo RECIENTE: la conciliación significa
+    // algo cuando el conteo es fresco. Contra un conteo de hace meses (33 de
+    // 51 tenían >90 días en el diagnóstico 2026-08-10, algunos >400) la
+    // diferencia solo dice "este modelo no se ha vuelto a contar" — eso vive
+    // en el tablero, no en la bandeja del día.
+    const UMBRAL_CONTEO_DIAS = 30;
     if (d.difs === null) fallidas.push('diferencias de conteo');
-    const difs = d.difs || [];
+    const difsTodas = d.difs || [];
+    const difs = difsTodas.filter(f => {
+      const ms = f.data?.ultima_actualizacion?.toMillis?.();
+      return ms && (Date.now() - ms) <= UMBRAL_CONTEO_DIAS * 86400000;
+    });
+    const difsViejas = difsTodas.length - difs.length;
+    const notaConteosViejos = difsViejas > 0
+      ? `<p class="hy-nota">${difsViejas} modelos más tienen diferencia contra conteos de hace
+         más de ${UMBRAL_CONTEO_DIAS} días — se cuadran recontando, no son trabajo de hoy.
+         <a href="../inventario/index.html">Ver el tablero →</a></p>` : '';
     total += difs.length;
     partes.push(grupo('De conteos', difs.length,
       conMas(difs, (f) => fila({
@@ -269,6 +281,7 @@ window.AlmacenHoy = (() => {
         at: f.data?.ultima_actualizacion?.toMillis?.() || null,
         ctaHtml: cta(`${EQUIPOS}?tab=en_bodega${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`, 'diff', 'Revisar'),
       }), '../inventario/index.html', 'el tablero'),
+      notaConteosViejos,
     ));
 
     // ── Pintado ──
