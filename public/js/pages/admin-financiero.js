@@ -321,8 +321,10 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     verificarAccesoYAplicarVisibilidad((rol) => {
-      if (rol !== ROLES.ADMIN) {
-        if (window.Toast) Toast.show('Acceso restringido a administradores.', 'bad');
+      // Panorama del espacio Finanzas (propuesta 2026-08, E4): contabilidad
+      // entra igual que administración — es su dashboard de cierre.
+      if (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD) {
+        if (window.Toast) Toast.show('Acceso restringido a administración y contabilidad.', 'bad');
         setTimeout(() => { location.href = '../index.html'; }, 1200);
         return;
       }

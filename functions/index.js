@@ -71,6 +71,7 @@ exports.onOrdenEntregada              = require("./src/triggers/ordenes/onOrdenE
 exports.facturacionDiaria             = require("./src/triggers/scheduled/facturacionDiaria");
 exports.calcularFacturaContrato       = require("./src/callable/calcularFacturaContrato");
 exports.listQBOCustomers              = require("./src/callable/listQBOCustomers");
+exports.qboStatus                     = require("./src/callable/qboStatus");
 exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentificacionPII");
 exports.fusionarPoolFicha             = require("./src/callable/fusionarPoolFicha");
 // Semanal: drift pool ↔ contratos/órdenes/POC → admin_reportes/conciliacion_pool

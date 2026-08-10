@@ -14,6 +14,9 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+  <script src="../js/ui/workspace-tabs.js"></script>
+  <script src="../js/ui/finanzas-nav.js"></script>
   <link rel="stylesheet" href="../css/admin-panel.css">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -54,6 +57,10 @@
 
   <div class="app-wrap app-wrap--wide">
 
+    <!-- Pestaña Panorama del espacio Finanzas (propuesta 2026-08, E4) -->
+    <div id="wsTabs-mount"></div>
+    <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('panorama'));</script>
+
     <div class="admin-toolbar">
       <label class="ts" for="selMonth">Mes:</label>
       <select id="selMonth" class="search-input" style="flex:0 0 auto;min-width:180px;"></select>
@@ -70,7 +77,7 @@
     <div class="alert-banner alert-info" style="margin-bottom:var(--sp-4);">
       <i data-lucide="info"></i>
       <div>
-        <strong>Facturado del mes</strong> = cotizaciones aprobadas/convertidas + contratos aprobados en el rango. <strong>Pipeline</strong> = cotizaciones enviadas/aprobadas no convertidas (todas las fechas). Los deltas comparan con el mismo cálculo del mes anterior. El XLSX contiene 3 hojas (Resumen por día / Detalle / Por cliente) listo para contador.
+        <strong>Fuente: comercial</strong> (cotizaciones aprobadas/convertidas + contratos aprobados en el rango) — NO son facturas emitidas: la emisión a QuickBooks aún no existe y el motor de activación no alimenta este tablero. <strong>Pipeline</strong> = cotizaciones enviadas/aprobadas no convertidas (todas las fechas). Los deltas comparan con el mismo cálculo del mes anterior. El XLSX contiene 3 hojas (Resumen por día / Detalle / Por cliente) listo para contador.
       </div>
     </div>
 

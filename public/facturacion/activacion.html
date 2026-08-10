@@ -10,6 +10,9 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+  <script src="../js/ui/workspace-tabs.js"></script>
+  <script src="../js/ui/finanzas-nav.js"></script>
   <link rel="stylesheet" href="../css/app-kit-extras.css">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -46,6 +49,10 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
+
+  <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
+  <div id="wsTabs-mount"></div>
+  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('activacion'));</script>
   <p style="color:var(--fg-3); margin:0 0 var(--sp-3); font-size:13px;">
     Requeridos para activar: <b>contrato vigente</b> + <b>mapeo QuickBooks</b>. Entrega, seriales y firmado son recomendados (no bloquean).
     La facturación no se emite todavía — esto solo marca qué contratos están listos.

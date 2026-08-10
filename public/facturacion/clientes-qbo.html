@@ -10,6 +10,9 @@
   <link rel="stylesheet" href="../css/ceco-ui.css">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+  <script src="../js/ui/workspace-tabs.js"></script>
+  <script src="../js/ui/finanzas-nav.js"></script>
   <link rel="stylesheet" href="../css/app-kit-extras.css">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -39,6 +42,43 @@
 </script>
 
 <div class="app-wrap app-wrap--full">
+
+  <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
+  <div id="wsTabs-mount"></div>
+  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('quickbooks'));</script>
+
+  <!-- Estado de la conexión (callable qboStatus) — hace visible el riesgo del
+       refresh token de Intuit (~100 días), que antes moría en silencio. -->
+  <div class="ds-card ds-card-padded" id="qboEstado" style="display:none; margin-bottom:var(--sp-3); font-size:13px;"></div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      firebase.auth().onAuthStateChanged(async (user) => {
+        if (!user) return;
+        const card = document.getElementById('qboEstado');
+        if (!card) return;
+        try {
+          const fx = firebase.app().functions('us-central1');
+          const res = await fx.httpsCallable('qboStatus')({});
+          const d = res.data || {};
+          const dias = (ms) => ms ? Math.floor((ms - Date.now()) / 86400000) : null;
+          const dRef = dias(d.refresh_token_expires_at);
+          const refHtml = dRef == null ? '—'
+            : dRef < 0 ? '<b style="color:#991B1B;">VENCIDO — reconectar</b>'
+            : dRef <= 15 ? `<b style="color:#991B1B;">vence en ${dRef} días — reconectar pronto</b>`
+            : dRef <= 40 ? `<b style="color:#92400E;">vence en ${dRef} días</b>`
+            : `vence en ${dRef} días`;
+          card.style.display = '';
+          card.innerHTML = d.connected
+            ? `<b>QuickBooks conectado</b> · entorno <b>${d.env === 'production' ? 'PRODUCCIÓN' : 'sandbox'}</b>`
+              + `${d.realm_id ? ` · empresa ${d.realm_id}` : ''} · refresh token: ${refHtml}`
+            : '<b style="color:#991B1B;">QuickBooks NO conectado</b> — sin conexión no hay importación de catálogos ni emisión futura.';
+        } catch (e) {
+          // Callable aún no desplegado o sin permiso: la tarjeta no estorba.
+          console.warn('[qboStatus]', e?.code || e);
+        }
+      });
+    });
+  </script>
   <p id="qboResumen" style="color:var(--fg-3); margin:0 0 var(--sp-3); font-size:13px;">Cargando…</p>
 
   <div class="ds-card" style="padding:0;">

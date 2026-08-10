@@ -190,7 +190,7 @@ const Layout = (() => {
       { id: 'inventario',  label: 'Inventario',  icon: 'package',      href: '/inventario/index.html' },
       { id: 'equipos',     label: 'Equipos (serial)', icon: 'scan-barcode', href: '/inventario/equipos.html' },
       { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
-      { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/facturacion/index.html' },
+      { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/facturacion/activacion.html' },
     ]},
   ];
 

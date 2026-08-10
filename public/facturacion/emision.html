@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8" />
+  <title>Emisión de facturas - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
+  <link rel="stylesheet" href="../css/ws-tabs.css">
+  <script src="../js/ui/workspace-tabs.js"></script>
+  <script src="../js/ui/finanzas-nav.js"></script>
+
+  <style>
+    /* Checklist del camino a QBO — placeholder honesto, no un botón muerto. */
+    .em-paso { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-subtle); }
+    .em-paso:last-child { border-bottom:none; }
+    .em-paso-ico {
+      flex:0 0 26px; height:26px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      background:var(--surface-sunken); color:var(--fg-3);
+    }
+    .em-paso-ico.ok { background:#ECFDF5; color:#065F46; }
+    .em-paso-ico svg { width:14px; height:14px; }
+    .em-paso b { display:block; font-size:14px; }
+    .em-paso span { font-size:12.5px; color:var(--fg-3); }
+  </style>
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js"></script>
+  <script src="../js/core/modulos.js"></script>
+  <script src="../js/core/layout.js?v=cc7"></script>
+  <script src="../js/core/roles.js"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script src="/js/vendor/lucide.min.js"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbar({
+    title: '<i data-lucide="file-output"></i> Emisión de facturas',
+    showHome: true, homeHref: '../index.html', showLogout: true
+  });
+</script>
+
+<div class="app-wrap">
+
+  <!-- Navegación del espacio Finanzas (propuesta 2026-08, E4) -->
+  <div id="wsTabs-mount"></div>
+  <script>document.addEventListener('DOMContentLoaded', () => FinanzasNav.render('emision'));</script>
+
+  <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+    <h3 style="margin:0 0 6px;"><i data-lucide="info" style="width:16px;height:16px;vertical-align:-2px;"></i>
+      La app todavía NO emite facturas a QuickBooks</h3>
+    <p style="margin:0; font-size:13.5px; color:var(--fg-3); line-height:1.6;">
+      Lo que sí funciona hoy: los catálogos con mapeo QBO, el match de clientes, la
+      <a href="./activacion.html">activación de facturación</a> (explícita y auditada) y la
+      <b>vista previa del cálculo por contrato</b> (prorrateo ÷30, desglose, ITBMS) — está en
+      la pestaña Activación, contratos "Activos" → <i>Vista previa</i>. La emisión real es el
+      siguiente paso del plan QBO; mientras tanto la facturación se sigue haciendo directo en
+      QuickBooks.
+    </p>
+  </div>
+
+  <div class="ds-card ds-card-padded">
+    <h3 style="margin:0 0 4px;">El camino a la primera factura emitida desde la app</h3>
+    <p style="margin:0 0 10px; font-size:12.5px; color:var(--fg-3);">
+      Orden de ejecución del plan QBO (docs/SISTEMA_TOP_DOWN.md §5.4). Verde = ya construido.
+    </p>
+    <div class="em-paso"><span class="em-paso-ico ok"><i data-lucide="check"></i></span>
+      <div><b>Base ya construida</b><span>OAuth con QuickBooks, catálogos con tarifas y mapeo, match de clientes, activación + cálculo con vista previa, alertas diarias.</span></div></div>
+    <div class="em-paso"><span class="em-paso-ico"><i data-lucide="circle"></i></span>
+      <div><b>F1 · Escritura a QBO + idempotencia</b><span>qboPost con refresh/retry y la colección facturacion_periodos (sin esto un reintento duplica facturas).</span></div></div>
+    <div class="em-paso"><span class="em-paso-ico"><i data-lucide="circle"></i></span>
+      <div><b>F2 · Decidir la fuente de la línea facturable</b><span>contrato.equipos[] vs poc_devices por serial — decisión de negocio previa al facturador.</span></div></div>
+    <div class="em-paso"><span class="em-paso-ico"><i data-lucide="circle"></i></span>
+      <div><b>F3 · Sync de clientes + bundles pre-creados + cutover a producción</b><span>Customers con RUC desde la app; bundles "Mensualidad - modelo" a mano en QBO.</span></div></div>
+    <div class="em-paso"><span class="em-paso-ico"><i data-lucide="circle"></i></span>
+      <div><b>F4 · Piloto manual en borrador</b><span>previewFacturacion + corrida manual con 2-3 clientes, validando en QBO antes de enviar.</span></div></div>
+    <div class="em-paso"><span class="em-paso-ico"><i data-lucide="circle"></i></span>
+      <div><b>F5 · Emisión mensual automática</b><span>Cron el 1.º de cada mes + esta pantalla como consola de emisión e historial de períodos.</span></div></div>
+    <div class="em-paso"><span class="em-paso-ico"><i data-lucide="circle"></i></span>
+      <div><b>F6 · Pagos de vuelta</b><span>Procesar el webhook (hoy solo se almacena) para ver pagado/pendiente en la app.</span></div></div>
+  </div>
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+  firebase.auth().onAuthStateChanged(async (user) => {
+    if (!user) return window.location.href = "../login.html";
+    try{
+      const u = await UsuariosService.getUsuario(user.uid);
+      const rol = u ? u.rol : null;
+      if (!u || (rol !== ROLES.ADMIN && rol !== ROLES.CONTABILIDAD)) {
+        document.body.innerHTML = "<h3 style='color:red; text-align:center; margin-top:100px;'>Acceso restringido</h3>";
+        return;
+      }
+      if (window.lucide) lucide.createIcons();
+    }catch(e){ console.error(e); }
+  });
+  });
+</script>
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion'));
+  </script>
+</body>
+</html>
