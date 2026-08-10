@@ -10,8 +10,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Órdenes de Servicio - Cecomunica</title>
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc18">
-  <link rel="stylesheet" href="../css/ordenes-index.css?v=dev2">
+  <!-- cc22 / dev3: chips del pool en la columna Serie (clases .eqpool-chip-aviso
+       en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el
+       aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc22">
+  <link rel="stylesheet" href="../css/ordenes-index.css?v=dev3">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
@@ -43,7 +46,7 @@
 <script defer src="../js/ui/firmaPad.js?v=dev3"></script>
 <script defer src="../js/pages/ordenes-state.js?v=dev3"></script>
 <script defer src="../js/pages/ordenes-data.js"></script>
-<script defer src="../js/pages/ordenes-render.js?v=qc3"></script>
+<script defer src="../js/pages/ordenes-render.js?v=qc4"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=qc3"></script>
 <script defer src="../js/pages/ordenes-flujo.js?v=qc3"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=qc3"></script>

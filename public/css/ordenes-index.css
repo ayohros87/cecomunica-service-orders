@@ -2133,13 +2133,45 @@ tr.activo:hover { background: #f0f9ff !important; }
   line-height: 1.4;
 }
 
-/* Columnas con anchos específicos */
-.col-serie { width: 18%; }
-.col-modelo { width: 20%; }
-.col-intervencion { width: 28%; }
-.col-accesorios { width: 20%; }
-.col-observaciones { width: 10%; max-width: 120px; }
+/* Columnas con anchos específicos. La tabla es `table-layout: fixed` y el
+   <colgroup> que emite ordenes-render.js manda sobre estos valores: si cambias
+   uno, cambia el otro (estaban desalineados hasta 2026-08-10). */
+.col-serie { width: 16%; }
+.col-modelo { width: 12%; }
+.col-intervencion { width: 24%; }
+.col-accesorios { width: 22%; }
+.col-observaciones { width: 20%; }
 .col-acciones { width: 6%; text-align: center; }
+
+/* Serie comparte celda con los chips del pool (estado + avisos) que inyecta
+   decorarEstadoPoolEnTabla. Dos cosas los sacaban de la columna y los dejaban
+   ENCIMA del texto de Modelo (reporte 2026-08-10):
+     · la tabla es `table-layout: fixed`, así que la columna no crece; y
+     · .celda-editable trae `justify-content: space-between` de ceco-ui.css
+       (pensado para dejar el lápiz pegado a la derecha), que empujaba los
+       chips justo contra el borde de la columna.
+   Aquí van agrupados a la izquierda junto al serial, con wrap: caben en línea
+   si hay sitio y bajan a un renglón si no. El lápiz y el badge de fotos pasan
+   al final con `order` para no quedar en medio del serial y sus chips. */
+.equipos-table .col-serie .celda-editable {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.equipos-table .col-serie .celda-editable > .lapiz { order: 9; margin-left: 0; }
+.equipos-table .col-serie .celda-editable > .equipo-fotos-badge { order: 8; }
+.equipos-table .col-serie .celda-editable > .valor { overflow-wrap: anywhere; }
+/* Un chip solo nunca puede empujar fuera de la columna: si no cabe, se recorta
+   con puntos suspensivos y el texto completo queda en el title. */
+.equipos-table .col-serie .eqpool-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+}
 
 /* Truncar observaciones a 1 línea + tipografía de "nota":
    itálico, color atenuado, peso normal — lectura clara como
@@ -2826,7 +2858,9 @@ tr.activo:hover { background: #f0f9ff !important; }
     background: white;
   }
   
-  .equipos-table td { display: block; padding: 0; }
+  /* width:auto anula los .col-* de escritorio: aquí manda el grid, y un
+     porcentaje sobre un grid item solo encoge la celda. */
+  .equipos-table td { display: block; padding: 0; width: auto; }
   
   /* Prioridad: Serie, Modelo, Intervención */
   .col-serie { grid-column: 1 / 2; }

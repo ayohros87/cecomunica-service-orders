@@ -69,8 +69,7 @@ window.SerialField = {
         // en vez de callar — si no, el equipo desaparece sin explicación.
         if (norm.length >= 3 && !/\d/.test(norm)) {
           const hint = document.createElement('span');
-          hint.className = 'eqpool-chip';
-          hint.style.cssText = 'background:transparent; border:1px dashed var(--border, #cbd5e1); color:var(--fg-3, #64748b);';
+          hint.className = 'eqpool-chip eqpool-chip-vacio';
           hint.title = 'Un serial lleva al menos un número. Este texto no se registra en el inventario por serial (sí queda en la orden o el contrato).';
           hint.textContent = 'no es un serial';
           slot.appendChild(hint);
@@ -89,10 +88,13 @@ window.SerialField = {
       slot.innerHTML = '';
 
       const esc = this._esc.bind(this);
-      const chip = (html, css, title) => {
+      // El segundo argumento es una CLASE de la familia .eqpool-chip-* (viven en
+      // ceco-ui.css). Antes era un `style` inline por llamada y ya había derivado
+      // respecto a los mismos avisos en ordenes-render.js.
+      const chip = (html, extraClass, title) => {
         const a = document.createElement('a');
-        a.className = 'eqpool-chip';
-        a.style.cssText = `text-decoration:none; cursor:pointer; ${css || ''}`;
+        a.className = `eqpool-chip${extraClass ? ' ' + extraClass : ''}`;
+        a.style.cssText = 'text-decoration:none; cursor:pointer;';
         if (title) a.title = title;
         a.innerHTML = html;
         a.addEventListener('click', (ev) => {
@@ -104,8 +106,7 @@ window.SerialField = {
       };
 
       if (!docs.length) {
-        chip('sin registro en el pool',
-          'background:transparent; border:1px dashed var(--border, #cbd5e1); color:var(--fg-3, #64748b);',
+        chip('sin registro en el pool', 'eqpool-chip-vacio',
           'Este serial no existe en el pool — se dará de alta automáticamente al guardar. Verifica que esté bien escrito.');
         if (opts.onInfo) opts.onInfo({ docs, unidad: null });
         return;
@@ -114,8 +115,7 @@ window.SerialField = {
       if (docs.length > 1) {
         // "2+ modelos" = el mismo nombre que usa la fila de Inventario, la
         // ficha del equipo y la pestaña Conflictos (auditoría 2026-08-04, A4).
-        chip(`⚠ 2+ modelos (${docs.length} fichas) — elegir`,
-          'background:#fee2e2; color:#b91c1c;',
+        chip(`⚠ 2+ modelos (${docs.length} fichas) — elegir`, 'eqpool-chip-alerta',
           'Este serial existe en más de una ficha, con modelos distintos. Click para ver y elegir; se resuelve en Inventario · pestaña Conflictos.');
         if (opts.onInfo) opts.onInfo({ docs, unidad: null });
         return;
@@ -132,15 +132,14 @@ window.SerialField = {
       const clienteId = typeof opts.clienteId === 'function' ? (opts.clienteId() || '') : '';
       const clientePool = u.asignacion?.cliente_id || '';
       if (clientePool && clienteId && clientePool !== clienteId) {
-        chip('⚠ otro cliente', 'background:#fef3c7; color:#92400e;',
+        chip('⚠ otro cliente', 'eqpool-chip-aviso',
           `En el pool esta unidad figura con ${u.asignacion?.cliente_nombre || 'otro cliente'} — verifica el serial`);
       }
 
       const m = typeof opts.modelo === 'function' ? opts.modelo() : null;
       if (m && (m.modelo_id || (m.modelo_label || '').trim())
           && !EquiposPoolService._mismoModelo(u, m.modelo_id || null, m.modelo_label || '')) {
-        chip(`modelo distinto: ${esc(u.modelo_label || u.modelo_id || '?')}`,
-          'background:#fee2e2; color:#b91c1c;',
+        chip(`modelo distinto: ${esc(u.modelo_label || u.modelo_id || '?')}`, 'eqpool-chip-alerta',
           'El pool registra esta unidad con OTRO modelo — puede ser un error de dedo o una ficha por fusionar.');
       }
 

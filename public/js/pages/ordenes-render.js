@@ -504,13 +504,16 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 
     container.innerHTML = `
       <table class="equipos-table">
+        <!-- Debe coincidir con los .col-* de ordenes-index.css. Serie lleva el
+             serial MAS los chips del pool, por eso es ancha; Observaciones se
+             trunca a una linea con tooltip, por eso cedio espacio. -->
         <colgroup>
-          <col style="width: 8%;">
-          <col style="width: 8%;">
-          <col style="width: 26%;">
+          <col style="width: 16%;">
+          <col style="width: 12%;">
+          <col style="width: 24%;">
           <col style="width: 22%;">
-          <col style="width: 28%;">
-          <col style="width: 8%;">
+          <col style="width: 20%;">
+          <col style="width: 6%;">
         </colgroup>
         <thead>
           <tr>
@@ -601,7 +604,9 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 
               <td class="col-observaciones">
                 <div class="celda-editable" data-id="${ordenId}_${e.id}" data-campo="observaciones">
-                  <span class="valor" title="${e.observaciones || ''}">${e.observaciones || "-"}</span>
+                  <!-- escapeHtml en AMBOS: una comilla en la observacion rompia
+                       el atributo title, y el cuerpo iba crudo al innerHTML. -->
+                  <span class="valor" title="${escapeHtml(e.observaciones || '')}">${e.observaciones ? escapeHtml(e.observaciones) : "-"}</span>
                   ${obtenerIconoLapiz(`${ordenId}_${e.id}`, 'observaciones', e.observaciones || '')}
                 </div>
               </td>
@@ -676,13 +681,14 @@ async function decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle) {
     celda.appendChild(chip);
 
     // Aviso suave: el pool dice que esta unidad esta con OTRO cliente.
+    // Mismo texto y misma paleta que SerialField (.eqpool-chip-aviso) — es el
+    // mismo hallazgo, solo que aqui sobre una fila ya guardada.
     const clientePool = unidad.asignacion?.cliente_id || '';
     if (clientePool && clienteOrdenId && clientePool !== clienteOrdenId) {
       const warn = document.createElement('span');
-      warn.className = 'eqpool-chip';
-      warn.style.cssText = 'background:#fef3c7;color:#92400e;';
+      warn.className = 'eqpool-chip eqpool-chip-aviso';
       warn.title = `En el pool esta unidad figura con ${unidad.asignacion?.cliente_nombre || 'otro cliente'} — verifica el serial`;
-      warn.textContent = 'otro cliente';
+      warn.textContent = '⚠ otro cliente';
       celda.appendChild(warn);
     }
   }

@@ -2253,6 +2253,20 @@ table.app-table.editable tbody tr:hover { background: transparent; }
 .eqpool-chip-desconocido       { background: #f1f5f9; color: #64748b; }
 /* Variante de tabla: mismo lenguaje, un punto más grande para listados densos. */
 .eqpool-chip-lg { font-size: 12px; padding: 3px 10px; }
+/* Avisos que ACOMPAÑAN al chip de estado (no son estados del pool): la unidad
+   figura con otro cliente, con otro modelo, o el serial no existe todavía.
+   Estaban copiados como `style` inline en cada página (ordenes-render,
+   serial-field) y ya habían derivado entre sí — viven aquí para que el aviso
+   se vea igual en todas. */
+.eqpool-chip-aviso  { background: #fef3c7; color: #92400e; }
+.eqpool-chip-alerta { background: #fee2e2; color: #b91c1c; }
+/* Punteado = todavía no hay ficha ("sin registro en el pool", "no es un
+   serial"): sin relleno, porque no afirma un estado. */
+.eqpool-chip-vacio {
+  background: transparent;
+  border: 1px dashed var(--border, #cbd5e1);
+  color: var(--fg-3, #64748b);
+}
 /* Link discreto hacia una entidad (kardex, contrato, cliente, orden). */
 .eq-link { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--fg-3); }
 .eq-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
