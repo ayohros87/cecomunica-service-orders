@@ -65,11 +65,13 @@
   <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
   <script defer src="../js/services/equiposPoolService.js"></script>
+  <!-- Join único conteo↔pool (tablero, conciliación y reporte por correo). -->
+  <script defer src="../js/domain/stockAgg.js"></script>
   <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->
   <script defer src="../js/services/colaInventarioService.js"></script>
   <script defer src="../js/ui/toast.js"></script>
 
-  <script src="../js/pages/inventario-index.js?v=cc13" defer></script>
+  <script src="../js/pages/inventario-index.js?v=cc14" defer></script>
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
@@ -92,7 +94,7 @@
     menu: [
       { href: './pendientes.html',   label: '<i data-lucide="inbox"></i> Pendientes de inventario' },
       { href: './piezas.html',       label: '<i data-lucide="layers"></i> Piezas' },
-      { html: '<a href="./vista-correo.html" target="_blank" class="overflow-menu-item"><i data-lucide="mail"></i> Vista correo</a>' },
+      { onclick: 'copiarReporte()',  label: '<i data-lucide="mail"></i> Copiar reporte (correo)' },
       { onclick: 'exportarExcel()',  label: '<i data-lucide="download"></i> Excel' },
       { divider: true },
       { html: '<label class="overflow-menu-item"><input type="checkbox" checked id="col-CHK-anterior"> Conteo anterior</label>' },

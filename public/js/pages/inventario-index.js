@@ -29,32 +29,14 @@ firebase.auth().onAuthStateChanged(async (user) => {
   tabla.innerHTML = "";
 
   try {
-    // 1. Cargar los modelos una sola vez. Se excluyen los INACTIVOS: cuando se
-    //    deduplica un modelo la fila perdedora queda `activo:false`, pero si
-    //    conserva su doc de conteo seguía saliendo en la tabla — dos filas
-    //    idénticas, una con conteo y otra sin él (caso HYTERA SC780, 2026-07-29).
-    //    cargar-inventario.js ya filtraba igual, así que nadie puede contar
-    //    sobre una fila muerta; esto alinea la vista con la captura.
-    const modelosList = (await ModelosService.getModelos())
-      .filter(m => m.activo !== false);
-    const modelosMap = {};
-    modelosList.forEach(m => { modelosMap[m.id] = m; });
-
-    // 2. Fuente PRINCIPAL: el pool de seriales (unidades reales en bodega).
-    //    El conteo físico (inventario_actual) queda como verificación manual.
-    const [inventario, poolMap] = await Promise.all([
+    // Join único modelos ↔ conteo físico ↔ pool: StockAgg (js/domain/stockAgg.js).
+    // Ahí viven el filtro de modelos inactivos, el casado por id/label y el
+    // orden canónico — compartidos con la conciliación y el reporte por correo.
+    const [modelosList, inventario, poolMap] = await Promise.all([
+      ModelosService.getModelos(),
       InventarioService.getInventarioActual(),
       EquiposPoolService.contarBodegaPorModelo().catch(e => { console.warn('pool', e); return new Map(); }),
     ]);
-
-    // Índices del pool para casar contra las filas de conteo (por id de
-    // catálogo o por label normalizado — mismas tolerancias del pool).
-    const poolPorId = new Map(), poolPorLabel = new Map();
-    poolMap.forEach(g => {
-      if (g.modelo_id) poolPorId.set(g.modelo_id, g);
-      const tl = EquiposPoolService._tightLabel(g.modelo_label);
-      if (tl && !poolPorLabel.has(tl)) poolPorLabel.set(tl, g);
-    });
 
     if (inventario.length === 0 && poolMap.size === 0) {
       tabla.innerHTML = `
@@ -68,55 +50,9 @@ firebase.auth().onAuthStateChanged(async (user) => {
       return;
     }
 
-    const datos = [];
-    const gruposUsados = new Set();
-
-inventario.forEach(data => {
-  // Conteo cuyo modelo ya no está en el catálogo activo (fila perdedora de un
-  // dedup, o modelo borrado): sin la ficha del modelo la fila saldría en blanco,
-  // así que se omite. El conteo en sí no se pierde — sigue en inventario_actual
-  // y se recupera al mover el conteo a la fila superviviente.
-  const modelo = modelosMap[data.modelo_id];
-  if (!modelo) return;
-  const g = poolPorId.get(data.modelo_id)
-    || poolPorLabel.get(EquiposPoolService._tightLabel(modelo.modelo || '')) || null;
-  if (g) gruposUsados.add(g);
-  datos.push({ data, modelo, seriales: g ? g.n : 0 });
-});
-
-// Modelos con seriales en bodega que el conteo físico aún no lista.
-poolMap.forEach(g => {
-  if (gruposUsados.has(g)) return;
-  const modelo = (g.modelo_id && modelosMap[g.modelo_id])
-    || { modelo: g.modelo_label || '(sin modelo)' };
-  datos.push({ data: { modelo_id: g.modelo_id || null, cantidad: null }, modelo, seriales: g.n, sinConteo: true });
-});
-
-// Ordenar por alto_movimiento (true primero), luego marca, tipo y modelo
-datos.sort((a, b) => {
-  const altoA = a.modelo.alto_movimiento === true ? 1 : 0;
-  const altoB = b.modelo.alto_movimiento === true ? 1 : 0;
-  if (altoA !== altoB) return altoB - altoA; // true primero
-
-  const marcaA = a.modelo.marca?.toLowerCase() || "";
-  const marcaB = b.modelo.marca?.toLowerCase() || "";
-  if (marcaA !== marcaB) return marcaA.localeCompare(marcaB);
-
-  const tipoA = a.modelo.tipo?.toLowerCase() || "";
-  const tipoB = b.modelo.tipo?.toLowerCase() || "";
-  if (tipoA !== tipoB) return tipoA.localeCompare(tipoB);
-
-  const modeloA = a.modelo.modelo?.toLowerCase() || "";
-  const modeloB = b.modelo.modelo?.toLowerCase() || "";
-  return modeloA.localeCompare(modeloB);
-});
-
-
-
-// Mostrar ordenado
-inventarioDatos = datos;
-renderKPIs();
-renderizarTabla(inventarioDatos);
+    inventarioDatos = StockAgg.build({ modelos: modelosList, conteos: inventario, poolMap });
+    renderKPIs();
+    renderizarTabla(inventarioDatos);
 
   } catch (err) {
     console.error("❌ Error al cargar inventario:", err);
@@ -160,9 +96,36 @@ function renderKPIs() {
   set('kpiDif', (dif > 0 ? '+' : '') + dif.toLocaleString());
   const difEl = document.getElementById('kpiDif');
   if (difEl) difEl.classList.toggle('kpi-warn', dif !== 0);
-  // Compat: cards viejas si siguieran en el HTML.
-  set('kpiAltoMov', inventarioDatos.filter(({ modelo }) => modelo.alto_movimiento === true).length);
-  set('kpiStockBajo', inventarioDatos.filter(r => Number(r.seriales ?? 0) < 5).length);
+}
+
+// Copia el reporte con estilos inline al portapapeles, listo para pegar en un
+// correo (Outlook/Gmail). Reemplaza a vista-correo.html — mismo cálculo que
+// pinta la tabla (StockAgg), cero copias.
+async function copiarReporte() {
+  if (!Array.isArray(inventarioDatos) || !inventarioDatos.length) {
+    Toast.show('Inventario aún no cargado', 'warn');
+    return;
+  }
+  const html = StockAgg.emailHtml(inventarioDatos);
+  const plano = html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  try {
+    if (!navigator.clipboard || !window.ClipboardItem) throw new Error('sin ClipboardItem');
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html], { type: 'text/html' }),
+      'text/plain': new Blob([plano], { type: 'text/plain' }),
+    })]);
+    Toast.show('Reporte copiado — pégalo en el correo.', 'ok');
+  } catch (e) {
+    // Fallback (navegador sin clipboard rico): pestaña con el reporte para copiarlo a mano.
+    const w = window.open('', '_blank');
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+      Toast.show('Se abrió el reporte en una pestaña — cópialo desde ahí.', 'ok');
+    } else {
+      Toast.show('No se pudo copiar el reporte: ' + (e.message || e), 'bad');
+    }
+  }
 }
 
 // Filtro unificado: búsqueda + chip de tipo + toggles
