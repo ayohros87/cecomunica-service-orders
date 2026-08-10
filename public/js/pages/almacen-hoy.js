@@ -45,6 +45,11 @@ window.AlmacenHoy = (() => {
   const EQUIPOS = '../inventario/equipos.html';
   const MAX_FILAS = 8;   // por grupo; el resto queda tras "ver todos"
 
+  // Todo link que sale de la bandeja lleva ?volver=almacen: el topbar de la
+  // página destino (layout.js) lo convierte en un "Volver" que regresa AQUÍ
+  // y no al módulo histórico de esa página.
+  const vol = (url) => url + (url.includes('?') ? '&' : '?') + 'volver=almacen';
+
   const ctx = { rol: '', datos: null };
 
   const $ = (id) => document.getElementById(id);
@@ -161,9 +166,9 @@ window.AlmacenHoy = (() => {
   // ── Render ────────────────────────────────────────────────────────────
   function filaContrato(r) {
     const cfgs = {
-      seriales: { chip: 'Seriales', cls: 'seriales', icono: 'scan-barcode', cta: 'Asignar seriales', href: `../contratos/seriales.html?id=${encodeURIComponent(r.doc_id)}` },
-      cambio: { chip: 'Cambio', cls: 'cambio', icono: 'replace', cta: 'Reemplazar', href: `../contratos/seriales.html?id=${encodeURIComponent(r.doc_id)}` },
-      transicion: { chip: 'Transición', cls: 'transicion', icono: 'arrow-left-right', cta: 'Registrar', href: `../contratos/transicion.html?id=${encodeURIComponent(r.doc_id)}` },
+      seriales: { chip: 'Seriales', cls: 'seriales', icono: 'scan-barcode', cta: 'Asignar seriales', href: vol(`../contratos/seriales.html?id=${encodeURIComponent(r.doc_id)}`) },
+      cambio: { chip: 'Cambio', cls: 'cambio', icono: 'replace', cta: 'Reemplazar', href: vol(`../contratos/seriales.html?id=${encodeURIComponent(r.doc_id)}`) },
+      transicion: { chip: 'Transición', cls: 'transicion', icono: 'arrow-left-right', cta: 'Registrar', href: vol(`../contratos/transicion.html?id=${encodeURIComponent(r.doc_id)}`) },
     };
     const c = cfgs[r.tipo];
     let detalle = '';
@@ -218,8 +223,8 @@ window.AlmacenHoy = (() => {
         txt: `<b>${esc(eq.serial || eq.serial_norm)}</b> · ${esc(eq.modelo_label || 'sin modelo')}`
           + (eq.asignacion?.cliente_nombre ? ` — de ${esc(eq.asignacion.cliente_nombre)}` : ''),
         at: eq.updated_at?.toMillis?.() || null,
-        ctaHtml: cta(`${EQUIPOS}?serial=${encodeURIComponent(eq.serial || eq.serial_norm)}`, 'search-check', 'Revisar'),
-      }), `${EQUIPOS}?tab=devuelto_revision`, 'devueltos');
+        ctaHtml: cta(vol(`${EQUIPOS}?serial=${encodeURIComponent(eq.serial || eq.serial_norm)}`), 'search-check', 'Revisar'),
+      }), vol(`${EQUIPOS}?tab=devuelto_revision`), 'devueltos');
     }
 
     // Por clasificar NO se cuenta como trabajo del día: es deuda de migración
@@ -233,7 +238,7 @@ window.AlmacenHoy = (() => {
       const sinModelo = d.clasificar.filter(eq => !eq.modelo_label).length;
       notaClasificar = `<p class="hy-nota">${d.clasificar.length.toLocaleString()} unidades en
         "por clasificar" (deuda de migración — ubicación sin respaldo${sinModelo ? `, ${sinModelo.toLocaleString()} sin modelo` : ''})
-        — <a href="${EQUIPOS}?tab=por_clasificar">revisar por lotes →</a></p>`;
+        — <a href="${vol(`${EQUIPOS}?tab=por_clasificar`)}">revisar por lotes →</a></p>`;
     }
 
     if (d.conflictos === null) fallidas.push('conflictos');
@@ -242,8 +247,8 @@ window.AlmacenHoy = (() => {
       poolHtml += conMas(d.conflictos, (g) => fila({
         chip: 'Conflicto', chipCls: 'conflicto',
         txt: `<b>${esc(g.norm)}</b> — ${g.docs.length} fichas: ${esc(g.docs.map(x => x.modelo_label || '¿?').join(' ↔ '))}`,
-        ctaHtml: cta(`${EQUIPOS}?tab=conflictos`, 'git-merge', 'Resolver'),
-      }), `${EQUIPOS}?tab=conflictos`, 'conflictos');
+        ctaHtml: cta(vol(`${EQUIPOS}?tab=conflictos`), 'git-merge', 'Resolver'),
+      }), vol(`${EQUIPOS}?tab=conflictos`), 'conflictos');
     }
 
     total += poolN;
@@ -251,7 +256,7 @@ window.AlmacenHoy = (() => {
     if (d.sinVerificarN) {
       // Deuda de migración, no trabajo del día: se muestra pero NO suma al badge.
       notaVerificar = `<p class="hy-nota">${d.sinVerificarN.toLocaleString()} fichas de migración sin verificar
-        (deuda, no trabajo del día) — <a href="${EQUIPOS}?tab=todos&verificar=1">revisar por lotes →</a></p>`;
+        (deuda, no trabajo del día) — <a href="${vol(`${EQUIPOS}?tab=todos&verificar=1`)}">revisar por lotes →</a></p>`;
     }
     partes.push(grupo('Del pool', poolN, poolHtml, notaClasificar + notaVerificar));
 
@@ -272,15 +277,15 @@ window.AlmacenHoy = (() => {
     const notaConteosViejos = difsViejas > 0
       ? `<p class="hy-nota">${difsViejas} modelos más tienen diferencia contra conteos de hace
          más de ${UMBRAL_CONTEO_DIAS} días — se cuadran recontando, no son trabajo de hoy.
-         <a href="../inventario/index.html">Ver el tablero →</a></p>` : '';
+         <a href="${vol('../inventario/index.html')}">Ver el tablero →</a></p>` : '';
     total += difs.length;
     partes.push(grupo('De conteos', difs.length,
       conMas(difs, (f) => fila({
         chip: 'Diferencia', chipCls: 'diferencia',
         txt: `<b>${esc(f.modelo?.modelo || f.label)}</b> — pool ${f.seriales} vs conteo ${f.conteo} (${f.dif > 0 ? '+' : ''}${f.dif})`,
         at: f.data?.ultima_actualizacion?.toMillis?.() || null,
-        ctaHtml: cta(`${EQUIPOS}?tab=en_bodega${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`, 'diff', 'Revisar'),
-      }), '../inventario/index.html', 'el tablero'),
+        ctaHtml: cta(vol(`${EQUIPOS}?tab=en_bodega${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`), 'diff', 'Revisar'),
+      }), vol('../inventario/index.html'), 'el tablero'),
       notaConteosViejos,
     ));
 

@@ -34,6 +34,13 @@
   window.volverDeSeriales = () => { location.href = _destinoVolver; };
 
   function ajustarSalidas(rol) {
+    // Llegada desde la bandeja de Almacén (?volver=almacen): el regreso es al
+    // espacio, para cualquier rol. El topbar ya lo resuelve (layout.js); aquí
+    // se alinea el destino que usan los flujos post-guardar.
+    if (new URLSearchParams(location.search).get('volver') === 'almacen') {
+      _destinoVolver = '../almacen/index.html';
+      return;
+    }
     if (!SIN_CONTRATOS.includes(rol)) return;
     _destinoVolver = '../inventario/equipos.html';
     const bc = $('bc-modulo');

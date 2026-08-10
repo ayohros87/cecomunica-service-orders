@@ -27,18 +27,33 @@ const Layout = (() => {
   // SVG maestro: public/brand/cecomunica-monogram.svg.
   const BRAND_MARK = `<svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><defs><linearGradient id="ccPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4267"/><stop offset="0.5" stop-color="#0B2A47"/><stop offset="1" stop-color="#06203A"/></linearGradient><linearGradient id="ccSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient><linearGradient id="ccWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C4D2E0"/></linearGradient><linearGradient id="ccCyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD3EE"/><stop offset="1" stop-color="#0091B0"/></linearGradient><radialGradient id="ccGlow"><stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"/><stop offset="1" stop-color="#7FE3FF" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccPlate)"/><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccSheen)"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#ccWhite)" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#ccCyan)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="32" cy="32" r="6" fill="url(#ccGlow)"/><rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"/></svg>`;
 
+  /* Origen de navegación (?volver=): los espacios (Almacén/Finanzas) mandan
+     a las páginas con este parámetro para que el botón Volver regrese AL
+     ESPACIO y no al módulo histórico de la página — sin él, entrar a un ítem
+     de la bandeja era un viaje sin regreso. Whitelist a propósito: el
+     parámetro elige un destino conocido, nunca una URL cruda. */
+  const _VOLVER_DESTINOS = {
+    almacen:     { href: '/almacen/index.html',                 label: '<i data-lucide="arrow-left"></i> Almacén · Hoy' },
+    existencias: { href: '/almacen/index.html?tab=existencias', label: '<i data-lucide="arrow-left"></i> Existencias' },
+    finanzas:    { href: '/facturacion/activacion.html',        label: '<i data-lucide="arrow-left"></i> Finanzas' },
+  };
+
   function renderTopbar(opts = {}) {
     const {
       title      = '',
       leftSlot   = '',         // raw HTML rendered after title (e.g. inline search)
       actions    = [],
-      back       = null,
       showHome   = true,
       homeHref   = '../index.html',
       showLogout = true,
       menu       = [],
       menuId     = 'topbar-menu',  // override if multiple menus on a page
     } = opts;
+    let back = opts.back || null;
+    try {
+      const volver = new URLSearchParams(location.search).get('volver');
+      if (volver && _VOLVER_DESTINOS[volver]) back = _VOLVER_DESTINOS[volver];
+    } catch { /* sin URL rara no hay override */ }
 
     const btnHtml = (a) => {
       if (a.html) return a.html;  // raw HTML pass-through (e.g. view-toggle widget)

@@ -123,7 +123,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="../js/firebase-init.js"></script>
   <script src="../js/core/modulos.js"></script>
-  <script src="../js/core/layout.js?v=cc7"></script>
+  <script src="../js/core/layout.js?v=cc8"></script>
   <script src="../js/core/roles.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/domain/transicionPendiente.js"></script>
@@ -153,17 +153,17 @@
       title: '<i data-lucide="warehouse"></i> Almacén',
       actions: [
         { label: '<i data-lucide="plus"></i> Recibir equipos', cls: 'primary',
-          onclick: "window.location.href='../inventario/equipos.html?accion=recibir'" },
+          onclick: "window.location.href='../inventario/equipos.html?accion=recibir&volver=almacen'" },
         { label: '<i data-lucide="clipboard-list"></i> Conteo físico',
-          onclick: "window.location.href='../inventario/cargar-inventario.html'" },
+          onclick: "window.location.href='../inventario/cargar-inventario.html?volver=almacen'" },
         { label: '<i data-lucide="banknote"></i> Registrar venta',
-          onclick: "window.location.href='../inventario/equipos.html?accion=vender'" },
+          onclick: "window.location.href='../inventario/equipos.html?accion=vender&volver=almacen'" },
       ],
       menu: [
         { onclick: 'AlmacenPage.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
         { divider: true },
-        { href: '../inventario/index.html',   label: '<i data-lucide="package"></i> Inventario de Radios' },
-        { href: '../inventario/equipos.html', label: '<i data-lucide="scan-barcode"></i> Equipos por serial' },
+        { href: '../inventario/index.html?volver=almacen',   label: '<i data-lucide="package"></i> Inventario de Radios' },
+        { href: '../inventario/equipos.html?volver=almacen', label: '<i data-lucide="scan-barcode"></i> Equipos por serial' },
       ],
       showHome: true, homeHref: '../index.html', showLogout: true
     });

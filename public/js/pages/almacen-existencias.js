@@ -25,6 +25,10 @@ window.AlmacenExistencias = (() => {
   const EQUIPOS = '../inventario/equipos.html';
   const MAX_CHIPS = 40;   // seriales visibles por estado en la expansión
 
+  // Links que salen de Existencias: el topbar destino (layout.js) convierte
+  // ?volver=existencias en un "Volver" que regresa a esta pestaña.
+  const vol = (url) => url + (url.includes('?') ? '&' : '?') + 'volver=existencias';
+
   // Columnas de estado del grid (el resto cae en "Otros").
   const COLS = [
     { estado: 'en_bodega',         label: 'Bodega' },
@@ -241,13 +245,13 @@ window.AlmacenExistencias = (() => {
         </button>`).join('');
       const resto = docs.length - MAX_CHIPS;
       const mas = resto > 0
-        ? `<a class="ex-mas" href="${EQUIPOS}?tab=${encodeURIComponent(estado)}${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}">+${resto} más →</a>` : '';
+        ? `<a class="ex-mas" href="${vol(`${EQUIPOS}?tab=${encodeURIComponent(estado)}${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`)}">+${resto} más →</a>` : '';
       return `<div class="ex-bloque">
         <span class="ex-bloque-t">${esc(EquiposPoolService.ESTADO_LABELS[estado] || estado)} · ${docs.length}</span>
         ${chips}${mas}
       </div>`;
     }).join('');
-    const linkEquipos = `${EQUIPOS}?tab=todos${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`;
+    const linkEquipos = vol(`${EQUIPOS}?tab=todos${f.modelo_id ? `&modelo=${encodeURIComponent(f.modelo_id)}` : ''}`);
     return `
       <tr class="ex-expansion"><td colspan="9">
         ${bloques || '<span style="color:var(--fg-3); font-size:13px;">Sin unidades en el pool (solo conteo físico).</span>'}
