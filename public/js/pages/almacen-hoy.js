@@ -234,17 +234,34 @@ window.AlmacenHoy = (() => {
     let poolHtml = '';
     let poolN = 0;
 
+    // La inspección FORMAL de un devuelto es del TALLER, vía su orden de
+    // ENTRADA: al cerrarla, el trigger regresa la unidad a bodega verificada.
+    // A bodega solo le toca lo que quedó SIN tiquete de taller — la fuga
+    // (migración, o una ENTRADA que nunca se creó). Diagnóstico 2026-08-10:
+    // 63 de 66 en cuarentena tenían ENTRADA abierta — mostrarlos aquí era
+    // duplicarle al taller su propia cola.
+    let notaTaller = '';
     if (d.devueltos === null) fallidas.push('devueltos');
     else if (d.devueltos.length) {
-      poolN += d.devueltos.length;
-      const filas = [...d.devueltos].sort((a, b) => (a.updated_at?.toMillis?.() || 0) - (b.updated_at?.toMillis?.() || 0));
-      poolHtml += conMas(filas, (eq) => fila({
-        chip: 'Inspección', chipCls: 'inspeccion',
-        txt: `<b>${esc(eq.serial || eq.serial_norm)}</b> · ${esc(eq.modelo_label || 'sin modelo')}`
-          + (eq.asignacion?.cliente_nombre ? ` — de ${esc(eq.asignacion.cliente_nombre)}` : ''),
-        at: eq.updated_at?.toMillis?.() || null,
-        ctaHtml: cta(vol(`${EQUIPOS}?serial=${encodeURIComponent(eq.serial || eq.serial_norm)}`), 'search-check', 'Revisar'),
-      }), vol(`${EQUIPOS}?tab=devuelto_revision`), 'devueltos');
+      const sinTaller = d.devueltos.filter(eq => !eq.orden_actual_id);
+      const enTaller = d.devueltos.length - sinTaller.length;
+      if (sinTaller.length) {
+        poolN += sinTaller.length;
+        const filas = [...sinTaller].sort((a, b) => (a.updated_at?.toMillis?.() || 0) - (b.updated_at?.toMillis?.() || 0));
+        poolHtml += conMas(filas, (eq) => fila({
+          chip: 'Inspección', chipCls: 'inspeccion',
+          txt: `<b>${esc(eq.serial || eq.serial_norm)}</b> · ${esc(eq.modelo_label || 'sin modelo')}`
+            + (eq.asignacion?.cliente_nombre ? ` — de ${esc(eq.asignacion.cliente_nombre)}` : '')
+            + ' <span style="color:var(--fg-3);">(sin tiquete de taller)</span>',
+          at: eq.updated_at?.toMillis?.() || null,
+          ctaHtml: cta(vol(`${EQUIPOS}?serial=${encodeURIComponent(eq.serial || eq.serial_norm)}`), 'search-check', 'Revisar'),
+        }), vol(`${EQUIPOS}?tab=devuelto_revision`), 'devueltos');
+      }
+      if (enTaller) {
+        notaTaller = `<p class="hy-nota">${enTaller} devueltos están en inspección de TALLER
+          (orden de ENTRADA abierta) — regresan a bodega solos al cerrarse la ENTRADA;
+          no son trabajo de bodega.</p>`;
+      }
     }
 
     // Por clasificar NO se cuenta como trabajo del día: es deuda de migración
@@ -279,7 +296,7 @@ window.AlmacenHoy = (() => {
       notaVerificar = `<p class="hy-nota">${d.sinVerificarN.toLocaleString()} fichas de migración sin verificar
         (deuda, no trabajo del día) — <a href="${vol(`${EQUIPOS}?tab=todos&verificar=1`)}">revisar por lotes →</a></p>`;
     }
-    partes.push(grupo('Del pool', poolN, poolHtml, notaClasificar + notaVerificar));
+    partes.push(grupo('Del pool', poolN, poolHtml, notaTaller + notaClasificar + notaVerificar));
 
     // ── De conteos ──
     // Solo diferencias contra un conteo RECIENTE: la conciliación significa
