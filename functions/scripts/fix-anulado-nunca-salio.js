@@ -98,18 +98,35 @@ const EXECUTE = process.argv.includes("--execute");
       console.log(`     orden ${ordId}: ya tiene ${resueltos.length} check-in(s) — se deja como está`);
       continue;
     }
-    console.log(`     orden ${ordId}: sin check-in → se elimina (las unidades ya están en bodega)`);
+    console.log(`     orden ${ordId}: sin check-in → se CIERRA resuelta (las unidades ya están en bodega)`);
     ordenesCerradas++;
     if (!EXECUTE) continue;
-    await oSnap.ref.set({
-      eliminado: true,
-      fecha_eliminacion: admin.firestore.FieldValue.serverTimestamp(),
+
+    // Se CIERRA, no se elimina. La primera versión de este script la eliminaba,
+    // y el 2026-08-10 borró la orden 2026080605 mientras Brenda registraba sus
+    // seriales: le salió "No se encuentra la orden" y al refrescar la orden
+    // había desaparecido. Un tiquete que alguien puede tener abierto no se
+    // borra por debajo — se resuelve y se deja a la vista con su explicación.
+    //
+    // `update()` y NO `set(merge)`: solo update() interpreta "a.b" como ruta de
+    // campo; set(merge) crearía un campo literal llamado "devolucion.esperados".
+    const nota = "Resuelto automáticamente: el contrato se anuló sin entrega "
+      + "confirmada y el kardex prueba que las unidades nunca salieron de bodega.";
+    const esperados = (o.devolucion?.esperados || []).map(e => e.resolucion ? e : ({
+      ...e,
+      resolucion: "nunca_salio",
+      motivo_codigo: null, motivo_detalle: null,
+      resuelto_at: admin.firestore.Timestamp.now(),
+      resuelto_por: "system:fix-anulado-nunca-salio",
+    }));
+    await oSnap.ref.update({
+      estado_reparacion: "CERRADA (DEVOLUCION)",
+      "devolucion.esperados": esperados,
+      "devolucion.cierre_nota": nota,
       os_logs: admin.firestore.FieldValue.arrayUnion({
-        action: "ELIMINAR",
-        by: "system:fix-anulado-nunca-salio",
-        nota: "Las unidades nunca se entregaron: se liberaron a bodega sin confirmación",
+        action: "CERRAR", by: "system:fix-anulado-nunca-salio", nota,
       }),
-    }, { merge: true });
+    });
   }
 
   console.log(`\n${EXECUTE ? "Liberadas" : "Se liberarían"}: ${unidades} unidad(es) en ${contratos} contrato(s) · órdenes eliminadas: ${ordenesCerradas}`);
