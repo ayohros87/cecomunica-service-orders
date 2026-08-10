@@ -1,4 +1,6 @@
-// Bandeja "Pendientes de inventario" (public/inventario/pendientes.html).
+// Bandeja de trabajo de bodega — hoy vive en Almacén · Hoy
+// (public/almacen/index.html + js/pages/almacen-hoy.js; absorbe a la vieja
+// inventario/pendientes.html, propuesta Almacén/Finanzas 2026-08 E1).
 //
 // La bandeja existe para que el rol `inventario` vea el trabajo que nace
 // dentro de un contrato SIN darle el módulo Contratos. Ese contrato con la
@@ -8,7 +10,7 @@
 //   P1 — la proyección NO copia precios ni totales del contrato. Las líneas
 //        de `equipos[]` traen `precio` en el doc; a la fila solo pasan modelo
 //        y cantidad.
-//   P2 — `inventario` gana el módulo 'pendientes' pero NO 'contratos'
+//   P2 — `inventario` gana el módulo 'almacen' pero NO 'contratos'
 //        (js/core/modulos.js), y el rail tiene la entrada correspondiente.
 //   P3 — el predicado de transición vive en UN solo lugar
 //        (js/domain/transicionPendiente.js): la lista de contratos y la
@@ -208,24 +210,24 @@ test("el predicado de transición es el compartido de js/domain", () => {
 });
 
 // ── P2: visibilidad de módulos ─────────────────────────────────────────────
-test("inventario ve la bandeja pero no el módulo de contratos", () => {
+test("inventario ve el espacio Almacén pero no el módulo de contratos", () => {
   const ctx = { console, window: {} };
   vm.createContext(ctx);
   vm.runInContext(leer("public", "js", "core", "modulos.js"), ctx);
   const M = ctx.window.MODULOS;
 
-  assert.ok(M.puedeVer("inventario", "pendientes"), "inventario perdió la bandeja");
+  assert.ok(M.puedeVer("inventario", "almacen"), "inventario perdió el espacio Almacén");
   assert.ok(!M.puedeVer("inventario", "contratos"),
     "inventario ganó el módulo Contratos — la bandeja existe justo para evitarlo");
-  assert.ok(M.puedeVer("administrador", "pendientes"));
+  assert.ok(M.puedeVer("administrador", "almacen"));
   // Roles comerciales: la bandeja es de bodega, no de ventas.
-  assert.ok(!M.puedeVer("vendedor", "pendientes"));
-  assert.ok(!M.puedeVer("contabilidad", "pendientes"));
+  assert.ok(!M.puedeVer("vendedor", "almacen"));
+  assert.ok(!M.puedeVer("contabilidad", "almacen"));
 
   // El rail necesita la entrada o el módulo visible no lleva a ningún lado.
   const layout = leer("public", "js", "core", "layout.js");
-  assert.ok(layout.includes("id: 'pendientes'"), "el rail no tiene la entrada Pendientes");
-  assert.ok(layout.includes("/inventario/pendientes.html"), "la entrada del rail no apunta a la página");
+  assert.ok(layout.includes("id: 'almacen'"), "el rail no tiene la entrada Almacén");
+  assert.ok(layout.includes("/almacen/index.html"), "la entrada del rail no apunta al espacio");
 });
 
 test("la señal del home y la tarjeta apuntan al mismo módulo que existe", () => {
@@ -235,38 +237,43 @@ test("la señal del home y la tarjeta apuntan al mismo módulo que existe", () =
   const M = ctx.window.MODULOS;
 
   const senales = leer("public", "js", "pages", "home-signals.js");
-  // S15 se muestra solo si MODULOS.puedeVer(rol, sig.modulo): un módulo que
-  // nadie tiene la deja invisible en silencio.
+  // S15 se muestra solo si algún módulo de sig.modulo (string o lista — está
+  // migrando de 'pendientes' a 'almacen') es visible para el rol.
   const s15 = senales.split("S15:")[1].split("},")[0];
-  const modulo = s15.match(/modulo:\s*'([^']+)'/)[1];
-  assert.ok(M.puedeVer("inventario", modulo),
-    `S15 se gatea por el módulo '${modulo}', que inventario no tiene`);
+  const modulos = [...s15.matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+    .filter((m) => ["almacen", "pendientes"].includes(m));
+  assert.ok(modulos.length > 0, "S15 no declara módulo de gate");
+  assert.ok(modulos.some((m) => M.puedeVer("inventario", m)),
+    `S15 se gatea por '${modulos}', que inventario no tiene`);
+  assert.ok(s15.includes("almacen/index.html"), "S15 no aterriza en el espacio Almacén");
   assert.match(senales, /inventario:\s*\['S15'/,
     "S15 salió de la fila de señales de inventario");
   assert.ok(senales.includes("countSerialesPorAsignar"), "S15 sin su conteo");
   assert.ok(leer("public", "js", "services", "senalesService.js").includes("countSerialesPorAsignar()"),
     "senalesService no expone el conteo que usa S15");
 
-  // La tarjeta del home usa el mismo id de módulo para su visibilidad.
-  assert.ok(leer("public", "index.html").includes(`data-mod="${modulo}"`),
-    "el home no tiene tarjeta para la bandeja");
+  // La tarjeta del home usa un módulo visible para inventario.
+  assert.ok(leer("public", "index.html").includes('data-mod="almacen"'),
+    "el home no tiene la tarjeta del espacio Almacén");
 });
 
-// ── Render de la tabla ─────────────────────────────────────────────────────
+// ── Render de la bandeja (Almacén · Hoy) ───────────────────────────────────
 function cargarPagina(datos, transicionesActivas = true) {
   const nodos = {};
   const nodo = (id) => (nodos[id] = nodos[id] || { innerHTML: "", textContent: "", style: {} });
-  ["tablaPendientes", "estadoVacio", "wrapTabla", "resumenPendientes", "loader",
-    "avisoFallidas", "bodyPendientes", "cola-todas", "cola-seriales", "cola-cambio",
-    "cola-transicion"].forEach(nodo);
+  ["hoyGrupos", "hoyVacio", "avisoFallidas", "bodyAlmacen", "loader",
+    "tab-hoy", "tab-existencias", "wsTabs-mount"].forEach(nodo);
 
-  let onReady = null;
   const ctx = {
     console,
     window: {},
     Date,
+    URLSearchParams,
+    location: { search: "", href: "https://app.local/almacen/index.html" },
+    history: { replaceState: noop },
+    URL,
     document: {
-      addEventListener: (ev, cb) => { if (ev === "DOMContentLoaded") onReady = cb; },
+      addEventListener: (ev, cb) => { if (ev === "DOMContentLoaded") ctx._onReady = cb; },
       getElementById: (id) => nodos[id] || null,
       querySelector: () => ({ classList: { toggle: noop }, style: {} }),
       querySelectorAll: () => [],
@@ -276,64 +283,58 @@ function cargarPagina(datos, transicionesActivas = true) {
       refrescarBadge: noop,
       COLA_TRANSICIONES_ACTIVA: transicionesActivas,
     },
+    // Cargas del pool/conteos de la bandeja: vacías (los invariantes de esas
+    // colas se prueban en sus propios suites del pool).
+    EquiposPoolService: {
+      listar: async () => [],
+      contarBodegaPorModelo: async () => new Map(),
+    },
+    ModelosService: { getModelos: async () => [] },
+    InventarioService: { getInventarioActual: async () => [] },
+    StockAgg: { build: () => [], diferencias: () => [] },
+    WorkspaceTabs: { render: noop, setActive: noop, setBadge: noop },
+    firebase: {
+      firestore: () => ({
+        collection: () => ({
+          limit: () => ({}),   // sin .count → contarSinVerificar devuelve null
+          where: () => ({ limit: () => ({ get: async () => ({ docs: [] }) }) }),
+        }),
+      }),
+      auth: () => ({ currentUser: { uid: "u1" } }),
+    },
+    ROLES: { ADMIN: "administrador", INVENTARIO: "inventario", GERENTE: "gerente" },
     Toast: { show: noop },
     canRole: (rol) => ["administrador", "inventario", "recepcion", "vendedor", "gerente"].includes(rol),
     verificarAccesoYAplicarVisibilidad: (cb) => { ctx._init = cb; },
   };
   vm.createContext(ctx);
-  vm.runInContext(leer("public", "js", "pages", "inventario-pendientes.js"), ctx);
-  if (onReady) onReady();
-  return { api: ctx.window.ColaInventario, nodos, init: ctx._init };
+  vm.runInContext(leer("public", "js", "pages", "almacen-hoy.js"), ctx);
+  // DOMContentLoaded → verificarAccesoYAplicarVisibilidad(init) → ctx._init.
+  if (ctx._onReady) ctx._onReady();
+  return { api: ctx.window.AlmacenHoy, nodos, init: ctx._init, ctx };
 }
 
-test("la tabla muestra modelo y cantidad, nunca el precio", async () => {
+test("la bandeja muestra contrato y progreso, nunca el precio", async () => {
   const svc = cargarServicio({ seriales_estado: [{ id: "c1", data: CONTRATO_SERIALES }] });
   const filas = await svc.serialesPorAsignar();
-  const { api, nodos } = cargarPagina({ seriales: filas, cambios: [], transiciones: [], fallidas: [] });
+  const { api, nodos } = cargarPagina({ seriales: filas.map(plano), cambios: [], transiciones: [], fallidas: [] });
 
   await api.recargar();
-  const html = nodos.tablaPendientes.innerHTML;
+  const html = nodos.hoyGrupos.innerHTML;
   assert.match(html, /ALQ20260805-01/);
-  assert.match(html, /TC-508U/);
-  assert.match(html, /×6/);
+  assert.match(html, /CLIENTE DEMO/);
   assert.match(html, /3\/8/);              // progreso de seriales
   assert.match(html, /4 días/);            // antigüedad de la cola
   assert.match(html, /contratos\/seriales\.html\?id=c1/);
-  assert.ok(!html.includes("1250"), "la tabla pintó el precio unitario");
-  assert.ok(!html.includes("8490"), "la tabla pintó el total del contrato");
-  assert.equal(nodos.resumenPendientes.textContent, "1 pendiente");
+  assert.ok(!html.includes("1250"), "la bandeja pintó el precio unitario");
+  assert.ok(!html.includes("8490"), "la bandeja pintó el total del contrato");
 });
 
-test("cada tarjeta de cola filtra la tabla y se puede soltar", async () => {
-  const datos = {
-    seriales: [{ tipo: "seriales", doc_id: "s1", contrato_id: "ALQ-SER", cliente_nombre: "A",
-      accion: "Nuevo", equipos: [{ modelo: "TC-508U", cantidad: 1 }], unidades: 1, resueltos: 0, at: Date.now() }],
-    cambios: [{ tipo: "cambio", doc_id: "k1", contrato_id: "ALQ-CAM", cliente_nombre: "B",
-      accion: "Nuevo", equipos: [], unidades: 1, resueltos: 1, at: Date.now(),
-      cambio: { items: [{ serial: "ABC123", modelo: "TC-508U" }], motivo_tipo: "defectuoso", motivo: "" } }],
-    transiciones: [{ tipo: "transicion", doc_id: "t1", contrato_id: "ALQ-TRA", cliente_nombre: "C",
-      accion: "Renovación", equipos: [{ modelo: "TK-3000", cantidad: 2 }], unidades: 2, resueltos: 2, at: Date.now() }],
-    fallidas: [],
-  };
-  const { api, nodos } = cargarPagina(datos);
-  await api.recargar();
-  assert.equal(nodos.resumenPendientes.textContent, "3 pendientes");
-  assert.equal(nodos["cola-todas"].textContent, "3");
-
-  api.setCola("cambio");
-  assert.match(nodos.tablaPendientes.innerHTML, /ALQ-CAM/);
-  assert.ok(!nodos.tablaPendientes.innerHTML.includes("ALQ-SER"));
-  assert.equal(nodos.resumenPendientes.textContent, "1 pendiente");
-
-  api.setCola("cambio"); // segundo clic = soltar el filtro
-  assert.equal(nodos.resumenPendientes.textContent, "3 pendientes");
-});
-
-test("sin trabajo pendiente la bandeja lo dice en vez de mostrar una tabla vacía", async () => {
+test("sin trabajo pendiente la bandeja lo dice en vez de mostrar grupos vacíos", async () => {
   const { api, nodos } = cargarPagina({ seriales: [], cambios: [], transiciones: [], fallidas: [] });
   await api.recargar();
-  assert.equal(nodos.wrapTabla.style.display, "none");
-  assert.match(nodos.estadoVacio.innerHTML, /Bodega al día/);
+  assert.equal(nodos.hoyVacio.style.display, "");
+  assert.equal(nodos.hoyGrupos.innerHTML, "");
 });
 
 test("una cola que falló se avisa en vez de contarse como cero", async () => {
@@ -368,17 +369,9 @@ test("con la cola de transiciones apagada no se consulta ni se cuenta", async ()
   assert.equal(conCola.transiciones.length, 1);
 });
 
-test("la tarjeta de transiciones se oculta cuando la cola está apagada", async () => {
-  const { api } = cargarPagina(
-    { seriales: [], cambios: [], transiciones: [], fallidas: [] }, false);
-  // No revienta y no deja el filtro colgado en una cola invisible.
-  await api.recargar();
-  api.setCola("transicion");
-  await api.recargar();
-});
-
-test("sin permiso de gestionar seriales la bandeja no se carga", () => {
-  const { nodos, init } = cargarPagina({ seriales: [], cambios: [], transiciones: [], fallidas: [] });
+test("sin permiso de bodega la bandeja no se carga", () => {
+  const { nodos, init, ctx } = cargarPagina({ seriales: [], cambios: [], transiciones: [], fallidas: [] });
+  ctx.canRole = () => false;   // tecnico tampoco gestiona seriales
   init("tecnico");
-  assert.match(nodos.bodyPendientes.innerHTML, /Acceso restringido/);
+  assert.match(nodos.bodyAlmacen.innerHTML, /administración e inventario/);
 });

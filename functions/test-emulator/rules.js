@@ -362,6 +362,51 @@ async function main() {
   await assertSucceeds(as("vendedor").doc("clientes/cli1").set({ nombre: "X" }));
   ok("REGRESIÓN: inventario_piezas/analytics/poc_devices/clientes siguen abiertos");
 
+  // ── H8 (propuesta Almacén/Finanzas 2026-08): candados de facturación ──────
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("contratos/cFact").set({ estado: "activo", facturacion_estado: "pendiente", notas: "" });
+    await db.doc("empresa/facturacion_config").set({ auto_activar: false });
+    await db.doc("empresa/estado_de_reparacion").set({ x: 1 });
+    await db.doc("clientes/cliQbo").set({ nombre: "Y" });
+    await db.doc("inventario_piezas/pPrecio").set({ cantidad: 1, precio_venta: 10 });
+    await db.doc("inventario_piezas/pDel").set({ cantidad: 0 });
+  });
+
+  // contratos: los campos de facturación son del callable/las CF, no del cliente.
+  for (const r of ["vendedor", "recepcion", "administrador"]) {
+    await assertFails(as(r).doc("contratos/cFact").set({ facturacion_estado: "activa" }, { merge: true }));
+    await assertFails(as(r).doc("contratos/cFact").set({ entrega_confirmada: true }, { merge: true }));
+    await assertFails(as(r).doc("contratos/cFact").set({ facturable: false }, { merge: true }));
+  }
+  ok("contratos: facturacion_estado/entrega_confirmada/facturable bloqueados al cliente");
+  await assertSucceeds(as("vendedor").doc("contratos/cFact").set({ notas: "edición normal" }, { merge: true }));
+  ok("contratos: la edición normal (sin campos CF) sigue pasando");
+
+  // empresa/facturacion_config: toggles de auto-activación/alertas por rol.
+  await assertFails(as("tecnico").doc("empresa/facturacion_config").set({ auto_activar: true }, { merge: true }));
+  await assertFails(as("vendedor").doc("empresa/facturacion_config").set({ alertas_off: true }, { merge: true }));
+  await assertSucceeds(as("contabilidad").doc("empresa/facturacion_config").set({ auto_activar: true }, { merge: true }));
+  await assertSucceeds(as("administrador").doc("empresa/facturacion_config").set({ alertas_off: true }, { merge: true }));
+  ok("empresa: facturacion_config solo admin/contabilidad");
+  await assertSucceeds(as("recepcion").doc("empresa/estado_de_reparacion").set({ x: 2 }, { merge: true }));
+  ok("empresa: el resto de docs de config operativa sigue abierto al staff");
+
+  // clientes: el vínculo QBO decide a quién se factura.
+  await assertFails(as("vendedor").doc("clientes/cliQbo").set({ qbo_customer_id: "99" }, { merge: true }));
+  await assertSucceeds(as("contabilidad").doc("clientes/cliQbo").set({ qbo_customer_id: "99", qbo_customer_name: "Q" }, { merge: true }));
+  await assertSucceeds(as("vendedor").doc("clientes/cliQbo").set({ nombre: "Z" }, { merge: true }));
+  ok("clientes: qbo_customer_* solo admin/contabilidad; edición normal abierta");
+
+  // inventario_piezas: stock abierto (flujo de órdenes), precio/QBO por rol.
+  await assertFails(as("tecnico").doc("inventario_piezas/pPrecio").set({ precio_venta: 99 }, { merge: true }));
+  await assertSucceeds(as("tecnico").doc("inventario_piezas/pPrecio").set({ cantidad: 2 }, { merge: true }));
+  await assertSucceeds(as("contabilidad").doc("inventario_piezas/pPrecio").set({ precio_venta: 99 }, { merge: true }));
+  await assertSucceeds(as("inventario").doc("inventario_piezas/pPrecio").set({ costo_unitario: 5 }, { merge: true }));
+  await assertFails(as("tecnico").doc("inventario_piezas/pDel").delete());
+  await assertSucceeds(as("administrador").doc("inventario_piezas/pDel").delete());
+  ok("inventario_piezas: precio/costo/QBO gated; stock sigue abierto; delete solo admin");
+
   await testEnv.cleanup();
   console.log(`\nTODOS LOS TESTS DE REGLAS PASARON (${n} grupos)`);
 }

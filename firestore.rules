@@ -88,7 +88,19 @@ service cloud.firestore {
         // back-pointer de linaje (onLinajeWrite): la lista de contratos los
         // lee para el chip, así que nadie debe poder falsear "ya devolvió".
         "devolucion_tiquetes", "devolucion_pendientes", "devolucion_esperado",
-        "devolucion_estado", "devolucion_actualizado_at", "renovado_por_ids"
+        "devolucion_estado", "devolucion_actualizado_at", "renovado_por_ids",
+        // Facturación (H8, propuesta Almacén/Finanzas 2026-08): estos campos
+        // los escribe SOLO el callable gestionarFacturacion (rol-gated) y los
+        // triggers (onOrdenEntregada, facturacionDiaria, onAnnulment). El
+        // frontend únicamente los LEE (verificado 2026-08-10) — sin este
+        // candado cualquier autenticado podía marcar un contrato como
+        // facturando/no facturable esquivando el callable.
+        "facturacion_estado", "facturacion_fecha_inicio", "facturable",
+        "facturacion_no_aplica_motivo", "facturacion_activada_por",
+        "facturacion_activada_at", "facturacion_gestionado_por",
+        "facturacion_gestionado_at", "entrega_confirmada",
+        "entrega_confirmada_manual", "fecha_entrega_ultima",
+        "facturacion_entrega_at"
       ]);
     }
 
@@ -315,8 +327,17 @@ service cloud.firestore {
     // ordenes_de_servicio/consumos, ordenes_de_servicio/equipos_meta, etc.).
 
     match /clientes/{docId} {
-      allow read, write: if isSignedIn();
-      match /{sub=**} { allow read, write: if isSignedIn(); }   // documentos
+      allow read, create, delete: if isSignedIn();
+      // El vínculo con QuickBooks decide a QUIÉN se le facturará: solo lo
+      // cambian admin/contabilidad (la página de match ya gateaba en UI; H8).
+      allow update: if isSignedIn()
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(["qbo_customer_id", "qbo_customer_name"])
+            || userRole() in ["administrador", "contabilidad"]);
+      // OJO (rules v2): `/{sub=**}` a secas matchea CERO segmentos y alcanza el
+      // doc padre, anulando el candado de update de arriba (verificado en el
+      // harness). El segmento nombrado obliga a que sea una subcolección real.
+      match /{subcol}/{sub=**} { allow read, write: if isSignedIn(); }   // documentos
     }
 
     match /ordenes_de_servicio/{docId} {
@@ -556,7 +577,14 @@ service cloud.firestore {
     // desde las páginas de configuración, así que conserva write autenticado.
     match /empresa/{docId} {
       allow read:  if isSignedIn();
-      allow write: if isSignedIn() && (docId != "config" || isAdmin());
+      // facturacion_config (auto-activación, alertas, ítems QBO globales) era
+      // escribible por cualquier autenticado y sus toggles solo se gateaban en
+      // UI (H8) — ahora admin/contabilidad, igual que las páginas que lo editan.
+      allow write: if isSignedIn()
+        && (docId == "config" ? isAdmin()
+            : (docId == "facturacion_config"
+                ? userRole() in ["administrador", "contabilidad"]
+                : true));
     }
     // Conteo de inventario: lo escriben SOLO las páginas de inventario
     // (cargar-inventario/inventario-index), gated a admin/inventario. Restringir
@@ -569,10 +597,20 @@ service cloud.firestore {
       allow read:  if isSignedIn();
       allow write: if isSignedIn() && userRole() in ["administrador","inventario"];
     }
-    // inventario_piezas queda ABIERTA a propósito: además del catálogo
-    // (admin/contabilidad) la escribe el flujo de órdenes al consumir piezas
-    // (PiezasService.ajustarDelta) — restringirla rompería el ajuste de stock.
-    match /inventario_piezas/{docId}  { allow read, write: if isSignedIn(); }
+    // inventario_piezas: el stock lo ajusta el flujo de órdenes (ajustarDelta),
+    // así que create/stock quedan abiertos al staff. Lo que SÍ se cierra (H8)
+    // son los campos de precio y mapeo QBO — los editan solo los catálogos
+    // (piezas.html: admin/inventario; piezas-tarifas: admin/contabilidad).
+    match /inventario_piezas/{docId} {
+      allow read, create: if isSignedIn();
+      allow update: if isSignedIn()
+        && (!request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(["precio_venta", "costo_unitario", "qbo_item_id",
+                       "qbo_item_name", "precio_historial"])
+            || userRole() in ["administrador", "inventario", "contabilidad"]);
+      // Eliminar ya era solo-admin en la UI (piezas.js); ahora también aquí.
+      allow delete: if isAdmin();
+    }
     match /poc_logs/{docId}           { allow read, write: if isSignedIn(); }
     match /analytics_piezas_modelo/{docId} { allow read, write: if isSignedIn(); }
     // La cola de correo contiene PII (destinatarios, cuerpos con datos de
