@@ -1,5 +1,59 @@
 # Changelog
 
+## [138 programaciones cerradas y el censo de contratos sin origen] — 2026-08-11
+
+> Continuación del cambio de abajo. Dos preguntas del equipo: ¿las 173
+> PROGRAMACIÓN paradas en "COMPLETADO (EN OFICINA)" son viejas de cuando no
+> existía el paso de entrega? ¿y qué se hace con los 67 contratos sin origen?
+>
+> **Las 173: la hipótesis no se sostiene, pero cerrarlas sí.** El terminal
+> "ENTREGADO AL CLIENTE" existe desde el primer día y 572 órdenes lo alcanzaron.
+> El atasco parecía empezar en 2025-09 —0% antes, 19-79% después— pero eso es un
+> espejismo de migración: **el 100% de las órdenes anteriores a 2025-09 vienen
+> importadas** (`estado_migrado_de`) y entraron ya terminales. O sea que el
+> atasco no es histórico: es la conducta nativa del sistema y sigue viva hoy
+> (46% en agosto). Es proceso, no código.
+>
+> Lo que sí justifica cerrarlas es otra evidencia, más fuerte: **713 de los 950
+> radios de esas órdenes ya figuran `en_cliente`**. El equipo salió hace rato;
+> lo único que quedó atrás es el estado de la orden.
+>
+> Segmentadas por lo que cerrarlas MOVERÍA (leyendo el serial igual que
+> `onOrdenWritePool.equiposDe`, que cae a `numero_de_serie` — las órdenes viejas
+> no tienen el campo `serial`):
+>
+> | | órdenes | qué pasa al cerrar |
+> |---|---|---|
+> | **A** · nada en taller + evidencia de que salió | **138** | cero movimiento de inventario |
+> | **B** · nada en taller, sin evidencia | 8 | cero movimiento, pero sin prueba |
+> | **C** · con unidades en taller | 27 | moverían 111 radios a `en_cliente` |
+>
+> **Se cerró A** con `cierra-programaciones-historicas.js`. Pre-vuelo verificado
+> contra los cuatro triggers que reaccionan, y todas las predicciones se
+> cumplieron: `en_taller` intacto en 381, 0 órdenes de DEVOLUCIÓN nuevas,
+> `entrega_confirmada` 52 → 95 (los 43 contratos previstos), 8 unidades
+> `asignado_contrato` → `en_cliente` de dos contratos cuyo equipo ya había
+> salido. Facturación no se toca: `onOrdenEntregada` solo deja la señal de
+> readiness; activar es el callable aparte. **PROGRAMACIÓN parada: 173 → 35.**
+>
+> B y C quedan: B no tiene prueba de entrega y una (DECAMERON 2026062301) dice
+> explícitamente que los radios se programaron "en caso de que se necesite
+> reemplazo" — puede que nunca salieran. C incluye trabajo de esta semana.
+> Cerrarlas sería afirmar entregas que quizá no ocurrieron.
+>
+> **Los 67 sin origen se reducen a 16.** 33 son Adiciones (la regla no se las
+> exige: no generan devolución), 36 están anulados (los resuelve `onAnnulment`)
+> y 2 ya tienen su transición a mano. Quedan **16 accionables**, y de esos solo
+> **3** tienen un origen deducible sin ambigüedad; 8 tienen varios candidatos
+> (COMPAÑÍA GOLY tiene tres renovaciones peleándose el mismo pool) y 5 no tienen
+> ninguno — su original es de papel.
+>
+> Por eso **no hay backfill**: adivinar mal no deja un hueco, crea una orden
+> pidiéndole al cliente radios que no debe. Lo que faltaba era saber cuáles son,
+> y eso lo da `scripts/analiza-origen-faltante.js` (solo lectura): lista los
+> accionables, propone candidatos marcando con ◆ los que tienen equipo colgando,
+> y da el deep-link a la pantalla donde se vincula.
+
 ## [El vínculo al contrato original deja de ser opcional] — 2026-08-11
 
 > Reporte: "los contratos de reemplazo y renovación no están asociando los
