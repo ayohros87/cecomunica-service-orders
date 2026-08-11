@@ -1521,7 +1521,7 @@ window.EquiposPool = {
         grupos.set(key, g);
       }
       const user = firebase.auth().currentUser;
-      const res = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0 };
+      const res = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, modelo_completado: 0 };
       // Las colisiones de modelo no se crean solas: se juntan las de todos los
       // grupos y se preguntan una vez, como en la recepción manual.
       const porGrupo = [];
@@ -1553,6 +1553,7 @@ window.EquiposPool = {
         }
       }
       Toast.show(`Import completado: ${res.nuevos} nuevos, ${res.existentes} ya existían, ${res.colisiones} colisiones de serial, ${res.invalidos} inválidos.`
+        + (res.modelo_completado ? ` ${res.modelo_completado} tenían la ficha sin modelo y se completó.` : '')
         + (sinImportar ? ` ${sinImportar} sin importar por modelo distinto — corrige el archivo.` : ''),
         (res.colisiones || sinImportar) ? 'warn' : 'ok');
       this.cerrarImport();

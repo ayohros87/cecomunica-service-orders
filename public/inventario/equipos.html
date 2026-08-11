@@ -151,7 +151,7 @@
   <!-- ?v= aquí (y no en las otras páginas) porque el flujo de recepción de
        esta página y el servicio cambian juntos: la confirmación de colisión de
        modelo necesita las dos mitades de la misma versión. -->
-  <script defer src="../js/services/equiposPoolService.js?v=cc24"></script>
+  <script defer src="../js/services/equiposPoolService.js?v=cc26"></script>
   <!-- Join único conteo↔pool — lo usa el modal de conciliación. -->
   <script defer src="../js/domain/stockAgg.js"></script>
   <!-- Solo para el badge "Pendientes" del rail (conteo por agregados). -->
@@ -160,14 +160,14 @@
   <!-- Asistentes extraídos de esta página (2026-08-10): componentes con
        overlay propio, compartidos con el espacio Almacén. La página delega
        en ellos (EquiposPool.abrirRecibir / abrirVenta). -->
-  <script defer src="../js/ui/asistente-recibir.js"></script>
+  <script defer src="../js/ui/asistente-recibir.js?v=cc26"></script>
   <script defer src="../js/ui/asistente-venta.js"></script>
   <script defer src="../js/services/pocService.js?v=cc12"></script> <!-- soft-delete del device en "Corregir estado" -->
 
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/inventario-equipos.js?v=cc25" defer></script>
+  <script src="../js/pages/inventario-equipos.js?v=cc26" defer></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
 <body>

@@ -173,6 +173,7 @@ window.AsistenteRecibir = {
             { ...opciones, confirmarReubicacion: true,
               motivo: `Toma física de bodega${opciones.notas ? ` — ${opciones.notas}` : ''}` }, user);
           res.reubicados += res3.reubicados;
+          res.modelo_completado += res3.modelo_completado || 0;
           res.bloqueados = (res.bloqueados || []).concat(res3.bloqueados || []);
         } else {
           noMovidos = reubicables.length;
@@ -183,6 +184,13 @@ window.AsistenteRecibir = {
       let msg = `${res.nuevos} equipos recibidos en bodega.`;
       if (res.reubicados) msg += ` ${res.reubicados} traídos de vuelta a bodega.`;
       if (res.existentes) msg += ` ${res.existentes} ya estaban.`;
+      // Se nombra aparte porque es lo que hace que aparezcan en el inventario:
+      // sin modelo la ficha no suma bajo ninguno, y "ya estaban" a secas era
+      // justo el mensaje que dejaba a bodega sin saber por qué no cuadraba.
+      if (res.modelo_completado) {
+        msg += ` ${res.modelo_completado} tenían la ficha sin modelo y se completó`
+          + ` con ${opciones.modelo_label || 'el modelo del conteo'}.`;
+      }
       // Decir "ya existían" de algo que sigue figurando con un cliente sería la
       // misma mentira que este cambio vino a quitar.
       if (noMovidos) msg += ` ${noMovidos} se dejaron donde estaban.`;

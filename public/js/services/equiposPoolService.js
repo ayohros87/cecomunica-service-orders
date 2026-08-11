@@ -403,6 +403,29 @@ const EquiposPoolService = {
     return { enBodega, reubicables, bloqueados };
   },
 
+  // De lo que YA está en bodega, cuáles tienen la ficha sin modelo. Pura, igual
+  // que sus dos hermanas.
+  //
+  // Una ficha sin modelo es invisible para el inventario: todas las vistas
+  // agrupan por `modeloKey`, así que cae en un cubo "(sin modelo)" y no suma
+  // bajo ninguno. Contarla tampoco lo arreglaba — `clasificarReubicacion` la
+  // manda a `enBodega`, que no escribe nada, y el conteo respondía "ya estaba"
+  // dejando el hueco igual. Bodega lo reportó al revés: "está en bodega y en
+  // sistema, pero no me deja verificar y no suma en el total".
+  //
+  // Nacen así las fichas de `migracion_poc` (el device de la plataforma POC no
+  // trae modelo): 2,399 en total, 54 de ellas en bodega — corregidas por script
+  // el 2026-08-11 cruzándolas contra órdenes y contratos.
+  //
+  // Completar el modelo es ADOPTAR, no reclasificar: `clasificarColisiones` ya
+  // apartó todo lo que tiene OTRO modelo, así que aquí nunca se pisa un dato.
+  clasificarSinModelo(items, existentesData) {
+    return (items || []).filter(v => {
+      const d = existentesData.get(v.norm);
+      return !!d && !d.modelo_id && !(d.modelo_label || '').toString().trim();
+    });
+  },
+
   // Recepción masiva de un modelo (pegado multilínea / lector de código de
   // barras / import Excel / toma física). Dedup contra la colección con
   // documentId() in (patrón sim_cards); los seriales que ya existen se
@@ -417,14 +440,19 @@ const EquiposPoolService = {
   // está, así que la UI lo pregunta y con `confirmarReubicacion: true` se los
   // trae a bodega por `corregirABodega` (la misma función que usa la acción en
   // lote de la página — nunca una segunda ruta de escritura).
+  // Los que ya están en bodega con la ficha SIN modelo se completan sin
+  // preguntar (`clasificarSinModelo`): no hay dato que pisar y era el único
+  // caso en que contar una unidad no cambiaba nada.
   // Retorna { nuevos, existentes, colisiones, invalidos, reubicados,
-  //           colisiones_pendientes, reubicables_pendientes, bloqueados }.
+  //           modelo_completado, colisiones_pendientes, reubicables_pendientes,
+  //           bloqueados }.
   async recibir(seriales, { modelo_id = null, modelo_label = '', condicion = 'nuevo',
                             proveedor = '', notas = '', origen = 'bodega',
                             confirmarColisiones = false, confirmarReubicacion = false,
                             motivo = '' }, user, onProgress = null) {
     const db = firebase.firestore();
     const resultado = { nuevos: 0, existentes: 0, colisiones: 0, invalidos: 0, reubicados: 0,
+      modelo_completado: 0,
       colisiones_pendientes: [], reubicables_pendientes: [], bloqueados: [] };
 
     const vistos = new Set();
@@ -485,12 +513,19 @@ const EquiposPoolService = {
     resultado.existentes += enBodega.length;
     resultado.bloqueados = bloqueados;
 
+    // Fichas sin modelo que el conteo puede completar. Se juntan las dos vías:
+    // lo que ya estaba en bodega, y lo que la reubicación acaba de traer
+    // (`corregirABodega` mueve la unidad pero no le pone modelo).
+    const completar = (modelo_id || modelo_label)
+      ? this.clasificarSinModelo(enBodega, existentes) : [];
+
     if (confirmarReubicacion) {
       const nota = motivo || 'Toma física de bodega: la unidad está en el estante';
       for (const v of reubicables) {
         try {
           await this.corregirABodega(v.norm, nota, user);
           resultado.reubicados++;
+          if (modelo_id || modelo_label) completar.push(...this.clasificarSinModelo([v], existentes));
         } catch (e) {
           // Otra sesión pudo moverla entre el conteo y la confirmación: se
           // reporta como bloqueada en vez de tumbar la tanda entera.
@@ -500,6 +535,25 @@ const EquiposPoolService = {
       }
     } else {
       resultado.reubicables_pendientes = reubicables;
+    }
+
+    // Completar el modelo no se pregunta: no se pisa ningún dato (las fichas
+    // con OTRO modelo ya salieron por `clasificarColisiones`) y sin esto contar
+    // la unidad no cambiaba nada. Queda en el kardex como cualquier corrección.
+    for (let i = 0; i < completar.length; i += 200) {
+      const batch = db.batch();
+      for (const v of completar.slice(i, i + 200)) {
+        const ref = db.collection('equipos_pool').doc(v.norm);
+        batch.update(ref, { modelo_id, modelo_label, condicion, ...this._autoria(user) });
+        batch.set(ref.collection('movimientos').doc(), this._movimiento({
+          tipo: 'correccion_modelo',
+          de_estado: this.ESTADOS.EN_BODEGA, a_estado: this.ESTADOS.EN_BODEGA,
+          notas: `Modelo completado por el conteo: ${modelo_label || modelo_id} (${condicion}).`
+            + ' La ficha no tenía modelo.',
+        }, user));
+      }
+      await batch.commit();
+      resultado.modelo_completado += Math.min(200, completar.length - i);
     }
 
     if (!confirmarColisiones) {

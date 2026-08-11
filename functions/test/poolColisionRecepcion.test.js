@@ -263,6 +263,54 @@ test("con muchas reubicaciones el diálogo corta la lista", () => {
   assert.ok(!msg.includes("S19"), "solo se listan los primeros 12");
 });
 
+// ── Fichas sin modelo: el conteo las completa ─────────────────────────────
+// Una ficha sin modelo es invisible para el inventario (todo agrupa por
+// modeloKey) y contarla no lo arreglaba: caía en `enBodega`, que no escribe
+// nada, y el conteo respondía "ya estaba". Bodega lo reportó el 2026-08-11 con
+// 22902A4424 y 22611A1964: "están en bodega y en sistema, pero no me deja
+// verificar y no suman en el total".
+
+test("la ficha en bodega sin modelo se marca para completar", () => {
+  const r = S.clasificarSinModelo([item("22902A4424")],
+    mapa([["22902A4424", { modelo_id: null, modelo_label: "", estado: "en_bodega" }]]));
+  assert.deepEqual(plano(r).map(x => x.norm), ["22902A4424"]);
+});
+
+test("una ficha que YA tiene modelo no se toca", () => {
+  const r = S.clasificarSinModelo([item("A"), item("B")], mapa([
+    ["A", { modelo_id: PD606, modelo_label: "HYTERA PD606-R", estado: "en_bodega" }],
+    ["B", { modelo_id: null, modelo_label: "PD606-R", estado: "en_bodega" }],
+  ]));
+  assert.equal(r.length, 0, "ni por id ni por label: completar es solo para las vacías");
+});
+
+test("un modelo_label en blanco cuenta como sin modelo", () => {
+  const r = S.clasificarSinModelo([item("A")],
+    mapa([["A", { modelo_id: null, modelo_label: "   ", estado: "en_bodega" }]]));
+  assert.equal(r.length, 1);
+});
+
+test("sin ficha en el mapa no se inventa nada que completar", () => {
+  assert.deepEqual(plano(S.clasificarSinModelo([item("NOPE")], mapa([]))), []);
+  assert.deepEqual(plano(S.clasificarSinModelo([], mapa([]))), []);
+  assert.deepEqual(plano(S.clasificarSinModelo(null, mapa([]))), []);
+});
+
+test("completar es adopción, no reclasificación: la colisión ya filtró lo ajeno", () => {
+  // El orden importa: `recibir` corre clasificarColisiones ANTES, así que a
+  // clasificarSinModelo nunca le llega una ficha de otro modelo. Se comprueba
+  // encadenando las dos como en producción.
+  const existentes = mapa([
+    ["A", { modelo_id: null, modelo_label: "", estado: "en_bodega" }],      // adoptar
+    ["B", { modelo_id: PD506, modelo_label: "HYTERA PD506U-R", estado: "en_bodega" }], // ajena
+  ]);
+  const { mismoModelo } = S.clasificarColisiones(
+    [item("A"), item("B")], existentes, PD606, "PD606-R");
+  const { enBodega } = S.clasificarReubicacion(mismoModelo, existentes);
+  const r = S.clasificarSinModelo(enBodega, existentes);
+  assert.deepEqual(plano(r).map(x => x.norm), ["A"]);
+});
+
 test("una tanda mezclada se separa en sus dos grupos", () => {
   const r = S.clasificarColisiones(
     [item("A"), item("B"), item("C")],
