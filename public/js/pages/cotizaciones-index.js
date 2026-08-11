@@ -371,10 +371,15 @@
      'aprobado_por_uid', 'aprobado_por_email', 'convertida_por_uid', 'rechazado_por_uid']
       .forEach(k => { delete copia[k]; });
     const ref = await CotizacionesService.addCotizacion(copia);
-    // La cotización duplicada también requiere aprobación → notificar a ventas.
-    try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
-    catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
-    Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud enviada a ventas@cecomunica.com', 'ok');
+    // Misma política que una cotización nueva: dentro de umbral y con rol que
+    // pueda enviar, no se molesta al aprobador (ver requiereAprobacionPara).
+    if (CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg }).requiere) {
+      try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
+      catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
+      Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
+    } else {
+      Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
+    }
     location.href = `editar-cotizacion.html?id=${encodeURIComponent(ref.id)}`;
   }
 

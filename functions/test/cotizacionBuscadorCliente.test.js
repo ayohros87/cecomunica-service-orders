@@ -38,9 +38,12 @@ function cargarCotState() {
   ctx.window.window = ctx.window;
   vm.createContext(ctx);
   vm.runInContext(leer("public", "js", "domain", "cotizacionesTotales.js"), ctx);
-  ctx.window.FMT = { round2: (n) => Math.round(Number(n || 0) * 100) / 100, ITBMS_RATE: 0.07, esc: String };
+  ctx.window.FMT = { round2: (n) => Math.round(Number(n || 0) * 100) / 100, ITBMS_RATE: 0.07, esc: String, money: (n) => "USD " + n };
   ctx.FMT = ctx.window.FMT;
   ctx.CotizacionTotales = ctx.window.CotizacionTotales;
+  // El mapa de permisos real: requiereAprobacionPara consulta window.canRole,
+  // y el test tiene que ejercitar la matriz de verdad, no una imitación.
+  vm.runInContext(leer("public", "js", "core", "roles.js"), ctx);
   vm.runInContext(leer("public", "js", "pages", "cot-editor-state.js"), ctx);
   return ctx.window.CotState;
 }
@@ -154,25 +157,71 @@ test("B1 · las tres pantallas montan el combo, y teclear en él no ensucia el b
   assert.match(editor, /dataset\?\.comboBusqueda/, "el marcador de sucio debe ignorar el buscador");
 });
 
-// Reporte del mismo día sobre COT-2026-0042 (CENTRAL AZUCARERA DE ALANJE,
-// $160.50, sin descuento, creada por una vendedora): "¿por qué está
-// solicitando aprobación?". No la estaba solicitando — no se encoló ningún
-// correo. Mentía el subtítulo fijo de la pantalla, heredado de cuando toda
-// cotización pasaba por aprobación.
-test("B3 · el subtítulo de Nueva cotización dice lo que Guardar hará de verdad", () => {
+// Reporte del mismo día: llegó a ventas@ un correo "Nueva cotización creada …
+// requiere aprobación" por COT-2026-0042 (CENTRAL AZUCARERA DE ALANJE,
+// $160.50, sin descuento, vendedora). Resultó ser una COPIA de COT-2026-0035
+// (ítems idénticos): Duplicar notificaba al aprobador SIEMPRE, sin consultar
+// la política que sí aplica Guardar. Lo mismo con COT-2026-0022, copia de
+// COT-2026-0021. Encima, el subtítulo de Nueva cotización era un texto fijo
+// que afirmaba que siempre se pediría aprobación.
+test("B3 · las tres puertas a borrador deciden la aprobación con la misma regla", () => {
+  const estado = leer("public", "js", "pages", "cot-editor-state.js");
   const editor = leer("public", "js", "pages", "cot-editor.js");
-  const totales = leer("public", "js", "domain", "cotizacionesTotales.js");
+  const detalle = leer("public", "js", "pages", "cot-detalle.js");
+  const indice = leer("public", "js", "pages", "cotizaciones-index.js");
 
+  // Nadie puede encolar la solicitud sin pasar antes por el predicado común.
+  for (const [nombre, src] of [["cot-detalle.js", detalle], ["cotizaciones-index.js", indice]]) {
+    const dup = src.slice(src.indexOf("async function duplicar"), src.indexOf("async function eliminar"));
+    assert.match(dup, /requiereAprobacionPara\(\{ doc: copia, rol: userRol, policy: policyCfg \}\)\.requiere/,
+      `${nombre}: duplicar debe consultar la política antes de notificar`);
+    assert.ok(
+      dup.indexOf("requiereAprobacionPara") < dup.indexOf("enqueueAprobacionMail"),
+      `${nombre}: el correo va DENTRO del if, no antes`);
+  }
+  assert.match(editor, /const pol = CotState\.requiereAprobacionPara\(\{ doc, rol: userRol, policy: policyCfg \}\)/,
+    "Guardar debe usar el mismo predicado que Duplicar");
+
+  // El subtítulo tampoco puede afirmar de antemano que se pedirá aprobación.
   assert.ok(
     !/'Al guardar se enviará una solicitud de aprobación a ventas@cecomunica\.com\.'/.test(editor),
     "el subtítulo no puede afirmar que siempre se pide aprobación",
   );
-  const fn = editor.slice(editor.indexOf("function subtituloNueva"), editor.indexOf("// ── Render principal"));
-  assert.match(fn, /T\.requiereAprobacion\(/, "el subtítulo debe consultar la política, no adivinar");
-  assert.match(fn, /canRole\(userRol, 'enviar-cotizacion'\)/, "y también el rol de quien la arma");
+  assert.match(
+    editor.slice(editor.indexOf("function subtituloNueva"), editor.indexOf("// ── Render principal")),
+    /CotState\.requiereAprobacionPara\(/,
+    "el subtítulo debe consultar la misma regla que Guardar",
+  );
 
-  // El umbral por defecto que decide ese texto: $160.50 cae dentro, $5,001 no.
-  assert.match(totales, /POLICY_DEFAULT: \{ descuentoMaxPct: 15, totalMax: 5000 \}/);
+  assert.match(estado, /function requiereAprobacionPara/, "el predicado vive una sola vez, en CotState");
+});
+
+test("B3 · el predicado: umbral primero, rol después", () => {
+  const CotState = cargarCotState();
+  const dentro = { total: 160.5, descuentoPct: 0 };   // el caso COT-2026-0042
+  const pol = { descuentoMaxPct: 15, totalMax: 5000 };
+
+  // Vendedora, dentro de umbral → nadie tiene que aprobar nada.
+  assert.equal(
+    CotState.requiereAprobacionPara({ doc: dentro, rol: "vendedor", policy: pol }).requiere,
+    false,
+    "una copia de $160.50 sin descuento no puede pedir aprobación",
+  );
+
+  // Fuera de umbral por total o por descuento → sí.
+  assert.equal(CotState.requiereAprobacionPara({ doc: { total: 6420, descuentoPct: 0 }, rol: "vendedor", policy: pol }).requiere, true);
+  assert.equal(CotState.requiereAprobacionPara({ doc: { total: 508.6, descuentoPct: 30 }, rol: "vendedor", policy: pol }).requiere, true);
+
+  // Dentro de umbral pero con un rol que no envía al cliente → también.
+  const r = CotState.requiereAprobacionPara({ doc: dentro, rol: "recepcion", policy: pol });
+  assert.equal(r.requiere, true);
+  assert.match(r.motivos[0], /rol/, "y el motivo debe explicar que es por el rol");
+
+  // El umbral por defecto que decide todo esto.
+  assert.match(
+    leer("public", "js", "domain", "cotizacionesTotales.js"),
+    /POLICY_DEFAULT: \{ descuentoMaxPct: 15, totalMax: 5000 \}/,
+  );
 });
 
 test("B2 · el selector no ofrece clientes fusionados; clientesById sí los resuelve", async () => {

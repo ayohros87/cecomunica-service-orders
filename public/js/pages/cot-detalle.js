@@ -509,10 +509,18 @@
     copia.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
     copia.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
     const ref = await CotizacionesService.addCotizacion(copia);
-    // La cotización duplicada nace en borrador → notificar a ventas igual que una nueva.
-    try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
-    catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
-    Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud enviada a ventas@cecomunica.com', 'ok');
+    // Duplicar nace en borrador, pero se rige por la MISMA política que una
+    // cotización nueva: si quien la copia puede enviarla y está dentro del
+    // umbral, no se molesta al aprobador. Antes se notificaba siempre, y por
+    // eso COT-2026-0042 ($160.50, sin descuento, copia de COT-2026-0035) pidió
+    // aprobación que nadie necesitaba.
+    if (CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg }).requiere) {
+      try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
+      catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
+      Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
+    } else {
+      Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
+    }
     location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(ref.id);
   }
 

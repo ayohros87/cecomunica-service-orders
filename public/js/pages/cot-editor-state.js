@@ -388,6 +388,26 @@
     return { clientes, clientesById, catalogo, ejecutivos, emisor };
   }
 
+  // ── ¿Este borrador necesita aprobación antes de salir? ────────────────────
+  // Única definición para las TRES puertas por las que nace un borrador:
+  // Guardar (cot-editor), Duplicar desde el detalle y Duplicar desde el
+  // listado. Vivían separadas y solo la primera consultaba la política, así
+  // que toda copia notificaba al aprobador aunque estuviera dentro del umbral
+  // — de ahí COT-2026-0042 ($160.50, sin descuento, copia de COT-2026-0035).
+  // Devuelve la misma forma que CotizacionTotales.requiereAprobacion.
+  function requiereAprobacionPara({ doc, rol, policy }) {
+    const T = window.CotizacionTotales;
+    const pol = T.requiereAprobacion(
+      { total: Number(doc?.total || 0), descuentoPct: Number(doc?.descuentoPct || 0) },
+      policy,
+    );
+    if (pol.requiere) return pol;
+    // Dentro de umbral, pero el rol tiene que poder enviarla él mismo; si no,
+    // alguien la tiene que aprobar igual.
+    if (typeof window.canRole === 'function' && window.canRole(rol, 'enviar-cotizacion')) return pol;
+    return { requiere: true, motivos: ['Tu rol no puede enviar cotizaciones al cliente.'] };
+  }
+
   // ── Combo de cliente buscable ─────────────────────────────────────────────
   // El <select> nativo NO filtra: solo hace type-ahead por prefijo con un
   // temporizador de ~1 s entre teclas. Al escribir "Hotel Gamboa" el navegador
@@ -846,7 +866,7 @@
     uid,
     mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec,
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
-    filtrarClientes, mountClienteCombo,
+    filtrarClientes, mountClienteCombo, requiereAprobacionPara,
     cerrarPrompt, reenviarPrompt,
     enqueueAprobacionMail,
     adjuntosToAttachments,

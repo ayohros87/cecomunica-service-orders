@@ -36,12 +36,13 @@
   function subtituloNueva() {
     if (!userRol) return 'Al guardar quedará en borrador.';
     const t = T.calcTotales(draft);
-    const pol = T.requiereAprobacion({ total: t.total, descuentoPct: draft.descuentoPct }, policyCfg);
-    if (canRole(userRol, 'enviar-cotizacion') && !pol.requiere) {
+    const pol = CotState.requiereAprobacionPara({
+      doc: { total: t.total, descuentoPct: draft.descuentoPct }, rol: userRol, policy: policyCfg,
+    });
+    if (!pol.requiere) {
       return 'Está dentro de tu límite de envío directo: al guardar queda lista para que tú mismo la envíes al cliente.';
     }
-    return 'Requiere aprobación — ' + (pol.motivos[0] || 'tu rol no puede enviar cotizaciones al cliente.')
-      + ' Al guardar se enviará la solicitud al aprobador.';
+    return 'Requiere aprobación — ' + (pol.motivos[0] || '') + ' Al guardar se enviará la solicitud al aprobador.';
   }
 
   // ── Render principal ──────────────────────────────────────────
@@ -670,13 +671,12 @@
         // Si el creador puede enviar y la cotización está DENTRO de política, no se
         // molesta al aprobador: la envía él mismo desde el detalle. Solo se encola la
         // solicitud de aprobación cuando excede el umbral (o el rol no puede enviar).
-        const pol = T.requiereAprobacion({ total: doc.total, descuentoPct: doc.descuentoPct }, policyCfg);
-        const autoEnvia = canRole(userRol, 'enviar-cotizacion') && !pol.requiere;
-        if (autoEnvia) {
+        const pol = CotState.requiereAprobacionPara({ doc, rol: userRol, policy: policyCfg });
+        if (!pol.requiere) {
           Toast.show('Cotización ' + draft.id + ' guardada · lista para enviar al cliente.', 'ok');
         } else {
           await enqueueAprobacionMail(doc, ref.id, user);
-          Toast.show('Cotización ' + draft.id + ' guardada · solicitud enviada a ventas@cecomunica.com', 'ok');
+          Toast.show('Cotización ' + draft.id + ' guardada · solicitud de aprobación enviada', 'ok');
         }
         setTimeout(() => { location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(ref.id); }, 800);
       } else {
