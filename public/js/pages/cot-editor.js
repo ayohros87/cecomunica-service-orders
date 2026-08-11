@@ -26,13 +26,29 @@
   function setCondiciones(condiciones) { draft = { ...draft, condiciones }; marcarSucio(); renderCondiciones(); }
   function fmtFechaCorta(iso) { return FMT.dateShort(iso); } // delega en el helper canónico
 
+  // El subtítulo tiene que decir lo que Guardar hará DE VERDAD. Era un texto
+  // fijo ("Al guardar se enviará una solicitud de aprobación a
+  // ventas@cecomunica.com") heredado de cuando toda cotización pasaba por
+  // aprobación; hoy un vendedor dentro de política envía la suya sin molestar
+  // a nadie, y el texto lo hacía creer lo contrario (reporte COT-2026-0042:
+  // $160.50, sin descuento — no se encoló ningún correo). Se recalcula en cada
+  // render, así que cambia solo al cruzar el umbral mientras se arma.
+  function subtituloNueva() {
+    if (!userRol) return 'Al guardar quedará en borrador.';
+    const t = T.calcTotales(draft);
+    const pol = T.requiereAprobacion({ total: t.total, descuentoPct: draft.descuentoPct }, policyCfg);
+    if (canRole(userRol, 'enviar-cotizacion') && !pol.requiere) {
+      return 'Está dentro de tu límite de envío directo: al guardar queda lista para que tú mismo la envíes al cliente.';
+    }
+    return 'Requiere aprobación — ' + (pol.motivos[0] || 'tu rol no puede enviar cotizaciones al cliente.')
+      + ' Al guardar se enviará la solicitud al aprobador.';
+  }
+
   // ── Render principal ──────────────────────────────────────────
   function renderTodo() {
     const esNueva = document.body.dataset.modo === 'nueva';
     const titulo = esNueva ? 'Nueva cotización' : (draft.id || draft._docId);
-    const subtitulo = esNueva
-      ? 'Al guardar se enviará una solicitud de aprobación a ventas@cecomunica.com.'
-      : ('Editando · ' + (CotState.ESTADOS[draft.estado] || {}).label);
+    const subtitulo = esNueva ? subtituloNueva() : ('Editando · ' + (CotState.ESTADOS[draft.estado] || {}).label);
 
     $('editorMount').innerHTML = `
       <nav class="app-breadcrumbs" aria-label="Breadcrumb">

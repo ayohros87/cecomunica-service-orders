@@ -154,6 +154,27 @@ test("B1 · las tres pantallas montan el combo, y teclear en él no ensucia el b
   assert.match(editor, /dataset\?\.comboBusqueda/, "el marcador de sucio debe ignorar el buscador");
 });
 
+// Reporte del mismo día sobre COT-2026-0042 (CENTRAL AZUCARERA DE ALANJE,
+// $160.50, sin descuento, creada por una vendedora): "¿por qué está
+// solicitando aprobación?". No la estaba solicitando — no se encoló ningún
+// correo. Mentía el subtítulo fijo de la pantalla, heredado de cuando toda
+// cotización pasaba por aprobación.
+test("B3 · el subtítulo de Nueva cotización dice lo que Guardar hará de verdad", () => {
+  const editor = leer("public", "js", "pages", "cot-editor.js");
+  const totales = leer("public", "js", "domain", "cotizacionesTotales.js");
+
+  assert.ok(
+    !/'Al guardar se enviará una solicitud de aprobación a ventas@cecomunica\.com\.'/.test(editor),
+    "el subtítulo no puede afirmar que siempre se pide aprobación",
+  );
+  const fn = editor.slice(editor.indexOf("function subtituloNueva"), editor.indexOf("// ── Render principal"));
+  assert.match(fn, /T\.requiereAprobacion\(/, "el subtítulo debe consultar la política, no adivinar");
+  assert.match(fn, /canRole\(userRol, 'enviar-cotizacion'\)/, "y también el rol de quien la arma");
+
+  // El umbral por defecto que decide ese texto: $160.50 cae dentro, $5,001 no.
+  assert.match(totales, /POLICY_DEFAULT: \{ descuentoMaxPct: 15, totalMax: 5000 \}/);
+});
+
 test("B2 · el selector no ofrece clientes fusionados; clientesById sí los resuelve", async () => {
   const ctx = {
     console,
