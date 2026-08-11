@@ -12,7 +12,7 @@
   <title>Cecomunica - Plataforma</title>
   <!-- Rediseño Command Center (F1) — esta página usa ceco-command.css.
        Las páginas aún no migradas siguen con ceco-ui.css. -->
-  <link rel="stylesheet" href="css/ceco-command.css?v=cc8">
+  <link rel="stylesheet" href="css/ceco-command.css?v=cc9">
 
   <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -25,9 +25,14 @@
        senalesService (S15), así que las dos mitades tienen que ir juntas. -->
   <script defer src="js/services/senalesService.js?v=qc4"></script>
   <script defer src="js/pages/home-signals.js?v=qc4"></script>
-  <script defer src="js/domain/ordenProgPendiente.js"></script>
-  <script defer src="js/services/feedOrdenesService.js"></script>
-  <script defer src="js/pages/home-feed-ordenes.js"></script>
+  <!-- Feed "Órdenes por crear": los tres archivos cambian juntos (descarte de
+       filas), así que comparten token de versión. equiposPoolService es la
+       única ruta de escritura a equipos_pool — el descarte de una venta pasa
+       por ahí para que quede en el kardex de cada unidad. -->
+  <script defer src="js/domain/ordenProgPendiente.js?v=fo2"></script>
+  <script defer src="js/services/equiposPoolService.js?v=fo2"></script>
+  <script defer src="js/services/feedOrdenesService.js?v=fo2"></script>
+  <script defer src="js/pages/home-feed-ordenes.js?v=fo2"></script>
   <script defer src="js/pages/home-feed-devoluciones.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 </head>
@@ -263,7 +268,8 @@
         HomeSignals.render({ rolEfectivo: effectiveRol, uid: user.uid });
 
         // Feed "Órdenes por crear" — solo recepción/admin (gate en el módulo).
-        if (window.HomeFeedOrdenes) HomeFeedOrdenes.render({ rolEfectivo: effectiveRol, uid: user.uid });
+        // `user` va aparte del uid: el descarte de una fila firma quién fue.
+        if (window.HomeFeedOrdenes) HomeFeedOrdenes.render({ rolEfectivo: effectiveRol, uid: user.uid, user });
         if (window.HomeFeedDevoluciones) HomeFeedDevoluciones.render({ rolEfectivo: effectiveRol, uid: user.uid });
 
         // Mostrar grid, ocultar skeletons, aplicar filtro inicial

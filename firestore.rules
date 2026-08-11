@@ -262,10 +262,19 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasAny(["firmado_url"])
             && userRole() in ["administrador", "vendedor"];
       }
+      // Descarte de la orden de programación ("esta orden no se va a crear"):
+      // solo lo escribe quien ve la bandeja del home — recepción y admin. La
+      // UI ya lo gatea; esto es el piso de rol, para que el campo que apaga el
+      // CTA de la lista de contratos no lo pueda poner cualquier autenticado.
+      function tocaDescarteOrdenProg() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(["orden_prog_descartada"]);
+      }
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn()
         && !touchesCFOwnedFields()
+        && (!tocaDescarteOrdenProg() || userRole() in ["administrador", "recepcion"])
         && (!(resource.data.estado != "activo" && request.resource.data.estado == "activo")
             || userRole() in ["administrador", "gerente"]
             || esActivacionPorFirmado());

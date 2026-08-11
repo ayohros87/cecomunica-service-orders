@@ -407,6 +407,20 @@ async function main() {
   await assertSucceeds(as("administrador").doc("inventario_piezas/pDel").delete());
   ok("inventario_piezas: precio/costo/QBO gated; stock sigue abierto; delete solo admin");
 
+  // contratos: descarte de la orden de programación ("no se va a crear"). Lo
+  // escribe quien ve la bandeja del home — recepción/admin. Es el campo que
+  // apaga el CTA "Crear orden" de la lista de contratos, así que no puede
+  // ponerlo cualquier autenticado.
+  for (const r of ["vendedor", "tecnico", "inventario", "gerente"]) {
+    await assertFails(as(r).doc("contratos/cFact")
+      .set({ orden_prog_descartada: { motivo: "no_aplica" } }, { merge: true }));
+  }
+  await assertSucceeds(as("recepcion").doc("contratos/cFact")
+    .set({ orden_prog_descartada: { motivo: "entregado", equipos_activos: 2 } }, { merge: true }));
+  await assertSucceeds(as("administrador").doc("contratos/cFact")
+    .set({ orden_prog_descartada: { motivo: "otro", nota: "x" } }, { merge: true }));
+  ok("contratos: orden_prog_descartada solo recepción/admin");
+
   await testEnv.cleanup();
   console.log(`\nTODOS LOS TESTS DE REGLAS PASARON (${n} grupos)`);
 }

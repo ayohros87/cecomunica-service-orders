@@ -723,6 +723,50 @@ const EquiposPoolService = {
     return batch.commit();
   },
 
+  // La venta NO va a generar orden de programación: recepción la saca del feed
+  // "Órdenes por crear" del home con un motivo. No cambia el estado — la unidad
+  // sigue 'vendido' y la venta sigue sin orden — solo marca que ya se decidió
+  // que no la lleva. Se escribe por unidad (una venta = varias unidades) y deja
+  // línea en el kardex, igual que vincularOrdenProgramacion: la historia de la
+  // unidad debe explicar por qué nunca hubo orden.
+  async descartarOrdenProgramacion(id, { motivo = 'otro', nota = '' } = {}, user) {
+    const db = firebase.firestore();
+    const ref = db.collection('equipos_pool').doc(id);
+    const txt = (nota || '').toString().trim();
+    const batch = db.batch();
+    batch.update(ref, {
+      'venta.orden_descartada': {
+        motivo,
+        nota: txt,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+        por: user?.uid || null,
+        por_email: user?.email || null,
+      },
+      ...this._autoria(user),
+    });
+    batch.set(ref.collection('movimientos').doc(), this._movimiento({
+      tipo: 'orden_descartada',
+      notas: `No se creará orden de programación para esta venta — ${motivo}${txt ? `: ${txt}` : ''}`,
+    }, user));
+    return batch.commit();
+  },
+
+  // Reversa del descarte: la venta vuelve al feed "Órdenes por crear".
+  async reactivarOrdenProgramacion(id, user) {
+    const db = firebase.firestore();
+    const ref = db.collection('equipos_pool').doc(id);
+    const batch = db.batch();
+    batch.update(ref, {
+      'venta.orden_descartada': firebase.firestore.FieldValue.delete(),
+      ...this._autoria(user),
+    });
+    batch.set(ref.collection('movimientos').doc(), this._movimiento({
+      tipo: 'orden_descartada',
+      notas: 'Descarte revertido: la venta vuelve a pedir orden de programación',
+    }, user));
+    return batch.commit();
+  },
+
   // Confirmación humana de un doc creado por migración automática.
   async verificar(id, user) {
     const db = firebase.firestore();

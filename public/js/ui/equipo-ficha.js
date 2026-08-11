@@ -40,6 +40,7 @@ window.EquipoFicha = {
     reactivacion:         'Reactivación',
     venta:                'Venta directa',
     orden_programacion:   'Orden de programación',
+    orden_descartada:     'Orden de programación descartada',
     correccion_migracion: 'Corrección de migración',
     reasignacion:         'Reasignación',
     cambio_estado:        'Cambio de estado',
