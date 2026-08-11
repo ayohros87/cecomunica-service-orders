@@ -105,20 +105,25 @@ const PROPIEDADES = new Set(["cecomunica", "cliente", "desconocida"]);
       continue;
     }
 
-    // Serial con varias fichas = colisión entre modelos: solo es de este conteo
-    // la que ya es de este modelo. Si ninguna lo es, nadie puede decidir desde
-    // aquí cuál era el radio que estaba en el estante.
-    let docs = snap.docs;
-    if (snap.size > 1) {
-      const propias = snap.docs.filter((d) => pool.mismoModelo(d.data(), MODELO_ID, LABEL));
-      r.otroModelo += snap.size - propias.length;
-      if (!propias.length) {
-        r.ambiguos.push({ serial: norm,
-          fichas: snap.docs.map((d) => `${d.data().modelo_label || "(sin modelo)"} [${d.id}]`) });
-        continue;
-      }
-      docs = propias;
+    // Solo es de este conteo la ficha que YA es de este modelo (o la que no
+    // tiene modelo: adoptar > duplicar). Si ninguna lo es, nadie puede decidir
+    // desde aquí cuál era el radio que estaba en el estante.
+    //
+    // El filtro corre SIEMPRE, no solo cuando el serial trae varias fichas: una
+    // ficha ÚNICA de otro modelo es el caso más peligroso, porque repuntarla la
+    // borra de su flota y nadie se entera. Con el candado puesto solo para
+    // `snap.size > 1`, el conteo de NX-420-R del 2026-08-11 se habría llevado
+    // por delante 15 fichas NX-920-R que estaban en bodega — la colisión
+    // Kenwood 420/920 es real (portátil vs base) y solo la resuelve quien tiene
+    // el radio en la mano.
+    const propias = snap.docs.filter((d) => pool.mismoModelo(d.data(), MODELO_ID, LABEL));
+    if (!propias.length) {
+      r.ambiguos.push({ serial: norm,
+        fichas: snap.docs.map((d) => `${d.data().modelo_label || "(sin modelo)"} [${d.id}] ${d.data().estado || ""}`) });
+      continue;
     }
+    r.otroModelo += snap.size - propias.length;
+    const docs = propias;
 
     for (const doc of docs) {
       const v = doc.data();
