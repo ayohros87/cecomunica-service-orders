@@ -80,6 +80,17 @@
     #previewVendedor .gaplicar { font-size: 11px; font-weight: 600; padding: 3px 9px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; border-radius: 6px; cursor: pointer; white-space: nowrap; }
     #previewVendedor .gaplicar:hover { background: #dbeafe; }
 
+    /* Filtro "Modelos a cargar": qué modelos del contrato entran al lote. Solo
+       se pinta cuando el contrato tiene más de un modelo. */
+    #filtroModelos:empty { display: none; }
+    #filtroModelos { margin-top: var(--sp-2); }
+    .fm-wrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .fm-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-3); }
+    .fm-chip { font-size: 12px; padding: 3px 10px; border-radius: 999px; cursor: pointer; border: 1px solid var(--border-default); background: var(--surface-card); color: var(--fg-3); }
+    .fm-chip.on { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-press, var(--accent)); font-weight: 600; }
+    .fm-chip:not(.on) { text-decoration: line-through; opacity: .6; }
+    .fm-tot { font-size: 11px; color: var(--fg-3); }
+
     /* Preview serial → modelo jalado del contrato */
     /* Aviso NON-BLOCKING de lote sin contrato vinculado (lo muestra el JS). */
     #avisoSinContrato { color: #92400e; background: #fff7ed; border: 1px solid #fed7aa; border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); font-weight: 600; font-size: 13px; margin-top: var(--sp-2); }
@@ -192,6 +203,9 @@
                   <i data-lucide="download"></i> Jalar</button>
               </div>
               <span class="form-hint">El <strong>modelo de cada serial se toma del contrato</strong>. Vincula el batch al contrato y al pool.</span>
+              <!-- Chips por modelo: un contrato multi-modelo casi nunca se carga
+                   entero a PoC (Gamboa: 74 seriales, lote de 22 PNC360S-R). -->
+              <div id="filtroModelos"></div>
               <div id="avisoSinContrato" hidden>&#9888;&#65039; Este lote se crear&aacute; <strong>sin contrato vinculado</strong>: los equipos quedan sin ancla al contrato/pool y el modelo saldr&aacute; del archivo del vendedor (posicional, puede quedar equivocado). Si el cliente tiene contrato, el&iacute;gelo arriba.<span id="avisoSinContratoExtra"></span></div>
               <div id="previewContrato"></div>
             </div>
@@ -244,7 +258,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc22" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=cc23" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

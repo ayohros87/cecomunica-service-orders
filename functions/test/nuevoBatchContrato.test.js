@@ -27,7 +27,7 @@ const SRC = fs.readFileSync(
   path.join(__dirname, "..", "..", "public", "js", "pages", "nuevo-batch.js"), "utf8");
 
 class FakeOption {
-  constructor(value, text, ref) { this.value = value; this.textContent = text; this._ref = ref || null; }
+  constructor(value, text, ref) { this.value = value; this.textContent = text; this._ref = ref || null; this.dataset = {}; }
   getAttribute(n) { return n === "data-ref" ? this._ref : null; }
 }
 
@@ -64,20 +64,50 @@ const CONTRATOS = [
   { id: "docDEMO",  contrato_id: "DEMO20260129-01",  tipo_contrato: "Demo",      estado: "aprobado", seriales: 4 },
 ];
 
-function montar({ contratos = CONTRATOS } = {}) {
+// Catálogo de modelos (marca + modelo → etiqueta "MARCA MODELO", que es como el
+// archivo del vendedor nombra el modelo).
+const MODELOS = [
+  { id: "mNX420",  marca: "KENWOOD", modelo: "NX-420-R" },
+  { id: "mPNC360", marca: "HYTERA",  modelo: "PNC360S-R" },
+  { id: "mNX920",  marca: "KENWOOD", modelo: "NX-920-R" },
+  { id: "mid",     marca: "HYTERA",  modelo: "PNC460-R" },
+];
+
+// El contrato real de Brenda: TROPICAL GAMBOA, 74 seriales de tres modelos, de
+// los que el lote PoC son solo los 22 PNC360S-R.
+const GAMBOA = {
+  id: "docGAMBOA", contrato_id: "ALQ20260806-02", tipo_contrato: "Alquiler", estado: "aprobado",
+  seriales: 74,
+  composicion: [
+    { modelo_id: "mNX420",  modelo: "NX-420-R",  pfx: "NX420",  n: 45 },
+    { modelo_id: "mPNC360", modelo: "PNC360S-R", pfx: "PNC",    n: 22 },
+    { modelo_id: "mNX920",  modelo: "NX-920-R",  pfx: "NX920",  n: 7 },
+  ],
+};
+
+// Archivo del vendedor: solo trae los 22 PNC, y nombra el modelo por etiqueta
+// (no por modelo_id) — que es el caso frágil que hay que cubrir.
+const ARCHIVO_22_PNC = Array.from({ length: 22 }, (_, i) => ({
+  cliente_id: "CLI1", radio_name: `MARINA${i + 1}`, modelo_label: "HYTERA PNC360S-R",
+  gps: false, grupos: ["MONTAJE-GAMBOA"],
+}));
+
+function montar({ contratos = CONTRATOS, modelos = MODELOS } = {}) {
   const els = new Map();
   const get = (id) => {
     if (!els.has(id)) els.set(id, id === "contratoJalar" || id === "cliente" || id === "ip" ? new FakeSelect(id) : new FakeEl(id));
     return els.get(id);
   };
   // Precrea los que el código consulta y el cliente, que necesita opciones.
-  ["contratoJalar", "cliente", "seriales", "previewContrato", "previewVendedor",
-    "avisoSinContrato", "avisoSinContratoExtra", "btnJalarContrato"].forEach(get);
+  ["contratoJalar", "cliente", "ip", "seriales", "previewContrato", "previewVendedor",
+    "avisoSinContrato", "avisoSinContratoExtra", "btnJalarContrato", "filtroModelos",
+    "unit_id_inicial"].forEach(get);
   get("cliente").innerHTML =
     '<option value="CLI1">UNIVERSIDAD ESPECIALIZADA DE LAS AMERICAS</option>' +
     '<option value="CLI2">FORTALEZA SECURITY, S.A</option>';
 
   const toasts = [];
+  const estado = { confirmar: true };      // respuesta de window.confirm
   const doc = {
     getElementById: get,
     addEventListener: () => {},           // DOMContentLoaded — no se ejecuta aquí
@@ -87,33 +117,60 @@ function montar({ contratos = CONTRATOS } = {}) {
   const sandbox = {
     console,
     document: doc,
+    confirm: () => estado.confirmar,      // window.confirm (sandbox.window = sandbox)
     Toast: { show: (msg, tipo) => toasts.push({ msg, tipo }) },
     Modal: { confirm: async () => true },
     FMT: { normalize: (s) => String(s || "").trim().toLowerCase(), normalizeGrupo: (s) => s, dedupGrupos: (a) => a, esc: (s) => s },
-    ModelosService: { getModelos: async () => [] },
+    ModelosService: { getModelos: async () => modelos },
     ClientesService: { listClientes: async () => ({ docs: [] }) },
     PocService: { getCatalogoGrupos: async () => [] },
     ContratosService: {
       _serialKey: (s) => String(s || "").trim().toUpperCase(),
       getContratosActivosPorCliente: async (clienteId) => (clienteId === "CLI1" ? contratos : []),
-      // Mapa serial→modelo del tamaño declarado por cada contrato.
+      // Mapa serial→modelo. Un contrato puede declarar `composicion` (varios
+      // modelos) o solo `seriales` (todos del mismo modelo).
       getModeloPorSerial: async (docId) => {
         const c = contratos.find(x => x.id === docId);
         const m = new Map();
-        for (let i = 0; i < (c?.seriales || 0); i++) {
-          const s = `${c.contrato_id}-S${i}`;
-          m.set(s.toUpperCase(), { serial: s, modelo: "PNC460-R", modelo_id: "mid" });
+        if (!c) return m;
+        const comp = c.composicion
+          || [{ modelo_id: "mid", modelo: "PNC460-R", pfx: `${c.contrato_id}-S`, n: c.seriales || 0 }];
+        let i = 0;
+        for (const g of comp) {
+          for (let k = 0; k < g.n; k++, i++) {
+            const s = `${g.pfx || `${c.contrato_id}-S`}${i}`;
+            m.set(s.toUpperCase(), { serial: s, modelo: g.modelo, modelo_id: g.modelo_id });
+          }
         }
         return m;
       },
     },
-    firebase: { auth: () => ({ onAuthStateChanged: () => {}, currentUser: { uid: "u", email: "e" } }) },
+    firebase: {
+      auth: () => ({ onAuthStateChanged: () => {}, currentUser: { uid: "u", email: "e" } }),
+      // Solo lo que usa proponerProximoUnitId (poc_devices recientes).
+      firestore: () => ({
+        collection: () => ({ orderBy: () => ({ limit: () => ({ get: async () => ({ forEach: () => {} }) }) }) }),
+      }),
+    },
   };
   vm.createContext(sandbox);
   sandbox.window = sandbox;
   vm.runInContext(SRC, sandbox, { filename: "nuevo-batch.js" });
-  return { sandbox, el: get, toasts };
+  return { sandbox, el: get, toasts, estado };
 }
+
+// Corre procesarArchivoJSON con un FileReader de mentira, para ejercitar la
+// cascada real que dispara el archivo del vendedor (cliente → contrato → jalar).
+async function subirArchivo(h, filas) {
+  let pendiente = null;
+  h.sandbox.FileReader = class {
+    readAsText(file) { pendiente = this.onload({ target: { result: file._texto } }); }
+  };
+  h.sandbox.procesarArchivoJSON({ name: "vendedor.json", _texto: JSON.stringify(filas) });
+  await pendiente;
+}
+
+const lineas = (h) => h.el("seriales").value.split("\n").filter(Boolean);
 
 // Estado "recepción ya llenó el formulario": cliente elegido y contrato vinculado.
 async function conContratoElegido(h, contratoDocId = "docREEMP") {
@@ -215,4 +272,104 @@ test("con el contrato vinculado el aviso desaparece", async () => {
 
   assert.equal(h.el("avisoSinContrato").hidden, true);
   assert.equal(h.el("avisoSinContratoExtra").textContent, "");
+});
+
+// ── Filtro por modelo (caso Brenda / TROPICAL GAMBOA, 2026-08-11) ──────────
+// El contrato ALQ20260806-02 tiene 74 seriales de tres modelos y el lote PoC
+// eran solo los 22 PNC360S-R. "Jalar" traía los 74 y el candado
+// "filas del archivo === seriales pegados" impedía guardar: la única salida era
+// teclear los 22 a mano — justo lo que ese candado vino a evitar.
+async function conGamboa() {
+  const h = montar({ contratos: [GAMBOA] });
+  await h.sandbox.cargarModelosCatalogo();   // normalmente lo hace DOMContentLoaded
+  return h;
+}
+
+test("el archivo de 22 PNC solo jala esos 22 de los 74 del contrato", async () => {
+  const h = await conGamboa();
+
+  await subirArchivo(h, ARCHIVO_22_PNC);
+
+  assert.equal(h.el("contratoJalar").value, "docGAMBOA", "debe vincular el contrato");
+  const ls = lineas(h);
+  assert.equal(ls.length, 22, "solo los seriales del modelo que trae el archivo");
+  assert.ok(ls.every(s => s.startsWith("PNC")), "ningún NX-420-R ni NX-920-R en el lote");
+  assert.ok(h.toasts.some(t => /Se jalaron 22 de 74/.test(t.msg)),
+    "el recorte tiene que ser visible, no silencioso");
+});
+
+test("si recepción ya jaló los 74, cargar el archivo recorta a los 22", async () => {
+  const h = await conGamboa();
+  await conContratoElegido(h, "docGAMBOA");
+  await h.sandbox.jalarSerialesDesdeContrato();
+  assert.equal(lineas(h).length, 74, "precondición: el contrato entero en el pegado");
+
+  await subirArchivo(h, ARCHIVO_22_PNC);
+
+  assert.equal(lineas(h).length, 22, "el archivo manda: los otros 52 salen del lote");
+});
+
+test("sin archivo se jala el contrato entero (no se filtra a ciegas)", async () => {
+  const h = await conGamboa();
+  await conContratoElegido(h, "docGAMBOA");
+
+  await h.sandbox.jalarSerialesDesdeContrato();
+
+  assert.equal(lineas(h).length, 74);
+});
+
+test("los chips agregan y quitan modelos del lote", async () => {
+  const h = await conGamboa();
+  await subirArchivo(h, ARCHIVO_22_PNC);
+
+  h.sandbox.alternarModeloFiltro("mNX920");          // suma los 7 NX-920-R
+  assert.equal(lineas(h).length, 29);
+
+  h.sandbox.alternarModeloFiltro("mPNC360");         // saca los 22 PNC
+  assert.equal(lineas(h).length, 7);
+  assert.ok(lineas(h).every(s => s.startsWith("NX920")));
+
+  h.sandbox.alternarModeloFiltro("mNX920");          // dejar cero no se permite
+  assert.equal(lineas(h).length, 7, "siempre queda al menos un modelo");
+  assert.ok(h.toasts.some(t => /al menos un modelo/.test(t.msg)));
+});
+
+test("los chips no tocan los seriales pegados a mano", async () => {
+  const h = await conGamboa();
+  await subirArchivo(h, ARCHIVO_22_PNC);
+  h.el("seriales").value = lineas(h).concat("SERIAL-SUELTO-1").join("\n");
+
+  h.sandbox.alternarModeloFiltro("mNX920");
+
+  assert.ok(lineas(h).includes("SERIAL-SUELTO-1"),
+    "el filtro solo manda sobre lo que vino del contrato");
+});
+
+test("al guardar se ofrece recortar en vez de bloquear a secas", async () => {
+  const h = await conGamboa();
+  await subirArchivo(h, ARCHIVO_22_PNC);
+  h.sandbox.alternarModeloFiltro("mNX420");          // 22 + 45 = 67 contra 22 filas
+  assert.equal(lineas(h).length, 67);
+
+  assert.equal(h.sandbox.recortarAModelosDelArchivo(), true);
+  assert.equal(lineas(h).length, 22, "recorta a los modelos del archivo");
+});
+
+test("si recepción dice que no al recorte, no se toca nada", async () => {
+  const h = await conGamboa();
+  await subirArchivo(h, ARCHIVO_22_PNC);
+  h.sandbox.alternarModeloFiltro("mNX420");
+  h.estado.confirmar = false;
+
+  assert.equal(h.sandbox.recortarAModelosDelArchivo(), false);
+  assert.equal(lineas(h).length, 67, "el pegado queda como estaba y el candado bloquea");
+});
+
+test("no se ofrece recortar si el recorte no cuadra con el archivo", async () => {
+  const h = await conGamboa();
+  await subirArchivo(h, ARCHIVO_22_PNC);
+  h.el("seriales").value = lineas(h).slice(0, 20).join("\n");   // 20 PNC contra 22 filas
+
+  assert.equal(h.sandbox.recortarAModelosDelArchivo(), false,
+    "recortar no arregla un desajuste que no es de modelos");
 });

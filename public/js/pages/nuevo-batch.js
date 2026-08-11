@@ -35,6 +35,9 @@
       modeloContratoPorSerial = contratoDocId
         ? await ContratosService.getModeloPorSerial(contratoDocId)
         : new Map();
+      // Al (re)vincular un contrato se recalcula qué modelos entran al lote:
+      // manda el archivo del vendedor si ya está cargado.
+      modelosSeleccionados = seleccionPorDefecto();
       refrescarPreviews();
       return modeloContratoPorSerial;
     }
@@ -80,6 +83,141 @@
         if (normModeloTxt(v.label) === txt || normModeloTxt(v.modelo) === txt) return id;
       }
       return '';
+    }
+
+    // ── Filtro por modelo del contrato ───────────────────────────────────────
+    // Un contrato casi nunca se carga entero a PoC. Gamboa ALQ20260806-02 tiene
+    // 74 seriales (45 NX-420-R + 22 PNC360S-R + 7 NX-920-R) y el lote eran solo
+    // los 22 PNC: "Jalar" traía los 74, el candado "filas del archivo ===
+    // seriales pegados" bloqueaba el guardado, y la única salida era teclear los
+    // seriales a mano — justo lo que ese candado vino a evitar. Ahora se eligen
+    // los modelos a cargar y por defecto se toman los que trae el archivo del
+    // vendedor, que ya dice exactamente qué se está creando (no hace falta una
+    // lista fija de "modelos PoC", que habría que mantener a mano).
+    let modelosSeleccionados = null;   // Set<modelo_id> · null = todos
+
+    // Seriales del contrato agrupados por modelo, del grupo más grande al menor.
+    function gruposModeloContrato() {
+      const g = new Map();
+      for (const v of modeloContratoPorSerial.values()) {
+        const id = v.modelo_id || '';
+        if (!g.has(id)) g.set(id, { id, label: labelModelo(v.modelo_id, v.modelo) || '(sin modelo)', seriales: [] });
+        const s = String(v.serial || '').trim();
+        if (s) g.get(id).seriales.push(s);
+      }
+      return [...g.values()].sort((a, b) => b.seriales.length - a.seriales.length);
+    }
+
+    function modeloSeleccionado(modeloId) {
+      return !modelosSeleccionados || modelosSeleccionados.has(modeloId || '');
+    }
+
+    // modelo_id de los modelos que trae el archivo del vendedor — solo los que el
+    // catálogo reconoce. Si no se resuelve ninguno se devuelve vacío y NO se
+    // filtra nada (mismo comportamiento que antes del filtro).
+    function modelosDelArchivo() {
+      const s = new Set();
+      (detallesBatch || []).forEach(d => { const id = resolverModeloIdJson(d); if (id) s.add(id); });
+      return s;
+    }
+
+    // Selección por defecto al vincular un contrato: los modelos del archivo,
+    // siempre que el contrato traiga alguno y quede algo que filtrar.
+    function seleccionPorDefecto() {
+      const grupos = gruposModeloContrato();
+      if (grupos.length < 2) return null;
+      const delArchivo = modelosDelArchivo();
+      const cruce = grupos.filter(g => delArchivo.has(g.id));
+      return (cruce.length && cruce.length < grupos.length) ? new Set(cruce.map(g => g.id)) : null;
+    }
+
+    // Chips "Modelos a cargar". Solo aparecen si el contrato tiene más de un
+    // modelo — con uno solo no hay nada que elegir y serían ruido.
+    function renderFiltroModelos() {
+      const cont = document.getElementById('filtroModelos');
+      if (!cont) return;
+      const grupos = gruposModeloContrato();
+      if (grupos.length < 2) { cont.innerHTML = ''; return; }
+      const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      const total = grupos.reduce((n, g) => n + g.seriales.length, 0);
+      const elegidos = grupos.filter(g => modeloSeleccionado(g.id))
+        .reduce((n, g) => n + g.seriales.length, 0);
+      const chips = grupos.map(g => {
+        const on = modeloSeleccionado(g.id);
+        return `<button type="button" class="fm-chip${on ? ' on' : ''}" data-mid="${esc(g.id)}" ` +
+          `aria-pressed="${on}" title="${on ? 'Sacar del lote' : 'Agregar al lote'} los ${g.seriales.length} ${esc(g.label)} del contrato">` +
+          `${esc(g.label)} <b>${g.seriales.length}</b></button>`;
+      }).join('');
+      cont.innerHTML = `<div class="fm-wrap"><span class="fm-lbl">Modelos a cargar</span>${chips}` +
+        `<span class="fm-tot">${elegidos} de ${total} seriales del contrato</span></div>`;
+    }
+
+    // Deja en el textarea exactamente los seriales del contrato de los modelos
+    // elegidos. Los seriales que NO son del contrato (pegados a mano) se
+    // conservan: el filtro solo manda sobre lo que vino del contrato.
+    function sincronizarSerialesConFiltro() {
+      const ta = document.getElementById('seriales');
+      if (!ta || !modeloContratoPorSerial.size) return { agregados: 0, quitados: 0 };
+      const actuales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+      const quedan = actuales.filter(s => {
+        const c = modeloContratoPorSerial.get(ContratosService._serialKey(s));
+        return !c || modeloSeleccionado(c.modelo_id);
+      });
+      const vistos = new Set(quedan.map(s => ContratosService._serialKey(s)));
+      const nuevos = [];
+      for (const v of modeloContratoPorSerial.values()) {
+        const s = String(v.serial || '').trim();
+        const k = ContratosService._serialKey(s);
+        if (!s || vistos.has(k) || !modeloSeleccionado(v.modelo_id)) continue;
+        nuevos.push(s); vistos.add(k);
+      }
+      ta.value = [...quedan, ...nuevos].join('\n');
+      refrescarPreviews();
+      return { agregados: nuevos.length, quitados: actuales.length - quedan.length };
+    }
+
+    // Click en un chip: enciende/apaga ese modelo y re-sincroniza el pegado.
+    function alternarModeloFiltro(modeloId) {
+      const grupos = gruposModeloContrato();
+      if (grupos.length < 2) return;
+      const sel = modelosSeleccionados ? new Set(modelosSeleccionados) : new Set(grupos.map(g => g.id));
+      if (sel.has(modeloId)) sel.delete(modeloId); else sel.add(modeloId);
+      if (!sel.size) { Toast.show('Deja al menos un modelo seleccionado.', 'warn'); return; }
+      modelosSeleccionados = sel.size === grupos.length ? null : sel;
+      const r = sincronizarSerialesConFiltro();
+      const etiqueta = grupos.find(x => x.id === modeloId)?.label || '';
+      Toast.show(r.quitados
+        ? `${r.quitados} serial(es) ${etiqueta} fuera del lote.`
+        : `${r.agregados} serial(es) ${etiqueta} agregados al lote.`, 'ok');
+    }
+
+    // Salida del candado de conteo (filas del archivo === seriales pegados): con
+    // un contrato multi-modelo el desajuste suele ser exactamente eso — el
+    // contrato entero contra un lote de un solo modelo. Se ofrece recortar a los
+    // modelos del archivo, y SOLO si el recorte deja justo las filas del archivo;
+    // si no cuadra, no hay nada que ofrecer y el candado bloquea como siempre.
+    function recortarAModelosDelArchivo() {
+      if (!modeloContratoPorSerial.size || !detallesBatch?.length) return false;
+      const delArchivo = modelosDelArchivo();
+      if (!delArchivo.size) return false;
+      const ta = document.getElementById('seriales');
+      const actuales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+      const quedan = actuales.filter(s => {
+        const c = modeloContratoPorSerial.get(ContratosService._serialKey(s));
+        return !c || delArchivo.has(c.modelo_id || '');
+      });
+      const fuera = actuales.length - quedan.length;
+      if (!fuera || quedan.length !== detallesBatch.length) return false;
+      const nombres = [...delArchivo].map(id => modeloById.get(id)?.label || id).join(', ');
+      const ok = window.confirm(
+        `El contrato tiene ${actuales.length} seriales, pero el archivo del vendedor trae ${detallesBatch.length} equipos (${nombres}).\n\n` +
+        `¿Crear solo esos ${quedan.length} y dejar los otros ${fuera} fuera del lote?\n\n` +
+        `Los ${fuera} que quedan fuera NO se tocan: siguen en el contrato, solo no se crean en PoC ahora.`);
+      if (!ok) return false;
+      modelosSeleccionados = new Set(delArchivo);
+      ta.value = quedan.join('\n');
+      refrescarPreviews();
+      return true;
     }
 
     // Reordena el textarea de seriales para que el MODELO de cada serial (según el
@@ -307,6 +445,10 @@
     // el simple serial→modelo.
     function refrescarPreviews() {
       const pc = document.getElementById('previewContrato');
+      // Sin contrato vinculado no hay modelos que elegir: la selección se suelta
+      // para que el próximo contrato arranque con su propio criterio.
+      if (!modeloContratoPorSerial.size) modelosSeleccionados = null;
+      renderFiltroModelos();
       if (detallesBatch?.length) {
         alinearSerialesConJson();
         renderPreviewCombinado();
@@ -501,8 +643,10 @@ async function cargarContratosDelCliente() {
   }
 }
 
-// Trae los seriales asignados al contrato elegido y los agrega al textarea
-// (dedupe contra lo ya pegado). No pisa lo existente: agrega al final.
+// Trae al textarea los seriales del contrato de los MODELOS elegidos (por
+// defecto, los que trae el archivo del vendedor). Los seriales pegados a mano
+// que no son del contrato se conservan; los del contrato de un modelo apagado
+// salen del lote.
 async function jalarSerialesDesdeContrato() {
   const sel = document.getElementById("contratoJalar");
   const contratoDocId = sel?.value || "";
@@ -510,20 +654,25 @@ async function jalarSerialesDesdeContrato() {
   const btn = document.getElementById("btnJalarContrato");
   if (btn) btn.disabled = true;
   try {
-    // Trae serial + modelo del contrato (fuente de verdad) y pinta el preview.
+    // Trae serial + modelo del contrato (fuente de verdad), fija el filtro de
+    // modelos por defecto y pinta el preview.
     const mapa = await cargarModeloContrato(contratoDocId);
-    const conSerial = Array.from(mapa.values()).map(s => String(s.serial || "").trim()).filter(Boolean);
-    if (!conSerial.length) { Toast.show('El contrato no tiene seriales asignados todavía.', 'warn'); return; }
+    if (!mapa.size) { Toast.show('El contrato no tiene seriales asignados todavía.', 'warn'); return; }
 
-    const ta = document.getElementById("seriales");
-    const actuales = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
-    const vistos = new Set(actuales.map(s => s.toLowerCase()));
-    const nuevos = conSerial.filter(s => !vistos.has(s.toLowerCase()));
-    ta.value = [...actuales, ...nuevos].join('\n');
-    refrescarPreviews(); // si hay archivo cargado, alinea los seriales a su orden
-    Toast.show(nuevos.length
-      ? `${nuevos.length} serial(es) jalados del contrato con su modelo.${conSerial.length - nuevos.length ? ` ${conSerial.length - nuevos.length} ya estaban.` : ''}`
-      : 'Todos los seriales del contrato ya estaban en la lista.', nuevos.length ? 'ok' : 'warn');
+    const r = sincronizarSerialesConFiltro();
+    const elegidos = gruposModeloContrato().filter(g => modeloSeleccionado(g.id));
+    const nElegidos = elegidos.reduce((n, g) => n + g.seriales.length, 0);
+
+    if (nElegidos < mapa.size) {
+      Toast.show(
+        `Se jalaron ${nElegidos} de ${mapa.size} seriales del contrato — solo ${elegidos.map(g => g.label).join(', ')}. ` +
+        `Los otros ${mapa.size - nElegidos} quedaron fuera del lote; cámbialo en "Modelos a cargar".`, 'ok');
+    } else {
+      const yaEstaban = mapa.size - r.agregados;
+      Toast.show(r.agregados
+        ? `${r.agregados} serial(es) jalados del contrato con su modelo.${yaEstaban > 0 ? ` ${yaEstaban} ya estaban.` : ''}`
+        : 'Todos los seriales del contrato ya estaban en la lista.', r.agregados ? 'ok' : 'warn');
+    }
   } catch (e) {
     console.error("Error jalando seriales del contrato:", e);
     Toast.show('No se pudieron traer los seriales del contrato.', 'bad');
@@ -642,6 +791,11 @@ async function autoJalarContrato(cantidadEsperada) {
         document.getElementById("btnJalarContrato")?.addEventListener("click", jalarSerialesDesdeContrato);
         // Elegir un contrato liga el modelo por serial (aunque no se pulse "Jalar").
         document.getElementById("contratoJalar")?.addEventListener("change", (e) => cargarModeloContrato(e.target.value || null));
+        // Chips "Modelos a cargar": elegir qué modelos del contrato entran al lote.
+        document.getElementById("filtroModelos")?.addEventListener("click", (e) => {
+          const chip = e.target.closest('.fm-chip');
+          if (chip) alternarModeloFiltro(chip.getAttribute('data-mid') || '');
+        });
         // Pegar seriales a mano también debe encender/apagar el aviso sin-contrato.
         document.getElementById("seriales")?.addEventListener("input", actualizarAvisoSinContrato);
 document.getElementById("addCliente").onclick = async () => {
@@ -712,7 +866,7 @@ document.getElementById("addCliente").onclick = async () => {
         const btnSubmit = document.querySelector('#batchForm button[type="submit"]');
         const bloquear = (v) => { _guardando = v; if (btnSubmit) btnSubmit.disabled = v; };
 
-        const seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
+        let seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
         const unitIdInicial = parseInt(document.getElementById("unit_id_inicial").value.trim(), 10);
 
         if (isNaN(unitIdInicial)) {
@@ -734,8 +888,15 @@ document.getElementById("addCliente").onclick = async () => {
         await registrarCliente(clienteSelect.selectedOptions[0].textContent);
 
         if ((detallesBatch || []).length > 0 && detallesBatch.length !== seriales.length) {
-          Toast.show(`El archivo JSON tiene ${detallesBatch.length} filas pero ingresaste ${seriales.length} seriales. Deben coincidir para guardar modelo por equipo.`, 'bad');
-          return;
+          // Última red: si el sobrante son justo los modelos que el archivo no
+          // trae, se ofrece recortar en vez de mandar a recepción a teclear.
+          if (recortarAModelosDelArchivo()) {
+            seriales = document.getElementById("seriales").value.trim().split('\n').map(s => s.trim()).filter(s => s);
+          }
+          if (detallesBatch.length !== seriales.length) {
+            Toast.show(`El archivo JSON tiene ${detallesBatch.length} filas pero ingresaste ${seriales.length} seriales. Deben coincidir para guardar modelo por equipo.`, 'bad');
+            return;
+          }
         }
 
         // ✅ Hard-stop: Block save if invalid groups detected in batch
