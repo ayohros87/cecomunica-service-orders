@@ -463,6 +463,11 @@
       const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
       const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
       const adjuntos = Array.isArray(opts.adjuntos) ? opts.adjuntos.filter(a => a && a.url) : [];
+      // La carta solo aplica a cotizaciones comerciales; quien llama pasa
+      // `llevaCarta: null` cuando es de taller y la fila no se dibuja. Verla aquí
+      // es lo que cierra el hueco: el envío ocurre fuera del editor, así que sin
+      // esta fila nadie sabe con qué va a salir el documento.
+      const cartaAplica = typeof opts.llevaCarta === 'boolean';
       const adjuntosHtml = adjuntos.length ? `
   <p style="margin:14px 0 4px;"><b>Archivos adjuntos:</b></p>
   <ul style="margin:0 0 10px; padding-left:18px; color:#374151;">
@@ -513,6 +518,16 @@
                 <input type="text" class="form-input" id="rxSubject" value="${esc(subject)}">
               </div>
             </fieldset>
+            ${cartaAplica ? `
+            <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3); margin-bottom:var(--sp-3);">
+              <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="file-text"></i> Carta de presentación</legend>
+              <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; font-size:13px; line-height:1.5;">
+                <input type="checkbox" id="rxCarta" ${opts.llevaCarta ? 'checked' : ''} style="width:18px; height:18px; flex:none; margin-top:1px;">
+                <span><b>Enviar con la carta de presentación</b><br>
+                  <span style="color:var(--fg-3);">Antepone 2 páginas institucionales al documento que abre el cliente. Este es el estado guardado en la cotización: lo que marques aquí es lo que se envía.</span>
+                </span>
+              </label>
+            </fieldset>` : ''}
             <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-3);">
               <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="eye"></i> Vista previa del correo</legend>
               <div style="background:#F5F7FA; padding:16px; border-radius:6px; max-height:280px; overflow:auto;">${bodyHtml}</div>
@@ -544,7 +559,13 @@
         if (btn.dataset.act === 'send') {
           const dest = (destInput.value || '').trim();
           if (!dest) { destInput.focus(); return; }
-          return close({ dest, subject: (subjInput.value || '').trim() || subject, html: bodyHtml });
+          const chkCarta = overlay.querySelector('#rxCarta');
+          return close({
+            dest,
+            subject: (subjInput.value || '').trim() || subject,
+            html: bodyHtml,
+            llevaCarta: chkCarta ? chkCarta.checked : null,
+          });
         }
       });
       const onKey = (e) => {

@@ -303,6 +303,7 @@
     try { link = await ensureLinkPublico(cot.id); }
     catch (e) { Toast.show('No se pudo generar el link público: ' + (e?.message || e), 'bad'); return; }
 
+    const cartaAplica = !CotState.esCotizacionDeTaller(cot);
     const payload = await CotState.reenviarPrompt({
       cotizacionId: cot.cotizacion_id || cot.id,
       clienteNombre: cot.cliente_nombre || '',
@@ -315,8 +316,25 @@
       ejecutivo: cot.ejecutivo_nombre || '',
       link,
       adjuntos: cot.adjuntos || [],
+      llevaCarta: cartaAplica ? CotState.llevaCarta(cot) : null,
     });
     if (!payload) return;
+
+    // Igual que en el detalle: lo que se marque en el panel manda. Se persiste y
+    // se reescribe el espejo (ensureLinkPublico relee el documento).
+    if (cartaAplica && payload.llevaCarta !== CotState.llevaCarta(cot)) {
+      const anterior = cot.incluye_carta;
+      try {
+        cot.incluye_carta = payload.llevaCarta;
+        await CotizacionesService.updateCotizacion(cot.id, { incluye_carta: payload.llevaCarta });
+        await ensureLinkPublico(cot.id);
+      } catch (e) {
+        cot.incluye_carta = anterior;
+        Toast.show('No se pudo aplicar el cambio de carta de presentación: ' + (e?.message || e), 'bad');
+        return;
+      }
+    }
+
     try {
       await CotizacionesService.enviarPorCorreo(cot.id, {
         to: payload.dest,
@@ -438,6 +456,15 @@
           <p style="margin:4px 0;"><b>Ejecutivo:</b> ${doc.ejecutivo_nombre || '—'}</p>
           <p style="margin:4px 0;"><b>Fecha:</b> ${fechaTxt} · <b>Validez:</b> ${ui.validezDias} días</p>
           <p style="margin:4px 0;"><b>Introducción:</b> ${doc.intro || '—'}</p>
+          ${CotState.esCotizacionDeTaller(doc) ? '' : `
+          <div style="margin:10px 0 4px; padding:10px; border:1px solid var(--border-subtle); border-radius:var(--radius-md); background:#F5F7FA;">
+            <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; line-height:1.5;">
+              <input type="checkbox" id="chkCartaAprob" ${CotState.llevaCarta(doc) ? 'checked' : ''} style="width:18px; height:18px; flex:none; margin-top:2px;">
+              <span><b>Enviar con carta de presentación</b><br>
+                <span style="font-size:12px; color:var(--fg-3);">Al aprobar, la cotización sale al cliente de inmediato. Estas 2 páginas institucionales van antes del documento.</span>
+              </span>
+            </label>
+          </div>`}
           <div style="margin-top:8px; padding:8px; border:1px dashed var(--border-default); border-radius:8px; max-width:420px;">
             <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${FMT.money(tot.subtotal)}</strong></div>
             ${ui.descuentoPct > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descuento (${ui.descuentoPct}%)</span><strong>−${FMT.money(tot.descGlobal)}</strong></div>` : ''}
@@ -467,6 +494,26 @@
         </table>
       </fieldset>
     `;
+
+    // La casilla se persiste al momento: confirmarAprobacion() relee el documento
+    // de Firestore para armar el espejo público, así que cambiarla solo en
+    // pantalla no tendría ningún efecto sobre lo que recibe el cliente.
+    const chkCarta = document.getElementById('chkCartaAprob');
+    if (chkCarta) {
+      chkCarta.addEventListener('change', async (e) => {
+        const val = e.target.checked;
+        e.target.disabled = true;
+        try {
+          await CotizacionesService.updateCotizacion(docId, { incluye_carta: val });
+          Toast.show(val ? 'Se enviará con carta de presentación.' : 'Se enviará sin carta de presentación.', 'ok');
+        } catch (err) {
+          e.target.checked = !val;
+          Toast.show('No se pudo cambiar la carta: ' + (err?.message || err), 'bad');
+        } finally {
+          e.target.disabled = false;
+        }
+      });
+    }
 
     Modal.open('overlayCotAprobacion', { onEscape: true });
     if (typeof lucide !== 'undefined') lucide.createIcons();

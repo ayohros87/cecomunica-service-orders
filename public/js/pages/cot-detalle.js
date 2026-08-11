@@ -398,9 +398,10 @@
   // ── Enviar por correo (panel con preview) ─────────────────────
   async function enviarPorCorreo(cli, ej) {
     const t = T.calcTotales(cot);
-    // Generar link público antes de abrir el panel.
-    let link;
-    try {
+    // Escribe (o reescribe) el espejo público con la decisión de carta VIGENTE.
+    // Se llama otra vez si el panel de envío cambia la casilla: el link es el
+    // mismo, lo que cambia es el contenido que abre el cliente.
+    const generarLink = async () => {
       const snapshot = {
         id: cot.id, estado: cot.estado, fecha: cot.fecha, validezDias: cot.validezDias,
         moneda: cot.moneda, descuentoPct: cot.descuentoPct, itbmsPct: cot.itbmsPct,
@@ -421,9 +422,15 @@
         lleva_carta: CotState.llevaCarta(cot),
         snapshot, emisor: catalogos.emisor,
       });
-      link = result.url;
-    } catch (e) { Toast.show('No se pudo generar el link público: ' + (e?.message || e), 'bad'); return; }
+      return result.url;
+    };
 
+    // Generar link público antes de abrir el panel.
+    let link;
+    try { link = await generarLink(); }
+    catch (e) { Toast.show('No se pudo generar el link público: ' + (e?.message || e), 'bad'); return; }
+
+    const cartaAplica = !CotState.esCotizacionDeTaller(cot);
     const payload = await CotState.reenviarPrompt({
       cotizacionId: cot.id,
       clienteNombre: cli.razon || '',
@@ -436,8 +443,24 @@
       ejecutivo: ej.nombre || '',
       link,
       adjuntos: cot.adjuntos || [],
+      llevaCarta: cartaAplica ? CotState.llevaCarta(cot) : null,
     });
     if (!payload) return;
+
+    // La casilla del panel manda sobre lo guardado: se persiste en la cotización
+    // (para el próximo envío) y se reescribe el espejo antes de mandar el correo.
+    if (cartaAplica && payload.llevaCarta !== CotState.llevaCarta(cot)) {
+      const anterior = cot.incluye_carta;
+      try {
+        cot.incluye_carta = payload.llevaCarta;
+        await CotizacionesService.updateCotizacion(cot._docId, { incluye_carta: payload.llevaCarta });
+        await generarLink();
+      } catch (e) {
+        cot.incluye_carta = anterior;
+        Toast.show('No se pudo aplicar el cambio de carta de presentación: ' + (e?.message || e), 'bad');
+        return;
+      }
+    }
 
     try {
       await CotizacionesService.enviarPorCorreo(cot._docId, {

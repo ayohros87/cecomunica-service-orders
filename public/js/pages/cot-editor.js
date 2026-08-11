@@ -9,15 +9,21 @@
   let subiendo = [];        // adjuntos en curso: [{ tmpId, nombre, pct }]
   let userRol = null;       // rol del usuario actual (para política de envío)
   let policyCfg = null;     // { descuentoMaxPct, totalMax } desde empresa/config
+  let dirty = false;        // hay cambios en pantalla que aún no se han guardado
 
   const $ = (id) => document.getElementById(id);
   const esc = FMT.esc; // helper canónico (core/formatting.js)
   const T = window.CotizacionTotales;
 
   // ── Utils ──────────────────────────────────────────────────────
-  function set(patch) { draft = { ...draft, ...patch }; renderTodo(); }
-  function setItems(items) { draft = { ...draft, items }; renderItems(); renderSummary(); }
-  function setCondiciones(condiciones) { draft = { ...draft, condiciones }; renderCondiciones(); }
+  // Toda mutación del borrador ensucia la pantalla: el editor no autoguarda y
+  // salir sin pulsar Guardar descarta el cambio en silencio (incidente
+  // COT-2026-0040: se destildó la carta de presentación y la cotización salió
+  // con ella porque el envío lee el documento de Firestore, no esta pantalla).
+  function marcarSucio() { dirty = true; }
+  function set(patch) { draft = { ...draft, ...patch }; marcarSucio(); renderTodo(); }
+  function setItems(items) { draft = { ...draft, items }; marcarSucio(); renderItems(); renderSummary(); }
+  function setCondiciones(condiciones) { draft = { ...draft, condiciones }; marcarSucio(); renderCondiciones(); }
   function fmtFechaCorta(iso) { return FMT.dateShort(iso); } // delega en el helper canónico
 
   // ── Render principal ──────────────────────────────────────────
@@ -100,6 +106,7 @@
                 <span>
                   <b>Incluir carta de presentación</b><br>
                   <span style="color:var(--fg-3);">Antepone 2 páginas institucionales (quiénes somos, cifras, servicios y sectores) al documento que recibe el cliente. Desmárcala si es un cliente recurrente que ya la conoce.</span>
+                  <span id="cartaEstado" style="display:block; margin-top:6px; font-weight:600; color:var(--fg-2);"></span>
                 </span>
               </label>
             </div>
@@ -141,8 +148,46 @@
     bindHeader();
     // Ausente en cotizaciones de taller (el panel no se renderiza).
     const chkCarta = $('chkCarta');
-    if (chkCarta) chkCarta.addEventListener('change', (e) => { draft.incluye_carta = e.target.checked; });
+    if (chkCarta) { chkCarta.addEventListener('change', onToggleCarta); pintarEstadoCarta(); }
     if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function pintarEstadoCarta() {
+    const el = $('cartaEstado');
+    if (!el) return;
+    const on = draft.incluye_carta !== false;
+    el.textContent = on
+      ? '→ Se enviará CON la carta (2 páginas antes de la cotización).'
+      : '→ Se enviará SIN la carta.';
+    el.style.color = on ? 'var(--fg-2)' : 'var(--warn)';
+  }
+
+  // La casilla se persiste al instante en una cotización ya creada. El envío al
+  // cliente —sea desde el detalle o al aprobar desde el listado— lee el
+  // documento de Firestore, no este borrador: si el destildado esperaba a que
+  // alguien pulsara Guardar, salía la carta igual (COT-2026-0040). En una
+  // cotización nueva todavía no hay documento: viaja en el primer Guardar.
+  async function onToggleCarta(e) {
+    const chk = e.target;
+    const val = chk.checked;
+    draft.incluye_carta = val;
+    pintarEstadoCarta();
+    if (!draft._docId) { marcarSucio(); return; }
+    chk.disabled = true;
+    try {
+      await CotizacionesService.updateCotizacion(draft._docId, {
+        incluye_carta: val,
+        fecha_modificacion: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      Toast.show(val ? 'Se enviará con carta de presentación.' : 'Se enviará sin carta de presentación.', 'ok');
+    } catch (err) {
+      draft.incluye_carta = !val;
+      chk.checked = !val;
+      pintarEstadoCarta();
+      Toast.show('No se pudo guardar la casilla: ' + (err?.message || err), 'bad');
+    } finally {
+      chk.disabled = false;
+    }
   }
 
   // ── Cliente y meta ────────────────────────────────────────────
@@ -426,7 +471,7 @@
     return (n / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  function setAdjuntos(adjuntos) { draft = { ...draft, adjuntos }; renderAdjuntos(); }
+  function setAdjuntos(adjuntos) { draft = { ...draft, adjuntos }; marcarSucio(); renderAdjuntos(); }
 
   function renderAdjuntos() {
     const list = $('adjuntosList');
@@ -544,8 +589,27 @@
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // Salir con cambios en pantalla los descarta. Se confirma antes de navegar
+  // (Cancelar / breadcrumb) y se avisa al cerrar la pestaña; `salir()` centraliza
+  // la pregunta para que ningún camino de salida se la salte.
+  async function salir(destino) {
+    if (dirty) {
+      const ok = await Modal.confirm({
+        title: 'Cambios sin guardar',
+        message: 'Hay cambios en pantalla que todavía no se han guardado. Si sales ahora se descartan y la cotización se enviará con los datos guardados.',
+        danger: true,
+        confirmLabel: 'Salir y descartar',
+      });
+      if (!ok) return;
+      dirty = false;
+    }
+    location.href = destino;
+  }
+
   function bindHeader() {
-    $('btnCancelar').addEventListener('click', () => { location.href = 'index.html'; });
+    $('btnCancelar').addEventListener('click', () => salir('index.html'));
+    const bcIndex = document.querySelector('.app-breadcrumbs a[href="index.html"]');
+    if (bcIndex) bcIndex.addEventListener('click', (e) => { e.preventDefault(); salir('index.html'); });
     $('btnGuardar').addEventListener('click', guardar);
     $('btnPreview').addEventListener('click', preview);
     $('btnAddItem').addEventListener('click', () => {
@@ -586,6 +650,7 @@
         doc.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
         const ref = await CotizacionesService.addCotizacion(doc);
+        dirty = false;
         // Si el creador puede enviar y la cotización está DENTRO de política, no se
         // molesta al aprobador: la envía él mismo desde el detalle. Solo se encola la
         // solicitud de aprobación cuando excede el umbral (o el rol no puede enviar).
@@ -607,6 +672,7 @@
         const doc = CotState.toDoc(draft, { catalogos });
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
         await CotizacionesService.updateCotizacion(draft._docId, doc);
+        dirty = false;
         Toast.show('Cambios guardados', 'ok');
         location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(draft._docId);
       }
@@ -688,6 +754,22 @@
         }
       }
       renderTodo();
+
+      // Cualquier edición de un campo ensucia la pantalla. Delegado en el mount
+      // (que sobrevive a los re-render de renderTodo) y en fase de captura para
+      // no depender de que cada handler se acuerde de marcarlo. La casilla de la
+      // carta se excluye: se persiste sola, no queda pendiente de Guardar.
+      const mount = $('editorMount');
+      if (mount) {
+        const marcar = (e) => { if (e.target?.id !== 'chkCarta') marcarSucio(); };
+        mount.addEventListener('input', marcar, true);
+        mount.addEventListener('change', marcar, true);
+      }
+      window.addEventListener('beforeunload', (e) => {
+        if (!dirty) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
     });
   });
 })();
