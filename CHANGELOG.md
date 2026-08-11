@@ -1,5 +1,43 @@
 # Changelog
 
+## [ENTRADA y VISITA: terminales que llegaron tarde] — 2026-08-11
+
+> Los otros dos tipos de orden atascados en "COMPLETADO (EN OFICINA)". Aquí la
+> hipótesis del feature tardío **sí se sostiene**, al revés que en PROGRAMACIÓN:
+> sus terminales propios (`CERRADA (ENTRADA)` el 2026-07-21, `CERRADA (VISITA)`
+> el 2026-07-28) no existían, y sin botón que apretar el técnico marcaba el
+> trabajo hecho y ahí moría la orden.
+>
+> **ENTRADA: 197 corregidas, 214 → 17.** El corte por fecha es el que manda: lo
+> anterior al 2026-07-21 es hueco histórico, lo posterior es proceso. Cerrarlas
+> por la vía normal habría sido un desastre — `onOrdenWritePool` manda a bodega
+> todo lo que esté en cuarentena, taller, asignado **o con el cliente**: **1,000
+> unidades, 739 de ellas hoy en poder del cliente**. La ubicación real de un
+> radio no se deduce de una orden de hace un año.
+>
+> Se usó `correccion_terminal: true`, el mismo mecanismo del arreglo del
+> 2026-07-28: arregla el estado y frena el trigger. Verificado después: el pool
+> quedó intacto (`en_taller` 381, `en_cliente` 3114, `devuelto_revision` 113) y
+> ningún contrato recibió `cancelacion_pendiente` — la marca también frena eso.
+> `fix-entradas-mal-cerradas.js` acepta ahora `--desde` y `--hasta-fecha`; su
+> comportamiento por defecto no cambia.
+>
+> **VISITA TÉCNICA: 21, listas pero SIN CORRER.** Corte perfectamente limpio —
+> todas entre el 2026-02-03 y el 2026-07-17, ninguna posterior al terminal. El
+> inventario no es problema (una visita ocurre en las instalaciones del cliente;
+> `onOrdenWritePool` las manda a su rama `esVisita`, que solo limpia
+> `orden_actual_id`). El problema es **`onComplete`**, que cuenta
+> `CERRADA (VISITA)` para las estadísticas del técnico y manda correo: cerrarlas
+> dispararía **21 correos** al taller y a ventas sobre visitas de hace meses y
+> sumaría una segunda marca a cada técnico, que ya contó al pasar por COMPLETADO.
+>
+> Por eso `correccion_terminal` ahora también se respeta en `onComplete` — la
+> marca significa lo mismo en los dos triggers: *esto se está moviendo hoy pero
+> pasó hace meses, no te comportes como si acabara de ocurrir*.
+> `cierra-visitas-historicas.js` queda escrito y con dry-run verificado, pero
+> **no se corre hasta desplegar functions**: sin el guard vivo, los 21 correos
+> salen igual.
+
 ## [138 programaciones cerradas y el censo de contratos sin origen] — 2026-08-11
 
 > Continuación del cambio de abajo. Dos preguntas del equipo: ¿las 173

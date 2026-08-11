@@ -22,6 +22,21 @@ module.exports = onDocumentUpdated(
     const esVisitaCerrada = /CERRADA \(VISITA\)/i.test(estadoDespues);
     if (!/COMPLETADO/i.test(estadoDespues) && !esVisitaCerrada) return null;
 
+    // Corrección de un terminal histórico: la orden se está moviendo hoy, pero
+    // el trabajo se hizo hace meses. Ni las estadísticas del técnico ni el
+    // correo deben comportarse como si acabara de pasar.
+    //
+    // Nace de las 21 VISITA TÉCNICA paradas en COMPLETADO (EN OFICINA) por ser
+    // ANTERIORES a CERRADA (VISITA) (2026-07-28): cerrarlas es correcto, pero
+    // sin este guard mandaría 21 correos al taller y a ventas sobre visitas de
+    // febrero a julio, y sumaría una segunda marca a cada técnico — ya contaron
+    // cuando pasaron por COMPLETADO. Misma marca y mismo significado que en
+    // onOrdenWritePool (scripts/fix-entradas-mal-cerradas.js).
+    if (after?.correccion_terminal === true) {
+      logger.info("[onComplete] Corrección de terminal histórico: sin stats ni correo", { ordenId });
+      return null;
+    }
+
     // Llavea las estadísticas por UID (identidad estable). Las órdenes sin
     // `tecnico_uid` (viejas) caen al nombre como fallback. NOTA: el lector
     // (usuariosService.getTecnicoStats) suma ambas claves uid+nombre, así que
