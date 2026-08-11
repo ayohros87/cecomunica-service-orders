@@ -164,10 +164,43 @@
   }
 
   // Registra apertura. Solo lo hace una vez por sesión por cotización (sessionStorage flag).
+  // ¿Quien abre es de la casa? El vendedor va en CC del MISMO correo que recibe
+  // el cliente (y supervisión en BCC), así que su copia trae el mismo link. Sin
+  // este corte, revisar la propia cotización se registraba como apertura del
+  // cliente y disparaba el aviso "📬 abierta por <cliente>" — pasó con
+  // COT-2026-0040, "abierta" 24 segundos después de enviarse.
+  //
+  // El corte es la sesión de Firebase: todo interno la tiene (la app la deja en
+  // el navegador), ningún cliente la tiene. Se resuelve con timeout para que un
+  // auth lento nunca deje de registrar una apertura real.
+  function esVisitaInterna() {
+    return new Promise((resolve) => {
+      if (!window.firebase || typeof firebase.auth !== 'function') return resolve(false);
+      let resuelto = false;
+      const listo = (v) => { if (!resuelto) { resuelto = true; clearTimeout(t); resolve(v); } };
+      const t = setTimeout(() => listo(false), 2500);
+      try {
+        const off = firebase.auth().onAuthStateChanged(
+          (u) => { listo(!!u); if (off) off(); },
+          () => listo(false),
+        );
+      } catch (_) { listo(false); }
+    });
+  }
+
+  // Aviso discreto para el interno: que sepa por qué su visita no cuenta.
+  function marcarVistaInterna() {
+    const meta = $('ptMeta');
+    if (!meta || meta.dataset.interno === '1') return;
+    meta.dataset.interno = '1';
+    meta.textContent = (meta.textContent || '') + ' · Vista interna (no cuenta como apertura del cliente)';
+  }
+
   async function logOpen(docId, vCode, cotizacionId) {
     try {
       const key = 'cot_open_' + docId;
       if (sessionStorage.getItem(key)) return;
+      if (await esVisitaInterna()) { marcarVistaInterna(); return; }
       const db = firebase.firestore();
       await db.collection('cotizacion_opens').add({
         verificacion_id: docId,
