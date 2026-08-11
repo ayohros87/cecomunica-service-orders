@@ -11,11 +11,20 @@
  * MISMA familia de modelo. Kenwood y otros reutilizan series entre modelos
  * distintos, y repuntar la ficha ajena borraría esa distinción.
  *
+ * `--forzar` levanta ese candado para el caso en que una PERSONA vio el radio y
+ * dice que el modelo está mal de familia a familia (PNC460 vs PNC560, no una
+ * variante -R). Es la contraparte en script de "Editar ficha → modelo" y del
+ * criterio del callable `fusionarPoolFicha`: la identidad la decide quien tiene
+ * el equipo delante, no el parecido de los labels. Cada cambio entre familias
+ * se imprime aparte y queda en el kardex marcado como decisión manual, porque
+ * es justo el movimiento que el candado existe para evitar por accidente.
+ *
  * NO toca estado, asignación ni verificado: esto corrige QUÉ es la unidad, no
  * dónde está.
  *
  * USAGE (desde functions/):
  *   node scripts/repunta-modelo-lista.js <archivo.txt> <modelo_id> [--write] [--email=..]
+ *        [--forzar] [--motivo="..."]
  * Idempotente.
  */
 const fs = require("fs");
@@ -27,6 +36,9 @@ const pool = require("../src/domain/equiposPool");
 const ARCHIVO   = process.argv[2];
 const MODELO_ID = process.argv[3];
 const dryRun    = !process.argv.includes("--write");
+const FORZAR    = process.argv.includes("--forzar");
+const MOTIVO    = (process.argv.find((a) => a.startsWith("--motivo=")) || "").split("=").slice(1).join("=")
+  || "Decisión manual: el modelo de la ficha estaba mal";
 const EMAIL     = (process.argv.find((a) => a.startsWith("--email=")) || "").split("=")[1]
   || "script:repunta-modelo-lista";
 
@@ -39,12 +51,13 @@ const EMAIL     = (process.argv.find((a) => a.startsWith("--email=")) || "").spl
   const LABEL = `${mv.marca || ""} ${mv.modelo || ""}`.trim();
   const COND  = (mv.estado || "").toUpperCase() === "R" ? "reuso" : "nuevo";
   console.log(`Destino: ${LABEL} (${MODELO_ID}) · estado ${mv.estado} → condicion "${COND}"`);
+  if (FORZAR) console.log(`*** --forzar: se cambian TAMBIÉN fichas de otra familia. Motivo: ${MOTIVO}`);
   console.log(dryRun ? "\n*** DRY-RUN — no se escribe nada ***\n" : "\n*** ESCRIBIENDO ***\n");
 
   const seriales = [...new Set(fs.readFileSync(ARCHIVO, "utf8").split(/\r?\n/)
     .map((s) => pool.normSerial(s.trim())).filter(Boolean))];
 
-  const r = { repuntadas: 0, sinCambio: 0, sinFicha: 0, saltadas: 0 };
+  const r = { repuntadas: 0, sinCambio: 0, sinFicha: 0, saltadas: 0, forzadas: 0 };
   for (const norm of seriales) {
     const snap = await db.collection("equipos_pool").where("serial_norm", "==", norm).get();
     if (snap.empty) { r.sinFicha++; console.log(`  !! sin ficha: ${norm}`); continue; }
@@ -52,14 +65,19 @@ const EMAIL     = (process.argv.find((a) => a.startsWith("--email=")) || "").spl
     for (const doc of snap.docs) {
       const v = doc.data();
       // Solo la ficha de la MISMA familia (mismoModelo tolera el sufijo -R).
-      if (!pool.mismoModelo(v, MODELO_ID, LABEL)) {
+      const ajena = !pool.mismoModelo(v, MODELO_ID, LABEL);
+      if (ajena && !FORZAR) {
         r.saltadas++;
-        console.log(`  SALTADA  ${norm}  es "${v.modelo_label}" — otra familia, no se toca`);
+        console.log(`  SALTADA  ${norm}  es "${v.modelo_label}" — otra familia, no se toca (--forzar para cambiarla)`);
         continue;
       }
       if (v.modelo_id === MODELO_ID && (v.condicion || "") === COND) { r.sinCambio++; continue; }
 
       const antes = `${v.modelo_label || "(sin modelo)"} / ${v.condicion || "?"}`;
+      if (ajena) {
+        r.forzadas++;
+        console.log(`  FORZADA  ${norm} [${doc.id}]  ${antes}  →  ${LABEL} / ${COND}   (cambio ENTRE FAMILIAS)`);
+      }
       if (!dryRun) {
         await doc.ref.set({
           modelo_id: MODELO_ID, modelo_label: LABEL, condicion: COND,
@@ -71,17 +89,19 @@ const EMAIL     = (process.argv.find((a) => a.startsWith("--email=")) || "").spl
           por: "system", por_email: EMAIL,
           tipo: "correccion_modelo",
           de_estado: v.estado || null, a_estado: v.estado || null, ref: null,
-          notas: `Reclasificado a ${LABEL} (${COND}). Antes: ${antes}`,
+          notas: `Reclasificado a ${LABEL} (${COND}). Antes: ${antes}`
+            + (ajena ? ` — cambio ENTRE FAMILIAS forzado. ${MOTIVO}` : ""),
         });
       }
       r.repuntadas++;
-      console.log(`  ${norm}  ${antes}  →  ${LABEL} / ${COND}`);
+      if (!ajena) console.log(`  ${norm}  ${antes}  →  ${LABEL} / ${COND}`);
     }
   }
 
   console.log(`\n=== ${seriales.length} seriales ===`);
   console.log(`repuntadas:  ${r.repuntadas}`);
   console.log(`sin cambio:  ${r.sinCambio}`);
+  if (r.forzadas) console.log(`FORZADAS entre familias: ${r.forzadas}`);
   if (r.saltadas) console.log(`saltadas (otra familia): ${r.saltadas}`);
   if (r.sinFicha) console.log(`sin ficha:   ${r.sinFicha}`);
   if (dryRun) console.log("\n*** DRY-RUN — volver a correr con --write para aplicar ***");
