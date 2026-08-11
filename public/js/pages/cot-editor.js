@@ -216,10 +216,7 @@
               <i data-lucide="plus"></i> Nuevo cliente
             </button>
           </label>
-          <select class="form-select" id="selCliente">
-            <option value="">Seleccione…</option>
-            ${catalogos.clientes.map(c => `<option value="${esc(c.id)}" ${c.id === draft.clienteId ? 'selected' : ''}>${esc(c.razon)}</option>`).join('')}
-          </select>
+          <div id="comboCliente"></div>
           <div class="cc-dp-ln" style="margin-top:8px;">
             ${cliente.representante ? `<b>Representante legal:</b> ${esc(cliente.representante)}<br>` : ''}
             RUC <span class="mono">${esc(cliente.ruc || '—')}</span><br>
@@ -288,15 +285,18 @@
     $('btnNuevoCliente').addEventListener('click', () => {
       location.href = '../contratos/nuevo-cliente.html?from=cotizacion';
     });
-    $('selCliente').addEventListener('change', (e) => {
-      const newId = e.target.value;
-      // Auto-ajusta ITBMS al flag itbms_exento del cliente (mismo patrón que contratos).
-      const cli = catalogos.clientesById[newId];
-      const patch = { clienteId: newId };
-      if (cli) {
-        patch.itbmsPct = cli.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
-      }
-      set(patch);
+    CotState.mountClienteCombo('comboCliente', {
+      clientes: catalogos.clientes,
+      selectedId: draft.clienteId,
+      onSelect: (newId) => {
+        // Auto-ajusta ITBMS al flag itbms_exento del cliente (mismo patrón que contratos).
+        const cli = catalogos.clientesById[newId];
+        const patch = { clienteId: newId };
+        if (cli) {
+          patch.itbmsPct = cli.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+        }
+        set(patch);
+      },
     });
     $('inpDirigidoA').addEventListener('input', (e) => { draft.dirigido_a = e.target.value; });
     $('inpDirigidoEmail').addEventListener('input', (e) => { draft.dirigido_email = e.target.value; });
@@ -758,10 +758,16 @@
       // Cualquier edición de un campo ensucia la pantalla. Delegado en el mount
       // (que sobrevive a los re-render de renderTodo) y en fase de captura para
       // no depender de que cada handler se acuerde de marcarlo. La casilla de la
-      // carta se excluye: se persiste sola, no queda pendiente de Guardar.
+      // carta se excluye: se persiste sola, no queda pendiente de Guardar. El
+      // buscador del combo de cliente también: teclear ahí es navegar, no
+      // editar — lo que sí ensucia es elegir, y eso pasa por set().
       const mount = $('editorMount');
       if (mount) {
-        const marcar = (e) => { if (e.target?.id !== 'chkCarta') marcarSucio(); };
+        const marcar = (e) => {
+          if (e.target?.id === 'chkCarta') return;
+          if (e.target?.dataset?.comboBusqueda) return;
+          marcarSucio();
+        };
         mount.addEventListener('input', marcar, true);
         mount.addEventListener('change', marcar, true);
       }

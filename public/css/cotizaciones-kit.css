@@ -73,6 +73,13 @@
 }
 .cc-panel-head h3 i[data-lucide] { width: 16px; height: 16px; color: var(--accent); }
 .cc-panel-body { padding: var(--sp-5); }
+/* El combo de cliente despliega su lista por encima del panel; sin esto el
+   overflow:hidden de arriba la recorta a media altura. La clase la pone y la
+   quita el propio combo (CotState.mountClienteCombo) al abrir/cerrar. */
+.cc-panel.cc-panel-combo-abierto { overflow: visible; }
+/* El resaltado del término buscado, en la paleta del sistema (el <mark> del
+   navegador es amarillo fosforescente). */
+.combo-item mark { background: var(--brand-soft); color: inherit; font-weight: 700; border-radius: 2px; padding: 0 1px; }
 
 /* De/Para mini-cards */
 .cc-dp { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); }

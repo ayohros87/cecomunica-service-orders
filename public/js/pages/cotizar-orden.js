@@ -218,10 +218,7 @@
       </div>` : ''}
       <div class="form-field">
         <label class="form-label">Cliente (Para) <span class="req">*</span></label>
-        <select class="form-select" id="selCliente">
-          <option value="">Seleccione…</option>
-          ${catalogos.clientes.map(c => `<option value="${esc(c.id)}" ${c.id === form.clienteId ? 'selected' : ''}>${esc(c.razon)}</option>`).join('')}
-        </select>
+        <div id="comboCliente"></div>
         <div class="cc-dp-ln" style="margin-top:8px;">
           ${cli.representante ? `<b>Representante:</b> ${esc(cli.representante)}<br>` : ''}
           RUC <span class="mono">${esc(cli.ruc || '—')}</span> · Tel <span class="mono">${esc(cli.tel || '—')}</span><br>
@@ -253,12 +250,16 @@
       </div>
     `;
 
-    $('selCliente').addEventListener('change', (e) => {
-      form.clienteId = e.target.value;
-      const cli2 = catalogos.clientesById[form.clienteId];
-      if (cli2) form.itbmsPct = cli2.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
-      touch();
-      renderCliente(); renderResumen();
+    CotState.mountClienteCombo('comboCliente', {
+      clientes: catalogos.clientes,
+      selectedId: form.clienteId,
+      onSelect: (newId) => {
+        form.clienteId = newId;
+        const cli2 = catalogos.clientesById[form.clienteId];
+        if (cli2) form.itbmsPct = cli2.itbms_exento ? 0 : Math.round(FMT.ITBMS_RATE * 100);
+        touch();
+        renderCliente(); renderResumen();
+      },
     });
     $('inpFecha').addEventListener('change', (e) => { form.fecha = e.target.value; touch(); });
     $('inpValidez').addEventListener('input', (e) => { form.validezDias = Number(e.target.value || 0); touch(); });

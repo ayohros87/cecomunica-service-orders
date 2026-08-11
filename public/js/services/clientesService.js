@@ -90,7 +90,10 @@ const ClientesService = {
   },
 
   /**
-   * Load all clients from Firestore
+   * Load all clients from Firestore.
+   * OJO: devuelve TAMBIÉN los borrados (deleted:true) — sirve para resolver un
+   * cliente_id histórico que ya fue fusionado. Todo selector/autocompletado
+   * debe filtrar `c.deleted !== true` antes de ofrecerlos.
    * @returns {Promise<Map<string, Object>>} Map of clientId => clientData
    */
   async loadClientes() {

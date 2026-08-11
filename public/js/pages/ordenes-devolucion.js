@@ -1319,6 +1319,7 @@
     let clientes = [];
     try { clientes = [...(await ClientesService.loadClientes()).values()]; } catch (e) { /* datalist vacío */ }
     const nombres = clientes
+      .filter(c => c.deleted !== true) // los duplicados fusionados no se sugieren
       .map(c => (c.nombre || '').trim()).filter(Boolean)
       .sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
 
