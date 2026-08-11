@@ -386,7 +386,10 @@
         contrato_origen_ref: refs[0],
         contrato_origen_ids: ids,
         contrato_origen_refs: refs,
-        origen_tipo: 'sistema',
+        // 'interno' — el mismo valor que escribe el formulario de contrato
+        // nuevo (js/domain/origenContrato.js). Antes esta pantalla ponía
+        // 'sistema', un cuarto valor que ningún lector contemplaba.
+        origen_tipo: 'interno',
       });
       Object.assign(ctx.contrato, {
         contrato_origen_id: ids[0], contrato_origen_ref: refs[0],

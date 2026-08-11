@@ -79,19 +79,63 @@ window.NCForm = {
   },
 
   // ── Vínculo al contrato original (Renovación / Adición / Reemplazo) ────
-  // PLAN_CICLO_VIDA_EQUIPOS.md C.1: enlace SUAVE — si no se elige nada queda
-  // origen_tipo 'ninguno'; los contratos históricos en papel se marcan legacy
-  // con una referencia libre.
-  _origenAplica() {
-    const accion = document.getElementById('accion')?.value;
-    const tipo   = document.getElementById('tipo_contrato')?.value;
-    return accion === 'Renovación' || accion === 'Adición' || tipo === 'REEMP';
+  // PLAN_CICLO_VIDA_EQUIPOS.md C.1. El enlace nació SUAVE y nadie lo llenaba
+  // (0 de 25 renovaciones), lo que dejaba sin origen a toda la cadena de la
+  // devolución. Desde 2026-08-11 es OBLIGATORIO en Renovación y Reemplazo, con
+  // el escape explícito "es de papel / no está en el sistema". El criterio vive
+  // en js/domain/origenContrato.js — aquí solo se lee el DOM y se pinta.
+
+  // Estado del bloque tal como lo dejó el vendedor, en la forma que espera el
+  // dominio. Un solo lector para pintar, validar y guardar.
+  leerOrigen() {
+    const accion      = document.getElementById('accion')?.value || '';
+    const codigo_tipo = document.getElementById('tipo_contrato')?.value || '';
+    const legacy      = !!document.getElementById('origenLegacyChk')?.checked;
+    const chks        = [...document.querySelectorAll('#origenContratosList .origen-chk')];
+    const marcados    = legacy ? [] : chks.filter(c => c.checked);
+    return {
+      accion, codigo_tipo, legacy,
+      origen_ids:  marcados.map(c => c.value),
+      origen_refs: marcados.map(c => c.getAttribute('data-ref') || c.value),
+      legacy_ref:  (document.getElementById('origenLegacyRef')?.value || '').trim(),
+      candidatos:  chks.length,
+    };
+  },
+
+  // Valida y avisa. `silencioso` para el repintado (no molestar mientras el
+  // vendedor todavía está llenando), ruidoso al intentar guardar.
+  validarOrigen({ silencioso = false } = {}) {
+    const sel = this.leerOrigen();
+    // La lista vacía significa dos cosas distintas y solo una manda al escape
+    // de papel. Si todavía no cargó (o falló), decirle "este cliente no tiene
+    // contratos" sería mentira — y empujaría a marcar legacy de más.
+    const estado = document.getElementById('origenContratosList')?.dataset.estado;
+    if (OrigenContrato.obligatorio(sel) && !sel.legacy && !sel.origen_ids.length
+        && (estado === 'cargando' || estado === 'error')) {
+      const r = { ok: false, motivo: 'lista_no_cargada', foco: 'lista',
+        mensaje: estado === 'cargando'
+          ? 'Espera a que carguen los contratos del cliente para elegir el original.'
+          : 'No se pudieron cargar los contratos del cliente. Vuelve a elegir la acción para reintentar.' };
+      if (!silencioso) Toast.show(`⚠️ ${r.mensaje}`, 'warn');
+      return r;
+    }
+    const r = OrigenContrato.validar(sel);
+    if (r.ok || silencioso) return r;
+    Toast.show(`⚠️ ${r.mensaje}`, 'warn');
+    const foco = { lista: 'origenContratosList', legacy: 'origenLegacyChk', ref: 'origenLegacyRef' }[r.foco];
+    const el = foco && document.getElementById(foco);
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (el.focus) try { el.focus(); } catch (_) { /* el div de la lista no enfoca */ }
+    }
+    return r;
   },
 
   refreshOrigenUI() {
     const box = document.getElementById('origenBox');
     if (!box) return;
-    const aplica = this._origenAplica();
+    const sel    = this.leerOrigen();
+    const aplica = OrigenContrato.aplica(sel);
     box.style.display = aplica ? 'block' : 'none';
     const chk  = document.getElementById('origenLegacyChk');
     const list = document.getElementById('origenContratosList');
@@ -101,20 +145,42 @@ window.NCForm = {
       list.querySelectorAll('.origen-chk').forEach(c => { c.disabled = chk.checked; });
       ref.style.display = chk.checked ? 'block' : 'none';
     }
+
+    // La exigencia se ve: asterisco y texto de ayuda cambian según el caso, en
+    // vez de descubrirse recién al intentar guardar.
+    const obliga = OrigenContrato.obligatorio(sel);
+    const req  = document.getElementById('origenReq');
+    if (req) req.style.display = obliga ? '' : 'none';
+    const hint = document.getElementById('origenHint');
+    if (hint) {
+      hint.textContent = !obliga
+        ? 'Conecta este contrato con el original para la transición de equipos. En una adición es opcional: el cliente conserva lo que ya tenía.'
+        : (chk?.checked
+            ? 'Anota la referencia del contrato en papel — es el único rastro que quedará del original.'
+            : 'Obligatorio: de este vínculo salen los equipos que el cliente debe devolver. Si el original no está en el sistema, márcalo abajo.');
+    }
+
     if (aplica) this.cargarContratosOrigen();
   },
 
   _origenClienteCargado: null,
   // Lista de CHECKBOXES (una renovación puede consolidar varios contratos
-  // viejos — multi-selección). Vacío = 'ninguno' (se puede vincular después).
+  // viejos — multi-selección).
   async cargarContratosOrigen() {
     const clienteId = document.getElementById('cliente')?.value || '';
     const list = document.getElementById('origenContratosList');
     if (!list) return;
     const hint = (msg) => { list.innerHTML = `<span style="color:var(--fg-3,#6b7280);">${NC.escapeHtml(msg)}</span>`; };
-    if (!clienteId) { hint('Selecciona el cliente primero…'); this._origenClienteCargado = null; return; }
+    // `estado` distingue "el cliente no tiene contratos" de "todavía no cargan":
+    // en los dos casos la lista está vacía, pero solo el primero justifica
+    // mandar al vendedor al escape de papel (validarOrigen lo consulta).
+    if (!clienteId) {
+      list.dataset.estado = 'sin-cliente';
+      hint('Selecciona el cliente primero…'); this._origenClienteCargado = null; return;
+    }
     if (this._origenClienteCargado === clienteId) return; // ya cargado para este cliente
     this._origenClienteCargado = clienteId;
+    list.dataset.estado = 'cargando';
     hint('Cargando contratos del cliente…');
     try {
       const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
@@ -125,10 +191,19 @@ window.NCForm = {
               <span><span class="form-check-label">${NC.escapeHtml(c.contrato_id || c.id)} · ${NC.escapeHtml(c.tipo_contrato || '')} · ${NC.escapeHtml(c.estado || '')}</span></span>
             </label>`).join('')
         : '';
+      list.dataset.estado = 'listo';
       if (!contratos.length) hint('El cliente no tiene contratos vigentes en el sistema');
+      // Repintar con la lista ya cargada (la cache del cliente hace que esta
+      // vuelta NO vuelva a consultar, así que no hay recursión).
+      this.refreshOrigenUI();
     } catch (e) {
       console.warn('No se pudieron cargar los contratos del cliente', e);
+      list.dataset.estado = 'error';
       hint('No se pudieron cargar los contratos');
+      // Se suelta la marca para que el próximo refresh (cambiar cliente,
+      // acción o tipo) reintente. NO se repinta aquí: refreshOrigenUI volvería
+      // a llamar a esta función y un fallo persistente giraría en seco.
+      this._origenClienteCargado = null;
     }
   },
 

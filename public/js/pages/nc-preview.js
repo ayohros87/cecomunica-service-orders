@@ -26,7 +26,9 @@ window.NCPreview = {
     });
 
     const tot = NCForm.recalcularTotalesContrato();
+    const origen = NCForm.leerOrigen();
     return {
+      origen,
       cliente_id: clienteId,
       cliente_nombre: cliente?.nombre || '',
       cliente_ruc: cliente?.ruc || '', cliente_dv: cliente?.dv || '',
@@ -57,6 +59,12 @@ window.NCPreview = {
     const refurbishedLabel = draft.accion === 'Renovación' && draft.renovacion_sin_equipo
       ? (draft.renovacion_refurbished_componentes ? 'Sí' : 'No')
       : '';
+    // El vínculo al original decide qué equipos se le van a reclamar al cliente:
+    // se confirma a la vista, no a ciegas.
+    const or = draft.origen || {};
+    const origenLabel = !OrigenContrato.aplica(or) ? ''
+      : (or.legacy ? `En papel / fuera del sistema${or.legacy_ref ? ` — ${or.legacy_ref}` : ''}`
+                   : (or.origen_refs || []).join(', ') || 'Ninguno');
 
     const eqRows = (draft.equipos || []).map((e, idx) => `
       <tr>
@@ -89,6 +97,7 @@ window.NCPreview = {
           ${renovacionLabel   ? `<div><b>Modalidad renovación:</b> ${esc(renovacionLabel)}</div>` : ''}
           ${refurbishedLabel  ? `<div><b>Refurbished batería/antena/clip/piezas:</b> ${esc(refurbishedLabel)}</div>` : ''}
           <div><b>Duración:</b> ${esc(draft.duracion || '')}</div>
+          ${origenLabel ? `<div><b>Contrato(s) original(es):</b> ${esc(origenLabel)}</div>` : ''}
           <div><b>Observaciones:</b> ${esc(draft.observaciones || '-')}</div>
         </div>
       </div>
@@ -144,6 +153,9 @@ window.NCPreview = {
       }
       const filas = [...document.querySelectorAll('#tablaEquipos tbody tr')];
       if (!filas.length) { Toast.show('⚠️ Debe agregar al menos un equipo.', 'warn'); return; }
+      // Renovación / Reemplazo tienen que declarar de qué contrato vienen: de
+      // ese vínculo salen los equipos a devolver (js/domain/origenContrato.js).
+      if (!NCForm.validarOrigen().ok) return;
 
       NC.previewDraft = self.buildContratoDraft();
       const sub = `${NC.previewDraft.cliente_nombre || ''} · ${NC.previewDraft.tipo_contrato || ''} · ${NC.previewDraft.accion || ''}`;

@@ -228,9 +228,11 @@
           </div>
 
           <!-- Vínculo al contrato original (Renovación / Adición / Reemplazo).
-               Enlace SUAVE: se puede omitir y vincular después. -->
+               OBLIGATORIO en Renovación y Reemplazo desde 2026-08-11: de este
+               vínculo salen los equipos a devolver. La Adición sigue opcional.
+               El criterio vive en js/domain/origenContrato.js. -->
           <div class="form-field" id="origenBox" style="display:none; grid-column:1/-1;">
-            <label class="form-label">Contrato(s) original(es) — al que renueva / adiciona / reemplaza (puede ser más de uno)</label>
+            <label class="form-label">Contrato(s) original(es) — al que renueva / adiciona / reemplaza (puede ser más de uno) <span class="req" id="origenReq" style="display:none;">*</span></label>
             <div id="origenContratosList"
                  style="display:flex;flex-direction:column;gap:4px;max-height:190px;overflow:auto;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;padding:8px 10px;font-size:13px;">
               <span style="color:var(--fg-3,#6b7280);">Selecciona el cliente primero…</span>
@@ -242,7 +244,7 @@
             <input class="form-input" type="text" id="origenLegacyRef"
                    placeholder="Referencia del contrato en papel (número, año…)"
                    style="display:none; margin-top:6px;">
-            <span class="form-hint">Conecta este contrato con el original para la transición de equipos. Si no lo eliges ahora, se puede vincular después.</span>
+            <span class="form-hint" id="origenHint">Conecta este contrato con el original para la transición de equipos.</span>
           </div>
 
           <div class="form-field">
@@ -387,17 +389,18 @@
   </div>
 
   <script defer src="../js/domain/totales.js"></script>
+  <script defer src="../js/domain/origenContrato.js?v=orig1"></script>
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
   <script src="/js/vendor/lucide.min.js"></script>
 
   <script src="../js/services/cargosService.js" defer></script>
   <script src="../js/pages/nc-state.js"       defer></script>
-  <script src="../js/pages/nc-form.js"        defer></script>
+  <script src="../js/pages/nc-form.js?v=orig1"        defer></script>
   <script src="../js/pages/nc-cargos.js"      defer></script>
   <script src="../js/pages/nc-combo.js"       defer></script>
-  <script src="../js/pages/nc-preview.js"     defer></script>
-  <script src="../js/pages/nc-guardar.js?v=num1"     defer></script>
+  <script src="../js/pages/nc-preview.js?v=orig1"     defer></script>
+  <script src="../js/pages/nc-guardar.js?v=orig1"     defer></script>
   <script src="../js/pages/nuevo-contrato.js" defer></script>
   <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->

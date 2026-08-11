@@ -1,5 +1,56 @@
 # Changelog
 
+## [El vínculo al contrato original deja de ser opcional] — 2026-08-11
+
+> Reporte: "los contratos de reemplazo y renovación no están asociando los
+> seriales que se deben devolver". Caso REEMP20260811-01 (FUNDACION BENEFICA
+> MAGEN DAVID ACADEMY). No los asociaba mal: **nunca llegaba a asociarlos**, y
+> la cadena estaba cortada en tres puntos.
+>
+> **1. El vínculo al original era opcional y nadie lo llenaba.** El formulario
+> lo ofrecía como enlace SUAVE: sin marcar nada quedaba `origen_tipo: 'ninguno'`
+> y el contrato no apuntaba a ningún original. Medido contra producción:
+> **67 de 74** contratos transicionables no-legacy sin origen, y de las 25
+> renovaciones, **cero**. El propio `linaje.js` ya lo decía en un comentario
+> ("hoy es el caso de la enorme mayoría"), pero nada lo exigía.
+>
+> **2. Sin origen, el automático nunca corre.** `onEntregaTransicion` corta en
+> `!origenIds.length`, y es el único que crea los mapeos de devolución y la
+> orden de recuperación. Contratos con `transicion_auto_at` en toda la base:
+> **0**. El auto-registro no se había ejecutado ni una vez desde que existe.
+>
+> **3. El fallback manual ofrecía los radios equivocados.** Sin vínculo, la
+> pantalla de transición lista "todos los equipos del cliente" filtrados a
+> `asignado_contrato|en_cliente`. Para REEMP20260811-01 ofrecía 3 radios de un
+> DEMO de 2025 y de otro reemplazo, y escondía los 10 HYTERA P50 que la
+> observación mandaba reemplazar: están `en_taller` porque su orden de
+> programación (2026072107) quedó en "COMPLETADO (EN OFICINA)" y nunca pasó a
+> "ENTREGADO AL CLIENTE".
+>
+> **Este cambio ataca el 1**, que es el que desatasca los otros dos. En
+> Renovación y Reemplazo el original es obligatorio, con el escape explícito
+> "es de papel / no está en el sistema" — que ahora **exige su referencia**: sin
+> ella la excepción no deja rastro y se vuelve un "siguiente" más del
+> formulario. Nadie queda bloqueado; la excepción se declara.
+>
+> La **Adición queda fuera a propósito**, mismo corte que usa
+> `onEntregaTransicion`: agrega unidades a un contrato vigente, el cliente
+> conserva lo de antes y no hay devolución (exigirlo abriría las recuperaciones
+> falsas de NADCAR y ACQUA TRES del 2026-08-10). Se le sigue ofreciendo el
+> vínculo, sin exigirlo.
+>
+> El criterio vive en `js/domain/origenContrato.js` — fuente única para pintar
+> la exigencia, bloquear el guardado y derivar `origen_tipo`, mismo patrón que
+> `transicionPendiente.js`. La validación va **antes** de reservar el
+> correlativo: rechazar después quemaba un número de contrato. De paso, la
+> pantalla de transición escribía `origen_tipo: 'sistema'`, un cuarto valor que
+> ningún lector contemplaba; ahora escribe `'interno'` como el formulario.
+>
+> **Sigue pendiente** (no lo toca este cambio): las **173 de 758** órdenes de
+> programación paradas en "COMPLETADO (EN OFICINA)" que dejan el inventario
+> congelado en el taller, y ampliar el fallback de salientes a `en_taller` sin
+> orden viva. 202/202 tests.
+
 ## [Devolución: cuatro reglas que decidían por tipo en vez de por evidencia] — 2026-08-10
 
 > La columna nueva destapó tres casos que el equipo mandó a revisar. Ninguno lo

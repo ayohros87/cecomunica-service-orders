@@ -83,11 +83,33 @@ window.NCGuardar = {
     sessionStorage.removeItem('contrato_prefill');
   },
 
+  // Devuelve el formulario a su estado editable tras un rechazo temprano. Sin
+  // esto el modal ya cerró, `NC.guardando` sigue en true y los dos botones de
+  // guardar quedan deshabilitados: la página parece colgada.
+  _abortarGuardado() {
+    NC.guardando = false;
+    const b1 = document.getElementById('btnConfirmPreview'); if (b1) b1.disabled = false;
+    const b2 = document.getElementById('btnGuardar');        if (b2) b2.disabled = false;
+  },
+
   async guardarContratoConfirmado(user) {
     const clienteId = document.getElementById('cliente').value;
     if (!clienteId) {
       Toast.show('⚠️ Debe seleccionar un cliente antes de crear el contrato.', 'warn');
       document.getElementById('clienteCombo').focus();
+      this._abortarGuardado();
+      return;
+    }
+
+    // Segundo candado del vínculo al original. El submit ya validó, pero esta
+    // función es la ÚNICA vía de creación de contratos y no debe depender de
+    // que la llamen bien. Va ANTES de reservar el correlativo: rechazar después
+    // quemaría un número de contrato que nadie usaría.
+    const origen  = NCForm.leerOrigen();
+    const vOrigen = OrigenContrato.validar(origen);
+    if (!vOrigen.ok) {
+      Toast.show(`⚠️ ${vOrigen.mensaje}`, 'warn');
+      this._abortarGuardado();
       return;
     }
 
@@ -129,18 +151,15 @@ window.NCGuardar = {
                precio: parseFloat(row.querySelector('.precio').value || 0) };
     });
 
-    // Vínculo suave al contrato original (Renovación/Adición/Reemplazo) —
-    // PLAN_CICLO_VIDA_EQUIPOS.md C.1. 'ninguno' = aplica pero no se eligió.
+    // Vínculo al contrato original (Renovación/Adición/Reemplazo) —
+    // PLAN_CICLO_VIDA_EQUIPOS.md C.1, obligatorio desde 2026-08-11 en
+    // Renovación y Reemplazo (js/domain/origenContrato.js explica por qué).
     // Multi-selección: una renovación puede consolidar varios contratos viejos.
     // contrato_origen_id/_ref (primero de la lista) se conservan por compat.
-    const origenAplica = NCForm._origenAplica();
-    const origenLegacy = origenAplica && !!document.getElementById('origenLegacyChk')?.checked;
-    const origenChks   = (origenAplica && !origenLegacy)
-      ? [...document.querySelectorAll('#origenContratosList .origen-chk:checked')] : [];
-    const origenIds    = origenChks.map(c => c.value);
-    const origenRefs   = origenChks.map(c => c.getAttribute('data-ref') || c.value);
-    const origenId     = origenIds[0] || null;
-    const origenRef    = origenRefs[0] || '';
+    const origenIds  = origen.origen_ids;
+    const origenRefs = origen.origen_refs;
+    const origenId   = origenIds[0] || null;
+    const origenRef  = origenRefs[0] || '';
 
     const clienteData     = NC.listaClientes[clienteId];
     const duracionSel     = document.getElementById('duracion').value;
@@ -168,12 +187,12 @@ window.NCGuardar = {
       renovacion_sin_equipo: sinEquipo,
       renovacion_refurbished_componentes: refurb,
       renovacion_modalidad: esRenov ? (sinEquipo ? 'Renovación sin equipo' : 'Renovación con equipo') : '',
-      origen_tipo: !origenAplica ? '' : (origenLegacy ? 'legacy' : (origenId ? 'interno' : 'ninguno')),
+      origen_tipo: OrigenContrato.tipoDe(origen),
       contrato_origen_id: origenId,
       contrato_origen_ref: origenRef,
       contrato_origen_ids: origenIds,
       contrato_origen_refs: origenRefs,
-      origen_legacy_ref: origenLegacy ? (document.getElementById('origenLegacyRef')?.value || '').trim() : '',
+      origen_legacy_ref: origen.legacy ? origen.legacy_ref : '',
       estado: 'pendiente_aprobacion',
       observaciones: document.getElementById('observaciones').value.trim(),
       equipos,
