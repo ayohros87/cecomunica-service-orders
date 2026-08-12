@@ -28,7 +28,10 @@
  *
  * USAGE (desde functions/):
  *   node scripts/cierra-programaciones-historicas.js <ordenId>[,<ordenId>...] [--write]
- *                                                    [--motivo="..."]
+ *                                                    [--motivo="..."] [--tipo=REPARACIÓN]
+ * --tipo: por defecto PROGRAMACIÓN; acepta REPARACIÓN (2026-08-12 — mismas
+ *         reglas: su terminal también es "ENTREGADO AL CLIENTE" y las paradas
+ *         se segmentaron por la misma evidencia antes de listar los IDs aquí).
  * Idempotente: una orden ya entregada se salta.
  */
 const admin = require("firebase-admin");
@@ -37,6 +40,10 @@ const db = admin.firestore();
 
 const IDS = (process.argv[2] || "").split(",").map((s) => s.trim()).filter(Boolean);
 const dryRun = !process.argv.includes("--write");
+// Tipo esperado — el guard de abajo salta cualquier orden que no lo sea.
+const TIPO = ((process.argv.find((a) => a.startsWith("--tipo=")) || "").split("=")[1] || "PROGRAMACIÓN")
+  .toUpperCase();
+const RE_TIPO = TIPO.startsWith("REPARA") ? /REPARA/i : /PROGRAMA/i;
 const MOTIVO = (process.argv.find((a) => a.startsWith("--motivo=")) || "").split("=").slice(1).join("=")
   || "Cierre histórico: el equipo se entregó en su momento y luego el cliente lo devolvió; "
    + "la devolución no se registró porque ese proceso no existía. Las unidades están en bodega "
@@ -63,8 +70,8 @@ const norm = (s) => String(s || "").trim().toUpperCase();
       console.log(`${id}: ya estaba ENTREGADO AL CLIENTE — se salta`);
       saltadas++; continue;
     }
-    if (!/PROGRAMA/i.test(String(o.tipo_de_servicio || ""))) {
-      console.log(`${id}: tipo ${o.tipo_de_servicio || "?"} — NO es PROGRAMACIÓN, se salta`);
+    if (!RE_TIPO.test(String(o.tipo_de_servicio || ""))) {
+      console.log(`${id}: tipo ${o.tipo_de_servicio || "?"} — NO es ${TIPO}, se salta`);
       saltadas++; continue;
     }
 

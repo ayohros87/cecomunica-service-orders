@@ -51,7 +51,9 @@ const dias = (t) => { const d = t?.toDate ? t.toDate() : null; return d && !isNa
     if (a?.contrato_doc_id) {
       tot.conAsig++;
       const c = contratos.get(a.contrato_doc_id);
-      if (!c || c.deleted || !["activo", "aprobado"].includes(c.estado)) {
+      // pendiente_devolucion apunta a un contrato muerto A PROPÓSITO: la
+      // asignación es el hilo de la recuperación en vuelo. No es deuda.
+      if ((!c || c.deleted || !["activo", "aprobado"].includes(c.estado)) && !u.pendiente_devolucion) {
         tot.asigContratoMuerto++;
         const k = c ? c.estado : "(contrato no existe)";
         asigMuertaDetalle.set(k, (asigMuertaDetalle.get(k) || 0) + 1);

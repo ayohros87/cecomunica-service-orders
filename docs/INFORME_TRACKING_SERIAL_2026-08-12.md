@@ -94,7 +94,7 @@ En papel está completo. En datos: **nunca ha corrido de punta a punta**. `trans
 | `por_clasificar` (ubicación desconocida) | **1,422 (19%)** | Herencia de conteos/backfills |
 | Sin modelo | 2,280 (31%) | Invisibles al inventario por modelo |
 | `verificado: false` | 4,955 (67%) | Migración automática sin confirmación humana |
-| Asignadas a contrato **anulado** | **50** | Asignaciones muertas sin soltar |
+| Asignadas a contrato **anulado** | 50 → **18 reales** | 32 son recuperaciones en vuelo (`pendiente_devolucion` usa la asignación como hilo, por diseño); las 18 restantes sí son residuo |
 | Con linaje `reemplaza_a` | **0** | La maquinaria jamás produjo un linaje |
 | `pendiente_devolucion` | 32 (todas <7 días) | El circuito nuevo sí está arrancando |
 
@@ -133,7 +133,7 @@ En papel está completo. En datos: **nunca ha corrido de punta a punta**. `trans
 El vendedor, al cerrar el trato, sabe: *"las P50 se reemplazan por T338"* (lo escribió en observaciones de REEMP20260811-01 — como **texto libre**). El sistema le pide esa decisión a recepción, semanas después, en `transicion.html`, reconstruyéndola desde el pool. Recepción no estuvo en la negociación → no registra nada → 0 linajes. **La pantalla de transición está bien diseñada para las excepciones, pero se usó como captura primaria, y como captura primaria está en el lugar equivocado del flujo.**
 
 ### B3 · La asignación es un puntero único que se pisa
-`asignacion` guarda UN contrato. La reasignación silenciosa está permitida por decisión (2026-07-22, queda nota en kardex), pero mientras el contrato viejo siga vigente, "cuántas unidades tiene el contrato X" da respuestas distintas según a quién se le pregunte: **12 de 62 contratos difieren** entre su subcolección y el pool. Además **50 unidades siguen asignadas a contratos anulados** (la anulación no siempre soltó).
+`asignacion` guarda UN contrato. La reasignación silenciosa está permitida por decisión (2026-07-22, queda nota en kardex), pero mientras el contrato viejo siga vigente, "cuántas unidades tiene el contrato X" da respuestas distintas según a quién se le pregunte: **12 de 62 contratos difieren** entre su subcolección y el pool. Además **18 unidades siguen asignadas a contratos anulados** sin razón viva (medido 2026-08-12; otras 32 apuntan a un anulado *a propósito* — son recuperaciones en vuelo donde `pendiente_devolucion` usa la asignación como hilo).
 
 ### B4 · en_cliente sin contrato: la brecha del 62%
 1,918 unidades están con un cliente identificado pero sin vehículo comercial. Origen: custodia de órdenes viejas, POC sin contrato, backfills. Es la razón por la que la pantalla de transición cae a "todos los equipos del cliente" y por la que el CTA de renovación no puede proponer nada útil.
@@ -187,7 +187,7 @@ La pantalla de transición actual **queda** — como lo que siempre debió ser: 
 
 1. **Backfill**: cruzar las 1,918 por serial contra `poc_devices.contrato_doc_id` y las subcolecciones de seriales de contratos vigentes (el patrón `linkContratoPoc` ya existe); lo ambiguo a cola de sospechosos, no auto-enlace.
 2. **Invariante hacia adelante**: una unidad no pasa a `en_cliente` sin `asignacion.contrato_doc_id` o custodia explícita (`ordenes` ya estampa custodia); el guard va en `upsertContacto`.
-3. **Soltar las 50 asignaciones a contratos anulados** (script puntual con dry-run; la mayoría es residuo de anulaciones previas al fix de 2026-07-15).
+3. **Soltar las asignaciones a contratos anulados sin razón viva** (script puntual con dry-run, saltando SIEMPRE las `pendiente_devolucion` — esas usan la asignación como hilo de la recuperación). Medido: 18 reales de las 50 aparentes.
 
 ### P4 · La flota visible donde se decide (UI, barato)
 
@@ -211,7 +211,7 @@ El eslabón más débil sigue siendo humano: la orden se queda en COMPLETADO. Pr
 
 | Qué | Cuántos | Cómo |
 |---|---|---|
-| Asignaciones a contratos anulados | 50 | script desasignar + kardex |
+| Asignaciones a contratos anulados (sin recuperación en vuelo) | 18 | `suelta-asignaciones-anuladas.js` |
 | Contratos subcolección ≠ pool | 12 | informe por contrato; corregir la fuente que difiera |
 | Vigentes sin ningún serial | 4 | pedir asignación (bandeja ya los muestra) |
 | Sin origen accionables | 16 | `analiza-origen-faltante.js` ya los lista con candidatos |
