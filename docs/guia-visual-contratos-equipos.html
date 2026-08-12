@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Contratos y equipos — guía visual</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: letter; margin: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1f2937; }
+  .page { width: 8.5in; height: 11in; padding: 0.55in 0.6in; page-break-after: always; position: relative; overflow: hidden; }
+  .page:last-child { page-break-after: avoid; }
+
+  /* Cabecera de página */
+  .head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 4px solid #0B2A47; padding-bottom: 8px; margin-bottom: 18px; }
+  .head h1 { font-size: 26px; color: #0B2A47; }
+  .head .n { font-size: 13px; color: #6b7280; }
+
+  /* Roles */
+  .rol { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 12px; border-radius: 999px; color: #fff; white-space: nowrap; }
+  .rol.vend { background: #2563eb; } .rol.ger { background: #7c3aed; } .rol.inv { background: #059669; }
+  .rol.rec { background: #ea580c; } .rol.tal { background: #4b5563; } .rol.sys { background: #0B2A47; }
+
+  /* Chips de estado (como en la app) */
+  .chip { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 4px 12px; border-radius: 999px; border: 2px solid; white-space: nowrap; }
+  .c-bod { color: #067647; border-color: #067647; background: #e9f7f0; }
+  .c-asig { color: #1d4ed8; border-color: #1d4ed8; background: #eff6ff; }
+  .c-cli { color: #0e7490; border-color: #0e7490; background: #ecfeff; }
+  .c-tal { color: #92400e; border-color: #f59e0b; background: #fffbeb; }
+  .c-ent { color: #9f1239; border-color: #9f1239; background: #fff1f2; }
+
+  /* Botones maqueta (como en la app) */
+  .btn-mock { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; color: #fff; background: #0B2A47; border-radius: 10px; padding: 9px 16px; box-shadow: 0 2px 5px rgba(0,0,0,.25); }
+  .btn-mock.verde { background: #059669; }
+  .btn-mock.click { position: relative; }
+  .btn-mock.click::after { content: "👆"; position: absolute; right: -14px; bottom: -14px; font-size: 22px; }
+
+  /* Flujo horizontal */
+  .flujo { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+  .flecha { font-size: 20px; color: #9ca3af; font-weight: 700; }
+
+  /* Pasos verticales */
+  .paso { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 10px; }
+  .paso .num { flex: none; width: 40px; height: 40px; border-radius: 50%; background: #0B2A47; color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .paso .cuerpo { flex: 1; border: 2px solid #e5e7eb; border-radius: 12px; padding: 10px 14px; }
+  .paso .cuerpo .t { font-size: 15.5px; font-weight: 700; margin-bottom: 2px; }
+  .paso .cuerpo .d { font-size: 13.5px; color: #4b5563; }
+  .conector { width: 40px; text-align: center; color: #cbd5e1; font-size: 16px; line-height: 0.7; margin: -6px 0 4px; }
+
+  .alerta { border: 3px solid #f59e0b; background: #fffbeb; border-radius: 14px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; }
+  .alerta .ico { font-size: 34px; }
+  .alerta .tx { font-size: 14.5px; }
+  .nota { border-left: 5px solid #2563eb; background: #eff6ff; border-radius: 8px; padding: 10px 14px; font-size: 13.5px; }
+
+  /* Destinos (renovación) */
+  .dest { display: inline-block; font-size: 13px; font-weight: 800; padding: 5px 14px; border-radius: 999px; border: 2.5px solid; }
+  .d-cont { color: #067647; border-color: #067647; background: #e9f7f0; }
+  .d-dev { color: #92400e; border-color: #f59e0b; background: #fffbeb; }
+  .d-rem { color: #1d4ed8; border-color: #1d4ed8; background: #eff6ff; }
+
+  /* Maqueta del formulario del plan */
+  .mock-form { border: 2px solid #d1d5db; border-radius: 12px; padding: 12px 14px; background: #fafafa; }
+  .mock-form .fila { display: flex; align-items: center; gap: 10px; padding: 6px 4px; border-bottom: 1px dashed #e5e7eb; font-size: 13.5px; }
+  .mock-form .fila:last-child { border-bottom: none; }
+  .mock-form .serial { font-family: Consolas, monospace; font-weight: 700; width: 110px; }
+  .radio-emoji { font-size: 17px; }
+
+  .dos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .tarjeta { border: 2px solid #e5e7eb; border-radius: 14px; padding: 14px 16px; }
+  .tarjeta h3 { font-size: 17px; color: #0B2A47; margin-bottom: 8px; }
+
+  .error-card { display: flex; gap: 12px; align-items: flex-start; border: 2.5px solid #fecaca; background: #fff1f2; border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; }
+  .error-card .x { font-size: 30px; }
+  .error-card b { display: block; font-size: 15px; margin-bottom: 2px; }
+  .error-card span { font-size: 13px; color: #4b5563; }
+  .ok-line { font-size: 13px; color: #067647; font-weight: 700; margin-top: 3px; }
+
+  .grande { font-size: 42px; }
+  .centrado { text-align: center; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ PÁGINA 1 · LA IDEA ═══════════ -->
+<div class="page">
+  <div class="head"><h1>📻 Contratos y equipos — guía visual</h1><span class="n">pág. 1 de 5</span></div>
+
+  <p style="font-size:17px; margin-bottom:16px;"><b>La idea en una línea:</b> el contrato dice <b>cuántos</b> radios · la ficha de cada serial dice <b>cuál, dónde está y qué le ha pasado</b>.</p>
+
+  <div class="nota" style="margin-bottom:20px; font-size:15px;">
+    🖱️ <b>Todo serial en el sistema es clickeable</b> → abre la ficha del radio con toda su historia.<br>
+    ¿Duda de dónde está un radio? <b>Empieza ahí, no por WhatsApp.</b>
+  </div>
+
+  <h2 style="font-size:18px; color:#0B2A47; margin-bottom:12px;">El viaje de cada radio</h2>
+  <div class="flujo" style="margin-bottom:8px;">
+    <span class="chip c-bod">📦 En bodega</span><span class="flecha">➜</span>
+    <span class="chip c-asig">📝 Asignado a contrato</span><span class="flecha">➜</span>
+    <span class="chip c-tal">🔧 En taller (programación)</span><span class="flecha">➜</span>
+    <span class="chip c-cli">🏢 En el cliente</span>
+  </div>
+  <div class="flujo" style="margin-bottom:22px;">
+    <span class="chip c-cli">🏢 En el cliente</span><span class="flecha">➜</span>
+    <span class="chip c-ent">↩️ Entrada / inspección</span><span class="flecha">➜</span>
+    <span class="chip c-bod">📦 En bodega otra vez</span>
+  </div>
+
+  <h2 style="font-size:18px; color:#0B2A47; margin-bottom:12px;">Quién hace qué</h2>
+  <table style="width:100%; border-collapse:collapse; font-size:14px;">
+    <tr>
+      <td style="padding:8px; border:1px solid #e5e7eb; text-align:center; width:20%;"><span class="rol vend">VENDEDOR</span><br><br>Crea el contrato y decide <b>qué pasa con cada radio</b> en renovaciones</td>
+      <td style="padding:8px; border:1px solid #e5e7eb; text-align:center; width:20%;"><span class="rol ger">GERENCIA</span><br><br>Aprueba</td>
+      <td style="padding:8px; border:1px solid #e5e7eb; text-align:center; width:20%;"><span class="rol inv">INVENTARIO</span><br><br>Asigna los seriales <b>con los botones</b>, no a mano</td>
+      <td style="padding:8px; border:1px solid #e5e7eb; text-align:center; width:20%;"><span class="rol tal">TALLER</span><br><br>Programa, completa y pasa QC</td>
+      <td style="padding:8px; border:1px solid #e5e7eb; text-align:center; width:20%;"><span class="rol rec">RECEPCIÓN</span><br><br>Crea la orden y <b>marca ENTREGADO</b> el día que el cliente recibe</td>
+    </tr>
+  </table>
+
+  <div style="position:absolute; bottom:0.55in; left:0.6in; right:0.6in;">
+    <div class="alerta">
+      <div class="ico">⚠️</div>
+      <div class="tx"><b>La regla de oro:</b> la historia de cada radio se escribe sola <b>si seguimos los pasos en el sistema</b>. Cada paso que se salta es un radio que después hay que salir a buscar.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PÁGINA 2 · CONTRATO NUEVO ═══════════ -->
+<div class="page">
+  <div class="head"><h1>🆕 Contrato NUEVO</h1><span class="n">pág. 2 de 5</span></div>
+
+  <div class="paso"><div class="num">1</div><div class="cuerpo">
+    <div class="t"><span class="rol vend">VENDEDOR</span> &nbsp;Crea el contrato</div>
+    <div class="d">Contratos · Nuevo → cliente, modelos y cantidades.</div>
+  </div></div>
+  <div class="conector">▼</div>
+  <div class="paso"><div class="num">2</div><div class="cuerpo">
+    <div class="t"><span class="rol ger">GERENCIA</span> &nbsp;Aprueba</div>
+    <div class="d">El sistema le pide los seriales a inventario por correo — solo.</div>
+  </div></div>
+  <div class="conector">▼</div>
+  <div class="paso"><div class="num">3</div><div class="cuerpo">
+    <div class="t"><span class="rol inv">INVENTARIO</span> &nbsp;Asigna los seriales</div>
+    <div class="d" style="margin:6px 0;"><span class="btn-mock click">📷 Tomar del pool (bodega)</span></div>
+    <div class="d">Escoge unidades reales de bodega (o selección automática). <b>Nada de teclear a mano.</b> Confirmar y enviar.</div>
+  </div></div>
+  <div class="conector">▼</div>
+  <div class="paso"><div class="num">4</div><div class="cuerpo">
+    <div class="t"><span class="rol rec">RECEPCIÓN</span> &nbsp;Crea la orden de PROGRAMACIÓN</div>
+    <div class="d">La lista de contratos se lo sugiere con un botón. Los seriales <b>se jalan del contrato</b>.</div>
+  </div></div>
+  <div class="conector">▼</div>
+  <div class="paso"><div class="num">5</div><div class="cuerpo">
+    <div class="t"><span class="rol tal">TALLER</span> &nbsp;Programa → COMPLETADO → QC</div>
+    <div class="d">El control de calidad firma antes de que salga.</div>
+  </div></div>
+  <div class="conector">▼</div>
+  <div class="paso"><div class="num" style="background:#ea580c;">6</div><div class="cuerpo" style="border-color:#f59e0b; background:#fffbeb;">
+    <div class="t"><span class="rol rec">RECEPCIÓN</span> &nbsp;El cliente recibe → marcar <u>ENTREGADO AL CLIENTE</u></div>
+    <div class="d"><b>El mismo día.</b> Este clic es el que mueve todo: el radio pasa a "en el cliente", el contrato registra la entrega y las renovaciones futuras funcionan solas.</div>
+  </div></div>
+
+  <div style="position:absolute; bottom:0.55in; left:0.6in; right:0.6in;">
+    <div class="alerta">
+      <div class="ico">📬</div>
+      <div class="tx">Cada mañana llega el correo <b>"Listas para entregar"</b> con las órdenes que solo esperan ese clic.<br><b>La meta: que llegue vacío.</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PÁGINA 3 · RENOVACIÓN ═══════════ -->
+<div class="page">
+  <div class="head"><h1>🔄 RENOVACIÓN</h1><span class="n">pág. 3 de 5</span></div>
+
+  <p style="font-size:15px; margin-bottom:14px;">Igual que un contrato nuevo <b>+ dos preguntas al crearlo</b> (las responde el <span class="rol vend">VENDEDOR</span>, que es quien negoció):</p>
+
+  <div class="paso"><div class="num">1</div><div class="cuerpo">
+    <div class="t">¿A qué contrato renueva? <span style="color:#b91c1c;">(obligatorio)</span></div>
+    <div class="d">La lista muestra cada contrato del cliente <b>con cuántos equipos tiene</b> — se elige sin adivinar.<br>📄 ¿El original es de papel? Marca la casilla y anota la referencia.</div>
+  </div></div>
+  <div class="conector">▼</div>
+  <div class="paso"><div class="num">2</div><div class="cuerpo">
+    <div class="t">¿Qué pasa con cada radio del contrato viejo?</div>
+    <div class="d" style="margin-top:8px;">
+      <div class="mock-form">
+        <div style="font-size:12px; color:#6b7280; margin-bottom:6px;">Transición de equipos — HYT-P50 · 10 unidades</div>
+        <div class="fila"><span class="radio-emoji">📻</span><span class="serial">26314A1619</span><span class="dest d-cont">✔ Continúa</span><span style="color:#6b7280;">— el cliente lo conserva</span></div>
+        <div class="fila"><span class="radio-emoji">📻</span><span class="serial">26314A1620</span><span class="dest d-dev">↩ Se devuelve</span><span style="color:#6b7280;">— sale del servicio</span></div>
+        <div class="fila"><span class="radio-emoji">📻</span><span class="serial">26314A1621</span><span class="dest d-rem">⇄ Se reemplaza</span><span style="color:#6b7280;">— radio nuevo toma su lugar</span></div>
+      </div>
+      <div style="margin-top:8px;">En una renovación <b>todos parten en <span class="dest d-cont" style="font-size:11.5px;">✔ Continúa</span></b> — solo marca las excepciones.</div>
+    </div>
+  </div></div>
+
+  <div class="nota" style="margin:14px 0;">
+    🤷 <b>¿No sabes los seriales?</b> Marca <b>"No sé los seriales — decidir por cantidades"</b> y pon cuántos por modelo (ej.: 6 continúan · 4 se devuelven). Recepción resuelve cuáles.
+  </div>
+
+  <h2 style="font-size:17px; color:#0B2A47; margin:16px 0 10px;">Y después, el sistema trabaja solo:</h2>
+  <div class="paso"><div class="num" style="background:#059669;">✓</div><div class="cuerpo">
+    <div class="t"><span class="rol inv">INVENTARIO</span> &nbsp;no re-teclea nada</div>
+    <div class="d" style="margin:6px 0;"><span class="btn-mock verde click">🔁 Traer del original (6 continúan)</span></div>
+    <div class="d">Un clic llena los seriales que el cliente conserva.</div>
+  </div></div>
+  <div class="paso"><div class="num" style="background:#059669;">✓</div><div class="cuerpo">
+    <div class="t"><span class="rol sys">SISTEMA</span> &nbsp;al marcar ENTREGADO</div>
+    <div class="d">Reclama <b>solo</b> los que dijiste que se devuelven: abre el tiquete de recuperación y avisa por correo al vendedor y a recepción.</div>
+  </div></div>
+
+  <div style="position:absolute; bottom:0.55in; left:0.6in; right:0.6in;">
+    <div class="nota" style="border-left-color:#067647; background:#e9f7f0;">
+      ✂️ <b>Renovación parcial</b> (renuevas 6 de 10) = 6 <b>Continúa</b> + 4 <b>Se devuelve</b>. Ya no se explica en observaciones — se marca.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PÁGINA 4 · REEMPLAZO Y ADICIÓN ═══════════ -->
+<div class="page">
+  <div class="head"><h1>⇄ REEMPLAZO &nbsp;·&nbsp; ➕ ADICIÓN</h1><span class="n">pág. 4 de 5</span></div>
+
+  <div class="tarjeta" style="margin-bottom:16px;">
+    <h3>⇄ Reemplazo — se cambian radios por otros</h3>
+    <p style="font-size:14px; margin-bottom:10px;">Igual que la renovación, pero todos parten en <span class="dest d-rem" style="font-size:12px;">⇄ Se reemplaza</span>. Al entregar, el sistema parea solo:</p>
+    <div class="centrado" style="margin:14px 0;">
+      <span style="font-size:15px;"><span class="radio-emoji">📻</span> <b style="font-family:Consolas,monospace;">26314A1619</b> <span style="color:#6b7280;">(viejo)</span></span>
+      <span class="grande" style="vertical-align:middle; color:#1d4ed8;"> ⇄ </span>
+      <span style="font-size:15px;"><span class="radio-emoji">📻</span> <b style="font-family:Consolas,monospace;">9C15A0871</b> <span style="color:#6b7280;">(nuevo)</span></span>
+    </div>
+    <p style="font-size:13.5px; color:#4b5563;">La ficha de cada radio queda enlazada: <i>"reemplaza a X"</i> / <i>"reemplazado por Y"</i>. La devolución del viejo <b>se pide sola</b> — tiquete y correo automáticos.</p>
+  </div>
+
+  <div class="tarjeta" style="border-color:#a7f3d0; background:#f0fdf9;">
+    <h3>➕ Adición — el cliente suma radios a lo que ya tiene</h3>
+    <div style="display:flex; gap:20px; align-items:center;">
+      <div class="grande">📻📻📻 <span style="color:#059669;">+ 📻📻</span></div>
+      <div style="font-size:14.5px;">
+        <b>El cliente conserva lo de antes Y recibe lo nuevo.</b><br>
+        <span style="font-size:13.5px; color:#4b5563;">· Vincular el contrato original: opcional.<br>
+        · <b>No se devuelve nada</b> — el sistema no va a reclamar ningún equipo.<br>
+        · El resto del flujo: igual que un contrato nuevo.</span>
+      </div>
+    </div>
+  </div>
+
+  <h2 style="font-size:17px; color:#0B2A47; margin:18px 0 10px;">↩️ Cuando los radios regresan</h2>
+  <div class="flujo" style="justify-content:flex-start; gap:10px;">
+    <div class="tarjeta" style="flex:1; padding:10px 12px;"><b style="font-size:14px;">1 · Tiquete de DEVOLUCIÓN</b><br><span style="font-size:12.5px; color:#4b5563;">Nace solo (renovación, anulación, baja) — es la lista de radios a recuperar.</span></div>
+    <span class="flecha">➜</span>
+    <div class="tarjeta" style="flex:1; padding:10px 12px;"><b style="font-size:14px;">2 · Check-in por serial</b><br><span style="font-size:12.5px; color:#4b5563;">El cliente entrega: accesorios, daño y firma, radio por radio.</span></div>
+    <span class="flecha">➜</span>
+    <div class="tarjeta" style="flex:1; padding:10px 12px;"><b style="font-size:14px;">3 · ENTRADA e inspección</b><br><span style="font-size:12.5px; color:#4b5563;">El taller revisa; al cerrar, el radio queda <b>disponible en bodega</b>.</span></div>
+  </div>
+
+  <div style="position:absolute; bottom:0.55in; left:0.6in; right:0.6in;">
+    <div class="nota">
+      🧭 <b>¿Qué equipos tiene un cliente?</b> Clientes → botón <b>"Equipos"</b> en su fila. &nbsp;·&nbsp; <b>¿Y este radio?</b> Clic en el serial, en cualquier pantalla.
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ PÁGINA 5 · LOS 3 ERRORES ═══════════ -->
+<div class="page">
+  <div class="head"><h1>🚫 Los 3 errores que más cuestan</h1><span class="n">pág. 5 de 5</span></div>
+
+  <div class="error-card">
+    <div class="x">1️⃣</div>
+    <div>
+      <b>No marcar ENTREGADO AL CLIENTE</b>
+      <span>El trabajo está hecho, pero el sistema cree que los radios siguen en el taller. El contrato no registra la entrega y la renovación no corre.</span>
+      <div class="ok-line">✔ Marcarlo el mismo día que el cliente recibe.</div>
+    </div>
+  </div>
+
+  <div class="error-card">
+    <div class="x">2️⃣</div>
+    <div>
+      <b>Teclear seriales que ya existen</b>
+      <span>Cada tecleo es un typo posible y una ficha duplicada que alguien tendrá que limpiar.</span>
+      <div class="ok-line">✔ Usar siempre los botones: Tomar del pool · Traer del original · Jalar del contrato.</div>
+    </div>
+  </div>
+
+  <div class="error-card">
+    <div class="x">3️⃣</div>
+    <div>
+      <b>Crear la renovación sin decir qué pasa con los radios viejos</b>
+      <span>El sistema lo pregunta al crear el contrato — es un minuto del vendedor que ahorra días de conciliación.</span>
+      <div class="ok-line">✔ Responderlo ahí, aunque sea por cantidades.</div>
+    </div>
+  </div>
+
+  <h2 style="font-size:17px; color:#0B2A47; margin:20px 0 10px;">📬 Los correos del sistema y qué hacer</h2>
+  <table style="width:100%; border-collapse:collapse; font-size:13.5px;">
+    <tr style="background:#f3f4f6;"><th style="padding:7px 10px; border:1px solid #e5e7eb; text-align:left;">Correo</th><th style="padding:7px 10px; border:1px solid #e5e7eb; text-align:left;">Quién</th><th style="padding:7px 10px; border:1px solid #e5e7eb; text-align:left;">Acción</th></tr>
+    <tr><td style="padding:7px 10px; border:1px solid #e5e7eb;">Solicitud de seriales</td><td style="padding:7px 10px; border:1px solid #e5e7eb;"><span class="rol inv">INVENTARIO</span></td><td style="padding:7px 10px; border:1px solid #e5e7eb;">Asignar seriales</td></tr>
+    <tr><td style="padding:7px 10px; border:1px solid #e5e7eb;"><b>Listas para entregar</b> 🆕</td><td style="padding:7px 10px; border:1px solid #e5e7eb;"><span class="rol rec">RECEPCIÓN</span></td><td style="padding:7px 10px; border:1px solid #e5e7eb;">Marcar ENTREGADO</td></tr>
+    <tr><td style="padding:7px 10px; border:1px solid #e5e7eb;">QC pendiente</td><td style="padding:7px 10px; border:1px solid #e5e7eb;"><span class="rol tal">TALLER</span></td><td style="padding:7px 10px; border:1px solid #e5e7eb;">Firmar el control de calidad</td></tr>
+    <tr><td style="padding:7px 10px; border:1px solid #e5e7eb;">Pendientes de devolución</td><td style="padding:7px 10px; border:1px solid #e5e7eb;"><span class="rol vend">VENDEDOR</span> <span class="rol rec">RECEPCIÓN</span></td><td style="padding:7px 10px; border:1px solid #e5e7eb;">Coordinar la recuperación</td></tr>
+    <tr><td style="padding:7px 10px; border:1px solid #e5e7eb;">Entradas sin inspección</td><td style="padding:7px 10px; border:1px solid #e5e7eb;"><span class="rol rec">RECEPCIÓN</span></td><td style="padding:7px 10px; border:1px solid #e5e7eb;">Pasar por inspección</td></tr>
+  </table>
+
+  <div style="position:absolute; bottom:0.55in; left:0.6in; right:0.6in;">
+    <div class="nota">
+      ❓ <b>Casos raros</b> (contrato de papel, serial que no aparece, radio de un cliente en otro): mensaje a Alberto con el <b>número de contrato</b> y el <b>serial</b>.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
