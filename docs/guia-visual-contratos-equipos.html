@@ -76,13 +76,27 @@
 
   .grande { font-size: 42px; }
   .centrado { text-align: center; }
+
+  /* Ícono walkie-talkie (two-way radio) — estilo Lucide, dibujado inline.
+     Tamaño = 1em: hereda el font-size y el color del texto que lo rodea. */
+  .wt { width: 1em; height: 1em; display: inline-block; vertical-align: -0.12em; }
 </style>
+<!-- Símbolo reutilizable del walkie-talkie -->
+<svg width="0" height="0" style="position:absolute;">
+  <symbol id="wt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 1v5"/>
+    <rect x="6" y="6" width="12" height="16" rx="2.5"/>
+    <path d="M9.5 11h5"/>
+    <path d="M9.5 14h5"/>
+    <path d="M12 18.5h.01"/>
+  </symbol>
+</svg>
 </head>
 <body>
 
 <!-- ═══════════ PÁGINA 1 · LA IDEA ═══════════ -->
 <div class="page">
-  <div class="head"><h1>📻 Contratos y equipos — guía visual</h1><span class="n">pág. 1 de 5</span></div>
+  <div class="head"><h1><svg class="wt"><use href="#wt-icon"/></svg> Contratos y equipos — guía visual</h1><span class="n">pág. 1 de 5</span></div>
 
   <p style="font-size:17px; margin-bottom:16px;"><b>La idea en una línea:</b> el contrato dice <b>cuántos</b> radios · la ficha de cada serial dice <b>cuál, dónde está y qué le ha pasado</b>.</p>
 
@@ -182,9 +196,9 @@
     <div class="d" style="margin-top:8px;">
       <div class="mock-form">
         <div style="font-size:12px; color:#6b7280; margin-bottom:6px;">Transición de equipos — HYT-P50 · 10 unidades</div>
-        <div class="fila"><span class="radio-emoji">📻</span><span class="serial">26314A1619</span><span class="dest d-cont">✔ Continúa</span><span style="color:#6b7280;">— el cliente lo conserva</span></div>
-        <div class="fila"><span class="radio-emoji">📻</span><span class="serial">26314A1620</span><span class="dest d-dev">↩ Se devuelve</span><span style="color:#6b7280;">— sale del servicio</span></div>
-        <div class="fila"><span class="radio-emoji">📻</span><span class="serial">26314A1621</span><span class="dest d-rem">⇄ Se reemplaza</span><span style="color:#6b7280;">— radio nuevo toma su lugar</span></div>
+        <div class="fila"><span class="radio-emoji"><svg class="wt"><use href="#wt-icon"/></svg></span><span class="serial">26314A1619</span><span class="dest d-cont">✔ Continúa</span><span style="color:#6b7280;">— el cliente lo conserva</span></div>
+        <div class="fila"><span class="radio-emoji"><svg class="wt"><use href="#wt-icon"/></svg></span><span class="serial">26314A1620</span><span class="dest d-dev">↩ Se devuelve</span><span style="color:#6b7280;">— sale del servicio</span></div>
+        <div class="fila"><span class="radio-emoji"><svg class="wt"><use href="#wt-icon"/></svg></span><span class="serial">26314A1621</span><span class="dest d-rem">⇄ Se reemplaza</span><span style="color:#6b7280;">— radio nuevo toma su lugar</span></div>
       </div>
       <div style="margin-top:8px;">En una renovación <b>todos parten en <span class="dest d-cont" style="font-size:11.5px;">✔ Continúa</span></b> — solo marca las excepciones.</div>
     </div>
@@ -220,9 +234,9 @@
     <h3>⇄ Reemplazo — se cambian radios por otros</h3>
     <p style="font-size:14px; margin-bottom:10px;">Igual que la renovación, pero todos parten en <span class="dest d-rem" style="font-size:12px;">⇄ Se reemplaza</span>. Al entregar, el sistema parea solo:</p>
     <div class="centrado" style="margin:14px 0;">
-      <span style="font-size:15px;"><span class="radio-emoji">📻</span> <b style="font-family:Consolas,monospace;">26314A1619</b> <span style="color:#6b7280;">(viejo)</span></span>
+      <span style="font-size:15px;"><span class="radio-emoji"><svg class="wt"><use href="#wt-icon"/></svg></span> <b style="font-family:Consolas,monospace;">26314A1619</b> <span style="color:#6b7280;">(viejo)</span></span>
       <span class="grande" style="vertical-align:middle; color:#1d4ed8;"> ⇄ </span>
-      <span style="font-size:15px;"><span class="radio-emoji">📻</span> <b style="font-family:Consolas,monospace;">9C15A0871</b> <span style="color:#6b7280;">(nuevo)</span></span>
+      <span style="font-size:15px;"><span class="radio-emoji"><svg class="wt"><use href="#wt-icon"/></svg></span> <b style="font-family:Consolas,monospace;">9C15A0871</b> <span style="color:#6b7280;">(nuevo)</span></span>
     </div>
     <p style="font-size:13.5px; color:#4b5563;">La ficha de cada radio queda enlazada: <i>"reemplaza a X"</i> / <i>"reemplazado por Y"</i>. La devolución del viejo <b>se pide sola</b> — tiquete y correo automáticos.</p>
   </div>
@@ -230,7 +244,7 @@
   <div class="tarjeta" style="border-color:#a7f3d0; background:#f0fdf9;">
     <h3>➕ Adición — el cliente suma radios a lo que ya tiene</h3>
     <div style="display:flex; gap:20px; align-items:center;">
-      <div class="grande">📻📻📻 <span style="color:#059669;">+ 📻📻</span></div>
+      <div class="grande"><svg class="wt"><use href="#wt-icon"/></svg><svg class="wt"><use href="#wt-icon"/></svg><svg class="wt"><use href="#wt-icon"/></svg> <span style="color:#059669;">+ <svg class="wt"><use href="#wt-icon"/></svg><svg class="wt"><use href="#wt-icon"/></svg></span></div>
       <div style="font-size:14.5px;">
         <b>El cliente conserva lo de antes Y recibe lo nuevo.</b><br>
         <span style="font-size:13.5px; color:#4b5563;">· Vincular el contrato original: opcional.<br>
