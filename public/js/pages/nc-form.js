@@ -161,6 +161,180 @@ window.NCForm = {
     }
 
     if (aplica) this.cargarContratosOrigen();
+    this.refreshPlanUI();
+  },
+
+  // ── Plan de transición (P1 del informe tracking 2026-08-12) ─────────────
+  // Al elegir el/los originales, el vendedor decide QUÉ pasa con cada unidad:
+  // continúa / se devuelve / se reemplaza. Si no sabe seriales, cambia a
+  // "por cantidades" y decide por modelo. El criterio vive en
+  // js/domain/transicionPlan.js; aquí solo se pinta y se lee el DOM.
+
+  _selPlan() {
+    return {
+      accion:      document.getElementById('accion')?.value,
+      codigo_tipo: document.getElementById('tipo_contrato')?.value,
+    };
+  },
+
+  // Unidades del pool de los orígenes marcados (alquiler; los propios del
+  // cliente no entran al plan — no se devuelven ni se sustituyen).
+  _unidadesDeOrigenes() {
+    const ids = new Set(this.leerOrigen().origen_ids);
+    if (!ids.size) return { alquiler: [], propios: 0 };
+    let propios = 0;
+    const alquiler = [];
+    for (const u of (this._unidadesCliente || [])) {
+      if (!ids.has(u.asignacion?.contrato_doc_id)) continue;
+      if (!['asignado_contrato', 'en_cliente', 'en_taller'].includes(u.estado)) continue;
+      if (u.propiedad === 'cliente') { propios++; continue; }
+      alquiler.push(u);
+    }
+    alquiler.sort((a, b) => String(a.modelo_label || '').localeCompare(String(b.modelo_label || ''))
+      || String(a.serial || '').localeCompare(String(b.serial || '')));
+    return { alquiler, propios };
+  },
+
+  refreshPlanUI() {
+    const box = document.getElementById('planBox');
+    if (!box) return;
+    const sel = this._selPlan();
+    const origen = this.leerOrigen();
+    const aplica = TransicionPlan.aplica(sel) && !origen.legacy && origen.origen_ids.length > 0;
+    if (!aplica) { box.style.display = 'none'; return; }
+
+    const { alquiler, propios } = this._unidadesDeOrigenes();
+    box.style.display = 'block';
+    const body = document.getElementById('planBody');
+    const hint = document.getElementById('planHint');
+    const esc = NC.escapeHtml;
+
+    if (!alquiler.length) {
+      body.innerHTML = `<span style="color:var(--fg-3,#6b7280);">El original no tiene unidades de alquiler en el pool${propios ? ` (${propios} son propiedad del cliente)` : ''} — la transición se registrará con recepción cuando el equipo aparezca.</span>`;
+      if (hint) hint.textContent = 'Sin unidades que planear. El contrato se crea normal.';
+      return;
+    }
+
+    // Conservar lo ya elegido al re-pintar (cambiar orígenes no debe borrar
+    // las decisiones del vendedor sobre los que siguen presentes).
+    const previoSerial = new Map();
+    body.querySelectorAll('.plan-destino').forEach(s => previoSerial.set(s.dataset.serial, s.value));
+    const previoCant = new Map();
+    body.querySelectorAll('.plan-cant-row').forEach(r => previoCant.set(r.dataset.modelo, {
+      continuan: r.querySelector('.plan-c')?.value, devuelven: r.querySelector('.plan-d')?.value,
+      reemplazan: r.querySelector('.plan-r')?.value,
+    }));
+    const porCantidad = !!document.getElementById('planPorCantidad')?.checked;
+
+    const def = TransicionPlan.destinoDefault(sel);
+    const OPT = [['continua', 'Continúa'], ['devuelve', 'Se devuelve'], ['reemplaza', 'Se reemplaza']];
+    const grupos = new Map();
+    alquiler.forEach(u => {
+      const k = `${u.modelo_id || ''}|${u.modelo_label || 'sin modelo'}`;
+      if (!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(u);
+    });
+
+    let html = '';
+    if (!porCantidad) {
+      for (const [k, us] of grupos) {
+        const modelo = k.split('|')[1];
+        html += `
+          <div style="margin:8px 0 4px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <b style="font-size:13px;">${esc(modelo)}</b>
+            <span style="font-size:12px; color:var(--fg-3);">${us.length} unidad${us.length === 1 ? '' : 'es'}</span>
+            <select class="form-select plan-bulk" data-grupo="${esc(k)}" style="height:26px; font-size:12px; width:auto;" title="Aplicar a todas las unidades del modelo">
+              <option value="">todas →</option>${OPT.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+            </select>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:4px 12px;">
+            ${us.map(u => {
+              const dest = previoSerial.get(u.serial || u.serial_norm) || def;
+              return `
+              <label style="display:flex; align-items:center; gap:6px; font-size:12.5px;">
+                <span style="font-family:var(--font-mono,monospace); min-width:110px;">${esc(u.serial || u.serial_norm)}</span>
+                <select class="form-select plan-destino" data-grupo="${esc(k)}" data-serial="${esc(u.serial || u.serial_norm)}"
+                        data-pool-id="${esc(u.id)}" data-modelo-id="${esc(u.modelo_id || '')}" data-modelo="${esc(u.modelo_label || '')}"
+                        style="height:26px; font-size:12px; flex:1;">
+                  ${OPT.map(([v, l]) => `<option value="${v}" ${v === dest ? 'selected' : ''}>${l}</option>`).join('')}
+                </select>
+              </label>`;
+            }).join('')}
+          </div>`;
+      }
+    } else {
+      html += `<table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead><tr style="text-align:left; color:var(--fg-3); font-size:12px;">
+          <th style="padding:4px 6px;">Modelo</th><th style="padding:4px 6px;">Total</th>
+          <th style="padding:4px 6px;">Continúan</th><th style="padding:4px 6px;">Se devuelven</th><th style="padding:4px 6px;">Se reemplazan</th>
+        </tr></thead><tbody>`;
+      for (const [k, us] of grupos) {
+        const modelo = k.split('|')[1];
+        const p = previoCant.get(k);
+        const c = p ? Number(p.continuan || 0) : (def === 'continua' ? us.length : 0);
+        const r = p ? Number(p.reemplazan || 0) : (def === 'reemplaza' ? us.length : 0);
+        const d = p ? Number(p.devuelven || 0) : (us.length - c - r);
+        html += `
+          <tr class="plan-cant-row" data-modelo="${esc(k)}" data-modelo-id="${esc(us[0].modelo_id || '')}" data-modelo-label="${esc(modelo)}" data-total="${us.length}">
+            <td style="padding:4px 6px;">${esc(modelo)}</td>
+            <td style="padding:4px 6px;"><b>${us.length}</b></td>
+            <td style="padding:4px 6px;"><input type="number" class="form-input plan-c" min="0" max="${us.length}" value="${c}" style="width:70px; height:28px;"></td>
+            <td style="padding:4px 6px;"><input type="number" class="form-input plan-d" min="0" max="${us.length}" value="${Math.max(0, d)}" style="width:70px; height:28px;"></td>
+            <td style="padding:4px 6px;"><input type="number" class="form-input plan-r" min="0" max="${us.length}" value="${r}" style="width:70px; height:28px;"></td>
+          </tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    if (propios) {
+      html += `<div style="margin-top:8px; font-size:12px; color:var(--fg-3);">${propios} unidad${propios === 1 ? '' : 'es'} propiedad del cliente queda${propios === 1 ? '' : 'n'} fuera: no se devuelve${propios === 1 ? '' : 'n'} ni se sustituye${propios === 1 ? '' : 'n'}.</div>`;
+    }
+    body.innerHTML = html;
+    if (hint) {
+      hint.textContent = porCantidad
+        ? 'Decide por cantidades — recepción resuelve los seriales concretos contra este plan al asignarlos.'
+        : (def === 'reemplaza'
+            ? 'Un reemplazo sustituye: todas parten en "se reemplaza"; marca las excepciones.'
+            : 'Una renovación extiende el servicio: todas parten en "continúa"; marca las que se devuelven o reemplazan.');
+    }
+    body.querySelectorAll('.plan-bulk').forEach(sel2 => sel2.addEventListener('change', () => {
+      if (!sel2.value) return;
+      body.querySelectorAll(`.plan-destino[data-grupo="${CSS.escape(sel2.dataset.grupo)}"]`)
+        .forEach(s => { s.value = sel2.value; });
+      sel2.value = '';
+    }));
+  },
+
+  // Plan tal como quedó en el DOM → objeto de dominio, o null si no aplica.
+  leerPlan() {
+    const box = document.getElementById('planBox');
+    const sel = this._selPlan();
+    const origen = this.leerOrigen();
+    if (!box || box.style.display === 'none') return null;
+    if (!TransicionPlan.aplica(sel) || origen.legacy || !origen.origen_ids.length) return null;
+
+    const porCantidad = !!document.getElementById('planPorCantidad')?.checked;
+    if (!porCantidad) {
+      const unidades = [...document.querySelectorAll('#planBody .plan-destino')].map(s => ({
+        pool_id: s.dataset.poolId || null,
+        serial: s.dataset.serial,
+        serial_norm: s.dataset.serial,
+        modelo_id: s.dataset.modeloId || null,
+        modelo: s.dataset.modelo || '',
+        destino: s.value,
+      }));
+      if (!unidades.length) return null;
+      return TransicionPlan.construirSerial(unidades, origen.origen_ids);
+    }
+    const filas = [...document.querySelectorAll('#planBody .plan-cant-row')].map(r => ({
+      modelo_id: r.dataset.modeloId || null,
+      modelo: r.dataset.modeloLabel || '',
+      total: Number(r.dataset.total || 0),
+      continuan: Number(r.querySelector('.plan-c')?.value || 0),
+      devuelven: Number(r.querySelector('.plan-d')?.value || 0),
+      reemplazan: Number(r.querySelector('.plan-r')?.value || 0),
+    }));
+    if (!filas.length) return null;
+    return TransicionPlan.construirCantidad(filas, origen.origen_ids);
   },
 
   _origenClienteCargado: null,
@@ -189,10 +363,14 @@ window.NCForm = {
       // original a ciegas entre varios contratos (informe tracking 2026-08-12,
       // P4.2: GOLY tiene 17 y solo algunos tienen equipo colgando). Best-effort:
       // sin el servicio o sin permiso, la lista sale sin conteos.
+      // La lista completa se guarda: el plan de transición (P1) la reusa para
+      // ofrecer las unidades del origen elegido sin otra consulta.
       const unidadesPor = new Map();
+      this._unidadesCliente = [];
       try {
         if (typeof EquiposPoolService !== 'undefined') {
-          (await EquiposPoolService.listarPorCliente(clienteId)).forEach(u => {
+          this._unidadesCliente = await EquiposPoolService.listarPorCliente(clienteId);
+          this._unidadesCliente.forEach(u => {
             const cid = u.asignacion?.contrato_doc_id;
             if (!cid) return;
             if (!['asignado_contrato', 'en_cliente', 'en_taller'].includes(u.estado)) return;
@@ -346,6 +524,11 @@ window.NCForm = {
         self.updateContratoBadges();
       });
       document.getElementById('origenLegacyChk')?.addEventListener('change', () => self.refreshOrigenUI());
+      // Marcar/desmarcar orígenes redefine el universo del plan de transición.
+      document.getElementById('origenContratosList')?.addEventListener('change', (e) => {
+        if (e.target?.classList?.contains('origen-chk')) self.refreshPlanUI();
+      });
+      document.getElementById('planPorCantidad')?.addEventListener('change', () => self.refreshPlanUI());
       document.getElementById('renovacion_sin_equipo')?.addEventListener('change', () => self.refreshRenovacionModeUI());
       document.getElementById('renovacion_refurbished_componentes')?.addEventListener('change', () => self.refreshRenovacionModeUI());
       document.getElementById('duracion')?.addEventListener('change', () => self.updateContratoBadges());

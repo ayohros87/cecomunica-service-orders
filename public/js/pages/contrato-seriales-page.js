@@ -229,10 +229,22 @@
     // así que bajan a un desplegable "Otras fuentes". No se muestra en modo
     // solo-lectura (candado de seriales asignados).
     if (gruposHtml && !locked) {
+      // Plan de transición decidido en la venta (informe tracking 2026-08-12,
+      // P2): las unidades marcadas "continúa" se traen del contrato original
+      // sin re-teclear — antes una renovación de 82 radios se tecleaba a mano.
+      const continuan = (contrato.transicion_plan?.nivel === 'serial')
+        ? (contrato.transicion_plan.unidades || []).filter(u => u.destino === 'continua')
+        : [];
+      const btnPlan = continuan.length
+        ? '<button type="button" class="btn btn-primary btn-sm" data-action="traer-original" '
+          + `title="El plan de la venta dice que ${continuan.length} unidad(es) del contrato original continúan en este — las llena aquí sin re-teclear.">`
+          + `<i data-lucide="repeat"></i> Traer del original (${continuan.length} continúan)</button>`
+        : '';
       const toolbar = document.createElement('div');
       toolbar.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:var(--sp-3,12px);';
       toolbar.innerHTML =
-        '<button type="button" class="btn btn-primary btn-sm" data-action="tomar-pool" title="Escoge unidades disponibles en bodega y resérvalas para este contrato. Es la vía normal.">'
+        btnPlan
+        + `<button type="button" class="btn ${btnPlan ? 'btn-ghost' : 'btn-primary'} btn-sm" data-action="tomar-pool" title="Escoge unidades disponibles en bodega y resérvalas para este contrato. Es la vía normal.">`
         + '<i data-lucide="scan-barcode"></i> Tomar del pool (bodega)</button>'
         + '<span style="font-size:12px; color:var(--fg-3);">o teclea/escanea cada serial abajo — también puedes pegar una columna de Excel sobre la primera casilla.</span>'
         + '<span style="flex:1;"></span>'
@@ -369,6 +381,7 @@
         return;
       }
       if (action === 'tomar-pool') { tomarDelPool(); return; }
+      if (action === 'traer-original') { traerDelOriginal(); return; }
       if (action === 'jalar-poc') { cerrarOtrasFuentes(); jalarDesdePoc(); return; }
       if (action === 'jalar-os')  { cerrarOtrasFuentes(); jalarDesdeOS();  return; }
       const grupo = btn.closest('.serial-group');
@@ -812,6 +825,21 @@
     if (sinCupo)    partes.push(`${sinCupo} sin cupo`);
     if (sinModelo)  partes.push(`${sinModelo} sin modelo en el contrato`);
     Toast.show(`Jalado desde ${origen}: ${partes.join(' · ')}.`, agregados ? 'ok' : 'warn');
+  }
+
+  // Trae las unidades que el plan de la venta marcó "continúa" — siguen
+  // físicamente con el cliente bajo el contrato original y pasan a servir a
+  // este. Reusa jalarItems (dedupe + match por modelo + reporte); la
+  // reasignación del pool la hace onSerialWrite al Guardar, con nota de
+  // reasignación en el kardex (informe tracking 2026-08-12, P2).
+  function traerDelOriginal() {
+    const plan = contrato.transicion_plan;
+    const continuan = (plan?.nivel === 'serial')
+      ? (plan.unidades || []).filter(u => u.destino === 'continua')
+      : [];
+    if (!continuan.length) { Toast.show('El plan de la venta no tiene unidades que continúen.', 'warn'); return; }
+    jalarItems(continuan.map(u => ({ serial: u.serial, modelo: u.modelo || '', modeloId: u.modelo_id || '' })),
+      'el contrato original (plan de la venta)');
   }
 
   // Toma unidades DISPONIBLES (en_bodega) del pool de equipos serializados.

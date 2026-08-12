@@ -113,6 +113,18 @@ window.NCGuardar = {
       return;
     }
 
+    // Plan de transición (P1): decidido en la venta, viaja con el contrato.
+    // También antes del correlativo, por la misma razón.
+    const transicionPlan = NCForm.leerPlan();
+    if (transicionPlan) {
+      const vPlan = TransicionPlan.validar(transicionPlan);
+      if (!vPlan.ok) {
+        Toast.show(`⚠️ ${vPlan.mensaje}`, 'warn');
+        this._abortarGuardado();
+        return;
+      }
+    }
+
     const tipoSel    = document.getElementById('tipo_contrato');
     const tipoCorto  = tipoSel.value;
     const tipoNombre = tipoSel.options[tipoSel.selectedIndex].text;
@@ -193,6 +205,9 @@ window.NCGuardar = {
       contrato_origen_ids: origenIds,
       contrato_origen_refs: origenRefs,
       origen_legacy_ref: origen.legacy ? origen.legacy_ref : '',
+      // El plan de transición decidido en la venta (P1). Lo consumen la página
+      // de seriales ("Traer del original") y onEntregaTransicion al entregar.
+      transicion_plan: transicionPlan || null,
       estado: 'pendiente_aprobacion',
       observaciones: document.getElementById('observaciones').value.trim(),
       equipos,

@@ -34,6 +34,7 @@ const STALE_MAX_DEFAULT = 30;
 const ENTRADA_DIAS_DEFAULT = 7;
 const DEVOLUCION_SLA_DEFAULT = 15;
 const QC_DIAS_DEFAULT = 3;
+const ENTREGA_DIAS_DEFAULT = 3;
 const MAX_FILAS = 30; // tope de filas por correo; el resto se resume
 
 function esc(v) {
@@ -71,7 +72,7 @@ module.exports = onSchedule(
     const now = new Date();
 
     // Config con fallbacks (nunca lanza).
-    let staleDias = STALE_DIAS_DEFAULT, staleMax = STALE_MAX_DEFAULT, entradaDias = ENTRADA_DIAS_DEFAULT, devolucionSla = DEVOLUCION_SLA_DEFAULT, qcDias = QC_DIAS_DEFAULT;
+    let staleDias = STALE_DIAS_DEFAULT, staleMax = STALE_MAX_DEFAULT, entradaDias = ENTRADA_DIAS_DEFAULT, devolucionSla = DEVOLUCION_SLA_DEFAULT, qcDias = QC_DIAS_DEFAULT, entregaDias = ENTREGA_DIAS_DEFAULT;
     try {
       const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
       if (Number.isFinite(Number(cfg.orden_stale_dias)) && Number(cfg.orden_stale_dias) >= 1) staleDias = Number(cfg.orden_stale_dias);
@@ -79,6 +80,7 @@ module.exports = onSchedule(
       if (Number.isFinite(Number(cfg.entrada_recordatorio_dias)) && Number(cfg.entrada_recordatorio_dias) >= 1) entradaDias = Number(cfg.entrada_recordatorio_dias);
       if (Number.isFinite(Number(cfg.devolucion_sla_dias)) && Number(cfg.devolucion_sla_dias) >= 1) devolucionSla = Number(cfg.devolucion_sla_dias);
       if (Number.isFinite(Number(cfg.qc_recordatorio_dias)) && Number(cfg.qc_recordatorio_dias) >= 1) qcDias = Number(cfg.qc_recordatorio_dias);
+      if (Number.isFinite(Number(cfg.entrega_recordatorio_dias)) && Number(cfg.entrega_recordatorio_dias) >= 1) entregaDias = Number(cfg.entrega_recordatorio_dias);
     } catch (e) { /* defaults */ }
 
     // ── A) Órdenes estancadas ────────────────────────────────────────────
@@ -366,6 +368,80 @@ module.exports = onSchedule(
       logger.info("[recordatorioOperativo] qc", { conMarca: snap.size, esperando: esperando.length, notificado: !!(esperando.length && to) });
     } catch (e) {
       logger.error("[recordatorioOperativo] sección qc falló", { message: e.message });
+    }
+
+    // ── E) Listas para entregar (informe tracking 2026-08-12, P6) ────────
+    // El eslabón más débil del ciclo es humano: la orden queda COMPLETADA con
+    // QC aprobado y nadie la marca ENTREGADO AL CLIENTE. Medido el 2026-08-11:
+    // el 46% de las PROGRAMACIÓN de agosto se paró ahí — y sin ENTREGADO no hay
+    // `entrega_confirmada`, no corre la transición de renovación y el pool se
+    // queda `en_taller`. La sección D avisa cuando FALTA el QC; esta avisa
+    // cuando el QC YA ESTÁ y solo falta apretar el botón.
+    try {
+      const snap = await db.collection("ordenes_de_servicio")
+        .where("estado_reparacion", "==", "COMPLETADO (EN OFICINA)")
+        .limit(1000)
+        .get();
+
+      const listas = [];
+      snap.forEach(d => {
+        const o = d.data() || {};
+        if (o.eliminado) return;
+        const tipo = (o.tipo_de_servicio || "").toUpperCase();
+        // Solo los tipos cuyo terminal ES la entrega. ENTRADA cierra sin
+        // entregar; VISITA cierra en sitio; DEVOLUCION tiene su circuito.
+        if (!/PROGRAMA|REPARA/.test(tipo)) return;
+        // Con QC requerido, solo cuando está aprobado y vigente (si falta, es
+        // cola de la sección D — no de esta).
+        if (o.qc_requerido === true) {
+          if (o.qc?.resultado !== "aprobado") return;
+          const n = o.qc?.equipos_n;
+          if (typeof n === "number" && n !== (Array.isArray(o.equipos) ? o.equipos.length : 0)) return;
+        }
+        const edad = edadDias(o.fecha_completado || o.fecha_modificacion || o.fecha_creacion, now);
+        if (edad == null || edad < entregaDias) return;
+        listas.push({
+          id: d.id,
+          orden: o.numero_orden || d.id,
+          cliente: o.cliente_nombre || o.cliente || "—",
+          tipo: o.tipo_de_servicio || "—",
+          contrato: o.contrato?.contrato_id || "—",
+          dias: Math.floor(edad),
+        });
+      });
+      listas.sort((a, b) => b.dias - a.dias);
+
+      const to = (await recepcionEmails()).join(",");
+      if (listas.length && to) {
+        const filas = listas.slice(0, MAX_FILAS).map(o => [
+          `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
+          esc(o.cliente), esc(o.tipo), esc(o.contrato), `<b>${o.dias}</b>`,
+        ]);
+        const extra = listas.length > MAX_FILAS
+          ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${listas.length - MAX_FILAS} más.</p>` : "";
+        await db.collection("mail_queue").add({
+          to,
+          subject: `Listas para entregar: ${listas.length} orden(es) con el trabajo terminado hace ${entregaDias}+ días`,
+          preheader: `${listas.length} órdenes completadas y con QC listo — solo falta marcar la entrega`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Órdenes listas para entregar</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              El trabajo está <b>terminado</b> y el control de calidad (si aplica) <b>aprobado</b> —
+              solo falta marcarlas <b>ENTREGADO AL CLIENTE</b> cuando el cliente reciba.
+              Sin ese paso el contrato no registra la entrega, la renovación no corre su
+              transición de equipos y el inventario sigue contando esos radios en el taller.
+            </p>
+            ${tablaHtml(["Orden", "Cliente", "Tipo", "Contrato", "Días"], filas)}
+            ${extra}`,
+          ctaUrl: `${APP_BASE_URL}/ordenes/index.html`,
+          ctaLabel: "Ver órdenes",
+          meta: { source: "recordatorioOperativo", seccion: "listas_entregar", total: listas.length },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      logger.info("[recordatorioOperativo] listas para entregar", { total: listas.length, notificado: !!(listas.length && to) });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección listas-entregar falló", { message: e.message });
     }
 
     return null;

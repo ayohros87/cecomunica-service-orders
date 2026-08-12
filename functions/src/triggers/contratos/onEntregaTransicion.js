@@ -25,6 +25,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 const { origenIdsDe } = require("../../lib/linaje");
+const { decidirSalientes } = require("../../lib/transicionPlanExec");
 
 module.exports = onDocumentUpdated(
   { document: "contratos/{cid}", region: "us-central1" },
@@ -61,9 +62,9 @@ module.exports = onDocumentUpdated(
     if (Number(after.transicion_mapeos_count || 0) > 0) return null; // ya hay registro manual
     if (after.transicion_auto_at) return null;                        // ya corrió
 
-    // Unidades de los orígenes aún con el cliente; alquiler solamente
-    // (propiedad 'cliente' = equipos propios, no se devuelven).
-    const unidades = [];
+    // Unidades de los orígenes aún con el cliente. La propiedad y el plan de
+    // la venta los aplica decidirSalientes (lib/transicionPlanExec.js).
+    const unidadesOrigen = [];
     for (const origenId of origenIds) {
       try {
         const snap = await db.collection("equipos_pool")
@@ -71,16 +72,36 @@ module.exports = onDocumentUpdated(
         snap.forEach((d) => {
           const u = d.data();
           if (!["asignado_contrato", "en_cliente"].includes(u.estado)) return;
-          if (u.propiedad === "cliente") return;
-          if (unidades.some(x => x.id === d.id)) return;
-          unidades.push({ id: d.id, origenId, ...u });
+          if (unidadesOrigen.some(x => x.id === d.id)) return;
+          unidadesOrigen.push({ id: d.id, origenId, ...u });
         });
       } catch (e) {
         logger.warn("[onEntregaTransicion] No se pudo leer el pool del origen", { cid, origenId, message: e.message });
       }
     }
 
-    if (!unidades.length) {
+    // Entrantes del contrato nuevo — para parear los 'reemplaza' del plan y
+    // producir el linaje (onMapeoWrite estampa reemplaza_a cuando el mapeo
+    // trae entrante Y saliente).
+    let entrantesNuevo = [];
+    try {
+      const snap = await db.collection("equipos_pool")
+        .where("asignacion.contrato_doc_id", "==", cid).get();
+      entrantesNuevo = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      logger.warn("[onEntregaTransicion] No se pudo leer el pool del contrato nuevo", { cid, message: e.message });
+    }
+
+    // El plan decidido en la venta (P1 informe 2026-08-12). Sin plan —o con
+    // plan por cantidades— aplica la regla clásica: todo el alquiler colgado
+    // del origen se devuelve.
+    const { reclamar, continuan } = decidirSalientes(after.transicion_plan || null, unidadesOrigen, entrantesNuevo);
+    if (continuan.length) {
+      logger.info("[onEntregaTransicion] Unidades que CONTINÚAN según el plan (no se reclaman)",
+        { contratoId, continuan: continuan.map((u) => u.serial || u.id) });
+    }
+
+    if (!reclamar.length) {
       // Origen vinculado pero sin unidades nuestras colgando: o son del cliente
       // (Propio), o ya volvieron, o el origen es legacy sin seriales. En los
       // tres casos NO hay nada que recuperar, y eso es una respuesta — no un
@@ -89,7 +110,10 @@ module.exports = onDocumentUpdated(
       // La revisión manual sigue disponible en la página de transición.
       const marca = {
         devolucion_estado: "no_aplica",
-        devolucion_no_aplica_motivo: "sin_unidades",
+        // Con plan de venta puede no haber NADA que devolver porque todo
+        // continúa en el contrato nuevo — eso no es "sin unidades", es una
+        // renovación completa por continuidad.
+        devolucion_no_aplica_motivo: continuan.length ? "continuan_en_renovacion" : "sin_unidades",
         devolucion_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
       };
       for (const origenId of origenIds) {
@@ -104,14 +128,16 @@ module.exports = onDocumentUpdated(
     }
 
     // Mapeos de devolución (batch). onMapeoWrite marca pendiente_devolucion,
-    // incrementa el contador y escribe el kardex de cada unidad.
+    // incrementa el contador, escribe el kardex — y cuando el mapeo trae
+    // ENTRANTE (pareo del plan) estampa el linaje reemplaza_a en la unidad
+    // nueva. Es la primera vía que produce linaje de forma automática.
     const batch = db.batch();
     const col = db.collection("contratos").doc(cid).collection("mapeos");
-    unidades.forEach((u) => batch.set(col.doc(), {
+    reclamar.forEach(({ unidad: u, entrante }) => batch.set(col.doc(), {
       saliente: u.serial || u.serial_norm || u.id,
       saliente_pool_id: u.id,
-      entrante: null,
-      entrante_pool_id: null,
+      entrante: entrante ? (entrante.serial || entrante.serial_norm || entrante.id) : null,
+      entrante_pool_id: entrante ? entrante.id : null,
       modelo: u.modelo_label || "",
       modelo_id: u.modelo_id || null,
       contrato_id: contratoId,
@@ -122,10 +148,14 @@ module.exports = onDocumentUpdated(
     }));
     batch.set(db.collection("contratos").doc(cid), {
       transicion_auto_at: admin.firestore.FieldValue.serverTimestamp(),
-      transicion_auto_unidades: unidades.length,
+      transicion_auto_unidades: reclamar.length,
     }, { merge: true });
     await batch.commit();
-    logger.info("[onEntregaTransicion] Devolución auto-registrada", { contratoId, unidades: unidades.length });
+    logger.info("[onEntregaTransicion] Devolución auto-registrada", {
+      contratoId, unidades: reclamar.length,
+      pareadas: reclamar.filter((r) => r.entrante).length,
+      continuan: continuan.length,
+    });
 
     // Tiquete de trabajo: orden de DEVOLUCIÓN (modo recuperación) con las
     // unidades a recuperar — asignable, medible (aging) y con check-in por
@@ -139,7 +169,7 @@ module.exports = onDocumentUpdated(
         contratoOrigenIds: origenIds,
         modo: "recuperacion",
         origen: { tipo: "renovacion", ref_id: cid },
-        unidades: unidades.map(u => ({
+        unidades: reclamar.map(({ unidad: u }) => ({
           serial: u.serial || u.serial_norm || u.id,
           modelo: u.modelo_label || "",
           modelo_id: u.modelo_id || null,

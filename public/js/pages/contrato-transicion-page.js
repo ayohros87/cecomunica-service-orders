@@ -225,7 +225,17 @@
         <button type="button" class="btn btn-sm" id="btnVincularOrigen" style="margin-top:6px;"><i data-lucide="link"></i> Vincular original(es)</button>
       </div>` : '';
 
+    // El plan decidido en la venta (si existe): recepción trabaja CONTRA el
+    // plan, no desde una página en blanco (informe tracking 2026-08-12, P1).
+    const planHtml = (c.transicion_plan && window.TransicionPlan) ? `
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);font-size:13px;background:#eff6ff;border-color:#bfdbfe;">
+        <i data-lucide="clipboard-check" style="width:14px;height:14px;vertical-align:-2px;"></i>
+        <b>Plan de la venta:</b> ${esc(TransicionPlan.resumen(c.transicion_plan))}.
+        ${c.transicion_plan.nivel === 'serial' ? 'El registro automático lo ejecuta al confirmarse la entrega; esta página es para las excepciones.' : 'Los seriales concretos se resuelven aquí y en la página de seriales, contra esas cantidades.'}
+      </div>` : '';
+
     $('transBody').innerHTML = `
+      ${planHtml}
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);font-size:13px;color:var(--fg-2);">
         <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;"></i>
         ${ancla}. Puede haber <b>menos o más</b> entrantes que salientes: mapea lo que aplique.

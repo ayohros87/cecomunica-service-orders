@@ -27,8 +27,10 @@ window.NCPreview = {
 
     const tot = NCForm.recalcularTotalesContrato();
     const origen = NCForm.leerOrigen();
+    const plan = NCForm.leerPlan();
     return {
       origen,
+      plan,
       cliente_id: clienteId,
       cliente_nombre: cliente?.nombre || '',
       cliente_ruc: cliente?.ruc || '', cliente_dv: cliente?.dv || '',
@@ -98,6 +100,7 @@ window.NCPreview = {
           ${refurbishedLabel  ? `<div><b>Refurbished batería/antena/clip/piezas:</b> ${esc(refurbishedLabel)}</div>` : ''}
           <div><b>Duración:</b> ${esc(draft.duracion || '')}</div>
           ${origenLabel ? `<div><b>Contrato(s) original(es):</b> ${esc(origenLabel)}</div>` : ''}
+          ${draft.plan ? `<div><b>Transición de equipos:</b> ${esc(TransicionPlan.resumen(draft.plan))}</div>` : ''}
           <div><b>Observaciones:</b> ${esc(draft.observaciones || '-')}</div>
         </div>
       </div>
@@ -156,6 +159,12 @@ window.NCPreview = {
       // Renovación / Reemplazo tienen que declarar de qué contrato vienen: de
       // ese vínculo salen los equipos a devolver (js/domain/origenContrato.js).
       if (!NCForm.validarOrigen().ok) return;
+      // Y el plan de transición tiene que cuadrar (js/domain/transicionPlan.js).
+      const _plan = NCForm.leerPlan();
+      if (_plan) {
+        const v = TransicionPlan.validar(_plan);
+        if (!v.ok) { Toast.show(`⚠️ ${v.mensaje}`, 'warn'); return; }
+      }
 
       NC.previewDraft = self.buildContratoDraft();
       const sub = `${NC.previewDraft.cliente_nombre || ''} · ${NC.previewDraft.tipo_contrato || ''} · ${NC.previewDraft.accion || ''}`;
