@@ -567,6 +567,7 @@ function renderRow(id, c){
 
 <td class="actions" style="text-align:center">
   <div class="table-actions">
+    <button class="btn sm" data-equipos title="Equipos del cliente en el pool (por contrato, con estado)"><i data-lucide="radio"></i> Equipos</button>
     <button class="btn sm" data-edit ${ro?'disabled':''}><i data-lucide="pencil"></i> Editar</button>
     <button class="btn sm danger" data-delete ${ro?'disabled':''}><i data-lucide="trash-2"></i> Eliminar</button>
   </div>
@@ -655,6 +656,11 @@ if (selectVend) {
       onInlineUpdate(id, patch);
     });
   }
+
+// Equipos del cliente — flota real del pool, agrupada por contrato.
+tr.querySelector('[data-equipos]').onclick = ()=>{
+  if(window.EquiposCliente) EquiposCliente.abrir(id, c.nombre || '');
+};
 
 // Editar (lleva al mismo formulario de nuevo-cliente, pero con id)
 tr.querySelector('[data-edit]').onclick = ()=> location.href = `../contratos/nuevo-cliente.html?id=${id}&from=clientes`;

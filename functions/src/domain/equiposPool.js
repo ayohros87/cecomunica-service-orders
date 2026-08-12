@@ -91,6 +91,22 @@ function mismoModelo(data, modeloId, modeloLabel) {
   return true;
 }
 
+// Invariante de custodia (informe tracking 2026-08-12, P3.2): una unidad
+// en_cliente sin cliente en la asignación es un radio "en la calle sin dueño
+// registrado" — la brecha que dejó 1,918 unidades sin contrato y 16 sin nada.
+// No se bloquea el flujo (avisar, nunca bloquear): se estampa
+// `custodia_faltante: true` para que la conciliación y las bandejas lo vean,
+// y se borra sola en cuanto una asignación con cliente aparece o el estado
+// deja de ser en_cliente. Función pura (test/poolCustodia.test.js).
+// `actual` = doc existente ({} en creación — un create no admite delete()).
+function custodiaPatch(estadoFinal, asignacionEfectiva, actual = {}) {
+  const tiene = !!(asignacionEfectiva
+    && (asignacionEfectiva.cliente_id || asignacionEfectiva.cliente_nombre));
+  if (estadoFinal === ESTADOS.EN_CLIENTE && !tiene) return { custodia_faltante: true };
+  if (actual.custodia_faltante) return { custodia_faltante: admin.firestore.FieldValue.delete() };
+  return {};
+}
+
 function _movimiento({ tipo, de_estado = null, a_estado = null, ref = null, notas = "" }) {
   return {
     at:  admin.firestore.FieldValue.serverTimestamp(),
@@ -210,6 +226,7 @@ async function upsertContacto(opts) {
         estado: opts.estado, origen: opts.origen, notas: opts.notas || "",
         ...extraCreate,
       });
+      Object.assign(doc, custodiaPatch(opts.estado, doc.asignacion));
       if (colisionConId) {
         doc.serial_compartido = true;
         tx.set(db.collection("equipos_pool").doc(colisionConId),
@@ -259,8 +276,12 @@ async function upsertContacto(opts) {
         + (asigVieja.contrato_id ? ` (${asigVieja.contrato_id})` : " (sin contrato)")
       : "";
 
+    // Custodia: la asignación EFECTIVA es la que va a quedar en el doc.
+    const asigEfectiva = ("asignacion" in update) ? update.asignacion : actual.asignacion;
+
     const noTocar = opts.noTocarDesde || [];
     if (de === opts.estado || noTocar.includes(de)) {
+      Object.assign(update, custodiaPatch(de, asigEfectiva, actual));
       tx.set(ref, update, { merge: true });
       // Sin transición de estado no habría movimiento: la reasignación silenciosa
       // dejaría al cliente anterior sin rastro. Se registra aparte.
@@ -278,6 +299,7 @@ async function upsertContacto(opts) {
     if ((opts.estado === ESTADOS.DEVUELTO || opts.estado === ESTADOS.EN_BODEGA) && actual.pendiente_devolucion) {
       update.pendiente_devolucion = admin.firestore.FieldValue.delete();
     }
+    Object.assign(update, custodiaPatch(opts.estado, asigEfectiva, actual));
     tx.set(ref, { estado: opts.estado, ...update }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo: opts.tipo || "cambio_estado", de_estado: de, a_estado: opts.estado,
@@ -320,6 +342,8 @@ async function transicionar(serial, modeloId, modeloLabel,
     if ((aEstado === ESTADOS.DEVUELTO || aEstado === ESTADOS.EN_BODEGA) && actual.pendiente_devolucion) {
       cambios.pendiente_devolucion = admin.firestore.FieldValue.delete();
     }
+    Object.assign(cambios, custodiaPatch(aEstado,
+      ("asignacion" in cambios) ? cambios.asignacion : actual.asignacion, actual));
     tx.set(ref, { estado: aEstado, ...cambios, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo, de_estado: de, a_estado: aEstado, ref: refMov, notas,
@@ -427,6 +451,8 @@ async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
     if ((aEstado === ESTADOS.DEVUELTO || aEstado === ESTADOS.EN_BODEGA) && actual.pendiente_devolucion) {
       cambios.pendiente_devolucion = admin.firestore.FieldValue.delete();
     }
+    Object.assign(cambios, custodiaPatch(aEstado,
+      ("asignacion" in cambios) ? cambios.asignacion : actual.asignacion, actual));
     tx.set(ref, { estado: aEstado, ...cambios, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
     tx.set(ref.collection("movimientos").doc(), _movimiento({
       tipo, de_estado: de, a_estado: aEstado, ref: refMov, notas,
@@ -436,5 +462,5 @@ async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
 }
 
 module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver,
-  upsertContacto, transicionar, transicionarPorId,
+  upsertContacto, transicionar, transicionarPorId, custodiaPatch,
   desasignarContrato, estadoPrevioAOrden, destinoAlSalirDeOrden };

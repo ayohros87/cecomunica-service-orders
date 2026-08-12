@@ -76,8 +76,16 @@
         salientes = await EquiposPoolService.listarPorCliente(c.cliente_id);
       }
     } catch (e) { console.warn('No se pudieron cargar los equipos salientes', e); }
+    // EN_TALLER también cuenta como saliente (informe tracking 2026-08-12,
+    // P4.3): la unidad sigue siendo del ciclo del contrato original aunque hoy
+    // esté en el taller por una orden — esconderla dejaba invisible justo el
+    // caso común de un reemplazo (los 10 P50 de MAGEN DAVID estaban en_taller
+    // con su orden parada en COMPLETADO). El estado se muestra tal cual; si se
+    // marca "se devuelve", el flag no miente: la ENTRADA posterior lo resuelve.
     ctx.salientes = salientes.filter(u =>
-      (u.estado === EquiposPoolService.ESTADOS.ASIGNADO || u.estado === EquiposPoolService.ESTADOS.EN_CLIENTE)
+      (u.estado === EquiposPoolService.ESTADOS.ASIGNADO
+        || u.estado === EquiposPoolService.ESTADOS.EN_CLIENTE
+        || u.estado === EquiposPoolService.ESTADOS.EN_TALLER)
       && u.asignacion?.contrato_doc_id !== contratoDocId);
 
     // ENTRANTES: seriales del contrato nuevo + su doc del pool (para el trigger).
@@ -244,6 +252,9 @@
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);">
         <div style="font-weight:600;margin-bottom:8px;">Equipos de alquiler que se devuelven (${alquiler.length})</div>
         <p style="margin:0 0 8px;font-size:12px;color:var(--fg-3);"><b>Todos se devuelven por defecto.</b> Desmarca solo la excepción (renovación parcial, vendido, perdido…) — el motivo es obligatorio. Los elegidos arriba como reemplazo se resuelven solos.</p>
+        ${alquiler.some(u => u.estado === EquiposPoolService.ESTADOS.EN_TALLER) ? `
+        <p style="margin:0 0 8px;font-size:12px;color:#92400e;"><i data-lucide="wrench" style="width:13px;height:13px;vertical-align:-2px;"></i>
+          Los marcados <b>En taller</b> ya están en nuestras manos por una orden — se pueden mapear igual; su entrada a bodega se registra al cerrar esa orden o la ENTRADA.</p>` : ''}
         <div style="overflow-x:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px;">
             <thead><tr style="text-align:left;color:var(--fg-3);font-size:12px;">
@@ -363,11 +374,24 @@
     try {
       const contratos = await ContratosService.getContratosActivosPorCliente(ctx.contrato.cliente_id);
       const otros = (contratos || []).filter(k => k.id !== contratoDocId);
+      // Unidades por contrato: elegir el original a ciegas era la queja
+      // (informe tracking 2026-08-12, P4.2). ctx.salientes ya trae los equipos
+      // del cliente cargados — se cuenta en memoria, sin otra consulta.
+      const unidadesPor = new Map();
+      (ctx.salientes || []).forEach(u => {
+        const cid = u.asignacion?.contrato_doc_id;
+        if (cid) unidadesPor.set(cid, (unidadesPor.get(cid) || 0) + 1);
+      });
+      const conteo = (id) => {
+        const n = unidadesPor.get(id) || 0;
+        return n ? ` <span style="color:var(--fg-3);">· <b style="color:inherit;">${n}</b> equipo${n === 1 ? '' : 's'}</span>`
+                 : ' <span style="color:var(--fg-3);">· sin equipos</span>';
+      };
       list.innerHTML = otros.length
         ? otros.map(k => `
             <label class="form-check" style="margin:0;">
               <input type="checkbox" class="origen-trans-chk" value="${esc(k.id)}" data-ref="${esc(k.contrato_id || k.id)}">
-              <span><span class="form-check-label">${esc(k.contrato_id || k.id)} · ${esc(k.tipo_contrato || '')} · ${esc(k.estado || '')}</span></span>
+              <span><span class="form-check-label">${esc(k.contrato_id || k.id)} · ${esc(k.tipo_contrato || '')} · ${esc(k.estado || '')}${conteo(k.id)}</span></span>
             </label>`).join('')
         : '<span style="color:var(--fg-3);">El cliente no tiene otros contratos vigentes</span>';
     } catch (e) {

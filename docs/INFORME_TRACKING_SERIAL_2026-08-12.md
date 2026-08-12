@@ -185,9 +185,10 @@ La pantalla de transición actual **queda** — como lo que siempre debió ser: 
 
 ### P3 · Cerrar la brecha en_cliente-sin-contrato
 
-1. **Backfill**: cruzar las 1,918 por serial contra `poc_devices.contrato_doc_id` y las subcolecciones de seriales de contratos vigentes (el patrón `linkContratoPoc` ya existe); lo ambiguo a cola de sospechosos, no auto-enlace.
-2. **Invariante hacia adelante**: una unidad no pasa a `en_cliente` sin `asignacion.contrato_doc_id` o custodia explícita (`ordenes` ya estampa custodia); el guard va en `upsertContacto`.
-3. **Soltar las asignaciones a contratos anulados sin razón viva** (script puntual con dry-run, saltando SIEMPRE las `pendiente_devolucion` — esas usan la asignación como hilo de la recuperación). Medido: 18 reales de las 50 aparentes.
+1. **Backfill**: cruzar las 1,918 por serial contra `poc_devices.contrato_doc_id` y las subcolecciones de seriales de contratos vigentes; lo ambiguo a cola de sospechosos, no auto-enlace.
+   **RESULTADO (corrido 2026-08-12, `backfill-asignacion-en-cliente.js`): 0 corregibles.** Las 1,904 no tienen rastro en NINGUNA fuente digital — son historia pre-pool (los 305 contratos legacy nunca digitalizaron seriales). La brecha no se cierra con cruces: se drena **cliente por cliente al renovar**, que es exactamente lo que P1 captura — este hallazgo SUBE la prioridad de P1. Quedaron reportadas 8 anomalías de "pista de otro cliente" (radios con custodia de un cliente y serial en el contrato de otro).
+2. **Invariante hacia adelante**: una unidad no pasa a `en_cliente` sin custodia — implementado como `custodia_faltante: true` (marca, no bloqueo) en `equiposPool.custodiaPatch`, aplicado en los tres caminos de escritura; se borra sola al ganar custodia o salir de en_cliente.
+3. **Soltar las asignaciones a contratos anulados sin razón viva** (script puntual con dry-run, saltando SIEMPRE las `pendiente_devolucion` — esas usan la asignación como hilo de la recuperación). Medido y corrido: 18 reales de las 50 aparentes.
 
 ### P4 · La flota visible donde se decide (UI, barato)
 

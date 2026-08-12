@@ -184,11 +184,35 @@ window.NCForm = {
     hint('Cargando contratos del cliente…');
     try {
       const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
+
+      // Unidades del pool por contrato — para que el vendedor NO elija el
+      // original a ciegas entre varios contratos (informe tracking 2026-08-12,
+      // P4.2: GOLY tiene 17 y solo algunos tienen equipo colgando). Best-effort:
+      // sin el servicio o sin permiso, la lista sale sin conteos.
+      const unidadesPor = new Map();
+      try {
+        if (typeof EquiposPoolService !== 'undefined') {
+          (await EquiposPoolService.listarPorCliente(clienteId)).forEach(u => {
+            const cid = u.asignacion?.contrato_doc_id;
+            if (!cid) return;
+            if (!['asignado_contrato', 'en_cliente', 'en_taller'].includes(u.estado)) return;
+            unidadesPor.set(cid, (unidadesPor.get(cid) || 0) + 1);
+          });
+        }
+      } catch (e) { /* sin conteos */ }
+      const conteoHtml = (id) => {
+        if (!unidadesPor.size) return '';
+        const n = unidadesPor.get(id) || 0;
+        return n
+          ? ` <span style="color:var(--fg-3,#6b7280);">· <b style="color:inherit;">${n}</b> equipo${n === 1 ? '' : 's'} en el pool</span>`
+          : ' <span style="color:var(--fg-3,#6b7280);">· sin equipos en el pool</span>';
+      };
+
       list.innerHTML = contratos.length
         ? contratos.map(c => `
             <label class="form-check" style="margin:0;">
               <input type="checkbox" class="origen-chk" value="${NC.escapeHtml(c.id)}" data-ref="${NC.escapeHtml(c.contrato_id || c.id)}">
-              <span><span class="form-check-label">${NC.escapeHtml(c.contrato_id || c.id)} · ${NC.escapeHtml(c.tipo_contrato || '')} · ${NC.escapeHtml(c.estado || '')}</span></span>
+              <span><span class="form-check-label">${NC.escapeHtml(c.contrato_id || c.id)} · ${NC.escapeHtml(c.tipo_contrato || '')} · ${NC.escapeHtml(c.estado || '')}${conteoHtml(c.id)}</span></span>
             </label>`).join('')
         : '';
       list.dataset.estado = 'listo';
