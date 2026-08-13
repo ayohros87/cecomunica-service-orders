@@ -129,6 +129,23 @@ window.Sesion = (() => {
     } catch { /* red intermitente: manda el rol cacheado; rules es el piso */ }
   }
 
+  // Sesión cacheada de ESTA pestaña sin conocer el uid todavía (Auth aún no
+  // restauró desde IndexedDB). Para el pintado optimista del rail: escanea
+  // las claves ccSesion:v1:* — tras limpiar() en logout solo puede haber una
+  // válida. Devuelve {uid, rol, nombre} o null (TTL vencido incluido).
+  function cacheAnonima() {
+    try {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith("ccSesion:v1:")) {
+          const c = cache(k.slice("ccSesion:v1:".length));
+          if (c && c.rol) return c;
+        }
+      }
+    } catch { /* sin storage */ }
+    return null;
+  }
+
   // Logout / sesión expirada: no heredar rol ni nombre al siguiente usuario.
   function limpiar() {
     try {
@@ -138,7 +155,7 @@ window.Sesion = (() => {
     } catch { /* sin storage: nada que limpiar */ }
   }
 
-  return { cache, perfil, rol, nombre, limpiar };
+  return { cache, cacheAnonima, perfil, rol, nombre, limpiar };
 })();
 
   // Apply admin-tunable config from empresa/config to runtime globals.

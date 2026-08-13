@@ -2518,3 +2518,16 @@ table.app-table.editable tbody tr:hover { background: transparent; }
   box-shadow: var(--shadow-sm);
 }
 .ds-card-padded { padding: var(--sp-6); }
+
+
+/* ── Transiciones entre páginas (cross-document View Transitions) ─────────
+   Opt-in same-origin: el navegador mantiene visible la página vieja y hace
+   un cross-fade corto a la nueva — elimina el flash blanco entre módulos.
+   Chrome/Edge/Safari lo soportan; Firefox lo ignora (queda como antes).
+   DUPLICADO en ceco-ui.css y ceco-command.css — mantener en sync. */
+@view-transition { navigation: auto; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}

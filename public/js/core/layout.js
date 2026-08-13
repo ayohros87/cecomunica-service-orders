@@ -358,6 +358,21 @@ const Layout = (() => {
      Firebase cargan con defer y este helper los necesita ya ejecutados. */
   function initRail(active) {
     if (typeof verificarAccesoYAplicarVisibilidad !== 'function') return;
+
+    // Pintado OPTIMISTA: con sesión cacheada en la pestaña, el rail sale en
+    // el primer frame tras DOMContentLoaded — sin esperar a que Auth restaure
+    // desde IndexedDB (~100-300 ms). Es lo que hace que el rail "no se mueva"
+    // entre páginas (además lo empareja la view transition, ceco-rail.css).
+    // Si la sesión expiró de verdad, verificarAcceso redirige a login como
+    // siempre; el rail optimista solo se vio un instante y sin datos.
+    let optimista = null;
+    const c = window.Sesion && Sesion.cacheAnonima ? Sesion.cacheAnonima() : null;
+    if (c && c.rol) {
+      const rolFx = window.MODULOS ? MODULOS.rolEfectivo(c.rol) : c.rol;
+      renderRail({ active, rol: rolFx, userName: c.nombre || '' });
+      optimista = { rolFx, nombre: c.nombre || '' };
+    }
+
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       const user = firebase.auth().currentUser;
       if (!user) return;
@@ -367,6 +382,9 @@ const Layout = (() => {
         ? await Sesion.nombre(user)
         : (user.displayName || (user.email || '').split('@')[0]);
       const rolFx = window.MODULOS ? MODULOS.rolEfectivo(rol) : rol;
+      // Si el optimista ya pintó exactamente esto, no re-render: el swap de
+      // outerHTML idéntico haría parpadear los iconos del rail.
+      if (optimista && optimista.rolFx === rolFx && optimista.nombre === nombre) return;
       renderRail({ active, rol: rolFx, userName: nombre });
     });
   }

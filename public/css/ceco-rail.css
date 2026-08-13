@@ -59,6 +59,12 @@ html[data-cc-rail="mini"]{--cc-rail-cur:var(--cc-rail-mini-w)}
   display:flex;flex-direction:column;border-right:1px solid var(--cc-navy-950);
   background-image:radial-gradient(circle at 1px 1px,rgba(120,200,255,.10) 1px,transparent 0);
   background-size:22px 22px;background-position:0 64px;z-index:30;
+  /* View transition entre páginas (@view-transition en ceco-ui/ceco-command):
+     el rail viejo y el nuevo se emparejan por este nombre y el navegador lo
+     mantiene visualmente QUIETO mientras el contenido hace cross-fade. Exige
+     que el rail nuevo exista al primer render — de eso se encarga el pintado
+     optimista de Layout.initRail (rol desde sessionStorage, sin esperar Auth). */
+  view-transition-name:cc-rail;
 }
 .rail__brand{display:flex;align-items:center;gap:10px;padding:16px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
 .rail__brand svg,.rail__brand img{width:34px;height:34px;border-radius:8px;flex:none;display:block}
