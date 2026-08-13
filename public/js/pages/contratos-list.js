@@ -14,7 +14,9 @@ window.ContratosLista = {
     if (reachedMax)    btn.innerHTML = '<i data-lucide="lock"></i> Límite de consulta alcanzado';
     else if (noMore)   btn.textContent = 'Sin más resultados';
     else               btn.innerHTML = CS.isLoading ? '<i data-lucide="loader"></i> Cargando...' : '<i data-lucide="chevron-down"></i> Cargar más contratos';
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    // Scoped al botón: el barrido full-document corría en cada actualización.
+    if (window.Icons) Icons.pintar(btn);
+    else if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   // Botón de seriales con estado: pendiente (resaltado) / parcial / completo (verde).
@@ -342,7 +344,7 @@ window.ContratosLista = {
       </td>
       <td>${ContratosLista.devolucionPill(data, id)}</td>
       <td class="td-muted">${data.fecha_creacion?.toDate ? data.fecha_creacion.toDate().toLocaleDateString() : '-'}</td>
-      <td class="td-muted">${esc(CS.mapaUsuarios[data.creado_por_uid] || '-')}</td>
+      <td class="td-muted" data-creador-uid="${esc(data.creado_por_uid || '')}">${esc(CS.mapaUsuarios[data.creado_por_uid] || (data.creado_por_uid ? '…' : '-'))}</td>
       <td class="td-mono" style="text-align:right; color:var(--fg-1); font-weight:600;">${FMT.money(tot.totalConITBMS)}</td>
       <td class="acciones">${accionesHtml}</td>
     `;
@@ -505,6 +507,26 @@ window.ContratosLista = {
       const searchRange = this.getSearchRange(clienteSearch);
       const cursor      = CS.lastDoc && !reset ? CS.lastDoc : null;
 
+      // Cache-first (solo carga inicial limpia, sin filtros ni búsqueda):
+      // pinta al instante lo que haya en la persistencia local de Firestore
+      // y el pase de servidor de abajo repinta con la verdad. CS.contratos se
+      // vacía después del paint para que el pase de servidor no duplique, y
+      // CS.lastDoc jamás se toma del caché (el cursor del servidor manda).
+      if (reset && !estadoSel && !clienteSearch) {
+        try {
+          const { docs: cacheDocs } = await ContratosService.listContratos({
+            estadoSel: null, creadoPorUid, searchRange: null,
+            campoOrden: CS.campoOrden, direccionAsc: CS.direccionAsc,
+            lastDoc: null, limit: CS.pageLimit(), source: 'cache',
+          });
+          if (cacheDocs.length) {
+            CS.contratos = cacheDocs;
+            this.renderDesdeCache();
+            CS.contratos = [];
+          }
+        } catch (_) { /* caché frío (primera visita): sigue el pase normal */ }
+      }
+
       const { docs: newDocs, lastDoc: newCursor } = await ContratosService.listContratos({
         estadoSel:    estadoSel || null,
         creadoPorUid,
@@ -566,7 +588,9 @@ window.ContratosLista = {
         CS.lastDoc   = null;
       }
 
-      await CS.precargarUsuarios(CS.contratos);
+      // Los nombres de creador NO retienen el primer paint: las filas salen
+      // con '…' en esa celda y se rellenan cuando la precarga resuelva.
+      const pNombres = CS.precargarUsuarios(CS.contratos);
 
       const filtrados = this.ordenar(
         this.filtrarLocal([...CS.contratos]).filter(matchesCliente)
@@ -613,11 +637,26 @@ window.ContratosLista = {
 
       ContratosEquipos.cargarIconos();
       this.updateBtnCargarMas(!CS.lastDoc);
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      // Scoped: el barrido full-document (~40 filas × varios iconos + todo el
+      // shell) era una de las fuentes del parpadeo de iconos.
+      if (window.Icons) Icons.pintar([tabla, listaMovil]);
+      else if (typeof lucide !== 'undefined') lucide.createIcons();
+      pNombres.then(() => this.rellenarNombresCreador()).catch(() => { /* la celda queda '…' */ });
     } finally {
       CS.isLoading = false;
       this.updateBtnCargarMas(false);
     }
+  },
+
+  // Rellena la celda "creado por" cuando la precarga de nombres (que ya no
+  // bloquea el primer paint) resuelve. Ignora filas de otros renders.
+  rellenarNombresCreador() {
+    document.querySelectorAll('[data-creador-uid]').forEach(el => {
+      const uid = el.getAttribute('data-creador-uid');
+      if (!uid) return;
+      const n = CS.mapaUsuarios[uid];
+      if (n) el.textContent = n;
+    });
   },
 
   renderDesdeCache() {
@@ -663,8 +702,12 @@ window.ContratosLista = {
         ${this.avisoAlcanceDevolucion()}
       `;
     }
+    // Sin esto las celdas de equipos quedaban vacías al re-render (resize y
+    // ahora también el paint cache-first).
+    ContratosEquipos.cargarIconos();
     this.updateBtnCargarMas(false);
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    if (window.Icons) Icons.pintar([tabla, listaMovil]);
+    else if (typeof lucide !== 'undefined') lucide.createIcons();
   },
 
   actualizarFlechitas() {

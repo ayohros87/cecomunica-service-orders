@@ -8,12 +8,16 @@ window.ContratosEquipos = {
 
   // ── Icon rendering in the list table ───────────────────────────
   cargarIconos() {
+    // Map por id (antes: CS.contratos.find() POR FILA — O(n²) sobre 40) y un
+    // solo pintado de iconos al final (antes: createIcons({nodes}) POR FILA).
+    const porId  = new Map(CS.contratos.map(x => [x.id, x]));
+    const celdas = [];
     document.querySelectorAll('tbody tr[data-contrato-doc-id]').forEach(fila => {
       const id     = fila.getAttribute('data-contrato-doc-id');
       const celda  = fila.querySelector('td[data-contrato-equipos]');
       if (!celda || !id) return;
 
-      const c = CS.contratos.find(x => x.id === id);
+      const c = porId.get(id);
       if (!c) { celda.innerHTML = '<span style="opacity:0.3;">—</span>'; return; }
 
       // Conteo de unidades activas del contrato (contratado − dado de baja).
@@ -39,8 +43,12 @@ window.ContratosEquipos = {
         <span>${countTxt}</span>
         <span style="justify-self:start; margin-left:4px;">${peek}</span>
       </span>`;
-      if (window.lucide) lucide.createIcons({ nodes: [celda] });
+      celdas.push(celda);
     });
+    if (celdas.length) {
+      if (window.Icons) Icons.pintar(celdas);
+      else if (window.lucide) lucide.createIcons({ nodes: celdas });
+    }
   },
 
   // ── Tooltip ─────────────────────────────────────────────────────

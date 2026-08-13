@@ -41,11 +41,11 @@ window.CS = {
     if (!ids.length) return;
     const chunks = [];
     for (let i = 0; i < ids.length; i += 10) chunks.push(ids.slice(i, i + 10));
-    for (const chunk of chunks) {
-      const users = await UsuariosService.getUsuariosByIds(chunk);
-      users.forEach(u => {
-        map[u.id] = u.nombre || u.email || u.id;
-      });
-    }
+    // Chunks en paralelo (antes: for-await serial, ceil(N/10) round-trips
+    // encadenados que retenían el primer paint de la tabla).
+    const grupos = await Promise.all(chunks.map(ch => UsuariosService.getUsuariosByIds(ch)));
+    grupos.flat().forEach(u => {
+      map[u.id] = u.nombre || u.email || u.id;
+    });
   }
 };

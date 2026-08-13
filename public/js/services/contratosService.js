@@ -119,6 +119,8 @@ const ContratosService = {
     direccionAsc = false,
     lastDoc      = null,
     limit        = 30,
+    source       = null,   // 'cache' → lee SOLO la persistencia local (pinta
+                           // al instante; el caller debe repintar del servidor)
   } = {}) {
     const db = firebase.firestore();
     let q = db.collection('contratos').where('deleted', '!=', true);
@@ -138,7 +140,7 @@ const ContratosService = {
 
     if (lastDoc) q = q.startAfter(lastDoc);
 
-    const snap = await q.get();
+    const snap = await (source ? q.get({ source }) : q.get());
     const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     return { docs, lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1] };
   },
