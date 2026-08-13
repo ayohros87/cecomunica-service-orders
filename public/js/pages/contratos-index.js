@@ -36,8 +36,9 @@ async function mostrarBadgeCancelaciones(rol) {
 auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = '/login.html'; return; }
   CS.currentUser = user;
-  const u = await UsuariosService.getUsuario(user.uid);
-  const rol = u?.rol || 'vista';
+  // Sesion: rol desde sessionStorage en navegaciones warm (revalida en
+  // background); en frío una sola lectura compartida con initRail.
+  const rol = (await Sesion.rol(user.uid)) || 'vista';
   window.userRole = rol;
 
   aplicarRestriccionesPorRol(rol);

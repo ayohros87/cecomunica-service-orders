@@ -10,8 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { window.location.href = '/login.html'; return; }
 
-    const userDoc = await UsuariosService.getUsuario(user.uid);
-    PocState.rolActual = userDoc?.rol || ROLES.VISTA;
+    // Sesion: rol desde sessionStorage en navegaciones warm (revalida en
+    // background); en frío una sola lectura compartida con initRail.
+    PocState.rolActual = (await Sesion.rol(user.uid)) || ROLES.VISTA;
 
     const permitidos = [ROLES.ADMIN, ROLES.RECEPCION, ROLES.TECNICO, ROLES.VISTA, ROLES.JEFE_TALLER];
     if (!permitidos.includes(PocState.rolActual)) {

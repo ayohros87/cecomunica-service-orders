@@ -353,16 +353,11 @@ const Layout = (() => {
     verificarAccesoYAplicarVisibilidad(async (rol) => {
       const user = firebase.auth().currentUser;
       if (!user) return;
-      let nombre = sessionStorage.getItem('ccUserName:' + user.uid) || '';
-      if (!nombre) {
-        try {
-          const u = window.UsuariosService ? await UsuariosService.getUsuario(user.uid) : null;
-          nombre = (u && (u.nombre || u.name)) || user.displayName || (user.email || '').split('@')[0];
-          sessionStorage.setItem('ccUserName:' + user.uid, nombre);
-        } catch {
-          nombre = user.displayName || (user.email || '').split('@')[0];
-        }
-      }
+      // Sesion dedupe la lectura de usuarios/{uid} con la del guard y la
+      // sirve de sessionStorage en navegaciones warm (cero red).
+      const nombre = window.Sesion
+        ? await Sesion.nombre(user)
+        : (user.displayName || (user.email || '').split('@')[0]);
       const rolFx = window.MODULOS ? MODULOS.rolEfectivo(rol) : rol;
       renderRail({ active, rol: rolFx, userName: nombre });
     });

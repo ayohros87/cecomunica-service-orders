@@ -28,10 +28,10 @@ window.CS = {
   async cargarUsuarios() {
     if (!this.currentUser?.uid) return;
     if (this.mapaUsuarios[this.currentUser.uid]) return;
-    const me = await UsuariosService.getUsuario(this.currentUser.uid);
-    if (me) {
-      this.mapaUsuarios[this.currentUser.uid] = me.nombre || me.email || this.currentUser.uid;
-    }
+    // Sesion evita releer usuarios/{uid}: cae en la misma single-flight
+    // que el guard de la página (0 lecturas extra).
+    const nombre = await Sesion.nombre(this.currentUser);
+    this.mapaUsuarios[this.currentUser.uid] = nombre || this.currentUser.uid;
   },
 
   async precargarUsuarios(contratos) {
