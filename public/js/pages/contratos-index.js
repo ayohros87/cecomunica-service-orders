@@ -7,7 +7,11 @@ function cerrarSesion() {
 }
 
 function aplicarRestriccionesPorRol(rol) {
-  if (rol !== ROLES.ADMIN && rol !== ROLES.VENDEDOR && rol !== ROLES.RECEPCION) {
+  // roles.js es la fuente ('ver-contratos': admin/vendedor/recepción/gerente).
+  // El gerente estaba expulsado aquí aunque la matriz le da aprobar/anular y
+  // firestore.rules se lo permite: clickeaba la tarjeta que el propio rail le
+  // muestra y recibía "No autorizado".
+  if (!canRole(rol, 'ver-contratos')) {
     Toast.show('No autorizado para ver Contratos.', 'bad');
     window.location.href = '/index.html';
     return;
@@ -15,7 +19,7 @@ function aplicarRestriccionesPorRol(rol) {
   const btnNuevoContrato = document.getElementById('btnNuevoContrato');
   if (btnNuevoContrato) {
     btnNuevoContrato.style.display =
-      (rol === ROLES.ADMIN || rol === ROLES.VENDEDOR) ? 'inline-block' : 'none';
+      canRole(rol, 'crear-contrato') ? 'inline-block' : 'none';
   }
 }
 
@@ -59,7 +63,7 @@ auth.onAuthStateChanged(async user => {
 
   const aprobarId = params.get('aprobar');
   if (aprobarId) {
-    if (rol === ROLES.ADMIN) {
+    if (canRole(rol, 'aprobar-contrato')) {
       try {
         const doc = await ContratosService.getContrato(aprobarId);
         if (doc) {
@@ -75,7 +79,7 @@ auth.onAuthStateChanged(async user => {
         Toast.show('⚠️ No se pudo abrir el contrato para aprobación.', 'warn');
       }
     } else {
-      Toast.show('⚠️ Solo un administrador puede aprobar contratos.', 'warn');
+      Toast.show('⚠️ Solo administración o gerencia puede aprobar contratos.', 'warn');
     }
   }
 });

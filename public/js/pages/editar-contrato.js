@@ -180,10 +180,21 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
   e.preventDefault();
 
   const duracionSeleccionada = document.getElementById("duracion").value;
-  const otraDuracion = document.getElementById("otra_duracion").value;
+  const otraDuracion = document.getElementById("otra_duracion").value.trim();
+  // Mismo candado que el alta (nc-guardar.js): "Otro" sin meses guardaba
+  // una duración " meses" vacía que llegaba al documento impreso.
+  if (duracionSeleccionada === "Otro" && !(parseInt(otraDuracion, 10) > 0)) {
+    Toast.show('⚠️ Eligió duración "Otro": indique el número de meses.', 'warn');
+    document.getElementById("otra_duracion").focus();
+    return;
+  }
   const duracionFinal = duracionSeleccionada === "Otro"
     ? `${otraDuracion} meses`
     : duracionSeleccionada;
+
+  // Guard anti doble-submit: dos clicks rápidos = dos updateContrato.
+  const btnSubmit = e.target.querySelector('button[type="submit"]');
+  if (btnSubmit) { if (btnSubmit.disabled) return; btnSubmit.disabled = true; }
 
   const equipos = [...document.querySelectorAll("#tablaEquipos tr")].map(row => {
     const modelo_id = row.querySelector(".modelo").value.trim();
@@ -210,7 +221,7 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
 
   const total_equipos = equipos.reduce((acc, e) => acc + Number(e.cantidad || 0), 0);
 
-  await ContratosService.updateContrato(contratoDocId, {
+  const actualizacion = ContratosService.updateContrato(contratoDocId, {
     codigo_tipo: document.getElementById("tipo_contrato").value,
     tipo_contrato: document.getElementById("tipo_contrato").selectedOptions[0].text,
     accion: accionSeleccionada,
@@ -236,6 +247,13 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
     primer_pago: t.inicial.totalConITBMS,
     fecha_modificacion: new Date()
   });
+  try {
+    await actualizacion;
+  } catch (err) {
+    Toast.show('No se pudo guardar: ' + ((err && err.message) || err), 'bad');
+    if (btnSubmit) btnSubmit.disabled = false;
+    return;
+  }
 
   Toast.show('Cambios guardados', 'ok');
   location.href = "index.html";

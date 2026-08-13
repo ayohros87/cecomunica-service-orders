@@ -125,6 +125,19 @@ window.NCGuardar = {
       }
     }
 
+    // Duración "Otro" exige el número de meses. Sin esto se guardaba —y se
+    // imprimía en el documento legal— una duración " meses" vacía. También
+    // antes del correlativo, por la misma razón que las validaciones de arriba.
+    if (document.getElementById('duracion').value === 'Otro') {
+      const otra = (document.getElementById('otra_duracion').value || '').trim();
+      if (!(parseInt(otra, 10) > 0)) {
+        Toast.show('⚠️ Eligió duración "Otro": indique el número de meses.', 'warn');
+        document.getElementById('otra_duracion').focus();
+        this._abortarGuardado();
+        return;
+      }
+    }
+
     const tipoSel    = document.getElementById('tipo_contrato');
     const tipoCorto  = tipoSel.value;
     const tipoNombre = tipoSel.options[tipoSel.selectedIndex].text;
@@ -175,7 +188,7 @@ window.NCGuardar = {
 
     const clienteData     = NC.listaClientes[clienteId];
     const duracionSel     = document.getElementById('duracion').value;
-    const otraDuracion    = document.getElementById('otra_duracion').value;
+    const otraDuracion    = document.getElementById('otra_duracion').value.trim();
     const duracionFinal   = duracionSel === 'Otro' ? `${otraDuracion} meses` : duracionSel;
     const tot             = NCForm.recalcularTotalesContrato();
     const total_equipos   = equipos.reduce((acc, e) => acc + Number(e.cantidad || 0), 0);

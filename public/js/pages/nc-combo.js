@@ -132,6 +132,10 @@ window.NCCombo = {
     // Cambió el cliente → recargar sus contratos para el vínculo de origen.
     if (window.NCForm) { NCForm._origenClienteCargado = null; NCForm.refreshOrigenUI(); }
     NCForm.updateContratoBadges();
+    // "Limpiar selección" deshabilita Guardar; al elegir cliente hay que revivirlo
+    // (antes quedaba muerto para siempre y obligaba a recargar la página).
+    const $btnGuardar = document.getElementById('btnGuardar');
+    if ($btnGuardar) { $btnGuardar.disabled = false; $btnGuardar.title = ''; }
   },
 
   updateActive() {

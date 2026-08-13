@@ -158,6 +158,9 @@ window.ContratosLista = {
 
     const bajaPendiente   = data.baja_estado === 'pendiente' && esActivoOAprobado && !data.terminacion_total;
     const esAprobadorBaja = esAdmin || esGerente;
+    // roles.js 'aprobar-contrato'/'anular-contrato' incluyen al gerente (y las
+    // rules le permiten el salto a 'activo' y el delete); antes solo esAdmin.
+    const puedeAprobarContrato = esAdmin || esGerente;
     const puedeSolicitarBaja = esActivoOAprobado && (esAdmin || esVendedor || esRecepcion || esGerente);
 
     // Guía del ciclo de equipos (PLAN_CICLO_VIDA_EQUIPOS.md): los "siguientes
@@ -194,7 +197,7 @@ window.ContratosLista = {
       primaryHtml = esAprobadorBaja
         ? `<a class="${ctaCls}" style="${amber}" href="cancelaciones.html" title="Aprobar baja pendiente"><i data-lucide="clock" style="width:14px;height:14px;"></i> Aprobar baja</a>`
         : `<a class="${ctaCls}" style="${amber}" href="cancelaciones.html" title="Baja en revisión por administración"><i data-lucide="clock" style="width:14px;height:14px;"></i> Baja en revisión</a>`;
-    } else if (esAdmin && data.estado === 'pendiente_aprobacion') {
+    } else if (puedeAprobarContrato && data.estado === 'pendiente_aprobacion') {
       primaryKind = 'aprobar';
       primaryHtml = `<button class="${ctaCls} btn-accent" onclick="ContratosAprobacion.abrir('${id}')" title="Aprobar contrato"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Aprobar</button>`;
     } else if (puedeSubirFirmado && !yaFirmado) {
@@ -229,7 +232,7 @@ window.ContratosLista = {
       items.push(I('pencil', 'Editar', `ContratosLista.editar('${id}')`));
     // Aprobar contrato — en el menú solo si NO es ya la CTA primaria (p.ej.
     // cuando una baja pendiente desplazó la CTA).
-    if (primaryKind !== 'aprobar' && esAdmin && data.estado === 'pendiente_aprobacion')
+    if (primaryKind !== 'aprobar' && puedeAprobarContrato && data.estado === 'pendiente_aprobacion')
       items.push(I('check-circle', 'Aprobar contrato', `ContratosAprobacion.abrir('${id}')`, 'highlighted'));
     // Solicitar baja — solo cuando no hay una baja pendiente (si la hay, vive en la CTA).
     if (puedeSolicitarBaja && !bajaPendiente)
@@ -268,7 +271,7 @@ window.ContratosLista = {
       items.push(I('copy', 'Duplicar', `ContratosLista.duplicar('${id}')`));
     // Destructivas (al final, separadas, en rojo)
     const danger = [];
-    if (esActivoOAprobado && esAdmin)
+    if (esActivoOAprobado && (esAdmin || esGerente))
       danger.push(I('ban', 'Anular contrato', `ContratosLista.anular('${id}')`, 'danger'));
     if (!['activo','aprobado','anulado'].includes(data.estado) && (esAdmin || esVendedor))
       danger.push(I('trash-2', 'Eliminar', `ContratosLista.borrar('${id}')`, 'danger'));
@@ -740,7 +743,7 @@ window.ContratosLista = {
     try {
       const c = await ContratosService.getContrato(id);
       if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
-      if (!AUTH.is(ROLES.ADMIN)) { Toast.show('Solo el administrador puede anular contratos.', 'bad'); return; }
+      if (!AUTH.is(ROLES.ADMIN) && !AUTH.is(ROLES.GERENTE)) { Toast.show('Solo administración o gerencia puede anular contratos.', 'bad'); return; }
       if (!['activo','aprobado'].includes(c.estado)) {
         Toast.show('Solo se puede anular un contrato ACTIVO o APROBADO.', 'bad'); return;
       }
