@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <!-- Preconnect: abre TCP+TLS a los orígenes del arranque antes de que el
+       parser llegue a los <script> del SDK / primeras llamadas de auth.
+       gstatic SIN crossorigin (scripts clásicos no-CORS); identitytoolkit y
+       firestore CON (fetch CORS); securetoken solo DNS (se usa al expirar token). -->
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
   <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -11,7 +19,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin · Auditoría — Cecomunica</title>
 
-  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc23">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
   <link rel="stylesheet" href="../css/admin-panel.css">

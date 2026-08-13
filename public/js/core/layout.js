@@ -5,6 +5,14 @@
      'edit'   — create/edit form: back to parent index + logout
      'child'  — workflow child: back to parent task + logout
      'home'   — root home page: logout only, no home link
+
+   DECISIÓN (plan arranque rápido, 2026-08-13): este archivo se queda
+   SÍNCRONO a propósito, aunque casi todo lo demás es defer. Dos razones:
+   (1) el IIFE de abajo debe correr ANTES del primer paint para reservar
+   la columna del rail; (2) ~40 páginas llaman Layout.renderTopbar(...)
+   en un <script> inline del body que se ejecuta durante el parse.
+   Son ~6 KB gzip same-origin — diferirlo obligaría a migrar esas 40
+   páginas para un ahorro marginal.
    ============================================================= */
 
 /* Estado del rail en tiempo de PARSE (este archivo se carga síncrono en el

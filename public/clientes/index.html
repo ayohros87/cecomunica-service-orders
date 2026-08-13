@@ -2,6 +2,18 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <!-- Preconnect: abre TCP+TLS a los orígenes del arranque antes de que el
+       parser llegue a los <script> del SDK / primeras llamadas de auth.
+       gstatic SIN crossorigin (scripts clásicos no-CORS); identitytoolkit y
+       firestore CON (fetch CORS); securetoken solo DNS (se usa al expirar token). -->
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <!-- Fuentes self-hosted: preload de los 2 pesos above-the-fold (crossorigin
+       es obligatorio en preload de fuentes aunque sea mismo origen). -->
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -25,7 +37,7 @@
   <script defer src="../js/services/usuariosService.js"></script>
   <script src="../js/core/auth.js"></script>
 
-  <link rel="stylesheet" href="../css/ceco-ui.css">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc23">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc6">
   <style>
@@ -216,7 +228,6 @@
   <script defer src="../js/ui/equipo-ficha.js?v=cc27"></script>
   <script defer src="../js/ui/equipos-cliente.js?v=cc27"></script>
   <script src="../js/pages/clientes-index.js?v=cc27" defer></script>
-  <script>if (typeof lucide !== 'undefined') lucide.createIcons();</script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

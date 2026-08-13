@@ -1,5 +1,57 @@
 # Changelog
 
+## [Arranque rápido: por qué demoraba entrar a los módulos] — 2026-08-13
+
+> Investigación disparada por "me demora entrar a órdenes a veces" + un 503
+> en consola. El 503 resultó ser dos cosas distintas: `listQBOItems`
+> devolviendo `unavailable` cuando QuickBooks no responde (puntual, ya
+> manejado) y el canal realtime de Firestore (transitorio de Google, se
+> reintenta solo). La demora real era estructural y se atacó por fases:
+>
+> - **`lucide.min.js` (401 KB) cargaba SÍNCRONO en 72 páginas** justo antes
+>   de `</head>`: bloqueaba el primer pintado de todo. Ahora va en `defer`
+>   con `?v=1` seguido de `js/core/icons.js` (nuevo), que hace el barrido
+>   inicial; los 83 guards inline viejos quedan como no-ops. CI vigila que
+>   no regrese (grep en ci.yml). `/js/vendor/**` se sirve con caché de 30
+>   días immutable.
+> - **Fuentes self-hosted**: el `@import` de Google Fonts dentro de
+>   ceco-ui/ceco-command era una cadena render-blocking de 4 saltos y 2
+>   dominios. Los 12 woff2 latin viven ahora en `/brand/fonts/` (mismos
+>   binarios que servía Google), `@font-face` con swap duplicado en ambos
+>   CSS ("mantener en sync"). Cierra el pendiente del plan Command Center.
+> - **`window.Sesion` (firebase-init)**: cada página releía `usuarios/{uid}`
+>   2-4 veces antes de pintar. Ahora: single-flight (1 lectura por carga,
+>   compartida), sessionStorage TTL 30 min (navegación warm pinta SIN red),
+>   revalidación background con reload-once si el rol cambió (guard
+>   anti-loop). El rol cacheado es solo UI — rules sigue siendo el piso.
+>   `empresa/config` con el mismo patrón. CONTRATO: el callback de
+>   `verificarAccesoYAplicarVisibilidad` se invoca EXACTAMENTE una vez.
+> - **Preconnect** a gstatic/identitytoolkit/firestore en todas las páginas
+>   con SDK (61 + las 4 prioritarias a mano).
+> - **Home**: el saludo ya no bloquea el grid (await de usuarios/{uid}
+>   eliminado); el grid se revela ANTES de señales/feeds; feeds con shimmer
+>   y acotados (devoluciones: orderBy cancelacion_pendiente.at + limit 50,
+>   verificado que las 33 marcas vivas tienen .at; S4Q: filtro server-side
+>   + limit 200). 2 índices compuestos nuevos en firestore.indexes.json —
+>   **desplegar índices ANTES que hosting**.
+> - **Contratos**: precarga de nombres en paralelo y fuera del primer paint
+>   (celda '…' + rellenarNombresCreador); cache-first de la primera página;
+>   iconos scoped (cargarIconos en una pasada + Map, era O(n²) con un
+>   createIcons POR FILA).
+> - **POC**: buscador con debounce 300 ms + mínimo 2 chars (antes CADA
+>   TECLA barría los 5,225 poc_devices) + memo 60 s del barrido; guard del
+>   botón "Cargar más" (el doble wiring duplicaba filas); cache-first de la
+>   primera página; los mapas (clientes completa ~413) ya no retienen la
+>   lista.
+> - **Caché js/css: 600s → 3600s** (+ SWR 86400) tras dar `?v=` a
+>   ceco-ui.css (73 páginas lo cargaban sin versión), layout.js?v=cc10 y
+>   firebase-init.js?v=ses1 en todas partes.
+>
+> Queda fuera a propósito: `login.html` (carga sync deliberada, solo se le
+> fijó `?v=1` a lucide), `/verify/**` y `verificar-contrato.html` (públicas,
+> sin cambios de red), `admin/kpi-reporte-print.html` (sigue con Google
+> Fonts vía <link>; candidato a migrar después).
+
 ## [ENTRADA y VISITA: terminales que llegaron tarde] — 2026-08-11
 
 > Los otros dos tipos de orden atascados en "COMPLETADO (EN OFICINA)". Aquí la
