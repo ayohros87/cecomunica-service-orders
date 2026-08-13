@@ -69,11 +69,14 @@
           <span class="module-card-sub">Flujo de trabajo del taller</span>
         </span>
       </a>
-      <a class="module-card" href="./tecnicos.html">
+      <!-- La lista empresa/tecnicos que editaba ordenes/tecnicos.html no la lee
+           ningún flujo: los técnicos del modal de asignar salen de `usuarios`
+           por rol. La tarjeta apunta a donde de verdad se habilitan. -->
+      <a class="module-card" href="../admin/usuarios.html">
         <span class="module-card-icon"><i data-lucide="users"></i></span>
         <span class="module-card-meta">
-          <span class="module-card-title">Técnicos</span>
-          <span class="module-card-sub">Personal del taller</span>
+          <span class="module-card-title">Técnicos (Admin · Usuarios)</span>
+          <span class="module-card-sub">Se habilitan asignando el rol de técnico</span>
         </span>
       </a>
       <a class="module-card" href="./modelo-de-radio.html">

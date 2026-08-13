@@ -111,7 +111,7 @@
     _overlay?.remove();
     _overlay = null;
     // Refresca la fila en la lista si la página de órdenes está montada.
-    if (typeof window.cargarOrdenes === 'function') { try { window.cargarOrdenes(true); } catch (e) {} }
+    if (typeof window.cargarOrdenesYEquipos === 'function') { try { window.cargarOrdenesYEquipos(true); } catch (e) {} }
   }
 
   // Firma del acuse: la captura vive en FirmaPad (js/ui/firmaPad.js), común a

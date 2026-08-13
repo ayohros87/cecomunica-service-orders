@@ -27,6 +27,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
   <script defer src="../js/services/empresaService.js"></script>
+  <script defer src="../js/ui/toast.js"></script>
   <script src="../js/core/modulos.js"></script>
   <script src="../js/core/layout.js?v=cc11"></script>
   <script defer src="/js/vendor/lucide.min.js?v=1"></script>
@@ -47,6 +48,20 @@
     // (preservando el deep-link) si no hay sesión. La lógica de la página corre
     // dentro del callback, ya autenticado. El control por rol real vive en las
     // reglas de Firestore (empresa/* write). Antes esta página no tenía guard.
+    // Estados CANÓNICOS del flujo: están cableados en los chips y botones de la
+    // bandeja (ordenes-render.js botonesFlujo / ordenes-state.js estadoCompacto),
+    // en los filtros y en firestore.rules. Borrarlos o renombrarlos desde aquí
+    // rompía el flujo en silencio (el único consumidor de ESTA lista es el
+    // select bloqueado de editar-orden). Por eso quedan con candado: solo los
+    // estados extra que agregue la empresa se pueden editar/eliminar.
+    const ESTADOS_CANONICOS = new Set([
+      "POR ASIGNAR",
+      "RECIBIDO EN MOSTRADOR",
+      "ASIGNADO",
+      "COMPLETADO (EN OFICINA)",
+      "ENTREGADO AL CLIENTE",
+    ]);
+
     document.addEventListener("DOMContentLoaded", () => {
       verificarAccesoYAplicarVisibilidad(async (rol) => {
       const lista = document.getElementById("lista-estados");
@@ -72,26 +87,38 @@
           estados.forEach(nombre => {
             const item = document.createElement("div");
             item.className = "crud-list-item";
+            const canonico = ESTADOS_CANONICOS.has(nombre);
+            const acciones = canonico
+              ? `<span title="Estado del flujo del taller: los botones, chips y reglas dependen de este nombre. No se puede editar ni eliminar." style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--fg-3);"><i data-lucide="lock" style="width:14px;height:14px;"></i> del flujo</span>`
+              : `<button class="btn btn-ghost btn-icon btn-sm" onclick="editarEstado('${nombre.replace(/'/g, "\\'")}')" aria-label="Editar"><i data-lucide="pencil"></i></button>
+                <button class="btn btn-ghost btn-icon btn-sm" onclick="borrarEstado('${nombre.replace(/'/g, "\\'")}')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>`;
             item.innerHTML = `
               <span class="crud-list-item-handle"><i data-lucide="grip-vertical"></i></span>
               <span class="crud-list-item-label">${esc(nombre)}</span>
-              <div class="crud-list-item-actions">
-                <button class="btn btn-ghost btn-icon btn-sm" onclick="editarEstado('${nombre.replace(/'/g, "\\'")}')" aria-label="Editar"><i data-lucide="pencil"></i></button>
-                <button class="btn btn-ghost btn-icon btn-sm" onclick="borrarEstado('${nombre.replace(/'/g, "\\'")}')" aria-label="Eliminar"><i data-lucide="trash-2"></i></button>
-              </div>`;
+              <div class="crud-list-item-actions">${acciones}</div>`;
             lista.appendChild(item);
           });
           if (typeof lucide !== 'undefined') lucide.createIcons();
         }
       }
 
+      // Defensa en profundidad: la UI ya no pinta botones en los canónicos,
+      // pero estas funciones son globales (window.*) y no deben poder tocarlos.
       window.editarEstado = async (id) => {
+        if (ESTADOS_CANONICOS.has(id)) {
+          Toast.show('Ese estado es parte del flujo del taller y no se puede renombrar.', 'warn');
+          return;
+        }
         inputEstado.value = id;
         editandoId = id;
         inputEstado.focus();
       };
 
       window.borrarEstado = async (id) => {
+        if (ESTADOS_CANONICOS.has(id)) {
+          Toast.show('Ese estado es parte del flujo del taller y no se puede eliminar.', 'warn');
+          return;
+        }
         if (confirm(`¿Eliminar estado "${id}"?`)) {
           const snap = await EmpresaService.getDoc("estado_de_reparacion");
           const nuevaLista = ((snap && snap.list) || []).filter(e => e !== id);
@@ -104,6 +131,11 @@
         e.preventDefault();
         const estado = inputEstado.value.trim();
         if (!estado) return;
+        if (editandoId && ESTADOS_CANONICOS.has(editandoId)) {
+          Toast.show('Ese estado es parte del flujo del taller y no se puede renombrar.', 'warn');
+          inputEstado.value = ""; editandoId = null;
+          return;
+        }
         const snap = await EmpresaService.getDoc("estado_de_reparacion");
         let lista = (snap && snap.list) || [];
         if (editandoId && editandoId !== estado) {
@@ -138,6 +170,17 @@
   </script>
 
   <div class="app-wrap app-wrap--narrow">
+
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4); border-left:3px solid var(--warn, #B45309); display:flex; gap:var(--sp-3); align-items:flex-start;">
+      <i data-lucide="shield-alert" style="width:20px;height:20px;flex:none;color:var(--warn, #B45309);margin-top:2px;"></i>
+      <p style="margin:0; font-size:13px; color:var(--fg-2);">
+        Los 5 estados marcados <b>"del flujo"</b> (POR ASIGNAR, RECIBIDO EN MOSTRADOR,
+        ASIGNADO, COMPLETADO (EN OFICINA), ENTREGADO AL CLIENTE) mueven los botones,
+        chips y reglas del sistema, así que <b>no se pueden renombrar ni eliminar</b>.
+        Los estados adicionales que agregues aquí solo aparecen como texto en el
+        selector de editar orden.
+      </p>
+    </div>
 
     <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
       <form id="form-estado">
