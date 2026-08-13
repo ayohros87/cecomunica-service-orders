@@ -171,6 +171,11 @@ function _iniciarSnapshotInicial() {
       const liveIds = new Set(orders.map(o => o.ordenId));
       const paginatedKept = (APP.state.orders || []).filter(o => !liveIds.has(o.ordenId));
       APP.state.orders = [...orders, ...paginatedKept];
+      // Base de los conteos de chips/KPIs: SIEMPRE el dataset sin filtrar.
+      // filtrarPorEstado reemplaza APP.state.orders con el subset de un solo
+      // estado; sin esta base congelada, los demás chips caían a 0 tras
+      // filtrar ("Por asignar: 0" siendo falso).
+      APP.state.chipBase = APP.state.orders;
       APP.state.lastVisible = lastSnapshot;
 
       // Hold the skeleton on the first snapshot if it's an empty result
@@ -261,6 +266,7 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
     APP.state.lastVisible = lastSnapshot;
     const nuevasOrdenes = orders;
     APP.state.orders.push(...nuevasOrdenes);
+    APP.state.chipBase = APP.state.orders;
 
     const filters = getActiveFilters();
     const filteredNuevas = hasActiveFilters(filters)

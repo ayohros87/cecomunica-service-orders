@@ -1061,10 +1061,12 @@ window.botonesGestion = botonesGestion;
 
 function actualizarResumen(lista) {
   const el = document.getElementById("resumenOrdenes");
-  // Count from APP.state.orders (unfiltered) so chip counts reflect the
-  // dataset, not the filtered view. The legacy resumen-button shows the
+  // Count from APP.state.chipBase — the last UNFILTERED dataset (kept fresh
+  // by the snapshot + pagination in ordenes-data.js). APP.state.orders no
+  // sirve de base: filtrarPorEstado lo reemplaza con el subset de un solo
+  // estado y los demás chips caían a 0. The legacy resumen-button shows the
   // filtered total so the user has both numbers.
-  const fullList = APP.state.orders || lista || [];
+  const fullList = APP.state.chipBase || APP.state.orders || lista || [];
   const total = (lista || []).length;
 
   const _statusOf = (o) => (o.estado_reparacion || "POR ASIGNAR").toUpperCase();

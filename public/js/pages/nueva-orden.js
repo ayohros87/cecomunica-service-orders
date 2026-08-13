@@ -356,8 +356,14 @@
       }
     }
 
+    // Guard anti doble-submit (mismo patrón que agregar-equipo.js): dos clicks
+    // rápidos hacían dos setOrder al MISMO id (pisándose el doc, con el log
+    // CREAR duplicado) y encolaban DOS correos de notificación.
+    let guardandoOrden = false;
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      if (guardandoOrden) return;
       if (!clienteSelect.value || !tipoSelect.value) {
         mostrarMensaje("Por favor seleccione un cliente y el tipo de servicio.", "rojo");
         return;
@@ -386,6 +392,13 @@
           }
         }
       }
+
+      // Validaciones pasadas: candado puesto ANTES de la preparación async
+      // (el prefill de venta puede tardar segundos y era la ventana del doble
+      // click). Se libera solo si el guardado falla.
+      guardandoOrden = true;
+      const btnSubmitOrden = form.querySelector("button[type='submit']");
+      if (btnSubmitOrden) btnSubmitOrden.disabled = true;
 
       const id = numeroInput.value;
       const cliente_id = clienteSelect.value;
@@ -544,5 +557,7 @@ ${window.location.origin}/ordenes/index.html
         setTimeout(() => window.location.href = 'index.html', 1000);
       } catch (error) {
         mostrarMensaje("Error al guardar: " + error.message, "rojo");
+        guardandoOrden = false;
+        if (btnSubmitOrden) btnSubmitOrden.disabled = false;
       }
     });

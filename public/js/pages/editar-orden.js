@@ -296,9 +296,15 @@
       }
     }
 
+    // Guard anti doble-submit (patrón de agregar-equipo.js): el guardado hace
+    // varios viajes a Firestore sin feedback inmediato; cada click extra en
+    // esa ventana repetía el merge y el borrado de caché de contrato.
+    let guardandoEdicion = false;
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      
+      if (guardandoEdicion) return;
+
       const tipoServicio = document.getElementById("tipo").value;
       
       // Validación específica para PROGRAMACIÓN
@@ -318,6 +324,10 @@
         }
       }
       
+      guardandoEdicion = true;
+      const btnGuardarEdicion = form.querySelector("button[type='submit']");
+      if (btnGuardarEdicion) btnGuardarEdicion.disabled = true;
+
       const data = {
         vendedor_asignado: document.getElementById("vendedor").value || "",
         tipo_de_servicio: tipoServicio,
@@ -383,9 +393,13 @@
         await OrdenesService.mergeOrder(ordenId, data);
         
         mostrarToast("✅ Orden actualizada correctamente", "ok");
-        setTimeout(() => window.location.href = 'index.html', 1500);
+        // Volver A LA ORDEN en la lista (no al index pelado): conserva la fila
+        // a la vista sin perder el contexto — el deep-link ?orden= ya existe.
+        setTimeout(() => window.location.href = `index.html?orden=${encodeURIComponent(ordenId)}`, 1500);
       } catch (error) {
         mostrarToast("❌ Error al guardar: " + error.message, "error");
+        guardandoEdicion = false;
+        if (btnGuardarEdicion) btnGuardarEdicion.disabled = false;
       }
     });
 
