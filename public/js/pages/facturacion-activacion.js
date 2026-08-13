@@ -197,7 +197,13 @@ function filaContrato(c){
     </tr>`;
 }
 
+// Candado anti doble-click: los botones de fila no se deshabilitaban mientras
+// el callable estaba en vuelo — doble click = doble invocación de
+// gestionarFacturacion (y la tabla congelada sin señal mientras recarga).
+let _accionEnVuelo = false;
+
 async function accion(id, acc){
+  if(_accionEnVuelo) return;
   const payload={};
   if(acc==='activar'){
     const d=document.getElementById('fi-'+id)?.value;
@@ -213,12 +219,14 @@ async function accion(id, acc){
   } else if(acc==='en_espera'){
     if(!window.confirm('¿Poner en espera (excluir del ciclo de facturación)?')) return;
   }
+  _accionEnVuelo = true;
   try{
     await firebase.functions().httpsCallable('gestionarFacturacion')({ contratoId:id, accion:acc, payload });
     Toast.show('Listo','ok');
     await cargar();
     render();
   }catch(e){ console.error(e); Toast.show('Error: '+(e.message||''),'bad'); }
+  finally{ _accionEnVuelo = false; }
 }
 
 window.setVista = setVista;
