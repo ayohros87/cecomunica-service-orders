@@ -12,6 +12,12 @@ async function cargarTiposDeServicioFiltros() {
   if (!desktopSel && !mobileSel) return;
 
   const applyOptions = (opts = []) => {
+    // DEVOLUCIÓN es un tipo auto-creado (renovación/anulación/baja) y por eso
+    // no vive en el config tipo_de_servicio (no debe ofrecerse al crear una
+    // orden); en el filtro sí hace falta para poder buscar esos tiquetes.
+    if (!opts.some(n => normTxt(n) === "devolucion")) {
+      opts = [...opts, "DEVOLUCIÓN"];
+    }
     const fill = (sel) => {
       if (!sel) return;
       sel.innerHTML = '<option value="">Tipo (todos)</option>';
