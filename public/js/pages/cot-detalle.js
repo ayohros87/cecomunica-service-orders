@@ -498,7 +498,14 @@
     }
   }
 
+  // Candado anti doble-click — mismo motivo que la lista: crea doc + consume
+  // correlativo + puede encolar correo al aprobador.
+  let duplicando = false;
+
   async function duplicar() {
+    if (duplicando) return;
+    duplicando = true;
+    try {
     const nuevoId = await CotState.nextCotizacionId();
     const user = firebase.auth().currentUser;
     const copia = CotState.toDoc(
@@ -522,6 +529,11 @@
       Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
     }
     location.href = 'editar-cotizacion.html?id=' + encodeURIComponent(ref.id);
+    } catch (err) {
+      console.error(err);
+      Toast.show('Error al duplicar: ' + (err?.message || err), 'bad');
+      duplicando = false;
+    }
   }
 
   firebase.auth().onAuthStateChanged(async (user) => {

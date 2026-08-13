@@ -652,8 +652,18 @@
     return true;
   }
 
+  // Guard anti doble-submit. En modo nueva había además una ventana de 800 ms
+  // post-éxito en la que un segundo click repetía addCotizacion con el MISMO
+  // draft.id → dos documentos con el mismo número COT (el correlativo
+  // transaccional no protege: el número ya está reservado en el draft).
+  let guardando = false;
+
   async function guardar() {
+    if (guardando) return;
     if (!validar()) return;
+    guardando = true;
+    const btnsGuardar = [document.getElementById('btnGuardar'), document.getElementById('btnGuardar2')].filter(Boolean);
+    btnsGuardar.forEach(b => { b.disabled = true; });
     const esNueva = document.body.dataset.modo === 'nueva';
     const user = firebase.auth().currentUser;
     try {
@@ -683,6 +693,8 @@
         // Defensa adicional: nunca persistir cambios sobre una cotización no editable.
         if (!CotState.esEditable(draft.estado)) {
           Toast.show('Esta cotización ya no es editable.', 'warn');
+          guardando = false;
+          btnsGuardar.forEach(b => { b.disabled = false; });
           return;
         }
         const doc = CotState.toDoc(draft, { catalogos });
@@ -695,6 +707,8 @@
     } catch (err) {
       console.error(err);
       Toast.show('Error al guardar: ' + (err?.message || err), 'bad');
+      guardando = false;
+      btnsGuardar.forEach(b => { b.disabled = false; });
     }
   }
 

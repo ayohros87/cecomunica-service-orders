@@ -351,7 +351,14 @@
     }
   }
 
+  // Candado anti doble-click: Duplicar crea el doc, consume correlativo y puede
+  // encolar el correo al aprobador — dos clicks rápidos hacían todo eso dos veces.
+  let duplicando = false;
+
   async function duplicar(src) {
+    if (duplicando) return;
+    duplicando = true;
+    try {
     const nuevoId = await CotState.nextCotizacionId();
     const user = firebase.auth().currentUser;
     const copia = { ...src };
@@ -381,6 +388,11 @@
       Toast.show('Cotización duplicada como ' + nuevoId + ' · lista para enviar al cliente', 'ok');
     }
     location.href = `editar-cotizacion.html?id=${encodeURIComponent(ref.id)}`;
+    } catch (err) {
+      console.error(err);
+      Toast.show('Error al duplicar: ' + (err?.message || err), 'bad');
+      duplicando = false;
+    }
   }
 
   async function eliminar(cot) {
@@ -531,6 +543,10 @@
 
   async function confirmarAprobacion() {
     if (!_aprobId) return;
+    // Candado: aprobar dispara el envío inmediato al cliente; dos clicks
+    // rápidos en el botón del modal duplicaban el correo.
+    const btnAprob = document.getElementById('btnConfirmarAprob');
+    if (btnAprob) { if (btnAprob.disabled) return; btnAprob.disabled = true; }
     try {
       const doc = await CotizacionesService.getCotizacion(_aprobId);
       if (!doc) { Toast.show('No encontrada', 'bad'); return; }
@@ -625,6 +641,9 @@
     } catch (e) {
       console.error(e);
       Toast.show('No se pudo aprobar.', 'bad');
+    } finally {
+      // El modal se reutiliza para la siguiente aprobación: siempre revivir.
+      if (btnAprob) btnAprob.disabled = false;
     }
   }
 
