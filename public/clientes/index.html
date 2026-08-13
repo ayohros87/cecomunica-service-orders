@@ -35,6 +35,10 @@
   <script src="../js/core/formatting.js"></script>
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
+  <!-- Toast/Modal: clientes-index.js los usa en la bulk-bar, "Mostrar todo" y el
+       guard de acceso; sin estos dos scripts esos botones morían en ReferenceError. -->
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/ui/modal.js"></script>
   <script src="../js/core/auth.js"></script>
 
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
@@ -227,7 +231,7 @@
   <script defer src="../js/services/equiposPoolService.js?v=cc27"></script>
   <script defer src="../js/ui/equipo-ficha.js?v=cc27"></script>
   <script defer src="../js/ui/equipos-cliente.js?v=cc27"></script>
-  <script src="../js/pages/clientes-index.js?v=cc27" defer></script>
+  <script src="../js/pages/clientes-index.js?v=cc28" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

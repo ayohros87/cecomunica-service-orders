@@ -472,31 +472,57 @@ async function loadPage(reset){
   $selectAll.disabled = ($tbody.children.length === 0) || asReadonly();
 }
 
-const onInlineUpdate = debounce(async (id, partial)=>{
+const _guardarInline = async (id, partial)=>{
   try{
     const uid = firebase.auth().currentUser?.uid || null;
     partial.updated_by = uid;
     // updated_at lo estampa ClientesService.updateCliente (serverTimestamp).
 
-    // nombre → normaliza (nombre_norm) y refresca tokens base
+    // Tokens de búsqueda: SIEMPRE por arrayUnion (añadir, nunca reemplazar).
+    // El reemplazo total que hacía la rama de nombre borraba los tokens ya
+    // guardados de representante/dirección/RUC; los tokens viejos que queden
+    // de más solo sobran — el form completo los reconstruye al guardar.
+    const toks = new Set();
+
+    // nombre → normaliza (nombre_norm) y añade tokens
     if(Object.prototype.hasOwnProperty.call(partial,'nombre') && partial.nombre){
       partial.nombre_norm = ClientesService.norm(partial.nombre);
-      partial.searchTokens = Array.from(new Set([
-        ...ClientesService.tokensFrom(partial.nombre),
-      ]));
+      ClientesService.tokensFrom(partial.nombre).forEach(t=>toks.add(t));
     }
 
     // representante → añade tokens
     if(Object.prototype.hasOwnProperty.call(partial,'representante') && partial.representante){
-      const t = ClientesService.tokensFrom(partial.representante);
-      partial.searchTokens = firebase.firestore.FieldValue.arrayUnion(...t);
+      ClientesService.tokensFrom(partial.representante).forEach(t=>toks.add(t));
     }
 
     // dirección → añade tokens (útil para buscar por calle/sector)
     if(Object.prototype.hasOwnProperty.call(partial,'direccion') && partial.direccion){
-      const t = ClientesService.tokensFrom(partial.direccion);
-      partial.searchTokens = firebase.firestore.FieldValue.arrayUnion(...t);
+      ClientesService.tokensFrom(partial.direccion).forEach(t=>toks.add(t));
     }
+
+    // ruc/dv → recalcular los normalizados (misma fórmula que
+    // ClientesService.buildClientePayload). Sin esto, un RUC corregido inline
+    // dejaba ruc_norm/rucdv_norm/dv_norm viejos y la detección de duplicados
+    // y las búsquedas normalizadas mentían a partir de ese momento.
+    if(Object.prototype.hasOwnProperty.call(partial,'ruc') || Object.prototype.hasOwnProperty.call(partial,'dv')){
+      const fila = $tbody.querySelector(`.rowSel[data-id="${id}"]`)?.closest('tr');
+      const ruc = Object.prototype.hasOwnProperty.call(partial,'ruc')
+        ? partial.ruc : (fila?.querySelector('input[data-field="ruc"]')?.value || '').trim();
+      const dv  = Object.prototype.hasOwnProperty.call(partial,'dv')
+        ? partial.dv  : (fila?.querySelector('input[data-field="dv"]')?.value || '').trim();
+      const ruc_norm = String(ruc || '').replace(/\D/g, '');
+      const dv_norm  = String(dv  || '').replace(/\D/g, '');
+      partial.ruc_norm   = ruc_norm;
+      partial.dv_norm    = dv_norm;
+      partial.rucdv_norm = ruc_norm + (dv_norm ? ('-' + dv_norm) : '');
+      if (ruc_norm) toks.add(ruc_norm);
+      if (partial.rucdv_norm){
+        toks.add(partial.rucdv_norm);
+        toks.add(partial.rucdv_norm.replace(/\D/g, ''));
+      }
+    }
+
+    if (toks.size) partial.searchTokens = firebase.firestore.FieldValue.arrayUnion(...Array.from(toks));
 
     await ClientesService.updateCliente(id, partial);
     setRowStatus(id, 'saved');
@@ -504,7 +530,24 @@ const onInlineUpdate = debounce(async (id, partial)=>{
     setRowStatus(id, 'error');
     Toast.show('No se pudo guardar: '+e.message, 'bad');
   }
-}, 700);
+};
+
+// Guardado inline: un temporizador POR CLIENTE con merge de campos. Antes era
+// un único debounce global compartido por todas las filas: editar otra celda
+// en <700 ms cancelaba el guardado anterior CON SUS ARGUMENTOS — el dot
+// quedaba en "saving" ámbar para siempre y el dato nunca se persistía
+// (escenario probable navegando con Enter fila abajo).
+const _inlinePendientes = new Map(); // id → { timer, partial }
+function onInlineUpdate(id, partial){
+  const prev   = _inlinePendientes.get(id);
+  const merged = Object.assign(prev ? prev.partial : {}, partial);
+  if (prev) clearTimeout(prev.timer);
+  const timer = setTimeout(()=>{
+    _inlinePendientes.delete(id);
+    _guardarInline(id, merged);
+  }, 700);
+  _inlinePendientes.set(id, { timer, partial: merged });
+}
 function renderRow(id, c){
   const tr = document.createElement('tr');
   const ro = asReadonly();
