@@ -1077,6 +1077,34 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "contratos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "cancelacion_pendiente.at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ordenes_de_servicio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "qc_requerido",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado_reparacion",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

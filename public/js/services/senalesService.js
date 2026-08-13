@@ -47,8 +47,15 @@ const SenalesService = {
    */
   async countOrdenesQcPendiente() {
     const db = firebase.firestore();
+    // El filtro de estado va server-side (antes se bajaba TODO qc_requerido
+    // sin limit y se filtraba aquí). limit(200) es techo de cordura: la señal
+    // muestra un conteo, no una lista, y 200 pendientes de QC ya es incendio.
+    // Índice compuesto: ordenes_de_servicio(qc_requerido ASC, estado_reparacion ASC).
     const snap = await db.collection('ordenes_de_servicio')
-      .where('qc_requerido', '==', true).get();
+      .where('qc_requerido', '==', true)
+      .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
+      .limit(200)
+      .get();
     let n = 0;
     snap.forEach(doc => {
       const o = doc.data() || {};

@@ -412,6 +412,14 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 .skeleton-mcard .sk-line.sub{width:50%;height:10px}
 .skeleton-mcard .sk-ico,.skeleton-mcard .sk-line{background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-150) 50%,var(--gray-100) 75%);background-size:200% 100%;animation:kpishimmer 1.2s infinite}
 
+/* skeleton de los feeds del home (órdenes por crear / contratos por cancelar):
+   shell con shimmer mientras corren las queries, evita el salto de layout */
+.fo-skel{background:linear-gradient(90deg,var(--gray-100) 25%,var(--gray-150) 50%,var(--gray-100) 75%);background-size:200% 100%;animation:kpishimmer 1.2s infinite;border-radius:6px}
+.fo-skel--ico{width:28px;height:28px;flex:none;border-radius:8px}
+.fo-skel--t{width:180px;height:12px}
+.fo-skel--l1{width:60%;height:12px;margin-bottom:6px}
+.fo-skel--l2{width:40%;height:10px}
+
 /* ============ MOBILE ============ */
 .mobile-only{display:none}
 .rail__toggle{display:none}

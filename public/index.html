@@ -35,7 +35,7 @@
   <script defer src="js/services/usuariosService.js"></script>
   <!-- Versión compartida a propósito: home-signals llama métodos nuevos de
        senalesService (S15), así que las dos mitades tienen que ir juntas. -->
-  <script defer src="js/services/senalesService.js?v=qc4"></script>
+  <script defer src="js/services/senalesService.js?v=qc5"></script>
   <script defer src="js/pages/home-signals.js?v=qc4"></script>
   <!-- Feed "Órdenes por crear": los tres archivos cambian juntos (descarte de
        filas), así que comparten token de versión. equiposPoolService es la
@@ -44,8 +44,8 @@
   <script defer src="js/domain/ordenProgPendiente.js?v=fo2"></script>
   <script defer src="js/services/equiposPoolService.js?v=fo2"></script>
   <script defer src="js/services/feedOrdenesService.js?v=fo2"></script>
-  <script defer src="js/pages/home-feed-ordenes.js?v=fo2"></script>
-  <script defer src="js/pages/home-feed-devoluciones.js"></script>
+  <script defer src="js/pages/home-feed-ordenes.js?v=fo3"></script>
+  <script defer src="js/pages/home-feed-devoluciones.js?v=fo3"></script>
   <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
        el barrido inicial de <i data-lucide>; los guards inline viejos quedan
        como no-ops en parse. Ver js/core/icons.js. -->
@@ -250,21 +250,19 @@
           }
         }
 
-        // Saludo
+        // Saludo — sin bloquear: pinta ya con el caché de sesión (o el email)
+        // y corrige async si el nombre llega después. Antes había un await de
+        // usuarios/{uid} aquí que retrasaba revelar el grid completo.
         const h = new Date().getHours();
         const saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
-        let nombre = sessionStorage.getItem('ccUserName:' + user.uid) || '';
-        if (!nombre) {
-          try {
-            const u = await UsuariosService.getUsuario(user.uid);
-            nombre = (u && (u.nombre || u.name)) || user.displayName || (user.email || '').split('@')[0];
-            sessionStorage.setItem('ccUserName:' + user.uid, nombre);
-          } catch {
-            nombre = user.displayName || (user.email || '').split('@')[0];
-          }
-        }
+        const pintaSaludo = (n) => {
+          document.getElementById('saludoNombre').textContent = `${saludo}, ${(n || '').split(' ')[0]}`;
+        };
+        const nombreCache = (window.Sesion && Sesion.cache(user.uid)?.nombre)
+          || sessionStorage.getItem('ccUserName:' + user.uid) || '';
+        pintaSaludo(nombreCache || user.displayName || (user.email || '').split('@')[0]);
+        if (!nombreCache && window.Sesion) Sesion.nombre(user).then(pintaSaludo).catch(() => {});
         const fecha = new Date().toLocaleDateString('es-PA', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
-        document.getElementById('saludoNombre').textContent = `${saludo}, ${nombre.split(' ')[0]}`;
         document.getElementById('saludoMeta').textContent = `${ROL_LABELS[effectiveRol] || effectiveRol || ''} · ${fecha}`;
 
         // Visibilidad de tarjetas. 'perfil' visible para todos; 'admin' solo
@@ -280,6 +278,15 @@
           document.getElementById('btnAdminPanel').style.display = '';
         }
 
+        // Revelar el grid YA — con rol cacheado (Sesion) esto pinta sin haber
+        // tocado Firestore. Señales y feeds llegan después, cada uno con su
+        // propio skeleton; no tienen por qué retener los módulos.
+        document.getElementById('gridSkeleton').style.display = 'none';
+        document.getElementById('gridModulos').style.display = '';
+        document.getElementById('hintKeys').style.display = '';
+        filtrarModulos();
+        if (window.Icons) Icons.pintar(document.getElementById('gridModulos'));
+
         // Señales accionables — mismas fuentes de gating (módulos + rules).
         HomeSignals.render({ rolEfectivo: effectiveRol, uid: user.uid });
 
@@ -287,14 +294,6 @@
         // `user` va aparte del uid: el descarte de una fila firma quién fue.
         if (window.HomeFeedOrdenes) HomeFeedOrdenes.render({ rolEfectivo: effectiveRol, uid: user.uid, user });
         if (window.HomeFeedDevoluciones) HomeFeedDevoluciones.render({ rolEfectivo: effectiveRol, uid: user.uid });
-
-        // Mostrar grid, ocultar skeletons, aplicar filtro inicial
-        document.getElementById('gridSkeleton').style.display = 'none';
-        document.getElementById('gridModulos').style.display = '';
-        document.getElementById('hintKeys').style.display = '';
-        filtrarModulos();
-
-        lucide.createIcons();
       });
     });
     });

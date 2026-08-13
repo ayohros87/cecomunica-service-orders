@@ -315,6 +315,21 @@ window.HomeFeedOrdenes = (() => {
     }
   }
 
+  // Shell de carga (2 filas shimmer). Clases .fo-skel en ceco-command.css.
+  function _skeleton(mount) {
+    const fila = `<div class="fo-row"><span class="fo-skel fo-skel--ico"></span>
+      <div class="fo-main"><div class="fo-skel fo-skel--l1"></div><div class="fo-skel fo-skel--l2"></div></div></div>`;
+    mount.innerHTML = `
+<div class="fo-card">
+  <div class="fo-head" style="cursor:default">
+    <span class="fo-skel fo-skel--ico"></span>
+    <span class="fo-skel fo-skel--t"></span>
+  </div>
+  <div class="fo-body">${fila}${fila}</div>
+</div>`;
+    mount.style.display = '';
+  }
+
   /**
    * @param {Object} opts
    * @param {string} opts.rolEfectivo  rol tras "Ver como" (gating visual)
@@ -331,6 +346,11 @@ window.HomeFeedOrdenes = (() => {
 
     const cached = _readCache(uid);
     if (cached) { _st.feed = cached; _pintar(); return; }
+
+    // Sin caché: shell con shimmer mientras corren las queries, en vez del
+    // hueco que aparecía de golpe al llegar los datos (salto de layout).
+    // Si el feed viene vacío, _pintar lo oculta y el shimmer desaparece.
+    _skeleton(mount);
 
     try {
       const feed = await FeedOrdenesService.ordenesPorCrear();

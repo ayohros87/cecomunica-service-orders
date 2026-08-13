@@ -57,7 +57,16 @@ window.HomeFeedDevoluciones = (() => {
 
   async function _cargar() {
     const db = firebase.firestore();
-    const snap = await db.collection('contratos').where('estado', 'in', VIGENTES).get();
+    // Acotada server-side: el orderBy por cancelacion_pendiente.at exige que
+    // el campo exista (filtra los contratos sin marca gratis) y el limit(50)
+    // evita bajar los ~374 vigentes completos para pintar 5 filas. Verificado
+    // 2026-08-13: las 33 marcas vivas tienen .at, ninguna queda fuera.
+    // Índice compuesto: contratos(estado ASC, cancelacion_pendiente.at DESC).
+    const snap = await db.collection('contratos')
+      .where('estado', 'in', VIGENTES)
+      .orderBy('cancelacion_pendiente.at', 'desc')
+      .limit(50)
+      .get();
     const filas = [];
     snap.forEach(d => {
       const v = d.data();
@@ -140,6 +149,21 @@ window.HomeFeedDevoluciones = (() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
+  // Shell de carga (2 filas shimmer). Clases .fo-skel en ceco-command.css.
+  function _skeleton(mount) {
+    const fila = `<div class="fo-row"><span class="fo-skel fo-skel--ico"></span>
+      <div class="fo-main"><div class="fo-skel fo-skel--l1"></div><div class="fo-skel fo-skel--l2"></div></div></div>`;
+    mount.innerHTML = `
+<div class="fo-card">
+  <div class="fo-head" style="cursor:default">
+    <span class="fo-skel fo-skel--ico"></span>
+    <span class="fo-skel fo-skel--t"></span>
+  </div>
+  <div class="fo-body">${fila}${fila}</div>
+</div>`;
+    mount.style.display = '';
+  }
+
   /**
    * @param {Object} opts
    * @param {string} opts.rolEfectivo  rol tras "Ver como" (gating visual)
@@ -153,6 +177,10 @@ window.HomeFeedDevoluciones = (() => {
 
     const cached = _readCache(uid);
     if (cached) { _pintar(mount, uid, cached); return; }
+
+    // Sin caché: shimmer mientras corre la query; si viene vacío, _pintar
+    // oculta el contenedor y el shimmer desaparece.
+    _skeleton(mount);
 
     try {
       const filas = await _cargar();
