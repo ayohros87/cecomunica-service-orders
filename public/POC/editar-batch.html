@@ -1,228 +1,24 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <!-- Preconnect: abre TCP+TLS a los orígenes del arranque antes de que el
-       parser llegue a los <script> del SDK / primeras llamadas de auth.
-       gstatic SIN crossorigin (scripts clásicos no-CORS); identitytoolkit y
-       firestore CON (fetch CORS); securetoken solo DNS (se usa al expirar token). -->
-  <link rel="preconnect" href="https://www.gstatic.com">
-  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
-  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
-  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
-  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="manifest" href="/manifest.webmanifest">
-  <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <title>Editar Equipos en Batch - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
-  <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc7">
-
-  <style>
-    /* Page-local — el resto vive en el kit */
-    .grupo-container { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-1); }
-    .grupo-container .grupo-input { min-width: 120px; }
-    #tablaContainer { margin-top: var(--sp-3); overflow-x: auto; }
-    #tablaContainer .app-table th,
-    #tablaContainer .app-table td { text-align: center; vertical-align: middle; }
-    #tablaContainer .app-table td input[type="text"],
-    #tablaContainer .app-table td select { width: 100%; box-sizing: border-box; }
-  </style>
-
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
-  <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js"></script>
-  <script src="../js/core/layout.js?v=cc11"></script>
-  <script src="../js/core/formatting.js"></script>
-  <script defer src="../js/services/pocService.js"></script>
-  <script defer src="../js/services/empresaService.js"></script>
-  <script defer src="../js/services/simCardsService.js"></script>
-  <script defer src="../js/ui/toast.js"></script>
-  <script defer src="../js/ui/modal.js"></script>
-  <script defer src="../js/pages/poc-sim-liberar.js"></script>
-  <script defer src="/js/vendor/lucide.min.js?v=1"></script>
-  <script defer src="/js/core/icons.js?v=1"></script>
+  <title>Editar Equipos en Batch - Cecomunica</title>
+  <!-- RETIRADA (auditoría UX 2026-08-13): era una página huérfana (ningún
+       enlace apuntaba a ella) SIN guarda de autenticación ni rol, sin
+       confirmación, sin candado de doble-submit y con alert() nativos — una
+       puerta trasera de edición sin auditoría de UI. Su función la cubre
+       "Editar en masa" de la Base PoC (poc-bulk.js), que sí valida roles,
+       confirma y tiene tope de seguridad. Mismo precedente que
+       trabajar-orden (eliminada 2026-07-06). -->
+  <meta http-equiv="refresh" content="0;url=./index.html">
+  <script>location.replace('./index.html');</script>
 </head>
 <body>
-  <div class="cc-app">
-  <div id="rail-mount"></div>
-  <div class="cc-work">
-
-  <div id="topbar-mount"></div>
-  <script>
-    Layout.renderTopbar({
-      title: '<i data-lucide="pencil"></i> Editar Equipos en Batch',
-      back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
-      showHome: true, homeHref: '../index.html', showLogout: true
-    });
-  </script>
-
-  <div class="app-wrap app-wrap--full">
-
-    <div class="ds-card ds-card-padded">
-      <div class="form-field">
-        <label class="form-label" for="lista_ids">Seriales o Unit IDs <span class="optional">(uno por línea)</span></label>
-        <textarea class="form-input form-textarea" id="lista_ids" rows="5"
-          style="font-family:var(--font-mono); font-size:13px;"
-          placeholder="ABC12345&#10;5001&#10;5002"></textarea>
-      </div>
-
-      <div class="form-actions" style="margin-top:var(--sp-3);">
-        <button class="btn btn-primary" onclick="buscarEquipos()"><i data-lucide="search"></i> Buscar</button>
-        <button class="btn btn-secondary" onclick="guardarCambios()"><i data-lucide="save"></i> Guardar cambios</button>
-        <button class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
-      </div>
-    </div>
-
-    <div id="tablaContainer"></div>
-
-  </div>
-
-  <script>
-    let equipos = [];
-
-    function formatSimPhone(sim, phone) {
-      return `${sim || ''} ${phone || ''}`.trim();
-    }
-
-    function parseSimPhone(value) {
-      const partes = value.trim().split(' ');
-      return { sim: partes[0] || '', phone: partes[1] || '' };
-    }
-
-    async function cargarProveedores(selectId) {
-      const snap = await EmpresaService.getDoc("proveedores");
-      const select = document.getElementById(selectId);
-      select.innerHTML = '';
-      if (snap) {
-        const lista = snap.list || [];
-        lista.forEach(op => {
-          const option = new Option(op, op);
-          select.appendChild(option);
-        });
-      }
-    }
-
-    function agregarGrupo(index) {
-      const container = document.getElementById(`gruposContainer_${index}`);
-      const div = document.createElement("div");
-      div.className = "grupo-container";
-      div.innerHTML = `<input type="text" class="grupo-input form-input">
-                        <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="this.parentNode.remove()"><i data-lucide="x"></i></button>`;
-      container.appendChild(div);
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    async function buscarEquipos() {
-      const ids = document.getElementById("lista_ids").value.trim().split('\n').map(s => s.trim()).filter(s => s);
-      if (ids.length === 0) return alert("Debe ingresar al menos un Serial o Unit ID.");
-
-      const resultados = [];
-      for (const id of ids) {
-        const bySerial = await PocService.findByField("serial", id);
-        const byUnit = await PocService.findByField("unit_id", id);
-        bySerial.forEach(d => resultados.push({ id: d.id, data: d }));
-        byUnit.forEach(d => resultados.push({ id: d.id, data: d }));
-      }
-
-      if (resultados.length === 0) return alert("No se encontraron equipos.");
-
-      equipos = resultados;
-      renderizarTabla();
-    }
-
-    function renderizarTabla() {
-      const container = document.getElementById("tablaContainer");
-      let html = '<div class="ds-card" style="overflow-x:auto;"><table class="app-table compact"><thead><tr>' +
-        '<th>Cliente</th><th>IP</th><th>Serial</th><th>Unit ID</th><th>Nombre Radio</th>' +
-        '<th>Grupos</th><th>Proveedor</th><th>SIM / Teléfono</th>' +
-        '<th>Activo</th><th>GPS</th><th>Notas</th>' +
-        '</tr></thead><tbody>';
-
-      equipos.forEach((eq, index) => {
-        const d = eq.data;
-        html += `<tr>
-          <td><input class="form-input" type="text" value="${d.cliente || ''}" id="cliente_${index}"></td>
-          <td><input class="form-input" type="text" value="${d.ip || ''}" id="ip_${index}" style="font-family:var(--font-mono);"></td>
-          <td class="td-mono">${d.serial}</td>
-          <td class="td-mono">${d.unit_id}</td>
-          <td><input class="form-input" type="text" value="${d.radio_name || ''}" id="radio_${index}"></td>
-          <td>
-            <div id="gruposContainer_${index}"></div>
-            <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="agregarGrupo(${index})"><i data-lucide="plus"></i></button>
-          </td>
-          <td>
-            <select class="form-select" id="proveedor_${index}"></select>
-          </td>
-          <td><input class="form-input" type="text" value="${formatSimPhone(d.sim_number, d.sim_phone)}" id="simtel_${index}"></td>
-          <td><input type="checkbox" id="activo_${index}" ${d.activo ? 'checked' : ''}></td>
-          <td><input type="checkbox" id="gps_${index}" ${d.gps ? 'checked' : ''}></td>
-          <td><input class="form-input" type="text" value="${d.notas || ''}" id="notas_${index}"></td>
-        </tr>`;
-      });
-      html += '</tbody></table></div>';
-      container.innerHTML = html;
-
-      equipos.forEach((eq, index) => {
-        const grupos = eq.data.grupos || [];
-        const container = document.getElementById(`gruposContainer_${index}`);
-        grupos.forEach(g => {
-          const div = document.createElement("div");
-          div.className = "grupo-container";
-          div.innerHTML = `<input class="grupo-input form-input" type="text" value="${g}">
-                            <button type="button" class="btn btn-ghost btn-icon btn-sm" onclick="this.parentNode.remove()"><i data-lucide="x"></i></button>`;
-          container.appendChild(div);
-        });
-        cargarProveedores(`proveedor_${index}`);
-        document.getElementById(`proveedor_${index}`).value = eq.data.operador || '';
-      });
-      if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    async function guardarCambios() {
-      const cambiosParaLiberar = [];   // equipos que pasaron a inactivo con SIM
-
-      const updates = equipos.map(async (eq, index) => {
-        const simTel = parseSimPhone(document.getElementById(`simtel_${index}`).value);
-        const grupos = FMT.dedupGrupos(
-          [...document.querySelectorAll(`#gruposContainer_${index} .grupo-input`)].map(i => i.value)
-        );
-
-        const fields = {
-          cliente: document.getElementById(`cliente_${index}`).value,
-          ip: document.getElementById(`ip_${index}`).value,
-          sim_number: simTel.sim,
-          sim_phone: simTel.phone,
-          operador: document.getElementById(`proveedor_${index}`).value,
-          grupos,
-          radio_name: document.getElementById(`radio_${index}`).value,
-          activo: document.getElementById(`activo_${index}`).checked,
-          gps: document.getElementById(`gps_${index}`).checked,
-          notas: document.getElementById(`notas_${index}`).value,
-          updated_at: firebase.firestore.FieldValue.serverTimestamp()
-        };
-        cambiosParaLiberar.push({ id: eq.id, antes: eq.data, despues: { ...eq.data, ...fields } });
-        return PocService.updatePocDevice(eq.id, fields);
-      });
-
-      await Promise.all(updates);
-      // Equipos que quedaron inactivos con SIM → ofrecer devolverlos al pool.
-      await SimLiberar.procesarDesactivados(cambiosParaLiberar);
-      alert("Cambios guardados correctamente.");
-      window.location.href = "index.html";
-    }
-  </script>
-  </div> <!-- /cc-work -->
-  </div> <!-- /cc-app -->
-  <script>
-    // Rail Command Center (F5) — espera auth (scripts defer) y pinta el rail del rol efectivo.
-    document.addEventListener('DOMContentLoaded', () => Layout.initRail('poc'));
-  </script>
+  <p style="font-family:system-ui;margin:40px;text-align:center;">
+    Esta herramienta fue reemplazada por <b>«Editar en masa»</b> dentro de la
+    <a href="./index.html">Base PoC</a>: selecciona los equipos en la lista y
+    usa el botón de edición masiva.
+  </p>
 </body>
 </html>

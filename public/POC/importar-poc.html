@@ -66,13 +66,19 @@
       </div>
 
       <div class="form-actions">
-        <button class="btn btn-primary" onclick="importarExcelAFirestore()"><i data-lucide="upload"></i> Importar dispositivos</button>
+        <!-- Dos pasos a propósito (auditoría P0): antes "Importar" escribía
+             directo a Firestore sin preview ni dedup — re-importar el mismo
+             archivo (o un doble click) duplicaba la base entera. -->
+        <button class="btn btn-primary" id="btnRevisar" onclick="revisarArchivo()"><i data-lucide="search-check"></i> Revisar archivo</button>
+        <button class="btn btn-secondary" id="btnImportar" onclick="importarRevisadas()" disabled><i data-lucide="upload"></i> Importar</button>
       </div>
 
       <div id="estadoImportacion" class="alert-banner" style="display:none; margin-top:var(--sp-3);">
         <span class="alert-banner-icon"><i data-lucide="info"></i></span>
         <div class="alert-banner-body" id="estadoImportacionBody"></div>
       </div>
+
+      <div id="previewImport" style="display:none; margin-top:var(--sp-3); font-size:13px;"></div>
     </div>
 
     <!-- Exportar dispositivos actuales -->
@@ -97,70 +103,180 @@ function setEstado(mensaje, tipo = 'info') {
   el.style.display = '';
 }
 
-async function importarExcelAFirestore() {
-  const archivoInput = document.getElementById('archivoExcel');
-  const archivo = archivoInput.files[0];
+const escHtml = v => String(v == null ? '' : v).replace(/[&<>"']/g, s =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
 
-  if (!archivo) {
-    setEstado("Selecciona un archivo .xlsx primero.", "warning");
-    return;
-  }
+// Estado del flujo en dos pasos: revisar → importar. El cambio de archivo
+// invalida la revisión (lo revisado ya no describe lo que se va a importar).
+let _rolPuedeImportar = false;
+let _revision = null;   // { nuevas, existentes, repetidas, sinSerial, nombre }
+let _ocupado = false;
 
-  setEstado("Importando, por favor espera…", "info");
-
-  await cargarXLSX();   // SheetJS bajo demanda
-  const data = await archivo.arrayBuffer();
-  const workbook = XLSX.read(data);
-  const sheet = workbook.Sheets["BD"];
-  const jsonData = XLSX.utils.sheet_to_json(sheet);
-
-  let contador = 0;
-
-  for (let fila of jsonData) {
-    const serialValue = fila["SERIAL"] && fila["SERIAL"].toString().trim() !== "" ? fila["SERIAL"] : "N/D";
-
-    const grupos = Object.keys(fila)
-      .filter(k => k.startsWith("GRUPO ") && fila[k])
-      .map(k => fila[k].toString().trim())
-      .filter(g => g.length > 0);
-
-    // Las celdas numéricas del Excel llegan como number — se fuerzan a string
-    // (los unit_id numéricos rompían el orden en Firestore: ordena por tipo).
-    const txt = v => (v ?? "").toString().trim();
-    const unitId = txt(fila["UNIT ID"]);
-
-    const nuevoRef = await PocService.addPocDevice({
-      cliente: txt(fila["CLIENTE"]),
-      operador: txt(fila["OPERADOR"]),
-      sim_number: txt(fila["# SIMCARD"]),
-      sim_phone: txt(fila["# TEL SIMCARD"]),
-      serial: serialValue.toString(),
-      gps: (fila["GPS"] || '').toString().toLowerCase().includes("true"),
-      activo: (fila["ACTIVO"] || '').toString().toUpperCase() !== "NO",
-      ip: txt(fila["IP del Servidor"]),
-      unit_id: unitId,
-      unit_id_num: PocService.unitIdNum(unitId),
-      radio_name: txt(fila["Nombre del Radio"]),
-      grupos,
-      notas: fila["DAÑOS"] || "",
-      deleted: false,
-      created_at: firebase.firestore.FieldValue.serverTimestamp(),
-      updated_at: firebase.firestore.FieldValue.serverTimestamp()
-    });
-
-    // Si el SIM importado existe disponible en el pool, marcarlo asignado
-    // (consistencia con POC → SIM cards). Best-effort, no frena el import.
-    if (fila["# SIMCARD"]) {
-      SimCardsService.marcarAsignadoSiExiste(fila["# SIMCARD"], {
-        id: nuevoRef.id, serial: serialValue, cliente_nombre: fila["CLIENTE"] || "",
-      }, firebase.auth().currentUser);
+document.addEventListener('DOMContentLoaded', () => {
+  // Guard de auth + rol (auditoría P0): esta página escribía a Firestore por
+  // URL directa sin validar sesión ni rol. Mismo criterio de escritura que la
+  // Base PoC (poc-state.esLectura): técnico/vista/jefe_taller solo leen.
+  verificarAccesoYAplicarVisibilidad((rol) => {
+    const soloLectura = ['tecnico', 'vista', 'jefe_taller'].includes(rol);
+    const tieneModulo = window.MODULOS ? MODULOS.puedeVer(rol, 'poc') : false;
+    _rolPuedeImportar = tieneModulo && !soloLectura;
+    if (!_rolPuedeImportar) {
+      setEstado('Tu rol no puede importar dispositivos. Volviendo a la Base PoC…', 'warning');
+      setTimeout(() => { location.href = 'index.html'; }, 1800);
     }
+  });
+  document.getElementById('archivoExcel').addEventListener('change', _invalidarRevision);
+});
 
-    contador++;
-    setEstado(`Dispositivos importados: ${contador}`, "info");
+function _invalidarRevision() {
+  _revision = null;
+  document.getElementById('btnImportar').disabled = true;
+  const prev = document.getElementById('previewImport');
+  prev.style.display = 'none';
+  prev.innerHTML = '';
+}
+
+function _pintarRevision() {
+  const { nuevas, existentes, repetidas, sinSerial, nombre } = _revision;
+  const lista = (arr) => arr.slice(0, 60).map(escHtml).join(', ') + (arr.length > 60 ? ` … (+${arr.length - 60} más)` : '');
+  const bloque = (n, titulo, detalle) => n
+    ? `<details style="margin:4px 0;"><summary><b>${n}</b> ${titulo}</summary>
+         <div style="color:var(--fg-3); margin:4px 0 0 14px; word-break:break-word;">${detalle}</div></details>`
+    : '';
+  const prev = document.getElementById('previewImport');
+  prev.innerHTML = `
+    <div class="ds-card ds-card-padded" style="background:var(--bg-2, #f8fafc);">
+      <p style="margin:0 0 6px;"><b>${escHtml(nombre)}</b> · ${nuevas.length + existentes.length + repetidas.length + sinSerial.length} filas leídas de la hoja "BD":</p>
+      <p style="margin:0 0 6px; color:${nuevas.length ? 'var(--ok, #15803d)' : 'var(--fg-3)'};"><b>${nuevas.length}</b> dispositivos nuevos por importar.</p>
+      ${bloque(existentes.length, 'ya existen en la base — se omiten (antes se duplicaban al re-importar)', lista(existentes))}
+      ${bloque(repetidas.length, 'seriales repetidos dentro del archivo — se importa solo la primera fila', lista(repetidas))}
+      ${bloque(sinSerial.length, 'filas sin SERIAL — se omiten', 'Complete el serial en el Excel y vuelva a revisar.')}
+    </div>`;
+  prev.style.display = '';
+  setEstado(nuevas.length
+    ? `Revisión lista: ${nuevas.length} por importar. Presiona "Importar".`
+    : 'Revisión lista: no hay dispositivos nuevos que importar.', nuevas.length ? 'info' : 'warning');
+}
+
+async function revisarArchivo() {
+  if (!_rolPuedeImportar) { setEstado('Tu rol no puede importar dispositivos.', 'warning'); return; }
+  if (_ocupado) return;
+  const archivo = document.getElementById('archivoExcel').files[0];
+  if (!archivo) { setEstado('Selecciona un archivo .xlsx primero.', 'warning'); return; }
+  _ocupado = true;
+  const btnR = document.getElementById('btnRevisar');
+  btnR.disabled = true;
+  _invalidarRevision();
+  try {
+    setEstado('Leyendo el archivo…', 'info');
+    await cargarXLSX();   // SheetJS bajo demanda
+    const data = await archivo.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheet = workbook.Sheets['BD'];
+    if (!sheet) { setEstado('El archivo no tiene la hoja "BD".', 'error'); return; }
+    const jsonData = XLSX.utils.sheet_to_json(sheet);
+    if (!jsonData.length) { setEstado('La hoja "BD" está vacía.', 'warning'); return; }
+
+    setEstado(`Comparando ${jsonData.length} filas contra la base actual…`, 'info');
+    const existentesDocs = await PocService.getPocDevices();
+    const serialesEnBase = new Set(
+      existentesDocs
+        .filter(d => !d.deleted)
+        .map(d => String(d.serial || '').trim().toUpperCase())
+        .filter(s => s && s !== 'N/D')
+    );
+
+    const vistos = new Set();
+    const rev = { nuevas: [], existentes: [], repetidas: [], sinSerial: [], nombre: archivo.name };
+    for (const fila of jsonData) {
+      const serial = String(fila['SERIAL'] ?? '').trim();
+      const norm = serial.toUpperCase();
+      if (!serial || norm === 'N/D') { rev.sinSerial.push(fila); continue; }
+      if (serialesEnBase.has(norm)) { rev.existentes.push(serial); continue; }
+      if (vistos.has(norm)) { rev.repetidas.push(serial); continue; }
+      vistos.add(norm);
+      rev.nuevas.push(fila);
+    }
+    _revision = rev;
+    _pintarRevision();
+  } catch (e) {
+    console.error('Error al revisar:', e);
+    setEstado('No se pudo revisar el archivo: ' + (e.message || e), 'error');
+  } finally {
+    _ocupado = false;
+    btnR.disabled = false;
+    document.getElementById('btnImportar').disabled = !(_revision && _revision.nuevas.length);
   }
+}
 
-  setEstado(`Importación completada. Total: ${contador}`, "success");
+async function importarRevisadas() {
+  if (!_rolPuedeImportar || _ocupado) return;
+  if (!_revision || !_revision.nuevas.length) { setEstado('Primero revisa el archivo.', 'warning'); return; }
+  _ocupado = true;
+  const btnR = document.getElementById('btnRevisar');
+  const btnI = document.getElementById('btnImportar');
+  btnR.disabled = true; btnI.disabled = true;
+  const filas = _revision.nuevas;
+  let contador = 0;
+  try {
+    for (const fila of filas) {
+      const serialValue = String(fila['SERIAL']).trim();
+
+      const grupos = Object.keys(fila)
+        .filter(k => k.startsWith('GRUPO ') && fila[k])
+        .map(k => fila[k].toString().trim())
+        .filter(g => g.length > 0);
+
+      // Las celdas numéricas del Excel llegan como number — se fuerzan a string
+      // (los unit_id numéricos rompían el orden en Firestore: ordena por tipo).
+      const txt = v => (v ?? '').toString().trim();
+      const unitId = txt(fila['UNIT ID']);
+
+      const nuevoRef = await PocService.addPocDevice({
+        cliente: txt(fila['CLIENTE']),
+        operador: txt(fila['OPERADOR']),
+        sim_number: txt(fila['# SIMCARD']),
+        sim_phone: txt(fila['# TEL SIMCARD']),
+        serial: serialValue,
+        gps: (fila['GPS'] || '').toString().toLowerCase().includes('true'),
+        activo: (fila['ACTIVO'] || '').toString().toUpperCase() !== 'NO',
+        ip: txt(fila['IP del Servidor']),
+        unit_id: unitId,
+        unit_id_num: PocService.unitIdNum(unitId),
+        radio_name: txt(fila['Nombre del Radio']),
+        grupos,
+        notas: fila['DAÑOS'] || '',
+        deleted: false,
+        created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        updated_at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      // Si el SIM importado existe disponible en el pool, marcarlo asignado
+      // (consistencia con POC → SIM cards). Best-effort, no frena el import.
+      if (fila['# SIMCARD']) {
+        SimCardsService.marcarAsignadoSiExiste(fila['# SIMCARD'], {
+          id: nuevoRef.id, serial: serialValue, cliente_nombre: fila['CLIENTE'] || '',
+        }, firebase.auth().currentUser);
+      }
+
+      contador++;
+      if (contador % 5 === 0 || contador === filas.length) {
+        setEstado(`Importando… ${contador}/${filas.length}`, 'info');
+      }
+    }
+    setEstado(`Importación completada: ${contador} dispositivos nuevos.`, 'success');
+  } catch (e) {
+    // Import PARCIAL visible (antes un fallo a mitad quedaba en silencio):
+    // lo ya escrito queda; re-revisar el archivo lo detecta como existente.
+    console.error('Error importando:', e);
+    setEstado(`Importación PARCIAL: entraron ${contador} de ${filas.length}. Vuelve a "Revisar archivo" — lo ya importado se omitirá. Detalle: ${e.message || e}`, 'error');
+  } finally {
+    _ocupado = false;
+    btnR.disabled = false;
+    // La revisión quedó consumida: exigir re-revisión antes de otro import
+    // (es el candado contra el doble click y contra importar dos veces).
+    _invalidarRevision();
+  }
 }
 
 async function exportarDispositivos() {
