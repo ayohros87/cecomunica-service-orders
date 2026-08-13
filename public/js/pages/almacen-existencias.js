@@ -253,16 +253,16 @@ window.AlmacenExistencias = (() => {
       let lote = '';
       if (puede && estado === 'devuelto_revision') {
         lote = `<button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
-          onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'inspeccion_ok')">
+          onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'inspeccion_ok', this)">
           ✓ Inspección OK (${docs.length})</button>`;
       } else if (puede && estado === 'por_clasificar') {
         lote = `<button type="button" class="btn btn-sm btn-accent" style="margin-left:6px;"
-          onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'corregir')">
+          onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'corregir', this)">
           Corregir a bodega (${docs.length})</button>`;
       }
       const sinVerif = puede ? docs.filter(x => x.verificado === false).length : 0;
       const loteVerif = sinVerif ? `<button type="button" class="btn btn-sm" style="margin-left:6px;"
-        onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'verificar')">
+        onclick="event.stopPropagation(); AlmacenExistencias.loteAccion('${esc(f.key).replace(/'/g, "\\'")}', '${esc(estado)}', 'verificar', this)">
         Marcar verificados (${sinVerif})</button>` : '';
       return `<div class="ex-bloque">
         <span class="ex-bloque-t">${esc(EquiposPoolService.ESTADO_LABELS[estado] || estado)} · ${docs.length}${lote}${loteVerif}</span>
@@ -365,7 +365,14 @@ window.AlmacenExistencias = (() => {
   // ── Acciones de lote por bloque (Fase C) ────────────────────────────────
   // Reutiliza las mismas funciones unitarias del servicio que las acciones de
   // fila — igual que hacía la página de Equipos con sus lotes.
-  async function loteAccion(key, estado, accion) {
+  // Candado del lote (auditoría P0): el bucle secuencial puede tardar minutos
+  // con lotes grandes; antes corría SIN señal de progreso y con el botón vivo
+  // — un segundo click lanzaba OTRO bucle en paralelo sobre las mismas
+  // unidades (kardex con movimientos duplicados).
+  let _loteEnVuelo = false;
+
+  async function loteAccion(key, estado, accion, btn) {
+    if (_loteEnVuelo) return;
     const f = ctx.filas.find(x => x.key === key);
     if (!f) return;
     const docs = f.docs.filter(eq => eq.estado === estado
@@ -378,18 +385,28 @@ window.AlmacenExistencias = (() => {
       verificar: `¿Marcar verificadas ${docs.length} unidades de ${f.label}?`,
     };
     if (!confirm(msgs[accion])) return;
+    _loteEnVuelo = true;
+    if (btn) btn.disabled = true;
     let ok = 0, err = 0;
-    for (const eq of docs) {
-      try {
-        if (accion === 'inspeccion_ok') await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK en lote (Almacén · Existencias)' }, user);
-        else if (accion === 'corregir') await EquiposPoolService.corregirABodega(eq.id, 'Corrección en lote (Almacén · Existencias)', user);
-        else if (accion === 'verificar') await EquiposPoolService.verificar(eq.id, user);
-        ok++;
-      } catch (e) { err++; console.warn('[lote]', eq.id, e?.code || e); }
+    try {
+      for (const eq of docs) {
+        if (btn) btn.textContent = `Procesando ${ok + err + 1}/${docs.length}…`;
+        try {
+          if (accion === 'inspeccion_ok') await EquiposPoolService.liberar(eq.id, { notas: 'Inspección OK en lote (Almacén · Existencias)' }, user);
+          else if (accion === 'corregir') await EquiposPoolService.corregirABodega(eq.id, 'Corrección en lote (Almacén · Existencias)', user);
+          else if (accion === 'verificar') await EquiposPoolService.verificar(eq.id, user);
+          ok++;
+        } catch (e) { err++; console.warn('[lote]', eq.id, e?.code || e); }
+      }
+      if (window.Toast) Toast.show(`Lote: ${ok} unidades procesadas${err ? `, ${err} fallaron` : ''}.`, err ? 'warn' : 'ok');
+      await recargar();
+      if (window.AlmacenHoy) AlmacenHoy.recargar();
+    } finally {
+      _loteEnVuelo = false;
+      // recargar() repinta la tabla (el botón viejo queda huérfano), pero si
+      // algo falló antes del repintado hay que revivirlo.
+      if (btn) btn.disabled = false;
     }
-    if (window.Toast) Toast.show(`Lote: ${ok} unidades procesadas${err ? `, ${err} fallaron` : ''}.`, err ? 'warn' : 'ok');
-    await recargar();
-    if (window.AlmacenHoy) AlmacenHoy.recargar();
   }
 
   return { activar, recargar, refrescarSiCargado, render, toggleFila, onBuscar, onBuscarEnter, setFiltroEstado, toggleSoloDif, exportarExcel, copiarReporte, loteAccion, verHistorico };

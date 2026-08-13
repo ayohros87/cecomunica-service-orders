@@ -26,9 +26,9 @@ window.AsistenteConteo = (() => {
   }
 
   // ── Paso 1: captura ─────────────────────────────────────────────────────
-  function paso1(filtro = '') {
-    const q = filtro.toLowerCase().trim();
-    const filas = ctx.modelos
+  function _filasCaptura(filtro = '') {
+    const q = String(filtro || '').toLowerCase().trim();
+    return ctx.modelos
       .filter(m => !q || `${m.marca || ''} ${m.modelo || ''}`.toLowerCase().includes(q))
       .map(m => `
         <tr>
@@ -40,7 +40,11 @@ window.AsistenteConteo = (() => {
               style="width:82px; text-align:right;" class="cc-input"
               oninput="AsistenteConteo._setCantidad('${esc(m.id)}', this.value)">
           </td>
-        </tr>`).join('');
+        </tr>`).join('')
+      || '<tr><td colspan="3" style="color:var(--fg-3);">Sin modelos con ese filtro.</td></tr>';
+  }
+
+  function paso1(filtro = '') {
     render(`
       <p style="font-size:12.5px; color:var(--fg-3); margin:0 0 8px;">
         Cuenta lo físico en bodega y teclea la cantidad por modelo. Deja vacío lo que no
@@ -48,11 +52,11 @@ window.AsistenteConteo = (() => {
         el conteo es la verificación independiente.
       </p>
       <input type="search" class="cc-input" placeholder="Filtrar modelo…" style="width:100%; margin-bottom:8px;"
-        oninput="AsistenteConteo._filtrar(this.value)">
+        value="${esc(filtro)}" oninput="AsistenteConteo._filtrar(this.value)">
       <div style="max-height:46vh; overflow-y:auto;">
         <table class="app-table compact">
           <thead><tr><th>Marca</th><th>Modelo</th><th style="text-align:right;">Cantidad contada</th></tr></thead>
-          <tbody>${filas || '<tr><td colspan="3" style="color:var(--fg-3);">Sin modelos con ese filtro.</td></tr>'}</tbody>
+          <tbody id="conteoTbodyCaptura">${_filasCaptura(filtro)}</tbody>
         </table>
       </div>`,
       `<button class="btn btn-primary" onclick="AsistenteConteo._revisar()">Revisar diferencias →</button>`);
@@ -62,7 +66,16 @@ window.AsistenteConteo = (() => {
     if (v === '' || v === null) delete ctx.cantidades[modeloId];
     else ctx.cantidades[modeloId] = Math.max(0, Number(v) || 0);
   }
-  function _filtrar(v) { paso1(v); }
+
+  // Solo repinta el <tbody>: recrear el overlay entero en cada tecla (lo que
+  // hacía antes) destruía el propio input del filtro — perdía el foco Y el
+  // texto tecleado, así que filtrar "NX-410" exigía un click y una letra por
+  // ciclo. Las cantidades sobreviven en ctx.cantidades.
+  function _filtrar(v) {
+    const tbody = document.getElementById('conteoTbodyCaptura');
+    if (tbody) tbody.innerHTML = _filasCaptura(v);
+    else paso1(v);
+  }
 
   // ── Paso 2: diff contra el pool ANTES de guardar ────────────────────────
   async function _revisar() {
