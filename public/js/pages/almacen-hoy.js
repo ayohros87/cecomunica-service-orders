@@ -51,6 +51,12 @@ window.AlmacenPage = {
     if (!window.AsistenteRecibir) { location.href = '../inventario/equipos.html?accion=recibir&volver=almacen'; return; }
     AsistenteRecibir.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
   },
+  // Importar la hoja de bodega tal cual llega. Es la vía principal de un conteo:
+  // "Recibir equipos" queda para el alta suelta de dos o tres seriales.
+  abrirImportar() {
+    if (!window.AsistenteImportar) { AlmacenPage.abrirRecibir(); return; }
+    AsistenteImportar.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });
+  },
   abrirVenta() {
     if (!window.AsistenteVenta) { location.href = '../inventario/equipos.html?accion=vender&volver=almacen'; return; }
     AsistenteVenta.abrir({ user: firebase.auth().currentUser, onDone: () => AlmacenPage.recargarTodo() });

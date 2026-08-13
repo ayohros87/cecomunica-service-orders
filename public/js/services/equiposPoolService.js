@@ -783,6 +783,57 @@ const EquiposPoolService = {
     return db.collection('equipos_pool').doc(id)
       .update({ ...permitidos, ...this._autoria(user) });
   },
+
+  // ── Correcciones CON kardex ──────────────────────────────────────────
+  // `actualizar` de arriba pisa el dato y no deja rastro: sirve para arreglar
+  // un typo recién capturado, no para cambiar qué ES una unidad o de quién.
+  // Estas tres escriben el movimiento en la misma tanda, con los MISMOS tipos
+  // que usan los scripts equivalentes (repunta-modelo-lista, corrige-propiedad
+  // -lista, anota-lista) para que el kardex se lea igual venga de donde venga.
+  // Sin la nota, el próximo backfill vuelve a "corregir" al revés.
+
+  _conKardex(id, campos, mov, user) {
+    const db = firebase.firestore();
+    const ref = db.collection('equipos_pool').doc(id);
+    const batch = db.batch();
+    batch.update(ref, { ...campos, ...this._autoria(user) });
+    batch.set(ref.collection('movimientos').doc(), this._movimiento(mov, user));
+    return batch.commit();
+  },
+
+  // Cambia QUÉ es la unidad. La condición la impone la fila del catálogo (-R →
+  // reuso), nunca se elige aparte: una ficha no puede decir "reuso" con un
+  // modelo que el catálogo tiene como nuevo.
+  // `estadoActual` solo alimenta el movimiento; no se toca dónde está la unidad.
+  async reclasificarModelo(id, { modelo_id, modelo_label, condicion, estadoActual = null, antes = '' }, motivo, user) {
+    return this._conKardex(id,
+      { modelo_id: modelo_id || null, modelo_label: (modelo_label || '').trim(), condicion },
+      { tipo: 'correccion_modelo', de_estado: estadoActual, a_estado: estadoActual,
+        notas: `Reclasificado a ${modelo_label} (${condicion}).`
+          + (antes ? ` Antes: ${antes}.` : '') + (motivo ? ` ${motivo}` : '') },
+      user);
+  },
+
+  // Cambia de QUIÉN es. El motivo no es decorativo: es la única memoria de por
+  // qué, y la regla 4 de backfill-propiedad.js marcó "del cliente" todo radio
+  // que entró solo por una orden de servicio — 47 fichas en bodega así.
+  async corregirPropiedad(id, propiedad, { estadoActual = null, antes = '' } = {}, motivo, user) {
+    return this._conKardex(id, { propiedad },
+      { tipo: 'correccion_propiedad', de_estado: estadoActual, a_estado: estadoActual,
+        notas: `Propiedad ${antes || '(vacía)'} → ${propiedad}.` + (motivo ? ` ${motivo}` : '') },
+      user);
+  },
+
+  // Nota visible en la ficha, para lo que el conteo observa y el pool no
+  // modela — el caso que lo motivó son las bases marcadas DAÑADA: el radio
+  // está en el estante (así que va a bodega como cualquiera) pero no sirve, y
+  // eso no cabe en `estado`, que es una ubicación.
+  async anotar(id, nota, { estadoActual = null, antes = '' } = {}, user) {
+    return this._conKardex(id, { notas: (nota || '').toString().trim() },
+      { tipo: 'nota', de_estado: estadoActual, a_estado: estadoActual,
+        notas: (nota || '') + (antes ? ` (antes: "${antes}")` : '') },
+      user);
+  },
 };
 
 window.EquiposPoolService = EquiposPoolService;

@@ -134,7 +134,7 @@
   <script defer src="../js/services/colaInventarioService.js?v=cc2"></script>
   <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/inventarioService.js"></script>
-  <script defer src="../js/services/equiposPoolService.js?v=cc26"></script>
+  <script defer src="../js/services/equiposPoolService.js?v=cc27"></script>
   <script defer src="../js/domain/stockAgg.js"></script>
   <script defer src="../js/ui/toast.js"></script>
   <!-- Síncrono a propósito: las pestañas se pintan en el parse (ver abajo)
@@ -144,6 +144,8 @@
   <script defer src="../js/ui/asistente-conteo.js"></script>
   <script defer src="../js/ui/asistente-recibir.js?v=cc26"></script>
   <script defer src="../js/ui/asistente-venta.js"></script>
+  <script defer src="../js/domain/serialPatron.js?v=cc27"></script> <!-- lo usa el importador -->
+  <script defer src="../js/ui/asistente-importar.js?v=cc27"></script>
   <script defer src="../js/services/clientesService.js"></script> <!-- autocomplete del asistente de venta -->
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/pages/almacen-hoy.js"></script>
@@ -160,7 +162,9 @@
     Layout.renderTopbar({
       title: '<i data-lucide="warehouse"></i> Almacén',
       actions: [
-        { label: '<i data-lucide="plus"></i> Recibir equipos', cls: 'primary',
+        { label: '<i data-lucide="file-spreadsheet"></i> Importar hoja', cls: 'primary',
+          onclick: "AlmacenPage.abrirImportar()" },
+        { label: '<i data-lucide="plus"></i> Recibir equipos',
           onclick: "AlmacenPage.abrirRecibir()" },
         { label: '<i data-lucide="clipboard-list"></i> Conteo físico',
           onclick: "AlmacenPage.abrirConteo()" },
