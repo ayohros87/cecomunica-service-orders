@@ -9,6 +9,10 @@
   <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
   <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <!-- Fuentes self-hosted: preload de los 2 pesos above-the-fold (crossorigin
+       es obligatorio en preload de fuentes aunque sea mismo origen). -->
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
@@ -21,7 +25,7 @@
   <!-- cc22 / dev3: chips del pool en la columna Serie (clases .eqpool-chip-aviso
        en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el
        aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc22">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc23">
   <link rel="stylesheet" href="../css/ordenes-index.css?v=dev3">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
