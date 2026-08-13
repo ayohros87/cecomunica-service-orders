@@ -84,7 +84,10 @@ function aplicarModoSoloLectura() {
     }
 
     async function cargarUsuariosTecnicos(){
-      const users = await UsuariosService.getUsuariosByRol([ROLES.TECNICO, ROLES.TECNICO_OPERATIVO]);
+      // jefe_taller incluido: el supervisor de taller también trabaja órdenes
+      // (se asigna igual que un técnico), así que su producción entra al
+      // ranking — el trigger de tecnico_stats ya registra por uid sin mirar rol.
+      const users = await UsuariosService.getUsuariosByRol([ROLES.TECNICO, ROLES.TECNICO_OPERATIVO, ROLES.JEFE_TALLER]);
 
       cacheUsuarios = users
         // Excluir técnicos desactivados del ranking. Convención del proyecto:

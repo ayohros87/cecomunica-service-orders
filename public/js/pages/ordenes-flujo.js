@@ -47,7 +47,12 @@ function _abrirModalTecnico(ordenId, { modo }) {
       technicians.forEach(tech => {
         const option = document.createElement("option");
         option.value = tech.uid;
-        option.textContent = tech.nombre;
+        // El nombre limpio viaja en dataset: es lo que se guarda en la orden
+        // (tecnico_asignado) y lo que compara el filtro por técnico. El sufijo
+        // del texto es solo visual, para distinguir al supervisor de taller.
+        option.dataset.nombre = tech.nombre;
+        option.textContent = tech.rol === "jefe_taller"
+          ? `${tech.nombre} — supervisor` : tech.nombre;
         if (esReasignar && tech.uid === tecnicoActualUid) option.selected = true;
         select.appendChild(option);
       });
@@ -100,7 +105,10 @@ window.confirmarAsignarTecnico = async function (ordenId) {
   const btnConfirmar = document.querySelector("#modalAsignar button[data-action='confirmar-asignar-tecnico']");
   const modo = (btnConfirmar && btnConfirmar.dataset.modo) || "asignar";
   const tecnicoUid = select.value;
-  const tecnicoNombre = select.options[select.selectedIndex].text;
+  const opcion = select.options[select.selectedIndex];
+  // dataset.nombre = nombre limpio (el texto puede traer el sufijo visual
+  // "— supervisor", que no debe guardarse en tecnico_asignado).
+  const tecnicoNombre = opcion.dataset.nombre || opcion.text;
 
   try {
     if (modo === "reasignar") {

@@ -556,25 +556,29 @@ const OrdenesService = {
   },
 
   /**
-   * Load technicians for assignment dropdown
-   * @returns {Promise<Array<{uid: string, nombre: string}>>}
+   * Load technicians for assignment dropdown. Incluye jefe_taller
+   * (supervisor de taller): también trabaja órdenes y puede asignárselas
+   * a sí mismo igual que un técnico.
+   * @returns {Promise<Array<{uid: string, nombre: string, rol: string}>>}
    */
   async loadTechnicians() {
     const db = firebase.firestore();
     const snapshot = await db.collection("usuarios")
-      .where("rol", "in", ["tecnico", "tecnico_operativo"])
+      .where("rol", "in", ["tecnico", "tecnico_operativo", "jefe_taller"])
       .get();
-    
+
     const technicians = [];
     snapshot.forEach(doc => {
       const data = doc.data();
       technicians.push({
         uid: doc.id,
-        nombre: data.nombre || data.email || doc.id
+        nombre: data.nombre || data.email || doc.id,
+        rol: data.rol || ""
       });
     });
-    
-    return technicians;
+
+    return technicians.sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
   },
 
   /**

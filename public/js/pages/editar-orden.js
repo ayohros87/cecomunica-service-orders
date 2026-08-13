@@ -392,7 +392,10 @@
     async function cargarTecnicos() {
       const select = document.getElementById("tecnico");
       select.innerHTML = '<option value="">Por asignar</option>';
-      const tecnicos = await UsuariosService.getUsuariosByRol(["tecnico", "tecnico_operativo"]);
+      // jefe_taller incluido: el supervisor de taller también puede quedar
+      // asignado a una orden, y este select (aunque bloqueado) muestra al
+      // asignado actual — sin su rol en la query el nombre no aparecería.
+      const tecnicos = await UsuariosService.getUsuariosByRol(["tecnico", "tecnico_operativo", "jefe_taller"]);
       tecnicos.forEach(u => {
         const opt = document.createElement("option");
         opt.value = u.id;
