@@ -188,6 +188,9 @@ APP.utils = {
    *   Falsy → full-document fallback (use sparingly).
    */
   lucideRefresh(scope) {
+    // Delegado al helper transversal (js/core/icons.js); fallback local por
+    // si la página se cargara sin icons.js.
+    if (window.Icons) { Icons.pintar(scope); return; }
     if (typeof lucide === 'undefined') return;
     const arr = Array.isArray(scope) ? scope.filter(Boolean) : (scope ? [scope] : null);
     if (arr && arr.length) lucide.createIcons({ nodes: arr });

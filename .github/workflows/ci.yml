@@ -33,6 +33,30 @@ jobs:
           done
           echo "Sintaxis OK"
 
+      # lucide.min.js (401 KB) debe ir SIEMPRE en defer, con ?v= y seguido de
+      # icons.js (que hace el barrido inicial de iconos). Un tag síncrono o sin
+      # versión regresa el bloqueo de render que se quitó en el plan de arranque.
+      - name: Lucide en defer + icons.js adyacente
+        run: |
+          set -e
+          # login.html es la excepción deliberada (carga sync); tools/ no se despliega.
+          filtro() { grep -v '^public/tools/' | grep -v '^public/login.html' || true; }
+          bad=$(grep -rlE '<script src="[^"]*lucide\.min\.js' public --include='*.html' | filtro)
+          if [ -n "$bad" ]; then
+            echo "::error::lucide.min.js sin defer (bloquea el render) en: $bad"; exit 1
+          fi
+          bad=$(grep -rlE 'lucide\.min\.js"' public --include='*.html' | filtro)
+          if [ -n "$bad" ]; then
+            echo "::error::lucide.min.js sin ?v= (caché immutable de /js/vendor/ lo exige) en: $bad"; exit 1
+          fi
+          bad=$(grep -rlE 'lucide\.min\.js\?v=' public --include='*.html' | filtro | while read -r f; do
+            grep -A2 'lucide\.min\.js?v=' "$f" | grep -q 'js/core/icons\.js' || echo "$f"
+          done || true)
+          if [ -n "$bad" ]; then
+            echo "::error::falta js/core/icons.js inmediatamente después de lucide en: $bad"; exit 1
+          fi
+          echo "Lucide OK"
+
       - name: Install functions deps
         working-directory: functions
         run: npm ci
