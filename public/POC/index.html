@@ -182,7 +182,7 @@
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
   <script src="../js/core/auth.js"></script>
-  <script defer src="../js/services/pocService.js?v=cc12"></script>
+  <script defer src="../js/services/pocService.js?v=cc13"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/modelosService.js"></script>
   <script defer src="../js/services/clientesService.js"></script>
@@ -199,7 +199,7 @@
   <script src="../js/pages/poc-bulk.js?v=cc10" defer></script>
   <script src="../js/pages/poc-sim.js" defer></script>
   <script src="../js/pages/poc-sim-pool.js?v=cc1" defer></script>
-  <script src="../js/pages/poc-list.js?v=cc13" defer></script>
+  <script src="../js/pages/poc-list.js?v=cc14" defer></script>
   <script src="../js/pages/poc-index.js?v=cc12" defer></script>
   <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
        el barrido inicial de <i data-lucide>; los guards inline viejos quedan
@@ -277,7 +277,7 @@
             <option value="grupos">Grupo</option>
             <option value="notas">Notas</option>
           </select>
-          <input type="search" id="filtroValor" placeholder="Escribe para filtrar…" aria-label="Buscar equipos" oninput="PocList.filtrar()" style="border:none; flex:1;">
+          <input type="search" id="filtroValor" placeholder="Escribe para filtrar…" aria-label="Buscar equipos" oninput="PocList.filtrarDebounced()" style="border:none; flex:1;">
           <button class="btn btn-ghost btn-icon btn-sm" onclick="PocList.limpiarFiltro()" aria-label="Limpiar filtro"><i data-lucide="rotate-ccw"></i></button>
         </div>
 
@@ -413,7 +413,7 @@
       <div class="app-table-footer">
         <div class="resumen-badge" id="resumenEquipos"></div>
         <div style="display:flex; gap:var(--sp-2);">
-          <button id="btnCargarMas" class="btn btn-ghost btn-sm" onclick="PocList.cargar()"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
+          <button id="btnCargarMas" class="btn btn-ghost btn-sm"><i data-lucide="chevron-down"></i> Cargar más equipos</button>
           <button class="btn btn-secondary btn-sm" onclick="PocList.mostrarTodo()"><i data-lucide="list"></i> Mostrar todo</button>
         </div>
       </div>

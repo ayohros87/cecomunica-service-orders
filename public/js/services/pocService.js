@@ -254,7 +254,10 @@ const PocService = {
   },
 
   // Paginated sorted list, excluding deleted. Returns { docs, lastDoc }.
-  async listPage({ sortField = 'cliente', sortAsc = true, onlyActivos = false, cursorDoc = null, limit = 50 } = {}) {
+  // source:'cache' lee SOLO la persistencia local (preview instantáneo; el
+  // caller debe repintar con el pase de servidor — el cursor de un snapshot
+  // de caché no es confiable para paginar).
+  async listPage({ sortField = 'cliente', sortAsc = true, onlyActivos = false, cursorDoc = null, limit = 50, source = null } = {}) {
     const db = firebase.firestore();
     let q = db.collection('poc_devices')
       .where('deleted', '!=', true)
@@ -263,7 +266,7 @@ const PocService = {
       .limit(limit);
     if (onlyActivos) q = q.where('activo', '==', true);
     if (cursorDoc) q = q.startAfter(cursorDoc);
-    const snap = await q.get();
+    const snap = await (source ? q.get({ source }) : q.get());
     return {
       docs: snap.docs.map(d => ({ id: d.id, ...d.data() })),
       lastDoc: snap.empty ? null : snap.docs[snap.docs.length - 1],

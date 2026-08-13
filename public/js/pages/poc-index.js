@@ -22,14 +22,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     PocState.aplicarPermisosRol();
-    // Los tres mapas son independientes — en paralelo el arranque cuesta la
-    // carga más lenta, no la suma (antes: 3 round-trips seriales).
-    await Promise.all([
+    // Los tres mapas son independientes y ya NO retienen la lista: el primer
+    // paint usa el snapshot d.cliente de cada ficha (nombreClienteDe cae ahí
+    // cuando el mapa no está) y refrescarNombresVisibles corrige en sitio al
+    // resolver. Antes la tabla esperaba clientes (~413 docs) + modelos + operadores.
+    const pMapas = Promise.all([
       PocState.cargarOperadores(),
       PocState.cargarClientesMap(),
       PocState.cargarModelosMap(),
     ]);
     PocList.cargar(true);
+    pMapas.then(() => PocList.refrescarNombresVisibles()).catch(() => { /* snapshot manda */ });
   });
 
   // Defensive: inject check-all header if not already present in HTML

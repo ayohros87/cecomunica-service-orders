@@ -7,11 +7,48 @@ window.PocList = {
   _campoOrden:   'created_at',
   _direccionAsc: false,
   _filtroID:     0,
+  _cargando:     false,          // guard en vuelo de cargar()
+  _debounceTimer: null,          // debounce del buscador
+  _allDocs:      null,           // memo {t, docs} del barrido completo (filtrar)
+  _ALL_TTL_MS:   60000,
+  _docsPorId:    new Map(),      // docId → doc de la última vez que se pintó
 
-  // Reload using current filter state
+  // Reload using current filter state.
+  // Es la ruta que llaman las mutaciones (delete/restore/bulk), así que
+  // invalida el memo del barrido — el próximo filtrar() lee fresco.
   refresh() {
-    const v = document.getElementById('filtroValor')?.value.trim();
-    if (v) this.filtrar(); else this.cargar(true);
+    this._allDocs = null;
+    const v = document.getElementById('filtroValor')?.value.trim() || '';
+    if (v.length >= 2) this.filtrar();
+    else if (!v) this.cargar(true);
+    // 1 solo carácter: no barrer 5,000+ docs por una letra (ver filtrarDebounced)
+  },
+
+  // Buscador: debounce de 300 ms + mínimo 2 caracteres. Antes cada TECLA
+  // disparaba PocService.getAll() sin limit (colección completa, ~5,225 docs).
+  filtrarDebounced() {
+    clearTimeout(this._debounceTimer);
+    this._debounceTimer = setTimeout(() => {
+      const v = document.getElementById('filtroValor')?.value.trim() || '';
+      if (v.length === 1) {
+        const res = document.getElementById('resumenEquipos');
+        if (res) res.innerHTML = '<span class="resumen-badge">escribe al menos 2 caracteres…</span>';
+        return;
+      }
+      if (v) this.filtrar(); else this.cargar(true);
+    }, 300);
+  },
+
+  // Barrido completo con memo de 60 s: la primera búsqueda paga la colección
+  // entera, las teclas siguientes filtran en memoria. NO usa {source:'cache'}
+  // de Firestore — devolvería resultados incompletos en silencio.
+  _getAllMemo() {
+    const m = this._allDocs;
+    if (m && Date.now() - m.t < this._ALL_TTL_MS) return Promise.resolve(m.docs);
+    return PocService.getAll({ sortField: 'created_at', sortAsc: false }).then(docs => {
+      this._allDocs = { t: Date.now(), docs };
+      return docs;
+    });
   },
 
   // ── Cell builders ───────────────────────────────────────────────
@@ -69,6 +106,9 @@ window.PocList = {
 
     const row = document.createElement('tr');
     row.dataset.id = docId;
+    // Para refrescarNombresVisibles: los nombres de cliente pueden llegar
+    // DESPUÉS del primer paint (los mapas ya no bloquean la lista).
+    this._docsPorId.set(docId, d);
 
     // checkbox (0)
     const tdCh = document.createElement('td');
@@ -186,6 +226,11 @@ window.PocList = {
     const tbody      = document.getElementById('devicesTable');
     const btnCargar  = document.getElementById('btnCargarMas');
 
+    // Guard en vuelo: el botón "Cargar más" tenía doble wiring (onclick del
+    // HTML + addEventListener) y un clic disparaba DOS listPage con el mismo
+    // cursor, duplicando filas.
+    if (this._cargando) return;
+
     // On a reset/first load we want a fresh list, but DON'T wipe the tbody
     // here — that would drop the skeleton (or current rows) and leave the
     // table blank for the whole network round-trip. We clear it inside the
@@ -198,6 +243,7 @@ window.PocList = {
       if (btnCargar) btnCargar.style.display = 'block';
     }
     if (this._noMasDatos) return;
+    this._cargando = true;
 
     const campoOrden    = this._campoOrden || 'cliente';
     const direccionOrden = this._direccionAsc ? 'asc' : 'desc';
@@ -217,15 +263,31 @@ window.PocList = {
       }, 15000);
     }
 
+    // Cache-first (solo reset): pinta al instante la primera página desde la
+    // persistencia local mientras el pase de servidor viaja; este repinta la
+    // verdad. El cursor y _noMasDatos SOLO se tocan en el pase de servidor.
+    if (esReset) {
+      PocService.listPage({
+        sortField: campoOrden, sortAsc: this._direccionAsc,
+        cursorDoc: null, limit: 50, source: 'cache',
+      }).then(({ docs }) => {
+        if (_resuelto || !docs.length) return;   // el servidor ganó o caché frío
+        tbody.innerHTML = '';
+        this._pintarPagina(tbody, docs);
+      }).catch(() => { /* caché frío (primera visita): sin preview */ });
+    }
+
     PocService.listPage({
       sortField: campoOrden, sortAsc: this._direccionAsc,
       cursorDoc: this._lastDoc || null, limit: 50,
     }).then(({ docs, lastDoc }) => {
       _resuelto = true;
+      this._cargando = false;
       if (_watchdog) clearTimeout(_watchdog);
       // Clear the skeleton/old rows now that the data is in (reset only;
       // pagination appends below the existing rows). This also clears any
-      // timeout-error row painted by the watchdog if data lands late.
+      // timeout-error row painted by the watchdog if data lands late, and
+      // the cache-first preview.
       if (esReset) tbody.innerHTML = '';
       if (!docs.length) {
         this._noMasDatos = true;
@@ -233,32 +295,10 @@ window.PocList = {
         return;
       }
       this._lastDoc = lastDoc;
-      const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
-      const soloInactivos   = document.getElementById('soloInactivos')?.checked;
-      const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
-
-      docs.forEach(d => {
-        if (soloInactivos && d.activo) return;
-        if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
-        if (soloIncompletos) {
-          const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
-          if (!crit.some(v => !v || v.trim?.() === '')) return;
-        }
-        tbody.appendChild(this._buildRow(d.id, d));
-      });
-
-      const total = tbody.rows.length;
-      const COL = PocState.COL;
-      let activos = 0, incompletos = 0;
-      [...tbody.rows].forEach(r => {
-        if (r.cells[COL.activo]?.dataset.activo === 'true') activos++;
-        if (r.cells[COL.cliente]?.querySelector('[data-incomplete]')) incompletos++;
-      });
-      PocState.actualizarResumen({ total, activos, incompletos });
-      this.actualizarFlechitas();
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      this._pintarPagina(tbody, docs);
     }).catch(err => {
       _resuelto = true;
+      this._cargando = false;
       if (_watchdog) clearTimeout(_watchdog);
       console.error('❌ Error al cargar la base POC:', err);
       // Only take over the table on a reset load — a failed "Cargar más"
@@ -268,6 +308,51 @@ window.PocList = {
           'Error al cargar la base POC',
           'Revisa tu conexión e intenta de nuevo.');
       }
+    });
+  },
+
+  // Pinta una tanda de docs (respetando los toggles) y actualiza el resumen.
+  // Compartido por el pase de servidor y el preview cache-first.
+  _pintarPagina(tbody, docs) {
+    const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
+    const soloInactivos   = document.getElementById('soloInactivos')?.checked;
+    const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
+
+    docs.forEach(d => {
+      if (soloInactivos && d.activo) return;
+      if (soloSinContrato && (d.contrato_id || d.contrato_doc_id)) return;
+      if (soloIncompletos) {
+        const crit = [PocState.nombreClienteDe(d), d.unit_id, d.operador, d.ip, d.sim_number, d.sim_phone];
+        if (!crit.some(v => !v || v.trim?.() === '')) return;
+      }
+      tbody.appendChild(this._buildRow(d.id, d));
+    });
+
+    const total = tbody.rows.length;
+    const COL = PocState.COL;
+    let activos = 0, incompletos = 0;
+    [...tbody.rows].forEach(r => {
+      if (r.cells[COL.activo]?.dataset.activo === 'true') activos++;
+      if (r.cells[COL.cliente]?.querySelector('[data-incomplete]')) incompletos++;
+    });
+    PocState.actualizarResumen({ total, activos, incompletos });
+    this.actualizarFlechitas();
+    if (window.Icons) Icons.pintar(tbody);
+    else if (typeof lucide !== 'undefined') lucide.createIcons();
+  },
+
+  // Corrige la celda de cliente de las filas visibles cuando los mapas de
+  // clientes/modelos resuelven (ya no bloquean el primer paint de la lista).
+  refrescarNombresVisibles() {
+    const tbody = document.getElementById('devicesTable');
+    if (!tbody) return;
+    const COL = PocState.COL;
+    [...tbody.rows].forEach(r => {
+      const d = this._docsPorId.get(r.dataset.id);
+      if (!d) return;
+      const strong = r.cells[COL.cliente]?.querySelector('strong');
+      const nombre = PocState.nombreClienteDe(d);
+      if (strong && nombre && strong.textContent !== nombre) strong.textContent = nombre;
     });
   },
 
@@ -346,7 +431,7 @@ window.PocList = {
     const soloIncompletos = document.getElementById('soloIncompletos')?.checked;
     const soloSinContrato = document.getElementById('soloSinContrato')?.checked;
 
-    PocService.getAll({ sortField: 'created_at', sortAsc: false }).then(docs => {
+    this._getAllMemo().then(docs => {
         if (ejecucionID !== this._filtroID) return;
         let total = 0, activos = 0, incompletos = 0;
         const coincidencias = [];
@@ -386,7 +471,8 @@ window.PocList = {
         coincidencias.forEach(d => tbody.appendChild(this._buildRow(d.id, d)));
         PocState.actualizarResumen({ total, activos, incompletos });
         this.actualizarFlechitas();
-        if (typeof lucide !== 'undefined') lucide.createIcons();
+        if (window.Icons) Icons.pintar(tbody);
+        else if (typeof lucide !== 'undefined') lucide.createIcons();
       }).catch(err => {
         // Stale-search guard: ignore errors from a superseded query.
         if (ejecucionID !== this._filtroID) return;
