@@ -83,6 +83,10 @@
         <button type="button" class="seg-btn" data-v="no_facturables" onclick="setVista('no_facturables')">No facturables <span id="cnt-no_facturables">0</span></button>
       </div>
       <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+        <!-- Buscador (auditoría): con decenas de contratos por bucket,
+             encontrar uno era scroll puro. -->
+        <input type="search" id="factFiltro" class="form-input" placeholder="Buscar contrato o cliente…"
+               style="max-width:210px; height:32px; font-size:13px;" oninput="setFiltroFact(this.value)">
         <label style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg-2); cursor:pointer; white-space:nowrap;" title="Apaga los correos de alerta (fuga / falso arranque) hasta que estén facturando.">
           <input type="checkbox" id="alertasCorreo" onchange="toggleAlertas(this.checked)"> Alertas por correo
         </label>
@@ -110,7 +114,7 @@
 </div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/facturacion-activacion.js?v=fix1" defer></script>
+<script src="../js/pages/facturacion-activacion.js?v=fix2" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

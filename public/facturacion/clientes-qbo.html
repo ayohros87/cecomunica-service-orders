@@ -91,7 +91,7 @@
   <p id="qboResumen" style="color:var(--fg-3); margin:0 0 var(--sp-3); font-size:13px;">Cargando…</p>
 
   <div class="ds-card" style="padding:0;">
-    <div style="padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--border-subtle);">
+    <div style="padding:var(--sp-3) var(--sp-4); border-bottom:1px solid var(--border-subtle); display:flex; gap:var(--sp-2); align-items:center; flex-wrap:wrap;">
       <div class="seg" role="tablist">
         <button type="button" class="seg-btn is-on" data-v="sugeridos" onclick="setVista('sugeridos')">Sugeridos <span id="cnt-sugeridos">0</span></button>
         <button type="button" class="seg-btn" data-v="multiples" onclick="setVista('multiples')">Múltiples <span id="cnt-multiples">0</span></button>
@@ -99,13 +99,22 @@
         <button type="button" class="seg-btn" data-v="vinculados" onclick="setVista('vinculados')">Vinculados <span id="cnt-vinculados">0</span></button>
         <button type="button" class="seg-btn" data-v="dupes" onclick="setVista('dupes')">Duplicados QBO <span id="cnt-dupes">0</span></button>
       </div>
+      <span style="flex:1;"></span>
+      <!-- Buscador (auditoría): sin él, encontrar un cliente era scroll puro. -->
+      <input type="search" id="qboFiltro" class="form-input" placeholder="Buscar cliente o RUC…"
+             style="max-width:220px; height:32px; font-size:13px;" oninput="setFiltro(this.value)">
+      <!-- Tras crear el Customer en QBO había que refrescar la página entera. -->
+      <button type="button" class="btn btn-sm btn-ghost" id="btnRecargarQbo" onclick="recargarQBO()"
+              title="Volver a leer los Customers de QuickBooks (p.ej. tras crear uno allá)">
+        <i data-lucide="refresh-cw"></i> Recargar QBO</button>
     </div>
     <div id="lista" style="padding:var(--sp-4);"><p style="color:var(--fg-3);">Cargando…</p></div>
   </div>
 </div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/facturacion-clientes-qbo.js" defer></script>
+<script defer src="../js/ui/modal.js"></script>
+<script src="../js/pages/facturacion-clientes-qbo.js?v=fix1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

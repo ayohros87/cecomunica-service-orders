@@ -118,11 +118,17 @@ function checklistCell(r){
     `<span class="r-chip ${req?'r-bad':'r-warn'}" title="${req?'Requerido':'Recomendado'}">${req?'✗':'⚠'} ${label}</span>`).join('') + '</div>';
 }
 
+let filtroTexto = '';
+function setFiltroFact(v){ filtroTexto = String(v||'').trim().toLowerCase(); render(); }
+
 function render(){
   actualizarConteos();
   const cont = document.getElementById('lista');
-  const rows = contratos.filter(c=>bucketDe(c)===vista);
-  if(!rows.length){ cont.innerHTML = emptyState('No hay contratos en esta vista.'); if(window.lucide) lucide.createIcons(); return; }
+  const rows = contratos.filter(c=>bucketDe(c)===vista)
+    .filter(c=>!filtroTexto
+      || String(c.contrato_id||'').toLowerCase().includes(filtroTexto)
+      || String(c.cliente_nombre||'').toLowerCase().includes(filtroTexto));
+  if(!rows.length){ cont.innerHTML = emptyState(filtroTexto ? 'Nada coincide con la búsqueda en esta vista.' : 'No hay contratos en esta vista.'); if(window.lucide) lucide.createIcons(); return; }
   cont.innerHTML = `
     <div class="app-table-wrap" style="border:none; box-shadow:none;">
       <table class="app-table">
@@ -230,6 +236,7 @@ async function accion(id, acc){
 }
 
 window.setVista = setVista;
+window.setFiltroFact = setFiltroFact;
 window.accion = accion;
 
 /* ===== Vista previa de factura (C1 — cálculo, sin escribir a QBO) ===== */

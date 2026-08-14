@@ -9,6 +9,7 @@ let custTop = [];          // customers top-level (no Job)
 let byRuc = {}, byName = {};
 let dupRucs = [];          // [{ruc, custs:[...]}]
 let vista = 'sugeridos';
+let filtroTexto = '';      // buscador (auditoría): sin él era scroll puro
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function norm(s){ return String(s||'').trim().toLowerCase(); }
@@ -88,6 +89,17 @@ function bucketDe(cl){
 }
 
 function setVista(v){ vista=v; document.querySelectorAll('.seg-btn').forEach(b=>b.classList.toggle('is-on', b.dataset.v===v)); render(); }
+function setFiltro(v){ filtroTexto = norm(v); render(); }
+
+// Tras crear el Customer en QBO había que refrescar la página completa
+// (cargar() solo corría en el arranque).
+async function recargarQBO(){
+  const b = document.getElementById('btnRecargarQbo');
+  if (b) b.disabled = true;
+  try { await cargar(); render(); Toast.show('Listado de QuickBooks actualizado','ok'); }
+  catch(e){ console.error(e); Toast.show('No se pudo recargar desde QuickBooks','bad'); }
+  finally { if (b) b.disabled = false; }
+}
 
 function emptyState(msg){
   return `<div class="empty-state"><i data-lucide="inbox" style="width:34px;height:34px;opacity:.4;"></i><div class="es-title">${msg}</div></div>`;
@@ -102,9 +114,13 @@ function render(){
   const cont=document.getElementById('lista');
   if(vista==='dupes'){ cont.innerHTML = renderDupes(); if(window.lucide) lucide.createIcons(); return; }
 
+  const fTax = filtroTexto.replace(/[^a-z0-9]/g,'').toUpperCase();
   const rows = clientes.filter(c=>bucketDe(c)===vista)
+    .filter(c=>!filtroTexto
+      || norm(c.empresa||c.nombre).includes(filtroTexto)
+      || (fTax && normTax(c.ruc||c.cedula).includes(fTax)))
     .sort((a,b)=>norm(a.empresa||a.nombre).localeCompare(norm(b.empresa||b.nombre)));
-  if(!rows.length){ cont.innerHTML = emptyState('Sin clientes en esta vista.'); if(window.lucide) lucide.createIcons(); return; }
+  if(!rows.length){ cont.innerHTML = emptyState(filtroTexto ? 'Nada coincide con la búsqueda en esta vista.' : 'Sin clientes en esta vista.'); if(window.lucide) lucide.createIcons(); return; }
   cont.innerHTML = `
     <div class="app-table-wrap" style="border:none; box-shadow:none;">
       <table class="app-table">
@@ -128,11 +144,27 @@ function filaCliente(cl){
   const mi = matchInfo(cl);
   const cands = mi.custs;
   if(!cands.length){
-    return `<tr>${cli}<td><span class="r-chip r-bad">sin match en QBO</span></td><td></td></tr>`;
+    // "Sin match" era un callejón sin salida (auditoría): si el matcher
+    // fallaba por RUC errado no había override. Select nativo = buscable
+    // tecleando; el vínculo manual SIEMPRE pide confirmación.
+    const opciones = custTop
+      .slice()
+      .sort((a,b)=>norm(a.display_name).localeCompare(norm(b.display_name)))
+      .map(c=>`<option value="${esc(c.qbo_customer_id)}">${esc(c.display_name)}${c.ruc?(' · '+esc(c.ruc)):''}</option>`).join('');
+    return `<tr>${cli}
+      <td><span class="r-chip r-bad">sin match en QBO</span>
+        <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+          <select class="form-select" id="qbo-man-${esc(cl.id)}" style="max-width:280px; height:30px; font-size:12.5px;">
+            <option value="">Vincular manualmente…</option>${opciones}
+          </select>
+          <button class="btn btn-sm btn-ghost" onclick="vincularManual('${cl.id}')" title="Vincular con el Customer elegido"><i data-lucide="link"></i></button>
+        </div>
+      </td><td></td></tr>`;
   }
+  const riesgoDe = (c)=> (cands.length>1 || (mi.via==='ruc' && !c._parecido)) ? 'true' : 'false';
   const lista = cands.map(c=>`
     <div style="display:flex; align-items:center; gap:8px; margin:3px 0;">
-      <button class="btn btn-sm btn-primary" onclick="vincular('${cl.id}','${c.qbo_customer_id}','${esc(c.display_name).replace(/'/g,"\\'")}')"><i data-lucide="link"></i> Vincular</button>
+      <button class="btn btn-sm btn-primary" onclick="vincular('${cl.id}','${c.qbo_customer_id}','${esc(c.display_name).replace(/'/g,"\\'")}', ${riesgoDe(c)})"><i data-lucide="link"></i> Vincular</button>
       <span style="font-size:13px;">${esc(c.display_name)}<span style="color:var(--fg-3); font-size:12px;">${c.ruc?(' · '+esc(c.ruc)):''} · saldo ${money(c.balance)}</span>${(mi.via==='ruc'&&!c._parecido)?' <span class="r-chip r-bad" title="RUC coincide pero el nombre no se parece — posible RUC errado en QBO">⚠ nombre distinto</span>':''}</span>
     </div>`).join('');
   let badge='';
@@ -153,20 +185,57 @@ function renderDupes(){
       </div>`).join('');
 }
 
-async function vincular(clienteId, qboId, qboName){
+async function vincular(clienteId, qboId, qboName, riesgo){
+  const cl = clientes.find(x=>x.id===clienteId);
+  // Confirmación proporcional (auditoría): con Customer=cliente y la
+  // facturación arrancando al entregar, un vínculo errado factura a OTRA
+  // empresa — y era 1 click sin pregunta. Solo pregunta en los casos con
+  // badge (múltiples / nombre distinto) y en el vínculo manual.
+  if (riesgo && window.Modal) {
+    const ok = await Modal.confirm({
+      title: 'Confirmar vínculo con QuickBooks',
+      message: `App: «${cl?.empresa || cl?.nombre || clienteId}» → QBO: «${qboName}». La facturación de sus contratos saldrá a ese Customer. ¿Vincular?`,
+      confirmLabel: 'Vincular',
+    });
+    if (!ok) return;
+  }
   try{
-    await ClientesService.updateCliente(clienteId, { qbo_customer_id: qboId, qbo_customer_name: qboName });
-    const cl = clientes.find(x=>x.id===clienteId); if(cl){ cl.qbo_customer_id=qboId; cl.qbo_customer_name=qboName; }
+    const user = firebase.auth().currentUser;
+    await ClientesService.updateCliente(clienteId, {
+      qbo_customer_id: qboId, qbo_customer_name: qboName,
+      // Rastro (auditoría): antes el vínculo no dejaba quién ni cuándo.
+      qbo_vinculado_por: (user && (user.email || user.uid)) || null,
+      qbo_vinculado_at: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    if(cl){ cl.qbo_customer_id=qboId; cl.qbo_customer_name=qboName; }
     Toast.show('Cliente vinculado','ok'); render();
   }catch(e){ console.error(e); Toast.show('No se pudo vincular','bad'); }
 }
+
+// Vínculo manual desde "Sin match": el select trae TODOS los Customers
+// top-level; la confirmación es obligatoria (riesgo=true).
+function vincularManual(clienteId){
+  const sel = document.getElementById('qbo-man-'+clienteId);
+  const qboId = sel && sel.value;
+  if(!qboId){ Toast.show('Elige el Customer de QuickBooks en la lista.','warn'); return; }
+  const c = custTop.find(x=>x.qbo_customer_id===qboId);
+  vincular(clienteId, qboId, (c && c.display_name) || '', true);
+}
+
 async function desvincular(clienteId){
   if(!window.confirm('¿Quitar el vínculo con QuickBooks?')) return;
   try{
-    await ClientesService.updateCliente(clienteId, { qbo_customer_id: firebase.firestore.FieldValue.delete(), qbo_customer_name: firebase.firestore.FieldValue.delete() });
+    const user = firebase.auth().currentUser;
+    await ClientesService.updateCliente(clienteId, {
+      qbo_customer_id: firebase.firestore.FieldValue.delete(),
+      qbo_customer_name: firebase.firestore.FieldValue.delete(),
+      qbo_desvinculado_por: (user && (user.email || user.uid)) || null,
+      qbo_desvinculado_at: firebase.firestore.FieldValue.serverTimestamp(),
+    });
     const cl = clientes.find(x=>x.id===clienteId); if(cl){ delete cl.qbo_customer_id; delete cl.qbo_customer_name; }
     Toast.show('Vínculo quitado','ok'); render();
   }catch(e){ console.error(e); Toast.show('No se pudo desvincular','bad'); }
 }
 
-window.setVista=setVista; window.vincular=vincular; window.desvincular=desvincular;
+window.setVista=setVista; window.setFiltro=setFiltro; window.recargarQBO=recargarQBO;
+window.vincular=vincular; window.vincularManual=vincularManual; window.desvincular=desvincular;
