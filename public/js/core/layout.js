@@ -399,3 +399,55 @@ const Layout = (() => {
 
   return { renderTopbar, renderTopbarFor, renderShell, renderRail, initRail, setRailBadge, wireMenuToggle: _wireMenuToggle };
 })();
+
+/* ── Ctrl/Cmd+K: buscador global (auditoría UX 2026-08, A2) ────────────────
+   El palette (js/ui/searchPalette.js) busca clientes/órdenes/contratos/
+   cotizaciones/PoC pero estaba montado SOLO en el panel admin — buscar "el
+   contrato de Fulano" desde órdenes costaba salir al home, entrar a
+   contratos y buscar. layout.js es el único script presente en todas las
+   páginas con shell, así que el atajo vive aquí y carga los scripts + css
+   BAJO DEMANDA al primer Ctrl+K: cero costo en el arranque. En admin (que
+   ya trae los scripts en el head) el loader los detecta y solo abre. */
+(() => {
+  let cargando = null;
+  const _css = (href) => {
+    if (document.querySelector(`link[href="${href}"]`)) return;
+    const l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = href;
+    document.head.appendChild(l);
+  };
+  const _script = (src) => new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error('No cargó ' + src));
+    document.head.appendChild(s);
+  });
+  const asegurarPalette = () => {
+    if (window.SearchPalette && window.BusquedaGlobalService) return Promise.resolve();
+    if (!cargando) {
+      _css('/css/search-palette.css?v=sp1');
+      cargando = (async () => {
+        // OrdenesService es opcional para el palette (guard interno), pero
+        // sin él no salen órdenes en los resultados — se trae también.
+        if (typeof OrdenesService === 'undefined') {
+          try { await _script('/js/services/ordenesService.js?v=sp1'); }
+          catch (_) { /* palette sin resultados de órdenes */ }
+        }
+        if (!window.BusquedaGlobalService) await _script('/js/services/busquedaGlobalService.js?v=sp1');
+        if (!window.SearchPalette) await _script('/js/ui/searchPalette.js?v=sp1');
+      })();
+    }
+    return cargando;
+  };
+  document.addEventListener('keydown', async (e) => {
+    if (!(e.metaKey || e.ctrlKey) || (e.key !== 'k' && e.key !== 'K')) return;
+    // Sin Firebase montado no hay qué buscar (páginas públicas/impresión).
+    if (typeof firebase === 'undefined' || !firebase.auth) return;
+    e.preventDefault();
+    try {
+      await asegurarPalette();
+      const abierto = document.querySelector('.search-palette-overlay.is-open');
+      if (abierto) window.SearchPalette.close();
+      else window.SearchPalette.open();
+    } catch (err) { console.warn('[palette] no se pudo abrir:', err); }
+  });
+})();

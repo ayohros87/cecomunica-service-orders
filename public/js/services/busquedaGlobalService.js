@@ -64,7 +64,7 @@ const BusquedaGlobalService = {
           id: d.id,
           title: c.nombre || c.empresa || '(sin nombre)',
           subtitle: [c.email || c.correo, c.ruc, c.telefono].filter(Boolean).join(' · '),
-          link: `../clientes/editar.html?id=${encodeURIComponent(d.id)}`,
+          link: `/clientes/editar.html?id=${encodeURIComponent(d.id)}`,
         });
       }
     });
@@ -85,7 +85,7 @@ const BusquedaGlobalService = {
       id: o.ordenId,
       title: o.numero_orden || o.ordenId,
       subtitle: [o.cliente_nombre || o.clienteNombre, o.estado_reparacion].filter(Boolean).join(' · '),
-      link: `../ordenes/editar-orden.html?id=${encodeURIComponent(o.ordenId)}`,
+      link: `/ordenes/index.html?orden=${encodeURIComponent(o.ordenId)}`,
     }));
   },
 
@@ -108,7 +108,7 @@ const BusquedaGlobalService = {
           id: d.id,
           title: c.contrato_id || d.id,
           subtitle: [c.cliente_nombre || c.clienteNombre, c.estado].filter(Boolean).join(' · '),
-          link: `../contratos/editar-contrato.html?id=${encodeURIComponent(d.id)}`,
+          link: `/contratos/index.html?buscar=${encodeURIComponent(c.contrato_id || d.id)}`,
         });
       }
     });
@@ -127,12 +127,13 @@ const BusquedaGlobalService = {
       if (this._match(d.id,             q) ||
           this._match(c.cliente_nombre, q) ||
           this._match(c.clienteNombre,  q) ||
+          this._match(c.cotizacion_id,  q) ||
           this._match(c.numero,         q)) {
         hits.push({
           id: d.id,
-          title: c.numero || d.id,
+          title: c.cotizacion_id || c.numero || d.id,
           subtitle: [c.cliente_nombre || c.clienteNombre, c.estado].filter(Boolean).join(' · '),
-          link: `../cotizaciones/editar-cotizacion.html?id=${encodeURIComponent(d.id)}`,
+          link: `/cotizaciones/detalle-cotizacion.html?id=${encodeURIComponent(d.id)}`,
         });
       }
     });
@@ -160,7 +161,7 @@ const BusquedaGlobalService = {
           id: d.id,
           title: p.radio_name || p.unit_id || p.serial || d.id,
           subtitle: [p.serial, p.sim_number, p.cliente].filter(Boolean).join(' · '),
-          link: `../POC/index.html?focus=${encodeURIComponent(d.id)}`,
+          link: `/POC/index.html?focus=${encodeURIComponent(d.id)}`,
         });
       }
     });

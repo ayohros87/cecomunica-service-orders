@@ -220,9 +220,10 @@
     const refresh = $('btnRefresh');
     if (refresh) refresh.addEventListener('click', () => loadAll());
 
-    // Global search palette: Cmd/Ctrl+K + button click. Init once.
+    // El atajo Cmd/Ctrl+K ahora lo bindea layout.js para TODAS las páginas
+    // (auditoría A2); llamar además SearchPalette.init() aquí duplicaba el
+    // listener y el toggle se anulaba a sí mismo (abrir+cerrar en un golpe).
     if (window.SearchPalette) {
-      SearchPalette.init();
       $('btnSearch')?.addEventListener('click', () => SearchPalette.open());
     }
 

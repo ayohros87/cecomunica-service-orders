@@ -26,7 +26,10 @@
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc7">
-  <link rel="stylesheet" href="../css/admin-panel.css">
+  <link rel="stylesheet" href="../css/admin-panel.css?v=sp1">
+  <!-- Palette Ctrl+K: estilos movidos fuera del kit admin (global, A2). Misma
+       URL que usa el lazy-loader de layout.js para compartir caché. -->
+  <link rel="stylesheet" href="../css/search-palette.css?v=sp1">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -42,11 +45,11 @@
   <script defer src="../js/services/contratosService.js"></script>
   <script defer src="../js/services/cotizacionesService.js"></script>
   <script defer src="../js/services/pocService.js"></script>
-  <script defer src="../js/services/busquedaGlobalService.js"></script>
+  <script defer src="../js/services/busquedaGlobalService.js?v=sp1"></script>
   <script defer src="../js/ui/searchPalette.js"></script>
   <script defer src="../js/ui/verComoPicker.js"></script>
   <script defer src="../js/domain/adminMetrics.js"></script>
-  <script src="../js/pages/admin-index.js" defer></script>
+  <script src="../js/pages/admin-index.js?v=sp1" defer></script>
   <script defer src="/js/vendor/lucide.min.js?v=1"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 
