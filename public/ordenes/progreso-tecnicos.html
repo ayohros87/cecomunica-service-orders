@@ -142,14 +142,20 @@
 
     <!-- Control de calidad (ordenes-qc.js): tasa de rechazo por técnico y
          motivos frecuentes, agregado de qc_historial. Solo lo ven
-         admin / jefe_taller / gerente (progreso-tecnicos.js lo muestra). -->
+         admin / jefe_taller (progreso-tecnicos.js lo muestra). El aviso de
+         visibilidad va escrito en la tarjeta para que la supervisión sepa
+         que los técnicos no ven estos números. -->
     <div class="ds-card" id="qcCard" style="display:none; margin-top:var(--sp-4);">
       <div style="padding:12px 14px 0;">
         <h3 style="margin:0 0 4px; display:flex; align-items:center; gap:6px;">
           <i data-lucide="clipboard-check"></i> Control de calidad
         </h3>
-        <p style="margin:0 0 8px; font-size:12px; color:var(--fg-3);" id="qcCaption">
+        <p style="margin:0 0 6px; font-size:12px; color:var(--fg-3);" id="qcCaption">
           Revisiones de QC del periodo seleccionado (órdenes con QC requerido).
+        </p>
+        <p style="margin:0 0 8px; font-size:12px; color:var(--fg-3); display:flex; align-items:center; gap:6px;">
+          <i data-lucide="lock" style="width:14px; height:14px; flex:0 0 auto;"></i>
+          <span>Visible solo para <strong>Administrador</strong> y <strong>Jefe de taller</strong>. Los técnicos y el resto de perfiles no ven esta sección.</span>
         </p>
       </div>
       <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0;">
@@ -170,7 +176,7 @@
 
   </div>
 
-  <script src="../js/pages/progreso-tecnicos.js?v=qc2" defer></script>
+  <script src="../js/pages/progreso-tecnicos.js?v=qc3" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

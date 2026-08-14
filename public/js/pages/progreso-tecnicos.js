@@ -138,7 +138,8 @@ async function cargarProgresos(dias) {
 // ===== Control de calidad (ordenes-qc.js) =====
 // Agrega qc_historial de las órdenes con QC requerido: revisiones y
 // rechazos por técnico + motivos frecuentes, en la misma ventana móvil
-// del ranking. Sección solo para admin / jefe_taller / gerente.
+// del ranking. Sección solo para admin / jefe_taller (supervisión de
+// taller): es información sensible de desempeño, el resto no la ve.
 const QC_MOTIVO_LABEL = {
   programacion: 'Programación', grupos: 'Grupos', gps: 'GPS',
   falla: 'Falla no resuelta', fisico: 'Físico / componentes',
@@ -146,7 +147,7 @@ const QC_MOTIVO_LABEL = {
 };
 
 function puedeVerQc(role){
-  return role === ROLES.ADMIN || role === ROLES.JEFE_TALLER || role === ROLES.GERENTE;
+  return role === ROLES.ADMIN || role === ROLES.JEFE_TALLER;
 }
 
 async function cargarYRenderQc(dias){
