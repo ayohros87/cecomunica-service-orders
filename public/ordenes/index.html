@@ -31,7 +31,7 @@
   <link rel="stylesheet" href="../css/ordenes-index.css?v=dev5">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
-  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc7">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   
 <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -41,7 +41,7 @@
 <script defer src="../js/firebase-init.js?v=ses2"></script>
 <script src="../js/core/roles.js"></script>
 <script src="../js/core/modulos.js"></script>
-<script src="../js/core/layout.js?v=cc11"></script>
+<script src="../js/core/layout.js?v=cc12"></script>
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
@@ -64,7 +64,7 @@
 <script defer src="../js/pages/ordenes-filters.js?v=qc3"></script>
 <script defer src="../js/pages/ordenes-flujo.js?v=qc5"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=qc3"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=cc18"></script>
+<script defer src="../js/pages/ordenes-equipos.js?v=cc19"></script>
 <script defer src="../js/pages/ordenes-notas.js"></script>
 <script defer src="../js/pages/ordenes-visita.js"></script>
 <script defer src="../js/pages/ordenes-devolucion.js?v=dev9"></script>
@@ -712,6 +712,11 @@
       </label>
       <input type="text" id="trabajoMotivoNoDisponible" class="motivo-no-disponible" placeholder="Motivo (libre)">
     </div>
+
+    <!-- Lote (auditoría M3): mismas manos, mismo trabajo — una orden de 10
+         radios idénticos costaba repetir el modal 10 veces. Copia SOLO el
+         texto de la intervención (fotos y materiales siguen por equipo). -->
+    <div id="trabajoAplicarOtros" style="display:none;"></div>
 
     <!-- Materiales / piezas del equipo (consumos) — el técnico selecciona los
          materiales usados junto a la intervención; cotizar-orden los precarga. -->

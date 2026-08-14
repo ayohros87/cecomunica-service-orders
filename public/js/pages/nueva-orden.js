@@ -180,32 +180,57 @@
       }
     }
 
+    function fechaBaseHoy() {
+      const f = new Date();
+      const p2 = (n) => String(n).padStart(2, '0');
+      return `${f.getFullYear()}${p2(f.getMonth() + 1)}${p2(f.getDate())}`;
+    }
+
+    // Solo VISTA PREVIA (auditoría A5): el número REAL se reserva al guardar
+    // con el contador atómico (contadores/ordenes_YYYYMMDD). Calcularlo aquí
+    // con listAll() era un full-scan de la colección por cada alta, con
+    // carrera de concurrencia (dos usuarios simultáneos → mismo número →
+    // setOrder pisaba el doc) y tope de 99 órdenes/día por el slice(-2).
     async function generarNumeroOrden() {
-      const fecha = new Date();
-      const yyyy = fecha.getFullYear();
-      const mm = String(fecha.getMonth() + 1).padStart(2, '0');
-      const dd = String(fecha.getDate()).padStart(2, '0');
-      const fechaBase = `${yyyy}${mm}${dd}`;
+      numeroInput.value = '';
+      numeroInput.placeholder = `${fechaBaseHoy()}·· (se asigna al guardar)`;
+      numeroInput.title = 'El correlativo definitivo se reserva al guardar la orden.';
+    }
 
-      const allOrders = await OrdenesService.listAll();
-      const existentes = allOrders
-        .filter(o => o.ordenId.startsWith(fechaBase))
-        .map(o => parseInt(o.ordenId.slice(-2)))
-        .filter(num => !isNaN(num));
+    // Catálogo en memoria + select filtrable (auditoría A6): ~2,000 opciones
+    // en un select nativo sin búsqueda era el punto de captura más caro de
+    // equivocarse — el cliente elegido contamina contrato, entrega y correo.
+    let _clientesDocs = [];
+    const _normTxt = (s) => String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-      const siguiente = existentes.length > 0 ? Math.max(...existentes) + 1 : 1;
-      numeroInput.value = `${fechaBase}${String(siguiente).padStart(2, '0')}`;
+    function pintarOpcionesClientes(filtro = '') {
+      const q = _normTxt(filtro).trim();
+      const actual = clienteSelect.value;
+      const lista = q ? _clientesDocs.filter(c => _normTxt(c.nombre).includes(q)) : _clientesDocs;
+      clienteSelect.innerHTML = '<option value="">Seleccione un cliente</option>';
+      lista.forEach(c => {
+        const option = document.createElement("option");
+        option.value = c.id;
+        option.textContent = c.nombre;
+        clienteSelect.appendChild(option);
+      });
+      if (actual && lista.some(c => c.id === actual)) {
+        clienteSelect.value = actual;
+      } else if (q && lista.length === 1) {
+        // Un único match → se auto-selecciona y dispara el change (carga el
+        // vendedor asignado y los contratos del cliente, como un click).
+        clienteSelect.value = lista[0].id;
+        clienteSelect.dispatchEvent(new Event('change'));
+      }
     }
 
     async function cargarClientes() {
   const { docs } = await ClientesService.listClientes({ limit: 2000 });
-  clienteSelect.innerHTML = '<option value="">Seleccione un cliente</option>';
-  docs.forEach(c => {
-    const option = document.createElement("option");
-    option.value = c.id;
-    option.textContent = c.nombre;
-    clienteSelect.appendChild(option);
-  });
+  _clientesDocs = docs;
+  pintarOpcionesClientes();
+  const filtroInput = document.getElementById('clienteFiltro');
+  if (filtroInput) filtroInput.addEventListener('input', (e) => pintarOpcionesClientes(e.target.value));
   clienteSelect.addEventListener("change", async () => {
   const clienteId = clienteSelect.value;
   if (!clienteId) return;
@@ -400,7 +425,27 @@
       const btnSubmitOrden = form.querySelector("button[type='submit']");
       if (btnSubmitOrden) btnSubmitOrden.disabled = true;
 
-      const id = numeroInput.value;
+      // Correlativo REAL, reservado dentro del candado anti doble-submit:
+      // transacción atómica + piso del día para sembrar el contador la
+      // primera vez. String(seq).padStart(2) crece a 3 dígitos a partir de
+      // la orden 100 — levanta el tope de 99/día sin cambiar el formato.
+      let id;
+      try {
+        const fechaStr = fechaBaseHoy();
+        let piso = 0;
+        try { piso = await OrdenesService.maxSufijoOrdenDelDia(fechaStr); }
+        catch (_) { /* piso 0: la reserva atómica garantiza unicidad igual */ }
+        const seq = await OrdenesService.reservarNumeroOrden(fechaStr, piso);
+        id = `${fechaStr}${String(seq).padStart(2, '0')}`;
+        numeroInput.value = id;
+      } catch (e) {
+        console.error("No se pudo reservar el número de orden:", e);
+        mostrarMensaje("No se pudo reservar el número de orden. Revisa la conexión e intenta de nuevo.", "rojo");
+        guardandoOrden = false;
+        if (btnSubmitOrden) btnSubmitOrden.disabled = false;
+        return;
+      }
+
       const cliente_id = clienteSelect.value;
       const cliente_nombre = clienteSelect.options[clienteSelect.selectedIndex]?.textContent || "";
 

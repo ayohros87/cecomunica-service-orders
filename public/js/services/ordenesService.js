@@ -130,6 +130,48 @@ const OrdenesService = {
     };
   },
 
+  // ── Correlativo del día (auditoría A5) ────────────────────────────────
+  // Antes el número salía de un listAll() de TODA la colección fuera de
+  // transacción: lento a escala, con carrera real (dos creadores simultáneos
+  // obtenían el mismo número y setOrder pisaba el doc) y tope de 99/día por
+  // el slice(-2). Mismo patrón que contratos.reservarSufijo / correlativo COT.
+
+  // Piso para sembrar el contador el primer día que se usa (las órdenes
+  // previas no dejaron contador): max sufijo de HOY con una query por rango
+  // del doc ID (los ids empiezan por YYYYMMDD).
+  async maxSufijoOrdenDelDia(fechaStr) {
+    const db = firebase.firestore();
+    const snap = await db.collection("ordenes_de_servicio")
+      .where(firebase.firestore.FieldPath.documentId(), ">=", fechaStr)
+      .where(firebase.firestore.FieldPath.documentId(), "<", fechaStr + "")
+      .get();
+    let max = 0;
+    const re = new RegExp("^" + fechaStr + "(\\d+)$");
+    snap.forEach(d => {
+      const m = d.id.match(re);
+      if (m) max = Math.max(max, Number(m[1]));
+    });
+    return max;
+  },
+
+  // Reserva atómica en contadores/ordenes_{YYYYMMDD} (rules: contadores/ ya
+  // permite create/update a todos los roles que crean órdenes).
+  async reservarNumeroOrden(fechaStr, piso = 0) {
+    const db = firebase.firestore();
+    const ref = db.collection("contadores").doc(`ordenes_${fechaStr}`);
+    return db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      const actual = snap.exists ? Number(snap.data().seq || 0) : 0;
+      const siguiente = Math.max(actual, piso) + 1;
+      t.set(ref, {
+        seq: siguiente,
+        fecha: fechaStr,
+        actualizado_en: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return siguiente;
+    });
+  },
+
   /**
    * Get a single order by ID
    * @param {string} ordenId - Order ID

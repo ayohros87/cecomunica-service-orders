@@ -512,6 +512,40 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   const txtEl = document.getElementById("trabajoEquipoText");
   if (txtEl) txtEl.value = (e.trabajo_tecnico || "").toString();
 
+  // Lote (auditoría M3): checkboxes con los DEMÁS equipos de la orden para
+  // aplicarles el mismo texto de intervención — una orden de 10 radios
+  // idénticos costaba repetir este modal 10 veces (~3N+1 interacciones).
+  const wrapOtros = document.getElementById("trabajoAplicarOtros");
+  if (wrapOtros) {
+    const escBatch = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
+    const otros = equipos.map((eq, i) => ({ eq, i })).filter(x => x.i !== idx);
+    if (!otros.length) {
+      wrapOtros.style.display = "none";
+      wrapOtros.innerHTML = "";
+    } else {
+      wrapOtros.style.display = "";
+      wrapOtros.innerHTML = `
+        <details style="margin:10px 0 0;">
+          <summary style="cursor:pointer; font-size:13px; color:var(--fg-2);">
+            Aplicar esta intervención también a otros equipos de la orden (${otros.length}) — solo el texto</summary>
+          <div style="max-height:140px; overflow-y:auto; margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+            ${otros.map(({ eq, i }) => {
+              const s = escBatch(String(eq.numero_de_serie || eq.serial || eq.SERIAL || "-"));
+              const ya = (eq.trabajo_tecnico || "").trim()
+                ? ' · <span style="color:#B45309;">ya tiene intervención (se reemplaza)</span>' : "";
+              const noDisp = eq.intervencion_no_disponible
+                ? ' · <span style="color:var(--fg-3);">marcado no disponible</span>' : "";
+              return `<label style="display:flex; gap:6px; align-items:center; font-size:13px;">
+                <input type="checkbox" class="trabajo-aplicar-chk" value="${i}">
+                <span style="font-family:var(--font-mono);">${s}</span>${ya}${noDisp}
+              </label>`;
+            }).join("")}
+          </div>
+        </details>`;
+    }
+  }
+
   const chkNoDisp = document.getElementById("trabajoNoDisponible");
   const motivoNoDisp = document.getElementById("trabajoMotivoNoDisponible");
   const isNoDisp = !!e.intervencion_no_disponible;
@@ -1051,13 +1085,35 @@ window.guardarTrabajoEquipoModal = async function() {
       });
     }
 
-    const equiposAll = await OrdenesService.updateTrabajoTecnico({
+    let equiposAll = await OrdenesService.updateTrabajoTecnico({
       ordenId: _trabajoOrdenId,
       equipoIdx: _trabajoEquipoIdx,
       texto: txt,
       uid,
       email
     });
+
+    // Lote (auditoría M3): el mismo texto a los equipos marcados, en serie
+    // (cada update reescribe el array de equipos — nada de paralelismo aquí).
+    // Solo aplica en el camino de texto: "no disponible" es por equipo.
+    const marcados = Array.from(document.querySelectorAll('#trabajoAplicarOtros .trabajo-aplicar-chk:checked'))
+      .map(ch => Number(ch.value))
+      .filter(i => Number.isInteger(i) && i !== _trabajoEquipoIdx);
+    let loteOk = 0, loteErr = 0;
+    for (const i of marcados) {
+      try {
+        btn.innerHTML = `<i data-lucide="loader"></i> Aplicando ${loteOk + loteErr + 2}/${marcados.length + 1}…`;
+        equiposAll = await OrdenesService.updateTrabajoTecnico({
+          ordenId: _trabajoOrdenId,
+          equipoIdx: i,
+          texto: txt,
+          uid,
+          email
+        });
+        loteOk++;
+      } catch (e2) { loteErr++; console.warn("Lote de intervención falló en idx", i, e2); }
+    }
+
     // Actualizar cache local
     const cache = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
     if (cache) cache.equipos = equiposAll;
@@ -1066,7 +1122,9 @@ window.guardarTrabajoEquipoModal = async function() {
     refrescarEquiposDeOrden(_trabajoOrdenId);
 
     cerrarTrabajoEquipoModal();
-    Toast.show("✅ Intervención guardada", "ok");
+    Toast.show(marcados.length
+      ? `✅ Intervención guardada en ${1 + loteOk} equipo(s)${loteErr ? ` · ${loteErr} fallaron` : ""}`
+      : "✅ Intervención guardada", loteErr ? "warn" : "ok");
     
     // Reset button state
     btn.disabled = false;
