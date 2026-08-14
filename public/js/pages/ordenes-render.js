@@ -998,7 +998,8 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
     menuItems.push(
-      { icon: '<i data-lucide="printer"></i>', label: "Imprimir / documentos", action: "ver-documentos", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota de entrega", action: "nota-entrega-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' },
       { divider: true },
       { icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
@@ -1013,7 +1014,8 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
     // Supervisor de taller: imprime la orden y sus documentos, y gestiona
     // notas técnicas — sin editar/eliminar la orden (eso queda en admin).
     menuItems.push(
-      { icon: '<i data-lucide="printer"></i>', label: "Imprimir / documentos", action: "ver-documentos", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
+      { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota de entrega", action: "nota-entrega-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
     );
   } else if (rol === ROLES.VISTA) {
@@ -1116,6 +1118,15 @@ function actualizarResumen(lista) {
   chipCount('COMPLETADO (EN OFICINA)', completadoOficina);
   chipCount('ENTREGADO AL CLIENTE', entregadoCliente);
   chipCount('CERRADA (VISITA)', cerradaVisita);
+  chipCount('qc', qcPendientes);
+  // El chip de QC es un toggle (checkbox #filtroQcPendiente), no un estado:
+  // su "activo" se sincroniza aquí, que corre tras cada aplicación de filtros
+  // (incluye el deep-link ?qc=1 y el chip del dropdown Resumen).
+  const qcOn = !!document.getElementById('filtroQcPendiente')?.checked;
+  document.querySelectorAll('.estado-chips-bar [data-action="filtrar-qc"]').forEach(b => {
+    b.classList.toggle('active', qcOn);
+    b.setAttribute('aria-selected', String(qcOn));
+  });
   // (The old #mobileHeader .topbar-badges cluster — tbPorAsignar /
   // tbAsignado / tbCompletado / tbEntregado — was a duplicate estado
   // filter and is gone. Its counts now live in the mobile chip bar

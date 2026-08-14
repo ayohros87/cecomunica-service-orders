@@ -304,11 +304,26 @@
       closeAllMenus();
     },
     // Imprimir / documentos — agrupa Imprimir orden + Nota de entrega.
+    // (Se conserva para compat; el menú ⋯ ahora trae las dos entradas
+    // DIRECTAS de abajo — auditoría Q10: el modal intermedio costaba un
+    // click extra en cada impresión.)
     'ver-documentos': (el) => {
       const ordenId = el.dataset.ordenId;
       if (!ordenId) return;
       closeAllMenus();
       mostrarDocumentos(ordenId);
+    },
+    'imprimir-orden-doc': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      abrirImpresionOrden(ordenId);
+    },
+    'nota-entrega-doc': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (!ordenId) return;
+      closeAllMenus();
+      if (typeof generarNotaEntregaIntervenciones === 'function') generarNotaEntregaIntervenciones(ordenId);
     },
     'cotizar-orden': (el) => {
       const ordenId = el.dataset.ordenId;

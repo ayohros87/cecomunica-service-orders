@@ -56,6 +56,14 @@ function _abrirModalTecnico(ordenId, { modo }) {
         if (esReasignar && tech.uid === tecnicoActualUid) option.selected = true;
         select.appendChild(option);
       });
+      // "Asignármela" (auditoría Q3): si quien abre el modal ES un técnico de
+      // la lista, preseleccionarlo — el caso más común es el técnico tomando
+      // su propia orden (4-5 clicks → 2, y sin riesgo de elegir al vecino).
+      // Recepción/jefe no suelen estar en la lista y eligen normal.
+      if (!esReasignar && !select.value) {
+        const miUid = firebase.auth().currentUser?.uid || '';
+        if (miUid && technicians.some(t => t.uid === miUid)) select.value = miUid;
+      }
       select.style.borderColor = select.value ? 'var(--accent)' : 'var(--line)';
     })
     .catch(error => {
@@ -144,9 +152,24 @@ window.completarOrden = async function (ordenId) {
   const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
   const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(orden);
 
-  const msg = esEntrada
+  let msg = esEntrada
     ? `¿Marcar la revisión de la orden ${ordenId} como completada? A continuación se abre el cierre de la entrada.`
     : `¿Marcar la orden ${ordenId} como completada?`;
+
+  // Aviso temprano (auditoría Q4): completar con equipos sin intervención se
+  // descubría DESPUÉS — en el badge de contradicción o con un rechazo de QC
+  // (~7 clicks + ida y vuelta del técnico). El aviso barato va en el confirm.
+  // Misma definición de "finalizado" que la barra de progreso de la fila:
+  // trabajo_tecnico con texto o marcado no-disponible (ordenes-render.js).
+  if (!esEntrada) {
+    const equiposActivos = (orden.equipos || []).filter(e => !e.eliminado);
+    const finalizados = equiposActivos.filter(e =>
+      (e.trabajo_tecnico || '').trim() || e.intervencion_no_disponible).length;
+    const sinIntervencion = Math.max(0, equiposActivos.length - finalizados);
+    if (sinIntervencion > 0) {
+      msg += ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen intervención registrada — el control de calidad puede rechazarla.`;
+    }
+  }
   if (!await Modal.confirm({ message: msg })) return;
 
   try {

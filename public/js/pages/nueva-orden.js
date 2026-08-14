@@ -553,8 +553,19 @@ ${window.location.origin}/ordenes/index.html
   console.error("❌ Error encolando email:", err);
 }
 
-        mostrarMensaje("✅ Orden guardada correctamente.");
-        setTimeout(() => window.location.href = 'index.html', 1000);
+        // Aterrizaje según lo que sigue (auditoría Q1): la orden nace sin
+        // equipos y el redirect al index obligaba a buscarla, expandirla y
+        // entrar a "+" (~4-5 interacciones extra en el flujo más repetido de
+        // recepción). VISITA no lleva equipos y la venta directa ya los trae:
+        // esas aterrizan en la orden dentro de la lista (?orden= la filtra).
+        const irACapturaEquipos = !prefillVenta && !esVisita(tipoSelect.value);
+        const destino = irACapturaEquipos
+          ? `agregar-equipo.html?orden_id=${encodeURIComponent(id)}`
+          : `index.html?orden=${encodeURIComponent(id)}`;
+        mostrarMensaje(irACapturaEquipos
+          ? "✅ Orden guardada. Abriendo la captura de equipos…"
+          : "✅ Orden guardada correctamente.");
+        setTimeout(() => window.location.href = destino, 800);
       } catch (error) {
         mostrarMensaje("Error al guardar: " + error.message, "rojo");
         guardandoOrden = false;

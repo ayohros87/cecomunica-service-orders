@@ -3525,6 +3525,8 @@ tr.activo:hover { background: #f0f9ff !important; }
 .estado-chip--completado  .dot { background: #16A34A; }
 .estado-chip--entregado   .dot { background: var(--gray-500); }
 .estado-chip--visita-cerrada .dot { background: #10B981; }
+/* Chip de la cola de QC (toggle, no estado) — violeta clipboard-check. */
+.estado-chip--qc .dot { background: #7C3AED; }
 
 .estado-chip.active {
   font-weight: 600;
