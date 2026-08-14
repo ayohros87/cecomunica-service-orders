@@ -20,7 +20,27 @@
   // salir sin pulsar Guardar descarta el cambio en silencio (incidente
   // COT-2026-0040: se destildó la carta de presentación y la cotización salió
   // con ella porque el envío lee el documento de Firestore, no esta pantalla).
-  function marcarSucio() { dirty = true; }
+  // ── Respaldo local del borrador (auditoría A7) ──────────────────────────
+  // Cerrar la pestaña, un crash o un "Salir" descuidado perdían TODOS los
+  // renglones (decisión vieja de no tener autosave). El respaldo vive en
+  // localStorage por usuario+documento, se escribe con debounce en cada
+  // edición y se ofrece una vez al volver; guardar o descartar lo limpia.
+  let _bkKey = null;
+  let _bkTimer = null;
+  function _bkProgramar() {
+    if (!_bkKey) return;
+    clearTimeout(_bkTimer);
+    _bkTimer = setTimeout(() => {
+      try { localStorage.setItem(_bkKey, JSON.stringify({ ts: Date.now(), draft })); }
+      catch (_) { /* storage lleno o bloqueado: el respaldo es best-effort */ }
+    }, 1200);
+  }
+  function _bkLimpiar() {
+    clearTimeout(_bkTimer);
+    if (_bkKey) { try { localStorage.removeItem(_bkKey); } catch (_) { /* sin storage */ } }
+  }
+
+  function marcarSucio() { dirty = true; _bkProgramar(); }
   function set(patch) { draft = { ...draft, ...patch }; marcarSucio(); renderTodo(); }
   function setItems(items) { draft = { ...draft, items }; marcarSucio(); renderItems(); renderSummary(); }
   function setCondiciones(condiciones) { draft = { ...draft, condiciones }; marcarSucio(); renderCondiciones(); }
@@ -37,7 +57,8 @@
     if (!userRol) return 'Al guardar quedará en borrador.';
     const t = T.calcTotales(draft);
     const pol = CotState.requiereAprobacionPara({
-      doc: { total: t.total, descuentoPct: draft.descuentoPct }, rol: userRol, policy: policyCfg,
+      // items incluidos: el descuento por línea también cuenta (A10).
+      doc: { total: t.total, descuentoPct: draft.descuentoPct, items: draft.items }, rol: userRol, policy: policyCfg,
     });
     if (!pol.requiere) {
       return 'Está dentro de tu límite de envío directo: al guardar queda lista para que tú mismo la envíes al cliente.';
@@ -635,6 +656,7 @@
         confirmLabel: 'Salir y descartar',
       });
       if (!ok) return;
+      _bkLimpiar();   // descartar explícito: el respaldo tampoco debe revivirlo
       dirty = false;
     }
     location.href = destino;
@@ -709,6 +731,7 @@
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
         const ref = await CotizacionesService.addCotizacion(doc);
         dirty = false;
+        _bkLimpiar();
         // Si el creador puede enviar y la cotización está DENTRO de política, no se
         // molesta al aprobador: la envía él mismo desde el detalle. Solo se encola la
         // solicitud de aprobación cuando excede el umbral (o el rol no puede enviar).
@@ -732,6 +755,7 @@
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
         await CotizacionesService.updateCotizacion(draft._docId, doc);
         dirty = false;
+        _bkLimpiar();
         Toast.show('Cambios guardados', 'ok');
         location.href = 'detalle-cotizacion.html?id=' + encodeURIComponent(draft._docId);
       }
@@ -814,6 +838,33 @@
           return;
         }
       }
+
+      // Respaldo local: ofrecer recuperación ANTES del primer render. En modo
+      // nueva también recupera el correlativo ya reservado (no quema otro).
+      _bkKey = 'cot_respaldo_' + user.uid + '_' + (esNueva ? 'nueva' : params.get('id'));
+      try {
+        const raw = localStorage.getItem(_bkKey);
+        if (raw) {
+          const bk = JSON.parse(raw);
+          const vigente = bk && bk.draft && (Date.now() - (bk.ts || 0)) < 3 * 86400000;
+          if (vigente) {
+            const n = (bk.draft.items || []).length;
+            const edadMin = Math.max(1, Math.round((Date.now() - bk.ts) / 60000));
+            const edadTxt = edadMin < 60 ? `${edadMin} min` : `${Math.round(edadMin / 60)} h`;
+            const ok = await Modal.confirm({
+              title: 'Recuperar borrador sin guardar',
+              message: `Quedó un borrador de esta cotización que no llegó a guardarse (${n} renglón(es), hace ${edadTxt}). ¿Recuperarlo y seguir donde ibas?`,
+              confirmLabel: 'Recuperar',
+              cancelLabel: 'Descartar respaldo',
+            });
+            if (ok) { draft = { ...draft, ...bk.draft }; dirty = true; }
+            else _bkLimpiar();
+          } else {
+            _bkLimpiar();
+          }
+        }
+      } catch (_) { _bkLimpiar(); }
+
       renderTodo();
 
       // Cualquier edición de un campo ensucia la pantalla. Delegado en el mount

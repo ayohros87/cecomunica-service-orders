@@ -398,7 +398,9 @@
   function requiereAprobacionPara({ doc, rol, policy }) {
     const T = window.CotizacionTotales;
     const pol = T.requiereAprobacion(
-      { total: Number(doc?.total || 0), descuentoPct: Number(doc?.descuentoPct || 0) },
+      // items incluidos (auditoría A10): el descuento por línea también
+      // cuenta para el umbral — antes 40% por línea pasaba sin aprobación.
+      { total: Number(doc?.total || 0), descuentoPct: Number(doc?.descuentoPct || 0), items: doc?.items },
       policy,
     );
     if (pol.requiere) return pol;

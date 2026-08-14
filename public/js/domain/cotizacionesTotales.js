@@ -56,8 +56,8 @@ window.CotizacionTotales = {
     };
   },
 
-  // ¿La cotización excede la política de envío directo? input: { total, descuentoPct }.
-  // Devuelve { requiere: bool, motivos: [string] } para poder explicar el porqué en UI.
+  // ¿La cotización excede la política de envío directo?
+  // input: { total, descuentoPct, items? }. Devuelve { requiere, motivos }.
   requiereAprobacion(input, policy) {
     const pol = { ...this.POLICY_DEFAULT, ...(policy || {}) };
     const total = Number(input?.total || 0);
@@ -65,6 +65,14 @@ window.CotizacionTotales = {
     const motivos = [];
     if (pol.descuentoMaxPct != null && desc > Number(pol.descuentoMaxPct)) {
       motivos.push(`Descuento ${desc}% supera el máximo para envío directo (${pol.descuentoMaxPct}%).`);
+    }
+    // Descuento POR LÍNEA (auditoría A10): antes no contaba para el umbral y
+    // además REDUCE el total — 40% en cada línea con total $4,900 salía sin
+    // aprobación. Manda el MAYOR descuento (global o de línea).
+    const maxLinea = (Array.isArray(input?.items) ? input.items : [])
+      .reduce((m, it) => Math.max(m, Number(it?.desc || 0)), 0);
+    if (pol.descuentoMaxPct != null && maxLinea > Number(pol.descuentoMaxPct)) {
+      motivos.push(`Hay renglones con ${maxLinea}% de descuento — supera el máximo para envío directo (${pol.descuentoMaxPct}%).`);
     }
     if (pol.totalMax != null && total > Number(pol.totalMax)) {
       motivos.push(`El total ${FMT.money(total)} supera el máximo para envío directo (${FMT.money(Number(pol.totalMax))}).`);
