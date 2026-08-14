@@ -386,11 +386,27 @@
                : 'Mientras queden pendientes, la orden sigue apareciendo en el recordatorio diario de devoluciones.'}
            </span>
          </div>`
-      : (esSinContrato && totalEsperado
-        ? `<div style="margin:0 0 12px;border:1px solid #A7F3D0;background:#ECFDF5;border-radius:10px;padding:8px 12px;font-size:13px;color:#065F46;">
-             <b>Completo:</b> ${recibidos} de ${totalEsperado} equipos recibidos.
-           </div>`
-        : '');
+      : (() => {
+          // Todo resuelto: banner verde con el SIGUIENTE PASO explícito —
+          // sin él, el modal quedaba mudo y no se entendía qué faltaba
+          // (firmar el acuse o cerrar la orden). Solo si hubo algo esperado:
+          // una sin_contrato sin total declarado da 0 pendientes en vacío.
+          const huboAlgo = esperados.length > 0
+            || porModelo.some(m => Number(m.cantidad || 0) > 0)
+            || totalEsperado > 0;
+          if (!huboAlgo) return '';
+          const detalle = esSinContrato && totalEsperado
+            ? `${recibidos} de ${totalEsperado} equipos recibidos`
+            : 'todas las unidades están resueltas';
+          const siguiente = cerrada ? ''
+            : sinAcuse.length
+            ? ` Siguiente paso: el cliente <b>firma el acuse</b> de ${sinAcuse.length} unidad(es) — más abajo.`
+            : ' Siguiente paso: <b>Cerrar devolución</b> (botón al pie).';
+          return `<div style="margin:0 0 12px;border:1px solid #A7F3D0;background:#ECFDF5;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px;">
+             <i data-lucide="package-check" style="width:16px;height:16px;color:#059669;flex:none;"></i>
+             <span style="font-size:13px;color:#065F46;"><b>Completo:</b> ${detalle}.${siguiente}</span>
+           </div>`;
+        })();
 
     const filas = esperados.map(e => `
       <tr>

@@ -789,10 +789,26 @@ function botonesFlujo(ordenId, estado, ordenData) {
   if (esDevolucion) {
     const cerradaDev = (estado || '').toUpperCase() === 'CERRADA (DEVOLUCION)';
     if (!cerradaDev && rol !== ROLES.VISTA) {
-      // Cuántos radios sigue debiendo el cliente, sin abrir el check-in: es el
-      // dato que se perdía de vista cuando devuelven solo una parte.
-      html += badgePendientesDevolucion(od);
-      html += `<button class="btn-flujo btn-flujo--completar" title="Check-in de equipos devueltos" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Check-in</button>`;
+      // Dos estados del mismo botón (ambos abren el check-in):
+      //   · faltan equipos  → ámbar "Registrar equipos": es un prompt de captura.
+      //     El verde con package-check se leía como "seriales ya registrados".
+      //   · todos recibidos → verde "Lista para cerrar": solo falta el acuse.
+      // Ojo: pendientesDevolucion da 0 también cuando una devolución
+      // sin_contrato no declaró total_esperado — ahí NO está lista, no hay
+      // contra qué comparar; se exige que haya habido algo esperado.
+      const dev = od?.devolucion || {};
+      const pend = typeof pendientesDevolucion === 'function' ? pendientesDevolucion(od) : 1;
+      const huboEsperados = (dev.esperados || []).length > 0
+        || (dev.esperados_por_modelo || []).some(m => Number(m.cantidad || 0) > 0)
+        || Number(dev.total_esperado || 0) > 0;
+      if (pend === 0 && huboEsperados) {
+        html += `<button class="btn-flujo btn-flujo--completar" title="El cliente ya devolvió todos los equipos — abre la devolución para firmar el acuse y cerrarla" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Lista para cerrar</button>`;
+      } else {
+        // Cuántos radios sigue debiendo el cliente, sin abrir el check-in: es el
+        // dato que se perdía de vista cuando devuelven solo una parte.
+        html += badgePendientesDevolucion(od);
+        html += `<button class="btn-flujo btn-flujo--checkin-dev" title="Registrar por serial los equipos que el cliente devuelve" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="scan-barcode"></i> Registrar equipos</button>`;
+      }
     } else {
       html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver devolución" data-action="checkin-devolucion" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver devolución</button>`;
     }
