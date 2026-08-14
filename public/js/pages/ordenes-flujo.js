@@ -139,18 +139,30 @@ window.confirmarAsignarTecnico = async function (ordenId) {
 };
 
 window.completarOrden = async function (ordenId) {
-  if (!await Modal.confirm({ message: `¿Marcar la orden ${ordenId} como completada?` })) return;
-
   // Las ENTRADA (inspección de devueltos) no llevan candado de QC: la
   // revisión ES el trabajo de la orden y nada sale hacia el cliente.
   const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
   const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(orden);
+
+  const msg = esEntrada
+    ? `¿Marcar la revisión de la orden ${ordenId} como completada? A continuación se abre el cierre de la entrada.`
+    : `¿Marcar la orden ${ordenId} como completada?`;
+  if (!await Modal.confirm({ message: msg })) return;
 
   try {
     await OrdenesService.completeOrder(ordenId, { qcRequerido: !esEntrada });
 
     Toast.show("✅ Orden completada", "ok");
     // Live snapshot picks up the change — no manual reload.
+
+    // ENTRADA: encadenar el modal de cierre — completar y cerrar son casi
+    // siempre el mismo momento, pero el cierre sigue siendo su propia
+    // decisión (mueve inventario a bodega y es terminal): el modal conserva
+    // el aviso de cotización y se puede cancelar; la orden queda en
+    // COMPLETADO con su botón "Cerrar entrada" de siempre.
+    if (esEntrada && typeof window.cerrarEntrada === 'function') {
+      window.cerrarEntrada(ordenId);
+    }
   } catch (error) {
     console.error("Error completando orden:", error);
     Toast.show("❌ Error al completar orden", "bad");
