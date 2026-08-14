@@ -979,6 +979,12 @@ window.EquiposPool = {
 
     if (kind !== 'historia') items.push(I('history', 'Historia (kardex)', `EquiposPool.abrirHistoria('${id}')`));
     if (puede) items.push(I('pencil', 'Editar ficha (modelo, propiedad, notas)', `EquiposPool.abrirEdicion('${id}')`));
+    // Corregir serial (auditoría 2026-08-13): un typo no colisiona (es un
+    // serial_norm distinto) → no cae en Conflictos y la ficha fantasma
+    // convive con la real hasta que el Dif la delate. El remedio era baja +
+    // alta, que partía el kardex en dos fichas. Ahora es una corrección con
+    // rastro (movimiento correccion_serial) que conserva la historia.
+    if (puede) items.push(I('scan-line', 'Corregir serial…', `EquiposPool.corregirSerial('${id}')`));
     if (puede && eq.verificado === false)
       items.push(I('badge-check', 'Marcar como verificado', `EquiposPool.verificar('${id}')`));
     if (puede && eq.estado === 'devuelto_revision' && kind !== 'inspeccion')
@@ -1082,6 +1088,40 @@ window.EquiposPool = {
       this.cargar();
     } catch (e) {
       Toast.show('Error: ' + (e.message || e), 'bad');
+    }
+  },
+
+  // Corrección de serial con kardex — ver nota en _accionesHtml. El servicio
+  // valida colisión (un serial ya existente en otra ficha es un duplicado a
+  // fusionar, no un typo) y escribe serial + serial_norm en la misma tanda.
+  async corregirSerial(id) {
+    const eq = this._equipos.find(x => x.id === id);
+    if (!eq) return;
+    const nuevo = await Modal.prompt({
+      title: 'Corregir serial',
+      message: `Serial actual: ${eq.serial || '¿?'} (${eq.modelo_label || 'modelo ?'}). Escribe el serial CORRECTO tal como aparece en la etiqueta del equipo. La corrección queda en el kardex.`,
+      defaultValue: eq.serial || '',
+      placeholder: 'Serial correcto',
+      confirmLabel: 'Revisar',
+    });
+    if (nuevo == null) return;
+    const limpio = nuevo.trim();
+    if (!limpio) { Toast.show('Serial vacío.', 'warn'); return; }
+    if (EquiposPoolService.normalizarSerial(limpio) === EquiposPoolService.normalizarSerial(eq.serial || '')) {
+      Toast.show('Es el mismo serial (solo cambia formato). Nada que corregir.', 'warn'); return;
+    }
+    const ok = await Modal.confirm({
+      title: 'Confirmar corrección',
+      message: `${eq.serial || '¿?'} → ${limpio}. La ficha conserva su historia y el movimiento queda en el kardex. Si el serial figura en un contrato vigente, corrígelo también en Seriales del contrato. ¿Aplicar?`,
+      confirmLabel: 'Corregir serial',
+    });
+    if (!ok) return;
+    try {
+      await EquiposPoolService.corregirSerial(id, limpio, 'Corregido desde Equipos por serial.', firebase.auth().currentUser);
+      Toast.show(`Serial corregido: ${limpio}`, 'ok');
+      this.cargar();
+    } catch (e) {
+      Toast.show('No se pudo corregir: ' + (e.message || e), 'bad');
     }
   },
 

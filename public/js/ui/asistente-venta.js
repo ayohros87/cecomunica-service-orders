@@ -342,6 +342,7 @@ window.AsistenteVenta = {
           <div class="form-field">
             <label class="form-label" for="asvSeriales">Seriales <span class="optional">(uno por línea — acepta lector de código de barras)</span></label>
             <textarea class="form-input" id="asvSeriales" rows="5" placeholder="B12345678&#10;B12345679&#10;…" style="font-family:var(--font-mono);"></textarea>
+            <p id="asvContador" style="font-size:12px; color:var(--fg-2); margin:4px 0 0; display:none;"></p>
           </div>
           <div style="display:flex; gap:var(--sp-3);">
             <div class="form-field" style="flex:2;">
@@ -378,9 +379,25 @@ window.AsistenteVenta = {
     this._el = overlay;
 
     overlay.querySelector('#asvCliente').addEventListener('input', () => this.sugerirCliente());
+    overlay.querySelector('#asvSeriales').addEventListener('input', () => this._actualizarContador());
     overlay.querySelector('#asvBtnGuardar').addEventListener('click', () => this.guardar());
     if (typeof lucide !== 'undefined') lucide.createIcons();
     overlay.querySelector('#asvSeriales').focus();
+  },
+
+  // Contador en vivo (auditoría): mismo motivo que en Recibir — al escanear
+  // nadie mira la pantalla y el repetido solo aparecía al validar.
+  _actualizarContador() {
+    const el  = this._el?.querySelector('#asvContador');
+    const txt = this._el?.querySelector('#asvSeriales');
+    if (!el || !txt) return;
+    const lineas = txt.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!lineas.length) { el.style.display = 'none'; return; }
+    const norm = lineas.map(s => s.toUpperCase());
+    const repetidos = norm.length - new Set(norm).size;
+    el.style.display = '';
+    el.innerHTML = `<b>${lineas.length}</b> serial(es) en la tanda` +
+      (repetidos ? ` · <b style="color:#B45309;">${repetidos} repetido(s)</b>` : '');
   },
 
   // Cierra el overlay — salvo mientras la venta corre (los confirm viven

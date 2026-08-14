@@ -59,11 +59,26 @@ window.AsistenteRecibir = {
       console.warn('No se pudo cargar el catálogo de modelos:', e);
       this._modelos = [];
     }
+    this._pintarOpcionesModelo(this._el?.querySelector('#asrModeloFiltro')?.value || '');
+  },
+
+  // Pinta el select respetando el filtro (auditoría: el catálogo completo en
+  // un <select> nativo era navegación a golpe de teclas parciales en bodega).
+  // Fila EXACTA del catálogo (N y R aparte) — igual que el modal original.
+  _pintarOpcionesModelo(filtro = '') {
     const sel = this._el?.querySelector('#asrModelo');
     if (!sel) return;
-    // Fila EXACTA del catálogo (N y R aparte) — igual que el modal original.
-    sel.innerHTML = '<option value="">Seleccione…</option>' + this._modelos
+    const q = String(filtro || '').toLowerCase().trim();
+    const actual = sel.value;
+    const lista = q ? this._modelos.filter(m => (m.label || '').toLowerCase().includes(q)) : this._modelos;
+    sel.innerHTML = '<option value="">Seleccione…</option>' + lista
       .map(m => `<option value="${this._esc(m.id)}">${this._esc(m.label)}</option>`).join('');
+    if (actual && lista.some(m => m.id === actual)) sel.value = actual;
+    // Con un único resultado se auto-selecciona: teclear "nx-410" y seguir
+    // directo al textarea de seriales.
+    else if (q && lista.length === 1) sel.value = lista[0].id;
+    else sel.value = '';
+    this._sincronizarCondicion();
   },
 
   _modeloLabel(modeloId) {
@@ -112,6 +127,23 @@ window.AsistenteRecibir = {
     btn.disabled = true;
     this._busy = true;
     try {
+      // Detector de mal transcritos (auditoría): SerialPatron corría SOLO en
+      // el importador — y justo este flujo de tecleo suelto es donde nacieron
+      // seriales como 16O13D0998 (letra O por cero). Aviso no bloqueante.
+      if (window.SerialPatron && seriales.length >= 3) {
+        try {
+          const rev = SerialPatron.revisar(seriales.map(s => s.toUpperCase()));
+          const sosp = (rev.revisados || []).filter(r => r.sospechoso);
+          if (sosp.length && rev.cobertura >= 0.6) {
+            const detalle = sosp.slice(0, 8)
+              .map(r => r.serial + (r.sugerencia ? ` (¿será ${r.sugerencia}?)` : '')).join('\n');
+            const seguir = confirm(
+              `Ojo: ${sosp.length} serial(es) no calzan con el patrón del resto de la tanda:\n\n${detalle}\n\n¿Recibir igual?`);
+            if (!seguir) return;
+          }
+        } catch (_) { /* detector opcional: nunca frena la recepción */ }
+      }
+
       const opciones = {
         modelo_id:    modeloId,
         modelo_label: this._modeloLabel(modeloId),
@@ -287,11 +319,15 @@ window.AsistenteRecibir = {
         <div class="sheet-body" style="padding:14px 8px;">
           <div class="form-field">
             <label class="form-label" for="asrModelo">Modelo</label>
+            <input class="form-input" id="asrModeloFiltro" type="search"
+                   placeholder="Filtrar modelo… (ej. NX-410)" style="margin-bottom:4px;"
+                   autocomplete="off">
             <select class="form-select" id="asrModelo"><option value="">Seleccione…</option></select>
           </div>
           <div class="form-field">
             <label class="form-label" for="asrSeriales">Seriales <span class="optional">(uno por línea — acepta lector de código de barras)</span></label>
             <textarea class="form-input" id="asrSeriales" rows="6" placeholder="B12345678&#10;B12345679&#10;…" style="font-family:var(--font-mono);"></textarea>
+            <p id="asrContador" style="font-size:12px; color:var(--fg-2); margin:4px 0 0; display:none;"></p>
             <p style="font-size:12px; color:var(--fg-3); margin:4px 0 0;">
               Sirve para contar el estante: los seriales que no existan se dan de alta y los que el
               sistema tenga en otro lado se preguntan antes de traerlos a bodega.</p>
@@ -337,10 +373,29 @@ window.AsistenteRecibir = {
     this._el = overlay;
 
     overlay.querySelector('#asrModelo').addEventListener('change', () => this._sincronizarCondicion());
+    overlay.querySelector('#asrModeloFiltro').addEventListener('input', (e) => this._pintarOpcionesModelo(e.target.value));
+    overlay.querySelector('#asrSeriales').addEventListener('input', () => this._actualizarContador());
     overlay.querySelector('#asrBtnGuardar').addEventListener('click', () => this.guardar());
     this._sincronizarCondicion();
     if (typeof lucide !== 'undefined') lucide.createIcons();
-    overlay.querySelector('#asrModelo').focus();
+    // Foco directo al filtro: es el primer gesto del flujo real de bodega.
+    overlay.querySelector('#asrModeloFiltro').focus();
+  },
+
+  // Contador en vivo (auditoría): al escanear con lector nadie mira la
+  // pantalla — un serial repetido solo se descubría al final, sumado a
+  // "inválidos" en el mismo número. Aquí se ve al momento.
+  _actualizarContador() {
+    const el  = this._el?.querySelector('#asrContador');
+    const txt = this._el?.querySelector('#asrSeriales');
+    if (!el || !txt) return;
+    const lineas = txt.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!lineas.length) { el.style.display = 'none'; return; }
+    const norm = lineas.map(s => s.toUpperCase());
+    const repetidos = norm.length - new Set(norm).size;
+    el.style.display = '';
+    el.innerHTML = `<b>${lineas.length}</b> serial(es) en la tanda` +
+      (repetidos ? ` · <b style="color:#B45309;">${repetidos} repetido(s)</b> — se reciben una sola vez` : '');
   },
 
   // Cierra el overlay — salvo mientras la recepción corre (los confirm en

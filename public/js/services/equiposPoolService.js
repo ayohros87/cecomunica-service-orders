@@ -801,6 +801,36 @@ const EquiposPoolService = {
     return batch.commit();
   },
 
+  // Corrige un serial mal transcrito SIN partir la historia (auditoría UX
+  // 2026-08-13): el remedio anterior era baja + alta, que dejaba el kardex
+  // repartido en dos fichas. El doc conserva su ID — un ID viejo es tolerado
+  // porque la búsqueda canónica es por el CAMPO serial_norm (ver failsafe de
+  // colisión arriba) — y se reescriben serial + serial_norm EN LA MISMA tanda
+  // (ningún trigger los re-deriva: dejar serial_norm viejo rompería
+  // findBySerial para el serial corregido).
+  async corregirSerial(id, serialNuevo, motivo, user) {
+    const serial = String(serialNuevo || '').trim();
+    const norm = this.normalizarSerial(serial);
+    if (!norm) throw new Error('Serial vacío o inválido.');
+    if (!/\d/.test(norm)) throw new Error('El serial debe contener al menos un dígito.');
+    // Si el serial corregido ya existe en OTRA ficha, esto no es un typo:
+    // es un duplicado a fusionar, no a pisar.
+    const existentes = await this.findBySerial(serial);
+    const choque = (existentes || []).find(d => d.id !== id);
+    if (choque) {
+      throw new Error(`Ya existe una ficha con ese serial (${choque.modelo_label || choque.modelo_id || 'modelo ?'} · estado ${choque.estado || '?'}). Si son la misma unidad hay que fusionarlas, no corregir el serial.`);
+    }
+    const ref = firebase.firestore().collection('equipos_pool').doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error('La ficha ya no existe.');
+    const d = snap.data();
+    return this._conKardex(id,
+      { serial, serial_norm: norm },
+      { tipo: 'correccion_serial', de_estado: d.estado || null, a_estado: d.estado || null,
+        notas: `Serial corregido: ${d.serial || '¿?'} → ${serial}.` + (motivo ? ` ${motivo}` : '') },
+      user);
+  },
+
   // Cambia QUÉ es la unidad. La condición la impone la fila del catálogo (-R →
   // reuso), nunca se elige aparte: una ficha no puede decir "reuso" con un
   // modelo que el catálogo tiene como nuevo.
