@@ -395,6 +395,14 @@ window.NCForm = {
         : '';
       list.dataset.estado = 'listo';
       if (!contratos.length) hint('El cliente no tiene contratos vigentes en el sistema');
+      // Preselección del origen (CTA "Renovar" de la lista): el contrato que
+      // se está renovando llega en NC.origenPreseleccion vía el prefill —
+      // marca su checkbox ANTES del repintado para que leerOrigen lo vea.
+      if (Array.isArray(NC.origenPreseleccion) && NC.origenPreseleccion.length) {
+        const pre = new Set(NC.origenPreseleccion);
+        list.querySelectorAll('.origen-chk').forEach(ch => { if (pre.has(ch.value)) ch.checked = true; });
+        NC.origenPreseleccion = null;
+      }
       // Repintar con la lista ya cargada (la cache del cliente hace que esta
       // vuelta NO vuelva a consultar, así que no hay recursión).
       this.refreshOrigenUI();

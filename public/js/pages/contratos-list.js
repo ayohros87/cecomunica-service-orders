@@ -266,6 +266,11 @@ window.ContratosLista = {
       items.push(I('dollar-sign', 'Marcar comisión', `ContratosLista.marcarComision('${id}')`));
     if (esAdmin && data.listo_para_comision)
       items.push(I('x-circle', 'Quitar comisión', `ContratosLista.quitarComision('${id}')`));
+    // Renovar con prefill (auditoría P1): renovar se rehacía DESDE CERO
+    // (~22 interacciones) eligiendo a mano cliente, equipos, plan y el
+    // contrato de origen — con riesgo real de vincular el origen equivocado.
+    if (data.estado === 'activo' && (esAdmin || esVendedor))
+      items.push(I('refresh-ccw', 'Renovar (precargado)', `ContratosLista.renovar('${id}')`, 'highlighted'));
     // Duplicar
     if (puedeEditar && ['anulado','inactivo'].includes(data.estado))
       items.push(I('copy', 'Duplicar', `ContratosLista.duplicar('${id}')`));
@@ -952,6 +957,40 @@ window.ContratosLista = {
     } catch (e) {
       console.error(e);
       Toast.show('No se pudo preparar el borrador para duplicar.', 'bad');
+    }
+  },
+
+  // CTA "Renovar": mismo mecanismo de prefill que duplicar(), más la
+  // preselección del ORIGEN (este contrato) — NC.origenPreseleccion la
+  // aplica nc-form.cargarContratosOrigen al pintar los checkboxes.
+  async renovar(id) {
+    try {
+      const c = await ContratosService.getContrato(id);
+      if (!c) { Toast.show('Contrato no encontrado.', 'bad'); return; }
+      if (c.estado !== 'activo') {
+        Toast.show('Solo se renueva un contrato ACTIVO.', 'bad'); return;
+      }
+      const draft = {
+        cliente_id:  c.cliente_id || '',
+        codigo_tipo: c.codigo_tipo || '',
+        accion:      'Renovación',
+        duracion:    c.duracion || '',
+        equipos: (c.equipos || []).map(e => ({
+          modelo_id:   e.modelo_id || '',
+          modelo:      e.modelo || '',
+          descripcion: e.descripcion || '',
+          cantidad:    Number(e.cantidad || 0),
+          precio:      Number(e.precio || 0),
+        })),
+        cargos: Array.isArray(c.cargos) ? c.cargos : [],
+        origen_preseleccion: [id],
+      };
+      sessionStorage.setItem('contrato_prefill', JSON.stringify(draft));
+      const q = draft.cliente_id ? `?prefill=1&cliente_id=${encodeURIComponent(draft.cliente_id)}` : '?prefill=1';
+      window.location.href = `nuevo-contrato.html${q}`;
+    } catch (e) {
+      console.error(e);
+      Toast.show('No se pudo preparar la renovación.', 'bad');
     }
   },
 

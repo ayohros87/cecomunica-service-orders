@@ -22,6 +22,11 @@ window.NCGuardar = {
     let draft;
     try { draft = JSON.parse(raw); } catch { sessionStorage.removeItem('contrato_prefill'); return; }
 
+    // CTA "Renovar" de la lista: el contrato que se renueva viaja aquí y
+    // cargarContratosOrigen (nc-form) marca su checkbox al pintar la lista.
+    NC.origenPreseleccion = Array.isArray(draft.origen_preseleccion) && draft.origen_preseleccion.length
+      ? draft.origen_preseleccion : null;
+
     const params        = new URLSearchParams(window.location.search);
     const yaTraeCliente = !!params.get('cliente_id');
     if (!yaTraeCliente && draft.cliente_id) {

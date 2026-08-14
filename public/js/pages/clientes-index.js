@@ -714,6 +714,38 @@ tr.querySelector('[data-delete]').onclick = async ()=>{
   if(asReadonly()) return;
 
   const nombre = escapeHtml(c.nombre || 'sin nombre');
+
+  // Pre-check (auditoría P1): el soft-delete era CIEGO — exactamente el
+  // escenario que ya dejó contratos y poc_devices colgantes. Con contratos
+  // vivos o equipos del pool encima, el borrado se bloquea; para fusionar
+  // duplicados está Admin · Clientes duplicados, que sí re-apunta.
+  let contratosVivos = 0, unidadesPool = 0;
+  try {
+    const snap = await firebase.firestore().collection('contratos')
+      .where('cliente_id', '==', id).get();
+    snap.forEach(d => {
+      const x = d.data();
+      if (!x.deleted && x.estado !== 'anulado') contratosVivos++;
+    });
+    if (typeof EquiposPoolService !== 'undefined' && EquiposPoolService.listarPorCliente) {
+      const unidades = await EquiposPoolService.listarPorCliente(id);
+      unidadesPool = (unidades || []).filter(u =>
+        ['asignado_contrato', 'en_cliente', 'en_taller'].includes(u.estado)).length;
+    }
+  } catch (e) { console.warn('Pre-check de borrado falló (se sigue con la advertencia):', e); }
+
+  if (contratosVivos > 0 || unidadesPool > 0) {
+    await confirmDialog({
+      title: 'No se puede eliminar',
+      message: `<strong>${nombre}</strong> tiene <strong>${contratosVivos}</strong> contrato(s) no anulados y
+                <strong>${unidadesPool}</strong> equipo(s) del pool asociados.<br>
+                Eliminarlo dejaría esos registros colgantes. Si es un duplicado,
+                fusiónalo desde <strong>Admin · Clientes duplicados</strong> (re-apunta contratos y equipos).`,
+      confirmText: 'Entendido'
+    });
+    return;
+  }
+
   const ok = await confirmDialog({
     title: 'Eliminar cliente',
     message: `¿Seguro que deseas eliminar a <strong>${nombre}</strong>?<br>
