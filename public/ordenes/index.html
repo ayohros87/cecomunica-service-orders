@@ -20,7 +20,9 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- Sin user-scalable=no: bloqueaba el zoom en tablet y los técnicos no
+       podían ampliar seriales pequeños (WCAG 1.4.4). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Órdenes de Servicio - Cecomunica</title>
   <!-- cc22 / dev3: chips del pool en la columna Serie (clases .eqpool-chip-aviso
        en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el

@@ -58,6 +58,21 @@ auth.onAuthStateChanged(async user => {
     if (inp) inp.value = buscar;
   }
 
+  // Deep-link ?estado= (señales del home S8/S10): aterrizar con el filtro de
+  // estado aplicado — antes la señal "Contratos por aprobar" dejaba al usuario
+  // en "Todos" y tenía que filtrar a mano.
+  const estadoParam = params.get('estado');
+  if (estadoParam) {
+    const sel = document.getElementById('filtroEstado');
+    if (sel && [...sel.options].some(o => o.value === estadoParam)) {
+      sel.value = estadoParam;
+      document.querySelectorAll('#filtroEstadoChips .filter-chip').forEach(ch =>
+        ch.classList.toggle('active', (ch.dataset.estado || '') === estadoParam));
+      const chkPnd = document.getElementById('chkSoloPendientes');
+      if (chkPnd) chkPnd.checked = (estadoParam === 'pendiente_aprobacion');
+    }
+  }
+
   await ContratosLista.cargar(true);
   ContratosLista.updateBtnCargarMas(false);
 

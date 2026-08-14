@@ -35,25 +35,25 @@ window.HomeSignals = (() => {
     S1: {
       modulo: 'ordenes', icon: 'alert-circle', alert: true, moreIsBad: true,
       label: 'Órdenes por asignar', sub: 'requieren asignar técnico',
-      href: 'ordenes/index.html',
+      href: 'ordenes/index.html?estado=POR%20ASIGNAR',
       count: () => SenalesService.countOrdenesPorEstado(EST.POR_ASIGNAR),
     },
     S2: {
       modulo: 'ordenes', icon: 'inbox',
       label: 'Recibidas en mostrador', sub: 'pendientes de procesar',
-      href: 'ordenes/index.html',
+      href: 'ordenes/index.html?estado=RECIBIDO%20EN%20MOSTRADOR',
       count: () => SenalesService.countOrdenesPorEstado(EST.MOSTRADOR),
     },
     S3: {
       modulo: 'ordenes', icon: 'hammer',
       label: 'En taller (asignadas)', sub: 'en manos de técnicos',
-      href: 'ordenes/index.html',
+      href: 'ordenes/index.html?estado=ASIGNADO',
       count: () => SenalesService.countOrdenesPorEstado(EST.ASIGNADO),
     },
     S4: {
       modulo: 'ordenes', icon: 'package-check',
       label: 'Completadas (en oficina)', sub: 'terminadas en el taller',
-      href: 'ordenes/index.html',
+      href: 'ordenes/index.html?estado=COMPLETADO%20(EN%20OFICINA)',
       count: () => SenalesService.countOrdenesPorEstado(EST.COMPLETADO),
     },
     // El subconjunto de S4 que NO puede entregarse: el candado de QC lo
@@ -68,19 +68,19 @@ window.HomeSignals = (() => {
     S5: {
       modulo: 'ordenes', icon: 'wrench',
       label: 'Mis órdenes asignadas', sub: 'en tu cola de trabajo',
-      href: 'ordenes/index.html',
+      href: 'ordenes/index.html?mias=1&estado=ASIGNADO',
       count: (ctx) => SenalesService.countMisOrdenes(ctx.uid, EST.ASIGNADO),
     },
     S4P: {
       modulo: 'ordenes', icon: 'package-check',
       label: 'Mis completadas (en oficina)', sub: 'trabajadas por ti',
-      href: 'ordenes/index.html',
+      href: 'ordenes/index.html?mias=1&estado=COMPLETADO%20(EN%20OFICINA)',
       count: (ctx) => SenalesService.countMisOrdenes(ctx.uid, EST.COMPLETADO),
     },
     S6: {
       modulo: 'cotizaciones', icon: 'file-clock',
       label: 'Cotizaciones enviadas', sub: 'esperando respuesta del cliente',
-      href: 'cotizaciones/index.html',
+      href: 'cotizaciones/index.html?estado=enviada',
       count: () => SenalesService.countCotizacionesPorEstado('enviada'),
     },
     S7: {
@@ -92,13 +92,13 @@ window.HomeSignals = (() => {
     S8: {
       modulo: 'contratos', icon: 'file-check-2',
       label: 'Contratos por activar', sub: 'aprobados, esperando equipos',
-      href: 'contratos/index.html',
+      href: 'contratos/index.html?estado=aprobado',
       count: () => SenalesService.countContratosPorEstado('aprobado'),
     },
     S10: {
       modulo: 'contratos', icon: 'stamp', moreIsBad: true,
       label: 'Contratos por aprobar', sub: 'esperando gerencia',
-      href: 'contratos/index.html',
+      href: 'contratos/index.html?estado=pendiente_aprobacion',
       count: () => SenalesService.countContratosPorEstado('pendiente_aprobacion'),
     },
     // Nota: "cotizaciones fuera de umbral por aprobar" NO es contable

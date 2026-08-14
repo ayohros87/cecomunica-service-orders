@@ -740,6 +740,14 @@
       try { policyCfg = window.CotizacionTotales.policyFromConfig(cfg); }
       catch (e) { policyCfg = window.CotizacionTotales.POLICY_DEFAULT; }
 
+      // Deep-link ?estado= (señales del home, p.ej. S6 "enviadas"): aterrizar
+      // con el segmento ya aplicado en vez de mostrar "Todas" y obligar a
+      // filtrar a mano lo que la señal ya prometía.
+      const estadoParam = new URLSearchParams(location.search).get('estado');
+      if (estadoParam && (estadoParam === 'todas' || CotState.ESTADO_ORDEN.includes(estadoParam))) {
+        filtroEstado = estadoParam;
+      }
+
       bindEvents();
       await cargarCotizaciones(true);
 
