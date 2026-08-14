@@ -61,7 +61,7 @@
       <div class="app-page-header">
         <div>
           <h1>${esc(titulo)}</h1>
-          <p>${esc(subtitulo)}</p>
+          <p id="cotSubtitulo">${esc(subtitulo)}</p>
         </div>
         <div class="app-page-header-actions">
           <button class="btn btn-ghost" id="btnCancelar"><i data-lucide="x"></i> Cancelar</button>
@@ -374,9 +374,14 @@
     row.querySelector('.cc-item-nombre').addEventListener('focus', (e) => openCatPop(row, e.target.value));
     row.querySelector('.cc-item-nombre').addEventListener('keydown', (e) => onCatKeydown(e, row));
     row.querySelector('.cc-item-spec-input').addEventListener('input', (e) => { const it = getIt(); if (it) it.spec = e.target.value; });
-    row.querySelector('.cc-item-cant').addEventListener('input', (e) => upd({ cant: Number(e.target.value || 0) }));
-    row.querySelector('.cc-item-precio').addEventListener('input', (e) => upd({ precio: Number(e.target.value || 0) }));
-    row.querySelector('.cc-item-descpct').addEventListener('input', (e) => upd({ desc: Number(e.target.value || 0) }));
+    // Clamp (auditoría): el min/max del HTML no bloquea el tecleo — un "150"
+    // en descuento producía totales NEGATIVOS sin ninguna señal.
+    row.querySelector('.cc-item-cant').addEventListener('input', (e) => upd({ cant: Math.max(0, Number(e.target.value || 0)) }));
+    row.querySelector('.cc-item-precio').addEventListener('input', (e) => upd({ precio: Math.max(0, Number(e.target.value || 0)) }));
+    row.querySelector('.cc-item-descpct').addEventListener('input', (e) => {
+      if (Number(e.target.value) > 100) e.target.value = 100;
+      upd({ desc: Math.min(100, Math.max(0, Number(e.target.value || 0))) });
+    });
     row.querySelector('.cc-item-del').addEventListener('click', () => {
       setItems(draft.items.filter(x => x.id !== id));
     });
@@ -579,6 +584,9 @@
         <div class="form-field">
           <label class="form-label">Descuento global %</label>
           <input type="number" class="form-input" id="inpDesc" min="0" max="100" value="${esc(draft.descuentoPct)}">
+          <span style="display:block; font-size:11.5px; color:var(--fg-3); margin-top:2px;">
+            Sobre ${Number(policyCfg?.descuentoMaxPct ?? 15)}% de descuento o ${FMT.money(Number(policyCfg?.totalMax ?? 5000))} de total requiere aprobación.
+          </span>
         </div>
         <div class="form-field">
           <label class="form-label">ITBMS</label>
@@ -599,10 +607,19 @@
         <button class="btn btn-secondary" id="btnPreview2" style="width:100%;"><i data-lucide="printer"></i> Vista previa / Imprimir</button>
       </div>
     `;
-    $('inpDesc').addEventListener('input', (e) => { draft.descuentoPct = Number(e.target.value || 0); renderSummary(); });
+    $('inpDesc').addEventListener('input', (e) => {
+      if (Number(e.target.value) > 100) e.target.value = 100;   // clamp: 150% daba totales negativos
+      draft.descuentoPct = Math.min(100, Math.max(0, Number(e.target.value || 0)));
+      renderSummary();
+    });
     $('selItbms').addEventListener('change', (e) => { draft.itbmsPct = Number(e.target.value); renderSummary(); });
     $('btnGuardar2').addEventListener('click', guardar);
     $('btnPreview2').addEventListener('click', preview);
+    // El aviso de política del header se recalculaba solo en renderTodo():
+    // cambiar descuento o items —justo las dos variables del umbral— lo
+    // dejaba obsoleto. renderSummary corre en cada cambio de monto.
+    const sub = $('cotSubtitulo');
+    if (sub && document.body.dataset.modo === 'nueva') sub.textContent = subtituloNueva();
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
@@ -645,10 +662,24 @@
   }
 
   // ── Guardar / preview ─────────────────────────────────────────
-  function validar() {
+  async function validar() {
     if (!draft.clienteId) { Toast.show('Selecciona un cliente.', 'warn'); return false; }
     if (!draft.items || !draft.items.length) { Toast.show('Agrega al menos un renglón.', 'warn'); return false; }
     if (subiendo.length) { Toast.show('Espera a que terminen de subir los adjuntos.', 'warn'); return false; }
+    // Renglones a medio llenar (auditoría): antes se podía guardar Y ENVIAR
+    // una cotización con líneas sin descripción o en $0.00 sin ninguna señal.
+    // Sin descripción se bloquea; en cero se pregunta (hay cortesías legítimas).
+    const sinNombre = draft.items.filter(it => !(it.nombre || '').trim()).length;
+    if (sinNombre) { Toast.show(`Hay ${sinNombre} renglón(es) sin descripción — complétalos o elimínalos.`, 'warn'); return false; }
+    const enCero = draft.items.filter(it => !(Number(it.cant) > 0) || !(Number(it.precio) > 0)).length;
+    if (enCero) {
+      const ok = await Modal.confirm({
+        title: 'Renglones en cero',
+        message: `${enCero} renglón(es) tienen cantidad o precio en 0 y saldrían en $0.00 al cliente. ¿Guardar así?`,
+        confirmLabel: 'Guardar así',
+      });
+      if (!ok) return false;
+    }
     return true;
   }
 
@@ -660,8 +691,8 @@
 
   async function guardar() {
     if (guardando) return;
-    if (!validar()) return;
-    guardando = true;
+    guardando = true;   // antes del await de validar(): cubre el confirm abierto
+    if (!(await validar())) { guardando = false; return; }
     const btnsGuardar = [document.getElementById('btnGuardar'), document.getElementById('btnGuardar2')].filter(Boolean);
     btnsGuardar.forEach(b => { b.disabled = true; });
     const esNueva = document.body.dataset.modo === 'nueva';

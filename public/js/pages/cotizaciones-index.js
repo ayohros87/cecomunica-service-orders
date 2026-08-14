@@ -357,6 +357,15 @@
 
   async function duplicar(src) {
     if (duplicando) return;
+    // Confirmación (auditoría): era 1 click desde un icono de fila que creaba
+    // doc + consumía correlativo + podía encolar correo al aprobador. Aquí el
+    // click extra es deseable.
+    const okDup = await Modal.confirm({
+      title: 'Duplicar cotización',
+      message: `Se creará una copia de ${src.cotizacion_id || 'esta cotización'} como nueva cotización en borrador (consume un número COT nuevo). ¿Continuar?`,
+      confirmLabel: 'Duplicar',
+    });
+    if (!okDup) return;
     duplicando = true;
     try {
     const nuevoId = await CotState.nextCotizacionId();
@@ -670,9 +679,34 @@
     }
   }
 
+  // Atajo por número (auditoría): la búsqueda filtra solo lo paginado en
+  // memoria — encontrar una COT vieja obligaba a martillar "Cargar más" de
+  // 30 en 30. Si el término es un número COT completo y no está cargado,
+  // se trae con una query directa y entra a la lista.
+  let _cotLookupPend = null;
+  async function lookupPorNumero() {
+    const term = ($('filtroTexto').value || '').trim().toUpperCase();
+    if (!/^COT-\d{4}-\d+$/.test(term)) return;
+    if (cotizaciones.some(c => (c.cotizacion_id || '').toUpperCase() === term)) return;
+    if (_cotLookupPend === term) return;
+    _cotLookupPend = term;
+    try {
+      const snap = await firebase.firestore().collection('cotizaciones')
+        .where('cotizacion_id', '==', term).limit(2).get();
+      let nuevas = false;
+      snap.forEach(d => {
+        if (!cotizaciones.some(c => c.id === d.id)) {
+          cotizaciones.push({ id: d.id, ...d.data() });
+          nuevas = true;
+        }
+      });
+      if (nuevas) render();
+    } catch (e) { console.warn('Lookup por número COT falló:', e); }
+  }
+
   // ── Eventos ───────────────────────────────────────────────────
   function bindEvents() {
-    $('filtroTexto').addEventListener('input', render);
+    $('filtroTexto').addEventListener('input', () => { render(); lookupPorNumero(); });
     $('toggleEliminadas').addEventListener('change', render);
     $('toggleMias').addEventListener('change', (e) => { soloMias = e.target.checked; render(); });
     $('btnCargarMas').addEventListener('click', () => cargarCotizaciones(false));

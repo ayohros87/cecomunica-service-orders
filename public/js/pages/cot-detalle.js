@@ -236,6 +236,7 @@
           <div class="cc-panel">
             <div class="cc-panel-head"><h3><i data-lucide="history"></i> Historial</h3></div>
             <div class="cc-panel-body">
+              <div id="cotAperturas" style="display:none; margin:0 0 10px; padding:8px 10px; border-radius:8px; background:var(--accent-soft, #E6F4FA); font-size:13px;"></div>
               <ul class="cc-timeline">
                 ${historial(cot, cli).map(h => `<li><div class="cc-tl-act">${esc(h.act)}</div><div class="cc-tl-meta">${esc(h.meta)}</div></li>`).join('')}
               </ul>
@@ -244,6 +245,34 @@
         </div>
       </div>
     `;
+
+    // Aperturas del cliente (auditoría): el dato SIEMPRE existió en
+    // cotizacion_verificaciones/{docId} (opens_count / last_opened_at, los
+    // escribe el trigger onOpened) pero ninguna pantalla interna lo leía —
+    // el vendedor tenía que ir a buscar el correo de aviso a su bandeja.
+    // Es la pregunta nº1 del seguimiento: "¿la abrió?".
+    (async () => {
+      try {
+        const snap = await firebase.firestore()
+          .collection('cotizacion_verificaciones').doc(cot._docId).get();
+        const v = snap.exists ? snap.data() : null;
+        const el = document.getElementById('cotAperturas');
+        if (!el) return;
+        if (v && Number(v.opens_count) > 0) {
+          const cuando = v.last_opened_at?.toDate
+            ? v.last_opened_at.toDate().toLocaleString('es-PA', { dateStyle: 'medium', timeStyle: 'short' })
+            : '';
+          el.innerHTML = `<i data-lucide="eye" style="width:14px;height:14px;vertical-align:-2px;"></i> ` +
+            `El cliente la abrió <b>${Number(v.opens_count)}</b> ${Number(v.opens_count) === 1 ? 'vez' : 'veces'}` +
+            (cuando ? ` · última: ${esc(cuando)}` : '');
+          el.style.display = '';
+        } else if (v && (cot.estado === 'enviada' || cot.estado === 'convertida')) {
+          el.innerHTML = `<i data-lucide="eye-off" style="width:14px;height:14px;vertical-align:-2px;"></i> Sin aperturas registradas del cliente todavía.`;
+          el.style.display = '';
+        }
+        if (el.style.display !== 'none' && typeof lucide !== 'undefined') lucide.createIcons();
+      } catch (e) { /* señal opcional: sin red o sin espejo no rompe el detalle */ }
+    })();
 
     const btnDup = $('btnDuplicar');
     if (btnDup) btnDup.addEventListener('click', duplicar);
@@ -504,6 +533,12 @@
 
   async function duplicar() {
     if (duplicando) return;
+    const okDup = await Modal.confirm({
+      title: 'Duplicar cotización',
+      message: `Se creará una copia de ${cot.cotizacion_id || 'esta cotización'} como nueva cotización en borrador (consume un número COT nuevo). ¿Continuar?`,
+      confirmLabel: 'Duplicar',
+    });
+    if (!okDup) return;
     duplicando = true;
     try {
     const nuevoId = await CotState.nextCotizacionId();
