@@ -5,6 +5,8 @@ const pool = require("../../domain/equiposPool");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 const { recepcionEmails } = require("../../lib/mailRecipients");
 const { origenIdsDe } = require("../../lib/linaje");
+const { clasificarUnidadesAnulacion, TIPO_ANULACION } = require("../../lib/devolucion");
+const { traspasarASustituto } = require("../../lib/sustitucionContrato");
 
 module.exports = onDocumentUpdated(
   {
@@ -54,8 +56,21 @@ module.exports = onDocumentUpdated(
     //   "no se devuelve" → excepción justificada
     // Mientras tanto las unidades quedan pendiente_devolucion (recordatorio
     // semanal las vigila). No crítico: un fallo no bloquea el correo.
+    //
+    // Cambio 2026-08-14 — SUSTITUCIÓN vs TERMINACIÓN. Lo de arriba asume que
+    // anular es acabar el acuerdo, y en este negocio casi nunca lo es: anular es
+    // rehacer el papel. Medido sobre los 84 contratos anulados, una anulación
+    // JAMÁS ha producido un radio devuelto (`anulacion/recibido` = 0 casos), y
+    // de las 3 cuyo equipo sí había salido, las 3 se quedaron con el cliente
+    // bajo un contrato nuevo. Ahora la UI pregunta cuál de las dos cosas es, y
+    // en una sustitución el equipo no se toca ni se abre tiquete: se traspasa al
+    // contrato sustituto. Sin respuesta (contratos viejos, scripts) se asume
+    // TERMINACIÓN — el comportamiento de siempre.
     try {
       const cid = event.params.docId;
+      const tipoAnulacion = after.anulacion_tipo === TIPO_ANULACION.SUSTITUCION
+        ? TIPO_ANULACION.SUSTITUCION
+        : TIPO_ANULACION.TERMINACION;
       // Unidad propiedad del CLIENTE (contrato "Propio" = venta con servicio):
       // no se devuelve, pero dejar la asignación apuntando a un contrato muerto
       // la congela para siempre — la ficha sigue diciendo "contratado" y la
@@ -104,16 +119,16 @@ module.exports = onDocumentUpdated(
       if (!after.orden_devolucion_id) {
         const serialesSnap = await db.collection("contratos").doc(cid)
           .collection("seriales").get();
-        const unidades = [];
-        // Fichas que SÍ se resolvieron sin necesitar devolución (custodia del
-        // cliente o liberadas a bodega). Sirven para distinguir "revisé y no
-        // hay nada que recuperar" de "no sé nada de este contrato".
-        let resueltasSinDevolucion = 0;
         // Lo que la anulación NO tocó, y por qué. Antes cada descarte era un
         // `continue` mudo: 20919D0708 (PROP20260625-01, 2026-08-06) se quedó
         // asignada a un contrato anulado porque su ficha decía PD506U-R y el
         // contrato PD606-R — resolver no la reconoció y nadie se enteró.
         const omitidas = [];
+        // Se resuelve el pool ANTES de decidir: la clasificación es lógica pura
+        // (lib/devolucion.js, probada en anulacionSustitucion.test.js) y no debe
+        // depender de Firestore para poder testearla sin emulador.
+        const fichas = [];
+        const refPorSerial = new Map();
         for (const d of serialesSnap.docs) {
           const s = d.data() || {};
           const serial = (s.serial || "").toString().trim();
@@ -125,42 +140,84 @@ module.exports = onDocumentUpdated(
             // upsertContacto) — aquí solo se lee.
             const { ref, data } = await pool.resolver(serial, s.modelo_id, s.modelo, { adoptarSiExiste: true });
             if (!data) { omitidas.push({ serial, motivo: "sin ficha en el pool" }); continue; }
-            if (![pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE].includes(data.estado)) {
-              omitidas.push({ serial, motivo: `estado ${data.estado}` }); continue;
-            }
-            if (data.asignacion?.contrato_doc_id !== cid) {
-              omitidas.push({ serial, motivo: `asignada a ${data.asignacion?.contrato_id || "otro contrato"}` }); continue;
-            }
-            if (data.propiedad === "cliente") {   // propio del cliente: no se devuelve
-              await degradarACustodia(ref, data);
-              resueltasSinDevolucion++;
-              continue;
-            }
-            // NUNCA SALIÓ: la unidad está RESERVADA para el contrato
-            // (asignado_contrato, no en_cliente) y la entrega jamás se
-            // confirmó. El equipo nunca cruzó la puerta, así que no hay
-            // devolución que confirmar — se suelta a bodega y ya.
-            //
-            // Esto NO revive el comportamiento retirado el 2026-07-20: aquello
-            // mandaba a cuarentena FINGIENDO que el cliente había devuelto.
-            // Aquí no se finge nada — el pool distingue "reservado" de
-            // "entregado", y pedirle a un humano que confirme lo que el dato ya
-            // dice es trabajo inventado. Lo que sí salió (en_cliente, o entrega
-            // confirmada) sigue pasando por el check-in de la orden.
-            if (data.estado === pool.ESTADOS.ASIGNADO && after.entrega_confirmada !== true) {
-              await liberarABodega(ref, data, serial);
-              resueltasSinDevolucion++;
-              continue;
-            }
-            await ref.set({
-              pendiente_devolucion: true,
-              updated_at: admin.firestore.FieldValue.serverTimestamp(),
-            }, { merge: true });
-            unidades.push({ serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null, pool_doc_id: ref.id });
+            refPorSerial.set(serial, { ref, data });
+            fichas.push({
+              serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null,
+              pool_doc_id: ref.id, estado: data.estado, propiedad: data.propiedad,
+              contrato_doc_id: data.asignacion?.contrato_doc_id || null,
+              contrato_id: data.asignacion?.contrato_id || "",
+            });
           } catch (e) {
             omitidas.push({ serial, motivo: `error: ${e.message}` });
           }
         }
+
+        const plan = clasificarUnidadesAnulacion({
+          fichas, contratoDocId: cid, tipo: tipoAnulacion,
+          entregaConfirmada: after.entrega_confirmada === true,
+        });
+        omitidas.push(...plan.omitidas);
+
+        // Fichas que SÍ se resolvieron sin necesitar devolución (custodia del
+        // cliente, liberadas a bodega, o continúan con el cliente en una
+        // sustitución). Sirven para distinguir "revisé y no hay nada que
+        // recuperar" de "no sé nada de este contrato".
+        let resueltasSinDevolucion = 0;
+
+        for (const f of plan.custodia) {
+          const { ref, data } = refPorSerial.get(f.serial);
+          await degradarACustodia(ref, data);
+          resueltasSinDevolucion++;
+        }
+        for (const f of plan.bodega) {
+          const { ref, data } = refPorSerial.get(f.serial);
+          await liberarABodega(ref, data, f.serial);
+          resueltasSinDevolucion++;
+        }
+
+        // SUSTITUCIÓN: el equipo se queda donde está. Se intenta traspasarlo al
+        // contrato sustituto para que no quede colgando de un contrato muerto.
+        // Si el traspaso no procede (no se indicó sustituto, o el sustituto ya
+        // tiene seriales), NO se abre un tiquete de devolución igual: eso sería
+        // volver a pedir que persigan equipo que nadie tiene que devolver. Se
+        // deja anotado el pendiente para que se vea, y la conciliación semanal
+        // (chequeo D: ficha asignada a contrato anulado sin orden de devolución)
+        // lo levanta solo.
+        if (plan.continuan.length) {
+          resueltasSinDevolucion += plan.continuan.length;
+          const r = await traspasarASustituto({
+            origenId: cid, origen: after,
+            sustitutoId: after.sustituido_por_id || null,
+            unidades: plan.continuan,
+          }).catch((e) => ({ ok: false, motivo: `error: ${e.message}` }));
+          if (r.ok) {
+            logger.info("[onContratoAnuladoNotify] Sustitución: equipo traspasado", {
+              contratoId, sustituto: after.sustituido_por_id, unidades: r.copiados,
+            });
+          } else {
+            logger.warn("[onContratoAnuladoNotify] Sustitución sin traspaso — queda por vincular", {
+              contratoId, motivo: r.motivo, unidades: plan.continuan.length,
+            });
+            await db.collection("contratos").doc(cid).set({
+              sustitucion_vinculo_pendiente: true,
+              sustitucion_vinculo_motivo: r.motivo || "",
+              sustitucion_unidades_en_cliente: plan.continuan.length,
+            }, { merge: true });
+          }
+        }
+
+        // A partir de aquí, solo lo que de verdad hay que ir a buscar.
+        const unidades = plan.devolucion.map((f) => ({
+          serial: f.serial, modelo: f.modelo, modelo_id: f.modelo_id, pool_doc_id: f.pool_doc_id,
+        }));
+        for (const f of plan.devolucion) {
+          const { ref } = refPorSerial.get(f.serial);
+          await ref.set({
+            pendiente_devolucion: true,
+            updated_at: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+
         if (omitidas.length) {
           logger.warn("[onContratoAnuladoNotify] Unidades que la anulación no tocó", {
             contratoId, omitidas: omitidas.length, detalle: omitidas.slice(0, 20),
@@ -184,12 +241,14 @@ module.exports = onDocumentUpdated(
           }
         } else if (resueltasSinDevolucion > 0) {
           // Se revisó ficha por ficha y ninguna requiere devolución: o son del
-          // cliente, o nunca salieron y ya están en bodega. Eso es una
-          // RESPUESTA, no un hueco — se estampa para que la fila diga "no
-          // aplica" verificado en vez de "sin registro" ("no se sabe").
+          // cliente, o nunca salieron y ya están en bodega, o el contrato se
+          // sustituyó y el equipo sigue con el cliente. Eso es una RESPUESTA, no
+          // un hueco — se estampa para que la fila diga "no aplica" verificado
+          // en vez de "sin registro" ("no se sabe").
           await db.collection("contratos").doc(cid).set({
             devolucion_estado: "no_aplica",
-            devolucion_no_aplica_motivo: "nada_que_recuperar",
+            devolucion_no_aplica_motivo: plan.continuan.length
+              ? "contrato_sustituido" : "nada_que_recuperar",
             devolucion_actualizado_at: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
           logger.info("[onContratoAnuladoNotify] Anulación resuelta sin devolución",

@@ -739,6 +739,110 @@ window.ContratosLista = {
   },
 
   // ── CRUD actions ─────────────────────────────────────────────────
+  // Diálogo de anulación. La pregunta que importa no es el motivo (texto libre
+  // que nadie vuelve a leer) sino QUÉ PASA CON LOS EQUIPOS, porque de eso
+  // depende que el sistema abra o no una orden para ir a recuperarlos.
+  //
+  // Antes se asumía siempre "el cliente devuelve", y en este negocio casi nunca
+  // es así: anular es rehacer el papel. Medido sobre los 84 contratos anulados,
+  // una anulación nunca produjo un radio devuelto — pero sí produjo tiquetes
+  // pidiendo perseguir equipo que el cliente tenía con todo derecho
+  // (ALQ20260715-01: 32 radios, 2026-08-06).
+  //
+  // Devuelve null si se cancela, o { motivo, tipo, sustitutoId }.
+  _dialogoAnulacion(c, candidatos) {
+    return new Promise(resolve => {
+      const esc = s => String(s ?? '').replace(/[&<>"']/g, m => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;'
+      }[m]));
+      const opciones = candidatos.map(x =>
+        `<option value="${esc(x.id)}">${esc(x.contrato_id || x.id)}${x.total_mensual ? ` — $${Number(x.total_mensual).toFixed(2)}/mes` : ''}</option>`
+      ).join('');
+
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:560px">
+          <div class="sheet-header">
+            <h3 class="sheet-title">Anular ${esc(c.contrato_id || '')}</h3>
+          </div>
+          <div class="sheet-body" style="padding:16px 8px;display:flex;flex-direction:column;gap:14px">
+            <div>
+              <label style="display:block;font-weight:600;margin-bottom:6px">¿Qué pasa con los equipos?</label>
+              <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer;margin-bottom:6px">
+                <input type="radio" name="anulTipo" value="sustitucion" checked style="margin-top:3px">
+                <span>
+                  <b>Se rehace el contrato</b> — el cliente conserva los equipos.<br>
+                  <small style="color:var(--muted,#666)">Error de precio, de representante legal, de modelo… El equipo no se mueve.</small>
+                </span>
+              </label>
+              <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px;cursor:pointer">
+                <input type="radio" name="anulTipo" value="terminacion" style="margin-top:3px">
+                <span>
+                  <b>Termina el acuerdo</b> — el cliente devuelve los equipos.<br>
+                  <small style="color:var(--muted,#666)">Se abrirá una orden de DEVOLUCIÓN para recuperarlos.</small>
+                </span>
+              </label>
+            </div>
+            <div data-role="bloque-sustituto">
+              <label style="display:block;font-weight:600;margin-bottom:6px">Contrato que lo sustituye <small style="font-weight:400;color:var(--muted,#666)">(opcional)</small></label>
+              <select class="input" data-role="sustituto" style="width:100%">
+                <option value="">Todavía no lo he creado</option>
+                ${opciones}
+              </select>
+              <small style="color:var(--muted,#666)">Si lo indicas, los equipos pasan solos al contrato nuevo.</small>
+            </div>
+            <div>
+              <label style="display:block;font-weight:600;margin-bottom:6px">Motivo</label>
+              <textarea class="input" data-role="motivo" rows="3" style="width:100%;resize:vertical"
+                placeholder="Ej: el precio no incluyó el ajuste del micrófono"></textarea>
+            </div>
+          </div>
+          <div class="footer">
+            <button class="btn btn-ghost"  data-action="cancel">Cancelar</button>
+            <button class="btn btn-danger" data-action="confirm">Anular contrato</button>
+          </div>
+        </div>`;
+
+      const motivoEl = overlay.querySelector('[data-role="motivo"]');
+      const sustEl   = overlay.querySelector('[data-role="sustituto"]');
+      const bloque   = overlay.querySelector('[data-role="bloque-sustituto"]');
+
+      // El selector de sustituto solo tiene sentido en una sustitución.
+      const sync = () => {
+        const tipo = overlay.querySelector('input[name="anulTipo"]:checked')?.value;
+        bloque.style.display = tipo === 'sustitucion' ? '' : 'none';
+      };
+      overlay.querySelectorAll('input[name="anulTipo"]').forEach(r =>
+        r.addEventListener('change', sync));
+      sync();
+
+      const cleanup = result => {
+        overlay.remove();
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', kb);
+        resolve(result);
+      };
+      const kb = e => { if (e.key === 'Escape') cleanup(null); };
+
+      overlay.addEventListener('click', e => {
+        const action = e.target.closest('[data-action]')?.dataset?.action;
+        if (action === 'cancel' || e.target === overlay) { cleanup(null); return; }
+        if (action !== 'confirm') return;
+        const motivo = (motivoEl.value || '').trim();
+        if (!motivo) { motivoEl.focus(); Toast.show('Debes indicar un motivo.', 'bad'); return; }
+        const tipo = overlay.querySelector('input[name="anulTipo"]:checked')?.value || 'terminacion';
+        cleanup({ motivo, tipo, sustitutoId: tipo === 'sustitucion' ? (sustEl.value || null) : null });
+      });
+
+      document.addEventListener('keydown', kb);
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+      motivoEl.focus();
+    });
+  },
+
   async anular(id) {
     try {
       const c = await ContratosService.getContrato(id);
@@ -748,10 +852,26 @@ window.ContratosLista = {
         Toast.show('Solo se puede anular un contrato ACTIVO o APROBADO.', 'bad'); return;
       }
 
-      const motivo = prompt('Motivo de anulación (ej: envío errado, datos incorrectos):');
-      if (motivo === null) return;
-      const motivoTrim = (motivo || '').trim();
-      if (!motivoTrim) { Toast.show('Debes indicar un motivo.', 'bad'); return; }
+      // Candidatos a sustituto: contratos vivos del MISMO cliente. Se filtra
+      // `deleted` en el cliente para no exigir un índice compuesto (misma razón
+      // que getContratosActivosAprobados). Si la consulta falla, el diálogo
+      // sigue funcionando con la opción "todavía no lo he creado".
+      let candidatos = [];
+      try {
+        const snap = await firebase.firestore().collection('contratos')
+          .where('cliente_id', '==', c.cliente_id || '__none__').get();
+        candidatos = snap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(x => x.id !== id && x.deleted !== true
+                    && ['aprobado', 'activo'].includes(x.estado))
+          .sort((a, b) => (b.fecha_creacion?.seconds || 0) - (a.fecha_creacion?.seconds || 0));
+      } catch (e) {
+        console.warn('No se pudieron cargar los contratos del cliente', e);
+      }
+
+      const res = await this._dialogoAnulacion(c, candidatos);
+      if (!res) return;
+      const motivoTrim = res.motivo;
 
       const update = {
         estado:           'anulado',
@@ -760,8 +880,17 @@ window.ContratosLista = {
         anulado_fecha:    firebase.firestore.Timestamp.now(),
         anulado_por_uid:  firebase.auth().currentUser?.uid || null,
         anulado_ref:      c.contrato_id || id,
+        // Lo lee onAnnulment para decidir si el equipo se mueve. Se escribe en
+        // el MISMO update que `estado`: el trigger dispara con este snapshot, y
+        // mandarlo después sería tarde.
+        anulacion_tipo:   res.tipo,
         fecha_modificacion: new Date()
       };
+      if (res.sustitutoId) {
+        const sust = candidatos.find(x => x.id === res.sustitutoId);
+        update.sustituido_por_id = res.sustitutoId;
+        update.sustituido_por_contrato_id = sust?.contrato_id || '';
+      }
 
       if (c.firmado || c.firmado_url) {
         Object.assign(update, {
@@ -780,8 +909,14 @@ window.ContratosLista = {
       }
 
       await ContratosService.updateContrato(id, update);
-      Toast.show('✅ Contrato ANULADO correctamente.', 'ok');
-      setTimeout(() => location.reload(), 1000);
+      // El mensaje dice qué va a pasar con los equipos, no solo que se anuló:
+      // es la consecuencia que la persona necesita confirmar de un vistazo.
+      Toast.show(res.tipo === 'sustitucion'
+        ? (res.sustitutoId
+            ? `✅ Contrato ANULADO. Los equipos pasan a ${update.sustituido_por_contrato_id || 'el contrato sustituto'}.`
+            : '✅ Contrato ANULADO. Los equipos siguen con el cliente — recuerda vincular el contrato nuevo.')
+        : '✅ Contrato ANULADO. Se abrirá una orden de DEVOLUCIÓN para recuperar los equipos.', 'ok');
+      setTimeout(() => location.reload(), 1800);
     } catch (e) {
       console.error(e);
       Toast.show('No se pudo anular el contrato.', 'bad');

@@ -113,6 +113,87 @@ const ESTADOS_COLGANDO = ["asignado_contrato", "en_cliente"];
 
 const _tight = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
+// Por qué se anula un contrato. La distinción no es burocrática: decide si el
+// equipo se mueve o no.
+//
+//   sustitucion — el papel se rehace (precio mal calculado, representante legal
+//                 equivocado, modelo mal escrito). El contrato cambia de número
+//                 y el equipo se queda exactamente donde está.
+//   terminacion — el acuerdo se acaba y el cliente devuelve los equipos.
+//
+// Se midió sobre los 84 contratos anulados a 2026-08-14: 35 tienen un contrato
+// sustituto (mismo cliente, mismo total de equipos, minutos de diferencia), y
+// de las 3 anulaciones cuyo equipo había salido de verdad, las 3 eran
+// sustituciones. `anulacion/recibido` —una anulación que produjo un radio
+// devuelto— tiene CERO casos en toda la historia del sistema; las 129
+// devoluciones reales entraron por 'contrato_papel' y 'baja'.
+//
+// TERMINACION es el default deliberado: es el comportamiento que el sistema ya
+// tenía, así que un contrato viejo (sin el campo) o una anulación hecha desde un
+// script se siguen comportando igual que siempre. Cambiar el default silenciaría
+// devoluciones legítimas de contratos que nadie volvió a tocar.
+const TIPO_ANULACION = { SUSTITUCION: "sustitucion", TERMINACION: "terminacion" };
+
+/**
+ * Qué hacer con cada unidad de un contrato que se anula, decidido ficha por
+ * ficha. Devuelve cubos, no efectos: el trigger los aplica y los tests los
+ * comprueban sin Firestore.
+ *
+ *   custodia   — es del CLIENTE: no se devuelve, pero deja de colgar del
+ *                contrato muerto (si no, la ficha queda congelada en
+ *                "contratada" para siempre)
+ *   bodega     — estaba RESERVADA y la entrega nunca se confirmó: el equipo no
+ *                cruzó la puerta, así que vuelve a bodega sin check-in
+ *   continuan  — SUSTITUCIÓN y el equipo ya está afuera: se queda con el
+ *                cliente bajo el contrato nuevo. No hay nada que recuperar
+ *   devolucion — el resto: salió y hay que ir por él (orden de DEVOLUCIÓN)
+ *   omitidas   — con el motivo, para que ningún descarte sea mudo
+ *
+ * @param {Object} p
+ * @param {Array}  p.fichas — [{ serial, modelo, modelo_id, pool_doc_id,
+ *        propiedad, estado, contrato_doc_id }]
+ * @param {string} p.contratoDocId — solo cuentan las que siguen apuntando aquí
+ * @param {string} [p.tipo] — TIPO_ANULACION.*; cualquier valor desconocido cae
+ *        en TERMINACION (el comportamiento histórico)
+ * @param {boolean} [p.entregaConfirmada] — del contrato que se anula
+ * @returns {{custodia:Array, bodega:Array, continuan:Array, devolucion:Array,
+ *            omitidas:Array<{serial:string, motivo:string}>}}
+ */
+function clasificarUnidadesAnulacion({
+  fichas = [], contratoDocId = null, tipo = "", entregaConfirmada = false,
+} = {}) {
+  const esSustitucion = tipo === TIPO_ANULACION.SUSTITUCION;
+  const out = { custodia: [], bodega: [], continuan: [], devolucion: [], omitidas: [] };
+
+  for (const f of fichas) {
+    const serial = String((f && f.serial) || "").trim();
+    if (!serial) continue;
+    if (!f.pool_doc_id && !f.estado) {
+      out.omitidas.push({ serial, motivo: "sin ficha en el pool" });
+      continue;
+    }
+    if (!ESTADOS_COLGANDO.includes(f.estado)) {
+      out.omitidas.push({ serial, motivo: `estado ${f.estado}` });
+      continue;
+    }
+    if (contratoDocId && f.contrato_doc_id !== contratoDocId) {
+      out.omitidas.push({ serial, motivo: `asignada a ${f.contrato_id || "otro contrato"}` });
+      continue;
+    }
+    // El equipo del cliente nunca se recupera, se anule como se anule.
+    if (f.propiedad === "cliente") { out.custodia.push(f); continue; }
+    // Reservada y sin entrega confirmada: jamás salió del taller.
+    if (f.estado === "asignado_contrato" && entregaConfirmada !== true) {
+      out.bodega.push(f);
+      continue;
+    }
+    // Salió de verdad. Aquí es donde el tipo de anulación cambia el destino.
+    if (esSustitucion) out.continuan.push(f);
+    else out.devolucion.push(f);
+  }
+  return out;
+}
+
 /**
  * Unidades de una baja que SÍ deben recuperarse, decidido ficha por ficha.
  *
@@ -167,5 +248,6 @@ function unidadesRecuperablesDeBaja({ fichas = [], contratoDocId = null, items =
 module.exports = {
   pendientesDevolucion, esperadosDevolucion, resumenDevolucion,
   derivarEstadoDevolucion, unidadesRecuperablesDeBaja,
+  clasificarUnidadesAnulacion, TIPO_ANULACION,
   ESTADOS_COLGANDO, ESTADO_CERRADA,
 };
