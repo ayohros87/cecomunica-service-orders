@@ -152,9 +152,11 @@ module.exports = onDocumentUpdated(
           }
         }
 
+        const sustitutoId = after.sustituido_por_id || null;
         const plan = clasificarUnidadesAnulacion({
           fichas, contratoDocId: cid, tipo: tipoAnulacion,
           entregaConfirmada: after.entrega_confirmada === true,
+          haySustituto: !!sustitutoId,
         });
         omitidas.push(...plan.omitidas);
 
@@ -183,25 +185,52 @@ module.exports = onDocumentUpdated(
         // deja anotado el pendiente para que se vea, y la conciliación semanal
         // (chequeo D: ficha asignada a contrato anulado sin orden de devolución)
         // lo levanta solo.
-        if (plan.continuan.length) {
+        //
+        // La rama corre también cuando `continuan` quedó VACÍO habiendo fichas:
+        // el silencio es la peor respuesta posible. REEMP20260811-01 (MAGEN
+        // DAVID, 2026-08-14) se anuló como sustitución con destino indicado, sus
+        // 5 fichas cayeron todas en `omitidas` (estaban en_taller) y el contrato
+        // no guardó ni una señal de que el traspaso no había ocurrido — la UI
+        // incluso había prometido "los equipos pasan a ALQ20260812-01".
+        const esSustitucion = tipoAnulacion === TIPO_ANULACION.SUSTITUCION;
+        if (esSustitucion && (plan.continuan.length || omitidas.length)) {
           resueltasSinDevolucion += plan.continuan.length;
           const r = await traspasarASustituto({
             origenId: cid, origen: after,
-            sustitutoId: after.sustituido_por_id || null,
+            sustitutoId,
             unidades: plan.continuan,
           }).catch((e) => ({ ok: false, motivo: `error: ${e.message}` }));
-          if (r.ok) {
+          // Un traspaso que dejó unidades fuera (sin cupo en el sustituto, o
+          // fichas omitidas) sigue necesitando ojo humano aunque haya copiado.
+          const sinCupo = (r.pendientes || []).length;
+          const traspasoLimpio = r.ok && !sinCupo && !omitidas.length;
+          if (traspasoLimpio) {
             logger.info("[onContratoAnuladoNotify] Sustitución: equipo traspasado", {
-              contratoId, sustituto: after.sustituido_por_id, unidades: r.copiados,
+              contratoId, sustituto: sustitutoId, unidades: r.copiados,
+              completo: r.completo, faltanEnSustituto: r.faltan || 0,
             });
+            await db.collection("contratos").doc(cid).set({
+              sustitucion_vinculo_pendiente: admin.firestore.FieldValue.delete(),
+              sustitucion_traspasados: r.copiados || 0,
+            }, { merge: true });
           } else {
-            logger.warn("[onContratoAnuladoNotify] Sustitución sin traspaso — queda por vincular", {
-              contratoId, motivo: r.motivo, unidades: plan.continuan.length,
+            const motivo = r.ok
+              ? [
+                sinCupo ? `${sinCupo} sin renglón libre en el sustituto` : "",
+                omitidas.length ? `${omitidas.length} ficha(s) omitida(s)` : "",
+              ].filter(Boolean).join(" · ")
+              : (r.motivo || "");
+            logger.warn("[onContratoAnuladoNotify] Sustitución incompleta — queda por vincular", {
+              contratoId, motivo, copiados: r.copiados || 0,
+              continuan: plan.continuan.length, omitidas: omitidas.length,
+              detalle: [...(r.pendientes || []), ...omitidas].slice(0, 20),
             });
             await db.collection("contratos").doc(cid).set({
               sustitucion_vinculo_pendiente: true,
-              sustitucion_vinculo_motivo: r.motivo || "",
+              sustitucion_vinculo_motivo: motivo,
+              sustitucion_traspasados: r.copiados || 0,
               sustitucion_unidades_en_cliente: plan.continuan.length,
+              sustitucion_pendientes: [...(r.pendientes || []), ...omitidas].slice(0, 50),
             }, { merge: true });
           }
         }

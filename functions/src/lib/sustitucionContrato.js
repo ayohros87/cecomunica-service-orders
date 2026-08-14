@@ -16,6 +16,38 @@
 
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("./admin");
+const { APP_BASE_URL, inventarioEmailTo } = require("./inventario");
+
+// Clave de modelo para casar un serial con el renglón que le corresponde en el
+// contrato sustituto: el id del modelo cuando lo hay, y si no el nombre
+// apretado (mismo criterio que devolucion.js — "PNC360S-R" == "pnc360s r").
+const claveModelo = (modeloId, modelo) => modeloId
+  || String(modelo == null ? "" : modelo).trim().toUpperCase().replace(/[^A-Z0-9]/g, "")
+  || "";
+
+/**
+ * Cupo de seriales por modelo del contrato: cuántas unidades admite cada
+ * renglón. Un contrato puede repetir el mismo modelo en varios renglones
+ * (precios distintos por tramo) — ALQ20260812-01 lleva "3x HYT-P50" y "2x
+ * HYT-P50" separados—, así que se suman por modelo, no por renglón.
+ * @returns {Map<string, {label:string, cantidad:number}>|null} null si el
+ *          contrato no declara equipos
+ */
+function cupoPorModelo(contrato) {
+  const lineas = (contrato && contrato.equipos) || [];
+  if (!Array.isArray(lineas) || !lineas.length) return null;
+  const cupo = new Map();
+  for (const l of lineas) {
+    const n = Number((l && l.cantidad) || 0);
+    if (n <= 0) continue;
+    const k = claveModelo(l.modelo_id, l.modelo);
+    if (!k) continue;
+    const prev = cupo.get(k);
+    if (prev) prev.cantidad += n;
+    else cupo.set(k, { label: (l.modelo || k), cantidad: n });
+  }
+  return cupo.size ? cupo : null;
+}
 
 /**
  * Pasa al contrato sustituto las unidades que siguen con el cliente.
@@ -26,13 +58,23 @@ const { admin, db } = require("./admin");
  * facturación). Prefiere dejar el trabajo a la vista de un humano antes que
  * adivinar.
  *
+ * El sustituto NO tiene por qué ser un calco del anulado: rehacer el papel es
+ * también la vía para corregir la cantidad. ALQ20260812-01 (MAGEN DAVID) nació
+ * con 10 unidades donde el anulado tenía 5. Por eso el traspaso es PARCIAL por
+ * diseño: cada serial entra por el renglón de SU modelo y hasta el cupo de ese
+ * renglón; lo que no cabe se reporta en `pendientes` en vez de colarse, y el
+ * contrato solo se marca "asignados" cuando de verdad quedó completo — si no,
+ * la pantalla de seriales se cerraría con la mitad del contrato sin cargar.
+ *
  * @param {Object} p
  * @param {string} p.origenId — doc id del contrato anulado
  * @param {Object} p.origen — datos del contrato anulado
  * @param {string} p.sustitutoId — doc id del contrato que lo sustituye
  * @param {Array}  p.unidades — fichas que continúan con el cliente
  *        [{ serial, modelo, modelo_id, pool_doc_id }]
- * @returns {Promise<{ok:boolean, motivo?:string, copiados?:number}>}
+ * @returns {Promise<{ok:boolean, motivo?:string, copiados?:number,
+ *          faltan?:number, completo?:boolean,
+ *          pendientes?:Array<{serial:string, motivo:string}>}>}
  */
 async function traspasarASustituto({ origenId, origen, sustitutoId, unidades }) {
   if (!sustitutoId)        return { ok: false, motivo: "sin contrato sustituto indicado" };
@@ -52,11 +94,15 @@ async function traspasarASustituto({ origenId, origen, sustitutoId, unidades }) 
   if (s.cliente_id !== origen.cliente_id) {
     return { ok: false, motivo: "el sustituto es de otro cliente" };
   }
-  // Si el sustituto YA tiene seriales, alguien los cargó a mano: sus decisiones
-  // mandan sobre las nuestras. Volver a escribir encima podría duplicar filas o
-  // pisar una corrección deliberada.
-  const yaTiene = await ref.collection("seriales").limit(1).get();
-  if (!yaTiene.empty) return { ok: false, motivo: "el sustituto ya tiene seriales cargados" };
+  // Seriales YA CONFIRMADOS en el sustituto: alguien cerró esa pantalla a
+  // conciencia y el contrato quedó bajo el candado de solo-lectura. Escribir
+  // encima sería pisar una decisión humana por la puerta de atrás.
+  // (Un sustituto con seriales a medio cargar SÍ se completa: es justo lo que
+  // pasa cuando el contrato nuevo crece y le cargan a mano los renglones que el
+  // anulado no cubría.)
+  if (s.seriales_estado === "asignados") {
+    return { ok: false, motivo: "el sustituto ya tiene sus seriales confirmados" };
+  }
 
   // El sustituto hereda la ENTREGA del original: el cliente ya tiene los radios
   // en la mano, y sin esta marca onSerialWrite los degradaría a
@@ -80,13 +126,49 @@ async function traspasarASustituto({ origenId, origen, sustitutoId, unidades }) 
   }
   await ref.set(patch, { merge: true });
 
+  // Cupo del sustituto, descontando lo que ya tenga cargado. Sin renglones de
+  // equipo declarados no hay con qué casar: se copia todo (comportamiento
+  // anterior) y que el humano revise.
+  const cupo = cupoPorModelo(s);
+  const yaCargados = await ref.collection("seriales").get();
+  const yaSeriales = new Set();
+  for (const d of yaCargados.docs) {
+    const y = d.data() || {};
+    const ser = String(y.serial || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (ser) yaSeriales.add(ser);
+    if (!cupo) continue;
+    const l = cupo.get(claveModelo(y.modelo_id, y.modelo));
+    if (l) l.cantidad = Math.max(0, l.cantidad - 1);
+  }
+
   // Las filas de serial, una por una: cada `set` dispara onSerialWrite, que
   // reapunta la ficha del pool. En lote sería igual de correcto pero mucho más
   // difícil de leer en los logs cuando algo falla.
   let copiados = 0;
+  const pendientes = [];
   for (const u of unidades) {
     const serial = String(u.serial || "").trim();
     if (!serial) continue;
+    // Idempotencia: re-ejecutar el traspaso (o completarlo tras arreglar el
+    // cupo) no debe duplicar la fila ni volver a disparar el pool.
+    if (yaSeriales.has(serial.toUpperCase().replace(/[^A-Z0-9]/g, ""))) continue;
+    if (cupo) {
+      const k = claveModelo(u.modelo_id, u.modelo);
+      const linea = cupo.get(k);
+      if (!linea || linea.cantidad <= 0) {
+        // O el modelo no está en el contrato nuevo, o su renglón ya se llenó.
+        // Las dos son decisión de negocio, no un detalle que taparle al humano:
+        // el radio se queda ligado al contrato anulado y sale en el aviso.
+        pendientes.push({
+          serial,
+          motivo: linea
+            ? `el renglón de ${u.modelo || k} ya está completo en el sustituto`
+            : `el sustituto no tiene renglón para ${u.modelo || "ese modelo"}`,
+        });
+        continue;
+      }
+      linea.cantidad--;
+    }
     await ref.collection("seriales").add({
       serial,
       modelo: u.modelo || "",
@@ -105,21 +187,136 @@ async function traspasarASustituto({ origenId, origen, sustitutoId, unidades }) 
     copiados++;
   }
 
-  // La señal de seriales del PADRE, no la subcolección `seriales_estado`: esa
-  // dispara el correo con el PDF del contrato a activaciones. El cliente ya
-  // tiene sus radios y ya recibió el PDF del contrato original; reenviarlo por
-  // una corrección de papeleo es ruido.
-  await ref.set({
-    seriales_estado: "asignados",
-    seriales_asignados_at: admin.firestore.FieldValue.serverTimestamp(),
-    seriales_asignados_por: "system:sustitucion",
-    seriales_omitidos_count: 0,
-  }, { merge: true });
+  // ¿Quedó completo? El cupo restante lo dice: si sobra alguna unidad por
+  // cargar, el contrato NO se marca como asignado.
+  const restantes = cupo
+    ? [...cupo.values()].filter((l) => l.cantidad > 0).map((l) => ({ modelo: l.label, cantidad: l.cantidad }))
+    : [];
+  const faltan = restantes.reduce((a, l) => a + l.cantidad, 0);
+  const completo = faltan === 0;
+
+  if (completo) {
+    // Contrato completo: se escribe la SEÑAL (`seriales_estado/current`), no el
+    // campo del padre. La señal es la que dispara onSerialesAsignadasSendPdf —
+    // el correo de aprobación a activaciones con el PDF—, que es justo lo que
+    // debe pasar: para activaciones este contrato ya tiene todos sus seriales,
+    // llegaran de donde llegaran. El propio trigger espeja `seriales_estado` en
+    // el padre, y su candado de idempotencia (`seriales_pdf_enviado_at`) evita
+    // el reenvío si a este contrato ya se le había mandado.
+    await ref.collection("seriales_estado").doc("current").set({
+      estado: "asignados",
+      omisiones: [],
+      por: "system:sustitucion",
+      origen_sustitucion: origen.contrato_id || origenId,
+      at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await ref.set({
+      seriales_estado: "asignados",
+      seriales_asignados_at: admin.firestore.FieldValue.serverTimestamp(),
+      seriales_asignados_por: "system:sustitucion",
+      seriales_omitidos_count: 0,
+      sustitucion_seriales_faltan: admin.firestore.FieldValue.delete(),
+    }, { merge: true });
+  } else {
+    // El sustituto creció (5 → 10 en MAGEN DAVID): el traspaso resolvió la
+    // parte que venía del contrato anulado y el resto lo carga inventario por
+    // la pantalla de siempre. Marcarlo "asignados" aquí habría echado el
+    // candado de solo-lectura sobre un contrato a medio llenar, y solo un
+    // administrador habría podido reabrirlo.
+    await ref.set({
+      sustitucion_seriales_faltan: faltan,
+      sustitucion_seriales_desde: origen.contrato_id || origenId,
+    }, { merge: true });
+  }
+
+  // Bodega se entera SIEMPRE: unos seriales aparecieron solos en un contrato
+  // que ellos no tocaron. Sin este aviso, el traspaso automático es justo el
+  // tipo de magia que hace que nadie confíe en la pantalla de seriales.
+  await avisarBodega({
+    sustitutoId, sustituto: s, origen, origenId,
+    copiados, restantes, completo, pendientes,
+  }).catch((e) => logger.warn("[sustitucionContrato] Aviso a bodega no encolado (no crítico)",
+    { sustitutoId, message: e.message }));
 
   logger.info("[sustitucionContrato] Equipo traspasado al contrato sustituto", {
-    origenId, sustitutoId, copiados,
+    origenId, sustitutoId, copiados, faltan, sinCupo: pendientes.length,
   });
-  return { ok: true, copiados };
+  return { ok: true, copiados, faltan, completo, pendientes, restantes };
 }
 
-module.exports = { traspasarASustituto };
+const esc = (v) => String(v ?? "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+
+/**
+ * Encola el aviso a inventario/bodega del traspaso automático: qué seriales
+ * entraron solos al contrato nuevo, de qué contrato venían y qué falta todavía.
+ * Nunca lanza hacia afuera (el caller lo envuelve): un correo no puede tumbar
+ * un traspaso que ya escribió en Firestore.
+ */
+async function avisarBodega({ sustitutoId, sustituto, origen, origenId, copiados, restantes, completo, pendientes }) {
+  const nuevoId  = sustituto.contrato_id || sustitutoId;
+  const viejoId  = origen.contrato_id || origenId;
+  const cliente  = sustituto.cliente_nombre || origen.cliente_nombre || "Cliente";
+  const urlSeriales = `${APP_BASE_URL}/contratos/seriales.html?id=${sustitutoId}`;
+
+  const filasFaltan = restantes.map((l) =>
+    `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;">${esc(l.modelo)}</td>
+         <td style="padding:6px 0;border-bottom:1px solid #eee;text-align:right;"><b>${l.cantidad}</b></td></tr>`).join("");
+
+  const bloqueEstado = completo
+    ? `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #059669;border-radius:10px;background:#ECFDF5;font:600 15px Arial,sans-serif;color:#065F46;">
+         El contrato quedó COMPLETO con este traspaso. No hay nada pendiente por asignar —
+         ya salió el correo de aprobación a activaciones.
+       </div>`
+    : `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #D97706;border-radius:10px;background:#FFFBEB;font:600 15px Arial,sans-serif;color:#92400E;">
+         Faltan ${restantes.reduce((a, l) => a + l.cantidad, 0)} serial(es) por asignar en ${esc(nuevoId)}.
+         El correo a activaciones sale cuando se completen.
+       </div>
+       <table role="presentation" width="100%" style="font:14px Arial,sans-serif;margin:0 0 16px;">
+         <tr><td style="padding:6px 0;border-bottom:2px solid #ddd;"><b>Modelo</b></td>
+             <td style="padding:6px 0;border-bottom:2px solid #ddd;text-align:right;"><b>Faltan</b></td></tr>
+         ${filasFaltan}
+       </table>`;
+
+  const bloqueSinCupo = (pendientes || []).length
+    ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#991B1B;">
+         <b>${pendientes.length} unidad(es) del contrato anulado no cupieron</b> en ningún renglón del
+         contrato nuevo y siguen ligadas a ${esc(viejoId)}:
+         ${esc(pendientes.map((p) => p.serial).join(", "))}.
+       </p>`
+    : "";
+
+  await db.collection("mail_queue").add({
+    to: await inventarioEmailTo(),
+    subject: `Seriales traspasados automáticamente: ${nuevoId} – ${cliente}`,
+    preheader: completo
+      ? `${nuevoId} quedó completo con ${copiados} serial(es) del contrato anulado ${viejoId}`
+      : `${nuevoId}: ${copiados} serial(es) traspasados, faltan ${restantes.reduce((a, l) => a + l.cantidad, 0)}`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#1F2937;">Seriales traspasados por anulación</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        El contrato <b>${esc(viejoId)}</b> se anuló por SUSTITUCIÓN y sus equipos pasaron solos al contrato
+        <b>${esc(nuevoId)}</b> (${esc(cliente)}). Los radios no se movieron de sitio: solo cambió de qué
+        contrato cuelgan.
+      </p>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        <b>${copiados}</b> serial(es) se asignaron automáticamente.
+      </p>
+      ${bloqueEstado}
+      ${bloqueSinCupo}
+    `,
+    ctaUrl: urlSeriales,
+    ctaLabel: completo ? "Ver seriales del contrato" : "Asignar los seriales que faltan",
+    meta: {
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      source: "sustitucion-contrato-bodega",
+      contrato_id: nuevoId,
+      contrato_doc_id: sustitutoId,
+      origen_contrato_id: viejoId,
+      copiados, completo,
+    },
+    status: "queued",
+  });
+  logger.info("[sustitucionContrato] Aviso a bodega encolado", { sustitutoId, copiados, completo });
+}
+
+module.exports = { traspasarASustituto, cupoPorModelo };

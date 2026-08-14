@@ -135,6 +135,22 @@ window.ContratosLista = {
   // Chip informativo: hay una solicitud de cambio de serial PENDIENTE de que
   // inventario introduzca los reemplazos. El flag lo mantiene el trigger
   // onSerialCambio en el contrato (seriales_cambio_pendiente).
+  // Chip de alerta: se anuló por SUSTITUCIÓN pero el equipo no llegó entero al
+  // contrato sustituto (no se indicó cuál, el modelo no tiene renglón allá, o
+  // alguna ficha no se pudo resolver). Lo estampa onAnnulment.
+  //
+  // Sin esto el fallo era invisible: MAGEN DAVID anuló REEMP20260811-01 hacia
+  // ALQ20260812-01, los 5 T338 se quedaron colgando del contrato muerto y la
+  // única huella fue una línea de log que nadie mira.
+  sustitucionPill(data) {
+    if (!data.sustitucion_vinculo_pendiente) return '';
+    const n = Number(data.sustitucion_unidades_en_cliente || 0);
+    const motivo = data.sustitucion_vinculo_motivo || 'no se pudo vincular el contrato sustituto';
+    const title = `Anulado por sustitución, pero el equipo no pasó al contrato nuevo: ${motivo}`
+      + (n ? ` · ${n} unidad(es) siguen ligadas a este contrato` : '');
+    return `<span class="chip-estado" style="background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;" title="${CS.esc(title)}"><i data-lucide="unlink" style="width:12px;height:12px;"></i> Sustitución sin vincular</span>`;
+  },
+
   cambioSerialPill(data) {
     if (!data.seriales_cambio_pendiente) return '';
     return `<span class="chip-estado" style="background:#EFF6FF;color:#1E3A8A;border:1px solid #93C5FD;" title="Solicitud de cambio de serial pendiente de reemplazo por inventario"><i data-lucide="replace" style="width:12px;height:12px;"></i> Cambio de serial</span>`;
@@ -348,6 +364,7 @@ window.ContratosLista = {
           <span class="chip-estado ${estadoClase}">${estadoTexto}</span>
           ${ContratosLista.bajaPill(data)}
           ${ContratosLista.cambioSerialPill(data)}
+          ${ContratosLista.sustitucionPill(data)}
         </div>
       </td>
       <td>${ContratosLista.devolucionPill(data, id)}</td>
@@ -396,6 +413,7 @@ window.ContratosLista = {
           <div class="chip-estado ${estadoClase}">${estadoTexto}</div>
           ${ContratosLista.bajaPill(data)}
           ${ContratosLista.cambioSerialPill(data)}
+          ${ContratosLista.sustitucionPill(data)}
           ${ContratosLista.devolucionPill(data, data.id)}
         </div>
       </div>

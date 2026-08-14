@@ -111,6 +111,16 @@ function derivarEstadoDevolucion(tiquetes) {
 // divergen.
 const ESTADOS_COLGANDO = ["asignado_contrato", "en_cliente"];
 
+// Estados en los que la unidad sigue LIGADA al contrato aunque no esté ni en
+// bodega apartada ni con el cliente: `en_taller` es la unidad que entró al
+// taller por una orden viva (programación, reparación) sin dejar de pertenecer
+// al contrato — por eso equiposPool tiene `desasignarContrato`, que suelta la
+// asignación sin mover el estado. Solo cuenta para la SUSTITUCIÓN: ahí lo que
+// se traspasa es el papel, no el radio, y dónde esté físicamente da igual.
+// Para la TERMINACIÓN el estado sí manda (no se le pide al cliente que devuelva
+// un radio que está en nuestro propio taller).
+const ESTADOS_EN_CONTRATO = [...ESTADOS_COLGANDO, "en_taller"];
+
 const _tight = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 // Por qué se anula un contrato. La distinción no es burocrática: decide si el
@@ -156,13 +166,30 @@ const TIPO_ANULACION = { SUSTITUCION: "sustitucion", TERMINACION: "terminacion" 
  * @param {string} [p.tipo] — TIPO_ANULACION.*; cualquier valor desconocido cae
  *        en TERMINACION (el comportamiento histórico)
  * @param {boolean} [p.entregaConfirmada] — del contrato que se anula
+ * @param {boolean} [p.haySustituto] — se indicó a qué contrato pasa el papel.
+ *        Con sustituto, TODA unidad que siga ligada a este contrato continúa:
+ *        no hay nada que decidir por unidad porque ninguna se mueve.
  * @returns {{custodia:Array, bodega:Array, continuan:Array, devolucion:Array,
  *            omitidas:Array<{serial:string, motivo:string}>}}
  */
 function clasificarUnidadesAnulacion({
   fichas = [], contratoDocId = null, tipo = "", entregaConfirmada = false,
+  haySustituto = false,
 } = {}) {
   const esSustitucion = tipo === TIPO_ANULACION.SUSTITUCION;
+  // Traspaso completo: sustitución CON contrato sustituto. El papel se rehace y
+  // el equipo se queda exactamente donde está, así que las tres preguntas que
+  // se hacen más abajo (¿de quién es?, ¿salió?, ¿hay que ir por él?) no
+  // aplican: ninguna unidad cambia de manos ni de sitio, solo de contrato.
+  //
+  // Sin este atajo, REEMP20260811-01 (MAGEN DAVID, 2026-08-14) perdió sus 5
+  // T338 en silencio: estaban `en_taller` por la orden de programación
+  // 2026081307 del día anterior, cayeron todas en `omitidas`, y el contrato
+  // sustituto ALQ20260812-01 nació sin un solo serial. Y de haber estado
+  // `asignado_contrato` (sin entrega confirmada) habría sido peor: las habría
+  // soltado a bodega, desarmando la reserva del cliente.
+  const traspasoIntegro = esSustitucion && haySustituto === true;
+  const estadosLigados = traspasoIntegro ? ESTADOS_EN_CONTRATO : ESTADOS_COLGANDO;
   const out = { custodia: [], bodega: [], continuan: [], devolucion: [], omitidas: [] };
 
   for (const f of fichas) {
@@ -172,7 +199,7 @@ function clasificarUnidadesAnulacion({
       out.omitidas.push({ serial, motivo: "sin ficha en el pool" });
       continue;
     }
-    if (!ESTADOS_COLGANDO.includes(f.estado)) {
+    if (!estadosLigados.includes(f.estado)) {
       out.omitidas.push({ serial, motivo: `estado ${f.estado}` });
       continue;
     }
@@ -180,6 +207,11 @@ function clasificarUnidadesAnulacion({
       out.omitidas.push({ serial, motivo: `asignada a ${f.contrato_id || "otro contrato"}` });
       continue;
     }
+    // Sustitución con destino conocido: la unidad sigue al papel, sin más.
+    // Incluye el equipo del CLIENTE (un contrato Propio que se rehace no
+    // convierte los radios del cliente en custodia suelta: siguen amparados,
+    // ahora por el contrato nuevo).
+    if (traspasoIntegro) { out.continuan.push(f); continue; }
     // El equipo del cliente nunca se recupera, se anule como se anule.
     if (f.propiedad === "cliente") { out.custodia.push(f); continue; }
     // Reservada y sin entrega confirmada: jamás salió del taller.
@@ -249,5 +281,5 @@ module.exports = {
   pendientesDevolucion, esperadosDevolucion, resumenDevolucion,
   derivarEstadoDevolucion, unidadesRecuperablesDeBaja,
   clasificarUnidadesAnulacion, TIPO_ANULACION,
-  ESTADOS_COLGANDO, ESTADO_CERRADA,
+  ESTADOS_COLGANDO, ESTADOS_EN_CONTRATO, ESTADO_CERRADA,
 };

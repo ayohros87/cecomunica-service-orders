@@ -22,7 +22,9 @@ if (!admin.apps.length) admin.initializeApp({ projectId: "test-anulacion-sustitu
 
 const {
   clasificarUnidadesAnulacion, TIPO_ANULACION, ESTADOS_COLGANDO,
+  ESTADOS_EN_CONTRATO,
 } = require("../src/lib/devolucion");
+const { cupoPorModelo } = require("../src/lib/sustitucionContrato");
 const pool = require("../src/domain/equiposPool");
 
 const CONTRATO = "contrato-anulado-1";
@@ -112,11 +114,11 @@ test("la ficha reasignada a otro contrato se omite con su motivo", () => {
   assert.equal(r.continuan.length, 0);
 });
 
-test("un estado fuera del contrato (en_taller, vendido, baja) se omite", () => {
-  for (const estado of ["en_taller", "vendido", "baja", "en_bodega", "devuelto_revision"]) {
+test("un estado fuera del contrato (vendido, baja) se omite", () => {
+  for (const estado of ["vendido", "baja", "en_bodega", "devuelto_revision", "por_clasificar"]) {
     const r = clasificarUnidadesAnulacion({
       fichas: [ficha("A1", { estado })], contratoDocId: CONTRATO,
-      tipo: TIPO_ANULACION.SUSTITUCION, entregaConfirmada: true,
+      tipo: TIPO_ANULACION.SUSTITUCION, entregaConfirmada: true, haySustituto: true,
     });
     assert.equal(r.omitidas.length, 1, `estado=${estado}`);
     assert.match(r.omitidas[0].motivo, new RegExp(estado));
@@ -156,8 +158,96 @@ test("caso PROP20260625-01: equipo del cliente en una sustitución → custodia,
   assert.equal(r.bodega.length, 0, "el equipo del cliente jamás entra a nuestra bodega");
 });
 
+// ── Traspaso íntegro: sustitución CON contrato sustituto ──────────────────
+// El caso REEMP20260811-01 → ALQ20260812-01 (MAGEN DAVID, 2026-08-14). Los 5
+// T338 estaban `en_taller` por la orden de programación del día anterior y la
+// anulación los perdió en silencio: cero traspasados, cero avisos.
+test("caso MAGEN DAVID: en_taller con sustituto indicado SÍ se traspasa", () => {
+  const fichas = Array.from({ length: 5 }, (_, i) =>
+    ficha(`T${i}`, { estado: "en_taller", modelo: "T338" }));
+  const r = clasificarUnidadesAnulacion({
+    fichas, contratoDocId: CONTRATO, tipo: TIPO_ANULACION.SUSTITUCION,
+    entregaConfirmada: false, haySustituto: true,
+  });
+  assert.equal(r.continuan.length, 5, "las 5 pasan al contrato nuevo");
+  assert.equal(r.omitidas.length, 0, "ninguna se pierde en silencio");
+  assert.equal(r.bodega.length, 0, "no se sueltan a bodega: son del contrato nuevo");
+});
+
+test("con sustituto, la RESERVADA sin entrega no se suelta a bodega", () => {
+  // Sin el atajo, una unidad `asignado_contrato` sin entrega confirmada volvía
+  // a bodega — desarmando la reserva que el contrato nuevo hereda.
+  const fichas = [ficha("A1", { estado: "asignado_contrato" })];
+  const r = clasificarUnidadesAnulacion({
+    fichas, contratoDocId: CONTRATO, tipo: TIPO_ANULACION.SUSTITUCION,
+    entregaConfirmada: false, haySustituto: true,
+  });
+  assert.deepEqual(seriales(r.continuan), ["A1"]);
+  assert.equal(r.bodega.length, 0);
+});
+
+test("con sustituto, el equipo del CLIENTE también sigue al contrato nuevo", () => {
+  const fichas = [ficha("P1", { propiedad: "cliente" })];
+  const r = clasificarUnidadesAnulacion({
+    fichas, contratoDocId: CONTRATO, tipo: TIPO_ANULACION.SUSTITUCION,
+    entregaConfirmada: true, haySustituto: true,
+  });
+  assert.deepEqual(seriales(r.continuan), ["P1"]);
+  assert.equal(r.custodia.length, 0, "queda amparado por el contrato nuevo, no en custodia suelta");
+});
+
+test("SIN sustituto se conserva el reparto de siempre (custodia/bodega)", () => {
+  const r = clasificarUnidadesAnulacion({
+    fichas: [ficha("P1", { propiedad: "cliente" }), ficha("A1", { estado: "asignado_contrato" }),
+      ficha("T1", { estado: "en_taller" })],
+    contratoDocId: CONTRATO, tipo: TIPO_ANULACION.SUSTITUCION,
+    entregaConfirmada: false, haySustituto: false,
+  });
+  assert.deepEqual(seriales(r.custodia), ["P1"]);
+  assert.deepEqual(seriales(r.bodega), ["A1"]);
+  assert.deepEqual(r.omitidas.map(o => o.serial), ["T1"]);
+});
+
+test("una TERMINACIÓN nunca reclama la unidad que está en nuestro taller", () => {
+  const r = clasificarUnidadesAnulacion({
+    fichas: [ficha("T1", { estado: "en_taller" })], contratoDocId: CONTRATO,
+    tipo: TIPO_ANULACION.TERMINACION, entregaConfirmada: true, haySustituto: true,
+  });
+  assert.equal(r.devolucion.length, 0);
+  assert.equal(r.omitidas.length, 1);
+});
+
+// ── Cupo del sustituto: el contrato nuevo puede ser MÁS grande ────────────
+test("cupoPorModelo suma los renglones repetidos del mismo modelo", () => {
+  // ALQ20260812-01 tal cual está en producción: 3 + 2 HYT-P50 (dos tramos de
+  // precio) + 5 T338 = 10 unidades donde el anulado tenía 5.
+  const cupo = cupoPorModelo({ equipos: [
+    { modelo_id: "m-hyt", modelo: "HYT-P50", cantidad: 3 },
+    { modelo_id: "m-t338", modelo: "T338",   cantidad: 5 },
+    { modelo_id: "m-hyt", modelo: "HYT-P50", cantidad: 2 },
+  ] });
+  assert.deepEqual(cupo.get("m-hyt"), { label: "HYT-P50", cantidad: 5 });
+  assert.deepEqual(cupo.get("m-t338"), { label: "T338", cantidad: 5 });
+});
+
+test("cupoPorModelo cae al nombre apretado cuando no hay modelo_id", () => {
+  const cupo = cupoPorModelo({ equipos: [{ modelo: "PNC360S-R", cantidad: 2 }] });
+  assert.deepEqual(cupo.get("PNC360SR"), { label: "PNC360S-R", cantidad: 2 });
+});
+
+test("cupoPorModelo devuelve null sin renglones (se copia todo, como antes)", () => {
+  assert.equal(cupoPorModelo({}), null);
+  assert.equal(cupoPorModelo({ equipos: [] }), null);
+  assert.equal(cupoPorModelo({ equipos: [{ modelo: "T338", cantidad: 0 }] }), null);
+});
+
 // ── Contrato con el pool: la copia de estados no puede divergir ───────────
 test("ESTADOS_COLGANDO sigue alineado con equiposPool", () => {
   assert.deepEqual([...ESTADOS_COLGANDO].sort(),
     [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE].sort());
+});
+
+test("ESTADOS_EN_CONTRATO sigue alineado con equiposPool", () => {
+  assert.deepEqual([...ESTADOS_EN_CONTRATO].sort(),
+    [pool.ESTADOS.ASIGNADO, pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.EN_TALLER].sort());
 });
