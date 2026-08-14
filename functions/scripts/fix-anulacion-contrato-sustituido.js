@@ -31,7 +31,12 @@
  *   3. ALQ20260806-03 ← seriales_estado "asignados"
  *   4. orden 2026080602 → eliminado:true (cancelada); el propio
  *      onOrdenDevolucionWrite suelta el chip del contrato viejo
- *   5. ALQ20260715-01 ← devolucion_estado "no_aplica / contrato_sustituido"
+ *   5. limpia `pendiente_devolucion` de las 32 fichas (lo puso onAnnulment y
+ *      NADIE lo borra al cancelar la orden — ver fase 5)
+ *   6. ALQ20260715-01 ← devolucion_estado "no_aplica / contrato_sustituido"
+ *
+ * Idempotente: se puede volver a correr. Los seriales ya copiados se saltan y
+ * el resto son escrituras `merge` con el mismo valor.
  *
  * NO envía el PDF de seriales al cliente: ese correo lo dispara la subcolección
  * `seriales_estado/current`, y aquí solo se escribe el campo espejo del padre.
@@ -80,9 +85,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     [nuevo.cliente_id === viejo.cliente_id, "mismo cliente en ambos contratos"],
     [(nuevo.contrato_origen_ids || []).length === 0,
       "el nuevo NO tiene origen vinculado (si lo tuviera, la entrega dispararía onEntregaTransicion)"],
-    [orden.eliminado !== true,              "la orden sigue viva"],
     [orden.tipo_de_servicio === "DEVOLUCION", "la orden es de DEVOLUCION"],
   ];
+  if (orden.eliminado === true) {
+    console.log("  · la orden YA está cancelada — re-ejecución, se completan las fases que falten");
+  }
   // El candado que importa: si alguien ya hizo check-in de alguna unidad, hubo
   // trabajo humano real sobre este tiquete y este script no lo puede pisar.
   const esperados = orden.devolucion?.esperados || [];
@@ -102,23 +109,35 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const seriales = serSnap.docs.filter((d) => (d.data().serial || "").trim());
   console.log(`\n  ✓ ${seriales.length} seriales en el contrato viejo`);
 
-  // Y las fichas del pool tienen que seguir donde el análisis las dejó.
-  const fichas = await db.collection("equipos_pool")
+  // Y las fichas del pool tienen que seguir donde el análisis las dejó. En una
+  // re-ejecución ya estarán bajo el contrato NUEVO, así que se miran las dos.
+  const enViejo = await db.collection("equipos_pool")
     .where("asignacion.contrato_doc_id", "==", VIEJO).get();
-  const fuera = fichas.docs.filter((f) => f.data().estado === "en_cliente");
-  console.log(`  ✓ ${fuera.length} de ${fichas.size} fichas del pool en_cliente`);
-  if (fichas.size !== fuera.length) {
+  const enNuevo = await db.collection("equipos_pool")
+    .where("asignacion.contrato_doc_id", "==", NUEVO).get();
+  const todas = [...enViejo.docs, ...enNuevo.docs];
+  const fuera = todas.filter((f) => f.data().estado === "en_cliente");
+  console.log(`  ✓ ${fuera.length} de ${todas.length} fichas en_cliente`
+    + ` (${enViejo.size} en el anulado, ${enNuevo.size} en el sustituto)`);
+  if (todas.length !== fuera.length) {
     console.error("Hay fichas en otro estado — revisar a mano. Abortado."); process.exit(1);
   }
+  // El flag que onAnnulment puso para vigilar la devolución. Nadie lo borra al
+  // cancelar la orden, y el digest diario (recordatorioOperativo §C2) lista las
+  // unidades con el flag que NO estén cubiertas por una orden abierta: cancelar
+  // sin limpiarlo convierte estos 32 radios en una alarma diaria falsa.
+  const conFlag = todas.filter((f) => f.data().pendiente_devolucion === true);
+  console.log(`  · ${conFlag.length} con pendiente_devolucion (se limpian en la fase 5)`);
 
   if (!EXECUTE) {
     console.log("\n── Se haría ──");
     console.log(`  1. ${nuevo.contrato_id}: entrega_confirmada=true, fecha_entrega_ultima=${viejo.fecha_entrega_ultima?.toDate?.().toISOString() || "?"}`);
     console.log(`  2. copiar ${seriales.length} seriales → contratos/${NUEVO}/seriales`);
-    console.log(`     (onSerialWrite re-apunta las ${fuera.length} fichas del pool, sin moverlas de en_cliente)`);
+    console.log(`     (onSerialWrite re-apunta las fichas del pool, sin moverlas de en_cliente)`);
     console.log(`  3. ${nuevo.contrato_id}: seriales_estado="asignados" (sin PDF al cliente)`);
     console.log(`  4. orden ${ORDEN}: eliminado=true (cancelada)`);
-    console.log(`  5. ${viejo.contrato_id}: devolucion_estado="no_aplica" (contrato_sustituido)`);
+    console.log(`  5. limpiar pendiente_devolucion en ${conFlag.length} ficha(s)`);
+    console.log(`  6. ${viejo.contrato_id}: devolucion_estado="no_aplica" (contrato_sustituido)`);
     console.log("\ndry-run: nada escrito.");
     process.exit(0);
   }
@@ -144,8 +163,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // Se escriben de uno en uno: cada uno dispara onSerialWrite, que hace el
   // upsert en el pool. En lote (batch) el trigger igual corre, pero de a uno se
   // puede reportar el avance y se le da aire a las 32 transacciones del pool.
+  const yaCopiados = new Set(
+    (await db.collection("contratos").doc(NUEVO).collection("seriales").get()).docs.map((d) => d.id));
   let copiados = 0;
   for (const d of seriales) {
+    if (yaCopiados.has(d.id)) continue;   // re-ejecución: no re-estampar created_at
     const s = d.data();
     await db.collection("contratos").doc(NUEVO).collection("seriales").doc(d.id).set({
       ...s,
@@ -217,6 +239,40 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   });
   console.log(`4. orden ${ORDEN}: cancelada (eliminado=true, con nota)`);
 
+  // ── 5. Limpiar `pendiente_devolucion` de las fichas ───────────────────────
+  // onAnnulment lo puso al abrir el tiquete (onAnnulment.js:155-158) y NADA lo
+  // borra al cancelarlo: onOrdenDevolucionWrite sale temprano cuando la orden
+  // está eliminada, y el pool solo lo limpia cuando la unidad vuelve a bodega o
+  // a cuarentena — que aquí nunca va a pasar.
+  //
+  // Dejarlo puesto es peor que no haber hecho nada: recordatorioOperativo §C2
+  // lista las unidades con el flag que ninguna orden ABIERTA cubre, y al
+  // cancelar la orden estas 32 quedan justo así. El digest diario le pediría a
+  // recepción y al vendedor que persigan 32 radios que el cliente tiene con
+  // todo derecho. También pinta el chip "pendiente de devolución" en la ficha.
+  //
+  // Escritura directa: no hay transición de estado que colgarle (la unidad no
+  // se mueve), y `transicionar` con estado igual devolvería "sin-cambio" sin
+  // escribir nada.
+  const paraLimpiar = (await db.collection("equipos_pool")
+    .where("asignacion.contrato_doc_id", "==", NUEVO).get())
+    .docs.filter((f) => f.data().pendiente_devolucion === true);
+  for (const f of paraLimpiar) {
+    await f.ref.set({
+      pendiente_devolucion: admin.firestore.FieldValue.delete(),
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    await f.ref.collection("movimientos").add({
+      at: admin.firestore.FieldValue.serverTimestamp(),
+      por: BY, por_email: null, tipo: "correccion_migracion",
+      de_estado: f.data().estado, a_estado: f.data().estado,
+      ref: { tipo: "contrato", id: NUEVO, label: nuevo.contrato_id || NUEVO },
+      notas: "Se retira la marca de devolución pendiente: la anulación fue "
+        + "administrativa y el equipo continúa con el cliente bajo el contrato sustituto",
+    });
+  }
+  console.log(`5. pendiente_devolucion limpiado en ${paraLimpiar.length} ficha(s)`);
+
   // ── 6. Cerrar la fila del contrato viejo ──────────────────────────────────
   // Después de la cancelación a propósito: estamparEspejo BORRA los campos
   // devolucion_* al quitar el último tiquete. Si esto se escribiera antes, el
@@ -241,7 +297,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     correccion_anulacion_nota: NOTA,
     correccion_anulacion_sustituido_por: nuevo.contrato_id || NUEVO,
   }, { merge: true });
-  console.log(`5. ${viejo.contrato_id}: devolucion_estado="no_aplica" (contrato_sustituido)`);
+  console.log(`6. ${viejo.contrato_id}: devolucion_estado="no_aplica" (contrato_sustituido)`);
 
   console.log("\nListo. Los 32 radios siguen en_cliente — ninguno se movió de sitio.");
   process.exit(0);
