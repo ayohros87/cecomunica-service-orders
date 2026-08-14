@@ -359,10 +359,13 @@ a.kpi:hover{border-color:var(--accent);box-shadow:var(--shadow-md)}
 
 /* ---- Descartar una fila ("esta orden no se va a crear") ---- */
 /* Acción secundaria: discreta hasta que el puntero entra en la fila. */
-.fo-x{flex:none;display:grid;place-items:center;width:26px;height:26px;border:1px solid transparent;border-radius:var(--r-md);background:none;color:var(--fg-4);cursor:pointer;opacity:.45;transition:opacity .15s,background .15s,color .15s,border-color .15s}
+.fo-x{flex:none;display:grid;place-items:center;width:26px;height:26px;padding:0;border:1px solid transparent;border-radius:var(--r-md);background:none;color:var(--fg-4);cursor:pointer;opacity:.45;transition:opacity .15s,background .15s,color .15s,border-color .15s}
 .fo-row:hover .fo-x,.fo-x:focus-visible{opacity:1}
 .fo-x:hover{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
-.fo-x i{width:14px;height:14px}
+/* El <i> lo reemplaza lucide por un <svg>: hay que nombrar los dos o el
+   icono sale a su tamaño intrínseco (24px), desborda el botón y grid deja
+   de centrarlo — el recuadro rojo del hover queda descuadrado. */
+.fo-x i,.fo-x svg{width:14px;height:14px}
 .fo-btn--ghost{color:var(--fg-3);background:var(--surface);border-color:var(--line);cursor:pointer}
 .fo-btn--ghost:hover{background:var(--gray-50);border-color:var(--line-strong)}
 .fo-btn--danger{color:var(--bad);background:var(--bad-soft);border-color:var(--bad);cursor:pointer}
