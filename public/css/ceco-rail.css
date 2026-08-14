@@ -161,9 +161,28 @@ html[data-cc-rail="mini"]{--cc-rail-cur:var(--cc-rail-mini-w)}
 @media (max-width:1180px){
   .os-kpis{grid-template-columns:repeat(2,1fr)}
 }
+/* Botón flotante que abre el drawer en móvil (lo inyecta Layout.renderRail
+   cuando la página no trae #ccRailToggle propio). Oculto en desktop. */
+.rail-fab{display:none}
+
 @media (max-width:1024px){
   .cc-app,.cc-app.has-rail,.cc-app.has-rail.rail-mini{grid-template-columns:1fr}
-  .rail,.rail-scrim,#rail-mount{display:none}
+  #rail-mount{display:none}
+  /* Drawer (auditoría A1): antes el rail se OCULTABA ≤1024px y las páginas
+     híbridas quedaban sin navegación móvil — cambiar de módulo era volver
+     al home (+2 clicks siempre). Off-canvas + scrim, mismo patrón que
+     ceco-command; el ancho fijo ignora el modo mini (drawer siempre full). */
+  .rail{position:fixed;inset:0 auto 0 0;z-index:1200;width:var(--cc-rail-w);
+    transform:translateX(-100%);transition:transform .2s ease;display:flex}
+  .rail--mini{width:var(--cc-rail-w)}
+  .rail.is-open{transform:none;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+  .rail-scrim{position:fixed;inset:0;background:rgba(6,24,41,.5);z-index:1150}
+  .rail-scrim.is-open{display:block}
+  .rail-fab{display:inline-flex;position:fixed;left:14px;bottom:14px;z-index:1100;
+    width:46px;height:46px;border-radius:999px;border:none;cursor:pointer;
+    background:#0B2A47;color:#fff;align-items:center;justify-content:center;
+    box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .rail-fab .lucide{width:22px;height:22px}
   .os-kpis.estado-chips-bar,
   .os-kpis{display:none}
 }

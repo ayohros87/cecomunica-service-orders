@@ -301,21 +301,42 @@ const Layout = (() => {
       try { localStorage.setItem(MINI_KEY, mini ? '1' : '0'); } catch { /* sin storage */ }
     });
 
-    // drawer móvil — solo si la página trae el botón (renderShell lo emite;
-    // las híbridas desktop-only no lo tienen y el rail se oculta por CSS).
-    const rail = document.getElementById('ccRail');
+    // drawer móvil (auditoría A1): antes solo funcionaba si la página emitía
+    // #ccRailToggle (exclusivo del renderShell que ninguna usa) y las 56
+    // híbridas quedaban SIN navegación móvil. Ahora, si falta el botón, se
+    // inyecta un flotante (.rail-fab, visible solo ≤1024px por CSS) — salvo
+    // en páginas con navegación móvil propia (bottom-nav de órdenes).
     const scrim = document.getElementById('ccRailScrim');
-    const toggle = document.getElementById('ccRailToggle');
-    if (rail && toggle) {
+    let toggle = document.getElementById('ccRailToggle');
+    if (!toggle && !document.querySelector('.bottom-nav, .mobile-bottom-nav, #mobileBottomNav')) {
+      toggle = document.createElement('button');
+      toggle.id = 'ccRailToggle';
+      toggle.type = 'button';
+      toggle.className = 'rail-fab';
+      toggle.setAttribute('aria-label', 'Menú de navegación');
+      toggle.innerHTML = '<i data-lucide="menu"></i>';
+      document.body.appendChild(toggle);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    // El rail se REEMPLAZA en cada render (pintado optimista → real): el
+    // listener del toggle se ata UNA vez y resuelve el rail al momento del
+    // click — cerrarlo sobre la variable dejaría el handler apuntando a un
+    // nodo muerto tras el re-render (toggle que abre y no cierra).
+    if (toggle && !toggle.dataset.wired) {
+      toggle.dataset.wired = '1';
       toggle.addEventListener('click', () => {
-        rail.classList.toggle('is-open');
-        scrim?.classList.toggle('is-open', rail.classList.contains('is-open'));
-      });
-      scrim?.addEventListener('click', () => {
-        rail.classList.remove('is-open');
-        scrim.classList.remove('is-open');
+        const r = document.getElementById('ccRail');
+        const s = document.getElementById('ccRailScrim');
+        if (!r) return;
+        r.classList.toggle('is-open');
+        s?.classList.toggle('is-open', r.classList.contains('is-open'));
       });
     }
+    // El scrim sí es nuevo en cada render: listener directo.
+    scrim?.addEventListener('click', () => {
+      scrim.classList.remove('is-open');
+      document.getElementById('ccRail')?.classList.remove('is-open');
+    });
   }
 
   function renderShell(opts = {}) {
