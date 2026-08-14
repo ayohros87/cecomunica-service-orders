@@ -36,6 +36,10 @@
   ];
   // Paleta PROPIA de resoluciones de devolución (antes reciclaba las clases de
   // chips de cotizaciones — mismo color, dominio ajeno; auditoría 2026-07-24).
+  // El verde pálido es EXCLUSIVO del estado ya resuelto: los botones de acción
+  // van sólidos (btn-primary) y sin gancho. Un "✓ Recibido" verde pálido en la
+  // columna de resolución se leía como "esta unidad ya llegó" cuando en
+  // realidad era el botón para registrarla (2026-08-14).
   const RES_LABEL = {
     recibido: '<span class="chip-estado" style="background:#e9f7f0;color:#067647;">Recibido</span>',
     nunca_salio: '<span class="chip-estado" style="background:#eef2ff;color:#4338ca;">Nunca salió</span>',
@@ -169,7 +173,7 @@
       <div style="border:1px solid #bae6fd;background:#eff6ff;border-radius:8px;padding:8px;max-width:440px;">
         ${checklistHtml(`¿Qué entregó el cliente con ${esc(serial)}?`)}
         <div style="display:flex;gap:6px;margin-top:8px;">
-          <button type="button" class="btn btn-sm" id="devRecibidoConfirm" style="background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;">✓ Confirmar recibido</button>
+          <button type="button" class="btn btn-primary btn-sm" id="devRecibidoConfirm">Confirmar recibido</button>
           <button type="button" class="btn btn-sm" id="devRecibidoCancel">Cancelar</button>
         </div>
       </div>`;
@@ -188,7 +192,7 @@
           está mal, corrígelo en <b>Inventario · Equipos por serial</b>.
         </div>
         <div style="display:flex;gap:6px;margin-top:8px;">
-          <button type="button" class="btn btn-sm" id="devCorregirConfirm" style="background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;">✓ Guardar corrección</button>
+          <button type="button" class="btn btn-primary btn-sm" id="devCorregirConfirm">Guardar corrección</button>
           <button type="button" class="btn btn-sm" id="devCorregirCancel">Cancelar</button>
         </div>
       </div>`;
@@ -330,8 +334,7 @@
           </div>
         </div>` : ''}
         <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-sm" id="devLoteConfirm" ${inc.length ? '' : 'disabled'}
-                  style="background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;">✓ Confirmar ${inc.length} recibido${inc.length === 1 ? '' : 's'}</button>
+          <button type="button" class="btn btn-primary btn-sm" id="devLoteConfirm" ${inc.length ? '' : 'disabled'}>Confirmar ${inc.length} recibido${inc.length === 1 ? '' : 's'}</button>
           <button type="button" class="btn btn-sm" id="devLoteCancel">Cancelar</button>
         </div>
       </div>`;
@@ -421,7 +424,8 @@
               + detalleRecibido(e, editable)
             : (editable ? (_recibiendoId === e.id ? miniFormHtml(e.serial) : `
               <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-                <button type="button" class="btn btn-sm dev-recibido" data-id="${esc(e.id)}" style="background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0;">✓ Recibido</button>
+                <button type="button" class="btn btn-primary btn-sm dev-recibido" data-id="${esc(e.id)}"
+                        title="Registrar la llegada física de esta unidad — abre el checklist de accesorios y daño"><i data-lucide="arrow-down-to-line"></i> Marcar recibido</button>
                 ${esConfirmacion ? `<button type="button" class="btn btn-sm dev-nunca" data-id="${esc(e.id)}">Nunca salió</button>` : ''}
                 <select class="form-select dev-motivo" data-id="${esc(e.id)}" style="height:30px;font-size:12px;max-width:230px;">
                   <option value="">No se devuelve — motivo…</option>
@@ -620,7 +624,7 @@
 
     _overlay.querySelector('#devCerrarModal')?.addEventListener('click', cerrarModal);
     _overlay.querySelector('#devCerrarOrden')?.addEventListener('click', cerrarOrden);
-    // "✓ Recibido" abre el mini-checklist; la escritura ocurre al confirmar.
+    // "Marcar recibido" abre el mini-checklist; la escritura ocurre al confirmar.
     _overlay.querySelectorAll('.dev-recibido').forEach(b => b.addEventListener('click', () => {
       const id = b.dataset.id;
       _cerrarCapturas();
