@@ -111,7 +111,22 @@ table td {
 
 table tbody tr { transition: background 0.15s; border-bottom: 1px solid var(--line); }
 
-table tbody tr:hover { background: #f0f9ff; }
+table tbody tr:hover { background: var(--accent-soft, #f0f9ff); }
+
+/* ── Reskin F4 slice 3 (propuesta .tbl): id mono-azul, avatar del técnico,
+   filas con más aire. La cebra por PARES (fila+detalle) se conserva. */
+.orden-id {
+  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-weight: 600; font-size: 13px; color: var(--accent, #0091D7);
+}
+.tec-avatar {
+  display: inline-flex; width: 22px; height: 22px; border-radius: 6px;
+  background: #EFF6FF; color: #1D4ED8;
+  font: 600 10.5px/1 var(--font-mono, monospace);
+  align-items: center; justify-content: center;
+  margin-right: 6px; vertical-align: middle;
+}
+#ordersTable > tr > td:not(.orden-expandida-wrapper) { padding-top: 12px; padding-bottom: 12px; }
 
 /* Zebra stripe by order pair (rows 1+2 = white, rows 3+4 = tinted)
    Each order occupies 2 rows: filaOrden + filaDetalle */

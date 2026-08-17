@@ -101,7 +101,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     <td>
       <span class="${dotClass}"></span>
       <i data-lucide="chevron-right" class="flecha"></i>
-      ${ordenId}
+      <span class="orden-id">${ordenId}</span>
       ${fotosBadge}
     </td>
     <td class="client-name-cell">
@@ -110,7 +110,12 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         <span class="cliente-icon">${iconoAdvertencia}${iconoContrato}</span>
       </div>
     </td>
-    <td>${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
+    <td>${(() => {
+      // Reskin F4 slice 3 (propuesta): avatar de iniciales junto al técnico.
+      const ini = String(ordenData.tecnico_asignado || '').trim()
+        .split(/\s+/).map(p => p[0]).slice(0, 2).join('').toUpperCase();
+      return ini ? `<span class="tec-avatar" aria-hidden="true">${ini}</span>` : '';
+    })()}${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
     <td><span class="chip-estado ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
     <td>${formatFecha(ordenData.fecha_creacion)}</td>
