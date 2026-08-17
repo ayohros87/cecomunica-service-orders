@@ -1077,6 +1077,37 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
 }
 window.botonesGestion = botonesGestion;
 
+// ── Conteos del SERVIDOR para chips/KPIs (auditoría M4/A8) ────────────────
+// Los conteos locales solo ven lo CARGADO (50 por página): "Por asignar: 3"
+// podía ser 8 en el servidor. Tras cada pintado local se corrigen con los
+// MISMOS count() agregados de las señales del home (SenalesService — 1
+// lectura por cada 1,000 contados), con throttle para no facturar por tecla.
+// El chip "Todas" queda local a propósito: cuenta lo cargado (los estados
+// legacy no están en la lista canónica y una suma server-side mentiría).
+let _conteosSrvTs = 0;
+let _conteosSrvEnVuelo = false;
+async function _refrescarConteosServidor() {
+  if (!window.SenalesService) return;
+  if (_conteosSrvEnVuelo || (Date.now() - _conteosSrvTs) < 45000) return;
+  _conteosSrvEnVuelo = true;
+  try {
+    const ESTADOS = ['POR ASIGNAR', 'RECIBIDO EN MOSTRADOR', 'ASIGNADO',
+      'COMPLETADO (EN OFICINA)', 'ENTREGADO AL CLIENTE', 'CERRADA (VISITA)'];
+    const [counts, qc] = await Promise.all([
+      Promise.all(ESTADOS.map(e => SenalesService.countOrdenesPorEstado(e).catch(() => null))),
+      SenalesService.countOrdenesQcPendiente().catch(() => null),
+    ]);
+    const pinta = (key, n) => {
+      if (n == null) return;   // un count fallido no pisa el número local
+      document.querySelectorAll(`.estado-chips-bar [data-count="${key}"]`)
+        .forEach(s => { s.textContent = String(n); });
+    };
+    ESTADOS.forEach((e, i) => pinta(e, counts[i]));
+    pinta('qc', qc);
+    _conteosSrvTs = Date.now();
+  } finally { _conteosSrvEnVuelo = false; }
+}
+
 function actualizarResumen(lista) {
   const el = document.getElementById("resumenOrdenes");
   // Count from APP.state.chipBase — the last UNFILTERED dataset (kept fresh
@@ -1127,6 +1158,8 @@ function actualizarResumen(lista) {
     b.classList.toggle('active', qcOn);
     b.setAttribute('aria-selected', String(qcOn));
   });
+  // Corrección asíncrona con los conteos del servidor (throttled, ver arriba).
+  _refrescarConteosServidor();
   // (The old #mobileHeader .topbar-badges cluster — tbPorAsignar /
   // tbAsignado / tbCompletado / tbEntregado — was a duplicate estado
   // filter and is gone. Its counts now live in the mobile chip bar
