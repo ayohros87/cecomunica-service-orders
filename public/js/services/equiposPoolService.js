@@ -670,6 +670,18 @@ const EquiposPoolService = {
     }, user);
   },
 
+  // Ubicación desconocida: el radio no está donde el sistema dice, y quien
+  // cuenta tampoco lo tiene en el estante. `verificado: false` porque eso es
+  // justo lo que dejó de ser cierto. La asignación se CONSERVA a propósito: es
+  // la única evidencia de dónde figuraba y por dónde empezar a buscarlo (mismo
+  // criterio que scripts/mueve-a-por-clasificar-lista.js).
+  async mandarAPorClasificar(id, motivo, user) {
+    return this.cambiarEstado(id, this.ESTADOS.POR_CLASIFICAR, {
+      tipo: 'reclasificacion', notas: motivo,
+      extra: { verificado: false },
+    }, user);
+  },
+
   // Venta directa sin contrato: la factura ya se emitió en QuickBooks y aquí
   // solo se descuenta la unidad de bodega. `esperado: EN_BODEGA` evita vender
   // dos veces (o vender algo que otro flujo ya movió). La asignación guarda a

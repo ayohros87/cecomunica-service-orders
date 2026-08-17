@@ -45,6 +45,46 @@ const InventarioService = {
 
     return batch.commit();
   },
+
+  // Mueve parte del conteo físico de una fila del catálogo a otra.
+  //
+  // NO es lo mismo que scripts/mueve-conteo-inventario.js, que traslada la fila
+  // ENTERA tras un dedup de modelos: acá el lote es parcial por naturaleza (12
+  // de 32 mal codificados) y las dos filas siguen vivas.
+  //
+  // Existe porque reclasificar sin tocar el conteo deja un fantasma: el
+  // 2026-08-14 bodega pasó 32 seriales de VM686 a PD686 y la fila VM686 se
+  // quedó contando 32 con una sola unidad viva — una diferencia de −31 que no
+  // había forma de cerrar desde la UI.
+  //
+  // `restarOrigen` y `sumarDestino` van por separado a propósito: que las
+  // unidades ya no estén en el origen es un hecho, pero que falten en el
+  // destino NO — si quien contó ya las anotó bajo el código bueno, sumarlas las
+  // contaría dos veces. Quien cuenta ve los dos números y decide.
+  async moverConteo({ desde, hacia, cantidad, restarOrigen = true, sumarDestino = false }) {
+    const n = Number(cantidad) || 0;
+    if (n <= 0) return [];
+    const db = firebase.firestore();
+    const leer = async (id) => {
+      if (!id) return null;
+      const s = await db.collection('inventario_actual').doc(id).get();
+      return s.exists ? s.data() : null;
+    };
+    const [o, d] = await Promise.all([leer(desde), leer(hacia)]);
+
+    const entries = [];
+    if (sumarDestino && hacia) {
+      entries.push({ modeloId: hacia, cantidad: (Number(d?.cantidad) || 0) + n });
+    }
+    if (restarOrigen && desde && o) {
+      // Nunca negativo: si el origen ya contaba menos que el lote, el conteo
+      // viejo estaba mal y lo que queda es cero, no una deuda.
+      entries.push({ modeloId: desde, cantidad: Math.max(0, (Number(o.cantidad) || 0) - n) });
+    }
+    if (!entries.length) return [];
+    await this.guardarInventario(entries);
+    return entries;
+  },
 };
 
 window.InventarioService = InventarioService;
