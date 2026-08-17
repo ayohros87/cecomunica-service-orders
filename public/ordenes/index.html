@@ -85,22 +85,32 @@
   <div class="cc-app">
   <div id="rail-mount"></div>
   <div class="cc-work">
-  <div class="topbar topbar--desktop" id="desktopTopbar">
-    <svg class="topbar-brand" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-label="CeComunica" role="img"><defs><linearGradient id="ccPlate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4267"/><stop offset="0.5" stop-color="#0B2A47"/><stop offset="1" stop-color="#06203A"/></linearGradient><linearGradient id="ccSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="0.32" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient><linearGradient id="ccWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#C4D2E0"/></linearGradient><linearGradient id="ccCyan" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5BD3EE"/><stop offset="1" stop-color="#0091B0"/></linearGradient><radialGradient id="ccGlow"><stop offset="0" stop-color="#7FE3FF" stop-opacity="0.9"/><stop offset="1" stop-color="#7FE3FF" stop-opacity="0"/></radialGradient></defs><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccPlate)"/><rect x="0" y="0" width="64" height="64" rx="10" fill="url(#ccSheen)"/><path d="M30 14 H22 a14 14 0 0 0 0 36 H30" stroke="url(#ccWhite)" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M34 14 H42 a14 14 0 0 1 0 36 H34" stroke="url(#ccCyan)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="32" cy="32" r="6" fill="url(#ccGlow)"/><rect x="30" y="30" width="4" height="4" rx="1" fill="#00B4D8"/></svg>
-    <h1 class="topbar-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</h1>
-    <div class="topbar-actions">
-      <button class="btn btn-primary" data-action="go-nueva-orden"><i data-lucide="plus"></i> Crear nueva orden</button>
-      <button class="btn btn-secondary" data-action="nueva-devolucion" title="Registrar devolución de equipos con contrato de papel (fuera del sistema)"><i data-lucide="package-open"></i> Devolución sin contrato</button>
-      <!-- §4.2 view toggle: table (desktop default) ↔ cards (mobile default) -->
-      <div class="view-toggle" role="group" aria-label="Modo de vista">
+  <!-- Topbar UNIFICADO (auditoría C1/A1): antes era la única variante
+       hardcodeada del sistema — duplicaba el monograma SVG (con los mismos
+       IDs de gradiente que el rail monta en esta página) y cualquier cambio
+       de layout.js había que replicarlo aquí a mano. El wrapper conserva
+       id+clase para la regla móvil (.topbar--desktop { display:none }); el
+       menú y el view-toggle van como html passthrough para que los siga
+       manejando la delegación de ordenes-events (toggle-topbar-menu) sin
+       doble wiring. -->
+  <div class="topbar--desktop" id="desktopTopbar">
+    <div id="topbar-mount"></div>
+    <script>
+      Layout.renderTopbar({
+        title: '<i data-lucide="clipboard-list"></i> Órdenes de Servicio',
+        showHome: false, showLogout: false,
+        actions: [
+          { label: '<i data-lucide="plus"></i> Crear nueva orden', cls: 'btn-primary', dataAction: 'go-nueva-orden' },
+          { label: '<i data-lucide="package-open"></i> Devolución sin contrato', cls: 'btn-secondary', dataAction: 'nueva-devolucion', title: 'Registrar devolución de equipos con contrato de papel (fuera del sistema)' },
+          { html: `<div class="view-toggle" role="group" aria-label="Modo de vista">
         <button type="button" class="view-toggle__btn" data-action="set-view-cards" data-view="cards" aria-pressed="false" title="Vista de tarjetas">
           <i data-lucide="layout-grid"></i>
         </button>
         <button type="button" class="view-toggle__btn" data-action="set-view-table" data-view="table" aria-pressed="true" title="Vista de tabla">
           <i data-lucide="table"></i>
         </button>
-      </div>
-      <div class="overflow-menu topbar-menu">
+      </div>` },
+          { html: `<div class="overflow-menu topbar-menu">
         <button class="btn btn-ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
         <div class="overflow-menu-dropdown" id="topbar-menu">
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
@@ -108,10 +118,12 @@
           <button class="overflow-menu-item" id="topbarBtnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente</button>
           <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Configuración</button>
         </div>
-      </div>
-      <button class="btn btn-ghost" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
-      <button class="btn btn-ghost" data-action="logout"><i data-lucide="log-out"></i> Cerrar sesión</button>
-    </div>
+      </div>` },
+          { label: '<i data-lucide="home"></i> Menú principal', cls: 'btn-ghost', dataAction: 'go-menu-principal' },
+          { label: '<i data-lucide="log-out"></i> Cerrar sesión', cls: 'btn-ghost', dataAction: 'logout' },
+        ],
+      });
+    </script>
   </div>
   
   <div class="app-wrap">
