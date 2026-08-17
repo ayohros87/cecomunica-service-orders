@@ -134,7 +134,10 @@ html[data-cc-rail="mini"]{--cc-rail-cur:var(--cc-rail-mini-w)}
 .os-kpi__label i{width:15px;height:15px;color:var(--fg-4,#9AA7B4);flex:none}
 .os-kpi__val{font:700 28px/1.05 var(--font-display,"Barlow",sans-serif);letter-spacing:-.02em;margin-top:8px;color:var(--fg-1,#0E1418)}
 .os-kpi__sub{font:600 11.5px/1 var(--font-mono,"IBM Plex Mono",monospace);margin-top:7px;color:var(--fg-3,#6B7884)}
-.os-kpi--alert{border-left:3px solid var(--status-critical,#D24545)}
+/* Reskin F4 (aprobado 2026-08-17), slice 1: paridad con la propuesta —
+   la tarjeta de alerta lleva el borde COMPLETO en rojo (no solo el filete),
+   como en propuesta/ordenes.html. */
+.os-kpi--alert{border-color:var(--status-critical,#D24545);border-left-width:3px}
 .os-kpi--alert .os-kpi__val{color:var(--status-critical,#D24545)}
 
 /* ---- Stepper del ciclo de vida (detalle de orden, F3) ----
