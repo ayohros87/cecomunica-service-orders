@@ -21,13 +21,23 @@
   let flatResults = [];
   let debounceTimer = null;
 
-  const GROUP_META = {
-    clientes:     { icon: 'users',       label: 'Clientes' },
-    ordenes:      { icon: 'settings-2',  label: 'Órdenes' },
-    contratos:    { icon: 'file-text',   label: 'Contratos' },
-    cotizaciones: { icon: 'receipt',     label: 'Cotizaciones' },
-    poc:          { icon: 'radio-tower', label: 'PoC' },
-  };
+  // Iconos/labels desde el catálogo único (MODULOS.CATALOGO, auditoría A9);
+  // los literales quedan de fallback para un modulos.js viejo en caché.
+  const GROUP_META = (() => {
+    const base = {
+      clientes:     { icon: 'users',       label: 'Clientes' },
+      ordenes:      { icon: 'settings-2',  label: 'Órdenes' },
+      contratos:    { icon: 'file-text',   label: 'Contratos' },
+      cotizaciones: { icon: 'receipt',     label: 'Cotizaciones' },
+      poc:          { icon: 'radio-tower', label: 'PoC' },
+    };
+    try {
+      (window.MODULOS?.CATALOGO || []).forEach(g => (g.items || []).forEach(it => {
+        if (base[it.id]) base[it.id] = { icon: it.icon, label: it.label };
+      }));
+    } catch (_) { /* fallback literal */ }
+    return base;
+  })();
 
   function escapeHtml(s) {
     return String(s == null ? '' : s)

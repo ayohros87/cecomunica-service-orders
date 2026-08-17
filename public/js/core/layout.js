@@ -195,7 +195,11 @@ const Layout = (() => {
      });
      ============================================================= */
 
-  const _RAIL_CATALOGO = [
+  // Fuente única: MODULOS.CATALOGO (auditoría A9). El array de abajo es un
+  // ESPEJO de emergencia por si un layout.js nuevo corre con un modulos.js
+  // viejo cacheado (sin CATALOGO): con [] el rail perdería sus links. No
+  // editar el espejo sin editar la fuente.
+  const _RAIL_CATALOGO = (window.MODULOS && MODULOS.CATALOGO) || [
     { grupo: 'Operación', items: [
       { id: 'ordenes',     label: 'Órdenes',          icon: 'settings-2',  href: '/ordenes/index.html' },
       { id: 'poc',         label: 'Base PoC',          icon: 'radio-tower', href: '/POC/index.html' },
@@ -207,10 +211,6 @@ const Layout = (() => {
       { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
     ]},
     { grupo: 'Almacén · finanzas', items: [
-      // Consolidación 2026-08: 'almacen' absorbió pendientes + inventario
-      // (tablero) + el trabajo diario de equipos; la página de Equipos por
-      // serial sigue viva como herramienta avanzada (menú de Almacén y
-      // deep-links de señales/correos), pero ya no ocupa rail.
       { id: 'almacen',     label: 'Almacén',     icon: 'warehouse',    href: '/almacen/index.html' },
       { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
       { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/facturacion/activacion.html' },

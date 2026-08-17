@@ -37,6 +37,29 @@ window.MODULOS = (() => {
     tecnico_operativo: ["ordenes", "firma"]
   };
 
+  // Catálogo de módulos navegables (auditoría A9): fuente ÚNICA de id, label,
+  // icono y href — la consumen el rail (Layout._RAIL_CATALOGO) y el buscador
+  // global (searchPalette.GROUP_META). Antes eran 3 copias a sincronizar a
+  // mano. Las tarjetas del home siguen siendo HTML estático en index.html
+  // (gateadas por deRol): si cambias un href/icono aquí, revisa esas tiles.
+  const CATALOGO = [
+    { grupo: 'Operación', items: [
+      { id: 'ordenes',     label: 'Órdenes',           icon: 'settings-2',  href: '/ordenes/index.html' },
+      { id: 'poc',         label: 'Base PoC',          icon: 'radio-tower', href: '/POC/index.html' },
+      { id: 'vendedores',  label: 'Registro (Ventas)', icon: 'briefcase',   href: '/POC/vendedores-batch.html' },
+    ]},
+    { grupo: 'Comercial', items: [
+      { id: 'cotizaciones', label: 'Cotizaciones', icon: 'receipt',   href: '/cotizaciones/index.html' },
+      { id: 'contratos',    label: 'Contratos',    icon: 'file-text', href: '/contratos/index.html' },
+      { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
+    ]},
+    { grupo: 'Almacén · finanzas', items: [
+      { id: 'almacen',     label: 'Almacén',  icon: 'warehouse',  href: '/almacen/index.html' },
+      { id: 'piezas',      label: 'Piezas',   icon: 'puzzle',     href: '/inventario/piezas.html' },
+      { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/facturacion/activacion.html' },
+    ]},
+  ];
+
   function deRol(rol) {
     return visiblesPorRol[rol] || [];
   }
@@ -54,5 +77,5 @@ window.MODULOS = (() => {
     return ok ? asParam : rolReal;
   }
 
-  return { visiblesPorRol, deRol, puedeVer, rolEfectivo };
+  return { visiblesPorRol, CATALOGO, deRol, puedeVer, rolEfectivo };
 })();
