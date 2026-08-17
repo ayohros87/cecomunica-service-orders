@@ -550,13 +550,16 @@
     );
     copia.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
     copia.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
+    // Flag persistido (A10) antes de escribir — misma evaluación que abajo.
+    const polCopia = CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg });
+    copia.requiere_aprobacion = polCopia.requiere;
     const ref = await CotizacionesService.addCotizacion(copia);
     // Duplicar nace en borrador, pero se rige por la MISMA política que una
     // cotización nueva: si quien la copia puede enviarla y está dentro del
     // umbral, no se molesta al aprobador. Antes se notificaba siempre, y por
     // eso COT-2026-0042 ($160.50, sin descuento, copia de COT-2026-0035) pidió
     // aprobación que nadie necesitaba.
-    if (CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg }).requiere) {
+    if (polCopia.requiere) {
       try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
       catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
       Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');

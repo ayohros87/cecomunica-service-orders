@@ -729,6 +729,11 @@
         const doc = CotState.toDoc(draft, { catalogos });
         doc.fecha_creacion = firebase.firestore.FieldValue.serverTimestamp();
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
+        // Flag PERSISTIDO (auditoría A10): requiereAprobacion se calculaba
+        // solo al vuelo — sin campo no hay señal contable server-side ni
+        // piso futuro en rules para borrador→enviada.
+        const polDoc = CotState.requiereAprobacionPara({ doc, rol: userRol, policy: policyCfg });
+        doc.requiere_aprobacion = polDoc.requiere;
         const ref = await CotizacionesService.addCotizacion(doc);
         dirty = false;
         _bkLimpiar();
@@ -753,6 +758,8 @@
         }
         const doc = CotState.toDoc(draft, { catalogos });
         doc.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
+        // Reevaluar el flag al editar: los montos pudieron cruzar el umbral.
+        doc.requiere_aprobacion = CotState.requiereAprobacionPara({ doc, rol: userRol, policy: policyCfg }).requiere;
         await CotizacionesService.updateCotizacion(draft._docId, doc);
         dirty = false;
         _bkLimpiar();

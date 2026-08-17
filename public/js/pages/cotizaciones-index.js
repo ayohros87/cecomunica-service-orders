@@ -391,10 +391,13 @@
      'fecha_vencimiento', 'vencida_auto', 'vencida_manual',
      'aprobado_por_uid', 'aprobado_por_email', 'convertida_por_uid', 'rechazado_por_uid']
       .forEach(k => { delete copia[k]; });
+    // Flag persistido (A10) antes de escribir — misma evaluación que abajo.
+    const polCopia = CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg });
+    copia.requiere_aprobacion = polCopia.requiere;
     const ref = await CotizacionesService.addCotizacion(copia);
     // Misma política que una cotización nueva: dentro de umbral y con rol que
     // pueda enviar, no se molesta al aprobador (ver requiereAprobacionPara).
-    if (CotState.requiereAprobacionPara({ doc: copia, rol: userRol, policy: policyCfg }).requiere) {
+    if (polCopia.requiere) {
       try { await CotState.enqueueAprobacionMail({ doc: copia, docId: ref.id, user }); }
       catch (e) { console.warn('No se pudo encolar correo de aprobación al duplicar:', e); }
       Toast.show('Cotización duplicada como ' + nuevoId + ' · solicitud de aprobación enviada', 'ok');
