@@ -19,8 +19,17 @@
   function pintar(scope) {
     if (typeof lucide === 'undefined') return;
     const arr = Array.isArray(scope) ? scope.filter(Boolean) : (scope ? [scope] : null);
-    if (arr && arr.length) lucide.createIcons({ nodes: arr });
-    else lucide.createIcons();
+    // FIX (auditoría órdenes 2026-08-17): la opción `nodes` NO existe en el
+    // vendor (acepta {icons, nameAttr, attrs, root, inTemplates}) — caía al
+    // default root:document y CADA refresh re-creaba TODOS los SVGs de la
+    // página (~600+ con 50 filas en órdenes): el origen real del parpadeo
+    // de iconos que se intentó arreglar con este scoping. `root` SÍ está
+    // soportado: el barrido queda local al contenedor pasado.
+    if (arr && arr.length) {
+      arr.forEach(el => { try { lucide.createIcons({ root: el }); } catch (_) { /* nodo suelto */ } });
+    } else {
+      lucide.createIcons();
+    }
   }
   window.Icons = { pintar };
   // Barrido inicial: como defer el DOM ya está parseado (readyState

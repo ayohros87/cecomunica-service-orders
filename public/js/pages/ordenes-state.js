@@ -193,7 +193,9 @@ APP.utils = {
     if (window.Icons) { Icons.pintar(scope); return; }
     if (typeof lucide === 'undefined') return;
     const arr = Array.isArray(scope) ? scope.filter(Boolean) : (scope ? [scope] : null);
-    if (arr && arr.length) lucide.createIcons({ nodes: arr });
+    // `nodes` no existe en el vendor — usar `root` por contenedor (ver
+    // js/core/icons.js, auditoría órdenes 2026-08-17).
+    if (arr && arr.length) arr.forEach(el => { try { lucide.createIcons({ root: el }); } catch (_) { /* nodo suelto */ } });
     else                   lucide.createIcons();
   }
 };

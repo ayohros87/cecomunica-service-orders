@@ -638,6 +638,12 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
 // serial figura asignado a OTRO cliente, un aviso — ayuda a detectar equipos
 // mal identificados al recibirlos en taller. Best-effort y asíncrono: si el
 // servicio no está o la consulta falla, la tabla queda igual que siempre.
+// Caché por sesión del decorado del pool (auditoría órdenes P0): mientras
+// una fila siguiera expandida, CADA snapshot re-consultaba equipos_pool por
+// sus seriales. TTL 5 min; también se cachean los "sin ficha" (docs: [])
+// para no re-preguntar por seriales que no existen en el pool.
+const _poolDecoCache = new Map(); // serial_norm → { ts, docs: [] }
+
 async function decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle) {
   if (typeof EquiposPoolService === 'undefined') return;
   const conSerial = (equipos || [])
@@ -645,17 +651,33 @@ async function decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle) {
     .filter(x => x.norm);
   if (!conSerial.length) return;
 
-  // Una query por chunk de 10 (limite del operador `in`) sobre serial_norm.
+  // Una query por chunk de 10 (limite del operador `in`) sobre serial_norm,
+  // SOLO para los seriales sin caché fresca.
   const norms = [...new Set(conSerial.map(x => x.norm))];
   const docs = [];
-  try {
-    const db = firebase.firestore();
-    for (let i = 0; i < norms.length; i += 10) {
-      const snap = await db.collection('equipos_pool')
-        .where('serial_norm', 'in', norms.slice(i, i + 10)).get();
-      snap.docs.forEach(d => docs.push({ id: d.id, ...d.data() }));
-    }
-  } catch (err) { return; }
+  const faltan = [];
+  const ahora = Date.now();
+  norms.forEach(n => {
+    const c = _poolDecoCache.get(n);
+    if (c && (ahora - c.ts) < 300000) docs.push(...c.docs);
+    else faltan.push(n);
+  });
+  if (faltan.length) {
+    try {
+      const db = firebase.firestore();
+      const traidos = new Map(faltan.map(n => [n, []]));
+      for (let i = 0; i < faltan.length; i += 10) {
+        const snap = await db.collection('equipos_pool')
+          .where('serial_norm', 'in', faltan.slice(i, i + 10)).get();
+        snap.docs.forEach(d => {
+          const doc = { id: d.id, ...d.data() };
+          docs.push(doc);
+          (traidos.get(doc.serial_norm) || []).push(doc);
+        });
+      }
+      traidos.forEach((arr, n) => _poolDecoCache.set(n, { ts: ahora, docs: arr }));
+    } catch (err) { return; }
+  }
   if (!docs.length) return;
 
   const ordenData = APP.state.orders.find(o => o.ordenId === ordenId);

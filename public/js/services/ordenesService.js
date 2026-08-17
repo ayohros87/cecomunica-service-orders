@@ -603,7 +603,14 @@ const OrdenesService = {
    * a sí mismo igual que un técnico.
    * @returns {Promise<Array<{uid: string, nombre: string, rol: string}>>}
    */
+  _techCache: null,
   async loadTechnicians() {
+    // Caché 5 min (auditoría órdenes P0): se leía en el boot de los filtros
+    // Y de nuevo en cada apertura del modal Asignar — la plantilla de
+    // técnicos casi nunca cambia dentro de una sesión.
+    if (this._techCache && (Date.now() - this._techCache.ts) < 300000) {
+      return this._techCache.data;
+    }
     const db = firebase.firestore();
     const snapshot = await db.collection("usuarios")
       .where("rol", "in", ["tecnico", "tecnico_operativo", "jefe_taller"])
@@ -619,8 +626,10 @@ const OrdenesService = {
       });
     });
 
-    return technicians.sort((a, b) =>
+    const data = technicians.sort((a, b) =>
       a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+    this._techCache = { ts: Date.now(), data };
+    return data;
   },
 
   /**
@@ -734,18 +743,24 @@ const OrdenesService = {
         if (m) results.push(m);
       });
 
-      if (results.length > 0) return results;
-      // Zero results from the indexed query may mean either "truly no
-      // matches" or "tokens not yet backfilled". Fall through to scan
-      // so users don't see false negatives during migration.
-      console.debug("[searchOrders] indexed query returned 0; falling back to scan");
+      // Cero resultados = cero resultados (auditoría órdenes 2026-08-17).
+      // El fall-through a full-scan era una red para la migración de
+      // searchTokens, que YA terminó — y convertía cada búsqueda sin
+      // coincidencias (un typo bastaba) en la descarga de la COLECCIÓN
+      // COMPLETA de órdenes filtrada en el navegador.
+      return results;
     } catch (err) {
-      console.warn("[searchOrders] indexed query failed, falling back to scan:",
+      console.warn("[searchOrders] indexed query failed, falling back to bounded scan:",
         err?.code || err?.message);
     }
 
-    // ── Fallback: full-collection scan ───────────────────────────
-    const snapshot = await db.collection("ordenes_de_servicio").get();
+    // ── Fallback ACOTADO: solo si la query indexada FALLÓ (índice caído,
+    // sin red a mitad) — nunca por 0 resultados. Últimas 300 órdenes, no
+    // toda la colección.
+    const snapshot = await db.collection("ordenes_de_servicio")
+      .orderBy("fecha_creacion", "desc")
+      .limit(300)
+      .get();
     const matchScan = buildMatch({ useTokens: false });
     const resultados = [];
     snapshot.forEach(doc => {

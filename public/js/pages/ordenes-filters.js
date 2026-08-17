@@ -343,8 +343,11 @@ window.filtrarOrdenes = async function () {
   const ordersTable = document.getElementById("ordersTable");
   const cardsWrap = document.getElementById("ordersCards");
 
-  if (ordersTable) ordersTable.innerHTML = "";
-  if (cardsWrap) cardsWrap.innerHTML = "";
+  // Skeleton durante el roundtrip (auditoría órdenes P0): antes la tabla
+  // quedaba EN BLANCO sin ninguna señal mientras respondía el servidor —
+  // la sensación de "lenta" más frecuente de la bandeja.
+  if (typeof renderSkeletonRows === 'function') renderSkeletonRows(6);
+  else { if (ordersTable) ordersTable.innerHTML = ""; if (cardsWrap) cardsWrap.innerHTML = ""; }
 
   _syncFiltersToURL();
 
@@ -381,6 +384,9 @@ window.filtrarOrdenes = async function () {
       return;
     }
 
+    // Swap único: fuera el skeleton, entran los resultados.
+    if (ordersTable) ordersTable.innerHTML = "";
+    if (cardsWrap) cardsWrap.innerHTML = "";
     ordenarOrdenes(resultados).forEach(o => {
       const equipos = (o.equipos || [])
         .filter(e => !e.eliminado)
@@ -408,8 +414,9 @@ window.filtrarRapido = async function () {
   const ordersTable = document.getElementById("ordersTable");
   const cardsWrap = document.getElementById("ordersCards");
 
-  if (ordersTable) ordersTable.innerHTML = "";
-  if (cardsWrap) cardsWrap.innerHTML = "";
+  // Skeleton durante el roundtrip — ver nota en filtrarOrdenes.
+  if (typeof renderSkeletonRows === 'function') renderSkeletonRows(6);
+  else { if (ordersTable) ordersTable.innerHTML = ""; if (cardsWrap) cardsWrap.innerHTML = ""; }
 
   if (!valor) {
     cargarOrdenesYEquipos(true);
@@ -435,6 +442,9 @@ window.filtrarRapido = async function () {
       return;
     }
 
+    // Swap único: fuera el skeleton, entran los resultados.
+    if (ordersTable) ordersTable.innerHTML = "";
+    if (cardsWrap) cardsWrap.innerHTML = "";
     ordenarOrdenes(resultados).forEach(o => {
       const equipos = (o.equipos || [])
         .filter(e => !e.eliminado)
@@ -623,6 +633,9 @@ window.filtrarPorEstado = async function (estado) {
     // without this the expand spinner hangs silently after a chip filter.
     APP.state.orders = resultados;
 
+    // Swap único: fuera el skeleton, entran los resultados.
+    if (ordersTable) ordersTable.innerHTML = "";
+    if (cardsWrap) cardsWrap.innerHTML = "";
     ordenarOrdenes(resultados).forEach(o => {
       const equipos = (o.equipos || [])
         .filter(e => !e.eliminado)
@@ -647,7 +660,10 @@ window.filtrarPorEstado = async function (estado) {
           renderEmptyState("No hay órdenes con ese estado", { icon: 'search-x' });
         } else {
           APP.state.orders = resultados;
-          ordenarOrdenes(resultados).forEach(o => {
+          // Swap único: fuera el skeleton, entran los resultados.
+    if (ordersTable) ordersTable.innerHTML = "";
+    if (cardsWrap) cardsWrap.innerHTML = "";
+    ordenarOrdenes(resultados).forEach(o => {
             const equipos = (o.equipos || [])
               .filter(e => !e.eliminado)
               .sort((a, b) => String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || "")));

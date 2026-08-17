@@ -165,6 +165,13 @@ function _iniciarSnapshotInicial() {
   // Tracks whether we've painted real data yet, so the very first empty
   // cache snapshot doesn't flash an empty state before the server replies.
   let _liveRendered = false;
+  // Coalescer de renders (auditoría órdenes P0): tras el primer pintado,
+  // cada escritura remota en la primera página (un colega guardando, una
+  // Cloud Function estampando) disparaba un re-render COMPLETO (~10k
+  // nodos). Los updates subsecuentes se agrupan en 150 ms: una ráfaga de
+  // triggers = un solo repintado.
+  let _primerPintado = false;
+  let _coalesceTimer = null;
 
   _firstPageUnsubscribe = OrdenesService.subscribeFirstPage({
     userRole: APP.state.userRole,
@@ -204,7 +211,13 @@ function _iniciarSnapshotInicial() {
       }
 
       if (typeof aplicarFiltrosCombinados === 'function') {
-        aplicarFiltrosCombinados();
+        if (!_primerPintado) {
+          _primerPintado = true;      // el primer pintado sale INMEDIATO
+          aplicarFiltrosCombinados();
+        } else {
+          clearTimeout(_coalesceTimer);
+          _coalesceTimer = setTimeout(() => aplicarFiltrosCombinados(), 150);
+        }
       }
     },
     onError: (err) => {
@@ -292,8 +305,10 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
           String(a.numero_de_serie || '').localeCompare(String(b.numero_de_serie || ''))
         );
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
-      aplicarRestriccionesPorRol(APP.state.userRole);
     });
+    // Una sola pasada de restricciones por página (antes corría DENTRO del
+    // forEach: 50 barridos de DOM por cada "Cargar más").
+    aplicarRestriccionesPorRol(APP.state.userRole);
     APP.utils.lucideRefresh([
       ordersTable,
       document.getElementById("ordersCards"),
