@@ -3520,6 +3520,16 @@ tr.activo:hover { background: #f0f9ff !important; }
    color por estado. POR ASIGNAR rojo · RECIBIDO violeta · ASIGNADO azul ·
    COMPLETADO verde · ENTREGADO gris. */
 .estado-chip--por-asignar .dot { background: var(--status-critical); }
+/* Reskin F4 slice 2 (propuesta, decisión #2): pulso SOLO en estados que
+   piden acción — hoy, "Por asignar". Mismo sigpulse de ceco-command. */
+@keyframes sigpulse { 0% { transform: scale(.6); opacity: .6; } 100% { transform: scale(1.7); opacity: 0; } }
+.estado-chip--por-asignar .dot { position: relative; }
+.estado-chip--por-asignar .dot::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  border: 1.5px solid var(--status-critical); opacity: .5;
+  animation: sigpulse 1.8s ease infinite;
+}
+@media (prefers-reduced-motion: reduce) { .estado-chip--por-asignar .dot::after { animation: none; } }
 .estado-chip--recibido    .dot { background: #6D28D9; }
 .estado-chip--asignado    .dot { background: #2563EB; }
 .estado-chip--completado  .dot { background: #16A34A; }
