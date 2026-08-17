@@ -171,7 +171,14 @@ service cloud.firestore {
       function politicaEnvioOk() {
         let cfg = get(/databases/$(database)/documents/empresa/config).data;
         return request.resource.data.get("descuentoPct", 0) <= cfg.get("cotizacion_descuento_max_pct", 15)
-            && request.resource.data.get("total", 0) <= cfg.get("cotizacion_total_max", 5000);
+            && request.resource.data.get("total", 0) <= cfg.get("cotizacion_total_max", 5000)
+            // Descuento POR LÍNEA (auditoría A10): rules no puede recorrer
+            // renglones, así que manda el flag `requiere_aprobacion` que la
+            // app estampa en CADA guardado (incluye el mayor descuento de
+            // línea desde 2026-08-17) — 40% por línea con total $4,900 ya no
+            // se envía sin aprobación. Docs previos sin el campo pasan como
+            // antes (default false): sin regresión sobre borradores viejos.
+            && request.resource.data.get("requiere_aprobacion", false) == false;
       }
       function aprobadaAntes() {
         return resource.data.get("fecha_aprobacion", null) != null;

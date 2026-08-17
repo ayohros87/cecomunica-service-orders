@@ -81,6 +81,20 @@ const SenalesService = {
     );
   },
 
+  // Cotizaciones que piden aprobación interna (auditoría A10): borradores con
+  // el flag `requiere_aprobacion` que la app estampa al guardar. La señal que
+  // el plan del Command Center dejó pendiente por "no contable server-side" —
+  // contable desde que el flag se persiste (2026-08-17). Índice compuesto:
+  // cotizaciones(estado ASC, requiere_aprobacion ASC).
+  countCotizacionesPorAprobar() {
+    const db = firebase.firestore();
+    return this._count(
+      db.collection('cotizaciones')
+        .where('estado', '==', 'borrador')
+        .where('requiere_aprobacion', '==', true)
+    );
+  },
+
   countCotizacionesPorEstado(estado) {
     const db = firebase.firestore();
     return this._count(

@@ -101,6 +101,14 @@ window.HomeSignals = (() => {
       href: 'contratos/index.html?estado=pendiente_aprobacion',
       count: () => SenalesService.countContratosPorEstado('pendiente_aprobacion'),
     },
+    // Pendiente del plan original ("no contable server-side"): contable desde
+    // que la app estampa `requiere_aprobacion` al guardar (auditoría A10).
+    SAP: {
+      modulo: 'cotizaciones', icon: 'file-check', moreIsBad: true,
+      label: 'Cotizaciones por aprobar', sub: 'fuera de política, esperando visto bueno',
+      href: 'cotizaciones/index.html?estado=borrador',
+      count: () => SenalesService.countCotizacionesPorAprobar(),
+    },
     // Nota: "cotizaciones fuera de umbral por aprobar" NO es contable
     // server-side hoy — requiereAprobacion se calcula al vuelo
     // (CotizacionTotales) y no se persiste en el doc. Si se quiere esa
@@ -156,9 +164,12 @@ window.HomeSignals = (() => {
   // accionable para ellos mientras que el total de completadas no lo es.
   // Recepción conserva S4 — entrega, pero no puede desbloquear.
   const POR_ROL = {
-    administrador:     ['S1', 'S3', 'S4Q', 'S6'],
-    gerente:           ['S1', 'S10', 'S6', 'S8'],
-    jefe_taller:       ['S1', 'S3', 'S4Q', 'S6'],
+    // SAP (cotizaciones por aprobar) reemplaza a S6 (enviadas) para los
+    // APROBADORES: lo que espera SU firma pesa más que lo que espera al
+    // cliente. El vendedor conserva S7 (sus activas, que incluye enviadas).
+    administrador:     ['S1', 'S3', 'S4Q', 'SAP'],
+    gerente:           ['S1', 'S10', 'SAP', 'S8'],
+    jefe_taller:       ['S1', 'S3', 'S4Q', 'SAP'],
     recepcion:         ['S1', 'S2', 'S4', 'S8'],
     vendedor:          ['S7', 'S8', 'S1', 'S4'],
     tecnico:           ['S5', 'S4P'],

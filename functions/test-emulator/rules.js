@@ -328,6 +328,11 @@ async function main() {
     await db.doc("cotizaciones/cDentro").set({ estado: "borrador", creado_por_uid: "vendedor", total: 1200, descuentoPct: 10 });
     await db.doc("cotizaciones/cFuera").set({ estado: "borrador", creado_por_uid: "vendedor", total: 9000, descuentoPct: 0 });
     await db.doc("cotizaciones/cAprobada").set({ estado: "aprobada", creado_por_uid: "vendedor", total: 9000, descuentoPct: 0, fecha_aprobacion: new Date() });
+    // Flag estampado por la app (auditoría A10): totales DENTRO de umbral pero
+    // con descuento por línea fuera — rules no puede recorrer renglones, así
+    // que manda requiere_aprobacion.
+    await db.doc("cotizaciones/cLinea").set({ estado: "borrador", creado_por_uid: "vendedor", total: 4900, descuentoPct: 0, requiere_aprobacion: true });
+    await db.doc("cotizaciones/cFlagOk").set({ estado: "borrador", creado_por_uid: "vendedor", total: 1200, descuentoPct: 10, requiere_aprobacion: false });
   });
   await assertSucceeds(as("vendedor").doc("cotizaciones/cDentro").set({ estado: "enviada" }, { merge: true }));
   ok("cotizaciones: vendedor envía la suya dentro de política");
@@ -337,6 +342,12 @@ async function main() {
   ok("cotizaciones: con aprobación previa el dueño sí puede marcar enviada");
   await assertSucceeds(as("gerente").doc("cotizaciones/cFuera").set({ estado: "enviada" }, { merge: true }));
   ok("cotizaciones: gerente (aprobador comercial) envía fuera de política");
+  await assertFails(as("vendedor").doc("cotizaciones/cLinea").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: requiere_aprobacion=true bloquea el envío directo (descuento por línea)");
+  await assertSucceeds(as("vendedor").doc("cotizaciones/cFlagOk").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: flag en false no estorba el envío dentro de política");
+  await assertSucceeds(as("gerente").doc("cotizaciones/cLinea").set({ estado: "enviada" }, { merge: true }));
+  ok("cotizaciones: el aprobador del tipo envía aunque el flag pida aprobación");
 
   // ── contadores: correlativos de cotizaciones y contratos ──────────────────
   // El número de contrato se RESERVA en contadores/contratos_{TIPO}_{YYYYMMDD}

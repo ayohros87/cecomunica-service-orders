@@ -29,6 +29,20 @@
       ]
     },
     {
+      "collectionGroup": "cotizaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "requiere_aprobacion",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "analytics_piezas_modelo",
       "queryScope": "COLLECTION",
       "fields": [
