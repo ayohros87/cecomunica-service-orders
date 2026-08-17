@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "cotizaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "creado_por_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "analytics_piezas_modelo",
       "queryScope": "COLLECTION",
       "fields": [

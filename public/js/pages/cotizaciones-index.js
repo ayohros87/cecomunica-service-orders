@@ -30,7 +30,12 @@
     if (btn) { btn.disabled = true; btn.innerHTML = '<i data-lucide="loader"></i> Cargando...'; }
     if (esInicial) { cotizaciones = []; lastDoc = null; }
 
-    const { docs, lastDoc: cursor } = await CotizacionesService.listCotizaciones({ lastDoc, limit: 30 });
+    // Vendedor (forzado a "solo mías"): filtro EN EL SERVIDOR — antes
+    // descargaba las de toda la empresa y veía 3-4 suyas por página de 30
+    // (además de privacidad: docs ajenos en su navegador). El toggle de
+    // admin/supervisor sigue siendo client-side sobre lo cargado.
+    const uidFiltro = (userRol === ROLES.VENDEDOR && !esSupervisor) ? userUid : null;
+    const { docs, lastDoc: cursor } = await CotizacionesService.listCotizaciones({ lastDoc, limit: 30, creadoPorUid: uidFiltro });
     if (docs.length) { lastDoc = cursor; cotizaciones.push(...docs); }
     render();
 

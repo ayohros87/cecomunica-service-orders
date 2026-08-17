@@ -81,11 +81,15 @@ const CotizacionesService = {
   },
 
   // Paginated list, newest first.
-  async listCotizaciones({ lastDoc = null, limit = 30 } = {}) {
+  // creadoPorUid (auditoría A8): el vendedor forzado a "solo mías" descargaba
+  // las cotizaciones de TODA la empresa y filtraba en cliente — cada página de
+  // 30 le mostraba 3-4 suyas (y los docs ajenos llegaban a su navegador).
+  // Índice compuesto: cotizaciones(creado_por_uid ASC, fecha_creacion DESC).
+  async listCotizaciones({ lastDoc = null, limit = 30, creadoPorUid = null } = {}) {
     const db = firebase.firestore();
-    let q = db.collection('cotizaciones')
-      .orderBy('fecha_creacion', 'desc')
-      .limit(limit);
+    let q = db.collection('cotizaciones');
+    if (creadoPorUid) q = q.where('creado_por_uid', '==', creadoPorUid);
+    q = q.orderBy('fecha_creacion', 'desc').limit(limit);
     if (lastDoc) q = q.startAfter(lastDoc);
     const snap = await q.get();
     const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
