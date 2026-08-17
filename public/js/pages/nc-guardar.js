@@ -203,6 +203,11 @@ window.NCGuardar = {
       cliente_id: clienteId,
       cliente_nombre: clienteData?.nombre || '',
       cliente_nombre_lower: (clienteData?.nombre || '').toLowerCase(),
+      // Tokens de búsqueda (A8): el prefijo solo no encuentra palabras
+      // interiores; los existentes se backfillean por script.
+      searchTokens: ContratosService.buildSearchTokens({
+        cliente_nombre: clienteData?.nombre || '', contrato_id,
+      }),
       cliente_direccion: clienteData?.direccion || '',
       cliente_telefono: clienteData?.telefono || '',
       cliente_ruc: clienteData?.ruc || '',

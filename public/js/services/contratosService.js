@@ -51,6 +51,38 @@ const ContratosService = {
   },
 
   // Create a new contract document; returns the Firestore DocumentReference.
+  // ── Búsqueda por tokens (auditoría A8) ──────────────────────────────────
+  // La búsqueda server-side por PREFIJO de cliente_nombre_lower daba falsos
+  // negativos con palabras interiores ("israelita" no encuentra "Sociedad
+  // Israelita") → el vendedor concluía "no existe" y duplicaba el contrato.
+  // Tokens word-prefix (mismo patrón que clientes.searchTokens), estampados
+  // al crear (nc-guardar) y backfilleados por
+  // functions/scripts/backfill-contratos-search-tokens.js (MANTENER EN SYNC).
+  buildSearchTokens({ cliente_nombre = '', contrato_id = '' } = {}) {
+    const norm = (s) => String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    const toks = new Set();
+    norm(cliente_nombre).split(/[^a-z0-9]+/).filter(Boolean).forEach(p => {
+      for (let i = 2; i <= p.length; i++) toks.add(p.slice(0, i));
+    });
+    if (contrato_id) toks.add(String(contrato_id).toLowerCase());
+    return Array.from(toks).slice(0, 200);
+  },
+
+  // Primer token del término contra searchTokens; el refinado multi-palabra
+  // lo hace el llamador con includes() sobre los hits (volumen chico).
+  async searchByToken(term, { creadoPorUid = null, limit = 80 } = {}) {
+    const db = firebase.firestore();
+    const tok = String(term || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .split(/[^a-z0-9]+/).filter(Boolean)[0];
+    if (!tok || tok.length < 2) return [];
+    let q = db.collection('contratos').where('searchTokens', 'array-contains', tok);
+    if (creadoPorUid) q = q.where('creado_por_uid', '==', creadoPorUid);
+    const snap = await q.limit(limit).get();
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  },
+
   async addContrato(data) {
     const db = firebase.firestore();
     return db.collection('contratos').add(data);

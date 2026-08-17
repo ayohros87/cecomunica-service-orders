@@ -533,6 +533,31 @@ window.ContratosLista = {
       const searchRange = this.getSearchRange(clienteSearch);
       const cursor      = CS.lastDoc && !reset ? CS.lastDoc : null;
 
+      // Búsqueda por TOKENS primero (auditoría A8): el prefijo daba falsos
+      // negativos con palabras interiores ("israelita" ∉ prefijo de "Sociedad
+      // Israelita") y el fallback paginaba a ciegas hasta 8 páginas. Si hay
+      // hits, el resultado es COMPLETO (sin "Cargar más"); si la query falla
+      // (docs sin backfillear, sin índice), siguen el prefijo y el fallback
+      // de siempre.
+      const maxRows = CS.maxRows();
+      let tokenHit = false;
+      if (clienteSearchLower && reset) {
+        try {
+          const tokDocs = await ContratosService.searchByToken(clienteSearch, { creadoPorUid });
+          const filtrados = tokDocs
+            .filter(c => c.deleted !== true)
+            .filter(matchesCliente)
+            .filter(c => !estadoSel || c.estado === estadoSel);
+          if (filtrados.length) {
+            tokenHit = true;
+            filtrados.sort((a, b) => (b.fecha_creacion?.seconds || 0) - (a.fecha_creacion?.seconds || 0));
+            CS.contratos = filtrados;
+            CS.lastDoc = null;
+          }
+        } catch (e) { console.warn('Búsqueda por tokens no disponible aún:', e?.code || e); }
+      }
+      if (!tokenHit) {
+
       // Cache-first (solo carga inicial limpia, sin filtros ni búsqueda):
       // pinta al instante lo que haya en la persistencia local de Firestore
       // y el pase de servidor de abajo repinta con la verdad. CS.contratos se
@@ -571,7 +596,6 @@ window.ContratosLista = {
         CS.lastDoc   = null;
       }
 
-      const maxRows = CS.maxRows();
       if (clienteSearchLower && newDocs.length === 0) {
         let fallbackLastDoc = cursor;
         let fallbackPages   = 0;
@@ -591,6 +615,7 @@ window.ContratosLista = {
         }
         if (fallbackPages > 0) CS.lastDoc = fallbackLastDoc;
       }
+      } // fin if (!tokenHit): con hits de tokens no se pagina ni se hace fallback
 
       // Safety net: exact contract-ID lookup so any contract is findable by
       // its ID even when it lives beyond the fallback's page reach. Only
