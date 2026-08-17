@@ -68,9 +68,17 @@
        default (13px on a 1-row band) felt tight here; bumping td font to
        15px and using a slightly darker tint (#f1f5f9 vs #f8fafc) gives
        the same "agrupado" feel as ordenes. */
-    table.app-table tbody td { font-size: 15px; }
+    table.app-table tbody td { font-size: 15px; padding-top: 12px; padding-bottom: 12px; }
     table.app-table tbody tr:nth-child(even) { background: #f1f5f9; }
-    table.app-table tbody tr:nth-child(even):hover { background: var(--brand-soft); }
+    table.app-table tbody tr:hover,
+    table.app-table tbody tr:nth-child(even):hover { background: var(--accent-soft, #E6F4FA); }
+    /* Reskin F4 familia 3 (propuesta .tbl .id): número de contrato mono-azul,
+       misma receta que órdenes (.orden-id) y cotizaciones (.cc-cell-num). */
+    .contrato-id {
+      font-family: var(--font-mono, "IBM Plex Mono", monospace);
+      font-weight: 600; font-size: 13.5px;
+      color: var(--accent, #0091D7); white-space: nowrap;
+    }
 
     /* Equipos peek icon (inline emoji-style in table) */
     .equipos-peek {
@@ -315,7 +323,7 @@
   <script defer src="../js/pages/contratos-upload.js"></script>
   <script defer src="../js/pages/contratos-equipos.js?v=dev4"></script>
   <script defer src="../js/pages/contratos-seriales-cambio.js"></script>
-  <script defer src="../js/pages/contratos-list.js?v=dev9"></script>
+  <script defer src="../js/pages/contratos-list.js?v=dev10"></script>
   <script src="../js/pages/contratos-index.js?v=ses3" defer></script>
 
   <!-- Aprobación overlay -->

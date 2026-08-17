@@ -354,7 +354,7 @@ window.ContratosLista = {
     const fila = document.createElement('tr');
     fila.setAttribute('data-contrato-doc-id', id);
     fila.innerHTML = `
-      <td class="td-primary">${data.contrato_id || '-'} ${iconoComision}</td>
+      <td class="td-primary"><span class="contrato-id">${data.contrato_id || '-'}</span> ${iconoComision}</td>
       <td><strong style="color:var(--fg-1); font-weight:600;">${esc(data.cliente_nombre || '-')}</strong></td>
       <td>${esc(data.tipo_contrato || '-')}</td>
       <td>${esc(data.accion || '-')}</td>

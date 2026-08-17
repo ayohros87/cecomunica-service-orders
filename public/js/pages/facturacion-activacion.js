@@ -195,7 +195,7 @@ function filaContrato(c){
 
   return `
     <tr>
-      <td><div style="font-weight:600;">${esc(c.contrato_id||id)}</div><div style="font-size:12px; color:var(--fg-3);">${esc(c.cliente_nombre||'')}</div></td>
+      <td><div style="font-family:var(--font-mono, monospace); font-weight:600; font-size:13px; color:var(--accent, #0091D7);">${esc(c.contrato_id||id)}</div><div style="font-size:12px; color:var(--fg-3);">${esc(c.cliente_nombre||'')}</div></td>
       <td style="text-align:center; font-family:var(--font-mono);">${act}${total>act?`<span style="color:var(--fg-3);">/${total}</span>`:''}</td>
       <td>${checklistCell(r)}</td>
       <td style="white-space:nowrap;">${fechaCol}</td>

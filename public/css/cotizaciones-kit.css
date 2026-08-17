@@ -33,7 +33,12 @@
 .cc-cell-cliente { font-weight: 600; color: var(--fg-1); }
 .cc-cell-cliente .cc-aten { font-weight: 400; font-size: var(--fs-caption); color: var(--fg-3); margin-top: 2px; }
 .cc-aten { font-weight: 400; font-size: var(--fs-caption); color: var(--fg-3); margin-top: 2px; }
-.cc-cell-num { font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-mono); color: var(--brand); white-space: nowrap; }
+/* Reskin F4 familia 2 (propuesta .tbl .id): el N° en ACCENT azul como el
+   resto del sistema (era navy --brand) + filas con aire y hover accent-soft,
+   mismas recetas que la bandeja de órdenes (slice 3). */
+.cc-cell-num { font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-mono); color: var(--accent, #0091D7); white-space: nowrap; }
+#tablaCotizaciones > tr > td { padding-top: 12px; padding-bottom: 12px; }
+#tablaCotizaciones > tr:hover { background: var(--accent-soft, #E6F4FA); }
 .cc-cell-total { font-family: var(--font-mono); font-weight: 600; color: var(--fg-1); text-align: right; }
 .cc-row-actions { display: inline-flex; gap: 2px; }
 .cc-row-actions .btn-icon { color: var(--fg-3); }
