@@ -300,9 +300,12 @@ window.NCGuardar = {
         status: 'queued'
       });
 
+      // El contrato ya está guardado: el respaldo local queda obsoleto.
+      if (window.NCRespaldo) NCRespaldo.limpiar();
       Toast.show('✅ Contrato guardado. Enviaremos el correo a ventas@cecomunica.com en segundo plano…', 'ok');
       setTimeout(() => { window.location.href = 'index.html'; }, 1200);
     } catch (e) {
+      if (window.NCRespaldo) NCRespaldo.limpiar();
       console.warn('No se pudo encolar el correo:', e);
       Toast.show('⚠️ Contrato guardado, pero no se pudo encolar el correo.', 'warn');
       setTimeout(() => { window.location.href = 'index.html'; }, 1800);
