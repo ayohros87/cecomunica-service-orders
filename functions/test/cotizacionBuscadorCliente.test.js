@@ -173,8 +173,16 @@ test("B3 · las tres puertas a borrador deciden la aprobación con la misma regl
   // Nadie puede encolar la solicitud sin pasar antes por el predicado común.
   for (const [nombre, src] of [["cot-detalle.js", detalle], ["cotizaciones-index.js", indice]]) {
     const dup = src.slice(src.indexOf("async function duplicar"), src.indexOf("async function eliminar"));
-    assert.match(dup, /requiereAprobacionPara\(\{ doc: copia, rol: userRol, policy: policyCfg \}\)\.requiere/,
+    // El assert mira el predicado y su ARGUMENTO, no el formato: A10 partió la
+    // expresión en dos líneas para persistir `requiere_aprobacion` antes de
+    // escribir, y el regex viejo —que exigía `…policyCfg }).requiere` de una
+    // sola pieza— llevaba fallando desde entonces sin que el comportamiento
+    // tuviera nada malo. Lo que de verdad protege esta prueba es el orden que
+    // se verifica abajo: consultar primero, notificar después.
+    assert.match(dup, /requiereAprobacionPara\(\{\s*doc: copia, rol: userRol, policy: policyCfg\s*\}\)/,
       `${nombre}: duplicar debe consultar la política antes de notificar`);
+    assert.match(dup, /requiere_aprobacion = pol\w*\.requiere/,
+      `${nombre}: la copia debe nacer con el flag persistido`);
     assert.ok(
       dup.indexOf("requiereAprobacionPara") < dup.indexOf("enqueueAprobacionMail"),
       `${nombre}: el correo va DENTRO del if, no antes`);
