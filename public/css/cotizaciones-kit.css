@@ -260,6 +260,17 @@
 .cc-kv dt { color: var(--fg-3); white-space: nowrap; }
 .cc-kv dd { margin: 0; color: var(--fg-1); font-weight: 500; }
 
+/* Chip de modalidad en tablas de solo lectura (detalle, aprobación). Solo se
+   pinta cuando la cotización mezcla: en una de pura venta sería una columna
+   con el mismo valor en todas las filas. */
+.cc-mod-chip {
+  display: inline-block; padding: 2px 8px; border-radius: var(--radius-pill);
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.cc-mod-chip.es-venta    { color: #0F6B47; background: #E7F6EF; border-color: #A8DCC4; }
+.cc-mod-chip.es-alquiler { color: var(--blue-700, #005781); background: var(--blue-50, #E6F4FB); border-color: var(--blue-200, #99D3EF); }
+
 /* Timeline historial */
 .cc-timeline { list-style: none; margin: 0; padding: 0; }
 .cc-timeline li { position: relative; padding: 0 0 var(--sp-4) var(--sp-6); }

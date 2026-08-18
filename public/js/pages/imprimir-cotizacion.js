@@ -34,6 +34,31 @@
     page.insertAdjacentHTML('beforebegin', CartaPresentacion.html({ emisor }));
   }
 
+  // Totales de la propuesta impresa. Este documento lo LEE EL CLIENTE, así que
+  // aquí no aparece el "valor evaluado" a 12 meses: ese número es interno, solo
+  // sirve para decidir aprobaciones y no es nada que el cliente vaya a pagar.
+  // Lo que se le muestra es lo que factura: el pago único y la mensualidad.
+  function totalesImpresion(t, cot) {
+    const pctD = Number(cot?.descuentoPct || 0);
+    const rotuloItbms = cot.itbmsPct > 0 ? 'ITBMS (' + cot.itbmsPct + '%)' : 'ITBMS exento';
+
+    const bloque = (b, titulo, sufijo, cap) => !b.n ? '' : `
+      ${cap ? `<div class="cq-tcap">${cap}</div>` : ''}
+      <div class="cq-trow"><span>Subtotal</span><span class="cq-tv">${FMT.money(b.subtotal)}</span></div>
+      ${pctD > 0 ? `<div class="cq-trow disc"><span>Descuento (${pctD}%)</span><span class="cq-tv">−${FMT.money(b.descGlobal)}</span></div>` : ''}
+      <div class="cq-trow"><span>${rotuloItbms}</span><span class="cq-tv">${FMT.money(b.itbms)}</span></div>
+      <div class="cq-trow total"><span class="cq-lblt">${titulo}</span><span class="cq-tv">${FMT.money(b.total)}${sufijo}</span></div>`;
+
+    if (!t.hayAlquiler) return bloque(t.venta, 'Total', '', '');
+
+    return `
+      ${bloque(t.venta, 'Total equipos', '', t.hayVenta ? 'Equipos en venta' : '')}
+      ${bloque(t.alquiler, 'Mensualidad', '<span class="cq-per">/mes</span>', 'Alquiler mensual')}
+      ${t.plazoMeses > 0
+        ? `<div class="cq-trow"><span>Plazo del alquiler</span><span class="cq-tv">${t.plazoMeses} meses</span></div>`
+        : ''}`;
+  }
+
   function render(cot, cli, ej, emisor, doc) {
     const dirigidoA = doc?.dirigido_a || cli.representante || '';
     const dirigidoEmail = doc?.dirigido_email || cli.email || '';
@@ -93,10 +118,16 @@
         <table class="cq-table">
           <thead>
             <tr><th>#</th><th>Descripción</th><th class="c">Cant.</th>
+              ${t.hayAlquiler ? '<th class="c">Modalidad</th>' : ''}
               <th class="r">Precio unit.</th><th class="r">Total</th></tr>
           </thead>
           <tbody>
-            ${cot.items.map((it, i) => `
+            ${cot.items.map((it, i) => {
+              // La columna de modalidad solo se imprime si la propuesta mezcla:
+              // en una de pura venta sería una columna con el mismo valor en
+              // todas las filas, y el cliente ya lo sabe por el título.
+              const esAlq = T.esAlquiler(it);
+              return `
               <tr>
                 <td class="idx">${String(i + 1).padStart(2, '0')}</td>
                 <td>
@@ -104,10 +135,11 @@
                   ${(it.spec || it.modelo) ? `<div class="cq-spec">${esc(it.spec)}${it.modelo ? ' · <span class="cq-model">' + esc(it.modelo) + '</span>' : ''}</div>` : ''}
                 </td>
                 <td class="qty">${esc(it.cant)}</td>
-                <td class="num r">${FMT.money(it.precio)}</td>
-                <td class="num r">${FMT.money(T.lineTotal(it))}</td>
-              </tr>
-            `).join('')}
+                ${t.hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
+                <td class="num r">${FMT.money(it.precio)}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+                <td class="num r">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>
@@ -120,10 +152,7 @@
           </div>
         </div>
         <div class="cq-totals">
-          <div class="cq-trow"><span>Subtotal</span><span class="cq-tv">${FMT.money(t.subtotal)}</span></div>
-          ${cot.descuentoPct > 0 ? `<div class="cq-trow disc"><span>Descuento (${cot.descuentoPct}%)</span><span class="cq-tv">−${FMT.money(t.descGlobal)}</span></div>` : ''}
-          <div class="cq-trow"><span>${cot.itbmsPct > 0 ? 'ITBMS (' + cot.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="cq-tv">${FMT.money(t.itbms)}</span></div>
-          <div class="cq-trow total"><span class="cq-lblt">Total</span><span class="cq-tv">${FMT.money(t.total)}</span></div>
+          ${totalesImpresion(t, cot)}
         </div>
       </div>
 

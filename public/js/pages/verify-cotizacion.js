@@ -37,6 +37,36 @@
     page.insertAdjacentHTML('beforebegin', CartaPresentacion.html({ emisor }));
   }
 
+  // Totales del espejo público. Lee del snapshot CONGELADO, no recalcula: un
+  // link ya enviado no puede cambiar de contenido. Los espejos emitidos antes
+  // de la modalidad no traen `hayAlquiler` — caen al camino de siempre, que es
+  // exactamente lo que decía el documento que recibió el cliente.
+  function totalesEspejo(snap) {
+    const rotuloItbms = snap.itbmsPct > 0 ? 'ITBMS (' + snap.itbmsPct + '%)' : 'ITBMS exento';
+
+    if (!snap.hayAlquiler) {
+      return `
+        <div class="cq-trow"><span>Subtotal</span><span class="cq-tv">${FMT.money(snap.subtotal)}</span></div>
+        ${snap.descuentoPct > 0 ? `<div class="cq-trow disc"><span>Descuento (${snap.descuentoPct}%)</span><span class="cq-tv">−${FMT.money(snap.descGlobal)}</span></div>` : ''}
+        <div class="cq-trow"><span>${rotuloItbms}</span><span class="cq-tv">${FMT.money(snap.itbms)}</span></div>
+        <div class="cq-trow total"><span class="cq-lblt">Total</span><span class="cq-tv">${FMT.money(snap.total)}</span></div>`;
+    }
+
+    const bloque = (b, titulo, sufijo, cap) => !b || !b.n ? '' : `
+      ${cap ? `<div class="cq-tcap">${cap}</div>` : ''}
+      <div class="cq-trow"><span>Subtotal</span><span class="cq-tv">${FMT.money(b.subtotal)}</span></div>
+      ${snap.descuentoPct > 0 ? `<div class="cq-trow disc"><span>Descuento (${snap.descuentoPct}%)</span><span class="cq-tv">−${FMT.money(b.descGlobal)}</span></div>` : ''}
+      <div class="cq-trow"><span>${rotuloItbms}</span><span class="cq-tv">${FMT.money(b.itbms)}</span></div>
+      <div class="cq-trow total"><span class="cq-lblt">${titulo}</span><span class="cq-tv">${FMT.money(b.total)}${sufijo}</span></div>`;
+
+    return `
+      ${bloque(snap.ventaDetalle, 'Total equipos', '', snap.hayVenta ? 'Equipos en venta' : '')}
+      ${bloque(snap.alquilerDetalle, 'Mensualidad', '<span class="cq-per">/mes</span>', 'Alquiler mensual')}
+      ${Number(snap.plazoMeses) > 0
+        ? `<div class="cq-trow"><span>Plazo del alquiler</span><span class="cq-tv">${Number(snap.plazoMeses)} meses</span></div>`
+        : ''}`;
+  }
+
   function render(snap, emisor, vCode, docId, llevaCarta) {
     if (!snap) { showError('La cotización no contiene datos.'); return; }
     const cli = snap.cliente || {};
@@ -100,9 +130,13 @@
 
       <div class="cq-items">
         <table class="cq-table">
-          <thead><tr><th>#</th><th>Descripción</th><th class="c">Cant.</th><th class="r">Precio unit.</th><th class="r">Total</th></tr></thead>
+          <thead><tr><th>#</th><th>Descripción</th><th class="c">Cant.</th>
+            ${snap.hayAlquiler ? '<th class="c">Modalidad</th>' : ''}
+            <th class="r">Precio unit.</th><th class="r">Total</th></tr></thead>
           <tbody>
-            ${(snap.items || []).map((it, i) => `
+            ${(snap.items || []).map((it, i) => {
+              const esAlq = T.esAlquiler(it);
+              return `
               <tr>
                 <td class="idx">${String(i + 1).padStart(2, '0')}</td>
                 <td>
@@ -110,10 +144,11 @@
                   ${(it.spec || it.modelo) ? `<div class="cq-spec">${esc(it.spec)}${it.modelo ? ' · <span class="cq-model">' + esc(it.modelo) + '</span>' : ''}</div>` : ''}
                 </td>
                 <td class="qty">${esc(it.cant)}</td>
-                <td class="num r">${FMT.money(it.precio)}</td>
-                <td class="num r">${FMT.money(T.lineTotal(it))}</td>
-              </tr>
-            `).join('')}
+                ${snap.hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
+                <td class="num r">${FMT.money(it.precio)}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+                <td class="num r">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>
@@ -126,10 +161,7 @@
           </div>
         </div>
         <div class="cq-totals">
-          <div class="cq-trow"><span>Subtotal</span><span class="cq-tv">${FMT.money(snap.subtotal)}</span></div>
-          ${snap.descuentoPct > 0 ? `<div class="cq-trow disc"><span>Descuento (${snap.descuentoPct}%)</span><span class="cq-tv">−${FMT.money(snap.descGlobal)}</span></div>` : ''}
-          <div class="cq-trow"><span>${snap.itbmsPct > 0 ? 'ITBMS (' + snap.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="cq-tv">${FMT.money(snap.itbms)}</span></div>
-          <div class="cq-trow total"><span class="cq-lblt">Total</span><span class="cq-tv">${FMT.money(snap.total)}</span></div>
+          ${totalesEspejo(snap)}
         </div>
       </div>
 

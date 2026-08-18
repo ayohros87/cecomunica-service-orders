@@ -118,9 +118,12 @@
     const visibles = cotizaciones.filter(c => !c.deleted && (!soloMias || c.creado_por_uid === userUid));
     const enviadas = visibles.filter(c => c.estado === 'enviada').length;
     // "Monto cerrado": solo cotizaciones convertidas a venta efectiva.
-    const montoCerrado = visibles
-      .filter(c => c.estado === 'convertida')
-      .reduce((s, c) => s + Number(c.total || 0), 0);
+    // `c.total` es el valor evaluado, así que una cotización de alquiler entra
+    // con su primer año de renta — es la única forma de sumarla con las ventas
+    // de pago único. El subtítulo lo dice cuando hay alguna.
+    const convertidasList = visibles.filter(c => c.estado === 'convertida');
+    const montoCerrado = convertidasList.reduce((s, c) => s + Number(c.total || 0), 0);
+    const hayRentaCerrada = convertidasList.some(c => Number(c.total_mensual || 0) > 0);
     // Tasa de cierre: convertidas / oportunidades activas (enviadas + convertidas + rechazadas + vencidas).
     // Excluye borrador (en proceso) y aprobada (aún no llegó al cliente).
     const convertidas = visibles.filter(c => c.estado === 'convertida').length;
@@ -132,6 +135,8 @@
     $('statTotal').textContent = filtradas.length;
     $('statPendientes').textContent = enviadas;
     $('statMontoAprobado').textContent = FMT.money(montoCerrado);
+    const sub = $('statMontoSub');
+    if (sub) sub.textContent = hayRentaCerrada ? 'convertidas · alquiler a 12 meses' : 'solo convertidas a venta';
     $('statTasa').textContent = tasa + '%';
   }
 
@@ -158,10 +163,11 @@
       return `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar y enviar" data-action="aprobar"><i data-lucide="check-circle"></i></button>`;
     }
     if (!canRole(userRol, 'enviar-cotizacion')) return '';
-    // items incluidos (A10): sin ellos esta fila ofrecía "Enviar al cliente"
-    // para un borrador que el editor ya había marcado como requiere_aprobacion.
-    const pol = window.CotizacionTotales.requiereAprobacion(
-      { total: Number(c.total || 0), descuentoPct: Number(c.descuentoPct || 0), items: c.items }, policyCfg);
+    // evaluarPolitica recalcula desde el documento — descuento por renglón y
+    // alquiler proyectado incluidos. Armar el input a mano fue lo que hacía que
+    // esta fila ofreciera "Enviar al cliente" para un borrador que el editor ya
+    // había marcado como requiere_aprobacion.
+    const pol = window.CotizacionTotales.evaluarPolitica(c, policyCfg);
     return pol.requiere
       ? `<button class="btn btn-ghost btn-icon btn-sm" title="Solicitar aprobación" data-action="solicitar"><i data-lucide="shield-check"></i></button>`
       : `<button class="btn btn-ghost btn-icon btn-sm" title="Enviar al cliente" data-action="enviar-directo"><i data-lucide="send"></i></button>`;
@@ -260,8 +266,7 @@
 
   // Notifica al aprobador que un borrador fuera de política espera revisión.
   async function solicitarAprobacion(cot) {
-    const pol = window.CotizacionTotales.requiereAprobacion(
-      { total: Number(cot.total || 0), descuentoPct: Number(cot.descuentoPct || 0), items: cot.items }, policyCfg);
+    const pol = window.CotizacionTotales.evaluarPolitica(cot, policyCfg);
     const ok = await Modal.confirm({
       title: 'Solicitar aprobación',
       message: 'Esta cotización supera los límites para envío directo:\n\n• ' +
@@ -485,6 +490,34 @@
     // aprobador solo veía el descuento global y no entendía por qué le llegó.
     const maxDescLinea = (ui.items || []).reduce((m, it) => Math.max(m, Number(it.desc || 0)), 0);
 
+    // POR QUÉ está aquí esta cotización. El aprobador abre este modal desde el
+    // CTA del correo y tenía que deducir el motivo mirando números.
+    const polAprob = T.evaluarPolitica(ui, policyCfg);
+    const motivosHtml = polAprob.motivos.length ? `
+      <div style="margin:10px 0 4px; padding:10px 12px; border-left:3px solid #B45309; background:#FFFBEB; border-radius:4px; font-size:13px; line-height:1.5;">
+        <b>Motivo de la aprobación</b>
+        <ul style="margin:6px 0 0; padding-left:18px;">
+          ${polAprob.motivos.map(m => `<li>${FMT.esc(m)}</li>`).join('')}
+        </ul>
+      </div>` : '';
+
+    // Un bloque de totales por modalidad. `mostrarTitulo` solo cuando la
+    // cotización mezcla: con una sola modalidad el encabezado sobra.
+    const bloque = (titulo, b, sufijo, mostrarTitulo) => {
+      if (!b.n) return '';
+      return `
+        ${mostrarTitulo ? `<div style="font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-4); margin:6px 0 4px;">${titulo}</div>` : ''}
+        ${b.descLineas > 0 ? `
+        <div style="display:flex; justify-content:space-between;"><span>Precio de lista</span><strong>${FMT.money(b.bruto)}</strong></div>
+        <div style="display:flex; justify-content:space-between;"><span>Descuento por renglón (máx ${maxDescLinea}%)</span><strong>−${FMT.money(b.descLineas)}</strong></div>` : ''}
+        <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${FMT.money(b.subtotal)}</strong></div>
+        ${ui.descuentoPct > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descuento global (${ui.descuentoPct}%)</span><strong>−${FMT.money(b.descGlobal)}</strong></div>` : ''}
+        <div style="display:flex; justify-content:space-between;"><span>ITBMS (${ui.itbmsPct}%)</span><strong>${FMT.money(b.itbms)}</strong></div>
+        <div style="border-top:1px solid var(--border-default); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
+          <span><b>Total${mostrarTitulo ? (sufijo ? ' mensual' : ' venta') : ''}</b></span><strong>${FMT.money(b.total)}${sufijo}</strong>
+        </div>`;
+    };
+
     $('bodyCotAprobacion').innerHTML = `
       <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-4); margin-bottom:var(--sp-3);">
         <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="file-text"></i> Detalles de la cotización</legend>
@@ -505,16 +538,21 @@
               </span>
             </label>
           </div>`}
+          ${motivosHtml}
           <div style="margin-top:8px; padding:8px; border:1px dashed var(--border-default); border-radius:8px; max-width:420px;">
-            ${tot.descLineas > 0 ? `
-            <div style="display:flex; justify-content:space-between;"><span>Precio de lista</span><strong>${FMT.money(tot.bruto)}</strong></div>
-            <div style="display:flex; justify-content:space-between;"><span>Descuento por renglón (máx ${maxDescLinea}%)</span><strong>−${FMT.money(tot.descLineas)}</strong></div>` : ''}
-            <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${FMT.money(tot.subtotal)}</strong></div>
-            ${ui.descuentoPct > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descuento global (${ui.descuentoPct}%)</span><strong>−${FMT.money(tot.descGlobal)}</strong></div>` : ''}
-            <div style="display:flex; justify-content:space-between;"><span>ITBMS (${ui.itbmsPct}%)</span><strong>${FMT.money(tot.itbms)}</strong></div>
-            <div style="border-top:1px solid var(--border-default); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
-              <span><b>Total</b></span><strong>${FMT.money(tot.total)}</strong>
-            </div>
+            ${bloque('Venta · pago único', tot.venta, '', tot.hayAlquiler && tot.hayVenta)}
+            ${tot.hayAlquiler ? bloque('Alquiler · por mes', tot.alquiler, '/mes', true) : ''}
+            ${tot.hayAlquiler ? `
+            <div style="border-top:1px solid var(--border-default); margin-top:8px; padding-top:8px; font-size:12.5px; color:var(--fg-3);">
+              <div style="display:flex; justify-content:space-between;"><span>Plazo acordado</span><strong>${tot.plazoMeses > 0 ? tot.plazoMeses + ' meses' : 'sin declarar'}</strong></div>
+              ${tot.plazoMeses > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Compromiso del plazo</span><strong>${FMT.money(tot.compromiso)}</strong></div>` : ''}
+              <div style="display:flex; justify-content:space-between; margin-top:6px; color:var(--fg-2);">
+                <span><b>Valor evaluado a ${tot.mesesComputables} meses</b></span><strong>${FMT.money(tot.total)}</strong>
+              </div>
+              <div style="font-family:var(--font-mono); font-size:11px; margin-top:2px;">
+                ${FMT.money(tot.venta.total)} + ${FMT.money(tot.alquiler.total)} × ${tot.mesesComputables}
+              </div>
+            </div>` : ''}
           </div>
         </div>
       </fieldset>
@@ -522,18 +560,23 @@
         <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="list"></i> Renglones</legend>
         <table class="app-table" style="font-size:13px; min-width:520px;">
           <thead>
-            <tr><th>Descripción</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">P. unit.</th><th style="text-align:right;">Desc.</th><th style="text-align:right;">Total</th></tr>
+            <tr><th>Descripción</th><th style="text-align:center;">Cant.</th>
+              ${tot.hayAlquiler ? '<th style="text-align:center;">Modalidad</th>' : ''}
+              <th style="text-align:right;">P. unit.</th><th style="text-align:right;">Desc.</th><th style="text-align:right;">Total</th></tr>
           </thead>
           <tbody>
-            ${ui.items.map(it => `
+            ${ui.items.map(it => {
+              const esAlq = T.esAlquiler(it);
+              return `
               <tr>
                 <td>${it.nombre || '—'}${it.modelo ? ' · ' + it.modelo : ''}</td>
                 <td style="text-align:center;">${it.cant}</td>
-                <td style="text-align:right;">${FMT.money(it.precio)}</td>
+                ${tot.hayAlquiler ? `<td style="text-align:center;"><span class="cc-mod-chip ${esAlq ? 'es-alquiler' : 'es-venta'}">${esAlq ? 'Alquiler' : 'Venta'}</span></td>` : ''}
+                <td style="text-align:right;">${FMT.money(it.precio)}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
                 <td style="text-align:right;${Number(it.desc || 0) > Number(policyCfg?.descuentoMaxPct ?? 15) ? ' color:#B91C1C; font-weight:600;' : ''}">${Number(it.desc || 0) > 0 ? Number(it.desc) + '%' : '—'}</td>
-                <td style="text-align:right;">${FMT.money(T.lineTotal(it))}</td>
-              </tr>
-            `).join('')}
+                <td style="text-align:right;">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </fieldset>

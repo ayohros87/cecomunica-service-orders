@@ -678,51 +678,17 @@
 
   // ── Resumen ───────────────────────────────────────────────────
 
-  // Bloque de totales. Con solo venta se ve igual que siempre (una lista y un
-  // Total). En cuanto hay un renglón de alquiler se parte en dos grupos: los
-  // dos números no se pueden sumar, y fingir que sí es lo que haría que un
-  // compromiso de 36 meses pasara por una venta chica.
+  // El markup vive en CotState: lo comparten el editor, el detalle y la
+  // impresión, y tres copias es como se termina mostrando un número distinto
+  // en cada pantalla para la misma cotización. Aquí solo se le pasa el campo
+  // de plazo, que es lo único editable del bloque.
   function bloqueTotales(t) {
-    const pctD = Number(draft.descuentoPct || 0);
-    const rotuloItbms = draft.itbmsPct > 0 ? 'ITBMS (' + draft.itbmsPct + '%)' : 'ITBMS exento';
-
-    if (!t.hayAlquiler) {
-      return `
-        <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(t.venta.subtotal)}</span></div>
-        ${pctD > 0 ? `<div class="cc-sum-row disc"><span>Descuento (${pctD}%)</span><span class="v">−${FMT.money(t.venta.descGlobal)}</span></div>` : ''}
-        <div class="cc-sum-row"><span>${rotuloItbms}</span><span class="v">${FMT.money(t.venta.itbms)}</span></div>
-        <div class="cc-sum-total"><span class="lbl">Total</span><span class="v">${FMT.money(t.venta.total)}</span></div>`;
-    }
-
-    const grupo = (titulo, color, b, sufijo, clase) => `
-      <div class="cc-sum-grupo ${clase}">
-        <span class="cc-sum-cap"><i style="background:${color}"></i>${titulo}</span>
-        ${b.descLineas > 0 ? `
-          <div class="cc-sum-row"><span>Precio de lista</span><span class="v">${FMT.money(b.bruto)}</span></div>
-          <div class="cc-sum-row disc"><span>Descuento por renglón</span><span class="v">−${FMT.money(b.descLineas)}</span></div>` : ''}
-        <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(b.subtotal)}</span></div>
-        ${pctD > 0 ? `<div class="cc-sum-row disc"><span>Descuento global (${pctD}%)</span><span class="v">−${FMT.money(b.descGlobal)}</span></div>` : ''}
-        <div class="cc-sum-row"><span>${rotuloItbms}</span><span class="v">${FMT.money(b.itbms)}</span></div>
-        <div class="cc-sum-total"><span class="lbl">${titulo}</span><span class="v">${FMT.money(b.total)}${sufijo}</span></div>
+    const plazoInput = `
+      <div class="form-field">
+        <label class="form-label" for="inpPlazo">Plazo del alquiler (meses)</label>
+        <input type="number" class="form-input" id="inpPlazo" min="0" max="120" step="1" value="${esc(draft.plazoMeses || '')}" placeholder="36">
       </div>`;
-
-    return `
-      ${t.hayVenta ? grupo('Total venta', 'var(--status-online, #1FA56B)', t.venta, '', 'es-venta') : ''}
-      ${grupo('Total mensual', 'var(--accent)', t.alquiler, '<span class="cc-per">/mes</span>', 'es-alquiler')}
-      <div class="cc-sum-grupo cc-sum-plazo">
-        <div class="form-field">
-          <label class="form-label" for="inpPlazo">Plazo del alquiler (meses)</label>
-          <input type="number" class="form-input" id="inpPlazo" min="0" max="120" step="1" value="${esc(draft.plazoMeses || '')}" placeholder="36">
-        </div>
-        ${t.plazoMeses > 0
-          ? `<div class="cc-sum-row muted"><span>Compromiso de ${t.plazoMeses} meses</span><span class="v">${FMT.money(t.compromiso)}</span></div>`
-          : '<span class="cc-sum-aviso">Sin plazo se evalúa como un año completo contra el límite de envío.</span>'}
-      </div>
-      <div class="cc-sum-evaluado">
-        <b>Valor evaluado a ${t.mesesComputables} ${t.mesesComputables === 1 ? 'mes' : 'meses'}</b>
-        <span class="cc-sum-cuenta">${FMT.money(t.venta.total)} + ${FMT.money(t.alquiler.total)} × ${t.mesesComputables} = <b>${FMT.money(t.total)}</b></span>
-        <span class="cc-sum-aviso">Es el número que compara el límite de envío directo, no lo que paga el cliente.</span>
-      </div>`;
+    return CotState.bloqueTotalesHtml(t, draft, { plazoInput });
   }
 
   function renderSummary() {

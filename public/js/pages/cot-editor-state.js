@@ -450,6 +450,67 @@
     return { requiere: true, motivos: ['Tu rol no puede enviar cotizaciones al cliente.'] };
   }
 
+  // ── Bloque de totales (compartido) ───────────────────────────────────────
+  // Lo pintan el editor, el detalle y la impresión. Vive aquí porque venta y
+  // alquiler son dos totales que NO se suman, y tres copias del mismo markup
+  // es exactamente como se termina mostrando un número distinto en cada
+  // pantalla para la misma cotización.
+  //
+  //   t          → salida de CotizacionTotales.calcTotales
+  //   cot        → el documento (o su forma UI): descuentoPct e itbmsPct
+  //   plazoInput → HTML del campo editable de plazo; sin él se muestra el
+  //                plazo como dato de solo lectura.
+  function bloqueTotalesHtml(t, cot, { plazoInput = '' } = {}) {
+    const pctD = Number(cot?.descuentoPct || 0);
+    const itbmsPct = Number(cot?.itbmsPct || 0);
+    const rotuloItbms = itbmsPct > 0 ? 'ITBMS (' + itbmsPct + '%)' : 'ITBMS exento';
+
+    // Sin alquiler se ve exactamente igual que antes de existir la modalidad.
+    if (!t.hayAlquiler) {
+      return `
+        <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(t.venta.subtotal)}</span></div>
+        ${pctD > 0 ? `<div class="cc-sum-row disc"><span>Descuento (${pctD}%)</span><span class="v">−${FMT.money(t.venta.descGlobal)}</span></div>` : ''}
+        <div class="cc-sum-row"><span>${rotuloItbms}</span><span class="v">${FMT.money(t.venta.itbms)}</span></div>
+        <div class="cc-sum-total"><span class="lbl">Total</span><span class="v">${FMT.money(t.venta.total)}</span></div>`;
+    }
+
+    const grupo = (titulo, color, b, sufijo, clase) => `
+      <div class="cc-sum-grupo ${clase}">
+        <span class="cc-sum-cap"><i style="background:${color}"></i>${titulo}</span>
+        ${b.descLineas > 0 ? `
+          <div class="cc-sum-row"><span>Precio de lista</span><span class="v">${FMT.money(b.bruto)}</span></div>
+          <div class="cc-sum-row disc"><span>Descuento por renglón</span><span class="v">−${FMT.money(b.descLineas)}</span></div>` : ''}
+        <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(b.subtotal)}</span></div>
+        ${pctD > 0 ? `<div class="cc-sum-row disc"><span>Descuento global (${pctD}%)</span><span class="v">−${FMT.money(b.descGlobal)}</span></div>` : ''}
+        <div class="cc-sum-row"><span>${rotuloItbms}</span><span class="v">${FMT.money(b.itbms)}</span></div>
+        <div class="cc-sum-total"><span class="lbl">${titulo}</span><span class="v">${FMT.money(b.total)}${sufijo}</span></div>
+      </div>`;
+
+    const plazoBloque = plazoInput
+      ? `<div class="cc-sum-grupo cc-sum-plazo">
+           ${plazoInput}
+           ${t.plazoMeses > 0
+             ? `<div class="cc-sum-row muted"><span>Compromiso de ${t.plazoMeses} meses</span><span class="v">${FMT.money(t.compromiso)}</span></div>`
+             : '<span class="cc-sum-aviso">Sin plazo se evalúa como un año completo contra el límite de envío.</span>'}
+         </div>`
+      : (t.plazoMeses > 0
+          ? `<div class="cc-sum-grupo cc-sum-plazo">
+               <div class="cc-sum-row"><span>Plazo del alquiler</span><span class="v">${t.plazoMeses} meses</span></div>
+               <div class="cc-sum-row muted"><span>Compromiso de ${t.plazoMeses} meses</span><span class="v">${FMT.money(t.compromiso)}</span></div>
+             </div>`
+          : '');
+
+    return `
+      ${t.hayVenta ? grupo('Total venta', 'var(--status-online, #1FA56B)', t.venta, '', 'es-venta') : ''}
+      ${grupo('Total mensual', 'var(--accent)', t.alquiler, '<span class="cc-per">/mes</span>', 'es-alquiler')}
+      ${plazoBloque}
+      <div class="cc-sum-evaluado">
+        <b>Valor evaluado a ${t.mesesComputables} ${t.mesesComputables === 1 ? 'mes' : 'meses'}</b>
+        <span class="cc-sum-cuenta">${FMT.money(t.venta.total)} + ${FMT.money(t.alquiler.total)} × ${t.mesesComputables} = <b>${FMT.money(t.total)}</b></span>
+        <span class="cc-sum-aviso">Es el número que compara el límite de envío directo, no lo que paga el cliente.</span>
+      </div>`;
+  }
+
   // ── Combo de cliente buscable ─────────────────────────────────────────────
   // El <select> nativo NO filtra: solo hace type-ahead por prefijo con un
   // temporizador de ~1 s entre teclas. Al escribir "Hotel Gamboa" el navegador
@@ -630,7 +691,7 @@
   // Permite al usuario marcar el desenlace de una cotización enviada / aprobada
   // como Convertida (venta cerrada) o Rechazada (cliente declinó), evitando
   // tener dos botones separados. Devuelve Promise<'convertida'|'rechazada'|null>.
-  function cerrarPrompt({ cotizacionId, total, cliente } = {}) {
+  function cerrarPrompt({ cotizacionId, total, totalTexto, cliente } = {}) {
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
       overlay.className = 'modal-backdrop';
@@ -643,7 +704,7 @@
           </div>
           <div class="modal-body">
             <p style="margin:0 0 12px; font-size:14px; color:var(--fg-2);">
-              ${cotizacionId ? '<b>' + cotizacionId + '</b> · ' : ''}${cliente || ''}${total != null ? ' · ' + window.FMT.money(total) : ''}
+              ${cotizacionId ? '<b>' + cotizacionId + '</b> · ' : ''}${cliente || ''}${totalTexto ? ' · ' + esc(totalTexto) : (total != null ? ' · ' + window.FMT.money(total) : '')}
             </p>
             <p style="margin:0 0 16px; font-size:13.5px; color:var(--fg-2); line-height:1.5;">
               ¿Cómo terminó esta cotización? Solo las cotizaciones convertidas a venta cuentan en el "Monto cerrado" del tablero.
@@ -719,7 +780,7 @@
   <p style="margin:0 0 10px;">Estimados señores,</p>
   ${dirAHtml}
   <p style="margin:0 0 10px;">${introHtml}</p>
-  <p style="margin:0 0 4px;"><b>Total:</b> ${window.FMT.money(Number(opts.total || 0))}</p>
+  <p style="margin:0 0 4px;"><b>Total:</b> ${esc(opts.totalTexto || window.FMT.money(Number(opts.total || 0)))}</p>
   <p style="margin:0 0 4px;"><b>Validez:</b> ${opts.validezDias || 15} días</p>
   ${adjuntosHtml}
   <p style="margin:18px 0;">
@@ -820,12 +881,31 @@
   // para que también se dispare al "Duplicar" desde el listado o detalle:
   // una cotización duplicada nace en borrador y necesita aprobación igual
   // que una cotización nueva.
+  // Filas de totales de un bucket para el correo. Se mantiene aparte del
+  // bloque de pantalla porque el correo es HTML de tabla para clientes de
+  // correo viejos: nada de flex, nada de custom properties.
+  function filaMail(b, titulo, sufijo, mostrarCap, doc) {
+    if (!b.n) return '';
+    const FMT = window.FMT;
+    const td = 'padding:6px 0;border-bottom:1px solid #eee;';
+    return `
+      ${mostrarCap ? `<tr><td colspan="2" style="padding:10px 0 2px;font:700 11px Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#6B7884;">${titulo}</td></tr>` : ''}
+      ${b.descLineas > 0 ? `
+      <tr><td style="${td}"><b>Precio de lista</b></td><td style="${td}">${FMT.money(b.bruto)}</td></tr>
+      <tr><td style="${td}"><b>Descuento por renglón</b></td><td style="${td}">−${FMT.money(b.descLineas)}</td></tr>` : ''}
+      <tr><td style="${td}"><b>Subtotal</b></td><td style="${td}">${FMT.money(b.subtotal)}</td></tr>
+      ${b.descGlobal > 0 ? `<tr><td style="${td}"><b>Descuento global (${Number(doc.descuentoPct || 0)}%)</b></td><td style="${td}">−${FMT.money(b.descGlobal)}</td></tr>` : ''}
+      <tr><td style="${td}"><b>ITBMS (${doc.itbmsPct}%)</b></td><td style="${td}">${FMT.money(b.itbms)}</td></tr>
+      <tr><td style="${td}"><b>${titulo}</b></td><td style="${td}"><b>${FMT.money(b.total)}${sufijo}</b></td></tr>`;
+  }
+
   async function enqueueAprobacionMail({ doc, docId, user }) {
     const T = window.CotizacionTotales;
     const FMT = window.FMT;
     const esc = FMT.esc; // helper canónico (core/formatting.js)
     const t = T.calcTotales({
       items: doc.items || [], descuentoPct: doc.descuentoPct || 0, itbmsPct: doc.itbmsPct || 0,
+      plazoMeses: doc.plazoMeses || 0,
     });
     const obsEsc = (doc.intro || '-').replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
     // POR QUÉ requiere aprobación: el correo solo decía "requiere aprobación" y
@@ -855,7 +935,7 @@
     });
     const itemsHtml = [...grupos.entries()].map(([spec, items]) => {
       const lis = items.map(it =>
-        `<li>${esc(it.nombre || '')}${it.modelo ? ` <span style="font-family:monospace;font-size:12px;">(${esc(it.modelo)})</span>` : ''} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}${Number(it.desc || 0) > 0 ? ` <b>− ${Number(it.desc)}%</b> = ${FMT.money(T.lineTotal(it))}` : ''}</li>`
+        `<li>${esc(it.nombre || '')}${it.modelo ? ` <span style="font-family:monospace;font-size:12px;">(${esc(it.modelo)})</span>` : ''} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}${T.esAlquiler(it) ? '/mes' : ''}${Number(it.desc || 0) > 0 ? ` <b>− ${Number(it.desc)}%</b> = ${FMT.money(T.lineTotal(it))}${T.esAlquiler(it) ? '/mes' : ''}` : ''}${T.esAlquiler(it) ? ' <span style="font-size:11px;color:#005781;">[alquiler]</span>' : ''}</li>`
       ).join('');
       const header = spec
         ? `<p style="margin:10px 0 4px;font:600 13px Arial,sans-serif;color:#374151;">${esc(spec)}</p>`
@@ -901,13 +981,11 @@
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Ejecutivo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.ejecutivo_nombre || '-'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Validez</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.validezDias} días</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Introducción</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${obsEsc}</td></tr>
-          ${t.descLineas > 0 ? `
-          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Precio de lista</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.bruto)}</td></tr>
-          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Descuento por renglón</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">−${FMT.money(t.descLineas)}</td></tr>` : ''}
-          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Subtotal</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.subtotal)}</td></tr>
-          ${t.descGlobal > 0 ? `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Descuento global (${Number(doc.descuentoPct || 0)}%)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">−${FMT.money(t.descGlobal)}</td></tr>` : ''}
-          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>ITBMS (${doc.itbmsPct}%)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.itbms)}</td></tr>
-          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Total</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${FMT.money(t.total)}</b></td></tr>
+          ${filaMail(t.venta, t.hayAlquiler ? 'Total venta' : 'Total', '', t.hayAlquiler && t.hayVenta, doc)}
+          ${t.hayAlquiler ? filaMail(t.alquiler, 'Total mensual', ' / mes', true, doc) : ''}
+          ${t.hayAlquiler ? `
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Plazo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${t.plazoMeses > 0 ? t.plazoMeses + ' meses · compromiso ' + FMT.money(t.compromiso) : 'sin declarar'}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Valor evaluado (${t.mesesComputables} meses)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${FMT.money(t.total)}</b> <span style="color:#6B7884;">= ${FMT.money(t.venta.total)} + ${FMT.money(t.alquiler.total)} × ${t.mesesComputables}</span></td></tr>` : ''}
         </table>
         ${itemsHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Renglones</h4>${itemsHtml}` : ''}
       `,
@@ -929,7 +1007,7 @@
     uid,
     mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec, precioSugerido,
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
-    filtrarClientes, mountClienteCombo, requiereAprobacionPara,
+    filtrarClientes, mountClienteCombo, requiereAprobacionPara, bloqueTotalesHtml,
     cerrarPrompt, reenviarPrompt,
     enqueueAprobacionMail,
     adjuntosToAttachments,

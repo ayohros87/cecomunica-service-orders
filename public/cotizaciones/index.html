@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
   <!-- Rediseño Command Center F4: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/cotizaciones-kit.css?v=f4">
+  <link rel="stylesheet" href="../css/cotizaciones-kit.css?v=va1">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -44,8 +44,8 @@
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/services/mailService.js"></script>
-  <script defer src="../js/domain/cotizacionesTotales.js?v=a10b"></script>
-  <script defer src="../js/pages/cot-editor-state.js?v=cc33"></script>
+  <script defer src="../js/domain/cotizacionesTotales.js?v=va1"></script>
+  <script defer src="../js/pages/cot-editor-state.js?v=va1"></script>
   <script defer src="/js/vendor/lucide.min.js?v=1"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -85,7 +85,7 @@
         <div class="cc-stat-label">Enviadas · esperando</div><div class="cc-stat-sub">requieren seguimiento</div></div></div>
       <div class="cc-stat cc-stat--green"><div class="cc-stat-icon"><i data-lucide="check-circle"></i></div>
         <div class="cc-stat-body"><div class="cc-stat-value" id="statMontoAprobado">—</div>
-        <div class="cc-stat-label">Monto cerrado</div><div class="cc-stat-sub">solo convertidas a venta</div></div></div>
+        <div class="cc-stat-label">Monto cerrado</div><div class="cc-stat-sub" id="statMontoSub" title="El alquiler no es un pago único: se cuenta su primer año para poder sumarlo con las ventas.">solo convertidas a venta</div></div></div>
       <div class="cc-stat cc-stat--amber"><div class="cc-stat-icon"><i data-lucide="trending-up"></i></div>
         <div class="cc-stat-body"><div class="cc-stat-value" id="statTasa">—</div>
         <div class="cc-stat-label">Tasa de cierre</div><div class="cc-stat-sub">convertidas / oportunidades</div></div></div>
@@ -211,7 +211,7 @@
     </div>
   </div>
 
-  <script src="../js/pages/cotizaciones-index.js?v=cc36" defer></script>
+  <script src="../js/pages/cotizaciones-index.js?v=va1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

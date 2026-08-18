@@ -101,16 +101,27 @@
     return '';
   }
 
+  // Importe para encabezados y avisos de una línea. Una cotización mixta no
+  // tiene UN importe: se enseñan los dos en vez de un total proyectado que el
+  // cliente nunca va a ver en la propuesta.
+  function resumenImporte(t) {
+    if (!t.hayAlquiler) return FMT.money(t.venta.total);
+    if (!t.hayVenta) return FMT.money(t.alquiler.total) + '/mes';
+    return FMT.money(t.venta.total) + ' + ' + FMT.money(t.alquiler.total) + '/mes';
+  }
+
   function render() {
     const cli = (catalogos.clientesById[cot.clienteId]) || { razon: cot.cliente_nombre, ruc: cot.cliente_ruc, email: cot.cliente_email, representante: '' };
     const ej = catalogos.ejecutivos.find(e => e.id === cot.ejecutivoId) || { nombre: cot.ejecutivo_nombre || '—' };
     const dirigidoA = cot.dirigido_a || cli.representante || '';
     const dirigidoEmail = cot.dirigido_email || cli.email || '';
     const t = T.calcTotales(cot);
-    // items incluidos (A10): el descuento por renglón también decide la
-    // política, y sin él el header mostraba "Enviar al cliente" para una
-    // cotización que el editor había mandado a aprobación.
-    polEnvio = T.requiereAprobacion({ total: t.total, descuentoPct: cot.descuentoPct, items: cot.items }, policyCfg);
+    // evaluarPolitica recalcula desde el documento: entran el descuento por
+    // renglón (A10) y la proyección del alquiler a 12 meses sin que este
+    // llamador tenga que armar el input — armarlo a mano fue lo que hizo que
+    // el header ofreciera "Enviar al cliente" para un borrador que el editor
+    // ya había mandado a aprobación.
+    polEnvio = T.evaluarPolitica(cot, policyCfg);
     const vence = T.validezVence(cot);
 
     $('detalleMount').innerHTML = `
@@ -123,7 +134,7 @@
       <div class="app-page-header">
         <div>
           <h1 style="display:flex; align-items:center; gap:12px;">${esc(cot.id)} ${estadoChipHtml(cot.estado)}</h1>
-          <p>${esc(cli.razon || '—')} · ${FMT.money(t.total)} · ${cot.items.length} renglones</p>
+          <p>${esc(cli.razon || '—')} · ${resumenImporte(t)} · ${cot.items.length} renglones</p>
         </div>
         <div class="app-page-header-actions">
           ${soloLectura ? '' : botonAccionPrincipal(cot.estado)}
@@ -164,11 +175,17 @@
                 <thead>
                   <tr><th style="width:40px;">#</th><th>Descripción</th>
                     <th style="width:70px; text-align:center;">Cant.</th>
+                    ${t.hayAlquiler ? '<th style="width:88px; text-align:center;">Modalidad</th>' : ''}
                     <th style="width:100px; text-align:right;">P. unit.</th>
                     <th style="width:110px; text-align:right;">Total</th></tr>
                 </thead>
                 <tbody>
-                  ${cot.items.map((it, i) => `
+                  ${cot.items.map((it, i) => {
+                    // La columna de modalidad solo aparece si la cotización
+                    // mezcla: en una de pura venta sería una columna con el
+                    // mismo valor en todas las filas.
+                    const esAlq = T.esAlquiler(it);
+                    return `
                     <tr>
                       <td class="td-muted">${String(i + 1).padStart(2, '0')}</td>
                       <td>
@@ -176,10 +193,11 @@
                         <div style="font-size:11.5px; color:var(--fg-3);">${esc(it.spec || '')}${it.modelo ? ' · ' + esc(it.modelo) : ''}${it.desc > 0 ? ' · desc ' + it.desc + '%' : ''}</div>
                       </td>
                       <td style="text-align:center; font-family:var(--font-mono);">${esc(it.cant)}</td>
-                      <td style="text-align:right; font-family:var(--font-mono);">${FMT.money(it.precio)}</td>
-                      <td style="text-align:right; font-family:var(--font-mono); font-weight:600; color:var(--fg-1);">${FMT.money(T.lineTotal(it))}</td>
-                    </tr>
-                  `).join('')}
+                      ${t.hayAlquiler ? `<td style="text-align:center;"><span class="cc-mod-chip ${esAlq ? 'es-alquiler' : 'es-venta'}">${esAlq ? 'Alquiler' : 'Venta'}</span></td>` : ''}
+                      <td style="text-align:right; font-family:var(--font-mono);">${FMT.money(it.precio)}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
+                      <td style="text-align:right; font-family:var(--font-mono); font-weight:600; color:var(--fg-1);">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</td>
+                    </tr>`;
+                  }).join('')}
                 </tbody>
               </table>
             </div>
@@ -219,10 +237,7 @@
           <div class="cc-panel">
             <div class="cc-panel-head"><h3><i data-lucide="calculator"></i> Totales</h3></div>
             <div class="cc-panel-body">
-              <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(t.subtotal)}</span></div>
-              ${cot.descuentoPct > 0 ? `<div class="cc-sum-row disc"><span>Descuento (${cot.descuentoPct}%)</span><span class="v">−${FMT.money(t.descGlobal)}</span></div>` : ''}
-              <div class="cc-sum-row"><span>${cot.itbmsPct > 0 ? 'ITBMS (' + cot.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="v">${FMT.money(t.itbms)}</span></div>
-              <div class="cc-sum-total"><span class="lbl">Total</span><span class="v">${FMT.money(t.total)}</span></div>
+              ${CotState.bloqueTotalesHtml(t, cot)}
               <dl class="cc-kv" style="margin-top:18px; gap:8px 14px;">
                 <dt>Emitida</dt><dd>${esc(fmtFechaCorta(cot.fecha))}</dd>
                 <dt>Vence</dt><dd>${esc(fmtFechaCorta(vence))}</dd>
@@ -360,7 +375,9 @@
     const t = T.calcTotales(cot);
     const desenlace = await CotState.cerrarPrompt({
       cotizacionId: cot.id,
-      total: t.total,
+      // El importe real, no el proyectado a 12 meses: quien cierra reconoce la
+      // cotización por lo que se le cotizó al cliente.
+      totalTexto: resumenImporte(t),
       cliente: cli?.razon || cot.cliente_nombre || '',
     });
     if (!desenlace) return;
@@ -438,7 +455,14 @@
         id: cot.id, estado: cot.estado, fecha: cot.fecha, validezDias: cot.validezDias,
         moneda: cot.moneda, descuentoPct: cot.descuentoPct, itbmsPct: cot.itbmsPct,
         intro: cot.intro, items: cot.items, condiciones: cot.condiciones,
+        // El espejo público muestra lo que PAGA el cliente, así que lleva los
+        // dos totales reales y el plazo. `total` se conserva por compatibilidad
+        // con los espejos ya emitidos (todos de pura venta, donde coincide con
+        // total_venta), pero verify pinta el desglose cuando hay alquiler.
         subtotal: t.subtotal, descGlobal: t.descGlobal, itbms: t.itbms, total: t.total,
+        totalVenta: t.venta.total, totalMensual: t.alquiler.total,
+        plazoMeses: t.plazoMeses, hayAlquiler: t.hayAlquiler, hayVenta: t.hayVenta,
+        ventaDetalle: t.venta, alquilerDetalle: t.alquiler,
         cliente: { razon: cli.razon, ruc: cli.ruc, tel: cli.tel, email: cli.email, representante: cli.representante },
         ejecutivo: { nombre: ej.nombre, rol: ej.rol, email: ej.email, tel: ej.tel },
       };
@@ -466,7 +490,8 @@
     const payload = await CotState.reenviarPrompt({
       cotizacionId: cot.id,
       clienteNombre: cli.razon || '',
-      total: t.total,
+      // Al cliente se le escribe lo que paga, no el valor evaluado interno.
+      totalTexto: resumenImporte(t),
       dirigidoA: cot.dirigido_a || '',
       defaultDest: cot.dirigido_email || cli.email || '',
       ccEmail: cot.creado_por_email || '',
