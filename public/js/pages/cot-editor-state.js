@@ -788,6 +788,22 @@
       items: doc.items || [], descuentoPct: doc.descuentoPct || 0, itbmsPct: doc.itbmsPct || 0,
     });
     const obsEsc = (doc.intro || '-').replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
+    // POR QUÉ requiere aprobación: el correo solo decía "requiere aprobación" y
+    // el aprobador tenía que abrir la cotización para adivinar el motivo —
+    // sobre todo con descuento por renglón, que ni se veía en la tabla.
+    let motivosHtml = '';
+    try {
+      const pol = T.requiereAprobacion(
+        { total: t.total, descuentoPct: doc.descuentoPct, items: doc.items },
+        T.policyFromConfig(await EmpresaService.getConfig()),
+      );
+      if (pol.motivos.length) {
+        motivosHtml = `<div style="margin:0 0 14px;padding:10px 12px;border-left:3px solid #B45309;background:#FFFBEB;font:14px/1.5 Arial,sans-serif;">
+          <b>Motivo de la aprobación</b>
+          <ul style="margin:6px 0 0;padding-left:18px;">${pol.motivos.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
+        </div>`;
+      }
+    } catch (e) { console.warn('No se pudo resolver el motivo de aprobación:', e); }
     // Renglones agrupados por equipo: los ítems creados desde una orden llevan
     // el contexto del radio en `spec` ("Equipo: Serie … · Modelo …"); los que
     // no lo traen (cotización comercial) caen a un grupo general sin encabezado.
@@ -799,7 +815,7 @@
     });
     const itemsHtml = [...grupos.entries()].map(([spec, items]) => {
       const lis = items.map(it =>
-        `<li>${esc(it.nombre || '')}${it.modelo ? ` <span style="font-family:monospace;font-size:12px;">(${esc(it.modelo)})</span>` : ''} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}</li>`
+        `<li>${esc(it.nombre || '')}${it.modelo ? ` <span style="font-family:monospace;font-size:12px;">(${esc(it.modelo)})</span>` : ''} – ${Number(it.cant || 0)} × ${FMT.money(Number(it.precio || 0))}${Number(it.desc || 0) > 0 ? ` <b>− ${Number(it.desc)}%</b> = ${FMT.money(T.lineTotal(it))}` : ''}</li>`
       ).join('');
       const header = spec
         ? `<p style="margin:10px 0 4px;font:600 13px Arial,sans-serif;color:#374151;">${esc(spec)}</p>`
@@ -837,6 +853,7 @@
         <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
           Se registró la cotización <b>${doc.cotizacion_id}</b> en estado borrador y requiere aprobación.
         </p>
+        ${motivosHtml}
         <table role="presentation" width="100%" style="font:14px Arial,sans-serif;margin:12px 0 16px;">
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Cliente</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.cliente_nombre || '-'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Dirigido a</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.dirigido_a || '-'}</td></tr>
@@ -844,7 +861,11 @@
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Ejecutivo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.ejecutivo_nombre || '-'}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Validez</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${doc.validezDias} días</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Introducción</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${obsEsc}</td></tr>
+          ${t.descLineas > 0 ? `
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Precio de lista</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.bruto)}</td></tr>
+          <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Descuento por renglón</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">−${FMT.money(t.descLineas)}</td></tr>` : ''}
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Subtotal</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.subtotal)}</td></tr>
+          ${t.descGlobal > 0 ? `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Descuento global (${Number(doc.descuentoPct || 0)}%)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">−${FMT.money(t.descGlobal)}</td></tr>` : ''}
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>ITBMS (${doc.itbmsPct}%)</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${FMT.money(t.itbms)}</td></tr>
           <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Total</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>${FMT.money(t.total)}</b></td></tr>
         </table>

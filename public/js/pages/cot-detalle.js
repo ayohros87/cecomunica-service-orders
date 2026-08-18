@@ -107,7 +107,10 @@
     const dirigidoA = cot.dirigido_a || cli.representante || '';
     const dirigidoEmail = cot.dirigido_email || cli.email || '';
     const t = T.calcTotales(cot);
-    polEnvio = T.requiereAprobacion({ total: t.total, descuentoPct: cot.descuentoPct }, policyCfg);
+    // items incluidos (A10): el descuento por renglón también decide la
+    // política, y sin él el header mostraba "Enviar al cliente" para una
+    // cotización que el editor había mandado a aprobación.
+    polEnvio = T.requiereAprobacion({ total: t.total, descuentoPct: cot.descuentoPct, items: cot.items }, policyCfg);
     const vence = T.validezVence(cot);
 
     $('detalleMount').innerHTML = `

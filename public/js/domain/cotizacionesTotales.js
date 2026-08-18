@@ -9,16 +9,22 @@ window.CotizacionTotales = {
   },
 
   // Totales completos de una cotización: subtotal, descuento global, ITBMS y total.
+  // `bruto` y `descLineas` existen para que las pantallas puedan MOSTRAR el
+  // descuento por renglón: el subtotal ya viene neto de él, así que sin estos
+  // dos campos un 20% por línea es invisible en cualquier bloque de totales.
   calcTotales(cot) {
     const items = Array.isArray(cot?.items) ? cot.items : [];
+    const bruto = FMT.round2(items.reduce(
+      (s, it) => s + Number(it?.cant || 0) * Number(it?.precio || 0), 0));
     const subtotal = FMT.round2(items.reduce((s, it) => s + this.lineTotal(it), 0));
+    const descLineas = FMT.round2(bruto - subtotal);
     const descPct = Number(cot?.descuentoPct || 0);
     const itbmsPct = Number(cot?.itbmsPct || 0);
     const descGlobal = FMT.round2(subtotal * descPct / 100);
     const base = FMT.round2(subtotal - descGlobal);
     const itbms = FMT.round2(base * itbmsPct / 100);
     const total = FMT.round2(base + itbms);
-    return { subtotal, descGlobal, base, itbms, total };
+    return { bruto, descLineas, subtotal, descGlobal, base, itbms, total };
   },
 
   // Cuenta de unidades (suma de cantidades).

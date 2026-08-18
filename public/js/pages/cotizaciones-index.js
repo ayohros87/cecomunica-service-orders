@@ -158,8 +158,10 @@
       return `<button class="btn btn-ghost btn-icon btn-sm" title="Aprobar y enviar" data-action="aprobar"><i data-lucide="check-circle"></i></button>`;
     }
     if (!canRole(userRol, 'enviar-cotizacion')) return '';
+    // items incluidos (A10): sin ellos esta fila ofrecía "Enviar al cliente"
+    // para un borrador que el editor ya había marcado como requiere_aprobacion.
     const pol = window.CotizacionTotales.requiereAprobacion(
-      { total: Number(c.total || 0), descuentoPct: Number(c.descuentoPct || 0) }, policyCfg);
+      { total: Number(c.total || 0), descuentoPct: Number(c.descuentoPct || 0), items: c.items }, policyCfg);
     return pol.requiere
       ? `<button class="btn btn-ghost btn-icon btn-sm" title="Solicitar aprobación" data-action="solicitar"><i data-lucide="shield-check"></i></button>`
       : `<button class="btn btn-ghost btn-icon btn-sm" title="Enviar al cliente" data-action="enviar-directo"><i data-lucide="send"></i></button>`;
@@ -259,7 +261,7 @@
   // Notifica al aprobador que un borrador fuera de política espera revisión.
   async function solicitarAprobacion(cot) {
     const pol = window.CotizacionTotales.requiereAprobacion(
-      { total: Number(cot.total || 0), descuentoPct: Number(cot.descuentoPct || 0) }, policyCfg);
+      { total: Number(cot.total || 0), descuentoPct: Number(cot.descuentoPct || 0), items: cot.items }, policyCfg);
     const ok = await Modal.confirm({
       title: 'Solicitar aprobación',
       message: 'Esta cotización supera los límites para envío directo:\n\n• ' +
@@ -478,6 +480,10 @@
     const ui = CotState.toUi(doc);
     const tot = T.calcTotales(ui);
     const fechaTxt = ui.fecha || '—';
+    // El descuento por renglón es la razón más común por la que una cotización
+    // pequeña cae en aprobación (política A10). Se muestra explícito: antes el
+    // aprobador solo veía el descuento global y no entendía por qué le llegó.
+    const maxDescLinea = (ui.items || []).reduce((m, it) => Math.max(m, Number(it.desc || 0)), 0);
 
     $('bodyCotAprobacion').innerHTML = `
       <fieldset style="border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:var(--sp-4); margin-bottom:var(--sp-3);">
@@ -500,8 +506,11 @@
             </label>
           </div>`}
           <div style="margin-top:8px; padding:8px; border:1px dashed var(--border-default); border-radius:8px; max-width:420px;">
+            ${tot.descLineas > 0 ? `
+            <div style="display:flex; justify-content:space-between;"><span>Precio de lista</span><strong>${FMT.money(tot.bruto)}</strong></div>
+            <div style="display:flex; justify-content:space-between;"><span>Descuento por renglón (máx ${maxDescLinea}%)</span><strong>−${FMT.money(tot.descLineas)}</strong></div>` : ''}
             <div style="display:flex; justify-content:space-between;"><span>Subtotal</span><strong>${FMT.money(tot.subtotal)}</strong></div>
-            ${ui.descuentoPct > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descuento (${ui.descuentoPct}%)</span><strong>−${FMT.money(tot.descGlobal)}</strong></div>` : ''}
+            ${ui.descuentoPct > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descuento global (${ui.descuentoPct}%)</span><strong>−${FMT.money(tot.descGlobal)}</strong></div>` : ''}
             <div style="display:flex; justify-content:space-between;"><span>ITBMS (${ui.itbmsPct}%)</span><strong>${FMT.money(tot.itbms)}</strong></div>
             <div style="border-top:1px solid var(--border-default); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
               <span><b>Total</b></span><strong>${FMT.money(tot.total)}</strong>
@@ -513,7 +522,7 @@
         <legend style="padding:0 var(--sp-2); font-weight:bold;"><i data-lucide="list"></i> Renglones</legend>
         <table class="app-table" style="font-size:13px; min-width:520px;">
           <thead>
-            <tr><th>Descripción</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">P. unit.</th><th style="text-align:right;">Total</th></tr>
+            <tr><th>Descripción</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">P. unit.</th><th style="text-align:right;">Desc.</th><th style="text-align:right;">Total</th></tr>
           </thead>
           <tbody>
             ${ui.items.map(it => `
@@ -521,6 +530,7 @@
                 <td>${it.nombre || '—'}${it.modelo ? ' · ' + it.modelo : ''}</td>
                 <td style="text-align:center;">${it.cant}</td>
                 <td style="text-align:right;">${FMT.money(it.precio)}</td>
+                <td style="text-align:right;${Number(it.desc || 0) > Number(policyCfg?.descuentoMaxPct ?? 15) ? ' color:#B91C1C; font-weight:600;' : ''}">${Number(it.desc || 0) > 0 ? Number(it.desc) + '%' : '—'}</td>
                 <td style="text-align:right;">${FMT.money(T.lineTotal(it))}</td>
               </tr>
             `).join('')}
