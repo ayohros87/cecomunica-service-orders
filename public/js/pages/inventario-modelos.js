@@ -188,7 +188,7 @@ function render(){
     const hint = soloAlquiler
       ? 'No hay equipos marcados como "Se alquila". Pulsa <b>Todos</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.'
       : 'No hay modelos para mostrar';
-    tbody.innerHTML = `<tr><td colspan="13" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
     actualizarResumen();
     return;
   }
@@ -220,6 +220,9 @@ function renderRow(m){
     <td>${mapTipo(m.tipo)}</td>
     <td style="text-align:center"><label class="toggle-switch" title="¿Se alquila?"><input type="checkbox" data-field="es_alquiler" ${m.es_alquiler===true?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
     <td style="text-align:center"><label class="toggle-switch" title="¿Es POC? (POC no lleva frecuencia)"><input type="checkbox" data-field="es_poc" ${pocDis?'checked':''}><span class="toggle-track"></span><span class="toggle-thumb"></span></label></td>
+    <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_venta"
+          value="${Number.isFinite(m.precio_venta)?m.precio_venta:''}" placeholder="0.00"
+          title="Precio sugerido de venta — el editor de cotizaciones lo propone al elegir este modelo"></td>
     <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_alquiler"
           value="${Number.isFinite(m.precio_alquiler)?m.precio_alquiler:''}" placeholder="0.00"></td>
     <td><input type="number" step="any" min="0" class="td-input td-num" data-field="precio_frecuencia"
@@ -269,8 +272,16 @@ function actualizarResumen(){
   const alquiler = (listaModelos||[]).filter(m => m.es_alquiler === true).length;
   const conTarifa = (listaModelos||[]).filter(m => m.es_alquiler === true && Number(m.precio_alquiler) > 0).length;
   const pend = (listaModelos||[]).filter(m => m.es_alquiler === true && mapeoBadge(m).cls === 'map-warn').length;
+  // Cobertura del precio de venta: es lo que el editor de cotizaciones propone
+  // al elegir un modelo, y sin él el vendedor teclea cada precio a mano.
+  const activos = (listaModelos||[]).filter(m => m.activo !== false);
+  const conVenta = activos.filter(m => Number(m.precio_venta) > 0).length;
+  const faltaVenta = activos.length - conVenta;
   document.getElementById('resumenModelos').innerHTML =
-    `<b>${total}</b> modelos · <b>${alquiler}</b> de alquiler · <b>${conTarifa}</b> con tarifa · <span style="color:#92400E"><b>${pend}</b> sin configurar</span>`;
+    `<b>${total}</b> modelos · <b>${alquiler}</b> de alquiler · <b>${conTarifa}</b> con tarifa · `
+    + `<span style="color:#92400E"><b>${pend}</b> sin configurar</span> · `
+    + `<b>${conVenta}</b>/${activos.length} activos con precio de venta`
+    + (faltaVenta ? ` <span style="color:#92400E">(faltan ${faltaVenta})</span>` : '');
 }
 
 /* ===== Guardado inline ===== */
@@ -314,6 +325,7 @@ function abrirModal(id=null){
   document.getElementById('f-alto').checked=false;
   document.getElementById('f-activo').checked=true;
   setVal('f-aliases','');
+  setVal('f-descripcion','');
   setVal('f-notas','');
 
   if(!creando){
@@ -327,6 +339,7 @@ function abrirModal(id=null){
       document.getElementById('f-alto').checked = m.alto_movimiento===true;
       document.getElementById('f-activo').checked = m.activo!==false;
       setVal('f-aliases', Array.isArray(m.aliases) ? m.aliases.join(', ') : (m.aliases||m.alias||''));
+      setVal('f-descripcion', m.descripcion||'');
       setVal('f-notas', m.notas||'');
     }
   }
@@ -393,6 +406,9 @@ async function guardarModelo(){
     aliases: [...new Set((document.getElementById('f-aliases').value||'')
       .split(/[,;]/).map(s=>s.trim()).filter(Boolean))],
     notas: (document.getElementById('f-notas').value||'').trim(),
+    // Descripción: la ÚNICA de estos campos que ve el cliente. cot-editor-state
+    // la copia al `spec` del renglón y sale impresa en la propuesta.
+    descripcion: (document.getElementById('f-descripcion').value||'').trim().slice(0, 140),
   };
   // Vínculo variante→base: solo tiene sentido en refurbished. En "Nuevo" se limpia
   // para que no queden vínculos colgando si se cambia el estado.
