@@ -157,6 +157,54 @@ window.completarOrden = async function (ordenId) {
   const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
   const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(orden);
 
+  // Misma definición de "finalizado" que la barra de progreso de la fila:
+  // trabajo_tecnico con texto o marcado no-disponible (ordenes-render.js).
+  // Los índices van sobre la lista SIN eliminados — el mismo espacio que
+  // usa updateTrabajoTecnico({equipoIdxs}).
+  const equiposActivos = (orden.equipos || []).filter(e => !e.eliminado);
+  const pendientesIdx = [];
+  equiposActivos.forEach((e, i) => {
+    if (!((e.trabajo_tecnico || '').trim() || e.intervencion_no_disponible)) pendientesIdx.push(i);
+  });
+  const sinIntervencion = pendientesIdx.length;
+
+  // PROGRAMACIÓN (§5.20, aprobado 2026-08-18): la intervención es UNA por
+  // orden — el mismo trabajo en todos los radios, y el 46% de equipos
+  // quedaba sin texto con el modelo por-equipo. Al completar se pide UN
+  // texto (pre-llenado: aceptar es un click) y se estampa a los pendientes
+  // en un solo write. Vaciar el texto = completar sin estampar — el aviso
+  // nunca bloqueó y sigue sin bloquear. Cancelar aborta el completar.
+  const tipoNorm = String(orden.tipo_de_servicio || "").trim().toUpperCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "");
+  if (tipoNorm === "PROGRAMACION" && !esEntrada && sinIntervencion > 0) {
+    const texto = await Modal.prompt({
+      title: `Completar orden ${ordenId}`,
+      message: `${sinIntervencion} de ${equiposActivos.length} equipo(s) sin intervención registrada. En PROGRAMACIÓN el trabajo es el mismo para todos: este texto se estampa a los pendientes al completar.`,
+      defaultValue: `Programación aplicada a los ${equiposActivos.length} radios de la orden.`,
+      multiline: true,
+      confirmLabel: "Estampar y completar",
+    });
+    if (texto === null) return; // canceló
+    try {
+      if (texto) {
+        const user = firebase.auth().currentUser;
+        await OrdenesService.updateTrabajoTecnico({
+          ordenId, equipoIdxs: pendientesIdx, texto,
+          uid: user?.uid || '', email: user?.email || ''
+        });
+      }
+      await OrdenesService.completeOrder(ordenId, { qcRequerido: true });
+      Toast.show(texto
+        ? `✅ Intervención estampada en ${sinIntervencion} equipo(s) — orden completada`
+        : "✅ Orden completada", "ok");
+      // Live snapshot picks up the change — no manual reload.
+    } catch (error) {
+      console.error("Error completando orden:", error);
+      Toast.show("❌ Error al completar orden", "bad");
+    }
+    return;
+  }
+
   let msg = esEntrada
     ? `¿Marcar la revisión de la orden ${ordenId} como completada? A continuación se abre el cierre de la entrada.`
     : `¿Marcar la orden ${ordenId} como completada?`;
@@ -164,21 +212,13 @@ window.completarOrden = async function (ordenId) {
   // Aviso temprano (auditoría Q4): completar con equipos sin intervención se
   // descubría DESPUÉS — en el badge de contradicción o con un rechazo de QC
   // (~7 clicks + ida y vuelta del técnico). El aviso barato va en el confirm.
-  // Misma definición de "finalizado" que la barra de progreso de la fila:
-  // trabajo_tecnico con texto o marcado no-disponible (ordenes-render.js).
   // También aplica a ENTRADA (auditoría P2): ahí la revisión ES el trabajo —
   // completar sin texto significa inspección sin documentar (y no hay QC
   // después que lo atrape).
-  {
-    const equiposActivos = (orden.equipos || []).filter(e => !e.eliminado);
-    const finalizados = equiposActivos.filter(e =>
-      (e.trabajo_tecnico || '').trim() || e.intervencion_no_disponible).length;
-    const sinIntervencion = Math.max(0, equiposActivos.length - finalizados);
-    if (sinIntervencion > 0) {
-      msg += esEntrada
-        ? ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen la revisión registrada — la inspección quedaría sin documentar.`
-        : ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen intervención registrada — el control de calidad puede rechazarla.`;
-    }
+  if (sinIntervencion > 0) {
+    msg += esEntrada
+      ? ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen la revisión registrada — la inspección quedaría sin documentar.`
+      : ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen intervención registrada — el control de calidad puede rechazarla.`;
   }
   if (!await Modal.confirm({ message: msg })) return;
 

@@ -28,6 +28,23 @@ function obtenerIconoLapiz(id, campo, valorActual) {
   `;
 }
 
+// Edad en cola (§5.22, aprobado 2026-08-18): pill discreto junto a la fecha
+// SOLO en POR ASIGNAR / RECIBIDO EN MOSTRADOR estancados — 9 órdenes >30 días
+// eran inventario fantasma que la bandeja no distinguía de lo de ayer. Ámbar
+// a los 14 días, rojo a los 30. Sin animación ni bloqueo: informa, no estorba.
+function edadChip(ordenData, estado) {
+  if (estado !== "POR ASIGNAR" && estado !== "RECIBIDO EN MOSTRADOR") return "";
+  // Para RECIBIDO cuenta desde la recepción si existe (estancado EN ese paso).
+  const f = (estado === "RECIBIDO EN MOSTRADOR" && ordenData.fecha_recepcion)
+    ? ordenData.fecha_recepcion : ordenData.fecha_creacion;
+  const ms = f?.toDate ? f.toDate().getTime() : (f ? new Date(f).getTime() : NaN);
+  if (!isFinite(ms)) return "";
+  const dias = Math.floor((Date.now() - ms) / 86400000);
+  if (dias < 14) return "";
+  const nivel = dias >= 30 ? "edad-chip--critica" : "edad-chip--alta";
+  return ` <span class="edad-chip ${nivel}" title="${dias} días en ${estado === 'POR ASIGNAR' ? 'POR ASIGNAR' : 'RECIBIDO EN MOSTRADOR'}">${dias} d</span>`;
+}
+
 function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   const equiposNormalizados = Array.isArray(equipos) ? equipos : [];
   const sinEquipos = equiposNormalizados.length === 0;
@@ -113,7 +130,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     })()}${escapeHtml(ordenData.tecnico_asignado)}${indicadorNota}</td>
     <td>${tipoChip(ordenData.tipo_de_servicio)}</td>
     <td><span class="chip-estado ${getEstadoClass(estado)}" title="${estado}">${estadoCompacto(estado)}</span></td>
-    <td>${formatFecha(ordenData.fecha_creacion)}</td>
+    <td>${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</td>
     <td class="col-fecha-entrega">${formatFecha(ordenData.fecha_entrega)}</td>
     <td class="acciones"><div class="acciones-wrap">${botonesFlujo(ordenId, estado, ordenData)}${botonesGestion(ordenId, estado, tooltipNota, estiloNota)}</div></td>
   `;
@@ -300,7 +317,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
         ${fotosBadgeMobile}
       </div>
       <div class="card-contrato__tier3">
-        <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}</span>
+        <span>Inicio: ${formatFecha(ordenData.fecha_creacion)}${edadChip(ordenData, estado)}</span>
         ${progresoHtml}
       </div>
       <div class="acciones">

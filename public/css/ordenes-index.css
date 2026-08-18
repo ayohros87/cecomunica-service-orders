@@ -3158,6 +3158,21 @@ tr.activo:hover { background: #f0f9ff !important; }
   letter-spacing: 0.04em;
 }
 
+/* Edad en cola (§5.22): pill discreto junto a la fecha en POR ASIGNAR /
+   RECIBIDO estancados. Informa sin estorbar: sin animación, sin bloqueo. */
+.edad-chip {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  vertical-align: middle;
+  cursor: help;
+}
+.edad-chip--alta    { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.edad-chip--critica { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
 /* Cabeceras ordenables (auditoría P2): reemplazan al select "Ordenar" +
    botón de dirección de la toolbar. La flecha la pinta syncSortHeaders(). */
 .orders-table thead th.th-sort { cursor: pointer; user-select: none; }
