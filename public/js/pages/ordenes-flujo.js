@@ -132,7 +132,12 @@ window.confirmarAsignarTecnico = async function (ordenId) {
       });
       Toast.show("✅ Técnico cambiado correctamente", "ok");
     } else {
-      await OrdenesService.assignTechnician(ordenId, tecnicoUid, tecnicoNombre);
+      // Si la orden sigue en POR ASIGNAR, esta asignación se salta la
+      // recepción en mostrador — va marcado a os_logs (auditoría P2).
+      const ordenPrev = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
+      const saltoRecepcion =
+        (ordenPrev.estado_reparacion || "POR ASIGNAR").toUpperCase() === "POR ASIGNAR";
+      await OrdenesService.assignTechnician(ordenId, tecnicoUid, tecnicoNombre, { saltoRecepcion });
       Toast.show("✅ Técnico asignado correctamente", "ok");
     }
 
@@ -161,13 +166,18 @@ window.completarOrden = async function (ordenId) {
   // (~7 clicks + ida y vuelta del técnico). El aviso barato va en el confirm.
   // Misma definición de "finalizado" que la barra de progreso de la fila:
   // trabajo_tecnico con texto o marcado no-disponible (ordenes-render.js).
-  if (!esEntrada) {
+  // También aplica a ENTRADA (auditoría P2): ahí la revisión ES el trabajo —
+  // completar sin texto significa inspección sin documentar (y no hay QC
+  // después que lo atrape).
+  {
     const equiposActivos = (orden.equipos || []).filter(e => !e.eliminado);
     const finalizados = equiposActivos.filter(e =>
       (e.trabajo_tecnico || '').trim() || e.intervencion_no_disponible).length;
     const sinIntervencion = Math.max(0, equiposActivos.length - finalizados);
     if (sinIntervencion > 0) {
-      msg += ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen intervención registrada — el control de calidad puede rechazarla.`;
+      msg += esEntrada
+        ? ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen la revisión registrada — la inspección quedaría sin documentar.`
+        : ` ⚠️ ${sinIntervencion} de ${equiposActivos.length} equipo(s) aún no tienen intervención registrada — el control de calidad puede rechazarla.`;
     }
   }
   if (!await Modal.confirm({ message: msg })) return;
@@ -287,10 +297,34 @@ window.cerrarEntrada = function (ordenId) {
 };
 
 window.eliminarOrden = async function (ordenId) {
-  if (!await Modal.confirm({ message: `¿ELIMINAR la orden ${ordenId}? Esta acción no se puede deshacer.`, danger: true })) return;
+  // Guardrails (auditoría órdenes P2): una orden entregada/cerrada es
+  // historial del cliente (firma, QC, acuses) — no se elimina. El menú ⋯ ya
+  // no ofrece la opción en terminales; esto cubre atajos y estado viejo en
+  // pantalla. Las rules exigen lo mismo del lado del servidor.
+  const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
+  const estado = (o.estado_reparacion || "POR ASIGNAR").toUpperCase();
+  if (estado.includes("ENTREGAD") || estado.startsWith("CERRADA")) {
+    Toast.show("Una orden entregada o cerrada no se elimina — es historial del cliente.", "warn");
+    return;
+  }
+
+  // El motivo es la fricción que reemplaza al confirm: queda en la orden y
+  // en su bitácora (os_logs), y las rules piden mínimo 10 caracteres.
+  const motivo = await Modal.prompt({
+    title: `Eliminar orden ${ordenId}`,
+    message: "La orden se oculta de la bandeja (borrado lógico). Indica el motivo — queda registrado en la orden:",
+    placeholder: "Ej.: duplicada — se creó dos veces por error",
+    multiline: true,
+    confirmLabel: "Eliminar orden",
+  });
+  if (motivo === null) return; // canceló
+  if (motivo.length < 10) {
+    Toast.show("Describe el motivo (mínimo 10 caracteres).", "warn");
+    return;
+  }
 
   try {
-    await OrdenesService.deleteOrder(ordenId);
+    await OrdenesService.deleteOrder(ordenId, { motivo });
 
     Toast.show("✅ Orden eliminada", "ok");
     // Live snapshot picks up the eliminado:true write — no manual reload.
@@ -320,27 +354,9 @@ function qcParaNota(orden) {
   };
 }
 
-window.generarNotaEntrega = function (ordenId) {
-  const orden = APP.state.orders.find(o => o.ordenId === ordenId);
-  if (!orden) {
-    Toast.show("Orden no encontrada", 'bad');
-    return;
-  }
-
-  const equipos = prepararEquiposParaNota(orden, false);
-
-  const data = {
-    numeroOrden: orden.ordenId || "",
-    cliente: nombreClienteDe(orden),
-    observaciones: orden.observaciones || "",
-    equipos,
-    resumen: computeResumenTotales(equipos),
-    qc: qcParaNota(orden)
-  };
-
-  localStorage.setItem("notaEntregaData", JSON.stringify(data));
-  window.open(BASE + "nota-entrega.html", "_blank");
-};
+// (window.generarNotaEntrega + nota-entrega.html retirados en la auditoría P2:
+// ninguna acción de la UI los alcanzaba — la nota vigente es la de
+// intervenciones, abajo, vía el action 'nota-entrega-doc'.)
 
 window.generarNotaEntregaIntervenciones = async function (ordenId) {
   const orden = APP.state.orders.find(o => o.ordenId === ordenId);

@@ -205,7 +205,7 @@ const OrdenesService = {
    * @param {string} tecnicoNombre - Technician name
    * @returns {Promise<void>}
    */
-  async assignTechnician(ordenId, tecnicoUid, tecnicoNombre) {
+  async assignTechnician(ordenId, tecnicoUid, tecnicoNombre, { saltoRecepcion = false } = {}) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
@@ -215,7 +215,11 @@ const OrdenesService = {
       fecha_asignacion: firebase.firestore.FieldValue.serverTimestamp(),
       os_logs: firebase.firestore.FieldValue.arrayUnion({
         action: 'ASIGNAR',
-        by: user?.uid || ''
+        by: user?.uid || '',
+        // Asignada directo desde POR ASIGNAR = nunca pasó por RECIBIDO EN
+        // MOSTRADOR. La marca hace medible el atajo (auditoría órdenes P2:
+        // 34 saltos en 90 días que eran invisibles en la bitácora).
+        ...(saltoRecepcion ? { salto_recepcion: true } : {})
       })
     });
   },
@@ -404,15 +408,27 @@ const OrdenesService = {
   },
 
   /**
-   * Soft delete order
+   * Soft delete order. El motivo y la autoría quedan en el doc y en la
+   * bitácora (os_logs) — las rules exigen motivo (≥10 chars), rol
+   * admin/recepción y estado NO terminal (auditoría órdenes P2).
    * @param {string} ordenId - Order ID
+   * @param {{motivo?: string}} [opts]
    * @returns {Promise<void>}
    */
-  async deleteOrder(ordenId) {
+  async deleteOrder(ordenId, { motivo = "" } = {}) {
     const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
       eliminado: true,
-      fecha_eliminacion: firebase.firestore.FieldValue.serverTimestamp()
+      fecha_eliminacion: firebase.firestore.FieldValue.serverTimestamp(),
+      eliminado_motivo: motivo,
+      eliminado_por_uid: user?.uid || "",
+      eliminado_por_email: user?.email || "",
+      os_logs: firebase.firestore.FieldValue.arrayUnion({
+        action: 'ELIMINAR',
+        by: user?.uid || '',
+        motivo: motivo
+      })
     });
   },
 

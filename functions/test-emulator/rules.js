@@ -432,6 +432,35 @@ async function main() {
     .set({ orden_prog_descartada: { motivo: "otro", nota: "x" } }, { merge: true }));
   ok("contratos: orden_prog_descartada solo recepción/admin");
 
+  // ── ordenes: `eliminado` (borrado lógico) — auditoría órdenes P2 ──────────
+  // Solo recepción lo enciende (admin queda exento por isAdmin()), con motivo
+  // ≥10 chars, nunca sobre una orden terminal y nunca en reversa true→false.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("ordenes_de_servicio/eDel1").set({ estado_reparacion: "POR ASIGNAR" });
+    await db.doc("ordenes_de_servicio/eDel2").set({ estado_reparacion: "POR ASIGNAR" });
+    await db.doc("ordenes_de_servicio/eDelTerm").set({ estado_reparacion: "ENTREGADO AL CLIENTE" });
+    await db.doc("ordenes_de_servicio/eDelRev").set({ estado_reparacion: "POR ASIGNAR", eliminado: true, eliminado_motivo: "duplicada por error" });
+  });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/eDel1")
+    .set({ eliminado: true, eliminado_motivo: "duplicada — se creó dos veces" }, { merge: true }));
+  ok("eliminado: recepción borra (lógico) una POR ASIGNAR con motivo");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/eDel2")
+    .set({ eliminado: true, eliminado_motivo: "corta" }, { merge: true }));
+  ok("eliminado: sin motivo suficiente (≥10 chars) NO pasa");
+  await assertFails(as("tecnico").doc("ordenes_de_servicio/eDel2")
+    .set({ eliminado: true, eliminado_motivo: "duplicada por error" }, { merge: true }));
+  ok("eliminado: técnico NO puede marcar eliminado");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/eDelTerm")
+    .set({ eliminado: true, eliminado_motivo: "duplicada por error" }, { merge: true }));
+  ok("eliminado: una orden ENTREGADA no se borra (historial del cliente)");
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/eDelRev")
+    .set({ eliminado: false }, { merge: true }));
+  ok("eliminado: la reversa true→false NO pasa para roles no-admin");
+  await assertSucceeds(as("administrador").doc("ordenes_de_servicio/eDelRev")
+    .set({ eliminado: false }, { merge: true }));
+  ok("eliminado: admin sí revierte (corrección manual)");
+
   await testEnv.cleanup();
   console.log(`\nTODOS LOS TESTS DE REGLAS PASARON (${n} grupos)`);
 }

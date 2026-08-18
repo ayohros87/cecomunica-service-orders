@@ -192,6 +192,16 @@
       const d = await OrdenesService.getOrder(ordenId);
 
       if (d) {
+        // Guardrail (auditoría órdenes P2): esta página edita la CABECERA y el
+        // menú ⋯ solo la ofrece en POR ASIGNAR — pero la URL era un bypass
+        // (marcadores, historial del navegador). Espejo del menú: fuera de
+        // POR ASIGNAR se avisa y se vuelve a la bandeja.
+        const estadoActual = (d.estado_reparacion || "POR ASIGNAR").toUpperCase();
+        if (estadoActual !== "POR ASIGNAR") {
+          mostrarToast(`La orden está en ${estadoActual} — la cabecera solo se edita en POR ASIGNAR.`, "error");
+          setTimeout(() => { window.location.href = `index.html?orden=${encodeURIComponent(ordenId)}`; }, 1800);
+          return;
+        }
         window.ordenDataOriginal = d;
         let nombreCliente = d.cliente_nombre || d.cliente || "";
         
@@ -316,9 +326,10 @@
             return;
           }
         } else {
-          // Debe tener motivo
-          if (!contratoMotivo.value.trim()) {
-            mostrarToast("⚠️ Debe indicar el motivo por el cual no aplica contrato.", "error");
+          // Debe tener motivo REAL (≥10 chars) — mismo umbral que nueva-orden
+          // (auditoría órdenes P2): sin él se colaban "n/a" y puntos.
+          if (contratoMotivo.value.trim().length < 10) {
+            mostrarToast("⚠️ Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "error");
             return;
           }
         }
@@ -378,7 +389,18 @@
       try {
         // Leer datos actuales para comparar contrato
         const datosActuales = (await OrdenesService.getOrder(ordenId)) || {};
-        
+
+        // Re-chequeo al GUARDAR con datos frescos (la pestaña pudo quedar
+        // abierta mientras la orden avanzaba de estado): mismo espejo del
+        // menú que el gate de carga.
+        const estadoFresco = (datosActuales.estado_reparacion || "POR ASIGNAR").toUpperCase();
+        if (estadoFresco !== "POR ASIGNAR") {
+          mostrarToast(`La orden ya está en ${estadoFresco} — la cabecera solo se edita en POR ASIGNAR.`, "error");
+          guardandoEdicion = false;
+          if (btnGuardarEdicion) btnGuardarEdicion.disabled = false;
+          return;
+        }
+
         // Si antes tenía contrato pero ahora no (o cambió), eliminar caché anterior
         const contratoAnterior = datosActuales?.contrato;
         if (contratoAnterior?.contrato_doc_id) {

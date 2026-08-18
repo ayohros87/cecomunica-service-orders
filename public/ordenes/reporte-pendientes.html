@@ -51,7 +51,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script defer src="../js/services/ordenesService.js"></script>
+  <script defer src="../js/services/ordenesService.js?v=qc6"></script>
   <script defer src="/js/vendor/lucide.min.js?v=1"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -85,9 +85,35 @@
         mensajeDiv.textContent = "Debe iniciar sesión para ver este reporte.";
         return;
       }
+      // Gate de rol (auditoría órdenes P2): el reporte vuelca TODA la
+      // operación pendiente (clientes + vendedores). Solo roles operativos y
+      // de supervisión; ante duda (doc de usuario ilegible) se niega.
+      try {
+        const snap = await firebase.firestore().collection("usuarios").doc(user.uid).get();
+        const rol = String((snap.data() || {}).rol || "").trim().toLowerCase();
+        const permitidos = ["administrador", "recepcion", "jefe_taller", "gerente",
+                            "tecnico", "tecnico_operativo", "vista"];
+        if (!permitidos.includes(rol)) {
+          mensajeDiv.style.color = "var(--status-critical)";
+          mensajeDiv.textContent = "Tu rol no tiene acceso a este reporte.";
+          return;
+        }
+      } catch (e) {
+        console.error("No se pudo validar el rol:", e);
+        mensajeDiv.style.color = "var(--status-critical)";
+        mensajeDiv.textContent = "No se pudo validar tu acceso al reporte.";
+        return;
+      }
       generarReporte();
     });
     });
+
+    // Escape HTML (auditoría órdenes P2): los nombres de cliente/vendedor
+    // vienen de Firestore — sin esto, un dato con marcado se inyectaba
+    // directo en la tabla del reporte.
+    const esc = (v) => String(v ?? "").replace(/[&<>"']/g, m => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+    }[m]));
 
     async function generarReporte() {
       mensajeDiv.textContent = "Cargando datos…";
@@ -129,13 +155,13 @@
 
           tabla += `
             <tr>
-              <td>${data.ordenId}</td>
-              <td>${nombreCliente}</td>
-              <td>${data.tipo_de_servicio || "-"}</td>
-              <td>${data.estado_reparacion || "-"}</td>
-              <td>${data.fecha_entrada || "-"}</td>
+              <td>${esc(data.ordenId)}</td>
+              <td>${esc(nombreCliente)}</td>
+              <td>${esc(data.tipo_de_servicio || "-")}</td>
+              <td>${esc(data.estado_reparacion || "-")}</td>
+              <td>${esc(data.fecha_entrada || "-")}</td>
               <td>${cantidadRadios}</td>
-              <td>${vendedor}</td>
+              <td>${esc(vendedor)}</td>
             </tr>
           `;
         }

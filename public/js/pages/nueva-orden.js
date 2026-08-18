@@ -410,9 +410,11 @@
             return;
           }
         } else {
-          // Debe tener motivo
-          if (!contratoMotivo.value.trim()) {
-            mostrarMensaje("⚠️ Debe indicar el motivo por el cual no aplica contrato.", "rojo");
+          // Debe tener motivo REAL (auditoría órdenes P2): con el campo libre
+          // se colaban "n/a" y puntos — el motivo es lo único que explica por
+          // qué una PROGRAMACIÓN/ENTRADA quedó fuera de contrato.
+          if (contratoMotivo.value.trim().length < 10) {
+            mostrarMensaje("⚠️ Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "rojo");
             return;
           }
         }

@@ -489,6 +489,24 @@ service cloud.firestore {
         return antes.get("acuses", []).size() <= despues.get("acuses", []).size()
           && antes.get("esperados", []).size() <= despues.get("esperados", []).size();
       }
+      // Borrado lógico (auditoría órdenes P2): `eliminado:true` saca la orden
+      // de TODA la operación (bandeja, señales, conteos) — merece candado
+      // propio. Para roles no-admin: solo recepción lo enciende (espeja el
+      // menú ⋯ de la UI), siempre con motivo (≥10 chars, el mínimo que pide
+      // la UI), nunca sobre una orden terminal (entregada/cerrada es historial
+      // del cliente con firma y QC) y nunca en reversa (true→false) — las
+      // resurrecciones son correcciones manuales de admin, que queda exento
+      // por el OR de isAdmin() en el allow.
+      function eliminadoOk() {
+        return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["eliminado"])
+          || (request.resource.data.get("eliminado", false) == true
+              && resource.data.get("eliminado", false) != true
+              && userRole() == "recepcion"
+              && request.resource.data.get("eliminado_motivo", "").size() >= 10
+              && !(resource.data.get("estado_reparacion", "POR ASIGNAR")
+                     in ["ENTREGADO AL CLIENTE", "CERRADA (VISITA)",
+                         "CERRADA (DEVOLUCION)", "CERRADA (ENTRADA)"]));
+      }
       allow read: if isSignedIn();
       // create/update solo para los roles que operan órdenes (permiso 'crear-orden'
       // en roles.js): admin/vendedor/recepción/técnico/técnico_operativo/jefe_taller.
@@ -499,7 +517,8 @@ service cloud.firestore {
         && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"]
         && (isAdmin() || (ordenTransicionLegal() && qcFieldsUntouchedOrJefe()
                           && qcAprobadoTraeChecklist() && qcRequeridoNoSeApaga()
-                          && qcMarcaAlCompletar() && devolucionAppendOnly()));
+                          && qcMarcaAlCompletar() && devolucionAppendOnly()
+                          && eliminadoOk()));
       // El cliente nunca hace hard-delete de una orden a nivel doc (verificado:
       // solo borra líneas de la subcolección `consumos`; los borrados de orden
       // pasan por consola/admin SDK y la CF onOrdenHardDelete limpia después).
