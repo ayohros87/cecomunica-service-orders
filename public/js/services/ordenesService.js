@@ -31,7 +31,7 @@ const OrdenesService = {
    * (live). Kept in sync via this single source.
    * @private
    */
-  _buildOrdersQuery({ userRole = null, userId = null, limit = 50 }) {
+  _buildOrdersQuery({ userRole = null, userId = null, limit = 50, soloMias = false }) {
     const db = firebase.firestore();
     let queryRef = db.collection("ordenes_de_servicio");
 
@@ -40,6 +40,14 @@ const OrdenesService = {
     if (userRole === "vendedor" && userId) {
       queryRef = queryRef.where("vendedor_asignado", "==", userId);
     } else if (userRole === "tecnico_operativo" && userId) {
+      queryRef = queryRef.where("tecnico_uid", "==", userId);
+    } else if (userRole === "tecnico" && userId && soloMias) {
+      // Auditoría órdenes P1.10: con "Mis órdenes" activo (el default del
+      // rol) el técnico bajaba las órdenes de TODOS de 15 en 15 y filtraba
+      // en cliente — percepción de lentitud y riesgo de no ver las suyas
+      // viejas. Con el toggle APAGADO vuelve a la query general (necesita
+      // ver POR ASIGNAR para tomar órdenes). Mismo índice que
+      // tecnico_operativo (tecnico_uid + fecha_creacion).
       queryRef = queryRef.where("tecnico_uid", "==", userId);
     }
 
@@ -70,8 +78,8 @@ const OrdenesService = {
    * @param {(err: Error) => void} [options.onError]
    * @returns {() => void} unsubscribe function — call when leaving the page
    */
-  subscribeFirstPage({ userRole = null, userId = null, limit = 50, onUpdate, onError } = {}) {
-    const queryRef = this._buildOrdersQuery({ userRole, userId, limit });
+  subscribeFirstPage({ userRole = null, userId = null, limit = 50, soloMias = false, onUpdate, onError } = {}) {
+    const queryRef = this._buildOrdersQuery({ userRole, userId, limit, soloMias });
     return queryRef.onSnapshot(
       snapshot => {
         const orders = [];
@@ -103,8 +111,8 @@ const OrdenesService = {
    * @param {number} options.limit - Number of orders to fetch
    * @returns {Promise<{orders: Array, lastSnapshot: firebase.firestore.DocumentSnapshot}>}
    */
-  async loadOrders({ lastSnapshot = null, userRole = null, userId = null, limit = 50 } = {}) {
-    let queryRef = this._buildOrdersQuery({ userRole, userId, limit });
+  async loadOrders({ lastSnapshot = null, userRole = null, userId = null, limit = 50, soloMias = false } = {}) {
+    let queryRef = this._buildOrdersQuery({ userRole, userId, limit, soloMias });
 
     if (lastSnapshot) {
       queryRef = queryRef.startAfter(lastSnapshot);
@@ -829,38 +837,46 @@ const OrdenesService = {
    * @param {string} params.email - User email
    * @returns {Promise<Array>} Updated equipos array
    */
-  async updateTrabajoTecnico({ ordenId, equipoIdx, texto, uid, email }) {
+  async updateTrabajoTecnico({ ordenId, equipoIdx, equipoIdxs = null, texto, uid, email }) {
     const db = firebase.firestore();
     const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
     const snap = await ordenRef.get();
-    
+
     if (!snap.exists) throw new Error("Orden no encontrada");
 
     const data = snap.data() || {};
     const equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
 
-    // Find the N-th non-deleted equipment in the original array
+    // Lote en UN write (auditoría órdenes P1.8): antes el "aplicar también a
+    // estos seriales" llamaba esta función en serie — get+update del doc
+    // completo POR EQUIPO (~2N viajes y la espera "Aplicando 3/5…").
+    // equipoIdxs (índices sobre la lista sin eliminados) aplica el mismo
+    // texto a todos en una sola lectura + una sola escritura.
+    const objetivo = new Set(
+      Array.isArray(equipoIdxs) && equipoIdxs.length ? equipoIdxs : [equipoIdx]
+    );
+
     let nonDeletedIndex = -1;
-    const realIndex = equiposAll.findIndex(e => {
-      if (e?.eliminado) return false;
+    let aplicados = 0;
+    equiposAll.forEach(e => {
+      if (e?.eliminado) return;
       nonDeletedIndex++;
-      return nonDeletedIndex === equipoIdx;
+      if (!objetivo.has(nonDeletedIndex)) return;
+      e.trabajo_tecnico = texto;
+      e.trabajo_tecnico_updated_at = firebase.firestore.Timestamp.now();
+      e.trabajo_tecnico_uid = uid;
+      e.trabajo_tecnico_nombre = email;
+      if (texto && texto.trim()) {
+        e.intervencion_no_disponible = false;
+        e.motivo_no_disponible = "";
+      }
+      aplicados++;
     });
 
-    if (realIndex === -1) throw new Error("Equipo no encontrado");
-
-    // Update equipment
-    equiposAll[realIndex].trabajo_tecnico = texto;
-    equiposAll[realIndex].trabajo_tecnico_updated_at = firebase.firestore.Timestamp.now();
-    equiposAll[realIndex].trabajo_tecnico_uid = uid;
-    equiposAll[realIndex].trabajo_tecnico_nombre = email;
-    if (texto && texto.trim()) {
-      equiposAll[realIndex].intervencion_no_disponible = false;
-      equiposAll[realIndex].motivo_no_disponible = "";
-    }
+    if (aplicados === 0) throw new Error("Equipo no encontrado");
 
     await ordenRef.update({ equipos: equiposAll });
-    
+
     return equiposAll;
   },
 

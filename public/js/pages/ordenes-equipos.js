@@ -571,8 +571,37 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
     };
   }
 
+  // Navegación entre equipos (auditoría órdenes P1.7): pasar al siguiente
+  // sin cerrar/reabrir el modal. Con texto editado y sin guardar, pregunta
+  // antes de descartar.
+  const nav = document.getElementById("trabajoNav");
+  if (nav) {
+    const total = equipos.length;
+    nav.style.display = total > 1 ? "flex" : "none";
+    const pos = document.getElementById("trabajoNavPos");
+    if (pos) pos.textContent = `Equipo ${idx + 1} de ${total}`;
+    const original = (e.trabajo_tecnico || "").toString().trim();
+    const irA = async (destino) => {
+      if (destino < 0 || destino >= total) return;
+      const txtAhora = (document.getElementById("trabajoEquipoText")?.value || "").trim();
+      if (txtAhora !== original) {
+        const ok = await Modal.confirm({
+          title: "Texto sin guardar",
+          message: "La intervención de este equipo tiene cambios sin guardar. ¿Pasar al otro equipo y descartarlos?",
+          confirmLabel: "Cambiar de equipo",
+        });
+        if (!ok) return;
+      }
+      abrirTrabajoEquipoModal(ordenId, destino);
+    };
+    const prev = document.getElementById("trabajoNavPrev");
+    const next = document.getElementById("trabajoNavNext");
+    if (prev) { prev.disabled = idx === 0; prev.onclick = () => irA(idx - 1); }
+    if (next) { next.disabled = idx === total - 1; next.onclick = () => irA(idx + 1); }
+  }
+
   const modal = document.getElementById("modalTrabajoEquipo");
-  
+
   // Add backdrop click handler (close when clicking outside modal)
   modal.onclick = function(e) {
     if (e.target === modal) {
@@ -775,6 +804,8 @@ window.verTrabajoEquipo = function(ordenId, idx) {
 
 let _materialPiezas = null;         // cache del catálogo (inventario_piezas activas)
 let _materialSeleccionada = null;   // pieza elegida en el modal de selección
+let _materialEquipoActual = null;   // equipo del modal (para sugerencias por modelo)
+let _materialOtros = [];            // otros equipos de la orden [{equipo, key}] (lote P1.6)
 let _materialBuscarTimer = null;
 let _materialWired = false;
 
@@ -848,11 +879,50 @@ function _materialSubtotalRefresh() {
   out.innerHTML = `Subtotal: <strong>${FMT.money(sub)}</strong>${tipo === "garantia" ? " (garantía — no se cobra)" : ""}`;
 }
 
+// Sugerencias al abrir (auditoría órdenes P1.6): la analítica "más usadas
+// por modelo" (analytics_piezas_modelo, escrita en cada cobro) existía SIN
+// ningún lector — el buscador exigía teclear siempre. Índice ya desplegado:
+// (modelo_norm ASC, usos_cobro DESC).
+async function _materialSugerenciasIniciales(equipo) {
+  const sug = document.getElementById("materialSugerencias");
+  if (!sug || !equipo) return;
+  try {
+    const modeloNorm = PiezasService.modeloNormDeEquipo(equipo);
+    if (!modeloNorm) { sug.innerHTML = ""; return; }
+    const snap = await firebase.firestore().collection("analytics_piezas_modelo")
+      .where("modelo_norm", "==", modeloNorm)
+      .orderBy("usos_cobro", "desc")
+      .limit(8).get();
+    if (snap.empty) { sug.innerHTML = ""; return; }
+    const porId = new Map((_materialPiezas || []).map(p => [p.id, p]));
+    const filas = [];
+    snap.forEach(d => {
+      const a = d.data();
+      const p = porId.get(a.pieza_id);
+      if (!p) return;
+      const stock = Number(p.cantidad || 0);
+      const sinControl = p.sin_control_inventario === true;
+      const agotada = !sinControl && stock <= 0;
+      filas.push(`<button type="button" class="equipo-material-chip" ${agotada ? "disabled" : ""}
+        data-action="pick-material-equipo" data-pieza-id="${escapeHtml(p.id)}"
+        title="Usada ${Number(a.usos_cobro || 0)} vez(ces) en este modelo · Stock: ${sinControl ? "sin control" : stock}">
+        <span>${escapeHtml(_nombrePieza(p))}</span>
+        <span class="mono">${escapeHtml(p.sku || "-")}</span>
+        <span>${FMT.money(p.precio_venta || 0)}</span>
+      </button>`);
+    });
+    sug.innerHTML = filas.length
+      ? `<div style="font-size:12px;color:var(--fg-3);padding:2px 0 4px;">Más usadas en este modelo:</div>` + filas.join("")
+      : "";
+  } catch (e) { sug.innerHTML = ""; /* sin sugerencias no estorba */ }
+}
+
 function _materialRenderSugerencias(q) {
   const sug = document.getElementById("materialSugerencias");
   if (!sug) return;
   const query = (q || "").trim();
-  if (!query) { sug.innerHTML = ""; return; }
+  // Con el buscador vacío vuelven las sugerencias por modelo (P1.6).
+  if (!query) { _materialSugerenciasIniciales(_materialEquipoActual); return; }
   const piezas = _materialPiezas || [];
   const list = PiezaSearch.search(piezas, query.toLowerCase());
   if (!list.length) { sug.innerHTML = '<div class="equipo-fotos-empty">Sin coincidencias.</div>'; return; }
@@ -909,13 +979,42 @@ window.abrirMaterialEquipoModal = async function() {
   if (precioEl) precioEl.value = "0";
   _materialSubtotalRefresh();
 
+  // Lote (P1.6): checkboxes con los DEMÁS equipos de la orden para aplicar
+  // la misma pieza/cantidad — antes el modal se repetía por equipo.
+  _materialEquipoActual = equipo;
+  _materialOtros = [];
+  const wrapOtrosMat = document.getElementById("materialAplicarOtros");
+  if (wrapOtrosMat) {
+    const cacheOrden = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
+    const eqsAct = (cacheOrden?.equipos || []).filter(e2 => !e2.eliminado && e2.id !== equipo.id);
+    _materialOtros = eqsAct.map(e2 => ({ equipo: e2, key: OrdenesService.consumoKeyDe(e2) }));
+    if (!_materialOtros.length) {
+      wrapOtrosMat.style.display = "none"; wrapOtrosMat.innerHTML = "";
+    } else {
+      wrapOtrosMat.style.display = "";
+      wrapOtrosMat.innerHTML = `
+        <details style="margin:8px 0 0;">
+          <summary style="cursor:pointer; font-size:13px; color:var(--fg-2);">
+            Aplicar este material también a otros equipos (${_materialOtros.length}) — misma pieza y cantidad</summary>
+          <div style="max-height:120px; overflow-y:auto; margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+            ${_materialOtros.map((x, i) => `
+              <label style="display:flex; gap:6px; align-items:center; font-size:13px;">
+                <input type="checkbox" class="material-aplicar-chk" value="${i}">
+                <span style="font-family:var(--font-mono,monospace);">${escapeHtml(String(x.equipo.numero_de_serie || x.equipo.serial || "-"))}</span>
+                ${x.equipo.modelo ? " · " + escapeHtml(x.equipo.modelo) : ""}
+              </label>`).join("")}
+          </div>
+        </details>`;
+    }
+  }
+
   const modal = document.getElementById("modalMaterialEquipo");
   if (modal) APP.utils.show(modal);
   APP.utils.lucideRefresh(modal);
 
   try {
     await _ensureMaterialPiezas();
-    if (sugEl) sugEl.innerHTML = "";
+    _materialSugerenciasIniciales(equipo);
     setTimeout(() => buscar?.focus(), 50);
   } catch (e) {
     console.error("❌ Error cargando catálogo de piezas:", e);
@@ -957,61 +1056,84 @@ window.confirmarMaterialEquipo = async function() {
   const subtotal = +((tipo === "cobro" ? qty * precio : 0)).toFixed(2);
   const user = firebase.auth().currentUser;
 
+  // Lote (P1.6): la misma pieza/cantidad a los equipos marcados en el modal.
+  const marcadosMat = Array.from(document.querySelectorAll('#materialAplicarOtros .material-aplicar-chk:checked'))
+    .map(ch => _materialOtros[Number(ch.value)])
+    .filter(Boolean);
+  const destinos = [{ equipo, key: equipoKey }, ...marcadosMat];
+
   try {
     if (btn) btn.disabled = true;
 
-    // Releer la pieza para validar stock real antes de descontar.
+    // Releer la pieza para validar el stock COMBINADO antes de descontar
+    // (qty por CADA equipo del lote).
     const piezaDB = await PiezasService.getPieza(_materialSeleccionada.id);
     if (!piezaDB) { Toast.show("La pieza ya no existe en el catálogo", "bad"); return; }
     const sinControl = piezaDB.sin_control_inventario === true;
-    if (!sinControl && Number(piezaDB.cantidad || 0) < qty) {
-      Toast.show(`Stock insuficiente (${Number(piezaDB.cantidad || 0)} disponibles)`, "warn");
+    const qtyTotal = qty * destinos.length;
+    if (!sinControl && Number(piezaDB.cantidad || 0) < qtyTotal) {
+      Toast.show(`Stock insuficiente para ${destinos.length} equipo(s): se necesitan ${qtyTotal} y hay ${Number(piezaDB.cantidad || 0)}`, "warn");
       return;
     }
 
-    await OrdenesService.addConsumo(_trabajoOrdenId, {
-      equipoId: equipoKey,
-      pieza_id: _materialSeleccionada.id,
-      pieza_nombre: _nombrePieza(_materialSeleccionada),
-      sku: _materialSeleccionada.sku || "",
-      qty,
-      precio_unit: precio,
-      tipo,
-      subtotal,
-      added_by_uid: user?.uid || null,
-      added_by_email: user?.email || null,
-      added_at: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    let consumosOk = 0;
+    for (const d of destinos) {
+      if (btn && destinos.length > 1) btn.innerHTML = `<i data-lucide="loader"></i> Registrando ${consumosOk + 1}/${destinos.length}…`;
+      await OrdenesService.addConsumo(_trabajoOrdenId, {
+        equipoId: d.key,
+        pieza_id: _materialSeleccionada.id,
+        pieza_nombre: _nombrePieza(_materialSeleccionada),
+        sku: _materialSeleccionada.sku || "",
+        qty,
+        precio_unit: precio,
+        tipo,
+        subtotal,
+        added_by_uid: user?.uid || null,
+        added_by_email: user?.email || null,
+        added_at: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      consumosOk++;
+    }
 
-    // A partir de aquí el consumo YA existe: los pasos restantes no deben
+    // A partir de aquí los consumos YA existen: los pasos restantes no deben
     // presentarse como fallo total — un reintento del usuario duplicaría el
     // consumo (y el descuento de stock).
     const piezaId = _materialSeleccionada.id;
     try {
       if (!sinControl) {
-        await PiezasService.ajustarDelta(piezaId, -qty);
+        await PiezasService.ajustarDelta(piezaId, -qty * consumosOk);
         const cache = (_materialPiezas || []).find(x => x.id === piezaId);
-        if (cache) cache.cantidad = Number(cache.cantidad || 0) - qty;
+        if (cache) cache.cantidad = Number(cache.cantidad || 0) - qty * consumosOk;
       }
     } catch (e) {
       console.error("❌ Material registrado pero no se pudo descontar stock:", e);
       Toast.show("⚠️ Material registrado, pero no se pudo descontar el stock — ajústalo en inventario", "warn");
     }
 
-    // Alimenta las recomendaciones "más usadas por modelo" (analytics).
+    // Alimenta las recomendaciones "más usadas por modelo" (analytics) —
+    // una vez por modelo distinto dentro del lote.
     if (tipo === "cobro") {
-      try { await PiezasService.incrementarUsoAnalytics(PiezasService.modeloNormDeEquipo(equipo), piezaId); }
-      catch (e) { console.warn("No se pudo registrar analytics de pieza:", e); }
+      const modelos = new Set(destinos.map(d => PiezasService.modeloNormDeEquipo(d.equipo)).filter(Boolean));
+      for (const m of modelos) {
+        try { await PiezasService.incrementarUsoAnalytics(m, piezaId); }
+        catch (e) { console.warn("No se pudo registrar analytics de pieza:", e); }
+      }
     }
 
     cerrarMaterialEquipoModal();
-    Toast.show("✅ Material registrado", "ok");
+    Toast.show(destinos.length > 1
+      ? `✅ Material registrado en ${consumosOk} equipo(s)`
+      : "✅ Material registrado", "ok");
     _renderEquipoMateriales();
   } catch (e) {
     console.error("❌ Error registrando material:", e);
     Toast.show(`❌ Error al registrar: ${e?.message || e}`, "bad");
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="plus"></i> Agregar material';
+      APP.utils.lucideRefresh(btn);
+    }
   }
 };
 
@@ -1085,34 +1207,22 @@ window.guardarTrabajoEquipoModal = async function() {
       });
     }
 
-    let equiposAll = await OrdenesService.updateTrabajoTecnico({
+    // Lote en UN write (auditoría órdenes P1.8): el equipo actual + los
+    // marcados en "aplicar también" van juntos en una sola lectura+escritura
+    // del doc — antes era un viaje get+update POR EQUIPO con la espera
+    // visible "Aplicando 3/5…". Solo el camino de texto: "no disponible" es
+    // por equipo.
+    const marcados = Array.from(document.querySelectorAll('#trabajoAplicarOtros .trabajo-aplicar-chk:checked'))
+      .map(ch => Number(ch.value))
+      .filter(i => Number.isInteger(i) && i !== _trabajoEquipoIdx);
+    const equiposAll = await OrdenesService.updateTrabajoTecnico({
       ordenId: _trabajoOrdenId,
       equipoIdx: _trabajoEquipoIdx,
+      equipoIdxs: [_trabajoEquipoIdx, ...marcados],
       texto: txt,
       uid,
       email
     });
-
-    // Lote (auditoría M3): el mismo texto a los equipos marcados, en serie
-    // (cada update reescribe el array de equipos — nada de paralelismo aquí).
-    // Solo aplica en el camino de texto: "no disponible" es por equipo.
-    const marcados = Array.from(document.querySelectorAll('#trabajoAplicarOtros .trabajo-aplicar-chk:checked'))
-      .map(ch => Number(ch.value))
-      .filter(i => Number.isInteger(i) && i !== _trabajoEquipoIdx);
-    let loteOk = 0, loteErr = 0;
-    for (const i of marcados) {
-      try {
-        btn.innerHTML = `<i data-lucide="loader"></i> Aplicando ${loteOk + loteErr + 2}/${marcados.length + 1}…`;
-        equiposAll = await OrdenesService.updateTrabajoTecnico({
-          ordenId: _trabajoOrdenId,
-          equipoIdx: i,
-          texto: txt,
-          uid,
-          email
-        });
-        loteOk++;
-      } catch (e2) { loteErr++; console.warn("Lote de intervención falló en idx", i, e2); }
-    }
 
     // Actualizar cache local
     const cache = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
@@ -1123,8 +1233,8 @@ window.guardarTrabajoEquipoModal = async function() {
 
     cerrarTrabajoEquipoModal();
     Toast.show(marcados.length
-      ? `✅ Intervención guardada en ${1 + loteOk} equipo(s)${loteErr ? ` · ${loteErr} fallaron` : ""}`
-      : "✅ Intervención guardada", loteErr ? "warn" : "ok");
+      ? `✅ Intervención guardada en ${1 + marcados.length} equipo(s)`
+      : "✅ Intervención guardada", "ok");
     
     // Reset button state
     btn.disabled = false;

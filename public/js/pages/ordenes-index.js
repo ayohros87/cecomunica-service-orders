@@ -51,7 +51,17 @@ document.addEventListener("DOMContentLoaded", function () {
   const filtroTecnicoEl = document.getElementById("filtroTecnico");
   if (filtroTecnicoEl) filtroTecnicoEl.addEventListener("change", () => aplicarFiltrosCombinados());
   const toggleMisOrdenes = document.getElementById("toggleMisOrdenes");
-  if (toggleMisOrdenes) toggleMisOrdenes.addEventListener("change", () => aplicarFiltrosCombinados());
+  if (toggleMisOrdenes) toggleMisOrdenes.addEventListener("change", () => {
+    // Para el rol técnico el toggle cambia la QUERY (P1.10): re-suscribir
+    // trae sus órdenes del servidor (o vuelve a la general para ver POR
+    // ASIGNAR). Para los demás roles sigue siendo filtro en cliente.
+    if (APP.state.userRole === 'tecnico' && typeof window._iniciarSnapshotInicial === 'function') {
+      if (typeof renderSkeletonRows === 'function') renderSkeletonRows(6);
+      window._iniciarSnapshotInicial();
+      return;
+    }
+    aplicarFiltrosCombinados();
+  });
 
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) {

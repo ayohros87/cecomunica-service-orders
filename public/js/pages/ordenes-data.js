@@ -176,6 +176,9 @@ function _iniciarSnapshotInicial() {
   _firstPageUnsubscribe = OrdenesService.subscribeFirstPage({
     userRole: APP.state.userRole,
     userId: uid,
+    // El técnico con "Mis órdenes" activo consulta SUS órdenes al servidor
+    // (P1.10); el toggle re-suscribe (ver ordenes-index).
+    soloMias: !!document.getElementById('toggleMisOrdenes')?.checked,
     limit: CONFIG.pageLimit(APP.state.userRole),
     onUpdate: ({ orders, lastSnapshot, fromCache }) => {
       // Merge: live orders replace anything with the same ordenId in
@@ -274,6 +277,7 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       lastSnapshot: APP.state.lastVisible,
       userRole: APP.state.userRole,
       userId: uid,
+      soloMias: !!document.getElementById('toggleMisOrdenes')?.checked,
       limit: CONFIG.pageLimit(APP.state.userRole)
     });
 

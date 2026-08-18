@@ -207,7 +207,11 @@
   let textoToast = `✅ Se guardaron ${guardados} equipo(s) correctamente.`;
   if (omitidos) textoToast += ` ${omitidos} ya estaban en la orden.`;
   Toast.show(textoToast, "ok");
-  setTimeout(() => { window.location.href = "index.html"; }, 2000);
+  // Aterrizaje CON la orden a la vista (auditoría órdenes P1.9): antes
+  // esperaba 2 s fijos y caía al index pelado — el paso siguiente natural
+  // (Recibir con firma / Imprimir la hoja) obligaba a re-buscar la orden
+  // recién creada. ?orden= la deja filtrada en la bandeja.
+  setTimeout(() => { window.location.href = `index.html?orden=${encodeURIComponent(ordenId)}`; }, 600);
   container.innerHTML = "";
   contador = 0;
   } catch (error) {

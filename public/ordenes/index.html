@@ -45,7 +45,7 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<script defer src="../js/services/ordenesService.js?v=qc4"></script>
+<script defer src="../js/services/ordenesService.js?v=qc5"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script defer src="../js/services/senalesService.js?v=m4"></script>
@@ -62,12 +62,12 @@
 <script defer src="../js/ui/modal.js"></script>
 <script defer src="../js/ui/firmaPad.js?v=dev3"></script>
 <script defer src="../js/pages/ordenes-state.js?v=dev4"></script>
-<script defer src="../js/pages/ordenes-data.js?v=fix3"></script>
+<script defer src="../js/pages/ordenes-data.js?v=fix4"></script>
 <script defer src="../js/pages/ordenes-render.js?v=qc10"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=qc4"></script>
 <script defer src="../js/pages/ordenes-flujo.js?v=qc5"></script>
-<script defer src="../js/pages/ordenes-qc.js?v=qc3"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=cc19"></script>
+<script defer src="../js/pages/ordenes-qc.js?v=qc4"></script>
+<script defer src="../js/pages/ordenes-equipos.js?v=cc20"></script>
 <script defer src="../js/pages/ordenes-notas.js"></script>
 <script defer src="../js/pages/ordenes-visita.js"></script>
 <script defer src="../js/pages/ordenes-devolucion.js?v=dev10"></script>
@@ -79,7 +79,7 @@
      como no-ops en parse. Ver js/core/icons.js. -->
 <script defer src="/js/vendor/lucide.min.js?v=1"></script>
 <script defer src="/js/core/icons.js?v=2"></script>
-<script defer src="../js/pages/ordenes-index.js?v=qc3"></script>
+<script defer src="../js/pages/ordenes-index.js?v=qc4"></script>
 </head>
 <body>
   <div class="cc-app">
@@ -717,6 +717,15 @@
       <button class="btn btn-ghost" data-action="cerrar-trabajo-equipo"><i data-lucide="x"></i></button>
     </div>
 
+    <!-- Navegación entre equipos (auditoría órdenes P1.7): fotos y
+         materiales son POR equipo — sin esto el modal se cerraba y reabría
+         N veces por orden. -->
+    <div id="trabajoNav" style="display:none; align-items:center; justify-content:space-between; gap:8px; margin:0 0 8px;">
+      <button type="button" class="btn btn-ghost btn-sm" id="trabajoNavPrev"><i data-lucide="chevron-left"></i> Anterior</button>
+      <span id="trabajoNavPos" style="font-size:12.5px; color:var(--fg-3);"></span>
+      <button type="button" class="btn btn-ghost btn-sm" id="trabajoNavNext">Siguiente <i data-lucide="chevron-right"></i></button>
+    </div>
+
     <textarea id="trabajoEquipoText" class="textarea-full"
       placeholder="Describe la intervención técnica realizada..."></textarea>
 
@@ -805,6 +814,11 @@
       </div>
     </div>
     <div id="materialSubtotal" class="material-subtotal"></div>
+
+    <!-- Lote de materiales (auditoría órdenes P1.6): misma pieza y cantidad
+         a otros equipos de la orden en un solo flujo — antes eran ~6
+         interacciones POR EQUIPO repitiendo el modal. -->
+    <div id="materialAplicarOtros" style="display:none;"></div>
 
     <div class="modal-footer-mobile">
       <button class="btn btn-secondary btn-full" data-action="cerrar-material-equipo">Cancelar</button>

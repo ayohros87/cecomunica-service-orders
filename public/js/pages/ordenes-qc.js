@@ -259,6 +259,32 @@
             ${orden.tecnico_asignado ? `<span><b>Técnico:</b> ${esc(orden.tecnico_asignado)}</span>` : ''}
           </div>
 
+          ${(() => {
+            // Contexto (auditoría órdenes P1.11): el jefe revisaba A CIEGAS —
+            // el modal no mostraba equipos ni intervenciones y había que
+            // alternar con la fila expandida detrás.
+            const eqs = (orden.equipos || []).filter(x => !x.eliminado);
+            if (!eqs.length) return '';
+            return `
+            <details open style="margin-bottom:10px;border:1px solid var(--line,#E5E7EB);border-radius:8px;padding:8px 10px;">
+              <summary style="cursor:pointer;font-weight:600;font-size:13px;">Equipos e intervenciones (${eqs.length})</summary>
+              <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px;max-height:180px;overflow:auto;">
+                ${eqs.map(eq => {
+                  const t = (eq.trabajo_tecnico || '').trim();
+                  const nd = eq.intervencion_no_disponible;
+                  const detalle = nd
+                    ? `<span style="color:#92400E;">no disponible${eq.motivo_no_disponible ? ': ' + esc(eq.motivo_no_disponible) : ''}</span>`
+                    : (t ? esc(t.length > 120 ? t.slice(0, 120) + '…' : t)
+                         : '<span style="color:#B91C1C;font-weight:600;">SIN intervención registrada</span>');
+                  return `<div style="font-size:12.5px;line-height:1.45;">
+                    <span style="font-family:var(--font-mono,monospace);font-weight:600;color:var(--accent,#0091D7);">${esc(eq.numero_de_serie || eq.serial || '-')}</span>
+                    ${eq.modelo ? ' · ' + esc(eq.modelo) : ''} — ${detalle}
+                  </div>`;
+                }).join('')}
+              </div>
+            </details>`;
+          })()}
+
           ${soloLectura && qcPrev ? `
             <div style="margin-bottom:8px;font-weight:600;">
               Resultado: ${qcPrev.resultado === 'aprobado' ? '✅ Aprobado' : '❌ Rechazado'}
@@ -281,6 +307,12 @@
                 Verifique de nuevo el checklist completo.
               </div>` : ''}
 
+            <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
+              <button type="button" class="btn btn-secondary btn-sm" id="qcTodoOkBtn"
+                      title="Marca todos los puntos del checklist como OK — el registro queda igual de completo">
+                <i data-lucide="check-check"></i> Marcar todo OK
+              </button>
+            </div>
             <div id="qcChecklist">
               ${items.map(it => _itemRowHtml(it, '')).join('')}
             </div>
@@ -331,6 +363,22 @@
 
     overlay.addEventListener('click', async (e) => {
       if (e.target === overlay || e.target.closest('[data-close]')) { cleanup(); return; }
+
+      // "Todo OK" (auditoría P1.11): con 0 rechazos en 33 firmas, marcar
+      // 4-5 ítems uno a uno era ritual — un click deja el registro igual de
+      // completo; rechazar sigue exigiendo motivo y observaciones.
+      if (e.target.closest('#qcTodoOkBtn')) {
+        overlay.querySelectorAll('.qc-item-row').forEach(row => {
+          checklist[row.dataset.key] = 'ok';
+          row.querySelectorAll('.qc-chip').forEach(b => {
+            const active = b.dataset.valor === 'ok';
+            b.classList.toggle('btn-primary', active);
+            b.classList.toggle('btn-secondary', !active);
+          });
+        });
+        _refreshAprobar();
+        return;
+      }
 
       const chip = e.target.closest('.qc-chip');
       if (chip) {
