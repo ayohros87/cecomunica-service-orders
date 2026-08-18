@@ -191,6 +191,22 @@ test("evaluarPolitica pasa los items solo — no se le puede olvidar", () => {
   assert.equal(T.evaluarPolitica(cot, POL).requiere, true);
 });
 
+test("un doc sin items no puede colar un monto grande", () => {
+  // Recalcular desde `items` es lo correcto cuando hay renglones, pero un doc
+  // sin ellos —una lectura parcial, un objeto armado a mano— daria 0 y dejaria
+  // pasar cualquier monto. Manda el mayor entre lo recalculado y `total`.
+  assert.equal(T.evaluarPolitica({ total: 20000 }, POL).requiere, true);
+  assert.equal(T.evaluarPolitica({ total: 160.5, descuentoPct: 0 }, POL).requiere, false);
+});
+
+test("con items, el recalculo puede SUBIR el total pero nunca bajarlo", () => {
+  // `total` guardado stale (de antes de agregar renglones) no puede rebajar la
+  // evaluación: el alquiler proyectado manda.
+  const cot = { total: 100, items: [alq({ cant: 1, precio: 2000 })], itbmsPct: 0, plazoMeses: 36 };
+  assert.equal(T.evaluarPolitica(cot, POL).totales.valorEvaluado, 24000);
+  assert.equal(T.evaluarPolitica(cot, POL).requiere, true);
+});
+
 test("los defaults fallan CERRADO si Firestore no responde", () => {
   // Sin política explícita se usan los literales del módulo (15% / $5,000),
   // más estrictos que los valores vivos: una caída no puede soltar aprobaciones.

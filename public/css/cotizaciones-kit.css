@@ -103,7 +103,8 @@
 .cc-items { width: 100%; }
 .cc-items-head, .cc-item-row {
   display: grid;
-  grid-template-columns: 28px 1fr 70px 110px 70px 110px 32px;
+  /* reorden · descripción · cant · MODALIDAD · precio · desc% · total · borrar */
+  grid-template-columns: 34px 1fr 62px 132px 104px 62px 108px 32px;
   gap: var(--sp-2); align-items: center;
 }
 .cc-items-head {
@@ -133,14 +134,63 @@
 
 .cc-add-row { margin-top: var(--sp-2); }
 
-/* Reorden alternativo (móvil) */
+/* ── Modalidad del renglón (venta / alquiler) ────────────────
+   El borde izquierdo de color es la única señal que permite auditar una
+   cotización mixta sin leer control por control. */
+.cc-item-row.cc-mod-venta    { border-left: 3px solid var(--status-online, #1FA56B); }
+.cc-item-row.cc-mod-alquiler { border-left: 3px solid var(--accent); }
+
+.cc-seg {
+  display: grid; grid-template-columns: 1fr 1fr; height: 34px;
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  overflow: hidden; background: var(--surface-sunken);
+}
+.cc-seg-btn {
+  border: 0; background: transparent; cursor: pointer; padding: 0;
+  font: 600 11.5px/1 var(--font-body); color: var(--fg-3);
+  display: flex; align-items: center; justify-content: center;
+}
+.cc-seg-btn:hover { color: var(--fg-1); }
+.cc-seg-btn.on { background: var(--surface-card); box-shadow: var(--shadow-xs); }
+.cc-seg-btn.cc-seg-venta.on    { color: var(--status-online, #1FA56B); }
+.cc-seg-btn.cc-seg-alquiler.on { color: var(--accent); }
+.cc-seg-btn:focus-visible { outline: none; box-shadow: var(--ring-focus); position: relative; z-index: 1; }
+
+/* Sufijo "/mes" — el mismo tratamiento donde aparezca un importe recurrente. */
+.cc-per { font-family: var(--font-body); font-weight: 400; font-size: 10.5px; color: var(--fg-3); margin-left: 3px; }
+
+/* ── Reorden: manija (mouse) + flechas (táctil y teclado) ─────
+   Los eventos HTML5 de arrastre no se disparan en pantallas táctiles, así que
+   en iPad la manija mostraba el cursor de agarre y no pasaba nada. */
+.cc-item-reorden { display: flex; align-items: center; justify-content: center; gap: 2px; }
 .cc-item-arrows { display: flex; flex-direction: column; gap: 2px; }
+.cc-arrow {
+  width: 20px; height: 15px; padding: 0; cursor: pointer;
+  background: var(--surface-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs); color: var(--fg-3);
+  display: flex; align-items: center; justify-content: center;
+}
+.cc-arrow:hover { border-color: var(--accent); color: var(--accent); }
+.cc-arrow:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.cc-arrow i, .cc-arrow svg { width: 11px; height: 11px; }
+
+/* Precios del autocompletado: los dos a la vista, el de la modalidad activa
+   resaltado. "sin precio" se dice — un $0.00 parece una ganga. */
+.cc-cat-item .cc-cat-price { margin-left: 0; }
+.cc-cat-item .cc-cat-price.es-activo { color: var(--fg-1); }
+.cc-cat-item .cc-cat-price.es-vacio { color: var(--fg-4); font-weight: 400; font-style: italic; }
+.cc-cat-item .cc-cat-meta > .cc-cat-price:first-of-type { margin-left: auto; }
 
 @media (max-width: 720px) {
   .cc-items-head { display: none; }
   .cc-item-row { grid-template-columns: 1fr 1fr; gap: 6px; padding: var(--sp-3); }
-  .cc-item-row .cc-item-handle, .cc-item-row .cc-item-total, .cc-item-row .cc-item-del { grid-column: span 1; }
-  .cc-item-row .cc-item-desc { grid-column: 1 / -1; }
+  .cc-item-row .cc-item-reorden, .cc-item-row .cc-item-total, .cc-item-row .cc-item-del { grid-column: span 1; }
+  .cc-item-row .cc-item-desc, .cc-item-row .cc-seg { grid-column: 1 / -1; }
+  /* En táctil la manija no sirve: quedan solo las flechas. */
+  .cc-item-row .cc-item-handle { display: none; }
+  .cc-item-reorden { justify-content: flex-start; }
+  .cc-item-arrows { flex-direction: row; }
+  .cc-arrow { width: 30px; height: 26px; }
 }
 
 /* Autocompletar catálogo */
@@ -173,6 +223,35 @@
 .cc-sum-total .lbl { font-family: var(--font-display); font-weight: 700; font-size: 16px; text-transform: uppercase; letter-spacing: .03em; }
 .cc-sum-total .v { font-family: var(--font-mono); font-weight: 700; font-size: 20px; }
 .cc-sum-controls { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin: var(--sp-4) 0; }
+
+/* ── Resumen con las dos modalidades ──────────────────────────
+   Venta y alquiler son dos totales que NO se suman: uno es un pago único y el
+   otro es por mes. Se muestran como grupos con el mismo peso visual, y abajo
+   el valor evaluado — que es el único número comparable, y el que decide si
+   hace falta aprobación. */
+.cc-sum-grupo + .cc-sum-grupo { margin-top: var(--sp-4); padding-top: var(--sp-4); border-top: 1px solid var(--border-subtle); }
+.cc-sum-cap {
+  display: flex; align-items: center; gap: 7px; margin-bottom: var(--sp-2);
+  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-4);
+}
+.cc-sum-cap i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+/* Dos cajas oscuras idénticas se leen como una repetición y compiten entre sí.
+   Cada total lleva el borde de SU modalidad — el mismo código de color que el
+   borde izquierdo de los renglones — para que se distingan sin gritar. */
+.cc-sum-grupo .cc-sum-total { border-left: 4px solid transparent; }
+.cc-sum-grupo.es-venta    .cc-sum-total { border-left-color: var(--status-online, #1FA56B); }
+.cc-sum-grupo.es-alquiler .cc-sum-total { border-left-color: var(--accent); }
+.cc-sum-grupo.es-alquiler .cc-sum-total .v { font-size: 18px; }
+.cc-sum-row.muted { color: var(--fg-4); border-bottom: none; }
+.cc-sum-row.muted .v { color: var(--fg-3); }
+.cc-sum-plazo .form-field { margin-bottom: var(--sp-2); }
+.cc-sum-aviso { display: block; font-size: 11.5px; line-height: 1.5; color: var(--fg-3); }
+.cc-sum-evaluado {
+  margin-top: var(--sp-4); padding: var(--sp-3); border-radius: var(--radius-md);
+  background: var(--surface-sunken); border: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-2);
+}
+.cc-sum-cuenta { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-1); }
 
 /* ── Detalle (solo lectura) ────────────────────────────────── */
 .cc-detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: var(--sp-6); align-items: start; }

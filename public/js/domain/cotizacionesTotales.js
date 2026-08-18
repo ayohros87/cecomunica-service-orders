@@ -189,8 +189,15 @@ window.CotizacionTotales = {
   // "Enviar al cliente" para un borrador que el editor ya había marcado.
   evaluarPolitica(cot, policy) {
     const t = this.calcTotales(cot);
+    // Manda el MAYOR entre lo recalculado y el `total` que traiga el doc.
+    // Recalcular es lo correcto cuando hay renglones —así entran el descuento
+    // por línea y la proyección del alquiler—, pero un doc sin `items` (una
+    // lectura parcial, un objeto armado a mano) recalcularía 0 y dejaría pasar
+    // cualquier monto. Con el máximo, la política falla CERRADA en los dos
+    // casos: nunca menos aprobaciones de las que tocan.
+    const total = Math.max(t.total, Number(cot?.total || 0));
     const pol = this.requiereAprobacion({
-      total: t.total,
+      total,
       descuentoPct: cot?.descuentoPct,
       items: cot?.items,
       mesesComputables: t.mesesComputables,

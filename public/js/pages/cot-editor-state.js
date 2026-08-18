@@ -99,13 +99,31 @@
 
   function mapModeloToCatItem(m) {
     const nombre = [m?.marca, m?.modelo].filter(Boolean).join(' ').trim() || m?.nombre || m?.id;
+    const precioVenta = Number(m?.precio_venta || m?.precio || 0);
+    const precioAlquiler = Number(m?.precio_alquiler || 0);
     return {
       modelo: m?.codigo || m?.modelo || m?.id,
       nombre,
       spec: m?.descripcion || m?.spec || '',
-      precio: Number(m?.precio_venta || m?.precio || 0),
+      // `precio` se conserva como el de VENTA por compatibilidad con quien ya
+      // lo consume; el editor elige entre los dos según la modalidad del renglón.
+      precio: precioVenta,
+      precioVenta,
+      precioAlquiler,
+      esAlquiler: m?.es_alquiler === true,
       cat: m?.categoria || m?.tipo || 'Equipos',
     };
+  }
+
+  // Precio sugerido del catálogo para una modalidad. Devuelve null cuando no
+  // hay precio cargado: es distinto de 0 y las pantallas lo dicen ("sin
+  // tarifa") en vez de escribir un cero que parece un precio real.
+  function precioSugerido(catItem, modalidad) {
+    if (!catItem) return null;
+    const v = modalidad === 'alquiler'
+      ? Number(catItem.precioAlquiler || 0)
+      : Number(catItem.precioVenta || 0);
+    return v > 0 ? v : null;
   }
 
   function mapVendedorToEjec(u) {
@@ -135,6 +153,9 @@
       cant: Number(it.cant || 0),
       precio: Number(it.precio || 0),
       desc: Number(it.desc || 0),
+      // Modalidad del renglón. Ausente = venta: así una cotización anterior a
+      // este campo se lee y recalcula exactamente igual que siempre.
+      modalidad: it.modalidad === 'alquiler' ? 'alquiler' : 'venta',
     }));
     // Resuelve ITBMS: prioriza `itbms_aplica` (esquema canónico). Fallback al
     // `itbmsPct` legacy y al default global FMT.ITBMS_RATE.
@@ -159,6 +180,9 @@
       itbmsPct,
       intro: doc.intro || '',
       items,
+      // Plazo del alquiler, en meses. Vive en el DOCUMENTO: una cotización es
+      // un solo acuerdo con un solo plazo, y se convierte en un solo contrato.
+      plazoMeses: Number(doc.plazoMeses || 0),
       condiciones: Array.isArray(doc.condiciones) && doc.condiciones.length
         ? doc.condiciones.map(c => ({ k: c.k || '', v: c.v || '' }))
         : JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
@@ -234,7 +258,12 @@
         cant: Number(it.cant || 0),
         precio: Number(it.precio || 0),
         desc: Number(it.desc || 0),
+        // En alquiler, `precio` es POR MES. La modalidad es lo único que
+        // distingue los dos significados del mismo campo.
+        modalidad: window.CotizacionTotales.modalidadDe(it),
       })),
+      // Plazo del alquiler (meses). 0 = no aplica / sin declarar.
+      plazoMeses: Math.max(0, Math.round(Number(ui.plazoMeses || 0))),
       condiciones: ui.condiciones || [],
       // Adjuntos: se persisten en el doc para que viajen automáticamente en cada
       // envío de la propuesta (detalle, listado y aprobar-y-enviar).
@@ -248,7 +277,18 @@
       })),
       subtotal: FMT.round2(totales.subtotal),
       descuento_global: FMT.round2(totales.descGlobal),
+      // `total` es el VALOR EVALUADO: la venta más el alquiler proyectado a un
+      // máximo de 12 meses. Para una cotización de pura venta —todas las que
+      // existen hoy— es el mismo número de siempre, así que el listado, los KPI
+      // de Finanzas, la búsqueda global y firestore.rules siguen leyéndolo sin
+      // migración. Ver CotizacionTotales.calcTotales.
       total: FMT.round2(totales.total),
+      // Los dos totales REALES, para las pantallas que muestran el desglose.
+      total_venta: FMT.round2(totales.venta.total),
+      total_mensual: FMT.round2(totales.alquiler.total),
+      // Compromiso del plazo acordado (mensual × plazo real). Informativo:
+      // nunca se compara contra el techo de envío directo.
+      compromiso_plazo: FMT.round2(totales.compromiso),
       // Tipo de cotización: por defecto 'comercial'. cotizar-orden.js sobrescribe
       // con 'orden' + orden_id después de toDoc (cotizaciones de servicio).
       origen: ui.origen || 'comercial',
@@ -326,7 +366,8 @@
       descuentoPct: 0,
       itbmsPct: Math.round(FMT.ITBMS_RATE * 100),
       intro: 'Estimados señores: de acuerdo con su solicitud, presentamos la siguiente cotización de equipos de radiocomunicación profesional y servicios asociados.',
-      items: [{ id: uid(), modelo: '', nombre: '', spec: '', cant: 1, precio: 0, desc: 0 }],
+      items: [{ id: uid(), modelo: '', nombre: '', spec: '', cant: 1, precio: 0, desc: 0, modalidad: 'venta' }],
+      plazoMeses: 0,
       condiciones: JSON.parse(JSON.stringify(CONDICIONES_DEFAULT)),
       dirigido_a: '',
       dirigido_email: '',
@@ -397,12 +438,11 @@
   // Devuelve la misma forma que CotizacionTotales.requiereAprobacion.
   function requiereAprobacionPara({ doc, rol, policy }) {
     const T = window.CotizacionTotales;
-    const pol = T.requiereAprobacion(
-      // items incluidos (auditoría A10): el descuento por línea también
-      // cuenta para el umbral — antes 40% por línea pasaba sin aprobación.
-      { total: Number(doc?.total || 0), descuentoPct: Number(doc?.descuentoPct || 0), items: doc?.items },
-      policy,
-    );
+    // evaluarPolitica recalcula los totales desde los items, así que el
+    // descuento por renglón (A10) y la proyección del alquiler a 12 meses
+    // entran solas — ya no hay un input que armar y al que se le puedan
+    // olvidar los `items`, que fue exactamente el bug de las tres puertas.
+    const pol = T.evaluarPolitica(doc, policy);
     if (pol.requiere) return pol;
     // Dentro de umbral, pero el rol tiene que poder enviarla él mismo; si no,
     // alguien la tiene que aprobar igual.
@@ -887,7 +927,7 @@
     CONDICIONES_DEFAULT, PLANTILLAS_COND,
     EMISOR_FALLBACK,
     uid,
-    mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec,
+    mapClienteToUI, mapModeloToCatItem, mapVendedorToEjec, precioSugerido,
     toUi, toDoc, nuevaCotizacion, nextCotizacionId, bootstrapCatalogos,
     filtrarClientes, mountClienteCombo, requiereAprobacionPara,
     cerrarPrompt, reenviarPrompt,

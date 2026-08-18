@@ -55,11 +55,12 @@
   // render, así que cambia solo al cruzar el umbral mientras se arma.
   function subtituloNueva() {
     if (!userRol) return 'Al guardar quedará en borrador.';
-    const t = T.calcTotales(draft);
-    const pol = CotState.requiereAprobacionPara({
-      // items incluidos: el descuento por línea también cuenta (A10).
-      doc: { total: t.total, descuentoPct: draft.descuentoPct, items: draft.items }, rol: userRol, policy: policyCfg,
-    });
+    // El borrador entero, no un objeto armado a mano: requiereAprobacionPara
+    // recalcula desde los items y necesita `itbmsPct` y `plazoMeses` para dar
+    // el mismo veredicto que dará Guardar. Con el objeto recortado de antes,
+    // el ITBMS salía 0 y una cotización al filo del techo se anunciaba como
+    // "dentro de tu límite" y luego se guardaba pidiendo aprobación.
+    const pol = CotState.requiereAprobacionPara({ doc: draft, rol: userRol, policy: policyCfg });
     if (!pol.requiere) {
       return 'Está dentro de tu límite de envío directo: al guardar queda lista para que tú mismo la envíes al cliente.';
     }
@@ -109,6 +110,7 @@
               <div class="cc-items">
                 <div class="cc-items-head">
                   <span></span><span>Descripción</span><span class="c">Cant.</span>
+                  <span class="c">Modalidad</span>
                   <span class="r">Precio unit.</span><span class="c">Desc. %</span>
                   <span class="r">Total</span><span></span>
                 </div>
@@ -362,22 +364,53 @@
   }
 
   function itemRowHtml(it) {
+    const esAlq = T.esAlquiler(it);
     const totalLinea = FMT.money(T.lineTotal(it));
     return `
-      <div class="cc-item-row" data-id="${it.id}" draggable="true">
-        <span class="cc-item-handle" title="Arrastrar para reordenar"><i data-lucide="grip-vertical"></i></span>
+      <div class="cc-item-row ${esAlq ? 'cc-mod-alquiler' : 'cc-mod-venta'}" data-id="${it.id}" draggable="true">
+        <span class="cc-item-reorden">
+          <span class="cc-item-handle" title="Arrastrar para reordenar"><i data-lucide="grip-vertical"></i></span>
+          <span class="cc-item-arrows">
+            <button type="button" class="cc-arrow cc-arrow-up" aria-label="Subir renglón" title="Subir"><i data-lucide="chevron-up"></i></button>
+            <button type="button" class="cc-arrow cc-arrow-down" aria-label="Bajar renglón" title="Bajar"><i data-lucide="chevron-down"></i></button>
+          </span>
+        </span>
         <div class="cc-item-desc">
           <input class="form-input cc-item-nombre" placeholder="Buscar producto o escribir descripción…" value="${esc(it.nombre)}" autocomplete="off">
           <div class="cc-item-spec"><input class="form-input cc-item-spec-input" placeholder="Especificación (opcional)" value="${esc(it.spec)}"></div>
           <div class="cc-cat-pop" hidden></div>
         </div>
         <input class="form-input ctr-input cc-item-cant" type="number" min="0" value="${esc(it.cant)}">
-        <input class="form-input num-input cc-item-precio" type="number" min="0" step="0.01" value="${esc(it.precio)}">
+        <span class="cc-seg" role="group" aria-label="Modalidad del renglón">
+          <button type="button" class="cc-seg-btn cc-seg-venta ${esAlq ? '' : 'on'}" data-mod="venta"
+            aria-pressed="${esAlq ? 'false' : 'true'}" title="Pago único">Venta</button>
+          <button type="button" class="cc-seg-btn cc-seg-alquiler ${esAlq ? 'on' : ''}" data-mod="alquiler"
+            aria-pressed="${esAlq ? 'true' : 'false'}" title="Mensualidad">Alquiler</button>
+        </span>
+        <input class="form-input num-input cc-item-precio" type="number" min="0" step="0.01" value="${esc(it.precio)}"
+          title="${esAlq ? 'Precio POR MES de cada unidad' : 'Precio unitario de venta'}">
         <input class="form-input ctr-input cc-item-descpct" type="number" min="0" max="100" value="${esc(it.desc)}">
-        <span class="cc-item-total">${totalLinea}</span>
+        <span class="cc-item-total">${totalLinea}${esAlq ? '<span class="cc-per">/mes</span>' : ''}</span>
         <button class="btn btn-ghost btn-icon btn-sm cc-item-del" title="Eliminar"><i data-lucide="trash-2"></i></button>
       </div>
     `;
+  }
+
+  // Mueve un renglón `delta` posiciones. Es la misma operación que hace el
+  // drop del arrastre; existe aparte porque los eventos HTML5 de arrastre no
+  // se disparan en pantallas táctiles — en iPad la manija mostraba el cursor
+  // de agarre y no pasaba nada.
+  function moverItem(id, delta) {
+    const arr = draft.items.slice();
+    const i = arr.findIndex(x => x.id === id);
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= arr.length) return;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    setItems(arr);
+    // El re-render destruye el botón que tenía el foco: se devuelve al mismo
+    // botón de la fila movida para poder encadenar pulsaciones.
+    const sel = delta < 0 ? '.cc-arrow-up' : '.cc-arrow-down';
+    document.querySelector(`.cc-item-row[data-id="${id}"] ${sel}`)?.focus();
   }
 
   function bindItemRow(row) {
@@ -405,6 +438,33 @@
     });
     row.querySelector('.cc-item-del').addEventListener('click', () => {
       setItems(draft.items.filter(x => x.id !== id));
+    });
+
+    // Reorden sin arrastre (táctil y teclado).
+    row.querySelector('.cc-arrow-up').addEventListener('click', () => moverItem(id, -1));
+    row.querySelector('.cc-arrow-down').addEventListener('click', () => moverItem(id, +1));
+
+    // Modalidad: al cambiar se re-renderiza la fila entera porque cambian el
+    // rótulo del total (/mes), el título del precio y el color del borde.
+    row.querySelectorAll('.cc-seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const it = getIt(); if (!it) return;
+        const nueva = btn.dataset.mod;
+        if (T.modalidadDe(it) === nueva) return;
+        it.modalidad = nueva;
+        // El precio guardado es el de la OTRA modalidad y no significa nada en
+        // esta: si el catálogo tiene precio para la nueva, se propone; si no,
+        // se limpia en vez de dejar un número que ya no aplica.
+        const cat = (catalogos.catalogo || []).find(c => c.modelo === it.modelo || c.nombre === it.nombre);
+        const sug = CotState.precioSugerido(cat, nueva);
+        it.precio = sug != null ? sug : 0;
+        if (!draft.plazoMeses && nueva === 'alquiler') draft.plazoMeses = 12;
+        renderItems();
+        renderSummary();
+        if (sug == null && cat) {
+          Toast.show(`${cat.nombre} no tiene ${nueva === 'alquiler' ? 'tarifa de alquiler' : 'precio de venta'} en el catálogo — escríbelo a mano.`, 'warn');
+        }
+      });
     });
 
     // Drag/drop
@@ -436,13 +496,25 @@
       .filter(c => !t || (c.nombre + ' ' + c.modelo + ' ' + c.cat).toLowerCase().includes(t))
       .slice(0, 8);
     if (!matches.length) { pop.hidden = true; pop.innerHTML = ''; return; }
+    // Los dos precios a la vista, con el de la modalidad de esta fila
+    // resaltado: el vendedor decide con la comparación delante, y "sin
+    // precio" se dice en vez de mostrar un $0.00 que parece una ganga.
+    const it = draft.items.find(x => x.id === row.dataset.id);
+    const mod = T.modalidadDe(it);
+    const precioChip = (p, m) => {
+      const v = CotState.precioSugerido(p, m);
+      const activo = m === mod ? ' es-activo' : '';
+      const txt = v != null ? FMT.money(v) + (m === 'alquiler' ? '/mes' : '') : 'sin precio';
+      return `<span class="cc-cat-price${activo}${v == null ? ' es-vacio' : ''}">${txt}</span>`;
+    };
     pop.innerHTML = matches.map((p, i) => `
       <div class="cc-cat-item${i === 0 ? ' active' : ''}" data-modelo="${esc(p.modelo)}">
         <div class="cc-cat-name">${esc(p.nombre)}</div>
         <div class="cc-cat-meta">
           <span class="cc-cat-model">${esc(p.modelo)}</span>
           <span>${esc(p.cat)}</span>
-          <span class="cc-cat-price">${FMT.money(p.precio)}</span>
+          ${precioChip(p, 'venta')}
+          ${precioChip(p, 'alquiler')}
         </div>
       </div>
     `).join('');
@@ -457,12 +529,24 @@
     const id = row.dataset.id;
     const it = draft.items.find(x => x.id === id);
     if (!it) return;
-    it.modelo = p.modelo; it.nombre = p.nombre; it.spec = p.spec; it.precio = p.precio;
+    // El precio que se carga depende de la modalidad de ESTA fila: el de venta
+    // es un pago único y el de alquiler es por mes.
+    const mod = T.modalidadDe(it);
+    const sug = CotState.precioSugerido(p, mod);
+    it.modelo = p.modelo; it.nombre = p.nombre; it.spec = p.spec;
+    it.precio = sug != null ? sug : 0;
     row.querySelector('.cc-item-nombre').value = p.nombre;
     row.querySelector('.cc-item-spec-input').value = p.spec || '';
-    row.querySelector('.cc-item-precio').value = p.precio;
-    row.querySelector('.cc-item-total').textContent = FMT.money(T.lineTotal(it));
+    row.querySelector('.cc-item-precio').value = it.precio;
+    row.querySelector('.cc-item-total').innerHTML =
+      FMT.money(T.lineTotal(it)) + (mod === 'alquiler' ? '<span class="cc-per">/mes</span>' : '');
     row.querySelector('.cc-cat-pop').hidden = true;
+    // Sin precio cargado NO se escribe 0 en silencio: un cero parece un precio
+    // real y así salían propuestas en $0.00. Se avisa y se enfoca el campo.
+    if (sug == null) {
+      Toast.show(`${p.nombre} no tiene ${mod === 'alquiler' ? 'tarifa de alquiler' : 'precio de venta'} en el catálogo — escríbelo a mano.`, 'warn');
+      row.querySelector('.cc-item-precio').focus();
+    }
     renderSummary();
   }
   function onCatKeydown(e, row) {
@@ -593,6 +677,54 @@
   }
 
   // ── Resumen ───────────────────────────────────────────────────
+
+  // Bloque de totales. Con solo venta se ve igual que siempre (una lista y un
+  // Total). En cuanto hay un renglón de alquiler se parte en dos grupos: los
+  // dos números no se pueden sumar, y fingir que sí es lo que haría que un
+  // compromiso de 36 meses pasara por una venta chica.
+  function bloqueTotales(t) {
+    const pctD = Number(draft.descuentoPct || 0);
+    const rotuloItbms = draft.itbmsPct > 0 ? 'ITBMS (' + draft.itbmsPct + '%)' : 'ITBMS exento';
+
+    if (!t.hayAlquiler) {
+      return `
+        <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(t.venta.subtotal)}</span></div>
+        ${pctD > 0 ? `<div class="cc-sum-row disc"><span>Descuento (${pctD}%)</span><span class="v">−${FMT.money(t.venta.descGlobal)}</span></div>` : ''}
+        <div class="cc-sum-row"><span>${rotuloItbms}</span><span class="v">${FMT.money(t.venta.itbms)}</span></div>
+        <div class="cc-sum-total"><span class="lbl">Total</span><span class="v">${FMT.money(t.venta.total)}</span></div>`;
+    }
+
+    const grupo = (titulo, color, b, sufijo, clase) => `
+      <div class="cc-sum-grupo ${clase}">
+        <span class="cc-sum-cap"><i style="background:${color}"></i>${titulo}</span>
+        ${b.descLineas > 0 ? `
+          <div class="cc-sum-row"><span>Precio de lista</span><span class="v">${FMT.money(b.bruto)}</span></div>
+          <div class="cc-sum-row disc"><span>Descuento por renglón</span><span class="v">−${FMT.money(b.descLineas)}</span></div>` : ''}
+        <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(b.subtotal)}</span></div>
+        ${pctD > 0 ? `<div class="cc-sum-row disc"><span>Descuento global (${pctD}%)</span><span class="v">−${FMT.money(b.descGlobal)}</span></div>` : ''}
+        <div class="cc-sum-row"><span>${rotuloItbms}</span><span class="v">${FMT.money(b.itbms)}</span></div>
+        <div class="cc-sum-total"><span class="lbl">${titulo}</span><span class="v">${FMT.money(b.total)}${sufijo}</span></div>
+      </div>`;
+
+    return `
+      ${t.hayVenta ? grupo('Total venta', 'var(--status-online, #1FA56B)', t.venta, '', 'es-venta') : ''}
+      ${grupo('Total mensual', 'var(--accent)', t.alquiler, '<span class="cc-per">/mes</span>', 'es-alquiler')}
+      <div class="cc-sum-grupo cc-sum-plazo">
+        <div class="form-field">
+          <label class="form-label" for="inpPlazo">Plazo del alquiler (meses)</label>
+          <input type="number" class="form-input" id="inpPlazo" min="0" max="120" step="1" value="${esc(draft.plazoMeses || '')}" placeholder="36">
+        </div>
+        ${t.plazoMeses > 0
+          ? `<div class="cc-sum-row muted"><span>Compromiso de ${t.plazoMeses} meses</span><span class="v">${FMT.money(t.compromiso)}</span></div>`
+          : '<span class="cc-sum-aviso">Sin plazo se evalúa como un año completo contra el límite de envío.</span>'}
+      </div>
+      <div class="cc-sum-evaluado">
+        <b>Valor evaluado a ${t.mesesComputables} ${t.mesesComputables === 1 ? 'mes' : 'meses'}</b>
+        <span class="cc-sum-cuenta">${FMT.money(t.venta.total)} + ${FMT.money(t.alquiler.total)} × ${t.mesesComputables} = <b>${FMT.money(t.total)}</b></span>
+        <span class="cc-sum-aviso">Es el número que compara el límite de envío directo, no lo que paga el cliente.</span>
+      </div>`;
+  }
+
   function renderSummary() {
     const t = T.calcTotales(draft);
     const cli = catalogos.clientesById[draft.clienteId] || {};
@@ -606,7 +738,7 @@
           <label class="form-label">Descuento global %</label>
           <input type="number" class="form-input" id="inpDesc" min="0" max="100" value="${esc(draft.descuentoPct)}">
           <span style="display:block; font-size:11.5px; color:var(--fg-3); margin-top:2px;">
-            Sobre ${Number(policyCfg?.descuentoMaxPct ?? 15)}% de descuento —global <b>o en cualquier renglón</b>— o ${FMT.money(Number(policyCfg?.totalMax ?? 5000))} de total requiere aprobación.
+            Sobre ${Number(policyCfg?.descuentoMaxPct ?? 15)}% de descuento —global <b>o en cualquier renglón</b>— o ${FMT.money(Number(policyCfg?.totalMax ?? 5000))} requiere aprobación.${t.hayAlquiler ? ' El alquiler cuenta hasta 12 meses.' : ''}
           </span>
         </div>
         <div class="form-field">
@@ -618,10 +750,7 @@
           ${exentoHint}
         </div>
       </div>
-      <div class="cc-sum-row"><span>Subtotal</span><span class="v">${FMT.money(t.subtotal)}</span></div>
-      ${draft.descuentoPct > 0 ? `<div class="cc-sum-row disc"><span>Descuento (${draft.descuentoPct}%)</span><span class="v">−${FMT.money(t.descGlobal)}</span></div>` : ''}
-      <div class="cc-sum-row"><span>${draft.itbmsPct > 0 ? 'ITBMS (' + draft.itbmsPct + '%)' : 'ITBMS exento'}</span><span class="v">${FMT.money(t.itbms)}</span></div>
-      <div class="cc-sum-total"><span class="lbl">Total</span><span class="v">${FMT.money(t.total)}</span></div>
+      ${bloqueTotales(t)}
 
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:20px;">
         <button class="btn btn-primary" id="btnGuardar2" style="width:100%;"><i data-lucide="save"></i> Guardar cotización</button>
@@ -634,6 +763,12 @@
       renderSummary();
     });
     $('selItbms').addEventListener('change', (e) => { draft.itbmsPct = Number(e.target.value); renderSummary(); });
+    // El campo de plazo solo existe cuando hay renglones de alquiler.
+    $('inpPlazo')?.addEventListener('input', (e) => {
+      draft.plazoMeses = Math.max(0, Math.min(120, Math.round(Number(e.target.value || 0))));
+      marcarSucio();
+      renderSummary();
+    });
     $('btnGuardar2').addEventListener('click', guardar);
     $('btnPreview2').addEventListener('click', preview);
     // El aviso de política del header se recalculaba solo en renderTodo():
