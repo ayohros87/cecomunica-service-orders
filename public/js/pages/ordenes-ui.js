@@ -254,29 +254,12 @@ window.toggleTopbarMenu = function() {
   if (btn) btn.setAttribute('aria-expanded', menu.classList.contains('show') ? 'true' : 'false');
 };
 
-window.toggleResumenMenu = function() {
-  const menu = document.getElementById('resumen-menu');
-  const btn = document.querySelector('[data-action="toggle-resumen-menu"]');
-  if (!menu) return;
-
-  document.querySelectorAll('.overflow-menu-dropdown.show').forEach(m => {
-    if (m.id !== 'resumen-menu') {
-      m.classList.remove('show');
-    }
-  });
-
-  menu.classList.toggle('show');
-  if (btn) btn.setAttribute('aria-expanded', menu.classList.contains('show') ? 'true' : 'false');
-};
-
 window.closeAllMenus = function() {
   document.querySelectorAll('.overflow-menu-dropdown.show').forEach(m => {
     m.classList.remove('show');
   });
   const btn = document.querySelector('[data-action="toggle-topbar-menu"]');
   if (btn) btn.setAttribute('aria-expanded', 'false');
-  const resumenBtn = document.querySelector('[data-action="toggle-resumen-menu"]');
-  if (resumenBtn) resumenBtn.setAttribute('aria-expanded', 'false');
   document.querySelectorAll('tr.menu-open').forEach(r => r.classList.remove('menu-open'));
 };
 

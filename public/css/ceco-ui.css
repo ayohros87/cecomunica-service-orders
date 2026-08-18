@@ -1586,16 +1586,9 @@ td.acciones, td.flujo {
   .btn.working:hover {
     background:#fde68a;
   }
-  .dot-work{
-    display:inline-block;
-    width:8px; height:8px; border-radius:999px;
-    background:#f59e0b; margin-right:6px;
-    box-shadow:0 0 0 2px rgba(245,158,11,.25);
-    vertical-align:middle;
-  }
-    .dot{display:inline-block;width:8px;height:8px;border-radius:999px;margin-right:6px;background:#d1d5db;vertical-align:middle}
-  .dot.green{background:#22c55e}
-  .dot.orange{ background:#f59e0b; box-shadow:0 0 0 2px rgba(245,158,11,.25); }
+  /* (.dot-work y .dot.green/.dot.orange retirados: el dot de "trabajo" de la
+     fila de órdenes era su único consumidor y trabajo_estado ya no se escribe.) */
+  .dot{display:inline-block;width:8px;height:8px;border-radius:999px;margin-right:6px;background:#d1d5db;vertical-align:middle}
   .btn.warn{background:#f59e0b;color:#fff;border-color:#f59e0b}
   .notificacion-progreso {
   position: fixed;

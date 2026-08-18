@@ -35,8 +35,7 @@
     'go-menu-principal': () => window.location.href = '../index.html',
     'logout': () => cerrarSesion(),
     'toggle-topbar-menu': () => toggleTopbarMenu(),
-    'toggle-resumen-menu': () => toggleResumenMenu(),
-    
+
     // Filter actions
     'filtrar': () => filtrarOrdenes(),
     'filtrar-rapido': () => filtrarRapido(),
@@ -44,6 +43,7 @@
     'toggle-filtros-avanzados': () => toggleFiltrosAvanzados(),
     'cambiar-orden': () => cambiarOrden(),
     'cambiar-direccion': () => cambiarDireccionOrden(),
+    'sort-col': (el) => sortColumna(el),
     'filtrar-estado': () => aplicarFiltrosCombinados(),
     'filtrar-tipo': () => aplicarFiltrosCombinados(),
     'filtrar-tecnico': () => aplicarFiltrosCombinados(),
@@ -285,20 +285,9 @@
     },
     
     // Overflow menu actions
-    'generar-nota-entrega': (el) => {
-      const ordenId = el.dataset.ordenId;
-      if (ordenId) {
-        generarNotaEntrega(ordenId);
-        closeAllMenus();
-      }
-    },
-    'generar-nota-entrega-intervenciones': (el) => {
-      const ordenId = el.dataset.ordenId;
-      if (ordenId) {
-        generarNotaEntregaIntervenciones(ordenId);
-        closeAllMenus();
-      }
-    },
+    // ('generar-nota-entrega' y 'generar-nota-entrega-intervenciones' se
+    // retiraron: ningún template emitía esos data-action. La ruta viva es
+    // 'nota-entrega-doc' → generarNotaEntregaIntervenciones. Auditoría P2.)
     'imprimir-orden': (el) => {
       abrirImpresionOrden(el.dataset.ordenId);
       closeAllMenus();
@@ -347,30 +336,6 @@
       mostrarEntregaRecepcion(ordenId);
     },
     
-    // Badge filter actions
-    'filtrar-badge': (el) => {
-      const estado = el.dataset.estado;
-      const resumenEl = el.closest('.resumen, #mobileResumen');
-      
-      // Toggle active state
-      const wasActive = el.classList.contains('active');
-      if (resumenEl) {
-        resumenEl.querySelectorAll('.badge').forEach(b => b.classList.remove('active'));
-      }
-      
-      if (!wasActive) {
-        el.classList.add('active');
-        // Sync dropdown
-        const sel = document.getElementById('filtroEstado');
-        if (sel) sel.value = estado;
-        filtrarPorEstado(estado);
-      } else {
-        // Toggle off - show all
-        const sel = document.getElementById('filtroEstado');
-        if (sel) sel.value = '';
-        limpiarFiltros();
-      }
-    },
     // Cola de control de calidad (ordenes-qc.js): subconjunto de las
     // completadas que el candado no deja entregar. Es un toggle propio, no un
     // estado, así que limpia el filtro de estado para no cruzarse con él.

@@ -84,9 +84,18 @@ async function cargarTecnicosFiltros() {
 }
 
 window.ordenarOrdenes = function (data) {
+  // Timestamps de Firestore → ISO string: comparan bien entre sí y con las
+  // fechas guardadas como texto ("YYYY-MM-DD"), cosa que el objeto Timestamp
+  // no hace. Necesario para ordenar por fecha desde las cabeceras (P2).
+  const valorDe = (o, field) => {
+    if (field === "ordenId") return o.ordenId;
+    const v = o[field];
+    if (v && typeof v.toDate === "function") return v.toDate().toISOString();
+    return v || '';
+  };
   return data.sort((a, b) => {
-    let valorA = APP.state.sortField === "ordenId" ? a.ordenId : a[APP.state.sortField] || '';
-    let valorB = APP.state.sortField === "ordenId" ? b.ordenId : b[APP.state.sortField] || '';
+    let valorA = valorDe(a, APP.state.sortField);
+    let valorB = valorDe(b, APP.state.sortField);
 
     const esNumero = !isNaN(valorA) && !isNaN(valorB);
     if (esNumero) {

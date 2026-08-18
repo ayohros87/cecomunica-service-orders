@@ -277,9 +277,14 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
   gap: 8px;
 }
 
-.resumen-menu-wrap { position: relative; }
-
-.resumen-btn { font-weight: 600; }
+/* Conteo del listado (texto plano, aria-live). El dropdown "Resumen" era la
+   tercera copia del filtro de estado y se retiró (auditoría órdenes P2). */
+#resumenOrdenes {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  white-space: nowrap;
+}
 
 .fotos-taller-badge {
   display: inline-flex;
@@ -304,20 +309,6 @@ table tbody tr:nth-child(4n+4):hover { background: #f0f9ff; }
   vertical-align: middle;
   cursor: help;
   opacity: 0.85;
-}
-
-.resumen-menu { min-width: 240px; padding: 10px 12px; }
-
-.resumen-total {
-  font-weight: 700;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
-.resumen-badges {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
 }
 
 /* ======================================
@@ -1516,27 +1507,14 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   
   .toolbar.mt-8 { margin-top: 12px; }
   
-  /* Mobile summary badges */
+  /* Mobile summary (texto plano) */
   .resumen {
     font-size: 13px;
     flex-wrap: wrap;
     gap: 6px;
     justify-content: flex-start;
   }
-  
-  .resumen .badge {
-    font-size: 12px;
-    padding: 4px 8px;
-    cursor: pointer;
-    transition: var(--transition);
-  }
-  
-  .resumen .badge:hover { transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-  
-  .resumen .badge:active { transform: translateY(0); }
-  
-  .resumen .badge.active { box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.3); font-weight: 700; }
-  
+
   /* App wrap mobile spacing */
   .app-wrap { padding: 8px 12px; }
   
@@ -1756,27 +1734,6 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
     color: var(--bad);
     font-weight: 800;
   }
-}
-
-/* Desktop summary badges - clickable */
-.resumen .badge {
-  cursor: pointer;
-  transition: var(--transition);
-  user-select: none;
-}
-
-.resumen .badge:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  filter: brightness(1.05);
-}
-
-.resumen .badge:active { transform: translateY(0); }
-
-.resumen .badge.active {
-  box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.4);
-  font-weight: 800;
-  border: 2px solid var(--accent);
 }
 
 /* Overflow-menu CSS moved to ceco-ui.css (bucket 1, 2026-05-19). The
@@ -2514,6 +2471,10 @@ tr.activo:hover { background: #f0f9ff !important; }
   justify-content: flex-start;
 }
 
+/* Los chips de la tabla de equipos son clickeables desde el PRIMER click
+   (activan el modo lote solos — auditoría P2); el cursor lo anuncia. */
+.accesorios-group .accesorio-item { cursor: pointer; }
+
 .accesorio-item {
   display: inline-flex;
   align-items: center;
@@ -3196,6 +3157,13 @@ tr.activo:hover { background: #f0f9ff !important; }
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+/* Cabeceras ordenables (auditoría P2): reemplazan al select "Ordenar" +
+   botón de dirección de la toolbar. La flecha la pinta syncSortHeaders(). */
+.orders-table thead th.th-sort { cursor: pointer; user-select: none; }
+.orders-table thead th.th-sort:hover { color: var(--accent, #2563eb); }
+.orders-table thead th.th-sort--active { color: var(--accent, #2563eb); }
+.th-sort__dir { display: inline-block; min-width: 1em; font-weight: 800; }
 /* Estado pill column (5) keeps its own internal weight (pill is bold) —
    no override needed beyond the base. */
 

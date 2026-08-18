@@ -43,6 +43,13 @@ function aplicarRestriccionesPorRol(rol) {
     if (btnConfig) btnConfig.remove();
   }
 
+  // El reporte de pendientes vuelca toda la operación (clientes + vendedores):
+  // a vendedor ni se le ofrece — y la página además valida el rol al cargar
+  // (auditoría órdenes P2).
+  if (normalizedRole === ROLES.VENDEDOR) {
+    document.querySelectorAll("[data-action='go-reporte-pendientes']").forEach(b => b.remove());
+  }
+
   if (normalizedRole !== ROLES.ADMIN && normalizedRole !== ROLES.RECEPCION) {
     document.querySelectorAll(".btn-agregar-equipo").forEach(b => b.style.display = "none");
   }
@@ -276,6 +283,9 @@ function _applyURLToFilters() {
     touched = true;
   }
   APP.state.sortAscending = params.get('asc') === '1';
+  // Refleja el sort restaurado en las cabeceras (se llama después de la
+  // pintada inicial de syncSortHeaders, que corre con los defaults).
+  if (typeof syncSortHeaders === 'function') syncSortHeaders();
 
   // Mirror desktop search fields to the mobile filter drawer so both
   // stay in sync if the user opens it.
@@ -530,14 +540,54 @@ window.cambiarOrden = function () {
   if (!sel) return;
   APP.state.sortField = sel.value;
   _syncFiltersToURL();
+  syncSortHeaders();
   cargarOrdenesYEquipos();
 };
 
 window.cambiarDireccionOrden = function () {
   APP.state.sortAscending = !APP.state.sortAscending;
   _syncFiltersToURL();
+  syncSortHeaders();
   cargarOrdenesYEquipos();
 };
+
+// ── Cabeceras ordenables (auditoría órdenes P2) ─────────────────────
+// Click en un <th class="th-sort"> ordena por esa columna; segundo click
+// invierte la dirección. Reemplazan al select "Ordenar" + botón de dirección
+// de la toolbar (el select sigue oculto como espejo para el drawer móvil).
+window.sortColumna = function (el) {
+  const key = el?.dataset?.sortKey;
+  if (!key) return;
+  if (APP.state.sortField === key) {
+    APP.state.sortAscending = !APP.state.sortAscending;
+  } else {
+    APP.state.sortField = key;
+    // Número y fechas arrancan "lo más reciente primero"; texto, A→Z.
+    APP.state.sortAscending = !["ordenId", "fecha_creacion", "fecha_entrega"].includes(key);
+  }
+  // Espejos de estado (solo si la opción existe en cada select).
+  [document.getElementById("campoOrdenamiento"), document.getElementById("mobileSortField")]
+    .forEach(sel => {
+      if (sel && Array.from(sel.options).some(o => o.value === key)) sel.value = key;
+    });
+  _syncFiltersToURL();
+  syncSortHeaders();
+  cargarOrdenesYEquipos();
+};
+
+// Pinta ↑/↓ y aria-sort en la cabecera activa (y limpia las demás).
+window.syncSortHeaders = function () {
+  document.querySelectorAll("th.th-sort[data-sort-key]").forEach(th => {
+    const active = th.dataset.sortKey === APP.state.sortField;
+    const dir = th.querySelector(".th-sort__dir");
+    if (dir) dir.textContent = active ? (APP.state.sortAscending ? " ↑" : " ↓") : "";
+    th.classList.toggle("th-sort--active", active);
+    if (active) th.setAttribute("aria-sort", APP.state.sortAscending ? "ascending" : "descending");
+    else th.removeAttribute("aria-sort");
+  });
+};
+// Estado inicial (o restaurado de URL): el script va defer, el <thead> ya existe.
+syncSortHeaders();
 
 /**
  * Chip-bar handler — ORDENES_INDEX_IMPROVEMENTS §4.3.

@@ -28,7 +28,7 @@
        en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el
        aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
-  <link rel="stylesheet" href="../css/ordenes-index.css?v=dev7">
+  <link rel="stylesheet" href="../css/ordenes-index.css?v=dev8">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
@@ -45,7 +45,7 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<script defer src="../js/services/ordenesService.js?v=qc5"></script>
+<script defer src="../js/services/ordenesService.js?v=qc6"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script defer src="../js/services/senalesService.js?v=m4"></script>
@@ -62,18 +62,18 @@
 <script defer src="../js/ui/modal.js"></script>
 <script defer src="../js/ui/firmaPad.js?v=dev3"></script>
 <script defer src="../js/pages/ordenes-state.js?v=dev4"></script>
-<script defer src="../js/pages/ordenes-data.js?v=fix4"></script>
-<script defer src="../js/pages/ordenes-render.js?v=qc10"></script>
-<script defer src="../js/pages/ordenes-filters.js?v=qc4"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=qc5"></script>
+<script defer src="../js/pages/ordenes-data.js?v=fix5"></script>
+<script defer src="../js/pages/ordenes-render.js?v=qc11"></script>
+<script defer src="../js/pages/ordenes-filters.js?v=qc5"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=qc6"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=qc4"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=cc20"></script>
+<script defer src="../js/pages/ordenes-equipos.js?v=cc21"></script>
 <script defer src="../js/pages/ordenes-notas.js"></script>
 <script defer src="../js/pages/ordenes-visita.js"></script>
 <script defer src="../js/pages/ordenes-devolucion.js?v=dev10"></script>
-<script defer src="../js/pages/ordenes-ui.js"></script>
+<script defer src="../js/pages/ordenes-ui.js?v=p2"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
-<script defer src="../js/pages/ordenes-events.js?v=qc4"></script>
+<script defer src="../js/pages/ordenes-events.js?v=qc5"></script>
 <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
      el barrido inicial de <i data-lucide>; los guards inline viejos quedan
      como no-ops en parse. Ver js/core/icons.js. -->
@@ -101,7 +101,6 @@
         showHome: false, showLogout: false,
         actions: [
           { label: '<i data-lucide="plus"></i> Crear nueva orden', cls: 'btn-primary', dataAction: 'go-nueva-orden' },
-          { label: '<i data-lucide="package-open"></i> Devolución sin contrato', cls: 'btn-secondary', dataAction: 'nueva-devolucion', title: 'Registrar devolución de equipos con contrato de papel (fuera del sistema)' },
           { html: `<div class="view-toggle" role="group" aria-label="Modo de vista">
         <button type="button" class="view-toggle__btn" data-action="set-view-cards" data-view="cards" aria-pressed="false" title="Vista de tarjetas">
           <i data-lucide="layout-grid"></i>
@@ -113,9 +112,14 @@
           { html: `<div class="overflow-menu topbar-menu">
         <button class="btn btn-ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
         <div class="overflow-menu-dropdown" id="topbar-menu">
+          <!-- Acción esporádica (auditoría órdenes P2): antes ocupaba un botón
+               permanente del topbar; vive aquí para despejar la barra. -->
+          <button class="overflow-menu-item" data-action="nueva-devolucion" title="Registrar devolución de equipos con contrato de papel (fuera del sistema)"><i data-lucide="package-open"></i> Devolución sin contrato</button>
+          <div class="overflow-menu-divider"></div>
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
           <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
           <button class="overflow-menu-item" id="topbarBtnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente</button>
+          <button class="overflow-menu-item" data-action="toggle-fecha-entrega"><i data-lucide="calendar"></i> <span class="toggle-fecha-entrega-btn">Mostrar fecha entrega</span></button>
           <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Configuración</button>
         </div>
       </div>` },
@@ -283,14 +287,17 @@
       </div>
     </div>
 
-    <div class="right" style="display: flex; align-items: center; gap: 12px;">
-      <label class="text-label">Ordenar:</label>
-      <select id="campoOrdenamiento" data-action="cambiar-orden" style="min-width: 140px;">
+    <!-- El ordenamiento de escritorio vive en las CABECERAS de la tabla
+         (data-action="sort-col") — el select+botón de dirección salieron de
+         la toolbar (auditoría P2). El select sigue aquí OCULTO como espejo de
+         estado: el drawer móvil (#mobileSortField) y el restore de URL lo
+         siguen leyendo/escribiendo. "Mostrar fecha entrega" vive en el menú
+         "Más" del topbar. -->
+    <div class="right">
+      <select id="campoOrdenamiento" data-action="cambiar-orden" hidden aria-hidden="true" tabindex="-1">
         <option value="ordenId">Número</option>
         <option value="cliente_nombre">Cliente</option>
       </select>
-      <button class="btn" title="Cambiar dirección" data-action="cambiar-direccion"><i data-lucide="arrow-up-down"></i></button>
-      <button class="btn btn-ghost toggle-fecha-entrega-btn" id="btnToggleFechaEntrega" data-action="toggle-fecha-entrega">Mostrar fecha entrega</button>
     </div>
   </div>
 
@@ -347,8 +354,8 @@
         <span class="toggle-label">Mis órdenes</span>
       </label>
       <!-- Cola de control de calidad. Sin control visible propio: lo togglean
-           el chip "QC n" del resumen (data-action="filtrar-qc") y ?qc=1 en la
-           URL (CTA del correo diario y señal del home). -->
+           el chip "QC n" de la barra de estados (data-action="filtrar-qc") y
+           ?qc=1 en la URL (CTA del correo diario y señal del home). -->
       <input type="checkbox" id="filtroQcPendiente" hidden>
       <div id="resumenOrdenes" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
@@ -375,14 +382,17 @@
   <col style="width: 296px;">  <!-- Acciones -->
   </colgroup>
  <thead>
+  <!-- Cabeceras ordenables (auditoría P2): click ordena por la columna,
+       segundo click invierte. Reemplazan al select "Ordenar" + botón de
+       dirección de la toolbar. La flecha ↑/↓ la pinta syncSortHeaders(). -->
   <tr>
-    <th scope="col">Número</th>
-    <th scope="col">Cliente</th>
-    <th scope="col">Técnico</th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="ordenId" title="Ordenar por número">Número<span class="th-sort__dir" aria-hidden="true"></span></th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="cliente_nombre" title="Ordenar por cliente">Cliente<span class="th-sort__dir" aria-hidden="true"></span></th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="tecnico_asignado" title="Ordenar por técnico">Técnico<span class="th-sort__dir" aria-hidden="true"></span></th>
     <th scope="col">Tipo</th>
-    <th scope="col">Estado</th>
-    <th scope="col">Fecha Creación</th>
-    <th scope="col" class="col-fecha-entrega">Fecha Entrega</th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="estado_reparacion" title="Ordenar por estado">Estado<span class="th-sort__dir" aria-hidden="true"></span></th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="fecha_creacion" title="Ordenar por fecha de creación">Fecha Creación<span class="th-sort__dir" aria-hidden="true"></span></th>
+    <th scope="col" class="th-sort col-fecha-entrega" data-action="sort-col" data-sort-key="fecha_entrega" title="Ordenar por fecha de entrega">Fecha Entrega<span class="th-sort__dir" aria-hidden="true"></span></th>
     <th scope="col">Acciones</th>
   </tr>
 </thead>

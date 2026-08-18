@@ -70,13 +70,9 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   filaOrden.setAttribute('role', 'button');
   filaOrden.setAttribute('aria-expanded', 'false');
   filaOrden.setAttribute('aria-label', `Detalles de la orden ${ordenId}`);
-  const trabajo = (ordenData.trabajo_estado)
-    || (ordenData.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
-
-  const dotClass =
-    trabajo === 'COMPLETADO'  ? 'dot green'  :
-    trabajo === 'EN_PROGRESO' ? 'dot orange' :
-                                'dot';
+  // (El dot de "trabajo" que abría la fila se retiró: trabajo_estado no tiene
+  // escritor desde que se eliminó trabajar-orden [2026-07-06] — el punto gris
+  // era ruido sin señal. Auditoría órdenes P2.)
 
   const iconoAdvertencia = sinEquipos
     ? '<span title="Orden sin equipos" style="cursor:help;margin-left:6px;vertical-align:middle;"><i data-lucide="alert-triangle" class="warn-icon" style="color:#d97706;width:15px;height:15px;"></i></span>'
@@ -99,7 +95,6 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
 
   filaOrden.innerHTML = `
     <td>
-      <span class="${dotClass}"></span>
       <i data-lucide="chevron-right" class="flecha"></i>
       <span class="orden-id">${ordenId}</span>
       ${fotosBadge}
@@ -969,10 +964,6 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   const estadoUpper = (estado || "").toUpperCase();
 
   const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
-  // trabajo_estado ya no tiene escritor (lo escribía trabajar-orden, página
-  // eliminada 2026-07-06); se conserva la lectura solo porque órdenes legacy
-  // pueden traer el valor guardado — no agregar consumidores nuevos.
-  const trabajo = (o.trabajo_estado) || (o.cotizacion_emitida ? 'COMPLETADO' : 'SIN_INICIAR');
   const tieneNota = o.nota_tecnica && o.nota_tecnica.trim() !== "";
   const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(o);
 
@@ -1024,14 +1015,23 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
 
 
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION) {
+    // Editar: SOLO cuando aplica (POR ASIGNAR). El item gris permanente era
+    // ruido — en la mayoría de las filas no se podía usar (auditoría P2).
+    // Eliminar: solo en estados NO terminales; una orden entregada/cerrada es
+    // historial del cliente y se conserva (anular ≠ borrar).
+    const esTerminal = estadoUpper.includes("ENTREGAD") || estadoUpper.startsWith("CERRADA");
     menuItems.push(
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
       { icon: '<i data-lucide="clipboard-list"></i>', label: "Nota de entrega", action: "nota-entrega-doc", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
-      { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' },
-      { divider: true },
-      { icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: estadoUpper !== "POR ASIGNAR" ? "disabled" : "" },
-      { icon: '<i data-lucide="trash-2"></i>', label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" }
+      { icon: '<i data-lucide="file-text"></i>', label: tieneNota ? "Ver notas técnicas" : "Agregar notas técnicas", action: "gestionar-notas", dataAttributes: `data-orden-id="${ordenId}"`, class: tieneNota ? 'highlighted' : '' }
     );
+    if (estadoUpper === "POR ASIGNAR" || !esTerminal) menuItems.push({ divider: true });
+    if (estadoUpper === "POR ASIGNAR") {
+      menuItems.push({ icon: '<i data-lucide="pencil"></i>', label: "Editar orden", action: "editar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" });
+    }
+    if (!esTerminal) {
+      menuItems.push({ icon: '<i data-lucide="trash-2"></i>', label: "Eliminar orden", action: "eliminar-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "danger" });
+    }
   } else if (rol === ROLES.TECNICO || rol === ROLES.TECNICO_OPERATIVO) {
     menuItems.push(
       { icon: '<i data-lucide="printer"></i>', label: "Imprimir orden", action: "imprimir-orden", dataAttributes: `data-orden-id="${ordenId}"`, class: "" },
@@ -1199,25 +1199,10 @@ function actualizarResumen(lista) {
   const qcActivo = !!document.getElementById("filtroQcPendiente")?.checked;
   const estadoLabel = qcActivo ? "Pendientes de QC" : (estadoActivo || "Todos");
 
-  el.innerHTML = `
-    <div class="overflow-menu resumen-menu-wrap">
-      <button class="btn btn-ghost resumen-btn" data-action="toggle-resumen-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false">
-        Resumen: ${total} · ${estadoLabel}
-      </button>
-      <div class="overflow-menu-dropdown resumen-menu" id="resumen-menu">
-        <div class="resumen-total" data-action="limpiar-filtros" title="Ver todas las órdenes">Total: ${total}</div>
-        <div class="resumen-badges">
-          <span class="badge asignar ${estadoActivo === 'POR ASIGNAR' ? 'active' : ''}" title="Click para filtrar: POR ASIGNAR" data-action="filtrar-badge" data-estado="POR ASIGNAR">${porAsignar}</span>
-          <span class="badge recibido ${estadoActivo === 'RECIBIDO EN MOSTRADOR' ? 'active' : ''}" title="Click para filtrar: RECIBIDO EN MOSTRADOR" data-action="filtrar-badge" data-estado="RECIBIDO EN MOSTRADOR">${recibidoMostrador}</span>
-          <span class="badge asignado ${estadoActivo === 'ASIGNADO' ? 'active' : ''}" title="Click para filtrar: ASIGNADO" data-action="filtrar-badge" data-estado="ASIGNADO">${asignado}</span>
-          <span class="badge completo ${estadoActivo === 'COMPLETADO (EN OFICINA)' ? 'active' : ''}" title="Click para filtrar: COMPLETADO (EN OFICINA)" data-action="filtrar-badge" data-estado="COMPLETADO (EN OFICINA)">${completadoOficina}</span>
-          <span class="badge ${estadoActivo === 'ENTREGADO AL CLIENTE' ? 'active' : ''}" style="background:#bbf7d0;" title="Click para filtrar: ENTREGADO AL CLIENTE" data-action="filtrar-badge" data-estado="ENTREGADO AL CLIENTE">${entregadoCliente}</span>
-          <span class="badge ${estadoActivo === 'CERRADA (VISITA)' ? 'active' : ''}" style="background:#a7f3d0;" title="Click para filtrar: CERRADA (VISITA)" data-action="filtrar-badge" data-estado="CERRADA (VISITA)">${cerradaVisita}</span>
-          ${qcPendientes ? `<span class="badge ${qcActivo ? 'active' : ''}" style="background:#fef3c7;color:#92400e;" title="Click para filtrar: pendientes de control de calidad" data-action="filtrar-qc">QC ${qcPendientes}</span>` : ''}
-        </div>
-      </div>
-    </div>
-  `;
+  // Texto plano, sin dropdown: el menú "Resumen" era la TERCERA copia del
+  // filtro de estado (los chips y el select ya filtran). Queda el conteo del
+  // listado actual, visible y anunciable (aria-live), espejado al header móvil.
+  el.textContent = `Total: ${total} · ${estadoLabel}`;
 
   // mirror to mobile header summary (compact text only)
   const mh = document.getElementById("mobileResumen");

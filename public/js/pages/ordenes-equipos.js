@@ -267,6 +267,26 @@ window.activarModoAccesorios = function (ordenId) {
   }
 };
 
+// Chips de accesorios vivos al PRIMER click (auditoría órdenes P2): antes el
+// click en un chip fuera del modo lote se perdía — había que descubrir
+// "Accesorios en lote" en el menú del detalle. Delegado: si el modo no está
+// activo, lo activa y aplica el toggle del chip clickeado. Con el modo activo
+// este listener no llega a correr (el listener directo del chip hace
+// stopPropagation). Solo chips de la tabla de equipos (.accesorios-group);
+// los de la leyenda/popover no cuentan.
+document.addEventListener('click', (e) => {
+  const chip = e.target.closest('.accesorios-group .accesorio-item');
+  if (!chip) return;
+  const filaDetalle = chip.closest('tr.filaDetalle');
+  if (!filaDetalle || filaDetalle.dataset.modoAccesorios === "true") return;
+  const ordenId = filaDetalle.dataset.ordenId;
+  if (!ordenId) return;
+  activarModoAccesorios(ordenId);
+  // Re-despacha sobre el chip: ya con el listener directo, aplica el toggle
+  // que el usuario pidió con ese primer click.
+  chip.click();
+});
+
 // nombreClienteDe, getEstadoClass, tipoChip, estadoCompacto → pages/ordenes-state.js
 
 // actualizarResumen → pages/ordenes-render.js
