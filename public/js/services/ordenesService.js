@@ -51,6 +51,15 @@ const OrdenesService = {
       queryRef = queryRef.where("tecnico_uid", "==", userId);
     }
 
+    // Soft-deleted FUERA en el servidor (auditoría P3.19): antes se
+    // descargaban y se botaban en cliente (72 docs muertos por página en el
+    // peor caso). Requiere que el campo EXISTA en todos los docs — backfill
+    // 2026-08-19 (716 legacy) + todos los creadores lo estampan. Índices:
+    // (eliminado, fecha_creacion) y variantes con vendedor/tecnico. El
+    // filtro de cliente en subscribeFirstPage/loadOrders queda como
+    // cinturón — un doc nuevo sin el campo simplemente no aparece.
+    queryRef = queryRef.where("eliminado", "==", false);
+
     return queryRef.orderBy("fecha_creacion", "desc").limit(limit);
   },
 

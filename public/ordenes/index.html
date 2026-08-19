@@ -28,7 +28,7 @@
        en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el
        aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
-  <link rel="stylesheet" href="../css/ordenes-index.css?v=dev10">
+  <link rel="stylesheet" href="../css/ordenes-index.css?v=dev11">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
@@ -36,16 +36,18 @@
 <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
-<script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
+<!-- storage/functions compat DIFERIDOS (P3.15): ~50 KB gz que solo se usan
+     al subir firma/foto o pedir la URL de una identificación. Los carga
+     CargaDiferida al primer uso. -->
 <script defer src="../js/firebase-init.js?v=ses2"></script>
+<script defer src="../js/core/carga-diferida.js?v=1"></script>
 <script src="../js/core/roles.js"></script>
 <script src="../js/core/modulos.js"></script>
 <script src="../js/core/layout.js?v=cc12"></script>
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<script defer src="../js/services/ordenesService.js?v=qc6"></script>
+<script defer src="../js/services/ordenesService.js?v=qc7"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script defer src="../js/services/senalesService.js?v=m4"></script>
@@ -60,27 +62,27 @@
 <script defer src="../js/domain/scoring.js"></script>
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
-<script defer src="../js/ui/firmaPad.js?v=dev3"></script>
+<!-- firmaPad DIFERIDO (P3.15): solo lo usa el check-in de devolución;
+     lo trae CargaDiferida.devolucion() al primer uso. -->
 <script defer src="../js/pages/ordenes-state.js?v=dev4"></script>
 <script defer src="../js/pages/ordenes-data.js?v=fix5"></script>
-<script defer src="../js/pages/ordenes-render.js?v=qc13"></script>
+<script defer src="../js/pages/ordenes-render.js?v=qc14"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=qc5"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=qc7"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=qc8"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=qc4"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=cc21"></script>
-<script defer src="../js/pages/ordenes-notas.js"></script>
-<script defer src="../js/pages/ordenes-visita.js?v=f1"></script>
-<!-- Galería de fotos a nivel de orden (§5.23) — reemplaza a fotos-taller.html. -->
-<script defer src="../js/pages/ordenes-fotos.js?v=1"></script>
-<script defer src="../js/pages/ordenes-devolucion.js?v=dev10"></script>
+<script defer src="../js/pages/ordenes-equipos.js?v=cc22"></script>
+<!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
+     uso, con sus dependencias (storage, firmaPad): ordenes-notas,
+     ordenes-visita, ordenes-fotos (galería §5.23) y ordenes-devolucion.
+     Sus ?v= viven en core/carga-diferida.js. -->
 <script defer src="../js/pages/ordenes-ui.js?v=p2"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
-<script defer src="../js/pages/ordenes-events.js?v=qc6"></script>
+<script defer src="../js/pages/ordenes-events.js?v=qc7"></script>
 <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
      el barrido inicial de <i data-lucide>; los guards inline viejos quedan
      como no-ops en parse. Ver js/core/icons.js. -->
-<script defer src="/js/vendor/lucide.min.js?v=1"></script>
-<script defer src="/js/core/icons.js?v=2"></script>
+<script defer src="/js/vendor/lucide.min.js?v=2"></script>
+<script defer src="/js/core/icons.js?v=3"></script>
 <script defer src="../js/pages/ordenes-index.js?v=qc4"></script>
 </head>
 <body>

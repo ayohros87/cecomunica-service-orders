@@ -16,6 +16,34 @@
    createIcons({nodes}) y evita recorrer el documento completo.
    ============================================================= */
 (() => {
+  // Red de seguridad del vendor A MEDIDA (auditoría P3.16): lucide.min.js
+  // ahora trae SOLO los ~198 iconos censados (12 KB gz vs 95). Si un render
+  // usa un nombre fuera del set, su <i data-lucide> queda sin reemplazar —
+  // aquí se detecta, se carga UNA vez el vendor completo
+  // (lucide.full.min.js, que redefine window.lucide con todos) y se
+  // re-barre. El warn deja el nombre faltante en consola para sumarlo al
+  // censo y regenerar el vendor a medida.
+  let _fallbackPedido = false;
+  function _verificarFaltantes(raices) {
+    if (_fallbackPedido) return;
+    const ambitos = (raices && raices.length) ? raices : [document];
+    const faltantes = [];
+    ambitos.forEach(r => {
+      try {
+        r.querySelectorAll?.('i[data-lucide]')
+          .forEach(i => faltantes.push(i.getAttribute('data-lucide')));
+      } catch (_) { /* nodo suelto */ }
+    });
+    if (!faltantes.length) return;
+    _fallbackPedido = true;
+    console.warn('[Icons] iconos fuera del vendor a medida:',
+      Array.from(new Set(faltantes)).join(', '), '— cargando vendor completo');
+    const s = document.createElement('script');
+    s.src = '/js/vendor/lucide.full.min.js?v=1';
+    s.onload = () => { try { lucide.createIcons(); } catch (_) {} };
+    document.head.appendChild(s);
+  }
+
   function pintar(scope) {
     if (typeof lucide === 'undefined') return;
     const arr = Array.isArray(scope) ? scope.filter(Boolean) : (scope ? [scope] : null);
@@ -30,6 +58,7 @@
     } else {
       lucide.createIcons();
     }
+    _verificarFaltantes(arr);
   }
   window.Icons = { pintar };
   // Barrido inicial: como defer el DOM ya está parseado (readyState

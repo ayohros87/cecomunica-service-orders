@@ -79,13 +79,21 @@
     
     // Órdenes de DEVOLUCIÓN: check-in por serial (el mismo modal sirve de
     // vista de solo lectura cuando la orden está cerrada o el rol no opera).
+    // El módulo (22 KB gz + firmaPad + storage) se carga al PRIMER uso
+    // (auditoría P3.15) — CargaDiferida cachea, el segundo click es directo.
     'checkin-devolucion': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) { closeAllMenus(); OrdenesDevolucion.abrir(ordenId); }
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.devolucion().then(() => OrdenesDevolucion.abrir(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir el check-in.', 'bad'));
     },
     // Devolución de equipos con contrato de papel (fuera del sistema):
     // crea la orden en modo sin_contrato y abre el check-in de captura libre.
-    'nueva-devolucion': () => { OrdenesDevolucion.nueva(); },
+    'nueva-devolucion': () => {
+      CargaDiferida.devolucion().then(() => OrdenesDevolucion.nueva())
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir la devolución.', 'bad'));
+    },
 
     // Order actions
     'asignar-tecnico': (el) => {
@@ -121,15 +129,21 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) { closeAllMenus(); abrirModalRecepcion(ordenId); }
     },
-    // Visitas técnicas (ordenes-visita.js): informe estructurado + cierre
-    // en sitio con firma del personal de la empresa visitada.
+    // Visitas técnicas (ordenes-visita.js, diferido — P3.15): informe
+    // estructurado + cierre en sitio con firma del personal visitado.
     'cerrar-visita': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) { closeAllMenus(); abrirCierreVisita(ordenId); }
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.visita().then(() => abrirCierreVisita(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir el cierre.', 'bad'));
     },
     'informe-visita': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) { closeAllMenus(); abrirInformeVisita(ordenId); }
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.visita().then(() => abrirInformeVisita(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir el informe.', 'bad'));
     },
     'eliminar-orden': (el) => {
       const ordenId = el.dataset.ordenId;
@@ -145,7 +159,8 @@
       const ordenId = el.dataset.ordenId;
       if (!ordenId) return;
       closeAllMenus();
-      if (typeof abrirFotosOrden === 'function') abrirFotosOrden(ordenId);
+      CargaDiferida.fotos().then(() => abrirFotosOrden(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudo abrir la galería.', 'bad'));
     },
     
     // Equipment actions
@@ -325,10 +340,10 @@
     },
     'gestionar-notas': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) {
-        gestionarNotasTecnicas(ordenId);
-        closeAllMenus();
-      }
+      if (!ordenId) return;
+      closeAllMenus();
+      CargaDiferida.notas().then(() => gestionarNotasTecnicas(ordenId))
+        .catch(() => Toast.show('Sin conexión — no se pudieron abrir las notas.', 'bad'));
     },
     // Ver entrega/recepción — modal combinado con las fases que existan.
     'ver-entrega': (el) => {
@@ -836,6 +851,8 @@ window.verEntregaComprobante = verEntregaComprobante;
 async function verIdentificacionAdmin(ordenId, btnEl) {
   try {
     if (typeof Toast !== 'undefined') Toast.show('Obteniendo identificación…', 'info');
+    // functions-compat se difiere (P3.15): solo este callable lo usa en la página.
+    await CargaDiferida.functions();
     const fn = firebase.functions().httpsCallable('getIdentificacionUrl');
     const { data } = await fn({ ordenId });
     if (data.status === 'ok' && data.url) {

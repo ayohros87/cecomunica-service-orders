@@ -135,114 +135,18 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     <td class="acciones"><div class="acciones-wrap">${botonesFlujo(ordenId, estado, ordenData)}${botonesGestion(ordenId, estado, tooltipNota, estiloNota)}</div></td>
   `;
 
-  const filaDetalle = document.createElement("tr");
-  filaDetalle.style.display = "none";
-  filaDetalle.classList.add("filaDetalle");
-  filaDetalle.setAttribute("data-orden-id", ordenId);
-  filaDetalle.setAttribute("data-equipos-loaded", "false");
-
-  const estadoUpper = estado.toUpperCase();
-  const ordenCerrada = estadoUpper.includes('ENTREGAD') || estadoUpper.includes('ENTREGADA');
-  const ordenActiva = estadoUpper === 'POR ASIGNAR' || estadoUpper === 'RECIBIDO EN MOSTRADOR' || estadoUpper === 'ASIGNADO' || estadoUpper.includes('EN OFICINA');
-
-  filaDetalle.innerHTML = `
-    <td colspan="8" class="orden-expandida-wrapper">
-      <div class="orden-expandida-card ${ordenCerrada ? 'orden-cerrada' : 'orden-activa'}">
-        <div class="orden-header-compacto">
-          <div class="header-col-izq header-line" title="Cliente: ${escapeHtml(nombreClienteDe(ordenData))} · Técnico: ${escapeHtml(ordenData.tecnico_asignado || 'Sin asignar')}">
-            <span class="orden-numero"><strong>Orden ${ordenId}</strong></span>
-            <span class="separador">•</span>
-            <span class="cliente-nombre">${escapeHtml(nombreClienteDe(ordenData))}</span>
-            <span class="separador">•</span>
-            <div class="progreso-intervenciones-inline ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'}" data-orden-id="${ordenId}">
-              <span class="icon"><i data-lucide="wrench"></i></span>
-              <span class="progreso-valor">0/${equiposNormalizados.length}</span>
-            </div>
-            <span class="contradiccion-badge" data-orden-id="${ordenId}" style="display: none;"></span>
-          </div>
-
-          <div class="header-col-der">
-            <button class="btn-header-compact" data-action="agregar-equipo" data-stop-propagation="true" data-orden-id="${ordenId}" title="Agregar equipo">
-              <i data-lucide="plus"></i>
-            </button>
-            <button class="btn-header-compact" data-action="nuevo-batch" data-stop-propagation="true" data-orden-id="${ordenId}" title="Nuevo batch de equipos">
-              <i data-lucide="layers"></i>
-            </button>
-            <div class="overflow-menu mini-menu">
-              <button class="btn-header-compact" data-action="toggle-order-actions" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">
-                ⋯
-              </button>
-              <div class="overflow-menu-dropdown" id="order-actions-${ordenId}">
-                <button class="overflow-menu-item" data-action="copiar-seriales" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="copy"></i> Copiar seriales</button>
-                <button class="overflow-menu-item" data-action="activar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Accesorios en lote</button>
-              </div>
-            </div>
-            <button id="btnGuardarAccesorios_${ordenId}" class="btn-header-compact primary" data-action="guardar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}" style="display:none;" title="Guardar accesorios">
-              <i data-lucide="save"></i>
-            </button>
-          </div>
-        </div>
-
-        <div class="accesorios-popover" id="popoverAccesorios_${ordenId}" style="display: none;">
-          <div class="popover-content">
-            <div class="popover-header-leyenda">
-              <div class="leyenda-titulo">Leyenda de Accesorios</div>
-              <button class="popover-close" data-action="close-popover" data-stop-propagation="true" data-orden-id="${ordenId}">×</button>
-              <div class="leyenda-items-inline">
-                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">BAT</span> Batería</span>
-                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CLIP</span> Clip</span>
-                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CARG</span> Cargador</span>
-                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">FNT</span> Fuente</span>
-                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">ANT</span> Antena</span>
-                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CUB</span> Cubre Polvo</span>
-                <span class="separador-leyenda">|</span>
-                <span class="estado-inline"><span class="accesorio-item accesorio-item--chip activo accesorio-item--mini">✓</span> Incluido</span>
-                <span class="estado-inline"><span class="accesorio-item accesorio-item--chip inactivo accesorio-item--mini">✕</span> No incluido</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="resumen-operativo" data-orden-id="${ordenId}" style="display: ${ordenCerrada ? 'block' : 'none'};">
-          <div class="resumen-header">
-            <span class="icon"><i data-lucide="bar-chart-2"></i></span>
-            <strong>Resumen de Cierre</strong>
-          </div>
-          <div class="resumen-contenido">
-            <div class="resumen-item">
-              <span class="label">Total equipos:</span>
-              <span class="valor resumen-equipos">0</span>
-            </div>
-            <div class="resumen-item">
-              <span class="label">Intervenciones:</span>
-              <span class="valor resumen-intervenciones">0/0</span>
-            </div>
-            <div class="resumen-item">
-              <span class="label">Accesorios completos:</span>
-              <span class="valor resumen-accesorios">0/0</span>
-            </div>
-          </div>
-        </div>
-
-        ${_buildTimelineHTML(ordenData)}
-
-        <div class="equipos-container">
-          <div style="padding: 20px; text-align: center; color: #666;">
-            <div class="loader" style="margin: 0 auto;"></div>
-            <p style="margin-top: 10px;">Cargando equipos...</p>
-          </div>
-        </div>
-      </div>
-    </td>
-  `;
-
   // Row click/keydown handling is delegated at the table level — see
   // the `initOrdenRowDelegation` IIFE at the bottom of this file.
   // Marker attribute identifies rows that should toggle on click/Enter.
   filaOrden.setAttribute("data-orden-row", "1");
 
   contenedor.appendChild(filaOrden);
-  contenedor.appendChild(filaDetalle);
+  // Fila de detalle LAZY (auditoría P3.17): antes se construía aquí, EAGER,
+  // para las 50 órdenes de la página (~55% de los ~10,000 nodos de cada
+  // pintado, oculta casi toda). Ahora la construye _crearFilaDetalle al
+  // PRIMER expand (_toggleOrdenRow) — el snapshot re-pinta solo filas
+  // compactas y las expandidas se reconstruyen al re-expandir
+  // (renderOrdersList preserva cuáles estaban abiertas).
 
   const clientText = filaOrden.querySelector('.cliente-text');
   if (clientText && clientText.scrollWidth > clientText.offsetWidth) {
@@ -1336,14 +1240,135 @@ function renderEmptyState(message, opts = {}) {
 }
 window.renderEmptyState = renderEmptyState;
 
+// Construye la fila de detalle de una orden — LAZY (auditoría P3.17): antes
+// se armaba eager para las 50 órdenes (~55% de los ~10,000 nodos por pintado,
+// oculta casi toda); ahora SOLO la llama _toggleOrdenRow al primer expand
+// (y al re-expandir tras un re-render, vía renderOrdersList). Devuelve el
+// <tr class="filaDetalle"> listo; renderEquiposTabla llena .equipos-container.
+function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {
+  const estado = (ordenData.estado_reparacion || "POR ASIGNAR").toUpperCase();
+  const ordenCerrada = estado.includes('ENTREGAD') || estado.includes('ENTREGADA');
+
+  const filaDetalle = document.createElement("tr");
+  filaDetalle.style.display = "none";
+  filaDetalle.classList.add("filaDetalle");
+  filaDetalle.setAttribute("data-orden-id", ordenId);
+  filaDetalle.setAttribute("data-equipos-loaded", "false");
+
+  filaDetalle.innerHTML = `
+    <td colspan="8" class="orden-expandida-wrapper">
+      <div class="orden-expandida-card ${ordenCerrada ? 'orden-cerrada' : 'orden-activa'}">
+        <div class="orden-header-compacto">
+          <div class="header-col-izq header-line" title="Cliente: ${escapeHtml(nombreClienteDe(ordenData))} · Técnico: ${escapeHtml(ordenData.tecnico_asignado || 'Sin asignar')}">
+            <span class="orden-numero"><strong>Orden ${ordenId}</strong></span>
+            <span class="separador">•</span>
+            <span class="cliente-nombre">${escapeHtml(nombreClienteDe(ordenData))}</span>
+            <span class="separador">•</span>
+            <div class="progreso-intervenciones-inline ${ordenCerrada ? 'contexto-historico' : 'contexto-activo'}" data-orden-id="${ordenId}">
+              <span class="icon"><i data-lucide="wrench"></i></span>
+              <span class="progreso-valor">0/${equiposNormalizados.length}</span>
+            </div>
+            <span class="contradiccion-badge" data-orden-id="${ordenId}" style="display: none;"></span>
+          </div>
+
+          <div class="header-col-der">
+            <button class="btn-header-compact" data-action="agregar-equipo" data-stop-propagation="true" data-orden-id="${ordenId}" title="Agregar equipo">
+              <i data-lucide="plus"></i>
+            </button>
+            <button class="btn-header-compact" data-action="nuevo-batch" data-stop-propagation="true" data-orden-id="${ordenId}" title="Nuevo batch de equipos">
+              <i data-lucide="layers"></i>
+            </button>
+            <div class="overflow-menu mini-menu">
+              <button class="btn-header-compact" data-action="toggle-order-actions" data-stop-propagation="true" data-orden-id="${ordenId}" title="Más acciones">
+                ⋯
+              </button>
+              <div class="overflow-menu-dropdown" id="order-actions-${ordenId}">
+                <button class="overflow-menu-item" data-action="copiar-seriales" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="copy"></i> Copiar seriales</button>
+                <button class="overflow-menu-item" data-action="activar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Accesorios en lote</button>
+              </div>
+            </div>
+            <button id="btnGuardarAccesorios_${ordenId}" class="btn-header-compact primary" data-action="guardar-accesorios" data-stop-propagation="true" data-orden-id="${ordenId}" style="display:none;" title="Guardar accesorios">
+              <i data-lucide="save"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="accesorios-popover" id="popoverAccesorios_${ordenId}" style="display: none;">
+          <div class="popover-content">
+            <div class="popover-header-leyenda">
+              <div class="leyenda-titulo">Leyenda de Accesorios</div>
+              <button class="popover-close" data-action="close-popover" data-stop-propagation="true" data-orden-id="${ordenId}">×</button>
+              <div class="leyenda-items-inline">
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">BAT</span> Batería</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CLIP</span> Clip</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CARG</span> Cargador</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">FNT</span> Fuente</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">ANT</span> Antena</span>
+                <span class="leyenda-item"><span class="accesorio-item accesorio-item--chip activo">CUB</span> Cubre Polvo</span>
+                <span class="separador-leyenda">|</span>
+                <span class="estado-inline"><span class="accesorio-item accesorio-item--chip activo accesorio-item--mini">✓</span> Incluido</span>
+                <span class="estado-inline"><span class="accesorio-item accesorio-item--chip inactivo accesorio-item--mini">✕</span> No incluido</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="resumen-operativo" data-orden-id="${ordenId}" style="display: ${ordenCerrada ? 'block' : 'none'};">
+          <div class="resumen-header">
+            <span class="icon"><i data-lucide="bar-chart-2"></i></span>
+            <strong>Resumen de Cierre</strong>
+          </div>
+          <div class="resumen-contenido">
+            <div class="resumen-item">
+              <span class="label">Total equipos:</span>
+              <span class="valor resumen-equipos">0</span>
+            </div>
+            <div class="resumen-item">
+              <span class="label">Intervenciones:</span>
+              <span class="valor resumen-intervenciones">0/0</span>
+            </div>
+            <div class="resumen-item">
+              <span class="label">Accesorios completos:</span>
+              <span class="valor resumen-accesorios">0/0</span>
+            </div>
+          </div>
+        </div>
+
+        ${_buildTimelineHTML(ordenData)}
+
+        <div class="equipos-container">
+          <div style="padding: 20px; text-align: center; color: #666;">
+            <div class="loader" style="margin: 0 auto;"></div>
+            <p style="margin-top: 10px;">Cargando equipos...</p>
+          </div>
+        </div>
+      </div>
+    </td>
+  `;
+
+  return filaDetalle;
+}
+
 // ── Row expansion: one delegated listener for the entire table ──────
 // Replaces N per-row click + keydown listeners (50 rows × 2 = 100 listeners
 // at full page) with a single pair on #ordersTable. Toggle state lives in
 // the DOM (`data-equipos-loaded` + style.display); orden data is looked up
 // from APP.state.orders by `data-orden-id`. ORDENES_INDEX_IMPROVEMENTS.md QW4.
 function _toggleOrdenRow(filaOrden) {
-  const filaDetalle = filaOrden.nextElementSibling;
-  if (!filaDetalle || !filaDetalle.classList.contains('filaDetalle')) return;
+  // Fila de detalle LAZY (P3.17): ya no existe pre-construida junto a cada
+  // fila — se crea aquí al PRIMER expand con los datos frescos de APP.state.
+  let filaDetalle = filaOrden.nextElementSibling;
+  if (!filaDetalle || !filaDetalle.classList.contains('filaDetalle')) {
+    const ordenId = filaOrden.dataset.ordenId;
+    const orden = (APP.state.orders || []).find(o => o.ordenId === ordenId);
+    if (!orden) return;
+    const equipos = (orden.equipos || [])
+      .filter(e => !e.eliminado)
+      .sort((a, b) => String(a.numero_de_serie || '').localeCompare(String(b.numero_de_serie || '')));
+    filaDetalle = _crearFilaDetalle(ordenId, orden, equipos);
+    filaOrden.after(filaDetalle);
+    APP.utils.lucideRefresh(filaDetalle);
+  }
 
   filaOrden.classList.toggle('activo');
   const wasHidden = filaDetalle.style.display === 'none';

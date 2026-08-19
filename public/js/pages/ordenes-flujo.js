@@ -1021,6 +1021,7 @@ window.copiarSeriales = function (ordenId) {
         const canvas = document.getElementById('entregaFirmaCanvas');
         const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
         const pathFirma = `ordenes_firmas/${ordenId}_recepcion_${Date.now()}.png`;
+        await CargaDiferida.storage(); // SDK diferido (P3.15): se paga al firmar
         const refFirma = firebase.storage().ref(pathFirma);
         await refFirma.put(blob, { contentType: 'image/png' });
         firmaUrl = await refFirma.getDownloadURL();
@@ -1129,6 +1130,7 @@ window.copiarSeriales = function (ordenId) {
         const canvas = document.getElementById('entregaFirmaCanvas');
         const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
         const pathFirma = `ordenes_firmas/${ordenId}_firma_${Date.now()}.png`;
+        await CargaDiferida.storage(); // SDK diferido (P3.15): cubre firma + ID abajo
         const refFirma = firebase.storage().ref(pathFirma);
         await refFirma.put(blob, { contentType: 'image/png' });
         const firmaUrl = await refFirma.getDownloadURL();

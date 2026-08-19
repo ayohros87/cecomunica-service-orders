@@ -1147,6 +1147,56 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "ordenes_de_servicio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "eliminado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ordenes_de_servicio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "vendedor_asignado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "eliminado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "ordenes_de_servicio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "tecnico_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "eliminado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_creacion",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

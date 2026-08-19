@@ -676,6 +676,7 @@ window.onEquipoFotoInputChange = async function(ev) {
     const safeEquipo = _sanitizeFileName(equipoId);
     const fileName = `eq_${safeEquipo}_${ts}_${safe}.jpg`;
     const path = `ordenes_taller_fotos/${ordenId}/${fileName}`;
+    await CargaDiferida.storage(); // SDK diferido (P3.15): se paga al subir foto
     const ref = firebase.storage().ref(path);
     await ref.put(blob, { contentType: "image/jpeg" });
     const url = await ref.getDownloadURL();
