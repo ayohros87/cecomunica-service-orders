@@ -77,7 +77,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
     ? `<span class="nota-tecnica-indicador" title="Notas técnicas: ${tooltipNota}">🧠</span>`
     : "";
   const fotosBadge = fotosTallerCount > 0
-    ? `<span class="fotos-taller-badge" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
+    ? `<span class="fotos-taller-badge" title="Ver fotos de la orden" data-action="go-fotos-taller" data-orden-id="${ordenId}" data-stop-propagation="true" role="button" tabindex="0"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
     : "";
 
   filaOrden.style.cursor = "pointer";
@@ -268,7 +268,7 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
       : "";
     const tipoDisplay = ordenData.tipo_de_servicio || "—";
     const fotosBadgeMobile = fotosTallerCount > 0
-      ? `<span class="fotos-taller-badge mobile" title="Fotos de taller"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
+      ? `<span class="fotos-taller-badge mobile" title="Ver fotos de la orden" data-action="go-fotos-taller" data-orden-id="${ordenId}" data-stop-propagation="true" role="button" tabindex="0"><i data-lucide="camera"></i> ${fotosTallerCount}</span>`
       : "";
 
     // Intervención progress for the card (per-equipo aggregate) —

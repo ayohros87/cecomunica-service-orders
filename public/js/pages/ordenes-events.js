@@ -139,11 +139,13 @@
       const ordenId = el.dataset.ordenId;
       if (ordenId) window.location.href = `editar-orden.html?id=${ordenId}`;
     },
+    // Galería modal a nivel de orden (§5.23) — antes navegaba a
+    // fotos-taller.html (página retirada). Mismos datos (fotos_taller[]).
     'go-fotos-taller': (el) => {
       const ordenId = el.dataset.ordenId;
-      if (ordenId) {
-        window.location.href = BASE + `fotos-taller.html?ordenId=${encodeURIComponent(ordenId)}`;
-      }
+      if (!ordenId) return;
+      closeAllMenus();
+      if (typeof abrirFotosOrden === 'function') abrirFotosOrden(ordenId);
     },
     
     // Equipment actions

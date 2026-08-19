@@ -125,7 +125,8 @@
 
           <div class="muted" style="margin-top:10px;font-size:12px;display:flex;align-items:center;gap:6px;">
             <i data-lucide="camera"></i>
-            <span>¿Fotos del sitio? Úselas desde <a href="fotos-taller.html?ordenId=${encodeURIComponent(ordenId)}">Fotos de la visita</a>.</span>
+            <!-- Galería modal (§5.23) — la página fotos-taller.html se retiró. -->
+            <span>¿Fotos del sitio? <button type="button" class="btn btn-ghost" style="padding:2px 8px;font-size:12px;" data-action="go-fotos-taller" data-orden-id="${ordenId}">Abrir fotos de la visita</button></span>
           </div>
         </div>
         <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
