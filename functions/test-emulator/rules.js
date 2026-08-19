@@ -432,6 +432,38 @@ async function main() {
     .set({ orden_prog_descartada: { motivo: "otro", nota: "x" } }, { merge: true }));
   ok("contratos: orden_prog_descartada solo recepción/admin");
 
+  // ── contratos: activación por firmado + reemplazo del PDF ────────────────
+  // Subir el firmado de un contrato APROBADO lo activa (esActivacionPorFirmado);
+  // corregir el archivo de uno YA ACTIVO (se subió el contrato sin firmar) es un
+  // write activo→activo que solo repunta firmado_*. La UI lo bloqueaba y las
+  // reglas no: este caso fija que el backend siga permitiendo la corrección y que
+  // el salto a 'activo' siga cerrado para quien no tiene el firmado.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("contratos/cApro").set({ estado: "aprobado", contrato_id: "TEMP20260817-01" });
+    await db.doc("contratos/cFirmado").set({
+      estado: "activo", contrato_id: "TEMP20260817-02",
+      firmado: true, firmado_url: "https://x/viejo.pdf", firmado_nombre: "viejo.pdf",
+    });
+  });
+  // Sin firmado_url, el vendedor NO puede activar un aprobado.
+  await assertFails(as("vendedor").doc("contratos/cApro").set({ estado: "activo" }, { merge: true }));
+  await assertSucceeds(as("vendedor").doc("contratos/cApro")
+    .set({ estado: "activo", firmado: true, firmado_url: "https://x/f.pdf" }, { merge: true }));
+  ok("contratos: activación por firmado permitida al vendedor; sin firmado_url, no");
+  // Reemplazo sobre contrato vivo: repuntar el archivo sin tocar estado.
+  await assertSucceeds(as("vendedor").doc("contratos/cFirmado").set({
+    firmado_url: "https://x/nuevo.pdf", firmado_nombre: "nuevo.pdf",
+    firmado_historial: [{ firmado_url: "https://x/viejo.pdf", firmado_nombre: "viejo.pdf" }],
+  }, { merge: true }));
+  ok("contratos: reemplazo del PDF firmado en contrato activo (corrección del archivo)");
+  // Borrar el rastro del reemplazo (dejar el historial más corto) no pasa.
+  await assertFails(as("vendedor").doc("contratos/cFirmado")
+    .set({ firmado_historial: [] }, { merge: true }));
+  await assertSucceeds(as("administrador").doc("contratos/cFirmado")
+    .set({ firmado_historial: [] }, { merge: true }));
+  ok("contratos: firmado_historial solo crece (admin exento para correcciones)");
+
   // ── ordenes: `eliminado` (borrado lógico) — auditoría órdenes P2 ──────────
   // Solo recepción lo enciende (admin queda exento por isAdmin()), con motivo
   // ≥10 chars, nunca sobre una orden terminal y nunca en reversa true→false.

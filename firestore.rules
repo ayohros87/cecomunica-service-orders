@@ -3,26 +3,20 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ───────────────────────────────────────────────────────────────────────
-    // BORRADOR — reglas explícitas por colección (sin catch-all).
+    // Reglas explícitas por colección (SIN catch-all) — EN PRODUCCIÓN.
     //
-    // CONTEXTO: hasta ahora existía un catch-all `match /{document=**}` que
-    // concedía read+write a todo usuario autenticado. Por la semántica OR de
-    // Firestore (si CUALQUIER match concede, se permite) ese catch-all
-    // SOMBREABA las reglas más estrictas (usuarios, contratos) — eran inertes.
-    // Para poder ENFORCAR scoping en `cotizaciones` hay que eliminar el
-    // catch-all y enumerar cada colección; toda colección no listada queda
-    // denegada por defecto.
+    // CONTEXTO: existía un catch-all `match /{document=**}` con read+write
+    // para todo autenticado. Por la semántica OR de Firestore (si CUALQUIER
+    // match concede, se permite) ese catch-all SOMBREABA las reglas más
+    // estrictas — eran inertes. Se eliminó y cada colección está enumerada;
+    // toda colección NO listada queda denegada por defecto. Si el frontend
+    // estrena una colección nueva, hay que agregarla aquí o verá
+    // "Missing or insufficient permissions".
     //
-    // OBJETIVO DE ESTE CAMBIO: el ÚNICO endurecimiento real es `cotizaciones`
-    // (+ cierre de escritura de `usuarios`/`usuarios_audit`, verificado sin
-    // escrituras de cliente). El resto de colecciones conserva el
-    // comportamiento efectivo de hoy (auth read+write) para no romper flujos.
-    //
-    // ⚠️ PROBAR EN EMULADOR / dry-run ANTES DE DESPLEGAR. Flujos a verificar:
-    //   - cotizaciones: crear (vendedor), editar propia, aprobar (admin),
-    //     enviar/cerrar, intentos cruzados vendedor↔vendedor (deben fallar en get).
-    //   - contratos: linkOrden/unlinkOrden (subcolección ordenes), editar contrato.
-    //   - usuarios: alta/edición vía callable manageUser (admin SDK, sigue OK).
+    // Validación: harness en functions/test-emulator/rules.js (73 grupos),
+    // corre con `firebase emulators:exec --only firestore --project demo-ci
+    // "node functions/test-emulator/rules.js"`. Censo de colecciones del
+    // cliente cruzado contra este archivo el 2026-08-19: cobertura completa.
     // ───────────────────────────────────────────────────────────────────────
 
     function isSignedIn() { return request.auth != null; }
@@ -277,10 +271,22 @@ service cloud.firestore {
         return request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(["orden_prog_descartada"]);
       }
+      // Reemplazo del PDF firmado (contratos-upload.js, modo 'reemplazo'): el
+      // archivo saliente se archiva en firmado_historial[] y de ahí sale el
+      // evento REEMPLAZAR_FIRMADO de la auditoría. Sustituir el papel de un
+      // contrato vivo puede ser legítimo (se subió el contrato sin firmar),
+      // pero no puede ser silencioso: la lista solo crece. Mismo criterio que
+      // devolucionAppendOnly con los acuses. Admin exento para correcciones.
+      function firmadoHistorialAppendOnly() {
+        return resource.data.get("firmado_historial", []).size()
+            <= request.resource.data.get("firmado_historial", []).size()
+          || userRole() == "administrador";
+      }
       allow read: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn()
         && !touchesCFOwnedFields()
+        && firmadoHistorialAppendOnly()
         && (!tocaDescarteOrdenProg() || userRole() in ["administrador", "recepcion"])
         && (!(resource.data.estado != "activo" && request.resource.data.estado == "activo")
             || userRole() in ["administrador", "gerente"]
