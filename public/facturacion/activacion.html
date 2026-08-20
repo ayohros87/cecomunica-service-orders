@@ -19,12 +19,12 @@
   <meta charset="UTF-8" />
   <title>Activación de facturación - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc25">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/ws-tabs.css">
-  <script src="../js/ui/workspace-tabs.js"></script>
-  <script src="../js/ui/finanzas-nav.js"></script>
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <script src="../js/ui/finanzas-nav.js?v=f3"></script>
   <link rel="stylesheet" href="../css/app-kit-extras.css">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -55,8 +55,10 @@
 
 <div id="topbar-mount"></div>
 <script>
+  /* Sin botón "Volver": esta página ES la portada del espacio Finanzas
+     (./index.html solo redirige aquí, así que el Volver recargaba lo mismo).
+     Para salir del espacio están el rail y "Menú principal". */
   Layout.renderTopbarFor('index', {
-    back: { href: './index.html', label: '<i data-lucide="arrow-left"></i> Facturación' },
     title: '<i data-lucide="play-circle"></i> Activación de facturación',
   });
 </script>
@@ -114,7 +116,8 @@
 </div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/facturacion-activacion.js?v=fix3" defer></script>
+<script defer src="../js/ui/modal.js"></script> <!-- Modal.confirm de los toggles de config global -->
+<script src="../js/pages/facturacion-activacion.js?v=cc26" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

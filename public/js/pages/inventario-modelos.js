@@ -9,6 +9,7 @@ let modeloEditId = null;
 let showInactivos = false;   // por defecto ocultos para despejar la vista
 let soloConfig = false;
 let soloAlquiler = true;     // por defecto solo los modelos que se alquilan (vista limpia)
+let _terminoBusqueda = '';   // último término tecleado — lo reusa el alta desde el estado vacío
 const _savedTimers = {};
 const qboItems = { alquileres: [], bundles: [], servicios: [], loaded: false, loading: false };
 // Frecuencia y Mantenimiento usan el MISMO ítem de QBO para todos los modelos:
@@ -173,7 +174,9 @@ window.editarGlobal = editarGlobal;
 /* ===== Render ===== */
 function render(){
   const tbody = document.getElementById('tablaModelos');
-  const term = (document.getElementById('q')?.value || '').toLowerCase().trim();
+  const termRaw = (document.getElementById('q')?.value || '').trim();
+  const term = termRaw.toLowerCase();
+  _terminoBusqueda = termRaw;   // lo usa el atajo "Crear «…»" del estado vacío
 
   let data = (listaModelos||[]).filter(m => showInactivos ? true : (m.activo !== false));
   if (soloAlquiler) data = data.filter(m => m.es_alquiler === true);
@@ -185,11 +188,30 @@ function render(){
 
   tbody.innerHTML = '';
   if (data.length === 0){
-    const hint = soloAlquiler
-      ? 'No hay equipos marcados como "Se alquila". Pulsa <b>Todos</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.'
-      : 'No hay modelos para mostrar';
-    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:#666;">${hint}</td></tr>`;
+    // Buscar algo que no existe es EL momento en que se quiere crear: el estado
+    // vacío ofrece el alta con el término ya escrito, en vez de dejar al usuario
+    // a buscar el botón. Si el filtro "De alquiler" es el que esconde la fila,
+    // primero se ofrece ampliar a "Todos" — crear un duplicado sería peor.
+    let hint, cta = '';
+    if (term && soloAlquiler){
+      hint = `Ningún modelo <b>de alquiler</b> coincide con “${esc(termRaw)}”.`;
+      cta = `<button type="button" class="btn btn-sm" onclick="setFiltroAlquiler(false)"><i data-lucide="list"></i> Buscar en Todos</button>
+             <button type="button" class="btn btn-sm primary" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
+    } else if (term){
+      hint = `Ningún modelo coincide con “${esc(termRaw)}”.`;
+      cta = `<button type="button" class="btn btn-sm primary" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
+    } else if (soloAlquiler){
+      hint = 'No hay modelos marcados como "Se alquila". Pulsa <b>Todos</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.';
+    } else {
+      hint = 'Todavía no hay modelos en el catálogo.';
+      cta = `<button type="button" class="btn btn-sm primary" onclick="abrirModal()"><i data-lucide="plus"></i> Nuevo modelo</button>`;
+    }
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:24px; text-align:center; color:var(--fg-3);">
+        <p style="margin:0 0 12px;">${hint}</p>
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">${cta}</div>
+      </td></tr>`;
     actualizarResumen();
+    if (window.lucide) lucide.createIcons();
     return;
   }
   data.forEach(m => tbody.appendChild(renderRow(m)));
@@ -353,6 +375,15 @@ function abrirModal(id=null){
   if (window.lucide) lucide.createIcons();
 }
 function cerrarModal(){ const ov=document.getElementById('overlay'); ov.classList.remove('show'); ov.style.display='none'; modeloEditId=null; }
+
+// Alta desde el estado vacío: arranca con lo que se estaba buscando ya escrito
+// en Modelo y el foco en Marca, que es lo único que falta por decidir.
+function crearDesdeBusqueda(){
+  const termino = _terminoBusqueda;
+  abrirModal();
+  setVal('f-modelo', termino);
+  document.getElementById('f-marca')?.focus();
+}
 
 /* ===== Vínculo variante refurbished → base (plan 07_modelos_variante_refurbished) =====
    El doc refurbished conserva SU propio precio_alquiler y mapeo QBO (el ítem "R"
@@ -673,6 +704,7 @@ function setFiltroAlquiler(v){
 }
 window.setFiltroAlquiler = setFiltroAlquiler;
 window.abrirModal = abrirModal;
+window.crearDesdeBusqueda = crearDesdeBusqueda;
 window.cerrarModal = cerrarModal;
 window.guardarModelo = guardarModelo;
 window.eliminarModelo = eliminarModelo;

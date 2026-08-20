@@ -16,10 +16,13 @@
 //   WorkspaceTabs.setActive('existencias'); // para tabs de la misma página
 window.WorkspaceTabs = {
 
-  render(mountId, { tabs, active }) {
+  // variant: 'sub' pinta el segundo nivel como píldoras (ver ws-tabs.css) para
+  // que no se confunda con la tira de pestañas del espacio, que va encima.
+  render(mountId, { tabs, active, variant }) {
     const el = document.getElementById(mountId);
     if (!el) return;
-    el.innerHTML = `<nav class="ws-tabs" role="tablist">` + (tabs || []).map(t => {
+    const navCls = `ws-tabs${variant === 'sub' ? ' ws-tabs--sub' : ''}`;
+    el.innerHTML = `<nav class="${navCls}" role="tablist">` + (tabs || []).map(t => {
       const is = t.id === active;
       const badge = `<span class="ws-tab-badge" id="wsBadge-${t.id}" style="display:none"></span>`;
       const inner = `${t.icon ? `<i data-lucide="${t.icon}"></i>` : ''}<span>${t.label}</span>${badge}`;

@@ -15,12 +15,12 @@
   <meta charset="UTF-8" />
   <title>Piezas y Tarifas - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc25">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/ws-tabs.css">
-  <script src="../js/ui/workspace-tabs.js"></script>
-  <script src="../js/ui/finanzas-nav.js"></script>
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <script src="../js/ui/finanzas-nav.js?v=f3"></script>
 
   <!-- Firebase -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -96,27 +96,27 @@
 <div id="topbar-mount"></div>
 <script>
   Layout.renderTopbarFor('index', {
-    back: { href: '../facturacion/index.html', label: '<i data-lucide="arrow-left"></i> Facturación' },
+    back: { href: '../facturacion/activacion.html', label: '<i data-lucide="arrow-left"></i> Finanzas' },
     title: '<i data-lucide="puzzle"></i> Piezas y Tarifas',
     leftSlot: `
       <div class="filter-search" style="max-width:300px;">
         <span class="search-icon"><i data-lucide="search"></i></span>
         <input id="q" type="search" placeholder="Buscar nombre, marca, SKU o descripción…" aria-label="Buscar piezas">
       </div>`,
+    // Misma jerarquía que Modelos: crear al frente, mantenimiento en "Más".
     actions: [
-      { label: '<i data-lucide="download"></i> Importar de QuickBooks', cls: 'primary', onclick: "importarDeQBO()" },
-      { label: '<i data-lucide="plus"></i> Nueva pieza', onclick: "window.location.href='./piezas.html'" }
+      { label: '<i data-lucide="plus"></i> Nueva pieza', cls: 'primary', href: './piezas.html' }
     ],
     menu: [
-      { href: '../facturacion/index.html', label: '<i data-lucide="calculator"></i> Facturación (inicio)' },
-      { href: './modelos.html', label: '<i data-lucide="book-open"></i> Modelos y Tarifas' },
+      { href: './piezas.html', label: '<i data-lucide="plus"></i> Nueva pieza' },
+      { divider: true },
+      { onclick: 'importarDeQBO()', label: '<i data-lucide="download"></i> Importar de QuickBooks' },
+      { onclick: 'exportarExcel()', label: '<i data-lucide="file-spreadsheet"></i> Exportar a Excel' },
       { href: './piezas.html', label: '<i data-lucide="boxes"></i> Inventario de piezas' },
       { divider: true },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-sin-precio"> Solo sin precio</label>' },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-por-revisar"> Solo por revisar</label>' },
-      { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-inactivos"> Mostrar inactivos</label>' },
-      { divider: true },
-      { onclick: 'exportarExcel()', label: '<i data-lucide="download"></i> Excel' }
+      { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-inactivos"> Mostrar inactivos</label>' }
     ]
   });
 </script>
@@ -136,7 +136,11 @@
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <p id="resumenPiezas" class="md-stats" style="margin:0;">Cargando…</p>
-      <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
+        <!-- Alta también a la altura del contenido (igual que en Modelos). -->
+        <a class="btn primary" href="./piezas.html"><i data-lucide="plus"></i> Nueva pieza</a>
+      </div>
     </div>
     <div class="app-table-wrap" id="wrapTabla" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
       <table class="app-table" id="tabla">

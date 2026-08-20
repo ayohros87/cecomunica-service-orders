@@ -36,19 +36,58 @@ async function cargarConfig(){
     const al = document.getElementById('alertasCorreo'); if(al) al.checked = !data.alertas_off; // on por default
   }catch(e){ console.warn('config', e); }
 }
+/* Estos dos checkboxes NO son filtros de la vista: escriben configuración de
+   TODA la empresa al instante (uno gobierna la corrida automática de las 7:00
+   AM). Estaban sin confirmación, a un clic accidental de distancia. Ahora
+   avisan qué implica el cambio y, si se cancela, el checkbox vuelve a su
+   estado anterior — mismo patrón que el mapeo global de Modelos y Tarifas. */
+async function _confirmarConfig(chkId, valorPrevio, opts){
+  const ok = await Modal.confirm(opts);
+  if (!ok) {
+    const chk = document.getElementById(chkId);
+    if (chk) chk.checked = valorPrevio;   // revertir sin escribir
+  }
+  return ok;
+}
+
 async function toggleAuto(on){
+  const ok = await _confirmarConfig('autoActivar', !on, {
+    title: on ? 'Encender la auto-activación' : 'Apagar la auto-activación',
+    message: on
+      ? 'La corrida diaria de las <b>7:00 AM</b> pasará a activar sola todos los contratos que estén en <b>Listos</b>, sin que nadie los revise. Afecta a toda la empresa.'
+      : 'Los contratos <b>Listos</b> dejarán de activarse solos: habrá que activarlos a mano uno por uno.',
+    confirmLabel: on ? 'Sí, activar solos' : 'Sí, apagar',
+    danger: !!on,
+  });
+  if (!ok) return;
   try{
     await firebase.firestore().collection('empresa').doc('facturacion_config')
       .set({ auto_activar: !!on, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
     Toast.show(on?'Auto-activación activada (corre 7:00 AM)':'Auto-activación desactivada','ok');
-  }catch(e){ console.error(e); Toast.show('No se pudo guardar la config','bad'); }
+  }catch(e){
+    console.error(e); Toast.show('No se pudo guardar la config','bad');
+    const chk = document.getElementById('autoActivar'); if(chk) chk.checked = !on;  // no quedó guardado
+  }
 }
+
 async function toggleAlertas(on){
+  const ok = await _confirmarConfig('alertasCorreo', !on, {
+    title: on ? 'Encender las alertas por correo' : 'Apagar las alertas por correo',
+    message: on
+      ? 'Se vuelven a enviar los correos de alerta (fuga / falso arranque) a los destinatarios configurados.'
+      : 'Nadie recibirá los correos de <b>fuga</b> ni de <b>falso arranque</b> hasta que se vuelvan a encender. Afecta a toda la empresa.',
+    confirmLabel: on ? 'Sí, encender' : 'Sí, apagar',
+    danger: !on,
+  });
+  if (!ok) return;
   try{
     await firebase.firestore().collection('empresa').doc('facturacion_config')
       .set({ alertas_off: !on, actualizado_at: firebase.firestore.FieldValue.serverTimestamp() }, { merge:true });
     Toast.show(on?'Alertas por correo activadas':'Alertas por correo apagadas','ok');
-  }catch(e){ console.error(e); Toast.show('No se pudo guardar la config','bad'); }
+  }catch(e){
+    console.error(e); Toast.show('No se pudo guardar la config','bad');
+    const chk = document.getElementById('alertasCorreo'); if(chk) chk.checked = !on;  // no quedó guardado
+  }
 }
 window.toggleAuto = toggleAuto;
 window.toggleAlertas = toggleAlertas;

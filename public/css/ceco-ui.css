@@ -316,6 +316,13 @@ body{
 /* DS App Kit button variants — BEM modifier style (Phase 2). */
 .btn-primary   { background:var(--accent);  color:#fff; border-color:var(--accent); }
 .btn-primary:hover  { background:var(--accent-hover); box-shadow: var(--shadow-md); }
+/* Alias `.btn.primary` — es la convención que usa Layout.renderTopbar({actions:[{cls:'primary'}]})
+   en ~11 páginas (Nuevo cliente, Nuevo Contrato, Nueva cotización, Recibir equipos, Nuevo cargo…).
+   Nunca existió la regla, así que TODOS esos botones "primarios" se pintaban como uno más de la
+   fila: la barra de acciones no tenía jerarquía y la acción principal se perdía entre Volver /
+   Más / Menú principal / Cerrar sesión. */
+.btn.primary   { background:var(--accent);  color:#fff; border-color:var(--accent); }
+.btn.primary:hover  { background:var(--accent-hover); color:#fff; box-shadow: var(--shadow-md); }
 .btn-secondary { background:#f1f5f9; color:var(--text); border-color:#cbd5e1; }
 .btn-secondary:hover{ background:var(--line); }
 .btn-ghost     { background:transparent; border-color: transparent; }
@@ -1791,8 +1798,12 @@ i[data-lucide]                              { display: inline-block; }
 .lucide-x             { color: #94a3b8; }   /* slate-lt  — dismiss */
 .lucide-x-circle      { color: #94a3b8; }   /* slate-lt  — clear */
 
-/* Colored buttons: icons always white */
+/* Colored buttons: icons always white.
+   `.btn.primary` es el alias de `.btn-primary` (ver arriba) y necesita la misma
+   regla: si no, el icono conserva su color semántico (.lucide-plus, .lucide-download…)
+   y se pierde sobre el azul. */
 .btn-primary .lucide,
+.btn.primary .lucide,
 .btn-danger .lucide,
 .btn-accent .lucide                         { color: #fff; }
 

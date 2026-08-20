@@ -15,11 +15,11 @@
   <meta charset="UTF-8" />
   <title>Emisión de facturas - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc25">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/ws-tabs.css">
-  <script src="../js/ui/workspace-tabs.js"></script>
-  <script src="../js/ui/finanzas-nav.js"></script>
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <script src="../js/ui/finanzas-nav.js?v=f3"></script>
 
   <style>
     /* Checklist del camino a QBO — placeholder honesto, no un botón muerto. */
@@ -56,6 +56,7 @@
 <script>
   Layout.renderTopbar({
     title: '<i data-lucide="file-output"></i> Emisión de facturas',
+    back: { href: './activacion.html', label: '<i data-lucide="arrow-left"></i> Finanzas' },
     showHome: true, homeHref: '../index.html', showLogout: true
   });
 </script>

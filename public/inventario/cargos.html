@@ -15,12 +15,12 @@
   <meta charset="UTF-8" />
   <title>Cargos de Facturación - Cecomunica</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc24">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc25">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
-  <link rel="stylesheet" href="../css/ws-tabs.css">
-  <script src="../js/ui/workspace-tabs.js"></script>
-  <script src="../js/ui/finanzas-nav.js"></script>
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <script src="../js/ui/finanzas-nav.js?v=f3"></script>
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -64,7 +64,7 @@
 <div id="topbar-mount"></div>
 <script>
   Layout.renderTopbarFor('index', {
-    back: { href: '../facturacion/index.html', label: '<i data-lucide="arrow-left"></i> Facturación' },
+    back: { href: '../facturacion/activacion.html', label: '<i data-lucide="arrow-left"></i> Finanzas' },
     title: '<i data-lucide="receipt"></i> Cargos de Facturación',
     leftSlot: `
       <div class="filter-search" style="max-width:300px;">
@@ -75,8 +75,7 @@
       { label: '<i data-lucide="plus"></i> Nuevo cargo', cls: 'primary', onclick: "agregarCargo()" }
     ],
     menu: [
-      { href: '../facturacion/index.html', label: '<i data-lucide="calculator"></i> Facturación (inicio)' },
-      { href: './modelos.html', label: '<i data-lucide="radio"></i> Equipos y Tarifas' },
+      { onclick: 'agregarCargo()', label: '<i data-lucide="plus"></i> Nuevo cargo' },
       { divider: true },
       { html: '<label class="overflow-menu-item"><input type="checkbox" id="chk-inactivos"> Mostrar inactivos</label>' }
     ]
@@ -92,7 +91,11 @@
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <p id="resumen" class="md-stats" style="margin:0;">Cargando…</p>
-      <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <p id="qboHint" style="margin:0; font-size:12px; color:var(--fg-4);"></p>
+        <!-- Alta también a la altura del contenido (igual que en Modelos). -->
+        <button type="button" class="btn primary" onclick="agregarCargo()"><i data-lucide="plus"></i> Nuevo cargo</button>
+      </div>
     </div>
     <div class="app-table-wrap" style="border:none; box-shadow:none; border-radius:0; overflow:auto;">
       <table class="app-table" id="tabla">
