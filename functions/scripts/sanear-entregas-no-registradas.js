@@ -114,7 +114,7 @@ function dispararaTransicion(c) {
     q.forEach((d) => { const u = d.data() || {}; estadoPool.set(u.serial_norm, u.estado || "?"); });
   }
 
-  const seguras = [], revisar = [], sinEvidencia = [];
+  const seguras = [], revisar = [], parciales = [], sinEvidencia = [];
   for (const c of candidatas) {
     const posterior = c.seriales.filter((s) => (porSerial.get(s) || [])
       .some((o) => o.id !== c.id && o.creada && c.completada && o.creada > c.completada));
@@ -124,9 +124,21 @@ function dispararaTransicion(c) {
     });
     if (!posterior.length && !movidos.length) { sinEvidencia.push(c); continue; }
 
-    c.evidencia = posterior.length
-      ? `${posterior.length} serial(es) en una orden posterior`
-      : `${movidos.length} serial(es) movidos en inventario por otra vía`;
+    // COBERTURA: qué proporción de los radios de la orden tiene evidencia.
+    // Cerrar una orden marca TODAS sus unidades como entregadas (el trigger las
+    // mueve en_taller → en_cliente). Si la evidencia cubre 1 de 19 radios, los
+    // otros 18 podrían seguir de verdad en el taller y se estaría ensuciando el
+    // inventario — exactamente lo contrario de lo que este saneo busca.
+    // Por eso solo se cierran las de cobertura COMPLETA; las parciales se
+    // listan aparte con su proporción, para decidirlas a mano.
+    const conEvid = new Set([...posterior, ...movidos]);
+    c.cubiertos = conEvid.size;
+    c.total = c.seriales.length;
+    c.cobertura = c.total ? conEvid.size / c.total : 0;
+    c.evidencia = `${c.cubiertos}/${c.total} radios`
+      + (posterior.length ? " (en orden posterior)" : " (movidos en inventario)");
+
+    if (c.cobertura < 1) { parciales.push(c); continue; }
 
     if (c.contratoDocId) {
       const cd = await db.collection("contratos").doc(c.contratoDocId).get();
@@ -150,6 +162,10 @@ function dispararaTransicion(c) {
 
   console.log(`\n=== EXCLUIDAS — abrirían una recuperación, decisión humana (${revisar.length}) ===`);
   revisar.forEach((c) => { console.log(linea(c)); console.log(`        ↳ ${c.motivoRevisar}`); });
+
+  console.log(`\n=== EXCLUIDAS — evidencia PARCIAL, decisión humana (${parciales.length}) ===`);
+  console.log("    (cerrarlas marcaría como entregados radios que quizá siguen en el taller)");
+  parciales.sort((a, b) => b.cobertura - a.cobertura).forEach((c) => console.log(linea(c)));
 
   console.log(`\n=== EXCLUIDAS — sin evidencia externa (${sinEvidencia.length}) ===`);
   sinEvidencia.forEach((c) => console.log(linea(c)));
