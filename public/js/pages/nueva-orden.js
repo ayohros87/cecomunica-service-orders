@@ -605,13 +605,33 @@ ${window.location.origin}/ordenes/index.html
         // entrar a "+" (~4-5 interacciones extra en el flujo más repetido de
         // recepción). VISITA no lleva equipos y la venta directa ya los trae:
         // esas aterrizan en la orden dentro de la lista (?orden= la filtra).
-        const irACapturaEquipos = !prefillVenta && !esVisita(tipoSelect.value);
-        const destino = irACapturaEquipos
-          ? `agregar-equipo.html?orden_id=${encodeURIComponent(id)}`
-          : `index.html?orden=${encodeURIComponent(id)}`;
-        mostrarMensaje(irACapturaEquipos
-          ? "✅ Orden guardada. Abriendo la captura de equipos…"
-          : "✅ Orden guardada correctamente.");
+        //
+        // Con contrato vinculado los seriales YA están decididos en el contrato:
+        // teclearlos uno por uno en agregar-equipo era volver a capturar lo que
+        // el sistema ya sabe (observación de recepción, ago-2026 — por eso el
+        // panel de "órdenes por crear" se usaba poco: la orden terminaba
+        // creándose por el camino largo solo para llegar al batch). Esas
+        // aterrizan en el batch, y la PROGRAMACIÓN además jala sola del contrato
+        // (?jalar=contrato). En ENTRADA no se auto-jala: vuelve lo que el
+        // cliente devuelve, que puede ser una parte del contrato — el botón
+        // "Jalar del contrato" queda a un click.
+        const conContrato = requiereContrato(tipoSelect.value)
+          && !contratoNoAplica.checked && !!contratoSelect.value;
+        let destino, aviso;
+        if (conContrato) {
+          const auto = esProgramacion(tipoSelect.value);
+          destino = `nuevo-batch.html?orden_id=${encodeURIComponent(id)}${auto ? "&jalar=contrato" : ""}`;
+          aviso = auto
+            ? "✅ Orden guardada. Abriendo la carga de equipos con los seriales del contrato…"
+            : "✅ Orden guardada. Abriendo la carga de equipos…";
+        } else if (!prefillVenta && !esVisita(tipoSelect.value)) {
+          destino = `agregar-equipo.html?orden_id=${encodeURIComponent(id)}`;
+          aviso = "✅ Orden guardada. Abriendo la captura de equipos…";
+        } else {
+          destino = `index.html?orden=${encodeURIComponent(id)}`;
+          aviso = "✅ Orden guardada correctamente.";
+        }
+        mostrarMensaje(aviso);
         setTimeout(() => window.location.href = destino, 800);
       } catch (error) {
         mostrarMensaje("Error al guardar: " + error.message, "rojo");

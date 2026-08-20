@@ -102,7 +102,10 @@ function serialesActuales() {
   return set;
 }
 
-function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "", focus = false } = {}) {
+// `obsComun` marca que la observación de la fila la puso "Aplicar a todas" y no
+// una mano — es lo que permite volver a aplicarla corregida sin borrar fila por
+// fila (ver aplicarComunes).
+function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "", obsComun = false, focus = false } = {}) {
   const acc = accesorios || {};
   const id = `fila_${filaSeq++}`;
   const tr = document.createElement("tr");
@@ -126,6 +129,10 @@ function addRow({ serial = "", modeloId = "", accesorios = {}, observaciones = "
     <td class="batch-acciones"><button type="button" class="btn btn-ghost btn-sm" title="Eliminar fila" onclick="eliminarFila(this)"><i data-lucide="trash-2"></i></button></td>
   `;
   $("filasBatch").appendChild(tr);
+  if (obsComun && observaciones) {
+    const obsInput = tr.querySelector(".observaciones");
+    if (obsInput) obsInput.dataset.comun = "1";
+  }
   if (typeof lucide !== 'undefined') lucide.createIcons();
   renumber();
   const serieInput = tr.querySelector(".serie");
@@ -282,14 +289,23 @@ window.agregarFila = () => addRow({ focus: true });
 // entrega: los seriales ya se eligieron en el contrato y aquí no se re-teclean.
 // El modelo entra por modelo_id del contrato (misma FK del catálogo) o, en su
 // defecto, por nombre normalizado.
-window.jalarSerialesDesdeContrato = async () => {
+//
+// `auto` = la página se abrió con ?jalar=contrato (recién creada la orden de
+// PROGRAMACIÓN): mismo jalado, pero sin gritar cuando no hay nada que traer —
+// nadie pidió el jalado, la página se ofreció sola.
+window.jalarSerialesDesdeContrato = async ({ auto = false } = {}) => {
   if (!contratoDocId) { Toast.show("La orden no tiene contrato vinculado.", "warn"); return; }
   const btn = $("btnJalarContrato");
   if (btn) btn.disabled = true;
   try {
     const seriales = await ContratosService.getSerialesManual(contratoDocId);
     const conSerial = (seriales || []).filter(s => String(s.serial || "").trim());
-    if (!conSerial.length) { Toast.show("El contrato no tiene seriales asignados todavía.", "warn"); return; }
+    if (!conSerial.length) {
+      Toast.show(auto
+        ? "El contrato todavía no tiene seriales asignados: captura los equipos aquí."
+        : "El contrato no tiene seriales asignados todavía.", "warn");
+      return;
+    }
 
     const modeloPorNombre = new Map(modelos.map(m => [normName(m.nombre), m.id]));
     const idsValidos = new Set(modelos.map(m => m.id));
@@ -307,7 +323,7 @@ window.jalarSerialesDesdeContrato = async () => {
       agregados++;
     }
     if (agregados) mostrarOrigenEquipos(`Jalado del contrato${contratoIdVisible ? ` ${contratoIdVisible}` : ""}`);
-    let msg = `${agregados} equipo(s) jalados del contrato.`;
+    let msg = `${agregados} equipo(s) jalados del contrato${auto ? " — revisa y guarda" : ""}.`;
     if (omitidos) msg += ` ${omitidos} ya estaban en la tabla.`;
     Toast.show(agregados ? msg : "Esos seriales ya estaban en la tabla.", agregados ? "ok" : "warn");
   } catch (e) {
@@ -542,7 +558,7 @@ window.agregarDesdePegado = () => {
     const k = serial.toLowerCase();
     if (yaPresentes.has(k)) { duplicados++; return; }
     yaPresentes.add(k);
-    addRow({ serial, modeloId: defaults.modeloId, accesorios: defaults.accesorios, observaciones: defaults.observaciones });
+    addRow({ serial, modeloId: defaults.modeloId, accesorios: defaults.accesorios, observaciones: defaults.observaciones, obsComun: true });
     agregados++;
   });
 
@@ -568,14 +584,20 @@ function leerComunes() {
 }
 
 // Aplica los valores comunes a las filas existentes:
-//   • Modelo: solo a filas SIN modelo (respeta los reconocidos por POC).
+//   • Modelo: solo a filas SIN modelo (respeta los reconocidos por POC/contrato).
 //   • Accesorios: marca los seleccionados en todas las filas (no desmarca).
-//   • Observaciones: solo a filas con observaciones vacías.
+//   • Observaciones: a las filas vacías Y a las que ya traían la observación
+//     común. Corregir la descripción y volver a aplicar obligaba antes a borrar
+//     una por una las observaciones ya puestas (observación de recepción,
+//     ago-2026): lo que la máquina escribió, la máquina lo reescribe; lo que se
+//     escribió a mano en la fila no se pisa nunca (el input de la fila borra la
+//     marca `data-comun`, ver init).
 window.aplicarComunes = () => {
   const filas = document.querySelectorAll("#filasBatch tr");
   if (!filas.length) { Toast.show("No hay filas a las que aplicar.", "warn"); return; }
 
   const { modeloId, accesorios, observaciones } = leerComunes();
+  let obsReescritas = 0, obsRespetadas = 0;
   filas.forEach(tr => {
     const sel = tr.querySelector(".modelo");
     if (modeloId && sel && !sel.value) sel.value = modeloId;
@@ -586,9 +608,22 @@ window.aplicarComunes = () => {
     if (accesorios.antena)   tr.querySelector(".antena").checked = true;
     if (accesorios.cubrepolvo) tr.querySelector(".cubrepolvo").checked = true;
     const obs = tr.querySelector(".observaciones");
-    if (observaciones && obs && !obs.value.trim()) obs.value = observaciones;
+    // Vaciar el campo común no borra en masa lo ya escrito: para quitar una
+    // observación se borra en su fila.
+    if (!observaciones || !obs) return;
+    const actual = obs.value.trim();
+    if (!actual)                      { obs.value = observaciones; obs.dataset.comun = "1"; }
+    else if (obs.dataset.comun === "1") {
+      if (actual !== observaciones) obsReescritas++;
+      obs.value = observaciones;
+    }
+    else obsRespetadas++;
   });
-  Toast.show("Valores comunes aplicados a las filas.", "ok");
+
+  const partes = [`Valores comunes aplicados a ${filas.length} fila(s).`];
+  if (obsReescritas) partes.push(`${obsReescritas} observación(es) actualizada(s).`);
+  if (obsRespetadas) partes.push(`${obsRespetadas} con observación propia sin tocar.`);
+  Toast.show(partes.join(" "), "ok");
 };
 
 window.guardarBatch = async () => {
@@ -698,12 +733,25 @@ async function init() {
     await cargarOrden();
     wireComunTodos();
     // Editar el serial o el modelo revalida la fila contra el contrato.
+    // Tocar a mano una observación la saca del control de "valores comunes"
+    // (deja de re-escribirse al aplicar; ver aplicarComunes).
     const cuerpo = $("filasBatch");
     if (cuerpo) {
-      cuerpo.addEventListener("input",  () => refrescarContrato());
+      cuerpo.addEventListener("input",  (e) => {
+        if (e.target?.classList?.contains("observaciones")) delete e.target.dataset.comun;
+        refrescarContrato();
+      });
       cuerpo.addEventListener("change", () => refrescarContrato());
     }
     renumber();
+
+    // Llegada desde "Guardar orden" con contrato vinculado: la tabla se llena
+    // sola con los seriales del contrato. Es exactamente el click que recepción
+    // daba siempre a continuación.
+    const jalar = new URLSearchParams(window.location.search).get("jalar");
+    if (jalar === "contrato" && contratoDocId) {
+      await window.jalarSerialesDesdeContrato({ auto: true });
+    }
   } catch (error) {
     console.error("Error al iniciar la página:", error);
     Toast.show("Error al cargar la página.", "bad");
