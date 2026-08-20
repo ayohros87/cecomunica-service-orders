@@ -43,7 +43,10 @@ const Layout = (() => {
   const _VOLVER_DESTINOS = {
     almacen:     { href: '/almacen/index.html',                 label: '<i data-lucide="arrow-left"></i> Almacén · Hoy' },
     existencias: { href: '/almacen/index.html?tab=existencias', label: '<i data-lucide="arrow-left"></i> Existencias' },
-    finanzas:    { href: '/facturacion/activacion.html',        label: '<i data-lucide="arrow-left"></i> Finanzas' },
+    // La portada de Finanzas es Catálogo·Modelos (2026-08-20): es lo que se
+    // trabaja a diario. Activación queda dentro del espacio, para cuando
+    // arranque la facturación.
+    finanzas:    { href: '/inventario/modelos.html',            label: '<i data-lucide="arrow-left"></i> Finanzas' },
   };
 
   function renderTopbar(opts = {}) {
@@ -213,7 +216,7 @@ const Layout = (() => {
     { grupo: 'Almacén · finanzas', items: [
       { id: 'almacen',     label: 'Almacén',     icon: 'warehouse',    href: '/almacen/index.html' },
       { id: 'piezas',      label: 'Piezas',      icon: 'puzzle',       href: '/inventario/piezas.html' },
-      { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/facturacion/activacion.html' },
+      { id: 'facturacion', label: 'Finanzas',    icon: 'calculator',   href: '/inventario/modelos.html' },
     ]},
   ];
 
