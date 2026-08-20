@@ -799,8 +799,10 @@
       // Descartar equipos es irreversible de hecho (el radio se da por perdido
       // y bodega quedará avisada), así que se confirma aparte de la firma.
       if (pe && pe.descartados.length) {
+        // Modal.confirm inserta `message` como HTML (no lo escapa): el salto va
+        // con <br> y los seriales pasan por esc().
         const ok = await Modal.confirm({
-          message: `Se descartarán ${pe.descartados.length} equipo(s): ${pe.descartados.join(', ')}.\n\n`
+          message: `Se descartarán ${pe.descartados.length} equipo(s): <b>${esc(pe.descartados.join(', '))}</b>.<br><br>`
             + 'Quedarán registrados por serial y saltará una alerta si alguien los vuelve a ingresar en bodega o taller. ¿Continuar?',
           danger: true
         });
@@ -841,9 +843,10 @@
         Toast.show('Indique el motivo del rechazo (marque los equipos denegados, o use los chips/observaciones)', 'bad');
         return;
       }
-      const detalle = pe && pe.denegados.length ? `\n\nEquipos denegados: ${pe.denegados.join(', ')}.` : '';
+      const detalle = pe && pe.denegados.length
+        ? `<br><br>Equipos denegados: <b>${esc(pe.denegados.join(', '))}</b>.` : '';
       const detalleDesc = pe && pe.descartados.length
-        ? `\n\nAdemás se descartarán ${pe.descartados.length} equipo(s): ${pe.descartados.join(', ')} — quedarán registrados por serial con alerta al reingresarlos.`
+        ? `<br><br>Además se descartarán ${pe.descartados.length} equipo(s): <b>${esc(pe.descartados.join(', '))}</b> — quedarán registrados por serial con alerta al reingresarlos.`
         : '';
       const ok = await Modal.confirm({
         message: `¿Rechazar el QC de la orden ${ordenId}? Volverá al técnico${orden.tecnico_asignado ? ` (${orden.tecnico_asignado})` : ''} para corrección.${detalle}${detalleDesc}`,

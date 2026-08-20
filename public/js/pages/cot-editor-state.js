@@ -150,6 +150,10 @@
       modelo: it.modelo || '',
       nombre: it.nombre || '',
       spec: it.spec || '',
+      // Equipo al que pertenece el renglón, estructurado. Ausente en las
+      // cotizaciones emitidas antes del desglose por equipo — quien agrupa
+      // debe caer a `spec` (ver CotState.agruparPorEquipo).
+      equipo: it.equipo || null,
       cant: Number(it.cant || 0),
       precio: Number(it.precio || 0),
       desc: Number(it.desc || 0),
@@ -255,6 +259,8 @@
         modelo: it.modelo || '',
         nombre: it.nombre || '',
         spec: it.spec || '',
+        // null explícito y no `undefined`: Firestore rechaza undefined.
+        equipo: it.equipo || null,
         cant: Number(it.cant || 0),
         precio: Number(it.precio || 0),
         desc: Number(it.desc || 0),
@@ -1001,6 +1007,11 @@
 
   window.CotState = {
     ESTADOS, ESTADO_ORDEN, esEditable,
+    // Re-exportados desde CotizacionTotales (viven ahi porque verify/ los
+    // necesita y esa pagina publica NO carga este archivo).
+    agruparPorEquipo: (i) => CotizacionTotales.agruparPorEquipo(i),
+    tituloEquipo:     (g) => CotizacionTotales.tituloEquipo(g),
+    trabajoEquipo:    (g) => CotizacionTotales.trabajoEquipo(g),
     esCotizacionDeTaller, llevaCarta,
     CONDICIONES_DEFAULT, PLANTILLAS_COND,
     EMISOR_FALLBACK,

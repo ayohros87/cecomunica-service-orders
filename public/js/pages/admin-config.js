@@ -75,8 +75,11 @@
       type: 'user-picker', emptyHint: 'se notifica a todos los usuarios con rol Recepción',
       hint: 'Quién de recepción recibe: (1) la orden de ENTRADA que se crea sola cuando un cliente devuelve equipos (baja o anulación), y (2) los avisos de equipos pendientes de devolución (transiciones de renovación/reemplazo + recordatorio semanal). El vendedor del cliente siempre va incluido. Vacío = todos los usuarios con rol Recepción.' },
     { key: 'email_taller', section: 'correos', label: 'Avisos al taller (jefe de taller) → CC',
-      type: 'user-picker', emptyHint: 'no se copia al taller',
-      hint: 'Usuarios que reciben copia de: orden COMPLETADA, cada nota de entrega, y las órdenes de ENTRADA (equipos devueltos que hay que inspeccionar). Típicamente el jefe de taller — filtra por ese rol para encontrarlo rápido. Vacío = no se copia al taller.' },
+      type: 'user-picker', emptyHint: 'si está vacío, se notifica a los usuarios con rol Jefe de taller',
+      hint: 'Usuarios que reciben copia de: orden COMPLETADA, cada nota de entrega, las órdenes de ENTRADA (equipos devueltos que hay que inspeccionar), las órdenes estancadas y la cola de control de calidad. Típicamente el jefe de taller — filtra por ese rol para encontrarlo rápido. Vacío = se notifica a todos los usuarios con rol Jefe de taller.' },
+    { key: 'email_bodega', section: 'correos', label: 'Piezas usadas en una orden → bodega',
+      type: 'user-picker', emptyHint: 'se usa inventario@cecomunica.com',
+      hint: 'Quién recibe el resumen de piezas usadas (baterías, antenas, clips…) apenas sale la cotización de una orden de taller, para reponer o ajustar inventario sin esperar a que el técnico regrese. Incluye las piezas de garantía, que no se le cobran al cliente pero salieron de bodega igual. Vacío = se usa inventario@cecomunica.com.' },
 
     { key: 'stock_minimo_default',      section: 'inventario', label: 'Stock mínimo por defecto (piezas nuevas)',
       type: 'int',  min: 0,     max: 1000,

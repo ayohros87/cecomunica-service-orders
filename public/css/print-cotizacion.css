@@ -76,6 +76,26 @@
 .cq-table td .cq-desc { font-weight: 600; color: var(--ink); font-size: 13px; }
 .cq-table td .cq-spec { font-size: 11px; color: var(--fg4); margin-top: 3px; }
 .cq-table td .cq-model { font-family: var(--font-mono); color: var(--blue); }
+
+/* Encabezado de grupo por equipo. La cotización de taller se lee radio por
+   radio: modelo + serie, y debajo el trabajo realizado. El `background`
+   explícito gana sobre el zebra de tbody tr:nth-child(even), que con las filas
+   de grupo intercaladas ya no alterna de forma útil.
+   `break-inside: avoid` evita que un encabezado quede solo al pie de página
+   con sus renglones en la siguiente. */
+.cq-table tr.cq-grp { background: var(--paper); break-inside: avoid; page-break-inside: avoid; }
+.cq-table tr.cq-grp td {
+  padding: 9px 14px 7px;
+  border-bottom: 1px solid var(--stone);
+  border-top: 2px solid var(--blue);
+}
+.cq-table tr.cq-grp:first-child td { border-top: none; }
+.cq-table .cq-grp-t {
+  font-weight: 700; font-size: 12.5px; color: var(--ink);
+  text-transform: uppercase; letter-spacing: .03em;
+}
+.cq-table .cq-grp-w { font-size: 11.5px; color: var(--fg2); margin-top: 3px; line-height: 1.45; }
+.cq-table .cq-grp-w b { color: var(--fg4); font-weight: 600; }
 .cq-table td.c { text-align: center; }
 .cq-table td.r { text-align: right; }
 .cq-table td.num { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; }

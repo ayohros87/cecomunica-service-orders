@@ -134,21 +134,10 @@
             ${snap.hayAlquiler ? '<th class="c">Modalidad</th>' : ''}
             <th class="r">Precio unit.</th><th class="r">Total</th></tr></thead>
           <tbody>
-            ${(snap.items || []).map((it, i) => {
-              const esAlq = T.esAlquiler(it);
-              return `
-              <tr>
-                <td class="idx">${String(i + 1).padStart(2, '0')}</td>
-                <td>
-                  <div class="cq-desc">${esc(it.nombre)}</div>
-                  ${(it.spec || it.modelo) ? `<div class="cq-spec">${esc(it.spec)}${it.modelo ? ' · <span class="cq-model">' + esc(it.modelo) + '</span>' : ''}</div>` : ''}
-                </td>
-                <td class="qty">${esc(it.cant)}</td>
-                ${snap.hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
-                <td class="num r">${FMT.money(it.precio)}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
-                <td class="num r">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
-              </tr>`;
-            }).join('')}
+            <!-- Mismo cuerpo agrupado por equipo que la impresión: lo que el
+                 cliente abre desde el correo y lo que descarga en PDF tienen
+                 que decir exactamente lo mismo. -->
+            ${T.filasPorEquipoHtml(snap.items || [], { hayAlquiler: snap.hayAlquiler })}
           </tbody>
         </table>
       </div>

@@ -9,10 +9,118 @@
 
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
+const admin = require("firebase-admin");
 const { db } = require("../../lib/admin");
+const { bodegaEmailTo } = require("../../lib/mailRecipients");
+const { APP_BASE_URL } = require("../../lib/inventario");
 
 const ESTADOS_BLOQUEAN = ["enviada", "aprobada"];
 const ESTADOS_REABREN  = ["rechazada", "vencida"];
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m]));
+
+/**
+ * Resumen de piezas usadas en la orden, agregado por pieza.
+ *
+ * La fuente es la subcolección `consumos` de la orden — lo que el técnico
+ * registró como usado — y NO los renglones de la cotización: al cliente solo se
+ * le cobran los consumos de tipo 'cobro', pero bodega tiene que reponer también
+ * lo que salió por garantía. Ese era justo el hueco: las piezas de garantía no
+ * aparecían en ningún papel que llegara a bodega.
+ */
+async function resumenPiezasDeOrden(ordenId) {
+  const snap = await db.collection("ordenes_de_servicio").doc(ordenId)
+    .collection("consumos").get();
+
+  const porPieza = new Map();
+  snap.forEach((d) => {
+    const c = d.data() || {};
+    const qty = Number(c.qty || 0);
+    if (!(qty > 0)) return;
+    // Clave: el id de catálogo si lo hay; si no, sku o nombre. Una pieza fuera
+    // de catálogo (escrita a mano) sigue contando — bodega igual la repone.
+    const key = String(c.pieza_id || c.sku || c.pieza_nombre || "").trim().toLowerCase();
+    if (!key) return;
+    if (!porPieza.has(key)) {
+      porPieza.set(key, {
+        nombre: c.pieza_nombre || c.sku || "(sin nombre)",
+        sku: c.sku || "",
+        total: 0, cobro: 0, garantia: 0,
+      });
+    }
+    const p = porPieza.get(key);
+    p.total += qty;
+    if (String(c.tipo || "") === "garantia") p.garantia += qty;
+    else p.cobro += qty;
+  });
+
+  return [...porPieza.values()].sort((a, b) => b.total - a.total);
+}
+
+/**
+ * Encola el resumen interno de piezas para bodega. Se envía UNA sola vez por
+ * cotización (`resumen_bodega_at`): el estado cruza a 'enviada' y después a
+ * 'aprobada', y sin la marca bodega recibiría el mismo conteo dos veces.
+ */
+async function enviarResumenABodega(docId, cot) {
+  const ordenId = String(cot.orden_id);
+  const piezas = await resumenPiezasDeOrden(ordenId);
+  if (!piezas.length) {
+    logger.info("[onCotizacionEstadoChange] sin consumos: no se envía resumen", { ordenId });
+    return false;
+  }
+
+  const to = await bodegaEmailTo();
+  if (!to) {
+    logger.warn("[onCotizacionEstadoChange] sin buzón de bodega configurado", { ordenId });
+    return false;
+  }
+
+  const totalUnidades = piezas.reduce((n, p) => n + p.total, 0);
+  const filas = piezas.map((p) => `
+    <tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(p.nombre)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;">${esc(p.sku || "—")}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;"><b>${p.total}</b></td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;">${p.cobro || "—"}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;">${p.garantia || "—"}</td>
+    </tr>`).join("");
+
+  await db.collection("mail_queue").add({
+    to,
+    subject: `Piezas usadas — Orden ${ordenId} (${totalUnidades} unidad(es))`,
+    preheader: `${piezas.length} tipo(s) de pieza para reponer, sin esperar al técnico`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">Piezas usadas en la orden ${esc(ordenId)}</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        La cotización <b>${esc(cot.cotizacion_id || docId)}</b> de esta orden ya salió,
+        así que el consumo de piezas está cerrado. Este es el conteo total para
+        reponer o ajustar inventario.
+      </p>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#374151;">
+        <b>Cliente:</b> ${esc(cot.cliente_nombre || "—")}
+      </p>
+      <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Pieza</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">SKU</th>
+          <th style="text-align:right;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Total</th>
+          <th style="text-align:right;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Cobradas</th>
+          <th style="text-align:right;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Garantía</th>
+        </tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <p style="margin:10px 0 0;font:13px/1.5 Arial,sans-serif;color:#6b7280;">
+        Las de <b>garantía</b> no se le cobran al cliente, pero salieron de bodega igual.
+      </p>`,
+    ctaUrl: `${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(ordenId)}`,
+    ctaLabel: "Ver la orden",
+    meta: { source: "onCotizacionEstadoChange", seccion: "piezas_a_bodega", ordenId, tipos: piezas.length, unidades: totalUnidades },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return true;
+}
 
 module.exports = onDocumentUpdated(
   {
@@ -51,6 +159,31 @@ module.exports = onDocumentUpdated(
         ordenId: after.orden_id,
         cotizacionId: event.params.docId,
       });
+    }
+
+    // Resumen interno de piezas a bodega, en el mismo momento en que se cierra
+    // el consumo de la orden. Antes bodega se enteraba cuando el técnico volvía
+    // con el papel; ahora sale solo. Va en su propio try: si falla, el candado
+    // de arriba —que es lo que protege la integridad de la orden— ya quedó.
+    if (emitida === true && !after.resumen_bodega_at) {
+      try {
+        const enviado = await enviarResumenABodega(event.params.docId, after);
+        if (enviado) {
+          // La marca evita el duplicado en borrador→enviada→aprobada. Escribir
+          // aquí no recursa: el guard `estadoAntes === estadoDespues` de arriba
+          // corta la re-entrada porque este update no toca `estado`.
+          await event.data.after.ref.set(
+            { resumen_bodega_at: admin.firestore.FieldValue.serverTimestamp() },
+            { merge: true }
+          );
+        }
+      } catch (e) {
+        logger.error("[onCotizacionEstadoChange] resumen a bodega falló", {
+          message: e.message,
+          ordenId: after.orden_id,
+          cotizacionId: event.params.docId,
+        });
+      }
     }
     return null;
   }

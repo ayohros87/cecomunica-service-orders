@@ -11,6 +11,11 @@ const FALLBACKS = {
   // Jefe de taller: sin buzón por defecto — se configura en empresa/config
   // (email_taller). Los callers omiten el destinatario cuando viene vacío.
   taller:           "",
+  // Bodega. No existe un rol `bodega` en el sistema: el rol `inventario` y el
+  // buzón inventario@ son su equivalente institucional (mismo fallback que
+  // inventarioEmailTo en lib/inventario.js). Configurable en
+  // empresa/config.email_bodega desde Admin · Configuración.
+  bodega:           "inventario@cecomunica.com",
 };
 
 async function configEmailTo(key, fallback) {
@@ -27,6 +32,7 @@ async function configEmailTo(key, fallback) {
 
 const activacionesEmailTo    = () => configEmailTo("activaciones", FALLBACKS.activaciones);
 const atencionClienteEmailTo = () => configEmailTo("atencion_cliente", FALLBACKS.atencion_cliente);
+const bodegaEmailTo          = () => configEmailTo("bodega", FALLBACKS.bodega);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -87,4 +93,4 @@ async function ccContratoAprobado() {
   return [];
 }
 
-module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, tallerEmailTo, recepcionEmails, ccContratoAprobado, FALLBACKS };
+module.exports = { configEmailTo, activacionesEmailTo, atencionClienteEmailTo, bodegaEmailTo, tallerEmailTo, recepcionEmails, ccContratoAprobado, FALLBACKS };

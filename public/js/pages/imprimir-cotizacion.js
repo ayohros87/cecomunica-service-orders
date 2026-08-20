@@ -122,24 +122,13 @@
               <th class="r">Precio unit.</th><th class="r">Total</th></tr>
           </thead>
           <tbody>
-            ${cot.items.map((it, i) => {
-              // La columna de modalidad solo se imprime si la propuesta mezcla:
-              // en una de pura venta sería una columna con el mismo valor en
-              // todas las filas, y el cliente ya lo sabe por el título.
-              const esAlq = T.esAlquiler(it);
-              return `
-              <tr>
-                <td class="idx">${String(i + 1).padStart(2, '0')}</td>
-                <td>
-                  <div class="cq-desc">${esc(it.nombre)}</div>
-                  ${(it.spec || it.modelo) ? `<div class="cq-spec">${esc(it.spec)}${it.modelo ? ' · <span class="cq-model">' + esc(it.modelo) + '</span>' : ''}</div>` : ''}
-                </td>
-                <td class="qty">${esc(it.cant)}</td>
-                ${t.hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
-                <td class="num r">${FMT.money(it.precio)}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
-                <td class="num r">${FMT.money(T.lineTotal(it))}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
-              </tr>`;
-            }).join('')}
+            <!-- Agrupado por equipo (reporte jefa de taller, punto 4): un
+                 encabezado por radio con su modelo, su serie y el trabajo
+                 realizado, en vez del contexto repetido en gris bajo cada fila.
+                 La columna de modalidad solo se imprime si la propuesta mezcla
+                 venta y alquiler; en una de pura venta sería la misma palabra
+                 en todas las filas. -->
+            ${T.filasPorEquipoHtml(cot.items, { hayAlquiler: t.hayAlquiler })}
           </tbody>
         </table>
       </div>

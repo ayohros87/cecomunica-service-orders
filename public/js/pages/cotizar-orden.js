@@ -433,24 +433,58 @@
   }
 
   // ── Autocompletar piezas (inventario_piezas activas) ───────────────────────
+  // Cuántas piezas ofrece el autocompletar. Eran 8 y con un catálogo de
+  // accesorios (baterías y antenas de decenas de modelos) el resultado correcto
+  // se caía de la lista.
+  const MAX_SUGERENCIAS = 12;
+
   function buscarPiezas(term) {
+    // MISMO buscador que usa el técnico en el modal de materiales de la orden
+    // (ordenes-equipos.js → PiezaSearch.search). Aquí había un segundo matcher,
+    // más pobre: solo nombre y SKU. Buscar "hp786" o "hytera" no devolvía nada
+    // aunque la pieza los tuviera en `equipos_asociados` o en `marca` — y una
+    // búsqueda que no encuentra es exactamente lo que lleva a teclear el número
+    // de pieza a mano.
+    if (typeof PiezaSearch !== 'undefined') {
+      return PiezaSearch.search(piezas, term, MAX_SUGERENCIAS);
+    }
     const q = (term || '').trim().toLowerCase();
     if (!q) return [];
     return piezas
       .filter(p => (p.nombre || '').toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q))
-      .slice(0, 8);
+      .slice(0, MAX_SUGERENCIAS);
   }
   function openPop(row, eqId, lineId, term) {
     const pop = row.querySelector('.co-pza-pop');
     const matches = buscarPiezas(term);
-    if (!matches.length) { pop.hidden = true; pop.innerHTML = ''; return; }
-    pop.innerHTML = matches.map((p, i) => `
-      <div class="co-pza-item${i === 0 ? ' active' : ''}" data-pid="${esc(p.id)}" title="${esc(p.nombre || '—')}">
+    if (!matches.length) {
+      // Antes el popover simplemente se escondía. Sin señal, el técnico no
+      // sabía si el catálogo no tiene la pieza o si escribió mal, y seguía de
+      // largo escribiéndola a mano. Decirlo permite avisar a inventario.
+      const q = (term || '').trim();
+      if (q.length < 2) { pop.hidden = true; pop.innerHTML = ''; return; }
+      pop.innerHTML = `<div class="co-pza-item co-pza-vacio" style="cursor:default;">
+          <span>Sin coincidencias en el catálogo</span>
+          <span class="meta">se escribirá a mano — avisa a inventario para darla de alta</span>
+        </div>`;
+      pop.hidden = false;
+      return;
+    }
+    pop.innerHTML = matches.map((p, i) => {
+      // Marca y categoría desambiguan entre accesorios casi homónimos
+      // ("Batería" de seis modelos distintos). El stock evita cotizar algo que
+      // bodega no tiene.
+      const ctx = [p.marca, p.categoria].filter(Boolean).join(' · ');
+      const stock = p.sin_control_inventario ? '' : ` · stock ${Number(p.cantidad || 0)}`;
+      return `
+      <div class="co-pza-item${i === 0 ? ' active' : ''}" data-pid="${esc(p.id)}"
+           title="${esc([p.nombre, p.descripcion].filter(Boolean).join(' — '))}">
         <span>${esc(p.nombre || '—')}</span>
-        <span class="meta">${esc(p.sku || '')} · ${FMT.money(p.precio_venta || 0)}</span>
-      </div>`).join('');
+        <span class="meta">${esc(p.sku || '')}${ctx ? ' · ' + esc(ctx) : ''} · ${FMT.money(p.precio_venta || 0)}${esc(stock)}</span>
+      </div>`;
+    }).join('');
     pop.hidden = false;
-    pop.querySelectorAll('.co-pza-item').forEach(el => {
+    pop.querySelectorAll('.co-pza-item[data-pid]').forEach(el => {
       el.addEventListener('mousedown', (ev) => { ev.preventDefault(); pickPieza(row, eqId, lineId, el.dataset.pid); });
     });
   }
@@ -473,7 +507,10 @@
   function onPopKeydown(e, row, eqId, lineId) {
     const pop = row.querySelector('.co-pza-pop');
     if (pop.hidden) return;
-    const items = [...pop.querySelectorAll('.co-pza-item')];
+    // Solo las filas seleccionables: el aviso de "sin coincidencias" es texto,
+    // y sin este filtro Enter intentaba elegirlo (pickPieza con pid undefined).
+    const items = [...pop.querySelectorAll('.co-pza-item[data-pid]')];
+    if (!items.length) { if (e.key === 'Escape') pop.hidden = true; return; }
     const idx = items.findIndex(el => el.classList.contains('active'));
     if (e.key === 'ArrowDown') { e.preventDefault(); const n = Math.min(idx + 1, items.length - 1); items.forEach(i => i.classList.remove('active')); items[n]?.classList.add('active'); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); const n = Math.max(idx - 1, 0); items.forEach(i => i.classList.remove('active')); items[n]?.classList.add('active'); }
@@ -490,6 +527,14 @@
   // ── Resumen / totales ──────────────────────────────────────────────────────
   function itemsDeForm() {
     // Aplana las líneas por equipo en renglones de cotización, en orden de equipo.
+    //
+    // El renglón lleva ADEMÁS `equipo` (id, serial, modelo, intervención) como
+    // dato estructurado. Antes el equipo solo sobrevivía como texto dentro de
+    // `spec` ("Equipo: Serie … · Modelo …"), así que el documento que ve el
+    // cliente era un bloque plano con ese contexto repetido en gris bajo cada
+    // fila, y agrupar exigía parsear el string (lo hacía el correo de
+    // aprobación, partiendo por `spec`). `spec` se conserva tal cual para las
+    // cotizaciones ya emitidas y para el editor manual, que lo edita a mano.
     const items = [];
     equipos.forEach(eq => {
       (lineas[eq.id] || []).forEach(l => {
@@ -502,6 +547,13 @@
           modelo: (l.sku || '').trim(),
           nombre: (l.nombre || '').trim() || (l.sku || '').trim() || 'Pieza',
           spec: ctx,
+          equipo: {
+            id: String(eq.id || ''),
+            serial: eq.serial || '',
+            modelo: eq.modelo || '',
+            marca: eq.marca || '',
+            intervencion: eq.intervencion || '',
+          },
           cant: Number(l.cant || 0),
           precio: Number(l.precio || 0),
           desc: 0,
@@ -703,7 +755,7 @@
       <div class="co-cat-item" draggable="true" data-pid="${esc(p.id)}" title="${esc(nombre)}">
         <div class="co-cat-item-main">
           <span class="co-cat-item-name">${esc(nombre)}</span>
-          <span class="co-cat-item-meta">${esc(p.sku || '—')} · ${FMT.money(p.precio_venta || 0)}${(p.cantidad != null) ? ' · stock ' + Number(p.cantidad) : ''}</span>
+          <span class="co-cat-item-meta">${esc(p.sku || '—')}${p.marca ? ' · ' + esc(p.marca) : ''} · ${FMT.money(p.precio_venta || 0)}${(p.cantidad != null) ? ' · stock ' + Number(p.cantidad) : ''}</span>
         </div>
         <button class="btn btn-secondary btn-icon btn-sm" data-add-pid="${esc(p.id)}" title="Agregar"><i data-lucide="plus"></i></button>
       </div>`;
@@ -715,14 +767,20 @@
 
     let html = '';
     if (q) {
-      // Búsqueda: filtra globalmente (lista plana, sin grupos). Cubre el nombre
-      // corto, la descripción larga (texto QBO) y el SKU.
-      const rows = piezas
-        .filter(p => (p.nombre || '').toLowerCase().includes(q)
-          || (p.descripcion || '').toLowerCase().includes(q)
-          || (p.sku || '').toLowerCase().includes(q))
-        .slice(0, 200);
-      html = rows.length ? rows.map(itemCatalogoHtml).join('') : '<div class="co-cat-empty">Sin coincidencias.</div>';
+      // Búsqueda: filtra globalmente (lista plana, sin grupos) con el MISMO
+      // buscador del autocompletar y del modal de materiales del técnico
+      // (PiezaSearch). Suma marca y `equipos_asociados` a lo que ya cubría
+      // —nombre, descripción larga de QBO y SKU—, que es lo que hace que
+      // buscar el modelo del radio devuelva sus accesorios.
+      const rows = (typeof PiezaSearch !== 'undefined')
+        ? PiezaSearch.search(piezas, q, 200)
+        : piezas.filter(p => (p.nombre || '').toLowerCase().includes(q)
+            || (p.descripcion || '').toLowerCase().includes(q)
+            || (p.sku || '').toLowerCase().includes(q)).slice(0, 200);
+      html = rows.length ? rows.map(itemCatalogoHtml).join('')
+        : `<div class="co-cat-empty">Sin coincidencias en el catálogo.<br>
+             <span style="font-size:12px;">Si el accesorio existe pero no está dado de alta, avisa a inventario
+             (Inventario · Piezas) en vez de escribirlo a mano.</span></div>`;
     } else {
       // Arriba: sugeridas para el modelo del equipo destino (analytics de uso).
       const eq = equipos.find(x => x.id === catalogoTargetEq);

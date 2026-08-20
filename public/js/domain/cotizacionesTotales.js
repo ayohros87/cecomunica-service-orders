@@ -1,6 +1,7 @@
 // Cotizaciones — totales y helpers de fecha (puros, sin DOM ni Firestore)
 // API: CotizacionTotales.{lineTotal, calcTotales, cuenta, addDays, validezVence,
-//                         modalidadDe, esAlquiler, evaluarPolitica}
+//                         modalidadDe, esAlquiler, evaluarPolitica,
+//                         agruparPorEquipo, tituloEquipo, trabajoEquipo}
 //
 // MODALIDAD POR RENGLÓN. Cada renglón se vende (pago único) o se alquila
 // (mensualidad). Un renglón sin `modalidad` es VENTA — así toda cotización
@@ -181,6 +182,131 @@ window.CotizacionTotales = {
         `El total ${FMT.money(total)}${detalle} supera el máximo para envío directo (${FMT.money(Number(pol.totalMax))}).`);
     }
     return { requiere: motivos.length > 0, motivos };
+  },
+
+  /**
+   * Agrupa los renglones de una cotización POR EQUIPO.
+   *
+   * Reporte de la jefa de taller (2026-08-19), punto 4: la cotización que ve el
+   * cliente era un solo bloque plano, con el contexto del radio repetido en
+   * gris debajo de cada fila. Debe verse separada por modelo de radio y
+   * trabajos realizados, parecido a lo que el técnico ve al capturarla.
+   *
+   * Tres orígenes de agrupación, en orden de confianza:
+   *   1. `it.equipo` (objeto) — lo estampa cotizar-orden.js desde 2026-08-20.
+   *   2. `it.spec` (string "Equipo: Serie … · Modelo …") — cotizaciones ya
+   *      emitidas antes de ese cambio. Se agrupa por el string tal cual, que
+   *      es exactamente lo que ya hacía el correo de aprobación.
+   *   3. Sin ninguno (cotización comercial) — un único grupo sin encabezado.
+   *
+   * Conserva el orden de aparición: el técnico captura equipo por equipo y ese
+   * orden es el que tiene sentido para quien lee.
+   * @param {Array} items
+   * @returns {Array<{key:string, equipo:Object|null, spec:string, items:Array}>}
+   */
+  agruparPorEquipo(items) {
+    const grupos = new Map();
+    (items || []).forEach((it) => {
+      const eq = it.equipo || null;
+      // La clave prefiere el id del equipo, pero cae al par serial+modelo: los
+      // equipos de órdenes viejas no siempre traen id (ver prepararEquipos).
+      const key = eq
+        ? `eq:${eq.id || `${eq.serial || ''}|${eq.modelo || ''}`}`
+        : `spec:${String(it.spec || '').trim()}`;
+      if (!grupos.has(key)) {
+        grupos.set(key, { key, equipo: eq, spec: String(it.spec || '').trim(), items: [] });
+      }
+      grupos.get(key).items.push(it);
+    });
+    return [...grupos.values()];
+  },
+
+  /**
+   * Título del grupo tal como lo ve EL CLIENTE: modelo del radio y su serie.
+   * Sin SKU ni piezas — el desglose interno no es asunto suyo.
+   * Devuelve '' cuando no hay equipo identificable (cotización comercial),
+   * y entonces el grupo se pinta sin encabezado, como siempre.
+   */
+  tituloEquipo(grupo) {
+    const eq = grupo?.equipo;
+    if (eq) {
+      const modelo = String(eq.modelo || '').trim();
+      const serial = String(eq.serial || '').trim();
+      const marca  = String(eq.marca  || '').trim();
+      const nombre = [marca, modelo].filter(Boolean).join(' ') || 'Equipo';
+      return serial ? `${nombre} · Serie ${serial}` : nombre;
+    }
+    // Legacy: `spec` ya viene con el texto "Equipo: Serie X · Modelo Y ·
+    // Intervención: …". Se corta la intervención, que va aparte.
+    const spec = String(grupo?.spec || '').trim();
+    if (!spec) return '';
+    return spec.split(' · Intervención:')[0].replace(/^Equipo:\s*/, '');
+  },
+
+  /** Trabajo realizado en ese equipo, para mostrárselo al cliente. */
+  trabajoEquipo(grupo) {
+    if (grupo?.equipo) return String(grupo.equipo.intervencion || '').trim();
+    const m = String(grupo?.spec || '').match(/ · Intervención:\s*([\s\S]*)$/);
+    return m ? m[1].trim() : '';
+  },
+
+  /**
+   * Cuerpo de la tabla de renglones del documento que ve EL CLIENTE, agrupado
+   * por equipo. Lo comparten la vista pública (verify/cotizacion.html) y la
+   * impresión/PDF (cotizaciones/imprimir-cotizacion.html) — eran dos copias del
+   * mismo `<tbody>` y ya habían empezado a divergir.
+   *
+   * Cada grupo abre con una fila de encabezado: modelo y serie del radio, y
+   * debajo el trabajo realizado. Antes ese contexto se repetía en gris bajo
+   * CADA fila (`cq-spec`), que es lo que hacía que la cotización se leyera como
+   * un bloque plano. Dentro del grupo, el renglón ya no repite el equipo.
+   *
+   * Deliberadamente NO incluye el resumen interno de piezas: ese es el conteo
+   * que va a bodega para reponer inventario, no algo que el cliente deba ver.
+   *
+   * @param {Array} items
+   * @param {{hayAlquiler:boolean}} opts
+   * @returns {string} HTML de las filas (sin <tbody>)
+   */
+  filasPorEquipoHtml(items, { hayAlquiler = false } = {}) {
+    const esc = (v) => FMT.esc(v);
+    const grupos = this.agruparPorEquipo(items);
+    // Columnas: # · Descripción · Cant. · [Modalidad] · Precio unit. · Total
+    const cols = hayAlquiler ? 6 : 5;
+    let n = 0;
+
+    return grupos.map((g) => {
+      const titulo = this.tituloEquipo(g);
+      const trabajo = this.trabajoEquipo(g);
+      // Un grupo sin equipo identificable (cotización comercial) se pinta sin
+      // encabezado: exactamente como se veía antes de este cambio.
+      const header = titulo ? `
+        <tr class="cq-grp">
+          <td colspan="${cols}">
+            <div class="cq-grp-t">${esc(titulo)}</div>
+            ${trabajo ? `<div class="cq-grp-w"><b>Trabajo realizado:</b> ${esc(trabajo)}</div>` : ''}
+          </td>
+        </tr>` : '';
+
+      const filas = g.items.map((it) => {
+        const esAlq = this.esAlquiler(it);
+        n++;
+        return `
+        <tr>
+          <td class="idx">${String(n).padStart(2, '0')}</td>
+          <td>
+            <div class="cq-desc">${esc(it.nombre)}</div>
+            ${it.modelo ? `<div class="cq-spec"><span class="cq-model">${esc(it.modelo)}</span></div>` : ''}
+          </td>
+          <td class="qty">${esc(it.cant)}</td>
+          ${hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
+          <td class="num r">${FMT.money(it.precio)}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+          <td class="num r">${FMT.money(this.lineTotal(it))}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+        </tr>`;
+      }).join('');
+
+      return header + filas;
+    }).join('');
   },
 
   // Atajo: calcula totales y evalúa la política en un paso.
