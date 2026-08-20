@@ -6,6 +6,8 @@
  *    timestamp is derived from the corresponding fecha_* field on the parent
  *    document since arrayUnion can't accept serverTimestamp() (ver ARQUITECTURA §5.4).
  *  - contratos transitions — fecha_aprobacion, fecha_anulacion
+ *  - contratos firmado_historial[] — REEMPLAZAR_FIRMADO (sustitución del PDF
+ *    firmado sobre un contrato ya activo)
  *  - PII purges — identificacion_purged_at + identificacion_purged_by
  *
  * Returned events shape:
@@ -80,6 +82,26 @@ const AuditoriaService = {
             refLabel: c.contrato_id || doc.id,
             link: `../contratos/editar-contrato.html?id=${encodeURIComponent(doc.id)}`,
             cliente: c.cliente_nombre || c.clienteNombre || '',
+          });
+        }
+        // Reemplazo del PDF firmado sobre un contrato vivo: cada entrada de
+        // firmado_historial[] es un archivo que dejó de ser el vigente
+        // (contratos-upload.js, modo 'reemplazo'). Sustituir el papel de un
+        // contrato activo no puede ser silencioso.
+        const histFirmado = Array.isArray(c.firmado_historial) ? c.firmado_historial : [];
+        for (const h of histFirmado) {
+          if (!h || !h.reemplazado_at) continue;
+          events.push({
+            ts: toMs(h.reemplazado_at),
+            type: 'contrato',
+            action: 'REEMPLAZAR_FIRMADO',
+            by: h.reemplazado_por_uid || null,
+            refType: 'contrato',
+            refId: doc.id,
+            refLabel: c.contrato_id || doc.id,
+            link: `../contratos/editar-contrato.html?id=${encodeURIComponent(doc.id)}`,
+            cliente: c.cliente_nombre || c.clienteNombre || '',
+            meta: `Archivo sustituido: ${h.firmado_nombre || h.firmado_storage_path || '—'}`,
           });
         }
         if (c.fecha_anulacion) {

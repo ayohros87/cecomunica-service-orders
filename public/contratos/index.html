@@ -147,7 +147,9 @@
     <p id="mensaje" class="resumen" style="min-height:20px; margin-bottom:var(--sp-2);"></p>
 
     <!-- Upload status banner (shown when uploading a signed PDF) -->
-    <input type="file" id="fileFirmado" accept="application/pdf,image/*" style="display:none">
+    <!-- Solo PDF: storage.rules exige application/pdf en contratos_firmados/,
+         así que ofrecer imágenes solo producía un fallo de reglas tras subir. -->
+    <input type="file" id="fileFirmado" accept="application/pdf" style="display:none">
     <div id="uploadStatus" class="alert-banner">
       <span class="alert-banner-icon"><i data-lucide="upload"></i></span>
       <div class="alert-banner-body">
@@ -320,10 +322,11 @@
   <script defer src="../js/domain/devolucionContrato.js?v=dev3"></script>
   <script defer src="../js/pages/contratos-state.js?v=ses1"></script>
   <script defer src="../js/pages/contratos-approval.js?v=cc1"></script>
-  <script defer src="../js/pages/contratos-upload.js"></script>
+  <!-- firm2: reemplazo del PDF firmado sobre contratos ya activos. -->
+  <script defer src="../js/pages/contratos-upload.js?v=firm2"></script>
   <script defer src="../js/pages/contratos-equipos.js?v=dev4"></script>
   <script defer src="../js/pages/contratos-seriales-cambio.js"></script>
-  <script defer src="../js/pages/contratos-list.js?v=dev10"></script>
+  <script defer src="../js/pages/contratos-list.js?v=dev11"></script>
   <script src="../js/pages/contratos-index.js?v=ses3" defer></script>
 
   <!-- Aprobación overlay -->

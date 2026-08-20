@@ -169,7 +169,13 @@ window.ContratosLista = {
     const puedePanelTrabajo = esAdmin || esRecepcion;
     const editable    = puedeEditar && !['activo','aprobado','anulado'].includes(data.estado);
     const yaFirmado   = !!data.firmado_url;
-    const puedeSubirFirmado = data.estado === 'aprobado' && puedeEditar;
+    // Subir el firmado ACTIVA el contrato ('aprobado' → 'activo', contratos-upload.js),
+    // así que gatear el reemplazo también en 'aprobado' lo volvía inalcanzable: para
+    // cuando había algo que reemplazar el contrato ya estaba 'activo'. Quien subió el
+    // archivo equivocado (p.ej. el contrato sin firmar) se quedaba sin salida en la
+    // app. El reemplazo sobre contrato vivo repunta el archivo sin tocar el estado.
+    const puedeSubirFirmado      = data.estado === 'aprobado' && puedeEditar;
+    const puedeReemplazarFirmado = data.estado === 'activo'   && puedeEditar;
     const esActivoOAprobado = ['activo','aprobado'].includes(data.estado);
 
     const bajaPendiente   = data.baja_estado === 'pendiente' && esActivoOAprobado && !data.terminacion_total;
@@ -272,9 +278,9 @@ window.ContratosLista = {
     // Firmado
     if (yaFirmado) {
       items.push(A('file-text', 'Ver firmado', data.firmado_url));
-      if (puedeSubirFirmado)
+      if (puedeSubirFirmado || puedeReemplazarFirmado)
         items.push(I('refresh-cw', 'Reemplazar firmado', `ContratosFirmado.subir('${id}')`));
-    } else if (puedeSubirFirmado && primaryKind !== 'subir-firmado') {
+    } else if ((puedeSubirFirmado || puedeReemplazarFirmado) && primaryKind !== 'subir-firmado') {
       items.push(I('upload', 'Subir firmado', `ContratosFirmado.subir('${id}')`));
     }
     // Comisión (admin)

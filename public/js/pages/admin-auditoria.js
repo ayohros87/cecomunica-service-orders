@@ -3,7 +3,8 @@
  *
  * Renders a chronological list of:
  *  - Order transitions (ASIGNAR, COMPLETAR, ENTREGAR — from os_logs)
- *  - Contract transitions (APROBAR, ANULAR — from fecha_* fields)
+ *  - Contract transitions (APROBAR, ANULAR — from fecha_* fields;
+ *    REEMPLAZAR_FIRMADO — from firmado_historial[])
  *  - PII purges (PURGAR_ID — from identificacion_purged_at)
  *
  * Filters: by type (chips), by free text (id/cliente).
@@ -28,6 +29,7 @@
     DEVOLUCION_ACUSE:       { icon: 'pen-line',    color: '#0f766e', label: 'Acuse de recepción firmado' },
     APROBAR:                { icon: 'badge-check', color: '#15803d', label: 'Aprobar contrato' },
     ANULAR:                 { icon: 'x-octagon',   color: '#b91c1c', label: 'Anular contrato' },
+    REEMPLAZAR_FIRMADO:     { icon: 'refresh-cw',  color: '#b45309', label: 'Reemplazar contrato firmado' },
     PURGAR_ID:              { icon: 'shield-x',    color: '#7c2d12', label: 'Purgar foto ID' },
     USUARIO_CREATE:         { icon: 'user-plus',   color: '#15803d', label: 'Crear usuario' },
     USUARIO_UPDATE_ROL:     { icon: 'shield',      color: '#2563eb', label: 'Cambiar rol' },
