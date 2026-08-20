@@ -78,8 +78,8 @@
       type: 'user-picker', emptyHint: 'si está vacío, se notifica a los usuarios con rol Jefe de taller',
       hint: 'Usuarios que reciben copia de: orden COMPLETADA, cada nota de entrega, las órdenes de ENTRADA (equipos devueltos que hay que inspeccionar), las órdenes estancadas y la cola de control de calidad. Típicamente el jefe de taller — filtra por ese rol para encontrarlo rápido. Vacío = se notifica a todos los usuarios con rol Jefe de taller.' },
     { key: 'email_bodega', section: 'correos', label: 'Piezas usadas en una orden → bodega',
-      type: 'user-picker', emptyHint: 'se usa inventario@cecomunica.com',
-      hint: 'Quién recibe el resumen de piezas usadas (baterías, antenas, clips…) apenas sale la cotización de una orden de taller, para reponer o ajustar inventario sin esperar a que el técnico regrese. Incluye las piezas de garantía, que no se le cobran al cliente pero salieron de bodega igual. Vacío = se usa inventario@cecomunica.com.' },
+      type: 'user-picker', emptyHint: 'si está vacío, se notifica a los usuarios con rol Inventario',
+      hint: 'Quién recibe el resumen de piezas usadas (baterías, antenas, clips…) apenas sale la cotización de una orden de taller, para reponer o ajustar inventario sin esperar a que el técnico regrese. Incluye las piezas de garantía, que no se le cobran al cliente pero salieron de bodega igual. Vacío = se notifica a todos los usuarios con rol Inventario.' },
 
     { key: 'stock_minimo_default',      section: 'inventario', label: 'Stock mínimo por defecto (piezas nuevas)',
       type: 'int',  min: 0,     max: 1000,

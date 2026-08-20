@@ -700,7 +700,18 @@ function _btnQc(ordenId, od, rol) {
 // (modal en solo-lectura fuera de COMPLETADO/rol QC).
 function _btnQcRechazo(ordenId, od) {
   if (od?.qc?.resultado !== 'rechazado') return '';
-  return `<button class="btn-flujo btn-flujo--qc-rechazo" title="Ver motivo del rechazo de control de calidad" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-x"></i> Rechazo QC</button>`;
+  // Cuántos radios hay que corregir, EN LA FILA. Con revisión por equipo el
+  // rechazo ya no es "la orden está mal": son 2 de 9 radios concretos, y el
+  // técnico no debería tener que abrir el modal para enterarse de cuántos son
+  // (pedido de la jefa de taller, 2026-08-20: "debe estar claro para el
+  // técnico qué quedó pendiente").
+  const denegados = Array.isArray(od?.qc?.equipos_denegados) ? od.qc.equipos_denegados : [];
+  const n = denegados.length;
+  const etiqueta = n ? `Corregir ${n}` : 'Rechazo QC';
+  const detalle = n
+    ? `Control de calidad denegó ${n} equipo${n === 1 ? '' : 's'}: ${denegados.join(', ')}. Click para ver qué falló en cada uno.`
+    : 'Ver motivo del rechazo de control de calidad';
+  return `<button class="btn-flujo btn-flujo--qc-rechazo" title="${escapeHtml(detalle)}" data-action="qc-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="clipboard-x"></i> ${escapeHtml(etiqueta)}</button>`;
 }
 
 // Chip "faltan N" de una orden de DEVOLUCIÓN abierta. Se pinta junto al botón

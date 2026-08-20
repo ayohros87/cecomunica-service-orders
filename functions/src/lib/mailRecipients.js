@@ -11,11 +11,12 @@ const FALLBACKS = {
   // Jefe de taller: sin buzón por defecto — se configura en empresa/config
   // (email_taller). Los callers omiten el destinatario cuando viene vacío.
   taller:           "",
-  // Bodega. No existe un rol `bodega` en el sistema: el rol `inventario` y el
-  // buzón inventario@ son su equivalente institucional (mismo fallback que
-  // inventarioEmailTo en lib/inventario.js). Configurable en
-  // empresa/config.email_bodega desde Admin · Configuración.
-  bodega:           "inventario@cecomunica.com",
+  // Bodega: sin buzón por defecto. No existe un rol `bodega` en el sistema y el
+  // buzón inventario@cecomunica.com es un PLACEHOLDER que nunca se creó
+  // (confirmado 2026-08-20) — poner eso aquí mandaba el correo a un rebote
+  // silencioso. Se resuelve con empresa/config.email_bodega y, si está vacío,
+  // con los usuarios de rol `inventario`. Ver bodegaEmailTo().
+  bodega:           "",
 };
 
 async function configEmailTo(key, fallback) {
@@ -32,7 +33,6 @@ async function configEmailTo(key, fallback) {
 
 const activacionesEmailTo    = () => configEmailTo("activaciones", FALLBACKS.activaciones);
 const atencionClienteEmailTo = () => configEmailTo("atencion_cliente", FALLBACKS.atencion_cliente);
-const bodegaEmailTo          = () => configEmailTo("bodega", FALLBACKS.bodega);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -56,6 +56,17 @@ async function tallerEmailTo() {
     logger.warn("[mailRecipients] usuarios rol jefe_taller no leídos", { message: e.message });
   }
   return "";
+}
+
+// Bodega: empresa/config.email_bodega (Admin · Configuración, selector de
+// usuarios) o, si está vacío, los usuarios con rol `inventario`. Devuelve ""
+// cuando no hay nadie — el llamador NO envía y lo registra, que es mejor que
+// mandarlo al buzón placeholder que no existe. Nunca lanza.
+async function bodegaEmailTo() {
+  const cfg = await configEmailTo("bodega", FALLBACKS.bodega);
+  if (cfg) return cfg;
+  const { inventarioPorRol } = require("./inventario");
+  return (await inventarioPorRol()) || "";
 }
 
 // Recepción como ARRAY de emails: empresa/config.email_recepcion o, si está
