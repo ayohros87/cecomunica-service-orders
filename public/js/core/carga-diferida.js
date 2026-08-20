@@ -31,7 +31,10 @@ window.CargaDiferida = (() => {
   const GSTATIC = "https://www.gstatic.com/firebasejs/10.10.0/";
   const MODULOS = {
     firmaPad:   "/js/ui/firmaPad.js?v=dev3",
-    devolucion: "/js/pages/ordenes-devolucion.js?v=dev10",
+    devolucion: "/js/pages/ordenes-devolucion.js?v=dev11",
+    // Solo lo necesita el cierre de una devolución con faltantes (itemizar lo
+    // que el cliente no devolvió) — no tiene por qué pesar en cada orden.
+    cobros:     "/js/services/cobrosEquiposService.js?v=nd1",
     visita:     "/js/pages/ordenes-visita.js?v=f1",
     fotos:      "/js/pages/ordenes-fotos.js?v=1",
     notas:      "/js/pages/ordenes-notas.js?v=1",
@@ -50,7 +53,10 @@ window.CargaDiferida = (() => {
     // informe/cierre de visita y las fotos suben archivos a storage.
     devolucion() {
       return window.OrdenesDevolucion ? Promise.resolve()
-        : this.storage().then(() => script(MODULOS.firmaPad)).then(() => script(MODULOS.devolucion));
+        : this.storage()
+            .then(() => script(MODULOS.firmaPad))
+            .then(() => script(MODULOS.cobros))
+            .then(() => script(MODULOS.devolucion));
     },
     visita() {
       return window.abrirInformeVisita ? Promise.resolve()

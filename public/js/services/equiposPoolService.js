@@ -32,6 +32,10 @@ const EquiposPoolService = {
     // pasa a propiedad del cliente. No es terminal como baja — el radio
     // vendido puede volver a taller por una orden de servicio.
     VENDIDO:    'vendido',
+    // El cliente no la devolvió y hay que cobrarla — ver equiposPool.js
+    // (functions) para el criterio completo. El avance del cobro vive en
+    // cobros_equipos, no aquí.
+    PENDIENTE_COBRO: 'pendiente_cobro',
     BAJA:       'baja',
   },
 
@@ -50,6 +54,7 @@ const EquiposPoolService = {
     devuelto_revision: 'Devuelto · por inspeccionar',
     por_clasificar:    'Por clasificar (ubicación desconocida)',
     vendido:           'Vendido',
+    pendiente_cobro:   'No devuelto · por cobrar',
     baja:              'Baja',
   },
 

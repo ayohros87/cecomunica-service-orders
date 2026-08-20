@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Equipos no devueltos - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc26">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+
+  <style>
+    /* Page-local — bandeja de equipos que el cliente no devolvió. */
+    .nd-serial { font-family: var(--font-mono, monospace); font-weight: 700; color: var(--accent, #0091D7); cursor: pointer; }
+    .nd-meta   { font-size: 11.5px; color: var(--fg-3, #6b7280); }
+    .nd-monto  { font-family: var(--font-mono, monospace); text-align: right; white-space: nowrap; }
+    .nd-tachado { text-decoration: line-through; color: var(--fg-3, #6b7280); }
+    .nd-vacio  { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
+    .nd-vacio svg { width: 34px; height: 34px; color: #16A34A; }
+    .nd-kpis   { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: var(--sp-3); }
+    .nd-kpi    { border: 1px solid var(--border-subtle, #e5e7eb); border-radius: var(--radius-md); padding: 8px 14px; min-width: 132px; }
+    .nd-kpi-n  { font-size: 20px; font-weight: 800; line-height: 1.1; }
+    .nd-kpi-l  { font-size: 11.5px; color: var(--fg-3, #6b7280); }
+    .nd-kpi--deuda .nd-kpi-n { color: #b91c1c; }
+    .nd-kpi--viejo .nd-kpi-n { color: #c2410c; }
+    /* Etapas: pendiente es ámbar (hay tiempo), cobranza es rojo (se pasó). */
+    .nd-etapa { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+    .nd-etapa-pendiente   { background: #fef3c7; color: #92400e; }
+    .nd-etapa-en_cobranza { background: #fee2e2; color: #b91c1c; }
+    .nd-etapa-facturado   { background: #ccfbf1; color: #0f766e; }
+    .nd-etapa-condonado   { background: #f1f5f9; color: #64748b; }
+    .nd-etapa-recuperado  { background: #dcfce7; color: #15803d; }
+    .nd-aprob  { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa;
+                 border-radius: 999px; padding: 1px 7px; font-size: 10.5px; font-weight: 700; }
+    .nd-aviso  { display: flex; align-items: flex-start; gap: 8px; margin-bottom: var(--sp-4);
+                 padding: 10px 12px; border-radius: var(--radius-md); font-size: 13px;
+                 background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+    .nd-acciones { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+  </style>
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js?v=ses2"></script>
+  <script src="../js/core/modulos.js?v=cc13"></script>
+  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/services/equiposPoolService.js?v=cc29"></script>
+  <script defer src="../js/services/cobrosEquiposService.js?v=nd1"></script>
+  <script defer src="../js/ui/equipo-ficha.js?v=cc2"></script>
+  <script defer src="../js/pages/inventario-no-devueltos.js?v=nd1"></script>
+  <script defer src="/js/vendor/lucide.min.js?v=1"></script>
+  <script defer src="/js/core/icons.js?v=1"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="hand-coins"></i> Equipos no devueltos',
+      menu: [
+        { onclick: 'NoDevueltosPage.copiarEstadoCuenta()', label: '<i data-lucide="clipboard-copy"></i> Copiar estado de cuenta' },
+        { onclick: 'NoDevueltosPage.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
+      ],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div id="loader" style="display:none;" class="loader-center">
+    <div class="loader"></div>
+  </div>
+
+  <div class="app-wrap app-wrap--full">
+
+    <div class="nd-aviso">
+      <i data-lucide="alert-triangle"></i>
+      <div>
+        <b>Esto es plata que se debe.</b> Cada renglón es un equipo que un cliente no devolvió.
+        De aquí solo se sale por una decisión: <b>facturar</b>, <b>condonar</b> (solo administración)
+        o <b>recuperar</b> el equipo. Nada se vacía solo ni se cierra por vencimiento.
+        La factura se emite en QuickBooks; aquí se registra su número.
+      </div>
+    </div>
+
+    <div class="nd-kpis" id="ndKpis"></div>
+
+    <div class="app-toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:var(--sp-3);">
+      <input type="search" id="ndBuscar" class="form-input" style="max-width:320px;"
+             placeholder="Buscar por cliente, serial, modelo u orden…">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+        <input type="checkbox" id="ndVerCerrados"> Ver también los cerrados
+      </label>
+      <span class="nd-meta" id="ndResumen" style="margin-left:auto;"></span>
+    </div>
+
+    <div class="app-table-wrap">
+      <div style="overflow-x:auto;">
+        <table class="app-table">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Equipo</th>
+              <th>Motivo / Origen</th>
+              <th style="text-align:right;">Días</th>
+              <th style="text-align:right;">Catálogo</th>
+              <th style="text-align:right;">A cobrar</th>
+              <th>Etapa</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="ndTabla"></tbody>
+        </table>
+      </div>
+      <div class="nd-vacio" id="ndVacio" style="display:none;">
+        <i data-lucide="check-circle-2"></i>
+        <p>Ningún equipo pendiente de cobro. Todo lo que salió, volvió.</p>
+      </div>
+    </div>
+
+  </div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('almacen'));
+  </script>
+</body>
+</html>

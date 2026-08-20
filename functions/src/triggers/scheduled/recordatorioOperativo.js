@@ -25,8 +25,9 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL } = require("../../lib/inventario");
-const { tallerEmailTo, recepcionEmails } = require("../../lib/mailRecipients");
+const { tallerEmailTo, recepcionEmails, configEmailTo } = require("../../lib/mailRecipients");
 const { pendientesDevolucion } = require("../../lib/devolucion");
+const cobros = require("../../lib/cobrosEquipos");
 
 const ESTADOS_ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
 const STALE_DIAS_DEFAULT = 10;
@@ -476,6 +477,127 @@ module.exports = onSchedule(
       logger.info("[recordatorioOperativo] listas para entregar", { total: listas.length, notificado: !!(listas.length && to) });
     } catch (e) {
       logger.error("[recordatorioOperativo] sección listas-entregar falló", { message: e.message });
+    }
+
+    // ── F) Equipos no devueltos: escalado a cobranza ─────────────────────
+    // Plan: docs/plans/PLAN_EQUIPOS_NO_DEVUELTOS.md.
+    // Un equipo que el cliente no devolvió es plata que se debe, y lo que la
+    // hacía evaporarse era que nadie la volvía a mirar: el dato quedaba en un
+    // campo sin pantalla. Esta sección hace dos cosas, en este orden:
+    //   1. escala a `en_cobranza` los renglones que pasaron los 10 días
+    //      (regla del usuario 2026-08-20) — el escalado es del sistema, no de
+    //      una persona, justo para que no dependa de que alguien se acuerde;
+    //   2. manda el resumen diario de TODO lo abierto, con el monto.
+    // El correo sale aunque no haya escalados nuevos: la deuda vieja tiene que
+    // seguir doliendo todos los días hasta que alguien la cierre.
+    try {
+      const snap = await db.collection(cobros.COL)
+        .where("etapa", "in", cobros.ABIERTAS)
+        .limit(1000)
+        .get();
+
+      const abiertos = [];
+      let escalados = 0;
+      for (const d of snap.docs) {
+        const c = d.data() || {};
+        const dias = edadDias(c.desde || c.created_at, now);
+        const fila = {
+          id: d.id,
+          cliente: c.cliente_nombre || "—",
+          equipo: c.serial_norm
+            ? `${c.serial_norm} · ${c.modelo_label || "—"}`
+            : `${Number(c.cantidad) || 1} × ${c.modelo_label || "equipo"}`,
+          orden: c.orden_devolucion_id || "—",
+          dias: dias == null ? 0 : Math.floor(dias),
+          monto: Number(c.monto_total) || 0,
+          etapa: c.etapa,
+          sinPrecio: !(Number(c.monto_total) > 0),
+          porAprobar: c.requiere_aprobacion === true,
+        };
+        // Escalado: pasa a cobranza y se queda ahí (no vuelve solo).
+        if (fila.dias >= cobros.DIAS_A_COBRANZA && c.etapa === cobros.ETAPAS.PENDIENTE) {
+          try {
+            await d.ref.update({
+              etapa: cobros.ETAPAS.EN_COBRANZA,
+              escalado_at: admin.firestore.FieldValue.serverTimestamp(),
+              updated_at: admin.firestore.FieldValue.serverTimestamp(),
+              historial: admin.firestore.FieldValue.arrayUnion({
+                accion: "escalado",
+                detalle: `${fila.dias} días sin resolver — pasa a cobranza`,
+                fecha_iso: new Date().toISOString(),
+                por_uid: "system", por_email: "system:recordatorioOperativo",
+              }),
+            });
+            fila.etapa = cobros.ETAPAS.EN_COBRANZA;
+            escalados++;
+          } catch (err) {
+            logger.warn("[recordatorioOperativo] no se pudo escalar el cobro", { id: d.id, error: err.message });
+          }
+        }
+        abiertos.push(fila);
+      }
+      abiertos.sort((a, b) => b.dias - a.dias);
+
+      // Destinatario: `empresa/config.email_cobranza` si está configurado. Sin
+      // esa clave cae en recepción, que es quien cierra las devoluciones — un
+      // correo sin buzón es un correo que no se envía, y aquí eso significa
+      // volver al problema original.
+      const to = (await configEmailTo("cobranza", "")) || (await recepcionEmails()).join(",");
+      if (abiertos.length && to) {
+        const deuda = abiertos.reduce((s, c) => s + c.monto, 0);
+        const enCobranza = abiertos.filter(c => c.etapa === cobros.ETAPAS.EN_COBRANZA).length;
+        const sinPrecio = abiertos.filter(c => c.sinPrecio).length;
+        const porAprobar = abiertos.filter(c => c.porAprobar).length;
+
+        const filas = abiertos.slice(0, MAX_FILAS).map(c => [
+          esc(c.cliente), esc(c.equipo),
+          c.orden === "—" ? "—"
+            : `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(c.orden)}">${esc(c.orden)}</a>`,
+          `<b>${c.dias}</b>`,
+          c.sinPrecio ? '<span style="color:#b91c1c;">sin precio</span>' : `$${c.monto.toFixed(2)}`,
+          c.etapa === cobros.ETAPAS.EN_COBRANZA
+            ? '<b style="color:#b91c1c;">En cobranza</b>' : "Pendiente",
+        ]);
+        const extra = abiertos.length > MAX_FILAS
+          ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${abiertos.length - MAX_FILAS} más.</p>` : "";
+        const pendientes = [
+          sinPrecio ? `<b>${sinPrecio}</b> sin precio puesto (no se pueden facturar así)` : "",
+          porAprobar ? `<b>${porAprobar}</b> con un descuento que espera aprobación` : "",
+        ].filter(Boolean);
+
+        await db.collection("mail_queue").add({
+          to,
+          subject: `Equipos no devueltos: ${abiertos.length} por cobrar ($${deuda.toFixed(2)})`
+            + (escalados ? ` — ${escalados} pasaron a cobranza hoy` : ""),
+          preheader: `${abiertos.length} equipos sin devolver por $${deuda.toFixed(2)}; el más viejo lleva ${abiertos[0].dias} días`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#991b1b;">Equipos que el cliente no devolvió</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Hay <b>${abiertos.length} equipo(s)</b> sin devolver por <b>$${deuda.toFixed(2)}</b>.
+              El más viejo lleva <b>${abiertos[0].dias} días</b>${enCobranza ? ` y <b>${enCobranza}</b> ya está(n) en cobranza` : ""}.
+            </p>
+            ${escalados ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#b91c1c;">
+              <b>${escalados}</b> pasaron hoy a cobranza por cumplir ${cobros.DIAS_A_COBRANZA} días sin resolverse.</p>` : ""}
+            ${pendientes.length ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Ojo: ${pendientes.join(" y ")}.</p>` : ""}
+            ${tablaHtml(["Cliente", "Equipo", "Devolución", "Días", "A cobrar", "Etapa"], filas)}
+            ${extra}
+            <p style="margin:12px 0 0;font:13px/1.5 Arial,sans-serif;color:#6b7280;">
+              Cada renglón se cierra facturándolo (el número de factura sale de QuickBooks),
+              condonándolo (solo administración) o marcando que el equipo apareció.
+              Nada se cierra solo.
+            </p>`,
+          ctaUrl: `${APP_BASE_URL}/inventario/no-devueltos.html`,
+          ctaLabel: "Ver los equipos por cobrar",
+          meta: { source: "recordatorioOperativo", seccion: "no_devueltos",
+                  total: abiertos.length, deuda, escalados },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      logger.info("[recordatorioOperativo] no devueltos",
+        { abiertos: abiertos.length, escalados, notificado: !!(abiertos.length && to) });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección no-devueltos falló", { message: e.message });
     }
 
     return null;

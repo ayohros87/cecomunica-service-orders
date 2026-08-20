@@ -99,7 +99,11 @@
       try {
         _modelos = (typeof ModelosService !== 'undefined')
           ? (await ModelosService.getModelos())
-              .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || '').trim() }))
+              // `precio_venta` viaja para prellenar el monto de los equipos que
+              // el cliente NO devuelve (itemización al cerrar) sin releer el
+              // catálogo. Sin precio en el catálogo el campo nace vacío.
+              .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || '').trim(),
+                           precio_venta: Number(m.precio_venta) || 0 }))
               .filter(m => m.nombre)
               .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
           : [];
@@ -951,7 +955,8 @@
       try {
         _modelos = (typeof ModelosService !== 'undefined')
           ? (await ModelosService.getModelos())
-              .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || '').trim() }))
+              .map(m => ({ id: m.id, nombre: (m.modelo || m.nombre || '').trim(),
+                           precio_venta: Number(m.precio_venta) || 0 }))
               .filter(m => m.nombre)
               .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
           : [];
@@ -1260,21 +1265,254 @@
     render();
   }
 
+  // Faltantes que NO tienen fila propia: los que vienen de `esperados_por_modelo`
+  // (la baja no registró seriales) y los del contrato de PAPEL (total declarado
+  // menos recibidos). Los `esperados` sin resolver sí tienen fila y se resuelven
+  // uno a uno con "No se devuelve" — esos ya abren su renglón de cobro solos.
+  function _faltantesSinFila(dev) {
+    const esperados = dev.esperados || [];
+    const porModelo = (dev.esperados_por_modelo || [])
+      .map((m, i) => ({ idx: i, modelo_id: m.modelo_id || '', modelo: m.modelo || '',
+                        falta: Math.max(0, Number(m.cantidad || 0) - Number(m.recibidos || 0)) }))
+      .filter(m => m.falta > 0);
+    let papel = 0;
+    if (dev.modo === 'sin_contrato') {
+      const total = Number(dev.total_esperado || 0);
+      const recibidos = esperados.filter(e => e.resolucion === 'recibido').length;
+      if (total > 0) papel = Math.max(0, total - recibidos);
+    }
+    return { porModelo, papel, total: porModelo.reduce((s, m) => s + m.falta, 0) + papel };
+  }
+
+  // Modelo más frecuente entre lo que SÍ llegó — la mejor conjetura para
+  // prellenar un faltante de contrato de papel, donde no hay lista previa.
+  function _modeloDominante(dev) {
+    const cuenta = new Map();
+    (dev.esperados || []).filter(e => e.resolucion === 'recibido').forEach(e => {
+      const k = `${e.modelo_id || ''}|${e.modelo || ''}`;
+      cuenta.set(k, (cuenta.get(k) || 0) + 1);
+    });
+    let mejor = null;
+    cuenta.forEach((n, k) => { if (!mejor || n > mejor.n) mejor = { k, n }; });
+    if (!mejor) return { modelo_id: '', modelo: '' };
+    const [modelo_id, modelo] = mejor.k.split('|');
+    return { modelo_id, modelo };
+  }
+
+  // Itemización obligatoria de lo que el cliente no devolvió. Antes esto era un
+  // contador (`cierre_pendientes`) y una frase en observaciones: los 4 radios
+  // del finiquito de TIL PANAMA se perdieron exactamente ahí, porque un número
+  // no se puede cobrar ni perseguir. Ahora cada faltante sale del cierre como un
+  // renglón con modelo, cantidad y monto.
+  // Devuelve las líneas confirmadas, o null si se canceló.
+  function _pedirFaltantes(dev, faltan) {
+    return new Promise(resolve => {
+      const dom = _modeloDominante(dev);
+      const catalogo = _modelos || [];
+      const precioDe = (nombre) => {
+        const m = catalogo.find(x => x.nombre.toLowerCase() === (nombre || '').toLowerCase());
+        return m && m.precio_venta > 0 ? m.precio_venta : '';
+      };
+      // Arranca con una línea por cada grupo por-modelo conocido, más una del
+      // modelo dominante para el resto (contrato de papel).
+      const lineas = faltan.porModelo.map(m => ({
+        modelo_id: m.modelo_id, modelo: m.modelo, cantidad: m.falta, monto: precioDe(m.modelo),
+      }));
+      if (faltan.papel > 0) {
+        lineas.push({ modelo_id: dom.modelo_id, modelo: dom.modelo,
+                      cantidad: faltan.papel, monto: precioDe(dom.modelo) });
+      }
+
+      const overlay = document.createElement('div');
+      overlay.className = 'overlay';
+      overlay.style.display = 'flex';
+
+      const filaHtml = (l, i) => `
+        <tr data-i="${i}">
+          <td style="padding:4px;">
+            <input class="form-input fl-modelo" list="flModelos" value="${esc(l.modelo)}"
+                   placeholder="Modelo" style="height:30px;font-size:12px;min-width:170px;">
+          </td>
+          <td style="padding:4px;">
+            <input type="number" min="1" step="1" class="form-input fl-cant" value="${Number(l.cantidad) || 1}"
+                   style="height:30px;font-size:12px;width:70px;text-align:right;">
+          </td>
+          <td style="padding:4px;">
+            <input type="number" min="0" step="any" class="form-input fl-monto" value="${l.monto === '' ? '' : Number(l.monto)}"
+                   placeholder="0.00" style="height:30px;font-size:12px;width:100px;text-align:right;">
+          </td>
+          <td style="padding:4px;">
+            <button type="button" class="btn btn-sm fl-quitar" title="Quitar">✕</button>
+          </td>
+        </tr>`;
+
+      const pintar = () => {
+        overlay.querySelector('#flCuerpo').innerHTML = lineas.map(filaHtml).join('');
+        const suma = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+        const monto = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.monto) || 0), 0);
+        const ok = suma === faltan.total;
+        overlay.querySelector('#flResumen').innerHTML =
+          `<b>${suma}</b> de <b>${faltan.total}</b> equipo(s) itemizados · total a cobrar <b>$${monto.toFixed(2)}</b>` +
+          (ok ? '' : ` <span style="color:#b91c1c;">— las cantidades tienen que sumar ${faltan.total}</span>`);
+        overlay.querySelector('#flConfirmar').disabled = !ok;
+      };
+
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:620px;">
+          <div class="sheet-header"><h3 class="sheet-title">Equipos que el cliente no devolvió</h3></div>
+          <div class="sheet-body" style="padding:14px 10px;">
+            <p style="margin:0 0 10px;font-size:13.5px;line-height:1.45;">
+              Faltan <b>${faltan.total}</b> equipo(s). Antes de cerrar hay que decir <b>qué son</b> y
+              <b>a cuánto se cobran</b>: así quedan como renglones que alguien puede perseguir, en vez de
+              un número que se pierde al cerrar la orden.
+            </p>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+              <thead><tr style="text-align:left;color:var(--fg-3,#6b7280);">
+                <th style="padding:4px;">Modelo</th><th style="padding:4px;">Cant.</th>
+                <th style="padding:4px;">$ c/u</th><th></th>
+              </tr></thead>
+              <tbody id="flCuerpo"></tbody>
+            </table>
+            <datalist id="flModelos">${catalogo.map(m => `<option value="${esc(m.nombre)}"></option>`).join('')}</datalist>
+            <button type="button" class="btn btn-sm" id="flAgregar" style="margin-top:8px;">+ Otra línea</button>
+            <div id="flResumen" style="margin-top:10px;font-size:12.5px;"></div>
+            <div style="margin-top:8px;font-size:11.5px;color:var(--fg-3,#6b7280);">
+              El monto sale del precio de venta del catálogo y se puede ajustar. Un descuento mayor al
+              ${(window.CobrosEquiposService?.DESCUENTO_LIBRE_PCT) || 15}% pedirá aprobación antes de facturar,
+              y condonar solo lo puede hacer un administrador.
+            </div>
+          </div>
+          <div class="footer">
+            <button class="btn btn-ghost" id="flCancelar">Cancelar</button>
+            <button class="btn btn-primary" id="flConfirmar">Registrar y cerrar</button>
+          </div>
+        </div>`;
+
+      const cerrar = (r) => {
+        overlay.remove();
+        document.body.style.overflow = '';
+        resolve(r);
+      };
+
+      overlay.addEventListener('input', e => {
+        const tr = e.target.closest('tr[data-i]');
+        if (!tr) return;
+        const i = Number(tr.dataset.i);
+        if (e.target.classList.contains('fl-modelo')) {
+          const txt = e.target.value.trim();
+          const cat = catalogo.find(m => m.nombre.toLowerCase() === txt.toLowerCase());
+          lineas[i].modelo = txt;
+          lineas[i].modelo_id = cat ? cat.id : '';
+          // Solo prellena si el monto estaba vacío: no pisa lo que ya tecleó.
+          if (cat && cat.precio_venta > 0 && !lineas[i].monto) {
+            lineas[i].monto = cat.precio_venta;
+            tr.querySelector('.fl-monto').value = cat.precio_venta;
+          }
+        } else if (e.target.classList.contains('fl-cant')) {
+          lineas[i].cantidad = Math.max(1, Number(e.target.value) || 1);
+        } else if (e.target.classList.contains('fl-monto')) {
+          lineas[i].monto = e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0);
+        }
+        const suma = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+        const monto = lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.monto) || 0), 0);
+        const ok = suma === faltan.total;
+        overlay.querySelector('#flResumen').innerHTML =
+          `<b>${suma}</b> de <b>${faltan.total}</b> equipo(s) itemizados · total a cobrar <b>$${monto.toFixed(2)}</b>` +
+          (ok ? '' : ` <span style="color:#b91c1c;">— las cantidades tienen que sumar ${faltan.total}</span>`);
+        overlay.querySelector('#flConfirmar').disabled = !ok;
+      });
+
+      overlay.addEventListener('click', e => {
+        if (e.target.closest('.fl-quitar')) {
+          const i = Number(e.target.closest('tr[data-i]').dataset.i);
+          lineas.splice(i, 1);
+          if (!lineas.length) lineas.push({ modelo_id: '', modelo: '', cantidad: 1, monto: '' });
+          pintar();
+          return;
+        }
+        if (e.target.closest('#flAgregar')) {
+          lineas.push({ modelo_id: '', modelo: '', cantidad: 1, monto: '' });
+          pintar();
+          return;
+        }
+        if (e.target.closest('#flCancelar') || e.target === overlay) cerrar(null);
+        if (e.target.closest('#flConfirmar')) {
+          const sinModelo = lineas.filter(l => !(l.modelo || '').trim()).length;
+          if (sinModelo) { Toast.show('Cada línea necesita un modelo.', 'warn'); return; }
+          cerrar(lineas.map(l => ({
+            modelo_id: l.modelo_id || '', modelo: (l.modelo || '').trim(),
+            cantidad: Math.max(1, Number(l.cantidad) || 1),
+            monto: l.monto === '' ? null : Math.max(0, Number(l.monto) || 0),
+          })));
+        }
+      });
+
+      document.body.appendChild(overlay);
+      document.body.style.overflow = 'hidden';
+      pintar();
+    });
+  }
+
   async function cerrarOrden() {
     const dev = _orden.devolucion || {};
     const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id).length;
     const pend = (typeof pendientesDevolucion === 'function') ? pendientesDevolucion(_orden) : 0;
     const aviso = sinAcuse ? `\n\nOJO: ${sinAcuse} unidad(es) recibida(s) quedan SIN acuse firmado del cliente.` : '';
-    // Sin contrato el cierre con faltantes es legítimo (el cliente no trajo el
-    // resto), pero deja constancia: el número queda en la orden en vez de
-    // desaparecer al cerrar.
+
+    // Faltantes sin fila propia: hay que itemizarlos ANTES de cerrar, o se
+    // vuelven un número muerto. Los que sí tienen fila se resuelven con
+    // "No se devuelve", que abre su renglón de cobro por su cuenta.
+    const faltan = _faltantesSinFila(dev);
+    let lineas = null;
+    if (faltan.total > 0) {
+      if (typeof CobrosEquiposService === 'undefined') {
+        Toast.show('No se pudo cargar el registro de cobros — recarga la página.', 'bad');
+        return;
+      }
+      lineas = await _pedirFaltantes(dev, faltan);
+      if (!lineas) return;   // canceló: la orden NO se cierra
+    }
+
     const base = pend > 0
-      ? `¿Cerrar la devolución con ${pend} equipo(s) SIN devolver?\n\nQuedará registrado en la orden y dejará de aparecer en el recordatorio de pendientes — coordina el cobro o la excepción antes de cerrar.`
+      ? `¿Cerrar la devolución con ${pend} equipo(s) SIN devolver?\n\n` +
+        (faltan.total > 0
+          ? `Los ${faltan.total} faltantes quedarán registrados como equipos por cobrar, visibles en "Equipos no devueltos" hasta que se facturen, se condonen o aparezcan.`
+          : 'Quedará registrado en la orden — coordina el cobro o la excepción antes de cerrar.')
       : '¿Cerrar la devolución? Todas las unidades quedaron resueltas; los equipos recibidos ya están (o quedarán) en la orden de ENTRADA de inspección.';
     if (!window.confirm(base + aviso)) return;
     const user = firebase.auth().currentUser;
     const previo = dev.cierre_pendientes;
     dev.cierre_pendientes = pend;
+
+    // Los renglones de cobro se abren ANTES de cerrar: si el cierre falla, la
+    // deuda ya quedó registrada (que es lo que no puede perderse). Un renglón
+    // de más se cierra a mano desde la bandeja; uno de menos no se detecta.
+    if (lineas) {
+      const ids = [];
+      for (const l of lineas) {
+        try {
+          const id = await CobrosEquiposService.abrir({
+            cliente_id: _orden.cliente_id || '',
+            cliente_nombre: _orden.cliente_nombre || '',
+            orden_devolucion_id: _ordenId,
+            modelo_id: l.modelo_id, modelo_label: l.modelo,
+            cantidad: l.cantidad,
+            motivo_codigo: 'perdido',
+            motivo_detalle: 'No devuelto al cerrar la devolución (sin lista por serial)',
+            monto_catalogo_unit: l.monto,
+            monto_unit: l.monto,
+          });
+          ids.push(id);
+        } catch (e) {
+          console.error('[devolucion] no se pudo abrir el cobro', e);
+          Toast.show(`No se pudo registrar el cobro de ${l.modelo}: ${e?.message || e}`, 'bad');
+          dev.cierre_pendientes = previo;
+          return;   // sin renglón no se cierra: es justo lo que se traspapelaba
+        }
+      }
+      dev.cobros_ids = [...(dev.cobros_ids || []), ...ids];
+    }
+
     try {
       // `devolucion` va completo: mergeOrder usa set({merge:true}) y una clave
       // con punto crearía un campo literal "devolucion.cierre_pendientes".

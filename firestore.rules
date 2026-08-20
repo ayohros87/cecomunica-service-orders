@@ -607,6 +607,29 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Equipos que el cliente NO devolvió y hay que cobrarle (finiquito,
+    // pérdida, se los quedó). Un doc por renglón cobrable.
+    // Plan: docs/plans/PLAN_EQUIPOS_NO_DEVUELTOS.md.
+    //   · Lectura: cualquier autenticado — es la bandeja que impide que la
+    //     deuda se traspapele, y cuanta más gente la vea, mejor.
+    //   · Alta y ajuste: puedeGestionarSeriales() — los mismos que cierran
+    //     devoluciones y los que cobran.
+    //   · CONDONAR es perdonar plata: solo administrador. Se aplica en el
+    //     servidor de reglas, no solo en la UI — un renglón no puede pasar a
+    //     `condonado` si quien escribe no es admin.
+    //   · Nunca se borra: los cierres son etapas (facturado / condonado /
+    //     recuperado) con su traza en `historial[]`. Un renglón borrado es
+    //     exactamente el agujero que este módulo vino a tapar.
+    match /cobros_equipos/{docId} {
+      allow read:   if isSignedIn();
+      allow create: if puedeGestionarSeriales();
+      allow update: if puedeGestionarSeriales()
+        && (request.resource.data.etapa != "condonado"
+            || resource.data.etapa == "condonado"
+            || isAdmin());
+      allow delete: if false;
+    }
+
     // Modelos: catálogo + tarifas de facturación (info sensible). Lectura para
     // cualquier autenticado (inventario cuenta stock, contratos eligen modelo).
     // Escritura SOLO admin/contabilidad (modelo-de-radio.html ya es admin-only).

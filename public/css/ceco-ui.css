@@ -2317,6 +2317,9 @@ table.app-table.editable tbody tr:hover { background: transparent; }
    las devoluciones — no es una ubicación más, es "hay que ir a buscarlo". */
 .eqpool-chip-por_clasificar    { background: #ffe4e6; color: #9f1239; }
 .eqpool-chip-vendido           { background: #ccfbf1; color: #0f766e; }
+/* No devuelto por el cliente: rojo, no ámbar. Es plata que se debe, no una
+   cola de trabajo — tiene que leerse distinto de "por inspeccionar". */
+.eqpool-chip-pendiente_cobro   { background: #fee2e2; color: #b91c1c; }
 .eqpool-chip-baja              { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-en_poc            { background: #f1f5f9; color: #64748b; }
 .eqpool-chip-desconocido       { background: #f1f5f9; color: #64748b; }

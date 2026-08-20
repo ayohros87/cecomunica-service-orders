@@ -30,6 +30,7 @@ const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO } = require
 const { recepcionEmails } = require("../../lib/mailRecipients");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion } = require("../../lib/devolucion");
+const cobros = require("../../lib/cobrosEquipos");
 
 const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]
@@ -348,10 +349,15 @@ module.exports = onDocumentWritten(
         } else if (res === "no_devuelve") {
           const { ref, data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
           const unidadRef = e.pool_doc_id ? db.collection("equipos_pool").doc(e.pool_doc_id) : (data ? ref : null);
+          const motivo = e.motivo_codigo || "otro";
+          // ¿Es una deuda? `parcial` (sigue en servicio) y `vendido` (la venta
+          // ya ocurrió) NO lo son: no hay nada que perseguir. Los otros dos sí.
+          const cobrable = cobros.MOTIVOS_COBRABLES.includes(motivo);
+
           if (unidadRef) {
             await unidadRef.set({
               devolucion_excepcion: {
-                motivo_codigo: e.motivo_codigo || "otro",
+                motivo_codigo: motivo,
                 motivo_detalle: e.motivo_detalle || "",
                 orden_id: ordenId,
                 at: admin.firestore.FieldValue.serverTimestamp(),
@@ -363,10 +369,54 @@ module.exports = onDocumentWritten(
               at: admin.firestore.FieldValue.serverTimestamp(),
               por: "system", por_email: null, tipo: "devolucion",
               de_estado: null, a_estado: null, ref: refMov,
-              notas: `NO se devuelve (${e.motivo_codigo || "otro"}${e.motivo_detalle ? `: ${e.motivo_detalle}` : ""})`,
+              notas: `NO se devuelve (${motivo}${e.motivo_detalle ? `: ${e.motivo_detalle}` : ""})`,
             });
           }
-          logger.info("[onOrdenDevolucionWrite] no_devuelve", { ordenId, serial: e.serial });
+
+          // La unidad sale de `en_cliente`: ahí se confundía con un radio sano
+          // de un contrato vivo y nadie la volvía a mirar (así se perdieron los
+          // 4 radios del finiquito de TIL PANAMA). `pendiente_cobro` la deja
+          // visible hasta que alguien la facture, la condone o la recupere.
+          if (cobrable && unidadRef) {
+            try {
+              await pool.transicionarPorId(unidadRef.id, {
+                aEstado: pool.ESTADOS.PENDIENTE_COBRO,
+                // VENDIDO y BAJA fuera: ya son hechos cerrados de propiedad.
+                soloDesde: [pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.ASIGNADO,
+                            pool.ESTADOS.DEVUELTO, pool.ESTADOS.EN_TALLER,
+                            pool.ESTADOS.POR_CLASIFICAR],
+                tipo: "no_devuelto", refMov,
+                notas: `El cliente no devolvió la unidad (${motivo}) — pendiente de cobro`,
+                extra: { orden_actual_id: null },
+              });
+            } catch (err) {
+              logger.warn("[onOrdenDevolucionWrite] no se pudo marcar pendiente_cobro",
+                { ordenId, serial: e.serial, error: err.message });
+            }
+          }
+
+          // El renglón cobrable. Se abre aunque la unidad no tenga ficha: la
+          // deuda existe igual, y el renglón es su fuente de verdad.
+          if (cobrable) {
+            try {
+              const cobroId = await cobros.abrirCobro({
+                cliente_id: after.cliente_id || "",
+                cliente_nombre: after.cliente_nombre || "",
+                orden_devolucion_id: ordenId,
+                serial: e.serial, serial_norm: pool.normSerial(e.serial || ""),
+                pool_doc_id: unidadRef ? unidadRef.id : null,
+                modelo_id: e.modelo_id || "", modelo_label: e.modelo || "",
+                motivo_codigo: motivo, motivo_detalle: e.motivo_detalle || "",
+              });
+              if (cobroId) {
+                logger.info("[onOrdenDevolucionWrite] cobro abierto", { ordenId, serial: e.serial, cobroId });
+              }
+            } catch (err) {
+              logger.warn("[onOrdenDevolucionWrite] no se pudo abrir el cobro",
+                { ordenId, serial: e.serial, error: err.message });
+            }
+          }
+          logger.info("[onOrdenDevolucionWrite] no_devuelve", { ordenId, serial: e.serial, motivo, cobrable });
         }
       } catch (err) {
         logger.warn("[onOrdenDevolucionWrite] No se pudo aplicar la resolución (no crítico)", {

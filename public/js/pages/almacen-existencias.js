@@ -37,7 +37,10 @@ window.AlmacenExistencias = (() => {
     { estado: 'en_taller',         label: 'Taller' },
     { estado: 'devuelto_revision', label: 'Cuarent.' },
   ];
-  const OTROS = ['vendido', 'baja', 'por_clasificar', 'en_poc'];
+  // `pendiente_cobro` va en "Otros" y NO en una columna propia: el equipo no
+  // devuelto no es una ubicación que bodega pueda contar en el estante. Su
+  // seguimiento vive en la bandeja de no devueltos, no en existencias.
+  const OTROS = ['vendido', 'baja', 'por_clasificar', 'en_poc', 'pendiente_cobro'];
 
   const ctx = {
     cargado: false, cargando: false,

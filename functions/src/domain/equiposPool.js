@@ -27,6 +27,18 @@ const ESTADOS = {
   // bodega y pasa a propiedad del cliente. NO es terminal como baja — el radio
   // vendido puede volver a taller por una orden de servicio (contacto normal).
   VENDIDO:    "vendido",
+  // El cliente NO devolvió la unidad y hay que cobrársela (finiquito, pérdida,
+  // se la quedó). Es una ubicación real —está con el cliente— pero NO puede
+  // seguir viéndose como `en_cliente`: ahí se confunde con un radio sano de un
+  // contrato vivo y nadie lo vuelve a mirar. Así se perdieron los 4 radios del
+  // finiquito de TIL PANAMA, que solo existían como una frase en
+  // `observaciones`. Sale por una de cuatro puertas, todas explícitas:
+  // facturado (→ vendido), condonado (→ baja, solo admin), recuperado
+  // (→ en_bodega) o sigue abierto y sale en el correo diario.
+  // El avance del cobro NO vive aquí: vive en cobros_equipos.etapa. El pool
+  // dice DÓNDE está el equipo; el renglón dice CÓMO va la cobranza.
+  // Plan: docs/plans/PLAN_EQUIPOS_NO_DEVUELTOS.md.
+  PENDIENTE_COBRO: "pendiente_cobro",
   BAJA:       "baja",
 };
 
