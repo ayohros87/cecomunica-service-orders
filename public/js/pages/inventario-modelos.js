@@ -195,13 +195,13 @@ function render(){
     let hint, cta = '';
     if (term && soloAlquiler){
       hint = `Ningún modelo <b>de alquiler</b> coincide con “${esc(termRaw)}”.`;
-      cta = `<button type="button" class="btn btn-sm" onclick="setFiltroAlquiler(false)"><i data-lucide="list"></i> Buscar en Todos</button>
+      cta = `<button type="button" class="btn btn-sm" onclick="setFiltroAlquiler(false)"><i data-lucide="list"></i> Buscar en todo el catálogo</button>
              <button type="button" class="btn btn-sm primary" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
     } else if (term){
       hint = `Ningún modelo coincide con “${esc(termRaw)}”.`;
       cta = `<button type="button" class="btn btn-sm primary" onclick="crearDesdeBusqueda()"><i data-lucide="plus"></i> Crear “${esc(termRaw)}”</button>`;
     } else if (soloAlquiler){
-      hint = 'No hay modelos marcados como "Se alquila". Pulsa <b>Todos</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.';
+      hint = 'No hay modelos marcados como "Se alquila". Apaga <b>Solo alquiler</b> arriba y prende el toggle <b>¿Alquiler?</b> en los que se rentan.';
     } else {
       hint = 'Todavía no hay modelos en el catálogo.';
       cta = `<button type="button" class="btn btn-sm primary" onclick="abrirModal()"><i data-lucide="plus"></i> Nuevo modelo</button>`;
@@ -696,10 +696,13 @@ async function confirmarMapeo(){
 function cerrarMapeo(){ const ov=document.getElementById('overlayMapeo'); ov.classList.remove('show'); ov.style.display='none'; }
 
 /* ===== Exponer ===== */
+// Se llama desde el interruptor y también desde el estado vacío ("Ver todos los
+// modelos"), así que sincroniza el control además de re-pintar.
 function setFiltroAlquiler(v){
   soloAlquiler = v;
-  document.getElementById('seg-alq')?.classList.toggle('is-on', v);
-  document.getElementById('seg-all')?.classList.toggle('is-on', !v);
+  const chk = document.getElementById('chkSoloAlquiler');
+  if (chk) chk.checked = v;
+  document.getElementById('filtroAlquiler')?.classList.toggle('is-on', v);
   render();
 }
 window.setFiltroAlquiler = setFiltroAlquiler;

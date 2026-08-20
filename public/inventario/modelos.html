@@ -93,11 +93,21 @@
     .md-stats { display:flex; align-items:center; gap:var(--sp-3); font-size:13px; color:var(--fg-3); }
     .md-stats b { font-family:var(--font-mono); color:var(--fg-1); }
 
-    /* Segmento visible De alquiler / Todos */
-    .seg { display:inline-flex; border:1px solid var(--border-default); border-radius:var(--radius-pill); overflow:hidden; }
-    .seg-btn { border:0; background:var(--surface-card); color:var(--fg-2); padding:5px 14px; font-size:13px; font-weight:600; cursor:pointer; }
-    .seg-btn.is-on { background:var(--accent); color:#fff; }
-    .seg-btn + .seg-btn { border-left:1px solid var(--border-default); }
+    /* Filtro "Solo alquiler" (antes era un segmento De alquiler | Todos).
+       Se cambió porque no eran opciones al mismo nivel: "Todos" CONTIENE a
+       "De alquiler", así que el segmento —que promete alternativas excluyentes—
+       mentía. Como interruptor el estado se lee solo, y queda igual de visible
+       que antes (la decisión de 2026-06-16 era sacarlo del menú escondido). */
+    .filtro-toggle {
+      display:inline-flex; align-items:center; gap:8px;
+      padding:5px 14px 5px 8px; border:1px solid var(--border-default);
+      border-radius:var(--radius-pill); background:var(--surface-card);
+      font-size:13px; font-weight:600; color:var(--fg-2);
+      cursor:pointer; user-select:none; white-space:nowrap;
+      transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
+    }
+    .filtro-toggle:hover { background:var(--surface-sunken); }
+    .filtro-toggle.is-on { border-color:var(--accent); background:var(--brand-soft); color:var(--accent); }
   </style>
 </head>
 <body>
@@ -147,10 +157,14 @@
   <div class="ds-card" style="padding:0;">
     <div style="padding:var(--sp-3) var(--sp-4); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <div class="seg" role="tablist">
-          <button type="button" id="seg-alq" class="seg-btn is-on" onclick="setFiltroAlquiler(true)">De alquiler</button>
-          <button type="button" id="seg-all" class="seg-btn" onclick="setFiltroAlquiler(false)">Todos</button>
-        </div>
+        <label class="filtro-toggle is-on" id="filtroAlquiler"
+               title="Muestra solo los modelos marcados como «Se alquila». Apágalo para ver el catálogo completo.">
+          <span class="toggle-switch">
+            <input type="checkbox" id="chkSoloAlquiler" checked onchange="setFiltroAlquiler(this.checked)">
+            <span class="toggle-track"></span><span class="toggle-thumb"></span>
+          </span>
+          Solo alquiler
+        </label>
         <p id="resumenModelos" class="md-stats" style="margin:0;">Cargando…</p>
       </div>
       <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
@@ -320,7 +334,7 @@
 
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
-<script src="../js/pages/inventario-modelos.js?v=cc14" defer></script>
+<script src="../js/pages/inventario-modelos.js?v=cc15" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
