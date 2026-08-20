@@ -211,8 +211,6 @@ function _iniciarSnapshotInicial() {
         return;
       }
       _liveRendered = true;
-      // Real data painted — the load succeeded, so stand down the watchdog.
-      _limpiarWatchdogInicial();
       // First real page is in — pagination/auto-load may run from here.
       APP.state.firstPageReady = true;
 
@@ -222,22 +220,65 @@ function _iniciarSnapshotInicial() {
         btnCargarMas.style.display = "block";
       }
 
-      if (typeof aplicarFiltrosCombinados === 'function') {
+      // El watchdog se desarma DESPUÉS de pintar, no al llegar los datos
+      // (reporte jefa de taller 2026-08-19: "Ver órdenes" se quedaba cargando
+      // para siempre). Antes se limpiaba arriba y el pintado ocurría después,
+      // sin try/catch, dentro del callback de onSnapshot: cualquier excepción
+      // en el render se perdía dentro del SDK, onError no se disparaba, el
+      // watchdog ya no existía y el esqueleto se quedaba en pantalla eterno.
+      // Ahora la red de seguridad sigue armada hasta que hay filas de verdad.
+      try {
+        if (typeof aplicarFiltrosCombinados !== 'function') {
+          // Falla RUIDOSA a propósito: si ordenes-filters.js no cargó (404,
+          // caché parcial, error previo) antes no pasaba nada de nada — ni
+          // render ni error. Un esqueleto para siempre, sin rastro en consola.
+          throw new Error('aplicarFiltrosCombinados no está definida (¿ordenes-filters.js no cargó?)');
+        }
         if (!_primerPintado) {
           _primerPintado = true;      // el primer pintado sale INMEDIATO
           aplicarFiltrosCombinados();
         } else {
           clearTimeout(_coalesceTimer);
-          _coalesceTimer = setTimeout(() => aplicarFiltrosCombinados(), 150);
+          _coalesceTimer = setTimeout(() => {
+            try { aplicarFiltrosCombinados(); }
+            catch (e) { console.error('❌ Error repintando órdenes:', e); }
+          }, 150);
+        }
+        // Pintado OK: recién ahora se puede bajar la guardia.
+        _limpiarWatchdogInicial();
+      } catch (e) {
+        console.error('❌ Error pintando las órdenes:', e);
+        _limpiarWatchdogInicial();
+        _primerPintado = false;   // permite reintentar el primer pintado
+        if (typeof renderEmptyState === 'function') {
+          renderEmptyState('No se pudieron mostrar las órdenes', {
+            icon: 'alert-triangle',
+            sublabel: 'Los datos llegaron pero falló el dibujado de la lista. Vuelve a intentar; si sigue igual, recarga la página.',
+            retryLabel: 'Reintentar',
+            onRetry: _reintentarCargaInicial
+          });
         }
       }
     },
     onError: (err) => {
       console.error("❌ Snapshot error:", err);
       _limpiarWatchdogInicial();
-      renderEmptyState("Error al cargar datos", {
+      // Mensajes por causa: "revisa tu conexión" mandaba a la persona a mirar
+      // el wifi cuando el problema era un índice compuesto sin desplegar o un
+      // permiso. Reintentar no arregla ninguno de esos dos.
+      const code = String(err?.code || '');
+      let titulo = 'Error al cargar datos';
+      let sub = 'Revisa tu conexión e intenta de nuevo.';
+      if (code.includes('failed-precondition')) {
+        titulo = 'Falta un índice de la base de datos';
+        sub = 'La consulta de órdenes necesita un índice que no está desplegado. Avisa a soporte — reintentar no lo resuelve.';
+      } else if (code.includes('permission-denied')) {
+        titulo = 'Sin permiso para ver las órdenes';
+        sub = 'Tu usuario no tiene acceso a esta lista. Avisa a soporte para revisar tu rol.';
+      }
+      renderEmptyState(titulo, {
         icon: 'alert-triangle',
-        sublabel: 'Revisa tu conexión e intenta de nuevo.',
+        sublabel: sub,
         retryLabel: 'Reintentar',
         onRetry: _reintentarCargaInicial
       });

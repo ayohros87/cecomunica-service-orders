@@ -114,8 +114,14 @@ module.exports = onSchedule(
 
       const to = await tallerEmailTo();
       if (estancadas.length && to) {
+        // Cada orden enlazada (reporte jefa de taller 2026-08-19): el CTA
+        // lleva a la lista, que muestra las 40 MÁS RECIENTES — y estas son
+        // justamente las viejas, así que ninguna aparecía ahí. Sin enlace por
+        // fila no había forma de llegar a la orden que el correo nombra.
+        // Mismo patrón que la sección E, que sí lo hacía.
         const filas = estancadas.slice(0, MAX_FILAS).map(o => [
-          esc(o.orden), esc(o.cliente), esc(o.estado), esc(o.tecnico), `<b>${o.dias}</b>`,
+          `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
+          esc(o.cliente), esc(o.estado), esc(o.tecnico), `<b>${o.dias}</b>`,
         ]);
         const extra = estancadas.length > MAX_FILAS
           ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${estancadas.length - MAX_FILAS} más (ver listado completo en la app).</p>` : "";
@@ -330,6 +336,7 @@ module.exports = onSchedule(
         const edad = edadDias(o.fecha_completado, now);
         if (edad == null || edad < qcDias) return;
         esperando.push({
+          id: d.id,     // necesario para enlazar la fila a la orden
           orden: o.numero_orden || d.id,
           cliente: o.cliente_nombre || o.cliente || "—",
           tipo: o.tipo_de_servicio || "—",
@@ -342,8 +349,12 @@ module.exports = onSchedule(
 
       const to = await tallerEmailTo();
       if (esperando.length && to) {
+        // Enlace por fila, igual que en la sección A: el CTA `?qc=1` ya trae la
+        // cola completa desde el servidor, pero llegar a UNA orden concreta
+        // desde el correo sigue siendo lo más directo.
         const filas = esperando.slice(0, MAX_FILAS).map(o => [
-          esc(o.orden), esc(o.cliente), esc(o.tipo), esc(o.tecnico), esc(o.estadoQc), `<b>${o.dias}</b>`,
+          `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">${esc(o.orden)}</a>`,
+          esc(o.cliente), esc(o.tipo), esc(o.tecnico), esc(o.estadoQc), `<b>${o.dias}</b>`,
         ]);
         const extra = esperando.length > MAX_FILAS
           ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${esperando.length - MAX_FILAS} más (ver listado completo en la app).</p>` : "";

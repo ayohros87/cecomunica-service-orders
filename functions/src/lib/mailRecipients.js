@@ -27,9 +27,30 @@ async function configEmailTo(key, fallback) {
 
 const activacionesEmailTo    = () => configEmailTo("activaciones", FALLBACKS.activaciones);
 const atencionClienteEmailTo = () => configEmailTo("atencion_cliente", FALLBACKS.atencion_cliente);
-const tallerEmailTo          = () => configEmailTo("taller", FALLBACKS.taller);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Taller: empresa/config.email_taller o, si está vacío, los usuarios con rol
+// jefe_taller — el fallback por rol que la cabecera de recordatorioOperativo ya
+// prometía pero que no existía. Sin él, con la clave sin configurar el `to`
+// quedaba en "" y los correos de órdenes estancadas y de cola de QC no se
+// enviaban a nadie, en silencio. Mismo patrón que recepcionEmails().
+async function tallerEmailTo() {
+  const cfg = await configEmailTo("taller", FALLBACKS.taller);
+  if (cfg) return cfg;
+  try {
+    const snap = await db.collection("usuarios").where("rol", "==", "jefe_taller").get();
+    const out = [];
+    snap.forEach(d => {
+      const e = String(d.data()?.email || "").trim().toLowerCase();
+      if (EMAIL_RE.test(e)) out.push(e);
+    });
+    if (out.length) return out.join(", ");
+  } catch (e) {
+    logger.warn("[mailRecipients] usuarios rol jefe_taller no leídos", { message: e.message });
+  }
+  return "";
+}
 
 // Recepción como ARRAY de emails: empresa/config.email_recepcion o, si está
 // vacío, todos los usuarios con rol recepcion. Puede devolver []. Nunca lanza.

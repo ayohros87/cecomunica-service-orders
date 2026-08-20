@@ -193,6 +193,47 @@ function renderOrdersList(list) {
   APP.utils.lucideRefresh([ordersTable, cardsWrap]);
 }
 
+// La cola de QC NO cabe en la primera página. La lista viva son las 40 órdenes
+// más recientes por fecha_creacion, pero una orden entra en cola de QC al
+// completarse: las que enumera el correo diario son precisamente las viejas, y
+// el filtro de cliente sobre esas 40 devolvía "No se encontraron coincidencias"
+// mientras el correo decía que había cinco esperando.
+//
+// Solución: al encender el filtro (chip o deep-link ?qc=1) se consulta la cola
+// al servidor y se fusiona en APP.state.orders. Sobrevive a los snapshots
+// siguientes porque onUpdate conserva lo que no viene en la página viva
+// (paginatedKept), igual que las páginas de "Cargar más".
+let _colaQcCargada = false;
+
+async function asegurarColaQc() {
+  if (!document.getElementById('filtroQcPendiente')?.checked) return;
+  if (_colaQcCargada) return;
+  if (typeof OrdenesService?.listQcPendientes !== 'function') return;
+
+  const loader = document.getElementById('loader');
+  if (loader) loader.style.display = '';
+  try {
+    const cola = await OrdenesService.listQcPendientes(200);
+    const yaHay = new Set((APP.state.orders || []).map(o => o.ordenId));
+    const nuevas = cola.filter(o => !yaHay.has(o.ordenId));
+    if (nuevas.length) {
+      APP.state.orders = [...(APP.state.orders || []), ...nuevas];
+      APP.state.chipBase = APP.state.orders;
+    }
+    _colaQcCargada = true;
+    aplicarFiltrosCombinados();
+  } catch (e) {
+    console.error('[QC] no se pudo traer la cola de control de calidad:', e);
+    Toast.show('No se pudo cargar la cola de QC completa; se muestra solo lo que ya estaba cargado.', 'bad');
+  } finally {
+    if (loader) loader.style.display = 'none';
+  }
+}
+
+// Al apagar el filtro se olvida la marca para que volver a encenderlo
+// re-consulte (una orden pudo firmarse mientras tanto).
+function olvidarColaQc() { _colaQcCargada = false; }
+
 function aplicarFiltrosCombinados() {
   const filters = getActiveFilters();
   const filtered = hasActiveFilters(filters)

@@ -114,6 +114,11 @@ document.addEventListener("DOMContentLoaded", function () {
       // arrives.
       // §4.4 — auto-focus search field once the initial render is done.
       _autofocusSearchIfIdle();
+      // Deep-link ?qc=1 (CTA "Ver cola de QC" del correo diario): la cola no
+      // cabe en la primera página, así que se consulta al servidor. Sin esto
+      // el correo anunciaba órdenes que la página declaraba inexistentes.
+      // No se espera: repinta solo cuando llega.
+      if (typeof asegurarColaQc === 'function') asegurarColaQc();
       // Deep-link desde los correos: ?entrega=<ordenId> abre el modal de
       // Entrega/Recepción (firma + receptor). Es el destino de los links
       // generados en onComplete.js.
