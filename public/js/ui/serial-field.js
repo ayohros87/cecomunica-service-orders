@@ -11,6 +11,11 @@
 //       - "otro cliente" si la asignación no coincide con opts.clienteId()
 //       - "modelo distinto" si el pool trae otro modelo que opts.modelo()
 //   · 2+ fichas (compartido)  → chip de conflicto; click abre el selector
+// Y por encima de todos, independiente del pool:
+//   · descartado en QC        → chip de alerta "EQUIPO DESCARTADO — no utilizar"
+//     (equipos_descartados). Sale ANTES que cualquier otro chip y también
+//     cuando el serial no tiene ficha en el pool, que es justo el caso de un
+//     equipo descartado que alguien intenta reingresar a bodega.
 // Click en cualquier chip → EquipoFicha.abrir(serial) (si está cargada).
 //
 // API:
@@ -18,11 +23,14 @@
 //     opts.clienteId : () => string|null   — para detectar "otro cliente"
 //     opts.modelo    : () => ({modelo_id, modelo_label})|null — para detectar
 //                      desacuerdo de modelo con la ficha del pool
-//     opts.onInfo    : (info) => {}        — {docs, unidad|null} tras cada lookup
-//                      (p.ej. autocompletar el modelo del formulario)
+//     opts.onInfo    : (info) => {}        — {docs, unidad|null, descartado|null}
+//                      tras cada lookup (p.ej. autocompletar el modelo del
+//                      formulario, o bloquear el guardado si viene descartado).
+//                      `descartado` = doc de equipos_descartados vigente o null.
 //     opts.slot      : Element             — dónde inyectar el chip (default:
 //                      un <span> insertado justo después del input)
-// Dependencias: EquiposPoolService; EquipoFicha opcional.
+// Dependencias: EquiposPoolService; EquiposDescartadosService y EquipoFicha
+// opcionales (si no están cargados, el chip de descarte simplemente no sale).
 window.SerialField = {
 
   _cache: new Map(), // norm → {docs, at}
@@ -75,7 +83,7 @@ window.SerialField = {
           slot.appendChild(hint);
         }
         slot._sfNorm = null;
-        if (opts.onInfo) opts.onInfo({ docs: [], unidad: null });
+        if (opts.onInfo) opts.onInfo({ docs: [], unidad: null, descartado: null });
         return;
       }
       // Evita re-consultar si el usuario solo pasó el foco sin cambiar nada.
@@ -83,7 +91,21 @@ window.SerialField = {
       slot._sfNorm = norm;
 
       let docs = [];
-      try { docs = await this._lookup(norm); } catch (e) { return; }
+      // El descarte se consulta EN PARALELO y antes de cualquier salida
+      // temprana: un serial descartado tiene que avisar aunque no tenga ficha
+      // en el pool (equipo del cliente que nunca entró a bodega) o aunque
+      // tenga varias (colisión de modelos). Es la alerta más importante del
+      // campo — el equipo ya se declaró inservible en control de calidad.
+      let descartado = null;
+      try {
+        const [d, desc] = await Promise.all([
+          this._lookup(norm),
+          typeof EquiposDescartadosService !== 'undefined'
+            ? EquiposDescartadosService.buscar(norm)
+            : Promise.resolve(null),
+        ]);
+        docs = d; descartado = desc;
+      } catch (e) { return; }
       if (EquiposPoolService.normalizarSerial(input.value) !== norm) return; // cambió mientras consultaba
       slot.innerHTML = '';
 
@@ -105,10 +127,27 @@ window.SerialField = {
         return a;
       };
 
+      // Alerta de descarte — SIEMPRE primero y fuera de las salidas tempranas
+      // de abajo. Si control de calidad declaró la unidad inservible, eso pesa
+      // más que su estado en el pool: reingresarla a bodega o montarla en una
+      // orden es exactamente lo que hay que evitar.
+      if (descartado) {
+        const cuando = descartado.descartado_at?.toDate
+          ? descartado.descartado_at.toDate().toLocaleDateString('es-PA') : '';
+        const detalle = [
+          descartado.motivo ? `Motivo: ${descartado.motivo}` : '',
+          descartado.orden_id ? `Orden ${descartado.orden_id}` : '',
+          descartado.por_email || '',
+          cuando,
+        ].filter(Boolean).join(' · ');
+        chip('⛔ EQUIPO DESCARTADO — no utilizar', 'eqpool-chip-alerta',
+          `Control de calidad descartó esta unidad${detalle ? '. ' + detalle : ''}. No debe entregarse ni volver a inventario.`);
+      }
+
       if (!docs.length) {
         chip('sin registro en el pool', 'eqpool-chip-vacio',
           'Este serial no existe en el pool — se dará de alta automáticamente al guardar. Verifica que esté bien escrito.');
-        if (opts.onInfo) opts.onInfo({ docs, unidad: null });
+        if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado });
         return;
       }
 
@@ -117,7 +156,7 @@ window.SerialField = {
         // ficha del equipo y la pestaña Conflictos (auditoría 2026-08-04, A4).
         chip(`⚠ 2+ modelos (${docs.length} fichas) — elegir`, 'eqpool-chip-alerta',
           'Este serial existe en más de una ficha, con modelos distintos. Click para ver y elegir; se resuelve en Inventario · pestaña Conflictos.');
-        if (opts.onInfo) opts.onInfo({ docs, unidad: null });
+        if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado });
         return;
       }
 
@@ -143,7 +182,7 @@ window.SerialField = {
           'El pool registra esta unidad con OTRO modelo — puede ser un error de dedo o una ficha por fusionar.');
       }
 
-      if (opts.onInfo) opts.onInfo({ docs, unidad: u });
+      if (opts.onInfo) opts.onInfo({ docs, unidad: u, descartado });
     };
 
     input.addEventListener('blur', refrescar);

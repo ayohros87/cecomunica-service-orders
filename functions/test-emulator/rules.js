@@ -321,6 +321,33 @@ async function main() {
     .set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
   ok("qc: las aprobadas sin equipos_n (corte legacy) siguen entregándose");
 
+  // ── equipos_descartados: registro de radios que el QC declaró inservibles ─
+  // Escribe quien firma QC (jefe_taller/admin), NO puedeGestionarSeriales():
+  // jefe_taller no está en esa lista y es precisamente quien descarta. Lee
+  // cualquier autenticado porque la alerta al teclear un serial tiene que salir
+  // en todos los puntos de captura — el primero, bodega.
+  await assertSucceeds(as("jefe_taller").doc("equipos_descartados/ABC123")
+    .set({ serial_norm: "ABC123", motivo: "placa quemada", revocado: false }));
+  ok("descartados: jefe_taller registra un descarte");
+  await assertSucceeds(as("administrador").doc("equipos_descartados/ABC124").set({ serial_norm: "ABC124" }));
+  ok("descartados: admin también");
+  for (const r of ["tecnico", "recepcion", "inventario", "vendedor", "vista"]) {
+    await assertFails(as(r).doc("equipos_descartados/bad_" + r).set({ serial_norm: "X" }));
+  }
+  ok("descartados: técnico/recepción/inventario/vendedor/vista NO pueden descartar");
+  // Bodega (rol inventario) es la que MÁS necesita leerlo antes de recibir.
+  for (const r of ["inventario", "tecnico", "recepcion", "vista"]) {
+    await assertSucceeds(as(r).doc("equipos_descartados/ABC123").get());
+  }
+  ok("descartados: lectura abierta a todo autenticado (la alerta es para bodega y taller)");
+  await assertSucceeds(as("jefe_taller").doc("equipos_descartados/ABC123")
+    .set({ revocado: true, revocado_motivo: "sí servía" }, { merge: true }));
+  ok("descartados: revocar es un update, no un borrado (la traza se conserva)");
+  await assertFails(as("jefe_taller").doc("equipos_descartados/ABC124").delete());
+  await assertFails(as("inventario").doc("equipos_descartados/ABC124").delete());
+  await assertSucceeds(as("administrador").doc("equipos_descartados/ABC124").delete());
+  ok("descartados: delete solo admin — desde la UI se revoca, nunca se borra");
+
   // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();

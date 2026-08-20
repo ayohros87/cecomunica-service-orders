@@ -32,6 +32,7 @@
     },
     'go-reporte-pendientes': () => window.open(BASE + 'reporte-pendientes.html', '_blank'),
     'go-progreso-tecnicos': () => window.location.href = 'progreso-tecnicos.html',
+    'go-descartados': () => window.location.href = '../inventario/descartados.html',
     'go-menu-principal': () => window.location.href = '../index.html',
     'logout': () => cerrarSesion(),
     'toggle-topbar-menu': () => toggleTopbarMenu(),
@@ -364,8 +365,13 @@
         const sel = document.getElementById('filtroEstado');
         if (sel) sel.value = '';
         if (typeof syncEstadoChipsFromSelect === 'function') syncEstadoChipsFromSelect();
+      } else if (typeof olvidarColaQc === 'function') {
+        olvidarColaQc();
       }
       aplicarFiltrosCombinados();
+      // La cola de QC no cabe en la primera página (órdenes viejas): se
+      // consulta al servidor y repinta cuando llega. Ver asegurarColaQc.
+      if (cb.checked && typeof asegurarColaQc === 'function') asegurarColaQc();
     }
   };
   

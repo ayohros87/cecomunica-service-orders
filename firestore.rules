@@ -590,6 +590,23 @@ service cloud.firestore {
       }
     }
 
+    // Equipos descartados en control de calidad. Doc ID = serial normalizado,
+    // así que la alerta al teclear un serial (SerialField, en Bodega y Taller)
+    // es un solo get por doc-ID, sin índice.
+    //   · Lectura: cualquier autenticado — la alerta tiene que salir en TODOS
+    //     los puntos de captura de serial, y quien la necesita más es bodega.
+    //   · Escritura: los mismos que firman QC (es un resultado del QC), y NO
+    //     puedeGestionarSeriales(): jefe_taller no está en esa lista y es
+    //     precisamente quien descarta.
+    //   · Nunca se borra desde la UI: revocar escribe `revocado: true` y apila
+    //     la traza en `historial[]`. El delete queda solo para admin.
+    match /equipos_descartados/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && (userRole() in ["administrador", "jefe_taller"] || esRevisorQcExtra());
+      allow delete: if isAdmin();
+    }
+
     // Modelos: catálogo + tarifas de facturación (info sensible). Lectura para
     // cualquier autenticado (inventario cuenta stock, contratos eligen modelo).
     // Escritura SOLO admin/contabilidad (modelo-de-radio.html ya es admin-only).

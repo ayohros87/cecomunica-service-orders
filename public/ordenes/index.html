@@ -47,7 +47,7 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<script defer src="../js/services/ordenesService.js?v=qc7"></script>
+<script defer src="../js/services/ordenesService.js?v=qc8"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script defer src="../js/services/senalesService.js?v=m4"></script>
@@ -56,7 +56,7 @@
 <script defer src="../js/services/mailService.js"></script>
 <script defer src="../js/services/piezasService.js"></script>
 <script defer src="../js/services/modelosService.js"></script>
-<script defer src="../js/services/equiposPoolService.js"></script>
+<script defer src="../js/services/equiposPoolService.js"></script><script defer src="../js/services/equiposDescartadosService.js?v=qcdesc1"></script>
 <script defer src="../js/ui/equipo-ficha.js"></script>
 <script defer src="../js/ui/serial-field.js"></script>
 <script defer src="../js/domain/scoring.js"></script>
@@ -69,7 +69,7 @@
 <script defer src="../js/pages/ordenes-render.js?v=qc14"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=qc5"></script>
 <script defer src="../js/pages/ordenes-flujo.js?v=qc8"></script>
-<script defer src="../js/pages/ordenes-qc.js?v=qc4"></script>
+<script defer src="../js/pages/ordenes-qc.js?v=qc5"></script>
 <script defer src="../js/pages/ordenes-equipos.js?v=cc22"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
      uso, con sus dependencias (storage, firmaPad): ordenes-notas,
@@ -122,6 +122,9 @@
           <div class="overflow-menu-divider"></div>
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
           <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
+          <!-- Taller no tiene el módulo Almacén en el rail, así que el listado
+               de descartados (que nace en el QC de esta página) se alcanza aquí. -->
+          <button class="overflow-menu-item" data-action="go-descartados" title="Radios que control de calidad declaró inservibles"><i data-lucide="ban"></i> Equipos descartados</button>
           <button class="overflow-menu-item" id="topbarBtnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente</button>
           <button class="overflow-menu-item" data-action="toggle-fecha-entrega"><i data-lucide="calendar"></i> <span class="toggle-fecha-entrega-btn">Mostrar fecha entrega</span></button>
           <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Configuración</button>

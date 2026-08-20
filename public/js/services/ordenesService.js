@@ -24,6 +24,52 @@ function qcCoberturaDe(orden) {
   };
 }
 
+/**
+ * Bloque por-equipo de una pasada de QC, tal como se guarda en `qc`.
+ *
+ * El QC nació siendo UNA revisión por orden: `qc.checklist` era un mapa plano y
+ * una firma sobre 10 radios no podía decir qué se revisó en cada uno. Desde el
+ * checklist por equipo, el detalle fiel vive aquí (`por_equipo`, indexado por
+ * el `id` del equipo dentro de `orden.equipos[]`) y `qc.checklist` queda como
+ * resumen derivado — lo siguen leyendo la regla qcAprobadoTraeChecklist() y las
+ * métricas de progreso-tecnicos.js.
+ *
+ * Devuelve `{}` cuando la orden no tiene equipos (camino legacy) para no
+ * estampar claves vacías en el documento.
+ * @param {Object|null} equipos - payload armado por ordenes-qc.js
+ */
+function qcPorEquipoDe(equipos) {
+  if (!equipos || !equipos.por_equipo) return {};
+  return {
+    por_equipo: equipos.por_equipo,
+    equipos_revisados_n: equipos.equipos_revisados_n || 0,
+    equipos_aprobados: equipos.aprobados || [],
+    equipos_denegados: equipos.denegados || [],
+    equipos_descartados: equipos.descartados || [],
+  };
+}
+
+/**
+ * Versión COMPACTA para `qc_historial`. El historial es un array que crece con
+ * cada pasada (arrayUnion) dentro del mismo documento: meter el detalle por
+ * equipo multiplicaría su tamaño por el número de radios y acerca el doc al
+ * tope de 1 MiB de Firestore. El detalle completo de la pasada vigente ya está
+ * en `qc`; aquí basta el recuento y qué seriales se descartaron, que es lo
+ * único del historial que se consulta después.
+ * @param {Object|null} equipos
+ */
+function qcPorEquipoHistorialDe(equipos) {
+  if (!equipos || !equipos.por_equipo) return {};
+  return {
+    equipos_revisados_n: equipos.equipos_revisados_n || 0,
+    aprobados_n:   (equipos.aprobados   || []).length,
+    denegados_n:   (equipos.denegados   || []).length,
+    descartados_n: (equipos.descartados || []).length,
+    equipos_denegados:   equipos.denegados   || [],
+    equipos_descartados: equipos.descartados || [],
+  };
+}
+
 const OrdenesService = {
   /**
    * Internal helper: builds the orders query with role-based filtering
@@ -300,7 +346,7 @@ const OrdenesService = {
    * @param {string} ordenId
    * @param {{tipo:string, checklist:Object, observaciones?:string}} payload
    */
-  async saveQcAprobado(ordenId, { tipo, checklist, observaciones = '' }) {
+  async saveQcAprobado(ordenId, { tipo, checklist, observaciones = '', equipos = null }) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     const orden = (await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {};
@@ -311,6 +357,7 @@ const OrdenesService = {
         tipo,
         checklist,
         observaciones,
+        ...qcPorEquipoDe(equipos),
         // Qué cubrió esta firma. equipos_n lo compara la regla de entrega
         // (qcCubreLosEquipos): si después se agregan equipos, el QC caduca.
         // seriales deja el rastro de QUÉ unidades se revisaron — el checklist
@@ -328,6 +375,7 @@ const OrdenesService = {
         tipo,
         checklist,
         observaciones,
+        ...qcPorEquipoHistorialDe(equipos),
         equipos_n: cobertura.equipos_n,
         tecnico_uid: orden.tecnico_uid || '',
         tecnico: orden.tecnico_asignado || '',
@@ -349,7 +397,7 @@ const OrdenesService = {
    * @param {string} ordenId
    * @param {{tipo:string, checklist:Object, motivos:string[], observaciones?:string}} payload
    */
-  async saveQcRechazado(ordenId, { tipo, checklist, motivos, observaciones = '' }) {
+  async saveQcRechazado(ordenId, { tipo, checklist, motivos, observaciones = '', equipos = null }) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     const orden = (await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {};
@@ -362,6 +410,7 @@ const OrdenesService = {
         checklist,
         motivos,
         observaciones,
+        ...qcPorEquipoDe(equipos),
         equipos_n: cobertura.equipos_n,
         seriales: cobertura.seriales,
         por_uid: user?.uid || '',
@@ -374,6 +423,7 @@ const OrdenesService = {
         checklist,
         motivos,
         observaciones,
+        ...qcPorEquipoHistorialDe(equipos),
         equipos_n: cobertura.equipos_n,
         tecnico_uid: orden.tecnico_uid || '',
         tecnico: orden.tecnico_asignado || '',
@@ -850,6 +900,50 @@ const OrdenesService = {
       
       throw e; // Re-throw if not index issue
     }
+  },
+
+  /**
+   * Cola de control de calidad, CONSULTADA AL SERVIDOR.
+   *
+   * Por qué existe (reporte jefa de taller 2026-08-19): el chip "QC" y el CTA
+   * `?qc=1` del correo diario filtraban en cliente sobre la primera página —
+   * las 40 órdenes MÁS RECIENTES. Pero una orden entra en cola de QC después de
+   * completarse, así que las que el correo enumera son justamente las viejas:
+   * el correo decía "5 órdenes esperando" y la página respondía "No se
+   * encontraron coincidencias". Esta query no depende de esa ventana.
+   *
+   * Mismo criterio (y mismo índice compuesto qc_requerido+estado_reparacion)
+   * que SenalesService.countOrdenesQcPendiente, que cuenta lo mismo en el home.
+   * @param {number} [limit=200]
+   * @returns {Promise<Array>} órdenes pendientes de QC, sin ordenar
+   */
+  async listQcPendientes(limit = 200) {
+    const db = firebase.firestore();
+    const snap = await db.collection("ordenes_de_servicio")
+      .where("qc_requerido", "==", true)
+      .where("estado_reparacion", "==", "COMPLETADO (EN OFICINA)")
+      .limit(limit)
+      .get();
+
+    const out = [];
+    snap.forEach(doc => {
+      const o = { ordenId: doc.id, ...(doc.data() || {}) };
+      if (o.eliminado === true) return;
+      // Las ENTRADA cierran sin QC ni entrega: no son cola de nadie.
+      if ((o.tipo_de_servicio || "") === "ENTRADA") return;
+      // Con OrdenesQC cargada se usa su criterio (incluye la caducidad por
+      // cambio de seriales); si no, se cae al equivalente por conteo.
+      if (typeof OrdenesQC !== "undefined") {
+        if (OrdenesQC.qcPendiente(o)) out.push(o);
+        return;
+      }
+      const aprobado = o.qc?.resultado === "aprobado";
+      const n = o.qc?.equipos_n;
+      const caducado = aprobado && typeof n === "number"
+        && n !== (Array.isArray(o.equipos) ? o.equipos.length : 0);
+      if (!aprobado || caducado) out.push(o);
+    });
+    return out;
   },
 
   /**

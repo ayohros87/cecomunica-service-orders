@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Equipos descartados - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc25">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+
+  <style>
+    /* Page-local — listado de equipos descartados en control de calidad. */
+    .dsc-serial {
+      font-family: var(--font-mono, monospace); font-weight: 700;
+      color: var(--accent, #0091D7); cursor: pointer;
+    }
+    .dsc-revocado .dsc-serial { color: var(--fg-3); text-decoration: line-through; }
+    .dsc-motivo { font-size: 12.5px; color: var(--fg-2); }
+    .dsc-meta   { font-size: 12px; color: var(--fg-3); }
+    .dsc-vacio  { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
+    .dsc-vacio svg { width: 34px; height: 34px; color: #16A34A; }
+    .dsc-aviso {
+      display: flex; align-items: flex-start; gap: 8px; margin-bottom: var(--sp-4);
+      padding: 10px 12px; border-radius: var(--radius-md); font-size: 13px;
+      background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA;
+    }
+    .badge.revocado { background: var(--surface-sunken); color: var(--fg-3); }
+  </style>
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js?v=ses2"></script>
+  <script src="../js/core/modulos.js?v=cc13"></script>
+  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/services/equiposPoolService.js?v=cc28"></script>
+  <script defer src="../js/services/equiposDescartadosService.js?v=qcdesc1"></script>
+  <script defer src="../js/ui/equipo-ficha.js?v=cc2"></script>
+  <script defer src="../js/pages/inventario-descartados.js?v=qcdesc1"></script>
+  <script defer src="/js/vendor/lucide.min.js?v=1"></script>
+  <script defer src="/js/core/icons.js?v=1"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="ban"></i> Equipos descartados',
+      menu: [
+        { onclick: 'DescartadosPage.recargar()', label: '<i data-lucide="refresh-cw"></i> Recargar' },
+      ],
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div id="loader" style="display:none;" class="loader-center">
+    <div class="loader"></div>
+  </div>
+
+  <div class="app-wrap app-wrap--full">
+
+    <div class="dsc-aviso">
+      <i data-lucide="alert-triangle"></i>
+      <div>
+        <b>Estos equipos NO deben usarse.</b> Control de calidad los declaró
+        inservibles al revisar la orden. Si alguien teclea uno de estos seriales
+        en bodega o en el taller, el campo muestra una alerta automática.
+      </div>
+    </div>
+
+    <div class="app-toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:var(--sp-3);">
+      <input type="search" id="dscBuscar" class="form-input" style="max-width:320px;"
+             placeholder="Buscar por serial, modelo, orden o cliente…">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+        <input type="checkbox" id="dscVerRevocados"> Ver también los revocados
+      </label>
+      <span class="dsc-meta" id="dscResumen" style="margin-left:auto;"></span>
+    </div>
+
+    <div class="app-table-wrap">
+      <div style="overflow-x:auto;">
+        <table class="app-table">
+          <thead>
+            <tr>
+              <th>Serial</th>
+              <th>Modelo</th>
+              <th>Motivo</th>
+              <th>Orden / Cliente</th>
+              <th>Descartado por</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="dscTabla"></tbody>
+        </table>
+      </div>
+      <div class="dsc-vacio" id="dscVacio" style="display:none;">
+        <i data-lucide="check-circle-2"></i>
+        <p>Ningún equipo descartado. Nada que vigilar.</p>
+      </div>
+    </div>
+
+  </div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('almacen'));
+  </script>
+</body>
+</html>
