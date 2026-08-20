@@ -75,6 +75,11 @@ function aplicarRestriccionesPorRol(rol) {
 }
 window.aplicarRestriccionesPorRol = aplicarRestriccionesPorRol;
 
+// Órdenes que un correo señaló por su ID (deep-link `?ids=`). Es un filtro
+// EXACTO y sin caja de texto: no lo pone la persona, lo pone el enlace. Se
+// guarda aquí y no en un input porque no hay control de UI que lo represente.
+let _idsCorreo = null;   // Set<string> | null
+
 function getActiveFilters() {
   const filtroOrden = normTxt(document.getElementById("filtroOrden")?.value || "");
   const filtroCliente = normTxt(document.getElementById("filtroCliente")?.value || "");
@@ -85,7 +90,8 @@ function getActiveFilters() {
   const soloMias = !!document.getElementById("toggleMisOrdenes")?.checked;
   const soloQcPendiente = !!document.getElementById("filtroQcPendiente")?.checked;
 
-  return { filtroOrden, filtroCliente, filtroSerial, filtroTipo, filtroEstado, filtroTecnico, soloMias, soloQcPendiente };
+  return { filtroOrden, filtroCliente, filtroSerial, filtroTipo, filtroEstado, filtroTecnico, soloMias, soloQcPendiente,
+           idsCorreo: _idsCorreo };
 }
 
 function hasActiveFilters(filters) {
@@ -97,7 +103,8 @@ function hasActiveFilters(filters) {
     filters.filtroEstado ||
     filters.filtroTecnico ||
     filters.soloMias ||
-    filters.soloQcPendiente
+    filters.soloQcPendiente ||
+    (filters.idsCorreo && filters.idsCorreo.size)
   );
 }
 
@@ -125,6 +132,10 @@ function matchesAdvancedFilters(order, filters) {
       .some(e => normTxt(e.numero_de_serie || "").includes(filters.filtroSerial));
     if (!serialMatch) return false;
   }
+
+  // El deep-link del correo manda sobre todo lo demás: la persona hizo clic en
+  // "Ver órdenes" para ver ESAS, no para explorar la bandeja.
+  if (filters.idsCorreo && filters.idsCorreo.size && !filters.idsCorreo.has(order.ordenId)) return false;
 
   if (filters.filtroEstado && estado !== filters.filtroEstado) return false;
   if (filters.soloMias && !esOrdenMia(order)) return false;
@@ -234,6 +245,73 @@ async function asegurarColaQc() {
 // re-consulte (una orden pudo firmarse mientras tanto).
 function olvidarColaQc() { _colaQcCargada = false; }
 
+// ── Deep-link `?ids=` de los correos ──────────────────────────────────────
+// Mismo problema que la cola de QC, y por la misma razón: las órdenes que un
+// correo enumera son viejas (estancadas 10+ días, listas para entregar hace
+// días) y no caben en la primera página, que son las 40 más recientes. Antes
+// el CTA "Ver órdenes" llevaba a la lista pelada y la persona veía su bandeja
+// normal, sin rastro de lo que el correo anunciaba.
+//
+// El correo ya calculó QUÉ órdenes son, así que las manda por ID en la URL en
+// vez de que el cliente vuelva a deducir el criterio (edad, SLA, estado) —
+// duplicar esa lógica aquí la dejaría desincronizada del cron a la primera.
+let _idsCargados = false;
+
+async function asegurarOrdenesDeCorreo() {
+  if (!_idsCorreo || !_idsCorreo.size || _idsCargados) return;
+  if (typeof OrdenesService?.listByIds !== 'function') return;
+
+  const loader = document.getElementById('loader');
+  if (loader) loader.style.display = '';
+  try {
+    const faltantes = [...(_idsCorreo)]
+      .filter(id => !(APP.state.orders || []).some(o => o.ordenId === id));
+    if (faltantes.length) {
+      const traidas = await OrdenesService.listByIds(faltantes);
+      if (traidas.length) {
+        APP.state.orders = [...(APP.state.orders || []), ...traidas];
+        APP.state.chipBase = APP.state.orders;
+      }
+    }
+    _idsCargados = true;
+    aplicarFiltrosCombinados();
+    _avisoCorreoHtml();
+  } catch (e) {
+    console.error('[ids] no se pudieron traer las órdenes del correo:', e);
+    Toast.show('No se pudieron cargar todas las órdenes del correo.', 'bad');
+  } finally {
+    if (loader) loader.style.display = 'none';
+  }
+}
+
+// Aviso de que la vista está recortada por el enlace del correo, con salida.
+// Sin esto la persona ve 6 órdenes y cree que su bandeja se vació.
+function _avisoCorreoHtml() {
+  if (!_idsCorreo || !_idsCorreo.size) return;
+  let box = document.getElementById('avisoDeepLinkCorreo');
+  const cont = document.getElementById('ordersTable')?.closest('.app-table-wrap')?.parentElement
+            || document.querySelector('.app-wrap');
+  if (!box && cont) {
+    box = document.createElement('div');
+    box.id = 'avisoDeepLinkCorreo';
+    box.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;'
+      + 'margin:0 0 12px;padding:9px 12px;border-radius:8px;font-size:13px;'
+      + 'background:#EFF6FF;color:#1E3A8A;border:1px solid #BFDBFE;';
+    cont.insertBefore(box, cont.firstChild);
+  }
+  if (!box) return;
+  const n = _idsCorreo.size;
+  box.innerHTML = `<span><b>Estás viendo las ${n} orden(es) del correo.</b>
+      El resto de la bandeja está oculto.</span>
+    <button type="button" class="btn btn-secondary btn-sm" id="btnVerTodasCorreo"
+            style="margin-left:auto;">Ver todas las órdenes</button>`;
+  box.querySelector('#btnVerTodasCorreo').onclick = () => {
+    _idsCorreo = null;
+    box.remove();
+    aplicarFiltrosCombinados();
+  };
+}
+
 function aplicarFiltrosCombinados() {
   const filters = getActiveFilters();
   const filtered = hasActiveFilters(filters)
@@ -314,6 +392,14 @@ function _applyURLToFilters() {
   if (params.get('qc') === '1') {
     const q = document.getElementById('filtroQcPendiente');
     if (q) { q.checked = true; touched = true; }
+  }
+  // ?ids=a,b,c — las órdenes concretas que enumeraba un correo. Las trae
+  // asegurarOrdenesDeCorreo() del servidor, porque son viejas y no caben en la
+  // primera página. Tope de cordura: el correo manda como mucho 30.
+  const idsRaw = params.get('ids');
+  if (idsRaw) {
+    const ids = idsRaw.split(',').map(s => s.trim()).filter(Boolean).slice(0, 60);
+    if (ids.length) { _idsCorreo = new Set(ids); touched = true; }
   }
   if (params.has('sort')) {
     APP.state.sortField = params.get('sort');

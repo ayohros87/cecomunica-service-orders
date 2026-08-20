@@ -98,6 +98,10 @@
       type: 'user-picker', emptyHint: 'solo administradores',
       hint: 'Cuando los seriales de un contrato quedan "asignados", la pantalla se bloquea en solo-lectura para evitar cambios accidentales. Los administradores siempre pueden reabrir y editar; aquí puedes habilitar usuarios específicos (aunque no sean admin) para reabrir y editar seriales ya asignados. Vacío = solo administradores.' },
 
+    { key: 'qc_revisores_extra', section: 'operacion', label: 'Firmar control de calidad (además de admin y jefe de taller)',
+      type: 'user-picker', emptyHint: 'solo administradores y el jefe de taller',
+      hint: 'Ninguna orden de taller se entrega hasta que el control de calidad quede aprobado, y hoy lo firma casi siempre la misma persona. Aquí puedes habilitar suplentes: usuarios que podrán firmar el QC aunque no sean administradores ni jefe de taller. Sin nadie configurado, si esa persona falta la cola de entregas se detiene. Vacío = solo administradores y jefe de taller.' },
+
     { key: 'orden_stale_dias',          section: 'operacion', label: 'Días para marcar orden como "sin movimiento"',
       type: 'int',  min: 3,     max: 60,
       hint: 'Umbral usado en el panel de Operación para el flag de stale y en el correo diario de órdenes estancadas al taller (recordatorioOperativo).' },

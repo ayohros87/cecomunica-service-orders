@@ -53,6 +53,29 @@ function edadDias(ts, now) {
   return d ? (now - d) / (1000 * 60 * 60 * 24) : null;
 }
 
+// Deep-link del CTA: las órdenes CONCRETAS que el correo enumera, por ID.
+//
+// El botón llevaba a `/ordenes/index.html` pelado y la bandeja muestra las 40
+// MÁS RECIENTES — mientras que todo lo que enumeran estos correos es viejo por
+// definición (estancadas 10+ días, en cola de QC, esperando entrega). El
+// resultado era que la persona hacía clic y veía su bandeja de siempre, sin
+// rastro de lo anunciado (reporte de la jefa de taller, 2026-08-20:
+// "carga la página como si estuviera iniciando sesión de manera normal").
+//
+// Se mandan los IDs y no un filtro por criterio para no duplicar en el cliente
+// la lógica de edad/SLA/estado de este cron, que se desincronizaría a la
+// primera. El tope es el mismo MAX_FILAS que se muestra en la tabla.
+function idsCta(arr) {
+  const ids = arr.slice(0, MAX_FILAS).map(o => o.id).filter(Boolean);
+  return ids.length ? `?ids=${encodeURIComponent(ids.join(","))}` : "";
+}
+
+// Enlace de una fila a su orden. Llegar a la orden nombrada no debería exigir
+// buscarla a mano en la bandeja.
+function linkOrden(id, texto) {
+  return `<a href="${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(id)}">${esc(texto)}</a>`;
+}
+
 function tablaHtml(headers, rows) {
   const th = headers.map(h => `<th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">${esc(h)}</th>`).join("");
   const trs = rows.map(cols =>
@@ -137,8 +160,8 @@ module.exports = onSchedule(
             </p>
             ${tablaHtml(["Orden", "Cliente", "Estado", "Técnico", "Días"], filas)}
             ${extra}`,
-          ctaUrl: `${APP_BASE_URL}/ordenes/index.html`,
-          ctaLabel: "Ver órdenes",
+          ctaUrl: `${APP_BASE_URL}/ordenes/index.html${idsCta(estancadas)}`,
+          ctaLabel: "Ver estas órdenes",
           meta: { source: "recordatorioOperativo", seccion: "ordenes_estancadas", total: estancadas.length },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -268,7 +291,7 @@ module.exports = onSchedule(
       const dests = await recepcionEmails();
       if ((vencidas.length || sueltas.length) && dests.length) {
         const filasV = vencidas.slice(0, MAX_FILAS).map(a => [
-          esc(a.id), esc(a.cliente), esc(a.contrato), esc(a.modo), `${a.pendientes}`, `<b>${a.dias}</b>`,
+          linkOrden(a.id, a.id), esc(a.cliente), esc(a.contrato), esc(a.modo), `${a.pendientes}`, `<b>${a.dias}</b>`,
         ]);
         const filasS = sueltas.slice(0, MAX_FILAS).map(u => [
           esc(u.serial), esc(u.modelo), esc(u.cliente), `<b>${u.dias}</b>`,
@@ -292,8 +315,8 @@ module.exports = onSchedule(
               devolución abierta</b> (transiciones registradas a mano) — nadie es dueño de recuperarlos:
             </p>
             ${tablaHtml(["Serial", "Modelo", "Cliente", "Días"], filasS)}` : ""}`,
-          ctaUrl: `${APP_BASE_URL}/ordenes/index.html`,
-          ctaLabel: "Ver órdenes",
+          ctaUrl: `${APP_BASE_URL}/ordenes/index.html${idsCta(vencidas)}`,
+          ctaLabel: vencidas.length ? "Ver estas órdenes" : "Ver órdenes",
           meta: { source: "recordatorioOperativo", seccion: "devoluciones", vencidas: vencidas.length, sueltas: sueltas.length },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -444,8 +467,8 @@ module.exports = onSchedule(
             </p>
             ${tablaHtml(["Orden", "Cliente", "Tipo", "Contrato", "Días"], filas)}
             ${extra}`,
-          ctaUrl: `${APP_BASE_URL}/ordenes/index.html`,
-          ctaLabel: "Ver órdenes",
+          ctaUrl: `${APP_BASE_URL}/ordenes/index.html${idsCta(listas)}`,
+          ctaLabel: "Ver estas órdenes",
           meta: { source: "recordatorioOperativo", seccion: "listas_entregar", total: listas.length },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });

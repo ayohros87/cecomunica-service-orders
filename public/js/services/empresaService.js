@@ -22,6 +22,7 @@ const EMPRESA_CONFIG_DEFAULTS = Object.freeze({
   entrada_recordatorio_dias: 7,    // días en cuarentena (devuelto_revision) sin inspección antes de avisar a recepción
   devolucion_sla_dias: 15,         // días que una orden de DEVOLUCIÓN puede estar abierta antes de escalar en el digest diario
   seriales_editores_extra:   [],   // emails habilitados a EDITAR seriales ya "asignados" (además de admin). [] = solo administradores
+  qc_revisores_extra:        [],   // emails habilitados a FIRMAR el control de calidad (además de admin/jefe_taller). [] = solo esos dos. Sin suplentes, la cola de entregas se detiene si falta el jefe de taller
   cotizacion_descuento_max_pct: 15, // descuento % máximo que un vendedor puede enviar sin aprobación
   cotizacion_total_max:      5000, // total máximo (USD) que un vendedor puede enviar sin aprobación
   cotizaciones_supervisores: [],   // emails habilitados a VER todas las cotizaciones en solo-lectura, sin importar su rol (coordinación de ventas). [] = solo admin/jefe_taller/gerente ven todas

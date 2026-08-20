@@ -947,6 +947,42 @@ const OrdenesService = {
   },
 
   /**
+   * Órdenes por ID de documento, en un solo viaje por lote.
+   *
+   * Existe para el deep-link `?ids=` de los correos: la bandeja solo trae las
+   * 40 más recientes y las órdenes que un correo enumera son por definición las
+   * viejas, así que hay que pedirlas por nombre. Se usa `documentId() in [...]`,
+   * que Firestore limita a 30 valores por consulta — de ahí los lotes.
+   *
+   * Los IDs inexistentes (una orden borrada desde que salió el correo)
+   * simplemente no vuelven; no es un error.
+   * @param {string[]} ids
+   * @returns {Promise<Array>}
+   */
+  async listByIds(ids) {
+    const limpios = [...new Set((ids || []).map(s => String(s).trim()).filter(Boolean))];
+    if (!limpios.length) return [];
+
+    const db = firebase.firestore();
+    const col = db.collection("ordenes_de_servicio");
+    const TAM = 30;
+    const lotes = [];
+    for (let i = 0; i < limpios.length; i += TAM) lotes.push(limpios.slice(i, i + TAM));
+
+    const out = [];
+    const snaps = await Promise.all(lotes.map(lote =>
+      col.where(firebase.firestore.FieldPath.documentId(), "in", lote).get()));
+    snaps.forEach(snap => snap.forEach(doc => {
+      const d = doc.data() || {};
+      // Una orden borrada (lógicamente) no se muestra aunque el correo la
+      // nombrara: el correo es una foto del día anterior.
+      if (d.eliminado === true) return;
+      out.push({ ordenId: doc.id, ...d });
+    }));
+    return out;
+  },
+
+  /**
    * Update trabajo tecnico for a specific equipment in an order
    * @param {Object} params
    * @param {string} params.ordenId - Order ID

@@ -65,7 +65,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
   firebase.auth().onAuthStateChanged(async (user) => {
     if (!user) {
-      window.location.href = "../login.html";
+      // Conserva el destino (reporte jefa de taller 2026-08-20): esta página se
+      // abre desde los enlaces de los correos, muchas veces en el navegador del
+      // cliente de correo, donde la sesión no siempre se restaura. Al mandar a
+      // login sin `?next` se perdía el enlace profundo y, tras entrar, la
+      // persona aterrizaba en la lista normal — "como si iniciara sesión
+      // normalmente", sin las órdenes que el correo anunciaba.
+      // login.html ya sabe leer `next` (exige ruta absoluta de una sola barra).
+      const next = window.location.pathname + window.location.search;
+      window.location.href = "../login.html?next=" + encodeURIComponent(next);
       return;
     }
     try {
@@ -119,6 +127,10 @@ document.addEventListener("DOMContentLoaded", function () {
       // el correo anunciaba órdenes que la página declaraba inexistentes.
       // No se espera: repinta solo cuando llega.
       if (typeof asegurarColaQc === 'function') asegurarColaQc();
+      // Deep-link ?ids= (CTA "Ver órdenes" de los correos): trae del servidor
+      // las órdenes concretas que el correo enumeraba. Mismo motivo que la cola
+      // de QC — son viejas y no caben en la primera página.
+      if (typeof asegurarOrdenesDeCorreo === 'function') asegurarOrdenesDeCorreo();
       // Deep-link desde los correos: ?entrega=<ordenId> abre el modal de
       // Entrega/Recepción (firma + receptor). Es el destino de los links
       // generados en onComplete.js.
