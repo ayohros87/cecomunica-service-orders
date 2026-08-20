@@ -664,8 +664,11 @@
       } else if (sel !== 'descartado' && aviso) {
         aviso.remove();
       }
-      card.style.borderColor = sel === 'aprobado' ? '#86EFAC'
-        : (pide ? '#FECACA' : 'var(--line,#E5E7EB)');
+      // El verde señala RESUELTO, no "elegí aprobado": marcar el desenlace sin
+      // completar el checklist dejaba la tarjeta en verde mientras el resumen
+      // de abajo seguía diciendo que faltaba resolverla.
+      card.style.borderColor = _equipoResuelto(eqKey) ? '#86EFAC'
+        : (pide || sel ? '#FCD34D' : 'var(--line,#E5E7EB)');
     }
 
     // El motivo por equipo se teclea, no se clickea: va por 'input'.
@@ -674,6 +677,7 @@
       if (!nota) return;
       const eqK = nota.closest('.qc-equipo-card').dataset.eq;
       porEquipo[eqK].nota = nota.value;
+      _pintarResultado(eqK);   // el motivo escrito es lo que resuelve la tarjeta
       _refrescarEstado();
     });
 
