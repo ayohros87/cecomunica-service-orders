@@ -17,7 +17,10 @@
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin · Financiero — Cecomunica</title>
+  <!-- Sin el prefijo "Admin ·" del resto de la carpeta: la página está gateada a
+       admin Y contabilidad, y contabilidad llega por la pestaña Panorama de
+       Finanzas sin pisar nunca el panel de administración. -->
+  <title>Panorama financiero — Cecomunica</title>
 
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc25">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
@@ -58,7 +61,12 @@
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbar({
-      title: '<i data-lucide="dollar-sign"></i> Financiero',
+      /* "Panorama financiero" y no "Financiero" a secas: esta página tiene dos
+         padres —la pestaña "Panorama" de Finanzas y la tarjeta "Financiero" del
+         panel de admin— y el título tiene que reconciliar los dos. Con la forma
+         larga, cada lado reconoce su palabra; es el mismo patrón corto→largo del
+         resto del módulo (Activación → "Activación de facturación"). */
+      title: '<i data-lucide="dollar-sign"></i> Panorama financiero',
       back: { href: 'index.html', label: '<i data-lucide="arrow-left"></i> Panel' },
       showHome: true, homeHref: '../index.html', showLogout: true
     });
