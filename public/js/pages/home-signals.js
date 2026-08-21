@@ -84,7 +84,7 @@ window.HomeSignals = (() => {
       href: 'ordenes/index.html?estado=COMPLETADO%20(EN%20OFICINA)',
       count: () => SenalesService.countListasParaEntregar(),
       items: () => SenalesService.listListasParaEntregar(),
-      posponer: true,
+      posponer: true, curso: true,
       row: (r, esc) => ({
         txt: `<b>${esc(r.cliente)}</b> <span class="pend-id">${esc(r.id)}</span>`
           + ` · ${r.equipos} equipo${r.equipos === 1 ? '' : 's'} · ${esc(r.tipo)}`,
@@ -104,7 +104,7 @@ window.HomeSignals = (() => {
       href: 'ordenes/index.html',
       count: () => SenalesService.countEstancadas(),
       items: () => SenalesService.listEstancadas(),
-      posponer: true,
+      posponer: true, curso: true,
       row: (r, esc) => ({
         txt: `<b>${esc(r.cliente)}</b> <span class="pend-id">${esc(r.id)}</span>`
           + ` · ${esc(r.estado.toLowerCase())}${r.tecnico ? ' · ' + esc(r.tecnico) : ''}`,
@@ -187,6 +187,7 @@ window.HomeSignals = (() => {
       href: 'inventario/equipos.html?tab=devuelto_revision',
       count: () => SenalesService.countEquiposPoolPorEstado('devuelto_revision'),
       items: () => SenalesService.listCuarentena(),
+      curso: true,
       row: (r, esc) => ({
         txt: `<span class="pend-id">${esc(r.serial)}</span> <b>${esc(r.modelo)}</b>`
           + (r.cliente && r.cliente !== '—' ? ` · venía de ${esc(r.cliente)}` : ''),
@@ -389,6 +390,8 @@ window.HomeSignals = (() => {
       .pend-pospuesto .pend-txt { text-decoration: none; }
       .pend-snz-tag { flex: none; font-size: 11px; background: #FEF3C7; color: #92400E;
         border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+      .pend-curso-tag { flex: none; font-size: 11px; background: #E6F4FC; color: #005781;
+        border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
       .pend-pie { padding: 8px 14px; font-size: 12px; color: var(--fg-3, #6B819A);
         background: var(--surface-sunken, #F8FAFC); }
       .pend-vacio { padding: 16px 14px; font-size: 13px; color: var(--fg-3, #6B819A); text-align: center; }
@@ -407,13 +410,22 @@ window.HomeSignals = (() => {
     const snz = sig.posponer && !r.pospuesto
       ? `<button type="button" class="pend-snz-btn" data-snz="${_esc(r.id)}" title="Sacarlo del ruido unos días, con motivo — también silencia el correo diario">posponer</button>`
       : '';
+    // "En curso": el dueño del pendiente es el ROL — tomar avisa, no bloquea,
+    // y cualquiera del rol puede soltar (si quien lo tomó no está, el
+    // pendiente no se queda secuestrado).
+    const cursoTag = r.en_curso
+      ? `<span class="pend-curso-tag" title="Alguien del rol ya lo está trabajando — no bloquea: cualquiera puede actuar o soltarlo">en curso · ${_esc(r.curso_por)}${r.curso_dias ? ' · ' + r.curso_dias + 'd' : ''}</span>`
+      : '';
+    const cursoBtn = r.pospuesto ? '' : (r.en_curso
+      ? `<button type="button" class="pend-snz-btn" data-soltar="${_esc(r.id)}" title="Liberarlo — por ejemplo, si quien lo tomó no está">soltar</button>`
+      : (sig.curso ? `<button type="button" class="pend-snz-btn" data-tomar="${_esc(r.id)}" title="Avisar al resto del rol que lo estás trabajando">tomar</button>` : ''));
     const tag = r.pospuesto
       ? `<span class="pend-snz-tag" title="${_esc(r.snooze_motivo)}">pospuesto → ${_esc(r.snooze_hasta)}</span>
          <button type="button" class="pend-snz-btn" data-react="${_esc(r.id)}">reactivar</button>`
       : '';
     return `<div class="pend-fila${r.pospuesto ? ' pend-pospuesto' : ''}" data-row="${_esc(r.id)}" data-col="${_esc(r.col)}">
       <span class="pend-txt">${row.txt}</span>
-      ${tag}${_diasHtml(row.dias)}${snz}
+      ${tag}${cursoTag}${_diasHtml(row.dias)}${cursoBtn}${snz}
       ${row.cta && !r.pospuesto ? `<a class="pend-cta" href="${row.cta.href}">${_esc(row.cta.label)}</a>` : ''}
     </div>`;
   }
@@ -489,6 +501,22 @@ window.HomeSignals = (() => {
         } catch (e) { btn.disabled = false; console.warn('[HomeSignals] reactivar:', e); }
       });
     });
+    // Tomar / soltar no tocan el conteo (en curso sigue pendiente): solo
+    // repintan el panel.
+    const _accionCurso = (selector, fn) => {
+      panel.querySelectorAll(selector).forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          try {
+            const fila = btn.closest('.pend-fila');
+            await fn({ col: fila.dataset.col, id: fila.dataset.row });
+            _renderPanel(panel, id, sig);
+          } catch (e) { btn.disabled = false; console.warn('[HomeSignals] curso:', e); }
+        });
+      });
+    };
+    _accionCurso('[data-tomar]', (a) => SenalesService.tomarPendiente(a));
+    _accionCurso('[data-soltar]', (a) => SenalesService.soltarPendiente(a));
   }
 
   // Tras posponer/reactivar el conteo del tile cambia: se recalcula esa señal

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Harness — bandeja de pendientes</title>
+<!--
+  Harness de REVISIÓN VISUAL de la bandeja de pendientes del home.
+  Carga el código de PRODUCCIÓN íntegro (domain/pendientes, senalesService,
+  home-signals + el CSS real) sobre un Firestore de mentira con dataset fijo.
+  Lo maneja revisar-pendientes.js (Chrome headless vía puppeteer-core).
+  Corre con:  npm run test:browser   (desde functions/)
+  Encontró su primer defecto real el 2026-08-21 (S13: tile ≠ filas).
+  Las rutas son relativas a functions/test-browser/ — no mover sin ajustarlas.
+-->
+<!-- CSS REAL del home: los tiles .kpi salen con su estilo de producción -->
+<link rel="stylesheet" href="../../public/css/ceco-command.css">
+<style>
+  body { background: var(--bg, #F4F6F9); margin: 0; padding: 24px 0 60px; }
+  .launch__signals { margin-top: 0 !important; }
+  h4 { font: 700 13px/1.4 system-ui; color: #6B819A; max-width: 1120px;
+       margin: 26px auto 8px; padding: 0 28px; text-transform: uppercase; letter-spacing: .08em; }
+</style>
+</head>
+<body>
+<h4 id="titulo">Bandeja de pendientes — harness</h4>
+<div class="launch__signals" id="signalsRow"></div>
+
+<script>
+/* ── Firestore de MENTIRA con el dataset del harness ─────────────────────
+   Implementa exactamente la superficie que usa senalesService: collection →
+   where('=='/'in') → limit → get/count, doc → get/update, FieldValue, auth.
+   Así el código de producción corre ÍNTEGRO — solo se reemplaza la red. */
+(function () {
+  const hoy = Date.now();
+  const hace = (d) => new Date(hoy - d * 864e5).toISOString();
+  const futuro = (d) => new Date(hoy + d * 864e5).toISOString();
+  const qcOk = (n) => ({ resultado: 'aprobado', equipos_n: n });
+  const eqs = (n) => Array.from({ length: n }, (_, i) => ({ id: 'e' + i, numero_de_serie: 'SER' + i }));
+
+  const DATA = {
+    ordenes_de_servicio: {
+      // ── listas para entregar (ENT) ──
+      o1: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'PROGRAMACIÓN',
+            cliente_nombre: 'MINISTERIO DE DESARROLLO SOCIAL', fecha_completado: hace(24),
+            qc_requerido: true, qc: qcOk(3), equipos: eqs(3) },
+      o2: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'REPARACIÓN',
+            cliente_nombre: 'APMT PANAMA, S.A.', fecha_completado: hace(37),
+            qc_requerido: true, qc: qcOk(2), equipos: eqs(2) },
+      o3: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'REPARACIÓN',
+            cliente_nombre: 'COLON CONTAINER TERMINAL', fecha_completado: hace(9),
+            qc_requerido: true, qc: qcOk(1), equipos: eqs(1) },
+      o4: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'PROGRAMACIÓN',
+            cliente_nombre: 'HOTELES DECAMERON, S.R.L.', fecha_completado: hace(6),
+            qc_requerido: true, qc: qcOk(4), equipos: eqs(4) },
+      // pospuesta de fábrica: debe salir gris al final con su motivo
+      o5: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'REPARACIÓN',
+            cliente_nombre: 'CEMENTO BAYANO CONCRETO', fecha_completado: hace(15),
+            qc_requerido: true, qc: qcOk(1), equipos: eqs(1),
+            pendiente_snooze: { hasta: futuro(4), motivo: 'cliente de gira hasta el lunes', por_email: 'r@c.com' } },
+      // contraejemplos: joven, ENTRADA, y una en cola de QC
+      o6: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'REPARACIÓN',
+            cliente_nombre: 'JOVEN S.A.', fecha_completado: hace(1), qc_requerido: true, qc: qcOk(1), equipos: eqs(1) },
+      o7: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'ENTRADA',
+            cliente_nombre: 'NO DEBE SALIR', fecha_completado: hace(20) },
+      o8: { estado_reparacion: 'COMPLETADO (EN OFICINA)', tipo_de_servicio: 'REPARACIÓN',
+            cliente_nombre: 'SEINTEGRA PANAMA, S.A.', fecha_completado: hace(5),
+            qc_requerido: true, qc: { resultado: 'rechazado' }, equipos: eqs(2) },
+      // ── estancadas (EST) ──
+      o9:  { estado_reparacion: 'ASIGNADO', cliente_nombre: 'FORTALEZA SECURITY, S.A',
+             tecnico_asignado: 'Marcos Perez', fecha_modificacion: hace(21) },
+      o10: { estado_reparacion: 'POR ASIGNAR', cliente_nombre: 'GRUPO INDECSA, S.A.',
+             fecha_creacion: hace(12) },
+      o11: { estado_reparacion: 'RECIBIDO EN MOSTRADOR', cliente_nombre: 'PROM SECURITY',
+             fecha_modificacion: hace(14) },
+      o12: { estado_reparacion: 'ASIGNADO', cliente_nombre: 'LEGACY VIEJA',
+             fecha_modificacion: hace(60) },          // fuera de la ventana
+      o13: { estado_reparacion: 'ASIGNADO', cliente_nombre: 'FRESCA',
+             fecha_modificacion: hace(2) },           // aún no estancada
+    },
+    equipos_pool: {
+      u1: { estado: 'devuelto_revision', serial: 'B1200110', modelo_label: 'NX-410-R',
+            asignacion: { cliente_nombre: 'APMT PANAMA, S.A.' }, updated_at: hace(30) },
+      u2: { estado: 'devuelto_revision', serial: '24523A0371', modelo_label: 'PNC360S-R',
+            asignacion: { cliente_nombre: 'HOTELES DECAMERON, S.R.L.' }, updated_at: hace(9) },
+      u3: { estado: 'devuelto_revision', serial: 'O180828000175', modelo_label: 'TM-7PLUS',
+            updated_at: hace(2) },
+      u4: { estado: 'en_bodega', serial: 'NOSALE', updated_at: hace(9) },
+    },
+    contratos: {
+      c1: { estado: 'aprobado' }, c2: { estado: 'aprobado' },
+      c3: { estado: 'aprobado', seriales_estado: 'pendiente' },
+    },
+    empresa: { config: {} },
+    cotizaciones: {},
+    inventario_piezas: {},
+  };
+
+  function pasa(doc, filtros) {
+    return filtros.every(([campo, op, val]) => {
+      const v = doc[campo];
+      if (op === '==') return v === val;
+      if (op === 'in') return Array.isArray(val) && val.includes(v);
+      return false;
+    });
+  }
+  function snapDe(col, filtros, lim) {
+    const docs = Object.entries(DATA[col] || {})
+      .filter(([, d]) => pasa(d, filtros))
+      .slice(0, lim || 9999)
+      .map(([id, d]) => ({ id, data: () => JSON.parse(JSON.stringify(d)) }));
+    return { forEach: (cb) => docs.forEach(cb), size: docs.length };
+  }
+  function queryRef(col, filtros) {
+    return {
+      where: (f, op, v) => queryRef(col, filtros.concat([[f, op, v]])),
+      limit: (n) => ({
+        get: async () => snapDe(col, filtros, n),
+        count: () => ({ get: async () => ({ data: () => ({ count: snapDe(col, filtros).size }) }) }),
+      }),
+      get: async () => snapDe(col, filtros),
+      count: () => ({ get: async () => ({ data: () => ({ count: snapDe(col, filtros).size }) }) }),
+    };
+  }
+  const SENTINEL_DELETE = { __delete: true };
+  window.firebase = {
+    firestore: Object.assign(() => ({
+      collection: (col) => Object.assign(queryRef(col, []), {
+        doc: (id) => ({
+          get: async () => ({ exists: !!DATA[col]?.[id], data: () => DATA[col]?.[id] || {} }),
+          update: async (obj) => {
+            const doc = DATA[col][id];
+            if (!doc) throw new Error('no existe ' + col + '/' + id);
+            for (const [k, v] of Object.entries(obj)) {
+              if (v === SENTINEL_DELETE) delete doc[k]; else doc[k] = JSON.parse(JSON.stringify(v));
+            }
+          },
+        }),
+      }),
+    }), {
+      FieldValue: { serverTimestamp: () => new Date().toISOString(), delete: () => SENTINEL_DELETE },
+    }),
+    auth: () => ({ currentUser: { uid: 'harness', email: 'solangel.hosang@cecomunica.com' } }),
+  };
+  window.MODULOS = { puedeVer: () => true };
+  // sessionStorage real del navegador: se limpia para que el harness nunca
+  // pinte conteos cacheados de una corrida anterior.
+  try { sessionStorage.clear(); localStorage.clear(); } catch (e) {}
+})();
+</script>
+
+<!-- CÓDIGO REAL de producción, en el mismo orden que index.html -->
+<script src="../../public/js/domain/pendientes.js"></script>
+<script src="../../public/js/services/senalesService.js"></script>
+<script src="../../public/js/pages/home-signals.js"></script>
+
+<script>
+  const rol = new URLSearchParams(location.search).get('rol') || 'recepcion';
+  document.getElementById('titulo').textContent =
+    'Bandeja de pendientes — harness · rol: ' + rol;
+  HomeSignals.render({ rolEfectivo: rol, uid: 'harness' });
+</script>
+</body>
+</html>

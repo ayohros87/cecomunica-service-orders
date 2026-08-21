@@ -198,6 +198,20 @@ const SenalesService = {
     return this._cfgMemo;
   },
 
+  // "En curso": coordinación dentro del rol (el DUEÑO del pendiente es el
+  // rol, decisión 2026-08-21). No filtra nada — ni el conteo, ni el correo:
+  // un pendiente en curso sigue pendiente; solo avisa quién lo está
+  // trabajando para que el resto del rol no lo duplique.
+  _curso(doc) {
+    const c = doc && doc.pendiente_curso;
+    if (!c || !c.por_email) return { en_curso: false, curso_por: '', curso_dias: 0 };
+    return {
+      en_curso: true,
+      curso_por: String(c.por_email).split('@')[0],
+      curso_dias: Math.max(0, Math.floor(PendientesDomain.edadDias(c.at, new Date()) || 0)),
+    };
+  },
+
   _snooze(doc) {
     const activo = PendientesDomain.estaPospuesto(doc, new Date());
     return {
@@ -224,8 +238,8 @@ const SenalesService = {
           cliente: o.cliente_nombre || o.cliente || '—',
           tipo: o.tipo_de_servicio || '—',
           equipos: (o.equipos || []).filter(e => e && !e.eliminado).length,
-          dias: Math.floor(PendientesDomain.edadDias(o.fecha_completado || o.fecha_modificacion || o.fecha_creacion, now) || 0),
-          ...this._snooze(o),
+          dias: Math.floor(PendientesDomain.edadDias(o.fecha_completado || o.fecha_modificacion, now) || 0) || Math.floor(PendientesDomain.edadDias(o.fecha_creacion, now) || 0),
+          ...this._snooze(o), ...this._curso(o),
         });
       });
       return rows.sort((a, b) => b.dias - a.dias);
@@ -251,7 +265,7 @@ const SenalesService = {
           estado: o.estado_reparacion || '—',
           tecnico: o.tecnico_asignado || '',
           dias: Math.floor(PendientesDomain.edadDias(base, now) || 0),
-          ...this._snooze(o),
+          ...this._snooze(o), ...this._curso(o),
         });
       });
       return rows.sort((a, b) => b.dias - a.dias);
@@ -277,7 +291,7 @@ const SenalesService = {
           motivo: PendientesDomain.qcCaducado(o) ? 'caduco (cambiaron los equipos)'
             : (o.qc?.resultado === 'rechazado' ? 'rechazado, esperando correccion' : 'sin firmar'),
           dias: Math.floor(PendientesDomain.edadDias(o.fecha_completado || o.fecha_modificacion, now) || 0),
-          ...this._snooze(o),
+          ...this._snooze(o), ...this._curso(o),
         });
       });
       return rows.sort((a, b) => b.dias - a.dias);
@@ -303,7 +317,7 @@ const SenalesService = {
           modelo: u.modelo_label || '—',
           cliente: u.asignacion?.cliente_nombre || '—',
           dias: Math.floor(PendientesDomain.edadDias(u.updated_at || u.created_at, now) || 0),
-          ...this._snooze(u),
+          ...this._snooze(u), ...this._curso(u),
         });
       });
       return rows.sort((a, b) => b.dias - a.dias);
@@ -340,7 +354,7 @@ const SenalesService = {
           modelo: u.modelo_label || '—',
           cliente: u.asignacion?.cliente_nombre || '—',
           dias: Math.floor(PendientesDomain.edadDias(u.updated_at, now) || 0),
-          ...this._snooze(u),
+          ...this._snooze(u), ...this._curso(u),
         });
       });
       return rows.sort((a, b) => b.dias - a.dias);
@@ -378,6 +392,27 @@ const SenalesService = {
   async reactivarPendiente({ col, id }) {
     await firebase.firestore().collection(col).doc(id).update({
       pendiente_snooze: firebase.firestore.FieldValue.delete(),
+    });
+    this.invalidarListas();
+  },
+
+  /** "Lo estoy trabajando" — visible para todo el rol, sin bloquear a nadie. */
+  async tomarPendiente({ col, id }) {
+    const u = firebase.auth().currentUser;
+    await firebase.firestore().collection(col).doc(id).update({
+      pendiente_curso: {
+        por_email: u?.email || '', por_uid: u?.uid || '',
+        at: new Date().toISOString(),
+      },
+    });
+    this.invalidarListas();
+  },
+
+  /** Libera un "en curso" — cualquiera del rol puede (el dueño es el rol:
+      si quien lo tomó no está, el pendiente no se queda secuestrado). */
+  async soltarPendiente({ col, id }) {
+    await firebase.firestore().collection(col).doc(id).update({
+      pendiente_curso: firebase.firestore.FieldValue.delete(),
     });
     this.invalidarListas();
   },

@@ -8,7 +8,8 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "lint": "eslint . --max-warnings=-1",
-    "test": "node --test"
+    "test": "node --test",
+    "test:browser": "node test-browser/revisar-pendientes.js"
   },
   "engines": {
     "node": "22"

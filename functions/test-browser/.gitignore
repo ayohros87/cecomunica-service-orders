@@ -1,0 +1,3 @@
+# Capturas del runner: van a un tmpdir, pero si alguien corre una version
+# vieja que escriba aqui, que git nunca las trague.
+*.png

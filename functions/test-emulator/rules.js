@@ -371,6 +371,12 @@ async function main() {
   ok("snooze: recepción pospone una unidad del pool (puedeGestionarSeriales)");
   await assertFails(as("jefe_taller").doc("equipos_pool/snzU1").set(SNZ, { merge: true }));
   ok("snooze: jefe_taller NO escribe el pool — por eso la cuarentena no ofrece posponer");
+  // "En curso" (dueño del pendiente = EL ROL, decisión 2026-08-21): mismo
+  // camino de update que el snooze, campo pendiente_curso. Inventario es la
+  // audiencia de la cuarentena y puede marcar/soltar unidades del pool.
+  const CUR = { pendiente_curso: { por_email: "jose.solis@cecomunica.com", at: "2026-08-21T12:00:00.000Z" } };
+  await assertSucceeds(as("inventario").doc("equipos_pool/snzU1").set(CUR, { merge: true }));
+  ok("curso: inventario marca 'en curso' una unidad de cuarentena (dueño = rol)");
 
   // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
