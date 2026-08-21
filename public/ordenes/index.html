@@ -47,10 +47,12 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<script defer src="../js/services/ordenesService.js?v=ids1"></script>
+<!-- Predicados de pendiente: antes de ordenesService/senalesService/ordenes-qc, que delegan en él. -->
+<script defer src="../js/domain/pendientes.js?v=pen1"></script>
+<script defer src="../js/services/ordenesService.js?v=pen1"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
-<script defer src="../js/services/senalesService.js?v=m4"></script>
+<script defer src="../js/services/senalesService.js?v=pen1"></script>
 <script defer src="../js/services/empresaService.js"></script>
 <script defer src="../js/services/usuariosService.js"></script>
 <script defer src="../js/services/mailService.js"></script>
@@ -69,7 +71,7 @@
 <script defer src="../js/pages/ordenes-render.js?v=qc15"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=ids1"></script>
 <script defer src="../js/pages/ordenes-flujo.js?v=qc8"></script>
-<script defer src="../js/pages/ordenes-qc.js?v=qc5"></script>
+<script defer src="../js/pages/ordenes-qc.js?v=pen1"></script>
 <script defer src="../js/pages/ordenes-equipos.js?v=cc22"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
      uso, con sus dependencias (storage, firmaPad): ordenes-notas,

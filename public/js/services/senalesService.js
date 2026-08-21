@@ -56,18 +56,12 @@ const SenalesService = {
       .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
       .limit(200)
       .get();
+    // Predicado compartido con el cron del correo (PendientesDomain: espejo
+    // del servidor + test de sincronía). La copia local que vivía aquí ni
+    // siquiera sabía detectar la sustitución de serial.
     let n = 0;
     snap.forEach(doc => {
-      const o = doc.data() || {};
-      if (o.eliminado === true) return;
-      if ((o.estado_reparacion || '') !== 'COMPLETADO (EN OFICINA)') return;
-      // Las ENTRADA cierran sin QC ni entrega: no son cola de nadie.
-      if ((o.tipo_de_servicio || '') === 'ENTRADA') return;
-      const aprobado = o.qc?.resultado === 'aprobado';
-      const eq = o.qc?.equipos_n;
-      const caducado = aprobado && typeof eq === 'number'
-        && eq !== (Array.isArray(o.equipos) ? o.equipos.length : 0);
-      if (!aprobado || caducado) n++;
+      if (PendientesDomain.esQcColaOperativa(doc.data() || {})) n++;
     });
     return n;
   },
@@ -152,6 +146,240 @@ const SenalesService = {
     return this._count(
       db.collection('equipos_pool').where('verificado', '==', false)
     );
+  },
+
+  /* ══ Detectores con FILAS (bandeja de pendientes del home) ═════════════
+     Los cuatro salen del cron del correo diario; los predicados viven en
+     PendientesDomain (espejo del servidor + test de sincronia). Aqui solo
+     van las queries y la proyeccion segura de campos para la UI.
+
+     El conteo y las filas comparten UNA promesa memoizada (TTL 5 min): la
+     senal cuenta y, si la persona expande, las filas ya estan en memoria —
+     expandir no paga una segunda consulta.
+
+     Cada fila trae `pospuesto`: la UI muestra las activas y resume las
+     pospuestas. Los conteos excluyen las pospuestas — el mismo criterio
+     que el correo diario. */
+
+  _LIST_TTL_MS: 5 * 60 * 1000,
+  _listMemo: new Map(),   // clave → { t, p: Promise<rows> }
+
+  _memoList(clave, fn) {
+    const hit = this._listMemo.get(clave);
+    if (hit && Date.now() - hit.t < this._LIST_TTL_MS) return hit.p;
+    const p = fn().catch(e => { this._listMemo.delete(clave); throw e; });
+    this._listMemo.set(clave, { t: Date.now(), p });
+    return p;
+  },
+
+  /** Tras posponer/reactivar: la proxima lectura vuelve al servidor. */
+  invalidarListas() { this._listMemo.clear(); },
+
+  // Umbrales de empresa/config con fallback a los defaults del dominio —
+  // los MISMOS numeros que usa el cron, para que el correo y la bandeja
+  // nunca cuenten distinto (que es el bug que origino todo esto).
+  _cfgMemo: null,
+  async _config() {
+    if (this._cfgMemo) return this._cfgMemo;
+    const D = PendientesDomain.DEFAULTS;
+    let cfg = {};
+    try {
+      const snap = await firebase.firestore().collection('empresa').doc('config').get();
+      cfg = snap.exists ? (snap.data() || {}) : {};
+    } catch (e) { /* sin permiso o sin red: defaults */ }
+    const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) >= 1) ? Number(v) : d;
+    const staleDias = num(cfg.orden_stale_dias, D.stale_dias);
+    this._cfgMemo = {
+      staleDias,
+      staleMax:    Math.max(num(cfg.orden_stale_max_dias, D.stale_max_dias), staleDias + 1),
+      entradaDias: num(cfg.entrada_recordatorio_dias, D.entrada_dias),
+      entregaDias: num(cfg.entrega_recordatorio_dias, D.entrega_dias),
+    };
+    return this._cfgMemo;
+  },
+
+  _snooze(doc) {
+    const activo = PendientesDomain.estaPospuesto(doc, new Date());
+    return {
+      pospuesto: activo,
+      snooze_motivo: activo ? String(doc.pendiente_snooze?.motivo || '') : '',
+      snooze_hasta: activo ? String(doc.pendiente_snooze?.hasta || '').slice(0, 10) : '',
+    };
+  },
+
+  /** Terminadas con QC listo que nadie marco ENTREGADO (cron seccion E). */
+  listListasParaEntregar() {
+    return this._memoList('entregar', async () => {
+      const { entregaDias } = await this._config();
+      const now = new Date();
+      const snap = await firebase.firestore().collection('ordenes_de_servicio')
+        .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
+        .limit(500).get();
+      const rows = [];
+      snap.forEach(d => {
+        const o = d.data() || {};
+        if (!PendientesDomain.esListaParaEntregar(o, now, entregaDias)) return;
+        rows.push({
+          id: d.id, col: 'ordenes_de_servicio',
+          cliente: o.cliente_nombre || o.cliente || '—',
+          tipo: o.tipo_de_servicio || '—',
+          equipos: (o.equipos || []).filter(e => e && !e.eliminado).length,
+          dias: Math.floor(PendientesDomain.edadDias(o.fecha_completado || o.fecha_modificacion || o.fecha_creacion, now) || 0),
+          ...this._snooze(o),
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
+  },
+
+  /** Abiertas sin movimiento dentro de la ventana accionable (cron A). */
+  listEstancadas() {
+    return this._memoList('estancadas', async () => {
+      const { staleDias, staleMax } = await this._config();
+      const now = new Date();
+      const snap = await firebase.firestore().collection('ordenes_de_servicio')
+        .where('estado_reparacion', 'in', PendientesDomain.ESTADOS_ABIERTOS)
+        .limit(600).get();
+      const rows = [];
+      snap.forEach(d => {
+        const o = d.data() || {};
+        if (!PendientesDomain.esOrdenEstancada(o, now, { staleDias, staleMax })) return;
+        const base = o.fecha_modificacion || o.fecha_actualizacion || o.updatedAt || o.fecha_entrada || o.fecha_creacion;
+        rows.push({
+          id: d.id, col: 'ordenes_de_servicio',
+          cliente: o.cliente_nombre || o.cliente || '—',
+          estado: o.estado_reparacion || '—',
+          tecnico: o.tecnico_asignado || '',
+          dias: Math.floor(PendientesDomain.edadDias(base, now) || 0),
+          ...this._snooze(o),
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
+  },
+
+  /** Cola de QC con filas (mismo criterio que countOrdenesQcPendiente). */
+  listQcCola() {
+    return this._memoList('qc', async () => {
+      const now = new Date();
+      const snap = await firebase.firestore().collection('ordenes_de_servicio')
+        .where('qc_requerido', '==', true)
+        .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
+        .limit(200).get();
+      const rows = [];
+      snap.forEach(d => {
+        const o = d.data() || {};
+        if (!PendientesDomain.esQcColaOperativa(o)) return;
+        rows.push({
+          id: d.id, col: 'ordenes_de_servicio',
+          cliente: o.cliente_nombre || o.cliente || '—',
+          tipo: o.tipo_de_servicio || '—',
+          motivo: PendientesDomain.qcCaducado(o) ? 'caduco (cambiaron los equipos)'
+            : (o.qc?.resultado === 'rechazado' ? 'rechazado, esperando correccion' : 'sin firmar'),
+          dias: Math.floor(PendientesDomain.edadDias(o.fecha_completado || o.fecha_modificacion, now) || 0),
+          ...this._snooze(o),
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
+  },
+
+  /** Devueltos sin inspeccionar, con edad (cron seccion B). */
+  listCuarentena() {
+    return this._memoList('cuarentena', async () => {
+      const { entradaDias } = await this._config();
+      const now = new Date();
+      const snap = await firebase.firestore().collection('equipos_pool')
+        .where('estado', '==', 'devuelto_revision')
+        .limit(400).get();
+      const rows = [];
+      snap.forEach(d => {
+        const u = d.data() || {};
+        if (!PendientesDomain.esCuarentenaAtascada(u, now, entradaDias)) return;
+        rows.push({
+          id: d.id, col: 'equipos_pool',
+          serial: u.serial || d.id,
+          modelo: u.modelo_label || '—',
+          cliente: u.asignacion?.cliente_nombre || '—',
+          dias: Math.floor(PendientesDomain.edadDias(u.updated_at || u.created_at, now) || 0),
+          ...this._snooze(u),
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
+  },
+
+  /** Radios por recuperar SIN orden de devolucion que los reclame (cron C2).
+      DEFINIDO pero sin senal asignada: se enciende cuando negocio decida como
+      triar el atraso — mismo trato que la cola de transiciones de bodega. */
+  listRecuperarSinOrden() {
+    return this._memoList('recuperar', async () => {
+      const db = firebase.firestore();
+      const now = new Date();
+      const [pend, devs] = await Promise.all([
+        db.collection('equipos_pool').where('pendiente_devolucion', '==', true).limit(500).get(),
+        db.collection('ordenes_de_servicio').where('tipo_de_servicio', '==', 'DEVOLUCION').limit(1000).get(),
+      ]);
+      const norm = v => String(v || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const cubiertos = new Set();
+      devs.forEach(d => {
+        const o = d.data() || {};
+        if (o.eliminado) return;
+        if ((o.estado_reparacion || '').toUpperCase() === 'CERRADA (DEVOLUCION)') return;
+        (o.devolucion?.esperados || []).forEach(e => { const sr = norm(e.serial); if (sr) cubiertos.add(sr); });
+      });
+      const rows = [];
+      pend.forEach(d => {
+        const u = d.data() || {};
+        if (!['asignado_contrato', 'en_cliente'].includes(u.estado)) return;
+        if (cubiertos.has(norm(u.serial_norm || u.serial || d.id))) return;
+        rows.push({
+          id: d.id, col: 'equipos_pool',
+          serial: u.serial || d.id,
+          modelo: u.modelo_label || '—',
+          cliente: u.asignacion?.cliente_nombre || '—',
+          dias: Math.floor(PendientesDomain.edadDias(u.updated_at, now) || 0),
+          ...this._snooze(u),
+        });
+      });
+      return rows.sort((a, b) => b.dias - a.dias);
+    });
+  },
+
+  // Conteos derivados de las filas (excluyen pospuestas, como el correo).
+  async countListasParaEntregar() { return (await this.listListasParaEntregar()).filter(r => !r.pospuesto).length; },
+  async countEstancadas()         { return (await this.listEstancadas()).filter(r => !r.pospuesto).length; },
+  async countCuarentenaAtascada() { return (await this.listCuarentena()).filter(r => !r.pospuesto).length; },
+
+  /* ── Posponer (fase 3) ─────────────────────────────────────────────────
+     Escribe pendiente_snooze EN EL DOCUMENTO FUENTE (orden o unidad del
+     pool), nunca en una bandeja — mismo principio que el descarte de
+     "Ordenes por crear". Lo respetan esta bandeja Y el correo diario.
+     El piso de permisos es firestore.rules: ordenes las escriben los seis
+     roles de ordenes; el pool, los roles de puedeGestionarSeriales. Si las
+     reglas lo niegan, el error sube y la UI lo dice. */
+  async posponerPendiente({ col, id, dias, motivo }) {
+    const d = Math.max(1, Math.min(60, Number(dias) || 7));
+    const razon = String(motivo || '').trim();
+    if (!razon) throw new Error('El motivo es obligatorio: es lo que lee la siguiente persona.');
+    const hasta = new Date(Date.now() + d * 86400000).toISOString();
+    await firebase.firestore().collection(col).doc(id).update({
+      pendiente_snooze: {
+        hasta, motivo: razon,
+        por_email: firebase.auth().currentUser?.email || '',
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+    this.invalidarListas();
+    return hasta.slice(0, 10);
+  },
+
+  /** Deshace un posponer antes de que venza (vuelve a contar de una vez). */
+  async reactivarPendiente({ col, id }) {
+    await firebase.firestore().collection(col).doc(id).update({
+      pendiente_snooze: firebase.firestore.FieldValue.delete(),
+    });
+    this.invalidarListas();
   },
 };
 

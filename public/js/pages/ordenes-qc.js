@@ -76,44 +76,23 @@
     return t.includes('PROGRAM') ? 'programacion' : 'reparacion';
   }
 
-  // ¿Esta orden pasa por QC? Solo las de taller marcadas por completeOrder.
-  // Visitas y devoluciones tienen su propio cierre y nunca reciben la marca.
+  // El estado del QC (aprobado / caducado / pendiente) vive en
+  // PendientesDomain (js/domain/pendientes.js), espejo del módulo del
+  // servidor con test de sincronía. Estas funciones eran una de las CUATRO
+  // copias del mismo criterio — y la caducidad por sustitución de serial
+  // había nacido solo en esta, invisible para el cron y las señales. Ahora
+  // solo delegan; el porqué de cada regla está documentado en el dominio.
   function qcRequerido(orden) {
     return orden?.qc_requerido === true;
   }
   function qcAprobado(orden) {
-    return orden?.qc?.resultado === 'aprobado' && !qcCaducado(orden);
+    return PendientesDomain.qcAprobado(orden);
   }
-  // El QC cubre los equipos que la orden tenía al firmarse (qc.equipos_n).
-  // "Agregar equipo" y "Nuevo batch" siguen disponibles en COMPLETADO, así que
-  // si el conteo cambió después de la firma, la aprobación ya no cubre lo que
-  // va a salir y hay que repetirla. Las reglas exigen lo mismo en la entrega.
-  // equipos_n ausente = aprobado antes de este cambio → no caduca (corte).
-  // Además del conteo, con revisión por equipo se comparan los SERIALES: como
-  // cada radio se firma por separado, cambiar uno por otro sin tocar el total
-  // deja una firma que no cubre lo que va a salir. Las reglas solo pueden
-  // comparar el conteo (no saben iterar arrays), así que este candado extra es
-  // de cliente — obliga a repetir la pasada, que es lo correcto.
   function qcCaducado(orden) {
-    if (orden?.qc?.resultado !== 'aprobado') return false;
-    const n = orden?.qc?.equipos_n;
-    if (typeof n !== 'number') return false;
-    if (n !== (Array.isArray(orden.equipos) ? orden.equipos.length : 0)) return true;
-
-    const pe = orden?.qc?.por_equipo;
-    if (!pe || !Object.keys(pe).length) return false;   // corte legacy
-    const firmados = new Set(Object.values(pe).map(d => String(d.serial || '').trim()).filter(Boolean));
-    const ahora = (orden.equipos || [])
-      .filter(x => !x.eliminado)
-      .map(e => String(e.numero_de_serie || e.serial || '').trim())
-      .filter(Boolean);
-    return ahora.some(s => !firmados.has(s));
+    return PendientesDomain.qcCaducado(orden);
   }
-  // Pendiente = requerido y sin aprobación vigente (incluye rechazadas
-  // re-completadas: el qc anterior quedó 'rechazado' hasta la nueva pasada,
-  // y las aprobadas que caducaron por cambio de equipos).
   function qcPendiente(orden) {
-    return qcRequerido(orden) && !qcAprobado(orden);
+    return PendientesDomain.qcPendiente(orden);
   }
   function puedeHacerQc(rol) {
     if (rol === ROLES.ADMIN || rol === ROLES.JEFE_TALLER) return true;

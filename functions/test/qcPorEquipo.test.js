@@ -42,6 +42,11 @@ function cargarQc() {
     firebase: { auth: () => ({ currentUser: null }), firestore: () => ({}) },
   };
   vm.createContext(ctx);
+  // ordenes-qc delega el estado del QC en PendientesDomain (fase 1 del plan
+  // Pendientes, 2026-08-21): el dominio se evalúa primero, igual que en la
+  // página (js/domain/pendientes.js va antes en el orden de <script>).
+  vm.runInContext(leer("public", "js", "domain", "pendientes.js"), ctx);
+  ctx.PendientesDomain = ctx.window.PendientesDomain;
   vm.runInContext(leer("public", "js", "pages", "ordenes-qc.js"), ctx);
   return ctx.window.OrdenesQC;
 }

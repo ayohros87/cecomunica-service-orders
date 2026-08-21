@@ -928,20 +928,10 @@ const OrdenesService = {
     const out = [];
     snap.forEach(doc => {
       const o = { ordenId: doc.id, ...(doc.data() || {}) };
-      if (o.eliminado === true) return;
-      // Las ENTRADA cierran sin QC ni entrega: no son cola de nadie.
-      if ((o.tipo_de_servicio || "") === "ENTRADA") return;
-      // Con OrdenesQC cargada se usa su criterio (incluye la caducidad por
-      // cambio de seriales); si no, se cae al equivalente por conteo.
-      if (typeof OrdenesQC !== "undefined") {
-        if (OrdenesQC.qcPendiente(o)) out.push(o);
-        return;
-      }
-      const aprobado = o.qc?.resultado === "aprobado";
-      const n = o.qc?.equipos_n;
-      const caducado = aprobado && typeof n === "number"
-        && n !== (Array.isArray(o.equipos) ? o.equipos.length : 0);
-      if (!aprobado || caducado) out.push(o);
+      // Predicado compartido con el cron y las señales (PendientesDomain:
+      // espejo del servidor + test de sincronía). Aquí vivía la CUARTA copia
+      // del criterio, que además no sabía detectar la sustitución de serial.
+      if (PendientesDomain.esQcColaOperativa(o)) out.push(o);
     });
     return out;
   },

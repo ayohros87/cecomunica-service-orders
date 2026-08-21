@@ -27,6 +27,11 @@ const { admin, db } = require("../../lib/admin");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const { tallerEmailTo, recepcionEmails, configEmailTo } = require("../../lib/mailRecipients");
 const { pendientesDevolucion } = require("../../lib/devolucion");
+// Predicados compartidos con el navegador (espejo + test de sincronía):
+// la definición de "estancada", "lista para entregar", el estado del QC y
+// el "posponer" viven UNA vez en src/domain/pendientes.js. Antes cada
+// sección de este cron llevaba su copia y ya divergían.
+const PEND = require("../../domain/pendientes");
 const cobros = require("../../lib/cobrosEquipos");
 
 const ESTADOS_ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
@@ -117,14 +122,13 @@ module.exports = onSchedule(
       const estancadas = [];
       snap.forEach(d => {
         const o = d.data() || {};
-        if (o.eliminado) return;
-        // Las DEVOLUCIONES tienen su propia sección (C) con SLA y audiencia
-        // distinta (recepción/ventas, no taller).
-        if ((o.tipo_de_servicio || "") === "DEVOLUCION") return;
-        // Última actividad conocida — misma cadena que admin/operacion.
+        // Predicado compartido (excluye eliminadas, DEVOLUCIÓN —sección C— y
+        // aplica la ventana [staleDias, staleMax]); el posponer del usuario
+        // silencia también este correo, no solo la bandeja del home.
+        if (!PEND.esOrdenEstancada(o, now, { staleDias, staleMax })) return;
+        if (PEND.estaPospuesto(o, now)) return;
         const base = o.fecha_modificacion || o.fecha_actualizacion || o.updatedAt || o.fecha_entrada || o.fecha_creacion;
         const edad = edadDias(base, now);
-        if (edad == null || edad < staleDias || edad > staleMax) return;
         estancadas.push({
           id: d.id,
           orden: o.numero_orden || d.id,
@@ -182,8 +186,9 @@ module.exports = onSchedule(
       const atascadas = [];
       snap.forEach(d => {
         const u = d.data() || {};
+        if (!PEND.esCuarentenaAtascada(u, now, entradaDias)) return;
+        if (PEND.estaPospuesto(u, now)) return;
         const edad = edadDias(u.updated_at || u.created_at, now);
-        if (edad == null || edad < entradaDias) return;
         atascadas.push({
           serial: u.serial || d.id,
           modelo: u.modelo_label || "—",
@@ -277,6 +282,7 @@ module.exports = onSchedule(
           if (!["asignado_contrato", "en_cliente"].includes(u.estado)) return;
           const s = String(u.serial_norm || u.serial || d.id).toUpperCase().replace(/[^A-Z0-9]/g, "");
           if (cubiertos.has(s)) return;
+          if (PEND.estaPospuesto(u, now)) return;
           sueltas.push({
             serial: u.serial || d.id,
             modelo: u.modelo_label || "—",
@@ -346,17 +352,10 @@ module.exports = onSchedule(
       snap.forEach(d => {
         const o = d.data() || {};
         if (o.eliminado) return;
-        if ((o.estado_reparacion || "") !== "COMPLETADO (EN OFICINA)") return;
-        // Las ENTRADA cierran sin QC ni entrega (su terminal es CERRADA
-        // (ENTRADA)); no son cola de nadie aunque arrastren la marca.
-        if ((o.tipo_de_servicio || "") === "ENTRADA") return;
-        const aprobado = o.qc?.resultado === "aprobado";
-        // Un QC aprobado caduca si cambiaron los equipos desde la firma:
-        // vuelve a ser cola (mismo criterio que qcCaducado en ordenes-qc.js).
-        const n = o.qc?.equipos_n;
-        const caducado = aprobado && typeof n === "number"
-          && n !== (Array.isArray(o.equipos) ? o.equipos.length : 0);
-        if (aprobado && !caducado) return;
+        // Predicado compartido: excluye eliminadas, no-COMPLETADO y ENTRADA,
+        // y trae la caducidad COMPLETA (conteo Y sustitución de serial — la
+        // copia local de este cron solo sabía contar).
+        if (!PEND.esQcColaOperativa(o)) return;
         const edad = edadDias(o.fecha_completado, now);
         if (edad == null || edad < qcDias) return;
         esperando.push({
@@ -365,7 +364,7 @@ module.exports = onSchedule(
           cliente: o.cliente_nombre || o.cliente || "—",
           tipo: o.tipo_de_servicio || "—",
           tecnico: o.tecnico_asignado || "—",
-          estadoQc: caducado ? "Caducado" : (o.qc?.resultado === "rechazado" ? "Rechazado" : "Sin revisar"),
+          estadoQc: PEND.qcCaducado(o) ? "Caducado" : (o.qc?.resultado === "rechazado" ? "Rechazado" : "Sin revisar"),
           dias: Math.floor(edad),
         });
       });
@@ -421,20 +420,11 @@ module.exports = onSchedule(
       const listas = [];
       snap.forEach(d => {
         const o = d.data() || {};
-        if (o.eliminado) return;
-        const tipo = (o.tipo_de_servicio || "").toUpperCase();
-        // Solo los tipos cuyo terminal ES la entrega. ENTRADA cierra sin
-        // entregar; VISITA cierra en sitio; DEVOLUCION tiene su circuito.
-        if (!/PROGRAMA|REPARA/.test(tipo)) return;
-        // Con QC requerido, solo cuando está aprobado y vigente (si falta, es
-        // cola de la sección D — no de esta).
-        if (o.qc_requerido === true) {
-          if (o.qc?.resultado !== "aprobado") return;
-          const n = o.qc?.equipos_n;
-          if (typeof n === "number" && n !== (Array.isArray(o.equipos) ? o.equipos.length : 0)) return;
-        }
+        // Predicado compartido: tipo cuyo terminal ES la entrega, QC aprobado
+        // y vigente (si falta, es cola de la sección D), edad suficiente.
+        if (!PEND.esListaParaEntregar(o, now, entregaDias)) return;
+        if (PEND.estaPospuesto(o, now)) return;
         const edad = edadDias(o.fecha_completado || o.fecha_modificacion || o.fecha_creacion, now);
-        if (edad == null || edad < entregaDias) return;
         listas.push({
           id: d.id,
           orden: o.numero_orden || d.id,
