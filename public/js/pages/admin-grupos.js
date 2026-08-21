@@ -914,27 +914,90 @@
     }
   }
 
-  async function eliminarGrupo(nombre) {
+  // ── Eliminar grupo (modal + deshacer) ───────────────────────────────
+  // Con 10+ equipos el modal exige teclear el nombre del grupo; por debajo
+  // basta el botón. El borrado siempre deja snapshot (poc_grupos_historial)
+  // y el toast ofrece Deshacer por unos segundos.
+  const DEL_EXIGE_NOMBRE = 10;
+  let delPendiente = null;   // { nombre, count } mientras el modal está abierto
+
+  function eliminarGrupo(nombre) {
+    if (!State.clienteSel) return;
     const grupo = State.grupos.find(g => g.nombre === nombre);
     const count = grupo ? grupo.count : 0;
-    if (!confirm(
-      `Eliminar grupo "${nombre}" de ${count} equipo${count === 1 ? '' : 's'} de ${State.clienteSel.nombre}?\n\n` +
-      `Esta acción quita el grupo de los equipos, no los elimina.`
-    )) return;
+    delPendiente = { nombre, count };
+    $('gpDelMsg').innerHTML =
+      `Eliminar el grupo <strong>“${esc(nombre)}”</strong> de ` +
+      `<strong>${count} equipo${count === 1 ? '' : 's'}</strong> de ${esc(State.clienteSel.nombre)}.`;
+    const exige = count >= DEL_EXIGE_NOMBRE;
+    $('gpDelInputWrap').style.display = exige ? '' : 'none';
+    $('gpDelInput').value = '';
+    $('gpDelApply').disabled = exige;
+    $('gpDelOverlay').style.display = 'flex';
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    if (exige) $('gpDelInput').focus();
+  }
+
+  function cerrarDelModal() {
+    delPendiente = null;
+    $('gpDelOverlay').style.display = 'none';
+  }
+
+  function validarDelInput() {
+    if (!delPendiente) return;
+    if (delPendiente.count < DEL_EXIGE_NOMBRE) return;
+    $('gpDelApply').disabled =
+      FMT.normalize($('gpDelInput').value) !== FMT.normalize(delPendiente.nombre);
+  }
+
+  async function ejecutarEliminarGrupo() {
+    if (!delPendiente || !State.clienteSel) return;
+    const { nombre } = delPendiente;
+    cerrarDelModal();
     try {
-      const { affected } = await PocService.eliminarGrupo({
+      const { affected, historialId } = await PocService.eliminarGrupo({
         clienteId: State.clienteSel.id,
         clienteNombre: State.clienteSel.nombre,
         nombre,
       });
       invalidarCachesGrupos();
-      Toast.show(`Eliminado de ${affected} equipo${affected === 1 ? '' : 's'} ✅`, 'ok');
       State.seleccionados.delete(nombre);
+      mostrarToastDeshacer(nombre, affected, historialId);
       await cargarGruposCliente();
     } catch (e) {
       console.error('Error eliminando grupo:', e);
       Toast.show('Error al eliminar el grupo.', 'bad');
     }
+  }
+
+  // Toast persistente con botón Deshacer (15 s). Restaurar re-etiqueta los
+  // mismos equipos vía el snapshot y devuelve el grupo al catálogo.
+  function mostrarToastDeshacer(nombre, affected, historialId) {
+    const el = Toast.persist(
+      `Grupo “${nombre}” eliminado de ${affected} equipo${affected === 1 ? '' : 's'} ✅`, 'ok'
+    );
+    const btn = document.createElement('button');
+    btn.textContent = 'Deshacer';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.style.marginLeft = '10px';
+    const timer = setTimeout(() => el.remove(), 15000);
+    btn.addEventListener('click', async () => {
+      clearTimeout(timer);
+      btn.disabled = true;
+      btn.textContent = 'Restaurando…';
+      try {
+        const r = await PocService.restaurarGrupo({ historialId });
+        el.remove();
+        invalidarCachesGrupos();
+        Toast.show(`Grupo “${nombre}” restaurado en ${r.affected} equipo${r.affected === 1 ? '' : 's'} ✅`, 'ok');
+        await cargarGruposCliente();
+      } catch (e) {
+        console.error('Error restaurando grupo:', e);
+        el.remove();
+        Toast.show('No se pudo restaurar: ' + (e.message || e), 'bad');
+      }
+    });
+    el.appendChild(btn);
   }
 
   async function fusionarGrupos(sources, target) {
@@ -1019,6 +1082,20 @@
     const eqClose = $('gpEquiposClose'); if (eqClose) eqClose.addEventListener('click', cerrarEquipos);
     const eqOv = $('gpEquiposOverlay');
     if (eqOv) eqOv.addEventListener('click', e => { if (e.target === eqOv) cerrarEquipos(); });
+
+    const delClose = $('gpDelClose');   if (delClose)  delClose.addEventListener('click', cerrarDelModal);
+    const delCancel = $('gpDelCancel'); if (delCancel) delCancel.addEventListener('click', cerrarDelModal);
+    const delApply = $('gpDelApply');   if (delApply)  delApply.addEventListener('click', ejecutarEliminarGrupo);
+    const delInput = $('gpDelInput');
+    if (delInput) {
+      delInput.addEventListener('input', validarDelInput);
+      // Enter confirma solo si el botón ya está habilitado (nombre correcto).
+      delInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && !$('gpDelApply').disabled) ejecutarEliminarGrupo();
+      });
+    }
+    const delOv = $('gpDelOverlay');
+    if (delOv) delOv.addEventListener('click', e => { if (e.target === delOv) cerrarDelModal(); });
 
     const comClose = $('gpComunesClose');   if (comClose)  comClose.addEventListener('click', cerrarComunes);
     const comCancel = $('gpComunesCancel');  if (comCancel) comCancel.addEventListener('click', cerrarComunes);

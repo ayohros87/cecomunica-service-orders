@@ -618,16 +618,32 @@ const PocService = {
     return { affected: targets.length };
   },
 
-  // Remove `nombre` from every non-deleted device of the client.
+  // Remove `nombre` from every non-deleted device of the client. Antes de
+  // tocar el primer device se escribe un snapshot en poc_grupos_historial
+  // (grupo + device_ids) que permite deshacer con restaurarGrupo(); si el
+  // snapshot no se puede escribir, no se borra nada.
+  // Returns { affected, historialId }.
   async eliminarGrupo({ clienteId = null, clienteNombre = null, nombre }) {
     const nombreN = (nombre || '').toString().trim();
-    if (!nombreN) return { affected: 0 };
+    if (!nombreN) return { affected: 0, historialId: null };
     const devices = await this.getByCliente({ clienteId, clienteNombre });
     const targets = devices.filter(d => d.deleted !== true && (d.grupos || []).includes(nombreN));
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const histRef = await db.collection('poc_grupos_historial').add({
+      cliente_id:     clienteId || null,
+      cliente_nombre: clienteNombre || null,
+      grupo:          nombreN,
+      device_ids:     targets.map(d => d.id),
+      count:          targets.length,
+      fecha:          firebase.firestore.FieldValue.serverTimestamp(),
+      usuario:        user?.email || null,
+      usuario_uid:    user?.uid || null,
+      restaurado:     false,
+    });
     if (targets.length) {
-      const db = firebase.firestore();
       const CHUNK = 450;
-      const uid = firebase.auth().currentUser?.uid || null;
+      const uid = user?.uid || null;
       for (let i = 0; i < targets.length; i += CHUNK) {
         const batch = db.batch();
         for (const d of targets.slice(i, i + CHUNK)) {
@@ -648,7 +664,46 @@ const PocService = {
     await this._syncCatalogo(clienteId, clienteNombre, list =>
       list.filter(g => FMT.normalize(g) !== FMT.normalize(nombreN))
     );
-    return { affected: targets.length };
+    return { affected: targets.length, historialId: histRef.id };
+  },
+
+  // Reversa de eliminarGrupo a partir del snapshot en poc_grupos_historial:
+  // re-etiqueta el grupo en los mismos devices (arrayUnion, así no pisa
+  // ediciones que hayan pasado en medio) y lo devuelve al catálogo. Solo se
+  // aplica una vez (restaurado:true marca el snapshot como consumido).
+  // Returns { affected, grupo }.
+  async restaurarGrupo({ historialId }) {
+    if (!historialId) return { affected: 0, grupo: null };
+    const db = firebase.firestore();
+    const ref = db.collection('poc_grupos_historial').doc(historialId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new Error('No se encontró el registro del borrado.');
+    const h = snap.data();
+    if (h.restaurado === true) return { affected: 0, grupo: h.grupo };
+    const ids = Array.isArray(h.device_ids) ? h.device_ids : [];
+    const uid = firebase.auth().currentUser?.uid || null;
+    const CHUNK = 450;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = db.batch();
+      for (const id of ids.slice(i, i + CHUNK)) {
+        batch.update(db.collection('poc_devices').doc(id), {
+          grupos:     firebase.firestore.FieldValue.arrayUnion(h.grupo),
+          updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+          updated_by: uid,
+        });
+      }
+      await batch.commit();
+    }
+    await this._syncCatalogo(h.cliente_id, h.cliente_nombre, list => {
+      if (!list.some(g => FMT.normalize(g) === FMT.normalize(h.grupo))) list.push(h.grupo);
+      return list;
+    });
+    await ref.update({
+      restaurado:     true,
+      restaurado_at:  firebase.firestore.FieldValue.serverTimestamp(),
+      restaurado_por: uid,
+    });
+    return { affected: ids.length, grupo: h.grupo };
   },
 };
 

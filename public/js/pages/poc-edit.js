@@ -195,6 +195,18 @@ window.PocEdit = {
       if (this._prefijo) {
         grupos = FMT.dedupGrupos(grupos.map(g => FMT.aplicarPrefijoGrupo(this._prefijo, g)));
       }
+      // Segundo candado del mismo incidente: la consola Site One perdió sus
+      // 32 grupos por un guardado en blanco. Vaciar de un golpe TODOS los
+      // grupos de un equipo que tenía varios casi nunca es una edición real,
+      // pero puede serlo — se confirma en vez de bloquear.
+      const gruposAntes = Array.isArray(originalData?.grupos)
+        ? originalData.grupos.filter(g => (g || '').toString().trim()).length : 0;
+      if (gruposAntes >= 3 && grupos.length === 0) {
+        if (!confirm(
+          `Este equipo tenía ${gruposAntes} grupos y este guardado los quita TODOS.\n\n` +
+          `¿Seguro que quieres continuar?`
+        )) return;
+      }
       const user   = firebase.auth().currentUser;
 
       // Modelo is now picked from a dropdown — write the canonical FK and a

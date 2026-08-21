@@ -252,10 +252,10 @@
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/services/usuariosService.js"></script>
   <script defer src="../js/services/clientesService.js"></script>
-  <script defer src="../js/services/pocService.js"></script>
+  <script defer src="../js/services/pocService.js?v=cc14"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/domain/gruposAnalisis.js"></script>
-  <script src="../js/pages/admin-grupos.js" defer></script>
+  <script src="../js/pages/admin-grupos.js?v=cc14" defer></script>
   <script defer src="/js/vendor/lucide.min.js?v=1"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 
@@ -434,6 +434,37 @@
       <div class="gp-modal-foot">
         <span class="spacer" style="flex:1;"></span>
         <button class="btn btn-primary" onclick="document.getElementById('gpEquiposOverlay').style.display='none'">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: confirmar eliminación de grupo (reemplaza al confirm() nativo:
+       muestra el alcance en grande y, con 10+ equipos, exige teclear el
+       nombre del grupo — un borrado grande no se acepta por reflejo). -->
+  <div id="gpDelOverlay" class="gp-modal-overlay" style="display:none;">
+    <div class="gp-modal" role="dialog" aria-modal="true" aria-labelledby="gpDelTitle" style="width:460px;">
+      <div class="gp-modal-head">
+        <h3 id="gpDelTitle"><i data-lucide="trash-2"></i> Eliminar grupo</h3>
+        <button class="gp-modal-close" id="gpDelClose" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="gp-modal-body">
+        <p id="gpDelMsg" class="gp-mig-intro" style="margin-top:0;"></p>
+        <p class="gp-mig-intro" style="color:var(--fg-3);">
+          Esta acción quita el grupo de los equipos y del catálogo — los equipos no se eliminan.
+          Vas a poder deshacerla justo después con el botón <strong>Deshacer</strong>.
+        </p>
+        <div id="gpDelInputWrap" style="display:none;">
+          <label for="gpDelInput" style="display:block; font-size:13px; margin-bottom:6px;">
+            Para confirmar, escribe el nombre del grupo:
+          </label>
+          <input id="gpDelInput" class="form-input" type="text" autocomplete="off"
+                 placeholder="Nombre exacto del grupo" style="width:100%;">
+        </div>
+      </div>
+      <div class="gp-modal-foot">
+        <span class="spacer" style="flex:1;"></span>
+        <button class="btn btn-ghost" id="gpDelCancel">Cancelar</button>
+        <button class="btn btn-danger" id="gpDelApply"><i data-lucide="trash-2"></i> Eliminar grupo</button>
       </div>
     </div>
   </div>

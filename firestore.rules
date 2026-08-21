@@ -693,6 +693,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /poc_logs/{docId}           { allow read, write: if isSignedIn(); }
+    // Snapshots de borrado de grupos (admin/grupos.html): quién borró qué
+    // grupo y de cuáles equipos, para poder deshacer (restaurarGrupo). El
+    // staff crea/actualiza (marca restaurado); borrar el historial es admin.
+    match /poc_grupos_historial/{docId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
     match /analytics_piezas_modelo/{docId} { allow read, write: if isSignedIn(); }
     // La cola de correo contiene PII (destinatarios, cuerpos con datos de
     // clientes/contratos). Lectura y administración solo admin/gerente; el
