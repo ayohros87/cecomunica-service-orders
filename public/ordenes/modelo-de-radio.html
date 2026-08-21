@@ -110,6 +110,12 @@
         const tipo = document.getElementById("tipo-modelo").value.trim();
         const estado = document.getElementById("estado-modelo").value.trim();
         if (!modelo) return;
+        // Candado -R vs estado: el sufijo -R significa refurbished y los puntos de
+        // captura derivan la condición de `estado` — guardarlo distinto de "R" hace
+        // que los radios entren como nuevos en silencio (caso DGP8550-R 2026-08-21).
+        if (/[\s-]r$/i.test(modelo) && estado.toUpperCase() !== "R") {
+          if (!confirm(`"${modelo}" termina en -R (refurbished) pero el estado no es "R". Todo radio de este modelo entrará a bodega como NUEVO. ¿Guardar así de todos modos?`)) return;
+        }
         if (editandoId) {
           await ModelosService.updateModelo(editandoId, { modelo, marca, tipo, estado });
           editandoId = null;

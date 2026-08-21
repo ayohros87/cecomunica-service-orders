@@ -441,6 +441,19 @@ async function guardarModelo(){
     // la copia al `spec` del renglón y sale impresa en la propuesta.
     descripcion: (document.getElementById('f-descripcion').value||'').trim().slice(0, 140),
   };
+  // Candado -R vs estado: el nombre "-R" es la convención de refurbished, pero lo
+  // que manda en los puntos de captura es `estado` — un "-R" guardado como Nuevo
+  // hace que cada radio que se reciba entre con condición "nuevo" en silencio
+  // (pasó con el DGP8550-R el 2026-08-21). Se puede seguir, pero a conciencia.
+  if (/[\s-]r$/i.test(modelo) && payload.estado !== 'R') {
+    const ok = await Modal.confirm({
+      title: 'El nombre termina en -R pero el estado es Nuevo',
+      message: `<b>${esc(marca)} ${esc(modelo)}</b> termina en <b>-R</b>, que en el catálogo significa refurbished, pero está por guardarse con estado <b>Nuevo</b>. Todo radio que se reciba de este modelo entrará como "nuevo". Si es refurbished, cancela y cambia el estado a Refurbished.`,
+      confirmLabel: 'Guardar como Nuevo igual',
+      danger: true,
+    });
+    if (!ok) return;
+  }
   // Vínculo variante→base: solo tiene sentido en refurbished. En "Nuevo" se limpia
   // para que no queden vínculos colgando si se cambia el estado.
   const varSel = (document.getElementById('f-variante-de')||{}).value || '';
