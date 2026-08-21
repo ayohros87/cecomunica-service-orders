@@ -174,6 +174,17 @@ window.PocEdit = {
   async guardar() {
     if (!this._docId) return;
     try {
+      // Candado anti-formulario-vacío (consola Site One, 2026-06-30): un
+      // guardado con serial, unit ID y nombre en blanco a la vez deja el
+      // equipo invisible para toda búsqueda de la lista. Ningún equipo
+      // legítimo vive así, o sea que ese estado solo puede ser un form que
+      // se vació sin querer.
+      const idVacios = ['drawer-serial', 'drawer-unit-id', 'drawer-radio-name']
+        .every(id => !(document.getElementById(id).value || '').trim());
+      if (idVacios) {
+        Toast.show('No se guardó: serial, unit ID y nombre están vacíos. Completa al menos uno.', 'bad');
+        return;
+      }
       const docId        = this._docId;
       const rowRef       = this._row;
       const originalData = this._data;
