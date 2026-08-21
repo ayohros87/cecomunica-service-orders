@@ -284,10 +284,12 @@ const SenalesService = {
     });
   },
 
-  /** Devueltos sin inspeccionar, con edad (cron seccion B). */
+  /** Devueltos sin inspeccionar, con edad. TODOS, no solo los atascados: la
+      señal S13 cuenta la cuarentena completa (agregado) y el panel tiene que
+      listar lo mismo que el número promete. El umbral de "atascado N+ días"
+      es del CORREO (cron sección B), que avisa; la bandeja muestra la cola. */
   listCuarentena() {
     return this._memoList('cuarentena', async () => {
-      const { entradaDias } = await this._config();
       const now = new Date();
       const snap = await firebase.firestore().collection('equipos_pool')
         .where('estado', '==', 'devuelto_revision')
@@ -295,7 +297,6 @@ const SenalesService = {
       const rows = [];
       snap.forEach(d => {
         const u = d.data() || {};
-        if (!PendientesDomain.esCuarentenaAtascada(u, now, entradaDias)) return;
         rows.push({
           id: d.id, col: 'equipos_pool',
           serial: u.serial || d.id,
@@ -349,7 +350,6 @@ const SenalesService = {
   // Conteos derivados de las filas (excluyen pospuestas, como el correo).
   async countListasParaEntregar() { return (await this.listListasParaEntregar()).filter(r => !r.pospuesto).length; },
   async countEstancadas()         { return (await this.listEstancadas()).filter(r => !r.pospuesto).length; },
-  async countCuarentenaAtascada() { return (await this.listCuarentena()).filter(r => !r.pospuesto).length; },
 
   /* ── Posponer (fase 3) ─────────────────────────────────────────────────
      Escribe pendiente_snooze EN EL DOCUMENTO FUENTE (orden o unidad del

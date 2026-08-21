@@ -348,6 +348,30 @@ async function main() {
   await assertSucceeds(as("administrador").doc("equipos_descartados/ABC124").delete());
   ok("descartados: delete solo admin — desde la UI se revoca, nunca se borra");
 
+  // ── pendiente_snooze: posponer desde la bandeja del home ──────────────────
+  // El posponer escribe EN el documento fuente (orden o unidad del pool) SIN
+  // regla nueva: viaja por los caminos de update existentes. Estos casos
+  // congelan ese supuesto — si un refactor de reglas lo rompe, la bandeja
+  // falla en producción sin que ningún test unitario lo vea.
+  const SNZ = { pendiente_snooze: { hasta: "2027-01-01T00:00:00.000Z", motivo: "cliente recibe el lunes", por_email: "x@y.com" } };
+  await seedOrden("snzEnt", {});   // COMPLETADO — la cola "listas para entregar" (recepción)
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/snzEnt").set(SNZ, { merge: true }));
+  ok("snooze: recepción pospone una orden COMPLETADA (cola de entrega)");
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("ordenes_de_servicio/snzEst").set({ estado_reparacion: "ASIGNADO" });
+  });
+  await assertSucceeds(as("jefe_taller").doc("ordenes_de_servicio/snzEst").set(SNZ, { merge: true }));
+  ok("snooze: jefe_taller pospone una orden ASIGNADA (sin movimiento)");
+  await assertFails(as("inventario").doc("ordenes_de_servicio/snzEst").set(SNZ, { merge: true }));
+  ok("snooze: inventario NO puede posponer órdenes (no es rol de órdenes)");
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("equipos_pool/snzU1").set({ estado: "devuelto_revision", serial_norm: "SNZ111" });
+  });
+  await assertSucceeds(as("recepcion").doc("equipos_pool/snzU1").set(SNZ, { merge: true }));
+  ok("snooze: recepción pospone una unidad del pool (puedeGestionarSeriales)");
+  await assertFails(as("jefe_taller").doc("equipos_pool/snzU1").set(SNZ, { merge: true }));
+  ok("snooze: jefe_taller NO escribe el pool — por eso la cuarentena no ofrece posponer");
+
   // ── cotizaciones: umbral de envío ENFORCED (antes solo-UI) ────────────────
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
