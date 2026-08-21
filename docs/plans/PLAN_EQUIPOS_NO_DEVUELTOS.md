@@ -156,15 +156,26 @@ No hizo falta inventar semántica nueva para el final del camino.
 
 ---
 
-## 6. Pendientes
+## 6. Decisiones tomadas después de la primera ola
+
+- **El acuse firmado NO se va a exigir para cerrar una devolución**
+  (decisión del usuario, 2026-08-21). Las dos órdenes de TIL cerraron con cero
+  acuses, así que si el cliente discute no hay papel de lo que sí entregó — pero
+  ese riesgo se maneja **administrativamente**, fuera del sistema, o en una fase
+  posterior. No implementar el bloqueo ni el aviso: obligarlo ahora frenaría
+  cierres legítimos por un papel que hoy se resuelve por otro canal.
+- **NX-420-R = $375** de precio de venta (usuario, 2026-08-21). Estampado en el
+  catálogo con `scripts/precio-nx420r-y-cobro-til.js`, que además reprecia los
+  renglones abiertos de ese modelo que nacieron sin monto. El renglón de TIL
+  quedó en 4 × $375 = **$1,500**.
+
+## 7. Pendientes
 
 - **Configurar `empresa/config.email_cobranza`.** Sin esa clave, el aviso de
-  escalado cae en los administradores. Es un campo del panel de configuración.
+  escalado cae en recepción. Es un campo del panel de configuración.
 - **Precios de venta faltantes.** El monto se prellena solo si el modelo tiene
   `precio_venta`. `scripts/exporta-modelos-sin-precio.js` lista los que faltan.
-  Los modelos refurbished (`-R`) son los más propensos a no tenerlo.
+  Los modelos refurbished (`-R`) son los más propensos a no tenerlo — el
+  NX-420-R no lo tenía y por eso el primer renglón nació en 0.
 - **Los 4 equipos de TIL** quedan abiertos como un renglón sin serial. Si
   aparecen los seriales, se dividen en renglones individuales.
-- **Exigir el acuse firmado antes de cerrar una devolución.** Las dos órdenes de
-  TIL cerraron con cero acuses: si el cliente discute, no hay papel de lo que sí
-  entregó. Queda fuera de esta ola.
