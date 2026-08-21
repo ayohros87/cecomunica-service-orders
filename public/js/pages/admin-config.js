@@ -80,6 +80,9 @@
     { key: 'email_bodega', section: 'correos', label: 'Piezas usadas en una orden → bodega',
       type: 'user-picker', emptyHint: 'si está vacío, se notifica a los usuarios con rol Inventario',
       hint: 'Quién recibe el resumen de piezas usadas (baterías, antenas, clips…) apenas sale la cotización de una orden de taller, para reponer o ajustar inventario sin esperar a que el técnico regrese. Incluye las piezas de garantía, que no se le cobran al cliente pero salieron de bodega igual. Vacío = se notifica a todos los usuarios con rol Inventario.' },
+    { key: 'email_cobranza', section: 'correos', label: 'Equipos NO devueltos (por cobrar) → cobranza',
+      type: 'user-picker', emptyHint: 'si está vacío, se notifica a recepción',
+      hint: 'Quién recibe el resumen diario de los equipos que un cliente no devolvió y hay que facturarle, con el monto y cuántos días llevan. Ahí mismo se avisa cuáles pasaron a cobranza (a los 10 días) y cuáles no se pueden facturar todavía porque les falta ponerles precio. Vacío = se notifica a recepción, que es quien cierra las devoluciones.' },
 
     { key: 'stock_minimo_default',      section: 'inventario', label: 'Stock mínimo por defecto (piezas nuevas)',
       type: 'int',  min: 0,     max: 1000,
