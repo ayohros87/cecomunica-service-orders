@@ -19,9 +19,10 @@
  * El gating de QUÉ señal ve cada rol vive en js/pages/home-signals.js
  * (módulos visibles); este servicio solo ejecuta la consulta.
  *
- * Limitación v1: los conteos de órdenes incluyen soft-deleted
- * (eliminado=true, raros) porque count() no puede expresar
- * "campo ausente o != true". La bandeja los filtra client-side.
+ * (La vieja "limitación v1" —conteos de órdenes inflados por soft-deleted
+ * porque count() no podía expresar "campo ausente o != true"— murió con los
+ * agregados: el scan filtra `eliminado` como cualquier consumidor. Medido el
+ * 2026-08-24: POR ASIGNAR decía 90 y 55 eran órdenes borradas.)
  */
 
 const SenalesService = {
@@ -37,20 +38,30 @@ const SenalesService = {
   // ninguna decisión y sí costaría lecturas sin tope.
   _COUNT_TOPE: 400,
 
-  async _count(queryRef) {
-    // Si algún día el SDK trae el agregado (migración a modular), se usa.
-    if (typeof queryRef.count === 'function') {
+  async _count(queryRef, docFilter = null) {
+    // Si algún día el SDK trae el agregado (migración a modular), se usa —
+    // OJO: el agregado no sabe aplicar docFilter; si para entonces el filtro
+    // importa, hay que quedarse en el scan o modelar el campo en la query.
+    if (typeof queryRef.count === 'function' && !docFilter) {
       const snap = await queryRef.count().get();
       return snap.data().count;
     }
     const snap = await queryRef.limit(this._COUNT_TOPE + 1).get();
-    return snap.size > this._COUNT_TOPE ? (this._COUNT_TOPE + '+') : snap.size;
+    if (!docFilter) return snap.size > this._COUNT_TOPE ? (this._COUNT_TOPE + '+') : snap.size;
+    let n = 0, vistos = 0;
+    snap.forEach(d => { vistos++; if (docFilter(d.data() || {})) n++; });
+    // Si el scan topó, hay más docs sin ver: el conteo filtrado es piso.
+    return vistos > this._COUNT_TOPE ? (n + '+') : n;
   },
+
+  // Una orden borrada (lógicamente) no es cola de nadie.
+  _viva(o) { return o.eliminado !== true; },
 
   countOrdenesPorEstado(estado) {
     const db = firebase.firestore();
     return this._count(
-      db.collection('ordenes_de_servicio').where('estado_reparacion', '==', estado)
+      db.collection('ordenes_de_servicio').where('estado_reparacion', '==', estado),
+      this._viva
     );
   },
 
@@ -87,7 +98,8 @@ const SenalesService = {
     return this._count(
       db.collection('ordenes_de_servicio')
         .where('tecnico_uid', '==', uid)
-        .where('estado_reparacion', '==', estado)
+        .where('estado_reparacion', '==', estado),
+      this._viva
     );
   },
 

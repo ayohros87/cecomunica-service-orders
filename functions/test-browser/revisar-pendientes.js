@@ -55,6 +55,8 @@ const shot = (n) => path.join(OUT, n + ".png");
 
   const entVal = await p.$eval('[data-signal-val="ENT"]', el => el.textContent);
   check(entVal === "4", `ENT cuenta 4 (o1-o4; excluye pospuesta o5, joven o6, ENTRADA o7, QC o8) — vale ${entVal}`);
+  const s1Val = await p.$eval('[data-signal-val="S1"]', el => el.textContent);
+  check(s1Val === "1", `S1 excluye la orden borrada o14 (solo o10 viva) — vale ${s1Val}`);
 
   await p.click('[data-signal="ENT"]');
   await p.waitForSelector(".pend-panel .pend-fila", { timeout: 5000 });

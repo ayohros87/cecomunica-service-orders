@@ -76,6 +76,10 @@
              fecha_modificacion: hace(60) },          // fuera de la ventana
       o13: { estado_reparacion: 'ASIGNADO', cliente_nombre: 'FRESCA',
              fecha_modificacion: hace(2) },           // aún no estancada
+      // borrada lógicamente: la señal POR ASIGNAR no debe contarla (en
+      // producción inflaba el conteo: 90 crudas, 55 borradas, 35 vivas)
+      o14: { estado_reparacion: 'POR ASIGNAR', cliente_nombre: 'BORRADA NO CUENTA',
+             fecha_creacion: hace(5), eliminado: true },
     },
     equipos_pool: {
       u1: { estado: 'devuelto_revision', serial: 'B1200110', modelo_label: 'NX-410-R',
