@@ -113,12 +113,14 @@
   function queryRef(col, filtros) {
     return {
       where: (f, op, v) => queryRef(col, filtros.concat([[f, op, v]])),
+      // SIN count(): el SDK compat real no lo tiene (los agregados son de la
+      // API modular). El stub lo imitaba "de más" y por eso el harness no
+      // detectó que aggregatesDisponibles() escondía la fila en producción.
+      // El stub debe ser tan pobre como el SDK de verdad.
       limit: (n) => ({
         get: async () => snapDe(col, filtros, n),
-        count: () => ({ get: async () => ({ data: () => ({ count: snapDe(col, filtros).size }) }) }),
       }),
       get: async () => snapDe(col, filtros),
-      count: () => ({ get: async () => ({ data: () => ({ count: snapDe(col, filtros).size }) }) }),
     };
   }
   const SENTINEL_DELETE = { __delete: true };

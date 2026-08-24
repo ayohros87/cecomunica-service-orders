@@ -1,10 +1,16 @@
 /**
  * senalesService.js
- * Conteos agregados para la fila de señales del home (y badges del rail).
+ * Conteos para la fila de señales del home (y badges del rail).
  * PLAN_REDISENO_COMMAND_CENTER.md §3.
  *
- * Usa agregados count() del SDK compat (≥9.16): 1 lectura facturada por
- * cada 1,000 documentos contados, sin descargar documentos.
+ * ⚠️ HISTORIA (2026-08-24): este archivo nació asumiendo que el SDK compat
+ * traía agregados count() "≥9.16". NUNCA los trajo — los agregados son de la
+ * API modular; compat no los expone en ninguna versión. El guard
+ * aggregatesDisponibles() siempre devolvió false y ESCONDIÓ la fila de
+ * señales completa desde el estreno del rediseño, con una degradación tan
+ * silenciosa que nadie la vio. Hoy _count() cuenta con un SCAN ACOTADO
+ * (tope _COUNT_TOPE; por encima reporta "N+"), y el día que la app migre a
+ * la API modular puede volver al agregado de verdad.
  *
  * Piso de permisos (firestore.rules, verificado 2026-07-13):
  *   ordenes_de_servicio / contratos / inventario_piezas → read isSignedIn()
@@ -20,15 +26,25 @@
 
 const SenalesService = {
 
-  /** ¿El SDK cargado soporta agregados count()? */
+  /** Conservado por compatibilidad de firma: los conteos ya no dependen de
+      agregados del SDK (ver la cabecera), así que siempre hay señales. */
   aggregatesDisponibles() {
-    const probe = firebase.firestore().collection('ordenes_de_servicio').limit(1);
-    return typeof probe.count === 'function';
+    return true;
   },
 
+  // Tope del conteo por scan. Por encima se reporta "N+": para una señal
+  // operativa, "400+" ya significa "incendio" — el número exacto no cambia
+  // ninguna decisión y sí costaría lecturas sin tope.
+  _COUNT_TOPE: 400,
+
   async _count(queryRef) {
-    const snap = await queryRef.count().get();
-    return snap.data().count;
+    // Si algún día el SDK trae el agregado (migración a modular), se usa.
+    if (typeof queryRef.count === 'function') {
+      const snap = await queryRef.count().get();
+      return snap.data().count;
+    }
+    const snap = await queryRef.limit(this._COUNT_TOPE + 1).get();
+    return snap.size > this._COUNT_TOPE ? (this._COUNT_TOPE + '+') : snap.size;
   },
 
   countOrdenesPorEstado(estado) {

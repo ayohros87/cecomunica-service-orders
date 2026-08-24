@@ -589,7 +589,11 @@ window.HomeSignals = (() => {
       return mods.some(m => MODULOS.puedeVer(rolEfectivo, m));
     });
 
-    if (!ids.length || !SenalesService.aggregatesDisponibles()) {
+    // (El gate por aggregatesDisponibles() se quitó el 2026-08-24: era el
+    // guard que escondió la fila COMPLETA desde el estreno — el SDK compat
+    // nunca tuvo count() y nadie vio degradarse nada. Los conteos ahora
+    // funcionan siempre, por agregado o por scan acotado.)
+    if (!ids.length) {
       mount.style.display = 'none';
       return;
     }
@@ -614,7 +618,8 @@ window.HomeSignals = (() => {
     const cached = _readCache(uid, rolEfectivo);
     if (cached) {
       ids.forEach(id => {
-        if (typeof cached[id] === 'number') setVal(id, cached[id]);
+        // number o string: el conteo por scan reporta "400+" cuando topa.
+        if (typeof cached[id] === 'number' || typeof cached[id] === 'string') setVal(id, cached[id]);
         else dropTile(id);
       });
       _applyDeltas(mount, ids, cached, _rotateSnapshot(uid, rolEfectivo, cached));
