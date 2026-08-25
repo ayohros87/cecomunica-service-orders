@@ -135,6 +135,13 @@ window.PocEdit = {
   renderGruposChips() {
     const cont = document.getElementById('drawer-grupos-catalog');
     if (!cont) return;
+    // Total de grupos del cliente junto a la etiqueta: llevar la cuenta a ojo
+    // en clientes grandes (renombres/fusiones en curso) se presta a errores.
+    const cnt = document.getElementById('drawer-grupos-count');
+    if (cnt) {
+      const total = (this._catalogo || []).length;
+      cnt.textContent = total ? `· ${total} grupo${total === 1 ? '' : 's'} en total` : '';
+    }
     const seleccion = this._inputGrupos();
     const selNorms = new Set(seleccion.map(g => FMT.normalize(g)));
     // Universo = catálogo ∪ grupos que ya trae el equipo (para no perder de

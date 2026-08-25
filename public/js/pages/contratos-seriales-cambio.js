@@ -55,7 +55,7 @@ window.ContratosSerialCambio = {
           <input type="checkbox" class="scmb-check" value="${esc(s.serial)}" data-modelo="${esc(s.modelo || '')}" data-modelo-id="${esc(s.modelo_id || '')}" style="width:16px;height:16px;">
           <span style="font-family:var(--font-mono,monospace);">${esc(s.serial)}</span>
         </label>`).join('');
-      return `<div style="margin-bottom:10px;">
+      return `<div class="scmb-grupo" style="margin-bottom:10px;">
           <div style="font-weight:600;margin:4px 0;">${esc(modelo)}</div>
           <div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;overflow:hidden;">${filas}</div>
         </div>`;
@@ -87,7 +87,10 @@ window.ContratosSerialCambio = {
             <textarea id="scmbNota" class="form-input" rows="2" placeholder="Nota (opcional)" style="width:100%;font-family:inherit;font-size:13px;"></textarea>
           </div>
           <label class="form-label">Seriales a reemplazar</label>
-          <div id="scmbLista">${grupos}</div>
+          <input type="search" id="scmbBuscar" class="form-input" autocomplete="off"
+                 placeholder="Buscar serial… (pega el que indicó bodega)"
+                 style="width:100%;margin-bottom:8px;height:36px;font-family:var(--font-mono,monospace);">
+          <div id="scmbLista" style="max-height:44vh;overflow-y:auto;">${grupos}</div>
           <div id="scmbCount" class="ts" style="margin-top:8px;">Sin selección</div>
         </div>
         <div class="modal-footer">
@@ -98,12 +101,38 @@ window.ContratosSerialCambio = {
     document.body.appendChild(overlay);
     overlay.style.display = 'flex';
 
+    // Identidad tolerante para buscar: sin guiones/espacios y sin mayúsculas,
+    // igual que la del pool — el serial que dicta bodega no siempre viene con
+    // el mismo formato con el que se capturó.
+    const normSerial = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
     const count = () => {
       const n = overlay.querySelectorAll('.scmb-check:checked').length;
       const el = overlay.querySelector('#scmbCount');
-      if (el) el.textContent = n ? `${n} serial(es) seleccionado(s)` : 'Sin selección';
+      if (!el) return;
+      let txt = n ? `${n} serial(es) seleccionado(s)` : 'Sin selección';
+      if (normSerial(overlay.querySelector('#scmbBuscar')?.value)) {
+        const vis = [...overlay.querySelectorAll('.scmb-item')].filter(i => i.style.display !== 'none').length;
+        txt += vis ? ` · ${vis} coincidencia(s)` : ' · sin coincidencias — revisa el serial';
+      }
+      el.textContent = txt;
     };
     overlay.addEventListener('change', e => { if (e.target.classList.contains('scmb-check')) count(); });
+
+    // Buscador: filtra las filas por serial (los ya marcados siguen contando
+    // aunque queden ocultos por el filtro).
+    overlay.querySelector('#scmbBuscar').addEventListener('input', (e) => {
+      const q = normSerial(e.target.value);
+      overlay.querySelectorAll('.scmb-item').forEach(item => {
+        const chk = item.querySelector('.scmb-check');
+        item.style.display = (!q || normSerial(chk?.value).includes(q)) ? '' : 'none';
+      });
+      overlay.querySelectorAll('.scmb-grupo').forEach(g => {
+        const alguno = [...g.querySelectorAll('.scmb-item')].some(i => i.style.display !== 'none');
+        g.style.display = alguno ? '' : 'none';
+      });
+      count();
+    });
     overlay.addEventListener('click', e => { if (e.target === overlay) this.cerrar(); });
 
     if (typeof lucide !== 'undefined') lucide.createIcons();

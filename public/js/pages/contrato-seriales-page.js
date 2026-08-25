@@ -272,12 +272,38 @@
 
     const fs = $('footerStrip');
     if (fs) fs.style.display = gruposHtml ? '' : 'none';
+    const sw = $('serialBuscarWrap');
+    if (sw) sw.style.display = gruposHtml ? 'flex' : 'none';
 
     aplicarCandado(locked);
 
     wire();
     refresh();
+    aplicarBusquedaSerial();   // re-resalta tras re-render (candado/desbloqueo)
     if (window.lucide) lucide.createIcons();
+  }
+
+  // ── Buscador de seriales del contrato ───────────────────────────────────
+  // Con contratos de 80+ radios, ubicar a ojo el serial que indicó bodega se
+  // presta a omisiones. Resalta TODAS las coincidencias (identidad tolerante a
+  // guiones/espacios, la misma del pool) y hace scroll a la primera. Funciona
+  // también con la página bloqueada: leer .value no requiere inputs activos.
+  function aplicarBusquedaSerial(conScroll) {
+    const inp = $('serialBuscar');
+    const info = $('serialBuscarInfo');
+    if (!inp) return;
+    const q = norm(inp.value);
+    const inputs = [...document.querySelectorAll('#serialesBody .serial-input')];
+    inputs.forEach(i => i.classList.remove('buscado'));
+    if (!q) { if (info) info.textContent = ''; return; }
+    const hits = inputs.filter(i => norm(i.value).includes(q));
+    hits.forEach(i => i.classList.add('buscado'));
+    if (info) {
+      info.textContent = hits.length
+        ? `${hits.length} coincidencia${hits.length === 1 ? '' : 's'}`
+        : 'Sin coincidencias — revisa el serial';
+    }
+    if (conScroll && hits.length) hits[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   // Modo solo-lectura sobre la pantalla ya renderizada. Tres estados:
@@ -422,6 +448,14 @@
       if (!e.target.closest('.overflow-menu')) cerrarOtrasFuentes();
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarOtrasFuentes(); });
+
+    const sb = $('serialBuscar');
+    if (sb) {
+      sb.addEventListener('input', () => aplicarBusquedaSerial(true));
+      sb.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { sb.value = ''; aplicarBusquedaSerial(); }
+      });
+    }
 
     $('btnGuardar').addEventListener('click', () => guardar());
     $('btnConfirmar').addEventListener('click', () => confirmar());

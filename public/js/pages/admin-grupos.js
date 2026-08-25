@@ -271,6 +271,8 @@
     State.seleccionados.clear();
     renderClientes();
     $('btnGpReload').disabled = false;
+    const tc = $('gpTotalGrupos');
+    if (tc) tc.textContent = '…';   // no mostrar el total del cliente anterior
     $('gpGrupoList').innerHTML =
       `<div style="padding:24px; text-align:center; color:var(--fg-3); font-size:13px;">Cargando grupos…</div>`;
     await cargarGruposCliente();
@@ -295,10 +297,27 @@
       renderPanelAgregar();
       renderGrupos();
       renderDupBanner();
+      renderContadorGrupos();
     } catch (e) {
       console.error('Error cargando grupos:', e);
       Toast.show('No se pudieron cargar los grupos.', 'bad');
     }
+  }
+
+  // Contador de grupos del cliente seleccionado. Toda acción (alta, renombre,
+  // fusión, borrado, prefijo) termina en cargarGruposCliente, así que el total
+  // se recalcula solo — contarlos a mano en clientes grandes invitaba a
+  // omisiones.
+  function renderContadorGrupos() {
+    const el = $('gpTotalGrupos');
+    if (!el) return;
+    if (!State.clienteSel) { el.textContent = ''; return; }
+    const total = State.grupos.length;
+    const conEquipos = State.grupos.filter(g => g.count > 0).length;
+    el.innerHTML = `<strong>${total}</strong> grupo${total === 1 ? '' : 's'}`
+      + (conEquipos < total
+          ? ` <span style="color:var(--fg-3);">(${conEquipos} con equipos)</span>`
+          : '');
   }
 
   // ── Prefijo del cliente ──────────────────────────────────────────────
