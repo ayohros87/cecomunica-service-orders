@@ -545,9 +545,128 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
   }
 
   filaDetalle.setAttribute("data-equipos-loaded", "true");
+
+  // Buscador de serial: solo con listas largas, y siempre re-aplicado — este
+  // render acaba de reemplazar el <tbody> entero (pasa en cada snapshot),
+  // así que el filtro vigente hay que volver a pintarlo sobre las filas nuevas.
+  const barraBuscar = filaDetalle.querySelector('.equipos-buscador');
+  if (barraBuscar) {
+    const mostrarBuscador = equipos.length >= EQUIPOS_BUSCADOR_MIN;
+    barraBuscar.style.display = mostrarBuscador ? '' : 'none';
+    if (!mostrarBuscador) {
+      const inp = barraBuscar.querySelector('.equipos-buscar-input');
+      if (inp) inp.value = '';
+    }
+  }
+  aplicarBusquedaSerialOrden(ordenId);
+
   APP.utils.lucideRefresh(filaDetalle);
   decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle);
 }
+
+// ── Buscador de serial dentro de una orden ────────────────────────────────
+// Petición de recepción (2026-08-25): con la lista larga, encontrar el radio
+// que se va a reemplazar obligaba a recorrerla a mano. El filtro deja a la
+// vista solo las filas cuyo serial coincide, con la identidad tolerante del
+// pool (guiones, espacios y mayúsculas dan igual: "PD-606" == "pd 606").
+// Por debajo de este número de equipos la lista cabe de un vistazo y la barra
+// solo añadiría ruido.
+const EQUIPOS_BUSCADOR_MIN = 5;
+
+function _normSerialBusqueda(v) {
+  if (typeof EquiposPoolService !== 'undefined') return EquiposPoolService.normalizarSerial(v);
+  return String(v == null ? '' : v).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+// Arranque del buscador cuando la bandeja ya viene filtrada por serial: la
+// orden se expande apuntando al radio que el usuario venía buscando.
+function _serialDeLaBandeja() {
+  return (document.getElementById('filtroSerial')?.value || '').trim();
+}
+
+function _filaDetalleDe(ordenId) {
+  return document.querySelector(`tr.filaDetalle[data-orden-id="${ordenId}"]`);
+}
+
+function aplicarBusquedaSerialOrden(ordenId) {
+  const filaDetalle = _filaDetalleDe(ordenId);
+  if (!filaDetalle) return;
+  const barra = filaDetalle.querySelector('.equipos-buscador');
+  const input = filaDetalle.querySelector('.equipos-buscar-input');
+  if (!barra || !input) return;
+  const info = barra.querySelector('.equipos-buscar-info');
+  const btnLimpiar = barra.querySelector('.equipos-buscar-limpiar');
+  const filas = [...filaDetalle.querySelectorAll('tr.equipo-row')];
+
+  filas.forEach(tr => tr.classList.remove('equipo-row--oculto', 'equipo-row--hit'));
+  barra.classList.remove('sin-resultados');
+
+  const q = _normSerialBusqueda(input.value);
+  if (!q) {
+    if (info) info.textContent = '';
+    if (btnLimpiar) btnLimpiar.style.display = 'none';
+    return;
+  }
+
+  let hits = 0;
+  filas.forEach(tr => {
+    // El serial visible de la fila; los chips del pool son nodos aparte, no
+    // entran en el texto de .valor.
+    const serial = tr.querySelector('.col-serie .valor')?.textContent || '';
+    if (_normSerialBusqueda(serial).includes(q)) { tr.classList.add('equipo-row--hit'); hits++; }
+    else tr.classList.add('equipo-row--oculto');
+  });
+
+  if (info) {
+    info.textContent = hits
+      ? `${hits} de ${filas.length} equipo${filas.length === 1 ? '' : 's'}`
+      : 'Ningún serial de esta orden coincide — revísalo';
+  }
+  if (!hits) barra.classList.add('sin-resultados');
+  if (btnLimpiar) btnLimpiar.style.display = '';
+}
+window.aplicarBusquedaSerialOrden = aplicarBusquedaSerialOrden;
+
+function limpiarBusquedaSerialOrden(ordenId) {
+  const input = _filaDetalleDe(ordenId)?.querySelector('.equipos-buscar-input');
+  if (!input) return;
+  input.value = '';
+  aplicarBusquedaSerialOrden(ordenId);
+  input.focus();
+}
+window.limpiarBusquedaSerialOrden = limpiarBusquedaSerialOrden;
+
+// Tras cambiar un serial con el lápiz: si la búsqueda activa apuntaba al valor
+// VIEJO, el re-render dejaría la lista en "sin coincidencias" justo después del
+// cambio y parecería que el radio se perdió. Se re-apunta al serial nuevo, que
+// además sirve de confirmación visual de lo que quedó guardado.
+function reapuntarBusquedaSerialOrden(ordenId, serialViejo, serialNuevo) {
+  const input = _filaDetalleDe(ordenId)?.querySelector('.equipos-buscar-input');
+  if (!input) return;
+  const q = _normSerialBusqueda(input.value);
+  if (!q || !_normSerialBusqueda(serialViejo).includes(q)) return;
+  input.value = String(serialNuevo || '').trim();
+}
+window.reapuntarBusquedaSerialOrden = reapuntarBusquedaSerialOrden;
+
+// Delegados en document: la barra se crea y se re-crea con cada fila de
+// detalle, igual que el resto de acciones de esta página.
+document.addEventListener('input', (e) => {
+  const input = e.target.closest?.('.equipos-buscar-input');
+  if (!input) return;
+  aplicarBusquedaSerialOrden(input.dataset.ordenId);
+});
+
+document.addEventListener('keydown', (e) => {
+  const input = e.target.closest?.('.equipos-buscar-input');
+  if (!input) return;
+  if (e.key === 'Escape') {
+    e.stopPropagation();          // no cerrar/colapsar nada más con esta tecla
+    limpiarBusquedaSerialOrden(input.dataset.ordenId);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();           // el filtro ya es en vivo; Enter no envía nada
+  }
+});
 
 // Decora la columna Serie con el estado de la unidad en el pool de equipos
 // serializados (equipos_pool): chip de estado con link al kardex y, si el
@@ -1346,6 +1465,26 @@ function _crearFilaDetalle(ordenId, ordenData, equiposNormalizados) {
         </div>
 
         ${_buildTimelineHTML(ordenData)}
+
+        <!-- Buscador de serial DENTRO de la orden (petición de recepción,
+             2026-08-25): en órdenes con decenas de radios —y más aún cuando
+             varios ya fueron reemplazados— ubicar a ojo el serial que hay que
+             cambiar se presta a errores. Filtra las filas y resalta la
+             coincidencia. Vive FUERA de .equipos-container a propósito:
+             renderEquiposTabla reescribe ese contenedor en cada snapshot y el
+             texto escrito se perdería. Solo aparece con listas largas
+             (EQUIPOS_BUSCADOR_MIN); la visibilidad la decide ese render. -->
+        <div class="equipos-buscador" data-orden-id="${ordenId}" style="display:none;">
+          <i data-lucide="search" class="equipos-buscador-icono"></i>
+          <input type="search" class="equipos-buscar-input" data-orden-id="${ordenId}"
+                 placeholder="Buscar serial en esta orden…" aria-label="Buscar serial en esta orden"
+                 autocomplete="off" spellcheck="false" value="${escapeHtml(_serialDeLaBandeja())}">
+          <span class="equipos-buscar-info" aria-live="polite"></span>
+          <button type="button" class="equipos-buscar-limpiar" data-action="limpiar-busqueda-serial"
+                  data-stop-propagation="true" data-orden-id="${ordenId}" style="display:none;">
+            Ver todos
+          </button>
+        </div>
 
         <div class="equipos-container">
           <div style="padding: 20px; text-align: center; color: #666;">

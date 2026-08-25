@@ -205,6 +205,11 @@
         if (popover) popover.style.display = 'none';
       }
     },
+    // Buscador de serial dentro de la orden (barra sobre la tabla de equipos).
+    'limpiar-busqueda-serial': (el) => {
+      const ordenId = el.dataset.ordenId;
+      if (ordenId) limpiarBusquedaSerialOrden(ordenId);
+    },
     'editar-campo-equipo': (el) => {
       const { id, campo, valor } = el.dataset;
       if (id && campo !== undefined) editarCampoEquipo(id, campo, valor || '');

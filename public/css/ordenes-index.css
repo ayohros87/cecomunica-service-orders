@@ -3711,3 +3711,108 @@ tr.activo:hover { background: #f0f9ff !important; }
 }
 
 .equipo-fotos-badge i { width: 12px; height: 12px; }
+
+/* ========================================
+   BUSCADOR DE SERIAL DENTRO DE LA ORDEN
+   Petición de recepción (2026-08-25): en órdenes con decenas de radios,
+   ubicar a ojo el serial que hay que reemplazar se prestaba a errores.
+   Barra sobre la tabla de equipos (escritorio) y sobre las tarjetas del
+   modal de equipos (móvil). Solo aparece con listas largas.
+   ======================================== */
+
+.equipos-buscador {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.equipos-buscador-icono {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.equipos-buscar-input,
+.equipos-buscar-input-mobile {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 340px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+}
+
+.equipos-buscar-input:focus,
+.equipos-buscar-input-mobile:focus {
+  outline: none;
+  border-color: var(--accent, #0091D7);
+  box-shadow: 0 0 0 3px rgba(0, 145, 215, 0.15);
+}
+
+.equipos-buscar-info {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.equipos-buscador.sin-resultados .equipos-buscar-info { color: #dc2626; font-weight: 600; }
+.equipos-buscador.sin-resultados .equipos-buscar-input,
+.equipos-buscador.sin-resultados .equipos-buscar-input-mobile {
+  border-color: #dc2626;
+  /* También el halo: el del :focus es azul y tapaba el borde rojo justo
+     cuando el usuario sigue escribiendo, que es cuando hace falta verlo. */
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+
+.equipos-buscar-limpiar {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  font-size: 12px;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.equipos-buscar-limpiar:hover { background: #eef2f7; }
+
+/* Fuera del filtro. !important porque en móvil las filas de .equipos-table
+   se pintan como grid (media query de arriba) y ahí un display:none normal
+   perdería por especificidad. */
+.equipo-row--oculto { display: none !important; }
+
+.equipos-table tbody tr.equipo-row--hit,
+.equipos-table tbody tr.equipo-row--hit:hover { background: #ecfdf5; }
+
+.equipos-table tbody tr.equipo-row--hit .col-serie .valor-primario {
+  color: #047857;
+  font-weight: 700;
+}
+
+/* Variante del modal de equipos (móvil): sin marco, la barra va suelta
+   encima de las tarjetas. */
+.equipos-buscador--modal {
+  padding: 0 0 10px;
+  background: transparent;
+  border-top: none;
+  border-bottom: none;
+}
+
+.equipos-buscador--modal .equipos-buscar-input-mobile { max-width: none; }
+
+.equipo-card--oculto { display: none !important; }
+
+.equipo-card--hit {
+  border-color: #059669 !important;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.18);
+}

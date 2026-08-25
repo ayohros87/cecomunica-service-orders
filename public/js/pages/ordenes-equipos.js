@@ -166,6 +166,13 @@ window.editarCampoEquipo = async function(compuestoId, campo, valorActual = "") 
       if (i >= 0) cacheOrden.equipos[i][campo] = valorLimpio;
     }
 
+    // Si la tabla estaba filtrada por el serial VIEJO, el re-render la dejaría
+    // en "sin coincidencias" y parecería que el radio se perdió: se re-apunta
+    // el buscador al serial nuevo (ordenes-render.js).
+    if (esSerial && typeof reapuntarBusquedaSerialOrden === "function") {
+      reapuntarBusquedaSerialOrden(target.ordenId, valorActual || "", valorLimpio);
+    }
+
     refrescarEquiposDeOrden(target.ordenId);
     Toast.show("✅ Equipo actualizado", "ok");
   } catch (e) {
@@ -350,7 +357,7 @@ window.abrirEquiposMobile = function(ordenId) {
         : '';
 
       return `
-        <div class="${cardClass}">
+        <div class="${cardClass}" data-serial="${escapeHtml(serial)}">
           <div class="equipo-card-header">
             <div class="equipo-card-info">
               <div class="equipo-card-serial"><i data-lucide="package"></i> ${escapeHtml(serial)} ${fotosBadge}</div>
@@ -381,9 +388,78 @@ window.abrirEquiposMobile = function(ordenId) {
     }).join("");
   }
 
+  // Buscador de serial (misma petición que en la tabla de escritorio). Al
+  // cambiar de orden se limpia; si es un refresco de la MISMA orden se
+  // conserva lo escrito y se vuelve a aplicar sobre las tarjetas nuevas.
+  const buscarInput = document.getElementById("equiposMobileBuscar");
+  if (buscarInput && _equiposMobileOrdenId !== ordenId) buscarInput.value = "";
+  _equiposMobileOrdenId = ordenId;
+  const barraBuscar = document.getElementById("equiposMobileBuscador");
+  if (barraBuscar) {
+    const mostrar = equipos.length >= EQUIPOS_BUSCADOR_MIN_MOBILE;
+    barraBuscar.style.display = mostrar ? '' : 'none';
+    if (!mostrar && buscarInput) buscarInput.value = "";
+  }
+  aplicarBusquedaSerialMobile();
+
   APP.utils.lucideRefresh(modal);
   if (modal) APP.utils.show(modal);
 };
+
+// ── Buscador de serial en el modal de equipos (móvil) ─────────────────────
+// Espejo de la barra de la tabla de escritorio (ordenes-render.js): filtra las
+// tarjetas por serial con la identidad tolerante del pool. La lista se
+// re-genera entera en cada refresco, por eso el filtro se re-aplica al final
+// de abrirEquiposMobile.
+const EQUIPOS_BUSCADOR_MIN_MOBILE = 5;
+let _equiposMobileOrdenId = null;
+
+function _normSerialMobile(v) {
+  if (typeof EquiposPoolService !== "undefined") return EquiposPoolService.normalizarSerial(v);
+  return String(v == null ? "" : v).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function aplicarBusquedaSerialMobile() {
+  const input = document.getElementById("equiposMobileBuscar");
+  const info = document.getElementById("equiposMobileBuscarInfo");
+  const barra = document.getElementById("equiposMobileBuscador");
+  const list = document.getElementById("equiposMobileList");
+  if (!input || !list) return;
+
+  const cards = [...list.querySelectorAll(".equipo-card")];
+  cards.forEach(c => c.classList.remove("equipo-card--oculto", "equipo-card--hit"));
+  if (barra) barra.classList.remove("sin-resultados");
+
+  const q = _normSerialMobile(input.value);
+  if (!q) { if (info) info.textContent = ""; return; }
+
+  let hits = 0;
+  cards.forEach(c => {
+    if (_normSerialMobile(c.dataset.serial || "").includes(q)) { c.classList.add("equipo-card--hit"); hits++; }
+    else c.classList.add("equipo-card--oculto");
+  });
+  if (info) {
+    info.textContent = hits
+      ? `${hits} de ${cards.length} equipo${cards.length === 1 ? "" : "s"}`
+      : "Ningún serial de esta orden coincide";
+  }
+  if (!hits && barra) barra.classList.add("sin-resultados");
+}
+window.aplicarBusquedaSerialMobile = aplicarBusquedaSerialMobile;
+
+document.addEventListener("input", (e) => {
+  if (e.target && e.target.id === "equiposMobileBuscar") aplicarBusquedaSerialMobile();
+});
+document.addEventListener("keydown", (e) => {
+  if (!e.target || e.target.id !== "equiposMobileBuscar") return;
+  if (e.key === "Escape") {
+    e.stopPropagation();          // Escape limpia el filtro, no cierra el modal
+    e.target.value = "";
+    aplicarBusquedaSerialMobile();
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+  }
+});
 
 window.cerrarEquiposMobile = function() {
   const modal = document.getElementById("modalEquiposMobile");
