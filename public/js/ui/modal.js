@@ -99,6 +99,11 @@ window.Modal = {
       const overlay = document.createElement('div');
       overlay.className = 'overlay';
       overlay.style.display = 'flex';
+      // Por encima de cualquier overlay de página (QC/flujo/visita usan 9500,
+      // el visor de fotos 10050): confirm/prompt siempre se abren ENCIMA de
+      // otro modal, y el .overlay del CSS (z 1500) los dejaba escondidos
+      // detrás — cada clic apilaba un backdrop más y la pantalla se veía negra.
+      overlay.style.zIndex = '10100';
       overlay.innerHTML = `
         <div class="modal" style="max-width:440px">
           <div class="sheet-header">
@@ -162,6 +167,8 @@ window.Modal = {
       const overlay = document.createElement('div');
       overlay.className = 'overlay';
       overlay.style.display = 'flex';
+      // Mismo motivo que en confirm(): siempre encima del modal que lo abre.
+      overlay.style.zIndex = '10100';
       overlay.innerHTML = `
         <div class="modal" style="max-width:460px">
           ${title ? `<div class="sheet-header"><h3 class="sheet-title">${esc(title)}</h3></div>` : ''}
