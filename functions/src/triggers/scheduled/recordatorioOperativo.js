@@ -18,8 +18,18 @@
 //     cambiar los equipos), hace >= empresa/config.qc_recordatorio_dias (3).
 //     La sección A no las ve: solo mira estados abiertos. Destinatario: taller.
 //
-// Solo correos (mail_queue → onMailQueued); no escribe en órdenes ni en el
-// pool. Un correo por sección por día, solo si hay filas.
+//  F) EQUIPOS NO DEVUELTOS: renglones de cobros_equipos abiertos. Escala a
+//     `en_cobranza` los que pasaron los 10 días y manda el resumen con el
+//     monto. Destinatario: empresa/config.email_cobranza (o recepción).
+//
+//  G) ENTRADAs CERRADAS CON EQUIPOS QUE NO ATERRIZARON: órdenes marcadas con
+//     `cierre_entrada_con_incidencias` por onOrdenWritePool — el radio se
+//     quedó fuera del inventario al cerrar, casi siempre por un serial mal
+//     tecleado. Destinatario: recepción, con copia al taller.
+//
+// F es la ÚNICA sección que escribe (el escalado de etapa); las demás solo
+// mandan correos (mail_queue → onMailQueued). Un correo por sección por día,
+// solo si hay filas.
 
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
@@ -467,6 +477,85 @@ module.exports = onSchedule(
       logger.info("[recordatorioOperativo] listas para entregar", { total: listas.length, notificado: !!(listas.length && to) });
     } catch (e) {
       logger.error("[recordatorioOperativo] sección listas-entregar falló", { message: e.message });
+    }
+
+    // ── G) ENTRADAs cerradas con equipos que no aterrizaron ──────────────
+    // El aviso que no existía. `onOrdenWritePool` anota en la orden los equipos
+    // que el cierre no pudo mandar a bodega (`cierre_entrada_incidencias`);
+    // esto los saca a la luz. Sin esta sección la anotación sería otro campo
+    // que se escribe y nadie lee — exactamente el error que dejó nueve días
+    // fuera del inventario al radio de TIL PANAMA.
+    //
+    // Va a recepción (quien teclea los seriales y puede corregirlos) con copia
+    // al taller (quien cierra las ENTRADAs). El motivo `sin_ficha` es el grave:
+    // hay un radio físico que el sistema no sabe dónde está, casi siempre por
+    // un dígito mal tecleado. Corregir el serial en la orden lo aterriza solo.
+    try {
+      const snap = await db.collection("ordenes_de_servicio")
+        .where("cierre_entrada_con_incidencias", "==", true)
+        .limit(500)
+        .get();
+
+      const filas = [];
+      snap.forEach(d => {
+        const o = d.data() || {};
+        if (o.eliminado) return;
+        (o.cierre_entrada_incidencias || []).forEach(i => {
+          filas.push({
+            id: d.id,
+            orden: o.numero_orden || d.id,
+            cliente: o.cliente_nombre || "—",
+            serial: i.serial || "—",
+            modelo: i.modelo || "—",
+            motivo: i.motivo,
+            estado: i.estado || null,
+            dias: Math.floor(edadDias(o.cierre_entrada_incidencias_at || o.fecha_cierre_entrada, now) || 0),
+          });
+        });
+      });
+      filas.sort((a, b) => b.dias - a.dias);
+      const sinFicha = filas.filter(f => f.motivo === "sin_ficha").length;
+
+      const to = (await recepcionEmails()).join(",");
+      const cc = await tallerEmailTo();
+      if (filas.length && to) {
+        const rows = filas.slice(0, MAX_FILAS).map(f => [
+          linkOrden(f.id, f.orden), esc(f.cliente),
+          `<code>${esc(f.serial)}</code>`, esc(f.modelo),
+          f.motivo === "sin_ficha"
+            ? '<b style="color:#b91c1c;">No existe en inventario</b>'
+            : `No se pudo mover${f.estado ? ` (está ${esc(f.estado)})` : ""}`,
+          `<b>${f.dias}</b>`,
+        ]);
+        const extra = filas.length > MAX_FILAS
+          ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${filas.length - MAX_FILAS} más.</p>` : "";
+        await db.collection("mail_queue").add({
+          to, ...(cc ? { cc } : {}),
+          subject: `Equipos que no llegaron a bodega al cerrar su ENTRADA: ${filas.length}`,
+          preheader: `${filas.length} equipo(s) quedaron fuera del inventario al cerrar su orden de ENTRADA`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#991b1b;">Equipos que no aterrizaron en bodega</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Estas órdenes de ENTRADA se cerraron, pero <b>${filas.length} equipo(s)</b> no pasaron a bodega.
+              Mientras tanto NO cuentan como disponibles: si alguien busca uno de estos radios en el
+              sistema, no lo va a encontrar en el estante.
+            </p>
+            ${sinFicha ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#b91c1c;">
+              <b>${sinFicha}</b> tienen un serial que <b>no existe en el inventario</b> — casi siempre es un
+              dígito mal tecleado. Corrígelo en la orden (lápiz del equipo) y el radio aterriza solo.</p>` : ""}
+            ${tablaHtml(["Orden", "Cliente", "Serial", "Modelo", "Qué pasó", "Días"], rows)}
+            ${extra}`,
+          ctaUrl: `${APP_BASE_URL}/ordenes/index.html${idsCta(filas)}`,
+          ctaLabel: "Ver estas órdenes",
+          meta: { source: "recordatorioOperativo", seccion: "entrada_incidencias",
+                  total: filas.length, sinFicha },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      logger.info("[recordatorioOperativo] incidencias de cierre de ENTRADA",
+        { total: filas.length, sinFicha, notificado: !!(filas.length && to) });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección entrada-incidencias falló", { message: e.message });
     }
 
     // ── F) Equipos no devueltos: escalado a cobranza ─────────────────────

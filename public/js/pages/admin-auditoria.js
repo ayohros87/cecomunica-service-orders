@@ -27,6 +27,9 @@
     ENTREGAR:               { icon: 'truck',       color: '#0f766e', label: 'Entregar orden' },
     CERRAR_ENTRADA:         { icon: 'package-check', color: '#15803d', label: 'Cerrar entrada' },
     DEVOLUCION_ACUSE:       { icon: 'pen-line',    color: '#0f766e', label: 'Acuse de recepción firmado' },
+    // Cambiar el serial de un equipo re-apunta el inventario: rojo, no gris.
+    EDITAR_SERIAL:          { icon: 'scan-line',   color: '#b45309', label: 'Editar serial de un equipo' },
+    CORREGIR_SERIAL:        { icon: 'scan-line',   color: '#b45309', label: 'Corregir serial (script)' },
     APROBAR:                { icon: 'badge-check', color: '#15803d', label: 'Aprobar contrato' },
     ANULAR:                 { icon: 'x-octagon',   color: '#b91c1c', label: 'Anular contrato' },
     REEMPLAZAR_FIRMADO:     { icon: 'refresh-cw',  color: '#b45309', label: 'Reemplazar contrato firmado' },

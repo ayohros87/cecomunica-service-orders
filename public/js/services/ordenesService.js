@@ -515,16 +515,46 @@ const OrdenesService = {
       throw new Error("Equipo no encontrado");
     }
     
+    const anterior = equipos[equipoIndex][campo];
     equipos[equipoIndex][campo] = valor;
     // El serial vive bajo DOS claves (`serial` es la que leen los triggers del
     // pool y los renders; `numero_de_serie` es el alias legacy de escritura).
     // Editar solo una dejaba al pool rastreando el serial viejo — se
     // sincronizan siempre juntas.
-    if (campo === "numero_de_serie" || campo === "serial") {
+    const esSerial = campo === "numero_de_serie" || campo === "serial";
+    if (esSerial) {
       equipos[equipoIndex].serial = valor;
       equipos[equipoIndex].numero_de_serie = valor;
     }
-    await ordenRef.update({ equipos });
+
+    // Cambiar un serial deja rastro. Antes esta función hacía un
+    // `update({equipos})` pelado: ni `fecha_modificacion` ni `os_logs`, así que
+    // el cambio era INDEMOSTRABLE — ni quién ni cuándo.
+    //
+    // Costó un caso real (TIL PANAMA, 2026-08): la tanda creó la fila con
+    // "B8C10597", alguien la editó a "B8C1697" desde aquí, y al cerrar la
+    // ENTRADA el equipo se quedó en cuarentena porque ese serial no existía en
+    // el pool. Reconstruir qué había pasado exigió descartar hipótesis una por
+    // una contra el kardex, y aun así nunca se supo QUIÉN lo editó.
+    //
+    // Solo el serial se registra: modelo y observaciones se corrigen a cada
+    // rato y llenarían la bitácora de ruido. El serial es la identidad del
+    // equipo — cambiarlo re-apunta el inventario.
+    const patch = { equipos };
+    if (esSerial) {
+      patch.fecha_modificacion = firebase.firestore.FieldValue.serverTimestamp();
+      patch.os_logs = firebase.firestore.FieldValue.arrayUnion({
+        action: "EDITAR_SERIAL",
+        by: firebase.auth().currentUser?.uid || "",
+        by_email: firebase.auth().currentUser?.email || "",
+        // ISO y no serverTimestamp: Firestore no admite sentinelas dentro de
+        // un array (mismo patrón que el historial de equipos descartados).
+        at_iso: new Date().toISOString(),
+        de: String(anterior ?? ""),
+        a: String(valor ?? ""),
+      });
+    }
+    await ordenRef.update(patch);
   },
 
   /**

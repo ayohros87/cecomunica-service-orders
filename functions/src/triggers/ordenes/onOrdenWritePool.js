@@ -36,6 +36,108 @@ function equiposDe(data) {
     .filter((e) => e.serial);
 }
 
+// Aterriza en bodega los equipos de una ENTRADA que se cierra, y DEJA CONSTANCIA
+// de lo que no pudo aterrizar.
+//
+// El bug que cierra (caso TIL PANAMA, 2026-08): `transicionar` devuelve
+// "no-existe" cuando el serial de la fila no tiene ficha en el pool — un dígito
+// mal tecleado basta. Antes ese retorno se ignoraba y el `catch` estaba vacío:
+// el radio real se quedaba en cuarentena mientras sus 13 compañeros de tanda
+// pasaban a bodega, y NADA lo decía. Estuvo nueve días fuera del inventario
+// disponible sin que saltara un solo aviso.
+//
+// Ahora cada unidad que no aterriza queda anotada en la propia orden
+// (`cierre_entrada_incidencias`) con el motivo, y la bandera
+// `cierre_entrada_con_incidencias` la hace consultable — el correo diario la
+// lee de ahí (recordatorioOperativo §G) en vez de barrer todas las órdenes.
+//
+// Motivos:
+//   · sin_ficha  — el serial no existe en el pool. Casi siempre está mal
+//                  escrito. Es el caso grave: hay un radio físico sin rastro.
+//   · no_movio   — la ficha existe pero no estaba en un estado que el cierre
+//                  pueda mover (vendida, de baja, o ya en bodega). Puede ser
+//                  benigno; se anota igual para que alguien lo mire.
+//
+// `reintento` la usa la re-evaluación de abajo: al corregir el serial de una
+// ENTRADA ya cerrada, esto vuelve a correr y el equipo aterriza tarde pero
+// aterriza — que es exactamente lo que hubo que hacer a mano con el radio de TIL.
+async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } = {}) {
+  const refMovE = { tipo: "orden", id: ordenId, label: after.numero_orden || ordenId };
+  const incidencias = [];
+  let aterrizados = 0;
+
+  for (const e of equipos) {
+    let r = null;
+    try {
+      r = await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
+        aEstado: pool.ESTADOS.EN_BODEGA,
+        // VENDIDO y BAJA quedan fuera a propósito: son hechos de
+        // propiedad, no de ubicación, y no los revierte una entrada.
+        soloDesde: [pool.ESTADOS.DEVUELTO, pool.ESTADOS.EN_TALLER,
+                    pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.ASIGNADO],
+        tipo: "cierre_entrada",
+        refMov: refMovE,
+        notas: reintento
+          ? "Entrada ya cerrada: el equipo aterriza en bodega al corregirse su serial"
+          : "Entrada cerrada: el equipo queda disponible en bodega",
+        // verificado:true — la ENTRADA ES la orden de inspección del
+        // equipo devuelto: el taller lo tuvo en la mano y lo revisó, así
+        // que eso YA es la confirmación humana. Otras vueltas a bodega
+        // (p.ej. quitar un serial de un contrato, onSerialWrite) sí
+        // dejan verificado:false porque nadie miró la unidad.
+        extra: { orden_actual_id: null, asignacion: null, verificado: true },
+      });
+    } catch (err) {
+      r = "error";
+      logger.warn("[onOrdenWritePool] transicionar falló al cerrar ENTRADA",
+        { ordenId, serial: e.serial, error: err.message });
+    }
+    if (r === "transicion") { aterrizados++; continue; }
+    // "sin-cambio" con la ficha YA en bodega es el caso idempotente (el trigger
+    // corrió dos veces): no es incidencia. Se distingue releyendo la ficha.
+    let estadoActual = null;
+    try {
+      const { data } = await pool.resolver(e.serial, e.modelo_id, e.modelo);
+      estadoActual = data ? data.estado : null;
+    } catch (err) { /* si no se puede releer, se anota igual */ }
+    if (estadoActual === pool.ESTADOS.EN_BODEGA) continue;
+    incidencias.push({
+      serial: e.serial,
+      modelo: e.modelo || "",
+      motivo: r === "no-existe" ? "sin_ficha" : "no_movio",
+      estado: estadoActual,
+    });
+  }
+  return { incidencias, aterrizados };
+}
+
+// Escribe (o limpia) el rastro de incidencias del cierre en la propia orden.
+// Se limpia solo: cuando ya no queda ninguna, la bandera desaparece y la orden
+// deja de salir en el correo — sin que nadie tenga que "marcar como resuelto".
+async function anotarIncidencias(ordenId, after, incidencias) {
+  const teniaAntes = !!after.cierre_entrada_con_incidencias;
+  if (!incidencias.length) {
+    if (!teniaAntes) return;
+    await db.collection("ordenes_de_servicio").doc(ordenId).set({
+      cierre_entrada_con_incidencias: admin.firestore.FieldValue.delete(),
+      cierre_entrada_incidencias: admin.firestore.FieldValue.delete(),
+    }, { merge: true });
+    logger.info("[onOrdenWritePool] incidencias de cierre resueltas", { ordenId });
+    return;
+  }
+  await db.collection("ordenes_de_servicio").doc(ordenId).set({
+    cierre_entrada_con_incidencias: true,
+    cierre_entrada_incidencias: incidencias,
+    cierre_entrada_incidencias_at: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  // error y no warn: un radio que se cierra sin aterrizar es inventario que
+  // desaparece en silencio, no un detalle de log.
+  logger.error("[onOrdenWritePool] ENTRADA cerrada con equipos que NO aterrizaron", {
+    ordenId, total: incidencias.length,
+    sinFicha: incidencias.filter((i) => i.motivo === "sin_ficha").map((i) => i.serial),
+  });
+}
+
 module.exports = onDocumentWritten(
   { document: "ordenes_de_servicio/{ordenId}", region: "us-central1" },
   async (event) => {
@@ -70,28 +172,52 @@ module.exports = onDocumentWritten(
         && norm(after.estado_reparacion) === CERRADA_ENTRADA
         && norm(before?.estado_reparacion) !== CERRADA_ENTRADA;
 
-      if (cerroEntrada) {
-        const refMovE = { tipo: "orden", id: ordenId, label: after.numero_orden || ordenId };
-        for (const e of despues) {
-          try {
-            await pool.transicionar(e.serial, e.modelo_id, e.modelo, {
-              aEstado: pool.ESTADOS.EN_BODEGA,
-              // VENDIDO y BAJA quedan fuera a propósito: son hechos de
-              // propiedad, no de ubicación, y no los revierte una entrada.
-              soloDesde: [pool.ESTADOS.DEVUELTO, pool.ESTADOS.EN_TALLER,
-                          pool.ESTADOS.EN_CLIENTE, pool.ESTADOS.ASIGNADO],
-              tipo: "cierre_entrada",
-              refMov: refMovE,
-              notas: "Entrada cerrada: el equipo queda disponible en bodega",
-              // verificado:true — la ENTRADA ES la orden de inspección del
-              // equipo devuelto: el taller lo tuvo en la mano y lo revisó, así
-              // que eso YA es la confirmación humana. Otras vueltas a bodega
-              // (p.ej. quitar un serial de un contrato, onSerialWrite) sí
-              // dejan verificado:false porque nadie miró la unidad.
-              extra: { orden_actual_id: null, asignacion: null, verificado: true },
-            });
-          } catch (err) { /* best-effort por unidad */ }
+      // ── ENTRADA ya cerrada que se corrige ────────────────────────────────
+      // La otra mitad del arreglo. Si una ENTRADA cerró dejando equipos sin
+      // aterrizar (serial mal tecleado), corregir ese serial tenía que
+      // rescatarse a mano: el bloque de arriba solo corre en el INSTANTE del
+      // cierre y ya nunca vuelve a mirar. Con el radio de TIL hubo que
+      // renombrar la ficha y aplicar la transición perdida con un script.
+      //
+      // Ahora, mientras la orden tenga incidencias anotadas, cualquier
+      // escritura la vuelve a evaluar: en cuanto el serial corregido resuelve
+      // a una ficha real, el equipo aterriza en bodega y la anotación se
+      // limpia sola. Solo entra si YA hay incidencias, así que no cuesta nada
+      // en las órdenes sanas.
+      if (after && after.cierre_entrada_con_incidencias === true
+          && norm(after.tipo_de_servicio) === "ENTRADA"
+          && norm(after.estado_reparacion) === CERRADA_ENTRADA
+          && after.eliminado !== true
+          && !cerroEntrada) {
+        const seriales = new Set((after.cierre_entrada_incidencias || []).map((i) => pool.normSerial(i.serial)));
+        // Solo se reintentan las filas problemáticas y las que las sustituyeron
+        // (un serial corregido es una fila NUEVA a ojos del serial viejo), no
+        // toda la orden: las demás ya están donde tienen que estar.
+        const candidatos = despues.filter((e) => {
+          const k = pool.normSerial(e.serial);
+          return seriales.has(k) || !keysAntes.has(k);
+        });
+        if (candidatos.length) {
+          const { incidencias, aterrizados } = await aterrizarEntrada(ordenId, after, candidatos, { reintento: true });
+          // Lo que ya no falla sale de la lista; lo que sigue fallando se queda.
+          const resueltos = new Set(candidatos.map((e) => pool.normSerial(e.serial)));
+          const restantes = (after.cierre_entrada_incidencias || [])
+            .filter((i) => !resueltos.has(pool.normSerial(i.serial)))
+            .concat(incidencias);
+          await anotarIncidencias(ordenId, after, restantes);
+          if (aterrizados) {
+            logger.info("[onOrdenWritePool] equipos rescatados de una ENTRADA ya cerrada",
+              { ordenId, aterrizados, quedan: restantes.length });
+          }
         }
+        return null;
+      }
+
+      if (cerroEntrada) {
+        const { incidencias, aterrizados } = await aterrizarEntrada(ordenId, after, despues);
+        await anotarIncidencias(ordenId, after, incidencias);
+        logger.info("[onOrdenWritePool] cierre de ENTRADA", {
+          ordenId, unidades: despues.length, aterrizados, incidencias: incidencias.length });
 
         // El equipo volvió, pero el contrato sigue vivo: se marca para que
         // ventas lo cancele. NO se cancela solo — una ENTRADA también puede ser
