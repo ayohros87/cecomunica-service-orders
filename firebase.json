@@ -12,7 +12,8 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**",
-      "tools/**"
+      "tools/**",
+      "dev-diag-*.html"
     ],
     "rewrites": [
       {
