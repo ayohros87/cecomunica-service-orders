@@ -132,21 +132,40 @@ window.Centro = {
       items.sort((a, b) => a.dias - b.dias);
       if (!items.length) { cont.innerHTML = ''; return; }
 
+      // Colapsable (pedido 2026-08-26); la preferencia sobrevive en localStorage.
       const MAX = 12;
+      const colapsado = localStorage.getItem('cg_hoy_colapsado') === '1';
       cont.innerHTML = `<div class="ds-card" style="padding:0; margin-bottom:var(--sp-4); overflow:hidden;">
-        <div style="padding:10px 16px 6px; font-size:11px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:#8A6415; display:flex; align-items:center; gap:7px;">
-          <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Para hoy · ${items.length}</div>
+        <button type="button" onclick="Centro.toggleParaHoy()"
+          style="width:100%; text-align:left; background:none; border:0; cursor:pointer; padding:10px 16px ${colapsado ? '10px' : '6px'};
+                 font-size:11px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:#8A6415;
+                 display:flex; align-items:center; gap:7px;">
+          <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Para hoy · ${items.length}
+          <span id="cgHoyCaret" style="margin-left:auto; color:var(--fg-4); font-size:14px;">${colapsado ? '▸' : '▾'}</span>
+        </button>
+        <div id="cgHoyBody" class="${colapsado ? 'hidden' : ''}">
         ${items.slice(0, MAX).map(i => `<button type="button" class="cg-hoy ${i.tipo}"
             onclick="${i.g ? `Centro.gSel='${this.esc(i.g)}';` : ''}Centro.abrir('${this.esc(i.cliente_id)}')">
             <span>${this.esc(i.txt)}</span><span style="margin-left:auto; color:var(--fg-4); font-weight:600;">›</span>
           </button>`).join('')}
         ${items.length > MAX ? `<div style="padding:6px 16px 10px; font-size:12px; color:var(--fg-4);">…y ${items.length - MAX} más</div>` : ''}
+        </div>
       </div>`;
       if (window.lucide?.createIcons) lucide.createIcons();
     } catch (e) {
       console.warn('[centro] franja para-hoy no disponible:', e?.message || e);
       cont.innerHTML = '';
     }
+  },
+
+  toggleParaHoy() {
+    const body = document.getElementById('cgHoyBody');
+    const caret = document.getElementById('cgHoyCaret');
+    if (!body) return;
+    const colapsar = !body.classList.contains('hidden');
+    body.classList.toggle('hidden', colapsar);
+    if (caret) caret.textContent = colapsar ? '▸' : '▾';
+    try { localStorage.setItem('cg_hoy_colapsado', colapsar ? '1' : '0'); } catch (e) { /* sin persistencia */ }
   },
 
   setCartera(v) {
