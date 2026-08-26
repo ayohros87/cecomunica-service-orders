@@ -57,6 +57,11 @@
     .cg-senal.warn { background:var(--soft-warn, #FBF3E0); color:#8A6415; }
     .cg-senal.bad  { background:var(--soft-bad, #FBE9E9); color:#A03030; }
     .cg-senal.info { background:var(--accent-soft, #E6F4FB); color:#0B5E8A; }
+    .cg-vida { min-width:150px; }
+    .cg-vida .lbl { font-size:12.5px; font-weight:700; display:block; line-height:1.2; }
+    .cg-vida .sub { font-size:11px; color:var(--fg-4); }
+    .cg-vida .bar { height:5px; border-radius:999px; background:var(--surface-sunken, #EEF2F6); overflow:hidden; margin-top:4px; max-width:160px; }
+    .cg-vida .bar i { display:block; height:100%; border-radius:999px; }
     .cg-venc { font-size:12px; font-weight:600; border-radius:999px; padding:1px 9px; white-space:nowrap; }
     .cg-venc.vigente { background:#E4F5EC; color:#17714B; }
     .cg-venc.por_vencer { background:#FBF3E0; color:#8A6415; }
@@ -165,7 +170,7 @@
 <div id="cgModal" class="cg-overlay hidden"></div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/clientes-centro.js?v=cg4" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg5" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

@@ -692,7 +692,7 @@ module.exports = onSchedule(
     try {
       const horizonte = new Date(now.getTime() + VIG.AVISO_DIAS * 86400000);
       const snap = await db.collection("contratos")
-        .where("estado", "==", "activo")
+        .where("estado", "in", ["activo", "aprobado"]) // ambos operan (283 aprobados nunca pasan a activo)
         .where("fecha_vencimiento", "<=", admin.firestore.Timestamp.fromDate(horizonte))
         .limit(1000)
         .get();

@@ -78,8 +78,10 @@ const onContratoActivado = onDocumentUpdated(
     // escribía ese campo. Idempotente: si ya existe (backfill o pasada
     // anterior) no se recalcula; la renovación por tramos escribirá la suya.
     // El estado por_vencer/vencido lo mantiene la sección H del cron.
+    // 'aprobado' también opera (la mayoría del histórico nunca pasa a
+    // 'activo'): el tramo se estampa desde el primer estado operativo.
     let vigenciaPatch = {};
-    if (estadoAfter === "activo" && !after.fecha_vencimiento) {
+    if (["activo", "aprobado"].includes(estadoAfter) && !after.fecha_vencimiento) {
       const meses = vigencia.parseDuracionMeses(after.duracion);
       if (meses) {
         const inicioInfo = vigencia.mejorFechaInicio(after);

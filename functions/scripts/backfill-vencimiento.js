@@ -35,7 +35,10 @@ const AUTOR = "script:backfill-vencimiento";
 function fmt(d) { return d ? d.toISOString().slice(0, 10) : "—"; }
 
 (async () => {
-  const snap = await db.collection("contratos").where("estado", "==", "activo").get();
+  // 'aprobado' TAMBIÉN opera (factura, tiene seriales): en este sistema la
+  // mayoría del histórico nunca pasa a 'activo' (283 aprobados vs 94 activos
+  // al 2026-08-26) — dejarlos fuera dejaba a casi toda la flota sin señal.
+  const snap = await db.collection("contratos").where("estado", "in", ["activo", "aprobado"]).get();
   const now = new Date();
 
   const yaTienen = [];

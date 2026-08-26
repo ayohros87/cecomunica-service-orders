@@ -209,12 +209,42 @@ window.Centro = {
     return { dias, estado };
   },
 
+  // 'aprobado' también opera (la mayoría del histórico nunca pasa a 'activo').
+  _esVigente(c) { return ['activo', 'aprobado'].includes(c?.estado); },
+
+  // Vida del contrato al estilo del prototipo: "vence en N días" con semáforo,
+  // fecha, y barra de vida transcurrida (vigencia.fecha_inicio → vencimiento).
+  _vidaHtml(c) {
+    if (!this._esVigente(c)) return '—';
+    const dias = this._diasA(c.fecha_vencimiento);
+    if (dias === null) {
+      return `<span class="cg-venc por_vencer" title="Fija la duración del contrato para calcular su vencimiento">sin duración</span>`;
+    }
+    const ini = c.vigencia?.fecha_inicio;
+    const iniD = ini?.toDate ? ini.toDate() : (ini ? new Date(ini) : null);
+    const fv = c.fecha_vencimiento;
+    const fvD = fv?.toDate ? fv.toDate() : new Date(fv);
+    let pct = null;
+    if (iniD && fvD && fvD > iniD) {
+      pct = Math.min(100, Math.max(0, Math.round(((Date.now() - iniD.getTime()) / (fvD - iniD)) * 100)));
+    }
+    const estado = dias < 0 ? 'vencido' : (dias <= this.AVISO_DIAS ? 'por_vencer' : 'vigente');
+    const color = estado === 'vencido' ? '#D24545' : estado === 'por_vencer' ? '#E0A93A' : '#1FA56B';
+    const tcolor = estado === 'vencido' ? '#A03030' : estado === 'por_vencer' ? '#8A6415' : '#17714B';
+    const label = dias < 0 ? `vencido hace ${-dias} día${-dias === 1 ? '' : 's'}` : `vence en ${dias} día${dias === 1 ? '' : 's'}`;
+    return `<div class="cg-vida">
+      <span class="lbl num" style="color:${tcolor};">${label}</span>
+      <span class="sub num">${this._fmtFecha(c.fecha_vencimiento)}</span>
+      ${pct !== null ? `<div class="bar"><i style="width:${pct}%;background:${color};"></i></div>` : ''}
+    </div>`;
+  },
+
   pintarKpis() {
-    const activos = this.contratos.filter(c => c.estado === 'activo');
+    const activos = this.contratos.filter(c => this._esVigente(c));
     const enTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
     const abiertas = (this.gestiones || []).filter(g => GestionesService.ABIERTAS.includes(g.estado)).length;
     document.getElementById('fKpis').innerHTML = [
-      [activos.length, 'Contratos activos'],
+      [activos.length, 'Contratos vigentes'],
       [this.equipos.length, 'Equipos en campo'],
       [abiertas, 'Gestiones abiertas'],
       [enTaller, 'En taller / revisión'],
@@ -224,7 +254,7 @@ window.Centro = {
   pintarSenales() {
     const out = [];
     for (const c of this.contratos) {
-      if (c.estado !== 'activo') continue;
+      if (!this._esVigente(c)) continue;
       const v = this._vencInfo(c);
       if (!v) continue;
       if (v.estado === 'vencido') {
@@ -257,18 +287,15 @@ window.Centro = {
     const cont = document.getElementById('fContratos');
     if (!this.contratos.length) { cont.innerHTML = '<div class="cg-vacio">Sin contratos registrados.</div>'; return; }
     const filas = this.contratos.map(c => {
-      const v = c.estado === 'activo' ? this._vencInfo(c) : null;
-      const vence = v
-        ? `${this._fmtFecha(c.fecha_vencimiento)} <span class="cg-venc ${v.estado}">${v.estado === 'vencido' ? 'vencido' : (v.estado === 'por_vencer' ? `en ${v.dias} d` : 'vigente')}</span>`
-        : (c.estado === 'activo' ? '<span style="color:var(--fg-4);">sin fecha</span>' : '—');
-      const renovar = v && v.estado !== 'vigente'
+      const dias = this._esVigente(c) ? this._diasA(c.fecha_vencimiento) : null;
+      const renovar = dias !== null && dias <= this.AVISO_DIAS
         ? `<a class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" href="../contratos/nuevo-contrato.html">Renovar</a>` : '';
       return `<tr>
         <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
         <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
         <td>${this.esc(c.estado || '—')}</td>
         <td style="text-align:right;">${this._unidadesActivas(c)}</td>
-        <td>${vence}</td>
+        <td>${this._vidaHtml(c)}</td>
         <td style="text-align:right; white-space:nowrap;">${renovar}
           <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
     }).join('');
