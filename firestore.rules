@@ -94,7 +94,14 @@ service cloud.firestore {
         "facturacion_activada_at", "facturacion_gestionado_por",
         "facturacion_gestionado_at", "entrega_confirmada",
         "entrega_confirmada_manual", "fecha_entrega_ultima",
-        "facturacion_entrega_at"
+        "facturacion_entrega_at",
+        // Vigencia del contrato (Ola 1 gestiones por cliente, 2026-08-26): la
+        // estampan onContratoActivado / backfill y la mantiene el cron
+        // (recordatorioOperativo sección H). La lista y el Centro de gestión
+        // pintan la señal "por vencer" con estos campos — nadie debe poder
+        // correr un vencimiento a mano; una corrección real va por script.
+        "fecha_vencimiento", "vencimiento_estado", "vencimiento_estado_at",
+        "vigencia"
       ]);
     }
 

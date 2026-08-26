@@ -271,6 +271,20 @@
       ]
     },
     {
+      "collectionGroup": "contratos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fecha_vencimiento",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "equipos_pool",
       "queryScope": "COLLECTION",
       "fields": [

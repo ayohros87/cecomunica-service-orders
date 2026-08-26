@@ -43,6 +43,7 @@ const { pendientesDevolucion } = require("../../lib/devolucion");
 // sección de este cron llevaba su copia y ya divergían.
 const PEND = require("../../domain/pendientes");
 const cobros = require("../../lib/cobrosEquipos");
+const VIG = require("../../lib/vigencia");
 
 const ESTADOS_ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
 const STALE_DIAS_DEFAULT = 10;
@@ -677,6 +678,89 @@ module.exports = onSchedule(
         { abiertos: abiertos.length, escalados, notificado: !!(abiertos.length && to) });
     } catch (e) {
       logger.error("[recordatorioOperativo] sección no-devueltos falló", { message: e.message });
+    }
+
+    // ── H) Contratos por vencer (aviso a 60 días — decisión 2026-08-26) ──
+    // Ola 1 de gestiones por cliente (docs/ARQUITECTURA_GESTIONES_POR_CLIENTE_
+    // 2026-08-25.md). Dos trabajos, en este orden:
+    //   1. mantener `vencimiento_estado` (vigente → por_vencer → vencido) —
+    //      es lo que leen las señales del Centro de gestión y la lista de
+    //      contratos; el campo nace en onContratoActivado / el backfill;
+    //   2. digest a empresa/config.email_renovaciones con lo que está en
+    //      ventana. Sin esa clave configurada NO se inventa destinatario: se
+    //      loguea y la señal queda solo en la app. Nada se bloquea al vencer.
+    try {
+      const horizonte = new Date(now.getTime() + VIG.AVISO_DIAS * 86400000);
+      const snap = await db.collection("contratos")
+        .where("estado", "==", "activo")
+        .where("fecha_vencimiento", "<=", admin.firestore.Timestamp.fromDate(horizonte))
+        .limit(1000)
+        .get();
+
+      const filas = [];
+      let actualizados = 0;
+      for (const d of snap.docs) {
+        const c = d.data() || {};
+        if (c.deleted) continue;
+        const est = VIG.estadoVencimiento(c.fecha_vencimiento, now);
+        if (est && est !== c.vencimiento_estado) {
+          try {
+            await d.ref.update({
+              vencimiento_estado: est,
+              vencimiento_estado_at: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            actualizados++;
+          } catch (err) {
+            logger.warn("[recordatorioOperativo] no se pudo estampar vencimiento_estado", { id: d.id, error: err.message });
+          }
+        }
+        const fv = aDate(c.fecha_vencimiento);
+        filas.push({
+          id: d.id,
+          contrato: c.contrato_id || d.id,
+          cliente: c.cliente_nombre || "—",
+          tipo: c.tipo_contrato || c.codigo_tipo || "—",
+          vence: fv ? fv.toISOString().slice(0, 10) : "—",
+          dias: fv ? Math.ceil((fv - now) / 86400000) : 0,
+          estado: est || "—",
+        });
+      }
+      filas.sort((a, b) => a.dias - b.dias);
+
+      const to = await configEmailTo("renovaciones", "");
+      if (filas.length && to) {
+        const vencidosN = filas.filter(f => f.estado === "vencido").length;
+        const rows = filas.slice(0, MAX_FILAS).map(f => [
+          `<a href="${APP_BASE_URL}/contratos/editar-contrato.html?id=${encodeURIComponent(f.id)}">${esc(f.contrato)}</a>`,
+          esc(f.cliente), esc(f.tipo), esc(f.vence),
+          f.dias < 0 ? `<b style="color:#b91c1c;">vencido hace ${-f.dias}</b>` : `<b>${f.dias}</b>`,
+        ]);
+        const extra = filas.length > MAX_FILAS
+          ? `<p style="font:13px Arial,sans-serif;color:#6b7280;">…y ${filas.length - MAX_FILAS} más.</p>` : "";
+        await db.collection("mail_queue").add({
+          to,
+          subject: `Contratos por vencer: ${filas.length} en ventana de renovación${vencidosN ? ` (${vencidosN} ya vencidos)` : ""}`,
+          preheader: `${filas.length} contratos activos vencen dentro de ${VIG.AVISO_DIAS} días o ya vencieron`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Contratos por vencer</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Estos contratos activos vencen dentro de <b>${VIG.AVISO_DIAS} días</b> (o ya vencieron):
+              es la ventana para coordinar la renovación con el cliente. Nada se bloquea al vencer —
+              este aviso existe para que la renovación no llegue tarde.
+            </p>
+            ${tablaHtml(["Contrato", "Cliente", "Tipo", "Vence", "Días"], rows)}
+            ${extra}`,
+          ctaUrl: `${APP_BASE_URL}/contratos/index.html`,
+          ctaLabel: "Abrir contratos",
+          meta: { source: "recordatorioOperativo", seccion: "por_vencer", total: filas.length, vencidos: vencidosN },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else if (filas.length) {
+        logger.info("[recordatorioOperativo] por-vencer sin buzón (empresa/config.email_renovaciones vacío) — señal solo en la app");
+      }
+      logger.info("[recordatorioOperativo] contratos por vencer", { enVentana: filas.length, estampados: actualizados, notificado: !!(filas.length && to) });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección por-vencer falló", { message: e.message });
     }
 
     return null;
