@@ -141,12 +141,17 @@ window.Centro = {
         c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
       ].filter(Boolean).join(' · ') || '—';
 
-      // Carga en paralelo: contratos + flota + gestiones.
+      // Carga en paralelo: contratos + flota + gestiones. Las gestiones NO
+      // tumban la ficha si fallan (p. ej. reglas aún sin desplegar en un
+      // entorno): el cliente completo vale más que esa sección.
       const db = firebase.firestore();
       const [conSnap, equipos, gestiones] = await Promise.all([
         db.collection('contratos').where('cliente_id', '==', clienteId).get(),
         EquiposPoolService.listarPorCliente(clienteId),
-        GestionesService.listarPorCliente(clienteId),
+        GestionesService.listarPorCliente(clienteId).catch(e => {
+          console.warn('[centro] gestiones no disponibles:', e?.message || e);
+          return [];
+        }),
       ]);
       this.contratos = conSnap.docs.map(d => ({ id: d.id, ...d.data() }))
         .filter(x => !x.deleted)
