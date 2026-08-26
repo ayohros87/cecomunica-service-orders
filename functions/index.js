@@ -76,3 +76,9 @@ exports.migrarIdentificacionPII       = require("./src/callable/migrarIdentifica
 exports.fusionarPoolFicha             = require("./src/callable/fusionarPoolFicha");
 // Semanal: drift pool ↔ contratos/órdenes/POC → admin_reportes/conciliacion_pool
 exports.conciliacionPool              = require("./src/triggers/scheduled/conciliacionPool");
+// Gestiones por cliente (Ola 2 — reemplazo/demo): máquina de estados del
+// expediente (correos bodega/recepción/admin, OS de programación, cierre 4/4)
+exports.onGestionWrite                = require("./src/triggers/gestiones/onGestionWrite");
+// Avance seamless desde las órdenes: PROG entregada → devolución + linaje;
+// devolución sin pendientes → entrada completada
+exports.onOrdenWriteGestion           = require("./src/triggers/gestiones/onOrdenWriteGestion");
