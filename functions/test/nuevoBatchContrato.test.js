@@ -23,8 +23,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const SRC = fs.readFileSync(
-  path.join(__dirname, "..", "..", "public", "js", "pages", "nuevo-batch.js"), "utf8");
+const RAIZ = path.join(__dirname, "..", "..");
+const SRC = fs.readFileSync(path.join(RAIZ, "public", "js", "pages", "nuevo-batch.js"), "utf8");
+// Regla compartida "qué es una consola / cuántas trae el contrato".
+const SRC_CONSOLAS = fs.readFileSync(
+  path.join(RAIZ, "public", "js", "domain", "consolasContrato.js"), "utf8");
 
 class FakeOption {
   constructor(value, text, ref) { this.value = value; this.textContent = text; this._ref = ref || null; this.dataset = {}; }
@@ -155,6 +158,7 @@ function montar({ contratos = CONTRATOS, modelos = MODELOS } = {}) {
   };
   vm.createContext(sandbox);
   sandbox.window = sandbox;
+  vm.runInContext(SRC_CONSOLAS, sandbox, { filename: "consolasContrato.js" });
   vm.runInContext(SRC, sandbox, { filename: "nuevo-batch.js" });
   return { sandbox, el: get, toasts, estado };
 }
@@ -372,4 +376,38 @@ test("no se ofrece recortar si el recorte no cuadra con el archivo", async () =>
 
   assert.equal(h.sandbox.recortarAModelosDelArchivo(), false,
     "recortar no arregla un desajuste que no es de modelos");
+});
+
+// ── Consolas: el batch no las crea, pero sí avisa ───────────────────────────
+// Recepción, 26-ago-2026: "al cargar el JSON el batch únicamente reconoce los
+// 18 radios, las 2 consolas no se reflejan". No pueden reflejarse —van como
+// CARGO del contrato y no tienen serial— así que lo que toca es decirlo aquí y
+// mandar al alta de consolas, en vez de dejar a recepción buscando qué hizo mal.
+const CON_CONSOLAS = [{
+  id: "docALQ", contrato_id: "ALQ20260825-01", tipo_contrato: "Alquiler", estado: "aprobado",
+  seriales: 18, cargos: [{ concepto: "Consola", cantidad: 2, monto: 20 }],
+}];
+
+test("avisa cuántas consolas trae el contrato y adónde ir a crearlas", async () => {
+  const h = montar({ contratos: CON_CONSOLAS });
+  h.el("cliente").value = "CLI1";
+  await h.sandbox.cargarContratosDelCliente();
+  h.el("contratoJalar").value = "docALQ";
+  await h.sandbox.cargarModeloContrato("docALQ");
+
+  const aviso = h.el("avisoConsolas");
+  assert.equal(aviso.hidden, false, "el aviso tiene que verse al vincular el contrato");
+  assert.match(aviso.innerHTML, /2 consola/);
+  assert.match(aviso.innerHTML, /nueva-consola\.html\?cliente_id=CLI1&contrato_doc_id=docALQ/,
+    "el enlace debe llevar el cliente y el contrato ya elegidos");
+});
+
+test("un contrato sin consolas no muestra el aviso", async () => {
+  const h = montar();   // los contratos de UDELAS: sin cargos de consola
+  h.el("cliente").value = "CLI1";
+  await h.sandbox.cargarContratosDelCliente();
+  h.el("contratoJalar").value = "docALQ";
+  await h.sandbox.cargarModeloContrato("docALQ");
+
+  assert.equal(h.el("avisoConsolas").hidden, true);
 });

@@ -31,7 +31,32 @@
     // Carga el mapa serial→modelo del contrato elegido y pinta el preview. Se
     // llama al cambiar de contrato y (lazy) antes de guardar, para no depender de
     // que el usuario haya pulsado "Jalar seriales".
+    // ── Consolas del contrato (recepción, 26-ago-2026) ──────────────────────
+    // "Al cargar el archivo JSON el batch únicamente reconoce los 18 radios,
+    // las 2 consolas no se reflejan". Y no se van a reflejar nunca: una consola
+    // no tiene serial y en el contrato va como CARGO ("Consola" ×2), no como
+    // equipo — no está en contratos/{id}/seriales ni en el archivo del
+    // vendedor. Lo que sí se puede es avisar aquí, que es donde recepción se da
+    // cuenta, y mandarla al alta que sí las crea.
+    let contratosPorId = new Map();   // contrato_doc_id → doc del contrato
+
+    function renderAvisoConsolas() {
+      const caja = document.getElementById("avisoConsolas");
+      if (!caja) return;
+      const contratoDocId = document.getElementById("contratoJalar")?.value || "";
+      const n = ConsolasContrato.contratadas(contratosPorId.get(contratoDocId));
+      if (!n) { caja.hidden = true; caja.innerHTML = ""; return; }
+      const clienteId = document.getElementById("cliente")?.value || "";
+      const url = `nueva-consola.html?cliente_id=${encodeURIComponent(clienteId)}` +
+        `&contrato_doc_id=${encodeURIComponent(contratoDocId)}`;
+      caja.innerHTML = `Este contrato incluye <b>${n} consola(s)</b>. No entran en este lote: ` +
+        `una consola no tiene serial ni modelo, va como cargo del contrato. ` +
+        `<a href="${url}">Créalas aquí</a> cuando termines con los radios.`;
+      caja.hidden = false;
+    }
+
     async function cargarModeloContrato(contratoDocId) {
+      renderAvisoConsolas();
       modeloContratoPorSerial = contratoDocId
         ? await ContratosService.getModeloPorSerial(contratoDocId)
         : new Map();
@@ -449,6 +474,7 @@
       // para que el próximo contrato arranque con su propio criterio.
       if (!modeloContratoPorSerial.size) modelosSeleccionados = null;
       renderFiltroModelos();
+      renderAvisoConsolas();   // el contrato pudo cambiar (o restaurarse) sin pasar por cargarModeloContrato
       if (detallesBatch?.length) {
         alinearSerialesConJson();
         renderPreviewCombinado();
@@ -620,6 +646,7 @@ async function cargarContratosDelCliente() {
   sel.innerHTML = '<option value="">Cargando contratos…</option>';
   try {
     const contratos = await ContratosService.getContratosActivosPorCliente(clienteId);
+    contratosPorId = new Map(contratos.map(c => [c.id, c]));  // para el aviso de consolas
     sel.innerHTML = contratos.length
       ? '<option value="">Sin vincular a contrato</option>' + contratos.map(c => {
           const label = `${c.contrato_id || c.id} · ${c.tipo_contrato || ''} · ${c.estado || ''}`;

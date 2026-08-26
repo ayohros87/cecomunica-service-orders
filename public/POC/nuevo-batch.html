@@ -101,6 +101,10 @@
 
     /* Preview serial → modelo jalado del contrato */
     /* Aviso NON-BLOCKING de lote sin contrato vinculado (lo muestra el JS). */
+    /* Aviso de consolas del contrato (no entran al lote). */
+    .nb-aviso-consolas { color: var(--navy); background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); font-size: 13px; margin-top: var(--sp-2); }
+    .nb-aviso-consolas a { font-weight: 600; }
+
     #avisoSinContrato { color: #92400e; background: #fff7ed; border: 1px solid #fed7aa; border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3); font-weight: 600; font-size: 13px; margin-top: var(--sp-2); }
 
     #previewContrato:empty { display: none; }
@@ -122,6 +126,8 @@
   <script defer src="../js/services/clientesService.js"></script>
   <script defer src="../js/services/empresaService.js"></script>
   <script defer src="../js/services/contratosService.js"></script>
+  <!-- Regla única de "qué es una consola" y cuántas trae el contrato. -->
+  <script defer src="../js/domain/consolasContrato.js?v=cc1"></script>
   <!-- Pool de equipos: el preview avisa si un serial del lote figura con OTRO
        cliente (auditoría 2026-08-04, R3). EquipoFicha para abrirlo desde ahí. -->
   <script defer src="../js/services/equiposPoolService.js"></script>
@@ -215,6 +221,9 @@
               <!-- Chips por modelo: un contrato multi-modelo casi nunca se carga
                    entero a PoC (Gamboa: 74 seriales, lote de 22 PNC360S-R). -->
               <div id="filtroModelos"></div>
+              <!-- Consolas del contrato: no entran al lote (no tienen serial);
+                   el aviso lleva al alta que sí las crea. -->
+              <div id="avisoConsolas" class="nb-aviso-consolas" hidden></div>
               <div id="avisoSinContrato" hidden>&#9888;&#65039; Este lote se crear&aacute; <strong>sin contrato vinculado</strong>: los equipos quedan sin ancla al contrato/pool y el modelo saldr&aacute; del archivo del vendedor (posicional, puede quedar equivocado). Si el cliente tiene contrato, el&iacute;gelo arriba.<span id="avisoSinContratoExtra"></span></div>
               <div id="previewContrato"></div>
             </div>
@@ -267,7 +276,7 @@
 
   </div><!-- /.app-wrap -->
 
-  <script src="../js/pages/nuevo-batch.js?v=cc23" defer></script>
+  <script src="../js/pages/nuevo-batch.js?v=cc24" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
