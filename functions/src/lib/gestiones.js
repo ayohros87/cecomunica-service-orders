@@ -18,7 +18,7 @@ const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
 ));
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
-const TIPO_LABEL = { reemplazo: "Reemplazo", demo: "Demo", baja: "Baja de equipos" };
+const TIPO_LABEL = { reemplazo: "Reemplazo", demo: "Demo", baja: "Baja de equipos", aumento: "Aumento de equipos" };
 
 // Deep-link al expediente dentro del Centro de gestión.
 function urlGestion(g, gid) {
@@ -136,23 +136,33 @@ async function crearOrdenesProgramacion(gid, g) {
       porContrato.get(k).push(it);
     }
     for (const [cid, items] of porContrato) grupos.push({ contratoDocId: cid === "__sin__" ? null : cid, items });
+  } else if (g.tipo === "aumento") {
+    // Aumento por enmienda firmada: todas las unidades van al contrato destino
+    // del anexo; la vigencia del tramo la estampa onOrdenWriteGestion al entregar.
+    grupos.push({
+      contratoDocId: g.aumento?.contrato_doc_id || null,
+      contratoIdForzado: g.aumento?.contrato_id || null,
+      items: (g.aumento?.seriales_asignados || []).map(s => ({ ...s, esLinea: true })),
+    });
   } else {
     grupos.push({ contratoDocId: null, items: (g.demo?.seriales_asignados || []).map(s => ({ ...s, esDemo: true })) });
   }
 
   for (const grupo of grupos) {
-    const contratoId = grupo.items.find(i => i.contrato_id)?.contrato_id || null;
+    const contratoId = grupo.contratoIdForzado || grupo.items.find(i => i.contrato_id)?.contrato_id || null;
     const equipos = grupo.items.map(it => {
-      const serial = String(it.esDemo ? it.serial : it.serial_nuevo || "").trim();
+      const serial = String((it.esDemo || it.esLinea) ? it.serial : it.serial_nuevo || "").trim();
       return {
         id: crypto.randomUUID(),
-        modelo_id: (it.esDemo ? it.modelo_id : (it.modelo_solicitado_id || it.modelo_id)) || null,
-        modelo: String(it.esDemo ? it.modelo : (it.modelo_solicitado || it.modelo || "")).trim(),
+        modelo_id: ((it.esDemo || it.esLinea) ? it.modelo_id : (it.modelo_solicitado_id || it.modelo_id)) || null,
+        modelo: String((it.esDemo || it.esLinea) ? it.modelo : (it.modelo_solicitado || it.modelo || "")).trim(),
         serial,
         numero_de_serie: serial,
         observaciones: it.esDemo
           ? `Programación para DEMO (gestión ${gid}).`
-          : `REEMPLAZA al serial ${it.serial_saliente || "—"}: copiar su configuración, colocar su ID y confirmar. Motivo: ${it.motivo_detalle || it.motivo_codigo || "reemplazo"}.`,
+          : it.esLinea
+            ? `Programación de AUMENTO (enmienda ${gid}) — equipo nuevo del contrato ${contratoId || "—"} con vigencia propia.`
+            : `REEMPLAZA al serial ${it.serial_saliente || "—"}: copiar su configuración, colocar su ID y confirmar. Motivo: ${it.motivo_detalle || it.motivo_codigo || "reemplazo"}.`,
         eliminado: false,
       };
     }).filter(e => e.serial);
@@ -167,7 +177,9 @@ async function crearOrdenesProgramacion(gid, g) {
       fecha_creacion: admin.firestore.FieldValue.serverTimestamp(),
       observaciones: g.tipo === "reemplazo"
         ? `Orden creada automáticamente por la gestión ${gid} (reemplazo): programar ${equipos.length} equipo(s). Cada equipo indica el serial que sustituye — la programación toma como referencia la configuración del radio reemplazado.`
-        : `Orden creada automáticamente por la gestión ${gid} (demo): programar ${equipos.length} equipo(s) para demostración.`,
+        : g.tipo === "aumento"
+          ? `Orden creada automáticamente por la enmienda de aumento ${gid}: programar ${equipos.length} equipo(s) nuevos del contrato ${contratoId || "—"} (vigencia propia del tramo).`
+          : `Orden creada automáticamente por la gestión ${gid} (demo): programar ${equipos.length} equipo(s) para demostración.`,
       equipos,
       contrato: grupo.contratoDocId
         ? { aplica: true, contrato_doc_id: grupo.contratoDocId, contrato_id: contratoId, motivo_no_aplica: null }

@@ -30,6 +30,7 @@ const GestionesService = {
   // retorno son de demo); la máquina fina por tipo la validan los triggers.
   ESTADOS: {
     pendiente_aprobacion: 'Pendiente de aprobación',
+    pendiente_firma:      'Esperando firma del cliente',
     pendiente_bodega:     'Pendiente de bodega',
     en_proceso:           'En proceso',
     en_demo:              'En demo',
@@ -37,7 +38,7 @@ const GestionesService = {
     cerrada:              'Cerrada',
     anulada:              'Anulada',
   },
-  ABIERTAS: ['pendiente_aprobacion', 'pendiente_bodega', 'en_proceso', 'en_demo', 'retorno'],
+  ABIERTAS: ['pendiente_aprobacion', 'pendiente_firma', 'pendiente_bodega', 'en_proceso', 'en_demo', 'retorno'],
 
   tipoLabel(t)   { return this.TIPOS[t]?.label || t || '—'; },
   estadoLabel(e) { return this.ESTADOS[e] || e || '—'; },
@@ -100,6 +101,7 @@ const GestionesService = {
       fecha_solicitud: firebase.firestore.FieldValue.serverTimestamp(),
       deleted: false,
       ...(data.demo ? { demo: data.demo } : {}),
+      ...(data.aumento ? { aumento: data.aumento } : {}),
       ...(data.aprobacion ? { aprobacion: data.aprobacion } : {}),
       // Baja: la penalidad estimada y la fecha global viajan en el MISMO create
       // para que el correo de aprobación (trigger onCreate) ya traiga el desglose.
@@ -224,6 +226,53 @@ const GestionesService = {
     });
     await this.registrarEvento(gestionId, 'asignar',
       `Bodega asignó al demo: ${seriales.map(s => s.serial).join(', ')}`);
+  },
+
+  /* ── Aumento por enmienda firmada (Ola 4, decisión §8.2) ── */
+
+  // Aprobación COMERCIAL del aumento (admin/gerente) → queda esperando la
+  // firma del cliente en el anexo.
+  async aprobarAumento(gestionId) {
+    const user = firebase.auth().currentUser;
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'pendiente_firma',
+      'cierre.aprobacion': true,
+      aprobacion: {
+        requiere: true,
+        aprobado_por_uid: user?.uid || null,
+        aprobado_por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+    await this.registrarEvento(gestionId, 'aprobar',
+      'Aumento aprobado comercialmente — imprimir el anexo y recoger la firma del cliente.');
+  },
+
+  // Registra el anexo FIRMADO (sube el archivo a Storage y avanza el estado).
+  // El trigger aplica entonces las líneas al contrato y avisa a Bodega.
+  async registrarFirmaAumento(gestionId, file) {
+    const user = firebase.auth().currentUser;
+    const ext = /pdf$/i.test(file.type) ? 'pdf' : 'jpg';
+    const path = `gestiones_anexos/${gestionId}/anexo-firmado-${Date.now()}.${ext}`;
+    await firebase.storage().ref(path).put(file, { contentType: file.type });
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'pendiente_bodega',
+      'cierre.firma': true,
+      anexo_firmado_path: path,
+      anexo_firmado_at: firebase.firestore.FieldValue.serverTimestamp(),
+      anexo_firmado_por: user?.email || null,
+    });
+    await this.registrarEvento(gestionId, 'firma',
+      'Anexo firmado por el cliente registrado — el sistema aplica las líneas al contrato y avisa a Bodega.');
+  },
+
+  // Bodega asigna los seriales del AUMENTO.
+  async asignarAumento(gestionId, seriales) {
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      'aumento.seriales_asignados': seriales,
+    });
+    await this.registrarEvento(gestionId, 'asignar',
+      `Bodega asignó al aumento: ${seriales.map(s => s.serial).join(', ')}`);
   },
 
   async listarEventos(gestionId, { limit = 50 } = {}) {

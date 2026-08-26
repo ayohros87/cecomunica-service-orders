@@ -321,6 +321,14 @@ window.Centro = {
       ['derivacion', 'Fin de facturación aplicado', 'Derivado en cada contrato + devolución por serial'],
       ['entrada', 'Entrada de los equipos', 'Check-in de la devolución; inspección antes de disposición'],
     ],
+    aumento: [
+      ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
+      ['firma', 'Anexo firmado por el cliente', 'El período propio del equipo nuevo queda explícito'],
+      ['derivacion', 'Líneas aplicadas al contrato', 'Con vigencia propia del tramo (corre desde la entrega)'],
+      ['asignacion', 'Asignación de seriales', 'Bodega'],
+      ['programacion', 'Programación', 'OS de programación confirmada'],
+      ['entrega', 'Entrega al cliente', 'Arranca el tramo: inicio y vencimiento propios'],
+    ],
   },
 
   puedeAsignar() { return [ROLES.ADMIN, ROLES.INVENTARIO].includes(this.rol); },
@@ -394,7 +402,30 @@ window.Centro = {
       : '';
 
     let cuerpo = '';
-    if (g.tipo === 'baja') {
+    if (g.tipo === 'aumento') {
+      const a = g.aumento || {};
+      const total = (a.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+      const asignados = a.seriales_asignados || [];
+      const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega' && g.cierre?.derivacion;
+      cuerpo = `
+        <p style="font-size:13px; margin:0 0 8px;"><b>Contrato destino:</b>
+          <span class="cg-mono">${this.esc(a.contrato_id || '—')}</span> ·
+          <b>Vigencia del tramo:</b> ${this.esc(String(a.duracion_meses || '?'))} meses desde la entrega</p>
+        <div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+          <th>Cant.</th><th>Modelo</th><th>Precio/mes</th></tr></thead><tbody>
+          ${(a.lineas || []).map(l => `<tr><td class="num">${Number(l.cantidad || 0)}</td>
+            <td>${this.esc(l.modelo || '—')}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`).join('')}
+        </tbody></table></div>
+        ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})</p>` : ''}
+        ${asignando
+          ? `<div style="margin-top:10px;">${Array.from({ length: total }, (_, ix) => `
+              <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;margin:0 6px 6px 0;display:inline-block;"
+                data-gaum="${ix}" placeholder="Serial ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}">`).join('')}
+             <div style="margin-top:6px;"><button class="btn btn-primary" onclick="Centro.guardarAsignacionAumento('${this.esc(g.id)}')">
+               Guardar asignación</button></div></div>`
+          : (asignados.length ? `<p style="font-size:13px; margin:8px 0 0;"><b>Seriales:</b>
+              ${asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')}</p>` : '')}`;
+    } else if (g.tipo === 'baja') {
       const pen = g.penalidad_estimada;
       cuerpo = `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
         <th>Serial</th><th>Modelo</th><th>Contrato</th><th>Motivo</th><th>Fin de facturación</th>
@@ -460,15 +491,31 @@ window.Centro = {
     let aprobacion = '';
     if (g.estado === 'pendiente_aprobacion') {
       const esBaja = g.tipo === 'baja';
-      const puede = esBaja ? this.puedeAprobarBaja() : this.puedeAprobar();
+      const esAumento = g.tipo === 'aumento';
+      const puede = (esBaja || esAumento) ? this.puedeAprobarBaja() : this.puedeAprobar();
+      const fnAprobar = esBaja ? 'aprobarBajaGestion' : esAumento ? 'aprobarAumentoGestion' : 'aprobarGestion';
       aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span>${esBaja
              ? 'Baja esperando aprobación (una sola, con el desglose por contrato a la izquierda).'
-             : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
+             : esAumento
+               ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
+               : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
            ${puede ? `<span style="margin-left:auto; display:flex; gap:8px;">
              <button class="btn btn-primary" style="padding:4px 12px;font-size:12.5px;"
-               onclick="Centro.${esBaja ? 'aprobarBajaGestion' : 'aprobarGestion'}('${this.esc(g.id)}')">Aprobar</button>
+               onclick="Centro.${fnAprobar}('${this.esc(g.id)}')">Aprobar</button>
              <button class="btn btn-ghost" style="padding:4px 10px;font-size:12.5px;" onclick="Centro.anularGestion('${this.esc(g.id)}')">Rechazar</button>
+           </span>` : ''}</div>`;
+    } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento') {
+      aprobacion = `<div class="cg-senal info" style="margin:10px 0 0;">
+           <span><b>Esperando la firma del cliente.</b> Imprime el anexo (deja explícito el período propio
+             del equipo nuevo), recoge la firma y sube el archivo firmado — recién entonces el sistema
+             aplica las líneas y avisa a Bodega.</span>
+           ${this.puedeCrearGestion() ? `<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
+             <a class="btn btn-ghost" style="padding:4px 11px;font-size:12.5px;" target="_blank"
+                href="./anexo-aumento.html?g=${encodeURIComponent(g.id)}">Imprimir anexo</a>
+             <label class="btn btn-primary" style="padding:4px 12px;font-size:12.5px; cursor:pointer;">Subir firmado
+               <input type="file" accept="application/pdf,image/*" style="display:none;"
+                 onchange="Centro.subirAnexo('${this.esc(g.id)}', this.files[0])"></label>
            </span>` : ''}</div>`;
     }
     const anular = (this.puedeAprobar() || this.rol === ROLES.GERENTE)
@@ -495,6 +542,47 @@ window.Centro = {
       Toast.show('Excepción aprobada — Bodega recibirá el aviso', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar', 'bad'); }
+  },
+
+  async aprobarAumentoGestion(gid) {
+    try {
+      await GestionesService.aprobarAumento(gid);
+      Toast.show('Aumento aprobado — imprime el anexo y recoge la firma del cliente', 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo aprobar el aumento', 'bad'); }
+  },
+
+  async subirAnexo(gid, file) {
+    if (!file) return;
+    try {
+      Toast.show('Subiendo anexo firmado…', '');
+      await GestionesService.registrarFirmaAumento(gid, file);
+      Toast.show('Anexo firmado registrado — el sistema aplica las líneas y avisa a Bodega', 'ok');
+      setTimeout(() => this.recargarGestiones(), 1200);
+    } catch (e) { console.error(e); Toast.show('No se pudo subir el anexo', 'bad'); }
+  },
+
+  async guardarAsignacionAumento(gid) {
+    const inputs = [...document.querySelectorAll('input[data-gaum]')];
+    const seriales = [];
+    try {
+      for (const inp of inputs) {
+        const serial = inp.value.trim().toUpperCase();
+        if (!serial) continue;
+        const v = await this._validarSerialBodega(serial);
+        if (!v.ok) { Toast.show(v.why, 'bad'); return; }
+        seriales.push({
+          serial: v.unidad.serial || serial,
+          pool_doc_id: v.unidad.id || null,
+          modelo: v.unidad.modelo_label || '',
+          modelo_id: v.unidad.modelo_id || null,
+        });
+      }
+      if (!seriales.length) { Toast.show('Captura al menos un serial', 'warn'); return; }
+      await GestionesService.asignarAumento(gid, seriales);
+      Toast.show('Asignación guardada', 'ok');
+      setTimeout(() => this.recargarGestiones(), 1200);
+    } catch (e) { console.error(e); Toast.show('No se pudo guardar la asignación', 'bad'); }
   },
 
   async aprobarBajaGestion(gid) {
@@ -592,15 +680,51 @@ window.Centro = {
       <button type="button" onclick="Centro.wizReemplazo()">Reemplazo de equipo</button>
       <button type="button" onclick="Centro.wizDemo()">Demo de equipos</button>
       <button type="button" onclick="Centro.wizBaja()">Baja de equipos (por serial)</button>
+      ${activos.length ? '<button type="button" onclick="Centro.wizAumento()">Aumento de equipos (enmienda)</button>' : ''}
       ${terminaciones}
       <div class="hd">Comercial</div>
       <a href="../cotizaciones/index.html">Nueva cotización</a>
-      <a href="../contratos/nuevo-contrato.html">Nuevo contrato / aumento</a>
+      <a href="../contratos/nuevo-contrato.html">Nuevo contrato</a>
       <div class="hd">Cliente</div>
       <a href="./index.html">Editar datos del cliente</a>`;
   },
 
   /* ═════════ Wizards: reemplazo y demo ═════════ */
+
+  // Catálogo de modelos (colección `modelos`) — regla de Alberto 2026-08-26:
+  // los wizards SIEMPRE ofrecen la lista real, nunca texto libre.
+  modelos: null,
+  async _cargarModelos() {
+    if (this.modelos) return this.modelos;
+    try {
+      const todos = await ModelosService.getModelos();
+      this.modelos = (todos || [])
+        .filter(m => m.activo !== false)
+        .map(m => ({ id: m.id, label: `${m.marca || ''} ${m.modelo || ''}`.trim() }))
+        .filter(m => m.label)
+        .sort((a, b) => a.label.localeCompare(b.label));
+    } catch (e) {
+      console.warn('[centro] catálogo de modelos no disponible:', e?.message || e);
+      this.modelos = [];
+    }
+    return this.modelos;
+  },
+  // <select> del catálogo. Preselecciona por id del catálogo o por label.
+  _selModelo(attrs, selId, selLabel) {
+    const up = String(selLabel || '').trim().toUpperCase();
+    const opts = (this.modelos || []).map(m => {
+      const sel = (selId && m.id === selId)
+        || (!selId && up && (m.label.toUpperCase() === up || (up && m.label.toUpperCase().includes(up))));
+      return `<option value="${this.esc(m.id)}" ${sel ? 'selected' : ''}>${this.esc(m.label)}</option>`;
+    }).join('');
+    return `<select class="form-select" ${attrs}><option value="">— Modelo —</option>${opts}</select>`;
+  },
+  _modeloDeSelect(sel) {
+    const id = sel?.value || '';
+    if (!id) return null;
+    const m = (this.modelos || []).find(x => x.id === id);
+    return m ? { id: m.id, label: m.label } : null;
+  },
 
   MOTIVOS: [
     ['dano_no_reparable', 'Dañado — no reparable (diagnóstico de taller)'],
@@ -644,9 +768,10 @@ window.Centro = {
     return { ok: true, code: 'alquiler', label: e.propiedad === 'desconocida' ? 'Alquiler (propiedad por confirmar)' : 'Alquiler' };
   },
 
-  wizReemplazo() {
+  async wizReemplazo() {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
+    await this._cargarModelos();
     const filas = this.equipos.map((e, ix) => {
       const el = this._eleg(e);
       return `<tr style="${el.ok ? '' : 'opacity:.5;'}">
@@ -662,8 +787,7 @@ window.Centro = {
             <option value="">— Motivo —</option>
             ${this.MOTIVOS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
           </select>
-          <input class="form-input" data-wmod="${ix}" style="max-width:180px;" placeholder="Modelo de reemplazo"
-                 value="${this.esc(e.modelo_label || '')}">
+          ${this._selModelo(`data-wmod="${ix}" style="max-width:220px;"`, e.modelo_id, e.modelo_label)}
           <input class="form-input" data-wdet="${ix}" style="flex:1; min-width:180px;" placeholder="Detalle (opcional)">
         </div></td></tr>`;
     }).join('');
@@ -695,6 +819,8 @@ window.Centro = {
       const motivo = document.querySelector(`select[data-wmot="${ix}"]`)?.value || '';
       if (!motivo) { Toast.show(`Indica el motivo del serial ${e.serial}`, 'warn'); return; }
       const contrato = this.contratos.find(c => c.id === e.asignacion?.contrato_doc_id);
+      const modeloSel = this._modeloDeSelect(document.querySelector(`select[data-wmod="${ix}"]`));
+      if (!modeloSel) { Toast.show(`Elige el modelo de reemplazo del serial ${e.serial} (lista de modelos)`, 'warn'); return; }
       items.push({
         serial_saliente: e.serial || e.id,
         pool_doc_id_saliente: e.id,
@@ -705,9 +831,8 @@ window.Centro = {
         elegibilidad: el.code || 'alquiler',
         motivo_codigo: motivo,
         motivo_detalle: document.querySelector(`input[data-wdet="${ix}"]`)?.value.trim() || '',
-        modelo_solicitado: document.querySelector(`input[data-wmod="${ix}"]`)?.value.trim() || e.modelo_label || '',
-        modelo_solicitado_id: (document.querySelector(`input[data-wmod="${ix}"]`)?.value.trim() || e.modelo_label) === e.modelo_label
-          ? (e.modelo_id || null) : null,
+        modelo_solicitado: modeloSel.label,
+        modelo_solicitado_id: modeloSel.id,
         serial_nuevo: null, pool_doc_id_nuevo: null,
       });
     }
@@ -731,25 +856,31 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo crear la solicitud', 'bad'); }
   },
 
-  wizDemo() {
+  // Fila de línea modelo (+cantidad, +precio opcional) con el SELECT del catálogo.
+  _lineaModeloHtml(pref, conPrecio) {
+    return `<div style="display:flex; gap:8px; margin-bottom:8px;">
+      ${this._selModelo(`data-${pref}-modelo style="flex:1;"`)}
+      <input class="form-input" data-${pref}-cant type="number" min="1" value="1" style="width:86px;" title="Cantidad">
+      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="0.01" placeholder="$/mes" style="width:110px;" title="Precio mensual">` : ''}
+    </div>`;
+  },
+  _addLineaModelo(contId, pref, conPrecio) {
+    document.getElementById(contId)?.insertAdjacentHTML('beforeend', this._lineaModeloHtml(pref, conPrecio));
+  },
+
+  async wizDemo() {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
+    await this._cargarModelos();
     const hoy = new Date().toISOString().slice(0, 10);
     this._abrirModal(`
       <h3 style="margin:0 0 6px;">Nueva solicitud de demo — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
         Bodega asigna los seriales (stock nuevo o refurbished), el sistema crea la OS de programación
         y al retorno los equipos pasan por inspección antes de volver a Disponible.</p>
-      <div id="wdLineas">
-        <div style="display:flex; gap:8px; margin-bottom:8px;">
-          <input class="form-input" data-wdl-modelo style="flex:1;" placeholder="Modelo (ej. PNC360S)">
-          <input class="form-input" data-wdl-cant type="number" min="1" value="1" style="width:90px;">
-        </div>
-      </div>
+      <div id="wdLineas">${this._lineaModeloHtml('wdl')}</div>
       <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px; margin-bottom:12px;"
-        onclick="this.previousElementSibling.insertAdjacentHTML('beforeend',
-          '<div style=&quot;display:flex; gap:8px; margin-bottom:8px;&quot;><input class=&quot;form-input&quot; data-wdl-modelo style=&quot;flex:1;&quot; placeholder=&quot;Modelo&quot;><input class=&quot;form-input&quot; data-wdl-cant type=&quot;number&quot; min=&quot;1&quot; value=&quot;1&quot; style=&quot;width:90px;&quot;></div>')">
-        + Agregar otro modelo</button>
+        onclick="Centro._addLineaModelo('wdLineas','wdl')">+ Agregar otro modelo</button>
       <div class="form-field" style="margin-bottom:10px;">
         <label class="form-label">Motivo o finalidad del demo</label>
         <textarea class="form-input form-textarea" id="wdFin" placeholder="Ej.: prueba de cobertura previa a alquiler…"></textarea>
@@ -769,12 +900,12 @@ window.Centro = {
   },
 
   async crearDemo() {
-    const modelos = [...document.querySelectorAll('input[data-wdl-modelo]')];
+    const selects = [...document.querySelectorAll('select[data-wdl-modelo]')];
     const cants = [...document.querySelectorAll('input[data-wdl-cant]')];
-    const lineas = modelos.map((m, i) => ({
-      modelo: m.value.trim(),
-      cantidad: Math.max(1, Number(cants[i]?.value || 1)),
-    })).filter(l => l.modelo);
+    const lineas = selects.map((s, i) => {
+      const m = this._modeloDeSelect(s);
+      return m ? { modelo: m.label, modelo_id: m.id, cantidad: Math.max(1, Number(cants[i]?.value || 1)) } : null;
+    }).filter(Boolean);
     const finalidad = document.getElementById('wdFin')?.value.trim() || '';
     const salida = document.getElementById('wdSalida')?.value || '';
     if (!lineas.length) { Toast.show('Indica al menos un modelo', 'warn'); return; }
@@ -799,6 +930,83 @@ window.Centro = {
       Toast.show(`Solicitud ${gid} enviada — Bodega recibirá el aviso`, 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear la solicitud', 'bad'); }
+  },
+
+  /* ═════════ Wizard: aumento por enmienda firmada (Ola 4) ═════════ */
+
+  async wizAumento() {
+    this._cerrarModal();
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    await this._cargarModelos();
+    const activos = this.contratos.filter(c => c.estado === 'activo');
+    if (!activos.length) { Toast.show('El cliente no tiene contratos activos', 'warn'); return; }
+    this._abrirModal(`
+      <h3 style="margin:0 0 6px;">Aumento de equipos (enmienda) — ${this.esc(this.cliente.nombre)}</h3>
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
+        La enmienda agrega líneas al contrato existente <b>con vigencia propia</b>: el período del equipo
+        nuevo corre desde su entrega y vence más tarde que el resto — el anexo lo deja explícito y
+        <b>requiere la firma del cliente</b> antes de aplicarse.</p>
+      <div class="form-field" style="margin-bottom:10px; max-width:340px;">
+        <label class="form-label">Contrato destino</label>
+        <select class="form-select" id="waContrato">
+          ${activos.map(c => `<option value="${this.esc(c.id)}">${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
+        </select></div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
+        <div id="waLineas">${this._lineaModeloHtml('wau', true)}</div>
+        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
+          onclick="Centro._addLineaModelo('waLineas','wau',true)">+ Agregar otro modelo</button></div>
+      <div class="form-field" style="margin-bottom:12px; max-width:220px;">
+        <label class="form-label">Vigencia del tramo (meses)</label>
+        <input class="form-input" type="number" id="waMeses" min="1" value="18"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="Centro.crearAumento()">Enviar a aprobación</button>
+      </div>`);
+  },
+
+  async crearAumento() {
+    const contratoDocId = document.getElementById('waContrato')?.value || '';
+    const contrato = this.contratos.find(c => c.id === contratoDocId);
+    if (!contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
+    const selects = [...document.querySelectorAll('select[data-wau-modelo]')];
+    const cants = [...document.querySelectorAll('input[data-wau-cant]')];
+    const precios = [...document.querySelectorAll('input[data-wau-precio]')];
+    const lineas = selects.map((s, i) => {
+      const m = this._modeloDeSelect(s);
+      return m ? {
+        modelo: m.label, modelo_id: m.id,
+        cantidad: Math.max(1, Number(cants[i]?.value || 1)),
+        precio: Number(precios[i]?.value || 0),
+      } : null;
+    }).filter(Boolean);
+    if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
+    if (lineas.some(l => !(l.precio > 0))) { Toast.show('Cada línea necesita su precio mensual', 'warn'); return; }
+    const meses = Number(document.getElementById('waMeses')?.value || 0);
+    if (!(meses > 0)) { Toast.show('Indica la vigencia del tramo en meses', 'warn'); return; }
+    try {
+      const gid = await GestionesService.crear({
+        tipo: 'aumento',
+        cliente_id: this.cliente.id,
+        cliente_nombre: this.cliente.nombre || '',
+        estado: 'pendiente_aprobacion',
+        origen: { tipo: 'vendedor' },
+        items: [],
+        cierre: {},
+        aprobacion: { requiere: true },
+        aumento: {
+          contrato_doc_id: contrato.id,
+          contrato_id: contrato.contrato_id || contrato.id,
+          lineas,
+          duracion_meses: meses,
+          seriales_asignados: [],
+        },
+      });
+      this._cerrarModal();
+      this.gSel = gid;
+      Toast.show(`Aumento ${gid} enviado a aprobación comercial`, 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo crear el aumento', 'bad'); }
   },
 
   /* ═════════ Wizard: baja por serial (Ola 3) ═════════ */

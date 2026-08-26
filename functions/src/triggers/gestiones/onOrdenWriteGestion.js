@@ -163,6 +163,45 @@ module.exports = onDocumentWritten(
           }
           await G.registrarEvento(gid, "entrega",
             `Demo entregado desde la OS ${ordenId}; equipos en demo con el cliente. Orden de retorno ${devId || "—"} creada.`);
+        } else if (g.tipo === "aumento") {
+          // El tramo corre DESDE LA ENTREGA (decisión §8.2): aquí se estampan
+          // fecha de inicio y vencimiento en las líneas del contrato que llevan
+          // esta enmienda. El vencimiento del contrato-nivel (tramo original)
+          // no se toca: cada tramo vence por su lado (decisión §8.3).
+          const a = g.aumento || {};
+          const meses = Number(a.duracion_meses || 0);
+          if (a.contrato_doc_id && meses > 0) {
+            try {
+              const cRef = db.collection("contratos").doc(a.contrato_doc_id);
+              await db.runTransaction(async (tx) => {
+                const cSnap = await tx.get(cRef);
+                if (!cSnap.exists) return;
+                const equipos = Array.isArray(cSnap.data().equipos) ? [...cSnap.data().equipos] : [];
+                const inicio = new Date();
+                const fv = new Date(inicio.getTime());
+                fv.setMonth(fv.getMonth() + meses);
+                let tocadas = 0;
+                for (const l of equipos) {
+                  if (l.enmienda_id !== gid) continue;
+                  l.vigencia = {
+                    fecha_inicio: admin.firestore.Timestamp.fromDate(inicio),
+                    duracion_meses: meses,
+                    fecha_vencimiento: admin.firestore.Timestamp.fromDate(fv),
+                    estado: "vigente",
+                    enmienda_id: gid,
+                  };
+                  tocadas++;
+                }
+                if (tocadas) tx.set(cRef, { equipos }, { merge: true });
+              });
+              await G.registrarEvento(gid, "entrega",
+                `Entrega registrada desde la OS ${ordenId}. El tramo del aumento arranca hoy: ${meses} meses de vigencia propia en el contrato ${a.contrato_id || a.contrato_doc_id}.`);
+            } catch (e) {
+              logger.warn("[onOrdenWriteGestion] vigencia del tramo no estampada", { gid, message: e.message });
+            }
+          } else {
+            await G.registrarEvento(gid, "entrega", `Entrega registrada desde la OS ${ordenId}.`);
+          }
         } else {
           await G.registrarEvento(gid, "entrega", `Entrega registrada desde la OS ${ordenId}.`);
         }

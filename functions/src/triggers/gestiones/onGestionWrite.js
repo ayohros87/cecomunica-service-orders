@@ -28,6 +28,10 @@ const CIERRE_POR_TIPO = {
   reemplazo: ["asignacion", "programacion", "entrega", "entrada"],
   demo: ["asignacion", "programacion", "entrega", "entrada"],
   baja: ["aprobacion", "derivacion", "entrada"],
+  // Aumento por enmienda FIRMADA (decisión §8.2): aprobación comercial →
+  // firma del cliente en el anexo → derivación (líneas con tramo propio en el
+  // contrato) → asignación → programación → entrega. Sin entrada: no sale nada.
+  aumento: ["aprobacion", "firma", "derivacion", "asignacion", "programacion", "entrega"],
 };
 
 function asignacionCompleta(g) {
@@ -38,6 +42,12 @@ function asignacionCompleta(g) {
   if (g.tipo === "demo") {
     const total = (g.demo?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
     const asignados = (g.demo?.seriales_asignados || []).filter(s => String(s.serial || "").trim()).length;
+    return total > 0 && asignados >= total;
+  }
+  if (g.tipo === "aumento") {
+    if (g.cierre?.derivacion !== true) return false; // primero la firma y las líneas
+    const total = (g.aumento?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    const asignados = (g.aumento?.seriales_asignados || []).filter(s => String(s.serial || "").trim()).length;
     return total > 0 && asignados >= total;
   }
   return false;
@@ -118,6 +128,40 @@ async function correoAprobadoresBaja(gid, g) {
   });
 }
 
+// Aumento por enmienda: aprobación COMERCIAL previa al anexo (admin/gerencia).
+async function correoAprobadoresAumento(gid, g) {
+  const dests = await G.aprobadoresEmails();
+  if (!dests.length) {
+    logger.warn("[onGestionWrite] aumento sin aprobadores con email", { gid });
+    return;
+  }
+  const a = g.aumento || {};
+  await G.encolarCorreo({
+    to: dests[0],
+    cc: dests.length > 1 ? dests.slice(1).join(",") : null,
+    subject: `Aprobación comercial: aumento de equipos — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: `Enmienda al contrato ${a.contrato_id || "—"} con vigencia propia (${a.duracion_meses || "?"} meses)`,
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Aumento esperando aprobación comercial</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        La gestión <b>${G.escapeHtml(gid)}</b> propone una <b>enmienda de aumento</b> al contrato
+        <b>${G.escapeHtml(a.contrato_id || "—")}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>,
+        con <b>vigencia propia de ${G.escapeHtml(String(a.duracion_meses || "?"))} meses</b> desde la entrega
+        (el equipo nuevo vence más tarde que el resto — el anexo lo deja explícito).
+        Al aprobar, el vendedor imprime el anexo, el cliente lo firma, y recién entonces
+        el sistema aplica las líneas y pide los seriales a Bodega.
+      </p>
+      ${G.tablaHtml(["Cantidad", "Modelo", "Precio/mes"], (a.lineas || []).map(l => [
+        `${Number(l.cantidad || 0)}`,
+        G.escapeHtml(l.modelo || "—"),
+        `$${Number(l.precio || 0).toFixed(2)}`,
+      ]))}`,
+    ctaUrl: G.urlGestion(g, gid),
+    ctaLabel: "Revisar y aprobar",
+    meta: { gestion_id: gid, paso: "aprobacion_aumento" },
+  });
+}
+
 async function correoBodega(gid, g) {
   const to = await G.bodegaEmailTo();
   if (!to) {
@@ -131,11 +175,17 @@ async function correoBodega(gid, g) {
         G.escapeHtml(it.modelo_solicitado || it.modelo || "—"),
         G.escapeHtml(it.motivo_detalle || it.motivo_codigo || "—"),
       ])
-    : (g.demo?.lineas || []).map(l => [
-        `${Number(l.cantidad || 0)}`,
-        G.escapeHtml(l.modelo || "—"),
-        G.escapeHtml(g.demo?.finalidad || "—"), "",
-      ]);
+    : g.tipo === "aumento"
+      ? (g.aumento?.lineas || []).map(l => [
+          `${Number(l.cantidad || 0)}`,
+          G.escapeHtml(l.modelo || "—"),
+          `Aumento — contrato ${G.escapeHtml(g.aumento?.contrato_id || "—")}`, "",
+        ])
+      : (g.demo?.lineas || []).map(l => [
+          `${Number(l.cantidad || 0)}`,
+          G.escapeHtml(l.modelo || "—"),
+          G.escapeHtml(g.demo?.finalidad || "—"), "",
+        ]);
   await G.encolarCorreo({
     to,
     subject: `${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid}: asignar serial(es) — ${g.cliente_nombre || "Cliente"}`,
@@ -151,7 +201,7 @@ async function correoBodega(gid, g) {
       </p>
       ${g.tipo === "reemplazo"
         ? G.tablaHtml(["Sale", "Modelo actual", "Modelo solicitado", "Motivo"], filas)
-        : G.tablaHtml(["Cantidad", "Modelo", "Finalidad", ""], filas)}`,
+        : G.tablaHtml(["Cantidad", "Modelo", g.tipo === "aumento" ? "Detalle" : "Finalidad", ""], filas)}`,
     ctaUrl: G.urlGestion(g, gid),
     ctaLabel: "Asignar seriales",
     meta: { gestion_id: gid, paso: "bodega" },
@@ -170,7 +220,7 @@ async function correoRecepcion(gid, g, ordenIds) {
         `<code>${G.escapeHtml(it.serial_saliente || "—")}</code>`,
         G.escapeHtml(it.modelo_solicitado || it.modelo || "—"),
       ])
-    : (g.demo?.seriales_asignados || []).map(s => [
+    : ((g.tipo === "aumento" ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []).map(s => [
         `<code>${G.escapeHtml(s.serial || "—")}</code>`, "—", G.escapeHtml(s.modelo || "—"),
       ]);
   await G.encolarCorreo({
@@ -204,7 +254,7 @@ module.exports = onDocumentWritten(
     const before = event.data.before?.exists ? event.data.before.data() : null;
     const after = event.data.after?.exists ? event.data.after.data() : null;
     if (!after) return null;
-    if (!["reemplazo", "demo", "baja"].includes(after.tipo)) return null; // aumento/devolución/cambio_serial: olas 4–5
+    if (!["reemplazo", "demo", "baja", "aumento"].includes(after.tipo)) return null; // devolución/cambio_serial: ola 5
     if (["cerrada", "anulada"].includes(after.estado) && before?.estado === after.estado) return null;
 
     const creada = !before;
@@ -216,6 +266,9 @@ module.exports = onDocumentWritten(
         if (after.tipo === "baja") {
           await correoAprobadoresBaja(gid, after);
           await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administración y gerencia (baja por serial).");
+        } else if (after.tipo === "aumento") {
+          await correoAprobadoresAumento(gid, after);
+          await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación comercial enviado a administración y gerencia (aumento por enmienda).");
         } else {
           await correoAdmins(gid, after);
           await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administradores (excepción propio sin garantía).");
@@ -223,7 +276,8 @@ module.exports = onDocumentWritten(
       }
       const entraABodega = after.tipo !== "baja" && (
         (creada && after.estado === "pendiente_bodega") ||
-        (before && before.estado === "pendiente_aprobacion" && after.estado === "pendiente_bodega"));
+        (before && ["pendiente_aprobacion", "pendiente_firma"].includes(before.estado)
+          && after.estado === "pendiente_bodega"));
       if (entraABodega) {
         await correoBodega(gid, after);
         await G.registrarEvento(gid, "correo_bodega", "Aviso enviado a Bodega para asignar seriales.");
@@ -308,6 +362,57 @@ module.exports = onDocumentWritten(
       logger.error("[onGestionWrite] derivación de baja falló", { gid, message: e.message });
     }
 
+    // ── B3) AUMENTO firmado → líneas con tramo propio en el contrato ─────
+    // La UI registra el anexo firmado (pendiente_firma → pendiente_bodega +
+    // cierre.firma + anexo_firmado_path). Aquí se aplican las líneas a
+    // equipos[] del contrato destino con enmienda_id y la duración del tramo;
+    // la fecha de inicio/vencimiento del tramo se estampa AL ENTREGAR
+    // (decisión §8.2: el período corre desde la entrega). Admin SDK: esquiva
+    // touchesCFOwnedFields y las reglas del contrato.
+    try {
+      const firmadoAhora = after.tipo === "aumento"
+        && before && before.estado === "pendiente_firma" && after.estado === "pendiente_bodega"
+        && !after.cierre?.derivacion;
+      if (firmadoAhora) {
+        const a = after.aumento || {};
+        if (!a.contrato_doc_id || !(a.lineas || []).length) {
+          logger.error("[onGestionWrite] aumento firmado sin contrato destino o sin líneas", { gid });
+        } else {
+          const cRef = db.collection("contratos").doc(a.contrato_doc_id);
+          await db.runTransaction(async (tx) => {
+            const cSnap = await tx.get(cRef);
+            if (!cSnap.exists) throw new Error(`contrato destino ${a.contrato_doc_id} no existe`);
+            const equipos = Array.isArray(cSnap.data().equipos) ? [...cSnap.data().equipos] : [];
+            if (equipos.some(l => l.enmienda_id === gid)) return; // idempotencia
+            for (const l of (a.lineas || [])) {
+              equipos.push({
+                modelo_id: l.modelo_id || null,
+                modelo: l.modelo || "",
+                descripcion: `Aumento por enmienda ${gid} (anexo firmado)`,
+                cantidad: Number(l.cantidad || 0),
+                precio: Number(l.precio || 0),
+                enmienda_id: gid,
+                vigencia: {
+                  duracion_meses: Number(a.duracion_meses || 0) || null,
+                  estado: "pendiente_entrega", // el tramo corre desde la entrega
+                },
+              });
+            }
+            tx.set(cRef, {
+              equipos,
+              enmiendas_aumento: admin.firestore.FieldValue.arrayUnion(gid),
+            }, { merge: true });
+          });
+          await ref.set({ cierre: { ...(after.cierre || {}), derivacion: true } }, { merge: true });
+          await G.registrarEvento(gid, "derivacion",
+            `Anexo firmado: ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).`);
+          logger.info("[onGestionWrite] aumento aplicado al contrato", { gid, contrato: a.contrato_doc_id });
+        }
+      }
+    } catch (e) {
+      logger.error("[onGestionWrite] aplicación del aumento falló", { gid, message: e.message });
+    }
+
     // ── C) asignación completa → pool + OS PROGRAMACIÓN + correo ────────
     try {
       const lista = !after.ordenes?.programacion_id
@@ -330,17 +435,30 @@ module.exports = onDocumentWritten(
               },
               nota: `Asignado por gestión ${gid} — reemplaza a ${it.serial_saliente || "—"}`,
             }))
-          : (after.demo?.seriales_asignados || []).map(s => ({
-              serial: s.serial,
-              modelo_id: s.modelo_id || null,
-              modelo: s.modelo || "",
-              asignacion: {
-                contrato_doc_id: null, contrato_id: null,
-                cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
-                gestion_doc_id: gid, tipo: "demo",
-              },
-              nota: `Asignado por gestión ${gid} (demo)`,
-            }));
+          : after.tipo === "aumento"
+            ? (after.aumento?.seriales_asignados || []).map(s => ({
+                serial: s.serial,
+                modelo_id: s.modelo_id || null,
+                modelo: s.modelo || "",
+                asignacion: {
+                  contrato_doc_id: after.aumento?.contrato_doc_id || null,
+                  contrato_id: after.aumento?.contrato_id || null,
+                  cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
+                  gestion_doc_id: gid,
+                },
+                nota: `Asignado por enmienda de aumento ${gid} (contrato ${after.aumento?.contrato_id || "—"})`,
+              }))
+            : (after.demo?.seriales_asignados || []).map(s => ({
+                serial: s.serial,
+                modelo_id: s.modelo_id || null,
+                modelo: s.modelo || "",
+                asignacion: {
+                  contrato_doc_id: null, contrato_id: null,
+                  cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
+                  gestion_doc_id: gid, tipo: "demo",
+                },
+                nota: `Asignado por gestión ${gid} (demo)`,
+              }));
         for (const u of entrantes) {
           try {
             const r = await pool.transicionar(u.serial, u.modelo_id, u.modelo, {
