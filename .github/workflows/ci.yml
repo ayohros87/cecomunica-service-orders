@@ -57,6 +57,14 @@ jobs:
           fi
           echo "Lucide OK"
 
+      # En CSS, @import solo vale al inicio de la hoja (solo @charset y @layer
+      # pueden precederlo). Si queda debajo de otra regla el navegador lo ignora
+      # SIN avisar y la hoja importada nunca carga: asi murio app-kit-extras.css
+      # cuando los @font-face self-hosted se metieron arriba del @import, y el
+      # login quedo con texto blanco sobre fondo blanco.
+      - name: "@import al inicio de cada CSS"
+        run: node tools/check-css-import-first.js public
+
       - name: Install functions deps
         working-directory: functions
         run: npm ci

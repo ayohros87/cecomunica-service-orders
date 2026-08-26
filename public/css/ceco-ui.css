@@ -1,3 +1,11 @@
+/* Primitivos R3 del UI Kit (ver design-system/ui_kits/MIGRATION.md).
+   @import VA PRIMERO, antes de los @font-face: el CSS solo acepta @import al
+   inicio de la hoja (solo @charset y @layer pueden precederlo). Si queda
+   despues de cualquier otra regla el navegador lo IGNORA en silencio y toda
+   app-kit-extras.css deja de cargar (paso en e7f935a y dejo el login sin
+   estilos). NO mover de aqui — hay guard en tools/check-css-import-first.js */
+@import url('./app-kit-extras.css');
+
 /* Fuentes self-hosted (antes @import de Google Fonts: cadena render-blocking
    de 4 saltos HTML -> CSS -> CSS de Google -> woff2 en 2 dominios externos).
    Mismos woff2 subset latin que servia Google. Los archivos llevan -v1 en el
@@ -64,9 +72,6 @@
   src: url('/brand/fonts/ibm-plex-sans-700-latin-v1.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-
-/* Primitivos R3 del UI Kit (ver design-system/ui_kits/MIGRATION.md) */
-@import url('./app-kit-extras.css');
 
 /* ==== Cecomunica UI (base) ==== */
 :root{
