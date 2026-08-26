@@ -1,4 +1,15 @@
 Borrador de correo para bodega (José) — verificación de seriales, 2026-08-19.
+
+RESUELTO 2026-08-26: José devolvió el CSV con las 33 filas respondidas y se
+aplicó con functions/scripts/aplicar-verificacion-bodega-2026-08-19.js
+(50 escrituras, verificadas por muestreo):
+  · 21 correcciones de tipeo (guión/espacio/backtick que la etiqueta no trae) —
+    serial visible corregido en pool, poc_devices y órdenes; el serial_norm no
+    cambiaba, así que ningún doc-ID se movió.
+  · 12 fichas a BAJA por no-serial (códigos de producto: 407595-R ×2 por la
+    colisión de modelos, PC143-R, XX 1/2, PS-*, BASE (PS0000894), 300-01462,
+    DVP-2712). No se borran: la ficha en baja impide que los triggers las
+    resuciten mientras el texto siga en órdenes/contratos viejos.
 Adjunto: local-data/seriales-a-verificar-2026-08-19.xlsx (33 filas).
 Corto a propósito: el destinatario no lee textos largos.
 
