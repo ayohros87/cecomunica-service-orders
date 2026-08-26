@@ -123,6 +123,16 @@
 }
 
 *{box-sizing:border-box}
+
+/* Los controles de formulario NO heredan la tipografia: el UA stylesheet les
+   impone la fuente del sistema. Sin esto los <button> salen en Arial mientras
+   el resto de la UI va en Barlow/IBM Plex (se veia en .btn, que nunca declara
+   font-family). Selector de elemento (especificidad 0,0,1) a proposito: es un
+   piso, cualquier regla con clase lo sigue ganando. Solo font-family, NO el
+   shorthand `font:`, que ademas reiniciaria tamano y peso.
+   DUPLICADO IDENTICO en ceco-ui.css — mantener en sync. */
+button, input, select, textarea, optgroup { font-family: inherit; }
+
 html,body{height:100%}
 body{
   margin:0; font-family:var(--font-body); background:var(--bg); color:var(--fg-1);
