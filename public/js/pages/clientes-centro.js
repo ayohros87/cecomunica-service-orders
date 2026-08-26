@@ -36,8 +36,14 @@ window.Centro = {
           document.body.innerHTML = "<h3 style='color:red;text-align:center;margin-top:100px;'>Acceso restringido</h3>";
           return;
         }
-        // El vendedor arranca en SU cartera; el resto ve todo.
-        this.cartera = (this.rol === ROLES.VENDEDOR) ? 'mios' : 'todos';
+        // REGLA (Alberto 2026-08-26): el vendedor SOLO ve su propia cartera.
+        // No es un default — es un candado: sin toggle, lista filtrada y ficha
+        // bloqueada para clientes ajenos. (El piso en firestore.rules llega con
+        // el scoping de la Ola 2; hoy clientes es legible por toda la app.)
+        this.cartera = this.esVendedor() ? 'mios' : 'todos';
+        if (this.esVendedor()) {
+          document.querySelector('.seg')?.classList.add('hidden');
+        }
         this._wire();
         const id = new URLSearchParams(location.search).get('id');
         if (id) await this.abrir(id, { push: false });
@@ -66,7 +72,13 @@ window.Centro = {
 
   /* ═════════ Directorio ═════════ */
 
-  setCartera(v) { this.cartera = v; this.cargarLista(true); },
+  esVendedor() { return this.rol === ROLES.VENDEDOR; },
+
+  setCartera(v) {
+    if (this.esVendedor()) return;   // el vendedor no sale de su cartera
+    this.cartera = v;
+    this.cargarLista(true);
+  },
 
   async cargarLista(reset) {
     if (reset) { this.cursor = null; document.getElementById('cgLista').innerHTML = ''; }
@@ -128,6 +140,12 @@ window.Centro = {
     try {
       const c = await ClientesService.getCliente(clienteId);
       if (!c || c.deleted) { Toast.show('Cliente no encontrado', 'bad'); return; }
+      // Candado de cartera: un vendedor no abre clientes ajenos ni por deep-link.
+      if (this.esVendedor() && c.vendedor_asignado !== this.uid) {
+        Toast.show('Este cliente no está en tu cartera', 'bad');
+        this.volver({ push: true });
+        return;
+      }
       this.cliente = c;
       if (push) history.pushState({}, '', `?id=${encodeURIComponent(clienteId)}`);
       document.getElementById('vistaLista').classList.add('hidden');
