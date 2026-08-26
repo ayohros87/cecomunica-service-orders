@@ -80,8 +80,11 @@ const onContratoActivado = onDocumentUpdated(
     // El estado por_vencer/vencido lo mantiene la sección H del cron.
     // 'aprobado' también opera (la mayoría del histórico nunca pasa a
     // 'activo'): el tramo se estampa desde el primer estado operativo.
+    // Solo ALQ/PROP: los DEMO/TEMP terminan (no renuevan) y el REEMP cabalga
+    // sobre la vigencia de su origen (deep-dive 2026-08-26).
     let vigenciaPatch = {};
-    if (["activo", "aprobado"].includes(estadoAfter) && !after.fecha_vencimiento) {
+    if (["activo", "aprobado"].includes(estadoAfter) && !after.fecha_vencimiento
+        && vigencia.aplicaVencimiento(after)) {
       const meses = vigencia.parseDuracionMeses(after.duracion);
       if (meses) {
         const inicioInfo = vigencia.mejorFechaInicio(after);
@@ -99,6 +102,37 @@ const onContratoActivado = onDocumentUpdated(
               estampado_por: "onContratoActivado",
             },
           };
+        }
+      } else if (vigencia.codigoTipo(after) === "REEMP") {
+        // REEMP sin duración propia: HEREDA la vigencia del contrato de origen
+        // (decisión 2026-08-26) — el reemplazo cabalga sobre el período que ya
+        // corre. Requiere el linaje (contrato_origen_ids).
+        const origenIds = Array.isArray(after.contrato_origen_ids) && after.contrato_origen_ids.length
+          ? after.contrato_origen_ids
+          : (after.contrato_origen_id ? [after.contrato_origen_id] : []);
+        if (origenIds.length) {
+          try {
+            const oSnap = await db.collection("contratos").doc(origenIds[0]).get();
+            const o = oSnap.exists ? oSnap.data() : null;
+            if (o?.fecha_vencimiento) {
+              vigenciaPatch = {
+                fecha_vencimiento: o.fecha_vencimiento,
+                vencimiento_estado: vigencia.estadoVencimiento(o.fecha_vencimiento, new Date()),
+                vigencia: {
+                  fecha_inicio: o.vigencia?.fecha_inicio || null,
+                  duracion_meses: o.vigencia?.duracion_meses || null,
+                  fecha_vencimiento: o.fecha_vencimiento,
+                  fuente_inicio: "heredada_de_origen",
+                  origen_contrato_doc_id: origenIds[0],
+                  estampado_por: "onContratoActivado",
+                },
+              };
+            }
+          } catch (e) {
+            logger.warn("[vigencia] no se pudo heredar la vigencia del origen", { contratoId, origen: origenIds[0], message: e.message });
+          }
+        } else {
+          logger.info("[vigencia] REEMP sin duración ni origen — sin vencimiento hasta amarrar el linaje", { contratoId });
         }
       } else {
         // Sin duración parseable no hay señal — no es error: contratos viejos

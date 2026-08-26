@@ -702,6 +702,21 @@ module.exports = onSchedule(
       for (const d of snap.docs) {
         const c = d.data() || {};
         if (c.deleted) continue;
+        // Solo ALQ/PROP/REEMP señalan; DEMO/TEMP terminan por su propio flujo.
+        if (!VIG.aplicaVencimiento(c)) continue;
+        // Un contrato cuya renovación YA está amarrada no señala — pero solo
+        // si el renovador es una renovación REAL vigente: un REEMP amarrado
+        // como origen NO renueva al contrato (solo sustituye equipos).
+        if (Array.isArray(c.renovado_por_ids) && c.renovado_por_ids.length) {
+          let renovado = false;
+          for (const rid of c.renovado_por_ids.slice(0, 3)) {
+            try {
+              const r = (await db.collection("contratos").doc(rid).get()).data();
+              if (r && ["activo", "aprobado"].includes(r.estado) && VIG.codigoTipo(r) !== "REEMP") { renovado = true; break; }
+            } catch (err) { /* señal se mantiene si no se pudo verificar */ }
+          }
+          if (renovado) continue;
+        }
         const est = VIG.estadoVencimiento(c.fecha_vencimiento, now);
         if (est && est !== c.vencimiento_estado) {
           try {

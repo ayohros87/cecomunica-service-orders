@@ -14,6 +14,28 @@
 // Funciones puras: nada de Firestore aquí.
 
 const AVISO_DIAS = 60;              // ventana de la señal "por vencer"
+
+// La señal de vencimiento/renovación aplica a contratos de servicio continuo
+// (deep-dive 2026-08-26): un DEMO o un TEMP terminan y sus equipos se
+// recuperan por su propio flujo — "renovar un demo" no hace sentido. El REEMP
+// SÍ vence: con su duración propia si la tiene, y si no, HEREDA la vigencia
+// del contrato de origen (decisión de Alberto 2026-08-26) — por eso el linaje
+// del REEMP importa doble.
+const CODIGOS_CON_VENCIMIENTO = ["ALQ", "PROP", "REEMP"];
+
+// Código de tipo tolerante al histórico (docs viejos sin codigo_tipo).
+function codigoTipo(contrato) {
+  const c = contrato || {};
+  if (c.codigo_tipo) return c.codigo_tipo;
+  const porNombre = { "Alquiler": "ALQ", "Propio": "PROP", "Reemplazo": "REEMP", "Demo": "DEMO", "Temporal": "TEMP" };
+  if (porNombre[c.tipo_contrato]) return porNombre[c.tipo_contrato];
+  const m = String(c.contrato_id || "").match(/^[A-Z]+/);
+  return m ? m[0] : null;
+}
+
+function aplicaVencimiento(contrato) {
+  return CODIGOS_CON_VENCIMIENTO.includes(codigoTipo(contrato));
+}
 const ANTICIPADA_MESES = 3;         // renovación anticipada (solo 18+ meses)
 const ANTICIPADA_MINIMO_MESES = 18; // período mínimo para renovar anticipado
 
@@ -95,6 +117,9 @@ module.exports = {
   AVISO_DIAS,
   ANTICIPADA_MESES,
   ANTICIPADA_MINIMO_MESES,
+  CODIGOS_CON_VENCIMIENTO,
+  codigoTipo,
+  aplicaVencimiento,
   parseDuracionMeses,
   mejorFechaInicio,
   calcularVencimiento,

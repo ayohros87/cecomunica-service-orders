@@ -35,38 +35,68 @@ const AUTOR = "script:backfill-vencimiento";
 function fmt(d) { return d ? d.toISOString().slice(0, 10) : "—"; }
 
 (async () => {
-  // 'aprobado' TAMBIÉN opera (factura, tiene seriales): en este sistema la
-  // mayoría del histórico nunca pasa a 'activo' (283 aprobados vs 94 activos
-  // al 2026-08-26) — dejarlos fuera dejaba a casi toda la flota sin señal.
-  const snap = await db.collection("contratos").where("estado", "in", ["activo", "aprobado"]).get();
+  // Se leen TODOS los contratos: los estampables son activo+aprobado ('aprobado'
+  // también opera — 283 del histórico nunca pasan a 'activo'), pero el mapa
+  // completo hace falta para que un REEMP herede la vigencia de un origen que
+  // puede estar en cualquier estado.
+  const snap = await db.collection("contratos").get();
   const now = new Date();
+  const mapa = new Map();
+  snap.forEach((d) => mapa.set(d.id, { id: d.id, ref: d.ref, ...(d.data() || {}) }));
 
   const yaTienen = [];
   const sinDuracion = [];
   const aEstampar = [];
   const fuentes = {};
-  let borrados = 0;
+  let borrados = 0, herencias = 0, reempSinOrigen = 0;
 
-  snap.forEach((d) => {
-    const c = d.data() || {};
-    if (c.deleted) { borrados++; return; }
-    if (c.fecha_vencimiento) { yaTienen.push(d.id); return; }
+  for (const c of mapa.values()) {
+    if (c.deleted) { borrados++; continue; }
+    if (!["activo", "aprobado"].includes(c.estado)) continue;
+    if (!V.aplicaVencimiento(c)) continue; // DEMO/TEMP: sin señal de renovación
+    if (c.fecha_vencimiento) { yaTienen.push(c.id); continue; }
 
     const meses = V.parseDuracionMeses(c.duracion);
-    if (!meses) {
-      sinDuracion.push({ id: d.id, contrato: c.contrato_id || d.id, cliente: c.cliente_nombre || "—", duracion: c.duracion || "(vacía)" });
-      return;
+    if (meses) {
+      const { fecha, fuente } = V.mejorFechaInicio(c);
+      if (!fecha) {
+        sinDuracion.push({ id: c.id, contrato: c.contrato_id || c.id, cliente: c.cliente_nombre || "—", duracion: `${c.duracion} (sin fecha de inicio)` });
+        continue;
+      }
+      const fv = V.calcularVencimiento(fecha, meses);
+      const estado = V.estadoVencimiento(fv, now);
+      fuentes[fuente] = (fuentes[fuente] || 0) + 1;
+      aEstampar.push({ ref: c.ref, id: c.id, contrato: c.contrato_id || c.id, cliente: c.cliente_nombre || "—", inicio: fecha, fuente, meses, fv, estado });
+      continue;
     }
-    const { fecha, fuente } = V.mejorFechaInicio(c);
-    if (!fecha) {
-      sinDuracion.push({ id: d.id, contrato: c.contrato_id || d.id, cliente: c.cliente_nombre || "—", duracion: `${c.duracion} (sin fecha de inicio)` });
-      return;
+
+    // REEMP sin duración propia: HEREDA la vigencia del contrato de origen
+    // (decisión de Alberto 2026-08-26). Requiere el linaje amarrado.
+    if (V.codigoTipo(c) === "REEMP") {
+      const ids = Array.isArray(c.contrato_origen_ids) && c.contrato_origen_ids.length
+        ? c.contrato_origen_ids : (c.contrato_origen_id ? [c.contrato_origen_id] : []);
+      const origen = ids.length ? mapa.get(ids[0]) : null;
+      if (origen?.fecha_vencimiento) {
+        const fvD = origen.fecha_vencimiento.toDate ? origen.fecha_vencimiento.toDate() : new Date(origen.fecha_vencimiento);
+        const estado = V.estadoVencimiento(fvD, now);
+        herencias++;
+        fuentes["heredada_de_origen"] = (fuentes["heredada_de_origen"] || 0) + 1;
+        aEstampar.push({
+          ref: c.ref, id: c.id, contrato: c.contrato_id || c.id, cliente: c.cliente_nombre || "—",
+          inicio: origen.vigencia?.fecha_inicio?.toDate ? origen.vigencia.fecha_inicio.toDate() : null,
+          fuente: "heredada_de_origen", meses: origen.vigencia?.duracion_meses || null,
+          fv: fvD, estado, herencia_de: ids[0],
+        });
+      } else {
+        reempSinOrigen++;
+        sinDuracion.push({ id: c.id, contrato: c.contrato_id || c.id, cliente: c.cliente_nombre || "—", duracion: ids.length ? "(origen sin vencimiento)" : "(sin duración ni origen — amarrar linaje)" });
+      }
+      continue;
     }
-    const fv = V.calcularVencimiento(fecha, meses);
-    const estado = V.estadoVencimiento(fv, now);
-    fuentes[fuente] = (fuentes[fuente] || 0) + 1;
-    aEstampar.push({ ref: d.ref, id: d.id, contrato: c.contrato_id || d.id, cliente: c.cliente_nombre || "—", inicio: fecha, fuente, meses, fv, estado });
-  });
+
+    sinDuracion.push({ id: c.id, contrato: c.contrato_id || c.id, cliente: c.cliente_nombre || "—", duracion: c.duracion || "(vacía)" });
+  }
+  console.log(`REEMP: herencias listas=${herencias} · sin origen o con origen sin fecha=${reempSinOrigen}`);
 
   const vencidos = aEstampar.filter((x) => x.estado === "vencido");
   const porVencer = aEstampar.filter((x) => x.estado === "por_vencer");
@@ -97,10 +127,11 @@ function fmt(d) { return d ? d.toISOString().slice(0, 10) : "—"; }
         fecha_vencimiento: admin.firestore.Timestamp.fromDate(x.fv),
         vencimiento_estado: x.estado,
         vigencia: {
-          fecha_inicio: admin.firestore.Timestamp.fromDate(x.inicio),
-          duracion_meses: x.meses,
+          fecha_inicio: x.inicio ? admin.firestore.Timestamp.fromDate(x.inicio) : null,
+          duracion_meses: x.meses || null,
           fecha_vencimiento: admin.firestore.Timestamp.fromDate(x.fv),
           fuente_inicio: x.fuente,
+          ...(x.herencia_de ? { origen_contrato_doc_id: x.herencia_de } : {}),
           estampado_por: AUTOR,
         },
       });

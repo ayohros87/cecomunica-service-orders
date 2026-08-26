@@ -212,13 +212,42 @@ window.Centro = {
   // 'aprobado' también opera (la mayoría del histórico nunca pasa a 'activo').
   _esVigente(c) { return ['activo', 'aprobado'].includes(c?.estado); },
 
+  _codigoTipo(c) {
+    if (c?.codigo_tipo) return c.codigo_tipo;
+    const m = { 'Alquiler': 'ALQ', 'Propio': 'PROP', 'Reemplazo': 'REEMP', 'Demo': 'DEMO', 'Temporal': 'TEMP' };
+    if (m[c?.tipo_contrato]) return m[c.tipo_contrato];
+    const x = String(c?.contrato_id || '').match(/^[A-Z]+/);
+    return x ? x[0] : null;
+  },
+  // Señal de vencimiento/renovación: solo ALQ/PROP/REEMP (DEMO/TEMP terminan).
+  _aplicaVenc(c) { return ['ALQ', 'PROP', 'REEMP'].includes(this._codigoTipo(c)); },
+  // Renovación REAL vigente que ya cubre a este contrato (un REEMP amarrado
+  // como origen NO cuenta: solo sustituye equipos, no renueva el período).
+  _renovadoPor(c) {
+    for (const id of (c?.renovado_por_ids || [])) {
+      const r = this.contratos.find(x => x.id === id);
+      if (r && this._esVigente(r) && this._codigoTipo(r) !== 'REEMP') return r;
+    }
+    return null;
+  },
+
   // Vida del contrato al estilo del prototipo: "vence en N días" con semáforo,
   // fecha, y barra de vida transcurrida (vigencia.fecha_inicio → vencimiento).
   _vidaHtml(c) {
     if (!this._esVigente(c)) return '—';
+    if (!this._aplicaVenc(c)) {
+      return `<span style="color:var(--fg-4);" title="Los DEMO y TEMP terminan por su propio flujo de devolución — no renuevan">n/a</span>`;
+    }
+    const renovador = this._renovadoPor(c);
+    if (renovador) {
+      return `<div class="cg-vida"><span class="cg-venc vigente">renovado ✓</span>
+        <span class="sub">por <span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span></span></div>`;
+    }
     const dias = this._diasA(c.fecha_vencimiento);
     if (dias === null) {
-      return `<span class="cg-venc por_vencer" title="Fija la duración del contrato para calcular su vencimiento">sin duración</span>`;
+      return this._codigoTipo(c) === 'REEMP'
+        ? `<span class="cg-venc por_vencer" title="Un REEMP sin duración hereda la vigencia de su contrato de origen — falta amarrar el linaje">sin origen</span>`
+        : `<span class="cg-venc por_vencer" title="Fija la duración del contrato para calcular su vencimiento">sin duración</span>`;
     }
     const ini = c.vigencia?.fecha_inicio;
     const iniD = ini?.toDate ? ini.toDate() : (ini ? new Date(ini) : null);
@@ -254,7 +283,7 @@ window.Centro = {
   pintarSenales() {
     const out = [];
     for (const c of this.contratos) {
-      if (!this._esVigente(c)) continue;
+      if (!this._esVigente(c) || !this._aplicaVenc(c) || this._renovadoPor(c)) continue;
       const v = this._vencInfo(c);
       if (!v) continue;
       if (v.estado === 'vencido') {
@@ -287,8 +316,8 @@ window.Centro = {
     const cont = document.getElementById('fContratos');
     if (!this.contratos.length) { cont.innerHTML = '<div class="cg-vacio">Sin contratos registrados.</div>'; return; }
     const filas = this.contratos.map(c => {
-      const dias = this._esVigente(c) ? this._diasA(c.fecha_vencimiento) : null;
-      const renovar = dias !== null && dias <= this.AVISO_DIAS
+      const dias = this._esVigente(c) && this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
+      const renovar = dias !== null && dias <= this.AVISO_DIAS && !this._renovadoPor(c)
         ? `<a class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" href="../contratos/nuevo-contrato.html">Renovar</a>` : '';
       return `<tr>
         <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
@@ -302,6 +331,22 @@ window.Centro = {
     cont.innerHTML = `<table class="cg-tabla"><thead><tr>
       <th>Contrato</th><th>Tipo</th><th>Estado</th><th style="text-align:right;">Unid.</th><th>Vence</th><th></th>
       </tr></thead><tbody>${filas}</tbody></table>`;
+  },
+
+  // Chip de vencimiento POR EQUIPO (mismo semáforo): usa el tramo que le
+  // aplica — la línea del aumento (vigencia propia) si su modelo la tiene,
+  // si no el vencimiento del contrato. DEMO/TEMP y custodia sin contrato: —.
+  _vencChipEquipo(e) {
+    const c = this.contratos.find(x => x.id === e.asignacion?.contrato_doc_id);
+    if (!c || !this._esVigente(c) || !this._aplicaVenc(c)) return '<span style="color:var(--fg-4);">—</span>';
+    if (this._renovadoPor(c)) return '<span class="cg-venc vigente">renovado</span>';
+    const linea = (c.equipos || []).find(l => l?.vigencia?.fecha_vencimiento && l.modelo_id && e.modelo_id && l.modelo_id === e.modelo_id);
+    const fv = linea?.vigencia?.fecha_vencimiento || c.fecha_vencimiento;
+    const dias = this._diasA(fv);
+    if (dias === null) return '<span class="cg-venc por_vencer" title="El contrato no tiene duración fijada">sin duración</span>';
+    const cls = dias < 0 ? 'vencido' : (dias <= this.AVISO_DIAS ? 'por_vencer' : 'vigente');
+    const label = dias < 0 ? `vencido ${-dias} d` : `${dias} d`;
+    return `<span class="cg-venc ${cls} num" title="Vence ${this._fmtFecha(fv)}${linea ? ' · tramo del aumento' : ''}">${label}</span>`;
   },
 
   pintarEquipos() {
@@ -321,10 +366,11 @@ window.Centro = {
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td>${chip(e)}${e.pendiente_devolucion ? ' <span class="cg-venc por_vencer">pend. devolución</span>' : ''}</td>
       <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
+      <td>${this._vencChipEquipo(e)}</td>
       <td style="text-align:right;"><a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;"
         href="../inventario/equipos.html?serial=${encodeURIComponent(e.serial || e.id)}">Kardex ›</a></td></tr>`).join('');
     cont.innerHTML = `<table class="cg-tabla"><thead><tr>
-      <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th></th>
+      <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th>Vence</th><th></th>
       </tr></thead><tbody>${filas}</tbody></table>`;
   },
 
