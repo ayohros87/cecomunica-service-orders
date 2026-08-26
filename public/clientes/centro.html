@@ -84,6 +84,12 @@
     .cg-menu .off { color:var(--fg-4); cursor:not-allowed; }
     .cg-menu .off:hover { background:none; }
     .cg-vacio { color:var(--fg-3); font-size:13px; padding:14px; text-align:center; }
+    .cg-hoy { display:flex; gap:9px; align-items:center; width:100%; text-align:left; background:none; border:0;
+              border-top:1px solid var(--border-subtle); padding:8px 16px; font-size:13px; color:var(--fg-2); cursor:pointer; }
+    .cg-hoy:hover { background:var(--accent-soft, #E6F4FB); }
+    .cg-hoy.bad span:first-child  { color:#A03030; }
+    .cg-hoy.warn span:first-child { color:#8A6415; }
+    .cg-hoy.info span:first-child { color:#0B5E8A; }
     .cg-overlay { position:fixed; inset:0; background:rgba(11,42,71,.45); display:grid; place-items:center;
                   padding:20px; z-index:80; }
     .cg-modal { background:var(--surface-card); border-radius:14px; box-shadow:0 20px 50px -20px rgba(11,42,71,.4);
@@ -107,6 +113,7 @@
 
   <!-- ── Vista: directorio ─────────────────────────────────────────── -->
   <div id="vistaLista">
+    <div id="cgParaHoy"></div>
     <div class="cg-tools">
       <input class="form-input cg-buscar" id="cgBuscar" type="search"
              placeholder="Buscar cliente por nombre, RUC o representante…" autocomplete="off">
@@ -170,7 +177,7 @@
 <div id="cgModal" class="cg-overlay hidden"></div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/clientes-centro.js?v=cg7" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg8" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

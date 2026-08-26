@@ -52,6 +52,7 @@ window.Centro = {
         this.gSel = params.get('g') || null;   // deep-link al expediente (correos)
         if (id) await this.abrir(id, { push: false });
         else await this.cargarLista(true);
+        this.cargarParaHoy();                  // franja de alertas del directorio
       } catch (e) { console.error(e); Toast.show('Error al iniciar', 'bad'); }
     });
     window.addEventListener('popstate', () => {
@@ -77,6 +78,76 @@ window.Centro = {
   /* ═════════ Directorio ═════════ */
 
   esVendedor() { return this.rol === ROLES.VENDEDOR; },
+
+  // Franja "Para hoy" del directorio (pedido 2026-08-26: el admin debe ver las
+  // alertas en el home del Centro, no solo nombres). Contratos por vencer /
+  // vencidos + gestiones abiertas; el vendedor solo ve los de SU cartera.
+  // La lista de clientes sigue siendo la navegación principal — esto es la
+  // capa secundaria de señales, como se decidió el 2026-08-25.
+  async cargarParaHoy() {
+    const cont = document.getElementById('cgParaHoy');
+    if (!cont) return;
+    try {
+      const db = firebase.firestore();
+      let misClientes = null;
+      if (this.esVendedor()) {
+        const s = await db.collection('clientes').where('vendedor_asignado', '==', this.uid).get();
+        misClientes = new Set(s.docs.map(d => d.id));
+      }
+      const [venc, gest] = await Promise.all([
+        db.collection('contratos').where('vencimiento_estado', 'in', ['vencido', 'por_vencer']).limit(300).get(),
+        db.collection('gestiones').limit(150).get().catch(() => ({ docs: [] })),
+      ]);
+      const mapa = new Map();
+      venc.docs.forEach(d => mapa.set(d.id, { id: d.id, ...d.data() }));
+
+      const items = [];
+      for (const c of mapa.values()) {
+        if (c.deleted || !this._esVigente(c) || !this._aplicaVenc(c)) continue;
+        if (misClientes && !misClientes.has(c.cliente_id)) continue;
+        // Renovación REAL amarrada → sin señal (un REEMP como renovador no cuenta).
+        let renovado = false;
+        for (const rid of (c.renovado_por_ids || []).slice(0, 3)) {
+          let r = mapa.get(rid);
+          if (!r) { try { const s = await db.collection('contratos').doc(rid).get(); r = s.exists ? s.data() : null; } catch (e) { /* señal se queda */ } }
+          if (r && this._esVigente(r) && this._codigoTipo(r) !== 'REEMP') { renovado = true; break; }
+        }
+        if (renovado) continue;
+        const dias = this._diasA(c.fecha_vencimiento);
+        if (dias === null) continue;
+        items.push({
+          tipo: dias < 0 ? 'bad' : 'warn', dias, cliente_id: c.cliente_id,
+          txt: `${c.cliente_nombre || '—'} — ${c.contrato_id || c.id} ${dias < 0 ? `venció hace ${-dias} día${-dias === 1 ? '' : 's'}` : `vence en ${dias} día${dias === 1 ? '' : 's'}`}`,
+        });
+      }
+      gest.docs.forEach(d => {
+        const g = d.data();
+        if (!GestionesService.ABIERTAS.includes(g.estado)) return;
+        if (misClientes && !misClientes.has(g.cliente_id)) return;
+        items.push({
+          tipo: 'info', dias: 99999, cliente_id: g.cliente_id, g: d.id,
+          txt: `${g.cliente_nombre || '—'} — ${GestionesService.tipoLabel(g.tipo)} ${d.id}: ${GestionesService.estadoLabel(g.estado)}`,
+        });
+      });
+      items.sort((a, b) => a.dias - b.dias);
+      if (!items.length) { cont.innerHTML = ''; return; }
+
+      const MAX = 12;
+      cont.innerHTML = `<div class="ds-card" style="padding:0; margin-bottom:var(--sp-4); overflow:hidden;">
+        <div style="padding:10px 16px 6px; font-size:11px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:#8A6415; display:flex; align-items:center; gap:7px;">
+          <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Para hoy · ${items.length}</div>
+        ${items.slice(0, MAX).map(i => `<button type="button" class="cg-hoy ${i.tipo}"
+            onclick="${i.g ? `Centro.gSel='${this.esc(i.g)}';` : ''}Centro.abrir('${this.esc(i.cliente_id)}')">
+            <span>${this.esc(i.txt)}</span><span style="margin-left:auto; color:var(--fg-4); font-weight:600;">›</span>
+          </button>`).join('')}
+        ${items.length > MAX ? `<div style="padding:6px 16px 10px; font-size:12px; color:var(--fg-4);">…y ${items.length - MAX} más</div>` : ''}
+      </div>`;
+      if (window.lucide?.createIcons) lucide.createIcons();
+    } catch (e) {
+      console.warn('[centro] franja para-hoy no disponible:', e?.message || e);
+      cont.innerHTML = '';
+    }
+  },
 
   setCartera(v) {
     if (this.esVendedor()) return;   // el vendedor no sale de su cartera
