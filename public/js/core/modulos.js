@@ -31,7 +31,7 @@ window.MODULOS = (() => {
   const visiblesPorRol = {
     administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "centro", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
     gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "centro", "contratos", "cotizaciones", "clientes", "firma"],
-    inventario:    ["almacen", "inventario", "equipos", "pendientes", "piezas", "firma"],
+    inventario:    ["almacen", "centro", "inventario", "equipos", "pendientes", "piezas", "firma"],
     contabilidad:  ["facturacion", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],

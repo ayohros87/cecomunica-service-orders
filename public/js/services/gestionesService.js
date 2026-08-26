@@ -154,6 +154,62 @@ const GestionesService = {
     return out;
   },
 
+  // Aprobación de la excepción por servicio al cliente (propio sin garantía,
+  // decisión 2026-08-26 §8.1). Solo administrador — la regla de UI la valida
+  // la página; el trigger onGestionWrite manda el correo a bodega al aprobar.
+  async aprobar(gestionId) {
+    const user = firebase.auth().currentUser;
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'pendiente_bodega',
+      aprobacion: {
+        requiere: true,
+        aprobado_por_uid: user?.uid || null,
+        aprobado_por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+    await this.registrarEvento(gestionId, 'aprobar', 'Excepción aprobada por administración — pasa a Bodega.');
+  },
+
+  // Anular el expediente (nunca se borra). Vale para rechazar una excepción o
+  // cancelar una gestión que no avanzó.
+  async anular(gestionId, motivo) {
+    const user = firebase.auth().currentUser;
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'anulada',
+      anulada_motivo: motivo || '',
+      anulada_por_uid: user?.uid || null,
+      anulada_at: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    await this.registrarEvento(gestionId, 'anular', motivo ? `Anulada: ${motivo}` : 'Anulada.');
+  },
+
+  // Bodega asigna los seriales de un REEMPLAZO: reescribe items[] con
+  // serial_nuevo/pool_doc_id_nuevo por ítem. El trigger detecta la asignación
+  // completa, mueve el pool y crea la(s) OS de programación.
+  async asignarItems(gestionId, items) {
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({ items });
+    await this.registrarEvento(gestionId, 'asignar',
+      `Bodega asignó: ${items.map(i => `${i.serial_saliente}→${i.serial_nuevo || '—'}`).join(', ')}`);
+  },
+
+  // Bodega asigna los seriales de un DEMO.
+  async asignarDemo(gestionId, seriales) {
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      'demo.seriales_asignados': seriales,
+    });
+    await this.registrarEvento(gestionId, 'asignar',
+      `Bodega asignó al demo: ${seriales.map(s => s.serial).join(', ')}`);
+  },
+
+  async listarEventos(gestionId, { limit = 50 } = {}) {
+    const snap = await firebase.firestore().collection(this.COL).doc(gestionId)
+      .collection('eventos').limit(limit).get();
+    const out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    out.sort((a, b) => (b.at?.toMillis?.() || 0) - (a.at?.toMillis?.() || 0));
+    return out;
+  },
+
   // Conteo de abiertas de un cliente (KPI de la ficha 360). count() con
   // fallback a get acotado, mismo patrón que cancelacionesService.
   async contarAbiertasPorCliente(clienteId) {
