@@ -285,6 +285,20 @@
       ]
     },
     {
+      "collectionGroup": "gestiones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "cliente_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "equipos_pool",
       "queryScope": "COLLECTION",
       "fields": [

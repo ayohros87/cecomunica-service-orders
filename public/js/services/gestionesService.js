@@ -1,0 +1,174 @@
+/* =============================================================
+   GESTIONES — expedientes de operación por CLIENTE a nivel serial
+   (Ola 1, docs/ARQUITECTURA_GESTIONES_POR_CLIENTE_2026-08-25.md).
+
+   Una gestión opera sobre seriales concretos del cliente y puede
+   cruzar contratos: el contrato queda como envoltura de facturación
+   y cada ítem lleva su propio contrato_doc_id. Los efectos sobre el
+   contrato (baja_cancelado, órdenes, linaje reemplaza_a) los derivan
+   Cloud Functions a partir de la gestión — nunca el navegador.
+
+   V1 (Ola 1): fundación — correlativo, crear, listar, contadores.
+   Los wizards de reemplazo/demo y los triggers llegan en la Ola 2;
+   baja/aumento/devolución/cambio_serial en las Olas 3–5.
+   ============================================================= */
+
+const GestionesService = {
+  COL: 'gestiones',
+
+  // tipo → { prefijo del correlativo, label }
+  TIPOS: {
+    reemplazo:     { prefijo: 'GR', label: 'Reemplazo' },
+    demo:          { prefijo: 'GD', label: 'Demo' },
+    baja:          { prefijo: 'GB', label: 'Baja de equipos' },
+    aumento:       { prefijo: 'GA', label: 'Aumento de equipos' },
+    devolucion:    { prefijo: 'GV', label: 'Devolución' },
+    cambio_serial: { prefijo: 'GC', label: 'Cambio de serial' },
+  },
+
+  // Estados del expediente. No todos aplican a todos los tipos (en_demo /
+  // retorno son de demo); la máquina fina por tipo la validan los triggers.
+  ESTADOS: {
+    pendiente_aprobacion: 'Pendiente de aprobación',
+    pendiente_bodega:     'Pendiente de bodega',
+    en_proceso:           'En proceso',
+    en_demo:              'En demo',
+    retorno:              'En retorno',
+    cerrada:              'Cerrada',
+    anulada:              'Anulada',
+  },
+  ABIERTAS: ['pendiente_aprobacion', 'pendiente_bodega', 'en_proceso', 'en_demo', 'retorno'],
+
+  tipoLabel(t)   { return this.TIPOS[t]?.label || t || '—'; },
+  estadoLabel(e) { return this.ESTADOS[e] || e || '—'; },
+
+  // Sello YYYYMMDD en hora LOCAL — mismo criterio (y misma trampa evitada)
+  // que el correlativo de contratos: nada de toISOString()/UTC.
+  _fechaStr(d = new Date()) {
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}`;
+  },
+
+  // GR20260826-01: reserva atómica en contadores/gestiones_{PREF}_{YYYYMMDD}
+  // (patrón reservarSufijo de contratosService; colección nueva → sin piso).
+  async reservarId(tipo) {
+    const meta = this.TIPOS[tipo];
+    if (!meta) throw new Error(`Tipo de gestión desconocido: ${tipo}`);
+    const db = firebase.firestore();
+    const fechaStr = this._fechaStr();
+    const ref = db.collection('contadores').doc(`gestiones_${meta.prefijo}_${fechaStr}`);
+    const seq = await db.runTransaction(async (t) => {
+      const snap = await t.get(ref);
+      const siguiente = (snap.exists ? Number(snap.data().seq || 0) : 0) + 1;
+      t.set(ref, {
+        seq: siguiente,
+        prefijo: meta.prefijo,
+        fecha: fechaStr,
+        actualizado_en: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return siguiente;
+    });
+    return `${meta.prefijo}${fechaStr}-${String(seq).padStart(2, '0')}`;
+  },
+
+  // Crea el expediente. `data` trae tipo, cliente_id, cliente_nombre, items[],
+  // origen, y lo específico del tipo. El doc-ID ES el correlativo legible.
+  // Todos los items deben ser del MISMO cliente — el candado real está en la
+  // regla y lo reforzarán los triggers; aquí se valida para fallar temprano.
+  async crear(data) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    if (!data?.tipo || !this.TIPOS[data.tipo]) throw new Error('Tipo de gestión inválido');
+    if (!data?.cliente_id) throw new Error('La gestión necesita cliente_id');
+
+    const id = await this.reservarId(data.tipo);
+    const doc = {
+      tipo: data.tipo,
+      estado: data.estado || 'pendiente_bodega',
+      cliente_id: data.cliente_id,
+      cliente_nombre: data.cliente_nombre || '',
+      origen: data.origen || { tipo: 'vendedor' },
+      items: Array.isArray(data.items) ? data.items : [],
+      contratos_afectados: Array.from(new Set(
+        (data.items || []).map(i => i.contrato_doc_id).filter(Boolean)
+      )),
+      ordenes: {},
+      cierre: data.cierre || {},
+      notas: data.notas || '',
+      responsable_uid: user?.uid || null,
+      responsable_email: user?.email || null,
+      fecha_solicitud: firebase.firestore.FieldValue.serverTimestamp(),
+      deleted: false,
+      ...(data.demo ? { demo: data.demo } : {}),
+      ...(data.aprobacion ? { aprobacion: data.aprobacion } : {}),
+    };
+    await db.collection(this.COL).doc(id).set(doc);
+    await this.registrarEvento(id, 'crear', `Gestión creada (${this.tipoLabel(data.tipo)})`);
+    return id;
+  },
+
+  // Bitácora append-only del expediente.
+  async registrarEvento(gestionId, accion, detalle) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    try {
+      await db.collection(this.COL).doc(gestionId).collection('eventos').add({
+        accion,
+        detalle: detalle || '',
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+        por_uid: user?.uid || null,
+        por_email: user?.email || null,
+      });
+    } catch (e) {
+      console.warn('[gestiones] evento no registrado:', e?.message || e);
+    }
+  },
+
+  async get(id) {
+    const snap = await firebase.firestore().collection(this.COL).doc(id).get();
+    return snap.exists ? { id: snap.id, ...snap.data() } : null;
+  },
+
+  // Todas las gestiones de un cliente (el eje del Centro de gestión).
+  // Ordena en cliente para no exigir índice compuesto todavía.
+  async listarPorCliente(clienteId, { limit = 100 } = {}) {
+    const db = firebase.firestore();
+    const snap = await db.collection(this.COL)
+      .where('cliente_id', '==', clienteId)
+      .limit(limit)
+      .get();
+    const out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    out.sort((a, b) => (b.fecha_solicitud?.toMillis?.() || 0) - (a.fecha_solicitud?.toMillis?.() || 0));
+    return out;
+  },
+
+  // Bandeja global por estado (o abiertas si no se pasa).
+  async listar({ estado = null, limit = 200 } = {}) {
+    const db = firebase.firestore();
+    let q = db.collection(this.COL);
+    if (estado) q = q.where('estado', '==', estado);
+    const snap = await q.limit(limit).get();
+    let out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!estado) out = out.filter(g => this.ABIERTAS.includes(g.estado));
+    out.sort((a, b) => (b.fecha_solicitud?.toMillis?.() || 0) - (a.fecha_solicitud?.toMillis?.() || 0));
+    return out;
+  },
+
+  // Conteo de abiertas de un cliente (KPI de la ficha 360). count() con
+  // fallback a get acotado, mismo patrón que cancelacionesService.
+  async contarAbiertasPorCliente(clienteId) {
+    const db = firebase.firestore();
+    const base = db.collection(this.COL).where('cliente_id', '==', clienteId);
+    try {
+      if (typeof base.count === 'function') {
+        const s = await base.where('estado', 'in', this.ABIERTAS).count().get();
+        const n = s.data().count;
+        if (typeof n === 'number') return n;
+      }
+    } catch (e) { /* fallback */ }
+    const snap = await base.limit(200).get();
+    return snap.docs.filter(d => this.ABIERTAS.includes(d.data().estado)).length;
+  },
+};
+
+window.GestionesService = GestionesService;

@@ -657,6 +657,35 @@ service cloud.firestore {
       allow update: if isSignedIn() && userRole() in ["administrador","gerente"];
       allow delete: if isSignedIn() && userRole() in ["administrador","gerente"];
     }
+    // ── Gestiones por cliente (Ola 1, ARQUITECTURA_GESTIONES_POR_CLIENTE) ──
+    // Una gestión es el expediente de una operación del CLIENTE sobre seriales
+    // concretos (reemplazo, demo, baja, aumento, devolución, cambio de serial)
+    // y puede cruzar contratos. V1: crear/leer/actualizar básico; el
+    // endurecimiento por campo (asignación solo bodega, aprobación solo admin,
+    // cierre solo CF) llega con los triggers de la Ola 2. Nunca se borra: se
+    // anula (estado 'anulada'), igual que el resto del sistema.
+    match /gestiones/{docId} {
+      allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","jefe_taller","contabilidad"];
+      allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion"]
+                    && request.resource.data.cliente_id is string
+                    && request.resource.data.tipo in ["reemplazo","demo","baja","aumento","devolucion","cambio_serial"]
+                    && request.resource.data.deleted == false;
+      allow update: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario"];
+      allow delete: if false;
+      // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):
+      // append-only — onMapeoWrite generalizado los consume en la Ola 2.
+      match /mapeos/{mapeoId} {
+        allow read:   if isSignedIn();
+        allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario"];
+        allow update, delete: if false;
+      }
+      // Bitácora del expediente: quién hizo qué. Append-only.
+      match /eventos/{eventoId} {
+        allow read:   if isSignedIn();
+        allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","jefe_taller"];
+        allow update, delete: if false;
+      }
+    }
     // empresa/config guarda parámetros sensibles: umbrales de auto-envío de
     // cotizaciones (descuento_max_pct, total_max), seriales_editores_extra
     // (allowlist que salta el candado de seriales) e itbms_rate (tasa fiscal).
