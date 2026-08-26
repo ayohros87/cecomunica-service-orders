@@ -18,7 +18,7 @@ const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
 ));
 const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
 
-const TIPO_LABEL = { reemplazo: "Reemplazo", demo: "Demo" };
+const TIPO_LABEL = { reemplazo: "Reemplazo", demo: "Demo", baja: "Baja de equipos" };
 
 // Deep-link al expediente dentro del Centro de gestión.
 function urlGestion(g, gid) {
@@ -73,6 +73,17 @@ async function adminEmails() {
     const snap = await db.collection("usuarios").where("rol", "==", "administrador").get();
     snap.forEach(d => { const e = d.data()?.email; if (isEmail(e)) emails.add(e.trim().toLowerCase()); });
   } catch (e) { logger.warn("[gestiones] usuarios admin ilegibles", { error: e.message }); }
+  return [...emails];
+}
+
+// Aprobadores de bajas: administración y gerencia (mismo criterio que las
+// enmiendas clásicas de solicitudes_cancelacion).
+async function aprobadoresEmails() {
+  const emails = new Set();
+  try {
+    const snap = await db.collection("usuarios").where("rol", "in", ["administrador", "gerente"]).get();
+    snap.forEach(d => { const e = d.data()?.email; if (isEmail(e)) emails.add(e.trim().toLowerCase()); });
+  } catch (e) { logger.warn("[gestiones] usuarios aprobadores ilegibles", { error: e.message }); }
   return [...emails];
 }
 
@@ -191,7 +202,7 @@ async function crearOrdenesProgramacion(gid, g) {
 
 module.exports = {
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, tablaHtml,
-  destinatariosRecepcionVendedor, adminEmails, encolarCorreo,
+  destinatariosRecepcionVendedor, adminEmails, aprobadoresEmails, encolarCorreo,
   registrarEvento, crearOrdenesProgramacion,
   bodegaEmailTo,
 };

@@ -101,6 +101,11 @@ const GestionesService = {
       deleted: false,
       ...(data.demo ? { demo: data.demo } : {}),
       ...(data.aprobacion ? { aprobacion: data.aprobacion } : {}),
+      // Baja: la penalidad estimada y la fecha global viajan en el MISMO create
+      // para que el correo de aprobación (trigger onCreate) ya traiga el desglose.
+      ...(data.penalidad_estimada ? { penalidad_estimada: data.penalidad_estimada } : {}),
+      ...(data.fecha_fin_facturacion ? { fecha_fin_facturacion: data.fecha_fin_facturacion } : {}),
+      ...(data.motivo_codigo ? { motivo_codigo: data.motivo_codigo } : {}),
     };
     await db.collection(this.COL).doc(id).set(doc);
     await this.registrarEvento(id, 'crear', `Gestión creada (${this.tipoLabel(data.tipo)})`);
@@ -182,6 +187,25 @@ const GestionesService = {
       anulada_at: firebase.firestore.FieldValue.serverTimestamp(),
     });
     await this.registrarEvento(gestionId, 'anular', motivo ? `Anulada: ${motivo}` : 'Anulada.');
+  },
+
+  // Aprobación de una BAJA por serial (admin/gerente — UNA sola aprobación por
+  // gestión aunque cruce contratos, decisión §8.10). El trigger deriva el fin
+  // de facturación por contrato y crea la devolución por serial.
+  async aprobarBaja(gestionId) {
+    const user = firebase.auth().currentUser;
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      estado: 'en_proceso',
+      'cierre.aprobacion': true,
+      aprobacion: {
+        requiere: true,
+        aprobado_por_uid: user?.uid || null,
+        aprobado_por_email: user?.email || null,
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+    });
+    await this.registrarEvento(gestionId, 'aprobar',
+      'Baja aprobada — el sistema deriva el fin de facturación por contrato y crea la devolución por serial.');
   },
 
   // Bodega asigna los seriales de un REEMPLAZO: reescribe items[] con

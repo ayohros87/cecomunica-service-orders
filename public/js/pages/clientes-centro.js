@@ -316,10 +316,16 @@ window.Centro = {
       ['entrega', 'Entrega al cliente', 'Se registra sola al entregar la OS'],
       ['entrada', 'Retorno y recepción', 'Check-in del retorno; inspección antes de Disponible'],
     ],
+    baja: [
+      ['aprobacion', 'Aprobación de la baja', 'Una sola aprobación, con desglose por contrato'],
+      ['derivacion', 'Fin de facturación aplicado', 'Derivado en cada contrato + devolución por serial'],
+      ['entrada', 'Entrada de los equipos', 'Check-in de la devolución; inspección antes de disposición'],
+    ],
   },
 
   puedeAsignar() { return [ROLES.ADMIN, ROLES.INVENTARIO].includes(this.rol); },
   puedeAprobar() { return this.rol === ROLES.ADMIN; },
+  puedeAprobarBaja() { return [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol); },
   puedeCrearGestion() { return [ROLES.ADMIN, ROLES.GERENTE, ROLES.VENDEDOR, ROLES.RECEPCION].includes(this.rol); },
 
   async recargarGestiones() {
@@ -388,7 +394,28 @@ window.Centro = {
       : '';
 
     let cuerpo = '';
-    if (g.tipo === 'reemplazo') {
+    if (g.tipo === 'baja') {
+      const pen = g.penalidad_estimada;
+      cuerpo = `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+        <th>Serial</th><th>Modelo</th><th>Contrato</th><th>Motivo</th><th>Fin de facturación</th>
+        </tr></thead><tbody>
+        ${(g.items || []).map(it => `<tr>
+          <td class="cg-mono">${this.esc(it.serial_saliente || it.serial || '—')}</td>
+          <td>${this.esc(it.modelo || '—')}</td>
+          <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || '—')}</td>
+          <td style="font-size:12.5px;">${this.esc(it.motivo_detalle || it.motivo_codigo || '—')}</td>
+          <td class="num" style="font-size:12.5px;">${this.esc(it.fecha_fin_facturacion || g.fecha_fin_facturacion || '—')}</td>
+        </tr>`).join('')}</tbody></table></div>
+        ${pen?.por_contrato?.length ? `
+          <p style="font-size:13px; margin:10px 0 4px;"><b>Penalidad estimada por contrato</b>
+            <span style="color:var(--fg-4);">(no vencido: 3 meses de mensualidad · vencido: 30 días)</span></p>
+          ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:3px 0;">
+            <span class="cg-mono">${this.esc(p.contrato_id || '—')}</span>
+            <span style="color:var(--fg-3);">${this.esc(p.detalle || '')}</span>
+            <b style="margin-left:auto;" class="num">$${Number(p.monto || 0).toFixed(2)}</b></div>`).join('')}
+          <div style="display:flex; font-size:13.5px; border-top:1px solid var(--border-subtle); padding-top:5px; margin-top:3px;">
+            <b>Total estimado</b><b style="margin-left:auto;" class="num">$${Number(pen.total || 0).toFixed(2)}</b></div>` : ''}`;
+    } else if (g.tipo === 'reemplazo') {
       const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega';
       cuerpo = `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
         <th>Sale</th><th>Modelo</th><th>Entra</th><th>Modelo solicitado</th><th>Motivo</th><th>Contrato</th>
@@ -430,14 +457,20 @@ window.Centro = {
               : 'pendiente de bodega'}</p>`}`;
     }
 
-    const aprobacion = (g.estado === 'pendiente_aprobacion')
-      ? `<div class="cg-senal warn" style="margin:10px 0 0;">
-           <span>Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.</span>
-           ${this.puedeAprobar() ? `<span style="margin-left:auto; display:flex; gap:8px;">
-             <button class="btn btn-primary" style="padding:4px 12px;font-size:12.5px;" onclick="Centro.aprobarGestion('${this.esc(g.id)}')">Aprobar</button>
+    let aprobacion = '';
+    if (g.estado === 'pendiente_aprobacion') {
+      const esBaja = g.tipo === 'baja';
+      const puede = esBaja ? this.puedeAprobarBaja() : this.puedeAprobar();
+      aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
+           <span>${esBaja
+             ? 'Baja esperando aprobación (una sola, con el desglose por contrato a la izquierda).'
+             : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
+           ${puede ? `<span style="margin-left:auto; display:flex; gap:8px;">
+             <button class="btn btn-primary" style="padding:4px 12px;font-size:12.5px;"
+               onclick="Centro.${esBaja ? 'aprobarBajaGestion' : 'aprobarGestion'}('${this.esc(g.id)}')">Aprobar</button>
              <button class="btn btn-ghost" style="padding:4px 10px;font-size:12.5px;" onclick="Centro.anularGestion('${this.esc(g.id)}')">Rechazar</button>
-           </span>` : ''}</div>`
-      : '';
+           </span>` : ''}</div>`;
+    }
     const anular = (this.puedeAprobar() || this.rol === ROLES.GERENTE)
       && !['cerrada', 'anulada', 'pendiente_aprobacion'].includes(g.estado)
       && !g.cierre?.entrega
@@ -462,6 +495,14 @@ window.Centro = {
       Toast.show('Excepción aprobada — Bodega recibirá el aviso', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar', 'bad'); }
+  },
+
+  async aprobarBajaGestion(gid) {
+    try {
+      await GestionesService.aprobarBaja(gid);
+      Toast.show('Baja aprobada — el sistema deriva la facturación y crea la devolución por serial', 'ok');
+      setTimeout(() => this.recargarGestiones(), 1200);
+    } catch (e) { console.error(e); Toast.show('No se pudo aprobar la baja', 'bad'); }
   },
 
   async anularGestion(gid) {
@@ -544,15 +585,14 @@ window.Centro = {
     if (!this.puedeCrearGestion()) { btn?.classList.add('hidden'); return; }
     btn?.classList.remove('hidden');
     const activos = this.contratos.filter(c => c.estado === 'activo');
-    const bajas = activos.length
-      ? activos.map(c => `<a href="../contratos/cancelaciones.html?contrato=${encodeURIComponent(c.id)}">
-          Baja / terminación — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></a>`).join('')
-      : `<button class="off" type="button">Baja de equipos (sin contratos activos)</button>`;
+    const terminaciones = activos.map(c => `<a href="../contratos/cancelaciones.html?contrato=${encodeURIComponent(c.id)}">
+          Terminación total — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></a>`).join('');
     document.getElementById('cgMenu').innerHTML = `
       <div class="hd">Equipos</div>
       <button type="button" onclick="Centro.wizReemplazo()">Reemplazo de equipo</button>
       <button type="button" onclick="Centro.wizDemo()">Demo de equipos</button>
-      ${bajas}
+      <button type="button" onclick="Centro.wizBaja()">Baja de equipos (por serial)</button>
+      ${terminaciones}
       <div class="hd">Comercial</div>
       <a href="../cotizaciones/index.html">Nueva cotización</a>
       <a href="../contratos/nuevo-contrato.html">Nuevo contrato / aumento</a>
@@ -759,5 +799,143 @@ window.Centro = {
       Toast.show(`Solicitud ${gid} enviada — Bodega recibirá el aviso`, 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear la solicitud', 'bad'); }
+  },
+
+  /* ═════════ Wizard: baja por serial (Ola 3) ═════════ */
+
+  MOTIVOS_BAJA: [
+    ['fin_necesidad', 'Fin de la necesidad'],
+    ['precio', 'Precio'],
+    ['servicio', 'Servicio'],
+    ['fallas_equipo', 'Fallas de equipo'],
+    ['cierre_operacion', 'Cierre de operación'],
+    ['morosidad', 'Morosidad'],
+    ['cambio_proveedor', 'Cambio de proveedor'],
+    ['migracion', 'Migración'],
+    ['otro', 'Otro'],
+  ],
+
+  // Penalidad estimada según el tramo de cada ítem (decisión §8.4): contrato
+  // no vencido → 3 meses de mensualidad de la línea; vencido → 30 días (~1
+  // mensualidad; la factura corriente + prorrateo exactos los emite finanzas).
+  _penalidadBaja(items) {
+    const por = new Map();
+    for (const it of items) {
+      const c = this.contratos.find(x => x.id === it.contrato_doc_id);
+      if (!c) continue;
+      const linea = (c.equipos || []).find(l =>
+        (l.modelo_id && it.modelo_id && l.modelo_id === it.modelo_id) ||
+        String(l.modelo || '').trim().toUpperCase() === String(it.modelo || '').trim().toUpperCase());
+      const precio = Number(linea?.precio || 0);
+      const dias = this._diasA(c.fecha_vencimiento);
+      const vencido = dias !== null && dias < 0;
+      const cur = por.get(c.id) || { contrato_id: c.contrato_id || c.id, monto: 0, unidades: 0, vencido, sinPrecio: false };
+      cur.monto += vencido ? precio : precio * 3;
+      cur.unidades += 1;
+      if (!precio) cur.sinPrecio = true;
+      por.set(c.id, cur);
+    }
+    const lista = [...por.values()].map(p => ({
+      contrato_id: p.contrato_id,
+      monto: Math.round(p.monto * 100) / 100,
+      detalle: `${p.unidades} unid. · ${p.vencido ? 'contrato vencido: 30 días' : 'no vencido: 3 meses de mensualidad'}${p.sinPrecio ? ' · ⚠ línea sin precio' : ''}`,
+    }));
+    return { por_contrato: lista, total: Math.round(lista.reduce((s, p) => s + p.monto, 0) * 100) / 100 };
+  },
+
+  wizBaja() {
+    this._cerrarModal();
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    const elegibles = this.equipos.filter(e =>
+      ['en_cliente', 'asignado_contrato'].includes(e.estado) && e.asignacion?.contrato_doc_id);
+    const finMes = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10); })();
+    this._abrirModal(`
+      <h3 style="margin:0 0 6px;">Baja de equipos — ${this.esc(this.cliente.nombre)}</h3>
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
+        Marca los seriales a dar de baja (pueden ser de contratos distintos — una sola aprobación con el
+        desglose). El sistema calcula la penalidad por tramo y, al aprobarse, deriva el fin de facturación
+        en cada contrato y crea la orden de devolución por serial.</p>
+      <div class="cg-twrap" style="max-height:38vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
+        <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th>
+        </tr></thead><tbody>
+        ${elegibles.map((e, ix) => `<tr>
+          <td><input type="checkbox" data-bsel="${this.equipos.indexOf(e)}" onchange="Centro._bajaPreview()"></td>
+          <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
+          <td>${this.esc(e.modelo_label || '—')}</td>
+          <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="cg-vacio">Sin equipos con contrato en campo.</td></tr>'}
+      </tbody></table></div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+        <select class="form-select" id="wbMotivo" style="max-width:250px;">
+          <option value="">— Motivo —</option>
+          ${this.MOTIVOS_BAJA.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
+        </select>
+        <input class="form-input" id="wbDet" style="flex:1; min-width:180px;" placeholder="Detalle (opcional)">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px;">Fin de facturación
+          <input class="form-input" type="date" id="wbFin" value="${finMes}" style="width:150px;"></label>
+      </div>
+      <div id="wbPen" style="margin-top:12px;"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="Centro.crearBaja()">Enviar a aprobación</button>
+      </div>`);
+  },
+
+  _bajaItemsSeleccion() {
+    return [...document.querySelectorAll('input[data-bsel]:checked')].map(i => {
+      const e = this.equipos[Number(i.dataset.bsel)];
+      return {
+        serial_saliente: e.serial || e.id,
+        pool_doc_id_saliente: e.id,
+        modelo: e.modelo_label || '',
+        modelo_id: e.modelo_id || null,
+        contrato_doc_id: e.asignacion?.contrato_doc_id || null,
+        contrato_id: e.asignacion?.contrato_id || null,
+      };
+    });
+  },
+
+  _bajaPreview() {
+    const items = this._bajaItemsSeleccion();
+    const pen = this._penalidadBaja(items);
+    document.getElementById('wbPen').innerHTML = items.length ? `
+      <p style="font-size:13px; margin:0 0 4px;"><b>Penalidad estimada</b>
+        <span style="color:var(--fg-4);">(no vencido: 3 meses · vencido: 30 días)</span></p>
+      ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:2px 0;">
+        <span class="cg-mono">${this.esc(p.contrato_id)}</span>
+        <span style="color:var(--fg-3);">${this.esc(p.detalle)}</span>
+        <b style="margin-left:auto;" class="num">$${p.monto.toFixed(2)}</b></div>`).join('')}
+      <div style="display:flex; font-size:13.5px; border-top:1px solid var(--border-subtle); padding-top:4px;">
+        <b>Total estimado</b><b style="margin-left:auto;" class="num">$${pen.total.toFixed(2)}</b></div>` : '';
+  },
+
+  async crearBaja() {
+    const base = this._bajaItemsSeleccion();
+    if (!base.length) { Toast.show('Marca al menos un serial', 'warn'); return; }
+    const motivo = document.getElementById('wbMotivo')?.value || '';
+    if (!motivo) { Toast.show('Indica el motivo de la baja', 'warn'); return; }
+    const detalle = document.getElementById('wbDet')?.value.trim() || '';
+    const fin = document.getElementById('wbFin')?.value || '';
+    const items = base.map(it => ({ ...it, motivo_codigo: motivo, motivo_detalle: detalle, fecha_fin_facturacion: fin || null }));
+    const pen = this._penalidadBaja(items);
+    try {
+      const gid = await GestionesService.crear({
+        tipo: 'baja',
+        cliente_id: this.cliente.id,
+        cliente_nombre: this.cliente.nombre || '',
+        estado: 'pendiente_aprobacion',
+        origen: { tipo: 'vendedor' },
+        items,
+        cierre: {},
+        aprobacion: { requiere: true },
+        penalidad_estimada: pen,
+        fecha_fin_facturacion: fin || null,
+        motivo_codigo: motivo,
+      });
+      this._cerrarModal();
+      this.gSel = gid;
+      Toast.show(`Baja ${gid} enviada a aprobación`, 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo crear la baja', 'bad'); }
   },
 };

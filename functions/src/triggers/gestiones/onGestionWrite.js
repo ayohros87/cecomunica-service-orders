@@ -21,7 +21,14 @@ const { APP_BASE_URL } = require("../../lib/inventario");
 const pool = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
 
-const CIERRE_FLAGS = ["asignacion", "programacion", "entrega", "entrada"];
+// Condiciones de cierre por tipo. Reemplazo/demo: las 4 del correo de Zuleika.
+// Baja (Ola 3): aprobación → derivación (fin de facturación aplicado y
+// devolución creada) → entrada (check-in resuelto).
+const CIERRE_POR_TIPO = {
+  reemplazo: ["asignacion", "programacion", "entrega", "entrada"],
+  demo: ["asignacion", "programacion", "entrega", "entrada"],
+  baja: ["aprobacion", "derivacion", "entrada"],
+};
 
 function asignacionCompleta(g) {
   if (g.tipo === "reemplazo") {
@@ -63,6 +70,51 @@ async function correoAdmins(gid, g) {
     ctaUrl: G.urlGestion(g, gid),
     ctaLabel: "Revisar y aprobar",
     meta: { gestion_id: gid, paso: "aprobacion" },
+  });
+}
+
+// Baja por serial: UNA sola aprobación por gestión, con el desglose claro de
+// qué contrato aporta cada equipo y su penalidad (decisión §8.10).
+async function correoAprobadoresBaja(gid, g) {
+  const dests = await G.aprobadoresEmails();
+  if (!dests.length) {
+    logger.warn("[onGestionWrite] baja sin aprobadores con email", { gid });
+    return;
+  }
+  const filas = (g.items || []).map(it => [
+    `<code>${G.escapeHtml(it.serial_saliente || it.serial || "—")}</code>`,
+    G.escapeHtml(it.modelo || "—"),
+    `<code>${G.escapeHtml(it.contrato_id || "—")}</code>`,
+    G.escapeHtml(it.motivo_detalle || it.motivo_codigo || g.motivo_codigo || "—"),
+  ]);
+  const pen = g.penalidad_estimada;
+  const penHtml = pen?.por_contrato?.length
+    ? `<p style="margin:12px 0 4px;font:14px/1.5 Arial,sans-serif;"><b>Penalidad estimada por contrato</b>
+        (no vencido: 3 meses de mensualidad · vencido: 30 días):</p>`
+      + G.tablaHtml(["Contrato", "Base", "Penalidad est."], pen.por_contrato.map(p => [
+          `<code>${G.escapeHtml(p.contrato_id || "—")}</code>`,
+          G.escapeHtml(p.detalle || "—"),
+          `<b>$${Number(p.monto || 0).toFixed(2)}</b>`,
+        ]))
+      + `<p style="margin:4px 0 0;font:13px Arial,sans-serif;">Total estimado: <b>$${Number(pen.total || 0).toFixed(2)}</b></p>`
+    : "";
+  await G.encolarCorreo({
+    to: dests[0],
+    cc: dests.length > 1 ? dests.slice(1).join(",") : null,
+    subject: `Aprobación requerida: baja de ${(g.items || []).length} equipo(s) — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: "Baja por serial; puede tocar varios contratos — una sola aprobación con desglose",
+    bodyContent: `
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Baja de equipos esperando aprobación</h2>
+      <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+        La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> solicita la baja
+        de los siguientes equipos (el desglose indica de qué contrato viene cada uno). Al aprobar, el sistema
+        deriva el fin de facturación en cada contrato y crea la orden de devolución <b>por serial</b>.
+      </p>
+      ${G.tablaHtml(["Serial", "Modelo", "Contrato", "Motivo"], filas)}
+      ${penHtml}`,
+    ctaUrl: G.urlGestion(g, gid),
+    ctaLabel: "Revisar y aprobar",
+    meta: { gestion_id: gid, paso: "aprobacion_baja" },
   });
 }
 
@@ -152,7 +204,7 @@ module.exports = onDocumentWritten(
     const before = event.data.before?.exists ? event.data.before.data() : null;
     const after = event.data.after?.exists ? event.data.after.data() : null;
     if (!after) return null;
-    if (!["reemplazo", "demo"].includes(after.tipo)) return null; // otros tipos: olas 3–5
+    if (!["reemplazo", "demo", "baja"].includes(after.tipo)) return null; // aumento/devolución/cambio_serial: olas 4–5
     if (["cerrada", "anulada"].includes(after.estado) && before?.estado === after.estado) return null;
 
     const creada = !before;
@@ -161,18 +213,99 @@ module.exports = onDocumentWritten(
     // ── A/B) correos de arranque, por flanco de estado ──────────────────
     try {
       if (creada && after.estado === "pendiente_aprobacion") {
-        await correoAdmins(gid, after);
-        await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administradores (excepción propio sin garantía).");
+        if (after.tipo === "baja") {
+          await correoAprobadoresBaja(gid, after);
+          await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administración y gerencia (baja por serial).");
+        } else {
+          await correoAdmins(gid, after);
+          await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administradores (excepción propio sin garantía).");
+        }
       }
-      const entraABodega =
+      const entraABodega = after.tipo !== "baja" && (
         (creada && after.estado === "pendiente_bodega") ||
-        (before && before.estado === "pendiente_aprobacion" && after.estado === "pendiente_bodega");
+        (before && before.estado === "pendiente_aprobacion" && after.estado === "pendiente_bodega"));
       if (entraABodega) {
         await correoBodega(gid, after);
         await G.registrarEvento(gid, "correo_bodega", "Aviso enviado a Bodega para asignar seriales.");
       }
     } catch (e) {
       logger.error("[onGestionWrite] correos de arranque fallaron", { gid, message: e.message });
+    }
+
+    // ── B2) BAJA aprobada → derivados por contrato + devolución por serial ─
+    // La aprobación (una sola por gestión, decisión §8.10) la estampa la UI:
+    // estado pendiente_aprobacion → en_proceso + cierre.aprobacion. Aquí corre
+    // el efecto: recalcular baja_cancelado/fecha_fin en CADA contrato afectado
+    // (lib compartida con onCancelacionWrite — no se pisan), marcar los
+    // salientes pendiente_devolucion y crear la orden de DEVOLUCIÓN por serial
+    // (se acabó adivinar unidades por modelo).
+    try {
+      const aprobadaAhora = after.tipo === "baja"
+        && before && before.estado === "pendiente_aprobacion" && after.estado === "en_proceso"
+        && !after.cierre?.derivacion;
+      if (aprobadaAhora) {
+        const { derivarBajaContrato } = require("../../lib/bajas");
+        const contratos = Array.isArray(after.contratos_afectados) ? after.contratos_afectados : [];
+        for (const cid of contratos) await derivarBajaContrato(cid);
+
+        for (const it of (after.items || [])) {
+          const serial = String(it.serial_saliente || it.serial || "").trim();
+          if (!serial) continue;
+          try {
+            const r = await pool.resolver(serial, it.modelo_id || null, it.modelo || "");
+            if (r.data) {
+              await r.ref.set({
+                pendiente_devolucion: true,
+                updated_at: admin.firestore.FieldValue.serverTimestamp(),
+              }, { merge: true });
+              await r.ref.collection("movimientos").add({
+                at: admin.firestore.FieldValue.serverTimestamp(),
+                por: "system", por_email: null,
+                tipo: "baja", de_estado: null, a_estado: null,
+                ref: { tipo: "gestion", id: gid, label: gid },
+                notas: `Baja aprobada (${gid}) — pendiente de devolución`,
+              });
+            }
+          } catch (e) {
+            logger.warn("[onGestionWrite] saliente de baja no marcado", { gid, serial, message: e.message });
+          }
+        }
+
+        const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
+        const unidades = (after.items || [])
+          .map(it => ({
+            serial: it.serial_saliente || it.serial,
+            modelo: it.modelo || "",
+            modelo_id: it.modelo_id || null,
+            pool_doc_id: it.pool_doc_id_saliente || null,
+          }))
+          .filter(u => String(u.serial || "").trim());
+        const devId = await crearOrdenDevolucion({
+          clienteId: after.cliente_id,
+          clienteNombre: after.cliente_nombre || "",
+          contratoDocId: contratos[0] || null,
+          contratoId: (after.items || []).find(i => i.contrato_id)?.contrato_id || null,
+          contratoOrigenIds: contratos,
+          modo: "recuperacion",
+          origen: { tipo: "gestion_baja", ref_id: gid },
+          unidades,
+          motivo: `Baja de equipos ${gid} — recuperar las unidades dadas de baja`,
+        });
+        if (devId) {
+          await db.collection("ordenes_de_servicio").doc(devId).set({
+            gestion: { id: gid, tipo: "baja" },
+          }, { merge: true });
+        }
+        await ref.set({
+          cierre: { ...(after.cierre || {}), derivacion: true },
+          ordenes: { ...(after.ordenes || {}), devolucion_id: devId || null },
+        }, { merge: true });
+        await G.registrarEvento(gid, "derivacion",
+          `Baja aplicada en ${contratos.length} contrato(s): fin de facturación derivado y orden de devolución ${devId || "—"} creada por serial.`);
+        logger.info("[onGestionWrite] baja derivada", { gid, contratos: contratos.length, devId });
+      }
+    } catch (e) {
+      logger.error("[onGestionWrite] derivación de baja falló", { gid, message: e.message });
     }
 
     // ── C) asignación completa → pool + OS PROGRAMACIÓN + correo ────────
@@ -250,16 +383,17 @@ module.exports = onDocumentWritten(
       logger.error("[onGestionWrite] bloque de asignación falló", { gid, message: e.message });
     }
 
-    // ── D) cierre automático 4/4 ─────────────────────────────────────────
+    // ── D) cierre automático (flags completos según el tipo) ─────────────
     try {
       const c = after.cierre || {};
-      const completo = CIERRE_FLAGS.every(k => c[k] === true);
+      const flags = CIERRE_POR_TIPO[after.tipo] || CIERRE_POR_TIPO.reemplazo;
+      const completo = flags.every(k => c[k] === true);
       if (completo && !["cerrada", "anulada"].includes(after.estado)) {
         await ref.set({
           estado: "cerrada",
           cerrada_at: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
-        await G.registrarEvento(gid, "cierre", "Gestión cerrada automáticamente — 4 de 4 condiciones completadas.");
+        await G.registrarEvento(gid, "cierre", `Gestión cerrada automáticamente — ${flags.length} de ${flags.length} condiciones completadas.`);
         if (G.isEmail(after.responsable_email)) {
           await G.encolarCorreo({
             to: after.responsable_email,
@@ -269,8 +403,8 @@ module.exports = onDocumentWritten(
               <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">Gestión cerrada</h2>
               <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
                 La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>
-                completó sus 4 condiciones (asignación, programación, entrega y entrada) y se cerró
-                automáticamente. El expediente queda como historial del cliente.
+                completó todas sus condiciones de cierre y se cerró automáticamente.
+                El expediente queda como historial del cliente.
               </p>`,
             ctaUrl: G.urlGestion(after, gid),
             ctaLabel: "Ver el expediente",

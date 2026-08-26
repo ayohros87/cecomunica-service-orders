@@ -125,35 +125,18 @@ module.exports = onDocumentWritten(
         if (created) {
           await ref.set({ baja_estado: "pendiente", baja_solicitud_id: id, baja_actualizado_at: now }, { merge: true });
         } else if (approved) {
-          // Recalcula lo cancelado por modelo desde TODAS las enmiendas aprobadas/cerradas
-          // del contrato (idempotente). Detecta si alguna es terminación total.
-          const sols = await db.collection("solicitudes_cancelacion")
-            .where("contrato_doc_id", "==", contratoDocId).get();
-          const map = {};
-          let terminacionTotal = false;
-          let terminacionFin = null;
-          sols.forEach((s) => {
-            const sd = s.data();
-            if (sd.estado !== "aprobada" && sd.estado !== "cerrada") return;
-            (sd.items || []).forEach((it) => {
-              const key = String(it.modelo_id || it.modelo || "").trim();
-              const q = Number(it.cantidad || 0);
-              if (!key || q <= 0) return;
-              map[key] = Number(map[key] || 0) + q;
-            });
-            if (sd.tipo === "terminacion_total") { terminacionTotal = true; terminacionFin = sd.fecha_fin_facturacion || terminacionFin; }
-          });
-          const total = Object.values(map).reduce((s, v) => s + Number(v || 0), 0);
-          const payload = {
+          // Recalcula lo cancelado desde TODAS las fuentes (enmiendas clásicas
+          // por modelo + gestiones de baja por serial) vía la lib compartida —
+          // Ola 3: dos escritores del mismo derivado deben leerse entre sí o
+          // se pisan (docs/ARQUITECTURA_GESTIONES_POR_CLIENTE_2026-08-25.md).
+          const { derivarBajaContrato } = require("../../lib/bajas");
+          await derivarBajaContrato(contratoDocId);
+          await ref.set({
             baja_estado: "aprobada",
             baja_solicitud_id: id,
             baja_fecha_fin: finTs,
-            baja_cancelado: map,
-            baja_cancelado_total: total,
             baja_actualizado_at: now,
-          };
-          if (terminacionTotal) { payload.terminacion_total = true; payload.terminacion_fin = terminacionFin; }
-          await ref.set(payload, { merge: true });
+          }, { merge: true });
         } else if (rejected) {
           await ref.set({
             baja_estado: admin.firestore.FieldValue.delete(),
