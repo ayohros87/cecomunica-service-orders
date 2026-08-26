@@ -58,13 +58,83 @@
       if (!es) { visitaSitio.value = ""; visitaContacto.value = ""; }
     }
     
+    // ── Vendedor del CONTRATO (petición de recepción, 2026-08-26) ───────────
+    // En una PROGRAMACIÓN/ENTRADA el vendedor es quien elaboró el contrato
+    // (contratos.creado_por_uid — el mismo uid que va en CC del correo de
+    // "contrato aprobado"). Recepción no lo tenía a mano en esta pantalla: el
+    // único lugar donde aparecía era ese correo, así que se elegía de memoria
+    // y se colaban errores (P.H. PLAZA DEL ESTE: la orden se rehízo entera por
+    // haber puesto el vendedor equivocado). Ahora lo trae el contrato, se
+    // muestra en la lista de contratos y queda editable.
+    let _vendedoresCache = null;             // [{ id, nombre, email }]
+    const _vendedorPorContrato = new Map();  // contrato_doc_id → uid del elaborador
+
+    async function getVendedores() {
+      if (!_vendedoresCache) _vendedoresCache = await UsuariosService.getVendedores();
+      return _vendedoresCache;
+    }
+
+    function nombreVendedor(uid) {
+      const v = (_vendedoresCache || []).find(x => x.id === uid);
+      return v ? (v.nombre || v.email || v.id) : "";
+    }
+
+    function mostrarHintVendedor(texto) {
+      const hint = document.getElementById("vendedorHint");
+      if (!hint) return;
+      hint.textContent = texto || "";
+      hint.hidden = !texto;
+    }
+
+    // Rellena el select de vendedores y preselecciona `preseleccionUid`. Sin
+    // preselección conserva lo que ya estaba elegido (el select se re-arma en
+    // varios puntos y no debe perder la elección del usuario).
+    async function poblarVendedores(preseleccionUid = "") {
+      const vendSelect = document.getElementById("vendedor");
+      if (!vendSelect) return;
+      const actual = vendSelect.value;
+      const vendedores = await getVendedores();
+      vendSelect.innerHTML = '<option value="">Seleccione vendedor</option>';
+      vendedores.forEach(v => {
+        const opt = document.createElement("option");
+        opt.value = v.id;
+        opt.textContent = (v.nombre || v.email || v.id);
+        vendSelect.appendChild(opt);
+      });
+      const elegir = preseleccionUid || actual;
+      if (elegir && [...vendSelect.options].some(o => o.value === elegir)) vendSelect.value = elegir;
+    }
+
+    // Aplica al select el vendedor del contrato elegido. No fuerza nada: si el
+    // elaborador no está en el catálogo de vendedores (contratos viejos hechos
+    // por recepción o por un usuario dado de baja) deja lo que haya y lo dice.
+    async function aplicarVendedorDelContrato() {
+      const contratoDocId = contratoSelect.value;
+      if (!contratoDocId) { mostrarHintVendedor(""); return; }
+      const uid = _vendedorPorContrato.get(contratoDocId) || "";
+      await poblarVendedores(uid);
+      const ref = contratoSelect.selectedOptions[0]?.dataset.ref || "el contrato";
+      const nombre = uid ? nombreVendedor(uid) : "";
+      if (nombre) {
+        mostrarHintVendedor(`Tomado de ${ref} — lo elaboró ${nombre}. Cámbialo solo si no corresponde.`);
+      } else if (uid) {
+        // Contrato hecho por alguien que no figura como vendedor (recepción,
+        // un usuario dado de baja): no se puede preseleccionar nada.
+        mostrarHintVendedor(`Quien elaboró ${ref} no está en la lista de vendedores — selecciónalo a mano.`);
+      } else {
+        mostrarHintVendedor(`${ref} no registra quién lo elaboró — selecciona el vendedor a mano.`);
+      }
+    }
+
     // Función para cargar contratos del cliente
     async function cargarContratosDelCliente(clienteId) {
       contratoSelect.innerHTML = '<option value="">Seleccione contrato</option>';
-      
+      mostrarHintVendedor("");
+
       if (!clienteId) return;
-      
+
       try {
+        await getVendedores(); // para poder nombrar al elaborador en cada opción
         // ✅ Query simplificado: Firestore no requiere orderBy para deleted cuando usamos == false
         // Esto evita errores de índice compuesto
         const contratosCliente = await ContratosService.getContratosActivosPorCliente(clienteId);
@@ -73,7 +143,7 @@
           const option = document.createElement("option");
           option.value = contrato.id;
 
-          // Formato: CT-XXX — Tipo — Estado — 📻 X equipos
+          // Formato: CT-XXX — Tipo — Estado — 📻 X equipos — 🧑‍💼 Vendedor
           const contratoId = contrato.contrato_id || contrato.id;
           const tipoContrato = contrato.tipo_contrato || "N/A";
           const estado = contrato.estado || "N/A";
@@ -82,7 +152,14 @@
           const total = Number(contrato.total_equipos);
           const extra = Number.isFinite(total) ? ` — 📻 ${total} equipos` : "";
 
-          option.textContent = `${contratoId} — ${tipoContrato} — ${estado}${extra}`;
+          // Elaborador del contrato = vendedor de la orden (ver bloque de arriba).
+          const uidVendedor = contrato.creado_por_uid || "";
+          if (uidVendedor) _vendedorPorContrato.set(contrato.id, uidVendedor);
+          const nombre = uidVendedor ? nombreVendedor(uidVendedor) : "";
+          const vend = nombre ? ` — 🧑‍💼 ${nombre}` : "";
+
+          option.dataset.ref = contratoId;
+          option.textContent = `${contratoId} — ${tipoContrato} — ${estado}${extra}${vend}`;
           contratoSelect.appendChild(option);
         });
 
@@ -142,6 +219,9 @@
         await cargarContratosDelCliente(clienteSelect.value);
       }
     });
+
+    // Elegir contrato fija el vendedor (el que lo elaboró).
+    contratoSelect.addEventListener("change", () => { aplicarVendedorDelContrato(); });
     
     // Event listener para checkbox "No aplica"
     contratoNoAplica.addEventListener("change", function() {
@@ -238,17 +318,11 @@
   try {
     const c = await ClientesService.getCliente(clienteId);
     if (c) {
-      const vendSelect = document.getElementById("vendedor");
-      vendSelect.innerHTML = '<option value="">Seleccione vendedor</option>';
-
-      const vendedores = await UsuariosService.getVendedores();
-      vendedores.forEach(v => {
-        const opt = document.createElement("option");
-        opt.value = v.id;
-        opt.textContent = (v.nombre || v.email || v.id);
-        if (c.vendedor_asignado === v.id) opt.selected = true;
-        vendSelect.appendChild(opt);
-      });
+      // Manda el contrato si ya hay uno elegido (su elaborador ES el vendedor
+      // de la orden); el vendedor asignado del cliente es el respaldo, y hoy
+      // está vacío en la mayoría de las fichas.
+      const uidContrato = _vendedorPorContrato.get(contratoSelect.value) || "";
+      await poblarVendedores(uidContrato || c.vendedor_asignado || "");
     }
   } catch (e) {
     console.error("Error cargando vendedor:", e);
@@ -376,6 +450,7 @@
           if (clienteSelect.value) await cargarContratosDelCliente(clienteSelect.value);
           if (contratoDocId && [...contratoSelect.options].some(o => o.value === contratoDocId)) {
             contratoSelect.value = contratoDocId;
+            await aplicarVendedorDelContrato(); // el contrato precargado también trae su vendedor
           }
         }
       }

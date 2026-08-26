@@ -125,6 +125,11 @@
             <select class="form-select" id="vendedor" required>
               <option value="">Seleccione vendedor</option>
             </select>
+            <!-- El vendedor de una PROGRAMACIÓN/ENTRADA es el del CONTRATO (quien
+                 lo elaboró). Antes había que abrirse el correo del contrato
+                 aprobado para saberlo; ahora se toma solo y este hint dice de
+                 dónde salió. Sigue siendo editable. -->
+            <span class="form-hint" id="vendedorHint" hidden></span>
           </div>
 
           <div class="form-field">
@@ -204,7 +209,7 @@
 
   </div>
 
-  <script src="../js/pages/nueva-orden.js?v=fix5" defer></script>
+  <script src="../js/pages/nueva-orden.js?v=fix6" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
