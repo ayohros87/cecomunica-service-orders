@@ -349,6 +349,24 @@ window.Centro = {
     return `<span class="cg-venc ${cls} num" title="Vence ${this._fmtFecha(fv)}${linea ? ' · tramo del aumento' : ''}">${label}</span>`;
   },
 
+  // Línea del contrato que le corresponde a la unidad (por modelo_id, con
+  // fallback al label). La misma que definiría su tarifa y su tramo.
+  _lineaDeEquipo(e, c) {
+    return (c?.equipos || []).find(l =>
+      (l.modelo_id && e.modelo_id && l.modelo_id === e.modelo_id) ||
+      String(l.modelo || '').trim().toUpperCase() === String(e.modelo_label || '').trim().toUpperCase());
+  },
+
+  // Tarifa mensual del equipo según la línea de su contrato.
+  _tarifaEquipo(e) {
+    const c = this.contratos.find(x => x.id === e.asignacion?.contrato_doc_id);
+    if (!c) return '<span style="color:var(--fg-4);">—</span>';
+    const p = Number(this._lineaDeEquipo(e, c)?.precio || 0);
+    return p > 0
+      ? `<span class="num">$${p.toFixed(2)}<span style="font-size:11px;color:var(--fg-4);">/mes</span></span>`
+      : '<span style="color:var(--fg-4);" title="La línea del contrato no tiene precio">—</span>';
+  },
+
   pintarEquipos() {
     const cont = document.getElementById('fEquipos');
     const q = (document.getElementById('fEqFiltro')?.value || '').trim().toUpperCase();
@@ -366,11 +384,12 @@ window.Centro = {
       <td>${this.esc(e.modelo_label || '—')}</td>
       <td>${chip(e)}${e.pendiente_devolucion ? ' <span class="cg-venc por_vencer">pend. devolución</span>' : ''}</td>
       <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
+      <td style="text-align:right;">${this._tarifaEquipo(e)}</td>
       <td>${this._vencChipEquipo(e)}</td>
       <td style="text-align:right;"><a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;"
         href="../inventario/equipos.html?serial=${encodeURIComponent(e.serial || e.id)}">Kardex ›</a></td></tr>`).join('');
     cont.innerHTML = `<table class="cg-tabla"><thead><tr>
-      <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th>Vence</th><th></th>
+      <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
       </tr></thead><tbody>${filas}</tbody></table>`;
   },
 
