@@ -789,6 +789,24 @@ function verEntregaComprobante(ordenId) {
     ? `<img src="${esc(o.firma_url)}" alt="Firma del receptor" class="firma-img">`
     : `<div class="firma-line"></div>`;
 
+  // Observaciones de la orden y notas escritas al confirmar la entrega. Van
+  // en el comprobante impreso porque el correo de Nota de Entrega ya las
+  // lleva: la hoja que firma el cliente decía menos que el correo, y ahí
+  // nacían los malentendidos (p. ej. "este radio reemplaza al robado").
+  // white-space:pre-wrap conserva los saltos de línea del textarea.
+  const obsBlock = o.observaciones
+    ? `<div class="bloque">
+         <div class="bloque-t">Contrato / Observaciones</div>
+         <div class="bloque-b">${esc(o.observaciones)}</div>
+       </div>`
+    : '';
+  const notasBlock = o.notas_entrega
+    ? `<div class="bloque bloque-alerta">
+         <div class="bloque-t">Notas de entrega</div>
+         <div class="bloque-b">${esc(o.notas_entrega)}</div>
+       </div>`
+    : '';
+
   const logo = `${location.origin}/logo_cecomunica.png`;
 
   const html = `<!DOCTYPE html>
@@ -810,6 +828,11 @@ function verEntregaComprobante(ordenId) {
   .c-num { width:28px; color:#6b7280; }
   .c-mono { font-family:monospace; font-size:12px; }
   .nota { font-size:13px; margin:14px 0 0; }
+  .bloque { margin:14px 0 0; padding:10px 14px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; }
+  .bloque-alerta { background:#fffbeb; border-color:#fde68a; }
+  .bloque-t { font-size:12px; font-weight:700; color:#6b7280; margin-bottom:3px; }
+  .bloque-alerta .bloque-t { color:#92400e; }
+  .bloque-b { font-size:13px; line-height:1.5; white-space:pre-wrap; }
   .firma-wrap { margin-top:28px; }
   .firma-img { max-width:280px; max-height:130px; display:block; border:1px solid #e5e7eb; border-radius:6px; background:#fff; }
   .firma-line { width:280px; border-bottom:1px solid #111; height:60px; }
@@ -817,7 +840,7 @@ function verEntregaComprobante(ordenId) {
   .toolbar { margin-bottom:18px; }
   .toolbar button { background:#0091D7; color:#fff; border:0; padding:8px 16px; border-radius:6px; font:600 13px Arial; cursor:pointer; }
   .foot { margin-top:32px; font-size:11px; color:#9ca3af; text-align:center; border-top:1px solid #eee; padding-top:8px; }
-  @media print { .toolbar { display:none; } body { padding:0; } }
+  @media print { .toolbar { display:none; } body { padding:0; } .bloque { break-inside:avoid; } }
 </style></head>
 <body>
   <div class="toolbar"><button onclick="window.print()">🖨️ Imprimir</button></div>
@@ -834,10 +857,14 @@ function verEntregaComprobante(ordenId) {
     <div><span class="k">Técnico:</span> <strong>${esc(o.tecnico_asignado || '—')}</strong></div>
   </div>
 
+  ${obsBlock}
+
   <h2>Equipos entregados (${equipos.length})</h2>
   ${equipos.length
     ? `<table><thead><tr><th class="c-num">#</th><th>Serial</th><th>Modelo</th><th>Accesorios</th></tr></thead><tbody>${equiposRows}</tbody></table>`
     : `<p class="nota">Sin equipos registrados en la orden.</p>`}
+
+  ${notasBlock}
 
   ${idNota}
 
