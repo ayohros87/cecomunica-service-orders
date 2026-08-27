@@ -413,7 +413,7 @@ window.Centro = {
   },
 
   pintarKpis() {
-    const activos = this.contratos.filter(c => this._esVigente(c));
+    const activos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
     const enTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
     const abiertas = (this.gestiones || []).filter(g => GestionesService.ABIERTAS.includes(g.estado)).length;
     document.getElementById('fKpis').innerHTML = [
@@ -469,7 +469,12 @@ window.Centro = {
   pintarContratos() {
     const cont = document.getElementById('fContratos');
     if (!this.contratos.length) { cont.innerHTML = '<div class="cg-vacio">Sin contratos registrados.</div>'; return; }
-    const filas = this.contratos.map(c => {
+    // El overhang (caso SEPROSA, 2026-08-28): la tabla principal muestra SOLO
+    // lo operativo — vigente y no cubierto por una renovación. Lo renovado,
+    // vencido, anulado o terminado se pliega en "Histórico".
+    const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
+    const historico = this.contratos.filter(c => !operativos.includes(c));
+    const filas = operativos.map(c => {
       const dias = this._esVigente(c) && this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
       const renovar = dias !== null && dias <= this.AVISO_DIAS && !this._renovadoPor(c)
         ? (this.puedeCrearGestion()
@@ -488,9 +493,27 @@ window.Centro = {
                  onclick="Centro.wizAumento('${this.esc(c.id)}')">+ Aumento</button>` : ''}
           <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
     }).join('');
-    cont.innerHTML = `<table class="cg-tabla"><thead><tr>
-      <th>Contrato</th><th>Tipo</th><th>Estado</th><th style="text-align:right;">Unid.</th><th>Vence</th><th></th>
-      </tr></thead><tbody>${filas}</tbody></table>`;
+    const histFilas = historico.map(c => {
+      const renovador = this._renovadoPor(c);
+      const estadoTxt = renovador
+        ? `renovado por <span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>`
+        : this.esc(c.estado || '—');
+      return `<tr style="color:var(--fg-3);">
+        <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
+        <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
+        <td>${estadoTxt}</td>
+        <td style="text-align:right;">${this._unidadesActivas(c)}</td></tr>`;
+    }).join('');
+    cont.innerHTML = `
+      ${operativos.length ? `<table class="cg-tabla"><thead><tr>
+        <th>Contrato</th><th>Tipo</th><th>Estado</th><th style="text-align:right;">Unid.</th><th>Vence</th><th></th>
+        </tr></thead><tbody>${filas}</tbody></table>` : '<div class="cg-vacio">Sin contratos operativos.</div>'}
+      ${historico.length ? `<details style="margin-top:10px;">
+        <summary style="cursor:pointer; font-size:13px; color:var(--fg-3); font-weight:600;">Histórico (${historico.length}) — renovados, vencidos, anulados</summary>
+        <table class="cg-tabla" style="margin-top:8px;"><thead><tr>
+          <th>Contrato</th><th>Tipo</th><th>Estado</th><th style="text-align:right;">Unid.</th>
+          </tr></thead><tbody>${histFilas}</tbody></table>
+      </details>` : ''}`;
   },
 
   // Chip de vencimiento POR EQUIPO (mismo semáforo): usa el tramo que le
@@ -1468,6 +1491,26 @@ window.Centro = {
   _wcCustodia() {
     return this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id);
   },
+  // Fusión de líneas por modelo: suma cantidades; el precio queda el PRIMERO
+  // > 0 en el orden dado (las líneas llegan del contrato más reciente primero,
+  // así que gana la tarifa vigente). Clave por modelo_id o por label normalizado.
+  _wcMergeLineas(lineas) {
+    const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const out = new Map();
+    for (const l of lineas) {
+      if (!l) continue;
+      const k = l.modelo_id || norm(l.modelo);
+      if (!k) continue;
+      const cur = out.get(k);
+      if (!cur) out.set(k, { modelo_id: l.modelo_id || null, modelo: l.modelo || '',
+        cantidad: Number(l.cantidad) || 0, precio: Number(l.precio) > 0 ? Number(l.precio) : '' });
+      else {
+        cur.cantidad += Number(l.cantidad) || 0;
+        if (!(cur.precio > 0) && Number(l.precio) > 0) cur.precio = Number(l.precio);
+      }
+    }
+    return [...out.values()];
+  },
 
   async wizContrato(opts) {
     if (!this.puedeCrearGestion()) { Toast.show('Tu rol no crea contratos desde aquí', 'warn'); return; }
@@ -1480,19 +1523,28 @@ window.Centro = {
     const candidatos = this._wcCandidatos();
     let preIds = [];
     if (opts.renovarDe) preIds = candidatos.some(c => c.id === opts.renovarDe) ? [opts.renovarDe] : [];
-    else if (opts.renovarCuenta) preIds = candidatos.filter(c => this._wcEnVentana(c)).map(c => c.id);
+    // "Renovar cuenta" = CONSOLIDACIÓN (Alberto 2026-08-28, caso SEPROSA):
+    // preselecciona TODOS los contratos vigentes renovables del cliente —
+    // adiciones y reemplazos incluidos — para que la renovación los unifique
+    // en UN contrato y muera el overhang de contratitos por cliente.
+    else if (opts.renovarCuenta) {
+      preIds = candidatos.filter(c => this._aplicaVenc(c) && !this._renovadoPor(c)).map(c => c.id);
+    }
     const esRenov = !!(opts.renovarDe || opts.renovarCuenta);
     const custodia = this._wcCustodia();
     // Regularización: cuenta sin contratos en el sistema → escape legacy.
     const legacyAuto = esRenov && !preIds.length && !candidatos.length;
 
-    // Prefill de líneas: copia del/los contratos que se renuevan; en "Renovar
-    // cuenta" suma la custodia agrupada por modelo (sin precio — lo fija el
-    // vendedor). Es punto de partida: se edita todo.
-    const lineas = [];
-    for (const id of preIds) {
-      const c = candidatos.find(x => x.id === id);
-      (c?.equipos || []).forEach(l => lineas.push({ modelo_id: l.modelo_id, modelo: l.modelo, cantidad: l.cantidad, precio: l.precio }));
+    // Prefill de líneas: copia del/los contratos que se renuevan (los más
+    // recientes primero — su tarifa es la vigente); en "Renovar cuenta" suma
+    // la custodia agrupada por modelo (sin precio — lo fija el vendedor).
+    // Después se FUSIONA por modelo: una consolidación de 13 contratitos no
+    // debe salir con 13 líneas repetidas del mismo radio. Todo editable.
+    let lineas = [];
+    const origenesSel = preIds.map(id => candidatos.find(x => x.id === id)).filter(Boolean)
+      .sort((a, b) => String(b.contrato_id || '').localeCompare(String(a.contrato_id || '')));
+    for (const c of origenesSel) {
+      (c.equipos || []).forEach(l => lineas.push({ modelo_id: l.modelo_id, modelo: l.modelo, cantidad: l.cantidad, precio: l.precio }));
     }
     if (opts.renovarCuenta && custodia.length) {
       const porModelo = new Map();
@@ -1503,6 +1555,7 @@ window.Centro = {
       });
       porModelo.forEach(l => lineas.push(l));
     }
+    lineas = this._wcMergeLineas(lineas);
     if (!lineas.length) lineas.push(null);
 
     const itbmsDefault = this.cliente?.itbms_exento === true ? false
@@ -1520,10 +1573,13 @@ window.Centro = {
     }).join('');
 
     this._abrirModal(`
-      <h3 style="margin:0 0 6px;">${esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}</h3>
+      <h3 style="margin:0 0 6px;">${opts.renovarCuenta ? 'Renovar cuenta (consolidación)' : esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
         El contrato nace <b>pendiente de aprobación</b> con el mismo flujo de siempre (aprobación →
-        seriales de bodega → firma → activo). ${custodia.length ? `<b>${custodia.length} equipo(s) en campo sin
+        seriales de bodega → firma → activo).
+        ${opts.renovarCuenta && preIds.length > 1 ? `Esta renovación <b>consolida los ${preIds.length} contratos
+        marcados en UNO solo</b>: al activarse quedan marcados como renovados y pasan al histórico de la ficha.` : ''}
+        ${custodia.length ? `<b>${custodia.length} equipo(s) en campo sin
         contrato formal</b> — al renovar, la cuenta los cubre.` : ''}</p>
 
       <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:10px;">
