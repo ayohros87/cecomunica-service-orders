@@ -453,7 +453,7 @@ window.Centro = {
     const c = this.contratos.find(x => x.id === e.asignacion?.contrato_doc_id);
     if (!c || !this._esVigente(c) || !this._aplicaVenc(c)) return '<span style="color:var(--fg-4);">—</span>';
     if (this._renovadoPor(c)) return '<span class="cg-venc vigente">renovado</span>';
-    const linea = (c.equipos || []).find(l => l?.vigencia?.fecha_vencimiento && l.modelo_id && e.modelo_id && l.modelo_id === e.modelo_id);
+    const linea = (c.equipos || []).find(l => l?.vigencia?.fecha_vencimiento && this._mismoModeloLinea(l, e));
     const fv = linea?.vigencia?.fecha_vencimiento || c.fecha_vencimiento;
     const dias = this._diasA(fv);
     if (dias === null) return '<span class="cg-venc por_vencer" title="El contrato no tiene duración fijada">sin duración</span>';
@@ -462,12 +462,23 @@ window.Centro = {
     return `<span class="cg-venc ${cls} num" title="Vence ${this._fmtFecha(fv)}${linea ? ' · tramo del aumento' : ''}">${label}</span>`;
   },
 
-  // Línea del contrato que le corresponde a la unidad (por modelo_id, con
-  // fallback al label). La misma que definiría su tarifa y su tramo.
+  // Matching tolerante de modelo (caso Feduro 2026-08-27): la línea del
+  // contrato dice "PNC360S" con un modelo_id del catálogo y la ficha del pool
+  // dice "HYTERA PNC360S" (marca incluida) con OTRO id — id exacto y label
+  // exacto fallaban. Se normaliza a alfanumérico y se acepta contención por
+  // sufijo/prefijo (marca por delante, "-R" por detrás).
+  _normModelo(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); },
+  _mismoModeloLinea(l, e) {
+    if (l.modelo_id && e.modelo_id && l.modelo_id === e.modelo_id) return true;
+    const a = this._normModelo(l.modelo), b = this._normModelo(e.modelo_label);
+    if (!a || !b) return false;
+    return a === b || a.endsWith(b) || b.endsWith(a) || a.includes(b) || b.includes(a);
+  },
+
+  // Línea del contrato que le corresponde a la unidad — la que define su
+  // tarifa y su tramo.
   _lineaDeEquipo(e, c) {
-    return (c?.equipos || []).find(l =>
-      (l.modelo_id && e.modelo_id && l.modelo_id === e.modelo_id) ||
-      String(l.modelo || '').trim().toUpperCase() === String(e.modelo_label || '').trim().toUpperCase());
+    return (c?.equipos || []).find(l => this._mismoModeloLinea(l, e));
   },
 
   // Tarifa mensual del equipo según la línea de su contrato.
@@ -1270,9 +1281,7 @@ window.Centro = {
     for (const it of items) {
       const c = this.contratos.find(x => x.id === it.contrato_doc_id);
       if (!c) continue;
-      const linea = (c.equipos || []).find(l =>
-        (l.modelo_id && it.modelo_id && l.modelo_id === it.modelo_id) ||
-        String(l.modelo || '').trim().toUpperCase() === String(it.modelo || '').trim().toUpperCase());
+      const linea = (c.equipos || []).find(l => this._mismoModeloLinea(l, { modelo_id: it.modelo_id, modelo_label: it.modelo }));
       const precio = Number(linea?.precio || 0);
       const dias = this._diasA(c.fecha_vencimiento);
       const vencido = dias !== null && dias < 0;
