@@ -118,6 +118,19 @@ window.NCGuardar = {
       return;
     }
 
+    // Segundo candado del equipo saliente del REEMPLAZO, por la misma razón
+    // que el del origen: esta función es la única vía de creación.
+    const reemp  = NCForm.leerReemp();
+    const vReemp = ReemplazoSalientes.validar(reemp);
+    if (!vReemp.ok) {
+      Toast.show(`⚠️ ${vReemp.mensaje}`, 'warn');
+      this._abortarGuardado();
+      return;
+    }
+    const reemplazaSeriales = ReemplazoSalientes.aplica(reemp)
+      ? ReemplazoSalientes.construir(NCForm.unidadesReempSeleccionadas())
+      : null;
+
     // Plan de transición (P1): decidido en la venta, viaja con el contrato.
     // También antes del correlativo, por la misma razón.
     const transicionPlan = NCForm.leerPlan();
@@ -231,6 +244,11 @@ window.NCGuardar = {
       // El plan de transición decidido en la venta (P1). Lo consumen la página
       // de seriales ("Traer del original") y onEntregaTransicion al entregar.
       transicion_plan: transicionPlan || null,
+      // El radio que este REEMPLAZO sustituye. Es lo que reclama la devolución
+      // al confirmarse la entrega (onEntregaTransicion), en vez del contrato de
+      // origen completo. `[]` = "no se identificó", que es una respuesta —
+      // distinta de `null`, que es "no aplica / no se preguntó".
+      reemplaza_seriales: reemplazaSeriales,
       estado: 'pendiente_aprobacion',
       observaciones: document.getElementById('observaciones').value.trim(),
       equipos,

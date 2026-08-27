@@ -159,6 +159,9 @@ window.NCPreview = {
       // Renovación / Reemplazo tienen que declarar de qué contrato vienen: de
       // ese vínculo salen los equipos a devolver (js/domain/origenContrato.js).
       if (!NCForm.validarOrigen().ok) return;
+      // Y un REEMPLAZO tiene que decir QUÉ radio sustituye: es lo único que
+      // hace precisa la devolución (js/domain/reemplazoSalientes.js).
+      if (!NCForm.validarReemp().ok) return;
       // Y el plan de transición tiene que cuadrar (js/domain/transicionPlan.js).
       const _plan = NCForm.leerPlan();
       if (_plan) {

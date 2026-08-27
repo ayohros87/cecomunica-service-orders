@@ -257,6 +257,28 @@
             <span class="form-hint" id="origenHint">Conecta este contrato con el original para la transición de equipos.</span>
           </div>
 
+          <!-- Equipo(s) que sustituye este REEMPLAZO (2026-08-27). Un reemplazo
+               se define por el RADIO que sale, no por el contrato de donde
+               venía: preguntarlo aquí es lo único que hace precisa la
+               devolución. Antes esto se escribía en observaciones como texto
+               libre ("Se reemplaza la radio con número de serie 24813A0527") y
+               el sistema, que no lee texto, reclamaba TODO el contrato de
+               origen — así nació la orden falsa 2026082705 (SEGURIDAD IDEAL).
+               Funciona igual si el original es de papel: el radio sí está en el
+               pool aunque su contrato no esté. -->
+          <div class="form-field" id="reempBox" style="display:none; grid-column:1/-1;">
+            <label class="form-label">Equipo(s) que se reemplazan — el radio que sale <span class="req">*</span></label>
+            <div id="reempList"
+                 style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;padding:8px 10px;font-size:13px;">
+              <span style="color:var(--fg-3,#6b7280);">Selecciona el cliente primero…</span>
+            </div>
+            <label class="form-check" style="margin-top:6px;">
+              <input type="checkbox" id="reempSinIdentificarChk">
+              <span><span class="form-check-label">No se identifica el equipo saliente (se define con recepción)</span></span>
+            </label>
+            <span class="form-hint" id="reempHint">De aquí sale el equipo que el cliente debe entregar. Marca solo el que se sustituye — el resto de su flota no se toca.</span>
+          </div>
+
           <!-- Plan de transición (informe tracking 2026-08-12, P1): qué pasa con
                cada unidad del original, decidido AQUÍ, en la venta. -->
           <div class="form-field" id="planBox" style="display:none; grid-column:1/-1;">
@@ -416,6 +438,7 @@
   <script defer src="../js/domain/totales.js"></script>
   <script defer src="../js/domain/origenContrato.js?v=orig1"></script>
   <script defer src="../js/domain/transicionPlan.js?v=cc27"></script>
+  <script defer src="../js/domain/reemplazoSalientes.js?v=reemp1"></script>
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
   <script defer src="/js/vendor/lucide.min.js?v=1"></script>

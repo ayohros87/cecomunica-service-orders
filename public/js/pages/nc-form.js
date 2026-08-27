@@ -161,7 +161,99 @@ window.NCForm = {
     }
 
     if (aplica) this.cargarContratosOrigen();
+    this.refreshReempUI();
     this.refreshPlanUI();
+  },
+
+  // ── Equipo saliente del REEMPLAZO (2026-08-27) ─────────────────────────
+  // El criterio vive en js/domain/reemplazoSalientes.js; aquí solo se lee el
+  // DOM y se pinta. Es independiente del contrato original a propósito: el
+  // radio dañado puede venir de un contrato de papel, y aun así está en el pool.
+
+  leerReemp() {
+    const chks = [...document.querySelectorAll('#reempList .reemp-chk')];
+    const marcados = chks.filter(c => c.checked);
+    return {
+      codigo_tipo: document.getElementById('tipo_contrato')?.value || '',
+      sin_identificar: !!document.getElementById('reempSinIdentificarChk')?.checked,
+      seriales: marcados.map(c => c.value),
+      candidatos: chks.length,
+    };
+  },
+
+  // Las unidades marcadas, en la forma que guarda nc-guardar.
+  unidadesReempSeleccionadas() {
+    const ids = new Set(this.leerReemp().seriales);
+    if (!ids.size) return [];
+    return ReemplazoSalientes.candidatas(this._unidadesCliente || [])
+      .filter(u => ids.has(String(u.serial || u.serial_norm)));
+  },
+
+  refreshReempUI() {
+    const box = document.getElementById('reempBox');
+    if (!box) return;
+    const sel = this.leerReemp();
+    if (!ReemplazoSalientes.aplica(sel)) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+
+    const list = document.getElementById('reempList');
+    const chk  = document.getElementById('reempSinIdentificarChk');
+    const hint = document.getElementById('reempHint');
+    if (!list) return;
+    list.style.opacity = chk?.checked ? '0.45' : '';
+
+    const clienteId = document.getElementById('cliente')?.value || '';
+    if (!clienteId) {
+      list.innerHTML = '<span style="color:var(--fg-3,#6b7280);">Selecciona el cliente primero…</span>';
+      return;
+    }
+    // `_unidadesCliente` lo carga cargarContratosOrigen (mismo cliente, misma
+    // consulta): si aún no llegó, esta pasada pinta "cargando" y el repintado
+    // que hace esa función al terminar rellena la lista.
+    if (!this._unidadesCliente) {
+      list.innerHTML = '<span style="color:var(--fg-3,#6b7280);">Cargando equipos del cliente…</span>';
+      return;
+    }
+
+    const cands = ReemplazoSalientes.candidatas(this._unidadesCliente);
+    if (!cands.length) {
+      list.innerHTML = '<span style="color:var(--fg-3,#6b7280);">Este cliente no tiene equipos nuestros registrados en el pool.</span>';
+      if (hint) hint.textContent = 'Sin equipos que ofrecer — marca «No se identifica el equipo saliente».';
+      return;
+    }
+
+    // Conservar lo marcado al repintar (cambiar de acción no debe borrar la
+    // elección del vendedor).
+    const previos = new Set(this.leerReemp().seriales);
+    const esc = NC.escapeHtml;
+    list.innerHTML = cands.map(u => {
+      const s = String(u.serial || u.serial_norm);
+      const ctr = u.asignacion?.contrato_id ? ` · ${esc(u.asignacion.contrato_id)}` : ' · sin contrato';
+      const taller = u.estado === 'en_taller' ? ' <b style="color:#92400e;">· en taller</b>' : '';
+      return `
+        <label class="form-check" style="margin:0;">
+          <input type="checkbox" class="reemp-chk" value="${esc(s)}" ${previos.has(s) ? 'checked' : ''} ${chk?.checked ? 'disabled' : ''}>
+          <span><span class="form-check-label"><span style="font-family:var(--font-mono,monospace);">${esc(s)}</span> · ${esc(u.modelo_label || '—')}${ctr}${taller}</span></span>
+        </label>`;
+    }).join('');
+    if (hint) {
+      hint.textContent = chk?.checked
+        ? 'Recepción define el equipo saliente al entregar. No se abrirá devolución automática.'
+        : `De aquí sale el equipo que el cliente debe entregar. ${cands.length} equipo(s) del cliente — marca solo el que se sustituye.`;
+    }
+  },
+
+  // Valida y avisa. Mismo contrato que validarOrigen.
+  validarReemp({ silencioso = false } = {}) {
+    const r = ReemplazoSalientes.validar(this.leerReemp());
+    if (r.ok || silencioso) return r;
+    Toast.show(`⚠️ ${r.mensaje}`, 'warn');
+    const el = document.getElementById(r.motivo === 'sin_candidatos' ? 'reempSinIdentificarChk' : 'reempList');
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      if (el.focus) try { el.focus(); } catch (_) { /* el div de la lista no enfoca */ }
+    }
+    return r;
   },
 
   // ── Plan de transición (P1 del informe tracking 2026-08-12) ─────────────
@@ -536,6 +628,7 @@ window.NCForm = {
       document.getElementById('origenContratosList')?.addEventListener('change', (e) => {
         if (e.target?.classList?.contains('origen-chk')) self.refreshPlanUI();
       });
+      document.getElementById('reempSinIdentificarChk')?.addEventListener('change', () => self.refreshReempUI());
       document.getElementById('planPorCantidad')?.addEventListener('change', () => self.refreshPlanUI());
       document.getElementById('renovacion_sin_equipo')?.addEventListener('change', () => self.refreshRenovacionModeUI());
       document.getElementById('renovacion_refurbished_componentes')?.addEventListener('change', () => self.refreshRenovacionModeUI());

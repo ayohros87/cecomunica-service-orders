@@ -84,36 +84,81 @@ module.exports = onDocumentUpdated(
     // decide "¿hay que registrar algo?", este decide "¿se devuelve el origen?".
     const esTransicionable = !after.renovacion_sin_equipo
       && (after.accion === "Renovación" || after.codigo_tipo === "REEMP");
-    const origenIds = origenIdsDe(after);
-    if (!esTransicionable || !origenIds.length) return null;
+    if (!esTransicionable) return null;
     if (after.seriales_estado === "legacy") return null;
     if (Number(after.transicion_mapeos_count || 0) > 0) return null; // ya hay registro manual
     if (after.transicion_auto_at) return null;                        // ya corrió
 
-    // Candados (a) y (b): ¿el origen es un hecho declarado o una suposición?
-    // Va ANTES de leer el pool — si el vínculo no es confiable, las unidades
-    // que cuelguen de él dan igual.
-    const vOrigen = evaluarOrigen(after);
-    if (!vOrigen.ok) {
-      await _bloquear(cid, contratoId, vOrigen, 0);
+    // ¿Por SERIAL o por CONTRATO? Un REEMPLAZO que declaró qué radio sustituye
+    // (js/domain/reemplazoSalientes.js, desde 2026-08-27) no necesita contrato
+    // de origen: reclama ESE radio y nada más. Es la vía precisa, y la única
+    // que funciona cuando el original está en papel — que es justo el caso
+    // donde el contrato de origen se inventaba y salían órdenes falsas.
+    const porSerial = Array.isArray(after.reemplaza_seriales);
+    const origenIds = origenIdsDe(after);
+
+    if (porSerial && !after.reemplaza_seriales.length) {
+      // Respuesta explícita del vendedor: "no se identifica el equipo saliente".
+      // No es un hueco — es una decisión, y adivinar la contradice.
+      logger.info("[onEntregaTransicion] REEMP sin equipo saliente identificado; no se reclama nada", { contratoId });
       return null;
     }
+    if (!porSerial && !origenIds.length) return null;
 
-    // Unidades de los orígenes aún con el cliente. La propiedad y el plan de
-    // la venta los aplica decidirSalientes (lib/transicionPlanExec.js).
+    // Candados (a) y (b): ¿el origen es un hecho declarado o una suposición?
+    // Va ANTES de leer el pool — si el vínculo no es confiable, las unidades
+    // que cuelguen de él dan igual. La vía por serial se los salta: no depende
+    // del contrato de origen, así que no puede heredar su error.
+    if (!porSerial) {
+      const vOrigen = evaluarOrigen(after);
+      if (!vOrigen.ok) {
+        await _bloquear(cid, contratoId, vOrigen, 0);
+        return null;
+      }
+    }
+
+    // Unidades a considerar. La propiedad y el plan de la venta los aplica
+    // decidirSalientes (lib/transicionPlanExec.js).
     const unidadesOrigen = [];
-    for (const origenId of origenIds) {
-      try {
-        const snap = await db.collection("equipos_pool")
-          .where("asignacion.contrato_doc_id", "==", origenId).get();
-        snap.forEach((d) => {
+    if (porSerial) {
+      // Por serial: se leen las fichas nombradas por la venta. Las que ya no
+      // están con el cliente se omiten — si el radio dañado ya volvió (entró
+      // al taller y se le dio entrada), no hay nada que recuperar.
+      for (const r of after.reemplaza_seriales) {
+        const poolId = r.pool_id || r.serial_norm || r.serial;
+        if (!poolId) continue;
+        try {
+          const d = await db.collection("equipos_pool").doc(String(poolId)).get();
+          if (!d.exists) {
+            logger.warn("[onEntregaTransicion] Serial saliente sin ficha en el pool", { contratoId, serial: r.serial });
+            continue;
+          }
           const u = d.data();
-          if (!["asignado_contrato", "en_cliente"].includes(u.estado)) return;
-          if (unidadesOrigen.some(x => x.id === d.id)) return;
-          unidadesOrigen.push({ id: d.id, origenId, ...u });
-        });
-      } catch (e) {
-        logger.warn("[onEntregaTransicion] No se pudo leer el pool del origen", { cid, origenId, message: e.message });
+          if (!["asignado_contrato", "en_cliente"].includes(u.estado)) {
+            logger.info("[onEntregaTransicion] Saliente ya no está con el cliente; no se reclama",
+              { contratoId, serial: r.serial, estado: u.estado });
+            continue;
+          }
+          if (unidadesOrigen.some(x => x.id === d.id)) continue;
+          unidadesOrigen.push({ id: d.id, origenId: u.asignacion?.contrato_doc_id || null, ...u });
+        } catch (e) {
+          logger.warn("[onEntregaTransicion] No se pudo leer la ficha del saliente", { contratoId, serial: r.serial, message: e.message });
+        }
+      }
+    } else {
+      for (const origenId of origenIds) {
+        try {
+          const snap = await db.collection("equipos_pool")
+            .where("asignacion.contrato_doc_id", "==", origenId).get();
+          snap.forEach((d) => {
+            const u = d.data();
+            if (!["asignado_contrato", "en_cliente"].includes(u.estado)) return;
+            if (unidadesOrigen.some(x => x.id === d.id)) return;
+            unidadesOrigen.push({ id: d.id, origenId, ...u });
+          });
+        } catch (e) {
+          logger.warn("[onEntregaTransicion] No se pudo leer el pool del origen", { cid, origenId, message: e.message });
+        }
       }
     }
 
@@ -175,10 +220,16 @@ module.exports = onDocumentUpdated(
     // Candado (c): un REEMPLAZO no puede reclamar más de lo que entrega. Va
     // aquí porque necesita el resultado del plan — con un plan por serial bien
     // llenado el conteo cuadra solo y este candado nunca se activa.
-    const vTope = evaluarTope(after, reclamar);
-    if (!vTope.ok) {
-      await _bloquear(cid, contratoId, vTope, reclamar.length);
-      return null;
+    //
+    // No aplica a la vía por serial: ahí cada saliente lo marcó una persona en
+    // la venta. El tope existe para atajar un reclamo DEDUCIDO que se desborda,
+    // no para discutirle a un vendedor que dijo exactamente qué radios salen.
+    if (!porSerial) {
+      const vTope = evaluarTope(after, reclamar);
+      if (!vTope.ok) {
+        await _bloquear(cid, contratoId, vTope, reclamar.length);
+        return null;
+      }
     }
 
     // Mapeos de devolución (batch). onMapeoWrite marca pendiente_devolucion,
@@ -232,7 +283,9 @@ module.exports = onDocumentUpdated(
           modelo_id: u.modelo_id || null,
           pool_doc_id: u.id,
         })),
-        motivo: `Renovación ${contratoId} entregada — recuperar los equipos del contrato anterior`,
+        motivo: porSerial
+          ? `Reemplazo ${contratoId} entregado — recuperar el/los equipos sustituidos`
+          : `Renovación ${contratoId} entregada — recuperar los equipos del contrato anterior`,
       });
       if (ordenId) {
         await db.collection("contratos").doc(cid).set({ orden_devolucion_id: ordenId }, { merge: true });

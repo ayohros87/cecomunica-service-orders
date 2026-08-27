@@ -225,6 +225,43 @@
         <button type="button" class="btn btn-sm" id="btnVincularOrigen" style="margin-top:6px;"><i data-lucide="link"></i> Vincular original(es)</button>
       </div>` : '';
 
+    // Auto-reclamo FRENADO (functions/src/lib/transicionAuto.js). El trigger
+    // no creó la orden de devolución porque no pudo justificar a quién le pide
+    // qué: el original está en papel, el vínculo lo dedujo un script, o el
+    // reemplazo reclamaba más equipos de los que entrega. Aquí se resuelve —
+    // confirmar el origen re-dispara el auto-reclamo (segundo flanco del
+    // trigger); quitarlo deja la pantalla lista para vincular el correcto.
+    const bloq = c.transicion_auto_bloqueada;
+    const ETIQUETA_BLOQUEO = {
+      origen_papel: 'El contrato original está en papel',
+      linaje_inferido: 'El vínculo al original lo dedujo un script',
+      excede_tope: 'El reemplazo reclama más equipos de los que entrega',
+    };
+    const bloqueoHtml = bloq ? `
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);font-size:13px;background:#fffbeb;border-color:#fcd34d;">
+        <div style="font-weight:600;color:#92400e;margin-bottom:4px;">
+          <i data-lucide="shield-alert" style="width:15px;height:15px;vertical-align:-3px;"></i>
+          No se abrió devolución automática — ${esc(ETIQUETA_BLOQUEO[bloq.motivo] || 'falta confirmar el origen')}
+        </div>
+        <div style="color:var(--fg-2);">${esc(bloq.detalle || '')}</div>
+        ${bloq.unidades_candidatas ? `<div style="color:var(--fg-2);margin-top:4px;">Se habrían reclamado <b>${bloq.unidades_candidatas}</b> equipo(s)${bloq.tope ? ` contra ${bloq.tope} entregado(s)` : ''}.</div>` : ''}
+        ${origenRefs.length ? `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <button type="button" class="btn btn-sm" id="btnConfirmarOrigen">
+            <i data-lucide="check"></i> Sí, reemplaza a ${esc(origenRefs.join(', '))}
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btnQuitarOrigen">
+            <i data-lucide="unlink"></i> No — quitar el vínculo
+          </button>
+        </div>
+        <div style="color:var(--fg-3);margin-top:6px;font-size:12px;">
+          Al confirmar, el sistema abre la orden de devolución con los equipos de ese contrato que siguen con el cliente.
+        </div>` : `
+        <div style="color:var(--fg-3);margin-top:8px;font-size:12px;">
+          Vincula abajo el contrato original correcto, o registra la transición a mano en esta página.
+        </div>`}
+      </div>` : '';
+
     // El plan decidido en la venta (si existe): recepción trabaja CONTRA el
     // plan, no desde una página en blanco (informe tracking 2026-08-12, P1).
     const planHtml = (c.transicion_plan && window.TransicionPlan) ? `
@@ -235,6 +272,7 @@
       </div>` : '';
 
     $('transBody').innerHTML = `
+      ${bloqueoHtml}
       ${planHtml}
       <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-3);font-size:13px;color:var(--fg-2);">
         <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px;"></i>
@@ -311,6 +349,8 @@
     $('btnGuardarTrans')?.addEventListener('click', guardar);
     $('btnSinReemplazos')?.addEventListener('click', cerrarSinReemplazos);
     $('btnVincularOrigen')?.addEventListener('click', vincularOrigen);
+    $('btnConfirmarOrigen')?.addEventListener('click', confirmarOrigen);
+    $('btnQuitarOrigen')?.addEventListener('click', quitarOrigen);
     poblarVinculo();
     // Un saliente elegido en un select desaparece de las opciones de los demás
     // y de la lista de "se devuelve sin sustituto" (checkbox se desmarca/oculta).
@@ -434,6 +474,58 @@
     } catch (e) {
       console.error('Error vinculando el contrato original:', e);
       Toast.show('No se pudo vincular el contrato original.', 'bad');
+    }
+  }
+
+  // Confirmar el vínculo deducido. Escribe `linaje_confirmado` con quién y
+  // cuándo: es el flanco que vuelve a disparar onEntregaTransicion, así que
+  // tiene que quedar claro de quién fue la decisión de pedirle equipos al
+  // cliente. A partir de aquí el vínculo vale igual que uno de la venta.
+  async function confirmarOrigen() {
+    const refs = (Array.isArray(ctx.contrato.contrato_origen_refs) && ctx.contrato.contrato_origen_refs.length)
+      ? ctx.contrato.contrato_origen_refs
+      : [ctx.contrato.contrato_origen_ref || ctx.contrato.contrato_origen_id];
+    if (!confirm(`¿Confirmas que este contrato reemplaza a ${refs.join(', ')}?\n\n`
+      + 'El sistema abrirá una orden de devolución con los equipos de ese contrato que siguen con el cliente.')) return;
+    const u = firebase.auth().currentUser;
+    try {
+      await ContratosService.updateContrato(contratoDocId, {
+        linaje_confirmado: {
+          por_uid: u?.uid || null,
+          por_email: u?.email || null,
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+      Toast.show('Origen confirmado — la orden de devolución se abre en unos segundos.', 'ok');
+      setTimeout(() => location.reload(), 2500);
+    } catch (e) {
+      console.error('Error confirmando el origen:', e);
+      Toast.show('No se pudo confirmar el origen.', 'bad');
+    }
+  }
+
+  // Rechazar el vínculo deducido: se borra junto con su marca de bloqueo y la
+  // pantalla vuelve a ofrecer "Vincular original(es)" para elegir el correcto.
+  // No se toca `origen_tipo: 'legacy'` — si el original es de papel, sigue
+  // siéndolo, y la transición se registra a mano aquí abajo.
+  async function quitarOrigen() {
+    if (!confirm('¿Quitar el vínculo al contrato original?\n\n'
+      + 'Podrás vincular el correcto, o registrar la transición a mano en esta página.')) return;
+    const FV = firebase.firestore.FieldValue;
+    try {
+      await ContratosService.updateContrato(contratoDocId, {
+        contrato_origen_id: FV.delete(),
+        contrato_origen_ids: FV.delete(),
+        contrato_origen_ref: FV.delete(),
+        contrato_origen_refs: FV.delete(),
+        linaje_amarrado: FV.delete(),
+        transicion_auto_bloqueada: FV.delete(),
+      });
+      Toast.show('Vínculo quitado — elige el contrato original correcto abajo.', 'ok');
+      setTimeout(() => location.reload(), 900);
+    } catch (e) {
+      console.error('Error quitando el vínculo del original:', e);
+      Toast.show('No se pudo quitar el vínculo.', 'bad');
     }
   }
 

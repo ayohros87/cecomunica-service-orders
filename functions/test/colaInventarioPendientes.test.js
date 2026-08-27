@@ -194,6 +194,15 @@ test("el predicado de transición es el compartido de js/domain", () => {
   assert.equal(TP.contratoNecesitaTransicion({ ...base, origen_tipo: "legacy" }), false);
   assert.equal(TP.contratoNecesitaTransicion({ ...base, origen_tipo: "ninguno" }), true);
   assert.equal(TP.contratoNecesitaTransicion({ ...base, origen_tipo: "interno" }), true);
+  // Un auto-reclamo frenado (transicionAuto) gana sobre las dos exenciones:
+  // hay algo concreto que resolver —confirmar el origen o quitarlo— y sin CTA
+  // la marca queda enterrada en el documento. Caso SEGURIDAD IDEAL 2026-08-27.
+  const frenado = { transicion_auto_bloqueada: { motivo: "origen_papel" } };
+  assert.equal(TP.contratoNecesitaTransicion({ ...base, origen_tipo: "legacy", ...frenado }), true);
+  assert.equal(TP.contratoNecesitaTransicion({ ...base, seriales_estado: "legacy", ...frenado }), true);
+  // …pero no resucita lo ya resuelto ni lo que no aplica.
+  assert.equal(TP.contratoNecesitaTransicion({ ...base, transicion_mapeos_count: 1, ...frenado }), false);
+  assert.equal(TP.contratoNecesitaTransicion({ estado: "activo", accion: "Nuevo", ...frenado }), false);
   assert.equal(TP.contratoNecesitaTransicion({ ...base, estado: "borrador" }), false);
   assert.equal(TP.contratoNecesitaTransicion({ estado: "activo", codigo_tipo: "REEMP" }), true);
   assert.equal(TP.contratoNecesitaTransicion({ estado: "activo", accion: "Nuevo" }), false);

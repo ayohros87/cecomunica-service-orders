@@ -37,9 +37,14 @@ window.TransicionPendiente = {
   // La acción sigue disponible en el menú ⋯ de la lista por si se quiere
   // registrar voluntariamente.
   contratoNecesitaTransicion(data) {
-    return this.esTransicionable(data)
-      && data.seriales_estado !== 'legacy'
-      && data.origen_tipo !== 'legacy'
-      && !Number(data.transicion_mapeos_count || 0);
+    if (!this.esTransicionable(data)) return false;
+    if (Number(data.transicion_mapeos_count || 0)) return false;
+    // Un auto-reclamo FRENADO gana sobre las dos exenciones: el trigger ya
+    // intentó abrir la devolución y no pudo justificarla
+    // (functions/src/lib/transicionAuto.js). Ahí sí hay algo concreto que
+    // resolver —confirmar el origen o quitarlo— y si el CTA no aparece, la
+    // marca queda enterrada en el documento y nadie se entera.
+    if (data.transicion_auto_bloqueada) return true;
+    return data.seriales_estado !== 'legacy' && data.origen_tipo !== 'legacy';
   },
 };
