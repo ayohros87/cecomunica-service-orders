@@ -10,6 +10,7 @@ window.Centro = {
   rol: null,
   uid: null,
   cartera: 'todos',        // 'mios' | 'todos'
+  soloActivos: true,       // toggle "solo clientes activos" (persistido)
   term: '',
   cursor: null,
   cliente: null,           // doc del cliente abierto (ficha)
@@ -46,6 +47,10 @@ window.Centro = {
         if (this.esVendedor()) {
           document.querySelector('.seg')?.classList.add('hidden');
         }
+        // Toggle "solo activos": encendido por defecto, preferencia persistida.
+        this.soloActivos = localStorage.getItem('cg_solo_activos') !== '0';
+        const chk = document.getElementById('cgSoloActivos');
+        if (chk) chk.checked = this.soloActivos;
         this._wire();
         const params = new URLSearchParams(location.search);
         const id = params.get('id');
@@ -174,6 +179,12 @@ window.Centro = {
     this.cargarLista(true);
   },
 
+  setSoloActivos(on) {
+    this.soloActivos = !!on;
+    try { localStorage.setItem('cg_solo_activos', on ? '1' : '0'); } catch (e) { /* sin persistencia */ }
+    this.cargarLista(true);
+  },
+
   async cargarLista(reset) {
     if (reset) { this.cursor = null; document.getElementById('cgLista').innerHTML = ''; }
     document.getElementById('segMios').classList.toggle('is-on', this.cartera === 'mios');
@@ -185,9 +196,12 @@ window.Centro = {
       this.cursor = lastDoc;
       // "Mi cartera" filtra en cliente sobre la página traída: con carteras de
       // decenas de clientes es suficiente; el scoping por reglas llega después.
-      const visibles = this.cartera === 'mios'
+      let visibles = this.cartera === 'mios'
         ? docs.filter(c => c.vendedor_asignado === this.uid)
         : docs;
+      // "Solo activos" filtra sobre la página traída (activo:false son pocos);
+      // apagando el toggle aparecen los inactivos.
+      if (this.soloActivos) visibles = visibles.filter(c => c.activo !== false);
       const cont = document.getElementById('cgLista');
       if (reset && !visibles.length && !lastDoc) {
         cont.innerHTML = `<div class="ds-card cg-vacio">${this.term
@@ -199,7 +213,7 @@ window.Centro = {
       document.getElementById('btnMas').classList.toggle('hidden', !lastDoc);
       const n = cont.querySelectorAll('.cg-row').length;
       document.getElementById('cgResumen').textContent =
-        `${n} cliente${n === 1 ? '' : 's'}${this.cartera === 'mios' ? ' en tu cartera' : ''}${lastDoc ? ' (hay más)' : ''}`;
+        `${n} cliente${n === 1 ? '' : 's'}${this.soloActivos ? ' activos' : ''}${this.cartera === 'mios' ? ' en tu cartera' : ''}${lastDoc ? ' (hay más)' : ''}`;
       if (window.lucide?.createIcons) lucide.createIcons();
     } catch (e) { console.error(e); Toast.show('No se pudo cargar la lista de clientes', 'bad'); }
   },

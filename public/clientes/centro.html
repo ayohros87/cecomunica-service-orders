@@ -40,6 +40,10 @@
     .seg-btn { border:0; background:var(--surface-card); color:var(--fg-2); padding:5px 14px; font-size:13px; font-weight:600; cursor:pointer; }
     .seg-btn.is-on { background:var(--accent); color:#fff; }
     .seg-btn + .seg-btn { border-left:1px solid var(--border-default); }
+    .cg-toggle { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--border-default);
+                 border-radius:var(--radius-pill); padding:5px 14px; font-size:13px; font-weight:600;
+                 color:var(--fg-2); background:var(--surface-card); cursor:pointer; user-select:none; }
+    .cg-toggle input { width:auto; margin:0; accent-color: var(--accent); }
     .cg-row { display:flex; gap:14px; align-items:center; background:var(--surface-card); border:1px solid var(--border-subtle);
               border-radius:var(--radius-md); padding:11px 16px; margin-bottom:8px; cursor:pointer; text-decoration:none; color:inherit; }
     .cg-row:hover { border-color:var(--accent); }
@@ -121,6 +125,9 @@
         <button type="button" class="seg-btn" id="segMios" onclick="Centro.setCartera('mios')">Mi cartera</button>
         <button type="button" class="seg-btn" id="segTodos" onclick="Centro.setCartera('todos')">Todos</button>
       </div>
+      <label class="cg-toggle" title="Ocultar clientes marcados como inactivos">
+        <input type="checkbox" id="cgSoloActivos" onchange="Centro.setSoloActivos(this.checked)"> Solo activos
+      </label>
       <span id="cgResumen" style="font-size:13px; color:var(--fg-3);"></span>
     </div>
     <div id="cgLista"></div>
@@ -177,7 +184,7 @@
 <div id="cgModal" class="cg-overlay hidden"></div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/clientes-centro.js?v=cg10" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg11" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
