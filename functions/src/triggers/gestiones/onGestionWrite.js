@@ -27,7 +27,10 @@ const G = require("../../lib/gestiones");
 const CIERRE_POR_TIPO = {
   reemplazo: ["asignacion", "programacion", "entrega", "entrada"],
   demo: ["asignacion", "programacion", "entrega", "entrada"],
-  baja: ["aprobacion", "derivacion", "entrada"],
+  // Baja: `derivacion` (fin de facturación) se estampa igual pero NO bloquea el
+  // cierre — la facturación aún no corre en la plataforma (Alberto 2026-08-27):
+  // es placeholder para cuando corra.
+  baja: ["aprobacion", "entrada"],
   // Aumento por enmienda FIRMADA (decisión §8.2): aprobación comercial →
   // firma del cliente en el anexo → derivación (líneas con tramo propio en el
   // contrato) → asignación → programación → entrega. Sin entrada: no sale nada.
@@ -97,6 +100,10 @@ async function correoAprobadoresBaja(gid, g) {
     `<code>${G.escapeHtml(it.contrato_id || "—")}</code>`,
     G.escapeHtml(it.motivo_detalle || it.motivo_codigo || g.motivo_codigo || "—"),
   ]);
+  const terminacion = Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length;
+  const cartaLinea = g.carta_path
+    ? `<p style="margin:0 0 12px;font:13px Arial,sans-serif;color:#065F46;">✓ Carta de solicitud del cliente adjunta${g.fecha_nota_cliente ? ` (nota del ${G.escapeHtml(g.fecha_nota_cliente)})` : ""}.</p>`
+    : `<p style="margin:0 0 12px;font:13px Arial,sans-serif;color:#b91c1c;"><b>Falta la carta de solicitud del cliente</b> — la aprobación queda bloqueada hasta adjuntarla.</p>`;
   const pen = g.penalidad_estimada;
   const penHtml = pen?.por_contrato?.length
     ? `<p style="margin:12px 0 4px;font:14px/1.5 Arial,sans-serif;"><b>Penalidad estimada por contrato</b>
@@ -111,15 +118,17 @@ async function correoAprobadoresBaja(gid, g) {
   await G.encolarCorreo({
     to: dests[0],
     cc: dests.length > 1 ? dests.slice(1).join(",") : null,
-    subject: `Aprobación requerida: baja de ${(g.items || []).length} equipo(s) — ${g.cliente_nombre || "Cliente"} (${gid})`,
-    preheader: "Baja por serial; puede tocar varios contratos — una sola aprobación con desglose",
+    subject: `Aprobación requerida: ${terminacion ? "TERMINACIÓN TOTAL" : "baja"} de ${(g.items || []).length} equipo(s) — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: terminacion ? "Terminación total de contrato — todos sus seriales se desconectan" : "Baja por serial; puede tocar varios contratos — una sola aprobación con desglose",
     bodyContent: `
-      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Baja de equipos esperando aprobación</h2>
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${terminacion ? "Terminación total esperando aprobación" : "Baja de equipos esperando aprobación"}</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-        La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> solicita la baja
-        de los siguientes equipos (el desglose indica de qué contrato viene cada uno). Al aprobar, el sistema
-        deriva el fin de facturación en cada contrato y crea la orden de devolución <b>por serial</b>.
+        La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>
+        ${terminacion ? `solicita la <b>terminación total</b> del contrato con la desconexión de todos sus seriales` : `solicita la baja de los siguientes equipos (el desglose indica de qué contrato viene cada uno)`}.
+        Al aprobar, el sistema crea de inmediato la orden de devolución <b>por serial</b> (los equipos propios
+        del cliente no se recuperan) y deja registrado el fin de facturación.
       </p>
+      ${cartaLinea}
       ${G.tablaHtml(["Serial", "Modelo", "Contrato", "Motivo"], filas)}
       ${penHtml}`,
     ctaUrl: G.urlGestion(g, gid),
@@ -305,6 +314,9 @@ module.exports = onDocumentWritten(
         for (const it of (after.items || [])) {
           const serial = String(it.serial_saliente || it.serial || "").trim();
           if (!serial) continue;
+          // Regla heredada de enmiendas: los equipos PROPIOS son del cliente —
+          // la baja solo corta el servicio, no se recuperan ni se marcan.
+          if (it.propiedad === "cliente") continue;
           try {
             const r = await pool.resolver(serial, it.modelo_id || null, it.modelo || "");
             if (r.data) {
@@ -326,37 +338,88 @@ module.exports = onDocumentWritten(
         }
 
         const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
-        const unidades = (after.items || [])
+        // Regla de enmiendas: los equipos PROPIOS (del cliente) no se recuperan.
+        const recuperables = (after.items || [])
+          .filter(it => String(it.serial_saliente || it.serial || "").trim() && it.propiedad !== "cliente")
           .map(it => ({
             serial: it.serial_saliente || it.serial,
             modelo: it.modelo || "",
             modelo_id: it.modelo_id || null,
             pool_doc_id: it.pool_doc_id_saliente || null,
-          }))
-          .filter(u => String(u.serial || "").trim());
-        const devId = await crearOrdenDevolucion({
-          clienteId: after.cliente_id,
-          clienteNombre: after.cliente_nombre || "",
-          contratoDocId: contratos[0] || null,
-          contratoId: (after.items || []).find(i => i.contrato_id)?.contrato_id || null,
-          contratoOrigenIds: contratos,
-          modo: "recuperacion",
-          origen: { tipo: "gestion_baja", ref_id: gid },
-          unidades,
-          motivo: `Baja de equipos ${gid} — recuperar las unidades dadas de baja`,
-        });
-        if (devId) {
-          await db.collection("ordenes_de_servicio").doc(devId).set({
-            gestion: { id: gid, tipo: "baja" },
-          }, { merge: true });
+          }));
+        const propias = (after.items || []).length - recuperables.length;
+        let devId = null;
+        if (recuperables.length) {
+          devId = await crearOrdenDevolucion({
+            clienteId: after.cliente_id,
+            clienteNombre: after.cliente_nombre || "",
+            contratoDocId: contratos[0] || null,
+            contratoId: (after.items || []).find(i => i.contrato_id)?.contrato_id || null,
+            contratoOrigenIds: contratos,
+            modo: "recuperacion",
+            origen: { tipo: "gestion_baja", ref_id: gid },
+            unidades: recuperables,
+            motivo: `${after.terminacion_total_de?.length ? "Terminación total" : "Baja de equipos"} ${gid} — recuperar las unidades dadas de baja`,
+          });
+          if (devId) {
+            await db.collection("ordenes_de_servicio").doc(devId).set({
+              gestion: { id: gid, tipo: "baja" },
+            }, { merge: true });
+          }
         }
         await ref.set({
-          cierre: { ...(after.cierre || {}), derivacion: true },
+          cierre: {
+            ...(after.cierre || {}),
+            derivacion: true,
+            // Todo propio → no hay nada que recuperar: la entrada se da por
+            // cumplida (la baja solo corta el servicio).
+            ...(recuperables.length ? {} : { entrada: true }),
+          },
           ordenes: { ...(after.ordenes || {}), devolucion_id: devId || null },
         }, { merge: true });
         await G.registrarEvento(gid, "derivacion",
-          `Baja aplicada en ${contratos.length} contrato(s): fin de facturación derivado y orden de devolución ${devId || "—"} creada por serial.`);
-        logger.info("[onGestionWrite] baja derivada", { gid, contratos: contratos.length, devId });
+          `Baja aplicada en ${contratos.length} contrato(s): fin de facturación registrado`
+          + (devId ? `; orden de devolución ${devId} creada por serial` : "")
+          + (propias ? `; ${propias} equipo(s) propios del cliente quedan con él (sin recuperación)` : "")
+          + (after.terminacion_total_de?.length ? `; TERMINACIÓN TOTAL de ${after.terminacion_total_de.length} contrato(s)` : "") + ".");
+        logger.info("[onGestionWrite] baja derivada", { gid, contratos: contratos.length, devId, propias });
+
+        // Correo de "baja aprobada" al vendedor responsable, al vendedor
+        // asignado del cliente y a ventas (pedido 2026-08-27).
+        try {
+          const dests = new Set();
+          if (G.isEmail(after.responsable_email)) dests.add(after.responsable_email.toLowerCase());
+          const vend = await G.vendedorEmailDeCliente(after.cliente_id);
+          if (vend) dests.add(vend);
+          const ventas = await G.configEmailTo("ventas", "ventas@cecomunica.net");
+          if (G.isEmail(ventas)) dests.add(ventas.trim().toLowerCase());
+          const lista = [...dests];
+          if (lista.length) {
+            await G.encolarCorreo({
+              to: lista[0],
+              cc: lista.length > 1 ? lista.slice(1).join(",") : null,
+              subject: `${after.terminacion_total_de?.length ? "Terminación total" : "Baja"} APROBADA: ${gid} — ${after.cliente_nombre || "Cliente"}`,
+              preheader: devId ? `Orden de devolución ${devId} creada por serial` : "Equipos del cliente — sin recuperación",
+              bodyContent: `
+                <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">${after.terminacion_total_de?.length ? "Terminación total aprobada" : "Baja aprobada"}</h2>
+                <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                  La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b> fue aprobada.
+                  ${devId ? `La orden de devolución <b>${G.escapeHtml(devId)}</b> quedó creada de inmediato para recuperar los equipos.` : "Los equipos son propios del cliente: no hay recuperación, la baja corta el servicio."}
+                  ${propias && devId ? `${propias} equipo(s) propios quedan con el cliente.` : ""}
+                </p>
+                ${G.tablaHtml(["Serial", "Modelo", "Contrato"], (after.items || []).map(it => [
+                  `<code>${G.escapeHtml(it.serial_saliente || it.serial || "—")}</code>`,
+                  G.escapeHtml(it.modelo || "—"),
+                  `<code>${G.escapeHtml(it.contrato_id || "—")}</code>`,
+                ]))}`,
+              ctaUrl: G.urlGestion(after, gid),
+              ctaLabel: "Ver el expediente",
+              meta: { gestion_id: gid, paso: "baja_aprobada" },
+            });
+          }
+        } catch (e) {
+          logger.warn("[onGestionWrite] correo de baja aprobada falló", { gid, message: e.message });
+        }
       }
     } catch (e) {
       logger.error("[onGestionWrite] derivación de baja falló", { gid, message: e.message });

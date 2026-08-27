@@ -108,6 +108,13 @@ const GestionesService = {
       ...(data.penalidad_estimada ? { penalidad_estimada: data.penalidad_estimada } : {}),
       ...(data.fecha_fin_facturacion ? { fecha_fin_facturacion: data.fecha_fin_facturacion } : {}),
       ...(data.motivo_codigo ? { motivo_codigo: data.motivo_codigo } : {}),
+      // Baja: terminación total de contrato(s), fecha de la nota del cliente,
+      // término elegido y manejo de depósito (heredados de enmiendas).
+      ...(Array.isArray(data.terminacion_total_de) && data.terminacion_total_de.length
+        ? { terminacion_total_de: data.terminacion_total_de } : {}),
+      ...(data.fecha_nota_cliente ? { fecha_nota_cliente: data.fecha_nota_cliente } : {}),
+      ...(data.termino ? { termino: data.termino } : {}),
+      ...(data.deposito ? { deposito: data.deposito } : {}),
     };
     await db.collection(this.COL).doc(id).set(doc);
     await this.registrarEvento(id, 'crear', `Gestión creada (${this.tipoLabel(data.tipo)})`);
@@ -226,6 +233,25 @@ const GestionesService = {
     });
     await this.registrarEvento(gestionId, 'asignar',
       `Bodega asignó al demo: ${seriales.map(s => s.serial).join(', ')}`);
+  },
+
+  // Carta de solicitud del cliente para una BAJA (obligatoria, pedido
+  // 2026-08-27) — misma bodega de anexos que el aumento firmado.
+  async subirCartaBaja(gestionId, file) {
+    const user = firebase.auth().currentUser;
+    const ext = /pdf$/i.test(file.type) ? 'pdf' : 'jpg';
+    const path = `gestiones_anexos/${gestionId}/carta-baja-${Date.now()}.${ext}`;
+    await firebase.storage().ref(path).put(file, { contentType: file.type });
+    await firebase.firestore().collection(this.COL).doc(gestionId).update({
+      carta_path: path,
+      carta_at: firebase.firestore.FieldValue.serverTimestamp(),
+      carta_por: user?.email || null,
+    });
+    await this.registrarEvento(gestionId, 'carta', 'Carta de solicitud del cliente adjuntada.');
+  },
+
+  async urlAnexo(path) {
+    return firebase.storage().ref(path).getDownloadURL();
   },
 
   /* ── Aumento por enmienda firmada (Ola 4, decisión §8.2) ── */

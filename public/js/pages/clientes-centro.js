@@ -278,6 +278,12 @@ window.Centro = {
       this.pintarGestiones();
       this.armarMenu();
       if (window.lucide?.createIcons) lucide.createIcons();
+      // Deep-link desde correo (?g=): aterrizar EN el expediente, no arriba
+      // de la página (pedido 2026-08-27).
+      if (this.gSel) {
+        setTimeout(() => document.getElementById(`grow-${this.gSel}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+      }
     } catch (e) { console.error(e); Toast.show('No se pudo abrir el cliente', 'bad'); }
   },
 
@@ -416,6 +422,9 @@ window.Centro = {
         <td style="text-align:right;">${this._unidadesActivas(c)}</td>
         <td>${this._vidaHtml(c)}</td>
         <td style="text-align:right; white-space:nowrap;">${renovar}
+          ${this.puedeCrearGestion() && this._esVigente(c)
+            ? `<button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" title="Aumento de líneas a este contrato (enmienda firmada)"
+                 onclick="Centro.wizAumento('${this.esc(c.id)}')">+ Aumento</button>` : ''}
           <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
     }).join('');
     cont.innerHTML = `<table class="cg-tabla"><thead><tr>
@@ -500,8 +509,8 @@ window.Centro = {
     ],
     baja: [
       ['aprobacion', 'Aprobación de la baja', 'Una sola aprobación, con desglose por contrato'],
-      ['derivacion', 'Fin de facturación aplicado', 'Derivado en cada contrato + devolución por serial'],
-      ['entrada', 'Entrada de los equipos', 'Check-in de la devolución; inspección antes de disposición'],
+      ['derivacion', 'Fin de facturación registrado', 'Placeholder: la facturación aún no corre en la plataforma — no bloquea el cierre'],
+      ['entrada', 'Entrada de los equipos', 'Check-in de la devolución (los propios del cliente no se recuperan)'],
     ],
     aumento: [
       ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
@@ -545,7 +554,7 @@ window.Centro = {
       const fecha = g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().toLocaleDateString('es-PA') : '—';
       const abierta = this.gSel === g.id;
       return `
-      <div class="cg-row" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
+      <div class="cg-row" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
         <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;">${this.esc(g.id)}</div>
           <div class="s">${this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
@@ -598,7 +607,8 @@ window.Centro = {
           ${(a.lineas || []).map(l => `<tr><td class="num">${Number(l.cantidad || 0)}</td>
             <td>${this.esc(l.modelo || '—')}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`).join('')}
         </tbody></table></div>
-        ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})</p>` : ''}
+        ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})
+          <button class="btn btn-ghost" style="padding:2px 9px;font-size:12px;" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
         ${asignando
           ? `<div style="margin-top:10px;">${Array.from({ length: total }, (_, ix) => `
               <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;margin:0 6px 6px 0;display:inline-block;"
@@ -609,7 +619,18 @@ window.Centro = {
               ${asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')}</p>` : '')}`;
     } else if (g.tipo === 'baja') {
       const pen = g.penalidad_estimada;
-      cuerpo = `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+      const esTerm = Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length;
+      const cartaHtml = g.carta_path
+        ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:0 0 8px;">✓ Carta del cliente adjunta${g.fecha_nota_cliente ? ` (nota del ${this.esc(g.fecha_nota_cliente)})` : ''}
+             <button class="btn btn-ghost" style="padding:2px 9px;font-size:12px;" onclick="Centro.verAnexo('${this.esc(g.carta_path)}')">Ver carta</button></p>`
+        : `<div class="cg-senal warn" style="margin:0 0 8px;">
+             <span><b>Falta la carta de solicitud del cliente</b> — la aprobación queda bloqueada hasta adjuntarla.</span>
+             ${this.puedeCrearGestion() ? `<label class="btn btn-primary" style="margin-left:auto; padding:3px 11px; font-size:12px; cursor:pointer;">Subir carta
+               <input type="file" accept="image/*,application/pdf" style="display:none;"
+                 onchange="Centro.subirCarta('${this.esc(g.id)}', this.files[0])"></label>` : ''}</div>`;
+      cuerpo = (esTerm ? `<div class="cg-senal bad" style="margin:0 0 8px;"><span><b>TERMINACIÓN TOTAL</b> — se desconectan todos los seriales del contrato.</span></div>` : '')
+        + cartaHtml
+        + `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
         <th>Serial</th><th>Modelo</th><th>Contrato</th><th>Motivo</th><th>Fin de facturación</th>
         </tr></thead><tbody>
         ${(g.items || []).map(it => `<tr>
@@ -676,6 +697,8 @@ window.Centro = {
       const esAumento = g.tipo === 'aumento';
       const puede = (esBaja || esAumento) ? this.puedeAprobarBaja() : this.puedeAprobar();
       const fnAprobar = esBaja ? 'aprobarBajaGestion' : esAumento ? 'aprobarAumentoGestion' : 'aprobarGestion';
+      // La baja no se aprueba sin la carta del cliente (pedido 2026-08-27).
+      const sinCarta = esBaja && !g.carta_path;
       aprobacion = `<div class="cg-senal warn" style="margin:10px 0 0;">
            <span>${esBaja
              ? 'Baja esperando aprobación (una sola, con el desglose por contrato a la izquierda).'
@@ -683,7 +706,8 @@ window.Centro = {
                ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
                : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
            ${puede ? `<span style="margin-left:auto; display:flex; gap:8px;">
-             <button class="btn btn-primary" style="padding:4px 12px;font-size:12.5px;"
+             <button class="btn btn-primary" style="padding:4px 12px;font-size:12.5px;${sinCarta ? ' opacity:.5; cursor:not-allowed;' : ''}"
+               ${sinCarta ? 'disabled title="Falta la carta de solicitud del cliente"' : ''}
                onclick="Centro.${fnAprobar}('${this.esc(g.id)}')">Aprobar</button>
              <button class="btn btn-ghost" style="padding:4px 10px;font-size:12.5px;" onclick="Centro.anularGestion('${this.esc(g.id)}')">Rechazar</button>
            </span>` : ''}</div>`;
@@ -724,6 +748,23 @@ window.Centro = {
       Toast.show('Excepción aprobada — Bodega recibirá el aviso', 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar', 'bad'); }
+  },
+
+  async verAnexo(path) {
+    try {
+      const url = await GestionesService.urlAnexo(path);
+      window.open(url, '_blank');
+    } catch (e) { console.error(e); Toast.show('No se pudo abrir el anexo', 'bad'); }
+  },
+
+  async subirCarta(gid, file) {
+    if (!file) return;
+    try {
+      Toast.show('Subiendo carta…', '');
+      await GestionesService.subirCartaBaja(gid, file);
+      Toast.show('Carta adjuntada', 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo subir la carta', 'bad'); }
   },
 
   async aprobarAumentoGestion(gid) {
@@ -854,9 +895,11 @@ window.Centro = {
     const btn = document.getElementById('btnGestion');
     if (!this.puedeCrearGestion()) { btn?.classList.add('hidden'); return; }
     btn?.classList.remove('hidden');
-    const activos = this.contratos.filter(c => c.estado === 'activo');
-    const terminaciones = activos.map(c => `<a href="../contratos/cancelaciones.html?contrato=${encodeURIComponent(c.id)}">
-          Terminación total — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></a>`).join('');
+    // Terminación total como GESTIÓN (2026-08-27) — la página vieja de
+    // enmiendas queda para el histórico y se descontinuará en la Ola 6.
+    const activos = this.contratos.filter(c => this._esVigente(c));
+    const terminaciones = activos.map(c => `<button type="button" onclick="Centro.wizTerminacion('${this.esc(c.id)}')">
+          Terminación total — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></button>`).join('');
     document.getElementById('cgMenu').innerHTML = `
       <div class="hd">Equipos</div>
       <button type="button" onclick="Centro.wizReemplazo()">Reemplazo de equipo</button>
@@ -1116,12 +1159,12 @@ window.Centro = {
 
   /* ═════════ Wizard: aumento por enmienda firmada (Ola 4) ═════════ */
 
-  async wizAumento() {
+  async wizAumento(preselId) {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
     await this._cargarModelos();
-    const activos = this.contratos.filter(c => c.estado === 'activo');
-    if (!activos.length) { Toast.show('El cliente no tiene contratos activos', 'warn'); return; }
+    const activos = this.contratos.filter(c => this._esVigente(c));
+    if (!activos.length) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }
     this._abrirModal(`
       <h3 style="margin:0 0 6px;">Aumento de equipos (enmienda) — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
@@ -1131,7 +1174,7 @@ window.Centro = {
       <div class="form-field" style="margin-bottom:10px; max-width:340px;">
         <label class="form-label">Contrato destino</label>
         <select class="form-select" id="waContrato">
-          ${activos.map(c => `<option value="${this.esc(c.id)}">${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
+          ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === preselId ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
         </select></div>
       <div class="form-field" style="margin-bottom:10px;">
         <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
@@ -1233,42 +1276,79 @@ window.Centro = {
     return { por_contrato: lista, total: Math.round(lista.reduce((s, p) => s + p.monto, 0) * 100) / 100 };
   },
 
-  wizBaja() {
+  // Terminación total = baja de TODOS los seriales del contrato, como gestión
+  // (2026-08-27; reemplaza el flujo viejo de enmiendas, que se descontinuará).
+  wizTerminacion(contratoDocId) { this.wizBaja({ terminacionDe: contratoDocId }); },
+
+  wizBaja(opts = {}) {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
+    const termDe = opts.terminacionDe || null;
+    const contratoTerm = termDe ? this.contratos.find(c => c.id === termDe) : null;
     const elegibles = this.equipos.filter(e =>
-      ['en_cliente', 'asignado_contrato'].includes(e.estado) && e.asignacion?.contrato_doc_id);
+      ['en_cliente', 'asignado_contrato'].includes(e.estado) && e.asignacion?.contrato_doc_id
+      && (!termDe || e.asignacion.contrato_doc_id === termDe));
     const finMes = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10); })();
     this._abrirModal(`
-      <h3 style="margin:0 0 6px;">Baja de equipos — ${this.esc(this.cliente.nombre)}</h3>
+      <h3 style="margin:0 0 6px;">${termDe
+        ? `Terminación total — <span class="cg-mono">${this.esc(contratoTerm?.contrato_id || termDe)}</span>`
+        : `Baja de equipos — ${this.esc(this.cliente.nombre)}`}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
-        Marca los seriales a dar de baja (pueden ser de contratos distintos — una sola aprobación con el
-        desglose). El sistema calcula la penalidad por tramo y, al aprobarse, deriva el fin de facturación
-        en cada contrato y crea la orden de devolución por serial.</p>
-      <div class="cg-twrap" style="max-height:38vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
-        <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th>
+        ${termDe
+          ? 'Se desconectan <b>todos</b> los seriales del contrato. Requiere la carta de cancelación del cliente; al aprobarse, la orden de devolución se crea de inmediato (los equipos propios del cliente no se recuperan).'
+          : 'Marca los seriales a dar de baja (pueden ser de contratos distintos — una sola aprobación con el desglose). Requiere la carta de solicitud del cliente; al aprobarse, la orden de devolución se crea de inmediato.'}</p>
+      <div class="cg-twrap" style="max-height:32vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
+        <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Propiedad</th>
         </tr></thead><tbody>
-        ${elegibles.map((e, ix) => `<tr>
-          <td><input type="checkbox" data-bsel="${this.equipos.indexOf(e)}" onchange="Centro._bajaPreview()"></td>
+        ${elegibles.map((e) => `<tr>
+          <td><input type="checkbox" data-bsel="${this.equipos.indexOf(e)}" ${termDe ? 'checked disabled' : ''} onchange="Centro._bajaPreview()"></td>
           <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
           <td>${this.esc(e.modelo_label || '—')}</td>
           <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
-        </tr>`).join('') || '<tr><td colspan="4" class="cg-vacio">Sin equipos con contrato en campo.</td></tr>'}
+          <td style="font-size:12px;">${e.propiedad === 'cliente' ? 'del cliente <span style="color:var(--fg-4);">(no se recupera)</span>' : 'CECOMUNICA'}</td>
+        </tr>`).join('') || '<tr><td colspan="5" class="cg-vacio">Sin equipos con contrato en campo.</td></tr>'}
       </tbody></table></div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
-        <select class="form-select" id="wbMotivo" style="max-width:250px;">
+        <select class="form-select" id="wbMotivo" style="max-width:230px;">
           <option value="">— Motivo —</option>
           ${this.MOTIVOS_BAJA.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}
         </select>
-        <input class="form-input" id="wbDet" style="flex:1; min-width:180px;" placeholder="Detalle (opcional)">
-        <label style="display:flex; align-items:center; gap:6px; font-size:13px;">Fin de facturación
-          <input class="form-input" type="date" id="wbFin" value="${finMes}" style="width:150px;"></label>
+        <input class="form-input" id="wbDet" style="flex:1; min-width:160px;" placeholder="Detalle (opcional)">
       </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; align-items:flex-end;">
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Carta del cliente (obligatoria)</label>
+          <input class="form-input" type="file" id="wbCarta" accept="image/*,application/pdf" style="max-width:250px;"></div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Fecha de la nota</label>
+          <input class="form-input" type="date" id="wbNota" style="width:150px;"></div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Término (referencial)</label>
+          <select class="form-select" id="wbTermino" style="width:170px;" onchange="document.getElementById('wbFinWrap').classList.toggle('hidden', this.value!=='otro')">
+            <option value="fin_mes">Hasta fin de mes</option>
+            <option value="30_dias">30 días más</option>
+            <option value="60_dias">60 días más</option>
+            <option value="otro">Otro (fecha)</option>
+          </select></div>
+        <div class="form-field hidden" style="margin:0;" id="wbFinWrap">
+          <label class="form-label">Fin (manual)</label>
+          <input class="form-input" type="date" id="wbFin" value="${finMes}" style="width:150px;"></div>
+        <div class="form-field" style="margin:0;">
+          <label class="form-label">Depósito / garantía</label>
+          <div style="display:flex; gap:6px;">
+            <select class="form-select" id="wbDepAcc" style="width:120px;" onchange="document.getElementById('wbDepMonto').disabled=(this.value==='na')">
+              <option value="na">No aplica</option><option value="devolver">Devolver</option><option value="retener">Retener</option>
+            </select>
+            <input class="form-input" type="number" id="wbDepMonto" min="0" step="0.01" placeholder="0.00" style="width:100px;" disabled></div></div>
+      </div>
+      <p style="font-size:11.5px; color:var(--fg-4); margin:6px 0 0;">El término de facturación es referencial:
+        la facturación aún no corre en la plataforma — queda registrado para cuando corra y no bloquea el cierre.</p>
       <div id="wbPen" style="margin-top:12px;"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearBaja()">Enviar a aprobación</button>
+        <button class="btn btn-primary" onclick="Centro.crearBaja(${termDe ? `'${this.esc(termDe)}'` : ''})">Enviar a aprobación</button>
       </div>`);
+    if (termDe) this._bajaPreview();
   },
 
   _bajaItemsSeleccion() {
@@ -1281,14 +1361,26 @@ window.Centro = {
         modelo_id: e.modelo_id || null,
         contrato_doc_id: e.asignacion?.contrato_doc_id || null,
         contrato_id: e.asignacion?.contrato_id || null,
+        propiedad: e.propiedad || null,   // 'cliente' = propio: no se recupera
       };
     });
+  },
+
+  _finPorTermino() {
+    const t = document.getElementById('wbTermino')?.value || 'fin_mes';
+    const d = new Date();
+    if (t === 'fin_mes') return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+    if (t === '30_dias') return new Date(d.getTime() + 30 * 86400000).toISOString().slice(0, 10);
+    if (t === '60_dias') return new Date(d.getTime() + 60 * 86400000).toISOString().slice(0, 10);
+    return document.getElementById('wbFin')?.value || '';
   },
 
   _bajaPreview() {
     const items = this._bajaItemsSeleccion();
     const pen = this._penalidadBaja(items);
+    const todasPropias = items.length && items.every(i => i.propiedad === 'cliente');
     document.getElementById('wbPen').innerHTML = items.length ? `
+      ${todasPropias ? '<div class="cg-senal info" style="margin-bottom:8px;">Equipos <b>propios del cliente</b>: la baja corta el servicio y la facturación — no se crea orden de recuperación.</div>' : ''}
       <p style="font-size:13px; margin:0 0 4px;"><b>Penalidad estimada</b>
         <span style="color:var(--fg-4);">(no vencido: 3 meses · vencido: 30 días)</span></p>
       ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:2px 0;">
@@ -1299,13 +1391,16 @@ window.Centro = {
         <b>Total estimado</b><b style="margin-left:auto;" class="num">$${pen.total.toFixed(2)}</b></div>` : '';
   },
 
-  async crearBaja() {
+  async crearBaja(terminacionDe) {
     const base = this._bajaItemsSeleccion();
     if (!base.length) { Toast.show('Marca al menos un serial', 'warn'); return; }
     const motivo = document.getElementById('wbMotivo')?.value || '';
     if (!motivo) { Toast.show('Indica el motivo de la baja', 'warn'); return; }
+    const carta = document.getElementById('wbCarta')?.files?.[0] || null;
+    if (!carta) { Toast.show('Adjunta la carta de solicitud del cliente (obligatoria)', 'warn'); return; }
     const detalle = document.getElementById('wbDet')?.value.trim() || '';
-    const fin = document.getElementById('wbFin')?.value || '';
+    const fin = this._finPorTermino();
+    const depAcc = document.getElementById('wbDepAcc')?.value || 'na';
     const items = base.map(it => ({ ...it, motivo_codigo: motivo, motivo_detalle: detalle, fecha_fin_facturacion: fin || null }));
     const pen = this._penalidadBaja(items);
     try {
@@ -1321,10 +1416,20 @@ window.Centro = {
         penalidad_estimada: pen,
         fecha_fin_facturacion: fin || null,
         motivo_codigo: motivo,
+        termino: document.getElementById('wbTermino')?.value || 'fin_mes',
+        fecha_nota_cliente: document.getElementById('wbNota')?.value || null,
+        deposito: depAcc === 'na' ? null : { accion: depAcc, monto: Number(document.getElementById('wbDepMonto')?.value || 0) },
+        ...(terminacionDe ? { terminacion_total_de: [terminacionDe] } : {}),
       });
+      try {
+        await GestionesService.subirCartaBaja(gid, carta);
+      } catch (e) {
+        console.error(e);
+        Toast.show('La gestión se creó pero la carta NO subió — adjúntala desde el expediente', 'warn');
+      }
       this._cerrarModal();
       this.gSel = gid;
-      Toast.show(`Baja ${gid} enviada a aprobación`, 'ok');
+      Toast.show(`${terminacionDe ? 'Terminación total' : 'Baja'} ${gid} enviada a aprobación`, 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear la baja', 'bad'); }
   },

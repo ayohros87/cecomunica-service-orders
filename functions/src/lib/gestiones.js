@@ -76,6 +76,22 @@ async function adminEmails() {
   return [...emails];
 }
 
+// Email del vendedor asignado de un cliente (o null). Nunca lanza.
+async function vendedorEmailDeCliente(clienteId) {
+  try {
+    if (!clienteId) return null;
+    const cli = await db.collection("clientes").doc(clienteId).get();
+    const uid = cli.exists ? cli.data().vendedor_asignado : null;
+    if (!uid) return null;
+    const u = await db.collection("usuarios").doc(uid).get();
+    const e = u.exists ? u.data().email : null;
+    return isEmail(e) ? e.trim().toLowerCase() : null;
+  } catch (e) {
+    logger.warn("[gestiones] vendedor del cliente ilegible", { clienteId, error: e.message });
+    return null;
+  }
+}
+
 // Aprobadores de bajas: administración y gerencia (mismo criterio que las
 // enmiendas clásicas de solicitudes_cancelacion).
 async function aprobadoresEmails() {
@@ -214,7 +230,8 @@ async function crearOrdenesProgramacion(gid, g) {
 
 module.exports = {
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, tablaHtml,
-  destinatariosRecepcionVendedor, adminEmails, aprobadoresEmails, encolarCorreo,
+  destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, encolarCorreo,
+  configEmailTo,
   registrarEvento, crearOrdenesProgramacion,
   bodegaEmailTo,
 };

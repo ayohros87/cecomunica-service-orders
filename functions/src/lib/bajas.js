@@ -67,6 +67,12 @@ async function derivarBajaContrato(contratoDocId) {
         map[key] = Number(map[key] || 0) + 1; // 1 ítem = 1 serial
         masTardia(it.fecha_fin_facturacion || gd.fecha_fin_facturacion);
       });
+      // Terminación total vía gestión (2026-08-27): reemplaza el flujo viejo
+      // de enmiendas para terminar el contrato completo.
+      if (Array.isArray(gd.terminacion_total_de) && gd.terminacion_total_de.includes(contratoDocId)) {
+        terminacionTotal = true;
+        terminacionFin = gd.fecha_fin_facturacion || terminacionFin;
+      }
     });
 
     const total = Object.values(map).reduce((s, v) => s + Number(v || 0), 0);
