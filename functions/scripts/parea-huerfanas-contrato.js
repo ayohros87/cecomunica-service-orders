@@ -105,11 +105,20 @@ const AUTOR = "script:parea-huerfanas-contrato";
     try {
       await db.collection("contratos").doc(it.contrato_doc_id).collection("seriales").add({
         serial: it.candidato.serial,
+        // El modelo de la FICHA, no el del renglón — igual que hace el traspaso
+        // en lib/sustitucionContrato.js. Dos razones:
+        //   1. onSerialWrite se lo pasa a `resolver`, que decide A QUÉ ficha del
+        //      pool apunta el serial. Mandar el modelo del contrato cuando la
+        //      ficha tiene otro es pedirle que no la encuentre: `mismoModelo`
+        //      tolera el sufijo -R por contención, pero no hay por qué apostar
+        //      — fallar ahí crearía una ficha sufijada duplicada (mecanismo
+        //      anti-colisión Kenwood NX420/NX920).
+        //   2. El renglón dice qué se facturó; la ficha dice qué radio es. Un
+        //      contrato que pide "PNC360S-R" se cumple con una ficha "PNC360S"
+        //      que vuelve del cliente — el "-R" lo gana el radio al regresar,
+        //      no al contratarse.
         modelo: it.candidato.modelo || it.modelo || "",
-        // El modelo del CATÁLOGO lo manda el renglón del contrato: es lo que se
-        // facturó. El de la ficha puede ser la variante "-R", que describe la
-        // condición del radio, no lo contratado.
-        modelo_id: it.mid || it.candidato.mid || null,
+        modelo_id: it.candidato.mid || it.mid || null,
         contrato_doc_id: it.contrato_doc_id,
         contrato_id: c ? (c.contrato_id || "") : "",
         cliente_id: c ? (c.cliente_id || "") : "",
