@@ -521,7 +521,21 @@ window.Centro = {
   // si no el vencimiento del contrato. DEMO/TEMP y custodia sin contrato: —.
   _vencChipEquipo(e) {
     const c = this.contratos.find(x => x.id === e.asignacion?.contrato_doc_id);
-    if (!c || !this._esVigente(c) || !this._aplicaVenc(c)) return '<span style="color:var(--fg-4);">—</span>';
+    if (!c || !this._esVigente(c) || !this._aplicaVenc(c)) {
+      // Custodia con vigencia propia estampada desde la evidencia de órdenes
+      // (asigna-custodia-por-ordenes, 2026-08-28): el semáforo corre aunque no
+      // haya contrato — la salida es la renovación/regularización de la cuenta.
+      const fvU = e.vigencia?.fecha_vencimiento;
+      if (fvU) {
+        const dias = this._diasA(fvU);
+        if (dias !== null) {
+          const cls = dias < 0 ? 'vencido' : (dias <= this.AVISO_DIAS ? 'por_vencer' : 'vigente');
+          const label = dias < 0 ? `vencido ${-dias} d` : `${dias} d`;
+          return `<span class="cg-venc ${cls} num" title="Vence ${this._fmtFecha(fvU)} · período estampado desde la orden de entrega — sin contrato formal (regularizar al renovar)">${label} *</span>`;
+        }
+      }
+      return '<span style="color:var(--fg-4);">—</span>';
+    }
     if (this._renovadoPor(c)) return '<span class="cg-venc vigente">renovado</span>';
     const linea = (c.equipos || []).find(l => l?.vigencia?.fecha_vencimiento && this._mismoModeloLinea(l, e));
     const fv = linea?.vigencia?.fecha_vencimiento || c.fecha_vencimiento;
@@ -580,11 +594,54 @@ window.Centro = {
       <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
       <td style="text-align:right;">${this._tarifaEquipo(e)}</td>
       <td>${this._vencChipEquipo(e)}</td>
-      <td style="text-align:right;"><a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;"
-        href="../inventario/equipos.html?serial=${encodeURIComponent(e.serial || e.id)}">Kardex ›</a></td></tr>`).join('');
+      <td style="text-align:right;"><button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;"
+        title="Historia completa de esta unidad" onclick="Centro.verKardex('${this.esc(e.id)}')">Kardex ›</button></td></tr>`).join('');
     cont.innerHTML = `<table class="cg-tabla"><thead><tr>
       <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
       </tr></thead><tbody>${filas}</tbody></table>`;
+  },
+
+  // Kardex en un modal (pedido 2026-08-28): la historia de la unidad se ve
+  // AQUÍ mismo — igual que en la página de equipos — y el salto a Seriales
+  // queda como link al pie, no como destino del botón.
+  async verKardex(id) {
+    const e = this.equipos.find(x => x.id === id);
+    const serial = e?.serial || id;
+    const urlSeriales = `../inventario/equipos.html?serial=${encodeURIComponent(serial)}`;
+    this._abrirModal(`
+      <h3 style="margin:0 0 2px;">Historia — <span class="cg-mono">${this.esc(serial)}</span></h3>
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3);">
+        ${this.esc(e?.modelo_label || '')} · ${this.esc((window.EquiposPoolService?.ESTADO_LABELS || {})[e?.estado] || e?.estado || '')}
+        ${e?.asignacion?.contrato_id ? ` · <span class="cg-mono">${this.esc(e.asignacion.contrato_id)}</span>` : ''}</p>
+      <div id="wkMovs" style="max-height:55vh; overflow:auto;">
+        <p style="color:var(--fg-3); font-size:13px;">Cargando movimientos…</p></div>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:12px;">
+        <a href="${urlSeriales}" style="font-size:12.5px;">Abrir en Seriales (pool de equipos) ›</a>
+        <button class="btn btn-ghost" style="margin-left:auto;" onclick="Centro._cerrarModal()">Cerrar</button>
+      </div>`);
+    try {
+      const movs = await EquiposPoolService.getMovimientos(id);
+      const cont = document.getElementById('wkMovs');
+      if (!cont) return;
+      if (!movs.length) { cont.innerHTML = '<p style="color:var(--fg-3); font-size:13px;">Sin movimientos registrados.</p>'; return; }
+      const L = (window.EquiposPoolService?.ESTADO_LABELS) || {};
+      cont.innerHTML = movs.map(m => {
+        const fecha = m.at?.toDate ? (window.FMT?.datetime ? FMT.datetime(m.at.toDate()) : m.at.toDate().toLocaleString()) : '—';
+        const trans = (m.de_estado || m.a_estado)
+          ? ` <span style="color:var(--fg-3);">${this.esc(L[m.de_estado] || m.de_estado || '·')} → ${this.esc(L[m.a_estado] || m.a_estado || '·')}</span>` : '';
+        const ref = m.ref ? ` · <span style="color:var(--fg-3);">${this.esc(m.ref.tipo || '')}: ${this.esc(m.ref.label || m.ref.id || '')}</span>` : '';
+        return `<div style="display:flex; gap:10px; padding:8px 2px; border-bottom:1px solid var(--border-subtle);">
+          <div style="flex:none; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-top:6px;"></div>
+          <div style="font-size:13px; line-height:1.45;">
+            <strong>${this.esc((m.tipo || '').replace(/_/g, ' '))}</strong>${trans}
+            ${m.notas ? `<div>${this.esc(m.notas)}</div>` : ''}
+            <div style="font-size:12px; color:var(--fg-4);">${this.esc(fecha)}${ref}${m.por_email ? ` · ${this.esc(m.por_email)}` : (m.por === 'system' ? ' · sistema' : '')}</div>
+          </div></div>`;
+      }).join('');
+    } catch (err) {
+      const cont = document.getElementById('wkMovs');
+      if (cont) cont.innerHTML = `<p style="color:#b91c1c; font-size:13px;">Error al cargar la historia: ${this.esc(err?.message || err)}</p>`;
+    }
   },
 
   /* ═════════ Gestiones: lista + expediente ═════════ */
