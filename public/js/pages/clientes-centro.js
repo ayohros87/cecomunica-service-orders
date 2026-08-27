@@ -853,8 +853,10 @@ window.Centro = {
     if (motivo === null) return;
     try {
       await GestionesService.anular(gid, motivo);
-      Toast.show('Gestión anulada', 'ok');
-      await this.recargarGestiones();
+      Toast.show('Gestión anulada — el sistema revierte sus efectos (órdenes, flags del pool)…', 'ok');
+      // La limpieza corre en el trigger (~1-2s): refrescar la FICHA COMPLETA
+      // para que equipos y señales dejen de mostrar los flags viejos.
+      setTimeout(() => { if (this.cliente) this.abrir(this.cliente.id, { push: false }); }, 1800);
     } catch (e) { console.error(e); Toast.show('No se pudo anular', 'bad'); }
   },
 

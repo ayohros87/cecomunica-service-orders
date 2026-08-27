@@ -269,6 +269,19 @@ module.exports = onDocumentWritten(
     const creada = !before;
     const ref = event.data.after.ref;
 
+    // ── A0) ANULADA → revertir los efectos regados (caso P223344) ────────
+    // Órdenes creadas sin trabajar se eliminan; flags del pool se limpian;
+    // derivados de baja se recalculan; el aumento sin entregar se retira del
+    // contrato. Lo físico (entregas/check-ins) NUNCA se deshace solo.
+    if (before && before.estado !== "anulada" && after.estado === "anulada") {
+      try {
+        await G.limpiarAnulacion(gid, after);
+      } catch (e) {
+        logger.error("[onGestionWrite] limpieza de anulación falló", { gid, message: e.message });
+      }
+      return null;
+    }
+
     // ── A/B) correos de arranque, por flanco de estado ──────────────────
     try {
       if (creada && after.estado === "pendiente_aprobacion") {

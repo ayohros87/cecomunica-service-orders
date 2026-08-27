@@ -228,7 +228,163 @@ async function crearOrdenesProgramacion(gid, g) {
   return ordenes;
 }
 
+/**
+ * Limpieza al ANULAR una gestión (pedido 2026-08-27, caso P223344): revierte
+ * los efectos que la gestión dejó regados — sin tocar lo que ya ocurrió en el
+ * mundo físico (entregas y check-ins se revisan a mano, no se des-hacen).
+ *   · Orden de DEVOLUCIÓN sin ningún check-in → eliminada (soft-delete).
+ *   · OS de PROGRAMACIÓN aún abiertas (POR ASIGNAR/RECIBIDO/ASIGNADO) → ídem.
+ *   · Salientes: se les quita pendiente_devolucion (con movimiento en kardex).
+ *   · Entrantes asignados por la gestión y aún en asignado_contrato → vuelven
+ *     a bodega (liberación); si tenían reemplaza_a de esta gestión, se borra.
+ *   · Baja: se recalculan los derivados de los contratos afectados (la lib ya
+ *     excluye gestiones anuladas). Aumento derivado sin entregar: se retiran
+ *     las líneas/cargos de la enmienda.
+ * Devuelve la lista de acciones (queda en la bitácora del expediente).
+ */
+async function limpiarAnulacion(gid, g) {
+  const pool = require("../domain/equiposPool");
+  const acciones = [];
+  const ABIERTOS = ["POR ASIGNAR", "RECIBIDO EN MOSTRADOR", "ASIGNADO"];
+
+  // 1) Orden de DEVOLUCIÓN
+  const devId = g.ordenes?.devolucion_id;
+  if (devId) {
+    try {
+      const ref = db.collection("ordenes_de_servicio").doc(devId);
+      const s = await ref.get();
+      const o = s.exists ? s.data() : null;
+      if (o && !o.eliminado) {
+        const resueltos = (o.devolucion?.esperados || []).filter(e => e.resolucion).length;
+        if (resueltos === 0 && (o.estado_reparacion || "") !== "CERRADA (DEVOLUCION)") {
+          await ref.update({
+            eliminado: true,
+            eliminado_motivo: `Gestión ${gid} anulada`,
+            os_logs: admin.firestore.FieldValue.arrayUnion({ action: "ELIMINAR", by: "system:gestiones", motivo: `Gestión ${gid} anulada`, at_iso: new Date().toISOString() }),
+          });
+          acciones.push(`devolución ${devId} eliminada`);
+        } else {
+          acciones.push(`devolución ${devId} tiene check-ins — revisar a mano`);
+        }
+      }
+    } catch (e) { logger.warn("[gestiones] limpieza devolución falló", { gid, devId, message: e.message }); }
+  }
+
+  // 2) OS de PROGRAMACIÓN abiertas
+  const progIds = g.ordenes?.programacion_ids || (g.ordenes?.programacion_id ? [g.ordenes.programacion_id] : []);
+  for (const pid of progIds) {
+    try {
+      const ref = db.collection("ordenes_de_servicio").doc(pid);
+      const s = await ref.get();
+      const o = s.exists ? s.data() : null;
+      if (o && !o.eliminado) {
+        if (ABIERTOS.includes((o.estado_reparacion || "").toUpperCase())) {
+          await ref.update({
+            eliminado: true,
+            eliminado_motivo: `Gestión ${gid} anulada`,
+            os_logs: admin.firestore.FieldValue.arrayUnion({ action: "ELIMINAR", by: "system:gestiones", motivo: `Gestión ${gid} anulada`, at_iso: new Date().toISOString() }),
+          });
+          acciones.push(`OS ${pid} eliminada`);
+        } else {
+          acciones.push(`OS ${pid} ya trabajada (${o.estado_reparacion}) — revisar a mano`);
+        }
+      }
+    } catch (e) { logger.warn("[gestiones] limpieza OS falló", { gid, pid, message: e.message }); }
+  }
+
+  const movAnulacion = (notas) => ({
+    at: admin.firestore.FieldValue.serverTimestamp(),
+    por: "system", por_email: null,
+    tipo: "gestion_anulada", de_estado: null, a_estado: null,
+    ref: { tipo: "gestion", id: gid, label: gid },
+    notas,
+  });
+
+  // 3) Salientes: quitar pendiente_devolucion
+  for (const it of (g.items || [])) {
+    const serial = String(it.serial_saliente || it.serial || "").trim();
+    if (!serial) continue;
+    try {
+      const r = await pool.resolver(serial, it.modelo_id || null, it.modelo || "");
+      if (r.data?.pendiente_devolucion) {
+        await r.ref.set({
+          pendiente_devolucion: admin.firestore.FieldValue.delete(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        await r.ref.collection("movimientos").add(movAnulacion(`Gestión ${gid} anulada — ya no está pendiente de devolución`));
+        acciones.push(`${serial}: pendiente_devolucion retirado`);
+      }
+    } catch (e) { logger.warn("[gestiones] limpieza saliente falló", { gid, serial, message: e.message }); }
+  }
+
+  // 4) Entrantes asignados por la gestión
+  const entrantes = [
+    ...(g.items || []).map(it => ({ serial: it.serial_nuevo, modelo_id: it.modelo_solicitado_id || it.modelo_id, modelo: it.modelo_solicitado || it.modelo, saliente: it.serial_saliente })),
+    ...((g.demo?.seriales_asignados || [])),
+    ...((g.aumento?.seriales_asignados || [])),
+  ].filter(u => String(u.serial || "").trim());
+  for (const u of entrantes) {
+    try {
+      const r = await pool.resolver(u.serial, u.modelo_id || null, u.modelo || "");
+      if (!r.data) continue;
+      if (u.saliente && r.data.reemplaza_a === pool.normSerial(u.saliente)) {
+        await r.ref.set({ reemplaza_a: admin.firestore.FieldValue.delete(), updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      }
+      if (r.data.asignacion?.gestion_doc_id === gid && r.data.estado === pool.ESTADOS.ASIGNADO) {
+        const t = await pool.transicionar(u.serial, u.modelo_id || null, u.modelo || "", {
+          aEstado: pool.ESTADOS.EN_BODEGA,
+          soloDesde: [pool.ESTADOS.ASIGNADO],
+          tipo: "liberacion",
+          refMov: { tipo: "gestion", id: gid, label: gid },
+          notas: `Gestión ${gid} anulada — vuelve a bodega`,
+          extra: { asignacion: null },
+        });
+        if (t === "transicion") acciones.push(`${u.serial}: liberado a bodega`);
+      } else if (r.data.asignacion?.gestion_doc_id === gid && r.data.estado === pool.ESTADOS.EN_CLIENTE) {
+        acciones.push(`${u.serial}: YA ENTREGADO — recuperar a mano`);
+      }
+    } catch (e) { logger.warn("[gestiones] limpieza entrante falló", { gid, serial: u.serial, message: e.message }); }
+  }
+
+  // 5) Baja: recalcular derivados (la lib excluye gestiones anuladas)
+  if (g.tipo === "baja" && Array.isArray(g.contratos_afectados)) {
+    const { derivarBajaContrato } = require("./bajas");
+    for (const cid of g.contratos_afectados) {
+      await derivarBajaContrato(cid);
+    }
+    if (g.contratos_afectados.length) acciones.push(`derivados de baja recalculados en ${g.contratos_afectados.length} contrato(s)`);
+  }
+
+  // 6) Aumento derivado y sin entregar: retirar líneas/cargos de la enmienda
+  if (g.tipo === "aumento" && g.cierre?.derivacion && g.aumento?.contrato_doc_id) {
+    try {
+      const cRef = db.collection("contratos").doc(g.aumento.contrato_doc_id);
+      await db.runTransaction(async (tx) => {
+        const s = await tx.get(cRef);
+        if (!s.exists) return;
+        const c = s.data();
+        const propias = (c.equipos || []).filter(l => l.enmienda_id === gid);
+        if (propias.some(l => l.vigencia?.estado === "vigente")) {
+          acciones.push("líneas del aumento YA ENTREGADAS — revisar el contrato a mano");
+          return;
+        }
+        tx.set(cRef, {
+          equipos: (c.equipos || []).filter(l => l.enmienda_id !== gid),
+          ...(Array.isArray(c.cargos) ? { cargos: c.cargos.filter(x => x.enmienda_id !== gid) } : {}),
+          enmiendas_aumento: admin.firestore.FieldValue.arrayRemove(gid),
+        }, { merge: true });
+        if (propias.length) acciones.push(`${propias.length} línea(s) del aumento retiradas del contrato`);
+      });
+    } catch (e) { logger.warn("[gestiones] limpieza aumento falló", { gid, message: e.message }); }
+  }
+
+  await registrarEvento(gid, "anulacion_limpieza", acciones.length ? acciones.join(" · ") : "Sin efectos que revertir.");
+  logger.info("[gestiones] anulación limpiada", { gid, acciones: acciones.length });
+  return acciones;
+}
+
 module.exports = {
+  limpiarAnulacion,
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, tablaHtml,
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, encolarCorreo,
   configEmailTo,
