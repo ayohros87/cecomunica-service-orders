@@ -105,3 +105,8 @@ design-system/**/assets/photos/
 # referencias de diseño con data real. Vive fuera de public/ para no depender
 # del hosting.ignore; el backup .bat SÍ la respalda.
 local-data/
+
+# Páginas de diagnóstico local (dev-diag-*.html): viven en public/ para poder
+# abrirlas con el hosting emulado, pero no son parte del producto. Ya están en
+# hosting.ignore de firebase.json — nunca se despliegan.
+public/dev-diag-*.html
