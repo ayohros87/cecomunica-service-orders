@@ -241,14 +241,15 @@ inicial es un documento de contrato; la cuenta se administra por anexos.
   y el `Class` de QBO se estabiliza. La transición de equipos deja de colgar de
   la renovación: cambios de flota = gestiones normales (reemplazo/baja/aumento)
   que componen. `transicion_plan`/`onEntregaTransicion` se retiran gradualmente.
-- **Regularización de cuentas sin contrato**: botón "Regularizar cuenta" en el
-  Centro → contrato estándar `origen_tipo:'regularizacion'` precargado con la
-  foto de la flota del pool (inventario POR SERIAL que el cliente firma
-  reconociendo, con columna de propiedad), tarifario completo (mismo bloque del
-  anexo), cláusula de no-novación y vigencia desde la firma; aprobación de
-  gerencia previa; la firma se recoge en la próxima renovación ("renueva y
-  formaliza"). Borrador visual del documento en el artifact
-  "Contrato de Regularización". Los legacy existentes son ancla suficiente.
+- **Un solo botón "Renovar cuenta"** (decisión 13 enmendada): el sistema decide
+  el formato según el ancla — contrato completo en sistema → anexo de
+  renovación; sin contrato o cascarón legacy sin líneas → **Contrato de
+  Renovación** (documento fundacional, `origen_tipo:'regularizacion'`)
+  precargado con la foto de la flota del pool (inventario POR SERIAL con
+  columna de propiedad que el cliente firma reconociendo), tarifario completo,
+  cláusula de no-novación y vigencia desde la firma; el legacy queda vinculado
+  como origen y se cierra. Aprobación de gerencia en ambos formatos. Borrador
+  visual en el artifact "Contrato de Regularización".
 - **Señal implementada ya (decisión 14)**: cuenta con equipos sin contrato
   formal ⇒ "requiere renovación / regularización" en ficha y "Para hoy".
 - Prerrequisito: Olas 1–4 rodando en producción (cumplido 2026-08-26/27).
@@ -283,7 +284,7 @@ inicial es un documento de contrato; la cuenta se administra por anexos.
 10. **Aprobación de baja multi-contrato** — **una sola aprobación por gestión**. Requisito de UI: la pantalla de aprobación desglosa claramente **de qué contrato viene cada equipo**, con los montos de facturación, la penalidad por tramo y toda la información relevante, antes de aprobar.
 11. **Cambio de serial por estado del equipo** — la ventana de corrección de un serial mal capturado la define el **estado del equipo**, no el estado del contrato (hoy la regla exige contrato `aprobado` y cierra la puerta al activarse). La corrección se permite en cualquier momento con **aprobación de administrador** y auditoría en el kardex (`correccion_serial`); si el radio está en una orden o QC en curso, la corrección avisa y arrastra la actualización.
 12. **Renovación por anexo (2026-08-27)** — la renovación deja de crear un contrato nuevo: se documenta con un **anexo firmado por el cliente** (misma maquinaria del anexo de aumento) que extiende la vigencia de los tramos. Solo el contrato inicial es un documento de contrato; la cuenta se administra por anexos (continuidad, agregar y eliminar unidades). Ver Ola 7.
-13. **Regularización de cuentas sin contrato (2026-08-27)** — los clientes viejos sin contrato en la plataforma se formalizan con un **Contrato de Regularización de Cuenta**: contrato estándar (`origen_tipo: 'regularizacion'`) cuyas líneas nacen de la **foto real de la flota del pool** (inventario POR SERIAL que el cliente firma reconociendo), con cláusula de no-novación, tarifario completo y vigencia desde la firma. **Requiere aprobación de gerencia** igual que cualquier renovación; la firma se recoge en la próxima renovación/anexo de la cuenta ("renueva y formaliza"). Los legacy existentes sirven de ancla sin crear nada. Borrador visual: artifact "Contrato de Regularización".
+13. **Regularización = renovación directa (2026-08-27, enmendada el mismo día)** — la regularización NO es un flujo aparte: se ejecuta **como renovación**. Un solo botón "Renovar cuenta" y el sistema decide el formato: si la cuenta tiene contrato completo en sistema → **anexo de renovación**; si no tiene contrato (o solo un cascarón legacy sin líneas) → **Contrato de Renovación** = el documento fundacional de la cuenta, precargado con la **foto real de la flota del pool** (inventario POR SERIAL que el cliente firma reconociendo), cláusula de no-novación, tarifario completo y vigencia desde la firma; el cascarón legacy queda vinculado como origen y se cierra. Racional: la mayoría de esos clientes ya tiene el contrato vencido — para ellos esto ES una renovación, no un concepto nuevo. **Aprobación de gerencia obligatoria** en ambos formatos. Borrador visual: artifact "Contrato de Regularización" (formato contrato fundacional).
 14. **Cuenta sin contrato formal completo ⇒ requiere renovación (2026-08-27)** — cualquier cuenta con equipos fuera de contrato formal se trata como pendiente de renovación/regularización: señal en la ficha y en "Para hoy" del Centro (implementada). Es la vía por la que se drenan las ~1,754 unidades en custodia.
 
 ### Aún abiertas
