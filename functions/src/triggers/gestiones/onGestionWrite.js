@@ -461,8 +461,22 @@ module.exports = onDocumentWritten(
                 },
               });
             }
+            // Cargos del anexo (únicos y mensuales) al contrato — mismo shape
+            // que nc-cargos.leer(); la facturación futura los lee de cargos[].
+            const cargos = Array.isArray(cSnap.data().cargos) ? [...cSnap.data().cargos] : [];
+            for (const cg of (a.cargos || [])) {
+              cargos.push({
+                cargo_id: cg.cargo_id || "",
+                concepto: cg.concepto || "",
+                cantidad: Number(cg.cantidad || 1),
+                monto: Number(cg.monto || 0),
+                recurrente: cg.recurrente === true,
+                enmienda_id: gid,
+              });
+            }
             tx.set(cRef, {
               equipos,
+              ...(a.cargos?.length ? { cargos } : {}),
               enmiendas_aumento: admin.firestore.FieldValue.arrayUnion(gid),
             }, { merge: true });
           });

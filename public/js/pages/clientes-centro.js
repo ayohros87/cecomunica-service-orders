@@ -631,7 +631,14 @@ window.Centro = {
           <th>Cant.</th><th>Modelo</th><th>Precio/mes</th></tr></thead><tbody>
           ${(a.lineas || []).map(l => `<tr><td class="num">${Number(l.cantidad || 0)}</td>
             <td>${this.esc(l.modelo || '—')}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`).join('')}
+          ${(a.cargos || []).map(c => `<tr><td class="num">${Number(c.cantidad || 0)}</td>
+            <td style="color:var(--fg-3);">${this.esc(c.concepto || '—')} <span class="cg-venc ${c.recurrente ? 'vigente' : 'por_vencer'}" style="font-size:10.5px;">${c.recurrente ? 'mensual' : 'único'}</span></td>
+            <td class="num">$${Number(c.monto || 0).toFixed(2)}</td></tr>`).join('')}
         </tbody></table></div>
+        ${a.totales ? `<p style="font-size:13px; margin:8px 0 0;">
+          <b>Total mensual:</b> <span class="num">$${Number(a.totales.total_mensual || 0).toFixed(2)}</span>
+          ${a.totales.itbms_aplica ? `<span style="color:var(--fg-4);">(inc. ITBMS ${(a.totales.itbms_porcentaje * 100).toFixed(0)}%)</span>` : '<span style="color:var(--fg-4);">(ITBMS exento)</span>'}
+          ${a.totales.cargos_uni ? ` · <b>Primer pago:</b> <span class="num">$${Number(a.totales.primer_pago || 0).toFixed(2)}</span>` : ''}</p>` : ''}
         ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})
           <button class="btn btn-ghost" style="padding:2px 9px;font-size:12px;" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
         ${asignando
@@ -1184,12 +1191,118 @@ window.Centro = {
 
   /* ═════════ Wizard: aumento por enmienda firmada (Ola 4) ═════════ */
 
+  // Catálogo de cargos (colección `cargos`, el mismo del contrato).
+  cargosCat: null,
+  async _cargarCargos() {
+    if (this.cargosCat) return this.cargosCat;
+    try {
+      const all = (typeof CargosService !== 'undefined') ? await CargosService.getCargos() : [];
+      this.cargosCat = (all || []).filter(c => c.activo !== false)
+        .sort((a, b) => String(a.concepto || '').localeCompare(String(b.concepto || ''), 'es'));
+    } catch (e) { console.warn('[centro] catálogo de cargos no disponible:', e?.message || e); this.cargosCat = []; }
+    return this.cargosCat;
+  },
+
+  _cargoLineaHtml() {
+    const opts = (this.cargosCat || []).map(c =>
+      `<option value="${this.esc(c.id)}" data-monto="${Number(c.monto_default) || 0}" data-rec="${c.recurrente ? 1 : 0}">${this.esc(c.concepto || '')}</option>`).join('');
+    return `<div class="wa-cargo" style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+      <select class="form-select" data-wac-sel style="flex:1;" onchange="Centro._cargoSelChange(this)">
+        <option value="">— cargo del catálogo —</option>${opts}</select>
+      <input class="form-input" data-wac-cant type="number" min="1" value="1" style="width:70px;" title="Cantidad" onchange="Centro._aumPreview()">
+      <input class="form-input" data-wac-monto type="number" min="0" step="0.01" placeholder="$" style="width:100px;" onchange="Centro._aumPreview()">
+      <select class="form-select" data-wac-tipo style="width:110px;" onchange="Centro._aumPreview()">
+        <option value="unico">Único</option><option value="recurrente">Mensual</option></select>
+      <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
+        onclick="this.parentElement.remove(); Centro._aumPreview()">✕</button>
+    </div>`;
+  },
+  _cargoSelChange(sel) {
+    const opt = sel.selectedOptions[0];
+    const fila = sel.parentElement;
+    if (opt && opt.value) {
+      const m = Number(opt.dataset.monto) || 0;
+      const monto = fila.querySelector('[data-wac-monto]');
+      if (m && !monto.value) monto.value = m;
+      fila.querySelector('[data-wac-tipo]').value = opt.dataset.rec === '1' ? 'recurrente' : 'unico';
+    }
+    this._aumPreview();
+  },
+
+  _aumLineas() {
+    const selects = [...document.querySelectorAll('select[data-wau-modelo]')];
+    const cants = [...document.querySelectorAll('input[data-wau-cant]')];
+    const precios = [...document.querySelectorAll('input[data-wau-precio]')];
+    return selects.map((s, i) => {
+      const m = this._modeloDeSelect(s);
+      return m ? { modelo: m.label, modelo_id: m.id,
+        cantidad: Math.max(1, Number(cants[i]?.value || 1)), precio: Number(precios[i]?.value || 0) } : null;
+    }).filter(Boolean);
+  },
+  _aumCargos() {
+    return [...document.querySelectorAll('.wa-cargo')].map(f => {
+      const sel = f.querySelector('[data-wac-sel]');
+      const opt = sel?.selectedOptions[0];
+      return {
+        cargo_id: sel?.value || '',
+        concepto: opt ? (opt.textContent || '').trim() : '',
+        cantidad: Math.max(1, Math.round(Number(f.querySelector('[data-wac-cant]')?.value)) || 1),
+        monto: Math.max(0, Number(f.querySelector('[data-wac-monto]')?.value || 0)),
+        recurrente: f.querySelector('[data-wac-tipo]')?.value === 'recurrente',
+      };
+    }).filter(c => c.cargo_id && c.monto > 0);
+  },
+
+  // Misma aritmética del contrato (nc-form.recalcularTotalesContrato):
+  // mensual = equipos + cargos recurrentes (+ITBMS); primer pago suma únicos.
+  _totAumento(lineas, cargos, itbmsAplica) {
+    const r2 = (n) => Math.round(n * 100) / 100;
+    const rate = (window.FMT && Number(FMT.ITBMS_RATE)) || 0.07;
+    const eq = r2(lineas.reduce((s, l) => s + l.cantidad * l.precio, 0));
+    let cr = 0, cu = 0;
+    cargos.forEach(c => { const t = c.monto * c.cantidad; if (c.recurrente) cr += t; else cu += t; });
+    cr = r2(cr); cu = r2(cu);
+    const mensualBase = r2(eq + cr);
+    const itbmsMen = itbmsAplica ? r2(mensualBase * rate) : 0;
+    const inicialBase = r2(eq + cr + cu);
+    const itbmsIni = itbmsAplica ? r2(inicialBase * rate) : 0;
+    return {
+      equipos_sub: eq, cargos_rec: cr, cargos_uni: cu,
+      itbms_aplica: !!itbmsAplica, itbms_porcentaje: rate,
+      itbms_mensual: itbmsMen, total_mensual: r2(mensualBase + itbmsMen),
+      itbms_unico: r2(Math.max(0, itbmsIni - itbmsMen)), primer_pago: r2(inicialBase + itbmsIni),
+    };
+  },
+
+  _aumPreview() {
+    const cont = document.getElementById('waTot');
+    if (!cont) return;
+    const t = this._totAumento(this._aumLineas(), this._aumCargos(),
+      document.getElementById('waItbms')?.checked !== false);
+    const f = (n) => `$${Number(n || 0).toFixed(2)}`;
+    const fila = (l, v, b) => `<div style="display:flex; font-size:13px; padding:2px 0;">
+      <span${b ? ' style="font-weight:700;"' : ''}>${l}</span><span class="num" style="margin-left:auto;${b ? 'font-weight:700;' : ''}">${v}</span></div>`;
+    cont.innerHTML =
+      fila('Equipos (mensual)', f(t.equipos_sub))
+      + (t.cargos_rec ? fila('Cargos mensuales', f(t.cargos_rec)) : '')
+      + (t.itbms_aplica ? fila(`ITBMS (${(t.itbms_porcentaje * 100).toFixed(0)}%)`, f(t.itbms_mensual)) : fila('ITBMS', 'Exento'))
+      + fila('TOTAL MENSUAL', f(t.total_mensual), true)
+      + (t.cargos_uni ? (
+          `<div style="border-top:1px solid var(--border-subtle); margin-top:4px; padding-top:4px;"></div>`
+          + fila('Cargos únicos', f(t.cargos_uni))
+          + (t.itbms_aplica ? fila('ITBMS únicos', f(t.itbms_unico)) : '')
+          + fila('PRIMER PAGO (mes 1 + únicos)', f(t.primer_pago), true)) : '');
+  },
+
   async wizAumento(preselId) {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
-    await this._cargarModelos();
+    await Promise.all([this._cargarModelos(), this._cargarCargos()]);
     const activos = this.contratos.filter(c => this._esVigente(c));
     if (!activos.length) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }
+    // ITBMS por defecto: hereda del contrato destino; cliente exento manda.
+    const cBase = activos.find(c => c.id === preselId) || activos[0];
+    const itbmsDefault = this.cliente?.itbms_exento === true ? false : (cBase?.itbms_aplica !== false);
     this._abrirModal(`
       <h3 style="margin:0 0 6px;">Aumento de equipos (enmienda) — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
@@ -1201,39 +1314,47 @@ window.Centro = {
         <select class="form-select" id="waContrato">
           ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === preselId ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
         </select></div>
+      <div oninput="Centro._aumPreview()">
       <div class="form-field" style="margin-bottom:10px;">
         <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
         <div id="waLineas">${this._lineaModeloHtml('wau', true)}</div>
         <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
-          onclick="Centro._addLineaModelo('waLineas','wau',true)">+ Agregar otro modelo</button></div>
-      <div class="form-field" style="margin-bottom:12px; max-width:220px;">
-        <label class="form-label">Vigencia del tramo (meses)</label>
-        <input class="form-input" type="number" id="waMeses" min="1" value="18"></div>
+          onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button></div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Otros conceptos (cargos del catálogo — únicos o mensuales)</label>
+        <div id="waCargos"></div>
+        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
+          onclick="document.getElementById('waCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button></div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <div class="form-field" style="margin:0; max-width:180px;">
+          <label class="form-label">Vigencia del tramo (meses)</label>
+          <input class="form-input" type="number" id="waMeses" min="1" value="18"></div>
+        <label class="cg-toggle" style="margin-bottom:2px;">
+          <input type="checkbox" id="waItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._aumPreview()">
+          Aplica ITBMS${this.cliente?.itbms_exento === true ? ' <span style="color:var(--fg-4);">(cliente exento)</span>' : ''}
+        </label>
+      </div>
+      <div id="waTot" class="ds-card" style="padding:10px 14px; max-width:380px; margin-bottom:12px;"></div>
+      </div>
       <div style="display:flex; gap:8px; justify-content:flex-end;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="Centro.crearAumento()">Enviar a aprobación</button>
       </div>`);
+    this._aumPreview();
   },
 
   async crearAumento() {
     const contratoDocId = document.getElementById('waContrato')?.value || '';
     const contrato = this.contratos.find(c => c.id === contratoDocId);
     if (!contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
-    const selects = [...document.querySelectorAll('select[data-wau-modelo]')];
-    const cants = [...document.querySelectorAll('input[data-wau-cant]')];
-    const precios = [...document.querySelectorAll('input[data-wau-precio]')];
-    const lineas = selects.map((s, i) => {
-      const m = this._modeloDeSelect(s);
-      return m ? {
-        modelo: m.label, modelo_id: m.id,
-        cantidad: Math.max(1, Number(cants[i]?.value || 1)),
-        precio: Number(precios[i]?.value || 0),
-      } : null;
-    }).filter(Boolean);
+    const lineas = this._aumLineas();
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
     if (lineas.some(l => !(l.precio > 0))) { Toast.show('Cada línea necesita su precio mensual', 'warn'); return; }
     const meses = Number(document.getElementById('waMeses')?.value || 0);
     if (!(meses > 0)) { Toast.show('Indica la vigencia del tramo en meses', 'warn'); return; }
+    const cargos = this._aumCargos();
+    const itbmsAplica = document.getElementById('waItbms')?.checked !== false;
+    const totales = this._totAumento(lineas, cargos, itbmsAplica);
     try {
       const gid = await GestionesService.crear({
         tipo: 'aumento',
@@ -1248,6 +1369,9 @@ window.Centro = {
           contrato_doc_id: contrato.id,
           contrato_id: contrato.contrato_id || contrato.id,
           lineas,
+          cargos,
+          itbms: { aplica: itbmsAplica, porcentaje: totales.itbms_porcentaje },
+          totales,
           duracion_meses: meses,
           seriales_asignados: [],
         },

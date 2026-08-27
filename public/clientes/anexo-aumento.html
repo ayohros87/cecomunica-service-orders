@@ -62,9 +62,12 @@
 
           document.getElementById('hoja').innerHTML = `
             <div class="cab">
-              <div>
-                <h1>CECOMUNICA</h1>
-                <div style="font:12px Arial,sans-serif;color:#555;">Comunicaciones de Panamá</div>
+              <div style="display:flex; align-items:center; gap:12px;">
+                <img src="/brand/cecomunica-monogram.svg" alt="" style="width:46px; height:46px;">
+                <div>
+                  <h1>CECOMUNICA</h1>
+                  <div style="font:12px Arial,sans-serif;color:#555;">Comunicaciones de Panamá</div>
+                </div>
               </div>
               <div class="num">ANEXO DE AUMENTO<br>${esc(gid)}<br>
                 <span style="font-weight:400;color:#555;">Contrato ${esc(a.contrato_id || '—')}</span></div>
@@ -79,16 +82,51 @@
               en este anexo:</p>
 
             <table>
-              <thead><tr><th>Cantidad</th><th>Modelo</th><th>Precio mensual (unidad)</th><th>Subtotal/mes</th></tr></thead>
+              <thead><tr><th>Cantidad</th><th>Concepto</th><th>Tipo</th><th>Precio (unidad)</th><th>Subtotal</th></tr></thead>
               <tbody>${(a.lineas || []).map(l => `<tr>
                 <td>${Number(l.cantidad || 0)}</td>
                 <td>${esc(l.modelo || '—')}</td>
+                <td>Mensual</td>
                 <td>$${Number(l.precio || 0).toFixed(2)}</td>
                 <td>$${(Number(l.cantidad || 0) * Number(l.precio || 0)).toFixed(2)}</td></tr>`).join('')}
-                <tr><td colspan="3" style="text-align:right;"><b>Total mensual del aumento</b></td>
-                    <td><b>$${totalMensual.toFixed(2)}</b></td></tr>
+              ${(a.cargos || []).map(c => `<tr>
+                <td>${Number(c.cantidad || 0)}</td>
+                <td>${esc(c.concepto || '—')}</td>
+                <td>${c.recurrente ? 'Mensual' : 'Único'}</td>
+                <td>$${Number(c.monto || 0).toFixed(2)}</td>
+                <td>$${(Number(c.cantidad || 0) * Number(c.monto || 0)).toFixed(2)}</td></tr>`).join('')}
               </tbody>
             </table>
+
+            ${(() => {
+              // Bloque tarifario — misma aritmética del contrato: mensual =
+              // equipos + cargos recurrentes (+ITBMS); primer pago suma únicos.
+              const r2 = (n) => Math.round(n * 100) / 100;
+              const t = a.totales || (() => {
+                const rate = 0.07;
+                const eq = r2((a.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0) * Number(l.precio || 0), 0));
+                let cr = 0, cu = 0;
+                (a.cargos || []).forEach(c => { const x = Number(c.monto || 0) * Number(c.cantidad || 1); if (c.recurrente) cr += x; else cu += x; });
+                const men = r2(eq + cr), ini = r2(eq + cr + cu);
+                const ap = a.itbms?.aplica !== false;
+                const im = ap ? r2(men * rate) : 0, ii = ap ? r2(ini * rate) : 0;
+                return { equipos_sub: eq, cargos_rec: r2(cr), cargos_uni: r2(cu), itbms_aplica: ap,
+                         itbms_porcentaje: rate, itbms_mensual: im, total_mensual: r2(men + im),
+                         itbms_unico: r2(Math.max(0, ii - im)), primer_pago: r2(ini + ii) };
+              })();
+              const f = (n) => `$${Number(n || 0).toFixed(2)}`;
+              const fila = (l, v, b) => `<tr><td colspan="4" style="text-align:right; border-bottom:${b ? '1.5px solid #111' : '1px solid #ccc'};${b ? 'font-weight:700;' : ''}">${l}</td>
+                <td style="border-bottom:${b ? '1.5px solid #111' : '1px solid #ccc'};${b ? 'font-weight:700;' : ''}">${v}</td></tr>`;
+              return `<table style="margin-top:2px;"><tbody>
+                ${fila('Subtotal equipos (mensual)', f(t.equipos_sub))}
+                ${t.cargos_rec ? fila('Cargos mensuales', f(t.cargos_rec)) : ''}
+                ${t.itbms_aplica ? fila(`ITBMS (${(t.itbms_porcentaje * 100).toFixed(0)}%)`, f(t.itbms_mensual)) : fila('ITBMS', 'Exento')}
+                ${fila('TOTAL MENSUAL DEL AUMENTO', f(t.total_mensual), true)}
+                ${t.cargos_uni ? fila('Cargos únicos (una sola vez)', f(t.cargos_uni)) : ''}
+                ${t.cargos_uni && t.itbms_aplica ? fila('ITBMS sobre únicos', f(t.itbms_unico)) : ''}
+                ${t.cargos_uni ? fila('PRIMER PAGO (mes 1 + únicos)', f(t.primer_pago), true) : ''}
+              </tbody></table>`;
+            })()}
 
             <div class="periodo">
               <b>PERÍODO DE VIGENCIA PROPIO DE ESTE ANEXO.</b> Los equipos de este anexo tienen un período de
