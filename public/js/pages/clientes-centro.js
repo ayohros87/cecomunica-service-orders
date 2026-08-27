@@ -714,8 +714,8 @@ window.Centro = {
           <td class="num" style="font-size:12.5px;">${this.esc(it.fecha_fin_facturacion || g.fecha_fin_facturacion || '—')}</td>
         </tr>`).join('')}</tbody></table></div>
         ${pen?.por_contrato?.length ? `
-          <p style="font-size:13px; margin:10px 0 4px;"><b>Penalidad estimada por contrato</b>
-            <span style="color:var(--fg-4);">(no vencido: 3 meses de mensualidad · vencido: 30 días + preaviso 60 días)</span></p>
+          <p style="font-size:13px; margin:10px 0 4px;"><b>Liquidación estimada por contrato — 3 meses en cualquier caso</b>
+            <span style="color:var(--fg-4);">(vencido: 60 días de preaviso con servicio activo + 30 de penalidad · cobro inmediato)</span></p>
           ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:3px 0;">
             <span class="cg-mono">${this.esc(p.contrato_id || '—')}</span>
             <span style="color:var(--fg-3);">${this.esc(p.detalle || '')}</span>
@@ -1440,9 +1440,11 @@ window.Centro = {
     ['otro', 'Otro'],
   ],
 
-  // Penalidad estimada según el tramo de cada ítem (decisión §8.4): contrato
-  // no vencido → 3 meses de mensualidad de la línea; vencido → 30 días (~1
-  // mensualidad; la factura corriente + prorrateo exactos los emite finanzas).
+  // Liquidación de baja según el tramo de cada ítem (decisión §8.4, versión
+  // final 2026-08-27): SIEMPRE equivale a 3 meses de la mensualidad de la
+  // línea, cobrados de inmediato. La diferencia es qué recibe el cliente:
+  // no vencido → penalidad pura; vencido → 60 días de preaviso CON SERVICIO
+  // ACTIVO + 30 días de penalidad.
   _penalidadBaja(items) {
     const por = new Map();
     for (const it of items) {
@@ -1453,7 +1455,7 @@ window.Centro = {
       const dias = this._diasA(c.fecha_vencimiento);
       const vencido = dias !== null && dias < 0;
       const cur = por.get(c.id) || { contrato_id: c.contrato_id || c.id, monto: 0, unidades: 0, vencido, sinPrecio: false };
-      cur.monto += vencido ? precio : precio * 3;
+      cur.monto += precio * 3;   // 3 meses en cualquier caso, cobro inmediato
       cur.unidades += 1;
       if (!precio) cur.sinPrecio = true;
       por.set(c.id, cur);
@@ -1461,7 +1463,9 @@ window.Centro = {
     const lista = [...por.values()].map(p => ({
       contrato_id: p.contrato_id,
       monto: Math.round(p.monto * 100) / 100,
-      detalle: `${p.unidades} unid. · ${p.vencido ? 'vencido: 30 días de penalidad + preaviso 60 días' : 'no vencido: 3 meses de mensualidad'}${p.sinPrecio ? ' · ⚠ línea sin precio' : ''}`,
+      detalle: `${p.unidades} unid. · ${p.vencido
+        ? 'vencido: 60 días de preaviso (servicio activo) + 30 de penalidad'
+        : 'no vencido: 3 meses de penalidad'}${p.sinPrecio ? ' · ⚠ línea sin precio' : ''}`,
     }));
     return { por_contrato: lista, total: Math.round(lista.reduce((s, p) => s + p.monto, 0) * 100) / 100 };
   },
@@ -1571,8 +1575,8 @@ window.Centro = {
     const todasPropias = items.length && items.every(i => i.propiedad === 'cliente');
     document.getElementById('wbPen').innerHTML = items.length ? `
       ${todasPropias ? '<div class="cg-senal info" style="margin-bottom:8px;">Equipos <b>propios del cliente</b>: la baja corta el servicio y la facturación — no se crea orden de recuperación.</div>' : ''}
-      <p style="font-size:13px; margin:0 0 4px;"><b>Penalidad estimada</b>
-        <span style="color:var(--fg-4);">(no vencido: 3 meses · vencido: 30 días + preaviso 60 días)</span></p>
+      <p style="font-size:13px; margin:0 0 4px;"><b>Liquidación estimada — 3 meses en cualquier caso, cobro inmediato</b>
+        <span style="color:var(--fg-4);">(vencido: 60 días de preaviso con servicio activo + 30 de penalidad)</span></p>
       ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:2px 0;">
         <span class="cg-mono">${this.esc(p.contrato_id)}</span>
         <span style="color:var(--fg-3);">${this.esc(p.detalle)}</span>

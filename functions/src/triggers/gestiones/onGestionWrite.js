@@ -106,8 +106,8 @@ async function correoAprobadoresBaja(gid, g) {
     : `<p style="margin:0 0 12px;font:13px Arial,sans-serif;color:#b91c1c;"><b>Falta la carta de solicitud del cliente</b> — la aprobación queda bloqueada hasta adjuntarla.</p>`;
   const pen = g.penalidad_estimada;
   const penHtml = pen?.por_contrato?.length
-    ? `<p style="margin:12px 0 4px;font:14px/1.5 Arial,sans-serif;"><b>Penalidad estimada por contrato</b>
-        (no vencido: 3 meses de mensualidad · vencido: 30 días de penalidad + preaviso de 60 días facturado):</p>`
+    ? `<p style="margin:12px 0 4px;font:14px/1.5 Arial,sans-serif;"><b>Liquidación estimada por contrato — 3 meses de mensualidad en cualquier caso, cobro inmediato</b>
+        (vencido: 60 días de preaviso con servicio activo + 30 de penalidad):</p>`
       + G.tablaHtml(["Contrato", "Base", "Penalidad est."], pen.por_contrato.map(p => [
           `<code>${G.escapeHtml(p.contrato_id || "—")}</code>`,
           G.escapeHtml(p.detalle || "—"),
