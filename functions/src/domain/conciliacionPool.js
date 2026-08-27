@@ -222,13 +222,70 @@ async function ejecutar() {
     }
   }
 
+  // ── H: modelo_id inválido en líneas de contratos vigentes ──
+  // La clase de bug del "modelo fantasma" (uYNSf5…, caso Feduro 2026-08-27):
+  // la línea apunta a un doc del catálogo que NO existe → la tarifa por equipo
+  // no resuelve y la facturación queda ciega. fix-lineas-modelo-id.js repara
+  // lo histórico; este chequeo vigila que no vuelva a entrar.
+  R.H_modelo_invalido = 0; R.H_muestras = [];
+  try {
+    const modSnap = await db.collection("modelos").get();
+    const modelosIds = new Set(modSnap.docs.map((d) => d.id));
+    for (const [cid, c] of contratos) {
+      if (c.deleted) continue;
+      if (!["aprobado", "activo"].includes(String(c.estado || "").toLowerCase())) continue;
+      for (const l of (c.equipos || [])) {
+        if (l.modelo_id && !modelosIds.has(l.modelo_id)) {
+          R.H_modelo_invalido++;
+          if (R.H_muestras.length < MAX_MUESTRAS) R.H_muestras.push({
+            contrato: c.contrato_id || cid, modelo: l.modelo || "?", modelo_id: l.modelo_id,
+          });
+        }
+      }
+    }
+  } catch (e) { /* best-effort: el resto del reporte vale igual */ }
+
+  // ── I: gestiones abiertas huérfanas (Ola 6) ──
+  // Abiertas sin cliente válido, o con ítems cuyo contrato no está en
+  // contratos_afectados (drift cabecera↔ítems que rompe filtros y correos).
+  R.I_gestiones_huerfanas = 0; R.I_muestras = [];
+  try {
+    const gSnap = await db.collection("gestiones").get();
+    const ABIERTAS_G = new Set(["pendiente_aprobacion", "pendiente_firma", "pendiente_bodega", "en_proceso", "en_demo", "retorno"]);
+    const clienteOk = new Map();
+    for (const d of gSnap.docs) {
+      const g = d.data();
+      if (g.deleted || !ABIERTAS_G.has(g.estado)) continue;
+      let mal = null;
+      if (!g.cliente_id) mal = "sin cliente_id";
+      else {
+        if (!clienteOk.has(g.cliente_id)) {
+          const cs = await db.collection("clientes").doc(g.cliente_id).get();
+          clienteOk.set(g.cliente_id, cs.exists && cs.data().deleted !== true);
+        }
+        if (!clienteOk.get(g.cliente_id)) mal = "cliente inexistente o borrado";
+      }
+      if (!mal) {
+        const af = new Set(g.contratos_afectados || []);
+        const fuera = (g.items || []).find((it) => it.contrato_doc_id && !af.has(it.contrato_doc_id));
+        if (fuera) mal = `ítem con contrato ${fuera.contrato_id || fuera.contrato_doc_id} fuera de contratos_afectados`;
+      }
+      if (mal) {
+        R.I_gestiones_huerfanas++;
+        if (R.I_muestras.length < MAX_MUESTRAS) R.I_muestras.push({
+          gestion: d.id, tipo: g.tipo || "?", cliente: g.cliente_nombre || g.cliente_id || "—", detalle: mal,
+        });
+      }
+    }
+  } catch (e) { /* best-effort */ }
+
   // El total es DRIFT: lo que el sistema no sabe. F_esperando_apagado queda
   // fuera a propósito — eso ya se decidió y es una tarea en POC, no un dato
   // roto; sumarlo haría que el reporte nunca bajara y volviera a ser ruido.
   const total = R.A_contrato_sin_ficha + R.B_taller_orden_cerrada
     + R.C_poc_sin_ficha + R.C_poc_sin_enlace
     + R.D_asignada_a_anulado + R.E_vendido_orden_cerrada + R.F_serial_dos_clientes
-    + R.G_asignada_sin_serial;
+    + R.G_asignada_sin_serial + R.H_modelo_invalido + R.I_gestiones_huerfanas;
   await db.collection("admin_reportes").doc("conciliacion_pool").set({ ...R, total });
   return { ...R, total };
 }

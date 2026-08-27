@@ -322,13 +322,14 @@ service cloud.firestore {
       match /seriales_estado/{docId2}     { allow write: if puedeGestionarSeriales(); }
       match /seriales_historial/{docId2}  { allow write: if puedeGestionarSeriales(); }
 
-      // Solicitudes de cambio de serial. Crear: recepción/admin y SOLO mientras
-      // el contrato está 'aprobado' (la ventana se cierra al activarse). Resolver
-      // (estado→'resuelto') o cancelar: quien gestiona seriales (inventario,
-      // recepción, admin, …). Borrar: admin.
+      // Solicitudes de cambio de serial. Decisión 2026-08-26 (#11, Ola 5): un
+      // serial mal capturado se corrige EN CUALQUIER MOMENTO — la ventana la
+      // define el estado del EQUIPO, no el papel del contrato (antes exigía
+      // contrato 'aprobado' y un error detectado tras activar quedaba
+      // incorregible). El control es la aprobación: resolver (estado→'resuelto')
+      // sigue reservado a quien gestiona seriales, con kardex correccion_serial.
       match /seriales_cambios/{reqId} {
-        allow create: if puedeSolicitarCambioSerial()
-                       && get(/databases/$(database)/documents/contratos/$(docId)).data.estado == "aprobado";
+        allow create: if puedeSolicitarCambioSerial();
         allow update: if puedeGestionarSeriales();
         allow delete: if isAdmin();
       }
