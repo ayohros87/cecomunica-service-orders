@@ -103,6 +103,30 @@ window.Centro = {
         db.collection('contratos').where('vencimiento_estado', 'in', ['vencido', 'por_vencer']).limit(300).get(),
         db.collection('gestiones').limit(150).get().catch(() => ({ docs: [] })),
       ]);
+
+      // Regla 2026-08-27: cuentas con equipos SIN contrato formal ⇒ requieren
+      // renovación/regularización. Se agrupa la custodia por cliente con caché
+      // de sesión (10 min) para no barrer el pool en cada apertura.
+      let custodia = null;
+      try {
+        const CK = 'cg_custodia_v1';
+        const raw = sessionStorage.getItem(CK);
+        if (raw) { const o = JSON.parse(raw); if (Date.now() - o.t < 10 * 60 * 1000) custodia = new Map(o.d); }
+        if (!custodia) {
+          const ps = await db.collection('equipos_pool').where('estado', '==', 'en_cliente').get();
+          custodia = new Map();
+          ps.forEach(d => {
+            const u = d.data();
+            const cid = u.asignacion?.cliente_id;
+            if (!cid || u.asignacion?.contrato_doc_id) return;
+            const cur = custodia.get(cid) || { n: 0, nombre: '' };
+            cur.n++;
+            if (!cur.nombre && u.asignacion?.cliente_nombre) cur.nombre = u.asignacion.cliente_nombre;
+            custodia.set(cid, cur);
+          });
+          sessionStorage.setItem(CK, JSON.stringify({ t: Date.now(), d: [...custodia.entries()] }));
+        }
+      } catch (e) { custodia = new Map(); }
       const mapa = new Map();
       venc.docs.forEach(d => mapa.set(d.id, { id: d.id, ...d.data() }));
 
@@ -125,6 +149,16 @@ window.Centro = {
           txt: `${c.cliente_nombre || '—'} — ${c.contrato_id || c.id} ${dias < 0 ? `venció hace ${-dias} día${-dias === 1 ? '' : 's'}` : `vence en ${dias} día${dias === 1 ? '' : 's'}`}`,
         });
       }
+      // Cuentas con custodia (equipos sin contrato) — entre los vencimientos
+      // y las gestiones; a más equipos sueltos, más arriba.
+      for (const [cid, info] of custodia) {
+        if (misClientes && !misClientes.has(cid)) continue;
+        items.push({
+          tipo: 'warn', dias: 1000 + Math.max(0, 900 - info.n), cliente_id: cid,
+          txt: `${info.nombre || '—'} — ${info.n} equipo(s) sin contrato formal: requiere renovación / regularización`,
+        });
+      }
+
       gest.docs.forEach(d => {
         const g = d.data();
         if (!GestionesService.ABIERTAS.includes(g.estado)) return;
@@ -402,6 +436,13 @@ window.Centro = {
         out.push({ tipo: 'warn', txt: `El contrato ${c.contrato_id || c.id} vence en ${v.dias} día(s) — iniciar renovación.` });
       }
     }
+    // Regla 2026-08-27: una cuenta con equipos FUERA de contrato formal ya
+    // requiere renovación/regularización (el documento marco los formaliza).
+    const sinContrato = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
+    if (sinContrato) out.unshift({
+      tipo: 'warn',
+      txt: `${sinContrato} equipo(s) sin contrato formal — la cuenta requiere renovación / regularización.`,
+    });
     const pendDev = this.equipos.filter(e => e.pendiente_devolucion).length;
     if (pendDev) out.push({ tipo: 'warn', txt: `${pendDev} equipo(s) pendiente(s) de devolución.` });
     const enTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
