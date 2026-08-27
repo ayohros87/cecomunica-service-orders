@@ -567,40 +567,26 @@ window.NCForm = {
   recalcularTotalesContrato() {
     const equiposSub  = this.calcularSubtotalDesdeFilas();
     const itbmsAplica = (document.getElementById('itbms_aplica')?.value ?? 'true') === 'true';
-
-    // Otros conceptos (cargos): recurrentes suman al mensual; únicos al primer pago.
     const cargos = (window.NCCargos ? NCCargos.leer() : []);
-    let cargosRec = 0, cargosUni = 0;
-    cargos.forEach(c => { const t = (Number(c.monto) || 0) * (Number(c.cantidad) || 1); if (c.recurrente) cargosRec += t; else cargosUni += t; });
-    cargosRec = FMT.round2(cargosRec); cargosUni = FMT.round2(cargosUni);
-
-    const mensual = ContractTotals.compute(FMT.round2(equiposSub + cargosRec), itbmsAplica);
-    const inicial = ContractTotals.compute(FMT.round2(equiposSub + cargosRec + cargosUni), itbmsAplica);
+    // La aritmética vive en js/domain/contratoTarifario.js (compartida con el
+    // wizard del Centro de gestión); aquí solo queda el pintado.
+    const tot = ContratoTarifario.totales(equiposSub, cargos, itbmsAplica);
 
     const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     const setShow = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
-    setTxt('itbms_label', mensual.itbmsLabel);
-    setTxt('subtotal_view', FMT.money(equiposSub));
-    setTxt('cargos_rec_view', FMT.money(cargosRec));
-    setTxt('itbms_view', FMT.money(mensual.itbmsMonto));
-    setTxt('total_con_itbms_view', FMT.money(mensual.totalConITBMS));
-    setTxt('cargos_uni_view', FMT.money(cargosUni));
-    const itbmsUni = Math.max(0, FMT.round2(inicial.itbmsMonto - mensual.itbmsMonto));
-    setTxt('itbms_uni_view', FMT.money(itbmsUni));
-    setTxt('primer_pago_view', FMT.money(inicial.totalConITBMS));
-    setShow('row-cargos-rec', cargosRec > 0);
-    setShow('row-cargos-uni', cargosUni > 0);
-    setShow('row-itbms-uni', cargosUni > 0 && itbmsUni > 0);
-    setShow('row-primer-pago', cargosUni > 0);
-
-    return {
-      // Compat: estos campos ahora reflejan el MENSUAL (equipos + cargos recurrentes).
-      subtotal: mensual.subtotal, itbmsAplica, itbmsPorc: mensual.itbmsPorc,
-      itbmsMonto: mensual.itbmsMonto, totalConITBMS: mensual.totalConITBMS, itbmsLabel: mensual.itbmsLabel,
-      // Detalle adicional:
-      equiposSub, cargosRec, cargosUni,
-      subtotalInicial: inicial.subtotal, itbmsInicial: inicial.itbmsMonto, primerPago: inicial.totalConITBMS,
-    };
+    setTxt('itbms_label', tot.itbmsLabel);
+    setTxt('subtotal_view', FMT.money(tot.equiposSub));
+    setTxt('cargos_rec_view', FMT.money(tot.cargosRec));
+    setTxt('itbms_view', FMT.money(tot.itbmsMonto));
+    setTxt('total_con_itbms_view', FMT.money(tot.totalConITBMS));
+    setTxt('cargos_uni_view', FMT.money(tot.cargosUni));
+    setTxt('itbms_uni_view', FMT.money(tot.itbmsUni));
+    setTxt('primer_pago_view', FMT.money(tot.primerPago));
+    setShow('row-cargos-rec', tot.cargosRec > 0);
+    setShow('row-cargos-uni', tot.cargosUni > 0);
+    setShow('row-itbms-uni', tot.cargosUni > 0 && tot.itbmsUni > 0);
+    setShow('row-primer-pago', tot.cargosUni > 0);
+    return tot;
   },
 
   calcularTotal() {

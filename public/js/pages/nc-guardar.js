@@ -194,91 +194,45 @@ window.NCGuardar = {
                precio: parseFloat(row.querySelector('.precio').value || 0) };
     });
 
-    // Vínculo al contrato original (Renovación/Adición/Reemplazo) —
-    // PLAN_CICLO_VIDA_EQUIPOS.md C.1, obligatorio desde 2026-08-11 en
-    // Renovación y Reemplazo (js/domain/origenContrato.js explica por qué).
-    // Multi-selección: una renovación puede consolidar varios contratos viejos.
-    // contrato_origen_id/_ref (primero de la lista) se conservan por compat.
-    const origenIds  = origen.origen_ids;
-    const origenRefs = origen.origen_refs;
-    const origenId   = origenIds[0] || null;
-    const origenRef  = origenRefs[0] || '';
-
     const clienteData     = NC.listaClientes[clienteId];
     const duracionSel     = document.getElementById('duracion').value;
     const otraDuracion    = document.getElementById('otra_duracion').value.trim();
     const duracionFinal   = duracionSel === 'Otro' ? `${otraDuracion} meses` : duracionSel;
-    const tot             = NCForm.recalcularTotalesContrato();
-    const total_equipos   = equipos.reduce((acc, e) => acc + Number(e.cantidad || 0), 0);
+    const duracionMeses   = parseInt(String(duracionFinal).replace(/\D+/g, ''), 10) || 0;
 
-    const contrato = {
+    // La forma del doc vive en js/domain/contratoTarifario.js — COMPARTIDA con
+    // el wizard del Centro de gestión. Cambiarla es cambiarla para ambos.
+    const contrato = ContratoTarifario.construirDoc({
       contrato_id,
-      cliente_id: clienteId,
-      cliente_nombre: clienteData?.nombre || '',
-      cliente_nombre_lower: (clienteData?.nombre || '').toLowerCase(),
-      // Tokens de búsqueda (A8): el prefijo solo no encuentra palabras
-      // interiores; los existentes se backfillean por script.
       searchTokens: ContratosService.buildSearchTokens({
         cliente_nombre: clienteData?.nombre || '', contrato_id,
       }),
-      cliente_direccion: clienteData?.direccion || '',
-      cliente_telefono: clienteData?.telefono || '',
-      cliente_ruc: clienteData?.ruc || '',
-      cliente_dv: clienteData?.dv || '',
-      cliente_rucdv: (clienteData?.ruc || '') + (clienteData?.dv ? ' - DV' + clienteData.dv : ''),
-      representante: clienteData?.representante || '',
-      representante_cedula: clienteData?.representante_cedula || '',
-      duracion: duracionFinal,
+      cliente: {
+        id: clienteId,
+        nombre: clienteData?.nombre || '',
+        direccion: clienteData?.direccion || '',
+        telefono: clienteData?.telefono || '',
+        ruc: clienteData?.ruc || '',
+        dv: clienteData?.dv || '',
+        representante: clienteData?.representante || '',
+        representante_cedula: clienteData?.representante_cedula || '',
+      },
       codigo_tipo: tipoCorto,
       tipo_contrato: tipoNombre,
       accion,
       renovacion_sin_equipo: sinEquipo,
       renovacion_refurbished_componentes: refurb,
-      renovacion_modalidad: esRenov ? (sinEquipo ? 'Renovación sin equipo' : 'Renovación con equipo') : '',
-      origen_tipo: OrigenContrato.tipoDe(origen),
-      contrato_origen_id: origenId,
-      contrato_origen_ref: origenRef,
-      contrato_origen_ids: origenIds,
-      contrato_origen_refs: origenRefs,
-      origen_legacy_ref: origen.legacy ? origen.legacy_ref : '',
-      // El plan de transición decidido en la venta (P1). Lo consumen la página
-      // de seriales ("Traer del original") y onEntregaTransicion al entregar.
+      origenSel: origen,
       transicion_plan: transicionPlan || null,
-      // El radio que este REEMPLAZO sustituye. Es lo que reclama la devolución
-      // al confirmarse la entrega (onEntregaTransicion), en vez del contrato de
-      // origen completo. `[]` = "no se identificó", que es una respuesta —
-      // distinta de `null`, que es "no aplica / no se preguntó".
       reemplaza_seriales: reemplazaSeriales,
-      estado: 'pendiente_aprobacion',
-      observaciones: document.getElementById('observaciones').value.trim(),
+      duracion: duracionFinal,
+      duracion_meses: duracionMeses,
+      observaciones: document.getElementById('observaciones').value,
       equipos,
-      // Cargos no-equipo (activación, etc.). Aditivo: NO afecta subtotal/total de
-      // equipos; se guardan aparte para el documento y la facturación futura.
       cargos: (window.NCCargos ? NCCargos.leer() : []),
-      total_equipos,
-      subtotal: tot.subtotal,
-      itbms_aplica: tot.itbmsAplica,
-      itbms_porcentaje: FMT.ITBMS_RATE,
-      itbms_monto: FMT.round2(tot.itbmsMonto),
-      total_con_itbms: FMT.round2(tot.totalConITBMS),
-      // Desglose con "Otros conceptos": el total mensual incluye los conceptos
-      // recurrentes; el primer pago suma además los únicos (activación, etc.).
-      subtotal_equipos: FMT.round2(tot.equiposSub),
-      cargos_recurrente: FMT.round2(tot.cargosRec),
-      cargos_unico: FMT.round2(tot.cargosUni),
-      total_mensual: FMT.round2(tot.totalConITBMS),
-      primer_pago: FMT.round2(tot.primerPago),
-      // `total` historically equaled `subtotal` on contratos written by
-      // this page — a long-standing bug since the field was first added.
-      // Fixed 2026-05-19: write the post-ITBMS total so the name matches
-      // the value. Existing readers that fall back `subtotal ?? total`
-      // still work (subtotal is always written above for new contratos).
-      total: FMT.round2(tot.totalConITBMS),
-      fecha_creacion: new Date(),
-      fecha_modificacion: new Date(),
-      deleted: false,
-      creado_por_uid: user.uid
-    };
+      itbms_aplica: (document.getElementById('itbms_aplica')?.value ?? 'true') === 'true',
+      creado_por_uid: user.uid,
+    });
 
     const docRef = await ContratosService.addContrato(contrato);
 

@@ -442,6 +442,9 @@ window.Centro = {
     if (sinContrato) out.unshift({
       tipo: 'warn',
       txt: `${sinContrato} equipo(s) sin contrato formal — la cuenta requiere renovación / regularización.`,
+      extra: this.puedeCrearGestion()
+        ? `<button class="btn btn-primary" style="padding:3px 11px; font-size:12px; margin-left:auto; flex:none;"
+             onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : '',
     });
     const pendDev = this.equipos.filter(e => e.pendiente_devolucion).length;
     if (pendDev) out.push({ tipo: 'warn', txt: `${pendDev} equipo(s) pendiente(s) de devolución.` });
@@ -454,7 +457,7 @@ window.Centro = {
     }
     document.getElementById('fSenales').innerHTML = out.length
       ? out.map(s => `<div class="cg-senal ${s.tipo}"><i data-lucide="${s.tipo === 'info' ? 'info' : 'alert-triangle'}"
-          style="width:15px;height:15px;flex:none;margin-top:2px;"></i><span>${this.esc(s.txt)}</span></div>`).join('')
+          style="width:15px;height:15px;flex:none;margin-top:2px;"></i><span>${this.esc(s.txt)}</span>${s.extra || ''}</div>`).join('')
       : '';
   },
 
@@ -469,7 +472,10 @@ window.Centro = {
     const filas = this.contratos.map(c => {
       const dias = this._esVigente(c) && this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
       const renovar = dias !== null && dias <= this.AVISO_DIAS && !this._renovadoPor(c)
-        ? `<a class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" href="../contratos/nuevo-contrato.html">Renovar</a>` : '';
+        ? (this.puedeCrearGestion()
+            ? `<button class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" title="Renovación con este contrato como origen"
+                 onclick="Centro.wizContrato('${this.esc(c.id)}')">Renovar</button>`
+            : `<a class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" href="../contratos/nuevo-contrato.html">Renovar</a>`) : '';
       return `<tr>
         <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
         <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
@@ -983,8 +989,11 @@ window.Centro = {
       ${activos.length ? '<button type="button" onclick="Centro.wizAumento()">Aumento de equipos (enmienda)</button>' : ''}
       ${terminaciones}
       <div class="hd">Comercial</div>
+      <button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>
+      ${(this.contratos.some(c => this._esVigente(c) && this._wcEnVentana(c)) || this._wcCustodia().length)
+        ? '<button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>' : ''}
       <a href="../cotizaciones/index.html">Nueva cotización</a>
-      <a href="../contratos/nuevo-contrato.html">Nuevo contrato</a>
+      <a href="../contratos/nuevo-contrato.html">Formulario clásico de contrato</a>
       <div class="hd">Cliente</div>
       <a href="./index.html">Editar datos del cliente</a>`;
   },
@@ -1252,12 +1261,12 @@ window.Centro = {
     return `<div class="wa-cargo" style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
       <select class="form-select" data-wac-sel style="flex:1;" onchange="Centro._cargoSelChange(this)">
         <option value="">— cargo del catálogo —</option>${opts}</select>
-      <input class="form-input" data-wac-cant type="number" min="1" value="1" style="width:70px;" title="Cantidad" onchange="Centro._aumPreview()">
-      <input class="form-input" data-wac-monto type="number" min="0" step="0.01" placeholder="$" style="width:100px;" onchange="Centro._aumPreview()">
-      <select class="form-select" data-wac-tipo style="width:110px;" onchange="Centro._aumPreview()">
+      <input class="form-input" data-wac-cant type="number" min="1" value="1" style="width:70px;" title="Cantidad" onchange="Centro._previewTarifario()">
+      <input class="form-input" data-wac-monto type="number" min="0" step="0.01" placeholder="$" style="width:100px;" onchange="Centro._previewTarifario()">
+      <select class="form-select" data-wac-tipo style="width:110px;" onchange="Centro._previewTarifario()">
         <option value="unico">Único</option><option value="recurrente">Mensual</option></select>
       <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
-        onclick="this.parentElement.remove(); Centro._aumPreview()">✕</button>
+        onclick="this.parentElement.remove(); Centro._previewTarifario()">✕</button>
     </div>`;
   },
   _cargoSelChange(sel) {
@@ -1269,19 +1278,25 @@ window.Centro = {
       if (m && !monto.value) monto.value = m;
       fila.querySelector('[data-wac-tipo]').value = opt.dataset.rec === '1' ? 'recurrente' : 'unico';
     }
-    this._aumPreview();
+    this._previewTarifario();
   },
+  // Las filas de cargos las comparten el aumento (#waTot) y el wizard de
+  // contrato (#wcTot); cada preview no-opea si su contenedor no está.
+  _previewTarifario() { this._aumPreview(); this._wcPreview(); },
 
-  _aumLineas() {
-    const selects = [...document.querySelectorAll('select[data-wau-modelo]')];
-    const cants = [...document.querySelectorAll('input[data-wau-cant]')];
-    const precios = [...document.querySelectorAll('input[data-wau-precio]')];
+  // Lector genérico de líneas modelo·cantidad·precio (los data-attrs que
+  // pinta _lineaModeloHtml). Lo comparten el aumento (wau) y el contrato (wcm).
+  _lineasModelo(pref) {
+    const selects = [...document.querySelectorAll(`select[data-${pref}-modelo]`)];
+    const cants = [...document.querySelectorAll(`input[data-${pref}-cant]`)];
+    const precios = [...document.querySelectorAll(`input[data-${pref}-precio]`)];
     return selects.map((s, i) => {
       const m = this._modeloDeSelect(s);
       return m ? { modelo: m.label, modelo_id: m.id,
         cantidad: Math.max(1, Number(cants[i]?.value || 1)), precio: Number(precios[i]?.value || 0) } : null;
     }).filter(Boolean);
   },
+  _aumLineas() { return this._lineasModelo('wau'); },
   _aumCargos() {
     return [...document.querySelectorAll('.wa-cargo')].map(f => {
       const sel = f.querySelector('[data-wac-sel]');
@@ -1296,37 +1311,25 @@ window.Centro = {
     }).filter(c => c.cargo_id && c.monto > 0);
   },
 
-  // Misma aritmética del contrato (nc-form.recalcularTotalesContrato):
-  // mensual = equipos + cargos recurrentes (+ITBMS); primer pago suma únicos.
+  // Aritmética del contrato — delega en js/domain/contratoTarifario.js (la
+  // misma que usa nc-form y el wizard de contrato). Este adaptador conserva
+  // la forma snake_case que ya persiste `gestiones.aumento.totales`.
   _totAumento(lineas, cargos, itbmsAplica) {
-    const r2 = (n) => Math.round(n * 100) / 100;
-    const rate = (window.FMT && Number(FMT.ITBMS_RATE)) || 0.07;
-    const eq = r2(lineas.reduce((s, l) => s + l.cantidad * l.precio, 0));
-    let cr = 0, cu = 0;
-    cargos.forEach(c => { const t = c.monto * c.cantidad; if (c.recurrente) cr += t; else cu += t; });
-    cr = r2(cr); cu = r2(cu);
-    const mensualBase = r2(eq + cr);
-    const itbmsMen = itbmsAplica ? r2(mensualBase * rate) : 0;
-    const inicialBase = r2(eq + cr + cu);
-    const itbmsIni = itbmsAplica ? r2(inicialBase * rate) : 0;
+    const t = ContratoTarifario.totales(lineas, cargos, !!itbmsAplica);
     return {
-      equipos_sub: eq, cargos_rec: cr, cargos_uni: cu,
-      itbms_aplica: !!itbmsAplica, itbms_porcentaje: rate,
-      itbms_mensual: itbmsMen, total_mensual: r2(mensualBase + itbmsMen),
-      itbms_unico: r2(Math.max(0, itbmsIni - itbmsMen)), primer_pago: r2(inicialBase + itbmsIni),
+      equipos_sub: t.equiposSub, cargos_rec: t.cargosRec, cargos_uni: t.cargosUni,
+      itbms_aplica: t.itbmsAplica, itbms_porcentaje: t.itbmsPorc,
+      itbms_mensual: t.itbmsMonto, total_mensual: t.totalConITBMS,
+      itbms_unico: t.itbmsUni, primer_pago: t.primerPago,
     };
   },
 
-  _aumPreview() {
-    const cont = document.getElementById('waTot');
-    if (!cont) return;
-    const t = this._totAumento(this._aumLineas(), this._aumCargos(),
-      document.getElementById('waItbms')?.checked !== false);
+  // Render del bloque tarifario (t en la forma snake_case de _totAumento).
+  _tarifarioHtml(t) {
     const f = (n) => `$${Number(n || 0).toFixed(2)}`;
     const fila = (l, v, b) => `<div style="display:flex; font-size:13px; padding:2px 0;">
       <span${b ? ' style="font-weight:700;"' : ''}>${l}</span><span class="num" style="margin-left:auto;${b ? 'font-weight:700;' : ''}">${v}</span></div>`;
-    cont.innerHTML =
-      fila('Equipos (mensual)', f(t.equipos_sub))
+    return fila('Equipos (mensual)', f(t.equipos_sub))
       + (t.cargos_rec ? fila('Cargos mensuales', f(t.cargos_rec)) : '')
       + (t.itbms_aplica ? fila(`ITBMS (${(t.itbms_porcentaje * 100).toFixed(0)}%)`, f(t.itbms_mensual)) : fila('ITBMS', 'Exento'))
       + fila('TOTAL MENSUAL', f(t.total_mensual), true)
@@ -1335,6 +1338,14 @@ window.Centro = {
           + fila('Cargos únicos', f(t.cargos_uni))
           + (t.itbms_aplica ? fila('ITBMS únicos', f(t.itbms_unico)) : '')
           + fila('PRIMER PAGO (mes 1 + únicos)', f(t.primer_pago), true)) : '');
+  },
+
+  _aumPreview() {
+    const cont = document.getElementById('waTot');
+    if (!cont) return;
+    const t = this._totAumento(this._aumLineas(), this._aumCargos(),
+      document.getElementById('waItbms')?.checked !== false);
+    cont.innerHTML = this._tarifarioHtml(t);
   },
 
   async wizAumento(preselId) {
@@ -1424,6 +1435,370 @@ window.Centro = {
       Toast.show(`Aumento ${gid} enviado a aprobación comercial`, 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear el aumento', 'bad'); }
+  },
+
+  /* ═════════ Wizard: nuevo contrato / renovación (Ola 7) ═════════ */
+
+  // Contrato desde la ficha del cliente, sin pasar por el formulario clásico.
+  // Escribe EXACTAMENTE el mismo doc (ContratoTarifario.construirDoc) con el
+  // mismo correlativo y estado inicial, así que la aprobación, la solicitud de
+  // seriales a bodega, el PDF y la activación por firmado corren igual.
+  // opts: id de contrato (Renovar de la fila) · {renovarCuenta:true} (consolida
+  // los que están en ventana; sin contratos = regularización vía legacy) · nada.
+  TIPOS_CONTRATO: { ALQ: 'Alquiler', PROP: 'Propio', DEMO: 'Demo', TEMP: 'Temporal' },
+
+  _lineaModeloPre(pref, conPrecio, l) {
+    return `<div style="display:flex; gap:8px; margin-bottom:8px;">
+      ${this._selModelo(`data-${pref}-modelo style="flex:1;"`, l?.modelo_id, l?.modelo)}
+      <input class="form-input" data-${pref}-cant type="number" min="1" value="${Math.max(1, Number(l?.cantidad || 1))}" style="width:86px;" title="Cantidad">
+      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="0.01" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">` : ''}
+      <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
+        onclick="this.parentElement.remove(); Centro._previewTarifario()">✕</button>
+    </div>`;
+  },
+
+  _wcCandidatos() {
+    return this.contratos.filter(c => this._esVigente(c) && !c.deleted);
+  },
+  _wcEnVentana(c) {
+    if (!this._aplicaVenc(c) || this._renovadoPor(c)) return false;
+    const dias = this._diasA(c.fecha_vencimiento);
+    return dias !== null && dias <= this.AVISO_DIAS;
+  },
+  _wcCustodia() {
+    return this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id);
+  },
+
+  async wizContrato(opts) {
+    if (!this.puedeCrearGestion()) { Toast.show('Tu rol no crea contratos desde aquí', 'warn'); return; }
+    if (typeof opts === 'string') opts = { renovarDe: opts };
+    opts = opts || {};
+    this._cerrarModal();
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    await Promise.all([this._cargarModelos(), this._cargarCargos()]);
+
+    const candidatos = this._wcCandidatos();
+    let preIds = [];
+    if (opts.renovarDe) preIds = candidatos.some(c => c.id === opts.renovarDe) ? [opts.renovarDe] : [];
+    else if (opts.renovarCuenta) preIds = candidatos.filter(c => this._wcEnVentana(c)).map(c => c.id);
+    const esRenov = !!(opts.renovarDe || opts.renovarCuenta);
+    const custodia = this._wcCustodia();
+    // Regularización: cuenta sin contratos en el sistema → escape legacy.
+    const legacyAuto = esRenov && !preIds.length && !candidatos.length;
+
+    // Prefill de líneas: copia del/los contratos que se renuevan; en "Renovar
+    // cuenta" suma la custodia agrupada por modelo (sin precio — lo fija el
+    // vendedor). Es punto de partida: se edita todo.
+    const lineas = [];
+    for (const id of preIds) {
+      const c = candidatos.find(x => x.id === id);
+      (c?.equipos || []).forEach(l => lineas.push({ modelo_id: l.modelo_id, modelo: l.modelo, cantidad: l.cantidad, precio: l.precio }));
+    }
+    if (opts.renovarCuenta && custodia.length) {
+      const porModelo = new Map();
+      custodia.forEach(e => {
+        const k = e.modelo_id || (e.modelo_label || '?');
+        const cur = porModelo.get(k) || { modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', cantidad: 0, precio: '' };
+        cur.cantidad += 1; porModelo.set(k, cur);
+      });
+      porModelo.forEach(l => lineas.push(l));
+    }
+    if (!lineas.length) lineas.push(null);
+
+    const itbmsDefault = this.cliente?.itbms_exento === true ? false
+      : (preIds.length ? (candidatos.find(c => c.id === preIds[0])?.itbms_aplica !== false) : true);
+
+    const origenChks = candidatos.map(c => {
+      const v = this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
+      const chip = v === null ? '' : v < 0 ? ` <span class="cg-venc vencido num">vencido ${-v} d</span>`
+        : v <= this.AVISO_DIAS ? ` <span class="cg-venc por_vencer num">${v} d</span>` : '';
+      return `<label style="display:flex; gap:8px; align-items:center; font-size:13px; padding:3px 0;">
+        <input type="checkbox" data-wco value="${this.esc(c.id)}" ${preIds.includes(c.id) ? 'checked' : ''}
+          onchange="Centro._wcSyncPlan()" style="width:auto; margin:0;">
+        <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
+        <span style="color:var(--fg-3);">${this.esc(c.tipo_contrato || '')} · ${this._unidadesActivas(c)} unid.</span>${chip}</label>`;
+    }).join('');
+
+    this._abrirModal(`
+      <h3 style="margin:0 0 6px;">${esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}</h3>
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
+        El contrato nace <b>pendiente de aprobación</b> con el mismo flujo de siempre (aprobación →
+        seriales de bodega → firma → activo). ${custodia.length ? `<b>${custodia.length} equipo(s) en campo sin
+        contrato formal</b> — al renovar, la cuenta los cubre.` : ''}</p>
+
+      <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:10px;">
+        <div class="form-field" style="margin:0; max-width:170px;">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" id="wcTipo" onchange="Centro._wcSyncTipo()">
+            ${Object.entries(this.TIPOS_CONTRATO).map(([k, v]) =>
+              `<option value="${k}" ${k === 'ALQ' ? 'selected' : ''}>${v}</option>`).join('')}
+          </select></div>
+        <div class="form-field" style="margin:0; max-width:170px;">
+          <label class="form-label">Acción</label>
+          <select class="form-select" id="wcAccion" onchange="Centro._wcSyncTipo()">
+            <option value="Nuevo" ${!esRenov ? 'selected' : ''}>Nuevo</option>
+            <option value="Renovación" ${esRenov ? 'selected' : ''}>Renovación</option>
+            <option value="Adición">Adición</option>
+            <option value="No Aplica">No Aplica</option>
+          </select></div>
+        <div class="form-field" style="margin:0; max-width:150px;">
+          <label class="form-label">Duración (meses)</label>
+          <input class="form-input" type="number" id="wcMeses" min="1" value="12"></div>
+      </div>
+
+      <div id="wcRenovBloque" class="${esRenov ? '' : 'hidden'}" style="margin-bottom:10px;">
+        <label class="cg-toggle" style="margin-bottom:8px;">
+          <input type="checkbox" id="wcSinEquipo"> Renovación sin equipo (los radios actuales continúan)
+        </label>
+        <label class="cg-toggle" style="margin-bottom:8px; margin-left:8px;">
+          <input type="checkbox" id="wcRefurb"> Refurbished / componentes
+        </label>
+      </div>
+
+      <div id="wcOrigenBloque" class="${esRenov ? '' : 'hidden'}">
+        <div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label">Contrato(s) que se renuevan (origen)</label>
+          ${origenChks || '<p style="font-size:13px; color:var(--fg-3); margin:0;">El cliente no tiene contratos vigentes en el sistema.</p>'}
+          <label style="display:flex; gap:8px; align-items:center; font-size:13px; padding:6px 0 0;">
+            <input type="checkbox" id="wcLegacy" ${legacyAuto ? 'checked' : ''} onchange="Centro._wcSyncPlan()" style="width:auto; margin:0;">
+            El contrato original es de papel / no está en el sistema</label>
+          <input class="form-input" id="wcLegacyRef" placeholder="Referencia del contrato en papel…"
+            value="${legacyAuto ? 'Cuenta sin contrato en sistema — regularización' : ''}"
+            style="margin-top:6px; max-width:420px; ${legacyAuto ? '' : 'display:none;'}">
+        </div>
+        <div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label">Plan de transición de los equipos del origen</label>
+          <div id="wcPlan" class="cg-twrap"></div>
+        </div>
+      </div>
+
+      <div oninput="Centro._wcPreview()">
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
+        <div id="wcLineas">${lineas.map(l => this._lineaModeloPre('wcm', true, l)).join('')}</div>
+        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
+          onclick="document.getElementById('wcLineas').insertAdjacentHTML('beforeend', Centro._lineaModeloPre('wcm', true)); Centro._wcPreview()">+ Agregar otro modelo</button></div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Otros conceptos (cargos del catálogo — únicos o mensuales)</label>
+        <div id="wcCargos"></div>
+        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
+          onclick="document.getElementById('wcCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button></div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+        <label class="cg-toggle" style="margin-bottom:2px;">
+          <input type="checkbox" id="wcItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._wcPreview()">
+          Aplica ITBMS${this.cliente?.itbms_exento === true ? ' <span style="color:var(--fg-4);">(cliente exento)</span>' : ''}
+        </label>
+      </div>
+      <div class="form-field" style="margin-bottom:10px;">
+        <label class="form-label">Observaciones</label>
+        <textarea class="form-input" id="wcObs" rows="2" style="resize:vertical;"></textarea></div>
+      <div id="wcTot" class="ds-card" style="padding:10px 14px; max-width:380px; margin-bottom:12px;"></div>
+      </div>
+
+      <div style="display:flex; gap:8px; justify-content:flex-end; align-items:center;">
+        <a href="../contratos/nuevo-contrato.html" style="margin-right:auto; font-size:12px; color:var(--fg-4);">Formulario clásico ›</a>
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" id="wcGuardar" onclick="Centro.crearContrato()">Guardar contrato</button>
+      </div>`);
+    document.getElementById('wcLegacy')?.addEventListener('change', (e) => {
+      const ref = document.getElementById('wcLegacyRef');
+      if (ref) ref.style.display = e.target.checked ? '' : 'none';
+    });
+    this._wcSyncPlan();
+    this._wcPreview();
+  },
+
+  _wcSyncTipo() {
+    const tipo = document.getElementById('wcTipo')?.value || 'ALQ';
+    const acc = document.getElementById('wcAccion');
+    if (!acc) return;
+    if (tipo === 'DEMO' || tipo === 'TEMP') { acc.value = 'No Aplica'; acc.disabled = true; }
+    else {
+      acc.disabled = false;
+      if (acc.value === 'No Aplica') acc.value = 'Nuevo';
+    }
+    const sel = { accion: acc.value, codigo_tipo: tipo };
+    document.getElementById('wcOrigenBloque')?.classList.toggle('hidden', !OrigenContrato.aplica(sel));
+    document.getElementById('wcRenovBloque')?.classList.toggle('hidden', acc.value !== 'Renovación');
+    this._wcSyncPlan();
+  },
+
+  _wcOrigenIds() {
+    return [...document.querySelectorAll('input[data-wco]:checked')].map(i => i.value);
+  },
+
+  // Unidades del pool de los contratos origen elegidos → plan por serial con
+  // destino editable (default: continúa — es una renovación, no una excepción).
+  _wcSyncPlan() {
+    const cont = document.getElementById('wcPlan');
+    if (!cont) return;
+    const sel = { accion: document.getElementById('wcAccion')?.value, codigo_tipo: document.getElementById('wcTipo')?.value };
+    const ids = this._wcOrigenIds();
+    if (!TransicionPlan.aplica(sel) || !ids.length) { cont.innerHTML = ''; return; }
+    const unidades = this.equipos.filter(e =>
+      ids.includes(e.asignacion?.contrato_doc_id) && ['en_cliente', 'asignado_contrato'].includes(e.estado));
+    if (!unidades.length) {
+      cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0;">El origen no tiene unidades con serial en el pool — el plan se resuelve con recepción.</p>';
+      return;
+    }
+    cont.innerHTML = `<table class="cg-tabla"><thead><tr>
+      <th>Serial</th><th>Modelo</th><th>Contrato</th><th>Destino</th></tr></thead><tbody>
+      ${unidades.map(e => `<tr>
+        <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
+        <td>${this.esc(e.modelo_label || '—')}</td>
+        <td class="cg-mono">${this.esc(e.asignacion?.contrato_id || '')}</td>
+        <td><select class="form-select" data-wcp="${this.esc(e.id)}" style="min-width:130px;">
+          <option value="continua" selected>Continúa</option>
+          <option value="devuelve">Se devuelve</option>
+          <option value="reemplaza">Se reemplaza</option>
+        </select></td></tr>`).join('')}</tbody></table>`;
+  },
+
+  _wcPreview() {
+    const cont = document.getElementById('wcTot');
+    if (!cont) return;
+    const cargos = [...document.querySelectorAll('#wcCargos .wa-cargo')].length
+      ? this._aumCargos() : [];
+    const t = this._totAumento(this._lineasModelo('wcm'), cargos,
+      document.getElementById('wcItbms')?.checked !== false);
+    cont.innerHTML = this._tarifarioHtml(t);
+  },
+
+  async crearContrato() {
+    if (this._wcGuardando) return;
+    const tipo = document.getElementById('wcTipo')?.value || '';
+    const tipoNombre = this.TIPOS_CONTRATO[tipo] || tipo;
+    const accion = document.getElementById('wcAccion')?.value || 'Nuevo';
+    const meses = parseInt(document.getElementById('wcMeses')?.value || '0', 10);
+    if (!tipo) { Toast.show('Elige el tipo de contrato', 'warn'); return; }
+    if (!(meses > 0)) { Toast.show('Indica la duración en meses', 'warn'); return; }
+
+    const lineas = this._lineasModelo('wcm');
+    if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
+    if (['ALQ', 'PROP'].includes(tipo) && lineas.some(l => !(l.precio > 0))) {
+      Toast.show('Cada línea necesita su precio mensual', 'warn'); return;
+    }
+
+    const candidatos = this._wcCandidatos();
+    const origenIds = this._wcOrigenIds();
+    const origenSel = {
+      accion, codigo_tipo: tipo,
+      legacy: !!document.getElementById('wcLegacy')?.checked,
+      legacy_ref: (document.getElementById('wcLegacyRef')?.value || '').trim(),
+      origen_ids: origenIds,
+      origen_refs: origenIds.map(id => {
+        const c = candidatos.find(x => x.id === id);
+        return c ? (c.contrato_id || c.id) : id;
+      }),
+      candidatos: candidatos.length,
+    };
+    const vOrigen = OrigenContrato.validar(origenSel);
+    if (!vOrigen.ok) { Toast.show(`⚠️ ${vOrigen.mensaje}`, 'warn'); return; }
+
+    let plan = null;
+    if (TransicionPlan.aplica(origenSel)) {
+      const unidades = [...document.querySelectorAll('select[data-wcp]')].map(s => {
+        const e = this.equipos.find(x => x.id === s.dataset.wcp);
+        return e ? { pool_id: e.id, serial: e.serial || e.id, serial_norm: e.id,
+          modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', destino: s.value } : null;
+      }).filter(Boolean);
+      if (unidades.length) {
+        plan = TransicionPlan.construirSerial(unidades, origenIds);
+        const vPlan = TransicionPlan.validar(plan);
+        if (!vPlan.ok) { Toast.show(`⚠️ ${vPlan.mensaje}`, 'warn'); return; }
+      }
+    }
+
+    this._wcGuardando = true;
+    const btn = document.getElementById('wcGuardar');
+    if (btn) btn.disabled = true;
+    try {
+      // Correlativo {TIPO}{YYYYMMDD}-{NN}: mismo doble mecanismo del
+      // formulario clásico (piso best-effort + reserva atómica en contadores/).
+      const hoy = new Date();
+      const fechaStr = ContratosService.fechaStrLocal(hoy);
+      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      const fin = new Date(inicio); fin.setDate(fin.getDate() + 1);
+      let piso = 0;
+      try { piso = await ContratosService.maxSufijoPorTipoYFecha(tipo, inicio, fin); } catch (_) { /* piso 0 */ }
+      const seq = await ContratosService.reservarSufijo(tipo, fechaStr, piso);
+      const contrato_id = tipo + fechaStr + '-' + String(seq).padStart(2, '0');
+
+      const cli = this.cliente;
+      const contrato = ContratoTarifario.construirDoc({
+        contrato_id,
+        searchTokens: ContratosService.buildSearchTokens({ cliente_nombre: cli.nombre || '', contrato_id }),
+        cliente: {
+          id: cli.id, nombre: cli.nombre || '', direccion: cli.direccion || '',
+          telefono: cli.telefono || '', ruc: cli.ruc || '', dv: cli.dv || '',
+          representante: cli.representante || '', representante_cedula: cli.representante_cedula || '',
+        },
+        codigo_tipo: tipo,
+        tipo_contrato: tipoNombre,
+        accion,
+        renovacion_sin_equipo: !!document.getElementById('wcSinEquipo')?.checked,
+        renovacion_refurbished_componentes: !!document.getElementById('wcRefurb')?.checked,
+        origenSel,
+        transicion_plan: plan,
+        reemplaza_seriales: null,
+        duracion: `${meses} meses`,
+        duracion_meses: meses,
+        observaciones: document.getElementById('wcObs')?.value || '',
+        equipos: lineas,
+        cargos: [...document.querySelectorAll('#wcCargos .wa-cargo')].length ? this._aumCargos() : [],
+        itbms_aplica: document.getElementById('wcItbms')?.checked !== false,
+        creado_por_uid: this.uid,
+      });
+
+      const docRef = await ContratosService.addContrato(contrato);
+
+      try {
+        const equiposHtml = contrato.equipos.map(e =>
+          `<li>${e.modelo} – ${e.cantidad} × $${Number(e.precio || 0).toFixed(2)}</li>`).join('');
+        const obsEsc = (contrato.observaciones || '-').replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
+        await MailService.enqueue({
+          to: 'ventas@cecomunica.com',
+          cc: firebase.auth().currentUser?.email || null,
+          subject: `Nuevo contrato creado: ${contrato.contrato_id} – ${contrato.cliente_nombre}`,
+          preheader: `Contrato pendiente de aprobación: ${contrato.cliente_nombre}`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Nuevo contrato creado</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Se ha registrado un nuevo contrato con el ID <b>${contrato.contrato_id}</b> desde el Centro de gestión.
+            </p>
+            ${contrato.accion === 'Renovación' ? `<div style="margin:0 0 14px;padding:12px 14px;border:2px solid #0074AC;border-radius:10px;background:#E6F4FB;font:700 15px Arial,sans-serif;color:#0B2A47;">Modalidad de renovación: ${contrato.renovacion_sin_equipo ? 'RENOVACIÓN SIN EQUIPO' : 'RENOVACIÓN CON EQUIPO'}</div>` : ''}
+            <table role="presentation" width="100%" style="font:14px Arial,sans-serif;margin:12px 0 16px;">
+              <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Cliente</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${contrato.cliente_nombre}</td></tr>
+              <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Tipo</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${contrato.tipo_contrato}</td></tr>
+              <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Acción</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${contrato.accion}</td></tr>
+              <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Duración</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${contrato.duracion || '-'}</td></tr>
+              <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Observaciones</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">${obsEsc}</td></tr>
+              <tr><td style="padding:6px 0;border-bottom:1px solid #eee;"><b>Total con ITBMS</b></td><td style="padding:6px 0;border-bottom:1px solid #eee;">$${Number(contrato.total_con_itbms || 0).toFixed(2)}</td></tr>
+            </table>
+            ${equiposHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Equipos</h4><ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${equiposHtml}</ul>` : ''}
+          `,
+          ctaUrl: `${location.origin}/contratos/index.html?aprobar=${docRef.id}`,
+          ctaLabel: 'Revisar contrato',
+          meta: {
+            created_at: firebase.firestore.FieldValue.serverTimestamp(),
+            created_by: this.uid,
+            source: 'centro-gestion',
+          },
+          status: 'queued',
+        });
+      } catch (e) { console.warn('No se pudo encolar el correo:', e); }
+
+      this._cerrarModal();
+      Toast.show(`✅ Contrato ${contrato_id} creado — pendiente de aprobación`, 'ok');
+      await this.abrir(this.cliente.id, { push: false });
+    } catch (e) {
+      console.error(e);
+      Toast.show('No se pudo crear el contrato', 'bad');
+    } finally {
+      this._wcGuardando = false;
+      const b = document.getElementById('wcGuardar');
+      if (b) b.disabled = false;
+    }
   },
 
   /* ═════════ Wizard: baja por serial (Ola 3) ═════════ */
