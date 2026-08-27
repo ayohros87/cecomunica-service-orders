@@ -26,6 +26,8 @@ const conciliacion = require("../src/domain/conciliacionPool");
   fila("E · vendido con enlace de orden colgante", R.E_vendido_orden_cerrada);
   fila("F · mismo serial ACTIVO con dos clientes", R.F_serial_dos_clientes);
   fila("G · asignada a un contrato vigente que ya no la lista", R.G_asignada_sin_serial);
+  fila("H · línea de contrato con modelo_id inválido (catálogo)", R.H_modelo_invalido || 0);
+  fila("I · gestión abierta huérfana (cliente/contratos_afectados)", R.I_gestiones_huerfanas || 0);
   console.log(`\n  TOTAL (drift): ${R.total}   (devices apagados ignorados: ${R.poc_apagados_ignorados})`);
   fila("· ya decididos, esperando apagar el device en POC", R.F_esperando_apagado || 0);
   for (const [k, v] of Object.entries(R)) {

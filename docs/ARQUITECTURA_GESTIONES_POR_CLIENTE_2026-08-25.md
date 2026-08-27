@@ -220,18 +220,21 @@ Las decisiones grandes ya están tomadas (§8): excepción de garantía con apro
 - El flujo Adición actual queda para clientes sin contrato aplicable.
 
 ### Ola 5 — Anulación, sustitución y cambio de serial sobre el nuevo eje (4–6 d)
+**Estado 2026-08-27:** parcial — el candado de `seriales_cambios` ya no exige contrato 'aprobado' (decisión #11, rules desplegadas); quedan traspaso por adenda, `onAnnulment` v2 y la gestión `cambio_serial` completa.
 - Extraer `traspasarSerial()` de `sustitucionContrato` a `lib/` con kardex `traspaso_contrato`, invocable **solo desde una enmienda de traspaso firmada por el cliente** (anexo con la maquinaria de la Ola 4) — sin operación manual libre.
 - `onAnnulment` v2: clasifica igual, pero (a) las `omitidas` se convierten en ítems de una gestión `devolucion` o en traspasos pendientes VISIBLES en el Centro; (b) el espejo de sustitución (`sustitucion_*`) se mantiene.
 - Gestión `cambio_serial` a nivel cliente; las `seriales_cambios` bajo contrato quedan de solo-lectura.
 - Riesgo: medio. Los casos raros (MAGEN DAVID, PROP mixto) ya tienen fixtures documentados en código — convertirlos en tests.
 
 ### Ola 6 — Espejo y retiro del camino viejo (3–4 d)
+**Estado 2026-08-27:** parcial — conciliación ampliada con chequeos H (modelo_id inválido: 9, los CONSOLA/ACTIVACION conocidos) e I (gestiones huérfanas: 0) desplegada, y banner de deprecación en la página de enmiendas; quedan el espejo pool→seriales y las colas sobre gestiones.
 - `contratos/{cid}/seriales` pasa a espejo derivado del pool (trigger pool→espejo); `saveSerialesManual` queda solo para la asignación inicial; reglas del espejo → CF-owned.
 - Colas de inventario leen `gestiones`; badge del rail unificado.
 - Conciliación semanal: chequeos nuevos (espejo vs pool, gestiones abiertas huérfanas, `contratos_afectados` vs ítems).
 - Documentación: actualizar `docs/FACTURACION_COMO_FUNCIONA.md` (glosario QBO desactualizado) y este documento a "implementado".
 
 ### Ola 7 — Renovación por anexo y cuenta única (5–8 d + 3–4 d regularización)
+**Estado 2026-08-27:** pieza 1 desplegada — wizard "Nuevo contrato / Renovar cuenta" en el Centro (mismo doc vía `js/domain/contratoTarifario.js`, prefill de origen/plan/líneas, custodia agrupada al renovar cuenta, duración numérica). La gestión `renovacion` por anexo firmado y el documento de regularización esperan la aprobación del Contrato v2.
 Propuesta de Alberto 2026-08-27, decisiones 12–14 cerradas. Solo el contrato
 inicial es un documento de contrato; la cuenta se administra por anexos.
 - **Gestión `renovacion`**: elegir contrato + tramos a renovar + nueva duración
