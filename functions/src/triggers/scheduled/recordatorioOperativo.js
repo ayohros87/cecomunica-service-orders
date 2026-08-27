@@ -778,6 +778,89 @@ module.exports = onSchedule(
       logger.error("[recordatorioOperativo] sección por-vencer falló", { message: e.message });
     }
 
+    // ── I) Demos con retorno vencido (decisiones 2026-08-26 #7 y #10) ────
+    // El demo sale con fecha estimada de devolución: al VENCERSE, recordatorio.
+    // Si salió SIN fecha, el recordatorio corre a los `demo_recordatorio_dias`
+    // (15) de la salida. Un solo recordatorio por demo (demo.recordatorio_at);
+    // la orden de retorno sigue viva y la sección C la recoge si envejece.
+    // Destinatario: el vendedor del cliente, con copia a recepción.
+    try {
+      const G = require("../../lib/gestiones");
+      let demoDias = 15;
+      try {
+        const cfg = (await db.collection("empresa").doc("config").get()).data() || {};
+        if (Number.isFinite(Number(cfg.demo_recordatorio_dias)) && Number(cfg.demo_recordatorio_dias) >= 1) demoDias = Number(cfg.demo_recordatorio_dias);
+      } catch (e) { /* default */ }
+
+      const snap = await db.collection("gestiones")
+        .where("estado", "==", "en_demo")
+        .limit(500)
+        .get();
+
+      let avisados = 0;
+      const dests = await recepcionEmails();
+      for (const d of snap.docs) {
+        const g = d.data() || {};
+        if (g.deleted || g.tipo !== "demo") continue;
+        if (g.demo?.recordatorio_at) continue;   // ya se avisó una vez
+
+        const estStr = String(g.demo?.fecha_devolucion_estimada || "").trim();
+        const est = estStr ? new Date(estStr + (estStr.length === 10 ? "T23:59:59-05:00" : "")) : null;
+        let motivo = null;
+        if (est && !isNaN(est.getTime())) {
+          if (now > est) motivo = `la fecha estimada de devolución (<b>${esc(estStr)}</b>) ya pasó`;
+        } else {
+          // Sin fecha estimada: base = salida del demo (fecha_entrega; los
+          // demos anteriores a este campo caen al evento 'entrega' y por
+          // último a la creación de la gestión).
+          let base = aDate(g.demo?.fecha_entrega);
+          if (!base) {
+            try {
+              const ev = await d.ref.collection("eventos").where("accion", "==", "entrega").limit(1).get();
+              if (!ev.empty) base = aDate(ev.docs[0].data().at);
+            } catch (err) { /* fallback abajo */ }
+          }
+          if (!base) base = aDate(g.fecha_creacion);
+          const edad = base ? (now - base) / 86400000 : null;
+          if (edad != null && edad >= demoDias) {
+            motivo = `salió <b>sin fecha estimada</b> de devolución hace ${Math.floor(edad)} días`;
+          }
+        }
+        if (!motivo) continue;
+
+        const to = await G.vendedorEmailDeCliente(g.cliente_id);
+        const cc = dests.join(", ") || null;
+        const destino = to || cc;
+        if (!destino) { logger.warn("[recordatorioOperativo] demo sin buzón", { gid: d.id }); continue; }
+        const seriales = (g.demo?.seriales_asignados || []).map(s => s.serial).filter(Boolean);
+        await db.collection("mail_queue").add({
+          to: destino,
+          ...(to && cc ? { cc } : {}),
+          subject: `Demo ${d.id} — coordinar la devolución con ${g.cliente_nombre || "el cliente"}`,
+          preheader: `El demo de ${g.cliente_nombre || "cliente"} debe retornar`,
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Retorno de demo pendiente</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              El demo <b>${esc(d.id)}</b> de <b>${esc(g.cliente_nombre || "—")}</b> sigue con el cliente y ${motivo}.
+              Coordina la devolución (o formaliza la venta/contrato si el cliente se queda los equipos).
+            </p>
+            ${seriales.length ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              Equipos: ${seriales.map(s => `<code>${esc(s)}</code>`).join(", ")}</p>` : ""}`,
+          ctaUrl: G.urlGestion(g, d.id),
+          ctaLabel: "Abrir la gestión",
+          meta: { source: "recordatorioOperativo", seccion: "demo_retorno", gestion: d.id },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        // Rutas anidadas con update() (dot-path), nunca set(merge).
+        await d.ref.update({ "demo.recordatorio_at": admin.firestore.FieldValue.serverTimestamp() });
+        await G.registrarEvento(d.id, "recordatorio", `Recordatorio de retorno del demo enviado a ${destino}.`);
+        avisados++;
+      }
+      logger.info("[recordatorioOperativo] demos", { enDemo: snap.size, avisados });
+    } catch (e) {
+      logger.error("[recordatorioOperativo] sección demos falló", { message: e.message });
+    }
+
     return null;
   }
 );

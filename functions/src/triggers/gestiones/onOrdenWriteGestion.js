@@ -143,6 +143,9 @@ module.exports = onDocumentWritten(
             `Entrega registrada desde la OS ${ordenId}. Orden de devolución ${devId || "—"} creada para recuperar el/los saliente(s); linaje reemplaza_a estampado.`);
         } else if (g.tipo === "demo" && !g.ordenes?.devolucion_id) {
           patch.estado = "en_demo";
+          // Fecha de salida del demo: es la base del recordatorio de retorno
+          // cuando no hay fecha estimada (cron recordatorioOperativo sección I).
+          patch.demo = { ...(g.demo || {}), fecha_entrega: new Date().toISOString() };
           const unidades = (g.demo?.seriales_asignados || [])
             .map(s => ({ serial: s.serial, modelo: s.modelo || "", modelo_id: s.modelo_id || null }))
             .filter(u => String(u.serial || "").trim());
