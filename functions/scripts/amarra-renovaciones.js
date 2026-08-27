@@ -38,6 +38,17 @@ const vigente = (c) => ["activo", "aprobado"].includes(c.estado);
 const origenIds = (c) => Array.isArray(c.contrato_origen_ids) && c.contrato_origen_ids.length
   ? c.contrato_origen_ids : (c.contrato_origen_id ? [c.contrato_origen_id] : []);
 
+// El contrato NO está suelto: el vendedor ya respondió que el original es de
+// papel y no está en el sistema. Buscarle un origen interno es contradecir la
+// respuesta que el formulario le exigió — y con consecuencias, porque
+// onEntregaTransicion lee ese vínculo para pedirle equipos al cliente.
+//
+// REEMP20260825-01 (SEGURIDAD IDEAL) es el caso: declaró papel
+// (ALQ2024-10-30-01), este script lo amarró a ALQ20260206-01 —la adición de
+// febrero, único candidato— y al confirmarse la entrega el 2026-08-27 se abrió
+// la orden 2026082705 reclamando dos radios ajenos al reemplazo.
+const declaraPapel = (c) => c.origen_tipo === "legacy" || !!String(c.origen_legacy_ref || "").trim();
+
 (async () => {
   const snap = await db.collection("contratos").get();
   const todos = [];
@@ -60,17 +71,23 @@ const origenIds = (c) => Array.isArray(c.contrato_origen_ids) && c.contrato_orig
   const grupos = [
     {
       nombre: "Renovaciones sueltas",
-      sueltos: todos.filter((c) => c.accion === "Renovación" && !origenIds(c).length && vigente(c) && V.codigoTipo(c) !== "REEMP"),
+      sueltos: todos.filter((c) => c.accion === "Renovación" && !origenIds(c).length && vigente(c) && V.codigoTipo(c) !== "REEMP" && !declaraPapel(c)),
       tiposOrigen: (n) => [V.codigoTipo(n)],
     },
     {
       nombre: "REEMP sin origen",
-      sueltos: todos.filter((c) => V.codigoTipo(c) === "REEMP" && !origenIds(c).length && vigente(c)),
+      sueltos: todos.filter((c) => V.codigoTipo(c) === "REEMP" && !origenIds(c).length && vigente(c) && !declaraPapel(c)),
       tiposOrigen: () => ["ALQ", "PROP"],
     },
   ];
 
   console.log(`\n=== amarra-renovaciones ${dryRun ? "(DRY-RUN)" : "(WRITE)"} ===`);
+  const papel = todos.filter((c) => vigente(c) && !origenIds(c).length && declaraPapel(c)
+    && (c.accion === "Renovación" || V.codigoTipo(c) === "REEMP"));
+  if (papel.length) {
+    console.log(`\n── Omitidos por declarar contrato de papel: ${papel.length} ──`);
+    papel.forEach((c) => console.log(`  [PAPEL]    ${c.contrato_id}  ${iso(c.fecha_creacion)}  (${c.cliente_nombre || "?"})  ref: ${c.origen_legacy_ref || "—"}`));
+  }
   const aAmarrar = [];
   for (const g of grupos) {
     let auto = 0, ambiguas = 0, sin = 0;

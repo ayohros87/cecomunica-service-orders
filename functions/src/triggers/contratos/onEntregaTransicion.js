@@ -26,6 +26,26 @@ const { admin, db } = require("../../lib/admin");
 const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
 const { origenIdsDe } = require("../../lib/linaje");
 const { decidirSalientes } = require("../../lib/transicionPlanExec");
+const { evaluarOrigen, evaluarTope } = require("../../lib/transicionAuto");
+
+// El auto-reclamo se frena y deja rastro en vez de crear una orden dudosa
+// (lib/transicionAuto.js explica los tres candados y el caso que los motivó).
+// No se estampa `transicion_auto_at`: el contrato queda elegible para correr
+// de nuevo en cuanto alguien confirme el origen.
+async function _bloquear(cid, contratoId, veredicto, candidatas) {
+  await db.collection("contratos").doc(cid).set({
+    transicion_auto_bloqueada: {
+      motivo: veredicto.motivo,
+      detalle: veredicto.detalle || "",
+      unidades_candidatas: Number(candidatas || 0),
+      tope: veredicto.tope == null ? null : Number(veredicto.tope),
+      at: admin.firestore.FieldValue.serverTimestamp(),
+    },
+  }, { merge: true });
+  logger.warn("[onEntregaTransicion] Auto-reclamo BLOQUEADO — requiere confirmación humana", {
+    contratoId, motivo: veredicto.motivo, candidatas: Number(candidatas || 0),
+  });
+}
 
 module.exports = onDocumentUpdated(
   { document: "contratos/{cid}", region: "us-central1" },
@@ -34,8 +54,16 @@ module.exports = onDocumentUpdated(
     const after  = event.data.after?.data();
     if (!before || !after) return null;
 
+    // DOS flancos de entrada, no uno:
+    //   1. la entrega del contrato nuevo — el momento original y el normal;
+    //   2. la confirmación humana del origen, para los que quedaron frenados
+    //      por un candado de transicionAuto. Sin este segundo flanco,
+    //      confirmar el vínculo no haría nada: el trigger solo mira la entrega
+    //      y esa ya pasó, así que la devolución legítima nunca se crearía.
     const entregaConfirmada = !before.entrega_confirmada && after.entrega_confirmada === true;
-    if (!entregaConfirmada) return null;
+    const origenConfirmado = !before.linaje_confirmado && !!after.linaje_confirmado
+      && after.entrega_confirmada === true && !!after.transicion_auto_bloqueada;
+    if (!entregaConfirmada && !origenConfirmado) return null;
 
     const cid = event.params.cid;
     const contratoId = after.contrato_id || cid;
@@ -61,6 +89,15 @@ module.exports = onDocumentUpdated(
     if (after.seriales_estado === "legacy") return null;
     if (Number(after.transicion_mapeos_count || 0) > 0) return null; // ya hay registro manual
     if (after.transicion_auto_at) return null;                        // ya corrió
+
+    // Candados (a) y (b): ¿el origen es un hecho declarado o una suposición?
+    // Va ANTES de leer el pool — si el vínculo no es confiable, las unidades
+    // que cuelguen de él dan igual.
+    const vOrigen = evaluarOrigen(after);
+    if (!vOrigen.ok) {
+      await _bloquear(cid, contratoId, vOrigen, 0);
+      return null;
+    }
 
     // Unidades de los orígenes aún con el cliente. La propiedad y el plan de
     // la venta los aplica decidirSalientes (lib/transicionPlanExec.js).
@@ -123,7 +160,24 @@ module.exports = onDocumentUpdated(
           logger.warn("[onEntregaTransicion] No se pudo marcar el origen sin unidades", { origenId, message: e.message });
         }
       }
+      // "No hay nada que recuperar" también resuelve un intento frenado.
+      try {
+        await db.collection("contratos").doc(cid).set({
+          transicion_auto_bloqueada: admin.firestore.FieldValue.delete(),
+        }, { merge: true });
+      } catch (e) {
+        logger.warn("[onEntregaTransicion] No se pudo limpiar transicion_auto_bloqueada", { contratoId, message: e.message });
+      }
       logger.info("[onEntregaTransicion] Origen sin unidades en el pool; marcado no_aplica", { contratoId, origenIds });
+      return null;
+    }
+
+    // Candado (c): un REEMPLAZO no puede reclamar más de lo que entrega. Va
+    // aquí porque necesita el resultado del plan — con un plan por serial bien
+    // llenado el conteo cuadra solo y este candado nunca se activa.
+    const vTope = evaluarTope(after, reclamar);
+    if (!vTope.ok) {
+      await _bloquear(cid, contratoId, vTope, reclamar.length);
       return null;
     }
 
@@ -149,6 +203,9 @@ module.exports = onDocumentUpdated(
     batch.set(db.collection("contratos").doc(cid), {
       transicion_auto_at: admin.firestore.FieldValue.serverTimestamp(),
       transicion_auto_unidades: reclamar.length,
+      // Corrió bien: se borra la marca del intento frenado (este contrato pudo
+      // llegar aquí por el segundo flanco, tras confirmarse el origen).
+      transicion_auto_bloqueada: admin.firestore.FieldValue.delete(),
     }, { merge: true });
     await batch.commit();
     logger.info("[onEntregaTransicion] Devolución auto-registrada", {
