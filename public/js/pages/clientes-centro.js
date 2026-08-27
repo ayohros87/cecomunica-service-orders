@@ -715,7 +715,7 @@ window.Centro = {
         </tr>`).join('')}</tbody></table></div>
         ${pen?.por_contrato?.length ? `
           <p style="font-size:13px; margin:10px 0 4px;"><b>Penalidad estimada por contrato</b>
-            <span style="color:var(--fg-4);">(no vencido: 3 meses de mensualidad · vencido: 30 días)</span></p>
+            <span style="color:var(--fg-4);">(no vencido: 3 meses de mensualidad · vencido: 30 días + preaviso 60 días)</span></p>
           ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:3px 0;">
             <span class="cg-mono">${this.esc(p.contrato_id || '—')}</span>
             <span style="color:var(--fg-3);">${this.esc(p.detalle || '')}</span>
@@ -1461,7 +1461,7 @@ window.Centro = {
     const lista = [...por.values()].map(p => ({
       contrato_id: p.contrato_id,
       monto: Math.round(p.monto * 100) / 100,
-      detalle: `${p.unidades} unid. · ${p.vencido ? 'contrato vencido: 30 días' : 'no vencido: 3 meses de mensualidad'}${p.sinPrecio ? ' · ⚠ línea sin precio' : ''}`,
+      detalle: `${p.unidades} unid. · ${p.vencido ? 'vencido: 30 días de penalidad + preaviso 60 días' : 'no vencido: 3 meses de mensualidad'}${p.sinPrecio ? ' · ⚠ línea sin precio' : ''}`,
     }));
     return { por_contrato: lista, total: Math.round(lista.reduce((s, p) => s + p.monto, 0) * 100) / 100 };
   },
@@ -1572,7 +1572,7 @@ window.Centro = {
     document.getElementById('wbPen').innerHTML = items.length ? `
       ${todasPropias ? '<div class="cg-senal info" style="margin-bottom:8px;">Equipos <b>propios del cliente</b>: la baja corta el servicio y la facturación — no se crea orden de recuperación.</div>' : ''}
       <p style="font-size:13px; margin:0 0 4px;"><b>Penalidad estimada</b>
-        <span style="color:var(--fg-4);">(no vencido: 3 meses · vencido: 30 días)</span></p>
+        <span style="color:var(--fg-4);">(no vencido: 3 meses · vencido: 30 días + preaviso 60 días)</span></p>
       ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:2px 0;">
         <span class="cg-mono">${this.esc(p.contrato_id)}</span>
         <span style="color:var(--fg-3);">${this.esc(p.detalle)}</span>

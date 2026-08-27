@@ -107,7 +107,7 @@ async function correoAprobadoresBaja(gid, g) {
   const pen = g.penalidad_estimada;
   const penHtml = pen?.por_contrato?.length
     ? `<p style="margin:12px 0 4px;font:14px/1.5 Arial,sans-serif;"><b>Penalidad estimada por contrato</b>
-        (no vencido: 3 meses de mensualidad · vencido: 30 días):</p>`
+        (no vencido: 3 meses de mensualidad · vencido: 30 días de penalidad + preaviso de 60 días facturado):</p>`
       + G.tablaHtml(["Contrato", "Base", "Penalidad est."], pen.por_contrato.map(p => [
           `<code>${G.escapeHtml(p.contrato_id || "—")}</code>`,
           G.escapeHtml(p.detalle || "—"),
