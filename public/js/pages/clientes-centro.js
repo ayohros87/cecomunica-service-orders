@@ -667,6 +667,16 @@ window.Centro = {
         </tbody></table>
         ${f.png ? `<div style="border:1px solid var(--border-subtle); border-radius:10px; padding:6px; margin-bottom:10px; background:#fff;">
           <img src="${f.png}" alt="firma" style="max-height:110px; display:block; margin:0 auto;"></div>` : ''}
+        ${f.cedula_path ? `
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+          <div style="flex:1; text-align:center;"><div class="form-label" style="margin-bottom:4px;">Cédula del firmante</div>
+            <img id="wvCed" style="max-width:100%; max-height:170px; border:1px solid var(--border-subtle); border-radius:8px;" alt="cargando…"></div>
+          <div style="flex:1; text-align:center;"><div class="form-label" style="margin-bottom:4px;">Selfie</div>
+            <img id="wvSelfie" style="max-width:100%; max-height:170px; border:1px solid var(--border-subtle); border-radius:8px;" alt="cargando…"></div>
+        </div>
+        <p style="font-size:11px; color:var(--fg-4); margin:0 0 10px;">Evidencia de identidad — dato sensible (Ley 81):
+          cada vista queda auditada; los enlaces expiran en 5 minutos.</p>`
+        : '<p style="font-size:12px; color:var(--fg-4); margin:0 0 10px;">Sin evidencia de identidad adjunta (firma anterior a la actualización).</p>'}
         <label class="cg-toggle" style="margin-bottom:12px;">
           <input type="checkbox" id="wfActualizar" checked>
           Actualizar la ficha del cliente con este representante (el directorio se corrige solo)
@@ -675,6 +685,21 @@ window.Centro = {
           <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="Centro._aceptarFirmanteConfirmar('${this.esc(sid)}')">Aceptar firmante y activar</button>
         </div>`);
+      // Evidencia de identidad: URLs firmadas de 5 min vía callable (los
+      // bytes viven con read:false — dato sensible, cada vista se audita).
+      if (f.cedula_path && firebase.functions) {
+        const fn = firebase.functions().httpsCallable('getFirmaIdentidadUrl');
+        [['cedula', 'wvCed'], ['selfie', 'wvSelfie']].forEach(([cual, imgId]) => {
+          fn({ sid, cual }).then(r => {
+            const img = document.getElementById(imgId);
+            if (img) { if (r.data?.url) img.src = r.data.url; else img.alt = 'no disponible'; }
+          }).catch((e) => {
+            console.warn('[centro] evidencia no disponible:', e?.message || e);
+            const img = document.getElementById(imgId);
+            if (img) img.alt = 'no disponible';
+          });
+        });
+      }
     } catch (e) { console.error(e); Toast.show('No se pudo cargar la solicitud de firma', 'bad'); }
   },
 

@@ -68,6 +68,9 @@ exports.runBackfill                   = require("./src/callable/runBackfill");
 exports.previewEmail                  = require("./src/callable/previewEmail");
 exports.getIdentificacionUrl          = require("./src/callable/getIdentificacionUrl");
 exports.getClienteDocUrl              = require("./src/callable/getClienteDocUrl");
+// Evidencia de identidad de la firma digital (cédula + selfie): URL firmada
+// de corta vida, gated a admin/gerencia, con auditoría por vista
+exports.getFirmaIdentidadUrl          = require("./src/callable/getFirmaIdentidadUrl");
 exports.kpiReportSnapshot             = require("./src/callable/kpiReportSnapshot");
 exports.listQBOItems                  = require("./src/callable/listQBOItems");
 exports.listQBOPiezas                 = require("./src/callable/listQBOPiezas");

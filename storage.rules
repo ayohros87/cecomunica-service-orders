@@ -144,6 +144,23 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // ── Firma digital: evidencia de identidad del firmante ──────────────
+    // Foto de la cédula (toma aparte, nítida — de ahí se leen los datos) y
+    // selfie del rostro, capturadas en /firmar/ (Ley 81: datos biométricos =
+    // sensibles, con consentimiento explícito propio). El firmante NO tiene
+    // sesión: create es público pero el path {sid} es el id inadivinable de
+    // firma_solicitudes — sin el enlace no hay dónde escribir. READ DENEGADO
+    // a todos los clientes: el staff (admin/gerencia) las ve solo por el
+    // callable getFirmaIdentidadUrl (URL firmada de 5 min + auditoría), igual
+    // que la cédula de entrega. Sin update/delete: purga por retención vía
+    // admin SDK.
+    match /firmas_identidad/{sid}/{file} {
+      allow read:   if false;
+      allow create: if request.resource.size < 6 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
     // ── Reporte KPIs junta (snapshots PDF + Excel fuente) ────────────────
     // Data financiera de junta directiva: NINGÚN acceso de cliente, ni
     // lectura. Escritura y lectura pasan solo por el callable

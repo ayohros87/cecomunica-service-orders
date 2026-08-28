@@ -12,6 +12,7 @@
        resto (validar firmante, activar, correos). -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
   <script defer src="/js/firebase-init.js?v=ses2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; }
@@ -36,6 +37,10 @@
     .chk { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 13.5px; }
     .chk input { width: 20px; height: 20px; margin-top: 1px; flex: none; }
     #firmaCanvas { width: 100%; height: 180px; border: 2px dashed #c8d4de; border-radius: 10px; background: #fff; touch-action: none; display: block; }
+    .foto-btn { display: block; width: 100%; text-align: center; border: 2px dashed #c8d4de; border-radius: 10px;
+                padding: 14px; background: #fff; color: #40525f; font-size: 14px; cursor: pointer; margin-top: 4px; }
+    .foto-btn.ok { border-style: solid; border-color: #1FA56B; color: #17714B; }
+    .prev { max-width: 200px; max-height: 150px; border-radius: 8px; margin: 8px auto 0; display: block; border: 1px solid #dde5ec; }
     .canvas-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
     button { font: 600 15px inherit; border: 0; border-radius: 10px; cursor: pointer; padding: 12px 18px; }
     .btn-p { background: #0B2A47; color: #fff; width: 100%; margin-top: 16px; }
@@ -95,6 +100,32 @@
       </div>
 
       <div class="card">
+        <h2>Identidad del firmante</h2>
+        <p class="nota">Dos fotos, <b>por separado</b> — cada una con su toma:</p>
+
+        <label>1 · Foto de su cédula (frente)</label>
+        <p class="nota">Solo la cédula, sobre una superficie plana, sin reflejos — los datos deben leerse con claridad.</p>
+        <label class="foto-btn" id="fCedBtn">📷 Tomar foto de la cédula
+          <input type="file" id="fCedFoto" accept="image/*" capture="environment" class="hidden"></label>
+        <img id="fCedPrev" class="prev hidden" alt="">
+
+        <label>2 · Foto de su rostro (selfie)</label>
+        <p class="nota">Solo su rostro, de frente y con buena luz — sin lentes oscuros ni gorra.</p>
+        <label class="foto-btn" id="fSelfieBtn">🤳 Tomar selfie
+          <input type="file" id="fSelfieFoto" accept="image/*" capture="user" class="hidden"></label>
+        <img id="fSelfiePrev" class="prev hidden" alt="">
+
+        <div class="chk">
+          <input type="checkbox" id="fConsentBio">
+          <span>Autorizo a <b>C COMUNICA, S.A.</b> a capturar y conservar la imagen de mi documento de
+            identidad y mi fotografía, <b>únicamente para verificar mi identidad</b> como firmante de este
+            documento. Se conservarán de forma segura, con acceso restringido, mientras la relación
+            contractual esté vigente y hasta 3 años después, conforme a la Ley 81 de 2019 de Protección
+            de Datos Personales.</span>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>Firma</h2>
         <p class="nota">Dibuje su firma con el dedo (o el mouse):</p>
         <canvas id="firmaCanvas"></canvas>
@@ -139,6 +170,7 @@
         this.pintar(s);
         this.ver('form');
         this.armarCanvas();
+        this.armarFotos();
       } catch (e) { console.error(e); this.ver('noValido'); }
     },
 
@@ -197,23 +229,81 @@
       document.getElementById('fcHint').textContent = '— firme dentro del recuadro —';
     },
 
+    // ── Evidencia de identidad: cédula y selfie en TOMAS SEPARADAS ──
+    _fotos: { cedula: null, selfie: null },
+    armarFotos() {
+      const wire = (inputId, btnId, prevId, clave, listo) => {
+        document.getElementById(inputId).addEventListener('change', async (e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          try {
+            const blob = await this._comprimir(f);
+            this._fotos[clave] = blob;
+            const prev = document.getElementById(prevId);
+            prev.src = URL.createObjectURL(blob);
+            prev.classList.remove('hidden');
+            const btn = document.getElementById(btnId);
+            btn.classList.add('ok');
+            btn.firstChild.textContent = `✓ ${listo} — tocar para repetir `;
+          } catch (err) {
+            console.error(err);
+            alert('No se pudo procesar la foto. Intente de nuevo.');
+          }
+        });
+      };
+      wire('fCedFoto', 'fCedBtn', 'fCedPrev', 'cedula', 'Cédula capturada');
+      wire('fSelfieFoto', 'fSelfieBtn', 'fSelfiePrev', 'selfie', 'Selfie capturado');
+    },
+    // Redimensiona a máx. 1600px y comprime a JPEG: la cédula queda legible y
+    // la subida pesa ~200-500 KB en vez de varios MB de la cámara.
+    _comprimir(file, maxDim = 1600) {
+      return new Promise((res, rej) => {
+        const img = new Image();
+        img.onload = () => {
+          const esc = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.width * esc);
+          cv.height = Math.round(img.height * esc);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          cv.toBlob((b) => b ? res(b) : rej(new Error('sin blob')), 'image/jpeg', 0.82);
+          URL.revokeObjectURL(img.src);
+        };
+        img.onerror = () => rej(new Error('imagen ilegible'));
+        img.src = URL.createObjectURL(file);
+      });
+    },
+
     async enviar() {
       const nombre = document.getElementById('fNombre').value.trim();
       const cedula = document.getElementById('fCedula').value.trim();
       const cargo  = document.getElementById('fCargo').value.trim();
       if (nombre.length < 3) { alert('Escriba el nombre completo de quien firma.'); return; }
       if (!cedula) { alert('Escriba la cédula o pasaporte de quien firma.'); return; }
+      if (!this._fotos.cedula) { alert('Tome la foto de su cédula (paso 1 de Identidad).'); return; }
+      if (!this._fotos.selfie) { alert('Tome su selfie (paso 2 de Identidad).'); return; }
+      if (!document.getElementById('fConsentBio').checked) { alert('Debe autorizar el uso de sus fotos para verificar su identidad.'); return; }
       if (this.trazos < 8) { alert('Dibuje su firma en el recuadro.'); return; }
       if (!document.getElementById('fAcepta').checked) { alert('Debe aceptar los términos del contrato.'); return; }
       const btn = document.getElementById('btnFirmar');
-      btn.disabled = true; btn.textContent = 'Registrando la firma…';
+      btn.disabled = true; btn.textContent = 'Subiendo evidencia…';
       try {
+        // Evidencia de identidad a Storage (path del enlace — inadivinable).
+        const st = firebase.storage();
+        const cedPath = `firmas_identidad/${this.sid}/cedula.jpg`;
+        const selPath = `firmas_identidad/${this.sid}/selfie.jpg`;
+        await st.ref(cedPath).put(this._fotos.cedula, { contentType: 'image/jpeg' });
+        await st.ref(selPath).put(this._fotos.selfie, { contentType: 'image/jpeg' });
+
+        btn.textContent = 'Registrando la firma…';
         const png = document.getElementById('firmaCanvas').toDataURL('image/png');
         await firebase.firestore().collection('firma_solicitudes').doc(this.sid).update({
           estado: 'firmado',
           firma: {
             nombre, cedula, cargo,
             png,
+            cedula_path: cedPath,
+            selfie_path: selPath,
+            consent_biometrico: true,
             acepta: true,
             user_agent: navigator.userAgent || '',
             firmado_at: firebase.firestore.FieldValue.serverTimestamp(),
