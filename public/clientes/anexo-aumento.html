@@ -62,11 +62,12 @@
 
           document.getElementById('hoja').innerHTML = `
             <div class="cab">
-              <div style="display:flex; align-items:center; gap:12px;">
-                <img src="/brand/cecomunica-monogram.svg" alt="" style="width:46px; height:46px;">
+              <div style="display:flex; align-items:center; gap:14px;">
+                <img src="/brand/logo-lockup-horizontal.svg" alt="C Comunica" style="height:44px;">
                 <div>
-                  <h1>CECOMUNICA</h1>
-                  <div style="font:12px Arial,sans-serif;color:#555;">Comunicaciones de Panamá</div>
+                  <h1 style="margin:0;">C COMUNICA, S.A.</h1>
+                  <div style="font:11.5px Arial,sans-serif;color:#555;">RUC 32977-27-249966 DV 39 · Panamá<br>
+                    ventas@cecomunica.com · +507 279-5570</div>
                 </div>
               </div>
               <div class="num">ANEXO DE AUMENTO<br>${esc(gid)}<br>
@@ -74,7 +75,7 @@
             </div>
 
             <h2>Anexo de aumento de equipos al contrato ${esc(a.contrato_id || '—')}</h2>
-            <p>Entre <b>CECOMUNICA</b> y <b>${esc(g.cliente_nombre || cli.nombre || '—')}</b>
+            <p>Entre <b>C COMUNICA, S.A.</b> (RUC 32977-27-249966 DV 39) y <b>${esc(g.cliente_nombre || cli.nombre || '—')}</b>
               (RUC ${esc(cli.rucdv_norm || c.cliente_rucdv || '—')}), representada por
               <b>${esc(cli.representante || c.representante || '—')}</b>, se conviene AUMENTAR los equipos del
               contrato <b>${esc(a.contrato_id || '—')}</b> con las siguientes líneas, que quedan sujetas a los
@@ -144,7 +145,7 @@
             <div class="firmas">
               <div><b>EL CLIENTE</b><br>${esc(cli.representante || c.representante || '')}<br>
                 ${esc(g.cliente_nombre || '—')}</div>
-              <div><b>CECOMUNICA</b><br>&nbsp;<br>&nbsp;</div>
+              <div><b>C COMUNICA, S.A.</b><br>&nbsp;<br>&nbsp;</div>
             </div>`;
           document.getElementById('estado').style.display = 'none';
           document.getElementById('hoja').style.display = '';
