@@ -57,8 +57,15 @@ const aDate = (t) => (t?.toDate ? t.toDate() : (t ? new Date(t) : null));
     const cod = VIG.codigoTipo(c);
 
     if (cod === "DEMO" || cod === "TEMP") {
+      // Candados contra cierres indebidos (lección DEMO20260827-01, que se
+      // cerró cuando la exclusión "de hoy" caducó con el cambio de día y sus
+      // radios en_taller eran PREPARACIÓN, no retorno): exclusión explícita
+      // por número + nunca cerrar contratos con menos de 30 días (pueden
+      // estar en vuelo — radios en taller alistándose para salir).
+      const EXCLUIR = new Set(["DEMO20260827-01"]); // Medicina Legal, vivo
       const creado = aDate(c.fecha_creacion);
-      if (creado && creado >= HOY && (c.cliente_nombre || "").toUpperCase().includes("MEDICINA LEGAL")) {
+      const dias = creado ? (Date.now() - creado.getTime()) / 86400000 : null;
+      if (EXCLUIR.has(c.contrato_id) || (dias !== null && dias < 30)) {
         excluidos.push(c); continue;
       }
       const colgando = porContrato.get(d.id) || [];
