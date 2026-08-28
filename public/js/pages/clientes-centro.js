@@ -553,12 +553,33 @@ window.Centro = {
       footer: `
         <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Abrir la página completa del contrato ›</a>
         <span class="sep"></span>
+        ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
+          ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
         ${c.firmado_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
           ? `<button class="btn btn-primary cg-act" onclick="Centro.aceptarFirmante('${this.esc(c.id)}')">Aceptar firmante…</button>` : ''}
         ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
           ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
         <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal()">Cerrar</button>`,
     });
+  },
+
+  // Aprobación del contrato SIN salir del Centro (2026-08-28: el correo de
+  // "contrato creado" mandaba al módulo viejo para aprobar). Mismos campos
+  // que contratos-approval.js; las rules solo guardan el salto a 'activo'.
+  async aprobarContrato(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c || c.estado !== 'pendiente_aprobacion') { Toast.show('El contrato no está pendiente de aprobación', 'warn'); return; }
+    try {
+      await ContratosService.updateContrato(id, {
+        estado: 'aprobado',
+        fecha_aprobacion: firebase.firestore.Timestamp.now(),
+        aprobado_por_uid: this.uid,
+        fecha_modificacion: new Date(),
+      });
+      this._cerrarModal();
+      Toast.show(`Contrato ${c.contrato_id || id} aprobado — sigue la firma del cliente`, 'ok');
+      await this.abrir(this.cliente.id, { push: false });
+    } catch (e) { console.error(e); Toast.show('No se pudo aprobar el contrato', 'bad'); }
   },
 
   /* ═════════ Firma digital del contrato (2026-08-28) ═════════ */
@@ -1085,15 +1106,79 @@ window.Centro = {
     if (window.lucide?.createIcons) lucide.createIcons();
   },
 
+  // Contratos EN TRÁMITE (renovación de cuenta / contrato nuevo) como
+  // expedientes de esta sección (pedido 2026-08-28: la renovación no aparecía
+  // en Gestiones y solo se podía aprobar en el módulo viejo). El contrato ES
+  // el expediente: pipeline aprobación → firma → activación → regularización,
+  // con las acciones aquí mismo.
+  _tramitesContrato() {
+    const dias = (t) => { const d = t?.toDate ? t.toDate() : (t ? new Date(t) : null); return d && !isNaN(d) ? (Date.now() - d) / 86400000 : null; };
+    return (this.contratos || []).filter(c => !c.deleted && (
+      c.estado === 'pendiente_aprobacion'
+      || (c.estado === 'aprobado' && !c.firmado && (dias(c.fecha_creacion) ?? 999) < 45)));
+  },
+  _tramiteHtml(c) {
+    const abierta = this.gSel === 'ct-' + c.id;
+    const pasos = [
+      ['Aprobación comercial', c.estado !== 'pendiente_aprobacion', 'llega a ventas@cecomunica.com'],
+      ['Firma del cliente', !!c.firmado, c.firma_solicitud_estado === 'pendiente' ? 'enlace de firma enviado — esperando' : 'enlace digital, o subir el firmado'],
+      ['Activación', c.estado === 'activo', 'automática al validarse la firma'],
+      ['Regularización de la cuenta', !!c.regularizacion?.at, c.regularizacion?.amarradas != null
+        ? `${c.regularizacion.amarradas} radio(s) amarrados${c.regularizacion.sin_cupo ? ` · ${c.regularizacion.sin_cupo} sin cupo` : ''}`
+        : 'la custodia se amarra sola al activarse'],
+    ];
+    const done = pasos.filter(p => p[1]).length;
+    const [chipCls, chipTxt] = c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
+      : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
+      : c.estado === 'activo' ? ['cg-chip--ok', 'Activo'] : ['cg-chip--info', 'En trámite'];
+    const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+    const esRenov = c.accion === 'Renovación';
+    const timeline = `<div class="cg-tl">` + pasos.map(([t, ok, s], i) => {
+      const next = !ok && pasos.slice(0, i).every(p => p[1]);
+      return `<div class="cg-tl-item${ok ? ' done' : next ? ' next' : ''}">
+        <span class="cg-tl-dot">${ok ? '✓' : ''}</span>
+        <span class="cg-tl-t"><b>${t}</b><span class="s">${s}</span></span></div>`;
+    }).join('') + `</div>`;
+    const acciones = `
+      ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
+        ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
+      ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
+        ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
+      <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`;
+    return `
+      <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
+           onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
+        <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;">${this.esc(c.contrato_id || c.id)}</div>
+          <div class="s">${esRenov ? 'Renovación de cuenta' : 'Contrato nuevo'} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes</div></div>
+        <span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/4</span>
+        <span class="cg-chip ${chipCls}">${chipTxt}</span>
+        <span class="arr">${abierta ? '▾' : '›'}</span>
+      </div>
+      ${abierta ? `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
+        <div class="cg-exp">
+          <div>
+            <p style="font-size:13px; margin:0 0 8px;">${esRenov
+              ? `Renueva y <b>consolida la cuenta</b>: sus orígenes quedan marcados como renovados al activarse.`
+              : `Contrato nuevo pendiente del ciclo aprobación → firma → activo.`}
+              <b>Duración:</b> ${this.esc(c.duracion || '—')}</p>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">${acciones}</div>
+          </div>
+          <div>${timeline}</div>
+        </div>
+      </div>` : ''}`;
+  },
+
   pintarGestiones() {
     const cont = document.getElementById('fGestiones');
-    if (!(this.gestiones || []).length) {
+    const tramites = this._tramitesContrato();
+    const tramHtml = tramites.map(c => this._tramiteHtml(c)).join('');
+    if (!(this.gestiones || []).length && !tramites.length) {
       cont.innerHTML = `<div class="cg-empty">Sin gestiones registradas todavía.
         ${this.puedeCrearGestion() ? `<div class="cta"><button class="btn btn-primary cg-act"
           onclick="event.stopPropagation(); document.getElementById('btnGestion')?.scrollIntoView({block:'center'}); document.getElementById('btnGestion')?.click()">Nueva gestión</button></div>` : ''}</div>`;
       return;
     }
-    cont.innerHTML = this.gestiones.map(g => {
+    cont.innerHTML = tramHtml + (this.gestiones || []).map(g => {
       const done = ['asignacion', 'programacion', 'entrega', 'entrada']
         .filter(k => g.cierre?.[k] === true).length;
       const fecha = g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().toLocaleDateString('es-PA') : '—';
@@ -1806,7 +1891,7 @@ window.Centro = {
     return `<div style="display:flex; gap:8px; margin-bottom:8px;">
       ${this._selModelo(`data-${pref}-modelo style="flex:1;"`)}
       <input class="form-input" data-${pref}-cant type="number" min="1" value="1" style="width:86px;" title="Cantidad">
-      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="0.01" placeholder="$/mes" style="width:110px;" title="Precio mensual">` : ''}
+      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" style="width:110px;" title="Precio mensual">` : ''}
     </div>`;
   },
   _addLineaModelo(contId, pref, conPrecio) {
@@ -1898,7 +1983,7 @@ window.Centro = {
       <select class="form-select" data-wac-sel style="flex:1;" onchange="Centro._cargoSelChange(this)">
         <option value="">— cargo del catálogo —</option>${opts}</select>
       <input class="form-input" data-wac-cant type="number" min="1" value="1" style="width:70px;" title="Cantidad" onchange="Centro._previewTarifario()">
-      <input class="form-input" data-wac-monto type="number" min="0" step="0.01" placeholder="$" style="width:100px;" onchange="Centro._previewTarifario()">
+      <input class="form-input" data-wac-monto type="number" min="0" step="1" placeholder="$" style="width:100px;" onchange="Centro._previewTarifario()">
       <select class="form-select" data-wac-tipo style="width:110px;" onchange="Centro._previewTarifario()">
         <option value="unico">Único</option><option value="recurrente">Mensual</option></select>
       <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
@@ -2116,7 +2201,7 @@ window.Centro = {
     return `<div style="display:flex; gap:8px; margin-bottom:8px;">
       ${this._selModelo(`data-${pref}-modelo style="flex:1;"`, l?.modelo_id, l?.modelo)}
       <input class="form-input" data-${pref}-cant type="number" min="1" value="${Math.max(1, Number(l?.cantidad || 1))}" style="width:86px;" title="Cantidad">
-      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="0.01" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">` : ''}
+      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">` : ''}
       <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
         onclick="this.parentElement.remove(); Centro._previewTarifario()">✕</button>
     </div>`;
@@ -2487,8 +2572,11 @@ window.Centro = {
             </table>
             ${equiposHtml ? `<h4 style="margin:0 0 8px;font:600 16px Arial,sans-serif;">Equipos</h4><ul style="margin:0 0 16px;padding-left:18px;font:14px/1.5 Arial,sans-serif;">${equiposHtml}</ul>` : ''}
           `,
-          ctaUrl: `${location.origin}/contratos/index.html?aprobar=${docRef.id}`,
-          ctaLabel: 'Revisar contrato',
+          // CTA al CENTRO (2026-08-28): el correo mandaba al módulo viejo a
+          // aprobar; ahora aterriza en la ficha del cliente, donde "Ver" del
+          // contrato ofrece "Aprobar contrato" y luego "Enviar para firma".
+          ctaUrl: `${location.origin}/clientes/centro.html?id=${encodeURIComponent(contrato.cliente_id)}`,
+          ctaLabel: 'Revisar y aprobar en el Centro',
           meta: {
             created_at: firebase.firestore.FieldValue.serverTimestamp(),
             created_by: this.uid,
