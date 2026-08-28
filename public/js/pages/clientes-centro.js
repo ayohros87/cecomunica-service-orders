@@ -482,9 +482,6 @@ window.Centro = {
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
       <td>${this._vidaHtml(c)}</td>
       <td style="text-align:right; white-space:nowrap;">${renovar}
-        ${this.puedeCrearGestion() && this._esVigente(c)
-          ? `<button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" title="Aumento de líneas a este contrato (enmienda firmada)"
-               onclick="Centro.wizAumento('${this.esc(c.id)}')">+ Aumento</button>` : ''}
         <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
   },
 
@@ -1105,26 +1102,58 @@ window.Centro = {
     btn?.classList.remove('hidden');
     // Terminación total como GESTIÓN (2026-08-27) — la página vieja de
     // enmiendas queda para el histórico y se descontinuará en la Ola 6.
-    // Menú FIJO y corto (pedido 2026-08-28: SEPROSA generaba 13 renglones de
-    // "Terminación total — …" que enterraban las acciones comunes). La
-    // terminación es UNA entrada que abre su selector de contrato.
-    const activos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
+    // Menú SEGÚN EL ESTADO DE LA CUENTA (decisión 2026-08-28: la unidad es la
+    // cuenta, no el contrato — cada acción tiene UN significado claro):
+    //   nueva        → Nuevo contrato.
+    //   fragmentada  → todo pasa por Renovar cuenta (consolida); agregar
+    //                  equipos entra por ahí; terminación = toda la cuenta.
+    //   consolidada  → Aumento (anexo directo al maestro), Renovar cuando
+    //                  entra en ventana, Terminación de la cuenta.
+    const est = this._cuentaEstado();
+    let cuentaHtml = '';
+    if (est.tipo === 'nueva') {
+      cuentaHtml = `<button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>`;
+    } else if (est.tipo === 'fragmentada') {
+      const n = est.renovables.length;
+      cuentaHtml = `
+        <button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta
+          <span style="display:block; font-size:11px; color:var(--fg-4);">consolida ${n ? `${n} contrato${n === 1 ? '' : 's'}` : 'la cuenta'}${est.custodia ? ` + ${est.custodia} radio${est.custodia === 1 ? '' : 's'} sin contrato` : ''} en un contrato maestro</span></button>
+        <button type="button" onclick="Centro.wizContrato({renovarCuenta:true, agregar:true})">Agregar equipos
+          <span style="display:block; font-size:11px; color:var(--fg-4);">la venta nueva entra en la misma renovación que consolida</span></button>
+        ${n ? `<button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta
+          <span style="display:block; font-size:11px; color:var(--fg-4);">cancela los ${n} contrato${n === 1 ? '' : 's'} con una sola carta y aprobación</span></button>` : ''}`;
+    } else {
+      const m = est.maestro;
+      cuentaHtml = `
+        <button type="button" onclick="Centro.wizAumento('${this.esc(m.id)}')">Aumento de equipos (anexo)</button>
+        ${this._wcEnVentana(m)
+          ? `<button type="button" onclick="Centro.wizContrato('${this.esc(m.id)}')">Renovar cuenta</button>` : ''}
+        <button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta</button>`;
+    }
     document.getElementById('cgMenu').innerHTML = `
       <div class="hd">Equipos</div>
       <button type="button" onclick="Centro.wizReemplazo()">Reemplazo de equipo</button>
       <button type="button" onclick="Centro.wizDemo()">Demo de equipos</button>
-      <button type="button" onclick="Centro.wizBaja()">Baja de equipos (por serial)</button>
-      <div class="hd">Contratos</div>
-      <button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>
-      ${(activos.some(c => this._wcEnVentana(c)) || this._wcCustodia().length)
-        ? '<button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>' : ''}
-      ${activos.length ? '<button type="button" onclick="Centro.wizAumento()">Aumento de equipos (enmienda)</button>' : ''}
-      ${activos.length ? '<button type="button" onclick="Centro.wizTerminacion()">Terminación total…</button>' : ''}
+      <button type="button" onclick="Centro.wizBaja()">Baja de equipos (parcial, por serial)</button>
+      <div class="hd">Cuenta</div>
+      ${cuentaHtml}
       <div class="hd">Comercial</div>
       <a href="../cotizaciones/index.html">Nueva cotización</a>
       <a href="../contratos/nuevo-contrato.html">Formulario clásico de contrato</a>
       <div class="hd">Cliente</div>
       <a href="./index.html">Editar datos del cliente</a>`;
+  },
+
+  // Estado de la cuenta para el menú. Los DEMO/TEMP no cuentan (terminan por
+  // su propia devolución); lo que define la cuenta son los renovables
+  // (ALQ/PROP/REEMP operativos) y la custodia sin contrato.
+  _cuentaEstado() {
+    const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
+    const renovables = operativos.filter(c => this._aplicaVenc(c));
+    const custodia = this._wcCustodia().length;
+    if (!renovables.length && !custodia) return { tipo: 'nueva', renovables, custodia, maestro: null };
+    if (renovables.length === 1 && !custodia) return { tipo: 'consolidada', renovables, custodia, maestro: renovables[0] };
+    return { tipo: 'fragmentada', renovables, custodia, maestro: null };
   },
 
   /* ═════════ Wizards: reemplazo y demo ═════════ */
@@ -1662,6 +1691,9 @@ window.Centro = {
       porModelo.forEach(l => lineas.push(l));
     }
     lineas = this._wcMergeLineas(lineas);
+    // "Agregar equipos" (cuenta fragmentada): la venta nueva entra en la misma
+    // renovación consolidadora — línea en blanco lista para el equipo nuevo.
+    if (opts.agregar) lineas.push(null);
     if (!lineas.length) lineas.push(null);
 
     const itbmsDefault = this.cliente?.itbms_exento === true ? false
@@ -1686,7 +1718,9 @@ window.Centro = {
         ${opts.renovarCuenta && preIds.length > 1 ? `Esta renovación <b>consolida los ${preIds.length} contratos
         marcados en UNO solo</b>: al activarse quedan marcados como renovados y pasan al histórico de la ficha.` : ''}
         ${custodia.length ? `<b>${custodia.length} equipo(s) en campo sin
-        contrato formal</b> — al renovar, la cuenta los cubre.` : ''}</p>
+        contrato formal</b> — al renovar, la cuenta los cubre.` : ''}
+        ${opts.agregar ? `<b>La última línea de equipos está en blanco para la venta nueva</b> — elige el modelo,
+        cantidad y precio; bodega asignará los seriales solo de los equipos nuevos.` : ''}</p>
 
       <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:10px;">
         <div class="form-field" style="margin:0; max-width:170px;">
@@ -2007,67 +2041,64 @@ window.Centro = {
     return { por_contrato: lista, total: Math.round(lista.reduce((s, p) => s + p.monto, 0) * 100) / 100 };
   },
 
-  // Terminación total = baja de TODOS los seriales del contrato, como gestión
-  // (2026-08-27; reemplaza el flujo viejo de enmiendas, que se descontinuará).
-  // Sin argumento abre el selector (una sola entrada en el menú); con uno o
-  // con un único contrato vigente va directo al wizard de terminación.
+  // Terminación de la CUENTA (decisión 2026-08-28): el cliente cancela el
+  // servicio — se terminan TODOS los contratos renovables en una sola gestión
+  // (una carta, una aprobación con el desglose, una devolución de toda la
+  // flota incluida la custodia). Lo parcial es la Baja por serial.
+  wizTerminacionCuenta() {
+    const est = this._cuentaEstado();
+    if (!est.renovables.length) { Toast.show('El cliente no tiene contratos vigentes que terminar', 'warn'); return; }
+    this.wizBaja({ terminacionCuenta: true });
+  },
+  // Compat: terminación de UN contrato (ya no se ofrece en el menú).
   wizTerminacion(contratoDocId) {
-    if (contratoDocId) { this.wizBaja({ terminacionDe: contratoDocId }); return; }
-    const activos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
-    if (!activos.length) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }
-    if (activos.length === 1) { this.wizBaja({ terminacionDe: activos[0].id }); return; }
-    this._cerrarModal();
-    document.getElementById('cgMenu')?.classList.add('hidden');
-    const filas = activos.map(c => {
-      const m = Number(c.total_mensual ?? c.total_con_itbms ?? 0);
-      const dias = this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
-      const chip = dias === null ? '' : dias < 0 ? `<span class="cg-venc vencido num">vencido ${-dias} d</span>`
-        : dias <= this.AVISO_DIAS ? `<span class="cg-venc por_vencer num">${dias} d</span>` : `<span class="cg-venc vigente num">${dias} d</span>`;
-      return `<button type="button" onclick="Centro.wizTerminacion('${this.esc(c.id)}')"
-        style="display:flex; gap:12px; align-items:center; width:100%; text-align:left; background:var(--surface-card);
-               border:1px solid var(--border-subtle); border-radius:10px; padding:10px 14px; margin-bottom:8px; cursor:pointer;">
-        <span class="cg-mono" style="font-weight:600;">${this.esc(c.contrato_id || c.id)}</span>
-        <span style="color:var(--fg-3); font-size:12.5px;">${this.esc(c.tipo_contrato || '')} · ${this._unidadesActivas(c)} unid. · ${m > 0 ? `$${m.toFixed(2)}/mes` : 'sin facturación'}</span>
-        <span style="margin-left:auto;">${chip}</span></button>`;
-    }).join('');
-    this._abrirModal(`
-      <h3 style="margin:0 0 6px;">Terminación total — elegir contrato</h3>
-      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
-        La terminación desconecta <b>todos</b> los seriales del contrato elegido y requiere la carta
-        de cancelación del cliente. Elige cuál se termina:</p>
-      <div style="max-height:55vh; overflow:auto;">${filas}</div>
-      <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-      </div>`);
+    if (contratoDocId) this.wizBaja({ terminacionDe: contratoDocId });
+    else this.wizTerminacionCuenta();
   },
 
   wizBaja(opts = {}) {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
+    const termCuenta = !!opts.terminacionCuenta;
     const termDe = opts.terminacionDe || null;
     const contratoTerm = termDe ? this.contratos.find(c => c.id === termDe) : null;
-    const elegibles = this.equipos.filter(e =>
-      ['en_cliente', 'asignado_contrato'].includes(e.estado) && e.asignacion?.contrato_doc_id
-      && (!termDe || e.asignacion.contrato_doc_id === termDe));
+    // Contratos que la terminación cancela (se guarda para crearBaja).
+    this._wbTermIds = termCuenta
+      ? this._cuentaEstado().renovables.map(c => c.id)
+      : (termDe ? [termDe] : []);
+    const esTerm = this._wbTermIds.length > 0;
+    const elegibles = this.equipos.filter(e => {
+      if (!['en_cliente', 'asignado_contrato'].includes(e.estado)) return false;
+      if (termCuenta) return this._wbTermIds.includes(e.asignacion?.contrato_doc_id)
+        || !e.asignacion?.contrato_doc_id;   // la custodia también se recupera
+      if (termDe) return e.asignacion?.contrato_doc_id === termDe;
+      return !!e.asignacion?.contrato_doc_id;
+    });
     const finMes = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10); })();
     this._abrirModal(`
-      <h3 style="margin:0 0 6px;">${termDe
-        ? `Terminación total — <span class="cg-mono">${this.esc(contratoTerm?.contrato_id || termDe)}</span>`
-        : `Baja de equipos — ${this.esc(this.cliente.nombre)}`}</h3>
+      <h3 style="margin:0 0 6px;">${termCuenta
+        ? `Terminación de la cuenta — ${this.esc(this.cliente.nombre)}`
+        : termDe
+          ? `Terminación total — <span class="cg-mono">${this.esc(contratoTerm?.contrato_id || termDe)}</span>`
+          : `Baja de equipos — ${this.esc(this.cliente.nombre)}`}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
-        ${termDe
+        ${termCuenta
+          ? `Cancela <b>los ${this._wbTermIds.length} contrato(s) vigente(s)</b> de la cuenta y recupera toda la flota en campo
+             (incluidos los radios sin contrato formal). Una sola carta del cliente y una sola aprobación con el desglose;
+             los equipos propios del cliente no se recuperan.`
+          : termDe
           ? 'Se desconectan <b>todos</b> los seriales del contrato. Requiere la carta de cancelación del cliente; al aprobarse, la orden de devolución se crea de inmediato (los equipos propios del cliente no se recuperan).'
           : 'Marca los seriales a dar de baja (pueden ser de contratos distintos — una sola aprobación con el desglose). Requiere la carta de solicitud del cliente; al aprobarse, la orden de devolución se crea de inmediato.'}</p>
       <div class="cg-twrap" style="max-height:32vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
         <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Propiedad</th>
         </tr></thead><tbody>
         ${elegibles.map((e) => `<tr>
-          <td><input type="checkbox" data-bsel="${this.equipos.indexOf(e)}" ${termDe ? 'checked disabled' : ''} onchange="Centro._bajaPreview()"></td>
+          <td><input type="checkbox" data-bsel="${this.equipos.indexOf(e)}" ${esTerm ? 'checked disabled' : ''} onchange="Centro._bajaPreview()"></td>
           <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
           <td>${this.esc(e.modelo_label || '—')}</td>
-          <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
+          <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || 'sin contrato')}</td>
           <td style="font-size:12px;">${e.propiedad === 'cliente' ? 'del cliente <span style="color:var(--fg-4);">(no se recupera)</span>' : 'CECOMUNICA'}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="cg-vacio">Sin equipos con contrato en campo.</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="5" class="cg-vacio">Sin equipos en campo.</td></tr>'}
       </tbody></table></div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
         <select class="form-select" id="wbMotivo" style="max-width:230px;">
@@ -2107,9 +2138,9 @@ window.Centro = {
       <div id="wbPen" style="margin-top:12px;"></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearBaja(${termDe ? `'${this.esc(termDe)}'` : ''})">Enviar a aprobación</button>
+        <button class="btn btn-primary" onclick="Centro.crearBaja()">Enviar a aprobación</button>
       </div>`);
-    if (termDe) this._bajaPreview();
+    if (esTerm) this._bajaPreview();
   },
 
   _bajaItemsSeleccion() {
@@ -2140,8 +2171,10 @@ window.Centro = {
     const items = this._bajaItemsSeleccion();
     const pen = this._penalidadBaja(items);
     const todasPropias = items.length && items.every(i => i.propiedad === 'cliente');
+    const sinContrato = items.filter(i => !i.contrato_doc_id).length;
     document.getElementById('wbPen').innerHTML = items.length ? `
       ${todasPropias ? '<div class="cg-senal info" style="margin-bottom:8px;">Equipos <b>propios del cliente</b>: la baja corta el servicio y la facturación — no se crea orden de recuperación.</div>' : ''}
+      ${sinContrato ? `<div class="cg-senal warn" style="margin-bottom:8px;">${sinContrato} radio(s) <b>sin contrato formal</b>: se recuperan igual, pero no hay tarifa para estimar su liquidación — el monto exacto lo pone finanzas.</div>` : ''}
       <p style="font-size:13px; margin:0 0 4px;"><b>Liquidación estimada — 3 meses en cualquier caso, cobro inmediato</b>
         <span style="color:var(--fg-4);">(vencido: 60 días de preaviso con servicio activo + 30 de penalidad)</span></p>
       ${pen.por_contrato.map(p => `<div style="display:flex; gap:10px; font-size:13px; padding:2px 0;">
@@ -2152,7 +2185,8 @@ window.Centro = {
         <b>Total estimado</b><b style="margin-left:auto;" class="num">$${pen.total.toFixed(2)}</b></div>` : '';
   },
 
-  async crearBaja(terminacionDe) {
+  async crearBaja() {
+    const termIds = Array.isArray(this._wbTermIds) ? this._wbTermIds : [];
     const base = this._bajaItemsSeleccion();
     if (!base.length) { Toast.show('Marca al menos un serial', 'warn'); return; }
     const motivo = document.getElementById('wbMotivo')?.value || '';
@@ -2180,7 +2214,7 @@ window.Centro = {
         termino: document.getElementById('wbTermino')?.value || 'fin_mes',
         fecha_nota_cliente: document.getElementById('wbNota')?.value || null,
         deposito: depAcc === 'na' ? null : { accion: depAcc, monto: Number(document.getElementById('wbDepMonto')?.value || 0) },
-        ...(terminacionDe ? { terminacion_total_de: [terminacionDe] } : {}),
+        ...(termIds.length ? { terminacion_total_de: termIds } : {}),
       });
       try {
         await GestionesService.subirCartaBaja(gid, carta);
@@ -2190,7 +2224,7 @@ window.Centro = {
       }
       this._cerrarModal();
       this.gSel = gid;
-      Toast.show(`${terminacionDe ? 'Terminación total' : 'Baja'} ${gid} enviada a aprobación`, 'ok');
+      Toast.show(`${termIds.length > 1 ? 'Terminación de la cuenta' : termIds.length ? 'Terminación total' : 'Baja'} ${gid} enviada a aprobación`, 'ok');
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear la baja', 'bad'); }
   },
