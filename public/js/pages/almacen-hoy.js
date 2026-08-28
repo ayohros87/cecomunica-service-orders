@@ -156,6 +156,30 @@ window.AlmacenHoy = (() => {
     return grupos.sort((a, b) => a.norm.localeCompare(b.norm));
   }
 
+  // Gestiones esperando a BODEGA (brecha Ola 6, caso GA20260828-01 de
+  // C COMUNICA 2026-08-28: el aumento firmado quedó en pendiente_bodega y la
+  // bandeja no lo mostraba — bodega solo se enteraba por el correo):
+  //   · aumento en 'pendiente_bodega' (anexo firmado; faltan los seriales)
+  //   · reemplazo/demo en 'en_proceso' sin cierre.asignacion
+  // La asignación se resuelve en el expediente del Centro (mismo deep-link
+  // del correo de bodega).
+  async function cargarGestionesBodega() {
+    const db = firebase.firestore();
+    const snap = await db.collection('gestiones')
+      .where('estado', 'in', ['pendiente_bodega', 'en_proceso']).limit(200).get();
+    const out = [];
+    snap.docs.forEach(d => {
+      const g = { id: d.id, ...d.data() };
+      if (g.deleted) return;
+      const espera = g.estado === 'pendiente_bodega'
+        || (g.estado === 'en_proceso' && ['reemplazo', 'demo'].includes(g.tipo) && !g.cierre?.asignacion);
+      if (espera) out.push(g);
+    });
+    const ms = (g) => g.actualizado_at?.toMillis?.() || g.updated_at?.toMillis?.()
+      || g.creado_at?.toMillis?.() || g.created_at?.toMillis?.() || g.fecha_creacion?.toMillis?.() || 0;
+    return out.map(g => ({ ...g, _at: ms(g) })).sort((a, b) => a._at - b._at);
+  }
+
   async function cargarDiferencias() {
     const [modelos, conteos, poolMap] = await Promise.all([
       ModelosService.getModelos(),
@@ -171,15 +195,16 @@ window.AlmacenHoy = (() => {
     try {
       // Cada carga cae por su lado: un permiso o índice roto no tumba la bandeja
       // — se muestra lo que sí se pudo leer y se avisa del hueco (null = falló).
-      const [colas, devueltos, clasificar, conflictos, sinVerificarN, difs] = await Promise.all([
+      const [colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs] = await Promise.all([
         ColaInventarioService.todo(),
+        cargarGestionesBodega().catch(e => { console.warn('[Hoy] gestiones:', e?.code || e); return null; }),
         EquiposPoolService.listar({ estado: 'devuelto_revision' }).catch(e => { console.warn('[Hoy] devueltos:', e?.code || e); return null; }),
         EquiposPoolService.listar({ estado: 'por_clasificar' }).catch(e => { console.warn('[Hoy] clasificar:', e?.code || e); return null; }),
         cargarConflictos().catch(e => { console.warn('[Hoy] conflictos:', e?.code || e); return null; }),
         contarSinVerificar().catch(e => { console.warn('[Hoy] sin verificar:', e?.code || e); return null; }),
         cargarDiferencias().catch(e => { console.warn('[Hoy] diferencias:', e?.code || e); return null; }),
       ]);
-      ctx.datos = { colas, devueltos, clasificar, conflictos, sinVerificarN, difs };
+      ctx.datos = { colas, gestiones, devueltos, clasificar, conflictos, sinVerificarN, difs };
       render();
     } catch (e) {
       console.error('[Hoy] no se pudo cargar:', e);
@@ -235,6 +260,35 @@ window.AlmacenHoy = (() => {
     partes.push(grupo('De contratos', deContratos.length,
       deContratos.map(filaContrato).join(''),
       notaTransicion));
+
+    // ── De gestiones (bodega asigna) ──
+    if (d.gestiones === null) fallidas.push('gestiones');
+    const gestiones = d.gestiones || [];
+    total += gestiones.length;
+    const CHIP_G = { aumento: ['Aumento', 'seriales'], reemplazo: ['Reemplazo', 'cambio'], demo: ['Demo', 'transicion'] };
+    partes.push(grupo('De gestiones (bodega asigna)', gestiones.length,
+      conMas(gestiones, (g) => {
+        const [chip, cls] = CHIP_G[g.tipo] || [g.tipo, 'seriales'];
+        let detalle = '';
+        if (g.tipo === 'aumento') {
+          const a = g.aumento || {};
+          detalle = ` — anexo firmado al <b>${esc(a.contrato_id || '—')}</b>: `
+            + (a.lineas || []).map(l => `${Number(l.cantidad || 0)} × ${esc(l.modelo || '?')}`).join(', ');
+        } else {
+          const n = (g.items || []).length;
+          detalle = g.tipo === 'demo'
+            ? ` — ${n} equipo(s) de demo por asignar`
+            : ` — ${n} reemplazo(s): elegir la unidad que sustituye`;
+        }
+        return fila({
+          chip, chipCls: cls,
+          txt: `<b>${esc(g.id)}</b> · ${esc(g.cliente_nombre || '—')}${detalle}`,
+          at: g._at || null,
+          ctaHtml: cta(vol(`../clientes/centro.html?id=${encodeURIComponent(g.cliente_id || '')}&g=${encodeURIComponent(g.id)}`),
+            'scan-barcode', 'Asignar seriales'),
+        });
+      }, vol('../clientes/centro.html'), 'gestiones'),
+    ));
 
     // ── Del pool ──
     let poolHtml = '';
