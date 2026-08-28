@@ -101,12 +101,12 @@
         <div class="form-grid-2">
 
           <div class="form-field">
-            <label class="form-label" for="numero">Número de orden <span class="req">*</span></label>
+            <label class="form-label" for="numero">Número de orden <span class="req"></span></label>
             <input class="form-input" type="text" id="numero" readonly style="font-family:var(--font-mono);">
           </div>
 
           <div class="form-field" style="grid-column:1/-1">
-            <label class="form-label" for="cliente">Cliente <span class="req">*</span></label>
+            <label class="form-label" for="cliente">Cliente <span class="req"></span></label>
             <!-- Filtro (auditoría A6): el select llegaba a ~2,000 opciones sin
                  búsqueda — el error de cliente aquí contamina contrato,
                  entrega y correo. Con un único resultado se auto-selecciona. -->
@@ -121,7 +121,7 @@
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="vendedor">Vendedor <span class="req">*</span></label>
+            <label class="form-label" for="vendedor">Vendedor <span class="req"></span></label>
             <select class="form-select" id="vendedor" required>
               <option value="">Seleccione vendedor</option>
             </select>
@@ -133,7 +133,7 @@
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="tipo">Tipo de servicio <span class="req">*</span></label>
+            <label class="form-label" for="tipo">Tipo de servicio <span class="req"></span></label>
             <select class="form-select" id="tipo" required>
               <option value="">Seleccione tipo de servicio</option>
             </select>
@@ -149,7 +149,10 @@
             </div>
 
             <div class="form-field">
-              <label class="form-label" id="contratoLabel" for="contratoSelect">Contrato <span class="req">*</span></label>
+              <!-- Sin span de obligatorio: la marca la pone/quita el JS con la clase
+                   `req` en este label según "No aplica" (antes el span estaba fijo y
+                   el campo se veía obligatorio aunque no lo fuera). -->
+              <label class="form-label" id="contratoLabel" for="contratoSelect">Contrato</label>
               <select class="form-select" id="contratoSelect" required>
                 <option value="">Seleccione contrato</option>
               </select>
@@ -161,7 +164,7 @@
             </label>
 
             <div class="form-field" id="contratoMotivoField" style="display: none; margin-top:var(--sp-2);">
-              <label class="form-label" for="contratoMotivo">Motivo (no aplica) <span class="req">*</span></label>
+              <label class="form-label" for="contratoMotivo">Motivo (no aplica) <span class="req"></span></label>
               <textarea class="form-input form-textarea" id="contratoMotivo" rows="3" placeholder="Explique por qué no aplica contrato…"></textarea>
             </div>
           </div>
@@ -174,7 +177,7 @@
             </div>
 
             <div class="form-field">
-              <label class="form-label" for="visitaSitio">Sitio / ubicación <span class="req">*</span></label>
+              <label class="form-label" for="visitaSitio">Sitio / ubicación <span class="req"></span></label>
               <input class="form-input" type="text" id="visitaSitio" placeholder="Ej.: Aeropuerto de Tocumen — caseta de repetidoras">
             </div>
 

@@ -128,24 +128,24 @@
         <div class="form-grid-2">
 
           <div class="form-field">
-            <label class="form-label" for="orden_id">Número de orden <span class="req">*</span></label>
+            <label class="form-label" for="orden_id">Número de orden <span class="req"></span></label>
             <input class="form-input" type="text" id="orden_id" readonly style="font-family:var(--font-mono);">
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="cliente">Cliente <span class="req">*</span></label>
+            <label class="form-label" for="cliente">Cliente <span class="req"></span></label>
             <input class="form-input" type="text" id="cliente" readonly>
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="vendedor">Vendedor <span class="req">*</span></label>
+            <label class="form-label" for="vendedor">Vendedor <span class="req"></span></label>
             <select class="form-select" id="vendedor">
               <option value="">Seleccione vendedor</option>
             </select>
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="tipo">Tipo de servicio <span class="req">*</span></label>
+            <label class="form-label" for="tipo">Tipo de servicio <span class="req"></span></label>
             <select class="form-select" id="tipo" required>
               <option value="">Seleccione tipo de servicio</option>
             </select>
@@ -159,7 +159,10 @@
             </div>
 
             <div class="form-field">
-              <label class="form-label" id="contratoLabel" for="contratoSelect">Contrato <span class="req">*</span></label>
+              <!-- Sin span de obligatorio: la marca la pone/quita el JS con la clase
+                   `req` en este label según "No aplica" (antes el span estaba fijo y
+                   el campo se veía obligatorio aunque no lo fuera). -->
+              <label class="form-label" id="contratoLabel" for="contratoSelect">Contrato</label>
               <select class="form-select" id="contratoSelect">
                 <option value="">Seleccione contrato</option>
               </select>
@@ -171,7 +174,7 @@
             </label>
 
             <div class="form-field" id="contratoMotivoField" style="display: none; margin-top:var(--sp-2);">
-              <label class="form-label" for="contratoMotivo">Motivo (no aplica) <span class="req">*</span></label>
+              <label class="form-label" for="contratoMotivo">Motivo (no aplica) <span class="req"></span></label>
               <textarea class="form-input form-textarea" id="contratoMotivo" rows="3" placeholder="Explique por qué no aplica contrato…"></textarea>
             </div>
           </div>

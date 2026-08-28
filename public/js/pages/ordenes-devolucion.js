@@ -1598,7 +1598,7 @@
             accesorios/daño y acuse firmado — las unidades quedan trackeadas en Equipos por serial.
           </p>
           <div class="form-field" style="margin-bottom:8px;">
-            <label class="form-label" for="devNuevaCliente">Cliente <span class="req">*</span></label>
+            <label class="form-label" for="devNuevaCliente">Cliente <span class="req"></span></label>
             <input class="form-input" id="devNuevaCliente" list="devNuevaClientesList" placeholder="Nombre del cliente (elige o escribe)" autocomplete="off">
             <datalist id="devNuevaClientesList">${nombres.map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
           </div>
@@ -1607,7 +1607,7 @@
             <input class="form-input" id="devNuevaRef" placeholder="Ej.: contrato físico #123 / carpeta 2019" autocomplete="off">
           </div>
           <div class="form-field" style="margin-bottom:8px;">
-            <label class="form-label" for="devNuevaTotal">¿Cuántos equipos debe devolver? <span class="req">*</span></label>
+            <label class="form-label" for="devNuevaTotal">¿Cuántos equipos debe devolver? <span class="req"></span></label>
             <input class="form-input" id="devNuevaTotal" type="number" min="1" max="999" placeholder="Ej.: 9" style="max-width:120px;" autocomplete="off">
             <div style="font-size:11.5px;color:var(--fg-3,#6b7280);margin-top:3px;">
               Total del alquiler según el contrato de papel. Es lo que permite saber cuántos radios

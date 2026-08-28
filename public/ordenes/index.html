@@ -40,7 +40,7 @@
      al subir firma/foto o pedir la URL de una identificación. Los carga
      CargaDiferida al primer uso. -->
 <script defer src="../js/firebase-init.js?v=ses2"></script>
-<script defer src="../js/core/carga-diferida.js?v=2"></script>
+<script defer src="../js/core/carga-diferida.js?v=3"></script>
 <script src="../js/core/roles.js"></script>
 <script src="../js/core/modulos.js?v=cc13"></script>
 <script src="../js/core/layout.js?v=cc13"></script>
@@ -481,7 +481,7 @@
            "Nombre de quien entrega" via _applyModo. -->
       <div class="form-field modal-entrega__field--med">
         <label for="entregaReceptorNombre" class="modal-entrega__label">
-          <span id="entregaReceptorLabel">Nombre de quien recibe</span> <span class="req">*</span>
+          <span id="entregaReceptorLabel">Nombre de quien recibe</span> <span class="req"></span>
         </label>
         <input type="text" id="entregaReceptorNombre"
                placeholder="Nombre completo"
@@ -517,7 +517,7 @@
         <div id="entregaSinIdBloque" class="hidden">
           <div class="form-field">
             <label class="modal-entrega__label">
-              Motivo (no proporciona ID) <span class="req">*</span>
+              Motivo (no proporciona ID) <span class="req"></span>
             </label>
             <textarea id="entregaSinIdMotivo" rows="2"
                       placeholder="Indique el motivo..." class="modal-entrega__motivo-id"></textarea>
@@ -540,7 +540,7 @@
         <div id="entregaRecepcionSinFirmaBloque" class="hidden">
           <div class="form-field">
             <label class="modal-entrega__label">
-              Motivo (sin firma) <span class="req">*</span>
+              Motivo (sin firma) <span class="req"></span>
             </label>
             <textarea id="entregaRecepcionSinFirmaMotivo" rows="2"
                       placeholder="Indique por qué se reciben sin firma..." class="modal-entrega__motivo-id"></textarea>
@@ -552,7 +552,7 @@
            (entrega) y 'Firma del que entrega' (recepción) vía _applyModo. -->
       <div id="entregaSigWrap" class="modal-entrega__sig-wrap">
         <label class="modal-entrega__label--muted">
-          <span id="entregaFirmaLabel">Firma del receptor</span> <span class="req">*</span>
+          <span id="entregaFirmaLabel">Firma del receptor</span> <span class="req"></span>
         </label>
         <canvas id="entregaFirmaCanvas" class="modal-entrega__canvas"></canvas>
         <button type="button" class="btn btn-ghost modal-entrega__clear-btn"

@@ -251,7 +251,7 @@
         </div>
         <div class="form-field">
           <label class="form-label" style="display:flex; align-items:center; justify-content:space-between;">
-            <span>Cliente (Para) <span class="req">*</span></span>
+            <span>Cliente (Para) <span class="req"></span></span>
             <button type="button" class="btn btn-ghost btn-sm" id="btnNuevoCliente" style="height:24px; padding:0 8px; font-size:11px;">
               <i data-lucide="plus"></i> Nuevo cliente
             </button>

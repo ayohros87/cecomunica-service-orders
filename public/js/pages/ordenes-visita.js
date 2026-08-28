@@ -88,11 +88,11 @@
 
           <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
             <div class="form-field" style="flex:0 1 170px;">
-              <label class="form-label" for="informeFechaVisita">Fecha real de la visita <span class="req">*</span></label>
+              <label class="form-label" for="informeFechaVisita">Fecha real de la visita <span class="req"></span></label>
               <input class="form-input" type="date" id="informeFechaVisita" value="${esc(inf.fecha_visita || _hoyISO())}" max="${_hoyISO()}">
             </div>
             <div class="form-field" style="flex:1 1 220px;">
-              <label class="form-label">Motivo <span class="req">*</span></label>
+              <label class="form-label">Motivo <span class="req"></span></label>
               <div id="informeMotivoChips" style="display:flex;gap:6px;flex-wrap:wrap;">
                 ${MOTIVOS.map(m => `
                   <button type="button" class="btn ${inf.motivo === m.key ? 'btn-primary' : 'btn-secondary'} visita-motivo-chip"
@@ -102,7 +102,7 @@
           </div>
 
           <div class="form-field" style="margin-bottom:12px;">
-            <label class="form-label" for="informeTrabajo">Trabajo realizado <span class="req">*</span></label>
+            <label class="form-label" for="informeTrabajo">Trabajo realizado <span class="req"></span></label>
             <textarea class="form-input form-textarea" id="informeTrabajo" rows="4"
               placeholder="Qué se hizo en el sitio: revisiones, ajustes, mediciones, cambios…">${esc(inf.trabajo_realizado || '')}</textarea>
           </div>
@@ -308,7 +308,7 @@
           </div>
 
           <div class="form-field" style="margin-bottom:10px;">
-            <label class="form-label" for="cierreReceptorNombre">Nombre de quien recibe conforme (personal de la empresa) <span class="req">*</span></label>
+            <label class="form-label" for="cierreReceptorNombre">Nombre de quien recibe conforme (personal de la empresa) <span class="req"></span></label>
             <input class="form-input" type="text" id="cierreReceptorNombre" placeholder="Nombre y apellido" autocomplete="off">
           </div>
           <div class="form-field" style="margin-bottom:10px;">
@@ -317,7 +317,7 @@
           </div>
 
           <div id="cierreFirmaWrap">
-            <label class="form-label">Firma de conformidad <span class="req">*</span></label>
+            <label class="form-label">Firma de conformidad <span class="req"></span></label>
             <canvas id="cierreFirmaCanvas" style="width:100%;height:180px;border:1px dashed var(--line,#cbd5e1);border-radius:8px;background:#fff;touch-action:none;"></canvas>
             <button type="button" class="btn btn-ghost" data-limpiar-firma="1" style="margin-top:4px;padding:4px 10px;font-size:12px;"><i data-lucide="eraser"></i> Limpiar firma</button>
           </div>
@@ -327,7 +327,7 @@
             <span class="form-check-label">Cerrar sin firma del personal de la empresa</span>
           </label>
           <div class="form-field hidden" id="cierreSinFirmaBloque" style="margin-top:8px;">
-            <label class="form-label" for="cierreSinFirmaMotivo">Motivo (obligatorio) <span class="req">*</span></label>
+            <label class="form-label" for="cierreSinFirmaMotivo">Motivo (obligatorio) <span class="req"></span></label>
             <textarea class="form-input form-textarea" id="cierreSinFirmaMotivo" rows="2"
               placeholder="Ej.: no había personal de la empresa en el sitio al finalizar"></textarea>
           </div>

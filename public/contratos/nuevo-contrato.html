@@ -175,7 +175,7 @@
       </div>
       <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
         <div class="form-field">
-          <label class="form-label" for="clienteCombo">Cliente <span class="req">*</span></label>
+          <label class="form-label" for="clienteCombo">Cliente <span class="req"></span></label>
           <div class="combobox">
             <input id="clienteCombo" class="form-input" type="text" placeholder="Escribe para buscar…" autocomplete="off">
             <input id="cliente" type="hidden" required>
@@ -198,7 +198,7 @@
       <div class="app-card app-card-padded" style="margin-bottom:var(--sp-4);">
         <div class="form-grid-2">
           <div class="form-field">
-            <label class="form-label" for="tipo_contrato">Tipo de contrato <span class="req">*</span></label>
+            <label class="form-label" for="tipo_contrato">Tipo de contrato <span class="req"></span></label>
             <select class="form-select" id="tipo_contrato" required>
               <option value="">Seleccione…</option>
               <option value="ALQ">Alquiler</option>
@@ -210,7 +210,7 @@
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="accion">Tipo de acción <span class="req">*</span></label>
+            <label class="form-label" for="accion">Tipo de acción <span class="req"></span></label>
             <select class="form-select" id="accion" required>
               <option value="">Seleccione…</option>
               <option value="Nuevo">Nuevo</option>
@@ -242,7 +242,7 @@
                vínculo salen los equipos a devolver. La Adición sigue opcional.
                El criterio vive en js/domain/origenContrato.js. -->
           <div class="form-field" id="origenBox" style="display:none; grid-column:1/-1;">
-            <label class="form-label">Contrato(s) original(es) — al que renueva / adiciona / reemplaza (puede ser más de uno) <span class="req" id="origenReq" style="display:none;">*</span></label>
+            <label class="form-label">Contrato(s) original(es) — al que renueva / adiciona / reemplaza (puede ser más de uno) <span class="req" id="origenReq" style="display:none;"></span></label>
             <div id="origenContratosList"
                  style="display:flex;flex-direction:column;gap:4px;max-height:190px;overflow:auto;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;padding:8px 10px;font-size:13px;">
               <span style="color:var(--fg-3,#6b7280);">Selecciona el cliente primero…</span>
@@ -267,7 +267,7 @@
                Funciona igual si el original es de papel: el radio sí está en el
                pool aunque su contrato no esté. -->
           <div class="form-field" id="reempBox" style="display:none; grid-column:1/-1;">
-            <label class="form-label">Equipo(s) que se reemplazan — el radio que sale <span class="req">*</span></label>
+            <label class="form-label">Equipo(s) que se reemplazan — el radio que sale <span class="req"></span></label>
             <div id="reempList"
                  style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto;border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;padding:8px 10px;font-size:13px;">
               <span style="color:var(--fg-3,#6b7280);">Selecciona el cliente primero…</span>
@@ -295,7 +295,7 @@
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="duracion">Duración del contrato <span class="req">*</span></label>
+            <label class="form-label" for="duracion">Duración del contrato <span class="req"></span></label>
             <select class="form-select" id="duracion" required onchange="NCForm.toggleOtraDuracion(this.value)">
               <option value="">Seleccione…</option>
               <option value="12 meses">12 meses</option>

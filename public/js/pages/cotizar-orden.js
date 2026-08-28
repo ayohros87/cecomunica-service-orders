@@ -217,7 +217,7 @@
         Esta orden no tiene un cliente vinculado. Selecciona uno para poder generar la cotización.
       </div>` : ''}
       <div class="form-field">
-        <label class="form-label">Cliente (Para) <span class="req">*</span></label>
+        <label class="form-label">Cliente (Para) <span class="req"></span></label>
         <div id="comboCliente"></div>
         <div class="cc-dp-ln" style="margin-top:8px;">
           ${cli.representante ? `<b>Representante:</b> ${esc(cli.representante)}<br>` : ''}
