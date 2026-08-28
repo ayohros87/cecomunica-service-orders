@@ -34,6 +34,9 @@ exports.onEntregaTransicion           = require("./src/triggers/contratos/onEntr
 exports.onLinajeWrite                 = require("./src/triggers/contratos/onLinajeWrite");
 // Pool de equipos por serial — migración por contacto (PLAN_POOL_EQUIPOS_SERIAL.md)
 exports.onEntregaPool                 = require("./src/triggers/contratos/onEntregaPool");
+// Ola 7: al activarse una RENOVACIÓN, la custodia del cliente se amarra sola
+// al contrato nuevo (regularización automática de la cuenta)
+exports.onRenovacionActivada          = require("./src/triggers/contratos/onRenovacionActivada");
 exports.onOrdenWritePool              = require("./src/triggers/ordenes/onOrdenWritePool");
 // Check-in de órdenes de DEVOLUCIÓN: aplica cada resolución al pool y crea la
 // ENTRADA de inspección al cerrar (recibido→cuarentena, nunca_salio→bodega)

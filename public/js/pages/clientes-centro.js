@@ -466,33 +466,73 @@ window.Centro = {
     return Math.max(0, total - Number(c.baja_cancelado_total || 0));
   },
 
+  // Fila estándar de un contrato operativo (la comparten la tabla principal
+  // y el pliegue de "menores").
+  _filaContrato(c) {
+    const dias = this._esVigente(c) && this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
+    const renovar = dias !== null && dias <= this.AVISO_DIAS && !this._renovadoPor(c)
+      ? (this.puedeCrearGestion()
+          ? `<button class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" title="Renovación con este contrato como origen"
+               onclick="Centro.wizContrato('${this.esc(c.id)}')">Renovar</button>`
+          : `<a class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" href="../contratos/nuevo-contrato.html">Renovar</a>`) : '';
+    return `<tr>
+      <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
+      <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
+      <td>${this.esc(c.estado || '—')}</td>
+      <td style="text-align:right;">${this._unidadesActivas(c)}</td>
+      <td>${this._vidaHtml(c)}</td>
+      <td style="text-align:right; white-space:nowrap;">${renovar}
+        ${this.puedeCrearGestion() && this._esVigente(c)
+          ? `<button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" title="Aumento de líneas a este contrato (enmienda firmada)"
+               onclick="Centro.wizAumento('${this.esc(c.id)}')">+ Aumento</button>` : ''}
+        <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
+  },
+
   pintarContratos() {
     const cont = document.getElementById('fContratos');
     if (!this.contratos.length) { cont.innerHTML = '<div class="cg-vacio">Sin contratos registrados.</div>'; return; }
-    // El overhang (caso SEPROSA, 2026-08-28): la tabla principal muestra SOLO
-    // lo operativo — vigente y no cubierto por una renovación. Lo renovado,
-    // vencido, anulado o terminado se pliega en "Histórico".
+    // El overhang (caso SEPROSA, 2026-08-28) en dos capas: (1) lo NO operativo
+    // (renovado/vencido/anulado) se pliega en "Histórico"; (2) de lo operativo,
+    // los contratos MENORES — sin facturación y sin urgencia (REEMPs de 1 radio,
+    // adiciones $0) — se pliegan en su propia línea. La función manda, no el
+    // tamaño: un $0 que entra en ventana de vencimiento sube solo.
     const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
     const historico = this.contratos.filter(c => !operativos.includes(c));
-    const filas = operativos.map(c => {
-      const dias = this._esVigente(c) && this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
-      const renovar = dias !== null && dias <= this.AVISO_DIAS && !this._renovadoPor(c)
-        ? (this.puedeCrearGestion()
-            ? `<button class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" title="Renovación con este contrato como origen"
-                 onclick="Centro.wizContrato('${this.esc(c.id)}')">Renovar</button>`
-            : `<a class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" href="../contratos/nuevo-contrato.html">Renovar</a>`) : '';
-      return `<tr>
-        <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
-        <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
-        <td>${this.esc(c.estado || '—')}</td>
-        <td style="text-align:right;">${this._unidadesActivas(c)}</td>
-        <td>${this._vidaHtml(c)}</td>
-        <td style="text-align:right; white-space:nowrap;">${renovar}
-          ${this.puedeCrearGestion() && this._esVigente(c)
-            ? `<button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" title="Aumento de líneas a este contrato (enmienda firmada)"
-                 onclick="Centro.wizAumento('${this.esc(c.id)}')">+ Aumento</button>` : ''}
-          <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
-    }).join('');
+    const mensualDe = (c) => Number(c.total_mensual ?? c.total_con_itbms ?? 0);
+    const esMenor = (c) => mensualDe(c) <= 0 && !this._wcEnVentana(c);
+    const principales = operativos.filter(c => !esMenor(c));
+    const menores = operativos.filter(esMenor);
+
+    // Encabezado de cuenta: el resumen que le da sentido al botón consolidador.
+    const enCampo = this.equipos.filter(e => ['en_cliente', 'asignado_contrato'].includes(e.estado)).length;
+    const mensualTot = operativos.reduce((s, c) => s + mensualDe(c), 0);
+    let proxima = null;
+    for (const c of operativos) {
+      if (!this._aplicaVenc(c) || !c.fecha_vencimiento) continue;
+      const d = c.fecha_vencimiento.toDate ? c.fecha_vencimiento.toDate() : new Date(c.fecha_vencimiento);
+      if (!isNaN(d) && (!proxima || d < proxima)) proxima = d;
+    }
+    const cuenta = operativos.length ? `
+      <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:9px 13px; margin-bottom:10px;
+                  background:var(--surface-sunken, #EEF2F6); border-radius:10px; font-size:13px; color:var(--fg-2);">
+        <span><b>${operativos.length}</b> contrato${operativos.length === 1 ? '' : 's'}</span>
+        <span>·</span><span><b>${enCampo}</b> radio${enCampo === 1 ? '' : 's'} en campo</span>
+        <span>·</span><span class="num"><b>$${mensualTot.toFixed(2)}</b>/mes</span>
+        ${proxima ? `<span>·</span><span>próximo vencimiento <b>${this._fmtFecha(proxima)}</b></span>` : ''}
+        ${this.puedeCrearGestion() && (operativos.length > 1 || this._wcCustodia().length)
+          ? `<button class="btn btn-primary" style="margin-left:auto; padding:4px 12px; font-size:12.5px;"
+               title="Consolida los contratos de la cuenta en uno solo"
+               onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : ''}
+      </div>` : '';
+
+    const filas = principales.map(c => this._filaContrato(c)).join('');
+    const nReemp = menores.filter(c => this._codigoTipo(c) === 'REEMP').length;
+    const nOtros = menores.length - nReemp;
+    const menoresLabel = [
+      nReemp ? `${nReemp} reemplazo${nReemp === 1 ? '' : 's'} de equipo` : '',
+      nOtros ? `${nOtros} sin facturación` : '',
+    ].filter(Boolean).join(' y ');
+    const menoresUnid = menores.reduce((s, c) => s + this._unidadesActivas(c), 0);
     const histFilas = historico.map(c => {
       const renovador = this._renovadoPor(c);
       const estadoTxt = renovador
@@ -504,10 +544,17 @@ window.Centro = {
         <td>${estadoTxt}</td>
         <td style="text-align:right;">${this._unidadesActivas(c)}</td></tr>`;
     }).join('');
+    const THEAD = `<thead><tr>
+      <th>Contrato</th><th>Tipo</th><th>Estado</th><th style="text-align:right;">Unid.</th><th>Vence</th><th></th>
+      </tr></thead>`;
     cont.innerHTML = `
-      ${operativos.length ? `<table class="cg-tabla"><thead><tr>
-        <th>Contrato</th><th>Tipo</th><th>Estado</th><th style="text-align:right;">Unid.</th><th>Vence</th><th></th>
-        </tr></thead><tbody>${filas}</tbody></table>` : '<div class="cg-vacio">Sin contratos operativos.</div>'}
+      ${cuenta}
+      ${principales.length ? `<table class="cg-tabla">${THEAD}<tbody>${filas}</tbody></table>`
+        : operativos.length ? '' : '<div class="cg-vacio">Sin contratos operativos.</div>'}
+      ${menores.length ? `<details style="margin-top:10px;">
+        <summary style="cursor:pointer; font-size:13px; color:var(--fg-3); font-weight:600;">Contratos menores (${menores.length}) — ${menoresLabel} · ${menoresUnid} unid.</summary>
+        <table class="cg-tabla" style="margin-top:8px;">${THEAD}<tbody>${menores.map(c => this._filaContrato(c)).join('')}</tbody></table>
+      </details>` : ''}
       ${historico.length ? `<details style="margin-top:10px;">
         <summary style="cursor:pointer; font-size:13px; color:var(--fg-3); font-weight:600;">Histórico (${historico.length}) — renovados, vencidos, anulados</summary>
         <table class="cg-tabla" style="margin-top:8px;"><thead><tr>
@@ -1058,20 +1105,22 @@ window.Centro = {
     btn?.classList.remove('hidden');
     // Terminación total como GESTIÓN (2026-08-27) — la página vieja de
     // enmiendas queda para el histórico y se descontinuará en la Ola 6.
-    const activos = this.contratos.filter(c => this._esVigente(c));
-    const terminaciones = activos.map(c => `<button type="button" onclick="Centro.wizTerminacion('${this.esc(c.id)}')">
-          Terminación total — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></button>`).join('');
+    // Menú FIJO y corto (pedido 2026-08-28: SEPROSA generaba 13 renglones de
+    // "Terminación total — …" que enterraban las acciones comunes). La
+    // terminación es UNA entrada que abre su selector de contrato.
+    const activos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
     document.getElementById('cgMenu').innerHTML = `
       <div class="hd">Equipos</div>
       <button type="button" onclick="Centro.wizReemplazo()">Reemplazo de equipo</button>
       <button type="button" onclick="Centro.wizDemo()">Demo de equipos</button>
       <button type="button" onclick="Centro.wizBaja()">Baja de equipos (por serial)</button>
-      ${activos.length ? '<button type="button" onclick="Centro.wizAumento()">Aumento de equipos (enmienda)</button>' : ''}
-      ${terminaciones}
-      <div class="hd">Comercial</div>
+      <div class="hd">Contratos</div>
       <button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>
-      ${(this.contratos.some(c => this._esVigente(c) && this._wcEnVentana(c)) || this._wcCustodia().length)
+      ${(activos.some(c => this._wcEnVentana(c)) || this._wcCustodia().length)
         ? '<button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>' : ''}
+      ${activos.length ? '<button type="button" onclick="Centro.wizAumento()">Aumento de equipos (enmienda)</button>' : ''}
+      ${activos.length ? '<button type="button" onclick="Centro.wizTerminacion()">Terminación total…</button>' : ''}
+      <div class="hd">Comercial</div>
       <a href="../cotizaciones/index.html">Nueva cotización</a>
       <a href="../contratos/nuevo-contrato.html">Formulario clásico de contrato</a>
       <div class="hd">Cliente</div>
@@ -1960,7 +2009,37 @@ window.Centro = {
 
   // Terminación total = baja de TODOS los seriales del contrato, como gestión
   // (2026-08-27; reemplaza el flujo viejo de enmiendas, que se descontinuará).
-  wizTerminacion(contratoDocId) { this.wizBaja({ terminacionDe: contratoDocId }); },
+  // Sin argumento abre el selector (una sola entrada en el menú); con uno o
+  // con un único contrato vigente va directo al wizard de terminación.
+  wizTerminacion(contratoDocId) {
+    if (contratoDocId) { this.wizBaja({ terminacionDe: contratoDocId }); return; }
+    const activos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
+    if (!activos.length) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }
+    if (activos.length === 1) { this.wizBaja({ terminacionDe: activos[0].id }); return; }
+    this._cerrarModal();
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    const filas = activos.map(c => {
+      const m = Number(c.total_mensual ?? c.total_con_itbms ?? 0);
+      const dias = this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
+      const chip = dias === null ? '' : dias < 0 ? `<span class="cg-venc vencido num">vencido ${-dias} d</span>`
+        : dias <= this.AVISO_DIAS ? `<span class="cg-venc por_vencer num">${dias} d</span>` : `<span class="cg-venc vigente num">${dias} d</span>`;
+      return `<button type="button" onclick="Centro.wizTerminacion('${this.esc(c.id)}')"
+        style="display:flex; gap:12px; align-items:center; width:100%; text-align:left; background:var(--surface-card);
+               border:1px solid var(--border-subtle); border-radius:10px; padding:10px 14px; margin-bottom:8px; cursor:pointer;">
+        <span class="cg-mono" style="font-weight:600;">${this.esc(c.contrato_id || c.id)}</span>
+        <span style="color:var(--fg-3); font-size:12.5px;">${this.esc(c.tipo_contrato || '')} · ${this._unidadesActivas(c)} unid. · ${m > 0 ? `$${m.toFixed(2)}/mes` : 'sin facturación'}</span>
+        <span style="margin-left:auto;">${chip}</span></button>`;
+    }).join('');
+    this._abrirModal(`
+      <h3 style="margin:0 0 6px;">Terminación total — elegir contrato</h3>
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
+        La terminación desconecta <b>todos</b> los seriales del contrato elegido y requiere la carta
+        de cancelación del cliente. Elige cuál se termina:</p>
+      <div style="max-height:55vh; overflow:auto;">${filas}</div>
+      <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+      </div>`);
+  },
 
   wizBaja(opts = {}) {
     this._cerrarModal();
