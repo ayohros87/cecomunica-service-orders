@@ -423,8 +423,27 @@ window.AlmacenHoy = (() => {
     if (!confirm(`Las ${g.docs.length} fichas del serial ${norm} quedarán marcadas como radios FÍSICOS distintos (salen de la cola, conservan el aviso "2+ modelos"). ¿Continuar?`)) return;
     try {
       const db = firebase.firestore();
+      const user = firebase.auth().currentUser;
       const batch = db.batch();
-      g.docs.forEach(d => batch.set(db.collection('equipos_pool').doc(d.id), { conflicto_revisado: true }, { merge: true }));
+      // Marca + kardex: la decisión tiene que quedar rastreable en la ficha —
+      // meses después la pregunta es "¿quién dijo que son distintos y cuándo?",
+      // y el chip "2+ modelos" por sí solo no la contesta.
+      g.docs.forEach(d => {
+        const ref = db.collection('equipos_pool').doc(d.id);
+        batch.set(ref, {
+          conflicto_revisado: true,
+          updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+          updated_by: user?.uid || null,
+          updated_by_email: user?.email || null,
+        }, { merge: true });
+        batch.set(ref.collection('movimientos').doc(), {
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+          por: user?.uid || 'system', por_email: user?.email || null,
+          tipo: 'conflicto_revisado',
+          de_estado: d.estado || null, a_estado: d.estado || null, ref: null,
+          notas: 'Serial compartido entre modelos: son radios distintos.',
+        });
+      });
       await batch.commit();
       if (window.Toast) Toast.show('Grupo marcado como radios distintos.', 'ok');
       _cerrarConflicto();

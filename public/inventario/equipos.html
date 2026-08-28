@@ -175,7 +175,7 @@
   <script defer src="../js/core/xlsx-loader.js"></script> <!-- SheetJS BAJO DEMANDA -->
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/inventario-equipos.js?v=cc27" defer></script>
+  <script src="../js/pages/inventario-equipos.js?v=cc29" defer></script>
   <script defer src="/js/vendor/lucide.min.js?v=1"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </head>
@@ -315,7 +315,7 @@
              Pendientes. El input SIGUE aquí (oculto) porque es el portador del
              estado que usan los filtros, la barra "Viendo:" y la persistencia. -->
         <label class="toggle-pill" style="display:none;"><input type="checkbox" id="chkSinVerificar" onchange="EquiposPool.render()"> Sin verificar</label>
-        <label class="toggle-pill" title="Seriales que existen en más de un modelo — se resuelven en la cola de Conflictos"><input type="checkbox" id="chkCompartidos" onchange="EquiposPool.render()"> 2+ modelos</label>
+        <label class="toggle-pill" title="Seriales que existen en más de un modelo, estén resueltos o no. Los que siguen pendientes de decisión están en la cola de Conflictos"><input type="checkbox" id="chkCompartidos" onchange="EquiposPool.render()"> 2+ modelos</label>
         <label class="toggle-pill" title="Unidades sin cliente ni contrato rastreable"><input type="checkbox" id="chkSinCliente" onchange="EquiposPool.render()"> Sin cliente</label>
         <label class="toggle-pill" title="En taller con la orden ya COMPLETADO (EN OFICINA): el radio está terminado y solo falta registrar la entrega"><input type="checkbox" id="chkListos" onchange="EquiposPool.render()"> Listos para entrega</label>
 

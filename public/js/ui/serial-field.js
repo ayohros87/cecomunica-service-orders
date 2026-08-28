@@ -154,8 +154,13 @@ window.SerialField = {
       if (docs.length > 1) {
         // "2+ modelos" = el mismo nombre que usa la fila de Inventario, la
         // ficha del equipo y la pestaña Conflictos (auditoría 2026-08-04, A4).
+        // Elegir toca en los dos casos; lo que cambia es si además hay algo que
+        // resolver — si ya se confirmó que son radios distintos, no lo hay.
+        const confirmado = docs.every(d => d.conflicto_revisado === true);
         chip(`⚠ 2+ modelos (${docs.length} fichas) — elegir`, 'eqpool-chip-alerta',
-          'Este serial existe en más de una ficha, con modelos distintos. Click para ver y elegir; se resuelve en Inventario · pestaña Conflictos.');
+          confirmado
+            ? 'Confirmado: son radios físicos distintos que comparten numeración (típico Kenwood NX-420 / NX-920). Click para elegir el modelo correcto.'
+            : 'Este serial existe en más de una ficha, con modelos distintos. Click para ver y elegir; se resuelve en Inventario · pestaña Conflictos.');
         if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado });
         return;
       }

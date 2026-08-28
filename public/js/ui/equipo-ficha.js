@@ -45,6 +45,8 @@ window.EquipoFicha = {
     reasignacion:         'Reasignación',
     cambio_estado:        'Cambio de estado',
     fusion_duplicado:     'Fusión de ficha duplicada',
+    conflicto_revisado:   'Conflicto de modelo resuelto',
+    conflicto_reabierto:  'Conflicto de modelo reabierto',
   },
 
   _esc(s) {
@@ -127,7 +129,14 @@ window.EquipoFicha = {
         ? EquiposPoolService.chipPendienteDevolucionHtml(eq) : ''),
       // Mismas clases y MISMO texto que en Inventario y junto a los inputs
       // (auditoría 2026-08-04, A4: una condición con cuatro nombres distintos).
-      eq.serial_compartido ? '<span class="eqpool-compartido" title="Este serial existe en más de una ficha — verifica el modelo. Se resuelve en Inventario · pestaña Conflictos.">2+ modelos</span>' : '',
+      // Con decisión tomada el chip baja de tono y deja de mandar a la cola:
+      // en Conflictos solo está lo pendiente, y un resuelto vive bajo "Ver los
+      // ya revisados". Mandarlo a ciegas hacía parecer que el dato se perdió.
+      eq.serial_compartido
+        ? (eq.conflicto_revisado === true
+            ? '<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. El detalle está en Inventario · Conflictos → «Ver los ya revisados».">2+ modelos · confirmado</span>'
+            : '<span class="eqpool-compartido" title="Este serial existe en más de una ficha y nadie lo ha revisado — verifica el modelo. Se resuelve en Inventario · pestaña Conflictos.">2+ modelos</span>')
+        : '',
       eq.verificado === false ? '<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación física">Sin verificar</span>' : '',
     ].join(' ');
 

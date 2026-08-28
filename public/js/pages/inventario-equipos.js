@@ -15,6 +15,9 @@ window.EquiposPool = {
   _rol: null,
   _editandoId: null,
   _importRows: null,
+  // Cola de Conflictos: mostrar también los grupos ya cerrados. No se persiste
+  // — la cola abre siempre en "lo que falta"; el historial se pide a propósito.
+  _conflRevisados: false,
 
   // Filtros persistidos por usuario (localStorage).
   // Default de primera visita (N4, auditoría 2026-08-04): **Bodega, sin filtro
@@ -299,7 +302,13 @@ window.EquiposPool = {
   // el modelo distinto (contrato vs POC vs bodega). Casi siempre es el MISMO
   // radio físico con el dato desparejo — esta cola los resuelve: fusionar en
   // la ficha real, o marcar que son radios distintos (colisión real Kenwood).
-  _gruposConflicto() {
+  //
+  // Un grupo ya resuelto (todas sus fichas con `conflicto_revisado`) sale de la
+  // COLA pero no deja de existir: el chip "2+ modelos" sigue en la ficha y el
+  // usuario que lo ve viene aquí a buscarlo. Por eso `incluirRevisados` — sin
+  // eso, el único destino que anuncia el chip es una pantalla donde el serial
+  // nunca aparece, y parece que el sistema perdió el dato.
+  _gruposConflicto({ incluirRevisados = false } = {}) {
     const porNorm = new Map();
     for (const eq of this._equipos) {
       const k = eq.serial_norm || (eq.id || '').split('__')[0];
@@ -309,50 +318,88 @@ window.EquiposPool = {
     const grupos = [];
     for (const [norm, docs] of porNorm) {
       if (docs.length < 2) continue;
-      if (docs.every(d => d.conflicto_revisado === true)) continue; // ya revisado
-      grupos.push({ norm, docs });
+      const revisado = docs.every(d => d.conflicto_revisado === true);
+      if (revisado && !incluirRevisados) continue;
+      grupos.push({ norm, docs, revisado });
     }
-    return grupos.sort((a, b) => a.norm.localeCompare(b.norm));
+    // Pendientes primero: la cola es para trabajar, el historial es consulta.
+    return grupos.sort((a, b) =>
+      (a.revisado === b.revisado) ? a.norm.localeCompare(b.norm) : (a.revisado ? 1 : -1));
+  },
+
+  // Alterna el historial de conflictos ya cerrados dentro de la cola.
+  toggleConflRevisados() {
+    this._conflRevisados = !this._conflRevisados;
+    this.render();
   },
 
   renderConflictos(tbody, q = '') {
     const esc = FMT.esc;
     const puede = this.puedeEscribir();
-    let grupos = this._gruposConflicto();
+    const verRev = !!this._conflRevisados;
+    let grupos = this._gruposConflicto({ incluirRevisados: verRev });
+    const nRevisados = this._gruposConflicto({ incluirRevisados: true })
+      .filter(g => g.revisado).length;
+    const lblRevisados = nRevisados === 1 ? 'el 1 ya revisado' : `los ${nRevisados} ya revisados`;
     if (q) grupos = grupos.filter(g => g.norm.toLowerCase().includes(q));
+
+    // Barra del historial: siempre visible mientras haya algo cerrado, también
+    // cuando la cola está vacía — es justo ahí donde el usuario que llega desde
+    // el chip "2+ modelos" necesita el camino.
+    const barra = nRevisados
+      ? `<tr><td colspan="9" style="padding:8px 14px; background:var(--bg-2, #f8fafc); border-bottom:1px solid var(--border);">
+          <label style="display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--fg-2); cursor:pointer;"
+                 title="Seriales que alguien ya resolvió: bodega confirmó que son radios físicos distintos. Salieron de la cola pero conservan el aviso «2+ modelos».">
+            <input type="checkbox" ${verRev ? 'checked' : ''} onchange="EquiposPool.toggleConflRevisados()">
+            Ver ${lblRevisados}
+          </label></td></tr>`
+      : '';
+
     if (!grupos.length) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">
-        No hay seriales con fichas en conflicto pendientes de revisar.<br>
-        Aparecen aquí cuando el mismo serial se registró con modelos distintos desde fuentes distintas (contrato, POC, bodega).</td></tr>`;
+      const msg = verRev || !nRevisados
+        ? `No hay seriales con fichas en conflicto${verRev ? '' : ' pendientes de revisar'}.<br>
+           Aparecen aquí cuando el mismo serial se registró con modelos distintos desde fuentes distintas (contrato, POC, bodega).`
+        : `No hay conflictos pendientes de revisar.<br>
+           ${nRevisados === 1 ? 'El ya resuelto sigue aquí' : `Los ${nRevisados} ya resueltos siguen aquí`}: marca "Ver ${lblRevisados}" para consultarlos.`;
+      tbody.innerHTML = barra + `<tr><td colspan="9" style="text-align:center; color:var(--fg-3); padding:var(--sp-6); line-height:1.6;">${msg}</td></tr>`;
       return;
     }
-    tbody.innerHTML = grupos.map(({ norm, docs }) => {
+    tbody.innerHTML = barra + grupos.map(({ norm, docs, revisado }) => {
       const cards = docs.map(d => `
-        <label style="display:block; border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:${puede ? 'pointer' : 'default'}; font-size:12.5px;">
-          ${puede ? `<input type="radio" name="confl_${esc(norm)}" value="${esc(d.id)}" style="margin-right:6px;">` : ''}
+        <label style="display:block; border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:${puede && !revisado ? 'pointer' : 'default'}; font-size:12.5px;">
+          ${puede && !revisado ? `<input type="radio" name="confl_${esc(norm)}" value="${esc(d.id)}" style="margin-right:6px;">` : ''}
           <strong>${esc(d.modelo_label || d.modelo_id || 'sin modelo')}</strong>
           ${EquiposPoolService.chipEstadoHtml(d.estado)}
-          ${d.conflicto_revisado ? '<span class="eqpool-chip" style="background:#f1f5f9;color:#64748b;">revisado</span>' : ''}
           <div style="color:var(--fg-3); margin-top:3px;">
             ${esc(d.asignacion?.cliente_nombre || 'sin asignación')}${d.asignacion?.contrato_id ? ` · ${esc(d.asignacion.contrato_id)}` : ''}
             · origen ${esc((d.origen || '—').replace(/_/g, ' '))}
             · <span style="font-family:var(--font-mono, monospace); font-size:11px;">${esc(d.id)}</span>
           </div>
         </label>`).join('');
-      return `<tr><td colspan="9" style="padding:12px 14px;">
+      const acciones = revisado
+        ? (puede ? `<div style="display:flex; justify-content:flex-end; margin-top:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="EquiposPool.reabrirGrupo('${esc(norm)}')"
+                    title="Devuelve el grupo a la cola de pendientes — para cuando la decisión resultó equivocada y hay que fusionar">
+              Reabrir</button>
+          </div>` : '')
+        : (puede ? `<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="EquiposPool.marcarDistintos('${esc(norm)}')"
+                    title="Colisión real (dos radios físicos comparten serial, tipo Kenwood NX420 y NX920) — se conservan ambas fichas y el grupo sale de esta cola">
+              Son radios distintos — mantener</button>
+            <button class="btn btn-primary btn-sm" onclick="EquiposPool.fusionarGrupo('${esc(norm)}')"
+                    title="Fusiona las demás fichas en la seleccionada: conserva su historia (kardex) y elimina los duplicados">
+              Fusionar en la seleccionada</button>
+          </div>` : '');
+      return `<tr><td colspan="9" style="padding:12px 14px; ${revisado ? 'background:var(--bg-2, #f8fafc);' : ''}">
         <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
           <span style="font-family:var(--font-mono, monospace); font-weight:600; font-size:14px;">${esc(norm)}</span>
-          <span style="color:var(--fg-3); font-size:12px;">${docs.length} fichas — ¿cuál es el radio real?</span>
+          ${revisado
+            ? `<span class="eqpool-chip" style="background:#f1f5f9;color:#475569;">revisado</span>
+               <span style="color:var(--fg-3); font-size:12px;">${docs.length} fichas — confirmado: son radios físicos distintos que comparten numeración</span>`
+            : `<span style="color:var(--fg-3); font-size:12px;">${docs.length} fichas — ¿cuál es el radio real?</span>`}
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:8px;">${cards}</div>
-        ${puede ? `<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
-          <button class="btn btn-ghost btn-sm" onclick="EquiposPool.marcarDistintos('${esc(norm)}')"
-                  title="Colisión real (dos radios físicos comparten serial, tipo Kenwood NX420 y NX920) — se conservan ambas fichas y el grupo sale de esta cola">
-            Son radios distintos — mantener</button>
-          <button class="btn btn-primary btn-sm" onclick="EquiposPool.fusionarGrupo('${esc(norm)}')"
-                  title="Fusiona las demás fichas en la seleccionada: conserva su historia (kardex) y elimina los duplicados">
-            Fusionar en la seleccionada</button>
-        </div>` : ''}
+        ${acciones}
       </td></tr>`;
     }).join('');
   },
@@ -394,17 +441,64 @@ window.EquiposPool = {
     });
     if (!ok) return;
     try {
-      const db = firebase.firestore();
-      const batch = db.batch();
-      grupo.docs.forEach(d => batch.set(db.collection('equipos_pool').doc(d.id),
-        { conflicto_revisado: true }, { merge: true }));
-      await batch.commit();
-      grupo.docs.forEach(d => { d.conflicto_revisado = true; });
+      await this._escribirRevisado(grupo, true,
+        'Serial compartido entre modelos: son radios distintos.');
       Toast.show('Grupo marcado como radios distintos.', 'ok');
       this.render();
     } catch (e) {
       Toast.show('No se pudo marcar: ' + (e.message || e), 'bad');
     }
+  },
+
+  // Devuelve a la cola un grupo cerrado por error (la decisión era "fusionar",
+  // no "son distintos"). No borra la marca: la pone en false y deja el porqué
+  // en el kardex, para que la próxima revisión sepa que ya hubo una vuelta.
+  async reabrirGrupo(norm) {
+    if (!this.puedeEscribir()) { Toast.show('Solo administración o inventario pueden revisar conflictos.', 'bad'); return; }
+    const grupo = this._gruposConflicto({ incluirRevisados: true }).find(g => g.norm === norm);
+    if (!grupo) return;
+    const motivo = await Modal.prompt({
+      title: 'Reabrir conflicto',
+      message: `Las ${grupo.docs.length} fichas del serial ${norm} vuelven a la cola de pendientes. `
+        + '¿Por qué se reabre?',
+      placeholder: 'Ej.: bodega revisó de nuevo y es un solo radio con el modelo mal capturado',
+      confirmLabel: 'Reabrir',
+    });
+    if (motivo === null) return;
+    try {
+      await this._escribirRevisado(grupo, false, `Conflicto reabierto. ${(motivo || '').trim()}`.trim());
+      Toast.show('Grupo devuelto a la cola de pendientes.', 'ok');
+      this.render();
+    } catch (e) {
+      Toast.show('No se pudo reabrir: ' + (e.message || e), 'bad');
+    }
+  },
+
+  // Marca/desmarca `conflicto_revisado` en todas las fichas del grupo Y deja
+  // movimiento en el kardex de cada una — sin la nota nadie sabe en qué se basó
+  // la decisión, que es justo lo que se pregunta meses después.
+  async _escribirRevisado(grupo, valor, notas) {
+    const db = firebase.firestore();
+    const user = firebase.auth().currentUser;
+    const batch = db.batch();
+    grupo.docs.forEach(d => {
+      const ref = db.collection('equipos_pool').doc(d.id);
+      batch.set(ref, {
+        conflicto_revisado: valor,
+        updated_at: firebase.firestore.FieldValue.serverTimestamp(),
+        updated_by: user?.uid || null,
+        updated_by_email: user?.email || null,
+      }, { merge: true });
+      batch.set(ref.collection('movimientos').doc(), {
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+        por: user?.uid || 'system', por_email: user?.email || null,
+        tipo: valor ? 'conflicto_revisado' : 'conflicto_reabierto',
+        de_estado: d.estado || null, a_estado: d.estado || null, ref: null,
+        notas: notas || '',
+      });
+    });
+    await batch.commit();
+    grupo.docs.forEach(d => { d.conflicto_revisado = valor; });
   },
 
   _sinCliente(eq) {
@@ -621,8 +715,15 @@ window.EquiposPool = {
         const tagPoc = eq.poc_device_id
           ? `<span class="eq-sub" title="Registrado en la plataforma POC (device ${esc(eq.poc_device_id)})">POC</span>` : '';
         const asignadoA = (linkCliente + linkContrato + linkOrden + tagPoc) || '—';
+        // El chip cambia de tono según haya decisión o no: rojo mientras el
+        // conflicto está abierto, ámbar cuando ya se confirmó que son radios
+        // distintos. Antes ambos casos mandaban a la pestaña Conflictos, donde
+        // el resuelto no aparece — y parecía que el sistema perdió el dato.
         const compartido = eq.serial_compartido
-          ? `<span class="eqpool-compartido" title="Este serial existe en más de un modelo — verifica el modelo antes de operar. Se resuelve en la pestaña Conflictos.">2+ modelos</span>` : '';
+          ? (eq.conflicto_revisado === true
+              ? `<span class="eqpool-compartido" style="background:#fef3c7;color:#92400e;" title="Confirmado: dos radios físicos distintos comparten esta numeración (típico Kenwood NX-420 / NX-920). Verifica el modelo antes de operar. El detalle está en la pestaña Conflictos → «Ver los ya revisados».">2+ modelos · confirmado</span>`
+              : `<span class="eqpool-compartido" title="Este serial existe en más de un modelo y nadie lo ha revisado — verifica el modelo antes de operar. Se resuelve en la pestaña Conflictos.">2+ modelos</span>`)
+          : '';
         const noVerif = eq.verificado === false
           ? `<span class="eqpool-noverif" title="Creado por migración automática — pendiente de confirmación">Sin verificar</span>` : '';
         const prop = eq.propiedad || 'desconocida';
@@ -1354,6 +1455,7 @@ window.EquiposPool = {
     correccion_serial: 'pencil', orden_programacion: 'clipboard-list',
     migracion: 'database', cambio_estado: 'arrow-right-left',
     reasignacion: 'users', fusion_duplicado: 'merge',
+    conflicto_revisado: 'check-check', conflicto_reabierto: 'rotate-ccw',
   },
 
   async abrirHistoria(id) {
