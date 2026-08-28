@@ -310,13 +310,14 @@ module.exports = onDocumentWritten(
 
     if (created) {
       // Regla 2026-08-28: TODA solicitud de aprobación va a ventas@cecomunica.com
-      // como destinatario principal; aprobadores y solicitante quedan en copia.
+      // — ese buzón ES el de los aprobadores (sin copias individuales que
+      // dupliquen). El solicitante sí queda en copia: es otra persona.
       const { configEmailTo } = require("../../lib/mailRecipients");
-      const [approvers, solicitante, buzonAprob] = await Promise.all([
-        getApproverEmails(), getUserInfo(after.solicitado_por || null),
+      const [solicitante, buzonAprob] = await Promise.all([
+        getUserInfo(after.solicitado_por || null),
         configEmailTo("aprobaciones", "ventas@cecomunica.com"),
       ]);
-      recipients = [buzonAprob, ...approvers];
+      recipients = [buzonAprob];
       if (isEmail(solicitante.email)) recipients.push(solicitante.email.trim().toLowerCase());
       subject   = `Enmienda (${tipoLabel}): ${contratoId} – ${cliente}`;
       preheader = `Nueva enmienda pendiente de aprobación · ${cliente}`;
