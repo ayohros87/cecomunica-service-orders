@@ -470,15 +470,74 @@ window.Centro = {
   // y el pliegue de "menores"). SIN acciones por contrato (decisión
   // 2026-08-28): renovar/aumentar/terminar son actos de la CUENTA y viven en
   // el encabezado y el menú — la fila solo informa (el semáforo es la señal).
+  // "Ver" abre la vista previa EN LA PÁGINA (regla 2026-08-28: no sacar a la
+  // persona de donde está — el salto a la página del contrato es un link
+  // explícito dentro del modal).
   _filaContrato(c) {
     return `<tr>
-      <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
+      <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
       <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
       <td>${this.esc(c.estado || '—')}</td>
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
       <td>${this._vidaHtml(c)}</td>
       <td style="text-align:right; white-space:nowrap;">
-        <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
+        <button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver</button></td></tr>`;
+  },
+
+  // Vista previa del contrato en un modal: todo lo esencial sin navegar.
+  verContrato(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) return;
+    this._cerrarModal();
+    const t = (window.ContractTotals?.fromDoc) ? ContractTotals.fromDoc(c) : null;
+    const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === id);
+    const renovador = this._renovadoPor(c);
+    const dato = (l, v) => v ? `<div style="display:flex; gap:8px; font-size:13px; padding:2px 0;">
+      <span style="color:var(--fg-3); min-width:120px;">${l}</span><span>${v}</span></div>` : '';
+    const lineas = (c.equipos || []).map(l => `<tr>
+      <td>${this.esc(l.modelo || '—')}</td>
+      <td style="text-align:right;">${Number(l.cantidad || 0)}</td>
+      <td style="text-align:right;" class="num">$${Number(l.precio || 0).toFixed(2)}</td>
+      <td style="text-align:right;" class="num">$${(Number(l.cantidad || 0) * Number(l.precio || 0)).toFixed(2)}</td></tr>`).join('');
+    const cargos = (c.cargos || []).map(x => `<tr>
+      <td>${this.esc(x.concepto || '—')} <span style="color:var(--fg-4); font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td>
+      <td style="text-align:right;">${Number(x.cantidad || 1)}</td>
+      <td style="text-align:right;" class="num">$${Number(x.monto || 0).toFixed(2)}</td>
+      <td style="text-align:right;" class="num">$${(Number(x.cantidad || 1) * Number(x.monto || 0)).toFixed(2)}</td></tr>`).join('');
+    const serialesCampo = enCampo.slice(0, 8).map(e => `<span class="cg-mono">${this.esc(e.serial || e.id)}</span>`).join(', ');
+    const reg = c.regularizacion;
+    this._abrirModal(`
+      <h3 style="margin:0 0 2px;"><span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
+        <span style="font-weight:400; color:var(--fg-3); font-size:14px;">· ${this.esc(c.tipo_contrato || c.codigo_tipo || '')} · ${this.esc(c.estado || '')}</span></h3>
+      <div style="margin:4px 0 10px;">${this._vidaHtml(c)}</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 24px; margin-bottom:10px;">
+        ${dato('Acción', this.esc(c.accion || ''))}
+        ${dato('Duración', this.esc(c.duracion || ''))}
+        ${dato('Creado', this._fmtFecha(c.fecha_creacion))}
+        ${dato('Aprobado', c.fecha_aprobacion ? this._fmtFecha(c.fecha_aprobacion) : '')}
+        ${dato('Origen', (c.contrato_origen_refs || []).map(r => `<span class="cg-mono">${this.esc(r)}</span>`).join(', ')
+          || (c.origen_legacy_ref ? `papel: ${this.esc(c.origen_legacy_ref)}` : ''))}
+        ${dato('Renovado por', renovador ? `<span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>` : '')}
+        ${dato('Firmado', c.firmado ? 'sí ✓' : '')}
+      </div>
+      ${lineas || cargos ? `<div class="cg-twrap" style="max-height:30vh; overflow:auto;">
+        <table class="cg-tabla"><thead><tr><th>Línea</th><th style="text-align:right;">Cant.</th>
+          <th style="text-align:right;">Precio</th><th style="text-align:right;">Total</th></tr></thead>
+        <tbody>${lineas}${cargos}</tbody></table></div>` : ''}
+      ${t ? `<div style="display:flex; gap:18px; font-size:13.5px; margin-top:8px; flex-wrap:wrap;">
+        <span>${this.esc(t.itbmsLabel || '')}</span>
+        <span style="margin-left:auto;"><b>Mensual: <span class="num">$${Number(t.totalMensual || 0).toFixed(2)}</span></b></span>
+        ${t.tieneCargosUnicos ? `<span><b>Primer pago: <span class="num">$${Number(t.primerPago || 0).toFixed(2)}</span></b></span>` : ''}
+      </div>` : ''}
+      ${enCampo.length ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">
+        <b>${enCampo.length}</b> equipo(s) en campo bajo este contrato${serialesCampo ? `: ${serialesCampo}${enCampo.length > 8 ? ` … y ${enCampo.length - 8} más` : ''}` : ''}.</p>` : ''}
+      ${reg?.amarradas ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
+        Regularización al activarse: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · ${reg.sin_cupo} sin cupo` : ''}${reg.sin_linea ? ` · ${reg.sin_linea} sin línea` : ''}.</p>` : ''}
+      ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}
+      <div style="display:flex; gap:8px; align-items:center; margin-top:14px;">
+        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" style="font-size:12.5px;">Abrir la página completa del contrato ›</a>
+        <button class="btn btn-ghost" style="margin-left:auto;" onclick="Centro._cerrarModal()">Cerrar</button>
+      </div>`);
   },
 
   pintarContratos() {
@@ -541,7 +600,7 @@ window.Centro = {
         ? `renovado por <span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>`
         : this.esc(c.estado || '—');
       return `<tr style="color:var(--fg-3);">
-        <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
+        <td class="cg-mono"><a href="#" onclick="Centro.verContrato('${this.esc(c.id)}'); return false;">${this.esc(c.contrato_id || c.id)}</a></td>
         <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
         <td>${estadoTxt}</td>
         <td style="text-align:right;">${this._unidadesActivas(c)}</td></tr>`;
@@ -1121,10 +1180,10 @@ window.Centro = {
     } else if (est.tipo === 'fragmentada') {
       const n = est.renovables.length;
       cuentaHtml = `
+        <button type="button" onclick="Centro.wizAgregarEquipos()">Agregar equipos
+          <span style="display:block; font-size:11px; color:var(--fg-4);">anexo rápido a la cuenta — el contrato ancla se elige solo</span></button>
         <button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta
           <span style="display:block; font-size:11px; color:var(--fg-4);">consolida ${n ? `${n} contrato${n === 1 ? '' : 's'}` : 'la cuenta'}${est.custodia ? ` + ${est.custodia} radio${est.custodia === 1 ? '' : 's'} sin contrato` : ''} en un contrato maestro</span></button>
-        <button type="button" onclick="Centro.wizContrato({renovarCuenta:true, agregar:true})">Agregar equipos
-          <span style="display:block; font-size:11px; color:var(--fg-4);">la venta nueva entra en la misma renovación que consolida</span></button>
         ${n ? `<button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta
           <span style="display:block; font-size:11px; color:var(--fg-4);">cancela los ${n} contrato${n === 1 ? '' : 's'} con una sola carta y aprobación</span></button>` : ''}`;
     } else {
@@ -1159,6 +1218,34 @@ window.Centro = {
     if (!renovables.length && !custodia) return { tipo: 'nueva', renovables, custodia, maestro: null };
     if (renovables.length === 1 && !custodia) return { tipo: 'consolidada', renovables, custodia, maestro: renovables[0] };
     return { tipo: 'fragmentada', renovables, custodia, maestro: null };
+  },
+
+  // Contrato ANCLA de una cuenta fragmentada: donde se cuelga el anexo de
+  // aumento SIN preguntarle al vendedor (decisión 2026-08-28 — cada tramo
+  // tiene vigencia propia, así que el papel que lo hospeda importa poco y la
+  // consolidación futura absorbe las líneas de todos). Criterio: el ALQ/PROP
+  // vigente de mayor facturación; a igualdad, el más reciente.
+  _cuentaAncla() {
+    const est = this._cuentaEstado();
+    const comerciales = est.renovables.filter(c => ['ALQ', 'PROP'].includes(this._codigoTipo(c)));
+    const candidatos = comerciales.length ? comerciales : est.renovables;
+    if (!candidatos.length) return null;
+    const m = (c) => Number(c.total_mensual ?? c.total_con_itbms ?? 0);
+    return candidatos.slice().sort((a, b) => (m(b) - m(a))
+      || String(b.contrato_id || '').localeCompare(String(a.contrato_id || '')))[0];
+  },
+
+  // "Agregar equipos": el camino LIVIANO para vender un radio más (2026-08-28
+  // — pedirle al cliente re-firmar 200 radios para agregar uno es exagerado).
+  // Consolidada → aumento directo al maestro; fragmentada → aumento al ancla
+  // automática (la consolidación se OFRECE dentro del wizard, no se impone);
+  // sin ningún contrato → no hay dónde colgar el anexo: renovar/regularizar.
+  wizAgregarEquipos() {
+    const est = this._cuentaEstado();
+    if (est.tipo === 'consolidada') { this.wizAumento(est.maestro.id); return; }
+    const ancla = this._cuentaAncla();
+    if (ancla) this.wizAumento(ancla.id, { ancla: true });
+    else this.wizContrato({ renovarCuenta: true, agregar: true });
   },
 
   /* ═════════ Wizards: reemplazo y demo ═════════ */
@@ -1511,7 +1598,7 @@ window.Centro = {
     cont.innerHTML = this._tarifarioHtml(t);
   },
 
-  async wizAumento(preselId) {
+  async wizAumento(preselId, opts = {}) {
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
     await Promise.all([this._cargarModelos(), this._cargarCargos()]);
@@ -1520,17 +1607,35 @@ window.Centro = {
     // ITBMS por defecto: hereda del contrato destino; cliente exento manda.
     const cBase = activos.find(c => c.id === preselId) || activos[0];
     const itbmsDefault = this.cliente?.itbms_exento === true ? false : (cBase?.itbms_aplica !== false);
+    // Ancla automática (cuenta fragmentada): el destino NO se pregunta — se
+    // informa. Y la consolidación se OFRECE cuando conviene, sin imponerla.
+    const est = this._cuentaEstado();
+    const nudge = est.tipo === 'fragmentada' && (est.custodia || est.renovables.some(c => this._wcEnVentana(c)))
+      ? `<div class="cg-senal warn" style="margin-bottom:10px; align-items:center;">
+          <span>Esta cuenta tiene <b>${est.renovables.length} contrato(s)</b>${est.custodia ? ` y <b>${est.custodia} radio(s) sin contrato formal</b>` : ''} —
+          si el cliente está por renovar, este es el momento de consolidarla.</span>
+          <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
+            onclick="Centro.wizContrato({renovarCuenta:true, agregar:true})">Mejor renovar la cuenta</button></div>` : '';
+    const destinoHtml = opts.ancla
+      ? `<div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label">Anexo a la cuenta</label>
+          <p style="margin:0; font-size:13px;">Se cuelga del contrato ancla
+            <span class="cg-mono">${this.esc(cBase.contrato_id || cBase.id)}</span>
+            <span style="color:var(--fg-4);">(el de mayor facturación — se elige solo; el tramo tiene vigencia propia)</span></p>
+          <select id="waContrato" class="hidden"><option value="${this.esc(cBase.id)}" selected></option></select></div>`
+      : `<div class="form-field" style="margin-bottom:10px; max-width:340px;">
+          <label class="form-label">Contrato destino</label>
+          <select class="form-select" id="waContrato">
+            ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === preselId ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
+          </select></div>`;
     this._abrirModal(`
       <h3 style="margin:0 0 6px;">Aumento de equipos (enmienda) — ${this.esc(this.cliente.nombre)}</h3>
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
-        La enmienda agrega líneas al contrato existente <b>con vigencia propia</b>: el período del equipo
+        La enmienda agrega líneas <b>con vigencia propia</b>: el período del equipo
         nuevo corre desde su entrega y vence más tarde que el resto — el anexo lo deja explícito y
         <b>requiere la firma del cliente</b> antes de aplicarse.</p>
-      <div class="form-field" style="margin-bottom:10px; max-width:340px;">
-        <label class="form-label">Contrato destino</label>
-        <select class="form-select" id="waContrato">
-          ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === preselId ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
-        </select></div>
+      ${nudge}
+      ${destinoHtml}
       <div oninput="Centro._aumPreview()">
       <div class="form-field" style="margin-bottom:10px;">
         <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
