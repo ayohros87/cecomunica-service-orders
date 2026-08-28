@@ -467,21 +467,17 @@ window.Centro = {
   },
 
   // Fila estándar de un contrato operativo (la comparten la tabla principal
-  // y el pliegue de "menores").
+  // y el pliegue de "menores"). SIN acciones por contrato (decisión
+  // 2026-08-28): renovar/aumentar/terminar son actos de la CUENTA y viven en
+  // el encabezado y el menú — la fila solo informa (el semáforo es la señal).
   _filaContrato(c) {
-    const dias = this._esVigente(c) && this._aplicaVenc(c) ? this._diasA(c.fecha_vencimiento) : null;
-    const renovar = dias !== null && dias <= this.AVISO_DIAS && !this._renovadoPor(c)
-      ? (this.puedeCrearGestion()
-          ? `<button class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" title="Renovación con este contrato como origen"
-               onclick="Centro.wizContrato('${this.esc(c.id)}')">Renovar</button>`
-          : `<a class="btn btn-primary" style="padding:4px 11px;font-size:12.5px;" href="../contratos/nuevo-contrato.html">Renovar</a>`) : '';
     return `<tr>
       <td class="cg-mono"><a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">${this.esc(c.contrato_id || c.id)}</a></td>
       <td>${this.esc(c.tipo_contrato || c.codigo_tipo || '—')}</td>
       <td>${this.esc(c.estado || '—')}</td>
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
       <td>${this._vidaHtml(c)}</td>
-      <td style="text-align:right; white-space:nowrap;">${renovar}
+      <td style="text-align:right; white-space:nowrap;">
         <a class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}">Abrir ›</a></td></tr>`;
   },
 
@@ -503,19 +499,28 @@ window.Centro = {
     // Encabezado de cuenta: el resumen que le da sentido al botón consolidador.
     const enCampo = this.equipos.filter(e => ['en_cliente', 'asignado_contrato'].includes(e.estado)).length;
     const mensualTot = operativos.reduce((s, c) => s + mensualDe(c), 0);
-    let proxima = null;
+    // Vencimiento de la cuenta: si algo YA venció se dice como tal (decir
+    // "próximo vencimiento" con una fecha pasada confunde); el "próximo" solo
+    // considera fechas futuras.
+    const hoy = new Date();
+    let vencidos = 0, masViejo = null, proxima = null;
     for (const c of operativos) {
       if (!this._aplicaVenc(c) || !c.fecha_vencimiento) continue;
       const d = c.fecha_vencimiento.toDate ? c.fecha_vencimiento.toDate() : new Date(c.fecha_vencimiento);
-      if (!isNaN(d) && (!proxima || d < proxima)) proxima = d;
+      if (isNaN(d)) continue;
+      if (d < hoy) { vencidos++; if (!masViejo || d < masViejo) masViejo = d; }
+      else if (!proxima || d < proxima) proxima = d;
     }
+    const vencHtml = vencidos
+      ? `<span>·</span><span class="cg-venc vencido">${vencidos} vencido${vencidos === 1 ? '' : 's'} — desde ${this._fmtFecha(masViejo)}</span>`
+      : proxima ? `<span>·</span><span>próximo vencimiento <b>${this._fmtFecha(proxima)}</b></span>` : '';
     const cuenta = operativos.length ? `
       <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; padding:9px 13px; margin-bottom:10px;
                   background:var(--surface-sunken, #EEF2F6); border-radius:10px; font-size:13px; color:var(--fg-2);">
         <span><b>${operativos.length}</b> contrato${operativos.length === 1 ? '' : 's'}</span>
         <span>·</span><span><b>${enCampo}</b> radio${enCampo === 1 ? '' : 's'} en campo</span>
         <span>·</span><span class="num"><b>$${mensualTot.toFixed(2)}</b>/mes</span>
-        ${proxima ? `<span>·</span><span>próximo vencimiento <b>${this._fmtFecha(proxima)}</b></span>` : ''}
+        ${vencHtml}
         ${this.puedeCrearGestion() && (operativos.length > 1 || this._wcCustodia().length)
           ? `<button class="btn btn-primary" style="margin-left:auto; padding:4px 12px; font-size:12.5px;"
                title="Consolida los contratos de la cuenta en uno solo"
