@@ -15,6 +15,10 @@ window.APP = {
     userRole: null,       // User role (replaces window.userRole)
     filters: {},          // Active filters
     lastVisible: null,    // Last document for pagination
+    // Hay un RESULTADO DE SERVIDOR en pantalla (búsqueda o chip de estado):
+    // la bandeja NO está mostrando las 40 más recientes, así que ni se pagina
+    // ni se repinta la lista viva encima. Ver ordenes-filters.js.
+    busquedaServidor: false,
     sortField: 'ordenId', // Field to sort by
     sortAscending: false  // Sort direction
   },

@@ -19,6 +19,45 @@ function _mergeIntoOrdersCache(fresh) {
   APP.state.orders = [...fresh, ...kept];
 }
 
+// ── Modo "resultado de servidor" ───────────────────────────────────────────
+// Reporte de recepción (2026-08-28): "busco la orden 2026082401, la encuentra,
+// y al rato la pantalla salta sola de vuelta a las órdenes recientes".
+//
+// Una búsqueda (rápida o avanzada) y el chip de estado NO son un filtro sobre
+// las 40 órdenes vivas: son una CONSULTA PROPIA al servidor que trae órdenes
+// de cualquier antigüedad. Antes ese resultado se pintaba a mano en el <tbody>
+// y nadie más se enteraba, así que:
+//   · el listener vivo repintaba la bandeja completa encima del hallazgo —
+//     con la búsqueda rápida ni siquiera hay input entre los filtros activos,
+//     de modo que aplicarFiltrosCombinados volvía a las recientes; y
+//   · "Cargar más" seguía visible con la página corta de un solo resultado, el
+//     IntersectionObserver lo veía y paginaba órdenes recientes debajo.
+// Recordar el resultado arregla las dos cosas: la base del repintado pasa a
+// ser ESE conjunto y la paginación queda apagada mientras dure.
+let _resultadoServidor = null;   // Set<string> de ordenId | null
+
+function entrarModoServidor(resultados) {
+  _resultadoServidor = new Set((resultados || []).map(o => o.ordenId));
+  APP.state.busquedaServidor = true;
+  const btn = document.getElementById("btnCargarMas");
+  if (btn) btn.style.display = "none";
+}
+
+function salirModoServidor() {
+  _resultadoServidor = null;
+  APP.state.busquedaServidor = false;
+}
+window.entrarModoServidor = entrarModoServidor;
+window.salirModoServidor = salirModoServidor;
+
+// Base del repintado: con un resultado de servidor en pantalla son exactamente
+// las órdenes que trajo la consulta (releídas de APP.state.orders, así el
+// listener vivo sí refresca lo que cambie en ellas); si no, la lista viva.
+function baseDeRenderizado() {
+  if (!_resultadoServidor) return APP.state.orders;
+  return (APP.state.orders || []).filter(o => _resultadoServidor.has(o.ordenId));
+}
+
 function setFechaEntregaVisible(visible) {
   const body = document.body;
   if (!body) return;
@@ -191,9 +230,51 @@ function _vigilarCierreDeMenu() {
   }, 250);
 }
 
+// ── Repintado en balde ────────────────────────────────────────────────────
+// Reporte de recepción (2026-08-28): "paso el cursor por encima de una orden,
+// sin hacer clic, y esa orden empieza a parpadear".
+//
+// El listener vivo dispara con CADA escritura remota sobre las 40 recientes,
+// incluidas las que no cambian NADA de lo que se ve (una Cloud Function
+// estampando un campo interno, un colega guardando otra orden). Cada una
+// vaciaba y reconstruía el <tbody>: la fila bajo el cursor se destruye, pierde
+// el :hover —fondo y botones de acción— y el navegador se lo devuelve en el
+// frame siguiente. Con varias escrituras seguidas, la fila late.
+//
+// Si la lista a pintar es idéntica a la que ya está en pantalla, no se toca el
+// DOM. La firma incluye el orden y el layout porque ambos cambian el dibujo.
+let _firmaListaPintada = '';
+
+function _firmaDeLista(list) {
+  try {
+    return `${APP.state.sortField}|${APP.state.sortAscending}|${APP.utils.isMobileLayout()}|${JSON.stringify(list)}`;
+  } catch (e) {
+    return '';   // algo no serializable → nunca se salta el repintado
+  }
+}
+
+// Cualquier pintado ajeno a renderOrdersList (esqueleto, estado vacío, páginas
+// de "Cargar más" añadidas a mano) invalida la firma. Además del contador de
+// filas de abajo, que ya cubre esqueleto y vacío por sí solo.
+function invalidarFirmaLista() { _firmaListaPintada = ''; }
+window.invalidarFirmaLista = invalidarFirmaLista;
+
 function renderOrdersList(list) {
   const ordersTable = document.getElementById("ordersTable");
   const cardsWrap = document.getElementById("ordersCards");
+
+  const firma = _firmaDeLista(list);
+  if (firma && firma === _firmaListaPintada && (list?.length || 0) > 0) {
+    // Cinturón: la firma sola no basta si el <tbody> lo pisó otro (esqueleto,
+    // estado vacío). Cada orden aporta su fila + su fila de detalle, así que
+    // con la lista pintada de verdad el contador nunca baja de list.length.
+    const pintadas = (ordersTable?.querySelectorAll('tr[data-orden-id]').length || 0)
+      + (cardsWrap?.querySelectorAll('.card-contrato[data-orden-id]').length || 0);
+    if (pintadas >= list.length) {
+      actualizarResumen(list);
+      return;
+    }
+  }
 
   if (_hayMenuAbiertoEnLista()) {
     if (!_repintadoPendiente) {
@@ -233,6 +314,7 @@ function renderOrdersList(list) {
   if (cardsWrap) cardsWrap.innerHTML = "";
 
   if (!list || list.length === 0) {
+    _firmaListaPintada = '';
     renderEmptyState("No se encontraron coincidencias", {
       icon: 'search-x',
       sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
@@ -257,6 +339,8 @@ function renderOrdersList(list) {
       }
     }
   }
+
+  _firmaListaPintada = firma;
 
   actualizarResumen(list);
   aplicarRestriccionesPorRol(APP.state.userRole);
@@ -382,12 +466,17 @@ function _avisoCorreoHtml() {
 
 function aplicarFiltrosCombinados() {
   const filters = getActiveFilters();
+  // Con una búsqueda en pantalla la base es el resultado del servidor, no las
+  // 40 vivas: sin esto, cada escritura remota devolvía la bandeja al inicio.
+  const base = baseDeRenderizado();
   const filtered = hasActiveFilters(filters)
-    ? applyActiveFiltersToOrders(APP.state.orders, filters)
-    : APP.state.orders;
+    ? applyActiveFiltersToOrders(base, filters)
+    : base;
 
   const btn = document.getElementById("btnCargarMas");
-  if (btn) btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${filtered.length})`;
+  if (btn && !APP.state.busquedaServidor) {
+    btn.innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${filtered.length})`;
+  }
 
   renderOrdersList(filtered);
   _syncFiltersToURL();
@@ -512,6 +601,11 @@ window._applyURLToFilters = function () {
 // Back/forward — re-apply URL state, then re-render.
 window.addEventListener('popstate', () => {
   if (_applyURLToFilters()) {
+    // La navegación reescribe los filtros: el resultado de servidor que había
+    // en pantalla ya no representa lo que pide la URL.
+    salirModoServidor();
+    const btnCargarMas = document.getElementById("btnCargarMas");
+    if (btnCargarMas) btnCargarMas.style.display = "block";
     if (typeof aplicarFiltrosCombinados === 'function') aplicarFiltrosCombinados();
     if (typeof syncEstadoChipsFromSelect === 'function') syncEstadoChipsFromSelect();
   }
@@ -551,12 +645,14 @@ window.filtrarOrdenes = async function () {
   // Skeleton durante el roundtrip (auditoría órdenes P0): antes la tabla
   // quedaba EN BLANCO sin ninguna señal mientras respondía el servidor —
   // la sensación de "lenta" más frecuente de la bandeja.
+  invalidarFirmaLista();
   if (typeof renderSkeletonRows === 'function') renderSkeletonRows(6);
   else { if (ordersTable) ordersTable.innerHTML = ""; if (cardsWrap) cardsWrap.innerHTML = ""; }
 
   _syncFiltersToURL();
 
   if (!filtroOrden && !filtroCliente && !filtroSerial && !filtroTipo) {
+    salirModoServidor();
     cargarOrdenesYEquipos(true);
     return;
   }
@@ -582,29 +678,25 @@ window.filtrarOrdenes = async function () {
     _mergeIntoOrdersCache(resultados);
 
     if (resultados.length === 0) {
+      salirModoServidor();
       renderEmptyState("No se encontraron coincidencias", {
         icon: 'search-x',
         sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
       });
+      actualizarResumen(resultados);
       return;
     }
 
-    // Swap único: fuera el skeleton, entran los resultados.
-    if (ordersTable) ordersTable.innerHTML = "";
-    if (cardsWrap) cardsWrap.innerHTML = "";
-    ordenarOrdenes(resultados).forEach(o => {
-      const equipos = (o.equipos || [])
-        .filter(e => !e.eliminado)
-        .sort((a, b) =>
-          String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || ""))
-        );
-      renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
-    });
-    APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
-    if (typeof marcarClientesTruncados === 'function') marcarClientesTruncados([ordersTable, document.getElementById("ordersCards")]);
+    // El resultado queda ANOTADO antes de pintarlo: de ahí en adelante el
+    // listener vivo repinta esto y no la bandeja completa, y la paginación
+    // automática queda apagada hasta que se limpie la búsqueda.
+    entrarModoServidor(resultados);
+    renderOrdersList(resultados);
+    return;
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
+    salirModoServidor();
     renderEmptyState("Error al filtrar datos", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
   }
 
@@ -621,10 +713,12 @@ window.filtrarRapido = async function () {
   const cardsWrap = document.getElementById("ordersCards");
 
   // Skeleton durante el roundtrip — ver nota en filtrarOrdenes.
+  invalidarFirmaLista();
   if (typeof renderSkeletonRows === 'function') renderSkeletonRows(6);
   else { if (ordersTable) ordersTable.innerHTML = ""; if (cardsWrap) cardsWrap.innerHTML = ""; }
 
   if (!valor) {
+    salirModoServidor();
     cargarOrdenesYEquipos(true);
     return;
   }
@@ -641,29 +735,23 @@ window.filtrarRapido = async function () {
     _mergeIntoOrdersCache(resultados);
 
     if (resultados.length === 0) {
+      salirModoServidor();
       renderEmptyState("No se encontraron coincidencias", {
         icon: 'search-x',
         sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
       });
+      actualizarResumen(resultados);
       return;
     }
 
-    // Swap único: fuera el skeleton, entran los resultados.
-    if (ordersTable) ordersTable.innerHTML = "";
-    if (cardsWrap) cardsWrap.innerHTML = "";
-    ordenarOrdenes(resultados).forEach(o => {
-      const equipos = (o.equipos || [])
-        .filter(e => !e.eliminado)
-        .sort((a, b) =>
-          String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || ""))
-        );
-      renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
-    });
-    APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
-    if (typeof marcarClientesTruncados === 'function') marcarClientesTruncados([ordersTable, document.getElementById("ordersCards")]);
+    // Ver la nota de filtrarOrdenes: el resultado se anota antes de pintarlo.
+    entrarModoServidor(resultados);
+    renderOrdersList(resultados);
+    return;
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
+    salirModoServidor();
     renderEmptyState("Error al filtrar datos", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
   }
 
@@ -727,6 +815,10 @@ window.limpiarFiltros = function () {
   const cardsWrap = document.getElementById("ordersCards");
   if (ordersTable) ordersTable.innerHTML = "";
   if (cardsWrap) cardsWrap.innerHTML = "";
+  invalidarFirmaLista();
+  salirModoServidor();
+  const btnCargarMas = document.getElementById("btnCargarMas");
+  if (btnCargarMas) btnCargarMas.style.display = "block";
 
   _syncFiltersToURL();
   cargarOrdenesYEquipos(true);
@@ -850,10 +942,12 @@ window.filtrarPorEstado = async function (estado) {
 
   if (ordersTable) ordersTable.innerHTML = "";
   if (cardsWrap) cardsWrap.innerHTML = "";
+  invalidarFirmaLista();
   APP.state.orders = [];
   APP.state.lastVisible = null;
 
   if (!estado) {
+    salirModoServidor();
     if (btnCargarMas) {
       btnCargarMas.innerHTML = '<i data-lucide="chevron-down"></i> Cargar más órdenes (0)';
       btnCargarMas.disabled = false;
@@ -872,6 +966,7 @@ window.filtrarPorEstado = async function (estado) {
     resultados = await OrdenesService.filterByStatus(estado, 200);
 
     if (resultados.length === 0) {
+      salirModoServidor();
       renderEmptyState("No hay órdenes con ese estado", { icon: 'search-x' });
       return;
     }
@@ -880,15 +975,11 @@ window.filtrarPorEstado = async function (estado) {
     // without this the expand spinner hangs silently after a chip filter.
     APP.state.orders = resultados;
 
-    // Swap único: fuera el skeleton, entran los resultados.
-    if (ordersTable) ordersTable.innerHTML = "";
-    if (cardsWrap) cardsWrap.innerHTML = "";
-    ordenarOrdenes(resultados).forEach(o => {
-      const equipos = (o.equipos || [])
-        .filter(e => !e.eliminado)
-        .sort((a, b) => String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || "")));
-      renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
-    });
+    // Mismo trato que la búsqueda: el conjunto del servidor manda sobre el
+    // repintado del listener vivo mientras el chip siga encendido.
+    entrarModoServidor(resultados);
+    renderOrdersList(resultados);
+    return;   // el `finally` de abajo apaga el loader
 
   } catch (e) {
     console.error("❌ Error al filtrar por estado:", {
@@ -904,24 +995,15 @@ window.filtrarPorEstado = async function (estado) {
         resultados = await OrdenesService.filterByStatus(estado, 200);
 
         if (resultados.length === 0) {
+          salirModoServidor();
           renderEmptyState("No hay órdenes con ese estado", { icon: 'search-x' });
+          actualizarResumen(resultados);
         } else {
           APP.state.orders = resultados;
-          // Swap único: fuera el skeleton, entran los resultados.
-    if (ordersTable) ordersTable.innerHTML = "";
-    if (cardsWrap) cardsWrap.innerHTML = "";
-    ordenarOrdenes(resultados).forEach(o => {
-            const equipos = (o.equipos || [])
-              .filter(e => !e.eliminado)
-              .sort((a, b) => String(a.numero_de_serie || "").localeCompare(String(b.numero_de_serie || "")));
-            renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
-          });
-          APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
-          if (typeof marcarClientesTruncados === 'function') marcarClientesTruncados([ordersTable, document.getElementById("ordersCards")]);
+          entrarModoServidor(resultados);
+          renderOrdersList(resultados);   // ya hace resumen, roles, iconos y truncado
         }
 
-        actualizarResumen(resultados);
-        if (typeof aplicarRestriccionesPorRol === 'function') aplicarRestriccionesPorRol(APP.state.userRole);
         if (loader) APP.utils.hide(loader);
         return;
       } catch (fallbackErr) {
@@ -929,6 +1011,7 @@ window.filtrarPorEstado = async function (estado) {
       }
     }
 
+    salirModoServidor();
     renderEmptyState("Error al filtrar por estado", { icon: 'alert-triangle', sublabel: 'Por favor, recarga la página.' });
   } finally {
     if (loader) loader.style.display = "none";

@@ -214,10 +214,16 @@ function _iniciarSnapshotInicial() {
       // First real page is in — pagination/auto-load may run from here.
       APP.state.firstPageReady = true;
 
-      if (orders.length === 0 && paginatedKept.length === 0) {
-        btnCargarMas.style.display = "none";
-      } else {
-        btnCargarMas.style.display = "block";
+      // Con un resultado de servidor en pantalla (búsqueda o chip de estado)
+      // el botón se queda escondido: volver a mostrarlo despertaba el
+      // IntersectionObserver y la bandeja paginaba órdenes recientes debajo
+      // del hallazgo. Ver el "modo servidor" en ordenes-filters.js.
+      if (!APP.state.busquedaServidor) {
+        if (orders.length === 0 && paginatedKept.length === 0) {
+          btnCargarMas.style.display = "none";
+        } else {
+          btnCargarMas.style.display = "block";
+        }
       }
 
       // El watchdog se desarma DESPUÉS de pintar, no al llegar los datos
@@ -351,6 +357,10 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       : APP.state.orders.length;
 
     document.getElementById("btnCargarMas").innerHTML = `<i data-lucide="chevron-down"></i> Cargar más órdenes (${totalVisible})`;
+
+    // Estas filas se AÑADEN a mano, fuera de renderOrdersList: su firma de
+    // pintado queda obsoleta y el próximo repintado debe ejecutarse de verdad.
+    if (typeof invalidarFirmaLista === 'function') invalidarFirmaLista();
 
     ordenarOrdenes(filteredNuevas).forEach(o => {
       const equipos = (o.equipos || [])

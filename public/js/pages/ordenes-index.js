@@ -158,6 +158,12 @@ document.addEventListener("DOMContentLoaded", function () {
     // a still-null cursor) BELOW the skeleton, which then jumps as the
     // snapshot re-renders from the top. Wait for the first real render.
     if (!APP.state.firstPageReady) return;
+    // Nunca se pagina encima de un resultado de servidor. Una búsqueda deja la
+    // página con una o dos filas, el observer ve el botón y traía 40 órdenes
+    // recientes debajo del hallazgo: "busco una orden y vuelve al inicio"
+    // (reporte de recepción 2026-08-28). El botón además está escondido en ese
+    // modo; esto es el cinturón por si alguien lo vuelve a mostrar.
+    if (APP.state.busquedaServidor) return;
     if (btnCargarMas.disabled) return;
     if (btnCargarMas.style.display === "none") return;
     _autoLoadInFlight = true;
