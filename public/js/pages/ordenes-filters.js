@@ -154,9 +154,59 @@ function applyActiveFiltersToOrders(list, filters) {
   return (list || []).filter(o => matchesAdvancedFilters(o, filters));
 }
 
+// ── El repintado NO reconstruye la tabla bajo un menú ⋯ abierto ────────────
+// Reporte de recepción (2026-08-28): "creé cuatro órdenes y solo pude imprimir
+// una". "Imprimir orden" y "Nota de entrega" viven SOLO en el menú ⋯ de la
+// fila, y ese menú es un nodo DENTRO del <tbody>: cuando el listener vivo
+// repintaba (cualquier escritura remota en las 40 más recientes lo dispara),
+// el <tbody> se vaciaba y el menú abierto desaparecía a media maniobra. Peor
+// aún, si el nodo se reemplaza entre el mousedown y el mouseup el navegador NO
+// emite el click: el botón de imprimir se pulsaba y no pasaba nada.
+//
+// Con un menú abierto la persona está a mitad de una acción, así que el
+// repintado espera. Se vigila con un intervalo corto (solo mientras hay algo
+// pendiente) para cubrir TODAS las formas de cerrarlo: clic fuera, ESC, elegir
+// una opción o volver a pulsar el ⋯.
+let _repintadoPendiente = false;
+let _repintadoEsperaDesde = 0;
+let _repintadoVigia = null;
+const REPINTADO_ESPERA_MAX_MS = 15000;
+
+function _hayMenuAbiertoEnLista() {
+  return !!document.querySelector(
+    '#ordersTable .overflow-menu-dropdown.show, #ordersCards .overflow-menu-dropdown.show'
+  );
+}
+
+function _vigilarCierreDeMenu() {
+  if (_repintadoVigia) return;
+  _repintadoVigia = setInterval(() => {
+    if (_hayMenuAbiertoEnLista()) return;
+    clearInterval(_repintadoVigia);
+    _repintadoVigia = null;
+    if (!_repintadoPendiente) return;
+    _repintadoPendiente = false;
+    // Se repinta con el estado FRESCO, no con la lista que quedó congelada.
+    if (typeof aplicarFiltrosCombinados === 'function') aplicarFiltrosCombinados();
+  }, 250);
+}
+
 function renderOrdersList(list) {
   const ordersTable = document.getElementById("ordersTable");
   const cardsWrap = document.getElementById("ordersCards");
+
+  if (_hayMenuAbiertoEnLista()) {
+    if (!_repintadoPendiente) {
+      _repintadoPendiente = true;
+      _repintadoEsperaDesde = Date.now();
+    }
+    // Tope de cortesía: un menú abierto y olvidado no congela la bandeja.
+    if (Date.now() - _repintadoEsperaDesde < REPINTADO_ESPERA_MAX_MS) {
+      _vigilarCierreDeMenu();
+      return;
+    }
+  }
+  _repintadoPendiente = false;
 
   // Preserve expanded-row state across re-renders. Without this, a
   // snapshot update on any order in the list would collapse every
