@@ -67,7 +67,7 @@
     <div id="yaFirmado" class="estado hidden">
       <div class="icono">✅</div>
       <h2>Firma registrada</h2>
-      <p style="margin-top:8px;">El contrato <b id="yfContrato"></b> ya fue firmado.
+      <p style="margin-top:8px;"><b id="yfContrato"></b> ya fue firmado.
         C Comunica le confirmará la activación del servicio.</p>
     </div>
 
@@ -133,7 +133,7 @@
         this.doc = s;
         if (s.estado === 'cancelado') { this.ver('noValido'); return; }
         if (s.estado !== 'pendiente') {
-          document.getElementById('yfContrato').textContent = s.contrato_id || '';
+          document.getElementById('yfContrato').textContent = s.titulo || `El contrato ${s.contrato_id || ''}`;
           this.ver('yaFirmado'); return;
         }
         this.pintar(s);
@@ -144,7 +144,7 @@
 
     pintar(s) {
       const r = s.resumen || {};
-      document.getElementById('fTitulo').textContent = `Contrato ${s.contrato_id || ''}`;
+      document.getElementById('fTitulo').textContent = s.titulo || `Contrato ${s.contrato_id || ''}`;
       document.getElementById('fSub').textContent =
         `${s.cliente_nombre || ''} · ${r.tipo_contrato || ''} · ${r.duracion || ''}`;
       const filas = [...(r.equipos || []).map(l =>
@@ -159,8 +159,8 @@
           ? `<div class="tot"><span></span><span>Primer pago: <b>$${Number(r.primer_pago || 0).toFixed(2)}</b></span></div>` : '');
       document.getElementById('fNombre').value = s.representante?.nombre || '';
       document.getElementById('fCedula').value = s.representante?.cedula || '';
-      document.getElementById('fAceptaTxt').textContent =
-        `Declaro que he leído el contrato ${s.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${s.cliente_nombre || 'la empresa'}.`;
+      document.getElementById('fAceptaTxt').textContent = s.declaracion
+        || `Declaro que he leído el contrato ${s.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${s.cliente_nombre || 'la empresa'}.`;
     },
 
     armarCanvas() {
@@ -219,7 +219,7 @@
             firmado_at: firebase.firestore.FieldValue.serverTimestamp(),
           },
         });
-        document.getElementById('yfContrato').textContent = this.doc.contrato_id || '';
+        document.getElementById('yfContrato').textContent = this.doc.titulo || `El contrato ${this.doc.contrato_id || ''}`;
         this.ver('yaFirmado');
         window.scrollTo(0, 0);
       } catch (e) {

@@ -67,6 +67,44 @@ async function activarContrato(sid, s, extraFirmado = {}) {
   return { c, hash };
 }
 
+// Anexo de aumento firmado digitalmente: la transición pendiente_firma →
+// pendiente_bodega + cierre.firma es EXACTAMENTE la que onGestionWrite (B3)
+// espera — él aplica las líneas al contrato y avisa a bodega; aquí solo se
+// registra la firma con su rastro.
+async function aplicarAnexo(sid, s, extraFirma = {}) {
+  const gRef = db.collection("gestiones").doc(s.gestion_id);
+  const gSnap = await gRef.get();
+  if (!gSnap.exists) { logger.error("[onFirmaContrato] gestión del anexo no existe", { sid }); return null; }
+  const g = gSnap.data();
+  const f = s.firma || {};
+  const hash = hashFirma({
+    contrato_id: `${s.gestion_id}|${s.contrato_id || ""}`,
+    firmante_nombre: f.nombre, firmante_cedula: f.cedula,
+    firmado_at: f.firmado_at?.toDate ? f.firmado_at.toDate().toISOString() : String(f.firmado_at || ""),
+    total_mensual: s.resumen?.total_mensual,
+  });
+  const upd = {
+    "cierre.firma": true,
+    anexo_firma_digital: {
+      solicitud_id: sid,
+      firmante_nombre: f.nombre || "",
+      firmante_cedula: f.cedula || "",
+      firmante_cargo: f.cargo || "",
+      firmado_at: f.firmado_at || admin.firestore.Timestamp.now(),
+      hash,
+      coincide_representante: s.firmante_coincide !== false,
+      ...extraFirma,
+    },
+    firma_solicitud_estado: "activado",
+    firma_pendiente_validacion: admin.firestore.FieldValue.delete(),
+  };
+  if (g.estado === "pendiente_firma") upd.estado = "pendiente_bodega";
+  await gRef.update(upd);
+  await G.registrarEvento(s.gestion_id, "firma",
+    `Anexo firmado DIGITALMENTE por ${f.nombre || "—"} (cédula ${f.cedula || "—"}) — hash ${hash.slice(0, 12)}…; pasa a bodega.`);
+  return { g, hash };
+}
+
 async function correo(to, cc, subject, cuerpo, ctaUrl, ctaLabel, meta) {
   try {
     await G.encolarCorreo({ to, cc, subject, preheader: subject, bodyContent: cuerpo, ctaUrl, ctaLabel, meta });
@@ -94,6 +132,42 @@ module.exports = onDocumentUpdated(
           ["Cédula", G.escapeHtml(after.representante?.cedula || "—"), G.escapeHtml(f.cedula || "—")],
           ["Cargo", "representante legal", G.escapeHtml(f.cargo || "—")],
         ]);
+
+        // ── Anexo de aumento ──
+        if (after.tipo === "anexo_aumento") {
+          if (coincide) {
+            const r = await aplicarAnexo(sid, { ...after, firmante_coincide: true });
+            await ref.update({ estado: "activado", firmante_coincide: true, hash: r?.hash || null,
+              procesado_at: admin.firestore.FieldValue.serverTimestamp() });
+            await correo(ventas, vendedor, `Anexo ${after.gestion_id} FIRMADO digitalmente — ${after.cliente_nombre || ""}`,
+              `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">Anexo de aumento firmado</h2>
+               <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                 El anexo <b>${G.escapeHtml(after.gestion_id || "")}</b> al contrato <b>${G.escapeHtml(after.contrato_id || "")}</b>
+                 de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b> fue firmado digitalmente por
+                 <b>${G.escapeHtml(f.nombre || "—")}</b> — coincide con el representante registrado.
+                 Las líneas se aplicaron al contrato y Bodega ya tiene la asignación en su bandeja.</p>`,
+              urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
+            logger.info("[onFirmaContrato] anexo firmado", { sid, gestion: after.gestion_id });
+          } else {
+            await ref.update({ estado: "validacion", firmante_coincide: false,
+              procesado_at: admin.firestore.FieldValue.serverTimestamp() });
+            await db.collection("gestiones").doc(after.gestion_id).update({
+              firma_pendiente_validacion: true,
+              firma_solicitud_id: sid,
+              firma_solicitud_estado: "validacion",
+            });
+            await correo(ventas, vendedor, `Validar firmante: anexo ${after.gestion_id} firmado por persona distinta al representante`,
+              `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Firma del anexo recibida — falta validar al firmante</h2>
+               <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                 El anexo <b>${G.escapeHtml(after.gestion_id || "")}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>
+                 fue firmado, pero el firmante <b>no coincide</b> con el representante registrado. Se aplica cuando
+                 ventas acepte al firmante (botón en el expediente de la gestión).</p>
+               ${tabla}`,
+              urlFicha, "Revisar y aceptar firmante", { firma_solicitud: sid, resultado: "validacion" });
+            logger.info("[onFirmaContrato] anexo en validación", { sid, gestion: after.gestion_id });
+          }
+          return null;
+        }
 
         if (coincide) {
           const r = await activarContrato(sid, { ...after, firmante_coincide: true });
@@ -136,8 +210,11 @@ module.exports = onDocumentUpdated(
     // ── Ventas aceptó al firmante ──
     if (before.estado === "validacion" && after.estado === "aceptado") {
       try {
-        const r = await activarContrato(sid, { ...after, firmante_coincide: false },
-          { validado_por_uid: after.validado_por_uid || null });
+        const r = after.tipo === "anexo_aumento"
+          ? await aplicarAnexo(sid, { ...after, firmante_coincide: false },
+              { validado_por_uid: after.validado_por_uid || null })
+          : await activarContrato(sid, { ...after, firmante_coincide: false },
+              { validado_por_uid: after.validado_por_uid || null });
         await ref.update({ estado: "activado", hash: r?.hash || null,
           procesado_at: admin.firestore.FieldValue.serverTimestamp() });
         if (after.actualizar_ficha === true && after.cliente_id && after.firma?.nombre) {
@@ -150,12 +227,17 @@ module.exports = onDocumentUpdated(
         }
         const vendedor = await G.vendedorEmailDeCliente(after.cliente_id);
         const ventas = await G.aprobacionesTo();
-        await correo(ventas, vendedor, `Contrato ${after.contrato_id} ACTIVADO — firmante validado`,
-          `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">Firmante validado — contrato activo</h2>
+        const esAnexo = after.tipo === "anexo_aumento";
+        await correo(ventas, vendedor,
+          esAnexo ? `Anexo ${after.gestion_id} APLICADO — firmante validado`
+                  : `Contrato ${after.contrato_id} ACTIVADO — firmante validado`,
+          `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">Firmante validado</h2>
            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-             Ventas aceptó a <b>${G.escapeHtml(after.firma?.nombre || "—")}</b> como firmante del contrato
-             <b>${G.escapeHtml(after.contrato_id || "")}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>;
-             el contrato quedó <b>activo</b>.${after.actualizar_ficha ? " La ficha del cliente se actualizó con el nuevo representante." : ""}</p>`,
+             Ventas aceptó a <b>${G.escapeHtml(after.firma?.nombre || "—")}</b> como firmante
+             ${esAnexo
+               ? `del anexo <b>${G.escapeHtml(after.gestion_id || "")}</b> al contrato <b>${G.escapeHtml(after.contrato_id || "")}</b>: las líneas se aplicaron y Bodega ya tiene la asignación.`
+               : `del contrato <b>${G.escapeHtml(after.contrato_id || "")}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>; el contrato quedó <b>activo</b>.`}
+             ${after.actualizar_ficha ? " La ficha del cliente se actualizó con el nuevo representante." : ""}</p>`,
           `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(after.cliente_id || "")}`,
           "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "aceptado" });
         logger.info("[onFirmaContrato] firmante aceptado y contrato activado", { sid, contrato: after.contrato_id });

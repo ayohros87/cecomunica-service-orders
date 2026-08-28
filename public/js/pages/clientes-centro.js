@@ -638,8 +638,16 @@ window.Centro = {
   // Ventas acepta a un firmante distinto del representante registrado.
   async aceptarFirmante(id) {
     const c = this.contratos.find(x => x.id === id);
-    const sid = c?.firma_solicitud_id;
-    if (!sid) { Toast.show('El contrato no tiene solicitud de firma vinculada', 'warn'); return; }
+    if (!c?.firma_solicitud_id) { Toast.show('El contrato no tiene solicitud de firma vinculada', 'warn'); return; }
+    this._abrirValidacionFirma(c.firma_solicitud_id, c.contrato_id || c.id);
+  },
+  // Igual pero para el ANEXO de aumento (la solicitud vive en la gestión).
+  aceptarFirmanteGestion(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    if (!g?.firma_solicitud_id) { Toast.show('La gestión no tiene solicitud de firma vinculada', 'warn'); return; }
+    this._abrirValidacionFirma(g.firma_solicitud_id, gid);
+  },
+  async _abrirValidacionFirma(sid, etiqueta) {
     this._cerrarModal();
     try {
       const snap = await firebase.firestore().collection('firma_solicitudes').doc(sid).get();
@@ -647,10 +655,11 @@ window.Centro = {
       if (!s || s.estado !== 'validacion') { Toast.show('La solicitud no está pendiente de validación', 'warn'); return; }
       const f = s.firma || {};
       this._abrirModal(`
-        <h3 style="margin:0 0 6px;">Validar firmante — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></h3>
+        <h3 style="margin:0 0 6px;">Validar firmante — <span class="cg-mono">${this.esc(etiqueta)}</span></h3>
         <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
           La firma quedó registrada con su rastro completo, pero el firmante no coincide con el
-          representante legal registrado. Al aceptar, el contrato se <b>activa</b>.</p>
+          representante legal registrado. Al aceptar, el documento <b>se aplica</b> (contrato → activo;
+          anexo → las líneas entran y bodega asigna).</p>
         <table class="cg-tabla" style="margin-bottom:10px;"><thead><tr><th></th><th>Registrado</th><th>Firmó</th></tr></thead><tbody>
           <tr><td>Nombre</td><td>${this.esc(s.representante?.nombre || '—')}</td><td><b>${this.esc(f.nombre || '—')}</b></td></tr>
           <tr><td>Cédula</td><td class="cg-mono">${this.esc(s.representante?.cedula || '—')}</td><td class="cg-mono"><b>${this.esc(f.cedula || '—')}</b></td></tr>
@@ -667,6 +676,100 @@ window.Centro = {
           <button class="btn btn-primary" onclick="Centro._aceptarFirmanteConfirmar('${this.esc(sid)}')">Aceptar firmante y activar</button>
         </div>`);
     } catch (e) { console.error(e); Toast.show('No se pudo cargar la solicitud de firma', 'bad'); }
+  },
+
+  // Enlace de firma digital para el ANEXO de aumento (pendiente_firma): la
+  // misma página /firmar/ y el mismo trigger; al firmar (y coincidir o ser
+  // validado) el anexo pasa solo a pendiente_bodega — cero papel, cero fotos.
+  async enviarFirmaAnexo(gid) {
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    if (!g || g.estado !== 'pendiente_firma') { Toast.show('El anexo debe estar aprobado y pendiente de firma', 'warn'); return; }
+    const a = g.aumento || {};
+    this._cerrarModal();
+    let sid = (g.firma_solicitud_id && g.firma_solicitud_estado === 'pendiente') ? g.firma_solicitud_id : null;
+    try {
+      if (!sid) {
+        const t = a.totales || {};
+        const ref = await firebase.firestore().collection('firma_solicitudes').add({
+          estado: 'pendiente',
+          tipo: 'anexo_aumento',
+          gestion_id: gid,
+          contrato_doc_id: a.contrato_doc_id || '',
+          contrato_id: a.contrato_id || '',
+          cliente_id: g.cliente_id,
+          cliente_nombre: g.cliente_nombre || '',
+          titulo: `Anexo de aumento ${gid} — contrato ${a.contrato_id || ''}`,
+          declaracion: `Declaro que he leído el anexo de aumento ${gid} al contrato ${a.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${g.cliente_nombre || 'la empresa'}.`,
+          representante: { nombre: this.cliente.representante || '', cedula: this.cliente.representante_cedula || '' },
+          resumen: {
+            tipo_contrato: 'Anexo de aumento',
+            duracion: `${a.duracion_meses || '?'} meses (tramo del anexo, desde la entrega)`,
+            equipos: (a.lineas || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0) })),
+            cargos: (a.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente })),
+            total_mensual: Number(t.total_mensual || 0),
+            primer_pago: Number(t.primer_pago || 0),
+            itbms_label: t.itbms_aplica ? `ITBMS (${Math.round((t.itbms_porcentaje || 0.07) * 100)}%)` : 'ITBMS EXENTO',
+          },
+          creado_por_uid: this.uid,
+          created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        sid = ref.id;
+        await firebase.firestore().collection('gestiones').doc(gid).update({
+          firma_solicitud_id: sid, firma_solicitud_estado: 'pendiente',
+        });
+        g.firma_solicitud_id = sid; g.firma_solicitud_estado = 'pendiente';
+      }
+      const url = `${location.origin}/firmar/?s=${sid}`;
+      const rep = this.cliente.representante || '—';
+      this._abrirModal(`
+        <h3 style="margin:0 0 6px;">Enviar anexo para firma — <span class="cg-mono">${this.esc(gid)}</span></h3>
+        <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3); max-width:66ch;">
+          El cliente abre el enlace en su celular, revisa el anexo (${this.esc(String((a.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ')))})
+          y <b>firma con el dedo</b>. Debe firmarlo <b>${this.esc(rep)}</b> (representante legal) — el enlace se puede
+          <b>reenviar</b>. Al firmar, las líneas entran al contrato y bodega recibe la asignación, todo solo.</p>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <input class="form-input" id="wfLink" value="${this.esc(url)}" readonly style="flex:1; font-size:12.5px;">
+          <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('wfLink').value).then(()=>Toast.show('Enlace copiado — pégalo en WhatsApp','ok'))">Copiar</button>
+        </div>
+        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+          <div class="form-field" style="margin:0; flex:1; min-width:220px;">
+            <label class="form-label">Enviar por correo a</label>
+            <input class="form-input" id="wfEmail" type="email" value="${this.esc(this.cliente.representante_email || this.cliente.email || '')}" placeholder="correo del cliente"></div>
+          <button class="btn btn-ghost" onclick="Centro._enviarFirmaAnexoCorreo('${this.esc(gid)}','${this.esc(sid)}')">Enviar correo</button>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+          <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
+        </div>`);
+    } catch (e) { console.error(e); Toast.show('No se pudo generar el enlace de firma del anexo', 'bad'); }
+  },
+
+  async _enviarFirmaAnexoCorreo(gid, sid) {
+    const email = (document.getElementById('wfEmail')?.value || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { Toast.show('Escribe un correo válido', 'warn'); return; }
+    const g = (this.gestiones || []).find(x => x.id === gid);
+    const a = g?.aumento || {};
+    const url = `${location.origin}/firmar/?s=${sid}`;
+    try {
+      await MailService.enqueue({
+        to: email,
+        cc: firebase.auth().currentUser?.email || null,
+        subject: `Anexo de aumento al contrato ${a.contrato_id || ''} listo para su firma — C Comunica`,
+        preheader: 'Firme el anexo desde su celular en un minuto',
+        bodyContent: `
+          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">Anexo de aumento listo para firma</h2>
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+            Estimado cliente: el anexo de aumento al contrato <b>${FMT.esc(a.contrato_id || '')}</b> de
+            <b>${FMT.esc(g?.cliente_nombre || '')}</b> está listo
+            (${FMT.esc((a.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', '))}).
+            Ábralo con el botón, revise el detalle y firme con el dedo desde su celular. Debe firmarlo el
+            <b>representante legal</b>; si lo recibe otra persona, puede reenviarle este correo.</p>`,
+        ctaUrl: url,
+        ctaLabel: 'Revisar y firmar el anexo',
+        meta: { created_at: firebase.firestore.FieldValue.serverTimestamp(), created_by: this.uid, source: 'firma-anexo', firma_solicitud: sid },
+        status: 'queued',
+      });
+      Toast.show(`Enlace de firma del anexo enviado a ${email}`, 'ok');
+    } catch (e) { console.error(e); Toast.show('No se pudo enviar el correo', 'bad'); }
   },
 
   async _aceptarFirmanteConfirmar(sid) {
@@ -1081,6 +1184,20 @@ window.Centro = {
           ${a.totales.cargos_uni ? ` · <b>Primer pago:</b> <span class="num">$${Number(a.totales.primer_pago || 0).toFixed(2)}</span>` : ''}</p>` : ''}
         ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})
           <button class="btn btn-ghost" style="padding:2px 9px;font-size:12px;" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
+        ${g.anexo_firma_digital ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">
+          ✓ Anexo firmado <b>digitalmente</b> por ${this.esc(g.anexo_firma_digital.firmante_nombre || '—')}
+          (cédula ${this.esc(g.anexo_firma_digital.firmante_cedula || '—')})</p>` : ''}
+        ${g.estado === 'pendiente_firma' && this.puedeCrearGestion() ? `
+          <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button class="btn btn-primary" style="padding:4px 12px; font-size:12.5px;"
+              onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">Enviar anexo para firma digital</button>
+            ${g.firma_solicitud_estado === 'pendiente' ? '<span style="font-size:12px; color:var(--fg-3);">enlace enviado — esperando la firma del cliente</span>' : ''}
+          </div>` : ''}
+        ${g.firma_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol) ? `
+          <div class="cg-senal warn" style="margin-top:8px; align-items:center;">
+            <span>Anexo firmado por persona <b>distinta al representante</b> — falta validar al firmante.</span>
+            <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
+              onclick="Centro.aceptarFirmanteGestion('${this.esc(g.id)}')">Aceptar firmante…</button></div>` : ''}
         ${asignando
           ? `<div style="margin-top:10px;">${this._slotsDeLineas(a.lineas).map((m, ix) => `
               <span style="display:inline-block; margin:0 6px 6px 0;">
