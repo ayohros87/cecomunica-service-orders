@@ -13,6 +13,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <!-- UI kit del módulo (2026-08-28): chips unificados, anatomía de modal,
+       pasos de wizard, expediente responsivo, jerarquía de botones. -->
+  <link rel="stylesheet" href="../css/ceco-gestion.css?v=kit1">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -135,8 +138,9 @@
         <button type="button" class="seg-btn" id="segMios" onclick="Centro.setCartera('mios')">Mi cartera</button>
         <button type="button" class="seg-btn" id="segTodos" onclick="Centro.setCartera('todos')">Todos</button>
       </div>
-      <label class="cg-toggle" title="Ocultar clientes marcados como inactivos">
-        <input type="checkbox" id="cgSoloActivos" onchange="Centro.setSoloActivos(this.checked)"> Solo activos
+      <label class="cg-switch" title="Ocultar clientes marcados como inactivos">
+        <input type="checkbox" id="cgSoloActivos" onchange="Centro.setSoloActivos(this.checked)">
+        <span class="trk" aria-hidden="true"></span> Solo activos
       </label>
       <span id="cgResumen" style="font-size:13px; color:var(--fg-3);"></span>
     </div>
@@ -194,7 +198,7 @@
 <div id="cgModal" class="cg-overlay hidden"></div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/clientes-centro.js?v=cg28" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg29" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

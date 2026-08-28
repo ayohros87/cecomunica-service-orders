@@ -40,6 +40,7 @@
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 12px; font-weight: 600; border-radius: 999px;
   padding: 1px 9px; white-space: nowrap; line-height: 1.6;
+  background: var(--surface-sunken, #EEF2F6); color: var(--fg-3);
 }
 .cg-chip--ok    { background: var(--cg-ok-soft);   color: var(--cg-ok-deep); }
 .cg-chip--warn  { background: var(--cg-warn-soft); color: var(--cg-warn-deep); }
@@ -61,8 +62,11 @@
 
 /* ── Modal: UNA anatomía ──────────────────────────────────────
    header fijo (título + cerrar), body scrolleable, footer fijo.
-   Los wizards largos dejan de scrollear el título y los botones. */
-.cg-modal { display: flex; flex-direction: column; max-height: 88vh; }
+   Los wizards largos dejan de scrollear el título y los botones.
+   Opt-in con el modificador --anatomia: los modales chicos siguen
+   con el .cg-modal simple de centro.html. */
+.cg-modal--anatomia { display: flex; flex-direction: column; max-height: 88vh;
+  padding: 0 !important; overflow: hidden !important; }
 .cg-modal-hd {
   display: flex; align-items: center; gap: 10px;
   padding: 14px 18px 10px; border-bottom: 1px solid var(--border-subtle);
@@ -140,6 +144,20 @@
 }
 @keyframes cg-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .cg-skel { animation: none; } }
+
+/* ── Switch (toggle real, no checkbox) ────────────────────────── */
+.cg-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: var(--fg-2); user-select: none; }
+.cg-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.cg-switch .trk { width: 34px; height: 20px; border-radius: 999px; flex: none;
+  background: var(--border-default, #C8D4DE); position: relative; transition: background .15s; }
+.cg-switch .trk::after { content: ''; position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+.cg-switch input:checked + .trk { background: var(--cg-ok); }
+.cg-switch input:checked + .trk::after { left: 16px; }
+.cg-switch input:focus-visible + .trk { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .cg-switch .trk, .cg-switch .trk::after { transition: none; } }
 
 /* ── Filas y foco accesible ───────────────────────────────────── */
 .cg-row:focus-visible, .cg-tabla a:focus-visible, .cg-act:focus-visible {

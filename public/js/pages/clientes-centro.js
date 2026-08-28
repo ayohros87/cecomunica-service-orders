@@ -224,21 +224,23 @@ window.Centro = {
     document.getElementById('segMios').classList.toggle('is-on', this.cartera === 'mios');
     document.getElementById('segTodos').classList.toggle('is-on', this.cartera === 'todos');
     try {
+      // "Solo activos" filtra EN EL SERVIDOR con la misma semántica del módulo
+      // de clientes (where activo == true): antes se filtraba en cliente con
+      // `activo !== false`, así que los docs SIN el campo pasaban como activos
+      // y la página traída encogía al filtrar (bug reportado 2026-08-28).
       const { docs, lastDoc } = await ClientesService.listClientesPage({
         term: this.term, cursorDoc: this.cursor, limit: 30,
+        onlyActive: this.soloActivos,
       });
       this.cursor = lastDoc;
       // "Mi cartera" filtra en cliente sobre la página traída: con carteras de
       // decenas de clientes es suficiente; el scoping por reglas llega después.
-      let visibles = this.cartera === 'mios'
+      const visibles = this.cartera === 'mios'
         ? docs.filter(c => c.vendedor_asignado === this.uid)
         : docs;
-      // "Solo activos" filtra sobre la página traída (activo:false son pocos);
-      // apagando el toggle aparecen los inactivos.
-      if (this.soloActivos) visibles = visibles.filter(c => c.activo !== false);
       const cont = document.getElementById('cgLista');
       if (reset && !visibles.length && !lastDoc) {
-        cont.innerHTML = `<div class="ds-card cg-vacio">${this.term
+        cont.innerHTML = `<div class="cg-empty">${this.term
           ? 'Ningún cliente coincide con la búsqueda.'
           : (this.cartera === 'mios' ? 'No tienes clientes asignados todavía.' : 'Sin clientes registrados.')}</div>`;
       } else {
@@ -300,6 +302,16 @@ window.Centro = {
         c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null, c.email || null,
         c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
       ].filter(Boolean).join(' · ') || '—';
+
+      // Skeletons mientras cargan contratos/flota/gestiones (la ficha antes
+      // aparecía a saltos, sección por sección).
+      const skel = (n, h) => Array.from({ length: n }, () =>
+        `<div class="cg-skel" style="height:${h}px; margin-bottom:8px;"></div>`).join('');
+      document.getElementById('fKpis').innerHTML = skel(1, 64);
+      document.getElementById('fSenales').innerHTML = '';
+      document.getElementById('fContratos').innerHTML = skel(3, 38);
+      document.getElementById('fEquipos').innerHTML = skel(3, 38);
+      document.getElementById('fGestiones').innerHTML = skel(2, 46);
 
       // Carga en paralelo: contratos + flota + gestiones. Las gestiones NO
       // tumban la ficha si fallan (p. ej. reglas aún sin desplegar en un
@@ -443,7 +455,7 @@ window.Centro = {
       tipo: 'warn',
       txt: `${sinContrato} equipo(s) sin contrato formal — la cuenta requiere renovación / regularización.`,
       extra: this.puedeCrearGestion()
-        ? `<button class="btn btn-primary" style="padding:3px 11px; font-size:12px; margin-left:auto; flex:none;"
+        ? `<button class="btn btn-primary cg-act cg-senal-cta"
              onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : '',
     });
     const pendDev = this.equipos.filter(e => e.pendiente_devolucion).length;
@@ -481,7 +493,7 @@ window.Centro = {
       <td style="text-align:right;">${this._unidadesActivas(c)}</td>
       <td>${this._vidaHtml(c)}</td>
       <td style="text-align:right; white-space:nowrap;">
-        <button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver</button></td></tr>`;
+        <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver</button></td></tr>`;
   },
 
   // Vista previa del contrato en un modal: todo lo esencial sin navegar.
@@ -506,10 +518,11 @@ window.Centro = {
       <td style="text-align:right;" class="num">$${(Number(x.cantidad || 1) * Number(x.monto || 0)).toFixed(2)}</td></tr>`).join('');
     const serialesCampo = enCampo.slice(0, 8).map(e => `<span class="cg-mono">${this.esc(e.serial || e.id)}</span>`).join(', ');
     const reg = c.regularizacion;
-    this._abrirModal(`
-      <h3 style="margin:0 0 2px;"><span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
-        <span style="font-weight:400; color:var(--fg-3); font-size:14px;">· ${this.esc(c.tipo_contrato || c.codigo_tipo || '')} · ${this.esc(c.estado || '')}</span></h3>
-      <div style="margin:4px 0 10px;">${this._vidaHtml(c)}</div>
+    this._abrirModalA({
+      titulo: `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>
+        <span style="font-weight:400; color:var(--fg-3); font-size:13.5px;"> · ${this.esc(c.tipo_contrato || c.codigo_tipo || '')} · ${this.esc(c.estado || '')}</span>`,
+      cuerpo: `
+      <div style="margin:0 0 10px;">${this._vidaHtml(c)}</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 24px; margin-bottom:10px;">
         ${dato('Acción', this.esc(c.accion || ''))}
         ${dato('Duración', this.esc(c.duracion || ''))}
@@ -536,16 +549,16 @@ window.Centro = {
         <b>${enCampo.length}</b> equipo(s) en campo bajo este contrato${serialesCampo ? `: ${serialesCampo}${enCampo.length > 8 ? ` … y ${enCampo.length - 8} más` : ''}` : ''}.</p>` : ''}
       ${reg?.amarradas ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
         Regularización al activarse: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · ${reg.sin_cupo} sin cupo` : ''}${reg.sin_linea ? ` · ${reg.sin_linea} sin línea` : ''}.</p>` : ''}
-      ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}
-      <div style="display:flex; gap:8px; align-items:center; margin-top:14px; flex-wrap:wrap;">
-        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" style="font-size:12.5px;">Abrir la página completa del contrato ›</a>
-        <span style="margin-left:auto;"></span>
+      ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}`,
+      footer: `
+        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Abrir la página completa del contrato ›</a>
+        <span class="sep"></span>
         ${c.firmado_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
-          ? `<button class="btn btn-primary" onclick="Centro.aceptarFirmante('${this.esc(c.id)}')">Aceptar firmante…</button>` : ''}
+          ? `<button class="btn btn-primary cg-act" onclick="Centro.aceptarFirmante('${this.esc(c.id)}')">Aceptar firmante…</button>` : ''}
         ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
-          ? `<button class="btn btn-primary" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
-        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
-      </div>`);
+          ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
+        <button class="btn btn-ghost cg-act" onclick="Centro._cerrarModal()">Cerrar</button>`,
+    });
   },
 
   /* ═════════ Firma digital del contrato (2026-08-28) ═════════ */
@@ -813,7 +826,7 @@ window.Centro = {
 
   pintarContratos() {
     const cont = document.getElementById('fContratos');
-    if (!this.contratos.length) { cont.innerHTML = '<div class="cg-vacio">Sin contratos registrados.</div>'; return; }
+    if (!this.contratos.length) { cont.innerHTML = '<div class="cg-empty">Sin contratos registrados.</div>'; return; }
     // El overhang (caso SEPROSA, 2026-08-28) en dos capas: (1) lo NO operativo
     // (renovado/vencido/anulado) se pliega en "Histórico"; (2) de lo operativo,
     // los contratos MENORES — sin facturación y sin urgencia (REEMPs de 1 radio,
@@ -882,7 +895,7 @@ window.Centro = {
     cont.innerHTML = `
       ${cuenta}
       ${principales.length ? `<table class="cg-tabla">${THEAD}<tbody>${filas}</tbody></table>`
-        : operativos.length ? '' : '<div class="cg-vacio">Sin contratos operativos.</div>'}
+        : operativos.length ? '' : '<div class="cg-empty">Sin contratos operativos.</div>'}
       ${menores.length ? `<details style="margin-top:10px;">
         <summary style="cursor:pointer; font-size:13px; color:var(--fg-3); font-weight:600;">Contratos menores (${menores.length}) — ${menoresLabel} · ${menoresUnid} unid.</summary>
         <table class="cg-tabla" style="margin-top:8px;">${THEAD}<tbody>${menores.map(c => this._filaContrato(c)).join('')}</tbody></table>
@@ -960,7 +973,7 @@ window.Centro = {
     const lista = this.equipos.filter(e => !q ||
       `${e.serial || ''} ${e.modelo_label || ''} ${e.asignacion?.contrato_id || ''}`.toUpperCase().includes(q));
     if (!lista.length) {
-      cont.innerHTML = `<div class="cg-vacio">${this.equipos.length ? 'Ningún equipo coincide con el filtro.' : 'Sin equipos asignados en el inventario.'}</div>`;
+      cont.innerHTML = `<div class="cg-empty">${this.equipos.length ? 'Ningún equipo coincide con el filtro.' : 'Sin equipos asignados en el inventario.'}</div>`;
       return;
     }
     const chip = (e) => (window.EquiposPoolService?.chipEstadoHtml)
@@ -973,7 +986,7 @@ window.Centro = {
       <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || '—')}</td>
       <td style="text-align:right;">${this._tarifaEquipo(e)}</td>
       <td>${this._vencChipEquipo(e)}</td>
-      <td style="text-align:right;"><button class="btn btn-ghost" style="padding:4px 9px;font-size:12.5px;"
+      <td style="text-align:right;"><button class="btn btn-ghost cg-act"
         title="Historia completa de esta unidad" onclick="Centro.verKardex('${this.esc(e.id)}')">Kardex ›</button></td></tr>`).join('');
     cont.innerHTML = `<table class="cg-tabla"><thead><tr>
       <th>Serial</th><th>Modelo</th><th>Situación</th><th>Contrato</th><th style="text-align:right;">Tarifa</th><th>Vence</th><th></th>
@@ -1075,8 +1088,9 @@ window.Centro = {
   pintarGestiones() {
     const cont = document.getElementById('fGestiones');
     if (!(this.gestiones || []).length) {
-      cont.innerHTML = `<div class="cg-vacio">Sin gestiones registradas todavía —
-        crea la primera con el botón "Nueva gestión".</div>`;
+      cont.innerHTML = `<div class="cg-empty">Sin gestiones registradas todavía.
+        ${this.puedeCrearGestion() ? `<div class="cta"><button class="btn btn-primary cg-act"
+          onclick="document.getElementById('btnGestion')?.click()">Nueva gestión</button></div>` : ''}</div>`;
       return;
     }
     cont.innerHTML = this.gestiones.map(g => {
@@ -1092,8 +1106,7 @@ window.Centro = {
             ? this.esc((g.demo?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ') || '—')
             : `${(g.items || []).length} serial(es)`} · ${fecha}</div></div>
         <span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/4</span>
-        <span style="font-size:12.5px; font-weight:600; color:var(--fg-2);">
-          ${this.esc(GestionesService.estadoLabel(g.estado))}</span>
+        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
         <span class="arr">${abierta ? '▾' : '›'}</span>
       </div>
       ${abierta ? this._detalleGestion(g) : ''}`;
@@ -1134,6 +1147,9 @@ window.Centro = {
         modelo: () => ({ modelo_id: inp.dataset.modeloId || null, modelo_label: inp.dataset.modeloLabel || '' }),
       }));
     }
+    // A11y: los inputs eran placeholder-only — el lector de pantalla no tenía
+    // nombre para el campo.
+    inputs.forEach(inp => { if (!inp.getAttribute('aria-label')) inp.setAttribute('aria-label', inp.placeholder || 'Serial'); });
     // Datalist de disponibles en bodega por modelo esperado.
     try {
       const bodega = await this._bodegaDisponibles();
@@ -1163,14 +1179,17 @@ window.Centro = {
   },
 
   _detalleGestion(g) {
+    // Checklist como timeline del kit: done = completado; next = el paso que
+    // sigue (todos los anteriores completos) — el ojo sabe dónde está parado.
     const defs = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
-    const check = defs.map(([k, t, s]) => `
-      <div style="display:flex; gap:9px; align-items:flex-start; margin-bottom:7px;">
-        <span style="width:18px;height:18px;border-radius:5px;flex:none;display:grid;place-items:center;
-          ${g.cierre?.[k] ? 'background:#1FA56B;color:#fff;' : 'border:1.5px solid var(--border-default);'}
-          font-size:12px;">${g.cierre?.[k] ? '✓' : ''}</span>
-        <span style="font-size:13px;"><b>${t}</b><br><span style="color:var(--fg-3);font-size:12px;">${s}</span></span>
-      </div>`).join('');
+    const check = `<div class="cg-tl">` + defs.map(([k, t, s], i) => {
+      const done = g.cierre?.[k] === true;
+      const next = !done && defs.slice(0, i).every(([kk]) => g.cierre?.[kk] === true);
+      return `<div class="cg-tl-item${done ? ' done' : next ? ' next' : ''}">
+        <span class="cg-tl-dot">${done ? '✓' : ''}</span>
+        <span class="cg-tl-t"><b>${t}</b><span class="s">${s}</span></span>
+      </div>`;
+    }).join('') + `</div>`;
 
     const ordenes = [
       ...((g.ordenes?.programacion_ids || (g.ordenes?.programacion_id ? [g.ordenes.programacion_id] : []))
@@ -1179,9 +1198,8 @@ window.Centro = {
       ...(g.ordenes?.entrada_id ? [{ id: g.ordenes.entrada_id, tipo: 'ENTRADA' }] : []),
     ];
     const osHtml = ordenes.length
-      ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">${ordenes.map(o =>
-          `<a class="btn btn-ghost" style="padding:4px 11px;font-size:12.5px;"
-             href="../ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">
+      ? `<div class="cg-os">${ordenes.map(o =>
+          `<a href="../ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">
              <b>${o.tipo}</b>&nbsp;<span class="cg-mono">${this.esc(o.id)}</span></a>`).join('')}</div>`
       : '';
 
@@ -1208,13 +1226,13 @@ window.Centro = {
           ${a.totales.itbms_aplica ? `<span style="color:var(--fg-4);">(inc. ITBMS ${(a.totales.itbms_porcentaje * 100).toFixed(0)}%)</span>` : '<span style="color:var(--fg-4);">(ITBMS exento)</span>'}
           ${a.totales.cargos_uni ? ` · <b>Primer pago:</b> <span class="num">$${Number(a.totales.primer_pago || 0).toFixed(2)}</span>` : ''}</p>` : ''}
         ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})
-          <button class="btn btn-ghost" style="padding:2px 9px;font-size:12px;" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
+          <button class="btn btn-ghost cg-act" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
         ${g.anexo_firma_digital ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">
           ✓ Anexo firmado <b>digitalmente</b> por ${this.esc(g.anexo_firma_digital.firmante_nombre || '—')}
           (cédula ${this.esc(g.anexo_firma_digital.firmante_cedula || '—')})</p>` : ''}
         ${g.estado === 'pendiente_firma' && this.puedeCrearGestion() ? `
           <div style="margin-top:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <button class="btn btn-primary" style="padding:4px 12px; font-size:12.5px;"
+            <button class="btn btn-primary cg-act"
               onclick="Centro.enviarFirmaAnexo('${this.esc(g.id)}')">Enviar anexo para firma digital</button>
             ${g.firma_solicitud_estado === 'pendiente' ? '<span style="font-size:12px; color:var(--fg-3);">enlace enviado — esperando la firma del cliente</span>' : ''}
           </div>` : ''}
@@ -1239,7 +1257,7 @@ window.Centro = {
       const esTerm = Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length;
       const cartaHtml = g.carta_path
         ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:0 0 8px;">✓ Carta del cliente adjunta${g.fecha_nota_cliente ? ` (nota del ${this.esc(g.fecha_nota_cliente)})` : ''}
-             <button class="btn btn-ghost" style="padding:2px 9px;font-size:12px;" onclick="Centro.verAnexo('${this.esc(g.carta_path)}')">Ver carta</button></p>`
+             <button class="btn btn-ghost cg-act" onclick="Centro.verAnexo('${this.esc(g.carta_path)}')">Ver carta</button></p>`
         : `<div class="cg-senal warn" style="margin:0 0 8px;">
              <span><b>Falta la carta de solicitud del cliente</b> — la aprobación queda bloqueada hasta adjuntarla.</span>
              ${this.puedeCrearGestion() ? `<label class="btn btn-primary" style="margin-left:auto; padding:3px 11px; font-size:12px; cursor:pointer;">Subir carta
@@ -1326,10 +1344,10 @@ window.Centro = {
                ? 'Aumento esperando aprobación comercial — al aprobar, se imprime el anexo para la firma del cliente.'
                : 'Excepción por servicio al cliente (propio sin garantía) — requiere aprobación de administración.'}</span>
            ${puede ? `<span style="margin-left:auto; display:flex; gap:8px;">
-             <button class="btn btn-primary" style="padding:4px 12px;font-size:12.5px;${sinCarta ? ' opacity:.5; cursor:not-allowed;' : ''}"
+             <button class="btn btn-primary cg-act" style="${sinCarta ? 'opacity:.5; cursor:not-allowed;' : ''}"
                ${sinCarta ? 'disabled title="Falta la carta de solicitud del cliente"' : ''}
                onclick="Centro.${fnAprobar}('${this.esc(g.id)}')">Aprobar</button>
-             <button class="btn btn-ghost" style="padding:4px 10px;font-size:12.5px;" onclick="Centro.anularGestion('${this.esc(g.id)}')">Rechazar</button>
+             <button class="btn-danger cg-act" onclick="Centro.anularGestion('${this.esc(g.id)}')">Rechazar</button>
            </span>` : ''}</div>`;
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento') {
       aprobacion = `<div class="cg-senal info" style="margin:10px 0 0;">
@@ -1337,9 +1355,9 @@ window.Centro = {
              del equipo nuevo), recoge la firma y sube el archivo firmado — recién entonces el sistema
              aplica las líneas y avisa a Bodega.</span>
            ${this.puedeCrearGestion() ? `<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
-             <a class="btn btn-ghost" style="padding:4px 11px;font-size:12.5px;" target="_blank"
+             <a class="btn btn-ghost cg-act" target="_blank"
                 href="./anexo-aumento.html?g=${encodeURIComponent(g.id)}">Imprimir anexo</a>
-             <label class="btn btn-primary" style="padding:4px 12px;font-size:12.5px; cursor:pointer;">Subir firmado
+             <label class="btn btn-primary cg-act" style="cursor:pointer;">Subir firmado
                <input type="file" accept="application/pdf,image/*" style="display:none;"
                  onchange="Centro.subirAnexo('${this.esc(g.id)}', this.files[0])"></label>
            </span>` : ''}</div>`;
@@ -1347,12 +1365,11 @@ window.Centro = {
     const anular = (this.puedeAprobar() || this.rol === ROLES.GERENTE)
       && !['cerrada', 'anulada', 'pendiente_aprobacion'].includes(g.estado)
       && !g.cierre?.entrega
-      ? `<button class="btn btn-ghost" style="padding:4px 10px;font-size:12px;color:var(--fg-4);"
-           onclick="Centro.anularGestion('${this.esc(g.id)}')">Anular gestión</button>`
+      ? `<button class="btn-quiet" onclick="Centro.anularGestion('${this.esc(g.id)}')">Anular gestión</button>`
       : '';
 
     return `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
-      <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:16px;">
+      <div class="cg-exp">
         <div>${cuerpo}${osHtml}</div>
         <div>${check}${aprobacion}</div>
       </div>
@@ -1649,10 +1666,27 @@ window.Centro = {
 
   _abrirModal(html) {
     const m = document.getElementById('cgModal');
-    m.innerHTML = `<div class="cg-modal">${html}</div>`;
+    m.innerHTML = `<div class="cg-modal" role="dialog" aria-modal="true">${html}</div>`;
     m.classList.remove('hidden');
     m.onclick = (e) => { if (e.target === m) this._cerrarModal(); };
     document.addEventListener('keydown', this._escModal);
+    setTimeout(() => m.querySelector('input:not([type=hidden]), select, textarea, button')?.focus(), 60);
+  },
+
+  // Anatomía del kit (header fijo + cuerpo scrolleable + footer fijo) para los
+  // modales largos: el título y las acciones nunca se pierden con el scroll.
+  _abrirModalA({ titulo, cuerpo, footer }) {
+    const m = document.getElementById('cgModal');
+    m.innerHTML = `<div class="cg-modal cg-modal--anatomia" role="dialog" aria-modal="true" aria-labelledby="cgModalT">
+      <div class="cg-modal-hd"><h3 id="cgModalT">${titulo}</h3>
+        <button type="button" class="cg-x" aria-label="Cerrar" onclick="Centro._cerrarModal()">✕</button></div>
+      <div class="cg-modal-bd">${cuerpo}</div>
+      ${footer ? `<div class="cg-modal-ft">${footer}</div>` : ''}
+    </div>`;
+    m.classList.remove('hidden');
+    m.onclick = (e) => { if (e.target === m) this._cerrarModal(); };
+    document.addEventListener('keydown', this._escModal);
+    setTimeout(() => m.querySelector('.cg-modal-bd input:not([type=hidden]), .cg-modal-bd select, .cg-modal-bd textarea, .cg-modal-bd button')?.focus(), 60);
   },
   _cerrarModal() {
     document.getElementById('cgModal')?.classList.add('hidden');
@@ -1710,7 +1744,7 @@ window.Centro = {
         Al enviar, Bodega recibe el aviso; si hay un propio sin garantía, primero pasa por aprobación de administración.</p>
       <div class="cg-twrap" style="max-height:44vh; overflow:auto;"><table class="cg-tabla"><thead><tr>
         <th style="width:34px;"></th><th>Serial</th><th>Modelo</th><th>Contrato</th><th>Elegibilidad</th>
-        </tr></thead><tbody>${filas || '<tr><td colspan="5" class="cg-vacio">El cliente no tiene equipos en campo.</td></tr>'}</tbody></table></div>
+        </tr></thead><tbody>${filas || '<tr><td colspan="5" class="cg-empty">El cliente no tiene equipos en campo.</td></tr>'}</tbody></table></div>
       <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="Centro.crearReemplazo()">Enviar solicitud</button>
@@ -1981,40 +2015,51 @@ window.Centro = {
           <select class="form-select" id="waContrato">
             ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === preselId ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
           </select></div>`;
-    this._abrirModal(`
-      <h3 style="margin:0 0 6px;">Aumento de equipos (enmienda) — ${this.esc(this.cliente.nombre)}</h3>
+    this._abrirModalA({
+      titulo: `Aumento de equipos (enmienda) — ${this.esc(this.cliente.nombre)}`,
+      cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         La enmienda agrega líneas <b>con vigencia propia</b>: el período del equipo
         nuevo corre desde su entrega y vence más tarde que el resto — el anexo lo deja explícito y
         <b>requiere la firma del cliente</b> antes de aplicarse.</p>
       ${nudge}
-      ${destinoHtml}
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">1</span> Destino del anexo</div>
+        ${destinoHtml}
+      </div>
       <div oninput="Centro._aumPreview()">
-      <div class="form-field" style="margin-bottom:10px;">
-        <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
-        <div id="waLineas">${this._lineaModeloHtml('wau', true)}</div>
-        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
-          onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button></div>
-      <div class="form-field" style="margin-bottom:10px;">
-        <label class="form-label">Otros conceptos (cargos del catálogo — únicos o mensuales)</label>
-        <div id="waCargos"></div>
-        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
-          onclick="document.getElementById('waCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button></div>
-      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
-        <div class="form-field" style="margin:0; max-width:180px;">
-          <label class="form-label">Vigencia del tramo (meses)</label>
-          <input class="form-input" type="number" id="waMeses" min="1" value="18"></div>
-        <label class="cg-toggle" style="margin-bottom:2px;">
-          <input type="checkbox" id="waItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._aumPreview()">
-          Aplica ITBMS${this.cliente?.itbms_exento === true ? ' <span style="color:var(--fg-4);">(cliente exento)</span>' : ''}
-        </label>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">2</span> Equipos y conceptos</div>
+        <div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
+          <div id="waLineas">${this._lineaModeloHtml('wau', true)}</div>
+          <button class="btn btn-ghost cg-act"
+            onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button></div>
+        <div class="form-field" style="margin-bottom:4px;">
+          <label class="form-label">Otros conceptos (cargos del catálogo — únicos o mensuales)</label>
+          <div id="waCargos"></div>
+          <button class="btn btn-ghost cg-act"
+            onclick="document.getElementById('waCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button></div>
       </div>
-      <div id="waTot" class="ds-card" style="padding:10px 14px; max-width:380px; margin-bottom:12px;"></div>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">3</span> Vigencia y totales</div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
+          <div class="form-field" style="margin:0; max-width:180px;">
+            <label class="form-label" for="waMeses">Vigencia del tramo (meses)</label>
+            <input class="form-input" type="number" id="waMeses" min="1" value="18"></div>
+          <label class="cg-toggle" style="margin-bottom:2px;">
+            <input type="checkbox" id="waItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._aumPreview()">
+            Aplica ITBMS${this.cliente?.itbms_exento === true ? ' <span style="color:var(--fg-4);">(cliente exento)</span>' : ''}
+          </label>
+        </div>
+        <div id="waTot" class="ds-card" style="padding:10px 14px; max-width:380px;"></div>
       </div>
-      <div style="display:flex; gap:8px; justify-content:flex-end;">
+      </div>`,
+      footer: `
+        <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearAumento()">Enviar a aprobación</button>
-      </div>`);
+        <button class="btn btn-primary" onclick="Centro.crearAumento()">Enviar a aprobación</button>`,
+    });
     this._aumPreview();
   },
 
@@ -2173,9 +2218,10 @@ window.Centro = {
         <span style="color:var(--fg-3);">${this.esc(c.tipo_contrato || '')} · ${this._unidadesActivas(c)} unid.</span>${chip}</label>`;
     }).join('');
 
-    this._abrirModal(`
-      <h3 style="margin:0 0 6px;">${opts.renovarCuenta ? 'Renovar cuenta (consolidación)' : esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}</h3>
-      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
+    this._abrirModalA({
+      titulo: `${opts.renovarCuenta ? 'Renovar cuenta (consolidación)' : esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}`,
+      cuerpo: `
+      <p style="margin:0 0 14px; font-size:13px; color:var(--fg-3); max-width:72ch;">
         El contrato nace <b>pendiente de aprobación</b> con el mismo flujo de siempre (aprobación →
         seriales de bodega → firma → activo).
         ${opts.renovarCuenta && preIds.length > 1 ? `Esta renovación <b>consolida los ${preIds.length} contratos
@@ -2185,80 +2231,87 @@ window.Centro = {
         ${opts.agregar ? `<b>La última línea de equipos está en blanco para la venta nueva</b> — elige el modelo,
         cantidad y precio; bodega asignará los seriales solo de los equipos nuevos.` : ''}</p>
 
-      <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:10px;">
-        <div class="form-field" style="margin:0; max-width:170px;">
-          <label class="form-label">Tipo</label>
-          <select class="form-select" id="wcTipo" onchange="Centro._wcSyncTipo()">
-            ${Object.entries(this.TIPOS_CONTRATO).map(([k, v]) =>
-              `<option value="${k}" ${k === 'ALQ' ? 'selected' : ''}>${v}</option>`).join('')}
-          </select></div>
-        <div class="form-field" style="margin:0; max-width:170px;">
-          <label class="form-label">Acción</label>
-          <select class="form-select" id="wcAccion" onchange="Centro._wcSyncTipo()">
-            <option value="Nuevo" ${!esRenov ? 'selected' : ''}>Nuevo</option>
-            <option value="Renovación" ${esRenov ? 'selected' : ''}>Renovación</option>
-            <option value="Adición">Adición</option>
-            <option value="No Aplica">No Aplica</option>
-          </select></div>
-        <div class="form-field" style="margin:0; max-width:150px;">
-          <label class="form-label">Duración (meses)</label>
-          <input class="form-input" type="number" id="wcMeses" min="1" value="12"></div>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">1</span> Datos del contrato <span class="hint">tipo · acción · duración</span></div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+          <div class="form-field" style="margin:0; max-width:170px;">
+            <label class="form-label" for="wcTipo">Tipo</label>
+            <select class="form-select" id="wcTipo" onchange="Centro._wcSyncTipo()">
+              ${Object.entries(this.TIPOS_CONTRATO).map(([k, v]) =>
+                `<option value="${k}" ${k === 'ALQ' ? 'selected' : ''}>${v}</option>`).join('')}
+            </select></div>
+          <div class="form-field" style="margin:0; max-width:170px;">
+            <label class="form-label" for="wcAccion">Acción</label>
+            <select class="form-select" id="wcAccion" onchange="Centro._wcSyncTipo()">
+              <option value="Nuevo" ${!esRenov ? 'selected' : ''}>Nuevo</option>
+              <option value="Renovación" ${esRenov ? 'selected' : ''}>Renovación</option>
+              <option value="Adición">Adición</option>
+              <option value="No Aplica">No Aplica</option>
+            </select></div>
+          <div class="form-field" style="margin:0; max-width:150px;">
+            <label class="form-label" for="wcMeses">Duración (meses)</label>
+            <input class="form-input" type="number" id="wcMeses" min="1" value="12"></div>
+        </div>
+        <div id="wcRenovBloque" class="${esRenov ? '' : 'hidden'}" style="margin-top:8px;">
+          <label class="cg-toggle">
+            <input type="checkbox" id="wcSinEquipo"> Renovación sin equipo (los radios actuales continúan)
+          </label>
+          <label class="cg-toggle" style="margin-left:8px;">
+            <input type="checkbox" id="wcRefurb"> Refurbished / componentes
+          </label>
+        </div>
       </div>
 
-      <div id="wcRenovBloque" class="${esRenov ? '' : 'hidden'}" style="margin-bottom:10px;">
-        <label class="cg-toggle" style="margin-bottom:8px;">
-          <input type="checkbox" id="wcSinEquipo"> Renovación sin equipo (los radios actuales continúan)
-        </label>
-        <label class="cg-toggle" style="margin-bottom:8px; margin-left:8px;">
-          <input type="checkbox" id="wcRefurb"> Refurbished / componentes
-        </label>
-      </div>
-
-      <div id="wcOrigenBloque" class="${esRenov ? '' : 'hidden'}">
+      <div id="wcOrigenBloque" class="cg-paso ${esRenov ? '' : 'hidden'}">
+        <div class="cg-paso-t"><span class="n">2</span> Contratos que se renuevan
+          <span class="hint">${opts.renovarCuenta ? 'preseleccionados — la consolidación los absorbe todos' : 'el origen define qué equipos transicionan'}</span></div>
         <div class="form-field" style="margin-bottom:10px;">
-          <label class="form-label">Contrato(s) que se renuevan (origen)</label>
           ${origenChks || '<p style="font-size:13px; color:var(--fg-3); margin:0;">El cliente no tiene contratos vigentes en el sistema.</p>'}
           <label style="display:flex; gap:8px; align-items:center; font-size:13px; padding:6px 0 0;">
             <input type="checkbox" id="wcLegacy" ${legacyAuto ? 'checked' : ''} onchange="Centro._wcSyncPlan()" style="width:auto; margin:0;">
             El contrato original es de papel / no está en el sistema</label>
-          <input class="form-input" id="wcLegacyRef" placeholder="Referencia del contrato en papel…"
+          <input class="form-input" id="wcLegacyRef" placeholder="Referencia del contrato en papel…" aria-label="Referencia del contrato en papel"
             value="${legacyAuto ? 'Cuenta sin contrato en sistema — regularización' : ''}"
             style="margin-top:6px; max-width:420px; ${legacyAuto ? '' : 'display:none;'}">
         </div>
-        <div class="form-field" style="margin-bottom:10px;">
+        <div class="form-field" style="margin-bottom:4px;">
           <label class="form-label">Plan de transición de los equipos del origen</label>
           <div id="wcPlan" class="cg-twrap"></div>
         </div>
       </div>
 
       <div oninput="Centro._wcPreview()">
-      <div class="form-field" style="margin-bottom:10px;">
-        <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
-        <div id="wcLineas">${lineas.map(l => this._lineaModeloPre('wcm', true, l)).join('')}</div>
-        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
-          onclick="document.getElementById('wcLineas').insertAdjacentHTML('beforeend', Centro._lineaModeloPre('wcm', true)); Centro._wcPreview()">+ Agregar otro modelo</button></div>
-      <div class="form-field" style="margin-bottom:10px;">
-        <label class="form-label">Otros conceptos (cargos del catálogo — únicos o mensuales)</label>
-        <div id="wcCargos"></div>
-        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12.5px;"
-          onclick="document.getElementById('wcCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button></div>
-      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px;">
-        <label class="cg-toggle" style="margin-bottom:2px;">
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">3</span> Equipos y tarifas
+          <span class="hint">fusionados por modelo — la tarifa vigente manda</span></div>
+        <div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
+          <div id="wcLineas">${lineas.map(l => this._lineaModeloPre('wcm', true, l)).join('')}</div>
+          <button class="btn btn-ghost cg-act"
+            onclick="document.getElementById('wcLineas').insertAdjacentHTML('beforeend', Centro._lineaModeloPre('wcm', true)); Centro._wcPreview()">+ Agregar otro modelo</button></div>
+        <div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label">Otros conceptos (cargos del catálogo — únicos o mensuales)</label>
+          <div id="wcCargos"></div>
+          <button class="btn btn-ghost cg-act"
+            onclick="document.getElementById('wcCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button></div>
+        <label class="cg-toggle">
           <input type="checkbox" id="wcItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._wcPreview()">
           Aplica ITBMS${this.cliente?.itbms_exento === true ? ' <span style="color:var(--fg-4);">(cliente exento)</span>' : ''}
         </label>
-      </div>
-      <div class="form-field" style="margin-bottom:10px;">
-        <label class="form-label">Observaciones</label>
-        <textarea class="form-input" id="wcObs" rows="2" style="resize:vertical;"></textarea></div>
-      <div id="wcTot" class="ds-card" style="padding:10px 14px; max-width:380px; margin-bottom:12px;"></div>
+        <div id="wcTot" class="ds-card" style="padding:10px 14px; max-width:380px; margin-top:10px;"></div>
       </div>
 
-      <div style="display:flex; gap:8px; justify-content:flex-end; align-items:center;">
-        <a href="../contratos/nuevo-contrato.html" style="margin-right:auto; font-size:12px; color:var(--fg-4);">Formulario clásico ›</a>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">4</span> Observaciones <span class="hint">opcional</span></div>
+        <textarea class="form-input" id="wcObs" rows="2" style="resize:vertical;" aria-label="Observaciones"></textarea>
+      </div>
+      </div>`,
+      footer: `
+        <a href="../contratos/nuevo-contrato.html" class="btn-quiet">Formulario clásico ›</a>
+        <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" id="wcGuardar" onclick="Centro.crearContrato()">Guardar contrato</button>
-      </div>`);
+        <button class="btn btn-primary" id="wcGuardar" onclick="Centro.crearContrato()">Guardar contrato</button>`,
+    });
     document.getElementById('wcLegacy')?.addEventListener('change', (e) => {
       const ref = document.getElementById('wcLegacyRef');
       if (ref) ref.style.display = e.target.checked ? '' : 'none';
@@ -2538,12 +2591,13 @@ window.Centro = {
       return !!e.asignacion?.contrato_doc_id;
     });
     const finMes = (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10); })();
-    this._abrirModal(`
-      <h3 style="margin:0 0 6px;">${termCuenta
+    this._abrirModalA({
+      titulo: termCuenta
         ? `Terminación de la cuenta — ${this.esc(this.cliente.nombre)}`
         : termDe
           ? `Terminación total — <span class="cg-mono">${this.esc(contratoTerm?.contrato_id || termDe)}</span>`
-          : `Baja de equipos — ${this.esc(this.cliente.nombre)}`}</h3>
+          : `Baja de equipos — ${this.esc(this.cliente.nombre)}`,
+      cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
         ${termCuenta
           ? `Cancela <b>los ${this._wbTermIds.length} contrato(s) vigente(s)</b> de la cuenta y recupera toda la flota en campo
@@ -2561,7 +2615,7 @@ window.Centro = {
           <td>${this.esc(e.modelo_label || '—')}</td>
           <td class="cg-mono" style="font-size:12px;">${this.esc(e.asignacion?.contrato_id || 'sin contrato')}</td>
           <td style="font-size:12px;">${e.propiedad === 'cliente' ? 'del cliente <span style="color:var(--fg-4);">(no se recupera)</span>' : 'CECOMUNICA'}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="cg-vacio">Sin equipos en campo.</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="5" class="cg-empty">Sin equipos en campo.</td></tr>'}
       </tbody></table></div>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
         <select class="form-select" id="wbMotivo" style="max-width:230px;">
@@ -2598,11 +2652,12 @@ window.Centro = {
       </div>
       <p style="font-size:11.5px; color:var(--fg-4); margin:6px 0 0;">El término de facturación es referencial:
         la facturación aún no corre en la plataforma — queda registrado para cuando corra y no bloquea el cierre.</p>
-      <div id="wbPen" style="margin-top:12px;"></div>
-      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
+      <div id="wbPen" style="margin-top:12px;"></div>`,
+      footer: `
+        <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="Centro.crearBaja()">Enviar a aprobación</button>
-      </div>`);
+        <button class="${termCuenta || termDe ? 'btn-danger cg-act' : 'btn btn-primary'}" onclick="Centro.crearBaja()">Enviar a aprobación</button>`,
+    });
     if (esTerm) this._bajaPreview();
   },
 
