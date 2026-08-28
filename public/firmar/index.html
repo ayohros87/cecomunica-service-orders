@@ -14,6 +14,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
   <script defer src="/js/firebase-init.js?v=ses2"></script>
+  <script defer src="/js/domain/contratoV2Texto.js?v=1"></script>
   <style>
     * { box-sizing: border-box; margin: 0; }
     body { font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1c2733; background: #f2f5f8; padding: 0 0 48px; }
@@ -49,6 +50,15 @@
     .estado { text-align: center; padding: 40px 16px; }
     .estado .icono { font-size: 44px; }
     .hidden { display: none; }
+    /* Contrato completo (texto compartido de contratoV2Texto.js) */
+    details.doc summary { cursor: pointer; font-weight: 600; color: #0B2A47; font-size: 14px; padding: 4px 0; }
+    .docv2 { font-size: 13px; line-height: 1.55; color: #2a3743; margin-top: 10px; }
+    .docv2 h3 { font-size: 13.5px; color: #0B2A47; margin: 12px 0 4px; }
+    .docv2 p, .docv2 li { margin-bottom: 7px; }
+    .docv2 ol.clausulas { padding-left: 0; list-style: none; }
+    .docv2 ul.sub { padding-left: 18px; margin-top: 4px; }
+    .docv2 table { font-size: 12.5px; }
+    .docv2 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
   </style>
 </head>
 <body>
@@ -82,8 +92,15 @@
         <p class="nota" id="fSub"></p>
         <table id="fTabla"></table>
         <div id="fTotales"></div>
-        <p class="nota">Este resumen acompaña al documento del contrato que le entrega su asesor.
-          Al firmar, usted acepta los términos y condiciones del contrato completo.</p>
+        <p class="nota">Al firmar, usted acepta los términos y condiciones del contrato completo,
+          disponible aquí abajo.</p>
+      </div>
+
+      <div class="card">
+        <details class="doc" id="fDocDet">
+          <summary>📄 Leer el contrato completo</summary>
+          <div class="docv2" id="fDocumento"></div>
+        </details>
       </div>
 
       <div class="card">
@@ -193,6 +210,58 @@
       document.getElementById('fCedula').value = s.representante?.cedula || '';
       document.getElementById('fAceptaTxt').textContent = s.declaracion
         || `Declaro que he leído el contrato ${s.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${s.cliente_nombre || 'la empresa'}.`;
+      this.pintarDocumento(s);
+    },
+
+    // El contrato COMPLETO (2026-08-28): secciones 1-4 con los datos del
+    // enlace + cláusulas 5-18 del texto compartido (contratoV2Texto.js).
+    // Los enlaces viejos sin snapshot `documento` muestran las cláusulas
+    // igual, con las partes en genérico.
+    pintarDocumento(s) {
+      const cont = document.getElementById('fDocumento');
+      if (!cont || !window.ContratoV2Texto) return;
+      const r = s.resumen || {};
+      const d = s.documento || {};
+      // Un ANEXO no repite el contrato: muestra sus líneas y remite al marco.
+      if (s.tipo === 'anexo_aumento') {
+        document.querySelector('#fDocDet summary').textContent = '📄 Leer el anexo completo';
+        cont.innerHTML = `
+          <p>Anexo de aumento al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
+            <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>. Las líneas
+            de la tabla de arriba se AGREGAN al contrato marco y forman parte integral de él
+            (cláusula 18 — administración por anexos), con su propio período cuando aplique.</p>
+          <p>En lo no modificado por este anexo, rigen íntegras las condiciones del contrato marco,
+            incluidas garantía (cláusula 8), tarifas y pagos (cláusulas 9–11), valor de reposición
+            (cláusula 15) y terminación y bajas (cláusula 17).</p>`;
+        return;
+      }
+      const durNum = String(r.duracion || '').match(/\d+/)?.[0];
+      const durHtml = `<b>${durNum ? `${durNum} meses` : this.esc(r.duracion || '____ meses')}</b>`;
+      const filas = [...(r.equipos || []).map(l =>
+        `<tr><td>${Number(l.cantidad || 0)}</td><td>${this.esc(l.modelo)}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
+      ...(r.cargos || []).map(x =>
+        `<tr><td>${Number(x.cantidad || 1)}</td><td>${this.esc(x.concepto)} <span style="color:#8a99a8;font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td><td class="num">$${Number(x.monto || 0).toFixed(2)}</td></tr>`)].join('');
+      const anexo = Array.isArray(d.anexo) ? d.anexo : [];
+      cont.innerHTML = `
+        <h3>1. Partes</h3>
+        <p><b>C COMUNICA, S.A.</b> (RUC 32977-27-249966 DV 39), en adelante <b>LA EMPRESA</b>, y
+          <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>${d.cliente_rucdv ? ` (RUC ${this.esc(d.cliente_rucdv)})` : ''},
+          representada por <b>${this.esc(s.representante?.nombre || '____________')}</b>${s.representante?.cedula ? `, cédula ${this.esc(s.representante.cedula)}` : ''},
+          en adelante <b>EL CLIENTE</b>, convienen el presente contrato de servicio de comunicación
+          conforme a las secciones y cláusulas siguientes, que se citan por su número.</p>
+        <h3>2. Equipos y servicio contratado</h3>
+        <table><thead><tr><th>Cant.</th><th>Concepto</th><th class="num">Precio</th></tr></thead><tbody>${filas}</tbody></table>
+        <p>Total mensual: <b>$${Number(r.total_mensual || 0).toFixed(2)}</b>${r.itbms_label ? ` (${this.esc(r.itbms_label)})` : ''}${r.primer_pago && r.primer_pago !== r.total_mensual ? ` · Primer pago: <b>$${Number(r.primer_pago || 0).toFixed(2)}</b>` : ''}</p>
+        ${d.observaciones ? `<p style="color:#5a6b7b;">${this.esc(d.observaciones)}</p>` : ''}
+        <h3>3. Inventario — Anexo A</h3>
+        <p>${ContratoV2Texto.inventarioHtml}</p>
+        ${anexo.length ? `<table><thead><tr><th>#</th><th>Serial</th><th>Modelo</th><th>Propiedad</th></tr></thead><tbody>
+          ${anexo.map((u, i) => `<tr><td>${i + 1}</td><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td><td>${this.esc(u.propiedad)}</td></tr>`).join('')}
+        </tbody></table>` : ''}
+        <h3>4. Vigencia, renovación y anexos</h3>
+        <p>${ContratoV2Texto.vigenciaHtml(durHtml)}</p>
+        <h3>Condiciones generales (cláusulas 5–18)</h3>
+        <ol class="clausulas">${ContratoV2Texto.clausulasHtml}</ol>`;
     },
 
     armarCanvas() {

@@ -90,10 +90,13 @@
     if (c.observaciones) pagoBits.push(esc(c.observaciones));
     $('pPago').innerHTML = pagoBits.join(' · ');
 
-    // ── Sección 4: duración ──
+    // ── Secciones 3 y 4 + cláusulas 5-18: texto legal compartido ──
     const durNum = Number(String(c.duracion || '').match(/\d+/)?.[0] || 0);
-    $('hDuracion').textContent = durNum
-      ? `${NUM_LETRAS[durNum] || durNum} (${durNum}) meses` : (c.duracion || '____ meses');
+    const durHtml = `<b>${durNum
+      ? `${NUM_LETRAS[durNum] || durNum} (${durNum}) meses` : esc(c.duracion || '____ meses')}</b>`;
+    $('txtInventario').innerHTML = ContratoV2Texto.inventarioHtml;
+    $('txtVigencia').innerHTML = ContratoV2Texto.vigenciaHtml(durHtml);
+    $('olClausulas').innerHTML = ContratoV2Texto.clausulasHtml;
 
     // ── Firmas ──
     const nombreFirmaCliente = `${esc(rep)} · ${esc(c.cliente_nombre || '')}`;

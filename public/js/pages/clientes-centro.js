@@ -464,6 +464,13 @@ window.Centro = {
         it('warn', `El contrato ${id} espera la firma del cliente`,
           c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital (o sube el firmado desde Ver)',
           B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true));
+      } else if (c.estado === 'activo') {
+        const reg = this._regPendiente(c);
+        if (reg?.motivo === 'sobrantes' && this.puedeCrearGestion()) {
+          it('warn', `Resolver la regularización parcial de ${id}`,
+            `${reg.sob} equipo(s) en custodia quedaron sin línea en el contrato (${reg.seriales.slice(0, 4).join(', ')}${reg.seriales.length > 4 ? '…' : ''}) — agrégalos por anexo o libéralos de la cuenta`,
+            B('Ver expediente', `Centro.abrirGestion('ct-${this.esc(c.id)}')`) + B('Agregar línea por anexo', `Centro.wizAumento('${this.esc(c.id)}')`, true));
+        }
       }
     }
     // Validaciones de firma fuera de la ventana de trámite.
@@ -595,10 +602,11 @@ window.Centro = {
   },
 
   // Vista previa del contrato en un modal: todo lo esencial sin navegar.
-  verContrato(id) {
+  async verContrato(id) {
     const c = this.contratos.find(x => x.id === id);
     if (!c) return;
     this._cerrarModal();
+    await this._cargarOsContrato(id).catch(() => {});
     const t = (window.ContractTotals?.fromDoc) ? ContractTotals.fromDoc(c) : null;
     const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === id);
     const renovador = this._renovadoPor(c);
@@ -645,8 +653,9 @@ window.Centro = {
       </div>` : ''}
       ${enCampo.length ? `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">
         <b>${enCampo.length}</b> equipo(s) en campo bajo este contrato${serialesCampo ? `: ${serialesCampo}${enCampo.length > 8 ? ` … y ${enCampo.length - 8} más` : ''}` : ''}.</p>` : ''}
-      ${reg?.amarradas ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
-        Regularización al activarse: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · ${reg.sin_cupo} sin cupo` : ''}${reg.sin_linea ? ` · ${reg.sin_linea} sin línea` : ''}.</p>` : ''}
+      ${reg?.amarradas != null ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
+        Regularización: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · <b style="color:var(--warn-deep, #92400E);">${reg.sin_cupo} sin cupo</b>` : ''}${reg.sin_linea ? ` · <b style="color:var(--warn-deep, #92400E);">${reg.sin_linea} sin línea: ${(reg.sin_linea_seriales || []).join(', ')}</b>` : ''}.</p>` : ''}
+      ${this._osCache[id] && !this._osCache[id].loading && this._osCache[id].os.length ? this._osTramiteHtml(c) : ''}
       ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}`,
       footer: `
         <a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Documento completo ›</a>
@@ -694,6 +703,13 @@ window.Centro = {
     try {
       if (!sid) {
         const t = (window.ContractTotals?.fromDoc) ? ContractTotals.fromDoc(c) : {};
+        // Snapshot para que el firmante VEA el contrato completo en /firmar/
+        // (pedido 2026-08-28): la página pública no puede leer contratos ni el
+        // pool, así que el enlace carga su propia copia (partes + Anexo A).
+        const enCampo = await (window.EquiposPoolService?.listarPorContrato
+          ? EquiposPoolService.listarPorContrato(c.id).catch(() => []) : []);
+        const rucdv = (c.cliente_rucdv && String(c.cliente_rucdv).trim())
+          || ((c.cliente_ruc || this.cliente.ruc || '') + (c.cliente_dv || this.cliente.dv ? ` DV ${c.cliente_dv || this.cliente.dv}` : '')).trim();
         const ref = await firebase.firestore().collection('firma_solicitudes').add({
           estado: 'pendiente',
           contrato_doc_id: c.id,
@@ -701,6 +717,14 @@ window.Centro = {
           cliente_id: c.cliente_id || this.cliente.id,
           cliente_nombre: c.cliente_nombre || this.cliente.nombre || '',
           representante: { nombre: c.representante || this.cliente.representante || '', cedula: c.representante_cedula || this.cliente.representante_cedula || '' },
+          documento: {
+            cliente_rucdv: rucdv || '',
+            observaciones: c.observaciones || '',
+            anexo: (enCampo || []).slice(0, 300).map(u => ({
+              serial: u.serial || u.id, modelo: u.modelo_label || '',
+              propiedad: u.propiedad === 'cliente' ? 'Del cliente' : 'C COMUNICA',
+            })),
+          },
           resumen: {
             tipo_contrato: c.tipo_contrato || '', duracion: c.duracion || '',
             equipos: (c.equipos || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0) })),
@@ -1231,12 +1255,25 @@ window.Centro = {
     return (this.contratos || []).filter(c => !c.deleted && (
       c.estado === 'pendiente_aprobacion'
       || (c.estado === 'aprobado' && !c.firmado && (dias(c.fecha_creacion) ?? 999) < 45)
-      // Renovación ACTIVA pero aún sin regularizar (caso C COMUNICA 1,
-      // 2026-08-28): el proceso no terminó — la custodia se amarra al
-      // ENTREGARSE la OS del contrato; hasta entonces sigue siendo trámite
-      // visible con su pipeline en 3/4.
-      || (c.accion === 'Renovación' && c.estado === 'activo' && !c.regularizacion?.at
+      // Renovación ACTIVA pero con la regularización PENDIENTE o PARCIAL
+      // (caso C COMUNICA 2026-08-28: el trigger amarró 2 y dejó 2 sin línea,
+      // y el check se daba por listo con solo regularizacion.at): el trámite
+      // no termina hasta que la conciliación queda EN CERO.
+      || (c.accion === 'Renovación' && c.estado === 'activo' && !!this._regPendiente(c)
           && (dias(c.fecha_creacion) ?? 999) < 45)));
+  },
+  // La regularización solo está completa cuando CORRIÓ y quedó en cero.
+  // Devuelve null si está lista; {motivo:'pendiente'} si aún no corre (la
+  // custodia se amarra al entregarse la OS); {motivo:'sobrantes', seriales}
+  // si corrió pero dejó equipos sin línea o sin cupo en el contrato.
+  _regPendiente(c) {
+    if (c.estado !== 'activo') return null;
+    const r = c.regularizacion;
+    if (!r?.at) return { motivo: 'pendiente' };
+    const sob = Number(r.sin_linea || 0) + Number(r.sin_cupo || 0);
+    if (!sob) return null;
+    return { motivo: 'sobrantes', sob,
+      seriales: [...(r.sin_linea_seriales || []), ...(r.sin_cupo_seriales || [])] };
   },
   // Una renovación EN CURSO apaga todos los botones de "Renovar cuenta"
   // (reclamo 2026-08-28: mil botones de renovación con una ya en trámite).
@@ -1245,18 +1282,23 @@ window.Centro = {
   },
   _tramiteHtml(c) {
     const abierta = this.gSel === 'ct-' + c.id;
+    const reg = this._regPendiente(c);
+    const r = c.regularizacion;
+    const regSub = reg?.motivo === 'sobrantes'
+      ? `${Number(r?.amarradas || 0)} amarrado(s) · ${reg.sob} SIN resolver: ${reg.seriales.slice(0, 4).join(', ')}${reg.seriales.length > 4 ? '…' : ''} — agrégalos por anexo o libéralos`
+      : (r?.at && !reg) ? `${Number(r.amarradas || 0)} radio(s) amarrados — conciliación en cero`
+      : 'la custodia se amarra sola al entregarse la orden de servicio';
     const pasos = [
       ['Aprobación comercial', c.estado !== 'pendiente_aprobacion', 'llega a ventas@cecomunica.com'],
       ['Firma del cliente', !!c.firmado, c.firma_solicitud_estado === 'pendiente' ? 'enlace de firma enviado — esperando' : 'enlace digital, o subir el firmado'],
       ['Activación', c.estado === 'activo', 'automática al validarse la firma'],
-      ['Regularización de la cuenta', !!c.regularizacion?.at, c.regularizacion?.amarradas != null
-        ? `${c.regularizacion.amarradas} radio(s) amarrados${c.regularizacion.sin_cupo ? ` · ${c.regularizacion.sin_cupo} sin cupo` : ''}`
-        : 'la custodia se amarra sola al activarse'],
+      ['Regularización de la cuenta', c.estado === 'activo' && !reg, regSub],
     ];
     const done = pasos.filter(p => p[1]).length;
     const [chipCls, chipTxt] = c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
       : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
-      : c.estado === 'activo' && !c.regularizacion?.at ? ['cg-chip--info', 'Activo — regularización pendiente']
+      : c.estado === 'activo' && reg?.motivo === 'sobrantes' ? ['cg-chip--warn', 'Activo — regularización parcial']
+      : c.estado === 'activo' && reg ? ['cg-chip--info', 'Activo — regularización pendiente']
       : c.estado === 'activo' ? ['cg-chip--ok', 'Activo'] : ['cg-chip--info', 'En trámite'];
     const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
     const esRenov = c.accion === 'Renovación';
@@ -1271,6 +1313,8 @@ window.Centro = {
         ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
       ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
         ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
+      ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
+        ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}')">Agregar línea por anexo</button>` : ''}
       <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`;
     return `
       <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
@@ -1289,10 +1333,68 @@ window.Centro = {
               : `Contrato nuevo pendiente del ciclo aprobación → firma → activo.`}
               <b>Duración:</b> ${this.esc(c.duracion || '—')}</p>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">${acciones}</div>
+            ${this._osTramiteHtml(c)}
           </div>
           <div>${timeline}</div>
         </div>
       </div>` : ''}`;
+  },
+
+  // ── Flujo de las órdenes de servicio del contrato (pedido 2026-08-28: el
+  // vendedor debe VER el equipo avanzar por bodega/taller sin salir de la
+  // ficha). El vínculo vive en ordenes_de_servicio.contrato.contrato_doc_id
+  // (mapa estampado al crear la orden); las fechas del doc son las etapas.
+  _osCache: {},
+  async _cargarOsContrato(cid) {
+    if (this._osCache[cid]) return;
+    this._osCache[cid] = { loading: true };
+    try {
+      const snap = await firebase.firestore().collection('ordenes_de_servicio')
+        .where('contrato.contrato_doc_id', '==', cid).limit(20).get();
+      const os = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .filter(o => o.eliminado !== true)
+        .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      this._osCache[cid] = { os };
+    } catch (e) {
+      console.warn('[centro] órdenes del contrato no legibles:', e?.message || e);
+      this._osCache[cid] = { os: [], error: true };
+    }
+    if (this.gSel === 'ct-' + cid) { this.pintarGestiones(); if (window.lucide?.createIcons) lucide.createIcons(); }
+  },
+  _osPasos(o) {
+    const f = (ts) => { const d = ts?.toDate ? ts.toDate() : (ts ? new Date(ts) : null); return d && !isNaN(d) ? d.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit' }) : null; };
+    return [
+      ['Creada', f(o.fecha_creacion || o.creado_en)],
+      ['Recibida', f(o.fecha_recepcion)],
+      [o.tecnico_asignado ? `Asignada (${o.tecnico_asignado})` : 'Asignada', f(o.fecha_asignacion)],
+      ['Completada', f(o.fecha_completado)],
+      ['Entregada', f(o.fecha_entrega)],
+    ];
+  },
+  _osTramiteHtml(c) {
+    const cch = this._osCache[c.id];
+    if (!cch || cch.loading) {
+      if (!cch) this._cargarOsContrato(c.id);
+      return `<div class="cg-skel" style="height:34px; margin-top:10px;" aria-label="Cargando órdenes…"></div>`;
+    }
+    if (!cch.os.length) return `<p style="font-size:12.5px; color:var(--fg-3); margin:10px 0 0;">
+      Aún sin órdenes de servicio de este contrato — bodega crea la orden al preparar los equipos.</p>`;
+    return `<div style="margin-top:10px;">` + cch.os.map(o => {
+      const pasos = this._osPasos(o);
+      const idxNext = pasos.findIndex(p => !p[1]);
+      const flujo = pasos.map((p, i) => {
+        const ok = !!p[1];
+        const estilo = ok ? '' : (i === idxNext ? 'color:var(--warn-deep, #92400E); font-weight:600;' : 'color:var(--fg-4);');
+        return `<span style="white-space:nowrap; ${estilo}">${ok ? '✓ ' : '○ '}${this.esc(p[0])}${p[1] ? ` <span style="color:var(--fg-4); font-weight:400;">${p[1]}</span>` : ''}</span>`;
+      }).join('<span style="color:var(--fg-4);"> › </span>');
+      const nSer = (o.equipos || []).length;
+      return `<div class="cg-os" style="margin-bottom:6px;">
+        <a href="../ordenes/editar-orden.html?id=${encodeURIComponent(o.id)}">
+          <b>${this.esc(o.tipo_de_servicio || 'ORDEN')}</b>&nbsp;<span class="cg-mono">${this.esc(o.id)}</span></a>
+        <span style="font-size:12px; color:var(--fg-3);">${nSer} equipo(s) · ${this.esc(o.estado_reparacion || '—')}</span>
+        <div style="flex-basis:100%; font-size:12px; margin-top:3px; display:flex; flex-wrap:wrap; gap:2px 4px;">${flujo}</div>
+      </div>`;
+    }).join('') + `</div>`;
   },
 
   pintarGestiones() {
