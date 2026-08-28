@@ -333,6 +333,7 @@ window.Centro = {
 
       this.pintarKpis();
       this.pintarSenales();
+      this.pintarAcciones();
       this.pintarContratos();
       this.pintarEquipos();
       this.pintarGestiones();
@@ -422,6 +423,96 @@ window.Centro = {
       <span class="sub num">${this._fmtFecha(c.fecha_vencimiento)}</span>
       ${pct !== null ? `<div class="bar"><i style="width:${pct}%;background:${color};"></i></div>` : ''}
     </div>`;
+  },
+
+  // Bandeja "REQUIERE TU ACCIÓN" — lo primero de la ficha (pedido 2026-08-28:
+  // al entrar, incluso por el link del correo, lo pendiente de MI acción tiene
+  // que ser lo primero, con el botón exacto y la evidencia al lado).
+  abrirGestion(gid) {
+    this.gSel = gid;
+    this.pintarGestiones();
+    if (window.lucide?.createIcons) lucide.createIcons();
+    setTimeout(() => document.getElementById(`grow-${gid}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+  },
+  pintarAcciones() {
+    const cont = document.getElementById('fAcciones');
+    if (!cont) return;
+    const items = [];
+    const esAprobador = [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol);
+    const it = (tono, t, s, btns) => items.push({ tono, t, s, btns });
+    const B = (label, fn, primario = false) =>
+      `<button class="${primario ? 'btn btn-primary' : 'btn btn-ghost'} cg-act" onclick="${fn}">${label}</button>`;
+
+    // Contratos con trabajo pendiente.
+    const vistos = new Set();
+    for (const c of this._tramitesContrato()) {
+      vistos.add(c.id);
+      const id = `<span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>`;
+      const tipoTxt = c.accion === 'Renovación' ? 'Renovación de cuenta' : 'Contrato nuevo';
+      const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+      if (c.estado === 'pendiente_aprobacion') {
+        if (esAprobador) it('warn', `Aprobar el contrato ${id}`,
+          `${tipoTxt} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes — revisa el detalle antes de aprobar`,
+          B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Aprobar', `Centro.aprobarContrato('${this.esc(c.id)}')`, true));
+        else it('info', `El contrato ${id} espera aprobación de ventas`, tipoTxt,
+          B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`));
+      } else if (c.firmado_pendiente_validacion) {
+        if (esAprobador) it('warn', `Validar al firmante del contrato ${id}`,
+          'Firmó una persona distinta al representante registrado — revisa la cédula, el selfie y la firma',
+          B('Validar firmante…', `Centro.aceptarFirmante('${this.esc(c.id)}')`, true));
+      } else if (c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()) {
+        it('warn', `El contrato ${id} espera la firma del cliente`,
+          c.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital (o sube el firmado desde Ver)',
+          B('Ver contrato', `Centro.verContrato('${this.esc(c.id)}')`) + B('Enviar para firma', `Centro.enviarFirma('${this.esc(c.id)}')`, true));
+      }
+    }
+    // Validaciones de firma fuera de la ventana de trámite.
+    for (const c of (this.contratos || [])) {
+      if (vistos.has(c.id) || !c.firmado_pendiente_validacion || !esAprobador) continue;
+      it('warn', `Validar al firmante del contrato <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>`,
+        'Firmó una persona distinta al representante — revisa la cédula, el selfie y la firma',
+        B('Validar firmante…', `Centro.aceptarFirmante('${this.esc(c.id)}')`, true));
+    }
+
+    // Gestiones con trabajo pendiente.
+    for (const g of (this.gestiones || [])) {
+      const gid = `<span class="cg-mono">${this.esc(g.id)}</span>`;
+      const ver = B('Ver expediente', `Centro.abrirGestion('${this.esc(g.id)}')`);
+      if (g.estado === 'pendiente_aprobacion') {
+        const esBaja = g.tipo === 'baja';
+        const esAum = g.tipo === 'aumento';
+        const puede = (esBaja || esAum) ? this.puedeAprobarBaja() : this.puedeAprobar();
+        const carta = esBaja && g.carta_path ? B('Ver carta', `Centro.verAnexo('${this.esc(g.carta_path)}')`) : '';
+        if (puede) {
+          const sinCarta = esBaja && !g.carta_path;
+          it('warn', `Aprobar ${esBaja ? (g.terminacion_total_de?.length ? 'la TERMINACIÓN de la cuenta' : 'la baja de equipos') : esAum ? 'el aumento (enmienda)' : 'la excepción de garantía'} ${gid}`,
+            sinCarta ? 'FALTA la carta del cliente — la aprobación está bloqueada hasta adjuntarla'
+              : `${(g.items || []).length || (g.aumento?.lineas || []).length} renglón(es) — revisa la evidencia antes de aprobar`,
+            carta + ver + (sinCarta ? '' : B('Revisar y aprobar', `Centro.abrirGestion('${this.esc(g.id)}')`, true)));
+        } else if (esBaja && !g.carta_path && this.puedeCrearGestion()) {
+          it('warn', `La baja ${gid} necesita la carta del cliente`, 'Adjúntala desde el expediente para desbloquear la aprobación', ver);
+        }
+      } else if (g.tipo === 'aumento' && g.estado === 'pendiente_firma' && !g.firma_pendiente_validacion && this.puedeCrearGestion()) {
+        it('warn', `El anexo de aumento ${gid} espera la firma del cliente`,
+          g.firma_solicitud_estado === 'pendiente' ? 'El enlace de firma ya se envió — se puede reenviar' : 'Envíale el enlace de firma digital (o imprime y sube el firmado)',
+          ver + B('Enviar anexo para firma', `Centro.enviarFirmaAnexo('${this.esc(g.id)}')`, true));
+      } else if (g.firma_pendiente_validacion && esAprobador) {
+        it('warn', `Validar al firmante del anexo ${gid}`,
+          'Firmó una persona distinta al representante — revisa la cédula, el selfie y la firma',
+          B('Validar firmante…', `Centro.aceptarFirmanteGestion('${this.esc(g.id)}')`, true));
+      } else if (g.estado === 'pendiente_bodega' && this.puedeAsignar()) {
+        it('info', `Asignar seriales de bodega a ${gid}`,
+          `${GestionesService.tipoLabel(g.tipo)} — elige de los disponibles del modelo`,
+          B('Asignar seriales', `Centro.abrirGestion('${this.esc(g.id)}')`, true));
+      }
+    }
+
+    cont.innerHTML = items.length
+      ? `<p class="cg-accion-hd">Requiere tu acción (${items.length})</p>`
+        + items.map(x => `<div class="cg-accion${x.tono === 'info' ? ' cg-accion--info' : ''}">
+            <span class="t"><b>${x.t}</b><span class="s">${x.s}</span></span>
+            <span class="btns">${x.btns}</span></div>`).join('')
+      : '';
   },
 
   pintarKpis() {
@@ -853,8 +944,13 @@ window.Centro = {
     // los contratos MENORES — sin facturación y sin urgencia (REEMPs de 1 radio,
     // adiciones $0) — se pliegan en su propia línea. La función manda, no el
     // tamaño: un $0 que entra en ventana de vencimiento sube solo.
-    const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c));
-    const historico = this.contratos.filter(c => !operativos.includes(c));
+    // Los contratos EN TRÁMITE (pendiente de aprobación / aprobado sin firmar
+    // reciente) NO van en esta tabla: decir "aprobado" aquí los hacía parecer
+    // contratos andando (reclamo 2026-08-28). Viven en "Requiere tu acción" y
+    // en Gestiones con su pipeline.
+    const tramiteIds = new Set(this._tramitesContrato().map(c => c.id));
+    const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c) && !tramiteIds.has(c.id));
+    const historico = this.contratos.filter(c => !operativos.includes(c) && !tramiteIds.has(c.id));
     const mensualDe = (c) => Number(c.total_mensual ?? c.total_con_itbms ?? 0);
     const esMenor = (c) => mensualDe(c) <= 0 && !this._wcEnVentana(c);
     const principales = operativos.filter(c => !esMenor(c));
@@ -915,6 +1011,8 @@ window.Centro = {
       </tr></thead>`;
     cont.innerHTML = `
       ${cuenta}
+      ${tramiteIds.size ? `<p style="font-size:12px; color:var(--fg-4); margin:0 0 8px;">
+        ${tramiteIds.size} contrato(s) <b>en trámite</b> (aprobación/firma) — atiéndelos arriba en “Requiere tu acción” o en Gestiones.</p>` : ''}
       ${principales.length ? `<table class="cg-tabla">${THEAD}<tbody>${filas}</tbody></table>`
         : operativos.length ? '' : '<div class="cg-empty">Sin contratos operativos.</div>'}
       ${menores.length ? `<details style="margin-top:10px;">
@@ -1094,6 +1192,7 @@ window.Centro = {
 
   async recargarGestiones() {
     this.gestiones = await GestionesService.listarPorCliente(this.cliente.id).catch(() => this.gestiones || []);
+    this.pintarAcciones();
     this.pintarKpis();
     this.pintarSenales();
     this.pintarGestiones();

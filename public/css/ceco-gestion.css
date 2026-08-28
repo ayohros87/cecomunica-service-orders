@@ -165,6 +165,26 @@
 }
 .cg-tabla tbody tr:hover { background: var(--surface-sunken, #F6F9FB); }
 
+/* ── Bandeja "Requiere tu acción" (lo primero de la ficha) ────────
+   Cada fila es UNA cosa que espera al usuario actual, con su botón
+   primario y el acceso a la evidencia (carta, anexo, cédula/selfie)
+   al lado. Nada de adivinar dónde apretar. */
+.cg-accion {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  background: var(--surface-card, #fff);
+  border: 1px solid var(--cg-warn); border-left: 4px solid var(--cg-warn);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 13.5px;
+}
+.cg-accion--info { border-color: var(--accent-line, #BFDBFE); border-left-color: var(--accent, #0074AC); }
+.cg-accion .t { min-width: 0; }
+.cg-accion .t b { display: block; }
+.cg-accion .t .s { color: var(--fg-3); font-size: 12.5px; }
+.cg-accion .btns { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
+.cg-accion-hd {
+  font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase;
+  font-weight: 700; color: var(--cg-warn-deep); margin: 0 0 6px;
+}
+
 /* ── Señal con acción embebida (patrón único) ─────────────────── */
 .cg-senal { align-items: center; }
 .cg-senal .cg-senal-cta { margin-left: auto; flex: none; }
