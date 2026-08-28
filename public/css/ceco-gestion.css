@@ -1,0 +1,152 @@
+/* =============================================================
+   ceco-gestion.css — UI KIT del Centro de Gestión (2026-08-28).
+
+   Consolida en CLASES lo que clientes-centro.js pintaba con ~200
+   estilos inline: una sola familia de chips, una anatomía de
+   modal, una jerarquía de botones de acción, el expediente como
+   componente. Extiende ceco-ui.css (usa sus tokens); no lo pisa.
+
+   Aplicación: cargar DESPUÉS de ceco-ui.css en centro.html y
+   migrar los templates de clientes-centro.js a estas clases.
+   ============================================================= */
+
+/* ── Tokens del módulo (semánticos sobre ceco-ui) ─────────────── */
+:root {
+  --cg-ok:        #1FA56B;  --cg-ok-deep:   #17714B;  --cg-ok-soft:  #E4F5EC;
+  --cg-warn:      #E0A93A;  --cg-warn-deep: #8A6415;  --cg-warn-soft:#FBF3E0;
+  --cg-bad:       #D24545;  --cg-bad-deep:  #A03030;  --cg-bad-soft: #FBE9E9;
+  --cg-info-deep: #0B5E8A;  --cg-info-soft: #E6F4FB;
+}
+
+/* ── Botones de acción del módulo ─────────────────────────────
+   Tamaño único "sm" para acciones de fila/expediente (antes:
+   padding:4px 11px;font-size:12.5px repetido 20+ veces) y la
+   variante danger que faltaba (Rechazar / Anular / Terminación). */
+.cg-act { padding: 4px 12px; font-size: 12.5px; }
+.btn-danger {
+  background: none; border: 1px solid var(--cg-bad);
+  color: var(--cg-bad-deep); border-radius: var(--radius-md, 8px);
+  font-weight: 600; cursor: pointer;
+}
+.btn-danger:hover { background: var(--cg-bad-soft); }
+.btn-quiet { background: none; border: 0; color: var(--fg-4); font-size: 12px;
+  cursor: pointer; text-decoration: underline; padding: 4px 6px; }
+
+/* ── Chips: UNA familia con variantes ─────────────────────────
+   Sustituye la mezcla cg-venc / texto plano de estado de gestión /
+   estilos sueltos. SerialField conserva su familia eqpool-chip
+   (es transversal a toda la app). */
+.cg-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 600; border-radius: 999px;
+  padding: 1px 9px; white-space: nowrap; line-height: 1.6;
+}
+.cg-chip--ok    { background: var(--cg-ok-soft);   color: var(--cg-ok-deep); }
+.cg-chip--warn  { background: var(--cg-warn-soft); color: var(--cg-warn-deep); }
+.cg-chip--bad   { background: var(--cg-bad-soft);  color: var(--cg-bad-deep); }
+.cg-chip--info  { background: var(--cg-info-soft); color: var(--cg-info-deep); }
+.cg-chip--muted { background: var(--surface-sunken, #EEF2F6); color: var(--fg-3); }
+/* Compat: la familia vieja cg-venc (vigente/por_vencer/vencido) sigue viva en
+   centro.html durante la migración; al terminar, se reemplaza por cg-chip--*. */
+
+/* Estado de la gestión → color por etapa del pipeline. */
+.cg-chip--estado-pendiente_aprobacion,
+.cg-chip--estado-pendiente_firma    { background: var(--cg-warn-soft); color: var(--cg-warn-deep); }
+.cg-chip--estado-pendiente_bodega   { background: var(--cg-info-soft); color: var(--cg-info-deep); }
+.cg-chip--estado-en_proceso,
+.cg-chip--estado-en_demo,
+.cg-chip--estado-retorno            { background: var(--cg-info-soft); color: var(--cg-info-deep); }
+.cg-chip--estado-cerrada            { background: var(--cg-ok-soft);   color: var(--cg-ok-deep); }
+.cg-chip--estado-anulada            { background: var(--surface-sunken, #EEF2F6); color: var(--fg-4); text-decoration: line-through; }
+
+/* ── Modal: UNA anatomía ──────────────────────────────────────
+   header fijo (título + cerrar), body scrolleable, footer fijo.
+   Los wizards largos dejan de scrollear el título y los botones. */
+.cg-modal { display: flex; flex-direction: column; max-height: 88vh; }
+.cg-modal-hd {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px 10px; border-bottom: 1px solid var(--border-subtle);
+  flex: none;
+}
+.cg-modal-hd h3 { margin: 0; font-size: 16.5px; min-width: 0; }
+.cg-modal-hd .cg-x {
+  margin-left: auto; border: 0; background: none; cursor: pointer;
+  font-size: 18px; color: var(--fg-4); padding: 4px 8px; border-radius: 8px;
+}
+.cg-modal-hd .cg-x:hover { background: var(--surface-sunken, #EEF2F6); }
+.cg-modal-bd { padding: 14px 18px; overflow-y: auto; flex: 1; min-height: 0; }
+.cg-modal-ft {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 10px 18px 14px; border-top: 1px solid var(--border-subtle);
+  flex: none;
+}
+.cg-modal-ft .sep { margin-left: auto; }
+
+/* ── Secciones numeradas del wizard ───────────────────────────
+   El formulario largo gana estructura sin partirse en pantallas:
+   cada bloque lleva su número + título; el ojo navega. */
+.cg-paso { margin: 0 0 16px; }
+.cg-paso-t {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13.5px; font-weight: 700; color: var(--navy, #0B2A47);
+  margin: 0 0 8px;
+}
+.cg-paso-t .n {
+  width: 20px; height: 20px; border-radius: 50%; flex: none;
+  background: var(--navy, #0B2A47); color: #fff;
+  display: grid; place-items: center; font-size: 11.5px;
+}
+.cg-paso-t .hint { font-weight: 400; color: var(--fg-4); font-size: 12px; }
+
+/* ── Expediente de gestión ────────────────────────────────────
+   Grid responsivo (antes 1.5fr/1fr fijo que rompía en móvil) +
+   checklist como timeline componente. */
+.cg-exp { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr); gap: 16px; }
+@media (max-width: 760px) { .cg-exp { grid-template-columns: 1fr; } }
+
+.cg-tl { margin: 0; }
+.cg-tl-item { display: flex; gap: 9px; align-items: flex-start; margin-bottom: 8px; }
+.cg-tl-dot {
+  width: 18px; height: 18px; border-radius: 6px; flex: none;
+  display: grid; place-items: center; font-size: 12px; margin-top: 1px;
+  border: 1.5px solid var(--border-default);
+  background: var(--surface-card, #fff); color: transparent;
+}
+.cg-tl-item.done .cg-tl-dot { background: var(--cg-ok); border-color: var(--cg-ok); color: #fff; }
+.cg-tl-item.next .cg-tl-dot { border-color: var(--cg-warn); }
+.cg-tl-t { font-size: 13px; }
+.cg-tl-t b { display: block; }
+.cg-tl-t .s { color: var(--fg-3); font-size: 12px; }
+
+.cg-os { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.cg-os a {
+  display: inline-flex; gap: 6px; align-items: center;
+  border: 1px solid var(--border-default); border-radius: 8px;
+  padding: 4px 10px; font-size: 12.5px; text-decoration: none; color: var(--fg-1);
+}
+.cg-os a:hover { border-color: var(--accent); }
+
+/* ── Estados vacíos y carga ───────────────────────────────────── */
+.cg-empty {
+  text-align: center; color: var(--fg-3); font-size: 13px;
+  padding: 22px 14px; border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md, 10px);
+}
+.cg-empty .cta { margin-top: 8px; }
+.cg-skel {
+  border-radius: 8px; background: linear-gradient(90deg,
+    var(--surface-sunken, #EEF2F6) 25%, #fff 50%, var(--surface-sunken, #EEF2F6) 75%);
+  background-size: 200% 100%; animation: cg-skel 1.2s infinite linear;
+}
+@keyframes cg-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .cg-skel { animation: none; } }
+
+/* ── Filas y foco accesible ───────────────────────────────────── */
+.cg-row:focus-visible, .cg-tabla a:focus-visible, .cg-act:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.cg-tabla tbody tr:hover { background: var(--surface-sunken, #F6F9FB); }
+
+/* ── Señal con acción embebida (patrón único) ─────────────────── */
+.cg-senal { align-items: center; }
+.cg-senal .cg-senal-cta { margin-left: auto; flex: none; }
