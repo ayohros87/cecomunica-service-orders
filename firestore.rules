@@ -687,6 +687,44 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+    // Firma digital de contratos (2026-08-28): el doc ES el enlace portador
+    // (id imposible de adivinar). El cliente firma SIN sesión: get abierto
+    // (list cerrado — sin el id no hay nada que leer) y una ÚNICA transición
+    // pública pendiente→firmado que solo toca los campos de la firma. La
+    // validación del firmante (cuando no coincide con el representante) y la
+    // cancelación son de personal autenticado. onFirmaContrato hace el resto
+    // con Admin SDK (activar el contrato, correos, ficha).
+    match /firma_solicitudes/{sid} {
+      allow get:  if true;
+      allow list: if false;
+      allow create: if isSignedIn()
+        && userRole() in ["administrador","gerente","vendedor"]
+        && request.resource.data.estado == "pendiente"
+        && request.resource.data.contrato_doc_id is string;
+      allow update: if
+        // El firmante (público): pendiente → firmado, solo campos de la firma.
+        (resource.data.estado == "pendiente"
+          && request.resource.data.estado == "firmado"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado","firma"])
+          && request.resource.data.firma.acepta == true
+          && request.resource.data.firma.nombre is string
+          && request.resource.data.firma.nombre.size() > 2
+          && request.resource.data.firma.cedula is string
+          && request.resource.data.firma.png is string
+          && request.resource.data.firma.png.size() < 900000)
+        // Ventas valida un firmante distinto al registrado: validacion → aceptado.
+        || (isSignedIn() && userRole() in ["administrador","gerente"]
+          && resource.data.estado == "validacion"
+          && request.resource.data.estado == "aceptado"
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(["estado","validado_por_uid","validado_at","actualizar_ficha"]))
+        // Cancelar un enlace pendiente (se generó por error / venció el trato).
+        || (isSignedIn() && userRole() in ["administrador","gerente","vendedor"]
+          && resource.data.estado == "pendiente"
+          && request.resource.data.estado == "cancelado"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado"]));
+      allow delete: if isAdmin();
+    }
     // empresa/config guarda parámetros sensibles: umbrales de auto-envío de
     // cotizaciones (descuento_max_pct, total_max), seriales_editores_extra
     // (allowlist que salta el candado de seriales) e itbms_rate (tasa fiscal).

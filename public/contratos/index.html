@@ -149,7 +149,10 @@
     <!-- Upload status banner (shown when uploading a signed PDF) -->
     <!-- Solo PDF: storage.rules exige application/pdf en contratos_firmados/,
          así que ofrecer imágenes solo producía un fallo de reglas tras subir. -->
-    <input type="file" id="fileFirmado" accept="application/pdf" style="display:none">
+    <!-- Acepta el PDF firmado O las FOTOS del contrato firmado (2026-08-28:
+         la mayoría de los clientes devuelven fotos por WhatsApp — se arma un
+         solo PDF automáticamente con jsPDF). -->
+    <input type="file" id="fileFirmado" accept="application/pdf,image/*" multiple style="display:none">
     <div id="uploadStatus" class="alert-banner">
       <span class="alert-banner-icon"><i data-lucide="upload"></i></span>
       <div class="alert-banner-body">

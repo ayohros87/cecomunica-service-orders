@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Firma de contrato — C Comunica</title>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <!-- Página PÚBLICA (2026-08-28): el cliente firma su contrato desde el
+       celular con un enlace portador (?s=). Sin sesión — las rules de
+       firma_solicitudes permiten get por id y una única transición
+       pendiente→firmado con los campos de la firma. onFirmaContrato hace el
+       resto (validar firmante, activar, correos). -->
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="/js/firebase-init.js?v=ses2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body { font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1c2733; background: #f2f5f8; padding: 0 0 48px; }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 16px; }
+    .cab { display: flex; gap: 12px; align-items: center; padding: 14px 16px; background: #fff; border-bottom: 3px solid #0B2A47; }
+    .cab img { height: 40px; }
+    .cab h1 { font-size: 16px; color: #0B2A47; }
+    .cab .sub { font-size: 11px; color: #5a6b7b; }
+    .card { background: #fff; border: 1px solid #dde5ec; border-radius: 12px; padding: 16px; margin-top: 14px; }
+    h2 { font-size: 17px; color: #0B2A47; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; margin: 8px 0; }
+    th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #5a6b7b; padding: 6px 8px; border-bottom: 2px solid #e5ebf1; }
+    td { padding: 7px 8px; border-bottom: 1px solid #eef2f6; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .tot { display: flex; justify-content: space-between; font-size: 14.5px; padding: 4px 0; }
+    .tot b { font-size: 16px; }
+    label { display: block; font-size: 12.5px; font-weight: 600; color: #40525f; margin: 12px 0 4px; }
+    input[type=text] { width: 100%; padding: 10px 12px; border: 1px solid #c8d4de; border-radius: 8px; font-size: 15px; }
+    .nota { font-size: 12.5px; color: #5a6b7b; margin-top: 6px; }
+    .aviso { background: #FBF3E0; border: 1px solid #E0A93A; color: #8A6415; border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-top: 10px; }
+    .chk { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-size: 13.5px; }
+    .chk input { width: 20px; height: 20px; margin-top: 1px; flex: none; }
+    #firmaCanvas { width: 100%; height: 180px; border: 2px dashed #c8d4de; border-radius: 10px; background: #fff; touch-action: none; display: block; }
+    .canvas-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+    button { font: 600 15px inherit; border: 0; border-radius: 10px; cursor: pointer; padding: 12px 18px; }
+    .btn-p { background: #0B2A47; color: #fff; width: 100%; margin-top: 16px; }
+    .btn-p:disabled { background: #9fb0bf; }
+    .btn-g { background: none; color: #5a6b7b; padding: 6px 10px; font-size: 13px; text-decoration: underline; }
+    .estado { text-align: center; padding: 40px 16px; }
+    .estado .icono { font-size: 44px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="cab">
+    <img src="/brand/logo-lockup-horizontal.svg" alt="C Comunica">
+    <div>
+      <h1>C COMUNICA, S.A.</h1>
+      <div class="sub">RUC 32977-27-249966 DV 39 · Panamá · ventas@cecomunica.com · +507 279-5570</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="cargando" class="estado"><div class="icono">⏳</div><p>Cargando…</p></div>
+
+    <div id="noValido" class="estado hidden">
+      <div class="icono">🔒</div>
+      <h2>Enlace no válido</h2>
+      <p class="nota">Este enlace de firma no existe o fue cancelado. Contacte a su asesor de C Comunica.</p>
+    </div>
+
+    <div id="yaFirmado" class="estado hidden">
+      <div class="icono">✅</div>
+      <h2>Firma registrada</h2>
+      <p style="margin-top:8px;">El contrato <b id="yfContrato"></b> ya fue firmado.
+        C Comunica le confirmará la activación del servicio.</p>
+    </div>
+
+    <div id="form" class="hidden">
+      <div class="card">
+        <h2 id="fTitulo">Contrato</h2>
+        <p class="nota" id="fSub"></p>
+        <table id="fTabla"></table>
+        <div id="fTotales"></div>
+        <p class="nota">Este resumen acompaña al documento del contrato que le entrega su asesor.
+          Al firmar, usted acepta los términos y condiciones del contrato completo.</p>
+      </div>
+
+      <div class="card">
+        <h2>¿Quién firma?</h2>
+        <p class="nota">Debe firmar el <b>representante legal</b> de la empresa. Si firma otra persona
+          autorizada, corrija el nombre y la cédula: la firma queda registrada y C Comunica validará
+          al firmante antes de activar.</p>
+        <label for="fNombre">Nombre completo</label>
+        <input type="text" id="fNombre" autocomplete="name">
+        <label for="fCedula">Cédula / pasaporte</label>
+        <input type="text" id="fCedula">
+        <label for="fCargo">Cargo</label>
+        <input type="text" id="fCargo" value="Representante Legal">
+      </div>
+
+      <div class="card">
+        <h2>Firma</h2>
+        <p class="nota">Dibuje su firma con el dedo (o el mouse):</p>
+        <canvas id="firmaCanvas"></canvas>
+        <div class="canvas-bar">
+          <span class="nota" id="fcHint">— firme dentro del recuadro —</span>
+          <button type="button" class="btn-g" onclick="Firma.limpiar()">Borrar y repetir</button>
+        </div>
+        <div class="chk">
+          <input type="checkbox" id="fAcepta">
+          <span id="fAceptaTxt">Declaro que he leído el contrato y acepto sus términos y condiciones.</span>
+        </div>
+        <div class="aviso">Su firma, nombre, cédula, fecha y dispositivo quedan registrados como
+          constancia de aceptación (firma electrónica, Ley 51 de 2008).</div>
+        <button type="button" class="btn-p" id="btnFirmar" onclick="Firma.enviar()">Firmar el contrato</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  window.Firma = {
+    sid: null, doc: null, trazos: 0, _dib: false, _ctx: null,
+
+    esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); },
+    ver(id) {
+      ['cargando', 'noValido', 'yaFirmado', 'form'].forEach(x =>
+        document.getElementById(x).classList.toggle('hidden', x !== id));
+    },
+
+    async init() {
+      this.sid = new URLSearchParams(location.search).get('s');
+      if (!this.sid) { this.ver('noValido'); return; }
+      try {
+        const snap = await firebase.firestore().collection('firma_solicitudes').doc(this.sid).get();
+        if (!snap.exists) { this.ver('noValido'); return; }
+        const s = snap.data();
+        this.doc = s;
+        if (s.estado === 'cancelado') { this.ver('noValido'); return; }
+        if (s.estado !== 'pendiente') {
+          document.getElementById('yfContrato').textContent = s.contrato_id || '';
+          this.ver('yaFirmado'); return;
+        }
+        this.pintar(s);
+        this.ver('form');
+        this.armarCanvas();
+      } catch (e) { console.error(e); this.ver('noValido'); }
+    },
+
+    pintar(s) {
+      const r = s.resumen || {};
+      document.getElementById('fTitulo').textContent = `Contrato ${s.contrato_id || ''}`;
+      document.getElementById('fSub').textContent =
+        `${s.cliente_nombre || ''} · ${r.tipo_contrato || ''} · ${r.duracion || ''}`;
+      const filas = [...(r.equipos || []).map(l =>
+        `<tr><td>${this.esc(l.modelo)}</td><td class="num">${Number(l.cantidad || 0)}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
+      ...(r.cargos || []).map(x =>
+        `<tr><td>${this.esc(x.concepto)} <span style="color:#8a99a8;font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td><td class="num">${Number(x.cantidad || 1)}</td><td class="num">$${Number(x.monto || 0).toFixed(2)}</td></tr>`)].join('');
+      document.getElementById('fTabla').innerHTML =
+        `<thead><tr><th>Detalle</th><th class="num">Cant.</th><th class="num">Precio</th></tr></thead><tbody>${filas}</tbody>`;
+      document.getElementById('fTotales').innerHTML =
+        `<div class="tot"><span>${this.esc(r.itbms_label || '')}</span><b>Mensual: $${Number(r.total_mensual || 0).toFixed(2)}</b></div>`
+        + (r.primer_pago && r.primer_pago !== r.total_mensual
+          ? `<div class="tot"><span></span><span>Primer pago: <b>$${Number(r.primer_pago || 0).toFixed(2)}</b></span></div>` : '');
+      document.getElementById('fNombre').value = s.representante?.nombre || '';
+      document.getElementById('fCedula').value = s.representante?.cedula || '';
+      document.getElementById('fAceptaTxt').textContent =
+        `Declaro que he leído el contrato ${s.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${s.cliente_nombre || 'la empresa'}.`;
+    },
+
+    armarCanvas() {
+      const cv = document.getElementById('firmaCanvas');
+      const escala = window.devicePixelRatio || 1;
+      cv.width = cv.offsetWidth * escala;
+      cv.height = cv.offsetHeight * escala;
+      const ctx = cv.getContext('2d');
+      ctx.scale(escala, escala);
+      ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#12233a';
+      this._ctx = ctx;
+      const pos = (e) => {
+        const r = cv.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+      };
+      cv.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); cv.setPointerCapture(e.pointerId);
+        this._dib = true; const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y);
+      });
+      cv.addEventListener('pointermove', (e) => {
+        if (!this._dib) return; e.preventDefault();
+        const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); this.trazos++;
+        document.getElementById('fcHint').textContent = '';
+      });
+      const fin = () => { this._dib = false; };
+      cv.addEventListener('pointerup', fin);
+      cv.addEventListener('pointercancel', fin);
+    },
+
+    limpiar() {
+      const cv = document.getElementById('firmaCanvas');
+      this._ctx.clearRect(0, 0, cv.width, cv.height);
+      this.trazos = 0;
+      document.getElementById('fcHint').textContent = '— firme dentro del recuadro —';
+    },
+
+    async enviar() {
+      const nombre = document.getElementById('fNombre').value.trim();
+      const cedula = document.getElementById('fCedula').value.trim();
+      const cargo  = document.getElementById('fCargo').value.trim();
+      if (nombre.length < 3) { alert('Escriba el nombre completo de quien firma.'); return; }
+      if (!cedula) { alert('Escriba la cédula o pasaporte de quien firma.'); return; }
+      if (this.trazos < 8) { alert('Dibuje su firma en el recuadro.'); return; }
+      if (!document.getElementById('fAcepta').checked) { alert('Debe aceptar los términos del contrato.'); return; }
+      const btn = document.getElementById('btnFirmar');
+      btn.disabled = true; btn.textContent = 'Registrando la firma…';
+      try {
+        const png = document.getElementById('firmaCanvas').toDataURL('image/png');
+        await firebase.firestore().collection('firma_solicitudes').doc(this.sid).update({
+          estado: 'firmado',
+          firma: {
+            nombre, cedula, cargo,
+            png,
+            acepta: true,
+            user_agent: navigator.userAgent || '',
+            firmado_at: firebase.firestore.FieldValue.serverTimestamp(),
+          },
+        });
+        document.getElementById('yfContrato').textContent = this.doc.contrato_id || '';
+        this.ver('yaFirmado');
+        window.scrollTo(0, 0);
+      } catch (e) {
+        console.error(e);
+        btn.disabled = false; btn.textContent = 'Firmar el contrato';
+        alert('No se pudo registrar la firma. Intente de nuevo o contacte a su asesor.');
+      }
+    },
+  };
+  window.addEventListener('DOMContentLoaded', () => Firma.init());
+  </script>
+</body>
+</html>

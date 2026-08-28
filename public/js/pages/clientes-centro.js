@@ -518,7 +518,10 @@ window.Centro = {
         ${dato('Origen', (c.contrato_origen_refs || []).map(r => `<span class="cg-mono">${this.esc(r)}</span>`).join(', ')
           || (c.origen_legacy_ref ? `papel: ${this.esc(c.origen_legacy_ref)}` : ''))}
         ${dato('Renovado por', renovador ? `<span class="cg-mono">${this.esc(renovador.contrato_id || renovador.id)}</span>` : '')}
-        ${dato('Firmado', c.firmado ? 'sí ✓' : '')}
+        ${dato('Firmado', c.firmado ? (c.firmado_tipo === 'digital' ? 'sí ✓ (firma digital)' : 'sí ✓') : '')}
+        ${dato('Firma digital', c.firmado_pendiente_validacion
+          ? '<span class="cg-venc por_vencer">recibida — validar firmante</span>'
+          : (!c.firmado && c.firma_solicitud_estado === 'pendiente' ? 'enlace enviado — esperando firma' : ''))}
       </div>
       ${lineas || cargos ? `<div class="cg-twrap" style="max-height:30vh; overflow:auto;">
         <table class="cg-tabla"><thead><tr><th>Línea</th><th style="text-align:right;">Cant.</th>
@@ -534,10 +537,150 @@ window.Centro = {
       ${reg?.amarradas ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
         Regularización al activarse: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · ${reg.sin_cupo} sin cupo` : ''}${reg.sin_linea ? ` · ${reg.sin_linea} sin línea` : ''}.</p>` : ''}
       ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}
-      <div style="display:flex; gap:8px; align-items:center; margin-top:14px;">
+      <div style="display:flex; gap:8px; align-items:center; margin-top:14px; flex-wrap:wrap;">
         <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" style="font-size:12.5px;">Abrir la página completa del contrato ›</a>
-        <button class="btn btn-ghost" style="margin-left:auto;" onclick="Centro._cerrarModal()">Cerrar</button>
+        <span style="margin-left:auto;"></span>
+        ${c.firmado_pendiente_validacion && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
+          ? `<button class="btn btn-primary" onclick="Centro.aceptarFirmante('${this.esc(c.id)}')">Aceptar firmante…</button>` : ''}
+        ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
+          ? `<button class="btn btn-primary" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
       </div>`);
+  },
+
+  /* ═════════ Firma digital del contrato (2026-08-28) ═════════ */
+
+  // Genera (o reusa) el enlace portador de firma y lo muestra: copiar para
+  // WhatsApp o enviar por correo. El enlace se puede REENVIAR — quien debe
+  // firmar es el representante legal, pero puede llegarle por el contacto.
+  async enviarFirma(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c || c.estado !== 'aprobado') { Toast.show('Solo contratos APROBADOS se envían a firma', 'warn'); return; }
+    this._cerrarModal();
+    let sid = (c.firma_solicitud_id && c.firma_solicitud_estado === 'pendiente') ? c.firma_solicitud_id : null;
+    try {
+      if (!sid) {
+        const t = (window.ContractTotals?.fromDoc) ? ContractTotals.fromDoc(c) : {};
+        const ref = await firebase.firestore().collection('firma_solicitudes').add({
+          estado: 'pendiente',
+          contrato_doc_id: c.id,
+          contrato_id: c.contrato_id || c.id,
+          cliente_id: c.cliente_id || this.cliente.id,
+          cliente_nombre: c.cliente_nombre || this.cliente.nombre || '',
+          representante: { nombre: c.representante || this.cliente.representante || '', cedula: c.representante_cedula || this.cliente.representante_cedula || '' },
+          resumen: {
+            tipo_contrato: c.tipo_contrato || '', duracion: c.duracion || '',
+            equipos: (c.equipos || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0) })),
+            cargos: (c.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente })),
+            total_mensual: Number(t.totalMensual || c.total_mensual || 0),
+            primer_pago: Number(t.primerPago || c.primer_pago || 0),
+            itbms_label: t.itbmsLabel || '',
+          },
+          creado_por_uid: this.uid,
+          created_at: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        sid = ref.id;
+        await ContratosService.updateContrato(c.id, { firma_solicitud_id: sid, firma_solicitud_estado: 'pendiente' });
+        c.firma_solicitud_id = sid; c.firma_solicitud_estado = 'pendiente';
+      }
+      const url = `${location.origin}/firmar/?s=${sid}`;
+      const rep = c.representante || this.cliente.representante || '—';
+      this._abrirModal(`
+        <h3 style="margin:0 0 6px;">Enviar para firma — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></h3>
+        <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3); max-width:66ch;">
+          El cliente abre este enlace en su celular, revisa el resumen y <b>firma con el dedo</b>.
+          Debe firmarlo <b>${this.esc(rep)}</b> (representante legal) — el enlace se puede <b>reenviar</b>
+          por WhatsApp si te lo recibe otro contacto. Si firma otra persona, la firma queda registrada
+          y ventas valida al firmante antes de activar. Al coincidir, el contrato se <b>activa solo</b>.</p>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+          <input class="form-input" id="wfLink" value="${this.esc(url)}" readonly style="flex:1; font-size:12.5px;">
+          <button class="btn btn-primary" onclick="navigator.clipboard.writeText(document.getElementById('wfLink').value).then(()=>Toast.show('Enlace copiado — pégalo en WhatsApp','ok'))">Copiar</button>
+        </div>
+        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+          <div class="form-field" style="margin:0; flex:1; min-width:220px;">
+            <label class="form-label">Enviar por correo a</label>
+            <input class="form-input" id="wfEmail" type="email" value="${this.esc(this.cliente.representante_email || this.cliente.email || '')}" placeholder="correo del cliente"></div>
+          <button class="btn btn-ghost" onclick="Centro._enviarFirmaCorreo('${this.esc(c.id)}','${this.esc(sid)}')">Enviar correo</button>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+          <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>
+        </div>`);
+    } catch (e) { console.error(e); Toast.show('No se pudo generar el enlace de firma', 'bad'); }
+  },
+
+  async _enviarFirmaCorreo(contratoDocId, sid) {
+    const email = (document.getElementById('wfEmail')?.value || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { Toast.show('Escribe un correo válido', 'warn'); return; }
+    const c = this.contratos.find(x => x.id === contratoDocId);
+    const url = `${location.origin}/firmar/?s=${sid}`;
+    try {
+      await MailService.enqueue({
+        to: email,
+        cc: firebase.auth().currentUser?.email || null,
+        subject: `Contrato ${c?.contrato_id || ''} listo para su firma — C Comunica`,
+        preheader: 'Firme su contrato desde el celular en un minuto',
+        bodyContent: `
+          <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">Su contrato está listo para firma</h2>
+          <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+            Estimado cliente: el contrato <b>${FMT.esc(c?.contrato_id || '')}</b> de
+            <b>${FMT.esc(c?.cliente_nombre || '')}</b> está listo. Ábralo con el botón, revise el resumen
+            y firme con el dedo desde su celular. Debe firmarlo el <b>representante legal</b>
+            (${FMT.esc(c?.representante || '—')}); si lo recibe otra persona, puede reenviarle este correo.</p>`,
+        ctaUrl: url,
+        ctaLabel: 'Revisar y firmar el contrato',
+        meta: { created_at: firebase.firestore.FieldValue.serverTimestamp(), created_by: this.uid, source: 'firma-contrato', firma_solicitud: sid },
+        status: 'queued',
+      });
+      Toast.show(`Enlace de firma enviado a ${email}`, 'ok');
+    } catch (e) { console.error(e); Toast.show('No se pudo enviar el correo', 'bad'); }
+  },
+
+  // Ventas acepta a un firmante distinto del representante registrado.
+  async aceptarFirmante(id) {
+    const c = this.contratos.find(x => x.id === id);
+    const sid = c?.firma_solicitud_id;
+    if (!sid) { Toast.show('El contrato no tiene solicitud de firma vinculada', 'warn'); return; }
+    this._cerrarModal();
+    try {
+      const snap = await firebase.firestore().collection('firma_solicitudes').doc(sid).get();
+      const s = snap.exists ? snap.data() : null;
+      if (!s || s.estado !== 'validacion') { Toast.show('La solicitud no está pendiente de validación', 'warn'); return; }
+      const f = s.firma || {};
+      this._abrirModal(`
+        <h3 style="margin:0 0 6px;">Validar firmante — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></h3>
+        <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:66ch;">
+          La firma quedó registrada con su rastro completo, pero el firmante no coincide con el
+          representante legal registrado. Al aceptar, el contrato se <b>activa</b>.</p>
+        <table class="cg-tabla" style="margin-bottom:10px;"><thead><tr><th></th><th>Registrado</th><th>Firmó</th></tr></thead><tbody>
+          <tr><td>Nombre</td><td>${this.esc(s.representante?.nombre || '—')}</td><td><b>${this.esc(f.nombre || '—')}</b></td></tr>
+          <tr><td>Cédula</td><td class="cg-mono">${this.esc(s.representante?.cedula || '—')}</td><td class="cg-mono"><b>${this.esc(f.cedula || '—')}</b></td></tr>
+          <tr><td>Cargo</td><td>representante legal</td><td>${this.esc(f.cargo || '—')}</td></tr>
+        </tbody></table>
+        ${f.png ? `<div style="border:1px solid var(--border-subtle); border-radius:10px; padding:6px; margin-bottom:10px; background:#fff;">
+          <img src="${f.png}" alt="firma" style="max-height:110px; display:block; margin:0 auto;"></div>` : ''}
+        <label class="cg-toggle" style="margin-bottom:12px;">
+          <input type="checkbox" id="wfActualizar" checked>
+          Actualizar la ficha del cliente con este representante (el directorio se corrige solo)
+        </label>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="Centro._aceptarFirmanteConfirmar('${this.esc(sid)}')">Aceptar firmante y activar</button>
+        </div>`);
+    } catch (e) { console.error(e); Toast.show('No se pudo cargar la solicitud de firma', 'bad'); }
+  },
+
+  async _aceptarFirmanteConfirmar(sid) {
+    try {
+      await firebase.firestore().collection('firma_solicitudes').doc(sid).update({
+        estado: 'aceptado',
+        validado_por_uid: this.uid,
+        validado_at: firebase.firestore.Timestamp.now(),
+        actualizar_ficha: document.getElementById('wfActualizar')?.checked === true,
+      });
+      this._cerrarModal();
+      Toast.show('Firmante aceptado — el contrato se activa en segundos', 'ok');
+      setTimeout(() => this.abrir(this.cliente.id, { push: false }), 1800);
+    } catch (e) { console.error(e); Toast.show('No se pudo aceptar al firmante', 'bad'); }
   },
 
   pintarContratos() {

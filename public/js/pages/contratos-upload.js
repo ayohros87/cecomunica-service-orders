@@ -91,17 +91,70 @@ window.ContratosFirmado = {
     this._previo = null;
   },
 
-  async _handleFile(e) {
-    const file = e.target.files[0];
-    if (!file || !this._contratoId) { this._limpiar(e.target); return; }
+  // Carga jsPDF bajo demanda (vendored) — solo cuando llegan FOTOS.
+  _cargarJsPDF() {
+    if (window.jspdf?.jsPDF) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = '/js/vendor/jspdf.umd.min.js';
+      s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar jsPDF'));
+      document.head.appendChild(s);
+    });
+  },
 
-    // storage.rules exige application/pdf en contratos_firmados/: sin este
-    // guard una foto del contrato fallaba con un error críptico de reglas
-    // después de subir.
-    const esPdf = file.type === 'application/pdf'
-      || (file.name.split('.').pop() || '').toLowerCase() === 'pdf';
-    if (!esPdf) {
-      Toast.show('El contrato firmado debe ser un PDF.', 'bad', 6000);
+  // Fotos del contrato firmado → UN solo PDF (una foto por página A4, ajustada
+  // sin recortar). Es el flujo real de 2026: el cliente firma y devuelve fotos
+  // por WhatsApp — antes había que convertirlas a mano fuera de la app.
+  async _fotosAPdf(files) {
+    await this._cargarJsPDF();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const W = 210, H = 297, M = 8;
+    for (let i = 0; i < files.length; i++) {
+      const dataUrl = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result); r.onerror = rej;
+        r.readAsDataURL(files[i]);
+      });
+      const img = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im); im.onerror = () => rej(new Error(`No se pudo leer la imagen ${files[i].name}`));
+        im.src = dataUrl;
+      });
+      const esc = Math.min((W - 2 * M) / img.width, (H - 2 * M) / img.height);
+      const w = img.width * esc, h = img.height * esc;
+      if (i > 0) doc.addPage();
+      const fmt = /png$/i.test(files[i].type) ? 'PNG' : 'JPEG';
+      doc.addImage(dataUrl, fmt, (W - w) / 2, (H - h) / 2, w, h);
+    }
+    return doc.output('blob');
+  },
+
+  async _handleFile(e) {
+    const files = [...(e.target.files || [])];
+    if (!files.length || !this._contratoId) { this._limpiar(e.target); return; }
+
+    // storage.rules exige application/pdf en contratos_firmados/: un PDF pasa
+    // directo; las FOTOS se convierten aquí a un solo PDF (orden = orden de
+    // selección). Mezclar PDF con fotos no tiene un orden obvio: se rechaza.
+    const esPdf = (f) => f.type === 'application/pdf' || (f.name.split('.').pop() || '').toLowerCase() === 'pdf';
+    const esImg = (f) => /^image\//.test(f.type);
+    let file;
+    if (files.length === 1 && esPdf(files[0])) {
+      file = files[0];
+    } else if (files.every(esImg)) {
+      Toast.show(`Armando un PDF con ${files.length} foto(s)…`, 'ok');
+      try {
+        const blob = await this._fotosAPdf(files);
+        file = new File([blob], `firmado_${files.length}fotos.pdf`, { type: 'application/pdf' });
+      } catch (err) {
+        console.error(err);
+        Toast.show('No se pudo armar el PDF con las fotos: ' + (err?.message || err), 'bad', 7000);
+        this._limpiar(e.target);
+        return;
+      }
+    } else {
+      Toast.show('Sube UN PDF, o solo fotos (varias a la vez) — no mezclados.', 'bad', 7000);
       this._limpiar(e.target);
       return;
     }

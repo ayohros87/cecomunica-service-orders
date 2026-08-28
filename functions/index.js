@@ -37,6 +37,9 @@ exports.onEntregaPool                 = require("./src/triggers/contratos/onEntr
 // Ola 7: al activarse una RENOVACIÓN, la custodia del cliente se amarra sola
 // al contrato nuevo (regularización automática de la cuenta)
 exports.onRenovacionActivada          = require("./src/triggers/contratos/onRenovacionActivada");
+// Firma digital de contratos: procesa la firma del cliente (enlace portador),
+// valida al firmante contra el representante y activa el contrato
+exports.onFirmaContrato               = require("./src/triggers/firmas/onFirmaContrato");
 exports.onOrdenWritePool              = require("./src/triggers/ordenes/onOrdenWritePool");
 // Check-in de órdenes de DEVOLUCIÓN: aplica cada resolución al pool y crea la
 // ENTRADA de inspección al cerrar (recibido→cuarentena, nunca_salio→bodega)
