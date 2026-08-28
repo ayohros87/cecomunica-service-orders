@@ -970,6 +970,68 @@ window.Centro = {
       </div>
       ${abierta ? this._detalleGestion(g) : ''}`;
     }).join('');
+    this._decorarAsignacion();
+  },
+
+  // Inputs de asignación de bodega al nivel del resto del sistema (pedido
+  // 2026-08-28: "tiene que venir de un serial existente, mira los otros
+  // contratos"): cada input se decora con SerialField (chips de estado del
+  // pool, descartados, conflictos, modelo distinto — el MISMO componente de
+  // contratos/seriales y órdenes) y gana un datalist con los seriales
+  // DISPONIBLES EN BODEGA de su modelo, para elegir de existentes en vez de
+  // teclear a ciegas. La validación dura al guardar (_validarSerialBodega)
+  // se mantiene como candado final.
+  _bodegaCache: null,
+  async _bodegaDisponibles() {
+    if (this._bodegaCache && Date.now() - this._bodegaCache.t < 5 * 60 * 1000) return this._bodegaCache.d;
+    const snap = await firebase.firestore().collection('equipos_pool')
+      .where('estado', '==', 'en_bodega').limit(3000).get();
+    const d = snap.docs.map(x => ({ id: x.id, ...x.data() }));
+    this._bodegaCache = { t: Date.now(), d };
+    return d;
+  },
+  _slotsDeLineas(lineas) {
+    const slots = [];
+    (lineas || []).forEach(l => {
+      for (let i = 0; i < Number(l.cantidad || 0); i++) slots.push({ id: l.modelo_id || '', label: l.modelo || '' });
+    });
+    return slots;
+  },
+  async _decorarAsignacion() {
+    const inputs = [...document.querySelectorAll('input[data-gaum], input[data-gdemo], input[data-gitem]')];
+    if (!inputs.length) return;
+    // SerialField: chips del pool (si el componente está cargado).
+    if (window.SerialField) {
+      inputs.forEach(inp => SerialField.adjuntar(inp, {
+        modelo: () => ({ modelo_id: inp.dataset.modeloId || null, modelo_label: inp.dataset.modeloLabel || '' }),
+      }));
+    }
+    // Datalist de disponibles en bodega por modelo esperado.
+    try {
+      const bodega = await this._bodegaDisponibles();
+      const porClave = new Map();
+      for (const inp of inputs) {
+        const clave = inp.dataset.modeloId || this._normModelo(inp.dataset.modeloLabel || '');
+        if (!clave) continue;
+        if (!porClave.has(clave)) {
+          const dlId = `cg-dl-${clave.replace(/[^A-Za-z0-9_-]/g, '')}`;
+          let dl = document.getElementById(dlId);
+          if (!dl) {
+            dl = document.createElement('datalist');
+            dl.id = dlId;
+            const compatibles = bodega.filter(u => (window.EquiposPoolService?._mismoModelo)
+              ? EquiposPoolService._mismoModelo(u, inp.dataset.modeloId || null, inp.dataset.modeloLabel || '')
+              : this._mismoModeloLinea({ modelo_id: inp.dataset.modeloId, modelo: inp.dataset.modeloLabel }, u));
+            dl.innerHTML = compatibles.slice(0, 300).map(u =>
+              `<option value="${this.esc(u.serial || u.id)}">${this.esc(u.modelo_label || '')}${u.condicion ? ` · ${this.esc(u.condicion)}` : ''}</option>`).join('');
+            document.body.appendChild(dl);
+          }
+          porClave.set(clave, dl.id);
+        }
+        inp.setAttribute('list', porClave.get(clave));
+        inp.setAttribute('autocomplete', 'off');
+      }
+    } catch (e) { console.warn('[centro] datalist de bodega no disponible:', e?.message || e); }
   },
 
   _detalleGestion(g) {
@@ -1020,11 +1082,14 @@ window.Centro = {
         ${g.anexo_firmado_path ? `<p style="font-size:12.5px; color:var(--ok-deep, #17714B); margin:8px 0 0;">✓ Anexo firmado registrado (${this.esc(g.anexo_firmado_por || '')})
           <button class="btn btn-ghost" style="padding:2px 9px;font-size:12px;" onclick="Centro.verAnexo('${this.esc(g.anexo_firmado_path)}')">Ver anexo</button></p>` : ''}
         ${asignando
-          ? `<div style="margin-top:10px;">${Array.from({ length: total }, (_, ix) => `
-              <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;margin:0 6px 6px 0;display:inline-block;"
-                data-gaum="${ix}" placeholder="Serial ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}">`).join('')}
+          ? `<div style="margin-top:10px;">${this._slotsDeLineas(a.lineas).map((m, ix) => `
+              <span style="display:inline-block; margin:0 6px 6px 0;">
+              <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;"
+                data-gaum="${ix}" data-modelo-id="${this.esc(m.id)}" data-modelo-label="${this.esc(m.label)}"
+                placeholder="${this.esc(m.label)} ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}"></span>`).join('')}
              <div style="margin-top:6px;"><button class="btn btn-primary" onclick="Centro.guardarAsignacionAumento('${this.esc(g.id)}')">
-               Guardar asignación</button></div></div>`
+               Guardar asignación</button>
+               <span style="font-size:12.5px; color:var(--fg-3);"> Elige de los disponibles en bodega (el campo sugiere los del modelo).</span></div></div>`
           : (asignados.length ? `<p style="font-size:13px; margin:8px 0 0;"><b>Seriales:</b>
               ${asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')}</p>` : '')}`;
     } else if (g.tipo === 'baja') {
@@ -1069,6 +1134,7 @@ window.Centro = {
           <td>${this.esc(it.modelo || '—')}</td>
           <td>${asignando
             ? `<input class="form-input" style="max-width:170px;padding:5px 9px;font-size:13px;" data-gitem="${ix}"
+                 data-modelo-id="${this.esc(it.modelo_solicitado_id || '')}" data-modelo-label="${this.esc(it.modelo_solicitado || it.modelo || '')}"
                  placeholder="Serial de bodega…" value="${this.esc(it.serial_nuevo || '')}">`
             : `<span class="cg-mono">${this.esc(it.serial_nuevo || 'pendiente')}</span>`}</td>
           <td>${this.esc(it.modelo_solicitado || it.modelo || '—')}</td>
@@ -1090,9 +1156,11 @@ window.Centro = {
           <b>Salida:</b> ${this.esc(g.demo?.fecha_salida || '—')} ·
           <b>Devolución estimada:</b> ${this.esc(g.demo?.fecha_devolucion_estimada || 'sin fecha')}</p>
         ${asignando
-          ? `<div>${Array.from({ length: total }, (_, ix) => `
-              <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;margin:0 6px 6px 0;display:inline-block;"
-                data-gdemo="${ix}" placeholder="Serial ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}">`).join('')}
+          ? `<div>${this._slotsDeLineas(g.demo?.lineas).map((m, ix) => `
+              <span style="display:inline-block; margin:0 6px 6px 0;">
+              <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;"
+                data-gdemo="${ix}" data-modelo-id="${this.esc(m.id)}" data-modelo-label="${this.esc(m.label)}"
+                placeholder="${this.esc(m.label)} ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}"></span>`).join('')}
              <div style="margin-top:6px;"><button class="btn btn-primary" onclick="Centro.guardarAsignacionDemo('${this.esc(g.id)}')">
                Guardar asignación</button>
                <span style="font-size:12.5px; color:var(--fg-3);"> Stock nuevo o refurbished, de bodega.</span></div>`
