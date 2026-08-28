@@ -542,13 +542,20 @@ window.Centro = {
     // Regla 2026-08-27: una cuenta con equipos FUERA de contrato formal ya
     // requiere renovación/regularización (el documento marco los formaliza).
     const sinContrato = this.equipos.filter(e => e.estado === 'en_cliente' && !e.asignacion?.contrato_doc_id).length;
-    if (sinContrato) out.unshift({
-      tipo: 'warn',
-      txt: `${sinContrato} equipo(s) sin contrato formal — la cuenta requiere renovación / regularización.`,
-      extra: this.puedeCrearGestion()
-        ? `<button class="btn btn-primary cg-act cg-senal-cta"
-             onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : '',
-    });
+    if (sinContrato) {
+      const tram = this._renovacionEnTramite();
+      out.unshift(tram ? {
+        tipo: 'info',
+        txt: `${sinContrato} equipo(s) sin contrato formal — la renovación en trámite (${tram.contrato_id || ''}) los cubrirá al activarse y entregarse.`,
+        extra: `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.abrirGestion('ct-${this.esc(tram.id)}')">Ver trámite</button>`,
+      } : {
+        tipo: 'warn',
+        txt: `${sinContrato} equipo(s) sin contrato formal — la cuenta requiere renovación / regularización.`,
+        extra: this.puedeCrearGestion()
+          ? `<button class="btn btn-primary cg-act cg-senal-cta"
+               onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : '',
+      });
+    }
     const pendDev = this.equipos.filter(e => e.pendiente_devolucion).length;
     if (pendDev) out.push({ tipo: 'warn', txt: `${pendDev} equipo(s) pendiente(s) de devolución.` });
     const enTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
@@ -948,7 +955,10 @@ window.Centro = {
     // reciente) NO van en esta tabla: decir "aprobado" aquí los hacía parecer
     // contratos andando (reclamo 2026-08-28). Viven en "Requiere tu acción" y
     // en Gestiones con su pipeline.
-    const tramiteIds = new Set(this._tramitesContrato().map(c => c.id));
+    // Solo los trámites NO activos salen de la tabla: una renovación ya
+    // ACTIVA es un contrato andando (va en la tabla) aunque su pipeline siga
+    // visible en Gestiones hasta regularizar.
+    const tramiteIds = new Set(this._tramitesContrato().filter(c => c.estado !== 'activo').map(c => c.id));
     const operativos = this.contratos.filter(c => this._esVigente(c) && !this._renovadoPor(c) && !tramiteIds.has(c.id));
     const historico = this.contratos.filter(c => !operativos.includes(c) && !tramiteIds.has(c.id));
     const mensualDe = (c) => Number(c.total_mensual ?? c.total_con_itbms ?? 0);
@@ -981,10 +991,15 @@ window.Centro = {
         <span>·</span><span><b>${enCampo}</b> radio${enCampo === 1 ? '' : 's'} en campo</span>
         <span>·</span><span class="num"><b>$${mensualTot.toFixed(2)}</b>/mes</span>
         ${vencHtml}
-        ${this.puedeCrearGestion() && (operativos.length > 1 || this._wcCustodia().length)
-          ? `<button class="btn btn-primary" style="margin-left:auto; padding:4px 12px; font-size:12.5px;"
-               title="Consolida los contratos de la cuenta en uno solo"
-               onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : ''}
+        ${(() => {
+          const tram = this._renovacionEnTramite();
+          if (tram) return `<button class="btn btn-ghost cg-act cg-senal-cta"
+            onclick="Centro.abrirGestion('ct-${this.esc(tram.id)}')">Renovación en trámite ›</button>`;
+          return this.puedeCrearGestion() && (operativos.length > 1 || this._wcCustodia().length)
+            ? `<button class="btn btn-primary cg-act cg-senal-cta"
+                 title="Consolida los contratos de la cuenta en uno solo"
+                 onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : '';
+        })()}
       </div>` : '';
 
     const filas = principales.map(c => this._filaContrato(c)).join('');
@@ -1214,7 +1229,18 @@ window.Centro = {
     const dias = (t) => { const d = t?.toDate ? t.toDate() : (t ? new Date(t) : null); return d && !isNaN(d) ? (Date.now() - d) / 86400000 : null; };
     return (this.contratos || []).filter(c => !c.deleted && (
       c.estado === 'pendiente_aprobacion'
-      || (c.estado === 'aprobado' && !c.firmado && (dias(c.fecha_creacion) ?? 999) < 45)));
+      || (c.estado === 'aprobado' && !c.firmado && (dias(c.fecha_creacion) ?? 999) < 45)
+      // Renovación ACTIVA pero aún sin regularizar (caso C COMUNICA 1,
+      // 2026-08-28): el proceso no terminó — la custodia se amarra al
+      // ENTREGARSE la OS del contrato; hasta entonces sigue siendo trámite
+      // visible con su pipeline en 3/4.
+      || (c.accion === 'Renovación' && c.estado === 'activo' && !c.regularizacion?.at
+          && (dias(c.fecha_creacion) ?? 999) < 45)));
+  },
+  // Una renovación EN CURSO apaga todos los botones de "Renovar cuenta"
+  // (reclamo 2026-08-28: mil botones de renovación con una ya en trámite).
+  _renovacionEnTramite() {
+    return this._tramitesContrato().find(c => c.accion === 'Renovación') || null;
   },
   _tramiteHtml(c) {
     const abierta = this.gSel === 'ct-' + c.id;
@@ -1229,6 +1255,7 @@ window.Centro = {
     const done = pasos.filter(p => p[1]).length;
     const [chipCls, chipTxt] = c.estado === 'pendiente_aprobacion' ? ['cg-chip--warn', 'Esperando aprobación']
       : !c.firmado ? ['cg-chip--warn', 'Esperando firma']
+      : c.estado === 'activo' && !c.regularizacion?.at ? ['cg-chip--info', 'Activo — regularización pendiente']
       : c.estado === 'activo' ? ['cg-chip--ok', 'Activo'] : ['cg-chip--info', 'En trámite'];
     const unid = (c.equipos || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
     const esRenov = c.accion === 'Renovación';
@@ -1731,6 +1758,14 @@ window.Centro = {
     let cuentaHtml = '';
     if (est.tipo === 'nueva') {
       cuentaHtml = `<button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>`;
+    } else if (this._renovacionEnTramite()) {
+      // Con una renovación EN CURSO no se ofrecen más renovaciones ni anexos
+      // que compitan con ella: el trámite manda.
+      const tram = this._renovacionEnTramite();
+      cuentaHtml = `
+        <button type="button" onclick="Centro.abrirGestion('ct-${this.esc(tram.id)}')">Renovación en trámite — <span class="cg-mono">${this.esc(tram.contrato_id || '')}</span>
+          <span style="display:block; font-size:11px; color:var(--fg-4);">abre el expediente para ver en qué paso va</span></button>
+        <button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta</button>`;
     } else if (est.tipo === 'fragmentada') {
       const n = est.renovables.length;
       cuentaHtml = `
@@ -2180,7 +2215,8 @@ window.Centro = {
     // Ancla automática (cuenta fragmentada): el destino NO se pregunta — se
     // informa. Y la consolidación se OFRECE cuando conviene, sin imponerla.
     const est = this._cuentaEstado();
-    const nudge = est.tipo === 'fragmentada' && (est.custodia || est.renovables.some(c => this._wcEnVentana(c)))
+    const nudge = est.tipo === 'fragmentada' && !this._renovacionEnTramite()
+      && (est.custodia || est.renovables.some(c => this._wcEnVentana(c)))
       ? `<div class="cg-senal warn" style="margin-bottom:10px; align-items:center;">
           <span>Esta cuenta tiene <b>${est.renovables.length} contrato(s)</b>${est.custodia ? ` y <b>${est.custodia} radio(s) sin contrato formal</b>` : ''} —
           si el cliente está por renovar, este es el momento de consolidarla.</span>
@@ -2342,6 +2378,15 @@ window.Centro = {
     if (!this.puedeCrearGestion()) { Toast.show('Tu rol no crea contratos desde aquí', 'warn'); return; }
     if (typeof opts === 'string') opts = { renovarDe: opts };
     opts = opts || {};
+    // Con una renovación en curso no se abre otra: se lleva al trámite.
+    if (opts.renovarCuenta || opts.renovarDe) {
+      const tram = this._renovacionEnTramite();
+      if (tram) {
+        Toast.show(`Ya hay una renovación en trámite (${tram.contrato_id || ''}) — te llevo al expediente`, 'warn');
+        this.abrirGestion('ct-' + tram.id);
+        return;
+      }
+    }
     this._cerrarModal();
     document.getElementById('cgMenu')?.classList.add('hidden');
     await Promise.all([this._cargarModelos(), this._cargarCargos()]);
