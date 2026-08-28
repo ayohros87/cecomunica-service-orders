@@ -649,7 +649,8 @@ window.Centro = {
         Regularización al activarse: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · ${reg.sin_cupo} sin cupo` : ''}${reg.sin_linea ? ` · ${reg.sin_linea} sin línea` : ''}.</p>` : ''}
       ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}`,
       footer: `
-        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Abrir la página completa del contrato ›</a>
+        <a href="../contratos/documento.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Documento completo ›</a>
+        <a href="../contratos/editar-contrato.html?id=${encodeURIComponent(c.id)}" class="btn-quiet">Editar</a>
         <span class="sep"></span>
         ${c.estado === 'pendiente_aprobacion' && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
           ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}

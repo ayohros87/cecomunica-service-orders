@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contrato de Servicio — Documento</title>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js?v=ses2"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script src="../js/core/auth.js"></script>
+  <script defer src="../js/services/contratosService.js?v=num1"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script defer src="../js/services/equiposPoolService.js?v=cg1"></script>
+  <script defer src="../js/services/modelosService.js"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+
+  <style>
+    /* Documento de contrato v2 — el formato de secciones numeradas, Anexo A por
+       serial y cláusulas citables. En pantalla: hojas sobre fondo gris; en
+       impresión cada .hoja es una página A4. */
+    :root { --navy:#0B2A47; --accent:#0091D7; }
+    * { box-sizing:border-box; margin:0; }
+    html, body { background:#E8ECF0; }
+    body { font: 13px/1.55 Georgia, 'Times New Roman', serif; color:#111; padding:22px 12px 60px; }
+    .wrap { max-width: 8.9in; margin: 0 auto; }
+    .hoja { background:#fff; max-width:8.5in; margin:0 auto 22px; padding:0.62in 0.85in;
+            box-shadow:0 3px 18px rgba(0,0,0,.18); }
+    h1 { font:800 17px/1.3 Arial,sans-serif; color:var(--navy); text-align:center; letter-spacing:.04em; margin:16px 0 6px; }
+    h2 { font:700 12.5px/1.3 Arial,sans-serif; color:var(--navy); margin:14px 0 5px; }
+    .cab { display:flex; justify-content:space-between; align-items:center; gap:14px;
+           border-bottom:2.5px solid var(--navy); padding-bottom:10px; }
+    .corp { font:11.5px/1.55 Arial,sans-serif; color:#444; }
+    .corp b { font-size:14.5px; color:#111; }
+    .numdoc { font:700 12px Arial,sans-serif; color:var(--navy); text-align:right; line-height:1.5; }
+    table { border-collapse:collapse; width:100%; font-size:12px; margin:5px 0; }
+    th { text-align:left; font:700 10px Arial,sans-serif; text-transform:uppercase; letter-spacing:.05em;
+         border-bottom:1.5px solid #111; padding:4.5px 7px; }
+    td { border-bottom:1px solid #ccc; padding:5px 7px; vertical-align:top; }
+    td.right, th.right { text-align:right; }
+    .mono { font-family:'Courier New', monospace; font-size:11.5px; }
+    .caja { border:1.5px solid var(--navy); padding:10px 14px; margin:10px 0; background:#F5F8FB; font-size:12px; }
+    .firmas { display:flex; gap:56px; margin-top:40px; }
+    .firmas > div { flex:1; border-top:1.5px solid #111; padding-top:6px; font-size:11.5px; text-align:center; }
+    .firmas .sello { font:italic 10.5px Arial,sans-serif; color:#2e7d32; margin-top:5px; line-height:1.45; }
+    .firmas img.trazo { max-height:64px; max-width:100%; display:block; margin:0 auto 4px; }
+    .firmas .espacio { height:70px; display:flex; align-items:flex-end; justify-content:center; }
+    .folio { display:flex; justify-content:space-between; gap:10px; font:10px Arial,sans-serif; color:#666;
+             border-top:1px solid #ddd; margin-top:18px; padding-top:7px; flex-wrap:wrap; }
+    .iniciales { font:10.5px Arial,sans-serif; color:#333; }
+    .iniciales span { display:inline-block; border-bottom:1px solid #111; width:70px; margin-left:6px; }
+    p, li { margin-bottom:7px; }
+    ol.clausulas { padding-left:0; list-style:none; }
+    ol.clausulas > li { margin-bottom:10px; }
+    ul.sub { padding-left:20px; margin-top:4px; }
+    ul.sub li { margin-bottom:4px; }
+    .verif { display:flex; gap:14px; align-items:center; border:1px solid #ccc; padding:9px 12px; margin-top:16px;
+             font:11px/1.5 Arial,sans-serif; }
+    .verif canvas { flex:none; }
+    .toolbar { max-width:8.5in; margin:0 auto 14px; display:flex; gap:10px; align-items:center;
+               font:13px Arial,sans-serif; }
+    .toolbar button, .toolbar a { font:600 13px Arial,sans-serif; color:#fff; background:var(--navy);
+      border:0; border-radius:8px; padding:8px 16px; cursor:pointer; text-decoration:none; }
+    .toolbar a.sec { background:#fff; color:var(--navy); border:1px solid var(--navy); }
+    .aviso-estado { max-width:8.5in; margin:0 auto 14px; border-radius:9px; padding:9px 16px;
+      font:12.5px/1.5 Arial,sans-serif; background:#FEF3C7; border:1px solid #F59E0B; color:#92400E; display:none; }
+    @media print {
+      html, body { background:#fff; padding:0; }
+      .toolbar, .aviso-estado { display:none !important; }
+      .hoja { box-shadow:none; margin:0; max-width:none; padding:0.35in 0.45in;
+              page-break-after:always; }
+      .hoja:last-child { page-break-after:auto; }
+      @page { size: A4 portrait; margin: 8mm; }
+      thead { display:table-header-group; }
+      tr { page-break-inside:avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="window.print()">Imprimir / PDF</button>
+    <a class="sec" id="lnkFicha" href="#">Ficha del cliente ›</a>
+    <a class="sec" id="lnkClasico" href="#">Formato anterior</a>
+  </div>
+  <div class="aviso-estado" id="avisoEstado"></div>
+
+  <div class="wrap" id="doc" style="display:none;">
+
+    <!-- ═════════ PÁGINA 1 ═════════ -->
+    <div class="hoja">
+      <div class="cab">
+        <div class="corp">
+          <b>C COMUNICA, S.A.</b><br>
+          RUC 32977-27-249966 DV 39 · Panamá<br>
+          CC. Bal Harbour, Piso 1, oficina 5A, Vía Italia, Paitilla<br>
+          ventas@cecomunica.com · +507 279-5570
+        </div>
+        <img src="../brand/logo-lockup-horizontal-compact.svg" alt="CECOMUNICA" style="height:44px;">
+        <div class="numdoc">CONTRATO DE SERVICIO<br><span id="hNumero">—</span><br>
+          <span style="font-weight:400;color:#555;" id="hTipoDur">—</span></div>
+      </div>
+
+      <h1>CONTRATO DE SERVICIO DE COMUNICACIÓN</h1>
+
+      <h2>1. Partes</h2>
+      <p id="sPartes">—</p>
+
+      <h2>2. Equipos y servicio contratado</h2>
+      <table>
+        <thead><tr><th>Cant.</th><th>Concepto</th><th>Tipo</th><th class="right">Precio (unidad)</th><th class="right">Subtotal</th></tr></thead>
+        <tbody id="tLineas"></tbody>
+      </table>
+      <p style="font-size:11.5px;" id="pPago"></p>
+
+      <div class="caja" id="cajaAnexoA">
+        <b>3. INVENTARIO — ANEXO A.</b> Los equipos se identifican por serial en el <b>Anexo A</b>,
+        parte integral de este contrato, con iniciales de ambas partes en cada página. El Anexo A
+        registra únicamente seriales verificados: los asignados por bodega o los levantados en
+        verificación conjunta con EL CLIENTE al momento de la firma.
+      </div>
+
+      <div class="caja">
+        <b>4. VIGENCIA, RENOVACIÓN Y ANEXOS.</b> Este contrato rige por <b id="hDuracion">—</b> desde su
+        firma. La renovación se documenta mediante <b>anexo firmado por EL CLIENTE</b>. Mientras
+        el anexo de renovación no se suscriba, el servicio continuará mes a mes bajo las tarifas
+        vigentes, y EL CLIENTE podrá darlo por terminado con <b>sesenta (60) días</b> de aviso escrito.
+        Los aumentos, reemplazos, traspasos y bajas de equipos se documentan igualmente por
+        anexos firmados que forman parte integral de este contrato, cada uno con su propio
+        período cuando aplique.
+      </div>
+
+      <div class="firmas">
+        <div><div class="espacio" data-firma="cliente"></div><b>EL CLIENTE</b><br><span id="f1Cliente">—</span></div>
+        <div><div class="espacio" data-firma="empresa"></div><b>C COMUNICA, S.A.</b><br>&nbsp;</div>
+      </div>
+
+      <div class="folio">
+        <span id="folio1">—</span>
+        <span class="mono" id="folioVerif1"></span>
+      </div>
+    </div>
+
+    <!-- ═════════ CONDICIONES GENERALES ═════════ -->
+    <div class="hoja" style="font-size:12px;">
+      <h1 style="margin-top:0;">CONDICIONES GENERALES</h1>
+      <ol class="clausulas">
+        <li><b>5. SERVICIO.</b> LA EMPRESA brindará a EL CLIENTE un servicio de comunicación privado,
+          en condiciones óptimas, las veinticuatro (24) horas del día, a través de ondas de radio y/o
+          telefonía conforme al desarrollo tecnológico disponible en la República de Panamá, dentro de
+          las áreas de cobertura indicadas en la Sección 2. EL CLIENTE autoriza el
+          monitoreo del sistema para control de calidad de la señal.</li>
+
+        <li><b>6. DISPONIBILIDAD.</b> El servicio estará sujeto a limitaciones o interrupciones por
+          causas fuera del control de LA EMPRESA (regulaciones, topografía, condiciones ambientales,
+          suministro eléctrico, servicios de terceros, mal uso por EL CLIENTE, fuerza mayor o caso
+          fortuito). LA EMPRESA podrá suspender temporalmente el servicio por mantenimiento o
+          instalación de nuevos equipos, procurando el menor impacto.</li>
+
+        <li><b>7. EQUIPOS Y PROPIEDAD.</b> La propiedad de cada equipo consta en el Anexo A.
+          <ul class="sub">
+            <li><b>Modalidad venta:</b> EL CLIENTE declara recibir en perfecto estado los equipos
+              identificados como de su propiedad, y es responsable de su uso.</li>
+            <li><b>Modalidad alquiler:</b> los equipos identificados como propiedad de LA EMPRESA
+              permanecen en poder de EL CLIENTE para su uso, sin transferencia de propiedad, debiendo
+              cuidarlos con la diligencia de un buen padre de familia. El alquiler incluye la batería
+              de fábrica con la activación; las baterías subsiguientes corren por cuenta de EL CLIENTE.</li>
+          </ul></li>
+
+        <li><b>8. GARANTÍA.</b> Los equipos adquiridos por EL CLIENTE tendrán <b>doce (12)
+          meses</b> de garantía que incluye mano de obra y piezas por daños o desperfectos no
+          atribuibles a mal uso o negligencia. Si el equipo no puede repararse en los talleres de LA
+          EMPRESA, se enviará a fábrica estando vigente la garantía. Cubierta frontal, teclado, antena
+          y batería corren por cuenta de EL CLIENTE.</li>
+
+        <li><b>9. TARIFAS Y AJUSTES.</b> EL CLIENTE se obliga al pago de las tarifas y cargos de la
+          Sección 2 y de los que ambas partes acepten mediante anexo firmado.
+          Las tarifas podrán modificarse notificándolo LA EMPRESA por anuncio publicado con treinta
+          (30) días y por escrito a EL CLIENTE con sesenta (60) días de antelación; EL CLIENTE podrá
+          dar por terminado el contrato por escrito dentro de los quince (15) días siguientes, de lo
+          contrario se entenderá aceptada la modificación.</li>
+
+        <li><b>10. PAGOS Y MORA.</b> EL CLIENTE pagará dentro de los cinco (5) primeros días de cada mes.
+          La demora causará un recargo del dos por ciento (2%) mensual sobre la suma
+          adeudada y la suspensión del servicio; los gastos de cobro, incluidos los
+          legales, correrán por cuenta de EL CLIENTE.</li>
+
+        <li><b>11. FORMAS DE PAGO.</b> EL CLIENTE podrá pagar por tarjeta de crédito, descuento directo,
+          ACH o sistema Clave. La autorización de cargo a tarjeta será irrevocable durante la vigencia
+          del contrato y sus renovaciones; si la tarjeta fuera cancelada o rechazada, EL CLIENTE deberá
+          autorizar otra en un máximo de siete (7) días, de lo contrario el servicio será suspendido y
+          aplicará la cláusula 17.</li>
+
+        <li><b>12. RESPONSABILIDAD.</b> La responsabilidad de LA EMPRESA por fallo o imposibilidad de
+          proveer el servicio se limita al <b>crédito por la interrupción</b>, sin sobrepasar un mes de
+          servicio o su prorrateo. EL CLIENTE reconoce que las interrupciones en telecomunicaciones son
+          frecuentes y de difícil comprobación, por lo que LA EMPRESA <b>no responderá por pérdida de
+          ganancias, pérdida de negocio ni daños indirectos o punitivos</b> derivados de la ejecución o
+          no ejecución de este contrato, ni por suspensiones por causas fuera de su control (caso
+          fortuito, fuerza mayor, restricciones gubernamentales, topografía, o desconexión de enlaces
+          de terceros, incluido Internet).</li>
+
+        <li><b>13. LIBERACIÓN.</b> EL CLIENTE mantendrá libre de reclamos y sanciones a LA EMPRESA por el
+          mal uso o uso indebido del servicio o del equipo, y la exime de responsabilidad por daños
+          causados por dicho uso. EL CLIENTE autoriza el suministro de su información a las autoridades
+          competentes que la soliciten, y autoriza a LA EMPRESA a obtener y suministrar referencias
+          financieras y crediticias cuando sea requerido.</li>
+
+        <li><b>14. OBLIGACIONES DE EL CLIENTE.</b>
+          <ul class="sub">
+            <li>Pagar puntualmente y mantener vigentes las autorizaciones de cobro; en caso de
+              incumplimiento, autoriza el reporte a la Asociación Panameña de Crédito (APC).</li>
+            <li>Usar el equipo y el servicio de forma diligente, para comunicaciones lícitas, conforme
+              a las recomendaciones del fabricante y las normas vigentes.</li>
+            <li>No ceder, vender, transferir, pignorar ni gravar los equipos de LA EMPRESA, ni ceder
+              este contrato sin autorización expresa.</li>
+            <li>Reportar de inmediato interferencias, y por escrito el robo o pérdida de cualquier
+              equipo, con la denuncia correspondiente.</li>
+            <li>No manipular el equipo inadecuadamente y llevarlo a desprogramación al terminar el
+              contrato.</li>
+            <li>Cumplir las disposiciones de la Autoridad Nacional de los Servicios Públicos.</li>
+          </ul></li>
+
+        <li><b>15. VALOR DE REPOSICIÓN.</b> En la modalidad de alquiler, EL CLIENTE responderá por
+          la pérdida o daño irreparable de cada equipo conforme al <b>valor de reposición por unidad
+          indicado en el Anexo A</b>, más ITBMS, valores que declara conocer y aceptar con su firma.</li>
+
+        <li><b>16. DEPÓSITO.</b> En la modalidad de alquiler, EL CLIENTE entrega el depósito de garantía
+          acordado, sin intereses, que se devolverá en el último mes del período estando EL CLIENTE al
+          día. En renovaciones, LA EMPRESA podrá eximirlo a su criterio.</li>
+
+        <li><b>17. TERMINACIÓN ANTICIPADA Y BAJAS.</b> La terminación del contrato por EL CLIENTE
+          causará una liquidación equivalente a tres (3) meses de mensualidad, <b>pagadera de
+          inmediato</b> en todos los casos: antes del vencimiento del período, en concepto de
+          penalidad; vencido el período y en continuidad mes a mes, en concepto de sesenta (60) días
+          de preaviso — durante los cuales EL SERVICIO permanecerá activo — más treinta (30) días de
+          penalidad. Toda terminación obliga a la devolución de los equipos de LA EMPRESA.
+          Las bajas parciales de equipos se documentan por anexo y se liquidan por equipo bajo
+          la misma regla, según el tramo de cada uno.</li>
+
+        <li><b>18. ADMINISTRACIÓN POR ANEXOS Y NOTIFICACIONES.</b> Toda modificación de equipos,
+          tarifas, períodos o partes se documentará mediante anexos firmados, numerados y verificables
+          digitalmente, que forman parte integral de este contrato. Las notificaciones se harán
+          por escrito a los correos y direcciones indicados en la Sección 1. Este documento y sus
+          anexos son verificables mediante el código impreso al pie.</li>
+      </ol>
+
+      <p style="margin-top:18px;" id="pFechaFirma">Panamá, ____ de ______________ de ______.</p>
+      <div class="firmas">
+        <div><div class="espacio" data-firma="cliente"></div><b>EL CLIENTE</b><br><span id="f2Cliente">—</span></div>
+        <div><div class="espacio" data-firma="empresa"></div><b>C COMUNICA, S.A.</b><br>&nbsp;</div>
+      </div>
+      <div class="verif" id="verifBox" style="display:none;">
+        <div id="qrVerif"></div>
+        <div><b>Verificación oficial</b><br>
+          Código: <span class="mono" id="verifCodigo">—</span><br>
+          URL: <span class="mono" id="verifUrl">—</span><br>
+          <span style="color:#666;">Documento válido solo si el código y la URL coinciden con el portal de verificación.</span></div>
+      </div>
+      <div class="folio">
+        <span class="iniciales">Iniciales: EL CLIENTE <span></span> · LA EMPRESA <span></span></span>
+        <span id="folio2">—</span>
+      </div>
+    </div>
+
+    <!-- ═════════ ANEXO A ═════════ -->
+    <div class="hoja" id="hojaAnexoA">
+      <div class="cab" style="padding-bottom:8px;">
+        <div style="display:flex; align-items:center; gap:11px;">
+          <img src="../brand/cecomunica-monogram.svg" alt="" style="height:34px;">
+          <div style="font:700 12.5px Arial,sans-serif; color:var(--navy);">ANEXO A — INVENTARIO DE EQUIPOS<br>
+            <span style="font-weight:400; color:#555;" id="aSub">—</span></div>
+        </div>
+        <div class="numdoc"><span id="aTotal">—</span></div>
+      </div>
+      <table>
+        <thead><tr><th style="width:5%;">#</th><th>Serial</th><th>Modelo</th><th>Ubicación / nombre</th><th>Propiedad</th><th style="width:6%;">Verif.</th></tr></thead>
+        <tbody id="tAnexoA"></tbody>
+      </table>
+
+      <h2 style="margin-top:14px;">Resumen del inventario y valor de reposición (cláusula 15)</h2>
+      <table>
+        <thead><tr><th>Modelo</th><th class="right">C Comunica</th><th class="right">Del cliente</th><th class="right">Total</th><th class="right">Valor de reposición (unidad)</th></tr></thead>
+        <tbody id="tResumenA"></tbody>
+      </table>
+      <p style="font-size:11.5px; margin-top:8px;">EL CLIENTE declara verificados y recibidos en buen
+        estado los equipos marcados en la columna "Verif.", reconoce la propiedad indicada de cada uno,
+        y acepta el valor de reposición por unidad para la modalidad de alquiler conforme a la
+        cláusula 15 del contrato.</p>
+
+      <div class="firmas" style="margin-top:30px;">
+        <div><div class="espacio" data-firma="cliente"></div><b>EL CLIENTE</b><br><span id="f3Cliente">—</span></div>
+        <div><div class="espacio" data-firma="empresa"></div><b>C COMUNICA, S.A.</b><br>&nbsp;</div>
+      </div>
+      <div class="folio">
+        <span class="iniciales">Iniciales: EL CLIENTE <span></span> · LA EMPRESA <span></span></span>
+        <span id="folioA">Anexo A</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="../js/pages/contrato-documento.js?v=doc1" defer></script>
+</body>
+</html>
