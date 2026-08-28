@@ -1090,7 +1090,7 @@ window.Centro = {
     if (!(this.gestiones || []).length) {
       cont.innerHTML = `<div class="cg-empty">Sin gestiones registradas todavía.
         ${this.puedeCrearGestion() ? `<div class="cta"><button class="btn btn-primary cg-act"
-          onclick="document.getElementById('btnGestion')?.click()">Nueva gestión</button></div>` : ''}</div>`;
+          onclick="event.stopPropagation(); document.getElementById('btnGestion')?.scrollIntoView({block:'center'}); document.getElementById('btnGestion')?.click()">Nueva gestión</button></div>` : ''}</div>`;
       return;
     }
     cont.innerHTML = this.gestiones.map(g => {
@@ -1573,7 +1573,6 @@ window.Centro = {
       ${cuentaHtml}
       <div class="hd">Comercial</div>
       <a href="../cotizaciones/index.html">Nueva cotización</a>
-      <a href="../contratos/nuevo-contrato.html">Formulario clásico de contrato</a>
       <div class="hd">Cliente</div>
       <a href="./index.html">Editar datos del cliente</a>`;
   },
@@ -2307,7 +2306,6 @@ window.Centro = {
       </div>
       </div>`,
       footer: `
-        <a href="../contratos/nuevo-contrato.html" class="btn-quiet">Formulario clásico ›</a>
         <span class="sep"></span>
         <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
         <button class="btn btn-primary" id="wcGuardar" onclick="Centro.crearContrato()">Guardar contrato</button>`,
