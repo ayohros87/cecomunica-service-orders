@@ -309,8 +309,14 @@ module.exports = onDocumentWritten(
     let subject, preheader, bodyHtml, ctaLabel, recipients;
 
     if (created) {
-      const [approvers, solicitante] = await Promise.all([getApproverEmails(), getUserInfo(after.solicitado_por || null)]);
-      recipients = [...approvers];
+      // Regla 2026-08-28: TODA solicitud de aprobación va a ventas@cecomunica.com
+      // como destinatario principal; aprobadores y solicitante quedan en copia.
+      const { configEmailTo } = require("../../lib/mailRecipients");
+      const [approvers, solicitante, buzonAprob] = await Promise.all([
+        getApproverEmails(), getUserInfo(after.solicitado_por || null),
+        configEmailTo("aprobaciones", "ventas@cecomunica.com"),
+      ]);
+      recipients = [buzonAprob, ...approvers];
       if (isEmail(solicitante.email)) recipients.push(solicitante.email.trim().toLowerCase());
       subject   = `Enmienda (${tipoLabel}): ${contratoId} – ${cliente}`;
       preheader = `Nueva enmienda pendiente de aprobación · ${cliente}`;

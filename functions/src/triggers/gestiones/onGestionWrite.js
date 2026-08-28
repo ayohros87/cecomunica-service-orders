@@ -57,15 +57,13 @@ function asignacionCompleta(g) {
 }
 
 async function correoAdmins(gid, g) {
+  // Regla 2026-08-28: TODA solicitud de aprobación va a ventas@cecomunica.com;
+  // los administradores quedan en copia.
   const admins = await G.adminEmails();
-  if (!admins.length) {
-    logger.warn("[onGestionWrite] excepción sin administradores con email", { gid });
-    return;
-  }
   const items = (g.items || []).filter(it => it.elegibilidad === "propio_excepcion");
   await G.encolarCorreo({
-    to: admins[0],
-    cc: admins.length > 1 ? admins.slice(1).join(",") : null,
+    to: await G.aprobacionesTo(),
+    cc: admins.length ? admins.join(",") : null,
     subject: `Aprobación requerida: ${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid} — ${g.cliente_nombre || "Cliente"}`,
     preheader: "Reemplazo de equipo propio sin garantía vigente (excepción por servicio al cliente)",
     bodyContent: `
@@ -89,11 +87,8 @@ async function correoAdmins(gid, g) {
 // Baja por serial: UNA sola aprobación por gestión, con el desglose claro de
 // qué contrato aporta cada equipo y su penalidad (decisión §8.10).
 async function correoAprobadoresBaja(gid, g) {
+  // Regla 2026-08-28: la solicitud va a ventas@cecomunica.com; aprobadores en CC.
   const dests = await G.aprobadoresEmails();
-  if (!dests.length) {
-    logger.warn("[onGestionWrite] baja sin aprobadores con email", { gid });
-    return;
-  }
   const filas = (g.items || []).map(it => [
     `<code>${G.escapeHtml(it.serial_saliente || it.serial || "—")}</code>`,
     G.escapeHtml(it.modelo || "—"),
@@ -116,8 +111,8 @@ async function correoAprobadoresBaja(gid, g) {
       + `<p style="margin:4px 0 0;font:13px Arial,sans-serif;">Total estimado: <b>$${Number(pen.total || 0).toFixed(2)}</b></p>`
     : "";
   await G.encolarCorreo({
-    to: dests[0],
-    cc: dests.length > 1 ? dests.slice(1).join(",") : null,
+    to: await G.aprobacionesTo(),
+    cc: dests.length ? dests.join(",") : null,
     subject: `Aprobación requerida: ${terminacion ? "TERMINACIÓN TOTAL" : "baja"} de ${(g.items || []).length} equipo(s) — ${g.cliente_nombre || "Cliente"} (${gid})`,
     preheader: terminacion ? "Terminación total de contrato — todos sus seriales se desconectan" : "Baja por serial; puede tocar varios contratos — una sola aprobación con desglose",
     bodyContent: `
@@ -139,15 +134,12 @@ async function correoAprobadoresBaja(gid, g) {
 
 // Aumento por enmienda: aprobación COMERCIAL previa al anexo (admin/gerencia).
 async function correoAprobadoresAumento(gid, g) {
+  // Regla 2026-08-28: la solicitud va a ventas@cecomunica.com; aprobadores en CC.
   const dests = await G.aprobadoresEmails();
-  if (!dests.length) {
-    logger.warn("[onGestionWrite] aumento sin aprobadores con email", { gid });
-    return;
-  }
   const a = g.aumento || {};
   await G.encolarCorreo({
-    to: dests[0],
-    cc: dests.length > 1 ? dests.slice(1).join(",") : null,
+    to: await G.aprobacionesTo(),
+    cc: dests.length ? dests.join(",") : null,
     subject: `Aprobación comercial: aumento de equipos — ${g.cliente_nombre || "Cliente"} (${gid})`,
     preheader: `Enmienda al contrato ${a.contrato_id || "—"} con vigencia propia (${a.duracion_meses || "?"} meses)`,
     bodyContent: `

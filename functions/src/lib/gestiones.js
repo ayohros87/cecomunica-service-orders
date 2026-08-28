@@ -103,6 +103,13 @@ async function aprobadoresEmails() {
   return [...emails];
 }
 
+// Buzón de TODAS las solicitudes de aprobación (regla de Alberto 2026-08-28):
+// van a ventas@cecomunica.com — los aprobadores individuales quedan en copia.
+// Configurable con empresa/config.email_aprobaciones.
+async function aprobacionesTo() {
+  return configEmailTo("aprobaciones", "ventas@cecomunica.com");
+}
+
 async function encolarCorreo({ to, cc, subject, preheader, bodyContent, ctaUrl, ctaLabel, meta }) {
   await db.collection("mail_queue").add({
     to,
@@ -386,7 +393,7 @@ async function limpiarAnulacion(gid, g) {
 module.exports = {
   limpiarAnulacion,
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, tablaHtml,
-  destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, encolarCorreo,
+  destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,
   registrarEvento, crearOrdenesProgramacion,
   bodegaEmailTo,
