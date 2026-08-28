@@ -45,6 +45,27 @@ function edadChip(ordenData, estado) {
   return ` <span class="edad-chip ${nivel}" title="${dias} días en ${estado === 'POR ASIGNAR' ? 'POR ASIGNAR' : 'RECIBIDO EN MOSTRADOR'}">${dias} d</span>`;
 }
 
+// Tooltip del nombre de cliente truncado, en UNA pasada diferida.
+// Medir por fila mientras se construye la tabla (scrollWidth/offsetWidth
+// justo tras el appendChild) forzaba 50 layouts síncronos por pintado, y el
+// primero de ellos caía con el <tbody> recién vaciado: ahí es donde se perdía
+// la posición del scroll. Aquí se lee todo junto, en rAF, con la tabla ya
+// completa: un solo layout y sin encogimiento intermedio.
+function marcarClientesTruncados(scope) {
+  const raices = Array.isArray(scope) ? scope.filter(Boolean) : (scope ? [scope] : [document]);
+  requestAnimationFrame(() => {
+    const pendientes = [];
+    raices.forEach(r => {
+      r.querySelectorAll?.('.cliente-text[data-nombre-completo]').forEach(el => {
+        // Lectura pura: nada de escrituras en este bucle.
+        if (el.scrollWidth > el.offsetWidth) pendientes.push(el);
+      });
+    });
+    pendientes.forEach(el => { el.title = el.dataset.nombreCompleto; });
+  });
+}
+window.marcarClientesTruncados = marcarClientesTruncados;
+
 function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   const equiposNormalizados = Array.isArray(equipos) ? equipos : [];
   const sinEquipos = equiposNormalizados.length === 0;
@@ -148,10 +169,16 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   // compactas y las expandidas se reconstruyen al re-expandir
   // (renderOrdersList preserva cuáles estaban abiertas).
 
+  // El tooltip del nombre largo se resuelve DESPUÉS, en una sola pasada
+  // (marcarClientesTruncados). Medirlo aquí —scrollWidth/offsetWidth sobre
+  // la fila recién insertada— forzaba un layout síncrono POR FILA, y como
+  // renderOrdersList vacía el <tbody> antes de reconstruirlo, ese layout
+  // ocurría con la tabla casi vacía: el documento se encogía, el navegador
+  // recortaba window.scrollY al nuevo máximo y la página saltaba al tope
+  // (reporte 2026-08-28: "hago scroll y me lanza hacia arriba"). El nombre
+  // se guarda en un data-attr para no recalcularlo en la pasada diferida.
   const clientText = filaOrden.querySelector('.cliente-text');
-  if (clientText && clientText.scrollWidth > clientText.offsetWidth) {
-    clientText.title = nombreClienteDe(ordenData);
-  }
+  if (clientText) clientText.dataset.nombreCompleto = nombreClienteDe(ordenData);
   } // ── end !isMobile (desktop layout) ──────────────────────────────────
 
   if (isMobile) {

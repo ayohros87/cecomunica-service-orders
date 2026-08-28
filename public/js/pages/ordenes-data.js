@@ -368,6 +368,9 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       document.getElementById("ordersCards"),
       document.getElementById("btnCargarMas")
     ]);
+    if (typeof marcarClientesTruncados === 'function') {
+      marcarClientesTruncados([ordersTable, document.getElementById("ordersCards")]);
+    }
 
   } catch (error) {
     console.error("❌ Error al cargar órdenes:", error);

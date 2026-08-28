@@ -170,13 +170,22 @@ function renderOrdersList(list) {
       )
     : new Set();
 
+  // Red de seguridad del scroll (2026-08-28): este render vacía el <tbody> y
+  // lo reconstruye. Si algo fuerza un layout con la tabla a medio llenar, el
+  // navegador recorta window.scrollY al máximo de ese momento y la persona
+  // acaba en el tope de la página — y como el listener vivo repinta con CADA
+  // escritura remota, pasaba sin tocar nada. La causa concreta (medir el
+  // nombre del cliente fila por fila) ya se corrigió en ordenes-render.js;
+  // esto cubre cualquier otra lectura de layout que se cuele en el futuro.
+  const scrollPrevio = window.scrollY;
+
   if (ordersTable) ordersTable.innerHTML = "";
   if (cardsWrap) cardsWrap.innerHTML = "";
 
   if (!list || list.length === 0) {
     renderEmptyState("No se encontraron coincidencias", {
       icon: 'search-x',
-      sublabel: 'Probá ajustar los filtros o limpiar la búsqueda.'
+      sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
     });
     actualizarResumen([]);
     return;
@@ -202,6 +211,15 @@ function renderOrdersList(list) {
   actualizarResumen(list);
   aplicarRestriccionesPorRol(APP.state.userRole);
   APP.utils.lucideRefresh([ordersTable, cardsWrap]);
+  if (typeof marcarClientesTruncados === 'function') marcarClientesTruncados([ordersTable, cardsWrap]);
+
+  // Solo se devuelve la posición si SIGUE existiendo con la lista nueva. Al
+  // filtrar, la lista se acorta de verdad y el tope es el destino correcto;
+  // al repintar el mismo conjunto por un snapshot, la posición se conserva.
+  if (scrollPrevio > 0 && window.scrollY !== scrollPrevio) {
+    const alcanzable = document.documentElement.scrollHeight - window.innerHeight;
+    if (alcanzable >= scrollPrevio) window.scrollTo(0, scrollPrevio);
+  }
 }
 
 // La cola de QC NO cabe en la primera página. La lista viva son las 40 órdenes
@@ -516,7 +534,7 @@ window.filtrarOrdenes = async function () {
     if (resultados.length === 0) {
       renderEmptyState("No se encontraron coincidencias", {
         icon: 'search-x',
-        sublabel: 'Probá ajustar los filtros o limpiar la búsqueda.'
+        sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
       });
       return;
     }
@@ -533,6 +551,7 @@ window.filtrarOrdenes = async function () {
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
     APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
+    if (typeof marcarClientesTruncados === 'function') marcarClientesTruncados([ordersTable, document.getElementById("ordersCards")]);
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -574,7 +593,7 @@ window.filtrarRapido = async function () {
     if (resultados.length === 0) {
       renderEmptyState("No se encontraron coincidencias", {
         icon: 'search-x',
-        sublabel: 'Probá ajustar los filtros o limpiar la búsqueda.'
+        sublabel: 'Prueba ajustar los filtros o limpiar la búsqueda.'
       });
       return;
     }
@@ -591,6 +610,7 @@ window.filtrarRapido = async function () {
       renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
     });
     APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
+    if (typeof marcarClientesTruncados === 'function') marcarClientesTruncados([ordersTable, document.getElementById("ordersCards")]);
 
   } catch (e) {
     console.error("❌ Error al filtrar:", e);
@@ -847,6 +867,7 @@ window.filtrarPorEstado = async function (estado) {
             renderizarOrdenYEquipos(o.ordenId, o, equipos, ordersTable);
           });
           APP.utils.lucideRefresh([ordersTable, document.getElementById("ordersCards")]);
+          if (typeof marcarClientesTruncados === 'function') marcarClientesTruncados([ordersTable, document.getElementById("ordersCards")]);
         }
 
         actualizarResumen(resultados);
