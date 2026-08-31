@@ -362,26 +362,66 @@ async function limpiarAnulacion(gid, g) {
     if (g.contratos_afectados.length) acciones.push(`derivados de baja recalculados en ${g.contratos_afectados.length} contrato(s)`);
   }
 
-  // 6) Aumento derivado y sin entregar: retirar líneas/cargos de la enmienda
+  // 6) Aumento derivado y sin entregar: retirar líneas/cargos de la enmienda.
+  //    El anexo de REGULARIZACIÓN es la excepción a "vigente = intocable": sus
+  //    líneas nacen vigentes pero sus equipos no salieron de bodega, así que
+  //    la anulación sí puede revertirlo completo (des-amarre + sobrantes de
+  //    vuelta a la conciliación).
   if (g.tipo === "aumento" && g.cierre?.derivacion && g.aumento?.contrato_doc_id) {
+    const esReg = g.aumento?.es_regularizacion === true;
     try {
       const cRef = db.collection("contratos").doc(g.aumento.contrato_doc_id);
+      let revertido = false;
       await db.runTransaction(async (tx) => {
         const s = await tx.get(cRef);
         if (!s.exists) return;
         const c = s.data();
         const propias = (c.equipos || []).filter(l => l.enmienda_id === gid);
-        if (propias.some(l => l.vigencia?.estado === "vigente")) {
+        if (!esReg && propias.some(l => l.vigencia?.estado === "vigente")) {
           acciones.push("líneas del aumento YA ENTREGADAS — revisar el contrato a mano");
           return;
         }
-        tx.set(cRef, {
+        const patch = {
           equipos: (c.equipos || []).filter(l => l.enmienda_id !== gid),
           ...(Array.isArray(c.cargos) ? { cargos: c.cargos.filter(x => x.enmienda_id !== gid) } : {}),
           enmiendas_aumento: admin.firestore.FieldValue.arrayRemove(gid),
-        }, { merge: true });
+        };
+        if (esReg && c.regularizacion?.ultima_por === `anexo:${gid}`) {
+          // Los seriales vuelven a la lista de sobrantes (sin_linea) para que
+          // el trámite/bandeja los sigan reclamando.
+          const r = c.regularizacion || {};
+          const devueltos = (g.aumento.regulariza_seriales || []).map(x => String(x.serial || "")).filter(Boolean);
+          const sl = [...new Set([...(r.sin_linea_seriales || []), ...devueltos])];
+          patch.regularizacion = {
+            ...r,
+            amarradas: Math.max(0, Number(r.amarradas || 0) - devueltos.length),
+            sin_linea: sl.length, sin_linea_seriales: sl,
+            ultima_por: `anulacion:${gid}`,
+          };
+        }
+        tx.set(cRef, patch, { merge: true });
+        revertido = true;
         if (propias.length) acciones.push(`${propias.length} línea(s) del aumento retiradas del contrato`);
       });
+      if (esReg && revertido) {
+        let sueltos = 0;
+        for (const sr of (g.aumento.regulariza_seriales || [])) {
+          if (!sr.pool_doc_id) continue;
+          try {
+            const pSnap = await db.collection("equipos_pool").doc(sr.pool_doc_id).get();
+            // Solo se des-amarra lo que ESTE anexo amarró (gestion_doc_id).
+            if (pSnap.exists && pSnap.data().asignacion?.gestion_doc_id === gid) {
+              await pSnap.ref.update({
+                "asignacion.contrato_doc_id": null,
+                "asignacion.contrato_id": "",
+                "asignacion.gestion_doc_id": admin.firestore.FieldValue.delete(),
+              });
+              sueltos++;
+            }
+          } catch (e) { logger.warn("[gestiones] des-amarre de regularización falló", { gid, serial: sr.serial, message: e.message }); }
+        }
+        if (sueltos) acciones.push(`${sueltos} equipo(s) des-amarrados — vuelven como sobrantes de la conciliación`);
+      }
     } catch (e) { logger.warn("[gestiones] limpieza aumento falló", { gid, message: e.message }); }
   }
 

@@ -469,7 +469,7 @@ window.Centro = {
         if (reg?.motivo === 'sobrantes' && this.puedeCrearGestion()) {
           it('warn', `Resolver la regularización parcial de ${id}`,
             `${reg.sob} equipo(s) en custodia quedaron sin línea en el contrato (${reg.seriales.slice(0, 4).join(', ')}${reg.seriales.length > 4 ? '…' : ''}) — agrégalos por anexo o libéralos de la cuenta`,
-            B('Ver expediente', `Centro.abrirGestion('ct-${this.esc(c.id)}')`) + B('Agregar línea por anexo', `Centro.wizAumento('${this.esc(c.id)}')`, true));
+            B('Ver expediente', `Centro.abrirGestion('ct-${this.esc(c.id)}')`) + B('Regularizar por anexo', `Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})`, true));
         }
       }
     }
@@ -880,12 +880,20 @@ window.Centro = {
           contrato_id: a.contrato_id || '',
           cliente_id: g.cliente_id,
           cliente_nombre: g.cliente_nombre || '',
-          titulo: `Anexo de aumento ${gid} — contrato ${a.contrato_id || ''}`,
-          declaracion: `Declaro que he leído el anexo de aumento ${gid} al contrato ${a.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${g.cliente_nombre || 'la empresa'}.`,
+          titulo: a.es_regularizacion
+            ? `Anexo de regularización ${gid} — contrato ${a.contrato_id || ''}`
+            : `Anexo de aumento ${gid} — contrato ${a.contrato_id || ''}`,
+          declaracion: a.es_regularizacion
+            ? `Declaro que los equipos del anexo ${gid} (${(a.regulariza_seriales || []).map(s => s.serial).join(', ')}) están en poder de ${g.cliente_nombre || 'la empresa'} y acepto su incorporación al contrato ${a.contrato_id || ''} con las tarifas indicadas.`
+            : `Declaro que he leído el anexo de aumento ${gid} al contrato ${a.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${g.cliente_nombre || 'la empresa'}.`,
           representante: { nombre: this.cliente.representante || '', cedula: this.cliente.representante_cedula || '' },
+          ...(a.es_regularizacion ? { es_regularizacion: true,
+            regulariza_seriales: (a.regulariza_seriales || []).map(s => ({ serial: s.serial || '', modelo: s.modelo || '' })) } : {}),
           resumen: {
-            tipo_contrato: 'Anexo de aumento',
-            duracion: `${a.duracion_meses || '?'} meses (tramo del anexo, desde la entrega)`,
+            tipo_contrato: a.es_regularizacion ? 'Anexo de regularización' : 'Anexo de aumento',
+            duracion: a.es_regularizacion
+              ? `${a.duracion_meses || '?'} meses (desde la firma — equipos ya entregados)`
+              : `${a.duracion_meses || '?'} meses (tramo del anexo, desde la entrega)`,
             equipos: (a.lineas || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0) })),
             cargos: (a.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente })),
             total_mensual: Number(t.total_mensual || 0),
@@ -1314,7 +1322,7 @@ window.Centro = {
       ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
         ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
       ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
-        ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}')">Agregar línea por anexo</button>` : ''}
+        ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})">Regularizar por anexo</button>` : ''}
       <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`;
     return `
       <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
@@ -1524,9 +1532,13 @@ window.Centro = {
       const asignados = a.seriales_asignados || [];
       const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega' && g.cierre?.derivacion;
       cuerpo = `
+        ${a.es_regularizacion ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
+          <b>Anexo de regularización</b> — amarra equipos que el cliente ya tiene
+          (<span class="cg-mono">${(a.regulariza_seriales || []).map(s => this.esc(s.serial)).join(', ')}</span>);
+          al firmarse se aplica y cierra solo, sin bodega ni entrega.</p>` : ''}
         <p style="font-size:13px; margin:0 0 8px;"><b>Contrato destino:</b>
           <span class="cg-mono">${this.esc(a.contrato_id || '—')}</span> ·
-          <b>Vigencia del tramo:</b> ${this.esc(String(a.duracion_meses || '?'))} meses desde la entrega</p>
+          <b>Vigencia del tramo:</b> ${this.esc(String(a.duracion_meses || '?'))} meses ${a.es_regularizacion ? 'desde la firma' : 'desde la entrega'}</p>
         <div class="cg-twrap"><table class="cg-tabla"><thead><tr>
           <th>Cant.</th><th>Modelo</th><th>Precio/mes</th></tr></thead><tbody>
           ${(a.lineas || []).map(l => `<tr><td class="num">${Number(l.cantidad || 0)}</td>
@@ -2315,17 +2327,38 @@ window.Centro = {
     // ITBMS por defecto: hereda del contrato destino; cliente exento manda.
     const cBase = activos.find(c => c.id === preselId) || activos[0];
     const itbmsDefault = this.cliente?.itbms_exento === true ? false : (cBase?.itbms_aplica !== false);
+    // Modo REGULARIZACIÓN (2026-08-31, caso C COMUNICA: el flujo normal mandó
+    // a Alberto a bodega por equipos que el cliente YA tenía): el anexo amarra
+    // los sobrantes de la conciliación — prellenado con sus modelos, y B3 lo
+    // aplica y CIERRA al firmarse, sin bodega, sin OS y sin entrega.
+    this._aumRegulariza = null;
+    if (opts.regularizar) {
+      const sobr = [...(cBase.regularizacion?.sin_linea_seriales || []),
+                    ...(cBase.regularizacion?.sin_cupo_seriales || [])];
+      const unidades = sobr.map(s => this.equipos.find(e => (e.serial || e.id) === s)).filter(Boolean);
+      if (!unidades.length) { Toast.show('Este contrato no tiene sobrantes de regularización', 'warn'); return; }
+      this._aumRegulariza = unidades.map(u => ({
+        pool_doc_id: u.id, serial: u.serial || u.id,
+        modelo_id: u.modelo_id || null, modelo: u.modelo_label || u.modelo || '',
+      }));
+    }
     // Ancla automática (cuenta fragmentada): el destino NO se pregunta — se
     // informa. Y la consolidación se OFRECE cuando conviene, sin imponerla.
     const est = this._cuentaEstado();
-    const nudge = est.tipo === 'fragmentada' && !this._renovacionEnTramite()
+    const nudge = this._aumRegulariza ? '' : est.tipo === 'fragmentada' && !this._renovacionEnTramite()
       && (est.custodia || est.renovables.some(c => this._wcEnVentana(c)))
       ? `<div class="cg-senal warn" style="margin-bottom:10px; align-items:center;">
           <span>Esta cuenta tiene <b>${est.renovables.length} contrato(s)</b>${est.custodia ? ` y <b>${est.custodia} radio(s) sin contrato formal</b>` : ''} —
           si el cliente está por renovar, este es el momento de consolidarla.</span>
           <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
             onclick="Centro.wizContrato({renovarCuenta:true, agregar:true})">Mejor renovar la cuenta</button></div>` : '';
-    const destinoHtml = opts.ancla
+    const destinoHtml = this._aumRegulariza
+      ? `<div class="form-field" style="margin-bottom:10px;">
+          <label class="form-label">Anexo de regularización al contrato</label>
+          <p style="margin:0; font-size:13px;"><span class="cg-mono">${this.esc(cBase.contrato_id || cBase.id)}</span>
+            <span style="color:var(--fg-4);">(el de la renovación con sobrantes — fijo)</span></p>
+          <select id="waContrato" class="hidden"><option value="${this.esc(cBase.id)}" selected></option></select></div>`
+      : opts.ancla
       ? `<div class="form-field" style="margin-bottom:10px;">
           <label class="form-label">Anexo a la cuenta</label>
           <p style="margin:0; font-size:13px;">Se cuelga del contrato ancla
@@ -2337,14 +2370,35 @@ window.Centro = {
           <select class="form-select" id="waContrato">
             ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === preselId ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
           </select></div>`;
+    // Prellenado de líneas: en regularización, los modelos de los sobrantes.
+    const lineasIni = this._aumRegulariza
+      ? (() => {
+          const m = new Map();
+          this._aumRegulariza.forEach(u => {
+            const k = u.modelo_id || u.modelo;
+            const g = m.get(k) || { modelo_id: u.modelo_id, modelo: u.modelo, cantidad: 0 };
+            g.cantidad++; m.set(k, g);
+          });
+          return [...m.values()].map(l => this._lineaModeloPre('wau', true, l)).join('');
+        })()
+      : this._lineaModeloHtml('wau', true);
+    const regSenal = this._aumRegulariza
+      ? `<div class="cg-senal warn" style="margin-bottom:10px;">
+          <span>Anexo de <b>regularización</b>: amarra <b>${this._aumRegulariza.length} equipo(s)</b> que el cliente
+          YA tiene (<span class="cg-mono">${this._aumRegulariza.map(u => this.esc(u.serial)).join(', ')}</span>).
+          Al firmarlo el cliente, quedan amarrados al contrato con el tramo desde <b>hoy</b> —
+          <b>sin bodega, sin orden de servicio y sin entrega</b>. Solo falta ponerles precio.</span></div>` : '';
     this._abrirModalA({
-      titulo: `Aumento de equipos (enmienda) — ${this.esc(this.cliente.nombre)}`,
+      titulo: `${this._aumRegulariza ? 'Regularización por anexo' : 'Aumento de equipos (enmienda)'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
-        La enmienda agrega líneas <b>con vigencia propia</b>: el período del equipo
-        nuevo corre desde su entrega y vence más tarde que el resto — el anexo lo deja explícito y
-        <b>requiere la firma del cliente</b> antes de aplicarse.</p>
-      ${nudge}
+        ${this._aumRegulariza
+          ? `El anexo formaliza equipos <b>ya en poder del cliente</b> que la renovación dejó sin línea —
+             <b>requiere la firma del cliente</b> y se aplica solo al firmarse.`
+          : `La enmienda agrega líneas <b>con vigencia propia</b>: el período del equipo
+             nuevo corre desde su entrega y vence más tarde que el resto — el anexo lo deja explícito y
+             <b>requiere la firma del cliente</b> antes de aplicarse.`}</p>
+      ${regSenal}${nudge}
       <div class="cg-paso">
         <div class="cg-paso-t"><span class="n">1</span> Destino del anexo</div>
         ${destinoHtml}
@@ -2354,7 +2408,7 @@ window.Centro = {
         <div class="cg-paso-t"><span class="n">2</span> Equipos y conceptos</div>
         <div class="form-field" style="margin-bottom:10px;">
           <label class="form-label">Equipos (modelo · cantidad · precio mensual)</label>
-          <div id="waLineas">${this._lineaModeloHtml('wau', true)}</div>
+          <div id="waLineas">${lineasIni}</div>
           <button class="btn btn-ghost cg-act"
             onclick="Centro._addLineaModelo('waLineas','wau',true); Centro._aumPreview()">+ Agregar otro modelo</button></div>
         <div class="form-field" style="margin-bottom:4px;">
@@ -2416,11 +2470,18 @@ window.Centro = {
           totales,
           duracion_meses: meses,
           seriales_asignados: [],
+          // Regularización: B3 amarra estos seriales (ya en campo) al
+          // firmarse el anexo y cierra la gestión — sin bodega ni entrega.
+          ...(this._aumRegulariza
+            ? { es_regularizacion: true, regulariza_seriales: this._aumRegulariza } : {}),
         },
       });
       this._cerrarModal();
       this.gSel = gid;
-      Toast.show(`Aumento ${gid} enviado a aprobación comercial`, 'ok');
+      Toast.show(this._aumRegulariza
+        ? `Regularización ${gid} enviada a aprobación — al firmarse amarra los equipos de una vez`
+        : `Aumento ${gid} enviado a aprobación comercial`, 'ok');
+      this._aumRegulariza = null;
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear el aumento', 'bad'); }
   },

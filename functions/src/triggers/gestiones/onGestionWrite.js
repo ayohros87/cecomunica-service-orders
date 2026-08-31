@@ -288,7 +288,9 @@ module.exports = onDocumentWritten(
           await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administradores (excepción propio sin garantía).");
         }
       }
-      const entraABodega = after.tipo !== "baja" && (
+      // Un anexo de REGULARIZACIÓN no pasa por bodega: los equipos ya están
+      // con el cliente (B3 los amarra directo al firmarse).
+      const entraABodega = after.tipo !== "baja" && after.aumento?.es_regularizacion !== true && (
         (creada && after.estado === "pendiente_bodega") ||
         (before && ["pendiente_aprobacion", "pendiente_firma"].includes(before.estado)
           && after.estado === "pendiente_bodega"));
@@ -446,6 +448,14 @@ module.exports = onDocumentWritten(
         if (!a.contrato_doc_id || !(a.lineas || []).length) {
           logger.error("[onGestionWrite] aumento firmado sin contrato destino o sin líneas", { gid });
         } else {
+          // Anexo de REGULARIZACIÓN (2026-08-31, caso C COMUNICA): los equipos
+          // YA están en poder del cliente (sobrantes sin línea de una
+          // renovación) — el tramo arranca HOY y no hay bodega ni entrega.
+          const esReg = a.es_regularizacion === true
+            && Array.isArray(a.regulariza_seriales) && a.regulariza_seriales.length > 0;
+          const hoy = new Date();
+          const fvReg = new Date(hoy.getTime());
+          fvReg.setMonth(fvReg.getMonth() + (Number(a.duracion_meses || 0) || 0));
           const cRef = db.collection("contratos").doc(a.contrato_doc_id);
           await db.runTransaction(async (tx) => {
             const cSnap = await tx.get(cRef);
@@ -456,14 +466,24 @@ module.exports = onDocumentWritten(
               equipos.push({
                 modelo_id: l.modelo_id || null,
                 modelo: l.modelo || "",
-                descripcion: `Aumento por enmienda ${gid} (anexo firmado)`,
+                descripcion: esReg
+                  ? `Regularización por enmienda ${gid} (anexo firmado — equipos ya en campo)`
+                  : `Aumento por enmienda ${gid} (anexo firmado)`,
                 cantidad: Number(l.cantidad || 0),
                 precio: Number(l.precio || 0),
                 enmienda_id: gid,
-                vigencia: {
-                  duracion_meses: Number(a.duracion_meses || 0) || null,
-                  estado: "pendiente_entrega", // el tramo corre desde la entrega
-                },
+                vigencia: esReg
+                  ? {
+                      fecha_inicio: admin.firestore.Timestamp.fromDate(hoy),
+                      duracion_meses: Number(a.duracion_meses || 0) || null,
+                      fecha_vencimiento: admin.firestore.Timestamp.fromDate(fvReg),
+                      estado: "vigente", // el equipo ya está entregado
+                      enmienda_id: gid,
+                    }
+                  : {
+                      duracion_meses: Number(a.duracion_meses || 0) || null,
+                      estado: "pendiente_entrega", // el tramo corre desde la entrega
+                    },
               });
             }
             // Cargos del anexo (únicos y mensuales) al contrato — mismo shape
@@ -485,10 +505,63 @@ module.exports = onDocumentWritten(
               enmiendas_aumento: admin.firestore.FieldValue.arrayUnion(gid),
             }, { merge: true });
           });
-          await ref.set({ cierre: { ...(after.cierre || {}), derivacion: true } }, { merge: true });
-          await G.registrarEvento(gid, "derivacion",
-            `Anexo firmado: ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).`);
-          logger.info("[onGestionWrite] aumento aplicado al contrato", { gid, contrato: a.contrato_doc_id });
+          if (esReg) {
+            // 1) Amarrar cada serial (ya en campo) al contrato — update con
+            //    dot-paths: jamás set(merge) sobre rutas anidadas del pool.
+            let amarrados = 0;
+            for (const s of a.regulariza_seriales) {
+              if (!s.pool_doc_id) continue;
+              try {
+                await db.collection("equipos_pool").doc(s.pool_doc_id).update({
+                  "asignacion.contrato_doc_id": a.contrato_doc_id,
+                  "asignacion.contrato_id": a.contrato_id || a.contrato_doc_id,
+                  "asignacion.gestion_doc_id": gid,
+                });
+                amarrados++;
+              } catch (e) {
+                logger.warn("[onGestionWrite] amarre de regularización falló", { gid, serial: s.serial, message: e.message });
+              }
+            }
+            // 2) La conciliación del contrato baja: esos seriales dejan de
+            //    ser sobrantes.
+            await db.runTransaction(async (tx) => {
+              const s2 = await tx.get(cRef);
+              if (!s2.exists) return;
+              const r = s2.data().regularizacion || {};
+              const set = new Set(a.regulariza_seriales.map(x => String(x.serial || "")));
+              const sl = (r.sin_linea_seriales || []).filter(x => !set.has(String(x)));
+              const sc = (r.sin_cupo_seriales || []).filter(x => !set.has(String(x)));
+              tx.set(cRef, {
+                regularizacion: {
+                  ...r,
+                  amarradas: Number(r.amarradas || 0) + amarrados,
+                  sin_linea: sl.length, sin_linea_seriales: sl,
+                  sin_cupo: sc.length, sin_cupo_seriales: sc,
+                  ultima_por: `anexo:${gid}`,
+                },
+              }, { merge: true });
+            });
+            // 3) La gestión cierra aquí mismo: no hay bodega, OS ni entrega.
+            await ref.set({
+              estado: "cerrada",
+              cerrada_at: admin.firestore.FieldValue.serverTimestamp(),
+              aumento: {
+                ...a,
+                seriales_asignados: a.regulariza_seriales.map(s => ({
+                  serial: s.serial || "", modelo_id: s.modelo_id || null, modelo: s.modelo || "",
+                })),
+              },
+              cierre: { ...(after.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
+            }, { merge: true });
+            await G.registrarEvento(gid, "entrega",
+              `Anexo de REGULARIZACIÓN aplicado: ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")}); el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
+            logger.info("[onGestionWrite] regularización por anexo aplicada", { gid, contrato: a.contrato_doc_id, amarrados });
+          } else {
+            await ref.set({ cierre: { ...(after.cierre || {}), derivacion: true } }, { merge: true });
+            await G.registrarEvento(gid, "derivacion",
+              `Anexo firmado: ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).`);
+            logger.info("[onGestionWrite] aumento aplicado al contrato", { gid, contrato: a.contrato_doc_id });
+          }
         }
       }
     } catch (e) {

@@ -225,11 +225,20 @@
       // Un ANEXO no repite el contrato: muestra sus líneas y remite al marco.
       if (s.tipo === 'anexo_aumento') {
         document.querySelector('#fDocDet summary').textContent = '📄 Leer el anexo completo';
+        const regu = s.es_regularizacion === true;
+        const serialesRegu = (s.regulariza_seriales || []).map(u =>
+          `<tr><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td></tr>`).join('');
         cont.innerHTML = `
-          <p>Anexo de aumento al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
-            <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>. Las líneas
-            de la tabla de arriba se AGREGAN al contrato marco y forman parte integral de él
-            (cláusula 18 — administración por anexos), con su propio período cuando aplique.</p>
+          <p>Anexo de ${regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
+            <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>.
+            ${regu
+              ? `Formaliza equipos que <b>ya están en poder de EL CLIENTE</b>: al firmarse, quedan
+                 incorporados al contrato marco con las tarifas de la tabla de arriba y su período
+                 corre <b>desde la firma</b> — no hay entrega pendiente.`
+              : `Las líneas de la tabla de arriba se AGREGAN al contrato marco y forman parte
+                 integral de él (cláusula 18 — administración por anexos), con su propio período
+                 cuando aplique.`}</p>
+          ${regu && serialesRegu ? `<table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${serialesRegu}</tbody></table>` : ''}
           <p>En lo no modificado por este anexo, rigen íntegras las condiciones del contrato marco,
             incluidas garantía (cláusula 8), tarifas y pagos (cláusulas 9–11), valor de reposición
             (cláusula 15) y terminación y bajas (cláusula 17).</p>`;
