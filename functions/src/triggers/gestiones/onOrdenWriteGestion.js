@@ -263,6 +263,25 @@ module.exports = onDocumentWritten(
                     fecha_modificacion: new Date(),
                   });
                 }
+                // Jerarquía del linaje (2026-08-31): los ORÍGENES que esta
+                // renovación consumió mueren con ella — sin esto, un origen
+                // 'aprobado' escondido tras renovado_por_ids resucitaba como
+                // contrato operativo al terminar la cuenta.
+                let origCerrados = 0;
+                const origenes = await db.collection("contratos")
+                  .where("renovado_por_ids", "array-contains", cDocId).get();
+                for (const od of origenes.docs) {
+                  const oc = od.data();
+                  if (!["activo", "aprobado"].includes(oc.estado)) continue;
+                  origCerrados++;
+                  await od.ref.update({
+                    estado: "vencido",
+                    estado_previo: oc.estado,
+                    vencido_at: admin.firestore.FieldValue.serverTimestamp(),
+                    vencido_motivo: `Terminación total ${gid}: era origen renovado por ${c.contrato_id || cDocId} — el linaje cierra con la cuenta`,
+                    fecha_modificacion: new Date(),
+                  }).catch((e2) => logger.warn("[onOrdenWriteGestion] origen no cerrado", { gid, origen: od.id, message: e2.message }));
+                }
                 const poolSnap = await db.collection("equipos_pool")
                   .where("asignacion.contrato_doc_id", "==", cDocId).get();
                 let sueltos = 0;
@@ -278,7 +297,7 @@ module.exports = onDocumentWritten(
                   }
                 }
                 await G.registrarEvento(gid, "terminacion",
-                  `Terminación total: el contrato ${c.contrato_id || cDocId} pasa a CERRADO (vencido) con la flota recuperada${sueltos ? `; ${sueltos} equipo(s) propios del cliente sueltan el vínculo al contrato` : ""}.`);
+                  `Terminación total: el contrato ${c.contrato_id || cDocId} pasa a CERRADO (vencido) con la flota recuperada${origCerrados ? `; ${origCerrados} contrato(s) origen del linaje cierran con él` : ""}${sueltos ? `; ${sueltos} equipo(s) propios del cliente sueltan el vínculo al contrato` : ""}.`);
                 logger.info("[onOrdenWriteGestion] terminación total aplicada", { gid, contrato: cDocId, sueltos });
               } catch (e2) {
                 logger.error("[onOrdenWriteGestion] terminación total falló", { gid, contrato: cDocId, message: e2.message });

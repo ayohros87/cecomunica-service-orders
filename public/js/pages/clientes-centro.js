@@ -383,7 +383,13 @@ window.Centro = {
   _renovadoPor(c) {
     for (const id of (c?.renovado_por_ids || [])) {
       const r = this.contratos.find(x => x.id === id);
-      if (r && this._esVigente(r) && this._codigoTipo(r) !== 'REEMP') return r;
+      if (!r || r.deleted || this._codigoTipo(r) === 'REEMP') continue;
+      if (this._esVigente(r)) return r;
+      // 2026-08-31 (caso C COMUNICA): la renovación TERMINÓ (vencido tras la
+      // terminación total) y su origen 'aprobado' de junio RESUCITÓ como
+      // operativo. Una renovación que llegó a vivir consume a sus orígenes
+      // para siempre — solo una ANULADA (o borrada) los libera.
+      if (r.estado !== 'anulado' && (r.fecha_activacion || r.estado_previo === 'activo')) return r;
     }
     return null;
   },
