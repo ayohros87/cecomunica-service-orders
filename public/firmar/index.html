@@ -238,20 +238,20 @@
         const regu = s.es_regularizacion === true;
         const serialesRegu = (s.regulariza_seriales || []).map(u =>
           `<tr><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td></tr>`).join('');
+        // Texto congelado en la solicitud (misma regla que el contrato); los
+        // enlaces anteriores al congelado usan el texto desplegado como
+        // respaldo.
+        const intro = d.intro_html || (window.ContratoV2Texto ? ContratoV2Texto.anexoIntro(regu) : '');
+        const marco = d.marco_html || (window.ContratoV2Texto ? ContratoV2Texto.anexoMarco : '');
+        const claus = d.clausulas_html || (window.ContratoV2Texto ? ContratoV2Texto.clausulasHtml : '');
         cont.innerHTML = `
           <p>Anexo de ${regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
-            <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>.
-            ${regu
-              ? `Formaliza equipos que <b>ya están en poder de EL CLIENTE</b>: al firmarse, quedan
-                 incorporados al contrato marco con las tarifas de la tabla de arriba y su período
-                 corre <b>desde la firma</b> — no hay entrega pendiente.`
-              : `Las líneas de la tabla de arriba se AGREGAN al contrato marco y forman parte
-                 integral de él (cláusula 18 — administración por anexos), con su propio período
-                 cuando aplique.`}</p>
+            <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>. ${intro}</p>
           ${regu && serialesRegu ? `<table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${serialesRegu}</tbody></table>` : ''}
-          <p>En lo no modificado por este anexo, rigen íntegras las condiciones del contrato marco,
-            incluidas garantía (cláusula 8), tarifas y pagos (cláusulas 9–11), valor de reposición
-            (cláusula 15) y terminación y bajas (cláusula 17).</p>`;
+          <p>${marco}</p>
+          ${claus ? `<h3>Condiciones generales del contrato marco (cláusulas 5–18, para su referencia)</h3>
+            <ol class="clausulas">${claus}</ol>` : ''}
+          ${d.texto_version ? `<p style="color:#8a99a8; font-size:11.5px;">Texto del anexo: versión ${this.esc(d.texto_version)} — congelado en esta solicitud de firma.</p>` : ''}`;
         return;
       }
       const durNum = String(r.duracion || '').match(/\d+/)?.[0];

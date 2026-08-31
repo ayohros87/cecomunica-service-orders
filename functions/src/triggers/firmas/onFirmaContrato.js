@@ -86,6 +86,7 @@ async function aplicarAnexo(sid, s, extraFirma = {}) {
     firmante_nombre: f.nombre, firmante_cedula: f.cedula,
     firmado_at: f.firmado_at?.toDate ? f.firmado_at.toDate().toISOString() : String(f.firmado_at || ""),
     total_mensual: s.resumen?.total_mensual,
+    texto_version: s.documento?.texto_version || null,
   });
   const upd = {
     "cierre.firma": true,
@@ -96,6 +97,7 @@ async function aplicarAnexo(sid, s, extraFirma = {}) {
       firmante_cargo: f.cargo || "",
       firmado_at: f.firmado_at || admin.firestore.Timestamp.now(),
       hash,
+      texto_version: s.documento?.texto_version || null,
       coincide_representante: s.firmante_coincide !== false,
       ...extraFirma,
     },

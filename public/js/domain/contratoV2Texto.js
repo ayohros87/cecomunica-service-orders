@@ -10,6 +10,22 @@ window.ContratoV2Texto = {
   // de fondo al texto.
   version: 'v2-2026-08-31',
 
+  // Texto del ANEXO (aumento / regularización). Igual que el contrato: se
+  // congela en la solicitud de firma junto con la versión.
+  anexoIntro(regu) {
+    return regu
+      ? `Formaliza equipos que <b>ya están en poder de EL CLIENTE</b>: al firmarse, quedan
+         incorporados al contrato marco con las tarifas de la tabla de arriba y su período
+         corre <b>desde la firma</b> — no hay entrega pendiente.`
+      : `Las líneas de la tabla de arriba se AGREGAN al contrato marco y forman parte
+         integral de él (cláusula 18 — administración por anexos), con su propio período
+         cuando aplique.`;
+  },
+  anexoMarco:
+    `En lo no modificado por este anexo, rigen íntegras las condiciones del contrato marco,
+     incluidas garantía (cláusula 8), tarifas y pagos (cláusulas 9–11), valor de reposición
+     (cláusula 15) y terminación y bajas (cláusula 17).`,
+
   // Sección 3 (caja) — inventario por serial.
   inventarioHtml:
     `Los equipos se identifican por serial en el <b>Anexo A</b>, parte integral de este

@@ -903,6 +903,15 @@ window.Centro = {
           representante: { nombre: this.cliente.representante || '', cedula: this.cliente.representante_cedula || '' },
           ...(a.es_regularizacion ? { es_regularizacion: true,
             regulariza_seriales: (a.regulariza_seriales || []).map(s => ({ serial: s.serial || '', modelo: s.modelo || '' })) } : {}),
+          // Texto del anexo CONGELADO con su versión (misma regla que el
+          // contrato: la firma cae sobre lo que el cliente leyó, inmutable) +
+          // las cláusulas del marco que el anexo cita, para leerlas ahí mismo.
+          ...(window.ContratoV2Texto ? { documento: {
+            texto_version: ContratoV2Texto.version,
+            intro_html: ContratoV2Texto.anexoIntro(a.es_regularizacion === true),
+            marco_html: ContratoV2Texto.anexoMarco,
+            clausulas_html: ContratoV2Texto.clausulasHtml,
+          } } : {}),
           resumen: {
             tipo_contrato: a.es_regularizacion ? 'Anexo de regularización' : 'Anexo de aumento',
             duracion: a.es_regularizacion
