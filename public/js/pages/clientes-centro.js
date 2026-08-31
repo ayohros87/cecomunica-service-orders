@@ -1439,18 +1439,22 @@ window.Centro = {
       return;
     }
     cont.innerHTML = tramHtml + (this.gestiones || []).map(g => {
-      const done = ['asignacion', 'programacion', 'entrega', 'entrada']
-        .filter(k => g.cierre?.[k] === true).length;
+      // Progreso con LOS PASOS DEL TIPO (el 4 fijo de reemplazo/demo pintaba
+      // "3/4" en un aumento cerrado con sus 6 pasos completos).
+      const defsG = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
+      const done = defsG.filter(([k]) => g.cierre?.[k] === true).length;
       const fecha = g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().toLocaleDateString('es-PA') : '—';
       const abierta = this.gSel === g.id;
       return `
       <div class="cg-row" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
         <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;">${this.esc(g.id)}</div>
-          <div class="s">${this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
+          <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo' : this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
             ? this.esc((g.demo?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ') || '—')
+            : g.tipo === 'aumento'
+            ? this.esc((g.aumento?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ') || '—')
             : `${(g.items || []).length} serial(es)`} · ${fecha}</div></div>
-        <span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/4</span>
+        <span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/${defsG.length}</span>
         <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
         <span class="arr">${abierta ? '▾' : '›'}</span>
       </div>
@@ -1526,7 +1530,17 @@ window.Centro = {
   _detalleGestion(g) {
     // Checklist como timeline del kit: done = completado; next = el paso que
     // sigue (todos los anteriores completos) — el ojo sabe dónde está parado.
-    const defs = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
+    let defs = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
+    // La regularización comparte flags con el aumento pero su historia es
+    // otra: sin bodega, sin OS, tramo desde la firma.
+    if (g.tipo === 'aumento' && g.aumento?.es_regularizacion) defs = [
+      ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
+      ['firma', 'Anexo firmado por el cliente', 'Declara que los equipos ya están en su poder'],
+      ['derivacion', 'Líneas aplicadas al contrato', 'El tramo corre desde la firma'],
+      ['asignacion', 'Seriales amarrados al contrato', 'Ya estaban en campo — sin pasar por bodega'],
+      ['programacion', 'Sin orden de servicio', 'No aplica: nada que programar'],
+      ['entrega', 'Regularización completa', 'Los sobrantes de la conciliación bajan a cero'],
+    ];
     const check = `<div class="cg-tl">` + defs.map(([k, t, s], i) => {
       const done = g.cierre?.[k] === true;
       const next = !done && defs.slice(0, i).every(([kk]) => g.cierre?.[kk] === true);
