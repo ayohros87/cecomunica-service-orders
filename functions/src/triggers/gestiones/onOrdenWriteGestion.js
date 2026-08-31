@@ -238,6 +238,53 @@ module.exports = onDocumentWritten(
               ? `Retorno del demo resuelto en la devolución ${ordenId}; los equipos pasan por inspección antes de volver a Disponible.`
               : `Check-in de la devolución ${ordenId} completo: el/los saliente(s) quedaron resueltos (recibido / excepción). La ENTRADA de inspección sigue su cadena normal.`);
           logger.info("[onOrdenWriteGestion] entrada propagada a la gestión", { gid, ordenId });
+
+          // ── TERMINACIÓN TOTAL: con la flota recuperada, el contrato se
+          // CIERRA de verdad (2026-08-31, caso C COMUNICA: la devolución
+          // completó pero el contrato quedaba 'activo' y la ficha del Centro
+          // seguía mostrando la cuenta viva). Terminal 'vencido' — el mismo
+          // de los cierres por recuperación (DEMO/TEMP/drenados). La custodia
+          // residual (equipos PROPIOS del cliente, que no se recuperan)
+          // suelta el vínculo al contrato: quedan como equipos del cliente.
+          if (g.tipo === "baja" && Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length) {
+            for (const cDocId of g.terminacion_total_de) {
+              try {
+                const cRef = db.collection("contratos").doc(cDocId);
+                const cSnap = await cRef.get();
+                if (!cSnap.exists) continue;
+                const c = cSnap.data();
+                if (["activo", "aprobado"].includes(c.estado)) {
+                  await cRef.update({
+                    estado: "vencido",
+                    estado_previo: c.estado,
+                    vencido_at: admin.firestore.FieldValue.serverTimestamp(),
+                    vencido_motivo: `Terminación total ${gid}: flota recuperada en la devolución ${ordenId}`,
+                    fecha_fin: admin.firestore.FieldValue.serverTimestamp(),
+                    fecha_modificacion: new Date(),
+                  });
+                }
+                const poolSnap = await db.collection("equipos_pool")
+                  .where("asignacion.contrato_doc_id", "==", cDocId).get();
+                let sueltos = 0;
+                for (const pd of poolSnap.docs) {
+                  try {
+                    await pd.ref.update({
+                      "asignacion.contrato_doc_id": null,
+                      "asignacion.contrato_id": "",
+                    });
+                    sueltos++;
+                  } catch (e2) {
+                    logger.warn("[onOrdenWriteGestion] no soltó custodia residual", { gid, serial: pd.id, message: e2.message });
+                  }
+                }
+                await G.registrarEvento(gid, "terminacion",
+                  `Terminación total: el contrato ${c.contrato_id || cDocId} pasa a CERRADO (vencido) con la flota recuperada${sueltos ? `; ${sueltos} equipo(s) propios del cliente sueltan el vínculo al contrato` : ""}.`);
+                logger.info("[onOrdenWriteGestion] terminación total aplicada", { gid, contrato: cDocId, sueltos });
+              } catch (e2) {
+                logger.error("[onOrdenWriteGestion] terminación total falló", { gid, contrato: cDocId, message: e2.message });
+              }
+            }
+          }
         }
       } catch (e) {
         logger.error("[onOrdenWriteGestion] propagación de entrada falló", { gid, ordenId, message: e.message });
