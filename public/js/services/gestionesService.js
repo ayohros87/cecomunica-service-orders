@@ -76,13 +76,16 @@ const GestionesService = {
   // origen, y lo específico del tipo. El doc-ID ES el correlativo legible.
   // Todos los items deben ser del MISMO cliente — el candado real está en la
   // regla y lo reforzarán los triggers; aquí se valida para fallar temprano.
-  async crear(data) {
+  // `opts.id`: correlativo YA reservado con reservarId() — permite subir
+  // anexos (la carta de baja) ANTES del create, para que el correo del
+  // trigger onCreate ya los vea.
+  async crear(data, { id: idReservado = null } = {}) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     if (!data?.tipo || !this.TIPOS[data.tipo]) throw new Error('Tipo de gestión inválido');
     if (!data?.cliente_id) throw new Error('La gestión necesita cliente_id');
 
-    const id = await this.reservarId(data.tipo);
+    const id = idReservado || await this.reservarId(data.tipo);
     const doc = {
       tipo: data.tipo,
       estado: data.estado || 'pendiente_bodega',
@@ -90,9 +93,14 @@ const GestionesService = {
       cliente_nombre: data.cliente_nombre || '',
       origen: data.origen || { tipo: 'vendedor' },
       items: Array.isArray(data.items) ? data.items : [],
-      contratos_afectados: Array.from(new Set(
-        (data.items || []).map(i => i.contrato_doc_id).filter(Boolean)
-      )),
+      // Además de los contratos de los ítems, una terminación total afecta a
+      // TODOS sus contratos aunque no tengan fichas en el pool (renovación sin
+      // equipo, custodia): sin esta unión, derivarBajaContrato jamás corría
+      // para ellos y quedaban vigentes en silencio.
+      contratos_afectados: Array.from(new Set([
+        ...(data.items || []).map(i => i.contrato_doc_id).filter(Boolean),
+        ...(Array.isArray(data.terminacion_total_de) ? data.terminacion_total_de : []),
+      ])),
       ordenes: {},
       cierre: data.cierre || {},
       notas: data.notas || '',
@@ -108,6 +116,13 @@ const GestionesService = {
       ...(data.penalidad_estimada ? { penalidad_estimada: data.penalidad_estimada } : {}),
       ...(data.fecha_fin_facturacion ? { fecha_fin_facturacion: data.fecha_fin_facturacion } : {}),
       ...(data.motivo_codigo ? { motivo_codigo: data.motivo_codigo } : {}),
+      // Carta del cliente subida ANTES del create (con el id reservado): así
+      // el correo de aprobación del trigger onCreate ya la ve adjunta.
+      ...(data.carta_path ? {
+        carta_path: data.carta_path,
+        carta_at: firebase.firestore.FieldValue.serverTimestamp(),
+        carta_por: user?.email || null,
+      } : {}),
       // Baja: terminación total de contrato(s), fecha de la nota del cliente,
       // término elegido y manejo de depósito (heredados de enmiendas).
       ...(Array.isArray(data.terminacion_total_de) && data.terminacion_total_de.length
@@ -156,14 +171,16 @@ const GestionesService = {
     return out;
   },
 
-  // Bandeja global por estado (o abiertas si no se pasa).
+  // Bandeja global por estado (o abiertas si no se pasa). Las abiertas se
+  // filtran EN EL SERVIDOR: sin filtro, el limit se comía por orden de doc-ID
+  // (GA… < GB… < GR…) y con >limit gestiones los reemplazos abiertos
+  // desaparecían mientras aumentos viejos cerrados llenaban la página.
   async listar({ estado = null, limit = 200 } = {}) {
     const db = firebase.firestore();
     let q = db.collection(this.COL);
-    if (estado) q = q.where('estado', '==', estado);
+    q = estado ? q.where('estado', '==', estado) : q.where('estado', 'in', this.ABIERTAS);
     const snap = await q.limit(limit).get();
-    let out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (!estado) out = out.filter(g => this.ABIERTAS.includes(g.estado));
+    const out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     out.sort((a, b) => (b.fecha_solicitud?.toMillis?.() || 0) - (a.fecha_solicitud?.toMillis?.() || 0));
     return out;
   },
@@ -235,13 +252,21 @@ const GestionesService = {
       `Bodega asignó al demo: ${seriales.map(s => s.serial).join(', ')}`);
   },
 
+  // Sube la carta a Storage y devuelve su path — SIN tocar el doc. Sirve para
+  // subirla ANTES del create (id reservado) y que el correo del onCreate ya
+  // la vea; el flujo post-create usa subirCartaBaja, que además estampa el doc.
+  async subirCartaArchivo(gestionId, file) {
+    const ext = /pdf$/i.test(file.type) ? 'pdf' : 'jpg';
+    const path = `gestiones_anexos/${gestionId}/carta-baja-${Date.now()}.${ext}`;
+    await firebase.storage().ref(path).put(file, { contentType: file.type });
+    return path;
+  },
+
   // Carta de solicitud del cliente para una BAJA (obligatoria, pedido
   // 2026-08-27) — misma bodega de anexos que el aumento firmado.
   async subirCartaBaja(gestionId, file) {
     const user = firebase.auth().currentUser;
-    const ext = /pdf$/i.test(file.type) ? 'pdf' : 'jpg';
-    const path = `gestiones_anexos/${gestionId}/carta-baja-${Date.now()}.${ext}`;
-    await firebase.storage().ref(path).put(file, { contentType: file.type });
+    const path = await this.subirCartaArchivo(gestionId, file);
     await firebase.firestore().collection(this.COL).doc(gestionId).update({
       carta_path: path,
       carta_at: firebase.firestore.FieldValue.serverTimestamp(),

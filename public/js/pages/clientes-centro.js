@@ -99,9 +99,13 @@ window.Centro = {
         const s = await db.collection('clientes').where('vendedor_asignado', '==', this.uid).get();
         misClientes = new Set(s.docs.map(d => d.id));
       }
+      // Las gestiones se filtran a ABIERTAS en el servidor: sin filtro, el
+      // limit devolvía por orden de doc-ID (GA… primero) y con el crecimiento
+      // los reemplazos abiertos se caían de la franja (trampa clase bandeja-40).
       const [venc, gest] = await Promise.all([
         db.collection('contratos').where('vencimiento_estado', 'in', ['vencido', 'por_vencer']).limit(300).get(),
-        db.collection('gestiones').limit(150).get().catch(() => ({ docs: [] })),
+        db.collection('gestiones').where('estado', 'in', GestionesService.ABIERTAS)
+          .limit(150).get().catch(() => ({ docs: [] })),
       ]);
 
       // Regla 2026-08-27: cuentas con equipos SIN contrato formal ⇒ requieren
@@ -273,6 +277,7 @@ window.Centro = {
   /* ═════════ Ficha 360 ═════════ */
 
   volver({ push = true } = {}) {
+    this._pararEscucha();
     this.cliente = null;
     document.getElementById('vistaFicha').classList.add('hidden');
     document.getElementById('vistaLista').classList.remove('hidden');
@@ -339,6 +344,10 @@ window.Centro = {
       this.pintarGestiones();
       this.armarMenu();
       if (window.lucide?.createIcons) lucide.createIcons();
+      // Escucha en vivo: los triggers escriben el avance ~1-2s después de
+      // cada acción y la página lo adivinaba con setTimeout — ahora el
+      // expediente se repinta cuando el dato REAL llega.
+      this._escucharGestiones(clienteId);
       // Deep-link desde correo (?g=): aterrizar EN el expediente, no arriba
       // de la página (pedido 2026-08-27).
       if (this.gSel) {
@@ -573,11 +582,8 @@ window.Centro = {
     if (pendDev) out.push({ tipo: 'warn', txt: `${pendDev} equipo(s) pendiente(s) de devolución.` });
     const enTaller = this.equipos.filter(e => ['en_taller', 'devuelto_revision'].includes(e.estado)).length;
     if (enTaller) out.push({ tipo: 'info', txt: `${enTaller} equipo(s) en taller o en revisión.` });
-    for (const g of (this.gestiones || [])) {
-      if (GestionesService.ABIERTAS.includes(g.estado)) {
-        out.push({ tipo: 'info', txt: `Gestión ${g.id} (${GestionesService.tipoLabel(g.tipo)}) — ${GestionesService.estadoLabel(g.estado)}.` });
-      }
-    }
+    // Las gestiones abiertas NO se repiten aquí: ya viven en el KPI, en
+    // "Requiere tu acción" y en la lista de Gestiones con su fila accionable.
     document.getElementById('fSenales').innerHTML = out.length
       ? out.map(s => `<div class="cg-senal ${s.tipo}"><i data-lucide="${s.tipo === 'info' ? 'info' : 'alert-triangle'}"
           style="width:15px;height:15px;flex:none;margin-top:2px;"></i><span>${this.esc(s.txt)}</span>${s.extra || ''}</div>`).join('')
@@ -1276,6 +1282,64 @@ window.Centro = {
     if (window.lucide?.createIcons) lucide.createIcons();
   },
 
+  // ── Escucha en vivo de las gestiones de la ficha (2026-08-31) ──
+  // Los triggers escriben el avance segundos después de cada acción; el
+  // listener repinta con el estado real en vez de adivinar con timeouts.
+  _unsubGestiones: null,
+  _repintarPend: false,
+  _escucharGestiones(clienteId) {
+    this._pararEscucha();
+    try {
+      this._unsubGestiones = firebase.firestore().collection('gestiones')
+        .where('cliente_id', '==', clienteId)
+        .onSnapshot((snap) => {
+          if (!this.cliente || this.cliente.id !== clienteId) return;
+          const out = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          out.sort((a, b) => (b.fecha_solicitud?.toMillis?.() || 0) - (a.fecha_solicitud?.toMillis?.() || 0));
+          this.gestiones = out;
+          this._repintarGestiones();
+        }, (e) => console.warn('[centro] escucha de gestiones no disponible:', e?.message || e));
+    } catch (e) { console.warn('[centro] escucha de gestiones no disponible:', e?.message || e); }
+  },
+  _pararEscucha() {
+    if (this._unsubGestiones) {
+      try { this._unsubGestiones(); } catch (e) { /* nada */ }
+      this._unsubGestiones = null;
+    }
+  },
+  _repintarGestiones() {
+    // Con el foco en un campo del expediente (bodega tecleando seriales) el
+    // repintado se pospone al blur — si no, le borra lo escrito a mitad.
+    const act = document.activeElement;
+    const enExp = act && document.getElementById('fGestiones')?.contains(act)
+      && ['INPUT', 'SELECT', 'TEXTAREA'].includes(act.tagName);
+    if (enExp) {
+      if (!this._repintarPend) {
+        this._repintarPend = true;
+        act.addEventListener('blur', () => {
+          this._repintarPend = false;
+          setTimeout(() => this._repintarGestiones(), 120);
+        }, { once: true });
+      }
+      return;
+    }
+    // Conserva lo tecleado y aún no guardado en los inputs de asignación.
+    const SEL = '#fGestiones input[data-gitem], #fGestiones input[data-gdemo], #fGestiones input[data-gaum]';
+    const clave = (i) => `${i.dataset.gitem ?? ''}|${i.dataset.gdemo ?? ''}|${i.dataset.gaum ?? ''}`;
+    const escritos = new Map();
+    document.querySelectorAll(SEL).forEach(i => { if (i.value.trim()) escritos.set(clave(i), i.value); });
+    this.pintarAcciones();
+    this.pintarKpis();
+    this.pintarSenales();
+    this.pintarGestiones();
+    if (escritos.size) {
+      document.querySelectorAll(SEL).forEach(i => {
+        if (!i.value.trim() && escritos.has(clave(i))) i.value = escritos.get(clave(i));
+      });
+    }
+    if (window.lucide?.createIcons) lucide.createIcons();
+  },
+
   toggleGestion(gid) {
     this.gSel = this.gSel === gid ? null : gid;
     this.pintarGestiones();
@@ -1787,19 +1851,23 @@ window.Centro = {
       Toast.show('Subiendo anexo firmado…', '');
       await GestionesService.registrarFirmaAumento(gid, file);
       Toast.show('Anexo firmado registrado — el sistema aplica las líneas y avisa a Bodega', 'ok');
-      setTimeout(() => this.recargarGestiones(), 1200);
+      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
     } catch (e) { console.error(e); Toast.show('No se pudo subir el anexo', 'bad'); }
   },
 
   async guardarAsignacionAumento(gid) {
     const inputs = [...document.querySelectorAll('input[data-gaum]')];
     const seriales = [];
+    const usados = new Set();
     try {
       for (const inp of inputs) {
         const serial = inp.value.trim().toUpperCase();
         if (!serial) continue;
-        const v = await this._validarSerialBodega(serial);
+        if (usados.has(serial)) { Toast.show(`${serial}: repetido — cada renglón necesita un serial distinto`, 'bad'); return; }
+        usados.add(serial);
+        const v = await this._validarSerialBodega(serial, this._esperadoDeInput(inp));
         if (!v.ok) { Toast.show(v.why, 'bad'); return; }
+        if (v.warn && !window.confirm(v.warn)) return;
         seriales.push({
           serial: v.unidad.serial || serial,
           pool_doc_id: v.unidad.id || null,
@@ -1810,7 +1878,7 @@ window.Centro = {
       if (!seriales.length) { Toast.show('Captura al menos un serial', 'warn'); return; }
       await GestionesService.asignarAumento(gid, seriales);
       Toast.show('Asignación guardada', 'ok');
-      setTimeout(() => this.recargarGestiones(), 1200);
+      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
     } catch (e) { console.error(e); Toast.show('No se pudo guardar la asignación', 'bad'); }
   },
 
@@ -1818,7 +1886,7 @@ window.Centro = {
     try {
       await GestionesService.aprobarBaja(gid);
       Toast.show('Baja aprobada — el sistema deriva la facturación y crea la devolución por serial', 'ok');
-      setTimeout(() => this.recargarGestiones(), 1200);
+      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
     } catch (e) { console.error(e); Toast.show('No se pudo aprobar la baja', 'bad'); }
   },
 
@@ -1835,13 +1903,32 @@ window.Centro = {
   },
 
   // Valida un serial contra el pool: debe existir y estar Disponible en bodega.
-  async _validarSerialBodega(serial) {
+  // `esperado` ({modelo_id, modelo_label}): si la unidad es de OTRO modelo que
+  // el solicitado, devuelve un aviso — el datalist sugería bien pero el candado
+  // final no lo exigía y bodega podía asignar un modelo distinto en silencio.
+  async _validarSerialBodega(serial, esperado = null) {
     const matches = await EquiposPoolService.findBySerial(serial);
     const lista = Array.isArray(matches) ? matches : (matches ? [matches] : []);
     if (!lista.length) return { ok: false, why: `${serial}: no existe en el inventario` };
     const disp = lista.find(m => m.estado === 'en_bodega');
     if (!disp) return { ok: false, why: `${serial}: no está Disponible en bodega (está ${lista[0].estado})` };
-    return { ok: true, unidad: disp };
+    let warn = null;
+    if (esperado && (esperado.modelo_id || esperado.modelo_label)) {
+      const coincide = (window.EquiposPoolService?._mismoModelo)
+        ? EquiposPoolService._mismoModelo(disp, esperado.modelo_id || null, esperado.modelo_label || '')
+        : this._mismoModeloLinea({ modelo_id: esperado.modelo_id, modelo: esperado.modelo_label }, disp);
+      if (!coincide) {
+        warn = `${serial} es ${disp.modelo_label || 'de otro modelo'} y lo solicitado es `
+          + `${esperado.modelo_label || esperado.modelo_id}. ¿Asignarlo de todos modos?`;
+      }
+    }
+    return { ok: true, unidad: disp, warn };
+  },
+
+  // Modelo esperado de un input de asignación (los data-attrs que pinta el
+  // expediente) — para la validación de coincidencia de _validarSerialBodega.
+  _esperadoDeInput(inp) {
+    return { modelo_id: inp.dataset.modeloId || null, modelo_label: inp.dataset.modeloLabel || '' };
   },
 
   async guardarAsignacion(gid) {
@@ -1849,13 +1936,17 @@ window.Centro = {
     if (!g) return;
     const inputs = [...document.querySelectorAll('input[data-gitem]')];
     const items = (g.items || []).map(it => ({ ...it }));
+    const usados = new Set();
     try {
       for (const inp of inputs) {
         const ix = Number(inp.dataset.gitem);
         const serial = inp.value.trim().toUpperCase();
         if (!serial) { items[ix].serial_nuevo = null; items[ix].pool_doc_id_nuevo = null; continue; }
-        const v = await this._validarSerialBodega(serial);
+        if (usados.has(serial)) { Toast.show(`${serial}: repetido — cada renglón necesita un serial distinto`, 'bad'); return; }
+        usados.add(serial);
+        const v = await this._validarSerialBodega(serial, this._esperadoDeInput(inp));
         if (!v.ok) { Toast.show(v.why, 'bad'); return; }
+        if (v.warn && !window.confirm(v.warn)) return;
         items[ix].serial_nuevo = v.unidad.serial || serial;
         items[ix].pool_doc_id_nuevo = v.unidad.id || null;
         items[ix].asignado_at = new Date().toISOString();
@@ -1865,19 +1956,23 @@ window.Centro = {
       Toast.show(completo
         ? 'Asignación completa — el sistema crea la OS de programación y avisa a Recepción'
         : 'Asignación guardada (parcial)', 'ok');
-      setTimeout(() => this.recargarGestiones(), 1200);
+      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
     } catch (e) { console.error(e); Toast.show('No se pudo guardar la asignación', 'bad'); }
   },
 
   async guardarAsignacionDemo(gid) {
     const inputs = [...document.querySelectorAll('input[data-gdemo]')];
     const seriales = [];
+    const usados = new Set();
     try {
       for (const inp of inputs) {
         const serial = inp.value.trim().toUpperCase();
         if (!serial) continue;
-        const v = await this._validarSerialBodega(serial);
+        if (usados.has(serial)) { Toast.show(`${serial}: repetido — cada renglón necesita un serial distinto`, 'bad'); return; }
+        usados.add(serial);
+        const v = await this._validarSerialBodega(serial, this._esperadoDeInput(inp));
         if (!v.ok) { Toast.show(v.why, 'bad'); return; }
+        if (v.warn && !window.confirm(v.warn)) return;
         seriales.push({
           serial: v.unidad.serial || serial,
           pool_doc_id: v.unidad.id || null,
@@ -1888,7 +1983,7 @@ window.Centro = {
       if (!seriales.length) { Toast.show('Captura al menos un serial', 'warn'); return; }
       await GestionesService.asignarDemo(gid, seriales);
       Toast.show('Asignación guardada', 'ok');
-      setTimeout(() => this.recargarGestiones(), 1200);
+      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
     } catch (e) { console.error(e); Toast.show('No se pudo guardar la asignación', 'bad'); }
   },
 
@@ -2968,7 +3063,9 @@ window.Centro = {
   // final 2026-08-27): SIEMPRE equivale a 3 meses de la mensualidad de la
   // línea, cobrados de inmediato. La diferencia es qué recibe el cliente:
   // no vencido → penalidad pura; vencido → 60 días de preaviso CON SERVICIO
-  // ACTIVO + 30 días de penalidad.
+  // ACTIVO + 30 días de penalidad. El vencimiento se evalúa POR TRAMO del
+  // ítem: la línea de un aumento tiene vigencia propia y puede seguir vigente
+  // aunque el contrato base ya venció (y al revés).
   _penalidadBaja(items) {
     const por = new Map();
     for (const it of items) {
@@ -2976,21 +3073,24 @@ window.Centro = {
       if (!c) continue;
       const linea = (c.equipos || []).find(l => this._mismoModeloLinea(l, { modelo_id: it.modelo_id, modelo_label: it.modelo }));
       const precio = Number(linea?.precio || 0);
-      const dias = this._diasA(c.fecha_vencimiento);
+      const dias = this._diasA(linea?.vigencia?.fecha_vencimiento || c.fecha_vencimiento);
       const vencido = dias !== null && dias < 0;
-      const cur = por.get(c.id) || { contrato_id: c.contrato_id || c.id, monto: 0, unidades: 0, vencido, sinPrecio: false };
+      const cur = por.get(c.id) || { contrato_id: c.contrato_id || c.id, monto: 0, vencidas: 0, vigentes: 0, sinPrecio: false };
       cur.monto += precio * 3;   // 3 meses en cualquier caso, cobro inmediato
-      cur.unidades += 1;
+      if (vencido) cur.vencidas += 1; else cur.vigentes += 1;
       if (!precio) cur.sinPrecio = true;
       por.set(c.id, cur);
     }
-    const lista = [...por.values()].map(p => ({
-      contrato_id: p.contrato_id,
-      monto: Math.round(p.monto * 100) / 100,
-      detalle: `${p.unidades} unid. · ${p.vencido
-        ? 'vencido: 60 días de preaviso (servicio activo) + 30 de penalidad'
-        : 'no vencido: 3 meses de penalidad'}${p.sinPrecio ? ' · ⚠ línea sin precio' : ''}`,
-    }));
+    const lista = [...por.values()].map(p => {
+      const partes = [];
+      if (p.vigentes) partes.push(`${p.vigentes} no vencida(s): 3 meses de penalidad`);
+      if (p.vencidas) partes.push(`${p.vencidas} vencida(s): 60 días de preaviso (servicio activo) + 30 de penalidad`);
+      return {
+        contrato_id: p.contrato_id,
+        monto: Math.round(p.monto * 100) / 100,
+        detalle: `${p.vigentes + p.vencidas} unid. · ${partes.join(' · ')}${p.sinPrecio ? ' · ⚠ línea sin precio' : ''}`,
+      };
+    });
     return { por_contrato: lista, total: Math.round(lista.reduce((s, p) => s + p.monto, 0) * 100) / 100 };
   },
 
@@ -3154,7 +3254,18 @@ window.Centro = {
     const items = base.map(it => ({ ...it, motivo_codigo: motivo, motivo_detalle: detalle, fecha_fin_facturacion: fin || null }));
     const pen = this._penalidadBaja(items);
     try {
-      const gid = await GestionesService.crear({
+      // La carta se sube ANTES de crear el doc (con el correlativo reservado):
+      // el correo de aprobación sale en el onCreate y siempre decía "falta la
+      // carta" aunque el wizard la adjuntara — ahora ya la ve adjunta.
+      const gid = await GestionesService.reservarId('baja');
+      let cartaPath = null;
+      try {
+        cartaPath = await GestionesService.subirCartaArchivo(gid, carta);
+      } catch (e) {
+        console.error(e);
+        Toast.show('La carta NO subió — la gestión se crea igual: adjúntala desde el expediente', 'warn');
+      }
+      await GestionesService.crear({
         tipo: 'baja',
         cliente_id: this.cliente.id,
         cliente_nombre: this.cliente.nombre || '',
@@ -3169,14 +3280,9 @@ window.Centro = {
         termino: document.getElementById('wbTermino')?.value || 'fin_mes',
         fecha_nota_cliente: document.getElementById('wbNota')?.value || null,
         deposito: depAcc === 'na' ? null : { accion: depAcc, monto: Number(document.getElementById('wbDepMonto')?.value || 0) },
+        ...(cartaPath ? { carta_path: cartaPath } : {}),
         ...(termIds.length ? { terminacion_total_de: termIds } : {}),
-      });
-      try {
-        await GestionesService.subirCartaBaja(gid, carta);
-      } catch (e) {
-        console.error(e);
-        Toast.show('La gestión se creó pero la carta NO subió — adjúntala desde el expediente', 'warn');
-      }
+      }, { id: gid });
       this._cerrarModal();
       this.gSel = gid;
       Toast.show(`${termIds.length > 1 ? 'Terminación de la cuenta' : termIds.length ? 'Terminación total' : 'Baja'} ${gid} enviada a aprobación`, 'ok');
