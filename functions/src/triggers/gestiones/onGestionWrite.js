@@ -309,16 +309,24 @@ module.exports = onDocumentWritten(
     // (lib compartida con onCancelacionWrite — no se pisan), marcar los
     // salientes pendiente_devolucion y crear la orden de DEVOLUCIÓN por serial
     // (se acabó adivinar unidades por modelo).
+    // Por NIVEL con lectura fresca (2026-08-31): el flanco de estado se
+    // consumía aunque la derivación fallara a medias y la baja quedaba
+    // aprobada sin devolución PARA SIEMPRE. Idempotencia: cierre.derivacion;
+    // el get fresco evita duplicar la devolución si el evento se re-entrega
+    // con un snapshot viejo.
     try {
-      const aprobadaAhora = after.tipo === "baja"
-        && before && before.estado === "pendiente_aprobacion" && after.estado === "en_proceso"
-        && !after.cierre?.derivacion;
-      if (aprobadaAhora) {
+      let gB = null;
+      if (after.tipo === "baja" && after.estado === "en_proceso" && !after.cierre?.derivacion) {
+        const fresco = await ref.get();
+        const d = fresco.exists ? fresco.data() : null;
+        if (d && d.estado === "en_proceso" && d.cierre?.aprobacion === true && !d.cierre?.derivacion) gB = d;
+      }
+      if (gB) {
         const { derivarBajaContrato } = require("../../lib/bajas");
-        const contratos = Array.isArray(after.contratos_afectados) ? after.contratos_afectados : [];
+        const contratos = Array.isArray(gB.contratos_afectados) ? gB.contratos_afectados : [];
         for (const cid of contratos) await derivarBajaContrato(cid);
 
-        for (const it of (after.items || [])) {
+        for (const it of (gB.items || [])) {
           const serial = String(it.serial_saliente || it.serial || "").trim();
           if (!serial) continue;
           // Regla heredada de enmiendas: los equipos PROPIOS son del cliente —
@@ -346,7 +354,7 @@ module.exports = onDocumentWritten(
 
         const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
         // Regla de enmiendas: los equipos PROPIOS (del cliente) no se recuperan.
-        const recuperables = (after.items || [])
+        const recuperables = (gB.items || [])
           .filter(it => String(it.serial_saliente || it.serial || "").trim() && it.propiedad !== "cliente")
           .map(it => ({
             serial: it.serial_saliente || it.serial,
@@ -354,19 +362,19 @@ module.exports = onDocumentWritten(
             modelo_id: it.modelo_id || null,
             pool_doc_id: it.pool_doc_id_saliente || null,
           }));
-        const propias = (after.items || []).length - recuperables.length;
+        const propias = (gB.items || []).length - recuperables.length;
         let devId = null;
         if (recuperables.length) {
           devId = await crearOrdenDevolucion({
-            clienteId: after.cliente_id,
-            clienteNombre: after.cliente_nombre || "",
+            clienteId: gB.cliente_id,
+            clienteNombre: gB.cliente_nombre || "",
             contratoDocId: contratos[0] || null,
-            contratoId: (after.items || []).find(i => i.contrato_id)?.contrato_id || null,
+            contratoId: (gB.items || []).find(i => i.contrato_id)?.contrato_id || null,
             contratoOrigenIds: contratos,
             modo: "recuperacion",
             origen: { tipo: "gestion_baja", ref_id: gid },
             unidades: recuperables,
-            motivo: `${after.terminacion_total_de?.length ? "Terminación total" : "Baja de equipos"} ${gid} — recuperar las unidades dadas de baja`,
+            motivo: `${gB.terminacion_total_de?.length ? "Terminación total" : "Baja de equipos"} ${gid} — recuperar las unidades dadas de baja`,
           });
           if (devId) {
             await db.collection("ordenes_de_servicio").doc(devId).set({
@@ -376,27 +384,27 @@ module.exports = onDocumentWritten(
         }
         await ref.set({
           cierre: {
-            ...(after.cierre || {}),
+            ...(gB.cierre || {}),
             derivacion: true,
             // Todo propio → no hay nada que recuperar: la entrada se da por
             // cumplida (la baja solo corta el servicio).
             ...(recuperables.length ? {} : { entrada: true }),
           },
-          ordenes: { ...(after.ordenes || {}), devolucion_id: devId || null },
+          ordenes: { ...(gB.ordenes || {}), devolucion_id: devId || null },
         }, { merge: true });
         await G.registrarEvento(gid, "derivacion",
           `Baja aplicada en ${contratos.length} contrato(s): fin de facturación registrado`
           + (devId ? `; orden de devolución ${devId} creada por serial` : "")
           + (propias ? `; ${propias} equipo(s) propios del cliente quedan con él (sin recuperación)` : "")
-          + (after.terminacion_total_de?.length ? `; TERMINACIÓN TOTAL de ${after.terminacion_total_de.length} contrato(s)` : "") + ".");
+          + (gB.terminacion_total_de?.length ? `; TERMINACIÓN TOTAL de ${gB.terminacion_total_de.length} contrato(s)` : "") + ".");
         logger.info("[onGestionWrite] baja derivada", { gid, contratos: contratos.length, devId, propias });
 
         // Correo de "baja aprobada" al vendedor responsable, al vendedor
         // asignado del cliente y a ventas (pedido 2026-08-27).
         try {
           const dests = new Set();
-          if (G.isEmail(after.responsable_email)) dests.add(after.responsable_email.toLowerCase());
-          const vend = await G.vendedorEmailDeCliente(after.cliente_id);
+          if (G.isEmail(gB.responsable_email)) dests.add(gB.responsable_email.toLowerCase());
+          const vend = await G.vendedorEmailDeCliente(gB.cliente_id);
           if (vend) dests.add(vend);
           const ventas = await G.configEmailTo("ventas", "ventas@cecomunica.net");
           if (G.isEmail(ventas)) dests.add(ventas.trim().toLowerCase());
@@ -405,21 +413,21 @@ module.exports = onDocumentWritten(
             await G.encolarCorreo({
               to: lista[0],
               cc: lista.length > 1 ? lista.slice(1).join(",") : null,
-              subject: `${after.terminacion_total_de?.length ? "Terminación total" : "Baja"} APROBADA: ${gid} — ${after.cliente_nombre || "Cliente"}`,
+              subject: `${gB.terminacion_total_de?.length ? "Terminación total" : "Baja"} APROBADA: ${gid} — ${gB.cliente_nombre || "Cliente"}`,
               preheader: devId ? `Orden de devolución ${devId} creada por serial` : "Equipos del cliente — sin recuperación",
               bodyContent: `
-                <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">${after.terminacion_total_de?.length ? "Terminación total aprobada" : "Baja aprobada"}</h2>
+                <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">${gB.terminacion_total_de?.length ? "Terminación total aprobada" : "Baja aprobada"}</h2>
                 <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-                  La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b> fue aprobada.
+                  La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(gB.cliente_nombre || "—")}</b> fue aprobada.
                   ${devId ? `La orden de devolución <b>${G.escapeHtml(devId)}</b> quedó creada de inmediato para recuperar los equipos.` : "Los equipos son propios del cliente: no hay recuperación, la baja corta el servicio."}
                   ${propias && devId ? `${propias} equipo(s) propios quedan con el cliente.` : ""}
                 </p>
-                ${G.tablaHtml(["Serial", "Modelo", "Contrato"], (after.items || []).map(it => [
+                ${G.tablaHtml(["Serial", "Modelo", "Contrato"], (gB.items || []).map(it => [
                   `<code>${G.escapeHtml(it.serial_saliente || it.serial || "—")}</code>`,
                   G.escapeHtml(it.modelo || "—"),
                   `<code>${G.escapeHtml(it.contrato_id || "—")}</code>`,
                 ]))}`,
-              ctaUrl: G.urlGestion(after, gid),
+              ctaUrl: G.urlGestion(gB, gid),
               ctaLabel: "Ver el expediente",
               meta: { gestion_id: gid, paso: "baja_aprobada" },
             });
@@ -440,11 +448,20 @@ module.exports = onDocumentWritten(
     // (decisión §8.2: el período corre desde la entrega). Admin SDK: esquiva
     // touchesCFOwnedFields y las reglas del contrato.
     try {
-      const firmadoAhora = after.tipo === "aumento"
-        && before && before.estado === "pendiente_firma" && after.estado === "pendiente_bodega"
-        && !after.cierre?.derivacion;
-      if (firmadoAhora) {
-        const a = after.aumento || {};
+      // Por NIVEL con lectura fresca (2026-08-31), igual que B2: si aplicar
+      // las líneas fallaba, el flanco pendiente_firma→pendiente_bodega ya
+      // estaba consumido y el anexo quedaba firmado sin aplicar, sin
+      // reintento. cierre.firma la estampan tanto la subida del firmado como
+      // la firma digital (onFirmaContrato).
+      let gA = null;
+      if (after.tipo === "aumento" && after.estado === "pendiente_bodega"
+          && after.cierre?.firma === true && !after.cierre?.derivacion) {
+        const fresco = await ref.get();
+        const d = fresco.exists ? fresco.data() : null;
+        if (d && d.estado === "pendiente_bodega" && d.cierre?.firma === true && !d.cierre?.derivacion) gA = d;
+      }
+      if (gA) {
+        const a = gA.aumento || {};
         if (!a.contrato_doc_id || !(a.lineas || []).length) {
           logger.error("[onGestionWrite] aumento firmado sin contrato destino o sin líneas", { gid });
         } else {
@@ -551,13 +568,13 @@ module.exports = onDocumentWritten(
                   serial: s.serial || "", modelo_id: s.modelo_id || null, modelo: s.modelo || "",
                 })),
               },
-              cierre: { ...(after.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
+              cierre: { ...(gA.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
             }, { merge: true });
             await G.registrarEvento(gid, "entrega",
               `Anexo de REGULARIZACIÓN aplicado: ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")}); el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
             logger.info("[onGestionWrite] regularización por anexo aplicada", { gid, contrato: a.contrato_doc_id, amarrados });
           } else {
-            await ref.set({ cierre: { ...(after.cierre || {}), derivacion: true } }, { merge: true });
+            await ref.set({ cierre: { ...(gA.cierre || {}), derivacion: true } }, { merge: true });
             await G.registrarEvento(gid, "derivacion",
               `Anexo firmado: ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).`);
             logger.info("[onGestionWrite] aumento aplicado al contrato", { gid, contrato: a.contrato_doc_id });
@@ -573,43 +590,54 @@ module.exports = onDocumentWritten(
       const lista = !after.ordenes?.programacion_id
         && ["pendiente_bodega", "en_proceso"].includes(after.estado)
         && asignacionCompleta(after);
+      // Lectura fresca (2026-08-31): una re-entrega del evento traería un
+      // snapshot viejo sin programacion_id y duplicaría la(s) OS y los
+      // movimientos del pool.
+      let gC = null;
       if (lista) {
+        const fresco = await ref.get();
+        const d = fresco.exists ? fresco.data() : null;
+        if (d && !d.ordenes?.programacion_id
+            && ["pendiente_bodega", "en_proceso"].includes(d.estado)
+            && asignacionCompleta(d)) gC = d;
+      }
+      if (gC) {
         // Entrantes al pool: asignados a la gestión. El de reemplazo HEREDA el
         // contrato (línea de facturación) del saliente; el de demo queda del
         // cliente sin contrato (asignacion.tipo:'demo').
-        const entrantes = after.tipo === "reemplazo"
-          ? (after.items || []).map(it => ({
+        const entrantes = gC.tipo === "reemplazo"
+          ? (gC.items || []).map(it => ({
               serial: it.serial_nuevo,
               modelo_id: it.modelo_solicitado_id || it.modelo_id || null,
               modelo: it.modelo_solicitado || it.modelo || "",
               asignacion: {
                 contrato_doc_id: it.contrato_doc_id || null,
                 contrato_id: it.contrato_id || null,
-                cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
+                cliente_id: gC.cliente_id, cliente_nombre: gC.cliente_nombre || "",
                 gestion_doc_id: gid,
               },
               nota: `Asignado por gestión ${gid} — reemplaza a ${it.serial_saliente || "—"}`,
             }))
-          : after.tipo === "aumento"
-            ? (after.aumento?.seriales_asignados || []).map(s => ({
+          : gC.tipo === "aumento"
+            ? (gC.aumento?.seriales_asignados || []).map(s => ({
                 serial: s.serial,
                 modelo_id: s.modelo_id || null,
                 modelo: s.modelo || "",
                 asignacion: {
-                  contrato_doc_id: after.aumento?.contrato_doc_id || null,
-                  contrato_id: after.aumento?.contrato_id || null,
-                  cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
+                  contrato_doc_id: gC.aumento?.contrato_doc_id || null,
+                  contrato_id: gC.aumento?.contrato_id || null,
+                  cliente_id: gC.cliente_id, cliente_nombre: gC.cliente_nombre || "",
                   gestion_doc_id: gid,
                 },
-                nota: `Asignado por enmienda de aumento ${gid} (contrato ${after.aumento?.contrato_id || "—"})`,
+                nota: `Asignado por enmienda de aumento ${gid} (contrato ${gC.aumento?.contrato_id || "—"})`,
               }))
-            : (after.demo?.seriales_asignados || []).map(s => ({
+            : (gC.demo?.seriales_asignados || []).map(s => ({
                 serial: s.serial,
                 modelo_id: s.modelo_id || null,
                 modelo: s.modelo || "",
                 asignacion: {
                   contrato_doc_id: null, contrato_id: null,
-                  cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
+                  cliente_id: gC.cliente_id, cliente_nombre: gC.cliente_nombre || "",
                   gestion_doc_id: gid, tipo: "demo",
                 },
                 nota: `Asignado por gestión ${gid} (demo)`,
@@ -636,20 +664,20 @@ module.exports = onDocumentWritten(
           }
         }
 
-        const ordenIds = await G.crearOrdenesProgramacion(gid, after);
+        const ordenIds = await G.crearOrdenesProgramacion(gid, gC);
         if (ordenIds.length) {
           await ref.set({
             estado: "en_proceso",
             ordenes: {
-              ...(after.ordenes || {}),
+              ...(gC.ordenes || {}),
               programacion_id: ordenIds[0],
               programacion_ids: ordenIds,
             },
-            cierre: { ...(after.cierre || {}), asignacion: true },
+            cierre: { ...(gC.cierre || {}), asignacion: true },
           }, { merge: true });
           await G.registrarEvento(gid, "programacion",
             `Asignación completa. OS de programación ${ordenIds.join(", ")} creada(s); correo a Recepción con copia al vendedor.`);
-          await correoRecepcion(gid, after, ordenIds);
+          await correoRecepcion(gid, gC, ordenIds);
         }
       }
     } catch (e) {
