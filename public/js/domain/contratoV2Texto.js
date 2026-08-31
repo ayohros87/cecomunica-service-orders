@@ -4,6 +4,12 @@
 // Numeración: secciones 1-4 en el cuerpo del documento; cláusulas 5-18 abajo.
 window.ContratoV2Texto = {
 
+  // Versión del texto legal. Se estampa en cada solicitud de firma junto con
+  // una COPIA CONGELADA del texto: lo que el cliente firma queda amarrado a
+  // esta versión aunque las cláusulas cambien después. Subirla en CADA cambio
+  // de fondo al texto.
+  version: 'v2-2026-08-31',
+
   // Sección 3 (caja) — inventario por serial.
   inventarioHtml:
     `Los equipos se identifican por serial en el <b>Anexo A</b>, parte integral de este

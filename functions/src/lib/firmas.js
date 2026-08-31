@@ -34,10 +34,14 @@ function firmanteCoincide(representante, firma) {
 // Huella de integridad de la firma: amarra QUIÉN firmó QUÉ y CUÁNDO. No es la
 // verificación pública (esa vive en verificaciones/ con HMAC + QR al
 // activarse); es el fingerprint que viaja en firmado_digital del contrato.
-function hashFirma({ contrato_id, firmante_nombre, firmante_cedula, firmado_at, total_mensual }) {
+// texto_version (2026-08-31): amarra también QUÉ VERSIÓN del texto legal leyó
+// el firmante (la copia congelada en la solicitud). Ausente en firmas viejas
+// → cadena vacía, así sus hashes históricos no cambian.
+function hashFirma({ contrato_id, firmante_nombre, firmante_cedula, firmado_at, total_mensual, texto_version }) {
   return crypto.createHash("sha256")
     .update([contrato_id, normNombre(firmante_nombre), normCedula(firmante_cedula),
-      String(firmado_at || ""), String(total_mensual ?? "")].join("|"))
+      String(firmado_at || ""), String(total_mensual ?? ""),
+      ...(texto_version ? [String(texto_version)] : [])].join("|"))
     .digest("hex");
 }
 

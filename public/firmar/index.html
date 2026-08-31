@@ -151,9 +151,11 @@
           <button type="button" class="btn-g" onclick="Firma.limpiar()">Borrar y repetir</button>
         </div>
         <div class="chk">
-          <input type="checkbox" id="fAcepta">
+          <input type="checkbox" id="fAcepta" disabled>
           <span id="fAceptaTxt">Declaro que he leído el contrato y acepto sus términos y condiciones.</span>
         </div>
+        <p class="nota" id="fLeaHint">Para habilitar la aceptación, primero abra
+          <b>«Leer el contrato completo»</b> más arriba.</p>
         <div class="aviso">Su firma, nombre, cédula, fecha y dispositivo quedan registrados como
           constancia de aceptación (firma electrónica, Ley 51 de 2008).</div>
         <button type="button" class="btn-p" id="btnFirmar" onclick="Firma.enviar()">Firmar el contrato</button>
@@ -211,6 +213,14 @@
       document.getElementById('fAceptaTxt').textContent = s.declaracion
         || `Declaro que he leído el contrato ${s.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${s.cliente_nombre || 'la empresa'}.`;
       this.pintarDocumento(s);
+      // Candado de lectura (2026-08-31): la aceptación se habilita solo
+      // después de ABRIR el documento completo — nadie firma lo que no vio.
+      const det = document.getElementById('fDocDet');
+      const chk = document.getElementById('fAcepta');
+      const hint = document.getElementById('fLeaHint');
+      det.addEventListener('toggle', () => {
+        if (det.open) { this._docVisto = true; chk.disabled = false; hint.classList.add('hidden'); }
+      });
     },
 
     // El contrato COMPLETO (2026-08-28): secciones 1-4 con los datos del
@@ -263,14 +273,15 @@
         <p>Total mensual: <b>$${Number(r.total_mensual || 0).toFixed(2)}</b>${r.itbms_label ? ` (${this.esc(r.itbms_label)})` : ''}${r.primer_pago && r.primer_pago !== r.total_mensual ? ` · Primer pago: <b>$${Number(r.primer_pago || 0).toFixed(2)}</b>` : ''}</p>
         ${d.observaciones ? `<p style="color:#5a6b7b;">${this.esc(d.observaciones)}</p>` : ''}
         <h3>3. Inventario — Anexo A</h3>
-        <p>${ContratoV2Texto.inventarioHtml}</p>
+        <p>${d.inventario_html || ContratoV2Texto.inventarioHtml}</p>
         ${anexo.length ? `<table><thead><tr><th>#</th><th>Serial</th><th>Modelo</th><th>Propiedad</th></tr></thead><tbody>
           ${anexo.map((u, i) => `<tr><td>${i + 1}</td><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td><td>${this.esc(u.propiedad)}</td></tr>`).join('')}
         </tbody></table>` : ''}
         <h3>4. Vigencia, renovación y anexos</h3>
-        <p>${ContratoV2Texto.vigenciaHtml(durHtml)}</p>
+        <p>${d.vigencia_html || ContratoV2Texto.vigenciaHtml(durHtml)}</p>
         <h3>Condiciones generales (cláusulas 5–18)</h3>
-        <ol class="clausulas">${ContratoV2Texto.clausulasHtml}</ol>`;
+        <ol class="clausulas">${d.clausulas_html || ContratoV2Texto.clausulasHtml}</ol>
+        ${d.texto_version ? `<p style="color:#8a99a8; font-size:11.5px;">Texto del contrato: versión ${this.esc(d.texto_version)} — congelado en esta solicitud de firma.</p>` : ''}`;
     },
 
     armarCanvas() {
@@ -361,6 +372,7 @@
       if (!this._fotos.selfie) { alert('Tome su selfie (paso 2 de Identidad).'); return; }
       if (!document.getElementById('fConsentBio').checked) { alert('Debe autorizar el uso de sus fotos para verificar su identidad.'); return; }
       if (this.trazos < 8) { alert('Dibuje su firma en el recuadro.'); return; }
+      if (!this._docVisto) { alert('Abra y lea el documento completo ("Leer el contrato completo") antes de firmar.'); return; }
       if (!document.getElementById('fAcepta').checked) { alert('Debe aceptar los términos del contrato.'); return; }
       const btn = document.getElementById('btnFirmar');
       btn.disabled = true; btn.textContent = 'Subiendo evidencia…';

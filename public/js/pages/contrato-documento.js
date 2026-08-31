@@ -90,13 +90,38 @@
     if (c.observaciones) pagoBits.push(esc(c.observaciones));
     $('pPago').innerHTML = pagoBits.join(' · ');
 
-    // ── Secciones 3 y 4 + cláusulas 5-18: texto legal compartido ──
+    // ── Secciones 3 y 4 + cláusulas 5-18 ──
+    // Contrato FIRMADO digitalmente: el texto sale de la copia CONGELADA en la
+    // solicitud de firma — lo que el cliente leyó y aceptó, inmutable aunque
+    // las cláusulas del sistema cambien después. Sin firma digital (o enlaces
+    // viejos sin copia), se muestra el texto vigente y se dice con claridad.
+    let sFirma = null;
+    if (c.firmado && c.firmado_digital?.solicitud_id) {
+      try {
+        const snap = await firebase.firestore().collection('firma_solicitudes')
+          .doc(c.firmado_digital.solicitud_id).get();
+        sFirma = snap.exists ? snap.data() : null;
+      } catch (e) { console.warn('solicitud de firma no legible', e); }
+    }
+    const frozen = sFirma?.documento?.clausulas_html ? sFirma.documento : null;
     const durNum = Number(String(c.duracion || '').match(/\d+/)?.[0] || 0);
     const durHtml = `<b>${durNum
       ? `${NUM_LETRAS[durNum] || durNum} (${durNum}) meses` : esc(c.duracion || '____ meses')}</b>`;
-    $('txtInventario').innerHTML = ContratoV2Texto.inventarioHtml;
-    $('txtVigencia').innerHTML = ContratoV2Texto.vigenciaHtml(durHtml);
-    $('olClausulas').innerHTML = ContratoV2Texto.clausulasHtml;
+    $('txtInventario').innerHTML = frozen?.inventario_html || ContratoV2Texto.inventarioHtml;
+    $('txtVigencia').innerHTML = frozen?.vigencia_html || ContratoV2Texto.vigenciaHtml(durHtml);
+    $('olClausulas').innerHTML = frozen?.clausulas_html || ContratoV2Texto.clausulasHtml;
+    if (c.firmado && c.firmado_digital) {
+      const av = $('avisoEstado');
+      av.style.display = 'block';
+      if (frozen) {
+        av.style.background = '#E7F5EC'; av.style.borderColor = '#1FA56B'; av.style.color = '#17714B';
+        av.textContent = `Texto conforme al firmado digitalmente — copia congelada en la solicitud de firma (versión ${frozen.texto_version || 'sin versión'}).`;
+      } else {
+        av.textContent = 'Este contrato se firmó digitalmente sobre el RESUMEN del enlace de firma: '
+          + 'el texto completo no quedó congelado en esa solicitud. Las cláusulas mostradas son el '
+          + 'texto vigente del sistema, como referencia — el firmado válido es el que vio el cliente.';
+      }
+    }
 
     // ── Firmas ──
     const nombreFirmaCliente = `${esc(rep)} · ${esc(c.cliente_nombre || '')}`;
@@ -109,13 +134,7 @@
     // rastro (nombre, cédula, hash) quedó estampado en el contrato.
     if (c.firmado && c.firmado_digital) {
       const fd = c.firmado_digital;
-      let png = null;
-      try {
-        if (fd.solicitud_id) {
-          const s = await firebase.firestore().collection('firma_solicitudes').doc(fd.solicitud_id).get();
-          png = s.exists ? (s.data().firma?.png || null) : null;
-        }
-      } catch (e) { console.warn('trazo de firma no disponible', e); }
+      const png = sFirma?.firma?.png || null;
       const fAt = fecha(fd.firmado_at);
       const sello = `<div>${png ? `<img class="trazo" src="${png}" alt="firma">` : ''}
         <div class="sello">✔ Firmado electrónicamente por ${esc(fd.firmante_nombre || rep)}<br>

@@ -717,6 +717,10 @@ window.Centro = {
           cliente_id: c.cliente_id || this.cliente.id,
           cliente_nombre: c.cliente_nombre || this.cliente.nombre || '',
           representante: { nombre: c.representante || this.cliente.representante || '', cedula: c.representante_cedula || this.cliente.representante_cedula || '' },
+          // El TEXTO ÍNTEGRO queda CONGELADO en la solicitud (2026-08-31,
+          // reclamo de Alberto: la firma no puede caer sobre un texto que el
+          // cliente no vio — ni cambiar después de firmado). /firmar/ muestra
+          // ESTA copia y el documento firmado se reconstruye desde aquí.
           documento: {
             cliente_rucdv: rucdv || '',
             observaciones: c.observaciones || '',
@@ -724,7 +728,15 @@ window.Centro = {
               serial: u.serial || u.id, modelo: u.modelo_label || '',
               propiedad: u.propiedad === 'cliente' ? 'Del cliente' : 'C COMUNICA',
             })),
+            ...(window.ContratoV2Texto ? {
+              texto_version: ContratoV2Texto.version,
+              inventario_html: ContratoV2Texto.inventarioHtml,
+              vigencia_html: ContratoV2Texto.vigenciaHtml(
+                `<b>${this.esc(c.duracion || '____ meses')}</b>`),
+              clausulas_html: ContratoV2Texto.clausulasHtml,
+            } : {}),
           },
+          declaracion: `Declaro que he leído el contrato ${c.contrato_id || c.id} COMPLETO en esta página (secciones 1–4 y cláusulas 5–18) y acepto sus términos y condiciones en nombre de ${c.cliente_nombre || this.cliente.nombre || 'la empresa'}.`,
           resumen: {
             tipo_contrato: c.tipo_contrato || '', duracion: c.duracion || '',
             equipos: (c.equipos || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0) })),
@@ -745,7 +757,9 @@ window.Centro = {
       this._abrirModal(`
         <h3 style="margin:0 0 6px;">Enviar para firma — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span></h3>
         <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3); max-width:66ch;">
-          El cliente abre este enlace en su celular, revisa el resumen y <b>firma con el dedo</b>.
+          El cliente abre este enlace en su celular, lee el <b>contrato completo</b> (queda una copia
+          congelada del texto en la solicitud) y <b>firma con el dedo</b> — la aceptación solo se
+          habilita después de abrir el documento.
           Debe firmarlo <b>${this.esc(rep)}</b> (representante legal) — el enlace se puede <b>reenviar</b>
           por WhatsApp si te lo recibe otro contacto. Si firma otra persona, la firma queda registrada
           y ventas valida al firmante antes de activar. Al coincidir, el contrato se <b>activa solo</b>.</p>
@@ -780,8 +794,8 @@ window.Centro = {
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">Su contrato está listo para firma</h2>
           <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
             Estimado cliente: el contrato <b>${FMT.esc(c?.contrato_id || '')}</b> de
-            <b>${FMT.esc(c?.cliente_nombre || '')}</b> está listo. Ábralo con el botón, revise el resumen
-            y firme con el dedo desde su celular. Debe firmarlo el <b>representante legal</b>
+            <b>${FMT.esc(c?.cliente_nombre || '')}</b> está listo. Ábralo con el botón, lea el contrato
+            completo y firme con el dedo desde su celular. Debe firmarlo el <b>representante legal</b>
             (${FMT.esc(c?.representante || '—')}); si lo recibe otra persona, puede reenviarle este correo.</p>`,
         ctaUrl: url,
         ctaLabel: 'Revisar y firmar el contrato',

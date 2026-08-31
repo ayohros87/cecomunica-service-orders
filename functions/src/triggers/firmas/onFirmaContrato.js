@@ -39,6 +39,7 @@ async function activarContrato(sid, s, extraFirmado = {}) {
     firmante_nombre: f.nombre, firmante_cedula: f.cedula,
     firmado_at: f.firmado_at?.toDate ? f.firmado_at.toDate().toISOString() : String(f.firmado_at || ""),
     total_mensual: c.total_mensual,
+    texto_version: s.documento?.texto_version || null,
   });
   const upd = {
     firmado: true,
@@ -51,6 +52,9 @@ async function activarContrato(sid, s, extraFirmado = {}) {
       firmante_cargo: f.cargo || "",
       firmado_at: f.firmado_at || ahora,
       hash,
+      // La versión del texto legal que el firmante leyó (copia congelada en
+      // la solicitud); null = firma anterior al congelado (solo resumen).
+      texto_version: s.documento?.texto_version || null,
       coincide_representante: s.firmante_coincide !== false,
       ...extraFirmado,
     },
