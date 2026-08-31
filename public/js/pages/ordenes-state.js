@@ -361,6 +361,15 @@ function pendientesDevolucion(orden) {
   return porSerial + porModelo + sinContrato;
 }
 
+// Una orden de PROGRAMACIÓN prepara equipos que YA están en CECOMUNICA:
+// salen de bodega hacia el taller sin que el cliente entregue nada, así que
+// la recepción en mostrador sobra — su flujo arranca directo en Asignar
+// (decisión Alberto 2026-08-31). Las rules ya permitían el salto
+// POR ASIGNAR → ASIGNADO; esto solo quita el paso muerto de la UI.
+function esOrdenProgramacion(orden) {
+  return normTxt(orden?.tipo_de_servicio).includes("programacion");
+}
+
 // Una orden de ENTRADA es la inspección de equipos que el cliente DEVOLVIÓ:
 // entran al taller para revisión técnica (y cotización si hay daños o
 // faltantes cobrables) y las unidades quedan bajo control de inventario.

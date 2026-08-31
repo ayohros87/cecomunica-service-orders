@@ -883,6 +883,10 @@ function botonesFlujo(ordenId, estado, ordenData) {
   const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(od);
   const esDevolucion = typeof esOrdenDevolucion === 'function' && esOrdenDevolucion(od);
   const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(od);
+  // PROGRAMACIÓN: los equipos ya están en CECOMUNICA (bodega → taller); no
+  // hay nada que recibir del cliente, el primer paso es Asignar.
+  const esProgramacion = typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(od);
+  const btnAsignarDirecto = `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico — los equipos ya están en CECOMUNICA, sin recepción en mostrador" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
 
   // Órdenes de DEVOLUCIÓN (recuperar equipos del cliente / confirmar
   // anulación): su flujo es el check-in por serial, no el de taller.
@@ -962,8 +966,11 @@ function botonesFlujo(ordenId, estado, ordenData) {
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION || rol === ROLES.JEFE_TALLER) {
     if (estado === "POR ASIGNAR") {
       // Primer paso obligatorio: recibir los equipos (acuse). No se puede
-      // asignar hasta haber recibido.
-      html += `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
+      // asignar hasta haber recibido — EXCEPTO en PROGRAMACIÓN, donde nada
+      // viene del cliente.
+      html += esProgramacion
+        ? btnAsignarDirecto
+        : `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
     } else if (estado === "RECIBIDO EN MOSTRADOR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {
@@ -985,7 +992,10 @@ function botonesFlujo(ordenId, estado, ordenData) {
     if (estado === "POR ASIGNAR") {
       // El técnico también puede recibir (primer paso). Si recepción no la
       // recibió, puede saltarse el paso con "Asignar (saltar recepción)" del ⋯.
-      html += `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
+      // PROGRAMACIÓN va directo a Asignar (nada viene del cliente).
+      html += esProgramacion
+        ? btnAsignarDirecto
+        : `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
     } else if (estado === "RECIBIDO EN MOSTRADOR") {
       html += `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
     } else if (estado === "ASIGNADO") {

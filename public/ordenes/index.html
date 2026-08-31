@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
-  <!-- Preconnect: abre TCP+TLS a los orígenes del arranque antes de que el
+  <!-- Preconnect: abre TCP+TLS a los orÃ­genes del arranque antes de que el
        parser llegue a los <script> del SDK / primeras llamadas de auth.
-       gstatic SIN crossorigin (scripts clásicos no-CORS); identitytoolkit y
+       gstatic SIN crossorigin (scripts clÃ¡sicos no-CORS); identitytoolkit y
        firestore CON (fetch CORS); securetoken solo DNS (se usa al expirar token). -->
   <link rel="preconnect" href="https://www.gstatic.com">
   <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
@@ -20,16 +20,16 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0B2A47">
   <meta charset="UTF-8">
-  <!-- Sin user-scalable=no: bloqueaba el zoom en tablet y los técnicos no
-       podían ampliar seriales pequeños (WCAG 1.4.4). -->
+  <!-- Sin user-scalable=no: bloqueaba el zoom en tablet y los tÃ©cnicos no
+       podÃ­an ampliar seriales pequeÃ±os (WCAG 1.4.4). -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Órdenes de Servicio - Cecomunica</title>
+  <title>Ã“rdenes de Servicio - Cecomunica</title>
   <!-- cc22 / dev3: chips del pool en la columna Serie (clases .eqpool-chip-aviso
        en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el
-       aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
+       aviso "otro cliente" sale sin fondo con el CSS viejo en cachÃ©. -->
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
   <link rel="stylesheet" href="../css/ordenes-index.css?v=dev12">
-  <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
+  <!-- RediseÃ±o Command Center F2: rail lateral + KPIs de seÃ±al (hÃ­brido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   
@@ -37,7 +37,7 @@
 <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
 <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
 <!-- storage/functions compat DIFERIDOS (P3.15): ~50 KB gz que solo se usan
-     al subir firma/foto o pedir la URL de una identificación. Los carga
+     al subir firma/foto o pedir la URL de una identificaciÃ³n. Los carga
      CargaDiferida al primer uso. -->
 <script defer src="../js/firebase-init.js?v=ses2"></script>
 <script defer src="../js/core/carga-diferida.js?v=3"></script>
@@ -47,11 +47,11 @@
 <script src="../js/core/formatting.js"></script>
 <script src="../js/core/auth.js"></script>
 <script defer src="../js/services/clientesService.js"></script>
-<!-- Predicados de pendiente: antes de ordenesService/senalesService/ordenes-qc, que delegan en él. -->
+<!-- Predicados de pendiente: antes de ordenesService/senalesService/ordenes-qc, que delegan en Ã©l. -->
 <script defer src="../js/domain/pendientes.js?v=pen1"></script>
 <script defer src="../js/services/ordenesService.js?v=ser1"></script>
-<!-- count() agregados para los chips/KPIs (mismos números que las señales
-     del home) — auditoría M4/A8. -->
+<!-- count() agregados para los chips/KPIs (mismos nÃºmeros que las seÃ±ales
+     del home) â€” auditorÃ­a M4/A8. -->
 <script defer src="../js/services/senalesService.js?v=pen5"></script>
 <script defer src="../js/services/empresaService.js"></script>
 <script defer src="../js/services/usuariosService.js"></script>
@@ -64,18 +64,18 @@
 <script defer src="../js/domain/scoring.js"></script>
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
-<!-- firmaPad DIFERIDO (P3.15): solo lo usa el check-in de devolución;
+<!-- firmaPad DIFERIDO (P3.15): solo lo usa el check-in de devoluciÃ³n;
      lo trae CargaDiferida.devolucion() al primer uso. -->
-<script defer src="../js/pages/ordenes-state.js?v=busq1"></script>
+<script defer src="../js/pages/ordenes-state.js?v=prog1"></script>
 <script defer src="../js/pages/ordenes-data.js?v=busq1"></script>
-<script defer src="../js/pages/ordenes-render.js?v=scroll1"></script>
+<script defer src="../js/pages/ordenes-render.js?v=prog1"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq1"></script>
 <script defer src="../js/pages/ordenes-flujo.js?v=qc8"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=pen1"></script>
 <script defer src="../js/pages/ordenes-equipos.js?v=cc23"></script>
-<!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
+<!-- MÃ³dulos de acciÃ³n DIFERIDOS (P3.15) â€” los carga CargaDiferida al primer
      uso, con sus dependencias (storage, firmaPad): ordenes-notas,
-     ordenes-visita, ordenes-fotos (galería §5.23) y ordenes-devolucion.
+     ordenes-visita, ordenes-fotos (galerÃ­a Â§5.23) y ordenes-devolucion.
      Sus ?v= viven en core/carga-diferida.js. -->
 <script defer src="../js/pages/ordenes-ui.js?v=p2"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
@@ -91,19 +91,19 @@
   <div class="cc-app">
   <div id="rail-mount"></div>
   <div class="cc-work">
-  <!-- Topbar UNIFICADO (auditoría C1/A1): antes era la única variante
-       hardcodeada del sistema — duplicaba el monograma SVG (con los mismos
-       IDs de gradiente que el rail monta en esta página) y cualquier cambio
-       de layout.js había que replicarlo aquí a mano. El wrapper conserva
-       id+clase para la regla móvil (.topbar--desktop { display:none }); el
-       menú y el view-toggle van como html passthrough para que los siga
-       manejando la delegación de ordenes-events (toggle-topbar-menu) sin
+  <!-- Topbar UNIFICADO (auditorÃ­a C1/A1): antes era la Ãºnica variante
+       hardcodeada del sistema â€” duplicaba el monograma SVG (con los mismos
+       IDs de gradiente que el rail monta en esta pÃ¡gina) y cualquier cambio
+       de layout.js habÃ­a que replicarlo aquÃ­ a mano. El wrapper conserva
+       id+clase para la regla mÃ³vil (.topbar--desktop { display:none }); el
+       menÃº y el view-toggle van como html passthrough para que los siga
+       manejando la delegaciÃ³n de ordenes-events (toggle-topbar-menu) sin
        doble wiring. -->
   <div class="topbar--desktop" id="desktopTopbar">
     <div id="topbar-mount"></div>
     <script>
       Layout.renderTopbar({
-        title: '<i data-lucide="clipboard-list"></i> Órdenes de Servicio',
+        title: '<i data-lucide="clipboard-list"></i> Ã“rdenes de Servicio',
         showHome: false, showLogout: false,
         actions: [
           { label: '<i data-lucide="plus"></i> Crear nueva orden', cls: 'btn-primary', dataAction: 'go-nueva-orden' },
@@ -116,24 +116,24 @@
         </button>
       </div>` },
           { html: `<div class="overflow-menu topbar-menu">
-        <button class="btn btn-ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> Más</button>
+        <button class="btn btn-ghost" data-action="toggle-topbar-menu" data-stop-propagation="true" aria-haspopup="true" aria-expanded="false"><i data-lucide="more-horizontal"></i> MÃ¡s</button>
         <div class="overflow-menu-dropdown" id="topbar-menu">
-          <!-- Acción esporádica (auditoría órdenes P2): antes ocupaba un botón
-               permanente del topbar; vive aquí para despejar la barra. -->
-          <button class="overflow-menu-item" data-action="nueva-devolucion" title="Registrar devolución de equipos con contrato de papel (fuera del sistema)"><i data-lucide="package-open"></i> Devolución sin contrato</button>
+          <!-- AcciÃ³n esporÃ¡dica (auditorÃ­a Ã³rdenes P2): antes ocupaba un botÃ³n
+               permanente del topbar; vive aquÃ­ para despejar la barra. -->
+          <button class="overflow-menu-item" data-action="nueva-devolucion" title="Registrar devoluciÃ³n de equipos con contrato de papel (fuera del sistema)"><i data-lucide="package-open"></i> DevoluciÃ³n sin contrato</button>
           <div class="overflow-menu-divider"></div>
           <button class="overflow-menu-item" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
           <button class="overflow-menu-item" id="btnProgresoTecnicos" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
-          <!-- Taller no tiene el módulo Almacén en el rail, así que el listado
-               de descartados (que nace en el QC de esta página) se alcanza aquí. -->
-          <button class="overflow-menu-item" data-action="go-descartados" title="Radios que control de calidad declaró inservibles"><i data-lucide="ban"></i> Equipos descartados</button>
+          <!-- Taller no tiene el mÃ³dulo AlmacÃ©n en el rail, asÃ­ que el listado
+               de descartados (que nace en el QC de esta pÃ¡gina) se alcanza aquÃ­. -->
+          <button class="overflow-menu-item" data-action="go-descartados" title="Radios que control de calidad declarÃ³ inservibles"><i data-lucide="ban"></i> Equipos descartados</button>
           <button class="overflow-menu-item" id="topbarBtnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente</button>
           <button class="overflow-menu-item" data-action="toggle-fecha-entrega"><i data-lucide="calendar"></i> <span class="toggle-fecha-entrega-btn">Mostrar fecha entrega</span></button>
-          <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Configuración</button>
+          <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> ConfiguraciÃ³n</button>
         </div>
       </div>` },
-          { label: '<i data-lucide="home"></i> Menú principal', cls: 'btn-ghost', dataAction: 'go-menu-principal' },
-          { label: '<i data-lucide="log-out"></i> Cerrar sesión', cls: 'btn-ghost', dataAction: 'logout' },
+          { label: '<i data-lucide="home"></i> MenÃº principal', cls: 'btn-ghost', dataAction: 'go-menu-principal' },
+          { label: '<i data-lucide="log-out"></i> Cerrar sesiÃ³n', cls: 'btn-ghost', dataAction: 'logout' },
         ],
       });
     </script>
@@ -144,11 +144,11 @@
 <!-- MOBILE ONLY: Header -->
 <div id="mobileHeader">
   <div class="mh-top">
-    <div class="mh-title"><i data-lucide="clipboard-list"></i> Órdenes de Servicio</div>
+    <div class="mh-title"><i data-lucide="clipboard-list"></i> Ã“rdenes de Servicio</div>
     <!-- Filtros se abren desde la barra inferior (#mobileBottomNav) -->
   </div>
 
-  <!-- Single estado filter — chip bar with live counts. Replaces both
+  <!-- Single estado filter â€” chip bar with live counts. Replaces both
        the old .topbar-badges cluster (mobile) and serves as the mobile
        equivalent of #estadoChipsBar (desktop). Same class + data-action
        so the existing handlers in ordenes-filters.js handle both. -->
@@ -178,12 +178,12 @@
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Completado <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
     </button>
-    <!-- Cola de QC (auditoría Q5): vivía enterrada en el dropdown "Resumen"
+    <!-- Cola de QC (auditorÃ­a Q5): vivÃ­a enterrada en el dropdown "Resumen"
          siendo la cola que frena entregas. Toggle propio (filtrar-qc). -->
     <button type="button" class="estado-chip estado-chip--qc"
             data-action="filtrar-qc"
             role="tab" aria-selected="false"
-            title="Completadas que el control de calidad aún no deja entregar">
+            title="Completadas que el control de calidad aÃºn no deja entregar">
       <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">0</span>
     </button>
     <button type="button" class="estado-chip estado-chip--entregado"
@@ -203,14 +203,14 @@
   </div>
 </div>
 
-<!-- KPIs de señal (desktop). El contenedor lleva .estado-chips-bar para que
+<!-- KPIs de seÃ±al (desktop). El contenedor lleva .estado-chips-bar para que
      actualizarResumen() llene los [data-count]; los botones disparan el mismo
      handler delegado de los chips (filtrar-estado-chip). Cero JS nuevo. -->
 <div class="os-kpis estado-chips-bar" id="ordenesKpis">
   <button type="button" class="os-kpi os-kpi--alert" data-action="filtrar-estado-chip" data-estado="POR ASIGNAR">
     <span class="os-kpi__label"><i data-lucide="alert-circle"></i> Por asignar</span>
     <span class="os-kpi__val" data-count="POR ASIGNAR">0</span>
-    <span class="os-kpi__sub">requieren técnico</span>
+    <span class="os-kpi__sub">requieren tÃ©cnico</span>
   </button>
   <button type="button" class="os-kpi" data-action="filtrar-estado-chip" data-estado="ASIGNADO">
     <span class="os-kpi__label"><i data-lucide="hammer"></i> Asignadas</span>
@@ -231,7 +231,7 @@
 
 <!-- Tarjeta de filtros -->
 <div class="card filters-card-sticky filters-card--desktop" id="desktopFiltersCard">
-  <!-- Estado chip bar — primary filter scan, replaces the dropdown. ORDENES_INDEX_IMPROVEMENTS §4.3 -->
+  <!-- Estado chip bar â€” primary filter scan, replaces the dropdown. ORDENES_INDEX_IMPROVEMENTS Â§4.3 -->
   <div class="estado-chips-bar" id="estadoChipsBar" role="tablist" aria-label="Filtrar por estado">
     <button type="button" class="estado-chip estado-chip--all active"
             data-action="filtrar-estado-chip" data-estado=""
@@ -258,12 +258,12 @@
             role="tab" aria-selected="false">
       <span class="dot" aria-hidden="true"></span>Completado <span class="estado-chip__count" data-count="COMPLETADO (EN OFICINA)">0</span>
     </button>
-    <!-- Cola de QC (auditoría Q5): vivía enterrada en el dropdown "Resumen"
+    <!-- Cola de QC (auditorÃ­a Q5): vivÃ­a enterrada en el dropdown "Resumen"
          siendo la cola que frena entregas. Toggle propio (filtrar-qc). -->
     <button type="button" class="estado-chip estado-chip--qc"
             data-action="filtrar-qc"
             role="tab" aria-selected="false"
-            title="Completadas que el control de calidad aún no deja entregar">
+            title="Completadas que el control de calidad aÃºn no deja entregar">
       <span class="dot" aria-hidden="true"></span>QC <span class="estado-chip__count" data-count="qc">0</span>
     </button>
     <button type="button" class="estado-chip estado-chip--entregado"
@@ -278,12 +278,12 @@
     </button>
   </div>
 
-  <!-- Búsqueda rápida -->
+  <!-- BÃºsqueda rÃ¡pida -->
   <div class="toolbar">
     <div class="left" style="flex: 1;">
       <input type="text" id="filtroRapido" placeholder="Buscar orden, cliente o serial..." class="input-compact" />
-      <button class="btn btn-primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>        <!-- §4.4 BarcodeDetector scan-to-search for field techs -->
-        <button class="btn btn-ghost" id="btnScanSerial" data-action="scan-serial" title="Escanear serial con cámara" style="display:none;"><i data-lucide="scan-line"></i> Escanear</button>      <button class="btn btn-secondary" data-action="limpiar-filtros">Limpiar</button>
+      <button class="btn btn-primary" data-action="filtrar-rapido"><i data-lucide="search"></i> Buscar</button>        <!-- Â§4.4 BarcodeDetector scan-to-search for field techs -->
+        <button class="btn btn-ghost" id="btnScanSerial" data-action="scan-serial" title="Escanear serial con cÃ¡mara" style="display:none;"><i data-lucide="scan-line"></i> Escanear</button>      <button class="btn btn-secondary" data-action="limpiar-filtros">Limpiar</button>
       <button class="btn btn-ghost" data-action="toggle-filtros-avanzados" id="btnToggleAvanzados">
         <i data-lucide="chevron-down" class="icon-avanzado" id="iconoAvanzados"></i> Avanzado
       </button>
@@ -297,14 +297,14 @@
     </div>
 
     <!-- El ordenamiento de escritorio vive en las CABECERAS de la tabla
-         (data-action="sort-col") — el select+botón de dirección salieron de
-         la toolbar (auditoría P2). El select sigue aquí OCULTO como espejo de
-         estado: el drawer móvil (#mobileSortField) y el restore de URL lo
-         siguen leyendo/escribiendo. "Mostrar fecha entrega" vive en el menú
-         "Más" del topbar. -->
+         (data-action="sort-col") â€” el select+botÃ³n de direcciÃ³n salieron de
+         la toolbar (auditorÃ­a P2). El select sigue aquÃ­ OCULTO como espejo de
+         estado: el drawer mÃ³vil (#mobileSortField) y el restore de URL lo
+         siguen leyendo/escribiendo. "Mostrar fecha entrega" vive en el menÃº
+         "MÃ¡s" del topbar. -->
     <div class="right">
       <select id="campoOrdenamiento" data-action="cambiar-orden" hidden aria-hidden="true" tabindex="-1">
-        <option value="ordenId">Número</option>
+        <option value="ordenId">NÃºmero</option>
         <option value="cliente_nombre">Cliente</option>
       </select>
     </div>
@@ -333,7 +333,7 @@
         </select>
       </div>
       <!-- Estado dropdown kept for URL/preset sync; visually replaced by
-           the chip bar above (ORDENES_INDEX_IMPROVEMENTS §4.3). The chip
+           the chip bar above (ORDENES_INDEX_IMPROVEMENTS Â§4.3). The chip
            handler mirrors its value here so getActiveFilters() still sees
            the right value without code changes. -->
       <div class="filter-field filter-field--hidden" aria-hidden="true">
@@ -350,9 +350,9 @@
         </select>
       </div>
       <div class="filter-field">
-        <label for="filtroTecnico" class="form-label-bold">Técnico</label>
+        <label for="filtroTecnico" class="form-label-bold">TÃ©cnico</label>
         <select id="filtroTecnico" class="filter-select" data-action="filtrar-tecnico">
-          <option value="">Técnico (todos)</option>
+          <option value="">TÃ©cnico (todos)</option>
         </select>
       </div>
     </div>  
@@ -360,11 +360,11 @@
       <label class="filter-toggle" for="toggleMisOrdenes">
         <input type="checkbox" id="toggleMisOrdenes" class="toggle-input" data-action="filtrar-mias">
         <span class="toggle-slider"></span>
-        <span class="toggle-label">Mis órdenes</span>
+        <span class="toggle-label">Mis Ã³rdenes</span>
       </label>
       <!-- Cola de control de calidad. Sin control visible propio: lo togglean
            el chip "QC n" de la barra de estados (data-action="filtrar-qc") y
-           ?qc=1 en la URL (CTA del correo diario y señal del home). -->
+           ?qc=1 en la URL (CTA del correo diario y seÃ±al del home). -->
       <input type="checkbox" id="filtroQcPendiente" hidden>
       <div id="resumenOrdenes" role="status" aria-live="polite" aria-atomic="true"></div>
     </div>
@@ -376,31 +376,31 @@
   <div class="app-table-wrap mt-12">
   <table class="orders-table">
   <colgroup>
-  <col style="width: 11%;">   <!-- Número -->
+  <col style="width: 11%;">   <!-- NÃºmero -->
   <col style="width: 24%;">  <!-- Cliente -->
-  <col style="width: 13%;">  <!-- Técnico -->
+  <col style="width: 13%;">  <!-- TÃ©cnico -->
   <col style="width: 10%;">  <!-- Tipo -->
   <col style="width: 12%;">  <!-- Estado -->
-  <col style="width: 10%;">   <!-- Fecha creación -->
+  <col style="width: 10%;">   <!-- Fecha creaciÃ³n -->
   <col style="width: 10%;" class="col-fecha-entrega">   <!-- Fecha entrega -->
   <!-- Acciones va en px, no en %: la celda puede llevar dos botones de flujo
-       + el menú ⋯ ("Ver QC"+"Entregar", "Completar"+"Rechazo QC",
+       + el menÃº â‹¯ ("Ver QC"+"Entregar", "Completar"+"Rechazo QC",
        "Faltan N"+"Check-in") y .app-table-wrap tiene overflow visible para
-       que el desplegable escape — con un % la fila se salía de la tabla en
+       que el desplegable escape â€” con un % la fila se salÃ­a de la tabla en
        vez de recortarse. El peor caso real mide 270px + 16px de padding. -->
   <col style="width: 296px;">  <!-- Acciones -->
   </colgroup>
  <thead>
-  <!-- Cabeceras ordenables (auditoría P2): click ordena por la columna,
-       segundo click invierte. Reemplazan al select "Ordenar" + botón de
-       dirección de la toolbar. La flecha ↑/↓ la pinta syncSortHeaders(). -->
+  <!-- Cabeceras ordenables (auditorÃ­a P2): click ordena por la columna,
+       segundo click invierte. Reemplazan al select "Ordenar" + botÃ³n de
+       direcciÃ³n de la toolbar. La flecha â†‘/â†“ la pinta syncSortHeaders(). -->
   <tr>
-    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="ordenId" title="Ordenar por número">Número<span class="th-sort__dir" aria-hidden="true"></span></th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="ordenId" title="Ordenar por nÃºmero">NÃºmero<span class="th-sort__dir" aria-hidden="true"></span></th>
     <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="cliente_nombre" title="Ordenar por cliente">Cliente<span class="th-sort__dir" aria-hidden="true"></span></th>
-    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="tecnico_asignado" title="Ordenar por técnico">Técnico<span class="th-sort__dir" aria-hidden="true"></span></th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="tecnico_asignado" title="Ordenar por tÃ©cnico">TÃ©cnico<span class="th-sort__dir" aria-hidden="true"></span></th>
     <th scope="col">Tipo</th>
     <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="estado_reparacion" title="Ordenar por estado">Estado<span class="th-sort__dir" aria-hidden="true"></span></th>
-    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="fecha_creacion" title="Ordenar por fecha de creación">Fecha Creación<span class="th-sort__dir" aria-hidden="true"></span></th>
+    <th scope="col" class="th-sort" data-action="sort-col" data-sort-key="fecha_creacion" title="Ordenar por fecha de creaciÃ³n">Fecha CreaciÃ³n<span class="th-sort__dir" aria-hidden="true"></span></th>
     <th scope="col" class="th-sort col-fecha-entrega" data-action="sort-col" data-sort-key="fecha_entrega" title="Ordenar por fecha de entrega">Fecha Entrega<span class="th-sort__dir" aria-hidden="true"></span></th>
     <th scope="col">Acciones</th>
   </tr>
@@ -414,44 +414,44 @@
 
  <div class="toolbar between mt-16">
   <div></div>
-  <button id="btnCargarMas" class="btn"><i data-lucide="chevron-down"></i> Cargar más órdenes</button>
+  <button id="btnCargarMas" class="btn"><i data-lucide="chevron-down"></i> Cargar mÃ¡s Ã³rdenes</button>
 </div>
-<!-- Modal Asignar Técnico -->
+<!-- Modal Asignar TÃ©cnico -->
 <div id="modalAsignar" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalAsignarTitle">
   <div class="modal modal-md">
     <div class="modal-header">
-      <h3 class="modal-title" id="modalAsignarTitle"><i data-lucide="wrench"></i> Asignar técnico</h3>
+      <h3 class="modal-title" id="modalAsignarTitle"><i data-lucide="wrench"></i> Asignar tÃ©cnico</h3>
       <button class="btn btn-ghost btn-close-modal" data-action="cerrar-modal-asignar" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
     <div class="form-field">
-      <label class="form-label">Selecciona un técnico</label>
+      <label class="form-label">Selecciona un tÃ©cnico</label>
       <select id="asignarTecnicoSelect" class="form-select-full" onchange="this.style.borderColor = this.value ? 'var(--accent)' : 'var(--line)'"></select>
       <p class="form-hint">
-        El técnico recibirá una notificación por email
+        El tÃ©cnico recibirÃ¡ una notificaciÃ³n por email
       </p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" data-action="cerrar-modal-asignar">Cancelar</button>
       <button class="btn btn-primary" data-action="confirmar-asignar-tecnico">
-        Asignar técnico
+        Asignar tÃ©cnico
       </button>
     </div>
   </div>
 </div>
 
-<!-- Modal Entrega / Recepción de Equipos.
+<!-- Modal Entrega / RecepciÃ³n de Equipos.
      `data-modo` toggles entre 'entrega' (default) y 'recepcion' (cliente
-     trae equipos al mostrador): el modo recepción reusa el canvas y la
+     trae equipos al mostrador): el modo recepciÃ³n reusa el canvas y la
      lista de equipos, pero esconde los bloques de ID, sin-ID y no-recibido.
-     La leyenda ENTRADA (descargo de daños/accesorios) aplica en AMBOS modos
-     según el tipo de orden — ver _applyModo en ordenes-flujo.js. -->
+     La leyenda ENTRADA (descargo de daÃ±os/accesorios) aplica en AMBOS modos
+     segÃºn el tipo de orden â€” ver _applyModo en ordenes-flujo.js. -->
 <div id="modalEntrega" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalEntregaTitle" data-modo="entrega">
   <div class="modal modal-entrega">
 
     <!-- Header -->
     <div class="modal-header modal-entrega__header">
       <h3 class="modal-title modal-entrega__title" id="modalEntregaTitle">
-        <i data-lucide="package-check" id="entregaModalIcon"></i> <span id="entregaModalTituloPrefijo">Entrega</span> — Orden <span id="entregaModalOrdenId"></span>
+        <i data-lucide="package-check" id="entregaModalIcon"></i> <span id="entregaModalTituloPrefijo">Entrega</span> â€” Orden <span id="entregaModalOrdenId"></span>
       </h3>
       <button class="btn btn-ghost modal-entrega__close" data-action="cerrar-modal-entrega" aria-label="Cerrar"><i data-lucide="x"></i></button>
     </div>
@@ -465,19 +465,19 @@
     <!-- Email del cliente (prefill desde el registro; editable para corregir antes de enviar la nota) -->
     <div class="form-field modal-entrega__field--med">
       <label for="entregaClienteEmail" class="modal-entrega__label">
-        Email del cliente <span class="modal-entrega__hint">(recibirá la nota de entrega)</span>
+        Email del cliente <span class="modal-entrega__hint">(recibirÃ¡ la nota de entrega)</span>
       </label>
       <input type="email" id="entregaClienteEmail"
              placeholder="correo@ejemplo.com"
              autocomplete="email"
              class="modal-entrega__nombre">
-      <p class="form-hint" id="entregaClienteEmailHint">Cargando email registrado…</p>
+      <p class="form-hint" id="entregaClienteEmailHint">Cargando email registradoâ€¦</p>
     </div>
 
     <!-- Normal delivery block -->
     <div id="entregaNormalBloque">
 
-      <!-- Receptor name. En modo recepción la etiqueta cambia a
+      <!-- Receptor name. En modo recepciÃ³n la etiqueta cambia a
            "Nombre de quien entrega" via _applyModo. -->
       <div class="form-field modal-entrega__field--med">
         <label for="entregaReceptorNombre" class="modal-entrega__label">
@@ -493,7 +493,7 @@
         <!-- With ID: file upload -->
         <div id="entregaConIdBloque">
           <label class="modal-entrega__label--muted">
-            Foto de identificación <span class="modal-entrega__hint">(opcional)</span>
+            Foto de identificaciÃ³n <span class="modal-entrega__hint">(opcional)</span>
           </label>
           <input type="file" id="entregaFotoId"
                  accept="image/*" capture="environment"
@@ -502,14 +502,14 @@
           <div id="entregaPreviewId" class="modal-entrega__preview"></div>
         </div>
 
-        <!-- Checkbox B: No ID — below the upload box -->
+        <!-- Checkbox B: No ID â€” below the upload box -->
         <div class="modal-entrega__cb-row modal-entrega__cb-row--below" onclick="document.getElementById('entregaSinId').click()">
           <input type="checkbox" id="entregaSinId"
                  class="modal-entrega__cb-input modal-entrega__cb-input--brand"
                  data-action="entrega-sin-id-change"
                  onclick="event.stopPropagation()">
           <label for="entregaSinId" class="modal-entrega__cb-label modal-entrega__cb-label--regular">
-            Cliente no desea proporcionar identificación
+            Cliente no desea proporcionar identificaciÃ³n
           </label>
         </div>
 
@@ -525,7 +525,7 @@
         </div>
       </div>
 
-      <!-- Recepción: equipos recibidos sin firma (oculto en modo entrega vía
+      <!-- RecepciÃ³n: equipos recibidos sin firma (oculto en modo entrega vÃ­a
            _applyModo). Al marcarlo se omite la firma y se exige el motivo. -->
       <div id="entregaRecepcionSinFirmaWrap" class="hidden">
         <div class="modal-entrega__cb-row" onclick="document.getElementById('entregaRecepcionSinFirma').click()">
@@ -543,13 +543,13 @@
               Motivo (sin firma) <span class="req"></span>
             </label>
             <textarea id="entregaRecepcionSinFirmaMotivo" rows="2"
-                      placeholder="Indique por qué se reciben sin firma..." class="modal-entrega__motivo-id"></textarea>
+                      placeholder="Indique por quÃ© se reciben sin firma..." class="modal-entrega__motivo-id"></textarea>
           </div>
         </div>
       </div>
 
       <!-- Signature canvas. El label cambia entre 'Firma del receptor'
-           (entrega) y 'Firma del que entrega' (recepción) vía _applyModo. -->
+           (entrega) y 'Firma del que entrega' (recepciÃ³n) vÃ­a _applyModo. -->
       <div id="entregaSigWrap" class="modal-entrega__sig-wrap">
         <label class="modal-entrega__label--muted">
           <span id="entregaFirmaLabel">Firma del receptor</span> <span class="req"></span>
@@ -563,12 +563,12 @@
 
     </div><!-- /entregaNormalBloque -->
 
-    <!-- Leyenda para órdenes tipo ENTRADA -->
+    <!-- Leyenda para Ã³rdenes tipo ENTRADA -->
     <div id="entregaLegendaEntrada" class="modal-entrega__legenda-entrada hidden">
-      Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización para su posterior facturación.
+      Los radios ingresarÃ¡n al taller para su revisiÃ³n. Cualquier daÃ±o identificado como causado por mal uso, asÃ­ como los accesorios o equipos no devueltos, serÃ¡n notificados oportunamente mediante cotizaciÃ³n para su posterior facturaciÃ³n.
     </div>
 
-    <!-- Checkbox A: Item not received — below the normal delivery block -->
+    <!-- Checkbox A: Item not received â€” below the normal delivery block -->
     <div class="modal-entrega__alert">
       <div class="modal-entrega__cb-row modal-entrega__cb-row--below" onclick="document.getElementById('entregaNoRecibido').click()">
         <input type="checkbox" id="entregaNoRecibido"
@@ -576,18 +576,18 @@
                data-action="entrega-no-recibido-change"
                onclick="event.stopPropagation()">
         <label for="entregaNoRecibido" class="modal-entrega__cb-label modal-entrega__cb-label--warn">
-          El artículo <strong>NO</strong> fue recibido por el cliente
+          El artÃ­culo <strong>NO</strong> fue recibido por el cliente
         </label>
       </div>
       <div id="entregaNoRecibidoBloque" class="modal-entrega__sub hidden">
         <div class="form-field modal-entrega__field--tight">
           <label class="modal-entrega__label--warn">Motivo <span class="req--warn">*</span></label>
           <textarea id="entregaNoRecibidoMotivo" rows="2"
-                    placeholder="Explique por qué no fue recibido..."
+                    placeholder="Explique por quÃ© no fue recibido..."
                     class="modal-entrega__warn-input"></textarea>
         </div>
         <div class="form-field">
-          <label class="modal-entrega__label--warn">¿Quién recibió / manejó los equipos? <span class="req--warn">*</span></label>
+          <label class="modal-entrega__label--warn">Â¿QuiÃ©n recibiÃ³ / manejÃ³ los equipos? <span class="req--warn">*</span></label>
           <input type="text" id="entregaPersonaInterna"
                  placeholder="Nombre del responsable interno"
                  class="modal-entrega__warn-input">
@@ -595,8 +595,8 @@
       </div>
     </div>
 
-    <!-- Notas de entrega (opcional) — se guardan en la orden y se incluyen
-         en el email de entrega. Oculto en modo recepción vía _applyModo. -->
+    <!-- Notas de entrega (opcional) â€” se guardan en la orden y se incluyen
+         en el email de entrega. Oculto en modo recepciÃ³n vÃ­a _applyModo. -->
     <div class="form-field modal-entrega__field--med" id="entregaNotasWrap">
       <label for="entregaNotas" class="modal-entrega__label">
         Notas de entrega <span class="modal-entrega__hint">(opcional, se incluyen en el email)</span>
@@ -623,7 +623,7 @@
 <nav id="mobileBottomNav" aria-label="Mobile navigation">
   <button class="mnav-item" type="button" data-action="mobile-scroll-top">
     <span class="mnav-ico"><i data-lucide="clipboard-list"></i></span>
-    <span class="mnav-label">Órdenes</span>
+    <span class="mnav-label">Ã“rdenes</span>
   </button>
 
   <button class="mnav-item mnav-primary" type="button" data-action="go-nueva-orden">
@@ -651,7 +651,7 @@
     <!-- Quick Search -->
     <div class="mdrawer-section">
       <label class="mlabel">Buscar</label>
-      <input id="mobileQuickSearch" class="minput" type="text" placeholder="Orden / Cliente / Serial…" />
+      <input id="mobileQuickSearch" class="minput" type="text" placeholder="Orden / Cliente / Serialâ€¦" />
       <div class="mrow">
         <button class="btn btn-primary mfull" type="button" data-action="mobile-apply-search">Buscar</button>
       </div>
@@ -669,11 +669,11 @@
         <option value="">Tipo (todos)</option>
       </select>
       <select id="mobileFiltroTecnico" class="minput">
-        <option value="">Técnico (todos)</option>
+        <option value="">TÃ©cnico (todos)</option>
       </select>
       <label class="mcheck">
         <input type="checkbox" id="mobileSoloMias">
-        <span>Ver solo mis órdenes</span>
+        <span>Ver solo mis Ã³rdenes</span>
       </label>
       <div class="mrow">
         <button class="btn btn-primary mfull" type="button" data-action="mobile-apply-advanced">Buscar</button>
@@ -688,7 +688,7 @@
       <label class="mlabel">Ordenar</label>
       <div class="mrow">
         <select id="mobileSortField" class="minput" data-action="mobile-sync-sort">
-          <option value="ordenId">Número de orden</option>
+          <option value="ordenId">NÃºmero de orden</option>
           <option value="cliente_nombre">Cliente</option>
         </select>
 
@@ -703,7 +703,7 @@
         <button class="mmenu-item" type="button" data-action="go-reporte-pendientes"><i data-lucide="clock"></i> Pendientes</button>
         <button class="mmenu-item" type="button" data-action="go-progreso-tecnicos"><i data-lucide="trophy"></i> Progreso</button>
         <button class="mmenu-item" type="button" data-action="go-config"><i data-lucide="settings"></i> Config</button>
-        <button class="mmenu-item" type="button" data-action="go-menu-principal"><i data-lucide="home"></i> Menú principal</button>
+        <button class="mmenu-item" type="button" data-action="go-menu-principal"><i data-lucide="home"></i> MenÃº principal</button>
         <button class="mmenu-item danger" type="button" data-action="logout"><i data-lucide="log-out"></i> Salir</button>
       </div>
     </div>
@@ -726,7 +726,7 @@
     <div id="equiposMobileBuscador" class="equipos-buscador equipos-buscador--modal" style="display:none;">
       <i data-lucide="search" class="equipos-buscador-icono"></i>
       <input type="search" id="equiposMobileBuscar" class="equipos-buscar-input-mobile"
-             placeholder="Buscar serial…" aria-label="Buscar serial en esta orden"
+             placeholder="Buscar serialâ€¦" aria-label="Buscar serial en esta orden"
              autocomplete="off" spellcheck="false">
       <span id="equiposMobileBuscarInfo" class="equipos-buscar-info" aria-live="polite"></span>
     </div>
@@ -740,14 +740,14 @@
   <div class="modal modal-lg">
     <div class="modal-header-mobile">
       <div>
-        <div id="trabajoEquipoTitle" class="modal-title-mobile">Intervención técnica</div>
+        <div id="trabajoEquipoTitle" class="modal-title-mobile">IntervenciÃ³n tÃ©cnica</div>
         <div id="trabajoEquipoSub" class="modal-subtitle"></div>
       </div>
       <button class="btn btn-ghost" data-action="cerrar-trabajo-equipo"><i data-lucide="x"></i></button>
     </div>
 
-    <!-- Navegación entre equipos (auditoría órdenes P1.7): fotos y
-         materiales son POR equipo — sin esto el modal se cerraba y reabría
+    <!-- NavegaciÃ³n entre equipos (auditorÃ­a Ã³rdenes P1.7): fotos y
+         materiales son POR equipo â€” sin esto el modal se cerraba y reabrÃ­a
          N veces por orden. -->
     <div id="trabajoNav" style="display:none; align-items:center; justify-content:space-between; gap:8px; margin:0 0 8px;">
       <button type="button" class="btn btn-ghost btn-sm" id="trabajoNavPrev"><i data-lucide="chevron-left"></i> Anterior</button>
@@ -756,23 +756,23 @@
     </div>
 
     <textarea id="trabajoEquipoText" class="textarea-full"
-      placeholder="Describe la intervención técnica realizada..."></textarea>
+      placeholder="Describe la intervenciÃ³n tÃ©cnica realizada..."></textarea>
 
     <div class="intervencion-ctrl intervencion-ctrl-modal">
       <label class="intervencion-no-disponible">
         <input type="checkbox" id="trabajoNoDisponible">
-        <span>Equipo no disponible para intervención</span>
+        <span>Equipo no disponible para intervenciÃ³n</span>
       </label>
       <input type="text" id="trabajoMotivoNoDisponible" class="motivo-no-disponible" placeholder="Motivo (libre)">
     </div>
 
-    <!-- Lote (auditoría M3): mismas manos, mismo trabajo — una orden de 10
-         radios idénticos costaba repetir el modal 10 veces. Copia SOLO el
-         texto de la intervención (fotos y materiales siguen por equipo). -->
+    <!-- Lote (auditorÃ­a M3): mismas manos, mismo trabajo â€” una orden de 10
+         radios idÃ©nticos costaba repetir el modal 10 veces. Copia SOLO el
+         texto de la intervenciÃ³n (fotos y materiales siguen por equipo). -->
     <div id="trabajoAplicarOtros" style="display:none;"></div>
 
-    <!-- Materiales / piezas del equipo (consumos) — el técnico selecciona los
-         materiales usados junto a la intervención; cotizar-orden los precarga. -->
+    <!-- Materiales / piezas del equipo (consumos) â€” el tÃ©cnico selecciona los
+         materiales usados junto a la intervenciÃ³n; cotizar-orden los precarga. -->
     <div class="equipo-fotos-section" id="equipoMaterialesSection">
       <div class="equipo-fotos-header">
         <div class="equipo-fotos-title">
@@ -810,7 +810,7 @@
   </div>
 </div>
 
-<!-- Modal selección de material (pieza) para la intervención de un equipo -->
+<!-- Modal selecciÃ³n de material (pieza) para la intervenciÃ³n de un equipo -->
 <div id="modalMaterialEquipo" class="overlay hidden">
   <div class="modal modal-lg">
     <div class="modal-header-mobile">
@@ -821,7 +821,7 @@
       <button class="btn btn-ghost" data-action="cerrar-material-equipo"><i data-lucide="x"></i></button>
     </div>
 
-    <input type="text" id="materialBuscar" class="form-input" placeholder="Buscar pieza por nombre, SKU o marca…" autocomplete="off">
+    <input type="text" id="materialBuscar" class="form-input" placeholder="Buscar pieza por nombre, SKU o marcaâ€¦" autocomplete="off">
     <div id="materialSugerencias" class="material-sugerencias"></div>
     <div id="materialSeleccion" class="material-seleccion"></div>
 
@@ -834,7 +834,7 @@
         <label class="form-label" for="materialTipo">Tipo</label>
         <select id="materialTipo" class="form-select">
           <option value="cobro">Cobro</option>
-          <option value="garantia">Garantía</option>
+          <option value="garantia">GarantÃ­a</option>
         </select>
       </div>
       <div class="form-field">
@@ -844,8 +844,8 @@
     </div>
     <div id="materialSubtotal" class="material-subtotal"></div>
 
-    <!-- Lote de materiales (auditoría órdenes P1.6): misma pieza y cantidad
-         a otros equipos de la orden en un solo flujo — antes eran ~6
+    <!-- Lote de materiales (auditorÃ­a Ã³rdenes P1.6): misma pieza y cantidad
+         a otros equipos de la orden en un solo flujo â€” antes eran ~6
          interacciones POR EQUIPO repitiendo el modal. -->
     <div id="materialAplicarOtros" style="display:none;"></div>
 
@@ -872,8 +872,8 @@
   </div> <!-- /cc-app -->
 
   <script>
-    // Rail Command Center (F2) — Layout.initRail espera auth (scripts defer)
-    // y pinta el rail con el rol efectivo. No toca el estado de la página.
+    // Rail Command Center (F2) â€” Layout.initRail espera auth (scripts defer)
+    // y pinta el rail con el rol efectivo. No toca el estado de la pÃ¡gina.
     document.addEventListener('DOMContentLoaded', () => Layout.initRail('ordenes'));
   </script>
 </body>
