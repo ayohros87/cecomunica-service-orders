@@ -661,17 +661,67 @@ service cloud.firestore {
     // ── Gestiones por cliente (Ola 1, ARQUITECTURA_GESTIONES_POR_CLIENTE) ──
     // Una gestión es el expediente de una operación del CLIENTE sobre seriales
     // concretos (reemplazo, demo, baja, aumento, devolución, cambio de serial)
-    // y puede cruzar contratos. V1: crear/leer/actualizar básico; el
-    // endurecimiento por campo (asignación solo bodega, aprobación solo admin,
-    // cierre solo CF) llega con los triggers de la Ola 2. Nunca se borra: se
-    // anula (estado 'anulada'), igual que el resto del sistema.
+    // y puede cruzar contratos. Nunca se borra: se anula (estado 'anulada'),
+    // igual que el resto del sistema.
+    // Endurecido por campo (2026-08-31 — la V1 dejaba a cualquier vendedor
+    // escribir estado/cierre/aprobacion de cualquier gestión): cada transición
+    // legítima de la UI tiene su forma; el avance del expediente (cierre.*,
+    // ordenes, derivados) lo escribe Cloud Functions con Admin SDK, que no
+    // pasa por estas reglas.
     match /gestiones/{docId} {
+      function soloTocaG(ks) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(ks);
+      }
+      // Aprobar (excepción → bodega · baja → en_proceso · aumento → firma):
+      // solo administración/gerencia. La baja NO se aprueba sin la carta del
+      // cliente — antes ese candado vivía solo en la página.
+      function esAprobacionGestion() {
+        return userRole() in ["administrador","gerente"]
+          && resource.data.estado == "pendiente_aprobacion"
+          && request.resource.data.estado in ["pendiente_bodega","en_proceso","pendiente_firma"]
+          && soloTocaG(["estado","aprobacion","cierre"])
+          && (resource.data.tipo != "baja"
+              || ("carta_path" in resource.data && resource.data.carta_path is string));
+      }
+      // Anular / rechazar: nunca una cerrada, otra anulada o una ya entregada.
+      function esAnulacionGestion() {
+        return userRole() in ["administrador","gerente"]
+          && request.resource.data.estado == "anulada"
+          && !(resource.data.estado in ["cerrada","anulada"])
+          && resource.data.get("cierre", {}).get("entrega", false) != true
+          && soloTocaG(["estado","anulada_motivo","anulada_por_uid","anulada_at"]);
+      }
+      // Adjuntar la carta del cliente (baja).
+      function esCartaGestion() {
+        return userRole() in ["administrador","gerente","vendedor","recepcion"]
+          && soloTocaG(["carta_path","carta_at","carta_por"]);
+      }
+      // Subir el anexo de aumento FIRMADO: pendiente_firma → pendiente_bodega.
+      function esFirmaAnexoGestion() {
+        return userRole() in ["administrador","gerente","vendedor","recepcion"]
+          && resource.data.estado == "pendiente_firma"
+          && request.resource.data.estado == "pendiente_bodega"
+          && soloTocaG(["estado","cierre","anexo_firmado_path","anexo_firmado_at","anexo_firmado_por"]);
+      }
+      // Vincular el enlace de firma digital del anexo.
+      function esEnlaceFirmaGestion() {
+        return userRole() in ["administrador","gerente","vendedor","recepcion"]
+          && soloTocaG(["firma_solicitud_id","firma_solicitud_estado"]);
+      }
+      // Bodega asigna seriales: items (reemplazo) o los seriales_asignados
+      // anidados de demo/aumento.
+      function esAsignacionGestion() {
+        return userRole() in ["administrador","inventario"]
+          && (soloTocaG(["items"]) || soloTocaG(["demo"]) || soloTocaG(["aumento"]));
+      }
       allow read:   if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario","tecnico","jefe_taller","contabilidad"];
       allow create: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion"]
                     && request.resource.data.cliente_id is string
                     && request.resource.data.tipo in ["reemplazo","demo","baja","aumento","devolucion","cambio_serial"]
                     && request.resource.data.deleted == false;
-      allow update: if isSignedIn() && userRole() in ["administrador","gerente","vendedor","recepcion","inventario"];
+      allow update: if isSignedIn() && (
+                      esAprobacionGestion() || esAnulacionGestion() || esCartaGestion()
+                      || esFirmaAnexoGestion() || esEnlaceFirmaGestion() || esAsignacionGestion());
       allow delete: if false;
       // Linaje del reemplazo (espejo del patrón contratos/{cid}/mapeos):
       // append-only — onMapeoWrite generalizado los consume en la Ola 2.
