@@ -36,6 +36,40 @@
     .pulse { display: inline-block; width: 10px; height: 10px; border-radius: 99px; background: #1FA56B; margin-right: 6px; animation: pulse 1.6s infinite; vertical-align: 1px; }
     @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
     @media (prefers-reduced-motion: reduce) { .pulse { animation: none } }
+
+    /* ── Pantalla de espera (la tablet vive en recepción, a la vista del
+       cliente): escena de marca a pantalla completa — logo, reloj y fecha —
+       con el estado de conexión discreto abajo. El contenido deriva unos
+       píxeles cada minuto para no quemar el panel. ── */
+    body.idle-full { overflow: hidden; }
+    body.idle-full .cab { display: none; }
+    .escena {
+      position: fixed; inset: 0; z-index: 5;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(120% 90% at 50% -10%, #123A61 0%, #0B2A47 55%, #071D33 100%);
+      color: #E8F0F7; text-align: center; padding: 24px;
+    }
+    .escena .deriva { transition: transform 6s ease-in-out; display: flex; flex-direction: column; align-items: center; }
+    .escena img.logo-idle { height: clamp(84px, 16vh, 150px); margin-bottom: 4.5vh; }
+    .escena .hora {
+      font-size: clamp(64px, 15vw, 128px); font-weight: 200; letter-spacing: .02em;
+      line-height: 1; font-variant-numeric: tabular-nums; color: #fff;
+    }
+    .escena .hora .seg { font-size: .32em; font-weight: 300; color: #7E9AB5; margin-left: .18em; }
+    .escena .fecha { font-size: clamp(16px, 2.6vw, 22px); color: #A9BFD3; margin-top: 14px; }
+    .escena .bienvenida { margin-top: 5.5vh; font-size: clamp(15px, 2.2vw, 19px); color: #E8F0F7; }
+    .escena .bienvenida b { font-weight: 600; }
+    .escena .sub-bienvenida { font-size: clamp(11.5px, 1.6vw, 13.5px); color: #7E9AB5; margin-top: 6px; letter-spacing: .04em; }
+    .escena .estado-pie {
+      position: absolute; bottom: 14px; right: 18px;
+      font-size: 11px; color: #567699; display: flex; align-items: center; gap: 6px;
+    }
+    .escena .estado-pie .punto { width: 7px; height: 7px; border-radius: 99px; background: #1FA56B; animation: pulse 2.4s infinite; }
+    .escena .estado-pie.sin-conexion .punto { background: #E0A93A; }
+    @media (prefers-reduced-motion: reduce) {
+      .escena .deriva { transition: none; }
+      .escena .estado-pie .punto { animation: none; }
+    }
     table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0 4px; }
     th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #5a6b7b; padding: 6px 8px; border-bottom: 2px solid #e5ebf1; }
     td { padding: 8px; border-bottom: 1px solid #eef2f6; vertical-align: top; }
@@ -68,10 +102,15 @@
   <div class="wrap">
     <div id="vCargando" class="idle"><div class="icono">⏳</div><h2>Conectando…</h2></div>
 
-    <div id="vIdle" class="idle hidden">
-      <div class="icono">🖊</div>
-      <h2>Esperando firmas</h2>
-      <p><span class="pulse"></span>Cuando recepción envíe un acuse a firmar, aparecerá aquí solo.</p>
+    <div id="vIdle" class="escena hidden">
+      <div class="deriva" id="idleDeriva">
+        <img class="logo-idle" src="/brand/logo-lockup-vertical-inverse.svg" alt="C Comunica">
+        <div class="hora"><span id="idleHora">--:--</span><span class="seg" id="idleAmPm"></span></div>
+        <div class="fecha" id="idleFecha"></div>
+        <div class="bienvenida"><b>Bienvenido</b></div>
+        <div class="sub-bienvenida">Servicio técnico y alquiler de radiocomunicación</div>
+      </div>
+      <div class="estado-pie" id="idleEstado"><span class="punto"></span><span id="idleEstadoTxt">En línea</span></div>
     </div>
 
     <div id="vFirma" class="hidden">
@@ -127,8 +166,54 @@
     let _guardando = false;
     let _wakeLock = null;
 
-    const ver = (id) => ['vCargando', 'vIdle', 'vFirma', 'vListo'].forEach(x =>
-      document.getElementById(x).classList.toggle('hidden', x !== id));
+    const ver = (id) => {
+      ['vCargando', 'vIdle', 'vFirma', 'vListo'].forEach(x =>
+        document.getElementById(x).classList.toggle('hidden', x !== id));
+      document.body.classList.toggle('idle-full', id === 'vIdle');
+      if (id === 'vIdle') arrancarReloj(); else pararReloj();
+    };
+
+    // ── Reloj de la pantalla de espera ──────────────────────────────────
+    // La tablet vive encendida en recepción a la vista del cliente: la
+    // espera es una pantalla de marca con la hora. El bloque deriva unos
+    // píxeles por minuto para no marcar el panel.
+    let _relojInt = null, _derivaInt = null;
+    function _tickReloj() {
+      const ahora = new Date();
+      let h = ahora.getHours();
+      const ampm = h >= 12 ? 'p. m.' : 'a. m.';
+      h = h % 12 || 12;
+      document.getElementById('idleHora').textContent =
+        `${h}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+      document.getElementById('idleAmPm').textContent = ampm;
+      // Solo la primera letra en mayúscula ("Lunes, 1 de septiembre…") —
+      // text-transform:capitalize capitalizaba cada palabra, mal en español.
+      const fecha = ahora.toLocaleDateString('es-PA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      document.getElementById('idleFecha').textContent =
+        fecha.charAt(0).toUpperCase() + fecha.slice(1);
+    }
+    function arrancarReloj() {
+      if (_relojInt) return;
+      _tickReloj();
+      _relojInt = setInterval(_tickReloj, 10000);
+      _derivaInt = setInterval(() => {
+        const dx = Math.round((Math.random() - 0.5) * 28);
+        const dy = Math.round((Math.random() - 0.5) * 20);
+        const el = document.getElementById('idleDeriva');
+        if (el) el.style.transform = `translate(${dx}px, ${dy}px)`;
+      }, 60000);
+    }
+    function pararReloj() {
+      clearInterval(_relojInt); _relojInt = null;
+      clearInterval(_derivaInt); _derivaInt = null;
+    }
+
+    function _estadoConexion(ok, txt) {
+      const pie = document.getElementById('idleEstado');
+      if (pie) pie.classList.toggle('sin-conexion', !ok);
+      const t = document.getElementById('idleEstadoTxt');
+      if (t) t.textContent = txt;
+    }
 
     // La tablet vive encendida en el mostrador: sin wake lock la pantalla se
     // apaga a media espera y el cliente se encuentra la tablet dormida.
@@ -231,6 +316,7 @@
         .where('estado', '==', 'pendiente')
         .where('tipo', '==', 'acuse_devolucion')
         .onSnapshot((snap) => {
+          _estadoConexion(true, 'En línea');
           const corte = Date.now() - 4 * 60 * 60 * 1000;
           const docs = snap.docs
             .map(d => ({ id: d.id, data: d.data() }))
@@ -261,6 +347,7 @@
         }, (err) => {
           console.error('[tablet] snapshot', err);
           document.getElementById('conEstado').textContent = 'Sin conexión — reintentando…';
+          _estadoConexion(false, 'Sin conexión — reintentando…');
         });
     }
 
