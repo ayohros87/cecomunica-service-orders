@@ -30,6 +30,30 @@
     .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
     .card { background: #fff; border: 1px solid #dde5ec; border-radius: 14px; padding: 18px 20px; margin-top: 14px; }
     h2 { font-size: 20px; color: #0B2A47; }
+
+    /* ── Vista de firma: dos columnas cuando la pantalla es ancha (tablet
+       horizontal en el stand del mostrador). Regla de kiosco: TODO visible
+       sin scroll — resumen a la izquierda, nombre+firma+confirmar a la
+       derecha. En vertical sigue en una columna. ── */
+    #vFirma { display: grid; gap: 14px; grid-template-columns: 1fr; margin-top: 14px; }
+    #vFirma .card { margin-top: 0; }
+    @media (min-width: 960px) {
+      .wrap { max-width: 1240px; }
+      #vFirma { grid-template-columns: 1.15fr 0.85fr; align-items: start; }
+    }
+    /* Durante la firma el cliente tiene la tablet en la mano: los datos de
+       sesión (correo del staff, punto de conexión) sobran en pantalla. */
+    body.firmando .estado-con { display: none; }
+    /* Muchas unidades: resumen por modelo + detalle plegado, para que la
+       firma no quede a tres pantallas de distancia. */
+    details.det-unidades summary { cursor: pointer; font-weight: 600; color: #0B2A47; font-size: 13.5px; padding: 8px 0 2px; }
+    .resumen-modelos { margin: 10px 0 2px; }
+    .resumen-modelos li { font-size: 14.5px; padding: 3px 0; list-style: none; }
+    .resumen-modelos li b { font-variant-numeric: tabular-nums; }
+    .resumen-dano { font-size: 13px; color: #8A6415; margin-top: 4px; }
+    /* Validación inline: nada de alert() frente al cliente. */
+    #fFaltan { text-align: center; margin-top: 8px; }
+    .error-box { background: #FDE8E8; border: 1px solid #E5A0A0; color: #8A1F1F; border-radius: 10px; padding: 10px 14px; font-size: 13.5px; margin-top: 10px; }
     .idle { text-align: center; padding: 12vh 20px; }
     .idle .icono { font-size: 52px; margin-bottom: 10px; }
     .idle p { color: #5a6b7b; margin-top: 6px; }
@@ -94,7 +118,7 @@
     <img src="/brand/logo-lockup-horizontal.svg" alt="C Comunica">
     <div>
       <h1>Firmas del mostrador</h1>
-      <div class="sub">Tablet de recepción — acuses de devolución</div>
+      <div class="sub">Tablet de recepción — acuses y entregas</div>
     </div>
     <div class="estado-con" id="conEstado"></div>
   </div>
@@ -120,10 +144,7 @@
           <span class="num-acuse" id="fNumero"></span>
         </div>
         <p class="nota" id="fSub" style="margin-top:4px;"></p>
-        <table>
-          <thead id="fThead"><tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr></thead>
-          <tbody id="fUnidades"></tbody>
-        </table>
+        <div id="fUnidadesWrap"></div>
         <div class="aviso" id="fLeyenda">Los radios ingresarán al taller para su revisión. Cualquier daño identificado
           como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados
           oportunamente mediante cotización para su posterior facturación.</div>
@@ -132,13 +153,17 @@
       <div class="card">
         <label for="fNombre" id="fNombreLabel">Nombre de quien entrega</label>
         <input type="text" id="fNombre" autocomplete="off" placeholder="Nombre y apellido">
+        <label for="fCedula">Cédula o pasaporte</label>
+        <input type="text" id="fCedula" autocomplete="off" placeholder="Ej.: 8-123-4567">
         <label>Firma</label>
         <canvas id="firmaCanvas"></canvas>
         <div class="canvas-bar">
           <span class="nota" id="fHint">— firma dentro del recuadro —</span>
           <button type="button" class="btn-g" id="fLimpiar">Borrar y repetir</button>
         </div>
-        <button type="button" class="btn-p" id="fConfirmar">Confirmar firma</button>
+        <button type="button" class="btn-p" id="fConfirmar" disabled>Confirmar firma</button>
+        <p class="nota" id="fFaltan"></p>
+        <div class="error-box hidden" id="fError"></div>
       </div>
     </div>
 
@@ -171,8 +196,59 @@
       ['vCargando', 'vIdle', 'vFirma', 'vListo'].forEach(x =>
         document.getElementById(x).classList.toggle('hidden', x !== id));
       document.body.classList.toggle('idle-full', id === 'vIdle');
+      // Con la tablet en manos del cliente, los datos de sesión del staff
+      // (correo, punto de conexión) se ocultan.
+      document.body.classList.toggle('firmando', id === 'vFirma');
       if (id === 'vIdle') arrancarReloj(); else pararReloj();
     };
+
+    // ── Aviso al llegar una solicitud ──────────────────────────────────
+    // La tablet pasa de la bienvenida a la firma sola: sin un timbre nadie
+    // lo nota si está de lado en el mostrador. Dos tonos cortos + vibración
+    // (si el dispositivo la tiene). Best-effort: si el navegador exige un
+    // gesto previo para el audio, simplemente no suena.
+    let _audioCtx = null;
+    function avisoLlegada() {
+      try { navigator.vibrate?.(200); } catch (e) { /* sin vibración */ }
+      try {
+        _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+        const t = _audioCtx.currentTime;
+        [[880, 0], [1174.66, 0.18]].forEach(([hz, off]) => {
+          const o = _audioCtx.createOscillator();
+          const g = _audioCtx.createGain();
+          o.type = 'sine'; o.frequency.value = hz;
+          g.gain.setValueAtTime(0.0001, t + off);
+          g.gain.exponentialRampToValueAtTime(0.25, t + off + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.45);
+          o.connect(g).connect(_audioCtx.destination);
+          o.start(t + off); o.stop(t + off + 0.5);
+        });
+      } catch (e) { /* sin audio: no crítico */ }
+    }
+
+    // ── Validación en vivo (nada de alert() frente al cliente) ─────────
+    // Confirmar se habilita solo cuando nombre + cédula + firma están; el
+    // hint dice exactamente qué falta.
+    function _actualizarConfirmar() {
+      const nombre = (document.getElementById('fNombre')?.value || '').trim();
+      const cedula = (document.getElementById('fCedula')?.value || '').trim();
+      const falta = [];
+      if (nombre.length < 3) falta.push('el nombre');
+      if (cedula.length < 4) falta.push('la cédula');
+      if (!_pad || _pad.isEmpty()) falta.push('la firma');
+      const btn = document.getElementById('fConfirmar');
+      if (btn && !_guardando) btn.disabled = falta.length > 0;
+      const hint = document.getElementById('fFaltan');
+      if (hint) hint.textContent = falta.length ? `Falta ${falta.join(', ').replace(/, ([^,]*)$/, ' y $1')}.` : '';
+    }
+
+    function _mostrarError(msg) {
+      const box = document.getElementById('fError');
+      if (!box) return;
+      box.textContent = msg;
+      box.classList.toggle('hidden', !msg);
+    }
 
     // ── Reloj de la pantalla de espera ──────────────────────────────────
     // La tablet vive encendida en recepción a la vista del cliente: la
@@ -250,11 +326,12 @@
       if (leyTxt) ley.textContent = leyTxt;
       // Devolución trae el checklist por unidad (accesorios + daño); los
       // otros flujos mandan un `detalle` ya resumido — columnas según venga.
-      const esDevolucion = (s.unidades || []).some(u => u && u.accesorios !== undefined);
-      document.getElementById('fThead').innerHTML = esDevolucion
-        ? '<tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr>'
-        : '<tr><th>Serial</th><th>Modelo</th><th>Accesorios</th></tr>';
-      document.getElementById('fUnidades').innerHTML = (s.unidades || []).map(u => esDevolucion ? `
+      const unidades = s.unidades || [];
+      const esDevolucion = unidades.some(u => u && u.accesorios !== undefined);
+      const thead = esDevolucion
+        ? '<thead><tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr></thead>'
+        : '<thead><tr><th>Serial</th><th>Modelo</th><th>Accesorios</th></tr></thead>';
+      const filas = unidades.map(u => esDevolucion ? `
         <tr>
           <td class="mono">${esc(u.serial || '—')}</td>
           <td>${esc(u.modelo || '—')}</td>
@@ -266,8 +343,30 @@
           <td>${esc(u.modelo || '—')}</td>
           <td>${esc(u.detalle || '—')}</td>
         </tr>`).join('');
+      const tabla = `<table>${thead}<tbody>${filas}</tbody></table>`;
+      // Muchas unidades: resumen por modelo con el detalle plegado — si no,
+      // la firma queda a tres pantallas de distancia.
+      if (unidades.length > 5) {
+        const porModelo = new Map();
+        unidades.forEach(u => {
+          const k = u.modelo || 'Sin modelo';
+          porModelo.set(k, (porModelo.get(k) || 0) + 1);
+        });
+        const conDano = unidades.filter(u => u.dano_visible).length;
+        document.getElementById('fUnidadesWrap').innerHTML = `
+          <ul class="resumen-modelos">
+            ${[...porModelo.entries()].map(([m, n]) => `<li><b>${n}</b> × ${esc(m)}</li>`).join('')}
+          </ul>
+          ${conDano ? `<div class="resumen-dano">⚠ ${conDano} unidad(es) con daño visible registrado — está en el detalle.</div>` : ''}
+          <details class="det-unidades"><summary>Ver detalle de las ${unidades.length} unidades</summary>${tabla}</details>`;
+      } else {
+        document.getElementById('fUnidadesWrap').innerHTML = tabla;
+      }
       document.getElementById('fNombre').value = '';
+      document.getElementById('fCedula').value = '';
+      _mostrarError('');
       document.getElementById('fHint').textContent = '— firma dentro del recuadro —';
+      avisoLlegada();
       pintarCopia(s);
       ver('vFirma');
       // FirmaPad se monta después del layout para conocer el ancho real.
@@ -278,8 +377,10 @@
           alto: 240,
           onChange: (hay) => {
             document.getElementById('fHint').textContent = hay ? '✓ Firma capturada' : '— firma dentro del recuadro —';
+            _actualizarConfirmar();
           },
         });
+        _actualizarConfirmar();
       });
     }
 
@@ -302,10 +403,13 @@
     async function confirmar() {
       if (!_sol || _guardando) return;
       const nombre = document.getElementById('fNombre').value.trim();
-      if (nombre.length < 3) { alert('Escribe el nombre completo de quien entrega.'); return; }
-      if (!_pad || _pad.isEmpty()) { alert('Dibuja la firma en el recuadro.'); return; }
+      const cedula = document.getElementById('fCedula').value.trim();
+      // El botón vive deshabilitado hasta que nombre+cédula+firma estén
+      // (_actualizarConfirmar); esto es solo el cinturón de seguridad.
+      if (nombre.length < 3 || cedula.length < 4 || !_pad || _pad.isEmpty()) return;
       const btn = document.getElementById('fConfirmar');
       _guardando = true;
+      _mostrarError('');
       btn.disabled = true; btn.textContent = 'Registrando…';
       try {
         const blob = await _pad.toBlob();
@@ -319,6 +423,7 @@
           estado: 'firmada',
           firma: {
             nombre,
+            cedula,
             url,
             at: firebase.firestore.FieldValue.serverTimestamp(),
             por_uid: user?.uid || null,
@@ -336,11 +441,13 @@
         _pad = null;
       } catch (e) {
         console.error(e);
-        alert('No se pudo registrar la firma. Intenta de nuevo.');
-        btn.disabled = false; btn.textContent = 'Confirmar firma';
-      } finally {
+        _mostrarError('No se pudo registrar la firma — revisa la conexión e intenta de nuevo.');
+        btn.textContent = 'Confirmar firma';
         _guardando = false;
+        _actualizarConfirmar();
+        return;
       }
+      _guardando = false;
     }
 
     function escuchar() {
@@ -394,8 +501,10 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('fLimpiar').addEventListener('click', () => _pad?.clear());
+      document.getElementById('fLimpiar').addEventListener('click', () => { _pad?.clear(); _actualizarConfirmar(); });
       document.getElementById('fConfirmar').addEventListener('click', confirmar);
+      document.getElementById('fNombre').addEventListener('input', _actualizarConfirmar);
+      document.getElementById('fCedula').addEventListener('input', _actualizarConfirmar);
       // Autenticación estándar del sistema: sin sesión redirige al login (con
       // next de vuelta a esta página).
       const arrancar = () => window.verificarAccesoYAplicarVisibilidad(() => {

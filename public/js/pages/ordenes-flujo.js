@@ -903,7 +903,7 @@ window.copiarSeriales = function (ordenId) {
     document.getElementById('entregaTabletListo')?.classList.toggle('hidden', !_firmaTablet);
     if (_firmaTablet) {
       const n = document.getElementById('entregaTabletNombre');
-      if (n) n.textContent = _firmaTablet.nombre || '—';
+      if (n) n.textContent = (_firmaTablet.nombre || '—') + (_firmaTablet.cedula ? ` · Céd. ${_firmaTablet.cedula}` : '');
       const img = document.getElementById('entregaTabletPreview');
       if (img && _firmaTablet.url) img.src = _firmaTablet.url;
     }
@@ -971,7 +971,7 @@ window.copiarSeriales = function (ordenId) {
           const d = s.exists ? s.data() : null;
           if (!d) return;
           if (d.estado === 'firmada') {
-            _firmaTablet = { url: d.firma?.url || null, nombre: d.firma?.nombre || '' };
+            _firmaTablet = { url: d.firma?.url || null, nombre: d.firma?.nombre || '', cedula: d.firma?.cedula || '' };
             _unsubTablet?.(); _unsubTablet = null; _solTablet = null;
             // El nombre que tecleó el cliente en la tablet prellena el campo
             // (editable); si recepción ya había escrito uno, se respeta.
@@ -1161,7 +1161,10 @@ window.copiarSeriales = function (ordenId) {
         firmaUrl = await refFirma.getDownloadURL();
       }
 
-      await OrdenesService.receiveAtCounter(ordenId, { receptorNombre, firmaUrl, sinFirma, sinFirmaMotivo });
+      await OrdenesService.receiveAtCounter(ordenId, {
+        receptorNombre, firmaUrl, sinFirma, sinFirmaMotivo,
+        cedula: (!sinFirma && _firmaTablet?.cedula) || '',
+      });
 
       // Si el operador editó el email del cliente, persistirlo en su
       // doc — mismo patrón que confirmarEntrega. Fallo no-fatal.
@@ -1292,6 +1295,8 @@ window.copiarSeriales = function (ordenId) {
         }
 
         firestoreData.receptor_nombre = receptorNombre;
+        // Cédula de quien recibe — hoy solo la captura la firma en tablet.
+        firestoreData.receptor_cedula = _firmaTablet?.cedula || null;
         firestoreData.firma_url = firmaUrl;
         firestoreData.identificacion_path = identificacionPath;
         firestoreData.sin_id = sinId;

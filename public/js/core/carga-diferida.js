@@ -31,7 +31,7 @@ window.CargaDiferida = (() => {
   const GSTATIC = "https://www.gstatic.com/firebasejs/10.10.0/";
   const MODULOS = {
     firmaPad:   "/js/ui/firmaPad.js?v=dev3",
-    devolucion: "/js/pages/ordenes-devolucion.js?v=dev16",
+    devolucion: "/js/pages/ordenes-devolucion.js?v=dev17",
     // Solo lo necesita el cierre de una devolución con faltantes (itemizar lo
     // que el cliente no devolvió) — no tiene por qué pesar en cada orden.
     cobros:     "/js/services/cobrosEquiposService.js?v=nd1",

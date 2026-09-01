@@ -447,7 +447,7 @@ const OrdenesService = {
    * @param {string} ordenId
    * @param {{receptorNombre:string, firmaUrl:string}} payload
    */
-  async receiveAtCounter(ordenId, { receptorNombre, firmaUrl, sinFirma = false, sinFirmaMotivo = '' }) {
+  async receiveAtCounter(ordenId, { receptorNombre, firmaUrl, sinFirma = false, sinFirmaMotivo = '', cedula = '' }) {
     const db = firebase.firestore();
     const user = firebase.auth().currentUser;
     await db.collection("ordenes_de_servicio").doc(ordenId).update({
@@ -457,6 +457,8 @@ const OrdenesService = {
       recepcion_por_email: user?.email || '',
       firma_recepcion_url: firmaUrl || null,
       receptor_recepcion_nombre: receptorNombre,
+      // Cédula de quien entrega — hoy solo la captura la firma en tablet.
+      receptor_recepcion_cedula: cedula || null,
       recepcion_sin_firma: !!sinFirma,
       recepcion_sin_firma_motivo: sinFirma ? sinFirmaMotivo : null,
       os_logs: firebase.firestore.FieldValue.arrayUnion({

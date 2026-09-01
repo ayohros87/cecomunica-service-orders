@@ -1504,7 +1504,7 @@
     } catch (e) { return true; }
   }
 
-  async function _persistirAcuse({ nombre, firmaUrl, sin, motivo, via, solicitudId, laxEmail }) {
+  async function _persistirAcuse({ nombre, cedula, firmaUrl, sin, motivo, via, solicitudId, laxEmail }) {
     const dev = _orden.devolucion;
     const pendientes = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
     if (!pendientes.length) return false;
@@ -1524,6 +1524,8 @@
       at: firebase.firestore.Timestamp.now(),
       por_uid: user?.uid || null,
       nombre_entrega: sin ? null : (nombre || null),
+      // Cédula de quien entrega — hoy solo la captura la firma en tablet.
+      cedula_entrega: sin ? null : (cedula || null),
       firma_url: firmaUrl || null,
       sin_firma: !!sin,
       sin_firma_motivo: sin ? (motivo || '') : null,
@@ -1699,6 +1701,7 @@
     try {
       await _persistirAcuse({
         nombre: sol.firma?.nombre || '',
+        cedula: sol.firma?.cedula || '',
         firmaUrl: sol.firma?.url || null,
         sin: false, motivo: '',
         via: 'tablet', solicitudId: solId,
@@ -1800,6 +1803,7 @@
             <div class="f-col">
               <div class="f-line">${firmaBloque}</div>
               <div class="f-name">${esc(a.nombre_entrega || (a.sin_firma ? '—' : ''))}</div>
+              ${a.cedula_entrega ? `<div style="font-size:11.5px;color:#5C554A;">Cédula ${esc(a.cedula_entrega)}</div>` : ''}
               <div class="f-role">Entrega — por el cliente</div>
             </div>
             <div class="f-col">

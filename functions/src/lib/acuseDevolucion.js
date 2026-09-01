@@ -91,6 +91,7 @@ function emailAcuse(ordenId, orden, acuse) {
          ${acuse.firma_url ? `<img src="${escapeHtml(acuse.firma_url)}" alt="Firma" style="max-height:70px;max-width:240px;display:block;">` : ""}
          <div style="border-top:1px solid #9ca3af;max-width:260px;padding-top:4px;font:13px Arial,sans-serif;">
            <b>${escapeHtml(acuse.nombre_entrega || "—")}</b><br>
+           ${acuse.cedula_entrega ? `<span style="font-size:11.5px;color:#6b7280;">Cédula ${escapeHtml(acuse.cedula_entrega)}</span><br>` : ""}
            <span style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Entrega — por el cliente</span>
          </div>
        </div>`;
