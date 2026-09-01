@@ -763,6 +763,7 @@
                 title="${esc(_accResumen(u.accesorios))}${u.dano_visible ? ` · Daño: ${esc(u.dano_visible)}` : ''}">${esc(u.serial)}</span>`).join('')}
             </div>
             ${st === 'enviado' && envio?.to ? `<div style="font-size:11.5px;color:var(--fg-3,#6b7280);margin-top:5px;">Copia enviada a <b>${esc(envio.to)}</b></div>` : ''}
+            ${(st === 'solicitado' || st === 'encolado') && envio?.to ? `<div style="font-size:11.5px;color:var(--fg-3,#6b7280);margin-top:5px;">Enviando copia a <b>${esc(envio.to)}</b>… (tarda unos segundos; el chip cambia solo)</div>` : ''}
             ${st === 'fallo' ? `<div style="font-size:11.5px;color:#b91c1c;margin-top:5px;">El envío falló${envio?.error ? `: ${esc(envio.error)}` : ''} — verifica el correo y reenvía.</div>` : ''}
           </div>`;
         }).join('')}
@@ -1610,6 +1611,10 @@
           serial: e.serial, modelo: e.modelo || '',
           accesorios: e.accesorios || null, dano_visible: e.dano_visible || null,
         })),
+        // La tablet le muestra al cliente a qué correo llegará su copia (y él
+        // mismo avisa si está mal ANTES de firmar). Es informativo: el envío
+        // real lo decide _persistirAcuse con el estado vigente del checkbox.
+        copia_a: (_acuseEnviarCopia && _esEmail(_emailCopia())) ? _emailCopia() : null,
         creado_at: firebase.firestore.FieldValue.serverTimestamp(),
         creado_por_uid: user?.uid || null,
         creado_por_email: user?.email || null,

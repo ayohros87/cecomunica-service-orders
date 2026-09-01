@@ -127,6 +127,7 @@
         <div class="aviso">Los radios ingresarán al taller para su revisión. Cualquier daño identificado
           como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados
           oportunamente mediante cotización para su posterior facturación.</div>
+        <p class="nota hidden" id="fCopia" style="margin-top:10px;"></p>
       </div>
       <div class="card">
         <label for="fNombre">Nombre de quien entrega</label>
@@ -144,7 +145,7 @@
     <div id="vListo" class="idle hidden">
       <div class="icono">✅</div>
       <h2>Firma registrada</h2>
-      <p>Gracias — recepción ya tiene el acuse. Puedes devolver la tablet.</p>
+      <p id="listoMsg">Gracias — recepción ya tiene el acuse. Puede devolver la tablet.</p>
     </div>
   </div>
 
@@ -246,6 +247,11 @@
         </tr>`).join('');
       document.getElementById('fNombre').value = '';
       document.getElementById('fHint').textContent = '— firma dentro del recuadro —';
+      // El cliente ve a qué correo llegará su copia ANTES de firmar — si está
+      // mal, lo dice aquí mismo y recepción lo corrige en la PC.
+      const copia = document.getElementById('fCopia');
+      copia.classList.toggle('hidden', !s.copia_a);
+      if (s.copia_a) copia.innerHTML = `📧 Al confirmar, le enviaremos copia de este acuse a <b>${esc(s.copia_a)}</b>. Si el correo no es el correcto, avísele a recepción antes de firmar.`;
       ver('vFirma');
       // FirmaPad se monta después del layout para conocer el ancho real.
       _pad?.destroy();
@@ -292,6 +298,9 @@
             por_uid: user?.uid || null,
           },
         });
+        document.getElementById('listoMsg').innerHTML = _sol.data.copia_a
+          ? `Gracias — le enviamos copia del acuse a <b>${esc(_sol.data.copia_a)}</b>. Puede devolver la tablet.`
+          : 'Gracias — recepción ya tiene el acuse. Puede devolver la tablet.';
         ver('vListo');
         // El snapshot dejará de traer esta solicitud (ya no está pendiente);
         // tras un momento la tablet vuelve sola a la espera.
