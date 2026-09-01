@@ -563,7 +563,11 @@ async function main() {
   await assertFails(as("vista").doc("firmas_tablet/ftNo").set(solTablet));
   await assertFails(as("recepcion").doc("firmas_tablet/ftNo")
     .set({ ...solTablet, estado: "firmada" }));   // no nace firmada
-  ok("firmas_tablet: crean los roles de órdenes, siempre en pendiente");
+  // Los tres flujos de mostrador crean; un tipo desconocido no.
+  await assertSucceeds(as("recepcion").doc("firmas_tablet/ftRec").set({ ...solTablet, tipo: "recepcion" }));
+  await assertSucceeds(as("recepcion").doc("firmas_tablet/ftEnt").set({ ...solTablet, tipo: "entrega" }));
+  await assertFails(as("recepcion").doc("firmas_tablet/ftNo").set({ ...solTablet, tipo: "visita" }));
+  ok("firmas_tablet: crean los roles de órdenes, siempre en pendiente y con tipo conocido");
   // La tablet (cualquier sesión) lista las pendientes — es su modo de operar.
   await assertSucceeds(as("vista").collection("firmas_tablet")
     .where("estado", "==", "pendiente").get());

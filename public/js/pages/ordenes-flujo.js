@@ -134,9 +134,16 @@ window.confirmarAsignarTecnico = async function (ordenId) {
     } else {
       // Si la orden sigue en POR ASIGNAR, esta asignación se salta la
       // recepción en mostrador — va marcado a os_logs (auditoría P2).
+      // PROGRAMACIÓN y ENTRADA no llevan recepción por diseño (su botón de
+      // POR ASIGNAR ya es Asignar), así que NO se marcan: si contaran como
+      // salto, la métrica de atajos —lo que sí es una excepción— quedaría
+      // inservible.
       const ordenPrev = (APP.state.orders || []).find(o => o.ordenId === ordenId) || {};
-      const saltoRecepcion =
-        (ordenPrev.estado_reparacion || "POR ASIGNAR").toUpperCase() === "POR ASIGNAR";
+      const sinRecepcion =
+        (typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(ordenPrev))
+        || (typeof esOrdenEntrada === 'function' && esOrdenEntrada(ordenPrev));
+      const saltoRecepcion = !sinRecepcion
+        && (ordenPrev.estado_reparacion || "POR ASIGNAR").toUpperCase() === "POR ASIGNAR";
       await OrdenesService.assignTechnician(ordenId, tecnicoUid, tecnicoNombre, { saltoRecepcion });
       Toast.show("✅ Técnico asignado correctamente", "ok");
     }
@@ -650,6 +657,9 @@ window.copiarSeriales = function (ordenId) {
     if (sinId) { sinId.classList.add('hidden'); sinId.style.display = ''; }
 
     _clearCanvas();
+    // Solicitud de tablet de un uso anterior del modal: se cancela — este
+    // modal es transiente y compartido entre órdenes.
+    _tabletReset(true);
   }
 
   // ── Resumen de la orden (equipos + totales) + leyenda ENTRADA ───
@@ -851,6 +861,7 @@ window.copiarSeriales = function (ordenId) {
     Modal.close('modalEntrega');
     const modal = document.getElementById('modalEntrega');
     if (modal) modal.classList.add('hidden');  // preserve .hidden invariant
+    _tabletReset(true);
     _ordenId = null;
     // Reset modo so the next open defaults to 'entrega' even if the
     // modal was last used for recepción.
@@ -864,6 +875,113 @@ window.copiarSeriales = function (ordenId) {
   };
 
   window.limpiarEntregaFirma = _clearCanvas;
+
+  // ── Firma en tablet (firmas_tablet + /firmar/tablet.html) ────────────
+  // Mismo mecanismo que el acuse de devolución (ordenes-devolucion.js), con
+  // un ciclo de vida más simple: este modal es TRANSIENTE y compartido entre
+  // órdenes, así que la solicitud se cancela al cerrar/reabrir el modal en
+  // vez de sobrevivirlo. La firma llega como URL (la tablet ya la subió a
+  // ordenes_firmas/) y el confirm la usa tal cual, sin canvas ni upload.
+  let _solTablet = null;    // id de la solicitud pendiente en firmas_tablet
+  let _unsubTablet = null;
+  let _firmaTablet = null;  // {url, nombre} cuando la tablet ya firmó
+
+  function _tabletUI() {
+    const esperando = !!_solTablet && !_firmaTablet;
+    document.getElementById('entregaCanvasWrap')?.classList.toggle('hidden', esperando || !!_firmaTablet);
+    document.getElementById('entregaTabletEspera')?.classList.toggle('hidden', !esperando);
+    document.getElementById('entregaTabletListo')?.classList.toggle('hidden', !_firmaTablet);
+    if (_firmaTablet) {
+      const n = document.getElementById('entregaTabletNombre');
+      if (n) n.textContent = _firmaTablet.nombre || '—';
+      const img = document.getElementById('entregaTabletPreview');
+      if (img && _firmaTablet.url) img.src = _firmaTablet.url;
+    }
+  }
+
+  // cancelarPendiente: true cuando el operador abandona (cerrar modal,
+  // reabrir, Cancelar) — la solicitud pendiente se cancela para que no quede
+  // huérfana en la tablet. La firmada no se toca: ya es constancia.
+  function _tabletReset(cancelarPendiente) {
+    _unsubTablet?.(); _unsubTablet = null;
+    if (cancelarPendiente && _solTablet && !_firmaTablet) {
+      firebase.firestore().collection('firmas_tablet').doc(_solTablet)
+        .update({ estado: 'cancelada' })
+        .catch(() => { /* ya firmada/cancelada: nada que hacer */ });
+    }
+    _solTablet = null;
+    _firmaTablet = null;
+    _tabletUI();
+  }
+
+  window._entregaFirmarEnTablet = async function () {
+    if (!_ordenId || _solTablet || _firmaTablet) return;
+    const orden = APP.state.orders.find(o => o.ordenId === _ordenId) || {};
+    const esRecepcion = _modo === 'recepcion';
+    const ACC = [['bateria', 'Batería'], ['antena', 'Antena'], ['clip', 'Clip'],
+                 ['cargador', 'Cargador'], ['fuente', 'Fuente'], ['cubrepolvo', 'Cubrepolvo']];
+    const unidades = (Array.isArray(orden.equipos) ? orden.equipos : [])
+      .filter(e => e && !e.eliminado)
+      .map(e => ({
+        serial: e.numero_de_serie || e.SERIAL || e.serial || '—',
+        modelo: e.modelo || '',
+        detalle: ACC.filter(([k]) => e[k]).map(([, l]) => l).join(', ') || 'Sin accesorios',
+      }));
+    // La leyenda que firma el cliente: solo aplica al dejar equipos de una
+    // ENTRADA (mismo criterio que _toggleLegendaEntrada).
+    const leyenda = String(orden.tipo_de_servicio || '').toUpperCase().includes('ENTRADA')
+      ? 'Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización para su posterior facturación.'
+      : null;
+    const user = firebase.auth().currentUser;
+    try {
+      const ref = await firebase.firestore().collection('firmas_tablet').add({
+        tipo: esRecepcion ? 'recepcion' : 'entrega',
+        estado: 'pendiente',
+        orden_id: _ordenId,
+        cliente_nombre: orden.cliente_nombre || '',
+        contrato_id: orden.contrato?.contrato_id || null,
+        numero: _ordenId,
+        titulo: esRecepcion ? 'Acuse de recibo en mostrador' : 'Acuse de entrega de equipos',
+        nombre_label: esRecepcion ? 'Nombre de quien entrega' : 'Nombre de quien recibe',
+        leyenda,
+        copia_a: null,
+        unidades,
+        creado_at: firebase.firestore.FieldValue.serverTimestamp(),
+        creado_por_uid: user?.uid || null,
+        creado_por_email: user?.email || null,
+      });
+      _solTablet = ref.id;
+      _firmaTablet = null;
+      _unsubTablet = firebase.firestore().collection('firmas_tablet').doc(ref.id)
+        .onSnapshot((s) => {
+          const d = s.exists ? s.data() : null;
+          if (!d) return;
+          if (d.estado === 'firmada') {
+            _firmaTablet = { url: d.firma?.url || null, nombre: d.firma?.nombre || '' };
+            _unsubTablet?.(); _unsubTablet = null; _solTablet = null;
+            // El nombre que tecleó el cliente en la tablet prellena el campo
+            // (editable); si recepción ya había escrito uno, se respeta.
+            const inp = document.getElementById('entregaReceptorNombre');
+            if (inp && !inp.value.trim() && _firmaTablet.nombre) inp.value = _firmaTablet.nombre;
+            _tabletUI();
+            Toast.show('Firma recibida de la tablet.', 'ok');
+          } else if (d.estado === 'cancelada') {
+            _tabletReset(false);
+          }
+        });
+      _tabletUI();
+      Toast.show('Solicitud enviada — ya aparece en la tablet del mostrador.', 'ok');
+    } catch (err) {
+      console.error('[_entregaFirmarEnTablet]', err);
+      Toast.show('No se pudo enviar la solicitud a la tablet.', 'bad');
+    }
+  };
+
+  window._entregaTabletCancelar = () => _tabletReset(true);
+  // Descarta la firma recibida y vuelve al recuadro (p.ej. firmó la persona
+  // equivocada). La firma queda archivada en la solicitud, pero la orden
+  // solo guarda la que esté vigente al confirmar.
+  window._entregaTabletDescartar = () => { _firmaTablet = null; _tabletUI(); };
 
   // Exposed for data-action change handlers in ordenes-events.js.
   // Use classList.toggle('hidden', ...) — the global `.hidden` class
@@ -1008,7 +1126,7 @@ window.copiarSeriales = function (ordenId) {
     const sinFirmaMotivo = sinFirma ? (document.getElementById('entregaRecepcionSinFirmaMotivo')?.value || '').trim() : '';
     if (sinFirma) {
       if (!sinFirmaMotivo) { Toast.show('Indique el motivo por el cual se reciben sin firma', 'bad'); return; }
-    } else if (_isCanvasEmpty()) {
+    } else if (!_firmaTablet && _isCanvasEmpty()) {
       Toast.show('La firma del que entrega es obligatoria', 'bad'); return;
     }
 
@@ -1017,7 +1135,9 @@ window.copiarSeriales = function (ordenId) {
 
     try {
       let firmaUrl = null;
-      if (!sinFirma) {
+      if (!sinFirma && _firmaTablet?.url) {
+        firmaUrl = _firmaTablet.url; // la tablet ya la subió a ordenes_firmas/
+      } else if (!sinFirma) {
         const canvas = document.getElementById('entregaFirmaCanvas');
         const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
         const pathFirma = `ordenes_firmas/${ordenId}_recepcion_${Date.now()}.png`;
@@ -1123,17 +1243,23 @@ window.copiarSeriales = function (ordenId) {
         const sinIdMotivo = sinId ? (document.getElementById('entregaSinIdMotivo')?.value || '').trim() : '';
 
         if (!receptorNombre) { Toast.show('Ingrese el nombre de quien recibe', 'bad'); return; }
-        if (_isCanvasEmpty()) { Toast.show('La firma es obligatoria', 'bad'); return; }
+        if (!_firmaTablet && _isCanvasEmpty()) { Toast.show('La firma es obligatoria', 'bad'); return; }
         if (sinId && !sinIdMotivo) { Toast.show('Indique por qué el cliente no proporciona ID', 'bad'); return; }
 
-        // Upload signature
-        const canvas = document.getElementById('entregaFirmaCanvas');
-        const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
-        const pathFirma = `ordenes_firmas/${ordenId}_firma_${Date.now()}.png`;
+        // Firma: de la tablet (ya subida a Storage por /firmar/tablet.html)
+        // o del canvas del modal.
         await CargaDiferida.storage(); // SDK diferido (P3.15): cubre firma + ID abajo
-        const refFirma = firebase.storage().ref(pathFirma);
-        await refFirma.put(blob, { contentType: 'image/png' });
-        const firmaUrl = await refFirma.getDownloadURL();
+        let firmaUrl;
+        if (_firmaTablet?.url) {
+          firmaUrl = _firmaTablet.url;
+        } else {
+          const canvas = document.getElementById('entregaFirmaCanvas');
+          const blob = await (await fetch(canvas.toDataURL('image/png'))).blob();
+          const pathFirma = `ordenes_firmas/${ordenId}_firma_${Date.now()}.png`;
+          const refFirma = firebase.storage().ref(pathFirma);
+          await refFirma.put(blob, { contentType: 'image/png' });
+          firmaUrl = await refFirma.getDownloadURL();
+        }
 
         // Upload ID photo (if provided and not waived). We store only the
         // Storage PATH — never a tokenized download URL — because the ID is

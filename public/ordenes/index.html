@@ -70,7 +70,7 @@
 <script defer src="../js/pages/ordenes-data.js?v=dup1"></script>
 <script defer src="../js/pages/ordenes-render.js?v=prog1"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq1"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=qc8"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=tab1"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=pen1"></script>
 <script defer src="../js/pages/ordenes-equipos.js?v=cc23"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
@@ -549,16 +549,47 @@
       </div>
 
       <!-- Signature canvas. El label cambia entre 'Firma del receptor'
-           (entrega) y 'Firma del que entrega' (recepción) vía _applyModo. -->
+           (entrega) y 'Firma del que entrega' (recepción) vía _applyModo.
+           FIRMA EN TABLET (2026-09-01): el botón manda la solicitud a la
+           tablet del mostrador (/firmar/tablet.html); mientras se espera se
+           oculta el canvas, y al llegar la firma se muestra el resultado.
+           La lógica vive en ordenes-flujo.js (_entregaFirmarEnTablet). -->
       <div id="entregaSigWrap" class="modal-entrega__sig-wrap">
         <label class="modal-entrega__label--muted">
           <span id="entregaFirmaLabel">Firma del receptor</span> <span class="req"></span>
         </label>
-        <canvas id="entregaFirmaCanvas" class="modal-entrega__canvas"></canvas>
-        <button type="button" class="btn btn-ghost modal-entrega__clear-btn"
-                data-action="limpiar-entrega-firma">
-          <i data-lucide="eraser"></i> Limpiar firma
-        </button>
+        <div id="entregaCanvasWrap">
+          <canvas id="entregaFirmaCanvas" class="modal-entrega__canvas"></canvas>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="btn btn-ghost modal-entrega__clear-btn"
+                    data-action="limpiar-entrega-firma">
+              <i data-lucide="eraser"></i> Limpiar firma
+            </button>
+            <button type="button" class="btn btn-ghost modal-entrega__clear-btn"
+                    onclick="window._entregaFirmarEnTablet()"
+                    title="La solicitud aparece sola en la tablet del mostrador; cuando el cliente confirme allá, la firma llega aquí automáticamente.">
+              <i data-lucide="tablet"></i> Firmar en la tablet
+            </button>
+          </div>
+        </div>
+        <div id="entregaTabletEspera" class="hidden"
+             style="display:flex;align-items:center;gap:10px;border:1px dashed #fcd34d;border-radius:8px;background:#fffbeb;padding:10px 12px;">
+          <span style="width:14px;height:14px;border:2px solid #fcd34d;border-top-color:#b45309;border-radius:99px;display:inline-block;animation:entregatabspin 1s linear infinite;flex:none;"></span>
+          <span style="font-size:12.5px;color:#78350f;flex:1;">
+            <b>Esperando la firma en la tablet…</b> Pásale la tablet al cliente; al confirmar allá, la firma llega aquí sola.
+          </span>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="window._entregaTabletCancelar()">Cancelar</button>
+        </div>
+        <style>@keyframes entregatabspin{to{transform:rotate(360deg)}}</style>
+        <div id="entregaTabletListo" class="hidden"
+             style="display:flex;align-items:center;gap:10px;border:1px solid #A7F3D0;border-radius:8px;background:#ECFDF5;padding:8px 12px;">
+          <img id="entregaTabletPreview" alt="Firma" style="max-height:44px;max-width:150px;background:#fff;border:1px solid #A7F3D0;border-radius:6px;flex:none;">
+          <span style="font-size:12.5px;color:#065F46;flex:1;">
+            ✓ Firma recibida de la tablet — <b id="entregaTabletNombre"></b>
+          </span>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="window._entregaTabletDescartar()"
+                  title="Descarta la firma de la tablet y vuelve al recuadro para firmar aquí.">Repetir</button>
+        </div>
       </div>
 
     </div><!-- /entregaNormalBloque -->

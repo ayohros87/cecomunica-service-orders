@@ -121,16 +121,16 @@
         </div>
         <p class="nota" id="fSub" style="margin-top:4px;"></p>
         <table>
-          <thead><tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr></thead>
+          <thead id="fThead"><tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr></thead>
           <tbody id="fUnidades"></tbody>
         </table>
-        <div class="aviso">Los radios ingresarán al taller para su revisión. Cualquier daño identificado
+        <div class="aviso" id="fLeyenda">Los radios ingresarán al taller para su revisión. Cualquier daño identificado
           como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados
           oportunamente mediante cotización para su posterior facturación.</div>
         <p class="nota hidden" id="fCopia" style="margin-top:10px;"></p>
       </div>
       <div class="card">
-        <label for="fNombre">Nombre de quien entrega</label>
+        <label for="fNombre" id="fNombreLabel">Nombre de quien entrega</label>
         <input type="text" id="fNombre" autocomplete="off" placeholder="Nombre y apellido">
         <label>Firma</label>
         <canvas id="firmaCanvas"></canvas>
@@ -230,20 +230,41 @@
       if (document.visibilityState === 'visible' && !_wakeLock) pedirWakeLock();
     });
 
+    // Leyenda por defecto (solicitudes de devolución, que no traen `leyenda`).
+    // Los otros tipos mandan la suya (o null para ocultarla).
+    const LEYENDA_DEFAULT = 'Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización para su posterior facturación.';
+
     function pintarSolicitud(id, s) {
       _sol = { id, data: s };
+      document.getElementById('fTitulo').textContent = s.titulo || 'Acuse de recibo de equipos';
+      document.getElementById('fNombreLabel').textContent = s.nombre_label || 'Nombre de quien entrega';
       document.getElementById('fNumero').textContent = s.numero || '';
       document.getElementById('fSub').innerHTML =
         `<b>${esc(s.cliente_nombre || '—')}</b>` +
         (s.contrato_id ? ` · Contrato ${esc(s.contrato_id)}` : '') +
         ` · Orden ${esc(s.orden_id || '')}` +
         ` · ${(s.unidades || []).length} equipo(s)`;
-      document.getElementById('fUnidades').innerHTML = (s.unidades || []).map(u => `
+      const leyTxt = (s.leyenda !== undefined) ? s.leyenda : LEYENDA_DEFAULT;
+      const ley = document.getElementById('fLeyenda');
+      ley.classList.toggle('hidden', !leyTxt);
+      if (leyTxt) ley.textContent = leyTxt;
+      // Devolución trae el checklist por unidad (accesorios + daño); los
+      // otros flujos mandan un `detalle` ya resumido — columnas según venga.
+      const esDevolucion = (s.unidades || []).some(u => u && u.accesorios !== undefined);
+      document.getElementById('fThead').innerHTML = esDevolucion
+        ? '<tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr>'
+        : '<tr><th>Serial</th><th>Modelo</th><th>Accesorios</th></tr>';
+      document.getElementById('fUnidades').innerHTML = (s.unidades || []).map(u => esDevolucion ? `
         <tr>
           <td class="mono">${esc(u.serial || '—')}</td>
           <td>${esc(u.modelo || '—')}</td>
           <td>${esc(resumenAcc(u.accesorios))}</td>
           <td>${esc(u.dano_visible || '—')}</td>
+        </tr>` : `
+        <tr>
+          <td class="mono">${esc(u.serial || '—')}</td>
+          <td>${esc(u.modelo || '—')}</td>
+          <td>${esc(u.detalle || '—')}</td>
         </tr>`).join('');
       document.getElementById('fNombre').value = '';
       document.getElementById('fHint').textContent = '— firma dentro del recuadro —';
@@ -324,16 +345,18 @@
 
     function escuchar() {
       // Solo igualdades (sin orderBy): no requiere índice compuesto. El orden
-      // (la más vieja primero) y el filtro de solicitudes rancias (>4h, de un
-      // modal que quedó abierto hace días) se resuelven aquí.
+      // (la más vieja primero), los tipos que esta pantalla sabe pintar y el
+      // filtro de solicitudes rancias (>4h, de un modal que quedó abierto
+      // hace días) se resuelven aquí.
+      const TIPOS = new Set(['acuse_devolucion', 'recepcion', 'entrega']);
       firebase.firestore().collection('firmas_tablet')
         .where('estado', '==', 'pendiente')
-        .where('tipo', '==', 'acuse_devolucion')
         .onSnapshot((snap) => {
           _estadoConexion(true, 'En línea');
           const corte = Date.now() - 4 * 60 * 60 * 1000;
           const docs = snap.docs
             .map(d => ({ id: d.id, data: d.data() }))
+            .filter(d => TIPOS.has(d.data.tipo))
             .filter(d => {
               const t = d.data.creado_at?.toDate ? d.data.creado_at.toDate().getTime() : 0;
               return t === 0 || t >= corte;

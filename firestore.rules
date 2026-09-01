@@ -789,7 +789,10 @@ service cloud.firestore {
       allow create: if isSignedIn()
         && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"]
         && request.resource.data.estado == "pendiente"
-        && request.resource.data.tipo == "acuse_devolucion"
+        // acuse_devolucion (check-in de devolución), recepcion (acuse de
+        // recibo en mostrador) y entrega (nota de entrega) — los tres flujos
+        // de mostrador donde el cliente firma.
+        && request.resource.data.tipo in ["acuse_devolucion", "recepcion", "entrega"]
         && request.resource.data.orden_id is string;
       allow update: if isSignedIn() && (
         (resource.data.estado == "pendiente"
