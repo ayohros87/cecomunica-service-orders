@@ -247,11 +247,7 @@
         </tr>`).join('');
       document.getElementById('fNombre').value = '';
       document.getElementById('fHint').textContent = '— firma dentro del recuadro —';
-      // El cliente ve a qué correo llegará su copia ANTES de firmar — si está
-      // mal, lo dice aquí mismo y recepción lo corrige en la PC.
-      const copia = document.getElementById('fCopia');
-      copia.classList.toggle('hidden', !s.copia_a);
-      if (s.copia_a) copia.innerHTML = `📧 Al confirmar, le enviaremos copia de este acuse a <b>${esc(s.copia_a)}</b>. Si el correo no es el correcto, avísele a recepción antes de firmar.`;
+      pintarCopia(s);
       ver('vFirma');
       // FirmaPad se monta después del layout para conocer el ancho real.
       _pad?.destroy();
@@ -264,6 +260,15 @@
           },
         });
       });
+    }
+
+    // El cliente ve a qué correo llegará su copia ANTES de firmar — si está
+    // mal, recepción lo corrige en la PC y esta línea se actualiza en vivo
+    // (la solicitud pendiente acepta cambios de copia_a).
+    function pintarCopia(s) {
+      const copia = document.getElementById('fCopia');
+      copia.classList.toggle('hidden', !s.copia_a);
+      if (s.copia_a) copia.innerHTML = `📧 Al confirmar, le enviaremos copia de este acuse a <b>${esc(s.copia_a)}</b>. Si el correo no es el correcto, avísele a recepción para corregirlo — se actualiza aquí mismo.`;
     }
 
     function aIdle() {
@@ -349,8 +354,13 @@
           const primera = docs[0];
           // No pisar la firma EN CURSO con otra solicitud que llegue detrás:
           // solo se repinta si es una solicitud distinta a la mostrada y no
-          // hay trazo empezado.
-          if (_sol && !_sol.consumida && _sol.id === primera.id) return;
+          // hay trazo empezado. La MISMA solicitud sí refresca el destino de
+          // la copia (recepción puede corregir el correo desde la PC).
+          if (_sol && !_sol.consumida && _sol.id === primera.id) {
+            _sol.data = primera.data;
+            pintarCopia(primera.data);
+            return;
+          }
           if (_sol && !_sol.consumida && _pad && !_pad.isEmpty()) return;
           pintarSolicitud(primera.id, primera.data);
         }, (err) => {

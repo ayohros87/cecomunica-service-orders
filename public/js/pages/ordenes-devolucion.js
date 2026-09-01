@@ -1029,8 +1029,12 @@
     inpAcuseNombre?.addEventListener('input', () => { _acuseNombreDraft = inpAcuseNombre.value; });
     const inpAcuseEmail = _overlay.querySelector('#acuseEmail');
     inpAcuseEmail?.addEventListener('input', () => { _acuseEmailDraft = inpAcuseEmail.value; });
+    inpAcuseEmail?.addEventListener('change', _pushCopiaATablet);
     const cbCopia = _overlay.querySelector('#acuseEnviarCopia');
-    cbCopia?.addEventListener('change', () => { _acuseEnviarCopia = !!cbCopia.checked; });
+    cbCopia?.addEventListener('change', () => {
+      _acuseEnviarCopia = !!cbCopia.checked;
+      _pushCopiaATablet();
+    });
     // El re-render descarta el canvas anterior: soltar sus listeners para no
     // dejar handlers de window colgando por cada check-in.
     _firmaAcuse?.destroy();
@@ -1643,6 +1647,18 @@
           if (_overlay) render();
         }
       });
+  }
+
+  // Corrección del correo con la tablet en la mano del cliente: el destino de
+  // la copia (copia_a) se actualiza en la solicitud pendiente y la tablet lo
+  // repinta en vivo. Best-effort e informativo — el envío real lo decide
+  // _persistirAcuse con el estado vigente del checkbox y el campo.
+  function _pushCopiaATablet() {
+    if (!_solTabletId) return;
+    const email = _emailCopia();
+    firebase.firestore().collection('firmas_tablet').doc(_solTabletId)
+      .update({ copia_a: (_acuseEnviarCopia && _esEmail(email)) ? email : null })
+      .catch(() => { /* solicitud ya firmada/cancelada: el dato ya no importa */ });
   }
 
   async function cancelarTablet() {

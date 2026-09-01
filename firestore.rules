@@ -800,7 +800,12 @@ service cloud.firestore {
           && request.resource.data.firma.url is string)
         || (resource.data.estado == "pendiente"
           && request.resource.data.estado == "cancelada"
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado"])));
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado"]))
+        // Recepción corrige el correo de la copia MIENTRAS el cliente firma:
+        // solo copia_a, solo en pendiente (una firmada ya es constancia).
+        || (resource.data.estado == "pendiente"
+          && request.resource.data.estado == "pendiente"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["copia_a"])));
       allow delete: if isAdmin();
     }
     // empresa/config guarda parámetros sensibles: umbrales de auto-envío de

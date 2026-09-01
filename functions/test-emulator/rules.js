@@ -582,6 +582,14 @@ async function main() {
     firma: { nombre: "Luis Camarena", url: "https://x/f.png" },
   }));
   ok("firmas_tablet: firmada exige nombre+url y no toca otros campos");
+  // Corrección del correo de la copia: solo copia_a, solo en pendiente.
+  await assertSucceeds(as("recepcion").doc("firmas_tablet/ft2")
+    .update({ copia_a: "corregido@cliente.com" }));
+  await assertFails(as("recepcion").doc("firmas_tablet/ft2")
+    .update({ copia_a: "x@y.com", orden_id: "OTRA" }));   // no arrastra otros campos
+  await assertFails(as("recepcion").doc("firmas_tablet/ft1")
+    .update({ copia_a: "x@y.com" }));                     // ft1 ya está firmada
+  ok("firmas_tablet: copia_a se corrige en pendiente y solo copia_a");
   // pendiente → cancelada: solo el estado; una firmada ya no se cancela.
   await assertSucceeds(as("recepcion").doc("firmas_tablet/ft2").update({ estado: "cancelada" }));
   await assertFails(as("recepcion").doc("firmas_tablet/ft1").update({ estado: "cancelada" }));
