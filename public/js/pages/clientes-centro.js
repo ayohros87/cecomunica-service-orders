@@ -570,13 +570,20 @@ window.Centro = {
         tipo: 'info',
         txt: `${sinContrato} equipo(s) sin contrato formal — la renovación en trámite (${tram.contrato_id || ''}) los cubrirá al activarse y entregarse.`,
         extra: `<button class="btn btn-ghost cg-act cg-senal-cta" onclick="Centro.abrirGestion('ct-${this.esc(tram.id)}')">Ver trámite</button>`,
-      } : {
-        tipo: 'warn',
-        txt: `${sinContrato} equipo(s) sin contrato formal — la cuenta requiere renovación / regularización.`,
-        extra: this.puedeCrearGestion()
-          ? `<button class="btn btn-primary cg-act cg-senal-cta"
-               onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta</button>` : '',
-      });
+      } : (() => {
+        // Sin contratos vigentes no hay nada que "renovar": la salida es un
+        // contrato NUEVO que cubra esos equipos (2026-09-01, C COMUNICA).
+        const sinVigentes = this._cuentaEstado().tipo === 'sin_contrato';
+        return {
+          tipo: 'warn',
+          txt: sinVigentes
+            ? `${sinContrato} equipo(s) con el cliente y la cuenta SIN contrato vigente — créale un contrato nuevo que los cubra.`
+            : `${sinContrato} equipo(s) sin contrato formal — la cuenta requiere renovación / regularización.`,
+          extra: this.puedeCrearGestion()
+            ? `<button class="btn btn-primary cg-act cg-senal-cta"
+                 onclick="Centro.wizContrato({renovarCuenta:true})">${sinVigentes ? 'Nuevo contrato' : 'Renovar cuenta'}</button>` : '',
+        };
+      })());
     }
     const pendDev = this.equipos.filter(e => e.pendiente_devolucion).length;
     if (pendDev) out.push({ tipo: 'warn', txt: `${pendDev} equipo(s) pendiente(s) de devolución.` });
@@ -2011,6 +2018,12 @@ window.Centro = {
     let cuentaHtml = '';
     if (est.tipo === 'nueva') {
       cuentaHtml = `<button type="button" onclick="Centro.wizContrato()">Nuevo contrato</button>`;
+    } else if (est.tipo === 'sin_contrato') {
+      // Sin contratos vigentes: renovar no aplica — contrato NUEVO que cubra
+      // los equipos que siguen con el cliente.
+      cuentaHtml = `
+        <button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Nuevo contrato
+          <span style="display:block; font-size:11px; color:var(--fg-4);">cubre los ${est.custodia} equipo${est.custodia === 1 ? '' : 's'} que el cliente aún tiene — se amarran al activarse</span></button>`;
     } else if (this._renovacionEnTramite()) {
       // Con una renovación EN CURSO no se ofrecen más renovaciones ni anexos
       // que compitan con ella: el trámite manda.
@@ -2057,6 +2070,11 @@ window.Centro = {
     const renovables = operativos.filter(c => this._aplicaVenc(c));
     const custodia = this._wcCustodia().length;
     if (!renovables.length && !custodia) return { tipo: 'nueva', renovables, custodia, maestro: null };
+    // 2026-09-01 (C COMUNICA tras la terminación total): SIN contratos
+    // vigentes pero CON equipos en campo — no hay nada que renovar; lo que
+    // aplica es un CONTRATO NUEVO que cubra esa custodia (el wizard entra en
+    // regularización legacy y la amarra al activarse).
+    if (!renovables.length) return { tipo: 'sin_contrato', renovables, custodia, maestro: null };
     if (renovables.length === 1 && !custodia) return { tipo: 'consolidada', renovables, custodia, maestro: renovables[0] };
     return { tipo: 'fragmentada', renovables, custodia, maestro: null };
   },
@@ -2749,14 +2767,21 @@ window.Centro = {
     }).join('');
 
     this._abrirModalA({
-      titulo: `${opts.renovarCuenta ? 'Renovar cuenta (consolidación)' : esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}`,
+      // Cuenta SIN contratos (legacyAuto): esto ES un contrato nuevo que
+      // regulariza la custodia — llamarlo "renovar" confundía (2026-09-01).
+      titulo: `${legacyAuto ? 'Nuevo contrato (regulariza la cuenta)'
+        : opts.renovarCuenta ? 'Renovar cuenta (consolidación)'
+        : esRenov ? 'Renovación' : 'Nuevo contrato'} — ${this.esc(this.cliente.nombre)}`,
       cuerpo: `
       <p style="margin:0 0 14px; font-size:13px; color:var(--fg-3); max-width:72ch;">
         El contrato nace <b>pendiente de aprobación</b> con el mismo flujo de siempre (aprobación →
         seriales de bodega → firma → activo).
         ${opts.renovarCuenta && preIds.length > 1 ? `Esta renovación <b>consolida los ${preIds.length} contratos
         marcados en UNO solo</b>: al activarse quedan marcados como renovados y pasan al histórico de la ficha.` : ''}
-        ${custodia.length ? `<b>${custodia.length} equipo(s) en campo sin
+        ${legacyAuto && custodia.length ? `La cuenta no tiene contratos vigentes pero
+        <b>${custodia.length} equipo(s) siguen con el cliente</b> — este contrato nuevo los cubre
+        y se amarran solos al activarse.` : ''}
+        ${!legacyAuto && custodia.length ? `<b>${custodia.length} equipo(s) en campo sin
         contrato formal</b> — al renovar, la cuenta los cubre.` : ''}
         ${opts.agregar ? `<b>La última línea de equipos está en blanco para la venta nueva</b> — elige el modelo,
         cantidad y precio; bodega asignará los seriales solo de los equipos nuevos.` : ''}</p>
