@@ -380,13 +380,13 @@ window.Centro = {
 
   _codigoTipo(c) {
     if (c?.codigo_tipo) return c.codigo_tipo;
-    const m = { 'Alquiler': 'ALQ', 'Propio': 'PROP', 'Reemplazo': 'REEMP', 'Demo': 'DEMO', 'Temporal': 'TEMP' };
+    const m = { 'Servicio': 'SERV', 'Alquiler': 'ALQ', 'Propio': 'PROP', 'Reemplazo': 'REEMP', 'Demo': 'DEMO', 'Temporal': 'TEMP' };
     if (m[c?.tipo_contrato]) return m[c.tipo_contrato];
     const x = String(c?.contrato_id || '').match(/^[A-Z]+/);
     return x ? x[0] : null;
   },
   // Señal de vencimiento/renovación: solo ALQ/PROP/REEMP (DEMO/TEMP terminan).
-  _aplicaVenc(c) { return ['ALQ', 'PROP', 'REEMP'].includes(this._codigoTipo(c)); },
+  _aplicaVenc(c) { return ['SERV', 'ALQ', 'PROP', 'REEMP'].includes(this._codigoTipo(c)); },
   // Renovación REAL vigente que ya cubre a este contrato (un REEMP amarrado
   // como origen NO cuenta: solo sustituye equipos, no renueva el período).
   _renovadoPor(c) {
@@ -758,7 +758,7 @@ window.Centro = {
           declaracion: `Declaro que he leído el contrato ${c.contrato_id || c.id} COMPLETO en esta página (secciones 1–4 y cláusulas 5–18) y acepto sus términos y condiciones en nombre de ${c.cliente_nombre || this.cliente.nombre || 'la empresa'}.`,
           resumen: {
             tipo_contrato: c.tipo_contrato || '', duracion: c.duracion || '',
-            equipos: (c.equipos || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0) })),
+            equipos: (c.equipos || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0), ...(l.modalidad ? { modalidad: l.modalidad } : {}) })),
             cargos: (c.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente })),
             total_mensual: Number(t.totalMensual || c.total_mensual || 0),
             primer_pago: Number(t.primerPago || c.primer_pago || 0),
@@ -936,7 +936,7 @@ window.Centro = {
             duracion: a.es_regularizacion
               ? `${a.duracion_meses || '?'} meses (desde la firma — equipos ya entregados)`
               : `${a.duracion_meses || '?'} meses (tramo del anexo, desde la entrega)`,
-            equipos: (a.lineas || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0) })),
+            equipos: (a.lineas || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0), ...(l.modalidad ? { modalidad: l.modalidad } : {}) })),
             cargos: (a.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente })),
             total_mensual: Number(t.total_mensual || 0),
             primer_pago: Number(t.primer_pago || 0),
@@ -2086,7 +2086,7 @@ window.Centro = {
   // vigente de mayor facturación; a igualdad, el más reciente.
   _cuentaAncla() {
     const est = this._cuentaEstado();
-    const comerciales = est.renovables.filter(c => ['ALQ', 'PROP'].includes(this._codigoTipo(c)));
+    const comerciales = est.renovables.filter(c => ['SERV', 'ALQ', 'PROP'].includes(this._codigoTipo(c)));
     const candidatos = comerciales.length ? comerciales : est.renovables;
     if (!candidatos.length) return null;
     const m = (c) => Number(c.total_mensual ?? c.total_con_itbms ?? 0);
@@ -2293,10 +2293,13 @@ window.Centro = {
 
   // Fila de línea modelo (+cantidad, +precio opcional) con el SELECT del catálogo.
   _lineaModeloHtml(pref, conPrecio) {
-    return `<div style="display:flex; gap:8px; margin-bottom:8px;">
+    return `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
       ${this._selModelo(`data-${pref}-modelo style="flex:1;"`)}
       <input class="form-input" data-${pref}-cant type="number" min="1" value="1" style="width:86px;" title="Cantidad">
-      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" style="width:110px;" title="Precio mensual">` : ''}
+      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" style="width:110px;" title="Precio mensual">
+      <label class="cg-toggle" style="flex:none; font-size:12px; padding:4px 9px;"
+        title="Equipo propiedad del cliente — la línea es tarifa de servicio, no alquiler">
+        <input type="checkbox" data-${pref}-propio> del cliente</label>` : ''}
     </div>`;
   },
   _addLineaModelo(contId, pref, conPrecio) {
@@ -2416,10 +2419,14 @@ window.Centro = {
     const selects = [...document.querySelectorAll(`select[data-${pref}-modelo]`)];
     const cants = [...document.querySelectorAll(`input[data-${pref}-cant]`)];
     const precios = [...document.querySelectorAll(`input[data-${pref}-precio]`)];
+    const propios = [...document.querySelectorAll(`input[data-${pref}-propio]`)];
     return selects.map((s, i) => {
       const m = this._modeloDeSelect(s);
       return m ? { modelo: m.label, modelo_id: m.id,
-        cantidad: Math.max(1, Number(cants[i]?.value || 1)), precio: Number(precios[i]?.value || 0) } : null;
+        cantidad: Math.max(1, Number(cants[i]?.value || 1)), precio: Number(precios[i]?.value || 0),
+        // Modalidad por línea (SERV mixto): 'propio' = equipo del cliente,
+        // tarifa de servicio; 'alquiler' = equipo de CECOMUNICA en renta.
+        modalidad: propios[i]?.checked ? 'propio' : 'alquiler' } : null;
     }).filter(Boolean);
   },
   _aumLineas() { return this._lineasModelo('wau'); },
@@ -2496,6 +2503,7 @@ window.Centro = {
       this._aumRegulariza = unidades.map(u => ({
         pool_doc_id: u.id, serial: u.serial || u.id,
         modelo_id: u.modelo_id || null, modelo: u.modelo_label || u.modelo || '',
+        modalidad: u.propiedad === 'cliente' ? 'propio' : 'alquiler',
       }));
     }
     // Ancla automática (cuenta fragmentada): el destino NO se pregunta — se
@@ -2531,8 +2539,8 @@ window.Centro = {
       ? (() => {
           const m = new Map();
           this._aumRegulariza.forEach(u => {
-            const k = u.modelo_id || u.modelo;
-            const g = m.get(k) || { modelo_id: u.modelo_id, modelo: u.modelo, cantidad: 0 };
+            const k = (u.modelo_id || u.modelo) + '|' + (u.modalidad || 'alquiler');
+            const g = m.get(k) || { modelo_id: u.modelo_id, modelo: u.modelo, modalidad: u.modalidad, cantidad: 0 };
             g.cantidad++; m.set(k, g);
           });
           return [...m.values()].map(l => this._lineaModeloPre('wau', true, l)).join('');
@@ -2650,13 +2658,20 @@ window.Centro = {
   // seriales a bodega, el PDF y la activación por firmado corren igual.
   // opts: id de contrato (Renovar de la fila) · {renovarCuenta:true} (consolida
   // los que están en ventana; sin contratos = regularización vía legacy) · nada.
-  TIPOS_CONTRATO: { ALQ: 'Alquiler', PROP: 'Propio', DEMO: 'Demo', TEMP: 'Temporal' },
+  // SERV (2026-09-01, decisión de Alberto): el contrato maestro de la cuenta
+  // es de SERVICIO y puede MEZCLAR modalidades — la propiedad vive por línea
+  // (modalidad) y por serial (pool/Anexo A). ALQ/PROP quedan como legacy: se
+  // absorben al renovar. Los nuevos desde el Centro nacen SERV.
+  TIPOS_CONTRATO: { SERV: 'Servicio', ALQ: 'Alquiler', PROP: 'Propio', DEMO: 'Demo', TEMP: 'Temporal' },
 
   _lineaModeloPre(pref, conPrecio, l) {
-    return `<div style="display:flex; gap:8px; margin-bottom:8px;">
+    return `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
       ${this._selModelo(`data-${pref}-modelo style="flex:1;"`, l?.modelo_id, l?.modelo)}
       <input class="form-input" data-${pref}-cant type="number" min="1" value="${Math.max(1, Number(l?.cantidad || 1))}" style="width:86px;" title="Cantidad">
-      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">` : ''}
+      ${conPrecio ? `<input class="form-input" data-${pref}-precio type="number" min="0" step="1" placeholder="$/mes" value="${l?.precio != null && l.precio !== '' ? Number(l.precio).toFixed(2) : ''}" style="width:110px;" title="Precio mensual">
+      <label class="cg-toggle" style="flex:none; font-size:12px; padding:4px 9px;"
+        title="Equipo propiedad del cliente — la línea es tarifa de servicio, no alquiler">
+        <input type="checkbox" data-${pref}-propio ${l?.modalidad === 'propio' ? 'checked' : ''}> del cliente</label>` : ''}
       <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
         onclick="this.parentElement.remove(); Centro._previewTarifario()">✕</button>
     </div>`;
@@ -2681,10 +2696,13 @@ window.Centro = {
     const out = new Map();
     for (const l of lineas) {
       if (!l) continue;
-      const k = l.modelo_id || norm(l.modelo);
-      if (!k) continue;
+      // La modalidad separa la fusión: alquiler y equipo-del-cliente del
+      // mismo modelo son líneas DISTINTAS (tarifas distintas) en SERV mixto.
+      const mod = l.modalidad === 'propio' ? 'propio' : 'alquiler';
+      const k = (l.modelo_id || norm(l.modelo)) + '|' + mod;
+      if (!l.modelo_id && !norm(l.modelo)) continue;
       const cur = out.get(k);
-      if (!cur) out.set(k, { modelo_id: l.modelo_id || null, modelo: l.modelo || '',
+      if (!cur) out.set(k, { modelo_id: l.modelo_id || null, modelo: l.modelo || '', modalidad: mod,
         cantidad: Number(l.cantidad) || 0, precio: Number(l.precio) > 0 ? Number(l.precio) : '' });
       else {
         cur.cantidad += Number(l.cantidad) || 0;
@@ -2735,13 +2753,17 @@ window.Centro = {
     const origenesSel = preIds.map(id => candidatos.find(x => x.id === id)).filter(Boolean)
       .sort((a, b) => String(b.contrato_id || '').localeCompare(String(a.contrato_id || '')));
     for (const c of origenesSel) {
-      (c.equipos || []).forEach(l => lineas.push({ modelo_id: l.modelo_id, modelo: l.modelo, cantidad: l.cantidad, precio: l.precio }));
+      (c.equipos || []).forEach(l => lineas.push({ modelo_id: l.modelo_id, modelo: l.modelo,
+        cantidad: l.cantidad, precio: l.precio,
+        // Un origen PROP entero era "equipo del cliente"; SERV ya lo trae por línea.
+        modalidad: l.modalidad || (this._codigoTipo(c) === 'PROP' ? 'propio' : 'alquiler') }));
     }
     if (opts.renovarCuenta && custodia.length) {
       const porModelo = new Map();
       custodia.forEach(e => {
-        const k = e.modelo_id || (e.modelo_label || '?');
-        const cur = porModelo.get(k) || { modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', cantidad: 0, precio: '' };
+        const mod = e.propiedad === 'cliente' ? 'propio' : 'alquiler';
+        const k = (e.modelo_id || (e.modelo_label || '?')) + '|' + mod;
+        const cur = porModelo.get(k) || { modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', modalidad: mod, cantidad: 0, precio: '' };
         cur.cantidad += 1; porModelo.set(k, cur);
       });
       porModelo.forEach(l => lineas.push(l));
@@ -2792,8 +2814,8 @@ window.Centro = {
           <div class="form-field" style="margin:0; max-width:170px;">
             <label class="form-label" for="wcTipo">Tipo</label>
             <select class="form-select" id="wcTipo" onchange="Centro._wcSyncTipo()">
-              ${(esRenov && !legacyAuto ? ['ALQ', 'PROP'] : legacyAuto ? ['ALQ', 'PROP'] : ['ALQ', 'PROP', 'TEMP'])
-                .map(k => `<option value="${k}" ${k === 'ALQ' ? 'selected' : ''}>${this.TIPOS_CONTRATO[k]}</option>`).join('')}
+              ${(esRenov ? ['SERV'] : ['SERV', 'TEMP'])
+                .map(k => `<option value="${k}" ${k === 'SERV' ? 'selected' : ''}>${this.TIPOS_CONTRATO[k]}</option>`).join('')}
             </select></div>
           <div class="form-field" style="margin:0; max-width:150px;">
             <label class="form-label" for="wcMeses">Duración (meses)</label>
@@ -2881,7 +2903,7 @@ window.Centro = {
   },
 
   _wcSyncTipo() {
-    const tipo = document.getElementById('wcTipo')?.value || 'ALQ';
+    const tipo = document.getElementById('wcTipo')?.value || 'SERV';
     const acc = document.getElementById('wcAccion');
     if (!acc) return;
     if (tipo === 'DEMO' || tipo === 'TEMP') { acc.value = 'No Aplica'; acc.disabled = true; }
@@ -2947,7 +2969,7 @@ window.Centro = {
 
     const lineas = this._lineasModelo('wcm');
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
-    if (['ALQ', 'PROP'].includes(tipo) && lineas.some(l => !(l.precio > 0))) {
+    if (['SERV', 'ALQ', 'PROP'].includes(tipo) && lineas.some(l => !(l.precio > 0))) {
       Toast.show('Cada línea necesita su precio mensual', 'warn'); return;
     }
 

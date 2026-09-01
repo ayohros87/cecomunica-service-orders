@@ -80,3 +80,35 @@ test("línea preferida llena → cae a la siguiente compatible con cupo (bug SEP
   assert.equal(r.asignar.length, 3);
   assert.equal(r.sin_cupo.length, 1);
 });
+
+// ── Modalidad por línea (SERV mixto, 2026-09-01) ──────────────────────────
+// Un equipo PROPIEDAD DEL CLIENTE solo se amarra a líneas 'propio' (tarifa de
+// servicio); uno de CECOMUNICA solo a líneas 'alquiler'. Línea sin modalidad =
+// legacy: acepta cualquiera.
+test("modalidad: el equipo del cliente solo toma la línea 'propio'", () => {
+  const contrato = { equipos: [
+    { modelo_id: "m1", modelo: "TB311XU", cantidad: 1, modalidad: "alquiler" },
+    { modelo_id: "m1", modelo: "TB311XU", cantidad: 1, modalidad: "propio" },
+  ] };
+  const u = { ...U("G1", "m1", "LENOVO TB311XU"), propiedad: "cliente" };
+  const r = planAmarre(contrato, [u], []);
+  assert.equal(r.asignar.length, 1);
+  assert.equal(r.asignar[0].linea_idx, 1);
+});
+
+test("modalidad: el equipo de CECOMUNICA no cabe en línea 'propio' → sin_linea", () => {
+  const contrato = { equipos: [{ modelo_id: "m1", modelo: "TB311XU", cantidad: 3, modalidad: "propio" }] };
+  const u = { ...U("G2", "m1", "LENOVO TB311XU"), propiedad: "cecomunica" };
+  const r = planAmarre(contrato, [u], []);
+  assert.equal(r.asignar.length, 0);
+  assert.equal(r.sin_linea.length, 1);
+});
+
+test("modalidad: línea legacy sin modalidad acepta ambas propiedades", () => {
+  const contrato = { equipos: [{ modelo_id: "m1", modelo: "TB311XU", cantidad: 2 }] };
+  const r = planAmarre(contrato, [
+    { ...U("G3", "m1", "LENOVO TB311XU"), propiedad: "cliente" },
+    { ...U("G4", "m1", "LENOVO TB311XU"), propiedad: "cecomunica" },
+  ], []);
+  assert.equal(r.asignar.length, 2);
+});

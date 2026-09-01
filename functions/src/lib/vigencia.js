@@ -21,13 +21,13 @@ const AVISO_DIAS = 60;              // ventana de la señal "por vencer"
 // SÍ vence: con su duración propia si la tiene, y si no, HEREDA la vigencia
 // del contrato de origen (decisión de Alberto 2026-08-26) — por eso el linaje
 // del REEMP importa doble.
-const CODIGOS_CON_VENCIMIENTO = ["ALQ", "PROP", "REEMP"];
+const CODIGOS_CON_VENCIMIENTO = ["SERV", "ALQ", "PROP", "REEMP"];
 
 // Código de tipo tolerante al histórico (docs viejos sin codigo_tipo).
 function codigoTipo(contrato) {
   const c = contrato || {};
   if (c.codigo_tipo) return c.codigo_tipo;
-  const porNombre = { "Alquiler": "ALQ", "Propio": "PROP", "Reemplazo": "REEMP", "Demo": "DEMO", "Temporal": "TEMP" };
+  const porNombre = { "Servicio": "SERV", "Alquiler": "ALQ", "Propio": "PROP", "Reemplazo": "REEMP", "Demo": "DEMO", "Temporal": "TEMP" };
   if (porNombre[c.tipo_contrato]) return porNombre[c.tipo_contrato];
   const m = String(c.contrato_id || "").match(/^[A-Z]+/);
   return m ? m[0] : null;

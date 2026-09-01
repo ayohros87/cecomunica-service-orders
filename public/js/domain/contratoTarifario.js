@@ -61,6 +61,9 @@ window.ContratoTarifario = {
       descripcion: (e.descripcion || '').trim() || 'Equipos de Comunicación',
       cantidad: parseInt(e.cantidad || 0, 10) || 0,
       precio: Number(e.precio || 0),
+      // SERV mixto (2026-09-01): 'propio' = equipo del cliente (tarifa de
+      // servicio); 'alquiler' = equipo de CECOMUNICA. Ausente en legacy.
+      ...(e.modalidad ? { modalidad: e.modalidad } : {}),
     }));
     const cargos   = Array.isArray(d.cargos) ? d.cargos : [];
     const tot      = this.totales(equipos, cargos, !!d.itbms_aplica);

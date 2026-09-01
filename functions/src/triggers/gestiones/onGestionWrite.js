@@ -488,6 +488,7 @@ module.exports = onDocumentWritten(
                   : `Aumento por enmienda ${gid} (anexo firmado)`,
                 cantidad: Number(l.cantidad || 0),
                 precio: Number(l.precio || 0),
+                ...(l.modalidad ? { modalidad: l.modalidad } : {}),
                 enmienda_id: gid,
                 vigencia: esReg
                   ? {

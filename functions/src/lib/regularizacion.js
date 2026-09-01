@@ -46,8 +46,14 @@ function planAmarre(contrato, unidades, filasExistentes) {
     // compatible con cupo (el bug que la simulación de SEPROSA destapó:
     // first-match dejaba 91 unidades sin_cupo con 96 cupos libres al lado).
     const matches = [];
+    // Modalidad (SERV mixto, 2026-09-01): un equipo PROPIEDAD DEL CLIENTE
+    // solo se amarra a líneas 'propio' (tarifa de servicio) y uno de
+    // CECOMUNICA solo a líneas 'alquiler'. Una línea SIN modalidad es legacy:
+    // acepta cualquiera (los contratos previos no distinguían).
+    const modUnidad = (u.propiedad === "cliente") ? "propio" : "alquiler";
     for (let i = 0; i < lineas.length; i++) {
       const l = lineas[i];
+      if (l.modalidad && l.modalidad !== modUnidad) continue;
       const exacto = !!(u.modelo_id && l.modelo_id && u.modelo_id === l.modelo_id);
       if (exacto || pool.mismoModelo(u, l.modelo_id || null, l.modelo || "")) matches.push({ i, exacto });
     }

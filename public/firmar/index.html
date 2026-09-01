@@ -199,7 +199,7 @@
       document.getElementById('fSub').textContent =
         `${s.cliente_nombre || ''} · ${r.tipo_contrato || ''} · ${r.duracion || ''}`;
       const filas = [...(r.equipos || []).map(l =>
-        `<tr><td>${this.esc(l.modelo)}</td><td class="num">${Number(l.cantidad || 0)}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
+        `<tr><td>${this.esc(l.modelo)}${l.modalidad === 'propio' ? ' <span style="color:#8a99a8;font-size:11px;">equipo del cliente</span>' : ''}</td><td class="num">${Number(l.cantidad || 0)}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
       ...(r.cargos || []).map(x =>
         `<tr><td>${this.esc(x.concepto)} <span style="color:#8a99a8;font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td><td class="num">${Number(x.cantidad || 1)}</td><td class="num">$${Number(x.monto || 0).toFixed(2)}</td></tr>`)].join('');
       document.getElementById('fTabla').innerHTML =
@@ -257,7 +257,7 @@
       const durNum = String(r.duracion || '').match(/\d+/)?.[0];
       const durHtml = `<b>${durNum ? `${durNum} meses` : this.esc(r.duracion || '____ meses')}</b>`;
       const filas = [...(r.equipos || []).map(l =>
-        `<tr><td>${Number(l.cantidad || 0)}</td><td>${this.esc(l.modelo)}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
+        `<tr><td>${Number(l.cantidad || 0)}</td><td>${l.modalidad === 'propio' ? `Servicio ${this.esc(l.modelo)} — equipo del cliente` : `Alquiler ${this.esc(l.modelo)}`}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
       ...(r.cargos || []).map(x =>
         `<tr><td>${Number(x.cantidad || 1)}</td><td>${this.esc(x.concepto)} <span style="color:#8a99a8;font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td><td class="num">$${Number(x.monto || 0).toFixed(2)}</td></tr>`)].join('');
       const anexo = Array.isArray(d.anexo) ? d.anexo : [];

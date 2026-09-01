@@ -61,7 +61,12 @@
     (c.equipos || []).forEach((l) => {
       const cant = Number(l.cantidad || 0); const precio = Number(l.precio || 0);
       subEquipos += cant * precio;
-      filas += `<tr><td>${cant}</td><td>${esc((esVenta ? '' : 'Alquiler ') + (l.modelo || l.descripcion || 'Equipos de comunicación'))}</td>
+      const nombre = l.modelo || l.descripcion || 'Equipos de comunicación';
+      // Modalidad por línea (SERV mixto): la línea dice de quién es el equipo.
+      const concepto = esVenta ? nombre
+        : l.modalidad === 'propio' ? `Servicio ${nombre} — equipo del cliente`
+        : `Alquiler ${nombre}`;
+      filas += `<tr><td>${cant}</td><td>${esc(concepto)}</td>
         <td>${esVenta ? 'Único' : 'Mensual'}</td><td class="right">${money(precio)}</td><td class="right">${money(cant * precio)}</td></tr>`;
     });
     (c.cargos || []).forEach((x) => {
