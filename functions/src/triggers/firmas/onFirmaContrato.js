@@ -117,6 +117,35 @@ async function correo(to, cc, subject, cuerpo, ctaUrl, ctaLabel, meta) {
   } catch (e) { logger.warn("[onFirmaContrato] correo no encolado", { message: e.message }); }
 }
 
+// La COPIA del cliente (2026-09-01, pedido de Alberto): al quedar firmado, el
+// cliente recibe por correo el enlace de su copia — /firmar/?s= muestra el
+// documento CONGELADO que leyó, con el rastro de la firma, en modo lectura.
+async function correoCopiaCliente(sid, s, esAnexo) {
+  try {
+    const cli = await db.collection("clientes").doc(s.cliente_id || "-").get();
+    if (!cli.exists) return;
+    const c = cli.data();
+    const email = [c.representante_email, c.email]
+      .find((e) => typeof e === "string" && e.includes("@") && !e.endsWith("@sin.email.cecomunica.com"));
+    if (!email) {
+      logger.info("[onFirmaContrato] cliente sin email — copia no enviada", { sid, cliente: s.cliente_id });
+      return;
+    }
+    const f = s.firma || {};
+    const etiqueta = esAnexo ? `anexo ${s.gestion_id || ""} al contrato ${s.contrato_id || ""}` : `contrato ${s.contrato_id || ""}`;
+    await correo(email, null,
+      `Su ${esAnexo ? "anexo" : "contrato"} ${esAnexo ? (s.gestion_id || "") : (s.contrato_id || "")} firmado — copia y constancia`,
+      `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">Gracias — su firma quedó registrada</h2>
+       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+         El ${G.escapeHtml(etiqueta)} con <b>C COMUNICA, S.A.</b> fue firmado por
+         <b>${G.escapeHtml(f.nombre || "—")}</b>. Con el botón puede abrir <b>su copia</b>:
+         el documento completo tal como lo firmó, con la constancia de la firma.
+         Le recomendamos conservar este correo.</p>`,
+      `${APP_BASE_URL}/firmar/?s=${sid}`, esAnexo ? "Ver mi anexo firmado" : "Ver mi contrato firmado",
+      { firma_solicitud: sid, paso: "copia_cliente" });
+  } catch (e) { logger.warn("[onFirmaContrato] copia al cliente falló", { sid, message: e.message }); }
+}
+
 module.exports = onDocumentUpdated(
   { document: "firma_solicitudes/{sid}", region: "us-central1" },
   async (event) => {
@@ -153,6 +182,7 @@ module.exports = onDocumentUpdated(
                  <b>${G.escapeHtml(f.nombre || "—")}</b> — coincide con el representante registrado.
                  Las líneas se aplicaron al contrato y Bodega ya tiene la asignación en su bandeja.</p>`,
               urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
+            await correoCopiaCliente(sid, after, true);
             logger.info("[onFirmaContrato] anexo firmado", { sid, gestion: after.gestion_id });
           } else {
             await ref.update({ estado: "validacion", firmante_coincide: false,
@@ -186,6 +216,7 @@ module.exports = onDocumentUpdated(
                digitalmente por <b>${G.escapeHtml(f.nombre || "—")}</b> (cédula ${G.escapeHtml(f.cedula || "—")}) — coincide con el
                representante registrado — y quedó <b>activo</b>. La firma, el rastro y el sello de verificación quedaron en el contrato.</p>`,
             urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
+          await correoCopiaCliente(sid, after, false);
           logger.info("[onFirmaContrato] firmado y activado", { sid, contrato: after.contrato_id });
         } else {
           await ref.update({ estado: "validacion", firmante_coincide: false,
@@ -246,6 +277,7 @@ module.exports = onDocumentUpdated(
              ${after.actualizar_ficha ? " La ficha del cliente se actualizó con el nuevo representante." : ""}</p>`,
           `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(after.cliente_id || "")}`,
           "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "aceptado" });
+        await correoCopiaCliente(sid, after, esAnexo);
         logger.info("[onFirmaContrato] firmante aceptado y contrato activado", { sid, contrato: after.contrato_id });
       } catch (e) {
         logger.error("[onFirmaContrato] fallo aceptando firmante", { sid, message: e.message });

@@ -79,11 +79,25 @@
       <p class="nota">Este enlace de firma no existe o fue cancelado. Contacte a su asesor de C Comunica.</p>
     </div>
 
-    <div id="yaFirmado" class="estado hidden">
-      <div class="icono">✅</div>
-      <h2>Firma registrada</h2>
-      <p style="margin-top:8px;"><b id="yfContrato"></b> ya fue firmado.
-        C Comunica le confirmará la activación del servicio.</p>
+    <div id="yaFirmado" class="hidden">
+      <div class="estado" style="padding-bottom:16px;">
+        <div class="icono">✅</div>
+        <h2>Firma registrada</h2>
+        <p style="margin-top:8px;"><b id="yfContrato"></b> ya fue firmado.
+          C Comunica le confirmará la activación del servicio.</p>
+      </div>
+      <!-- La COPIA del cliente (2026-09-01): este mismo enlace queda como su
+           constancia — el documento que leyó y firmó, congelado, con el
+           rastro de la firma. Consérvelo. -->
+      <div class="card" id="yfCopia" style="display:none;">
+        <h2>Su copia del documento firmado</h2>
+        <p class="nota" id="yfFirmaInfo"></p>
+        <details class="doc" id="yfDocDet" open>
+          <summary>📄 Documento completo</summary>
+          <div class="docv2" id="yfDocumento"></div>
+        </details>
+        <p class="nota">Guarde este enlace: es su constancia del documento tal como lo firmó.</p>
+      </div>
     </div>
 
     <div id="form" class="hidden">
@@ -184,6 +198,16 @@
         if (s.estado === 'cancelado') { this.ver('noValido'); return; }
         if (s.estado !== 'pendiente') {
           document.getElementById('yfContrato').textContent = s.titulo || `El contrato ${s.contrato_id || ''}`;
+          // La copia del cliente: el documento congelado + el rastro de SU
+          // firma, en modo lectura (cancelados no — ahí no hubo firma).
+          if (s.estado !== 'cancelado' && s.firma) {
+            const f = s.firma;
+            const fAt = f.firmado_at?.toDate ? f.firmado_at.toDate().toLocaleString('es-PA') : '';
+            document.getElementById('yfFirmaInfo').innerHTML =
+              `✔ Firmado por <b>${this.esc(f.nombre || '—')}</b> (cédula ${this.esc(f.cedula || '—')})${fAt ? ` el ${this.esc(fAt)}` : ''}.`;
+            this.pintarDocumento(s, 'yfDocumento', 'yfDocDet');
+            document.getElementById('yfCopia').style.display = '';
+          }
           this.ver('yaFirmado'); return;
         }
         this.pintar(s);
@@ -227,14 +251,15 @@
     // enlace + cláusulas 5-18 del texto compartido (contratoV2Texto.js).
     // Los enlaces viejos sin snapshot `documento` muestran las cláusulas
     // igual, con las partes en genérico.
-    pintarDocumento(s) {
-      const cont = document.getElementById('fDocumento');
+    pintarDocumento(s, contId = 'fDocumento', detId = 'fDocDet') {
+      const cont = document.getElementById(contId);
       if (!cont || !window.ContratoV2Texto) return;
       const r = s.resumen || {};
       const d = s.documento || {};
       // Un ANEXO no repite el contrato: muestra sus líneas y remite al marco.
       if (s.tipo === 'anexo_aumento') {
-        document.querySelector('#fDocDet summary').textContent = '📄 Leer el anexo completo';
+        const sum = document.querySelector(`#${detId} summary`);
+        if (sum && detId === 'fDocDet') sum.textContent = '📄 Leer el anexo completo';
         const regu = s.es_regularizacion === true;
         const serialesRegu = (s.regulariza_seriales || []).map(u =>
           `<tr><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td></tr>`).join('');
@@ -400,6 +425,11 @@
           },
         });
         document.getElementById('yfContrato').textContent = this.doc.titulo || `El contrato ${this.doc.contrato_id || ''}`;
+        // La copia queda a la vista de una vez (recién firmado).
+        document.getElementById('yfFirmaInfo').innerHTML =
+          `✔ Firmado por <b>${this.esc(nombre)}</b> (cédula ${this.esc(cedula)}) — ${new Date().toLocaleString('es-PA')}.`;
+        this.pintarDocumento(this.doc, 'yfDocumento', 'yfDocDet');
+        document.getElementById('yfCopia').style.display = '';
         this.ver('yaFirmado');
         window.scrollTo(0, 0);
       } catch (e) {
