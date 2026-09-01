@@ -9,8 +9,60 @@ const { attachVerificationFromMirror, buildContractHtmlForPdf } = require("../..
 const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
 const { activacionesEmailTo, ccContratoAprobado } = require("../../lib/mailRecipients");
 const vigencia = require("../../lib/vigencia");
+const { planAmarre } = require("../../lib/regularizacion");
+const poolDom = require("../../domain/equiposPool");
 
 const HMAC_SECRET = process.env.FIRMA_SECRET || "MISSING_SECRET";
+
+// SERV mixto (2026-09-01, pedido de Alberto: "no está jalando los seriales del
+// cliente automáticamente en almacén"): al APROBARSE el contrato, las líneas
+// modalidad 'propio' jalan sus seriales de la CUSTODIA del cliente (unidades
+// en_cliente propiedad 'cliente' sin contrato) — así el Anexo A ya los trae
+// cuando el cliente firma, y a Bodega solo le queda el stock de las líneas de
+// alquiler. Solo crea FILAS en contratos/{cid}/seriales: onSerialWrite hace el
+// sync al pool (con en_cliente y la propiedad protegidos). Idempotente:
+// planAmarre deduplica por filas existentes y la custodia ya amarrada sale
+// del filtro.
+async function jalarSerialesPropios(contratoRef, contrato, cid) {
+  const lineasPropio = (contrato.equipos || []).filter((l) => l.modalidad === "propio");
+  if (!lineasPropio.length || !contrato.cliente_id) return;
+  try {
+    const poolSnap = await db.collection("equipos_pool")
+      .where("asignacion.cliente_id", "==", contrato.cliente_id)
+      .where("estado", "==", "en_cliente").get();
+    const custodia = poolSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      .filter((u) => !u.asignacion?.contrato_doc_id && u.propiedad === "cliente");
+    if (!custodia.length) return;
+    const filasSnap = await contratoRef.collection("seriales").get();
+    const filas = filasSnap.docs.map((d) => {
+      const x = d.data() || {};
+      return { serial_norm: poolDom.normSerial(x.serial || ""), modelo_id: x.modelo_id || null, modelo: x.modelo || "" };
+    });
+    const plan = planAmarre({ equipos: lineasPropio }, custodia, filas);
+    for (const { unidad } of plan.asignar) {
+      await contratoRef.collection("seriales").add({
+        serial: unidad.serial || unidad.id,
+        modelo: unidad.modelo_label || "",
+        modelo_id: unidad.modelo_id || null,
+        contrato_doc_id: cid,
+        contrato_id: contrato.contrato_id || "",
+        cliente_id: contrato.cliente_id || "",
+        cliente_nombre: contrato.cliente_nombre || "",
+        source: "regularizacion_aprobacion",
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        created_by: "trigger:regularizacion_aprobacion",
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_by: "trigger:regularizacion_aprobacion",
+      });
+    }
+    if (plan.asignar.length) {
+      logger.info("[onContratoActivado] seriales del cliente jalados a las líneas propio",
+        { cid, jalados: plan.asignar.length });
+    }
+  } catch (e) {
+    logger.error("[onContratoActivado] jalado de seriales propios falló (no crítico)", { cid, message: e.message });
+  }
+}
 
 // Resuelve el email del vendedor (creador) del contrato para CC. Nunca lanza.
 async function vendedorEmail(uid) {
@@ -65,6 +117,10 @@ const onContratoActivado = onDocumentUpdated(
 
     if (!transitionedToActivo && !transitionedToAprobado && !needsRepair) {
       return null;
+    }
+
+    if (transitionedToAprobado || transitionedToActivo) {
+      await jalarSerialesPropios(afterSnap.ref, after, contratoId);
     }
 
     const aprobadoPor  = after.aprobado_por_uid || "desconocido";

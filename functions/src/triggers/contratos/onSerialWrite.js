@@ -121,7 +121,11 @@ module.exports = onDocumentWritten(
           modelo_id: after.modelo_id || null,
           modelo_label: after.modelo || "",
           estado: entregado ? pool.ESTADOS.EN_CLIENTE : pool.ESTADOS.ASIGNADO,
-          noTocarDesde: [pool.ESTADOS.EN_TALLER],
+          // EN_CLIENTE también se protege (2026-09-01, SERV mixto): una fila
+          // de un equipo que YA está con el cliente (línea "propio" jalada de
+          // la custodia) solo gana el vínculo al contrato — no se "des-entrega"
+          // a asignado. La propiedad existente nunca se pisa (upsertContacto).
+          noTocarDesde: [pool.ESTADOS.EN_TALLER, pool.ESTADOS.EN_CLIENTE],
           tipo: "asignacion_contrato",
           refMov: { tipo: "contrato", id: cid, label: after.contrato_id || "" },
           origen: "migracion_contrato",
