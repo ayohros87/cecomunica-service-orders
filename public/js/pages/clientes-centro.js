@@ -2787,26 +2787,32 @@ window.Centro = {
         cantidad y precio; bodega asignará los seriales solo de los equipos nuevos.` : ''}</p>
 
       <div class="cg-paso">
-        <div class="cg-paso-t"><span class="n">1</span> Datos del contrato <span class="hint">tipo · acción · duración</span></div>
-        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <div class="cg-paso-t"><span class="n">1</span> Datos del contrato <span class="hint">tipo · duración</span></div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
           <div class="form-field" style="margin:0; max-width:170px;">
             <label class="form-label" for="wcTipo">Tipo</label>
             <select class="form-select" id="wcTipo" onchange="Centro._wcSyncTipo()">
-              ${Object.entries(this.TIPOS_CONTRATO).map(([k, v]) =>
-                `<option value="${k}" ${k === 'ALQ' ? 'selected' : ''}>${v}</option>`).join('')}
-            </select></div>
-          <div class="form-field" style="margin:0; max-width:170px;">
-            <label class="form-label" for="wcAccion">Acción</label>
-            <select class="form-select" id="wcAccion" onchange="Centro._wcSyncTipo()">
-              <option value="Nuevo" ${!esRenov ? 'selected' : ''}>Nuevo</option>
-              <option value="Renovación" ${esRenov ? 'selected' : ''}>Renovación</option>
-              <option value="Adición">Adición</option>
-              <option value="No Aplica">No Aplica</option>
+              ${(esRenov && !legacyAuto ? ['ALQ', 'PROP'] : legacyAuto ? ['ALQ', 'PROP'] : ['ALQ', 'PROP', 'TEMP'])
+                .map(k => `<option value="${k}" ${k === 'ALQ' ? 'selected' : ''}>${this.TIPOS_CONTRATO[k]}</option>`).join('')}
             </select></div>
           <div class="form-field" style="margin:0; max-width:150px;">
             <label class="form-label" for="wcMeses">Duración (meses)</label>
-            <input class="form-input" type="number" id="wcMeses" min="1" value="12"></div>
+            <input class="form-input" type="number" id="wcMeses" min="1" value="18"></div>
+          <p style="margin:0 0 7px; font-size:12.5px; color:var(--fg-3);">
+            ${legacyAuto ? 'Regulariza la cuenta: los equipos en campo se amarran a este contrato al activarse.'
+              : esRenov ? 'Renovación de la cuenta — los orígenes marcados pasan al histórico al activarse.'
+              : 'Contrato nuevo.'}</p>
         </div>
+        <!-- La acción NO se pregunta (2026-09-01, "el menú decide"): la fija
+             el punto de entrada. Select oculto porque crearContrato y los
+             triggers (onRenovacionActivada exige 'Renovación' para amarrar la
+             custodia) leen de aquí; DEMO/TEMP mapean a 'No Aplica' en
+             _wcSyncTipo, igual que siempre. Los DEMO van por su wizard. -->
+        <select id="wcAccion" class="hidden" aria-hidden="true">
+          <option value="Nuevo" ${!esRenov ? 'selected' : ''}>Nuevo</option>
+          <option value="Renovación" ${esRenov ? 'selected' : ''}>Renovación</option>
+          <option value="No Aplica">No Aplica</option>
+        </select>
         <div id="wcRenovBloque" class="${esRenov ? '' : 'hidden'}" style="margin-top:8px;">
           <label class="cg-toggle">
             <input type="checkbox" id="wcSinEquipo"> Renovación sin equipo (los radios actuales continúan)
@@ -2818,10 +2824,10 @@ window.Centro = {
       </div>
 
       <div id="wcOrigenBloque" class="cg-paso ${esRenov ? '' : 'hidden'}">
-        <div class="cg-paso-t"><span class="n">2</span> Contratos que se renuevan
-          <span class="hint">${opts.renovarCuenta ? 'preseleccionados — la consolidación los absorbe todos' : 'el origen define qué equipos transicionan'}</span></div>
+        <div class="cg-paso-t"><span class="n">2</span> ${legacyAuto ? 'Origen de la cuenta' : 'Contratos que se renuevan'}
+          <span class="hint">${legacyAuto ? 'sin contratos vigentes en el sistema — queda registrado contra la referencia' : opts.renovarCuenta ? 'preseleccionados — la consolidación los absorbe todos' : 'el origen define qué equipos transicionan'}</span></div>
         <div class="form-field" style="margin-bottom:10px;">
-          ${origenChks || '<p style="font-size:13px; color:var(--fg-3); margin:0;">El cliente no tiene contratos vigentes en el sistema.</p>'}
+          ${origenChks || (legacyAuto ? '' : '<p style="font-size:13px; color:var(--fg-3); margin:0;">El cliente no tiene contratos vigentes en el sistema.</p>')}
           <label style="display:flex; gap:8px; align-items:center; font-size:13px; padding:6px 0 0;">
             <input type="checkbox" id="wcLegacy" ${legacyAuto ? 'checked' : ''} onchange="Centro._wcSyncPlan()" style="width:auto; margin:0;">
             El contrato original es de papel / no está en el sistema</label>
