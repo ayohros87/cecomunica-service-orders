@@ -16,7 +16,41 @@ const { buildEmailFromBase, renderByTemplate } = require("../../domain/emailRend
  *
  * Our own terminal writes set either sent_at (success) or error (failure),
  * which makes them skip on re-trigger — no infinite loop.
+ *
+ * Espejo del acuse de devolución (2026-09-01): los correos con meta.source
+ * 'acuse-devolucion' reflejan su resultado terminal (enviado/fallo) en
+ * devolucion.acuses[].envio de la orden — la tarjeta del acuse en la UI
+ * muestra el estado REAL del SMTP y ofrece reenviar cuando falló. Best-effort:
+ * un fallo del espejo nunca rompe el envío ni el reintento.
  */
+
+// Refleja el resultado del envío en el acuse de la orden de DEVOLUCIÓN.
+async function mirrorAcuseDevolucion(after, ok, errorMsg) {
+  const meta = after?.meta || {};
+  if (meta.source !== "acuse-devolucion" || !meta.orden_id || !meta.acuse_id) return;
+  try {
+    const ref = db.collection("ordenes_de_servicio").doc(meta.orden_id);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+      const arr = ((snap.data().devolucion || {}).acuses || []).map(x => ({ ...x }));
+      const i = arr.findIndex(x => x && x.id === meta.acuse_id);
+      if (i < 0) return;
+      // Un reenvío posterior ya pudo re-solicitar este acuse: no pisarlo con
+      // el resultado de un correo viejo.
+      const st = (arr[i].envio || {}).status;
+      if (st !== "encolado") return;
+      arr[i].envio = ok
+        ? { ...(arr[i].envio || {}), status: "enviado",
+            at: admin.firestore.Timestamp.now(), error: null }
+        : { ...(arr[i].envio || {}), status: "fallo",
+            at: admin.firestore.Timestamp.now(), error: String(errorMsg || "Fallo de envío") };
+      tx.update(ref, { "devolucion.acuses": arr });
+    });
+  } catch (e) {
+    console.error("[onMailQueued] no se pudo espejar el acuse de devolución:", e);
+  }
+}
 module.exports = onDocumentWritten(
   {
     document: "mail_queue/{mailId}",
@@ -91,6 +125,7 @@ module.exports = onDocumentWritten(
         sent_at:  admin.firestore.FieldValue.serverTimestamp(),
         error:    admin.firestore.FieldValue.delete(),
       });
+      await mirrorAcuseDevolucion(after, true, null);
     } catch (err) {
       console.error("Error enviando correo encolado:", err);
 
@@ -117,6 +152,9 @@ module.exports = onDocumentWritten(
         error:      String(err?.message || err),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
+      // Solo el fallo TERMINAL se espeja: un transitorio en reintento aún
+      // puede terminar en 'enviado'.
+      await mirrorAcuseDevolucion(after, false, err?.message || err);
     }
   }
 );

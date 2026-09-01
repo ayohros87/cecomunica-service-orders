@@ -31,6 +31,7 @@ const { recepcionEmails } = require("../../lib/mailRecipients");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion } = require("../../lib/devolucion");
 const cobros = require("../../lib/cobrosEquipos");
+const { emailAcuse } = require("../../lib/acuseDevolucion");
 
 const escapeHtml = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, s => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]
@@ -114,6 +115,71 @@ async function avisarCierreConPendientes(ordenId, after, pendientes) {
     status: "queued",
   });
   logger.info("[onOrdenDevolucionWrite] Aviso de cierre con pendientes encolado", { ordenId, pendientes, to: destinatarios[0] });
+}
+
+// ── Envío del acuse al CLIENTE ───────────────────────────────────────────
+// La UI marca devolucion.acuses[].envio = {status:'solicitado', to} y este
+// trigger hace el resto: reclama la solicitud (solicitado → encolado, en
+// transacción, para que un re-disparo no duplique el correo), encola el
+// documento en mail_queue y deja el mail_id en el acuse. onMailQueued espeja
+// el resultado real del SMTP (enviado/fallo) de vuelta — la tarjeta del acuse
+// dice la verdad y "Reenviar" vuelve a poner 'solicitado'.
+// El correo del cliente NO existía en este flujo (verificado 2026-09-01): la
+// UI lo lee de clientes.email_acuses || clientes.email y lo guarda corregido.
+async function procesarEnviosAcuses(ordenId, after) {
+  const dev = after.devolucion || {};
+  const solicitados = (dev.acuses || []).filter(a =>
+    a && a.id && a.envio && a.envio.status === "solicitado");
+  if (!solicitados.length) return;
+
+  const ref = db.collection("ordenes_de_servicio").doc(ordenId);
+  for (const a of solicitados) {
+    const to = String(a.envio.to || "").trim().toLowerCase();
+    const valido = isEmail(to);
+    const mailRef = db.collection("mail_queue").doc();
+    try {
+      // Reclamo primero, correo después: si dos instancias procesan la misma
+      // escritura, solo una gana la transición y solo esa encola el correo.
+      const claim = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) return null;
+        const d = snap.data().devolucion || {};
+        const arr = (d.acuses || []).map(x => ({ ...x }));
+        const i = arr.findIndex(x => x && x.id === a.id);
+        if (i < 0 || !arr[i].envio || arr[i].envio.status !== "solicitado") return null;
+        arr[i].envio = valido
+          ? { ...arr[i].envio, to, status: "encolado", mail_id: mailRef.id,
+              at: admin.firestore.Timestamp.now(), error: null }
+          : { ...arr[i].envio, status: "fallo",
+              at: admin.firestore.Timestamp.now(), error: "El correo del destinatario no es válido" };
+        // update() con ruta de puntos: NO set(merge), que dejaría campos a
+        // medias dentro de `devolucion` (regla de la casa).
+        tx.update(ref, { "devolucion.acuses": arr });
+        return valido ? arr[i] : null;
+      });
+      if (!claim) {
+        if (!valido) logger.warn("[onOrdenDevolucionWrite] acuse con correo inválido", { ordenId, acuse: a.id, to });
+        continue;
+      }
+      const payload = emailAcuse(ordenId, after, a);
+      await mailRef.set({
+        to,
+        subject: payload.subject,
+        preheader: payload.preheader,
+        bodyContent: payload.bodyContent,
+        meta: {
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          source: "acuse-devolucion",
+          orden_id: ordenId,
+          acuse_id: a.id,
+        },
+        status: "queued",
+      });
+      logger.info("[onOrdenDevolucionWrite] Acuse encolado para el cliente", { ordenId, acuse: a.id, to, mailId: mailRef.id });
+    } catch (e) {
+      logger.warn("[onOrdenDevolucionWrite] No se pudo encolar el acuse (no crítico)", { ordenId, acuse: a.id, error: e.message });
+    }
+  }
 }
 
 // ── Espejo del tiquete en el contrato ────────────────────────────────────
@@ -508,6 +574,9 @@ module.exports = onDocumentWritten(
         }
       }
     }
+
+    // Copias del acuse solicitadas para el cliente (solicitado → encolado).
+    await procesarEnviosAcuses(ordenId, after);
 
     // Espejo en el/los contrato(s). Corre SIEMPRE, no solo cuando hubo
     // resoluciones: la creación del tiquete es justo cuando el chip debe

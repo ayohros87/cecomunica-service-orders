@@ -25,6 +25,17 @@
 // backend crea UNA sola tanda de ENTRADA y el acuse cubre el lote entero.
 // Las resoluciones son definitivas (el pool se mueve al instante); un error
 // se corrige desde Inventario · Equipos por serial.
+// ACUSE FORMAL (2026-09-01): cada acuse lleva número correlativo
+// ({ordenId}-A{n}), documento imprimible (nueva pestaña) y COPIA AL CLIENTE
+// por correo: la UI marca acuses[].envio = 'solicitado' y el backend
+// (onOrdenDevolucionWrite) encola el correo; onMailQueued espeja el resultado
+// real (enviado/fallo) y la tarjeta ofrece reenviar. El correo del cliente
+// sale de clientes.email_acuses || clientes.email y se guarda corregido.
+// FIRMA EN TABLET: "Firmar en la tablet" crea una solicitud en firmas_tablet
+// que la tablet del mostrador (/firmar/tablet.html) muestra en vivo; al
+// firmarse allá, este modal la recoge (onSnapshot) y guarda el acuse solo.
+// El modal además escucha la orden en vivo (estado del envío, tandas de otra
+// pestaña) sin pisar capturas a medias.
 (function () {
   'use strict';
 
@@ -65,6 +76,14 @@
   let _firmaAcuse = null;   // API del canvas del acuse (FirmaPad)
   let _firmaSnapshot = null;// firma en curso, para sobrevivir a un re-render
   let _modelos = null;      // catálogo para el datalist de la captura libre (lazy)
+  let _emailCliente = null; // correo de acuses de la ficha del cliente (email_acuses || email)
+  let _acuseEmailDraft = null;  // correo tecleado en el bloque de firma (sobrevive re-renders)
+  let _acuseNombreDraft = '';   // nombre tecleado en el bloque de firma (idem)
+  let _acuseEnviarCopia = true; // "Enviar copia al cliente al guardar"
+  let _solTabletId = null;  // solicitud de firma en tablet pendiente (firmas_tablet)
+  let _unsubTablet = null;  // onSnapshot de la solicitud
+  let _unsubOrden = null;   // onSnapshot de la orden (envíos/tandas en vivo)
+  let _tabletGuardando = false; // candado: la firma de la tablet se guarda UNA vez
 
   // Los caminos de captura (unidad esperada, check-in por modelo/libre, lote
   // pegado y corrección de una recibida) comparten los IDs del mini-checklist:
@@ -89,10 +108,67 @@
     _firmaAcuse?.destroy();
     _firmaAcuse = null;
     _firmaSnapshot = null;
+    _emailCliente = null;
+    _acuseEmailDraft = null;
+    _acuseNombreDraft = '';
+    _acuseEnviarCopia = true;
+    _solTabletId = null;
     try {
       _orden = await OrdenesService.getOrder(ordenId);
     } catch (e) { Toast.show('No se pudo cargar la orden.', 'bad'); return; }
     if (!_orden || !_orden.devolucion) { Toast.show('La orden no tiene datos de devolución.', 'bad'); return; }
+    const db = firebase.firestore();
+    // Correo del cliente para la copia del acuse (best-effort): este flujo no
+    // capturaba ningún correo; se lee de la ficha y se guarda corregido.
+    if (_orden.cliente_id) {
+      try {
+        const c = await db.collection('clientes').doc(_orden.cliente_id).get();
+        if (c.exists) {
+          const d = c.data();
+          _emailCliente = String(d.email_acuses || d.email || '').trim().toLowerCase() || null;
+        }
+      } catch (e) { /* sin ficha o sin permiso: el campo queda vacío */ }
+    }
+    // ¿Quedó una firma en tablet de una sesión anterior? Se retoma la
+    // pendiente, y una 'firmada' que nunca llegó a aplicarse (el modal se
+    // cerró justo cuando el cliente confirmaba) se recupera aquí mismo.
+    // Solo igualdades + in: no requiere índice compuesto.
+    _unsubTablet?.(); _unsubTablet = null;
+    try {
+      const s = await db.collection('firmas_tablet')
+        .where('orden_id', '==', ordenId)
+        .where('estado', 'in', ['pendiente', 'firmada'])
+        .where('tipo', '==', 'acuse_devolucion')
+        .get();
+      const aplicados = new Set((_orden.devolucion.acuses || []).map(a => a.solicitud_id).filter(Boolean));
+      const docs = s.docs.filter(d => !aplicados.has(d.id));
+      const pendiente = docs.find(d => d.data().estado === 'pendiente');
+      // Una firmada vieja (otra tanda, otro día) no debe pegarse a la tanda
+      // actual: solo se recupera si es de las últimas 4 horas — la misma
+      // ventana de frescura que muestra la tablet.
+      const frescoMs = Date.now() - 4 * 60 * 60 * 1000;
+      const firmada = docs.find(d => d.data().estado === 'firmada'
+        && (d.data().creado_at?.toDate?.().getTime() || 0) >= frescoMs);
+      if (pendiente) { _solTabletId = pendiente.id; _suscribirTablet(); }
+      else if (firmada) { _acuseDesdeTablet(firmada.id, firmada.data()); }
+    } catch (e) { /* sin permiso o colección nueva: no crítico */ }
+    // La orden EN VIVO: el estado del envío del acuse lo escriben los triggers
+    // (encolado→enviado/fallo) y otra pestaña puede registrar tandas. Solo se
+    // repinta cuando no hay una captura a medias — un re-render en frío
+    // vaciaría el checklist o el campo que se está tecleando.
+    _unsubOrden?.();
+    _unsubOrden = db.collection('ordenes_de_servicio').doc(ordenId).onSnapshot((snap) => {
+      if (!_overlay || !snap.exists) return;
+      const fresh = snap.data();
+      if (!fresh || !fresh.devolucion) return;
+      const el = document.activeElement;
+      const tecleando = _overlay.contains(el) && /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName || '');
+      const capturando = _recibiendoId || _draftModelo || _draftLote || _editandoId
+        || _pegarAbierto || tecleando || (_firmaAcuse && !_firmaAcuse.isEmpty());
+      if (capturando) return; // la siguiente escritura propia re-sincroniza
+      _orden = fresh;
+      render();
+    });
     // Captura libre (sin contrato): datalist de modelos del catálogo, para
     // que la unidad nazca con modelo_id cuando el operador elige uno conocido.
     if (_orden.devolucion.modo === 'sin_contrato' && !_modelos) {
@@ -116,6 +192,10 @@
     _firmaAcuse?.destroy();
     _firmaAcuse = null;
     _firmaSnapshot = null;
+    _unsubOrden?.(); _unsubOrden = null;
+    // La solicitud de tablet NO se cancela al cerrar el modal: el cliente
+    // puede estar firmando en ese momento. Al reabrir la orden se retoma.
+    _unsubTablet?.(); _unsubTablet = null;
     _overlay?.remove();
     _overlay = null;
     // Refresca la fila en la lista si la página de órdenes está montada.
@@ -267,6 +347,33 @@
     return linea + accion;
   }
 
+  // Resumen del checklist de una unidad ("Completo" / lista / "Ninguno") —
+  // espeja _resumenAccesorios de functions/src/lib/acuseDevolucion.js.
+  function _accResumen(acc) {
+    if (!acc) return 'Sin checklist';
+    const con = ACCESORIOS.filter(([k]) => acc[k]).map(([, l]) => l);
+    if (con.length === ACCESORIOS.length) return 'Completo';
+    return con.length ? `Entregó: ${con.join(', ')}` : 'Sin accesorios';
+  }
+
+  // Chip del estado de envío de un acuse. 'solicitado'/'encolado' son el
+  // tránsito (la UI lo pide, el backend lo encola); 'enviado'/'fallo' son el
+  // resultado REAL del SMTP que espeja onMailQueued.
+  function _chipEnvioHtml(envio) {
+    const st = envio?.status || 'sin_enviar';
+    if (st === 'enviado') {
+      const cuando = envio.at?.toDate ? envio.at.toDate().toLocaleString('es-PA', { hour12: false }) : '';
+      return `<span class="chip-estado" style="background:#e9f7f0;color:#067647;" title="Copia enviada a ${esc(envio.to || '')}${cuando ? ` · ${cuando}` : ''}">✓ Enviado al cliente</span>`;
+    }
+    if (st === 'solicitado' || st === 'encolado') {
+      return `<span class="chip-estado" style="background:#eef2ff;color:#4338ca;" title="El correo está en cola de envío${envio?.to ? ` hacia ${esc(envio.to)}` : ''}.">Enviando…</span>`;
+    }
+    if (st === 'fallo') {
+      return `<span class="chip-estado" style="background:#fee2e2;color:#b91c1c;" title="${esc(envio?.error || 'El envío falló')}">⚠ Falló el envío</span>`;
+    }
+    return `<span class="chip-estado" style="background:var(--bg-2,#f3f4f6);color:var(--fg-3,#6b7280);">Sin enviar</span>`;
+  }
+
   // Tabla de revisión del lote pegado: qué va a entrar, con qué modelo y con
   // qué aviso. Nada se escribe hasta "Confirmar" — es la única oportunidad de
   // ver que un serial es de otro cliente ANTES de mover el pool.
@@ -415,18 +522,20 @@
            </div>`;
         })();
 
-    const filas = esperados.map(e => `
+    const tdS = 'padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);';
+
+    // ── El modal se organiza por ETAPA del mostrador (2026-09-01), en el
+    // orden físico del trabajo: recibir → firmar la tanda → acuses → cierre.
+    // Antes era UNA tabla con todo mezclado y el vínculo tanda→acuse no se
+    // veía por ningún lado.
+
+    // Unidades PENDIENTES por recibir, con sus acciones de check-in.
+    const filas = esperados.filter(e => !e.resolucion).map(e => `
       <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);font-family:var(--font-mono,monospace);">${esc(e.serial)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);white-space:nowrap;">${esc(e.modelo || '—')}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid var(--border-subtle,#e5e7eb);">
-          ${_editandoId === e.id
-            ? corregirHtml(e)
-            : e.resolucion
-            ? (RES_LABEL[e.resolucion] || esc(e.resolucion))
-              + (e.motivo_codigo ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);">${esc((MOTIVOS.find(([v]) => v === e.motivo_codigo) || [,''])[1])}${e.motivo_detalle ? ': ' + esc(e.motivo_detalle) : ''}</div>` : '')
-              + detalleRecibido(e, editable)
-            : (editable ? (_recibiendoId === e.id ? miniFormHtml(e.serial) : `
+        <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(e.serial)}</td>
+        <td style="${tdS}white-space:nowrap;">${esc(e.modelo || '—')}</td>
+        <td style="${tdS}">
+          ${editable ? (_recibiendoId === e.id ? miniFormHtml(e.serial) : `
               <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                 <button type="button" class="btn btn-primary btn-sm dev-recibido" data-id="${esc(e.id)}"
                         title="Registrar la llegada física de esta unidad — abre el checklist de accesorios y daño"><i data-lucide="arrow-down-to-line"></i> Marcar recibido</button>
@@ -436,7 +545,32 @@
                   ${MOTIVOS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
                 </select>
               </div>`)
-            : '<span style="color:var(--fg-3,#6b7280);">pendiente</span>')}
+            : '<span style="color:var(--fg-3,#6b7280);">pendiente</span>'}
+        </td>
+      </tr>`).join('');
+
+    // TANDA EN CURSO: recibidas que aún no tienen acuse firmado. Aquí vive la
+    // corrección pre-firma; las ya firmadas se ven en su tarjeta de acuse.
+    const filasTanda = sinAcuse.map(e => `
+      <tr>
+        <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(e.serial)}</td>
+        <td style="${tdS}white-space:nowrap;">${esc(e.modelo || '—')}</td>
+        <td style="${tdS}">
+          ${_editandoId === e.id
+            ? corregirHtml(e)
+            : (RES_LABEL.recibido + detalleRecibido(e, editable))}
+        </td>
+      </tr>`).join('');
+
+    // Otras resoluciones (no entran al taller): nunca salió / no se devuelve.
+    const otras = esperados.filter(e => e.resolucion === 'nunca_salio' || e.resolucion === 'no_devuelve');
+    const filasOtras = otras.map(e => `
+      <tr>
+        <td style="${tdS}font-family:var(--font-mono,monospace);">${esc(e.serial)}</td>
+        <td style="${tdS}white-space:nowrap;">${esc(e.modelo || '—')}</td>
+        <td style="${tdS}">
+          ${RES_LABEL[e.resolucion] || esc(e.resolucion)}
+          ${e.motivo_codigo ? `<div style="font-size:11px;color:var(--fg-3,#6b7280);">${esc((MOTIVOS.find(([v]) => v === e.motivo_codigo) || [,''])[1])}${e.motivo_detalle ? ': ' + esc(e.motivo_detalle) : ''}</div>` : ''}
         </td>
       </tr>`).join('');
 
@@ -514,24 +648,54 @@
       </tr>`;
     }).join('');
 
-    // Acuse de recepción: el cliente firma lo registrado (accesorios/daño)
-    // de las unidades recibidas que aún no tienen firma — una firma por
-    // tanda, con la misma leyenda legal del descargo de ENTRADA.
+    // Acuse de recepción de la TANDA: el cliente firma aquí (canvas) o en la
+    // tablet del mostrador ("Firmar en la tablet" → firmas_tablet, la página
+    // /firmar/tablet.html la muestra en vivo). El número correlativo nace
+    // aquí y la copia al cliente puede salir en el mismo guardado. Este
+    // bloque se pinta como pie de la sección "Tanda en curso".
+    const numeroSiguiente = `${_ordenId}-A${acuses.length + 1}`;
+    const emailPrellenado = _acuseEmailDraft != null ? _acuseEmailDraft : (_emailCliente || '');
+    const bloqueEnvioCopia = `
+        <div style="border-top:1px solid #fcd34d;margin-top:10px;padding-top:8px;">
+          <label class="form-check" style="display:flex;align-items:center;gap:8px;font-size:12.5px;margin:0 0 6px;">
+            <input type="checkbox" id="acuseEnviarCopia"${_acuseEnviarCopia ? ' checked' : ''}>
+            <span>Enviar copia del acuse al cliente al guardar</span>
+          </label>
+          <div class="form-field" style="margin:0;">
+            <input class="form-input" id="acuseEmail" type="email" placeholder="correo@cliente.com" autocomplete="off"
+                   style="height:32px;max-width:320px;" value="${esc(emailPrellenado)}">
+            <div style="font-size:11px;color:var(--fg-3,#6b7280);margin-top:3px;">
+              Sale de la ficha del cliente${_emailCliente ? '' : ' (no tiene correo registrado)'} — si lo corriges aquí,
+              queda guardado para los próximos envíos. También se puede enviar o reenviar después, desde la tarjeta del acuse.
+            </div>
+          </div>
+        </div>`;
     const bloqueAcuse = (editable && sinAcuse.length) ? `
-      <div style="margin-top:16px;border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:12px 14px;">
-        <div style="font-weight:700;font-size:13px;margin-bottom:4px;">Acuse de recepción — firma del cliente</div>
-        <p style="margin:0 0 8px;font-size:12.5px;color:#78350f;">
-          ${sinAcuse.length} unidad(es) recibida(s) por firmar: <b>${sinAcuse.map(e => esc(e.serial)).join(', ')}</b>.
-          La firma deja constancia de los accesorios entregados y el daño visible registrados arriba.
-        </p>
+      <div style="border-top:1px solid #fcd34d;background:#fffbeb;padding:12px 14px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          <span style="font-weight:700;font-size:13px;">Acuse de recibido — firma del cliente</span>
+          <span style="font-family:var(--font-mono,monospace);font-size:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:1px 8px;">${esc(numeroSiguiente)}</span>
+          ${!_solTabletId ? `<button type="button" class="btn btn-sm" id="acuseTabletBtn" style="margin-left:auto;"
+              title="La solicitud aparece sola en la tablet del mostrador; cuando el cliente confirme allá, el acuse se guarda aquí automáticamente.">
+              <i data-lucide="tablet"></i> Firmar en la tablet</button>` : ''}
+        </div>
         <p style="margin:0 0 10px;font-size:11.5px;color:#92400e;background:#fef3c7;border-radius:6px;padding:6px 8px;">
           Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso,
           así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización
           para su posterior facturación.
         </p>
+        ${_solTabletId ? `
+        <div style="display:flex;align-items:center;gap:10px;border:1px dashed #fcd34d;border-radius:8px;background:#fff;padding:10px 12px;">
+          <span style="width:14px;height:14px;border:2px solid #fcd34d;border-top-color:#b45309;border-radius:99px;display:inline-block;animation:devspin 1s linear infinite;flex:none;"></span>
+          <span style="font-size:12.5px;color:#78350f;flex:1;">
+            <b>Esperando la firma en la tablet…</b> Pásale la tablet al cliente; al confirmar allá, el acuse se guarda aquí solo.
+          </span>
+          <button type="button" class="btn btn-ghost btn-sm" id="acuseTabletCancelar">Cancelar</button>
+        </div>
+        <style>@keyframes devspin{to{transform:rotate(360deg)}}</style>` : `
         <div class="form-field" style="margin-bottom:8px;">
           <label class="form-label" for="acuseNombre">Nombre de quien entrega</label>
-          <input class="form-input" id="acuseNombre" placeholder="Nombre y apellido" autocomplete="off" style="height:32px;">
+          <input class="form-input" id="acuseNombre" placeholder="Nombre y apellido" autocomplete="off" style="height:32px;" value="${esc(_acuseNombreDraft)}">
         </div>
         <div id="acuseFirmaWrap">
           <label class="form-label">Firma</label>
@@ -550,52 +714,105 @@
         <div class="form-field hidden" id="acuseSinFirmaBloque" style="margin-top:6px;">
           <label class="form-label" for="acuseSinFirmaMotivo">Motivo (obligatorio)</label>
           <input class="form-input" id="acuseSinFirmaMotivo" style="height:32px;" placeholder="Ej.: equipos recogidos por el técnico en sitio">
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" id="acuseGuardarBtn" style="margin-top:10px;"><i data-lucide="pen-line"></i> Guardar acuse</button>
+        </div>`}
+        ${bloqueEnvioCopia}
+        ${!_solTabletId ? `<button type="button" class="btn btn-primary btn-sm" id="acuseGuardarBtn" style="margin-top:10px;"><i data-lucide="pen-line"></i> Guardar acuse</button>` : ''}
       </div>` : '';
 
-    const listaAcuses = acuses.length ? `
-      <div style="margin-top:12px;font-size:12.5px;">
-        <div style="font-weight:600;margin-bottom:4px;">Acuses de recepción firmados</div>
-        ${acuses.map(a => `
-          <div style="display:flex;gap:8px;flex-wrap:wrap;color:var(--fg-2,#374151);padding:2px 0;">
-            <span>${esc(a.nombre_entrega || (a.sin_firma ? 'Sin firma' : '—'))}</span>
-            <span style="color:var(--fg-3,#6b7280);">· ${(a.seriales || []).length} unidad(es)</span>
-            <span style="color:var(--fg-3,#6b7280);">· ${a.at?.toDate ? a.at.toDate().toLocaleString('es-PA', { hour12: false }) : ''}</span>
-            ${a.firma_url
-              ? `<a href="${esc(a.firma_url)}" target="_blank" rel="noopener">ver firma</a>`
-              : (a.sin_firma ? `<span style="color:#92400e;">sin firma: ${esc(a.sin_firma_motivo || '')}</span>` : '')}
-          </div>`).join('')}
+    // Tarjetas de acuse: una por tanda firmada, cada una con su número, sus
+    // unidades y SU PROPIO estado de envío al cliente (Ver/Imprimir y
+    // Enviar/Reenviar funcionan también con la orden cerrada).
+    const puedeEnviar = puedeOperar();
+    const secAcuses = acuses.length ? `
+      <div style="margin-top:16px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;">Acuses de recibido</div>
+        <div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:10px;overflow:hidden;">
+        ${acuses.map((a, idx) => {
+          const numero = a.numero || `${_ordenId}-A${idx + 1}`;
+          const unidadesA = (a.unidades && a.unidades.length)
+            ? a.unidades : (a.seriales || []).map(s => ({ serial: s }));
+          const fecha = a.at?.toDate ? a.at.toDate().toLocaleString('es-PA', { hour12: false }) : '';
+          const envio = a.envio || null;
+          const st = envio?.status || 'sin_enviar';
+          const btnEnviar = !puedeEnviar ? '' : (
+            st === 'enviado'
+              ? `<button type="button" class="btn btn-ghost btn-sm dev-acuse-enviar" data-idx="${idx}" style="padding:3px 8px;font-size:12px;">Reenviar</button>`
+              : (st === 'solicitado' || st === 'encolado')
+              ? ''
+              : `<button type="button" class="btn btn-primary btn-sm dev-acuse-enviar" data-idx="${idx}" style="padding:3px 10px;font-size:12px;">${st === 'fallo' ? 'Reenviar' : 'Enviar al cliente'}</button>`);
+          return `
+          <div style="padding:10px 14px;${idx ? 'border-top:1px solid var(--border-subtle,#e5e7eb);' : ''}">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font-family:var(--font-mono,monospace);font-size:12px;font-weight:600;background:var(--bg-2,#f3f4f6);border:1px solid var(--border-subtle,#e5e7eb);border-radius:6px;padding:1px 8px;white-space:nowrap;">${esc(numero)}</span>
+              <div style="flex:1;min-width:160px;">
+                <div style="font-size:13px;font-weight:600;">
+                  ${a.sin_firma ? `Sin firma — ${esc(a.sin_firma_motivo || '')}` : `Firmado por ${esc(a.nombre_entrega || '—')}`}
+                  ${a.via === 'tablet' ? '<span style="font-size:11px;color:var(--fg-3,#6b7280);font-weight:400;"> · en tablet</span>' : ''}
+                </div>
+                <div style="font-size:11.5px;color:var(--fg-3,#6b7280);">${esc(fecha)} · ${unidadesA.length} unidad(es)</div>
+              </div>
+              ${_chipEnvioHtml(envio)}
+              <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                <button type="button" class="btn btn-ghost btn-sm dev-acuse-ver" data-idx="${idx}" style="padding:3px 8px;font-size:12px;"
+                        title="Abre el documento del acuse en una pestaña nueva, listo para imprimir.">Ver / Imprimir</button>
+                ${btnEnviar}
+              </div>
+            </div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;">
+              ${unidadesA.map(u => `<span style="font-family:var(--font-mono,monospace);font-size:11px;background:var(--bg-2,#f3f4f6);border:1px solid var(--border-subtle,#e5e7eb);border-radius:6px;padding:1px 7px;color:var(--fg-2,#374151);"
+                title="${esc(_accResumen(u.accesorios))}${u.dano_visible ? ` · Daño: ${esc(u.dano_visible)}` : ''}">${esc(u.serial)}</span>`).join('')}
+            </div>
+            ${st === 'enviado' && envio?.to ? `<div style="font-size:11.5px;color:var(--fg-3,#6b7280);margin-top:5px;">Copia enviada a <b>${esc(envio.to)}</b></div>` : ''}
+            ${st === 'fallo' ? `<div style="font-size:11.5px;color:#b91c1c;margin-top:5px;">El envío falló${envio?.error ? `: ${esc(envio.error)}` : ''} — verifica el correo y reenvía.</div>` : ''}
+          </div>`;
+        }).join('')}
+        </div>
       </div>` : '';
 
-    const html = `
-      <div class="modal" style="max-width:720px;max-height:88vh;display:flex;flex-direction:column;">
-        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <div>
-            <div style="font-weight:700;">Devolución de equipos — orden ${esc(_ordenId)}</div>
-            <div style="font-size:12.5px;color:var(--fg-3,#6b7280);">${esc(_orden.cliente_nombre || '')} · ${esc(_orden.contrato?.contrato_id || '')} ${cerrada ? '· <b>CERRADA</b>' : ''}</div>
-          </div>
-          <button type="button" class="btn btn-ghost btn-sm" id="devCerrarModal"><i data-lucide="x"></i></button>
+    // Barra de progreso del tiquete: recibidos (verde) / excepciones (ámbar)
+    // / pendientes (gris). Es el dato que se pierde de vista cuando el
+    // cliente trae el alquiler por partes.
+    const excCount = otras.length;
+    const totalUnidades = recibidos + excCount + totalPend;
+    const progreso = totalUnidades > 0 ? `
+      <div style="margin:0 0 12px;">
+        <div style="display:flex;height:7px;border-radius:99px;overflow:hidden;background:var(--bg-2,#f3f4f6);">
+          <span style="width:${(recibidos / totalUnidades) * 100}%;background:#059669;"></span>
+          <span style="width:${(excCount / totalUnidades) * 100}%;background:#d97706;"></span>
         </div>
-        <div style="padding:14px 18px;overflow:auto;flex:1;">
-          <datalist id="devModelosList">${(_modelos || []).map(m => `<option value="${esc(m.nombre)}"></option>`).join('')}</datalist>
-          <p style="margin:0 0 12px;font-size:13px;color:var(--fg-2,#374151);">${intro}</p>
-          ${bannerPendientes}
-          ${bloquePegar}
-          ${bloqueLote}
-          ${(esperados.length || _draftModelo) ? `
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:5px;font-size:11.5px;color:var(--fg-3,#6b7280);">
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:#059669;margin-right:4px;"></span><b style="color:var(--fg-1,#111827);">${recibidos}</b> recibidos</span>
+          ${excCount ? `<span><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:#d97706;margin-right:4px;"></span><b style="color:var(--fg-1,#111827);">${excCount}</b> con excepción</span>` : ''}
+          <span><span style="display:inline-block;width:8px;height:8px;border-radius:99px;background:#d1d5db;margin-right:4px;"></span><b style="color:var(--fg-1,#111827);">${totalPend}</b> pendientes</span>
+          <span style="margin-left:auto;"><b style="color:var(--fg-1,#111827);">${acuses.length}</b> acuse(s)</span>
+        </div>
+      </div>` : '';
+
+    const theadUnidades = (col3) => `
+      <thead><tr style="text-align:left;color:var(--fg-3,#6b7280);font-size:12px;">
+        <th style="padding:6px 8px;">Serial</th><th style="padding:6px 8px;">Modelo</th><th style="padding:6px 8px;">${col3}</th>
+      </tr></thead>`;
+
+    // Sección "Por recibir": unidades esperadas pendientes + captura por
+    // modelo + captura libre — todo lo que aún puede convertirse en recibido.
+    const hayPorRecibir = filas || filaDraft || porModelo.length || bloqueCapturaLibre;
+    const secPorRecibir = hayPorRecibir ? `
+      <div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:10px;overflow:hidden;margin-bottom:14px;">
+        <div style="padding:8px 14px;background:var(--bg-2,#f8fafc);border-bottom:1px solid var(--border-subtle,#e5e7eb);font-weight:700;font-size:13px;">
+          Por recibir
+        </div>
+        <div style="padding:10px 14px;">
+          ${(filas || filaDraft) ? `
           <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
-              <thead><tr style="text-align:left;color:var(--fg-3,#6b7280);font-size:12px;">
-                <th style="padding:6px 8px;">Serial</th><th style="padding:6px 8px;">Modelo</th><th style="padding:6px 8px;">Resolución</th>
-              </tr></thead>
+              ${theadUnidades('Check-in')}
               <tbody>${filas}${filaDraft}</tbody>
             </table>
           </div>` : ''}
           ${bloqueCapturaLibre}
           ${porModelo.length ? `
-          <div style="margin-top:${(esperados.length || _draftModelo) ? '14px' : '0'};">
-            <div style="font-weight:600;font-size:13px;margin-bottom:6px;">Por modelo (la baja no registró seriales — se capturan al llegar)</div>
+          <div style="margin-top:${(filas || filaDraft) ? '12px' : '0'};">
+            <div style="font-weight:600;font-size:12.5px;margin-bottom:6px;color:var(--fg-2,#374151);">Por modelo (la baja no registró seriales — se capturan al llegar)</div>
             <div style="overflow-x:auto;">
               <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
                 <thead><tr style="text-align:left;color:var(--fg-3,#6b7280);font-size:12px;">
@@ -605,8 +822,60 @@
               </table>
             </div>
           </div>` : ''}
-          ${bloqueAcuse}
-          ${listaAcuses}
+        </div>
+      </div>` : '';
+
+    // Sección "Tanda en curso" (ámbar): recibidos sin acuse + el bloque de
+    // firma como pie. Es el paso que faltaba nombrar: la tanda ES el acuse.
+    const secTanda = sinAcuse.length ? `
+      <div style="border:1px solid #fcd34d;border-radius:10px;overflow:hidden;margin-bottom:14px;">
+        <div style="padding:8px 14px;background:#fffbeb;border-bottom:1px solid #fcd34d;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:13px;color:#92400e;">Tanda en curso — sin acuse firmado</span>
+          <span style="font-size:12px;color:#b45309;">${sinAcuse.length} unidad(es)</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
+            ${theadUnidades('Registrado en el check-in')}
+            <tbody>${filasTanda}</tbody>
+          </table>
+        </div>
+        ${bloqueAcuse}
+      </div>` : '';
+
+    // Otras resoluciones: nunca salió / no se devuelve — no van al taller.
+    const secOtras = filasOtras ? `
+      <div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:10px;overflow:hidden;margin-top:16px;">
+        <div style="padding:8px 14px;background:var(--bg-2,#f8fafc);border-bottom:1px solid var(--border-subtle,#e5e7eb);font-weight:700;font-size:13px;">
+          Otras resoluciones
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px;">
+            ${theadUnidades('Resolución')}
+            <tbody>${filasOtras}</tbody>
+          </table>
+        </div>
+      </div>` : '';
+
+    const html = `
+      <div class="modal" style="max-width:780px;max-height:88vh;display:flex;flex-direction:column;">
+        <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div>
+            <div style="font-weight:700;">Devolución de equipos — orden ${esc(_ordenId)}</div>
+            <div style="font-size:12.5px;color:var(--fg-3,#6b7280);">${esc(_orden.cliente_nombre || '')} · ${esc(_orden.contrato?.contrato_id || '')} ${cerrada ? '· <b>CERRADA</b>' : ''}</div>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="devCerrarModal"><i data-lucide="x"></i></button>
+        </div>
+        <div style="padding:14px 18px;overflow:auto;flex:1;">
+          <datalist id="devModelosList">${(_modelos || []).map(m => `<option value="${esc(m.nombre)}"></option>`).join('')}</datalist>
+          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">${intro}</p>
+          ${progreso}
+          ${bannerPendientes}
+          ${bloquePegar}
+          ${bloqueLote}
+          ${secPorRecibir}
+          ${secTanda}
+          ${secAcuses}
+          ${secOtras}
         </div>
         <div class="sheet-footer" style="display:flex;justify-content:space-between;gap:8px;padding:12px 18px;border-top:1px solid var(--border-subtle,#e5e7eb);">
           <span style="font-size:12px;color:var(--fg-3,#6b7280);align-self:center;">${cerrada
@@ -747,6 +1016,20 @@
       _firmaAcuse?.clear();
     });
     _overlay.querySelector('#acuseGuardarBtn')?.addEventListener('click', guardarAcuse);
+    // Firma en tablet + envío de acuses + borradores del bloque de firma
+    // (nombre/correo sobreviven a los re-renders de cada check-in).
+    _overlay.querySelector('#acuseTabletBtn')?.addEventListener('click', enviarATablet);
+    _overlay.querySelector('#acuseTabletCancelar')?.addEventListener('click', cancelarTablet);
+    _overlay.querySelectorAll('.dev-acuse-ver').forEach(b =>
+      b.addEventListener('click', () => abrirDocAcuse(Number(b.dataset.idx))));
+    _overlay.querySelectorAll('.dev-acuse-enviar').forEach(b =>
+      b.addEventListener('click', () => enviarAcuseCliente(Number(b.dataset.idx))));
+    const inpAcuseNombre = _overlay.querySelector('#acuseNombre');
+    inpAcuseNombre?.addEventListener('input', () => { _acuseNombreDraft = inpAcuseNombre.value; });
+    const inpAcuseEmail = _overlay.querySelector('#acuseEmail');
+    inpAcuseEmail?.addEventListener('input', () => { _acuseEmailDraft = inpAcuseEmail.value; });
+    const cbCopia = _overlay.querySelector('#acuseEnviarCopia');
+    cbCopia?.addEventListener('change', () => { _acuseEnviarCopia = !!cbCopia.checked; });
     // El re-render descarta el canvas anterior: soltar sus listeners para no
     // dejar handlers de window colgando por cada check-in.
     _firmaAcuse?.destroy();
@@ -1194,9 +1477,82 @@
     render();
   }
 
-  // Acuse por tanda: sube la firma, agrega devolucion.acuses[] y estampa
-  // acuse_id en cada unidad cubierta. El backend copia el primer acuse a la
-  // ENTRADA (recepción en mostrador).
+  // ── Acuse formal por tanda ─────────────────────────────────────────────
+  // _persistirAcuse es el ÚNICO camino que agrega devolucion.acuses[]: lo
+  // usan la firma en mostrador (guardarAcuse) y la firma en tablet
+  // (_acuseDesdeTablet). Asigna el número correlativo ({ordenId}-A{n}),
+  // estampa acuse_id en cada unidad cubierta y — si se pidió — deja el envío
+  // en 'solicitado' para que onOrdenDevolucionWrite encole la copia al
+  // cliente. El backend copia el primer acuse a la ENTRADA como su recepción.
+  const _esEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  function _emailCopia() {
+    return String((_acuseEmailDraft != null ? _acuseEmailDraft : _emailCliente) || '').trim().toLowerCase();
+  }
+
+  async function _persistirAcuse({ nombre, firmaUrl, sin, motivo, via, solicitudId, laxEmail }) {
+    const dev = _orden.devolucion;
+    const pendientes = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
+    if (!pendientes.length) return false;
+    const user = firebase.auth().currentUser;
+    const email = _emailCopia();
+    let enviar = _acuseEnviarCopia && !!email;
+    if (_acuseEnviarCopia && email && !_esEmail(email)) {
+      // Desde la tablet no hay nadie frente a la PC para corregir el correo:
+      // el acuse se guarda igual (sin enviar) y el envío queda para después.
+      if (laxEmail) enviar = false;
+      else { Toast.show('Escribe un correo válido o desmarca "Enviar copia al cliente".', 'bad'); return false; }
+    }
+
+    const acuse = {
+      id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
+      numero: `${_ordenId}-A${(dev.acuses || []).length + 1}`,
+      at: firebase.firestore.Timestamp.now(),
+      por_uid: user?.uid || null,
+      nombre_entrega: sin ? null : (nombre || null),
+      firma_url: firmaUrl || null,
+      sin_firma: !!sin,
+      sin_firma_motivo: sin ? (motivo || '') : null,
+      via: via || 'mostrador',
+      solicitud_id: solicitudId || null,
+      seriales: pendientes.map(e => e.serial),
+      unidades: pendientes.map(e => ({
+        serial: e.serial,
+        modelo: e.modelo || '',
+        accesorios: e.accesorios || null,
+        dano_visible: e.dano_visible || null,
+      })),
+      envio: enviar
+        ? { status: 'solicitado', to: email,
+            solicitado_at: firebase.firestore.Timestamp.now(),
+            solicitado_por: user?.uid || null }
+        : { status: 'sin_enviar', to: email || null },
+    };
+    dev.acuses = [...(dev.acuses || []), acuse];
+    pendientes.forEach(e => { e.acuse_id = acuse.id; });
+    // La corrección de una unidad se abre en este mismo modal, arriba del
+    // bloque de firma: si el cliente firmó mientras estaba abierta, esa
+    // unidad ya no se corrige y el formulario tiene que cerrarse solo.
+    _editandoId = null;
+    try {
+      await _guardarDevolucion('DEVOLUCION_ACUSE');
+    } catch (err) {
+      dev.acuses = dev.acuses.filter(a => a.id !== acuse.id);
+      pendientes.forEach(e => { delete e.acuse_id; });
+      throw err;
+    }
+    // La firma ya quedó archivada en este acuse: el lienzo arranca limpio
+    // para la siguiente tanda (si no, render() la restauraría).
+    _firmaSnapshot = null;
+    _firmaAcuse?.clear();
+    _acuseNombreDraft = '';
+    Toast.show(enviar
+      ? `Acuse ${acuse.numero} guardado — la copia va en camino a ${email}.`
+      : `Acuse ${acuse.numero} guardado.`, 'ok');
+    _guardarEmailCliente(email); // corrección de vuelta a la ficha (best-effort)
+    return true;
+  }
+
+  // Firma en el mostrador (canvas de este modal): sube la firma y persiste.
   async function guardarAcuse() {
     const dev = _orden.devolucion;
     const pendientes = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
@@ -1214,7 +1570,6 @@
 
     const btn = _overlay.querySelector('#acuseGuardarBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
-    const user = firebase.auth().currentUser;
     try {
       let firmaUrl = null;
       if (!sin) {
@@ -1225,44 +1580,292 @@
         await ref.put(blob, { contentType: 'image/png' });
         firmaUrl = await ref.getDownloadURL();
       }
-      const acuse = {
-        id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())),
-        at: firebase.firestore.Timestamp.now(),
-        por_uid: user?.uid || null,
-        nombre_entrega: sin ? null : nombre,
-        firma_url: firmaUrl,
-        sin_firma: sin,
-        sin_firma_motivo: sin ? motivo : null,
-        seriales: pendientes.map(e => e.serial),
-        unidades: pendientes.map(e => ({
-          serial: e.serial,
-          accesorios: e.accesorios || null,
-          dano_visible: e.dano_visible || null,
-        })),
-      };
-      dev.acuses = [...(dev.acuses || []), acuse];
-      pendientes.forEach(e => { e.acuse_id = acuse.id; });
-      // La corrección de una unidad se abre en este mismo modal, arriba del
-      // bloque de firma: si el cliente firmó mientras estaba abierta, esa
-      // unidad ya no se corrige y el formulario tiene que cerrarse solo.
-      _editandoId = null;
-      try {
-        await _guardarDevolucion('DEVOLUCION_ACUSE');
-        // La firma ya quedó archivada en este acuse: el lienzo arranca limpio
-        // para la siguiente tanda (si no, render() la restauraría).
-        _firmaSnapshot = null;
-        _firmaAcuse?.clear();
-        Toast.show('Acuse de recepción guardado.', 'ok');
-      } catch (err) {
-        dev.acuses = dev.acuses.filter(a => a.id !== acuse.id);
-        pendientes.forEach(e => { delete e.acuse_id; });
-        throw err;
-      }
+      await _persistirAcuse({ nombre, firmaUrl, sin, motivo, via: 'mostrador' });
     } catch (err) {
       console.error(err);
       Toast.show('No se pudo guardar el acuse.', 'bad');
     }
     render();
+  }
+
+  // ── Firma en tablet (firmas_tablet + /firmar/tablet.html) ──────────────
+  // "Firmar en la tablet" crea una solicitud que la tablet del mostrador
+  // muestra en vivo; cuando el cliente confirma allá, el onSnapshot de aquí
+  // guarda el acuse con esa firma. La solicitud sobrevive a cerrar el modal
+  // (abrir() la retoma) y recepción puede cancelarla en cualquier momento.
+  async function enviarATablet() {
+    const dev = _orden.devolucion || {};
+    const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
+    if (!sinAcuse.length || _solTabletId) return;
+    const user = firebase.auth().currentUser;
+    try {
+      const ref = await firebase.firestore().collection('firmas_tablet').add({
+        tipo: 'acuse_devolucion',
+        estado: 'pendiente',
+        orden_id: _ordenId,
+        cliente_nombre: _orden.cliente_nombre || '',
+        contrato_id: dev.origen?.ref_papel || _orden.contrato?.contrato_id || null,
+        numero: `${_ordenId}-A${(dev.acuses || []).length + 1}`,
+        unidades: sinAcuse.map(e => ({
+          serial: e.serial, modelo: e.modelo || '',
+          accesorios: e.accesorios || null, dano_visible: e.dano_visible || null,
+        })),
+        creado_at: firebase.firestore.FieldValue.serverTimestamp(),
+        creado_por_uid: user?.uid || null,
+        creado_por_email: user?.email || null,
+      });
+      _solTabletId = ref.id;
+      _suscribirTablet();
+      Toast.show('Solicitud enviada — ya aparece en la tablet del mostrador.', 'ok');
+    } catch (e) {
+      console.error('[OrdenesDevolucion.enviarATablet]', e);
+      Toast.show('No se pudo enviar la solicitud a la tablet.', 'bad');
+    }
+    render();
+  }
+
+  function _suscribirTablet() {
+    _unsubTablet?.();
+    if (!_solTabletId) return;
+    _unsubTablet = firebase.firestore().collection('firmas_tablet').doc(_solTabletId)
+      .onSnapshot((s) => {
+        const d = s.exists ? s.data() : null;
+        if (!d) return;
+        if (d.estado === 'firmada') {
+          _acuseDesdeTablet(s.id, d);
+        } else if (d.estado === 'cancelada') {
+          _unsubTablet?.(); _unsubTablet = null; _solTabletId = null;
+          if (_overlay) render();
+        }
+      });
+  }
+
+  async function cancelarTablet() {
+    if (!_solTabletId) return;
+    try {
+      await firebase.firestore().collection('firmas_tablet').doc(_solTabletId)
+        .update({ estado: 'cancelada' }); // el snapshot hace la limpieza
+    } catch (e) {
+      // Carrera benigna: la tablet firmó justo al cancelar — el snapshot
+      // entregará la firma de todos modos.
+      console.warn('[OrdenesDevolucion.cancelarTablet]', e);
+    }
+  }
+
+  // La tablet firmó: guarda el acuse UNA vez con la firma que subió la
+  // tablet (Storage) y el nombre que tecleó el cliente allá.
+  async function _acuseDesdeTablet(solId, sol) {
+    if (_tabletGuardando || !_orden?.devolucion) return;
+    if ((_orden.devolucion.acuses || []).some(a => a.solicitud_id === solId)) {
+      _unsubTablet?.(); _unsubTablet = null; _solTabletId = null;
+      return; // ya se aplicó (otra pestaña / doble snapshot)
+    }
+    _tabletGuardando = true;
+    try {
+      await _persistirAcuse({
+        nombre: sol.firma?.nombre || '',
+        firmaUrl: sol.firma?.url || null,
+        sin: false, motivo: '',
+        via: 'tablet', solicitudId: solId,
+        laxEmail: true,
+      });
+      _unsubTablet?.(); _unsubTablet = null; _solTabletId = null;
+    } catch (e) {
+      console.error('[OrdenesDevolucion._acuseDesdeTablet]', e);
+      Toast.show('La tablet firmó pero no se pudo guardar el acuse — cierra y reabre la devolución para reintentar.', 'bad');
+    } finally {
+      _tabletGuardando = false;
+    }
+    if (_overlay) render();
+  }
+
+  // ── Documento del acuse (ver / imprimir) ───────────────────────────────
+  // El documento formal se renderiza en el navegador, en una pestaña nueva
+  // lista para Ctrl+P — sin PDF ni servidor. El CONTENIDO espeja el correo
+  // que arma functions/src/lib/acuseDevolucion.js: si cambias columnas o la
+  // leyenda aquí, cámbialas también allá.
+  function _docAcuseHtml(a, idx) {
+    const dev = _orden.devolucion || {};
+    const numero = a.numero || `${_ordenId}-A${idx + 1}`;
+    const unidades = (a.unidades && a.unidades.length)
+      ? a.unidades : (a.seriales || []).map(s => ({ serial: s }));
+    const fecha = a.at?.toDate
+      ? a.at.toDate().toLocaleString('es-PA', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+      : '';
+    const contratoId = dev.origen?.ref_papel || _orden.contrato?.contrato_id || null;
+    const filasDoc = unidades.map(u => `
+      <tr>
+        <td class="mono">${esc(u.serial || '—')}</td>
+        <td>${esc(u.modelo || '—')}</td>
+        <td>${esc(_accResumen(u.accesorios))}</td>
+        <td>${esc(u.dano_visible || '—')}</td>
+      </tr>`).join('');
+    const firmaBloque = a.sin_firma
+      ? `<span class="sinfirma">Registrado sin firma — ${esc(a.sin_firma_motivo || '')}</span>`
+      : (a.firma_url ? `<img src="${esc(a.firma_url)}" alt="Firma de ${esc(a.nombre_entrega || '')}">` : '');
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+      <title>Acuse ${esc(numero)}</title>
+      <style>
+        * { box-sizing: border-box; margin: 0; }
+        body { background: #e8e6e0; font: 14px/1.55 'Source Serif 4', Georgia, 'Times New Roman', serif; color: #26221C; }
+        .toolbar { display: flex; gap: 10px; align-items: center; justify-content: flex-end; max-width: 780px; margin: 0 auto; padding: 12px 16px 0; font-family: 'Segoe UI', Arial, sans-serif; }
+        .toolbar button { font: 600 13.5px 'Segoe UI', Arial, sans-serif; border: 0; border-radius: 8px; cursor: pointer; padding: 9px 16px; background: #0B2A47; color: #fff; }
+        .hoja { background: #FDFCF8; max-width: 780px; margin: 12px auto 40px; padding: 44px 52px; box-shadow: 0 8px 30px rgba(20,20,30,.18); }
+        .memb { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; border-bottom: 2px solid #26221C; padding-bottom: 14px; flex-wrap: wrap; }
+        .memb img { height: 42px; }
+        .memb .datos-emp { font: 10.5px/1.5 'Segoe UI', Arial, sans-serif; color: #5C554A; margin-top: 4px; }
+        .docnum { text-align: right; font-size: 12.5px; color: #5C554A; }
+        .docnum b { display: block; font-family: Consolas, monospace; font-size: 14px; color: #26221C; }
+        h1 { font-size: 18px; text-align: center; margin: 26px 0 4px; letter-spacing: .02em; }
+        .subt { text-align: center; font-size: 12.5px; color: #5C554A; margin-bottom: 22px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; font-size: 13px; margin-bottom: 20px; }
+        .grid .lbl { display: block; font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #5C554A; }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        th { font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .07em; text-transform: uppercase; color: #5C554A; text-align: left; padding: 6px 10px; border-bottom: 1.5px solid #26221C; }
+        td { padding: 8px 10px; border-bottom: 1px solid #E4DFD2; vertical-align: top; }
+        td.mono { font-family: Consolas, monospace; font-size: 12px; white-space: nowrap; }
+        .legal { font-size: 11.5px; color: #5C554A; border-left: 2px solid #E4DFD2; padding-left: 14px; margin: 18px 0 34px; font-style: italic; }
+        .firmas { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+        .f-col { text-align: center; font-size: 12px; }
+        .f-line { border-bottom: 1px solid #26221C; min-height: 58px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 6px; }
+        .f-line img { max-height: 56px; max-width: 100%; }
+        .f-name { font-weight: 600; }
+        .f-role { font: 10.5px 'Segoe UI', Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #5C554A; }
+        .sinfirma { font-size: 11px; color: #5C554A; padding-bottom: 8px; }
+        .pie { margin-top: 34px; padding-top: 10px; border-top: 1px solid #E4DFD2; font: 10.5px 'Segoe UI', Arial, sans-serif; color: #5C554A; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        @media print { body { background: #fff; } .toolbar { display: none; } .hoja { box-shadow: none; margin: 0; max-width: none; padding: 6mm 4mm; } }
+      </style></head>
+      <body>
+        <div class="toolbar"><button onclick="window.print()">🖨 Imprimir</button></div>
+        <div class="hoja">
+          <div class="memb">
+            <div>
+              <img src="${location.origin}/brand/logo-lockup-horizontal.svg" alt="C Comunica">
+              <div class="datos-emp">C COMUNICA, S.A. · RUC 32977-27-249966 DV 39 · Panamá<br>ventas@cecomunica.com · +507 279-5570</div>
+            </div>
+            <div class="docnum">Acuse N.º <b>${esc(numero)}</b>${esc(fecha)}</div>
+          </div>
+          <h1>Acuse de recibo de equipos</h1>
+          <p class="subt">Constancia de entrega física en devolución — previa a la inspección técnica</p>
+          <div class="grid">
+            <div><span class="lbl">Cliente</span><b>${esc(_orden.cliente_nombre || '—')}</b></div>
+            <div><span class="lbl">Contrato</span><b>${esc(contratoId || '—')}</b></div>
+            <div><span class="lbl">Orden de devolución</span><b>${esc(_ordenId)}</b></div>
+            <div><span class="lbl">Recibido en</span><b>Mostrador — recepción</b></div>
+          </div>
+          <table>
+            <thead><tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr></thead>
+            <tbody>${filasDoc}</tbody>
+          </table>
+          <p class="legal">Los equipos listados ingresan al taller para su revisión técnica. Cualquier daño
+            identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán
+            notificados oportunamente mediante cotización para su posterior facturación. Este acuse deja
+            constancia de la entrega física; no constituye la inspección técnica final.</p>
+          <div class="firmas">
+            <div class="f-col">
+              <div class="f-line">${firmaBloque}</div>
+              <div class="f-name">${esc(a.nombre_entrega || (a.sin_firma ? '—' : ''))}</div>
+              <div class="f-role">Entrega — por el cliente</div>
+            </div>
+            <div class="f-col">
+              <div class="f-line"></div>
+              <div class="f-name">Recepción C Comunica</div>
+              <div class="f-role">Recibe — ${esc(fecha)}</div>
+            </div>
+          </div>
+          <div class="pie">
+            <span>Generado por el sistema de órdenes de servicio</span>
+            <span>${unidades.length} unidad(es) · ${esc(numero)}</span>
+          </div>
+        </div>
+      </body></html>`;
+  }
+
+  function abrirDocAcuse(idx) {
+    const a = (_orden.devolucion?.acuses || [])[idx];
+    if (!a) return;
+    const w = window.open('', '_blank');
+    if (!w) { Toast.show('El navegador bloqueó la pestaña del documento — permite ventanas emergentes.', 'bad'); return; }
+    w.document.write(_docAcuseHtml(a, idx));
+    w.document.close();
+  }
+
+  // ── Envío del acuse al cliente (desde la tarjeta) ──────────────────────
+  // Marca envio 'solicitado' y el backend encola el correo; sirve para el
+  // primer envío, el reenvío tras un fallo y el reenvío de cortesía — también
+  // con la orden CERRADA (el estado no cambia y las reglas lo permiten).
+  function enviarAcuseCliente(idx) {
+    const dev = _orden.devolucion || {};
+    const a = (dev.acuses || [])[idx];
+    if (!a || !puedeOperar()) return;
+    const st = a.envio?.status;
+    if (st === 'solicitado' || st === 'encolado') { Toast.show('Ese acuse ya está en camino.', 'warn'); return; }
+    const numero = a.numero || `${_ordenId}-A${idx + 1}`;
+    const prellenado = a.envio?.to || _emailCopia() || '';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay';
+    overlay.style.display = 'flex';
+    overlay.style.zIndex = '9500';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:430px;width:min(94vw,430px);">
+        <div class="sheet-header"><h3 class="sheet-title">Enviar acuse ${esc(numero)}</h3></div>
+        <div class="sheet-body" style="padding:12px 14px;">
+          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-2,#374151);">
+            El cliente recibe el documento completo del acuse — unidades, accesorios registrados y firma —
+            listo para archivar o imprimir.
+          </p>
+          <div class="form-field">
+            <label class="form-label" for="devEnvioEmail">Correo del cliente</label>
+            <input class="form-input" id="devEnvioEmail" type="email" value="${esc(prellenado)}" style="height:34px;" autocomplete="off">
+            <div style="font-size:11px;color:var(--fg-3,#6b7280);margin-top:3px;">Si lo corriges, queda guardado en la ficha para los próximos envíos.</div>
+          </div>
+        </div>
+        <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
+          <button class="btn btn-secondary" data-close="1">Cancelar</button>
+          <button class="btn btn-primary" id="devEnvioConfirmar">Enviar copia</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const cerrar = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay || e.target.closest('[data-close]')) cerrar(); });
+    overlay.querySelector('#devEnvioConfirmar').addEventListener('click', async () => {
+      const email = (overlay.querySelector('#devEnvioEmail')?.value || '').trim().toLowerCase();
+      if (!_esEmail(email)) { Toast.show('Escribe un correo válido.', 'bad'); return; }
+      const user = firebase.auth().currentUser;
+      const previo = a.envio || null;
+      a.envio = {
+        status: 'solicitado', to: email,
+        solicitado_at: firebase.firestore.Timestamp.now(),
+        solicitado_por: user?.uid || null,
+      };
+      const btn = overlay.querySelector('#devEnvioConfirmar');
+      btn.disabled = true; btn.textContent = 'Enviando…';
+      try {
+        await _guardarDevolucion('DEVOLUCION_ACUSE_ENVIO');
+        cerrar();
+        Toast.show(`Acuse ${numero} en camino a ${email}.`, 'ok');
+        _guardarEmailCliente(email);
+      } catch (err) {
+        console.error(err);
+        a.envio = previo;
+        btn.disabled = false; btn.textContent = 'Enviar copia';
+        Toast.show('No se pudo solicitar el envío.', 'bad');
+      }
+      render();
+    });
+    requestAnimationFrame(() => overlay.querySelector('#devEnvioEmail')?.focus());
+  }
+
+  // Correo corregido de vuelta a la ficha (best-effort). Va en email_acuses
+  // para no pisar el email general del cliente.
+  async function _guardarEmailCliente(email) {
+    if (!email || !_esEmail(email) || !_orden?.cliente_id || email === _emailCliente) return;
+    try {
+      await firebase.firestore().collection('clientes').doc(_orden.cliente_id)
+        .set({ email_acuses: email }, { merge: true });
+      _emailCliente = email;
+    } catch (e) { console.warn('[OrdenesDevolucion] email_acuses no guardado', e); }
   }
 
   // Faltantes que NO tienen fila propia: los que vienen de `esperados_por_modelo`
@@ -1458,6 +2061,11 @@
     const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id).length;
     const pend = (typeof pendientesDevolucion === 'function') ? pendientesDevolucion(_orden) : 0;
     const aviso = sinAcuse ? `\n\nOJO: ${sinAcuse} unidad(es) recibida(s) quedan SIN acuse firmado del cliente.` : '';
+    const acusesSinEnvio = (dev.acuses || []).filter(a =>
+      !a.envio || ['sin_enviar', 'fallo'].includes(a.envio.status)).length;
+    const avisoEnvio = acusesSinEnvio
+      ? `\n\n${acusesSinEnvio} acuse(s) aún sin enviar al cliente — se pueden enviar desde su tarjeta, también con la orden cerrada.`
+      : '';
 
     // Faltantes sin fila propia: hay que itemizarlos ANTES de cerrar, o se
     // vuelven un número muerto. Los que sí tienen fila se resuelven con
@@ -1479,7 +2087,7 @@
           ? `Los ${faltan.total} faltantes quedarán registrados como equipos por cobrar, visibles en "Equipos no devueltos" hasta que se facturen, se condonen o aparezcan.`
           : 'Quedará registrado en la orden — coordina el cobro o la excepción antes de cerrar.')
       : '¿Cerrar la devolución? Todas las unidades quedaron resueltas; los equipos recibidos ya están (o quedarán) en la orden de ENTRADA de inspección.';
-    if (!window.confirm(base + aviso)) return;
+    if (!window.confirm(base + aviso + avisoEnvio)) return;
     const user = firebase.auth().currentUser;
     const previo = dev.cierre_pendientes;
     dev.cierre_pendientes = pend;

@@ -775,6 +775,34 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado"]));
       allow delete: if isAdmin();
     }
+    // Firma en TABLET del acuse de devolución (2026-09-01): recepción "manda"
+    // la firma a la tablet del mostrador (Lenovo TB311XU con sesión iniciada,
+    // /firmar/tablet.html), que ESCUCHA las solicitudes pendientes en vivo y
+    // el cliente firma ahí. A diferencia de firma_solicitudes (enlace portador
+    // público), aquí TODO es personal autenticado: list abierto a la sesión
+    // (la tablet consulta estado=='pendiente') y transiciones cerradas:
+    // pendiente → firmada (la tablet, solo estado+firma) o pendiente →
+    // cancelada (recepción cierra la espera). La firma sube a Storage
+    // (ordenes_firmas/, PNG <1MB) y aquí solo viaja la URL.
+    match /firmas_tablet/{fid} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && userRole() in ["administrador","vendedor","recepcion","tecnico","tecnico_operativo","jefe_taller"]
+        && request.resource.data.estado == "pendiente"
+        && request.resource.data.tipo == "acuse_devolucion"
+        && request.resource.data.orden_id is string;
+      allow update: if isSignedIn() && (
+        (resource.data.estado == "pendiente"
+          && request.resource.data.estado == "firmada"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado","firma"])
+          && request.resource.data.firma.nombre is string
+          && request.resource.data.firma.nombre.size() > 2
+          && request.resource.data.firma.url is string)
+        || (resource.data.estado == "pendiente"
+          && request.resource.data.estado == "cancelada"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["estado"])));
+      allow delete: if isAdmin();
+    }
     // empresa/config guarda parámetros sensibles: umbrales de auto-envío de
     // cotizaciones (descuento_max_pct, total_max), seriales_editores_extra
     // (allowlist que salta el candado de seriales) e itbms_rate (tasa fiscal).

@@ -550,6 +550,59 @@ async function main() {
     .set({ eliminado: false }, { merge: true }));
   ok("eliminado: admin sí revierte (corrección manual)");
 
+  // ── firmas_tablet: firma del acuse en la tablet del mostrador ─────────────
+  // Personal autenticado crea (roles de órdenes) y la tablet transiciona
+  // pendiente→firmada SOLO con estado+firma; recepción cancela; nada más.
+  const solTablet = {
+    tipo: "acuse_devolucion", estado: "pendiente", orden_id: "2026090112",
+    cliente_nombre: "X", numero: "2026090112-A1", unidades: [],
+  };
+  await assertSucceeds(as("recepcion").doc("firmas_tablet/ft1").set(solTablet));
+  await assertSucceeds(as("recepcion").doc("firmas_tablet/ft2").set(solTablet));
+  await assertSucceeds(as("recepcion").doc("firmas_tablet/ft3").set(solTablet));
+  await assertFails(as("vista").doc("firmas_tablet/ftNo").set(solTablet));
+  await assertFails(as("recepcion").doc("firmas_tablet/ftNo")
+    .set({ ...solTablet, estado: "firmada" }));   // no nace firmada
+  ok("firmas_tablet: crean los roles de órdenes, siempre en pendiente");
+  // La tablet (cualquier sesión) lista las pendientes — es su modo de operar.
+  await assertSucceeds(as("vista").collection("firmas_tablet")
+    .where("estado", "==", "pendiente").get());
+  ok("firmas_tablet: la sesión de la tablet puede escuchar las pendientes");
+  // pendiente → firmada: solo estado+firma (nombre real y url).
+  await assertSucceeds(as("gerente").doc("firmas_tablet/ft1").update({
+    estado: "firmada",
+    firma: { nombre: "Luis Camarena", url: "https://x/f.png", por_uid: "u1" },
+  }));
+  await assertFails(as("recepcion").doc("firmas_tablet/ft2").update({
+    estado: "firmada",
+    firma: { nombre: "LC", url: "https://x/f.png" }, // nombre muy corto
+  }));
+  await assertFails(as("recepcion").doc("firmas_tablet/ft2").update({
+    estado: "firmada", orden_id: "OTRA",             // toca campos ajenos
+    firma: { nombre: "Luis Camarena", url: "https://x/f.png" },
+  }));
+  ok("firmas_tablet: firmada exige nombre+url y no toca otros campos");
+  // pendiente → cancelada: solo el estado; una firmada ya no se cancela.
+  await assertSucceeds(as("recepcion").doc("firmas_tablet/ft2").update({ estado: "cancelada" }));
+  await assertFails(as("recepcion").doc("firmas_tablet/ft1").update({ estado: "cancelada" }));
+  await assertFails(as("recepcion").doc("firmas_tablet/ft3").delete());
+  await assertSucceeds(as("administrador").doc("firmas_tablet/ft3").delete());
+  ok("firmas_tablet: cancelar solo pendientes; delete solo admin");
+
+  // ── ordenes: el envío del acuse (envio en acuses[]) no rompe append-only ──
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("ordenes_de_servicio/oAcuse").set({
+      estado_reparacion: "ASIGNADO", tipo_de_servicio: "DEVOLUCION",
+      devolucion: { esperados: [{ id: "e1", resolucion: "recibido", acuse_id: "a1" }],
+        acuses: [{ id: "a1", numero: "X-A1", envio: { status: "sin_enviar" } }] },
+    });
+  });
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oAcuse").set({
+    devolucion: { esperados: [{ id: "e1", resolucion: "recibido", acuse_id: "a1" }],
+      acuses: [{ id: "a1", numero: "X-A1", envio: { status: "solicitado", to: "x@y.com" } }] },
+  }, { merge: true }));
+  ok("ordenes: marcar envio 'solicitado' en un acuse existente pasa (append-only intacto)");
+
   await testEnv.cleanup();
   console.log(`\nTODOS LOS TESTS DE REGLAS PASARON (${n} grupos)`);
 }

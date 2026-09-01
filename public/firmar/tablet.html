@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Firma en tablet — C Comunica</title>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <!-- Tablet de firmas del mostrador (2026-09-01, Lenovo TB311XU): página que
+       la tablet deja ABIERTA con sesión iniciada. Escucha firmas_tablet
+       (estado=='pendiente') en vivo: cuando recepción manda un acuse de
+       devolución a firmar, aparece aquí solo, el cliente firma y la solicitud
+       pasa a 'firmada' — el modal de la PC la recoge y guarda el acuse.
+       Requiere sesión (verificarAccesoYAplicarVisibilidad): las reglas de
+       firmas_tablet solo abren list a personal autenticado. -->
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+  <script defer src="/js/firebase-init.js?v=ses2"></script>
+  <script defer src="/js/ui/firmaPad.js?v=dev3"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    html, body { height: 100%; }
+    body { font: 16px/1.5 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1c2733; background: #f2f5f8; }
+    .cab { display: flex; gap: 12px; align-items: center; padding: 12px 18px; background: #fff; border-bottom: 3px solid #0B2A47; }
+    .cab img { height: 36px; }
+    .cab h1 { font-size: 15px; color: #0B2A47; }
+    .cab .sub { font-size: 11px; color: #5a6b7b; }
+    .cab .estado-con { margin-left: auto; font-size: 11.5px; color: #5a6b7b; text-align: right; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; border: 1px solid #dde5ec; border-radius: 14px; padding: 18px 20px; margin-top: 14px; }
+    h2 { font-size: 20px; color: #0B2A47; }
+    .idle { text-align: center; padding: 12vh 20px; }
+    .idle .icono { font-size: 52px; margin-bottom: 10px; }
+    .idle p { color: #5a6b7b; margin-top: 6px; }
+    .pulse { display: inline-block; width: 10px; height: 10px; border-radius: 99px; background: #1FA56B; margin-right: 6px; animation: pulse 1.6s infinite; vertical-align: 1px; }
+    @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+    @media (prefers-reduced-motion: reduce) { .pulse { animation: none } }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 10px 0 4px; }
+    th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #5a6b7b; padding: 6px 8px; border-bottom: 2px solid #e5ebf1; }
+    td { padding: 8px; border-bottom: 1px solid #eef2f6; vertical-align: top; }
+    .mono { font-family: ui-monospace, Consolas, monospace; font-size: 13.5px; white-space: nowrap; }
+    .nota { font-size: 13px; color: #5a6b7b; }
+    .aviso { background: #FBF3E0; border: 1px solid #E0A93A; color: #8A6415; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-top: 12px; font-style: italic; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #40525f; margin: 14px 0 5px; }
+    input[type=text] { width: 100%; padding: 12px 14px; border: 1px solid #c8d4de; border-radius: 10px; font-size: 17px; }
+    #firmaCanvas { width: 100%; height: 240px; border: 2px dashed #c8d4de; border-radius: 12px; background: #fff; touch-action: none; display: block; }
+    .canvas-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+    button { font: 600 16px inherit; border: 0; border-radius: 12px; cursor: pointer; padding: 14px 20px; }
+    .btn-p { background: #0B2A47; color: #fff; width: 100%; margin-top: 16px; }
+    .btn-p:disabled { background: #9fb0bf; }
+    .btn-g { background: none; color: #5a6b7b; padding: 6px 10px; font-size: 14px; text-decoration: underline; }
+    .num-acuse { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: #eef3f8; border: 1px solid #dde5ec; border-radius: 8px; padding: 3px 10px; color: #0B2A47; white-space: nowrap; }
+    .enc { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="cab">
+    <img src="/brand/logo-lockup-horizontal.svg" alt="C Comunica">
+    <div>
+      <h1>Firmas del mostrador</h1>
+      <div class="sub">Tablet de recepción — acuses de devolución</div>
+    </div>
+    <div class="estado-con" id="conEstado"></div>
+  </div>
+
+  <div class="wrap">
+    <div id="vCargando" class="idle"><div class="icono">⏳</div><h2>Conectando…</h2></div>
+
+    <div id="vIdle" class="idle hidden">
+      <div class="icono">🖊</div>
+      <h2>Esperando firmas</h2>
+      <p><span class="pulse"></span>Cuando recepción envíe un acuse a firmar, aparecerá aquí solo.</p>
+    </div>
+
+    <div id="vFirma" class="hidden">
+      <div class="card">
+        <div class="enc">
+          <h2 id="fTitulo">Acuse de recibo de equipos</h2>
+          <span class="num-acuse" id="fNumero"></span>
+        </div>
+        <p class="nota" id="fSub" style="margin-top:4px;"></p>
+        <table>
+          <thead><tr><th>Serial</th><th>Modelo</th><th>Accesorios entregados</th><th>Daño visible</th></tr></thead>
+          <tbody id="fUnidades"></tbody>
+        </table>
+        <div class="aviso">Los radios ingresarán al taller para su revisión. Cualquier daño identificado
+          como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados
+          oportunamente mediante cotización para su posterior facturación.</div>
+      </div>
+      <div class="card">
+        <label for="fNombre">Nombre de quien entrega</label>
+        <input type="text" id="fNombre" autocomplete="off" placeholder="Nombre y apellido">
+        <label>Firma</label>
+        <canvas id="firmaCanvas"></canvas>
+        <div class="canvas-bar">
+          <span class="nota" id="fHint">— firma dentro del recuadro —</span>
+          <button type="button" class="btn-g" id="fLimpiar">Borrar y repetir</button>
+        </div>
+        <button type="button" class="btn-p" id="fConfirmar">Confirmar firma</button>
+      </div>
+    </div>
+
+    <div id="vListo" class="idle hidden">
+      <div class="icono">✅</div>
+      <h2>Firma registrada</h2>
+      <p>Gracias — recepción ya tiene el acuse. Puedes devolver la tablet.</p>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const ACC = { bateria: 'Batería', antena: 'Antena', clip: 'Clip', cargador: 'Cargador', fuente: 'Fuente', cubrepolvo: 'Cubrepolvo' };
+    const resumenAcc = (a) => {
+      if (!a) return '—';
+      const keys = Object.keys(ACC);
+      const con = keys.filter(k => a[k]).map(k => ACC[k]);
+      return con.length === keys.length ? 'Completo' : (con.length ? con.join(', ') : 'Ninguno');
+    };
+
+    let _pad = null;          // FirmaPad de la solicitud en pantalla
+    let _sol = null;          // {id, data} de la solicitud mostrada
+    let _guardando = false;
+    let _wakeLock = null;
+
+    const ver = (id) => ['vCargando', 'vIdle', 'vFirma', 'vListo'].forEach(x =>
+      document.getElementById(x).classList.toggle('hidden', x !== id));
+
+    // La tablet vive encendida en el mostrador: sin wake lock la pantalla se
+    // apaga a media espera y el cliente se encuentra la tablet dormida.
+    async function pedirWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          _wakeLock = await navigator.wakeLock.request('screen');
+          _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+        }
+      } catch (e) { /* sin soporte o sin permiso: no crítico */ }
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !_wakeLock) pedirWakeLock();
+    });
+
+    function pintarSolicitud(id, s) {
+      _sol = { id, data: s };
+      document.getElementById('fNumero').textContent = s.numero || '';
+      document.getElementById('fSub').innerHTML =
+        `<b>${esc(s.cliente_nombre || '—')}</b>` +
+        (s.contrato_id ? ` · Contrato ${esc(s.contrato_id)}` : '') +
+        ` · Orden ${esc(s.orden_id || '')}` +
+        ` · ${(s.unidades || []).length} equipo(s)`;
+      document.getElementById('fUnidades').innerHTML = (s.unidades || []).map(u => `
+        <tr>
+          <td class="mono">${esc(u.serial || '—')}</td>
+          <td>${esc(u.modelo || '—')}</td>
+          <td>${esc(resumenAcc(u.accesorios))}</td>
+          <td>${esc(u.dano_visible || '—')}</td>
+        </tr>`).join('');
+      document.getElementById('fNombre').value = '';
+      document.getElementById('fHint').textContent = '— firma dentro del recuadro —';
+      ver('vFirma');
+      // FirmaPad se monta después del layout para conocer el ancho real.
+      _pad?.destroy();
+      _pad = null;
+      requestAnimationFrame(() => {
+        _pad = FirmaPad.mount(document.getElementById('firmaCanvas'), {
+          alto: 240,
+          onChange: (hay) => {
+            document.getElementById('fHint').textContent = hay ? '✓ Firma capturada' : '— firma dentro del recuadro —';
+          },
+        });
+      });
+    }
+
+    function aIdle() {
+      _sol = null;
+      _pad?.destroy();
+      _pad = null;
+      ver('vIdle');
+    }
+
+    async function confirmar() {
+      if (!_sol || _guardando) return;
+      const nombre = document.getElementById('fNombre').value.trim();
+      if (nombre.length < 3) { alert('Escribe el nombre completo de quien entrega.'); return; }
+      if (!_pad || _pad.isEmpty()) { alert('Dibuja la firma en el recuadro.'); return; }
+      const btn = document.getElementById('fConfirmar');
+      _guardando = true;
+      btn.disabled = true; btn.textContent = 'Registrando…';
+      try {
+        const blob = await _pad.toBlob();
+        if (!blob) throw new Error('La firma quedó vacía.');
+        const path = `ordenes_firmas/${_sol.data.orden_id}_acuse_tablet_${Date.now()}.png`;
+        const ref = firebase.storage().ref(path);
+        await ref.put(blob, { contentType: 'image/png' });
+        const url = await ref.getDownloadURL();
+        const user = firebase.auth().currentUser;
+        await firebase.firestore().collection('firmas_tablet').doc(_sol.id).update({
+          estado: 'firmada',
+          firma: {
+            nombre,
+            url,
+            at: firebase.firestore.FieldValue.serverTimestamp(),
+            por_uid: user?.uid || null,
+          },
+        });
+        ver('vListo');
+        // El snapshot dejará de traer esta solicitud (ya no está pendiente);
+        // tras un momento la tablet vuelve sola a la espera.
+        setTimeout(() => { if (!_sol || _sol.consumida) aIdle(); }, 4000);
+        _sol = { consumida: true };
+        _pad?.destroy();
+        _pad = null;
+      } catch (e) {
+        console.error(e);
+        alert('No se pudo registrar la firma. Intenta de nuevo.');
+        btn.disabled = false; btn.textContent = 'Confirmar firma';
+      } finally {
+        _guardando = false;
+      }
+    }
+
+    function escuchar() {
+      // Solo igualdades (sin orderBy): no requiere índice compuesto. El orden
+      // (la más vieja primero) y el filtro de solicitudes rancias (>4h, de un
+      // modal que quedó abierto hace días) se resuelven aquí.
+      firebase.firestore().collection('firmas_tablet')
+        .where('estado', '==', 'pendiente')
+        .where('tipo', '==', 'acuse_devolucion')
+        .onSnapshot((snap) => {
+          const corte = Date.now() - 4 * 60 * 60 * 1000;
+          const docs = snap.docs
+            .map(d => ({ id: d.id, data: d.data() }))
+            .filter(d => {
+              const t = d.data.creado_at?.toDate ? d.data.creado_at.toDate().getTime() : 0;
+              return t === 0 || t >= corte;
+            })
+            .sort((a, b) => {
+              const ta = a.data.creado_at?.toDate ? a.data.creado_at.toDate().getTime() : 0;
+              const tb = b.data.creado_at?.toDate ? b.data.creado_at.toDate().getTime() : 0;
+              return ta - tb;
+            });
+
+          if (!docs.length) {
+            // Si estaba en pantalla y la cancelaron desde la PC, vuelve a la
+            // espera; la vista "listo" se respeta (su propio timeout la saca).
+            if (_sol && !_sol.consumida) aIdle();
+            else if (!_sol) ver('vIdle');
+            return;
+          }
+          const primera = docs[0];
+          // No pisar la firma EN CURSO con otra solicitud que llegue detrás:
+          // solo se repinta si es una solicitud distinta a la mostrada y no
+          // hay trazo empezado.
+          if (_sol && !_sol.consumida && _sol.id === primera.id) return;
+          if (_sol && !_sol.consumida && _pad && !_pad.isEmpty()) return;
+          pintarSolicitud(primera.id, primera.data);
+        }, (err) => {
+          console.error('[tablet] snapshot', err);
+          document.getElementById('conEstado').textContent = 'Sin conexión — reintentando…';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('fLimpiar').addEventListener('click', () => _pad?.clear());
+      document.getElementById('fConfirmar').addEventListener('click', confirmar);
+      // Autenticación estándar del sistema: sin sesión redirige al login (con
+      // next de vuelta a esta página).
+      const arrancar = () => window.verificarAccesoYAplicarVisibilidad(() => {
+        const u = firebase.auth().currentUser;
+        document.getElementById('conEstado').innerHTML =
+          `<span class="pulse"></span>${esc(u?.email || 'conectado')}`;
+        pedirWakeLock();
+        escuchar();
+        ver('vIdle');
+      });
+      // firebase-init va en defer: puede no haber corrido aún cuando dispara
+      // DOMContentLoaded en frío.
+      if (window.verificarAccesoYAplicarVisibilidad) arrancar();
+      else window.addEventListener('load', arrancar);
+    });
+  })();
+  </script>
+</body>
+</html>
