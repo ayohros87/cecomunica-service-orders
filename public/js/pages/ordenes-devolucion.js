@@ -675,7 +675,7 @@
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
           <span style="font-weight:700;font-size:13px;">Acuse de recibido — firma del cliente</span>
           <span style="font-family:var(--font-mono,monospace);font-size:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:1px 8px;">${esc(numeroSiguiente)}</span>
-          ${!_solTabletId ? `<button type="button" class="btn btn-sm" id="acuseTabletBtn" style="margin-left:auto;"
+          ${(!_solTabletId && _tabletMostradorDisponible()) ? `<button type="button" class="btn btn-sm btn-firma-tablet" id="acuseTabletBtn" style="margin-left:auto;"
               title="La solicitud aparece sola en la tablet del mostrador; cuando el cliente confirme allá, el acuse se guarda aquí automáticamente.">
               <i data-lucide="tablet"></i> Firmar en la tablet</button>` : ''}
         </div>
@@ -1494,6 +1494,16 @@
     return String((_acuseEmailDraft != null ? _acuseEmailDraft : _emailCliente) || '').trim().toLowerCase();
   }
 
+  // La tablet de firmas vive EN EL MOSTRADOR: en un teléfono o pantalla
+  // táctil (vendedor en la calle) el botón no se pinta — parecería el acceso
+  // para firmar en el propio dispositivo, y ahí el canvas del modal ya
+  // cumple. Mismo corte que .btn-firma-tablet en ordenes-index.css.
+  function _tabletMostradorDisponible() {
+    try {
+      return !window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)').matches;
+    } catch (e) { return true; }
+  }
+
   async function _persistirAcuse({ nombre, firmaUrl, sin, motivo, via, solicitudId, laxEmail }) {
     const dev = _orden.devolucion;
     const pendientes = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
@@ -1602,6 +1612,10 @@
     const dev = _orden.devolucion || {};
     const sinAcuse = (dev.esperados || []).filter(e => e.resolucion === 'recibido' && !e.acuse_id);
     if (!sinAcuse.length || _solTabletId) return;
+    if (!_tabletMostradorDisponible()) {
+      Toast.show('La firma en tablet es de la tablet del mostrador de recepción — en este dispositivo el cliente firma en el recuadro de aquí mismo.', 'warn');
+      return;
+    }
     const user = firebase.auth().currentUser;
     try {
       const ref = await firebase.firestore().collection('firmas_tablet').add({

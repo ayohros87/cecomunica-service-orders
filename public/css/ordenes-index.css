@@ -3816,3 +3816,15 @@ tr.activo:hover { background: #f0f9ff !important; }
   border-color: #059669 !important;
   box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.18);
 }
+
+/* ── Firma en tablet: SOLO escritorio (2026-09-01) ──────────────────────
+   La tablet de firmas vive EN EL MOSTRADOR de recepción. En un teléfono o
+   pantalla táctil (vendedor en la calle) el botón confunde: parecería el
+   acceso para firmar en el propio dispositivo — ahí el recuadro de firma
+   del modal ya cumple. Mismo corte móvil del resto del CSS (768px) más
+   dispositivos solo-touch (teléfono en horizontal supera los 768px).
+   Los módulos JS repiten este corte (_tabletMostradorDisponible) como
+   segundo candado. */
+@media (max-width: 768px), ((hover: none) and (pointer: coarse)) {
+  .btn-firma-tablet { display: none !important; }
+}

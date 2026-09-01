@@ -886,6 +886,16 @@ window.copiarSeriales = function (ordenId) {
   let _unsubTablet = null;
   let _firmaTablet = null;  // {url, nombre} cuando la tablet ya firmó
 
+  // La tablet de firmas vive EN EL MOSTRADOR: en un teléfono o pantalla
+  // táctil (vendedor en la calle) la opción se oculta — parecería el acceso
+  // para firmar en el propio dispositivo, y ahí el canvas del modal ya
+  // cumple. Mismo corte que .btn-firma-tablet en ordenes-index.css.
+  function _tabletMostradorDisponible() {
+    try {
+      return !window.matchMedia('(max-width: 768px), (hover: none) and (pointer: coarse)').matches;
+    } catch (e) { return true; }
+  }
+
   function _tabletUI() {
     const esperando = !!_solTablet && !_firmaTablet;
     document.getElementById('entregaCanvasWrap')?.classList.toggle('hidden', esperando || !!_firmaTablet);
@@ -916,6 +926,10 @@ window.copiarSeriales = function (ordenId) {
 
   window._entregaFirmarEnTablet = async function () {
     if (!_ordenId || _solTablet || _firmaTablet) return;
+    if (!_tabletMostradorDisponible()) {
+      Toast.show('La firma en tablet es de la tablet del mostrador de recepción — en este dispositivo el cliente firma en el recuadro de aquí mismo.', 'warn');
+      return;
+    }
     const orden = APP.state.orders.find(o => o.ordenId === _ordenId) || {};
     const esRecepcion = _modo === 'recepcion';
     const ACC = [['bateria', 'Batería'], ['antena', 'Antena'], ['clip', 'Clip'],
