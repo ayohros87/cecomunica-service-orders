@@ -41,10 +41,25 @@ const SenalesService = {
   // agosto: ~3M lecturas/mes y el grueso del egreso venían de estos scans).
   _COUNT_TOPE: 50,
 
-  async _count(queryRef, docFilter = null) {
-    // Si algún día el SDK trae el agregado (migración a modular), se usa —
-    // OJO: el agregado no sabe aplicar docFilter; si para entonces el filtro
-    // importa, hay que quedarse en el scan o modelar el campo en la query.
+  async _count(queryRef, docFilter = null, spec = null) {
+    // Agregados server-side (2026-09-02): el compat no trae count(), así que
+    // js/firebase-aggregates.js carga el SDK modular SOLO para contar y
+    // publica window.FbAgg. Con spec, el conteo cuesta 1-2 lecturas y unos
+    // bytes en vez de bajar ~50 docs de 8KB. `restarEliminadas` cubre el
+    // docFilter _viva sin backfill: total − (mismos filtros + eliminado==true)
+    // — los docs viejos sin el campo `eliminado` quedan bien contados.
+    // Cualquier fallo (módulo bloqueado, sin sesión, error) cae al scan.
+    if (spec && window.FbAgg && window.FbAgg.disponible) {
+      try {
+        let n = await window.FbAgg.count(spec.col, spec.wheres);
+        if (spec.restarEliminadas && n > 0) {
+          n -= await window.FbAgg.count(spec.col, [...spec.wheres, ['eliminado', '==', true]]);
+        }
+        return Math.max(0, n);
+      } catch (e) {
+        console.warn('[senales] agregado falló, cayendo al scan:', e?.code || e);
+      }
+    }
     if (typeof queryRef.count === 'function' && !docFilter) {
       const snap = await queryRef.count().get();
       return snap.data().count;
@@ -64,7 +79,8 @@ const SenalesService = {
     const db = firebase.firestore();
     return this._count(
       db.collection('ordenes_de_servicio').where('estado_reparacion', '==', estado),
-      this._viva
+      this._viva,
+      { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', estado]], restarEliminadas: true }
     );
   },
 
@@ -102,7 +118,10 @@ const SenalesService = {
       db.collection('ordenes_de_servicio')
         .where('tecnico_uid', '==', uid)
         .where('estado_reparacion', '==', estado),
-      this._viva
+      this._viva,
+      { col: 'ordenes_de_servicio',
+        wheres: [['tecnico_uid', '==', uid], ['estado_reparacion', '==', estado]],
+        restarEliminadas: true }
     );
   },
 
@@ -116,14 +135,18 @@ const SenalesService = {
     return this._count(
       db.collection('cotizaciones')
         .where('estado', '==', 'borrador')
-        .where('requiere_aprobacion', '==', true)
+        .where('requiere_aprobacion', '==', true),
+      null,
+      { col: 'cotizaciones', wheres: [['estado', '==', 'borrador'], ['requiere_aprobacion', '==', true]] }
     );
   },
 
   countCotizacionesPorEstado(estado) {
     const db = firebase.firestore();
     return this._count(
-      db.collection('cotizaciones').where('estado', '==', estado)
+      db.collection('cotizaciones').where('estado', '==', estado),
+      null,
+      { col: 'cotizaciones', wheres: [['estado', '==', estado]] }
     );
   },
 
@@ -132,14 +155,18 @@ const SenalesService = {
     return this._count(
       db.collection('cotizaciones')
         .where('creado_por_uid', '==', uid)
-        .where('estado', 'in', ['borrador', 'enviada'])
+        .where('estado', 'in', ['borrador', 'enviada']),
+      null,
+      { col: 'cotizaciones', wheres: [['creado_por_uid', '==', uid], ['estado', 'in', ['borrador', 'enviada']]] }
     );
   },
 
   countContratosPorEstado(estado) {
     const db = firebase.firestore();
     return this._count(
-      db.collection('contratos').where('estado', '==', estado)
+      db.collection('contratos').where('estado', '==', estado),
+      null,
+      { col: 'contratos', wheres: [['estado', '==', estado]] }
     );
   },
 
@@ -153,14 +180,18 @@ const SenalesService = {
     return this._count(
       db.collection('contratos')
         .where('seriales_estado', '==', 'pendiente')
-        .where('estado', 'in', ['aprobado', 'activo'])
+        .where('estado', 'in', ['aprobado', 'activo']),
+      null,
+      { col: 'contratos', wheres: [['seriales_estado', '==', 'pendiente'], ['estado', 'in', ['aprobado', 'activo']]] }
     );
   },
 
   countPiezasSinStock() {
     const db = firebase.firestore();
     return this._count(
-      db.collection('inventario_piezas').where('cantidad', '<=', 0)
+      db.collection('inventario_piezas').where('cantidad', '<=', 0),
+      null,
+      { col: 'inventario_piezas', wheres: [['cantidad', '<=', 0]] }
     );
   },
 
@@ -168,14 +199,18 @@ const SenalesService = {
   countEquiposPoolPorEstado(estado) {
     const db = firebase.firestore();
     return this._count(
-      db.collection('equipos_pool').where('estado', '==', estado)
+      db.collection('equipos_pool').where('estado', '==', estado),
+      null,
+      { col: 'equipos_pool', wheres: [['estado', '==', estado]] }
     );
   },
 
   countEquiposPoolSinVerificar() {
     const db = firebase.firestore();
     return this._count(
-      db.collection('equipos_pool').where('verificado', '==', false)
+      db.collection('equipos_pool').where('verificado', '==', false),
+      null,
+      { col: 'equipos_pool', wheres: [['verificado', '==', false]] }
     );
   },
 
