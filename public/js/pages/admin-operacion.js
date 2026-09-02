@@ -140,7 +140,17 @@
 
   function computeAtencion(d) {
     const now = new Date();
-    const ESTADOS_TERMINAL = new Set(['ENTREGADA', 'COMPLETADA']);
+    // Estados canónicos de APP.ESTADOS (2026-09-02): el Set traía 'ENTREGADA'
+    // y 'COMPLETADA', strings que NO existen en el sistema — el guard de
+    // terminal no filtraba nada y hasta las órdenes cerradas salían como
+    // "sin asignar".
+    const ESTADOS_TERMINAL = new Set([
+      'ENTREGADO AL CLIENTE', 'COMPLETADO (EN OFICINA)',
+      'CERRADA (VISITA)', 'CERRADA (DEVOLUCION)', 'CERRADA (ENTRADA)',
+    ]);
+    // La DEVOLUCION nace "POR ASIGNAR" pero nunca se asigna (vida binaria:
+    // abierta → cerrada) — fuera de las alertas de asignación/estancamiento.
+    const fueraDeCola = (o) => (o.tipo_de_servicio || '').toUpperCase() === 'DEVOLUCION';
 
     // ALTA — Órdenes sin asignar entre [N horas, M días]. Las > M días son
     // legacy noise (probablemente nunca se trabajaron, asignarlas hoy contamina
@@ -151,6 +161,7 @@
     const sinAsignar = d.ordenes.filter(o => {
       const est = (o.estado_reparacion || '').toUpperCase();
       if (ESTADOS_TERMINAL.has(est)) return false;
+      if (fueraDeCola(o)) return false;
       const tieneTec = !!(o.tecnico_asignado || o.tecnico_uid);
       if (tieneTec) return false;
       const age = AdminMetrics.ageInHours(o.fecha_entrada || o.fecha_creacion, now);
@@ -175,6 +186,7 @@
     const ordenesEstancadas = d.ordenes.filter(o => {
       const est = (o.estado_reparacion || '').toUpperCase();
       if (ESTADOS_TERMINAL.has(est)) return false;
+      if (fueraDeCola(o)) return false;
       const updated = o.updatedAt || o.fecha_actualizacion || o.fecha_modificacion || o.fecha_entrada;
       const age = AdminMetrics.ageInDays(updated, now);
       return age != null && age >= stale && age <= staleMax;

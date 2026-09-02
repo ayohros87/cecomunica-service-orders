@@ -122,6 +122,17 @@ test("esListaParaEntregar: front == functions (umbral default y explícito)", ()
   });
 });
 
+test("esColaDeTaller: front == functions sobre el corpus (y DEVOLUCION queda fuera)", () => {
+  ORDENES.forEach((o, i) => {
+    assert.equal(front.esColaDeTaller(o), backend.esColaDeTaller(o), `doc #${i}`);
+  });
+  assert.equal(backend.esColaDeTaller({ tipo_de_servicio: "DEVOLUCION" }), false);
+  assert.equal(backend.esColaDeTaller({ tipo_de_servicio: "REPARACION" }), true);
+  assert.equal(backend.esColaDeTaller({}), true, "sin tipo cuenta como taller");
+  // Serializado: el front vive en un sandbox vm con otros prototipos de Array.
+  assert.deepEqual(JSON.parse(JSON.stringify(front.TIPOS_FUERA_DE_COLA)), backend.TIPOS_FUERA_DE_COLA);
+});
+
 test("esOrdenEstancada: front == functions (ventana default y explícita)", () => {
   for (const opts of [undefined, { staleDias: 10, staleMax: 30 }, { staleDias: 3, staleMax: 90 }]) {
     ORDENES.forEach((o, i) => {

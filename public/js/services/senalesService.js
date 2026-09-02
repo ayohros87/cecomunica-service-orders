@@ -52,8 +52,18 @@ const SenalesService = {
     if (spec && window.FbAgg && window.FbAgg.disponible) {
       try {
         let n = await window.FbAgg.count(spec.col, spec.wheres);
-        if (spec.restarEliminadas && n > 0) {
+        if (spec.restarEliminadas) {
           n -= await window.FbAgg.count(spec.col, [...spec.wheres, ['eliminado', '==', true]]);
+        }
+        // Exclusión de tipos por inclusión-exclusión: se resta el tipo entero
+        // y, si también se restaron eliminadas, se devuelve el traslape
+        // (tipo + eliminada) que se restó dos veces.
+        for (const tipo of (spec.excluirTipos || [])) {
+          n -= await window.FbAgg.count(spec.col, [...spec.wheres, ['tipo_de_servicio', '==', tipo]]);
+          if (spec.restarEliminadas) {
+            n += await window.FbAgg.count(spec.col,
+              [...spec.wheres, ['tipo_de_servicio', '==', tipo], ['eliminado', '==', true]]);
+          }
         }
         return Math.max(0, n);
       } catch (e) {
@@ -75,12 +85,21 @@ const SenalesService = {
   // Una orden borrada (lógicamente) no es cola de nadie.
   _viva(o) { return o.eliminado !== true; },
 
-  countOrdenesPorEstado(estado) {
+  // soloTaller (2026-09-02): los KPIs de asignación excluyen los tipos con
+  // circuito propio (DEVOLUCION nace "POR ASIGNAR" pero nunca se asigna —
+  // eran 27 de las 48 vivas). El chip de la bandeja usa el default: ahí el
+  // conteo debe cuadrar con las filas que el filtro muestra.
+  countOrdenesPorEstado(estado, { soloTaller = false } = {}) {
     const db = firebase.firestore();
+    const docFilter = soloTaller
+      ? (o) => this._viva(o) && PendientesDomain.esColaDeTaller(o)
+      : this._viva;
     return this._count(
       db.collection('ordenes_de_servicio').where('estado_reparacion', '==', estado),
-      this._viva,
-      { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', estado]], restarEliminadas: true }
+      docFilter,
+      { col: 'ordenes_de_servicio', wheres: [['estado_reparacion', '==', estado]],
+        restarEliminadas: true,
+        ...(soloTaller ? { excluirTipos: PendientesDomain.TIPOS_FUERA_DE_COLA } : {}) }
     );
   },
 

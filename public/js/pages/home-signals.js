@@ -36,7 +36,9 @@ window.HomeSignals = (() => {
       modulo: 'ordenes', icon: 'alert-circle', alert: true, moreIsBad: true,
       label: 'Órdenes por asignar', sub: 'requieren asignar técnico',
       href: 'ordenes/index.html?estado=POR%20ASIGNAR',
-      count: () => SenalesService.countOrdenesPorEstado(EST.POR_ASIGNAR),
+      // soloTaller: la DEVOLUCION vive en "POR ASIGNAR" pero jamás se asigna
+      // (2026-09-02) — sin esto la señal contaba trabajo que no existe.
+      count: () => SenalesService.countOrdenesPorEstado(EST.POR_ASIGNAR, { soloTaller: true }),
     },
     S2: {
       modulo: 'ordenes', icon: 'inbox',

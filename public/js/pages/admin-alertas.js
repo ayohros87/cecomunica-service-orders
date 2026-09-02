@@ -153,7 +153,10 @@
         PocService.getPocDevices(),
       ]);
       const ESTADOS_ABIERTOS = new Set(['POR ASIGNAR','EN PROCESO','DIAGNÓSTICO','EN ESPERA','LISTA','PROGRAMACIÓN','ESTIMACIÓN','RECEPCIONADA']);
-      const ordenes_abiertas = (ordSnap || []).filter(o => o.eliminado !== true && ESTADOS_ABIERTOS.has((o.estado_reparacion || '').toUpperCase())).length;
+      // Sin DEVOLUCION (2026-09-02) — mismo criterio que admin-index.
+      const ordenes_abiertas = (ordSnap || []).filter(o => o.eliminado !== true
+        && ESTADOS_ABIERTOS.has((o.estado_reparacion || '').toUpperCase())
+        && (o.tipo_de_servicio || '').toUpperCase() !== 'DEVOLUCION').length;
       const contratos_pendientes = (ctRes?.docs || []).filter(c => c.estado === 'pendiente_aprobacion').length;
       const ahora = new Date();
       const cotizaciones_vencen = (cotRes?.docs || []).filter(c => {

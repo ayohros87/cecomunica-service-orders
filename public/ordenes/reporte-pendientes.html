@@ -120,7 +120,10 @@
       tablaDiv.innerHTML = "";
 
       try {
-        const ordenes = await OrdenesService.filterByStatuses(["POR ASIGNAR", "ASIGNADO"]);
+        // Sin DEVOLUCION (2026-09-02): nace "POR ASIGNAR" pero no es una orden
+        // de taller pendiente — su circuito es la recuperación de equipos.
+        const ordenes = (await OrdenesService.filterByStatuses(["POR ASIGNAR", "ASIGNADO"]))
+          .filter(o => (o.tipo_de_servicio || "").toUpperCase() !== "DEVOLUCION");
 
         if (!ordenes.length) {
           mensajeDiv.textContent = "No hay órdenes pendientes.";

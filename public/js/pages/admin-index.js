@@ -85,7 +85,11 @@
     try {
       const all = await OrdenesService.listAll();
       const live = all.filter(o => o.eliminado !== true);
-      const abiertas = AdminMetrics.countWhere(live, o => ESTADOS_ABIERTOS.has((o.estado_reparacion || '').toUpperCase()));
+      // Sin DEVOLUCION (2026-09-02): vive en "POR ASIGNAR" pero es un circuito
+      // aparte (recuperación de equipos), no una orden de taller abierta.
+      const abiertas = AdminMetrics.countWhere(live, o =>
+        ESTADOS_ABIERTOS.has((o.estado_reparacion || '').toUpperCase())
+        && (o.tipo_de_servicio || '').toUpperCase() !== 'DEVOLUCION');
       const completadas = AdminMetrics.countWhere(live, o => (o.estado_reparacion || '').toUpperCase() === 'COMPLETADA');
       const entregadas = AdminMetrics.countWhere(live, o => (o.estado_reparacion || '').toUpperCase() === 'ENTREGADA');
       state.metrics.ordenes_abiertas = abiertas;

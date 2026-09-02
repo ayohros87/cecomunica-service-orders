@@ -100,6 +100,18 @@ window.PendientesDomain = (() => {
     return edad != null && edad >= dias;
   }
 
+  // ── Cola de taller ──────────────────────────────────────────────────────
+  // Tipos con circuito PROPIO fuera de la cola de taller: la DEVOLUCIÓN nace
+  // "POR ASIGNAR" pero nunca se asigna (su vida es binaria: abierta → CERRADA
+  // (DEVOLUCION)), tiene SLA propio (cron §C) y otra audiencia. Los KPIs de
+  // asignación/apertura del taller deben excluirla o cuentan trabajo que no
+  // existe (2026-09-02: 27 de las 48 "POR ASIGNAR" vivas eran DEVOLUCIÓN).
+  const TIPOS_FUERA_DE_COLA = ["DEVOLUCION"];
+  function esColaDeTaller(orden) {
+    const tipo = String((orden && orden.tipo_de_servicio) || "").trim().toUpperCase();
+    return !TIPOS_FUERA_DE_COLA.includes(tipo);
+  }
+
   // ── Estancada ───────────────────────────────────────────────────────────
   // Abierta y sin movimiento. La ventana [staleDias, staleMax] es deliberada:
   // más vieja que el tope es ruido legacy que enmascara lo accionable (mismo
@@ -109,7 +121,7 @@ window.PendientesDomain = (() => {
     const staleDias = (opts && typeof opts.staleDias === "number") ? opts.staleDias : DEFAULTS.stale_dias;
     const staleMax = (opts && typeof opts.staleMax === "number") ? opts.staleMax : DEFAULTS.stale_max_dias;
     if (!orden || orden.eliminado === true) return false;
-    if ((orden.tipo_de_servicio || "") === "DEVOLUCION") return false;
+    if (!esColaDeTaller(orden)) return false;
     const base = orden.fecha_modificacion || orden.fecha_actualizacion
       || orden.updatedAt || orden.fecha_entrada || orden.fecha_creacion;
     const edad = edadDias(base, now);
@@ -142,8 +154,8 @@ window.PendientesDomain = (() => {
   }
 
   return {
-    DEFAULTS, ESTADOS_ABIERTOS, COMPLETADO,
-    aDate, edadDias,
+    DEFAULTS, ESTADOS_ABIERTOS, COMPLETADO, TIPOS_FUERA_DE_COLA,
+    aDate, edadDias, esColaDeTaller,
     qcCaducado, qcAprobado, qcPendiente, esQcColaOperativa,
     esListaParaEntregar, esOrdenEstancada, esCuarentenaAtascada,
     estaPospuesto,
