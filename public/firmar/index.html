@@ -292,7 +292,8 @@
         return;
       }
       const durNum = String(r.duracion || '').match(/\d+/)?.[0];
-      const durHtml = `<b>${durNum ? `${durNum} meses` : this.esc(r.duracion || '____ meses')}</b>`;
+      const durUni = /d[ií]a/i.test(String(r.duracion || '')) ? 'días' : 'meses';
+      const durHtml = `<b>${durNum ? `${durNum} ${durUni}` : this.esc(r.duracion || '____ meses')}</b>`;
       const filas = [...(r.equipos || []).map(l =>
         `<tr><td>${Number(l.cantidad || 0)}</td><td>${l.modalidad === 'propio' ? `Servicio ${this.esc(l.modelo)} — equipo del cliente` : `Alquiler ${this.esc(l.modelo)}`}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
       ...(r.cargos || []).map(x =>

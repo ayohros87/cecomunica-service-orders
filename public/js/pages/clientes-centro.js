@@ -3160,9 +3160,19 @@ window.Centro = {
               ${(esRenov ? ['SERV'] : ['SERV', 'TEMP'])
                 .map(k => `<option value="${k}" ${k === 'SERV' ? 'selected' : ''}>${this.TIPOS_CONTRATO[k]}</option>`).join('')}
             </select></div>
-          <div class="form-field" style="margin:0; max-width:150px;">
-            <label class="form-label" for="wcMeses">Duración (meses)</label>
-            <input class="form-input" type="number" id="wcMeses" min="1" value="18"></div>
+          <div class="form-field" style="margin:0; max-width:210px;">
+            <label class="form-label" for="wcMeses">Duración</label>
+            <div style="display:flex; gap:6px;">
+              <input class="form-input" type="number" id="wcMeses" min="1" value="18" style="width:90px;">
+              <!-- Días solo para TEMP (eventos cortos, caso FANLYC 2026-09-02:
+                   "del 3 al 6 de septiembre" forzado a meses). _wcSyncTipo lo
+                   muestra/oculta. -->
+              <select class="form-select" id="wcDurUnidad" style="width:100px; display:none;">
+                <option value="meses" selected>meses</option>
+                <option value="dias">días</option>
+              </select>
+              <span id="wcDurMesesLbl" style="align-self:center; font-size:13px; color:var(--fg-3);">meses</span>
+            </div></div>
           <p style="margin:0 0 7px; font-size:12.5px; color:var(--fg-3);">
             ${legacyAuto ? 'Regulariza la cuenta: los equipos en campo se amarran a este contrato al activarse.'
               : esRenov ? 'Renovación de la cuenta — los orígenes marcados pasan al histórico al activarse.'
@@ -3254,6 +3264,21 @@ window.Centro = {
       acc.disabled = false;
       if (acc.value === 'No Aplica') acc.value = 'Nuevo';
     }
+    // TEMP (evento) puede durar DÍAS: aparece el selector de unidad, con
+    // días por defecto y un valor corto razonable; al volver a SERV, meses.
+    const uni = document.getElementById('wcDurUnidad');
+    const lbl = document.getElementById('wcDurMesesLbl');
+    const num = document.getElementById('wcMeses');
+    if (uni && lbl && num) {
+      if (tipo === 'TEMP') {
+        uni.style.display = ''; lbl.style.display = 'none';
+        if (uni.value === 'meses' && Number(num.value) >= 12) { uni.value = 'dias'; num.value = 7; }
+      } else {
+        uni.style.display = 'none'; lbl.style.display = '';
+        uni.value = 'meses';
+        if (Number(num.value) < 12 && Number(num.value) <= 31) num.value = 18;
+      }
+    }
     const sel = { accion: acc.value, codigo_tipo: tipo };
     document.getElementById('wcOrigenBloque')?.classList.toggle('hidden', !OrigenContrato.aplica(sel));
     document.getElementById('wcRenovBloque')?.classList.toggle('hidden', acc.value !== 'Renovación');
@@ -3306,9 +3331,11 @@ window.Centro = {
     const tipo = document.getElementById('wcTipo')?.value || '';
     const tipoNombre = this.TIPOS_CONTRATO[tipo] || tipo;
     const accion = document.getElementById('wcAccion')?.value || 'Nuevo';
-    const meses = parseInt(document.getElementById('wcMeses')?.value || '0', 10);
+    const durN = parseInt(document.getElementById('wcMeses')?.value || '0', 10);
+    const durUnidad = (tipo === 'TEMP' && document.getElementById('wcDurUnidad')?.value === 'dias') ? 'dias' : 'meses';
+    const meses = durUnidad === 'meses' ? durN : 0;
     if (!tipo) { Toast.show('Elige el tipo de contrato', 'warn'); return; }
-    if (!(meses > 0)) { Toast.show('Indica la duración en meses', 'warn'); return; }
+    if (!(durN > 0)) { Toast.show(`Indica la duración en ${durUnidad === 'dias' ? 'días' : 'meses'}`, 'warn'); return; }
 
     const lineas = this._lineasModelo('wcm');
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
@@ -3378,8 +3405,9 @@ window.Centro = {
         origenSel,
         transicion_plan: plan,
         reemplaza_seriales: null,
-        duracion: `${meses} meses`,
+        duracion: durUnidad === 'dias' ? `${durN} día${durN === 1 ? '' : 's'}` : `${durN} meses`,
         duracion_meses: meses,
+        ...(durUnidad === 'dias' ? { duracion_dias: durN } : {}),
         observaciones: document.getElementById('wcObs')?.value || '',
         equipos: lineas,
         cargos: [...document.querySelectorAll('#wcCargos .wa-cargo')].length ? this._aumCargos() : [],

@@ -112,8 +112,9 @@
     }
     const frozen = sFirma?.documento?.clausulas_html ? sFirma.documento : null;
     const durNum = Number(String(c.duracion || '').match(/\d+/)?.[0] || 0);
+    const durUnidad = /d[ií]a/i.test(String(c.duracion || '')) ? (durNum === 1 ? 'día' : 'días') : 'meses';
     const durHtml = `<b>${durNum
-      ? `${NUM_LETRAS[durNum] || durNum} (${durNum}) meses` : esc(c.duracion || '____ meses')}</b>`;
+      ? `${NUM_LETRAS[durNum] || durNum} (${durNum}) ${durUnidad}` : esc(c.duracion || '____ meses')}</b>`;
     $('txtInventario').innerHTML = frozen?.inventario_html || ContratoV2Texto.inventarioHtml;
     $('txtVigencia').innerHTML = frozen?.vigencia_html || ContratoV2Texto.vigenciaHtml(durHtml);
     $('olClausulas').innerHTML = frozen?.clausulas_html || ContratoV2Texto.clausulasHtml;

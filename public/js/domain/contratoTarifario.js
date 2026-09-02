@@ -125,6 +125,8 @@ window.ContratoTarifario = {
     // El string " meses" vacío de la duración "Otro" dejó 53 contratos sin
     // vencimiento calculable; el número no puede quedar vacío.
     if (Number(d.duracion_meses) > 0) doc.duracion_meses = Number(d.duracion_meses);
+    // TEMP por DÍAS (eventos cortos, 2026-09-02): la duración también en días.
+    if (Number(d.duracion_dias) > 0) doc.duracion_dias = Number(d.duracion_dias);
     return doc;
   },
 };
