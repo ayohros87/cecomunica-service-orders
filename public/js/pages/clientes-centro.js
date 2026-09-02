@@ -378,6 +378,15 @@ window.Centro = {
   // 'aprobado' también opera (la mayoría del histórico nunca pasa a 'activo').
   _esVigente(c) { return ['activo', 'aprobado'].includes(c?.estado); },
 
+  // Duración legible: duracion_dias MANDA sobre el texto (2026-09-02, caso
+  // FANLYC: el formulario viejo pisó "4 días" con "1 meses" — su select no
+  // conoce los días; el numérico sobrevive y las vistas no se dejan mentir).
+  _durTxt(c) {
+    const d = Number(c?.duracion_dias || 0);
+    if (d > 0) return `${d} día${d === 1 ? '' : 's'}`;
+    return c?.duracion || '';
+  },
+
   _codigoTipo(c) {
     if (c?.codigo_tipo) return c.codigo_tipo;
     const m = { 'Servicio': 'SERV', 'Alquiler': 'ALQ', 'Propio': 'PROP', 'Reemplazo': 'REEMP', 'Demo': 'DEMO', 'Temporal': 'TEMP' };
@@ -650,7 +659,7 @@ window.Centro = {
       <div style="margin:0 0 10px;">${this._vidaHtml(c)}</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 24px; margin-bottom:10px;">
         ${dato('Acción', this.esc(c.accion || ''))}
-        ${dato('Duración', this.esc(c.duracion || ''))}
+        ${dato('Duración', this.esc(this._durTxt(c)))}
         ${dato('Creado', this._fmtFecha(c.fecha_creacion))}
         ${dato('Aprobado', c.fecha_aprobacion ? this._fmtFecha(c.fecha_aprobacion) : '')}
         ${dato('Origen', (c.contrato_origen_refs || []).map(r => `<span class="cg-mono">${this.esc(r)}</span>`).join(', ')
@@ -766,13 +775,13 @@ window.Centro = {
               texto_version: ContratoV2Texto.version,
               inventario_html: ContratoV2Texto.inventarioHtml,
               vigencia_html: ContratoV2Texto.vigenciaHtml(
-                `<b>${this.esc(c.duracion || '____ meses')}</b>`),
+                `<b>${this.esc(this._durTxt(c) || '____ meses')}</b>`),
               clausulas_html: ContratoV2Texto.clausulasHtml,
             } : {}),
           },
           declaracion: `Declaro que he leído el contrato ${c.contrato_id || c.id} COMPLETO en esta página (secciones 1–4 y cláusulas 5–18) y acepto sus términos y condiciones en nombre de ${c.cliente_nombre || this.cliente.nombre || 'la empresa'}.`,
           resumen: {
-            tipo_contrato: c.tipo_contrato || '', duracion: c.duracion || '',
+            tipo_contrato: c.tipo_contrato || '', duracion: this._durTxt(c),
             equipos: (c.equipos || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0), ...(l.modalidad ? { modalidad: l.modalidad } : {}) })),
             cargos: (c.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente })),
             total_mensual: Number(t.totalMensual || c.total_mensual || 0),
@@ -1476,7 +1485,7 @@ window.Centro = {
             <p style="font-size:13px; margin:0 0 8px;">${esRenov
               ? `Renueva y <b>consolida la cuenta</b>: sus orígenes quedan marcados como renovados al activarse.`
               : `Contrato nuevo pendiente del ciclo aprobación → firma → activo.`}
-              <b>Duración:</b> ${this.esc(c.duracion || '—')}</p>
+              <b>Duración:</b> ${this.esc(this._durTxt(c) || '—')}</p>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">${acciones}</div>
             ${this._osTramiteHtml(c)}
           </div>

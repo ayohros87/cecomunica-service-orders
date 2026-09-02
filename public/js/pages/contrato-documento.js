@@ -111,8 +111,11 @@
       } catch (e) { console.warn('solicitud de firma no legible', e); }
     }
     const frozen = sFirma?.documento?.clausulas_html ? sFirma.documento : null;
-    const durNum = Number(String(c.duracion || '').match(/\d+/)?.[0] || 0);
-    const durUnidad = /d[ií]a/i.test(String(c.duracion || '')) ? (durNum === 1 ? 'día' : 'días') : 'meses';
+    // duracion_dias MANDA sobre el texto (el formulario viejo puede pisarlo).
+    const durDias = Number(c.duracion_dias || 0);
+    const durNum = durDias > 0 ? durDias : Number(String(c.duracion || '').match(/\d+/)?.[0] || 0);
+    const durUnidad = (durDias > 0 || /d[ií]a/i.test(String(c.duracion || '')))
+      ? (durNum === 1 ? 'día' : 'días') : 'meses';
     const durHtml = `<b>${durNum
       ? `${NUM_LETRAS[durNum] || durNum} (${durNum}) ${durUnidad}` : esc(c.duracion || '____ meses')}</b>`;
     $('txtInventario').innerHTML = frozen?.inventario_html || ContratoV2Texto.inventarioHtml;
