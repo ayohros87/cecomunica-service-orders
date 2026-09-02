@@ -111,11 +111,28 @@ async function aterrizarEntrada(ordenId, after, equipos, { reintento = false } =
   return { incidencias, aterrizados };
 }
 
+// Dos listas de incidencias son "la misma" si anotan los mismos hechos, sin
+// importar el orden. El timestamp queda fuera a propósito: es lo único que
+// cambiaría en una reescritura idéntica.
+const claveInc = (i) => [pool.normSerial(i.serial), i.motivo || "", i.estado || "", i.modelo || ""].join("|");
+const mismasIncidencias = (a, b) =>
+  a.length === b.length && a.map(claveInc).sort().join("\n") === b.map(claveInc).sort().join("\n");
+
 // Escribe (o limpia) el rastro de incidencias del cierre en la propia orden.
 // Se limpia solo: cuando ya no queda ninguna, la bandera desaparece y la orden
 // deja de salir en el correo — sin que nadie tenga que "marcar como resuelto".
 async function anotarIncidencias(ordenId, after, incidencias) {
   const teniaAntes = !!after.cierre_entrada_con_incidencias;
+  // Candado anti-bucle (2026-09-02): este trigger escucha la misma colección
+  // que escribe. Si la lista no cambió, reescribirla solo refresca el
+  // serverTimestamp, y ese "cambio" re-dispara el trigger, que reintenta,
+  // vuelve a fallar igual y reescribe — para siempre. Así giró la orden
+  // 2026082605 a ~14 vueltas/segundo del 27-ago al 1-sep (19.5M invocaciones,
+  // $60+ de factura). Sin cambio real, no hay escritura.
+  if (incidencias.length && teniaAntes
+      && mismasIncidencias(incidencias, Array.isArray(after.cierre_entrada_incidencias) ? after.cierre_entrada_incidencias : [])) {
+    return;
+  }
   if (!incidencias.length) {
     if (!teniaAntes) return;
     await db.collection("ordenes_de_servicio").doc(ordenId).set({
