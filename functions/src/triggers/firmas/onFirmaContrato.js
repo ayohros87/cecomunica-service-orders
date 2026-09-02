@@ -111,6 +111,32 @@ async function aplicarAnexo(sid, s, extraFirma = {}) {
   return { g, hash };
 }
 
+// Detalle del anexo firmado, desde el snapshot de la solicitud (2026-09-02:
+// "en todos los emails se vea claro de qué se trata").
+function resumenAnexoHtml(s) {
+  const r = s.resumen || {};
+  let html = "";
+  const filas = [
+    ...(r.equipos || []).map((l) => [String(Number(l.cantidad || 0)),
+      G.escapeHtml(l.modelo || "—") + (l.modalidad === "propio" ? " — equipo del cliente" : ""),
+      `$${Number(l.precio || 0).toFixed(2)}/mes`]),
+    ...(r.cargos || []).map((c) => [String(Number(c.cantidad || 1)),
+      G.escapeHtml(c.concepto || "—") + ((c.seriales || []).length ? ` — <code>${c.seriales.map(G.escapeHtml).join(", ")}</code>` : ""),
+      `$${Number(c.monto || 0).toFixed(2)}${c.recurrente ? "/mes" : ""}`]),
+  ];
+  if (filas.length) html += G.tablaHtml(["Cant.", "Detalle", "Monto"], filas);
+  if ((s.ajustes_precio || []).length) {
+    html += G.tablaHtml(["Tarifa renegociada", "Antes", "Ahora"], s.ajustes_precio.map((x) => [
+      G.escapeHtml(x.modelo || "—"),
+      `$${Number(x.precio_anterior || 0).toFixed(2)}`,
+      `<b>$${Number(x.precio_nuevo || 0).toFixed(2)}</b>`]));
+  }
+  if (r.total_mensual != null) {
+    html += `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Total mensual del anexo: <b>$${Number(r.total_mensual || 0).toFixed(2)}</b></p>`;
+  }
+  return html;
+}
+
 async function correo(to, cc, subject, cuerpo, ctaUrl, ctaLabel, meta) {
   try {
     await G.encolarCorreo({ to, cc, subject, preheader: subject, bodyContent: cuerpo, ctaUrl, ctaLabel, meta });
@@ -140,7 +166,8 @@ async function correoCopiaCliente(sid, s, esAnexo) {
          El ${G.escapeHtml(etiqueta)} con <b>C COMUNICA, S.A.</b> fue firmado por
          <b>${G.escapeHtml(f.nombre || "—")}</b>. Con el botón puede abrir <b>su copia</b>:
          el documento completo tal como lo firmó, con la constancia de la firma.
-         Le recomendamos conservar este correo.</p>`,
+         Le recomendamos conservar este correo.</p>
+       ${resumenAnexoHtml(s)}`,
       `${APP_BASE_URL}/firmar/?s=${sid}`, esAnexo ? "Ver mi anexo firmado" : "Ver mi contrato firmado",
       { firma_solicitud: sid, paso: "copia_cliente" });
   } catch (e) { logger.warn("[onFirmaContrato] copia al cliente falló", { sid, message: e.message }); }
@@ -180,7 +207,12 @@ module.exports = onDocumentUpdated(
                  El anexo <b>${G.escapeHtml(after.gestion_id || "")}</b> al contrato <b>${G.escapeHtml(after.contrato_id || "")}</b>
                  de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b> fue firmado digitalmente por
                  <b>${G.escapeHtml(f.nombre || "—")}</b> — coincide con el representante registrado.
-                 Las líneas se aplicaron al contrato y Bodega ya tiene la asignación en su bandeja.</p>`,
+                 ${after.es_ajuste
+                   ? "El ajuste de tarifa/servicios se aplicó al contrato — no requiere bodega ni entrega."
+                   : after.es_regularizacion
+                   ? "Los equipos (ya en poder del cliente) quedaron amarrados al contrato — sin bodega ni entrega."
+                   : "Las líneas se aplicaron al contrato y Bodega ya tiene la asignación en su bandeja."}</p>
+               ${resumenAnexoHtml(after)}`,
               urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
             await correoCopiaCliente(sid, after, true);
             logger.info("[onFirmaContrato] anexo firmado", { sid, gestion: after.gestion_id });
@@ -198,7 +230,9 @@ module.exports = onDocumentUpdated(
                  El anexo <b>${G.escapeHtml(after.gestion_id || "")}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>
                  fue firmado, pero el firmante <b>no coincide</b> con el representante registrado. Se aplica cuando
                  ventas acepte al firmante (botón en el expediente de la gestión).</p>
-               ${tabla}`,
+               ${tabla}
+               <p style="margin:12px 0 4px;font:14px Arial,sans-serif;"><b>Qué contiene el anexo:</b></p>
+               ${resumenAnexoHtml(after)}`,
               urlFicha, "Revisar y aceptar firmante", { firma_solicitud: sid, resultado: "validacion" });
             logger.info("[onFirmaContrato] anexo en validación", { sid, gestion: after.gestion_id });
           }
@@ -214,7 +248,8 @@ module.exports = onDocumentUpdated(
              <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
                <b>${G.escapeHtml(after.contrato_id || "")}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b> fue firmado
                digitalmente por <b>${G.escapeHtml(f.nombre || "—")}</b> (cédula ${G.escapeHtml(f.cedula || "—")}) — coincide con el
-               representante registrado — y quedó <b>activo</b>. La firma, el rastro y el sello de verificación quedaron en el contrato.</p>`,
+               representante registrado — y quedó <b>activo</b>. La firma, el rastro y el sello de verificación quedaron en el contrato.</p>
+             ${resumenAnexoHtml(after)}`,
             urlFicha, "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "activado" });
           await correoCopiaCliente(sid, after, false);
           logger.info("[onFirmaContrato] firmado y activado", { sid, contrato: after.contrato_id });
@@ -234,7 +269,9 @@ module.exports = onDocumentUpdated(
                fue firmado digitalmente, pero el firmante <b>no coincide</b> con el representante legal registrado.
                La firma quedó registrada con su rastro completo; el contrato se activa cuando ventas acepte al firmante
                (botón en la ficha del cliente, vista del contrato).</p>
-             ${tabla}`,
+             ${tabla}
+             <p style="margin:12px 0 4px;font:14px Arial,sans-serif;"><b>Qué contiene el contrato:</b></p>
+             ${resumenAnexoHtml(after)}`,
             urlFicha, "Revisar y aceptar firmante", { firma_solicitud: sid, resultado: "validacion" });
           logger.info("[onFirmaContrato] firma en validación", { sid, contrato: after.contrato_id });
         }
@@ -272,9 +309,10 @@ module.exports = onDocumentUpdated(
            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
              Ventas aceptó a <b>${G.escapeHtml(after.firma?.nombre || "—")}</b> como firmante
              ${esAnexo
-               ? `del anexo <b>${G.escapeHtml(after.gestion_id || "")}</b> al contrato <b>${G.escapeHtml(after.contrato_id || "")}</b>: las líneas se aplicaron y Bodega ya tiene la asignación.`
+               ? `del anexo <b>${G.escapeHtml(after.gestion_id || "")}</b> al contrato <b>${G.escapeHtml(after.contrato_id || "")}</b>${after.es_ajuste ? " (ajuste de tarifa/servicios — sin bodega)" : after.es_regularizacion ? " (regularización — sin bodega)" : ": las líneas se aplicaron y Bodega ya tiene la asignación"}.`
                : `del contrato <b>${G.escapeHtml(after.contrato_id || "")}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>; el contrato quedó <b>activo</b>.`}
-             ${after.actualizar_ficha ? " La ficha del cliente se actualizó con el nuevo representante." : ""}</p>`,
+             ${after.actualizar_ficha ? " La ficha del cliente se actualizó con el nuevo representante." : ""}</p>
+           ${resumenAnexoHtml(after)}`,
           `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(after.cliente_id || "")}`,
           "Abrir la ficha del cliente", { firma_solicitud: sid, resultado: "aceptado" });
         await correoCopiaCliente(sid, after, esAnexo);

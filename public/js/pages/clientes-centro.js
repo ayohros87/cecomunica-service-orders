@@ -943,7 +943,9 @@ window.Centro = {
           } } : {}),
           resumen: {
             tipo_contrato: a.es_regularizacion ? 'Anexo de regularización' : 'Anexo de aumento',
-            duracion: a.es_regularizacion
+            duracion: a.es_ajuste
+              ? `Rige con el contrato${a.duracion_meses ? ` (${a.duracion_meses} meses)` : ''}`
+              : a.es_regularizacion
               ? `${a.duracion_meses || '?'} meses (desde la firma — equipos ya entregados)`
               : `${a.duracion_meses || '?'} meses (tramo del anexo, desde la entrega)`,
             equipos: (a.lineas || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0), ...(l.modalidad ? { modalidad: l.modalidad } : {}) })),
@@ -967,7 +969,7 @@ window.Centro = {
       this._abrirModal(`
         <h3 style="margin:0 0 6px;">Enviar anexo para firma — <span class="cg-mono">${this.esc(gid)}</span></h3>
         <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3); max-width:66ch;">
-          El cliente abre el enlace en su celular, revisa el anexo (${this.esc(String((a.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ')))})
+          El cliente abre el enlace en su celular, revisa el anexo (${this.esc(this._resumenAnexoTxt(a))})
           y <b>firma con el dedo</b>. Debe firmarlo <b>${this.esc(rep)}</b> (representante legal) — el enlace se puede
           <b>reenviar</b>. Al firmar, las líneas entran al contrato y bodega recibe la asignación, todo solo.</p>
         <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -986,6 +988,15 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo generar el enlace de firma del anexo', 'bad'); }
   },
 
+  // Resumen en texto de lo que trae el anexo (líneas + cargos + tarifas
+  // renegociadas) — para correos y modales: nunca "(vacío)" en un ajuste.
+  _resumenAnexoTxt(a = {}) {
+    return [
+      ...(a.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`),
+      ...(a.cargos || []).map(c => `${c.cantidad} × ${c.concepto} $${Number(c.monto || 0).toFixed(2)}${c.recurrente ? '/mes' : ''}`),
+      ...(a.ajustes_precio || []).map(x => `${x.modelo} $${Number(x.precio_anterior).toFixed(2)}→$${Number(x.precio_nuevo).toFixed(2)}`),
+    ].join(', ') || '—';
+  },
   async _enviarFirmaAnexoCorreo(gid, sid) {
     const email = (document.getElementById('wfEmail')?.value || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { Toast.show('Escribe un correo válido', 'warn'); return; }
@@ -1001,9 +1012,9 @@ window.Centro = {
         bodyContent: `
           <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">Anexo de aumento listo para firma</h2>
           <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-            Estimado cliente: el anexo de aumento al contrato <b>${FMT.esc(a.contrato_id || '')}</b> de
+            Estimado cliente: el anexo al contrato <b>${FMT.esc(a.contrato_id || '')}</b> de
             <b>${FMT.esc(g?.cliente_nombre || '')}</b> está listo
-            (${FMT.esc((a.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', '))}).
+            (${FMT.esc(this._resumenAnexoTxt(a))}).
             Ábralo con el botón, revise el detalle y firme con el dedo desde su celular. Debe firmarlo el
             <b>representante legal</b>; si lo recibe otra persona, puede reenviarle este correo.</p>`,
         ctaUrl: url,
@@ -1680,7 +1691,9 @@ window.Centro = {
           al firmarse se aplica y cierra solo, sin bodega ni entrega.</p>` : ''}
         <p style="font-size:13px; margin:0 0 8px;"><b>Contrato destino:</b>
           <span class="cg-mono">${this.esc(a.contrato_id || '—')}</span> ·
-          <b>Vigencia del tramo:</b> ${this.esc(String(a.duracion_meses || '?'))} meses ${a.es_regularizacion ? 'desde la firma' : 'desde la entrega'}</p>
+          <b>Vigencia:</b> ${a.es_ajuste
+            ? `rige con el contrato${a.duracion_meses ? ` (${this.esc(String(a.duracion_meses))} meses)` : ''}`
+            : `tramo de ${this.esc(String(a.duracion_meses || '?'))} meses ${a.es_regularizacion ? 'desde la firma' : 'desde la entrega'}`}</p>
         <div class="cg-twrap"><table class="cg-tabla"><thead><tr>
           <th>Cant.</th><th>Modelo</th><th>Precio/mes</th></tr></thead><tbody>
           ${(a.lineas || []).map(l => `<tr><td class="num">${Number(l.cantidad || 0)}</td>
@@ -2925,7 +2938,10 @@ window.Centro = {
           cargos,
           itbms: { aplica: itbmsAplica, porcentaje: totales.itbms_porcentaje },
           totales,
-          duracion_meses: null,
+          // El ajuste no crea tramo propio: hereda la vigencia del contrato
+          // destino (2026-09-02 — el "? meses" venía de dejarla en null).
+          duracion_meses: Number(contrato.duracion_meses)
+            || Number(String(contrato.duracion || '').match(/\d+/)?.[0]) || null,
           seriales_asignados: [],
           es_ajuste: true,
           ...(ajustes.length ? { ajustes_precio: ajustes } : {}),

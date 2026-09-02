@@ -133,30 +133,72 @@ async function correoAprobadoresBaja(gid, g) {
 }
 
 // Aumento por enmienda: aprobación COMERCIAL previa al anexo (admin/gerencia).
+// Detalle COMPLETO del anexo para cualquier correo (2026-09-02, reclamo de
+// Alberto: el correo de aprobación no decía qué involucraba el aumento):
+// líneas de equipos (con modalidad), cargos con sus seriales, tarifas
+// renegociadas y el total. Una sola fuente para aprobación, firmado y cierre.
+function detalleAumentoHtml(a = {}) {
+  let html = "";
+  if ((a.lineas || []).length) {
+    html += G.tablaHtml(["Cant.", "Equipo", "Precio/mes"], a.lineas.map(l => [
+      String(Number(l.cantidad || 0)),
+      G.escapeHtml(l.modelo || "—") + (l.modalidad === "propio" ? " — equipo del cliente" : ""),
+      `$${Number(l.precio || 0).toFixed(2)}`,
+    ]));
+  }
+  if ((a.cargos || []).length) {
+    html += G.tablaHtml(["Cant.", "Cargo / servicio", "Tipo", "Monto", "Equipos"], a.cargos.map(cg => [
+      String(Number(cg.cantidad || 1)),
+      G.escapeHtml(cg.concepto || "—"),
+      cg.recurrente ? "Mensual" : "Único",
+      `$${Number(cg.monto || 0).toFixed(2)}`,
+      (cg.seriales || []).length ? `<code>${cg.seriales.map(G.escapeHtml).join(", ")}</code>` : "—",
+    ]));
+  }
+  if ((a.ajustes_precio || []).length) {
+    html += `<p style="margin:12px 0 4px;font:14px Arial,sans-serif;"><b>Tarifas renegociadas:</b></p>`
+      + G.tablaHtml(["Línea", "Cant.", "Antes", "Ahora"], a.ajustes_precio.map(x => [
+          G.escapeHtml(x.modelo || "—"), String(Number(x.cantidad || 0)),
+          `$${Number(x.precio_anterior || 0).toFixed(2)}`, `<b>$${Number(x.precio_nuevo || 0).toFixed(2)}</b>`,
+        ]));
+  }
+  const t = a.totales || {};
+  if (t.total_mensual != null) {
+    html += `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Total mensual del anexo:
+      <b>$${Number(t.total_mensual || 0).toFixed(2)}</b>${Number(t.cargos_uni || 0) > 0
+        ? ` · Primer pago: <b>$${Number(t.primer_pago || 0).toFixed(2)}</b>` : ""}</p>`;
+  }
+  return html || `<p style="font:13px Arial,sans-serif;color:#666;">(sin detalle registrado)</p>`;
+}
+
 async function correoAprobadoresAumento(gid, g) {
   // Regla 2026-08-28: la solicitud va SOLO a ventas@cecomunica.com (el buzón
   // de los aprobadores).
   const a = g.aumento || {};
+  const esAjuste = a.es_ajuste === true;
+  const esReg = a.es_regularizacion === true;
+  const etiqueta = esAjuste ? "ajuste de tarifa / servicios" : esReg ? "regularización de equipos en campo" : "aumento de equipos";
   await G.encolarCorreo({
     to: await G.aprobacionesTo(),
     cc: null,
-    subject: `Aprobación comercial: aumento de equipos — ${g.cliente_nombre || "Cliente"} (${gid})`,
-    preheader: `Enmienda al contrato ${a.contrato_id || "—"} con vigencia propia (${a.duracion_meses || "?"} meses)`,
+    subject: `Aprobación comercial: ${etiqueta} — ${g.cliente_nombre || "Cliente"} (${gid})`,
+    preheader: esAjuste
+      ? `Anexo al contrato ${a.contrato_id || "—"}: solo cargos/tarifas — sin bodega`
+      : `Enmienda al contrato ${a.contrato_id || "—"} con vigencia propia (${a.duracion_meses || "?"} meses)`,
     bodyContent: `
-      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Aumento esperando aprobación comercial</h2>
+      <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">${esAjuste ? "Ajuste de tarifa esperando aprobación" : esReg ? "Regularización esperando aprobación" : "Aumento esperando aprobación comercial"}</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-        La gestión <b>${G.escapeHtml(gid)}</b> propone una <b>enmienda de aumento</b> al contrato
-        <b>${G.escapeHtml(a.contrato_id || "—")}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>,
-        con <b>vigencia propia de ${G.escapeHtml(String(a.duracion_meses || "?"))} meses</b> desde la entrega
-        (el equipo nuevo vence más tarde que el resto — el anexo lo deja explícito).
-        Al aprobar, el vendedor imprime el anexo, el cliente lo firma, y recién entonces
-        el sistema aplica las líneas y pide los seriales a Bodega.
+        La gestión <b>${G.escapeHtml(gid)}</b> propone un anexo al contrato
+        <b>${G.escapeHtml(a.contrato_id || "—")}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>.
+        ${esAjuste
+          ? `Al aprobar, el cliente firma el anexo y el ajuste <b>se aplica solo</b> — no pasa por bodega ni genera entrega.`
+          : esReg
+          ? `Los equipos <b>ya están en poder del cliente</b>: al firmarse, quedan amarrados al contrato de una vez, sin bodega ni entrega.`
+          : `Vigencia propia de <b>${G.escapeHtml(String(a.duracion_meses || "?"))} meses</b> desde la entrega.
+             Al aprobar, el cliente firma el anexo y recién entonces el sistema aplica las líneas y
+             pide los seriales a Bodega.`}
       </p>
-      ${G.tablaHtml(["Cantidad", "Modelo", "Precio/mes"], (a.lineas || []).map(l => [
-        `${Number(l.cantidad || 0)}`,
-        G.escapeHtml(l.modelo || "—"),
-        `$${Number(l.precio || 0).toFixed(2)}`,
-      ]))}`,
+      ${detalleAumentoHtml(a)}`,
     ctaUrl: G.urlGestion(g, gid),
     ctaLabel: "Revisar y aprobar",
     meta: { gestion_id: gid, paso: "aprobacion_aumento" },
@@ -833,10 +875,12 @@ module.exports = onDocumentWritten(
             bodyContent: `
               <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">Gestión cerrada</h2>
               <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-                La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>
+                La gestión <b>${G.escapeHtml(gid)}</b> (${G.escapeHtml(G.TIPO_LABEL[after.tipo] || after.tipo)})
+                de <b>${G.escapeHtml(after.cliente_nombre || "—")}</b>
                 completó todas sus condiciones de cierre y se cerró automáticamente.
                 El expediente queda como historial del cliente.
-              </p>`,
+              </p>
+              ${after.tipo === "aumento" ? detalleAumentoHtml(after.aumento || {}) : ""}`,
             ctaUrl: G.urlGestion(after, gid),
             ctaLabel: "Ver el expediente",
             meta: { gestion_id: gid, paso: "cierre" },
