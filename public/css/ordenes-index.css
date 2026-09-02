@@ -503,7 +503,10 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
   backdrop-filter: blur(8px);
 }
 
-.modal-entrega { max-width: 480px; }
+/* Más ancho (2026-09-02, pedido de recepción): con 480px quedaba mucho fondo
+   clickeable alrededor y el tap accidental cerraba el modal con la firma en
+   curso (el cierre por backdrop también se quitó en ordenes-flujo.js). */
+.modal-entrega { max-width: min(760px, calc(100vw - 16px)); }
 
 .modal-entrega__header {
   display: flex;
@@ -605,7 +608,7 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
 .modal-entrega__sig-wrap { margin-bottom: 4px; }
 .modal-entrega__canvas {
   width: 100%;
-  height: 200px;
+  height: 260px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: #fff;

@@ -841,7 +841,9 @@ window.copiarSeriales = function (ordenId) {
     // Modal.open wires Escape, Tab focus-trap, and saves/restores focus.
     // ARIA attrs (role=dialog, aria-modal, aria-labelledby) are on the
     // HTML root in ordenes/index.html. ORDENES_INDEX_IMPROVEMENTS.md §3a.11.
-    Modal.open('modalEntrega');
+    // onEscape:false (2026-09-02, pedido de recepción): una firma dibujada no
+    // se pierde por un Escape accidental — se cierra solo con X / Cancelar.
+    Modal.open('modalEntrega', { onEscape: false });
 
     // Init / resize canvas after it becomes visible so clientWidth is correct
     requestAnimationFrame(() => {
@@ -852,9 +854,11 @@ window.copiarSeriales = function (ordenId) {
       }
     });
 
-    // Backdrop click — Modal.open doesn't wire this, keep our own.
+    // Backdrop click NO cierra (2026-09-02, pedido de recepción): el tap
+    // afuera botaba el modal con la firma del cliente ya dibujada. Este modal
+    // se cierra ÚNICAMENTE con la X o Cancelar.
     const modal = document.getElementById('modalEntrega');
-    if (modal) modal.onclick = e => { if (e.target === modal) cerrarModalEntrega(); };
+    if (modal) modal.onclick = null;
   };
 
   window.cerrarModalEntrega = function () {

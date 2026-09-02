@@ -891,7 +891,10 @@
       _overlay.className = 'overlay';
       _overlay.style.display = 'flex';
       document.body.appendChild(_overlay);
-      _overlay.addEventListener('click', (ev) => { if (ev.target === _overlay) cerrarModal(); });
+      // El tap en el fondo NO cierra (2026-09-02, pedido de recepción): aquí
+      // vive la firma del acuse y un click accidental botaba el check-in en
+      // plena firma (el caso que la recuperación de tablet ya documentaba).
+      // Se cierra solo con la X.
     }
     _overlay.innerHTML = html;
     if (window.lucide) lucide.createIcons();
