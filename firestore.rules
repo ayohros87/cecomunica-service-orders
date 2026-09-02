@@ -367,7 +367,12 @@ service cloud.firestore {
       // OJO (rules v2): `/{sub=**}` a secas matchea CERO segmentos y alcanza el
       // doc padre, anulando el candado de update de arriba (verificado en el
       // harness). El segmento nombrado obliga a que sea una subcolección real.
-      match /{subcol}/{sub=**} { allow read, write: if isSignedIn(); }   // documentos
+      // `historial` lo escribe SOLO el trigger onClienteHistorial (Admin SDK):
+      // el rastro de quién cambió qué es inmutable desde el cliente.
+      match /{subcol}/{sub=**} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && subcol != "historial";           // documentos
+      }
     }
 
     match /ordenes_de_servicio/{docId} {

@@ -91,3 +91,6 @@ exports.onGestionWrite                = require("./src/triggers/gestiones/onGest
 // Avance seamless desde las órdenes: PROG entregada → devolución + linaje;
 // devolución sin pendientes → entrada completada
 exports.onOrdenWriteGestion           = require("./src/triggers/gestiones/onOrdenWriteGestion");
+// Historial de la ficha del cliente: quién cambió qué (representante, RUC,
+// vendedor…) — diff server-side en clientes/{id}/historial, inmutable por rules
+exports.onClienteHistorial            = require("./src/triggers/clientes/onClienteHistorial");

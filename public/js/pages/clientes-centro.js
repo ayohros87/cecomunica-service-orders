@@ -365,6 +365,76 @@ window.Centro = {
     ].filter(Boolean).join(' · ') || '—';
   },
 
+  // ── Historial de cambios de la ficha (2026-09-02) ──────────────────────
+  // Lo escribe el trigger onClienteHistorial (server-side, inmutable por
+  // rules): captura TODO escritor — grid, formulario, fusiones, scripts.
+  // Se lee BAJO DEMANDA (botón) para no sumar lecturas a cada apertura.
+  HIST_LABELS: {
+    nombre: 'Nombre', ruc: 'RUC', dv: 'DV',
+    representante: 'Representante legal', representante_cedula: 'Cédula del representante',
+    representante_email: 'Correo del representante',
+    telefono: 'Teléfono', email: 'Correo', email_acuses: 'Correo de acuses',
+    direccion: 'Dirección', direccion_facturacion: 'Dirección de facturación',
+    itbms_exento: 'ITBMS exento', itbms_motivo_exencion: 'Motivo de exención',
+    tags: 'Etiquetas', vendedor_asignado: 'Vendedor (uid)', vendedor_email: 'Vendedor',
+    activo: 'Activo', deleted: 'Eliminado', ip: 'IP',
+    qbo_customer_id: 'QuickBooks (id)', qbo_customer_name: 'QuickBooks (cliente)',
+  },
+  _histVal(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    if (v === true) return 'Sí';
+    if (v === false) return 'No';
+    if (Array.isArray(v)) return v.join(', ') || '—';
+    return String(v);
+  },
+  _histCuando(fv) {
+    const d = fv?.toDate ? fv.toDate() : null;
+    return d ? d.toLocaleString('es-PA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  },
+  async verHistorial() {
+    if (!this.cliente) return;
+    this._abrirModalA({
+      titulo: `Historial de la ficha — ${this.esc(this.cliente.nombre || '')}`,
+      cuerpo: '<div class="cg-vacio">Cargando…</div>',
+      footer: `<button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cerrar</button>`,
+    });
+    let filas = [];
+    try {
+      const snap = await firebase.firestore().collection('clientes').doc(this.cliente.id)
+        .collection('historial').orderBy('at', 'desc').limit(50).get();
+      filas = snap.docs.map(d => d.data());
+    } catch (e) { console.warn('[centro] historial no disponible:', e?.message || e); }
+    const bd = document.querySelector('#cgModal .cg-modal-bd');
+    if (!bd) return;
+    if (!filas.length) {
+      bd.innerHTML = `<div class="cg-vacio">Sin cambios registrados. El historial arrancó el
+        2&nbsp;sep&nbsp;2026 — los cambios anteriores a esa fecha no quedaron guardados.</div>`;
+      return;
+    }
+    bd.innerHTML = filas.map(h => {
+      const quien = this.esc(h.por_email || h.por_uid || 'sistema / script');
+      const cuando = this.esc(this._histCuando(h.at));
+      let cuerpo = '';
+      if (h.tipo === 'alta') {
+        cuerpo = `<div style="font-size:13px;">Alta del cliente${h.nombre ? ` — <b>${this.esc(h.nombre)}</b>` : ''}</div>`;
+      } else if (h.tipo === 'borrado_fisico') {
+        cuerpo = `<div style="font-size:13px; color:#A03030;">Borrado físico del documento${h.nombre ? ` — <b>${this.esc(h.nombre)}</b>` : ''}</div>`;
+      } else {
+        cuerpo = `<ul style="margin:4px 0 0; padding-left:18px; font-size:13px;">` +
+          Object.entries(h.cambios || {}).map(([campo, c]) => `
+            <li style="margin:2px 0;"><b>${this.esc(this.HIST_LABELS[campo] || campo)}</b>:
+              <span style="color:#A03030; text-decoration:line-through;">${this.esc(this._histVal(c?.antes))}</span>
+              <span style="color:var(--fg-4);">→</span>
+              <span style="color:#17714B; font-weight:600;">${this.esc(this._histVal(c?.despues))}</span></li>`).join('') +
+          `</ul>`;
+      }
+      return `<div style="border-bottom:1px solid var(--border-subtle); padding:10px 2px;">
+        <div style="font-size:12px; color:var(--fg-3);">${cuando} · ${quien}</div>
+        ${cuerpo}
+      </div>`;
+    }).join('');
+  },
+
   _mapContratos(snap) {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(x => !x.deleted)

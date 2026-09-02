@@ -164,6 +164,9 @@
           <p id="fMeta" style="margin:4px 0 0; color:var(--fg-3); font-size:13px;"></p>
         </div>
         <div class="cg-acts">
+          <button class="btn btn-ghost" onclick="Centro.verHistorial()"
+                  title="Quién cambió qué en la ficha (representante, RUC, vendedor…)">
+            <i data-lucide="history"></i> Historial</button>
           <button class="btn btn-primary" id="btnGestion" onclick="Centro.toggleMenu(event)">
             Nueva gestión <i data-lucide="chevron-down"></i></button>
           <div class="cg-menu hidden" id="cgMenu"></div>
@@ -200,7 +203,7 @@
 <div id="cgModal" class="cg-overlay hidden"></div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/clientes-centro.js?v=cg56" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg57" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
