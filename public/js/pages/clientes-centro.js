@@ -743,10 +743,25 @@ window.Centro = {
           documento: {
             cliente_rucdv: rucdv || '',
             observaciones: c.observaciones || '',
-            anexo: (enCampo || []).slice(0, 300).map(u => ({
-              serial: u.serial || u.id, modelo: u.modelo_label || '',
-              propiedad: u.propiedad === 'cliente' ? 'Del cliente' : 'C COMUNICA',
-            })),
+            // Cada serial con SU TARIFA (2026-09-02): línea del contrato por
+            // modelo+modalidad + servicios amarrados al serial. Lo que el
+            // cliente firma es exactamente esto — congelado.
+            anexo: (enCampo || []).slice(0, 300).map(u => {
+              const nrm = (s) => String(s || '').trim().toUpperCase();
+              const mod = u.propiedad === 'cliente' ? 'propio' : 'alquiler';
+              const linea = (c.equipos || []).find(l => (l.modalidad || 'alquiler') === mod
+                && ((u.modelo_id && l.modelo_id && l.modelo_id === u.modelo_id)
+                    || (nrm(l.modelo) && nrm(l.modelo) === nrm(u.modelo_label))));
+              let extras = 0;
+              (c.cargos || []).forEach(cg => {
+                if (cg.recurrente && Array.isArray(cg.seriales) && cg.seriales.includes(u.serial || u.id)) extras += Number(cg.monto || 0);
+              });
+              return {
+                serial: u.serial || u.id, modelo: u.modelo_label || '',
+                propiedad: u.propiedad === 'cliente' ? 'Del cliente' : 'C COMUNICA',
+                ...(linea || extras ? { tarifa_mensual: Number(((linea ? Number(linea.precio || 0) : 0) + extras).toFixed(2)) } : {}),
+              };
+            }),
             ...(window.ContratoV2Texto ? {
               texto_version: ContratoV2Texto.version,
               inventario_html: ContratoV2Texto.inventarioHtml,

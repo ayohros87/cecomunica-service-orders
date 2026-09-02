@@ -181,12 +181,13 @@
     $('folio1').textContent = `${numero} · Página 1 (+ Anexo A)`;
     $('folio2').textContent = `${numero} · Condiciones generales`;
 
-    // ── Anexo A: seriales reales del pool asignados a ESTE contrato ──
+    // ── Anexo A: seriales CON SU TARIFA (2026-09-02, pedido de Alberto) ──
+    // La tarifa por serial sale de su línea del contrato (modelo + modalidad)
+    // más los servicios amarrados a ese serial (cargos con seriales — GPS).
     let unidades = [];
     try { unidades = await EquiposPoolService.listarPorContrato(docId); }
     catch (e) { console.warn('pool no legible', e); }
     $('aSub').textContent = `Contrato ${numero} · ${c.cliente_nombre || ''}`;
-    $('aTotal').innerHTML = `${unidades.length} equipo(s)<br><span style="font-weight:400;color:#555;">por serial</span>`;
     $('folioA').textContent = `Anexo A · ${numero}`;
 
     let modelosMap = {};
@@ -195,24 +196,86 @@
       (ms || []).forEach((m) => { modelosMap[m.id] = m; });
     } catch (e) { console.warn('modelos no legibles', e); }
 
-    const filasA = unidades.map((e, i) => `<tr>
-      <td>${i + 1}</td><td class="mono">${esc(e.serial || e.id)}</td>
-      <td>${esc(e.modelo_label || e.modelo || '—')}</td>
-      <td style="color:#bbb;">____________</td>
-      <td>${e.propiedad === 'cliente' ? 'Del cliente' : 'C COMUNICA'}</td><td>☐</td></tr>`);
+    const norm = (s) => String(s || '').trim().toUpperCase();
+    const tarifaDe = (serial, modeloId, modeloLabel, propiedad) => {
+      const mod = propiedad === 'cliente' ? 'propio' : 'alquiler';
+      const linea = (c.equipos || []).find((l) =>
+        (l.modalidad || 'alquiler') === mod
+        && ((modeloId && l.modelo_id && l.modelo_id === modeloId)
+            || (norm(l.modelo) && norm(l.modelo) === norm(modeloLabel))
+            || (norm(modeloLabel) && norm(modeloLabel).includes(norm(l.modelo)) && norm(l.modelo))));
+      let extras = 0; const etiquetas = [];
+      (c.cargos || []).forEach((cg) => {
+        if (cg.recurrente && Array.isArray(cg.seriales) && cg.seriales.includes(serial)) {
+          extras += Number(cg.monto || 0); etiquetas.push(cg.concepto || 'servicio');
+        }
+      });
+      if (!linea && !extras) return { txt: '—' };
+      const base = linea ? Number(linea.precio || 0) : 0;
+      return { txt: `${money(base + extras)}${etiquetas.length ? ` <span style="font-size:9.5px; color:#555;">incl. ${esc(etiquetas.join(', '))}</span>` : ''}` };
+    };
+    const filaAnexo = (u, i) => {
+      const t = tarifaDe(u.serial || u.id, u.modelo_id || null, u.modelo_label || u.modelo || '', u.propiedad);
+      return `<tr>
+      <td>${i + 1}</td><td class="mono">${esc(u.serial || u.id)}</td>
+      <td>${esc(u.modelo_label || u.modelo || '—')}</td>
+      <td class="right">${u.tarifa_txt || t.txt}</td>
+      <td>${u.propiedad === 'cliente' ? 'Del cliente' : 'C COMUNICA'}</td><td>☐</td></tr>`;
+    };
+
+    // El documento FIRMADO muestra el Anexo A CONGELADO (lo que el cliente
+    // vio y firmó); lo asignado o cambiado DESPUÉS aparece aparte, como
+    // registro informativo SIN firma — la firma jamás cubre lo no visto.
+    const anexoFrozen = (frozen && Array.isArray(sFirma?.documento?.anexo) && sFirma.documento.anexo.length)
+      ? sFirma.documento.anexo.map((x) => ({
+          serial: x.serial, modelo_label: x.modelo,
+          propiedad: x.propiedad === 'Del cliente' ? 'cliente' : 'cecomunica',
+          tarifa_txt: (x.tarifa_mensual != null) ? money(x.tarifa_mensual) : null,
+        }))
+      : null;
+    const fuente = anexoFrozen || unidades;
+    $('aTotal').innerHTML = `${fuente.length} equipo(s)<br><span style="font-weight:400;color:#555;">${anexoFrozen ? 'al momento de la firma' : 'por serial'}</span>`;
+
+    const filasA = fuente.map((u, i) => filaAnexo(u, i));
     // Filas en blanco para la verificación conjunta en sitio.
-    const desde = unidades.length;
-    for (let i = 0; i < (unidades.length ? 3 : 8); i++) {
+    const desde = fuente.length;
+    for (let i = 0; i < (fuente.length ? 3 : 8); i++) {
       filasA.push(`<tr><td>${desde + i + 1}</td><td class="mono" style="color:#bbb;">____________</td>
-        <td style="color:#bbb;">____________</td><td style="color:#bbb;">____________</td>
+        <td style="color:#bbb;">____________</td><td style="color:#bbb;">______</td>
         <td style="color:#bbb;">______</td><td>☐</td></tr>`);
     }
-    if (!unidades.length) {
+    if (!fuente.length) {
       filasA.unshift(`<tr><td colspan="6" style="color:#555; font-size:11px;">Sin seriales de
         bodega asignados a este contrato — filas en blanco para el levantamiento en verificación
         conjunta con EL CLIENTE:</td></tr>`);
     }
     $('tAnexoA').innerHTML = filasA.join('');
+
+    // Registro ACTUAL cuando difiere del firmado: informativo, sin firma —
+    // los cambios constan en los anexos firmados que los originaron.
+    if (anexoFrozen) {
+      const setF = new Set(anexoFrozen.map((x) => String(x.serial)));
+      const setC = new Set(unidades.map((u) => String(u.serial || u.id)));
+      const difiere = setF.size !== setC.size || [...setC].some((s) => !setF.has(s));
+      if (difiere) {
+        const filasAct = unidades.map((u, i) => filaAnexo(u, i)).join('');
+        document.getElementById('hojaAnexoA').insertAdjacentHTML('afterend', `
+          <div class="hoja">
+            <div class="cab" style="padding-bottom:8px;">
+              <div style="font:700 12.5px Arial,sans-serif; color:var(--navy);">REGISTRO ACTUAL DE EQUIPOS — INFORMATIVO<br>
+                <span style="font-weight:400; color:#555;">Contrato ${esc(numero)} · posterior a la firma</span></div>
+            </div>
+            <p style="font:11.5px/1.5 Arial,sans-serif; color:#555; margin:8px 0;">
+              Este registro refleja los equipos y tarifas VIGENTES del contrato a la fecha de consulta.
+              <b>No forma parte del documento firmado</b> (arriba, congelado tal como el cliente lo vio):
+              cada cambio posterior consta en su propio anexo firmado.</p>
+            <table>
+              <thead><tr><th style="width:5%;">#</th><th>Serial</th><th>Modelo</th><th class="right">Tarifa/mes</th><th>Propiedad</th><th style="width:6%;"></th></tr></thead>
+              <tbody>${filasAct}</tbody>
+            </table>
+          </div>`);
+      }
+    }
 
     // Resumen por modelo + valor de reposición (precio de venta del catálogo;
     // si el modelo no tiene, aplica el valor genérico del contrato: $200).

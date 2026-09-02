@@ -8,7 +8,7 @@ window.ContratoV2Texto = {
   // una COPIA CONGELADA del texto: lo que el cliente firma queda amarrado a
   // esta versión aunque las cláusulas cambien después. Subirla en CADA cambio
   // de fondo al texto.
-  version: 'v2-2026-08-31',
+  version: 'v2-2026-09-02',
 
   // Texto del ANEXO (aumento / regularización). Igual que el contrato: se
   // congela en la solicitud de firma junto con la versión.
@@ -19,7 +19,9 @@ window.ContratoV2Texto = {
          corre <b>desde la firma</b> — no hay entrega pendiente.`
       : `Las líneas de la tabla de arriba se AGREGAN al contrato marco y forman parte
          integral de él (cláusula 18 — administración por anexos), con su propio período
-         cuando aplique.`;
+         cuando aplique. Los seriales de los equipos nuevos los asigna la bodega de LA
+         EMPRESA después de esta firma y quedan incorporados al registro de equipos del
+         contrato (Anexo A), verificable en todo momento.`;
   },
   anexoMarco:
     `En lo no modificado por este anexo, rigen íntegras las condiciones del contrato marco,

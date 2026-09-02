@@ -14,7 +14,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
   <script defer src="/js/firebase-init.js?v=ses2"></script>
-  <script defer src="/js/domain/contratoV2Texto.js?v=1"></script>
+  <script defer src="/js/domain/contratoV2Texto.js?v=2"></script>
   <style>
     * { box-sizing: border-box; margin: 0; }
     body { font: 15px/1.55 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #1c2733; background: #f2f5f8; padding: 0 0 48px; }
@@ -311,9 +311,12 @@
         ${d.observaciones ? `<p style="color:#5a6b7b;">${this.esc(d.observaciones)}</p>` : ''}
         <h3>3. Inventario — Anexo A</h3>
         <p>${d.inventario_html || ContratoV2Texto.inventarioHtml}</p>
-        ${anexo.length ? `<table><thead><tr><th>#</th><th>Serial</th><th>Modelo</th><th>Propiedad</th></tr></thead><tbody>
-          ${anexo.map((u, i) => `<tr><td>${i + 1}</td><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td><td>${this.esc(u.propiedad)}</td></tr>`).join('')}
-        </tbody></table>` : ''}
+        ${anexo.length ? (() => {
+          const conTarifa = anexo.some(u => u.tarifa_mensual != null);
+          return `<table><thead><tr><th>#</th><th>Serial</th><th>Modelo</th>${conTarifa ? '<th class="num">Tarifa/mes</th>' : ''}<th>Propiedad</th></tr></thead><tbody>
+          ${anexo.map((u, i) => `<tr><td>${i + 1}</td><td class="mono">${this.esc(u.serial)}</td><td>${this.esc(u.modelo)}</td>${conTarifa ? `<td class="num">${u.tarifa_mensual != null ? '$' + Number(u.tarifa_mensual).toFixed(2) : '—'}</td>` : ''}<td>${this.esc(u.propiedad)}</td></tr>`).join('')}
+          </tbody></table>`;
+        })() : ''}
         <h3>4. Vigencia, renovación y anexos</h3>
         <p>${d.vigencia_html || ContratoV2Texto.vigenciaHtml(durHtml)}</p>
         <h3>Condiciones generales (cláusulas 5–18)</h3>
