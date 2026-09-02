@@ -155,6 +155,34 @@ test("B5 · el colspan del encabezado cubre todas las columnas", () => {
     "con la columna de modalidad el encabezado tiene que crecer también");
 });
 
+// Reporte de Zuleika (2026-09-02): el descuento por renglón se aplicaba al
+// total pero no se veía por ninguna parte del documento — el cliente veía
+// $200 de precio unitario y $480 de total sin explicación. La columna "Desc."
+// lo hace visible, y solo existe cuando algún renglón trae descuento.
+test("B7 · la columna Desc. aparece solo si algún renglón trae descuento", () => {
+  const T = cargarTotales();
+  const sinDesc = [linea("a"), linea("b")];
+  const conDesc = [linea("a", { cant: 3, precio: 200, desc: 20 }), linea("b")];
+
+  assert.equal(T.hayDescLineas(sinDesc), false);
+  assert.equal(T.hayDescLineas(conDesc), true);
+
+  assert.ok(!T.filasPorEquipoHtml(sinDesc, { hayAlquiler: false }).includes('class="num c"'),
+    "sin descuentos la columna es puro ruido");
+  const html = T.filasPorEquipoHtml(conDesc, { hayAlquiler: false });
+  assert.ok(html.includes('class="num c">20%'), "el renglón enseña su porcentaje");
+  assert.ok(html.includes('class="num c">—'), "el renglón sin descuento marca —");
+  assert.ok(html.includes("$480.00"), "el total sigue saliendo con el precio rebajado");
+});
+
+test("B8 · el colspan del encabezado también crece con la columna Desc.", () => {
+  const T = cargarTotales();
+  const items = [linea("a", { desc: 10, equipo: { id: "e1", serial: "S1", modelo: "M1" } })];
+  assert.ok(T.filasPorEquipoHtml(items, { hayAlquiler: false }).includes('colspan="6"'));
+  assert.ok(T.filasPorEquipoHtml(items, { hayAlquiler: true }).includes('colspan="7"'),
+    "modalidad y descuento suman columnas por separado");
+});
+
 test("B6 · el contenido va escapado (el cliente abre esto en su navegador)", () => {
   const T = cargarTotales();
   const html = T.filasPorEquipoHtml([

@@ -119,7 +119,9 @@
           <thead>
             <tr><th>#</th><th>Descripción</th><th class="c">Cant.</th>
               ${t.hayAlquiler ? '<th class="c">Modalidad</th>' : ''}
-              <th class="r">Precio unit.</th><th class="r">Total</th></tr>
+              <th class="r">Precio unit.</th>
+              ${T.hayDescLineas(cot.items) ? '<th class="c">Desc.</th>' : ''}
+              <th class="r">Total</th></tr>
           </thead>
           <tbody>
             <!-- Agrupado por equipo (reporte jefa de taller, punto 4): un

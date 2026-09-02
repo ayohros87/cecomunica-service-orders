@@ -1,6 +1,6 @@
 // Cotizaciones — totales y helpers de fecha (puros, sin DOM ni Firestore)
 // API: CotizacionTotales.{lineTotal, calcTotales, cuenta, addDays, validezVence,
-//                         modalidadDe, esAlquiler, evaluarPolitica,
+//                         modalidadDe, esAlquiler, hayDescLineas, evaluarPolitica,
 //                         agruparPorEquipo, tituloEquipo, trabajoEquipo}
 //
 // MODALIDAD POR RENGLÓN. Cada renglón se vende (pago único) o se alquila
@@ -24,6 +24,14 @@ window.CotizacionTotales = {
 
   esAlquiler(it) {
     return this.modalidadDe(it) === 'alquiler';
+  },
+
+  // ¿Algún renglón trae descuento propio? Decide si el documento imprime la
+  // columna "Desc." — en una cotización sin descuentos la columna sería puro
+  // ruido, igual que "Modalidad" en una de pura venta.
+  hayDescLineas(items) {
+    return (Array.isArray(items) ? items : [])
+      .some((it) => Number(it?.desc || 0) > 0);
   },
 
   // Total de un renglón: cant * precio * (1 - desc/100). Redondea a 2 dec.
@@ -271,8 +279,13 @@ window.CotizacionTotales = {
   filasPorEquipoHtml(items, { hayAlquiler = false } = {}) {
     const esc = (v) => FMT.esc(v);
     const grupos = this.agruparPorEquipo(items);
-    // Columnas: # · Descripción · Cant. · [Modalidad] · Precio unit. · Total
-    const cols = hayAlquiler ? 6 : 5;
+    // La columna "Desc." aparece solo si algún renglón trae descuento — misma
+    // regla que "Modalidad". Se decide AQUÍ (no la pasa el llamador) para que
+    // el <thead> del llamador y estas filas nunca queden desalineados: ambos
+    // preguntan a hayDescLineas sobre los mismos items.
+    const hayDesc = this.hayDescLineas(items);
+    // Columnas: # · Descripción · Cant. · [Modalidad] · Precio unit. · [Desc.] · Total
+    const cols = 5 + (hayAlquiler ? 1 : 0) + (hayDesc ? 1 : 0);
     let n = 0;
 
     return grupos.map((g) => {
@@ -290,6 +303,7 @@ window.CotizacionTotales = {
 
       const filas = g.items.map((it) => {
         const esAlq = this.esAlquiler(it);
+        const pctLinea = Number(it?.desc || 0);
         n++;
         return `
         <tr>
@@ -301,6 +315,7 @@ window.CotizacionTotales = {
           <td class="qty">${esc(it.cant)}</td>
           ${hayAlquiler ? `<td class="c cq-mod">${esAlq ? 'Alquiler' : 'Venta'}</td>` : ''}
           <td class="num r">${FMT.money(it.precio)}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
+          ${hayDesc ? `<td class="num c">${pctLinea > 0 ? esc(pctLinea) + '%' : '—'}</td>` : ''}
           <td class="num r">${FMT.money(this.lineTotal(it))}${esAlq ? '<span class="cq-per">/mes</span>' : ''}</td>
         </tr>`;
       }).join('');

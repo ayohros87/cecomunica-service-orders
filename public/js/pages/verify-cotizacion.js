@@ -132,7 +132,9 @@
         <table class="cq-table">
           <thead><tr><th>#</th><th>Descripción</th><th class="c">Cant.</th>
             ${snap.hayAlquiler ? '<th class="c">Modalidad</th>' : ''}
-            <th class="r">Precio unit.</th><th class="r">Total</th></tr></thead>
+            <th class="r">Precio unit.</th>
+            ${T.hayDescLineas(snap.items) ? '<th class="c">Desc.</th>' : ''}
+            <th class="r">Total</th></tr></thead>
           <tbody>
             <!-- Mismo cuerpo agrupado por equipo que la impresión: lo que el
                  cliente abre desde el correo y lo que descarga en PDF tienen
