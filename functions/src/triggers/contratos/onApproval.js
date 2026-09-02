@@ -258,6 +258,57 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
 
     const pasoAAprobado = (before.estado !== "aprobado" && after.estado === "aprobado");
     if (!pasoAAprobado) return null;
+
+    // ── Correo AL VENDEDOR (2026-09-02, pregunta de Alberto: "¿le llega un
+    // email al vendedor para que busque la firma?" — no llegaba: solo iba de
+    // CC en la tarea de bodega, y en renovación sin equipo no salía NADA).
+    // Su siguiente acción es la firma del cliente: CTA directo a la ficha.
+    try {
+      const vend = await vendedorEmail(after.creado_por_uid);
+      if (vend) {
+        const filas = [
+          ...(after.equipos || []).filter(e => Number(e.cantidad || 0) > 0).map(e =>
+            `<tr><td style="padding:5px 8px;border-bottom:1px solid #eee;">${escapeHtml(e.modelo || "—")}${e.modalidad === "propio" ? " — equipo del cliente" : ""}</td>
+             <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(e.cantidad || 0)}</td>
+             <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;">$${Number(e.precio || 0).toFixed(2)}/mes</td></tr>`),
+          ...(after.cargos || []).map(cg =>
+            `<tr><td style="padding:5px 8px;border-bottom:1px solid #eee;">${escapeHtml(cg.concepto || "—")}</td>
+             <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(cg.cantidad || 1)}</td>
+             <td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right;">$${Number(cg.monto || 0).toFixed(2)}${cg.recurrente ? "/mes" : ""}</td></tr>`),
+        ].join("");
+        await db.collection("mail_queue").add({
+          to: vend,
+          subject: `Contrato ${after.contrato_id || event.params.docId} APROBADO — sigue la firma del cliente`,
+          preheader: "Envíale el enlace de firma digital desde la ficha del cliente",
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#065F46;">Tu contrato fue aprobado</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              El contrato <b>${escapeHtml(after.contrato_id || "")}</b> de
+              <b>${escapeHtml(after.cliente_nombre || "—")}</b> quedó <b>aprobado</b>.
+              El siguiente paso es tuyo: desde la ficha del cliente, usa
+              <b>Enviar para firma</b> — el cliente lee el contrato completo en su celular y firma
+              con el dedo. Bodega prepara los seriales en paralelo.</p>
+            <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
+              <thead><tr><th style="text-align:left;padding:5px 8px;border-bottom:2px solid #e5e7eb;">Detalle</th>
+                <th style="text-align:center;padding:5px 8px;border-bottom:2px solid #e5e7eb;">Cant.</th>
+                <th style="text-align:right;padding:5px 8px;border-bottom:2px solid #e5e7eb;">Precio</th></tr></thead>
+              <tbody>${filas}</tbody></table>
+            <p style="margin:8px 0 0;font:14px Arial,sans-serif;">Total mensual: <b>$${Number(after.total_mensual || 0).toFixed(2)}</b></p>`,
+          ctaUrl: `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(after.cliente_id || "")}`,
+          ctaLabel: "Abrir la ficha y enviar para firma",
+          meta: { source: "onContratoAprobado_vendedor", contrato_id: after.contrato_id || "" },
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        logger.info("[onContratoAprobadoSolicitaSeriales] correo al vendedor (firma) encolado",
+          { contrato: after.contrato_id, vendedor: vend });
+      } else {
+        logger.info("[onContratoAprobadoSolicitaSeriales] vendedor sin email — sin aviso de firma",
+          { contrato: after.contrato_id, uid: after.creado_por_uid || null });
+      }
+    } catch (e) {
+      logger.warn("[onContratoAprobadoSolicitaSeriales] correo al vendedor falló", { message: e.message });
+    }
+
     // Idempotencia: si el flujo de seriales ya arrancó, no repetir.
     if (after.seriales_estado) return null;
 
