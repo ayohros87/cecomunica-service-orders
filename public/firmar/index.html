@@ -279,6 +279,12 @@
           <p>Anexo de ${ajuste ? 'ajuste de tarifa' : regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
             <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>. ${intro}</p>
           ${regu && serialesRegu ? `<table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${serialesRegu}</tbody></table>` : ''}
+          ${ajuste && (s.ajustes_precio || []).length ? `
+            <h3>Tarifas renegociadas</h3>
+            <table><thead><tr><th>Línea</th><th class="num">Cant.</th><th class="num">Precio anterior</th><th class="num">Precio nuevo</th></tr></thead><tbody>
+            ${s.ajustes_precio.map(x => `<tr><td>${this.esc(x.modelo)}</td><td class="num">${Number(x.cantidad || 0)}</td>
+              <td class="num">$${Number(x.precio_anterior || 0).toFixed(2)}</td><td class="num"><b>$${Number(x.precio_nuevo || 0).toFixed(2)}</b></td></tr>`).join('')}
+            </tbody></table>` : ''}
           <p>${marco}</p>
           ${claus ? `<h3>Condiciones generales del contrato marco (cláusulas 5–18, para su referencia)</h3>
             <ol class="clausulas">${claus}</ol>` : ''}

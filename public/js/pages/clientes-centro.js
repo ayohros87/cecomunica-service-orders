@@ -919,12 +919,17 @@ window.Centro = {
             ? `Anexo de regularización ${gid} — contrato ${a.contrato_id || ''}`
             : `Anexo de aumento ${gid} — contrato ${a.contrato_id || ''}`,
           declaracion: a.es_ajuste
-            ? `Declaro que acepto los cargos del anexo ${gid} (${(a.cargos || []).map(c => `${c.concepto} $${Number(c.monto || 0).toFixed(2)}${c.recurrente ? '/mes' : ''} × ${c.cantidad}`).join('; ')}) al contrato ${a.contrato_id || ''} en nombre de ${g.cliente_nombre || 'la empresa'}.`
+            ? `Declaro que acepto ${[
+                (a.cargos || []).length ? `los cargos del anexo ${gid} (${(a.cargos || []).map(c => `${c.concepto} $${Number(c.monto || 0).toFixed(2)}${c.recurrente ? '/mes' : ''} × ${c.cantidad}`).join('; ')})` : '',
+                (a.ajustes_precio || []).length ? `el ajuste de tarifa de ${a.ajustes_precio.length} línea(s): ${a.ajustes_precio.map(x => `${x.modelo} de $${Number(x.precio_anterior).toFixed(2)} a $${Number(x.precio_nuevo).toFixed(2)}/mes`).join('; ')}` : '',
+              ].filter(Boolean).join(' y ')} al contrato ${a.contrato_id || ''} en nombre de ${g.cliente_nombre || 'la empresa'}.`
             : a.es_regularizacion
             ? `Declaro que los equipos del anexo ${gid} (${(a.regulariza_seriales || []).map(s => s.serial).join(', ')}) están en poder de ${g.cliente_nombre || 'la empresa'} y acepto su incorporación al contrato ${a.contrato_id || ''} con las tarifas indicadas.`
             : `Declaro que he leído el anexo de aumento ${gid} al contrato ${a.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${g.cliente_nombre || 'la empresa'}.`,
           representante: { nombre: this.cliente.representante || '', cedula: this.cliente.representante_cedula || '' },
-          ...(a.es_ajuste ? { es_ajuste: true } : {}),
+          ...(a.es_ajuste ? { es_ajuste: true,
+            ...(Array.isArray(a.ajustes_precio) && a.ajustes_precio.length
+              ? { ajustes_precio: a.ajustes_precio } : {}) } : {}),
           ...(a.es_regularizacion ? { es_regularizacion: true,
             regulariza_seriales: (a.regulariza_seriales || []).map(s => ({ serial: s.serial || '', modelo: s.modelo || '' })) } : {}),
           // Texto del anexo CONGELADO con su versión (misma regla que el
@@ -1664,8 +1669,11 @@ window.Centro = {
       const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega' && g.cierre?.derivacion;
       cuerpo = `
         ${a.es_ajuste ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
-          <b>Anexo de ajuste de tarifa / servicios</b> — solo cargos, sin equipos nuevos;
-          al firmarse se aplica al contrato y cierra solo, sin bodega ni entrega.</p>` : ''}
+          <b>Anexo de ajuste de tarifa / servicios</b> — sin equipos nuevos;
+          al firmarse se aplica al contrato y cierra solo, sin bodega ni entrega.</p>
+          ${(a.ajustes_precio || []).length ? `<p style="font-size:12.5px; margin:0 0 8px;">
+            <b>Tarifas renegociadas:</b> ${a.ajustes_precio.map(x =>
+              `${this.esc(x.modelo)} <span class="num">$${Number(x.precio_anterior).toFixed(2)} → $${Number(x.precio_nuevo).toFixed(2)}</span>`).join(' · ')}</p>` : ''}` : ''}
         ${a.es_regularizacion ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
           <b>Anexo de regularización</b> — amarra equipos que el cliente ya tiene
           (<span class="cg-mono">${(a.regulariza_seriales || []).map(s => this.esc(s.serial)).join(', ')}</span>);
@@ -2719,18 +2727,23 @@ window.Centro = {
       </div>
       <div oninput="Centro._wjPreview()">
       <div class="cg-paso">
-        <div class="cg-paso-t"><span class="n">2</span> Cargos / servicios</div>
+        <div class="cg-paso-t"><span class="n">2</span> Tarifas de las líneas actuales
+          <span class="hint">precio negociado — deja en blanco lo que no cambia</span></div>
+        <div id="wjLineas"></div>
+      </div>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">3</span> Cargos / servicios nuevos <span class="hint">opcional</span></div>
         <div id="wjCargos">${this._cargoLineaHtml()}</div>
         <button class="btn btn-ghost cg-act"
           onclick="document.getElementById('wjCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button>
       </div>
       <div class="cg-paso">
-        <div class="cg-paso-t"><span class="n">3</span> ¿A cuáles equipos aplica?
+        <div class="cg-paso-t"><span class="n">4</span> ¿A cuáles equipos aplican los cargos?
           <span class="hint">marca los seriales — la cantidad de los cargos mensuales sale sola</span></div>
         <div id="wjFlota" style="max-height:200px; overflow:auto;"></div>
       </div>
       <div class="cg-paso">
-        <div class="cg-paso-t"><span class="n">4</span> Totales</div>
+        <div class="cg-paso-t"><span class="n">5</span> Totales</div>
         <label class="cg-toggle">
           <input type="checkbox" id="wjItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._wjPreview()">
           Aplica ITBMS</label>
@@ -2745,7 +2758,43 @@ window.Centro = {
     this._wjSyncFlota();
     this._wjPreview();
   },
+  // Tarifas actuales del contrato destino, editables (renegociación de
+  // precio, 2026-09-02): cada línea muestra su precio vigente y un campo
+  // "nuevo" — vacío = sin cambio. Se aplica al firmarse el anexo.
+  _wjSyncLineas() {
+    const cont = document.getElementById('wjLineas');
+    if (!cont) return;
+    const cid = document.getElementById('wjContrato')?.value || '';
+    const c = this.contratos.find(x => x.id === cid);
+    const lineas = (c?.equipos || []);
+    cont.innerHTML = lineas.length ? `<div class="cg-twrap"><table class="cg-tabla"><thead><tr>
+        <th>Línea</th><th class="num">Cant.</th><th class="num">Precio actual</th><th class="num">Precio nuevo</th></tr></thead><tbody>
+      ${lineas.map((l, i) => `<tr>
+        <td>${this.esc(l.modelo || l.descripcion || '—')}${l.modalidad === 'propio' ? ' <span class="cg-venc vigente" style="font-size:10.5px;">del cliente</span>' : ''}</td>
+        <td class="num">${Number(l.cantidad || 0)}</td>
+        <td class="num">$${Number(l.precio || 0).toFixed(2)}</td>
+        <td class="num"><input class="form-input num" type="number" min="0" step="1" placeholder="sin cambio"
+          data-wj-nuevo data-idx="${i}" style="max-width:110px; padding:4px 8px; font-size:13px;"></td></tr>`).join('')}
+    </tbody></table></div>`
+      : `<p style="font-size:12.5px; color:var(--fg-3); margin:0;">El contrato no tiene líneas de equipos.</p>`;
+  },
+  _wjAjustes() {
+    const cid = document.getElementById('wjContrato')?.value || '';
+    const c = this.contratos.find(x => x.id === cid);
+    return [...document.querySelectorAll('input[data-wj-nuevo]')].map(inp => {
+      if (inp.value === '' || inp.value == null) return null;
+      const i = Number(inp.dataset.idx);
+      const l = (c?.equipos || [])[i];
+      if (!l) return null;
+      const nuevo = Math.max(0, Number(inp.value) || 0);
+      if (nuevo === Number(l.precio || 0)) return null;
+      return { idx: i, modelo_id: l.modelo_id || null, modelo: l.modelo || '',
+        modalidad: l.modalidad || null, cantidad: Number(l.cantidad || 0),
+        precio_anterior: Number(l.precio || 0), precio_nuevo: nuevo };
+    }).filter(Boolean);
+  },
   _wjSyncFlota() {
+    this._wjSyncLineas();
     const cont = document.getElementById('wjFlota');
     if (!cont) return;
     const cid = document.getElementById('wjContrato')?.value || '';
@@ -2781,7 +2830,13 @@ window.Centro = {
     const cont = document.getElementById('wjTot');
     if (!cont) return;
     const t = this._totAumento([], this._aumCargos(), document.getElementById('wjItbms')?.checked !== false);
-    cont.innerHTML = this._tarifarioHtml(t);
+    const ajustes = this._wjAjustes();
+    const delta = ajustes.reduce((s, a) => s + a.cantidad * (a.precio_nuevo - a.precio_anterior), 0);
+    cont.innerHTML =
+      (ajustes.length ? `<div style="display:flex; font-size:13px; padding:2px 0;">
+        <span>Ajuste de tarifas (${ajustes.length} línea${ajustes.length === 1 ? '' : 's'})</span>
+        <span class="num" style="margin-left:auto; ${delta >= 0 ? '' : 'color:var(--warn-deep, #92400E);'}">${delta >= 0 ? '+' : '−'}$${Math.abs(delta).toFixed(2)}/mes</span></div>` : '')
+      + this._tarifarioHtml(t);
   },
   async crearAjuste() {
     const cid = document.getElementById('wjContrato')?.value || '';
@@ -2790,7 +2845,10 @@ window.Centro = {
     const seriales = this._wjSeriales();
     const cargos = this._aumCargos().map(c => c.recurrente && seriales.length
       ? { ...c, cantidad: seriales.length, seriales } : c);
-    if (!cargos.length) { Toast.show('Agrega al menos un cargo del catálogo', 'warn'); return; }
+    const ajustes = this._wjAjustes();
+    if (!cargos.length && !ajustes.length) {
+      Toast.show('Agrega un cargo del catálogo o ajusta la tarifa de alguna línea', 'warn'); return;
+    }
     const itbmsAplica = document.getElementById('wjItbms')?.checked !== false;
     const totales = this._totAumento([], cargos, itbmsAplica);
     try {
@@ -2813,6 +2871,7 @@ window.Centro = {
           duracion_meses: null,
           seriales_asignados: [],
           es_ajuste: true,
+          ...(ajustes.length ? { ajustes_precio: ajustes } : {}),
         },
       });
       this._cerrarModal();

@@ -555,9 +555,68 @@ module.exports = onDocumentWritten(
                 enmienda_id: gid,
               });
             }
+            // Renegociación de precio (2026-09-02): las líneas listadas en
+            // ajustes_precio cambian su tarifa — se busca por índice y se
+            // verifica contra modelo+precio_anterior (si el contrato cambió
+            // entre la creación del anexo y la firma, se busca por match).
+            const ajustesAplicados = [];
+            if (esAjuste) {
+              for (const aj of (a.ajustes_precio || [])) {
+                let idx = Number(aj.idx);
+                const coincide = (l) => l
+                  && Number(l.precio || 0) === Number(aj.precio_anterior)
+                  && ((aj.modelo_id && l.modelo_id === aj.modelo_id)
+                      || String(l.modelo || "").trim() === String(aj.modelo || "").trim());
+                if (!coincide(equipos[idx])) {
+                  idx = equipos.findIndex((l) => coincide(l) && !ajustesAplicados.some((x) => x.idx === equipos.indexOf(l)));
+                }
+                if (idx < 0 || !equipos[idx]) {
+                  logger.warn("[onGestionWrite] ajuste de precio sin línea que coincida", { gid, ajuste: aj });
+                  continue;
+                }
+                equipos[idx] = {
+                  ...equipos[idx],
+                  precio: Number(aj.precio_nuevo || 0),
+                  ajustes: [...(equipos[idx].ajustes || []), {
+                    de: Number(aj.precio_anterior || 0), a: Number(aj.precio_nuevo || 0),
+                    enmienda_id: gid, at: new Date().toISOString().slice(0, 10),
+                  }],
+                };
+                ajustesAplicados.push({ idx, ...aj });
+              }
+            }
+            // Totales persistidos al día (misma aritmética que
+            // ContratoTarifario.totales — el documento y la facturación los
+            // leen de aquí; sin esto, un ajuste dejaba el total viejo).
+            const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+            const c0 = cSnap.data();
+            const equiposSub = r2(equipos.reduce((s2, l) => s2 + (Number(l.cantidad) || 0) * (Number(l.precio) || 0), 0));
+            let cargosRec = 0; let cargosUni = 0;
+            for (const cg of cargos) {
+              const t = (Number(cg.monto) || 0) * (Number(cg.cantidad) || 1);
+              if (cg.recurrente) cargosRec += t; else cargosUni += t;
+            }
+            cargosRec = r2(cargosRec); cargosUni = r2(cargosUni);
+            const rate = Number(c0.itbms_porcentaje ?? 0.07);
+            const aplicaItbms = c0.itbms_aplica !== false;
+            const subMensual = r2(equiposSub + cargosRec);
+            const itbmsMensual = aplicaItbms ? r2(subMensual * rate) : 0;
+            const totalMensual = r2(subMensual + itbmsMensual);
+            const subInicial = r2(subMensual + cargosUni);
+            const primerPago = r2(subInicial + (aplicaItbms ? r2(subInicial * rate) : 0));
             tx.set(cRef, {
               equipos,
               ...(a.cargos?.length ? { cargos } : {}),
+              // Los totales persistidos solo se recalculan en el AJUSTE: un
+              // aumento normal agrega líneas pendiente_entrega y su mensual
+              // no debe subir hasta la entrega real.
+              ...(esAjuste ? {
+                subtotal: subMensual, subtotal_equipos: equiposSub,
+                cargos_recurrente: cargosRec, cargos_unico: cargosUni,
+                itbms_monto: itbmsMensual, total_con_itbms: totalMensual,
+                total_mensual: totalMensual, total: totalMensual, primer_pago: primerPago,
+              } : {}),
+              fecha_modificacion: new Date(),
               enmiendas_aumento: admin.firestore.FieldValue.arrayUnion(gid),
             }, { merge: true });
           });
@@ -639,7 +698,10 @@ module.exports = onDocumentWritten(
               cierre: { ...(gA.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
             }, { merge: true });
             await G.registrarEvento(gid, "entrega",
-              `Anexo de AJUSTE aplicado: ${(a.cargos || []).map(cg => `${cg.concepto} $${Number(cg.monto || 0).toFixed(2)}${cg.recurrente ? "/mes" : ""} × ${cg.cantidad}${(cg.seriales || []).length ? ` (${cg.seriales.join(", ")})` : ""}`).join("; ")} al contrato ${a.contrato_id || a.contrato_doc_id}${estampados ? `; servicio estampado en ${estampados} equipo(s) del pool` : ""}. Sin bodega ni entrega — la gestión cierra.`);
+              `Anexo de AJUSTE aplicado al contrato ${a.contrato_id || a.contrato_doc_id}: ${[
+                (a.cargos || []).length ? (a.cargos || []).map(cg => `${cg.concepto} $${Number(cg.monto || 0).toFixed(2)}${cg.recurrente ? "/mes" : ""} × ${cg.cantidad}${(cg.seriales || []).length ? ` (${cg.seriales.join(", ")})` : ""}`).join("; ") : "",
+                (a.ajustes_precio || []).length ? `tarifas renegociadas: ${(a.ajustes_precio || []).map(x => `${x.modelo} $${Number(x.precio_anterior).toFixed(2)}→$${Number(x.precio_nuevo).toFixed(2)}`).join(", ")}` : "",
+              ].filter(Boolean).join("; ")}${estampados ? `; servicio estampado en ${estampados} equipo(s) del pool` : ""}; totales del contrato recalculados. Sin bodega ni entrega — la gestión cierra.`);
             logger.info("[onGestionWrite] ajuste de tarifa aplicado", { gid, contrato: a.contrato_doc_id, estampados });
           } else {
             await ref.set({ cierre: { ...(gA.cierre || {}), derivacion: true } }, { merge: true });
