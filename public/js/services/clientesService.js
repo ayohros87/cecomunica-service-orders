@@ -91,26 +91,30 @@ const ClientesService = {
 
   /**
    * Load all clients from Firestore.
-   * OJO: devuelve TAMBIÉN los borrados (deleted:true) — sirve para resolver un
-   * cliente_id histórico que ya fue fusionado. Todo selector/autocompletado
-   * debe filtrar `c.deleted !== true` antes de ofrecerlos.
+   * Desde 2026-09-02 delega en getAllClientes (solo clientes VIVOS): bajar la
+   * colección completa del servidor en cada apertura era la fuente #4 de
+   * lecturas de la factura de agosto, y ningún consumidor usaba los borrados
+   * (los tres filtran `deleted !== true` por su cuenta). Revalida contra el
+   * servidor a lo sumo cada 5 min por pestaña: entre medias sirve la caché
+   * local de Firestore, que sí incluye las escrituras propias — un cliente
+   * creado en OTRA máquina tarda máximo 5 min en aparecer (lección bodega
+   * 2026-08-10: cache-first puro sin revalidar dejó una venta sin facturar).
    * @returns {Promise<Map<string, Object>>} Map of clientId => clientData
    */
   async loadClientes() {
-    const db = firebase.firestore();
-    const snapshot = await db.collection("clientes").get();
-    
+    const K = 'clientes_srv_at';
+    let necesitaServidor = true;
+    try {
+      necesitaServidor = (Date.now() - Number(sessionStorage.getItem(K) || 0)) > 5 * 60 * 1000;
+    } catch (e) { /* sin sessionStorage: siempre servidor */ }
+
+    const lista = await this.getAllClientes({ fresh: necesitaServidor });
+    if (necesitaServidor) { try { sessionStorage.setItem(K, String(Date.now())); } catch (e) { /* no-op */ } }
+
     const clientesMap = new Map();
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      clientesMap.set(doc.id, {
-        id: doc.id,
-        nombre: data.nombre || "",
-        empresa: data.empresa || "",
-        ...data
-      });
-    });
-    
+    for (const c of lista) {
+      clientesMap.set(c.id, { nombre: "", empresa: "", ...c });
+    }
     return clientesMap;
   },
 

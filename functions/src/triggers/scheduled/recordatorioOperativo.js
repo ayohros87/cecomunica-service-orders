@@ -697,6 +697,23 @@ module.exports = onSchedule(
         .limit(1000)
         .get();
 
+      // Renovadores en LOTE (2026-09-02): antes cada contrato con
+      // renovado_por_ids hacía hasta 3 get() secuenciales dentro del bucle
+      // (N+1). Una pasada de getAll trae todos de una; el que no se pueda
+      // leer simplemente no aparece en el mapa y la señal se mantiene, igual
+      // que hacía el catch por unidad.
+      const renovadorIds = [...new Set(snap.docs.flatMap((d) => {
+        const c = d.data() || {};
+        return (!c.deleted && Array.isArray(c.renovado_por_ids)) ? c.renovado_por_ids.slice(0, 3) : [];
+      }))].filter(Boolean);
+      const renovadores = new Map();
+      for (let i = 0; i < renovadorIds.length; i += 300) {
+        const refs = renovadorIds.slice(i, i + 300).map((id) => db.collection("contratos").doc(id));
+        try {
+          (await db.getAll(...refs)).forEach((s) => { if (s.exists) renovadores.set(s.id, s.data()); });
+        } catch (err) { /* señal se mantiene para los que no se pudieron leer */ }
+      }
+
       const filas = [];
       let actualizados = 0;
       for (const d of snap.docs) {
@@ -708,13 +725,10 @@ module.exports = onSchedule(
         // si el renovador es una renovación REAL vigente: un REEMP amarrado
         // como origen NO renueva al contrato (solo sustituye equipos).
         if (Array.isArray(c.renovado_por_ids) && c.renovado_por_ids.length) {
-          let renovado = false;
-          for (const rid of c.renovado_por_ids.slice(0, 3)) {
-            try {
-              const r = (await db.collection("contratos").doc(rid).get()).data();
-              if (r && ["activo", "aprobado"].includes(r.estado) && VIG.codigoTipo(r) !== "REEMP") { renovado = true; break; }
-            } catch (err) { /* señal se mantiene si no se pudo verificar */ }
-          }
+          const renovado = c.renovado_por_ids.slice(0, 3).some((rid) => {
+            const r = renovadores.get(rid);
+            return r && ["activo", "aprobado"].includes(r.estado) && VIG.codigoTipo(r) !== "REEMP";
+          });
           if (renovado) continue;
         }
         const est = VIG.estadoVencimiento(c.fecha_vencimiento, now);

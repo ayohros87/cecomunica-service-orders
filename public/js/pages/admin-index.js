@@ -11,7 +11,10 @@
 (function () {
   'use strict';
 
-  const AUTO_REFRESH_MS = 60_000;
+  // 5 min, no 60s (2026-09-02, factura de agosto): con "Auto" encendido cada
+  // ciclo baja ~4,000 docs (órdenes + contratos + cotizaciones + POC +
+  // usuarios). A 60s eran ~240k lecturas/hora por pestaña abierta.
+  const AUTO_REFRESH_MS = 300_000;
 
   const ESTADOS_ABIERTOS = new Set([
     'POR ASIGNAR', 'EN PROCESO', 'DIAGNÓSTICO', 'EN ESPERA', 'LISTA',

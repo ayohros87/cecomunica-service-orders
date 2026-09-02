@@ -57,6 +57,25 @@ async function ejecutar() {
     } catch (e) { return null; }
   }
 
+  // Prefetch en LOTE de las órdenes enlazadas (2026-09-02): estadoOrden ya
+  // deduplicaba con el cache, pero leía de a un doc, en serie — y este cron
+  // barre miles de fichas. Mismo número de lecturas facturadas, muchísima
+  // menos latencia (= CPU-segundos del cron). Si un lote falla, estadoOrden
+  // cae al get individual como siempre.
+  {
+    const ids = [...new Set(fichas.map((f) => f.orden_actual_id).filter(Boolean))];
+    for (let i = 0; i < ids.length; i += 300) {
+      const refs = ids.slice(i, i + 300).map((id) => db.collection("ordenes_de_servicio").doc(id));
+      try {
+        (await db.getAll(...refs)).forEach((s) => {
+          const v = s.exists && s.data().eliminado !== true
+            ? String(s.data().estado_reparacion || "").trim().toUpperCase() : null;
+          ordenCache.set(s.id, v);
+        });
+      } catch (e) { /* best-effort */ }
+    }
+  }
+
   const R = {
     at: admin.firestore.FieldValue.serverTimestamp(),
     fichas_total: fichas.length,
@@ -252,19 +271,25 @@ async function ejecutar() {
   try {
     const gSnap = await db.collection("gestiones").get();
     const ABIERTAS_G = new Set(["pendiente_aprobacion", "pendiente_firma", "pendiente_bodega", "en_proceso", "en_demo", "retorno"]);
+    const abiertas = gSnap.docs.filter((d) => { const g = d.data(); return !g.deleted && ABIERTAS_G.has(g.estado); });
+    // Clientes en LOTE (2026-09-02): antes un get() por cliente dentro del
+    // bucle. Un lote que falle marca sus ids como OK — no se reporta drift
+    // que no se pudo verificar (antes un fallo abortaba la sección entera,
+    // que es el mismo resultado).
     const clienteOk = new Map();
-    for (const d of gSnap.docs) {
+    const cids = [...new Set(abiertas.map((d) => d.data().cliente_id).filter(Boolean))];
+    for (let i = 0; i < cids.length; i += 300) {
+      const tanda = cids.slice(i, i + 300);
+      try {
+        (await db.getAll(...tanda.map((id) => db.collection("clientes").doc(id))))
+          .forEach((s) => clienteOk.set(s.id, s.exists && s.data().deleted !== true));
+      } catch (e) { tanda.forEach((id) => clienteOk.set(id, true)); }
+    }
+    for (const d of abiertas) {
       const g = d.data();
-      if (g.deleted || !ABIERTAS_G.has(g.estado)) continue;
       let mal = null;
       if (!g.cliente_id) mal = "sin cliente_id";
-      else {
-        if (!clienteOk.has(g.cliente_id)) {
-          const cs = await db.collection("clientes").doc(g.cliente_id).get();
-          clienteOk.set(g.cliente_id, cs.exists && cs.data().deleted !== true);
-        }
-        if (!clienteOk.get(g.cliente_id)) mal = "cliente inexistente o borrado";
-      }
+      else if (!clienteOk.get(g.cliente_id)) mal = "cliente inexistente o borrado";
       if (!mal) {
         const af = new Set(g.contratos_afectados || []);
         const fuera = (g.items || []).find((it) => it.contrato_doc_id && !af.has(it.contrato_doc_id));

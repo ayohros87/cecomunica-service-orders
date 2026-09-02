@@ -885,6 +885,12 @@ const OrdenesService = {
     return resultados;
   },
 
+  // Memo de 60s por estado (2026-09-02, factura de agosto): los chips de la
+  // bandeja llaman esto en cada clic y cada clic bajaba hasta 200 docs de
+  // 8KB. Un chip repetido dentro del minuto sirve lo ya bajado; el costo es
+  // que un cambio de OTRO usuario tarda ≤60s en reflejarse en el chip.
+  _fbsMemo: new Map(),
+
   /**
    * Filter orders by status
    * @param {string} estado - Status to filter by
@@ -892,8 +898,12 @@ const OrdenesService = {
    * @returns {Promise<Array>}
    */
   async filterByStatus(estado, limit = 200) {
+    const memoKey = `${estado}|${limit}`;
+    const hit = this._fbsMemo.get(memoKey);
+    if (hit && (Date.now() - hit.at) < 60_000) return hit.rows;
+
     const db = firebase.firestore();
-    
+
     try {
       // Try with index first
       const snap = await db.collection("ordenes_de_servicio")
@@ -909,25 +919,28 @@ const OrdenesService = {
         resultados.push({ ordenId: doc.id, ...data });
       });
 
+      this._fbsMemo.set(memoKey, { at: Date.now(), rows: resultados });
       return resultados;
     } catch (e) {
       // Fallback if index is missing (failed-precondition)
       if (e?.code === "failed-precondition") {
         console.log("🔄 Index missing, using fallback JS filter");
-        
+
         const snapFallback = await db.collection("ordenes_de_servicio")
           .orderBy("fecha_creacion", "desc")
           .limit(limit)
           .get();
-        
+
         const allDocs = [];
         snapFallback.forEach(doc => {
           const data = doc.data();
           if (data.eliminado === true) return;
           allDocs.push({ ordenId: doc.id, ...data });
         });
-        
-        return allDocs.filter(o => o.estado_reparacion === estado);
+
+        const filtrados = allDocs.filter(o => o.estado_reparacion === estado);
+        this._fbsMemo.set(memoKey, { at: Date.now(), rows: filtrados });
+        return filtrados;
       }
       
       throw e; // Re-throw if not index issue
