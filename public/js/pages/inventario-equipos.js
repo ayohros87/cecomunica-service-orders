@@ -78,6 +78,38 @@ window.EquiposPool = {
     }
   },
 
+  // Refresco quirúrgico (2026-09-02, factura de agosto): recargar el pool
+  // COMPLETO (7,351 fichas) tras cada mutación era la 2ª fuente de lecturas
+  // del proyecto (~3.2M/mes). Tras tocar una unidad basta re-leer ESA ficha
+  // (1 lectura) y parchear la fila en memoria. Acepta varios ids: corregir un
+  // serial cambia el doc ID (doc ID = serial_norm), así que se pasan el viejo
+  // y el nuevo — el que ya no exista se quita del array. Con lotes grandes o
+  // sin estado previo cae a la recarga completa.
+  async refrescar(ids) {
+    const lista = [...new Set((Array.isArray(ids) ? ids : [ids]).filter(Boolean))];
+    if (!lista.length || !Array.isArray(this._equipos) || lista.length > 300) return this.cargar();
+    try {
+      const db = firebase.firestore();
+      const snaps = await Promise.all(lista.map(id => db.collection('equipos_pool').doc(id).get()));
+      for (const s of snaps) {
+        const i = this._equipos.findIndex(e => e.id === s.id);
+        if (s.exists) {
+          const doc = { id: s.id, ...s.data() };
+          if (i >= 0) this._equipos[i] = doc; else this._equipos.push(doc);
+        } else if (i >= 0) {
+          this._equipos.splice(i, 1);
+        }
+      }
+      // Mismo orden que EquiposPoolService.listar(), por si cambió el modelo.
+      this._equipos.sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
+        || (a.serial || '').localeCompare(b.serial || ''));
+      this.render();
+    } catch (e) {
+      console.error('Refresco puntual falló, recarga completa:', e);
+      return this.cargar();
+    }
+  },
+
   _ordenEstados: new Map(), // orden_actual_id → estado_reparacion
 
   async _cargarEstadosOrdenTaller() {
@@ -423,7 +455,7 @@ window.EquiposPool = {
       const fn = firebase.functions().httpsCallable('fusionarPoolFicha');
       const res = await fn({ keeperId, absorbidosIds: absorbidos });
       Toast.show(`Fusión lista: ${res.data.fusionados} ficha(s) absorbida(s).`, 'ok');
-      await this.cargar();
+      await this.refrescar([keeperId, ...absorbidos]);
     } catch (e) {
       Toast.show('No se pudo fusionar: ' + (e.message || e), 'bad');
     }
@@ -955,7 +987,7 @@ window.EquiposPool = {
     const noIntentados = aplican.length - resultados.length;
     Modal.close('eqLoteModal');
     this._sel.clear();
-    await this.cargar();
+    await this.refrescar(aplican.map(e => e.id));
     this._reporteLote({ accion: a, ok: ok.length, fallidos, noIntentados });
   },
 
@@ -1173,9 +1205,10 @@ window.EquiposPool = {
         notas:        document.getElementById('editNotas').value,
       }, firebase.auth().currentUser);
       Modal.close('eqEditModal');
+      const editadoId = this._editandoId;
       this._editandoId = null;
       Toast.show('Equipo actualizado.', 'ok');
-      this.cargar();
+      this.refrescar(editadoId);
     } catch (e) {
       Toast.show('Error al actualizar: ' + (e.message || e), 'bad');
     }
@@ -1186,7 +1219,7 @@ window.EquiposPool = {
     try {
       await EquiposPoolService.verificar(id, firebase.auth().currentUser);
       Toast.show('Equipo verificado.', 'ok');
-      this.cargar();
+      this.refrescar(id);
     } catch (e) {
       Toast.show('Error: ' + (e.message || e), 'bad');
     }
@@ -1220,7 +1253,7 @@ window.EquiposPool = {
     try {
       await EquiposPoolService.corregirSerial(id, limpio, 'Corregido desde Equipos por serial.', firebase.auth().currentUser);
       Toast.show(`Serial corregido: ${limpio}`, 'ok');
-      this.cargar();
+      this.refrescar([id, EquiposPoolService.normalizarSerial(limpio)]);
     } catch (e) {
       Toast.show('No se pudo corregir: ' + (e.message || e), 'bad');
     }
@@ -1234,7 +1267,7 @@ window.EquiposPool = {
     try {
       await EquiposPoolService.liberar(id, { notas: 'Inspección OK tras devolución' }, firebase.auth().currentUser);
       Toast.show('Equipo devuelto a bodega.', 'ok');
-      this.cargar();
+      this.refrescar(id);
     } catch (e) {
       Toast.show('Error: ' + (e.message || e), 'bad');
     }
@@ -1252,7 +1285,7 @@ window.EquiposPool = {
     try {
       await EquiposPoolService.darDeBaja(id, motivo.trim(), firebase.auth().currentUser);
       Toast.show('Equipo dado de baja.', 'ok');
-      this.cargar();
+      this.refrescar(id);
     } catch (e) {
       Toast.show('Error: ' + (e.message || e), 'bad');
     }
@@ -1271,7 +1304,7 @@ window.EquiposPool = {
     try {
       await EquiposPoolService.reactivar(id, motivo.trim(), firebase.auth().currentUser);
       Toast.show('Equipo reactivado — de vuelta en bodega.', 'ok');
-      this.cargar();
+      this.refrescar(id);
     } catch (e) {
       Toast.show('Error: ' + (e.message || e), 'bad');
     }
@@ -1419,7 +1452,7 @@ window.EquiposPool = {
       this._corrigiendoId = null;
       this._corrPocDevice = null;
       Toast.show(msg, 'ok');
-      this.cargar();
+      this.refrescar(id);
     } catch (e) {
       Toast.show('Error al corregir: ' + (e.message || e), 'bad');
     } finally {

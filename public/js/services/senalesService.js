@@ -34,9 +34,12 @@ const SenalesService = {
   },
 
   // Tope del conteo por scan. Por encima se reporta "N+": para una señal
-  // operativa, "400+" ya significa "incendio" — el número exacto no cambia
-  // ninguna decisión y sí costaría lecturas sin tope.
-  _COUNT_TOPE: 400,
+  // operativa, "50+" ya significa "hay cola" — el número exacto no cambia
+  // ninguna decisión y sí costaría lecturas sin tope. Era 400: con el SDK
+  // compat cada conteo BAJA los documentos enteros (no hay .count()), así que
+  // el tope es literalmente la factura de la señal (2026-09-02, factura de
+  // agosto: ~3M lecturas/mes y el grueso del egreso venían de estos scans).
+  _COUNT_TOPE: 50,
 
   async _count(queryRef, docFilter = null) {
     // Si algún día el SDK trae el agregado (migración a modular), se usa —
@@ -256,7 +259,7 @@ const SenalesService = {
       const now = new Date();
       const snap = await firebase.firestore().collection('ordenes_de_servicio')
         .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
-        .limit(500).get();
+        .limit(150).get();
       const rows = [];
       snap.forEach(d => {
         const o = d.data() || {};
@@ -280,8 +283,12 @@ const SenalesService = {
       const { staleDias, staleMax } = await this._config();
       const now = new Date();
       const snap = await firebase.firestore().collection('ordenes_de_servicio')
+        // Sin orderBy la query sale por doc ID = fecha (YYYYMMDD...): las más
+        // viejas primero, que es exactamente donde viven las estancadas. El
+        // tope bajó de 600 (2026-09-02): cada doc de orden pesa ~8KB y estos
+        // scans eran el grueso del egreso de la factura de agosto.
         .where('estado_reparacion', 'in', PendientesDomain.ESTADOS_ABIERTOS)
-        .limit(600).get();
+        .limit(150).get();
       const rows = [];
       snap.forEach(d => {
         const o = d.data() || {};
@@ -307,7 +314,7 @@ const SenalesService = {
       const snap = await firebase.firestore().collection('ordenes_de_servicio')
         .where('qc_requerido', '==', true)
         .where('estado_reparacion', '==', 'COMPLETADO (EN OFICINA)')
-        .limit(200).get();
+        .limit(150).get();
       const rows = [];
       snap.forEach(d => {
         const o = d.data() || {};
@@ -335,7 +342,7 @@ const SenalesService = {
       const now = new Date();
       const snap = await firebase.firestore().collection('equipos_pool')
         .where('estado', '==', 'devuelto_revision')
-        .limit(400).get();
+        .limit(150).get();
       const rows = [];
       snap.forEach(d => {
         const u = d.data() || {};
