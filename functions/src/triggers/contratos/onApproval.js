@@ -272,7 +272,8 @@ const onContratoActivado = onDocumentUpdated(
               : "<b>La facturación arranca de una vez</b> — no hay entrega pendiente."}</p>
           ${G.detalleAumentoHtml({ lineas: after.equipos || [], cargos: after.cargos || [],
             totales: { total_mensual: after.total_mensual, cargos_uni: after.cargos_unico, primer_pago: after.primer_pago } })}`,
-        cliente_id: after.cliente_id,
+        cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
+        responsable_uid: after.creado_por_uid || null,
         ctaUrl: `${APP_BASE_URL}/contratos/documento.html?id=${encodeURIComponent(contratoId)}`,
         ctaLabel: "Ver el documento del contrato",
         meta: { source: "onContratoActivado_facturacion", contrato_id: after.contrato_id || contratoId },

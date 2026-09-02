@@ -407,7 +407,8 @@ module.exports = onDocumentWritten(
               `<code>${G.escapeHtml(it.contrato_id || "—")}</code>`,
             ]))}
             ${gB.penalidad_estimada?.total ? `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Liquidación estimada: <b>$${Number(gB.penalidad_estimada.total || 0).toFixed(2)}</b></p>` : ""}`,
-          cliente_id: gB.cliente_id,
+          cliente_id: gB.cliente_id, cliente_nombre: gB.cliente_nombre || "",
+          responsable_uid: gB.responsable_uid || null, responsable_email: gB.responsable_email || null,
           ctaUrl: G.urlGestion(gB, gid), ctaLabel: "Ver el expediente",
           meta: { gestion_id: gid, paso: "facturacion_baja" },
         });
@@ -709,7 +710,8 @@ module.exports = onDocumentWritten(
                 quedaron amarrados al contrato <b>${G.escapeHtml(a.contrato_id || "")}</b> con tarifa
                 desde <b>hoy</b> — sin bodega ni entrega.</p>
                 ${G.detalleAumentoHtml(a)}`,
-              cliente_id: gA.cliente_id,
+              cliente_id: gA.cliente_id, cliente_nombre: gA.cliente_nombre || "",
+              responsable_uid: gA.responsable_uid || null, responsable_email: gA.responsable_email || null,
               ctaUrl: G.urlGestion(gA, gid), ctaLabel: "Ver el expediente",
               meta: { gestion_id: gid, paso: "facturacion_regularizacion" },
             });
@@ -753,7 +755,8 @@ module.exports = onDocumentWritten(
                 <b>${G.escapeHtml(a.contrato_id || "")}</b> de <b>${G.escapeHtml(gA.cliente_nombre || "—")}</b>
                 quedó <b>efectivo desde hoy</b> — el mensual del contrato ya está recalculado.</p>
                 ${G.detalleAumentoHtml(a)}`,
-              cliente_id: gA.cliente_id,
+              cliente_id: gA.cliente_id, cliente_nombre: gA.cliente_nombre || "",
+              responsable_uid: gA.responsable_uid || null, responsable_email: gA.responsable_email || null,
               ctaUrl: G.urlGestion(gA, gid), ctaLabel: "Ver el expediente",
               meta: { gestion_id: gid, paso: "facturacion_ajuste" },
             });

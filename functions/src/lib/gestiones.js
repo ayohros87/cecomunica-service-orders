@@ -442,7 +442,8 @@ const CHECKLIST_FACTURACION = `
     <b>Acciones de recepción:</b> actualizar <b>QuickBooks</b> (manual — aún sin integración) ·
     activar/ajustar en <b>POC</b> cuando aplique · pasar la información a <b>taller</b> si corresponde.</p>`;
 
-async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, ctaUrl, ctaLabel, meta }) {
+async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, cliente_nombre = "",
+  responsable_uid = null, responsable_email = null, ctaUrl, ctaLabel, meta }) {
   try {
     const { activacionesEmailTo } = require("./mailRecipients");
     const to = await activacionesEmailTo();
@@ -453,6 +454,37 @@ async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, ctaUrl, c
       bodyContent: `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">${titulo}</h2>${cuerpo}${CHECKLIST_FACTURACION}`,
       ctaUrl, ctaLabel, meta,
     });
+
+    // Ficha SIN vendedor asignado (2026-09-02, decisión Alberto tras el caso
+    // FANLYC): el aviso salió sin CC al vendedor — se alerta a RECEPCIÓN
+    // (cecrecep) con copia al ELABORADOR para que la ficha se corrija.
+    if (!cc && cliente_id) {
+      try {
+        const { recepcionEmails } = require("./mailRecipients");
+        const recep = await recepcionEmails();
+        const toAlerta = (recep && recep.length) ? recep.join(",") : "cecrecep@cecomunica.com";
+        let elaborador = responsable_email || null;
+        if (!elaborador && responsable_uid) {
+          const u = await db.collection("usuarios").doc(responsable_uid).get().catch(() => null);
+          elaborador = u?.exists ? (u.data().email || null) : null;
+        }
+        if (elaborador && (!isEmail(elaborador) || String(elaborador).endsWith("@sin.email.cecomunica.com"))) elaborador = null;
+        await encolarCorreo({
+          to: toAlerta, cc: elaborador,
+          subject: `Cuenta sin vendedor asignado: ${cliente_nombre || cliente_id}`,
+          preheader: "El aviso de facturación salió sin copia al vendedor",
+          bodyContent: `
+            <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#92400e;">Ficha sin vendedor asignado</h2>
+            <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              El aviso «${escapeHtml(subject)}» salió <b>sin copia al vendedor</b> porque la ficha de
+              <b>${escapeHtml(cliente_nombre || cliente_id)}</b> no tiene <b>vendedor asignado</b>.
+              Asignen el vendedor en la ficha del cliente para que los próximos avisos lo copien solos.</p>`,
+          ctaUrl: `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(cliente_id)}`,
+          ctaLabel: "Abrir la ficha del cliente",
+          meta: { ...(meta || {}), paso: "alerta_sin_vendedor" },
+        });
+      } catch (e2) { logger.warn("[gestiones] alerta sin-vendedor no encolada", { message: e2.message }); }
+    }
   } catch (e) { logger.warn("[gestiones] avisoFacturacion no encolado", { message: e.message, subject }); }
 }
 

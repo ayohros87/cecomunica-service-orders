@@ -211,7 +211,8 @@ module.exports = onDocumentWritten(
                   ${G.detalleAumentoHtml(a)}
                   ${(a.seriales_asignados || []).length ? `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Seriales entregados:
                     ${a.seriales_asignados.map(s => `<code>${G.escapeHtml(s.serial || "")}</code>`).join(", ")}</p>` : ""}`,
-                cliente_id: g.cliente_id,
+                cliente_id: g.cliente_id, cliente_nombre: g.cliente_nombre || "",
+                responsable_uid: g.responsable_uid || null, responsable_email: g.responsable_email || null,
                 ctaUrl: G.urlGestion(g, gid), ctaLabel: "Ver el expediente",
                 meta: { gestion_id: gid, paso: "facturacion_aumento_entrega", orden: ordenId },
               });
@@ -325,7 +326,8 @@ module.exports = onDocumentWritten(
                       <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> quedó recuperada (devolución
                       <b>${G.escapeHtml(ordenId)}</b>) y el contrato pasó a <b>cerrado</b>${origCerrados ? `, junto con ${origCerrados} contrato(s) origen de su linaje` : ""}.
                       Corresponde <b>cerrar la facturación en QuickBooks</b> y <b>desactivar las unidades en POC</b>.</p>`,
-                  cliente_id: g.cliente_id,
+                  cliente_id: g.cliente_id, cliente_nombre: g.cliente_nombre || "",
+                  responsable_uid: g.responsable_uid || null, responsable_email: g.responsable_email || null,
                   ctaUrl: G.urlGestion(g, gid), ctaLabel: "Ver el expediente",
                   meta: { gestion_id: gid, paso: "facturacion_terminacion", contrato: c.contrato_id || cDocId },
                 });
