@@ -1464,11 +1464,11 @@ window.Centro = {
     return `
       <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
-        <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;">${this.esc(c.contrato_id || c.id)}</div>
+        <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;">${this.esc(c.contrato_id || c.id)}</div>
           <div class="s">${esRenov ? 'Renovación de cuenta' : 'Contrato nuevo'} · ${unid} unid. · $${Number(c.total_mensual || 0).toFixed(2)}/mes</div></div>
-        <span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/4</span>
-        <span class="cg-chip ${chipCls}">${chipTxt}</span>
-        <span class="arr">${abierta ? '▾' : '›'}</span>
+        <span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/4</span>
+        <span class="cg-chip ${chipCls}" style="flex:none;">${chipTxt}</span>
+        <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
       </div>
       ${abierta ? `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
         <div class="cg-exp">
@@ -1563,7 +1563,7 @@ window.Centro = {
       <div class="cg-row" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
            onkeydown="if(event.key==='Enter')this.click()"
            style="${abierta ? 'border-color:var(--accent);' : ''}${atenuada && !abierta ? ' opacity:.62;' : ''}">
-        <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
+        <div style="min-width:0; flex:1;"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
           <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo'
             : g.tipo === 'aumento' && g.aumento?.es_ajuste ? 'Ajuste de tarifa / servicios'
             : this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
@@ -1572,9 +1572,9 @@ window.Centro = {
             ? this.esc([...(g.aumento?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`),
                         ...(g.aumento?.cargos || []).map(c => `${c.cantidad} × ${c.concepto}`)].join(', ') || '—')
             : `${(g.items || []).length} serial(es)`} · ${fecha}${g.estado === 'anulada' && g.anulada_motivo ? ` · <i>${this.esc(g.anulada_motivo)}</i>` : ''}</div></div>
-        ${atenuada ? '' : `<span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/${defsG.length}</span>`}
-        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}"${atenuada ? ' style="margin-left:auto;"' : ''}>${this.esc(GestionesService.estadoLabel(g.estado))}</span>
-        <span class="arr">${abierta ? '▾' : '›'}</span>
+        ${atenuada ? '' : `<span class="num" style="font-size:12px; color:var(--fg-3); flex:none;">${done}/${defsG.length}</span>`}
+        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}" style="flex:none;">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
+        <span class="arr" style="margin-left:0;">${abierta ? '▾' : '›'}</span>
       </div>
       ${abierta ? this._detalleGestion(g) : ''}`;
     };
