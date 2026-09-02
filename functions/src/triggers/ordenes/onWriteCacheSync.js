@@ -104,6 +104,25 @@ const onOrdenWriteSyncContratoCache = onDocumentWritten(
     const afterContratoId  = getApplicableContract(afterData);
     const wasSoftDeleted   = !beforeData?.eliminado && afterData?.eliminado === true;
 
+    // Candado de no-cambio (2026-09-02, factura de agosto): esto corre en TODA
+    // escritura de una orden — incluidas las que hacen los otros triggers de
+    // ordenes_de_servicio — y reescribía cache + resumen del contrato con
+    // serverTimestamp aunque nada relevante cambiara: cada edición de orden se
+    // amplificaba ~15 veces (8 triggers de ordenes, 7 de contratos). Si el
+    // vínculo, el flag eliminado y la vista de cache son idénticos, no hay
+    // nada que sincronizar.
+    const vistaCache = (d) => {
+      const c = extractCacheData(d);
+      if (!c) return null;
+      const { updated_at, ...resto } = c;
+      return JSON.stringify(resto);
+    };
+    if (beforeContratoId === afterContratoId
+        && (beforeData?.eliminado === true) === (afterData?.eliminado === true)
+        && vistaCache(beforeData) === vistaCache(afterData)) {
+      return null;
+    }
+
     logger.info("[onOrdenWriteSyncContratoCache] Contract analysis", {
       ordenId, beforeContratoId, afterContratoId,
       hasChange: beforeContratoId !== afterContratoId, wasSoftDeleted

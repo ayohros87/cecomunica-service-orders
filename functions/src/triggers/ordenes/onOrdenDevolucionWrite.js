@@ -231,7 +231,21 @@ async function estamparEspejo(ordenId, orden) {
           if (!(ordenId in tiquetes)) return;   // nada que quitar
           delete tiquetes[ordenId];
         } else {
-          tiquetes[ordenId] = { ...resumen, rol: destino.rol };
+          const nuevo  = { ...resumen, rol: destino.rol };
+          // Candado de no-cambio (2026-09-02, factura de agosto): esto corre
+          // en TODA escritura de una DEVOLUCIÓN y por cada contrato afectado.
+          // Reescribir el mismo tiquete solo refresca devolucion_actualizado_at
+          // y dispara los 7 triggers de contratos en vano. El resumen son tres
+          // escalares + rol: si coinciden, los derivados tampoco cambian.
+          const previo = tiquetes[ordenId];
+          if (previo
+              && previo.rol === nuevo.rol
+              && Number(previo.pendientes || 0) === Number(nuevo.pendientes || 0)
+              && Number(previo.esperado   || 0) === Number(nuevo.esperado   || 0)
+              && !!previo.abierta === !!nuevo.abierta) {
+            return;                             // tiquete idéntico: sin escritura
+          }
+          tiquetes[ordenId] = nuevo;
         }
 
         // Sin tiquetes no quedan campos a medias: la fila vuelve a no mostrar

@@ -105,13 +105,18 @@ const onContratoActivado = onDocumentUpdated(
 
     const contratoId = event.params.docId;
     const verificRef = admin.firestore().collection("verificaciones").doc(contratoId);
-    const verificSnap = await verificRef.get();
 
     const transitionedToActivo   = (estadoBefore !== "activo"   && estadoAfter === "activo");
     const transitionedToAprobado = (estadoBefore !== "aprobado" && estadoAfter === "aprobado");
 
+    // La marca verificacion_ok vive en el contrato y la estampa este mismo
+    // trigger DESPUÉS de escribir la verificación (2026-09-02). Antes se leía
+    // verificaciones/ en cada escritura de un contrato activo solo para saber
+    // si hacía falta reparar — una lectura por escritura, multiplicada por
+    // todos los triggers que tocan contratos. Contratos anteriores a la marca
+    // se auto-sanan en su próxima escritura, una sola vuelta.
     const needsRepair =
-      !verificSnap.exists ||
+      after.verificacion_ok !== true ||
       !after.firma_codigo ||
       !after.firma_hash   ||
       !after.firma_url;
@@ -198,42 +203,11 @@ const onContratoActivado = onDocumentUpdated(
       }
     }
 
-    await afterSnap.ref.set({
-      firma_codigo: codigoCorto,
-      firma_hash: hmac,
-      firma_url: firmaUrl,
-      ...vigenciaPatch,
-      ...(transitionedToActivo || transitionedToAprobado || !after.fecha_aprobacion ? {
-        fecha_aprobacion: admin.firestore.FieldValue.serverTimestamp(),
-      } : {}),
-    }, { merge: true });
-
-    // ── Aviso de facturación a RECEPCIÓN al pasar a ACTIVO (2026-09-02) ──
-    // El contrato ya es real: crear/actualizar en QuickBooks y POC. Si lleva
-    // equipo por entregar, la facturación arranca en la fecha de ENTREGA (la
-    // OS le llega a recepción por su flujo normal).
-    if (transitionedToActivo) {
-      const conEquipo = (after.equipos || []).some(e => Number(e.cantidad || 0) > 0)
-        && !after.renovacion_sin_equipo;
-      await G.avisoFacturacion({
-        subject: `FACTURACIÓN: ${after.accion === "Renovación" ? "renovación" : "contrato"} ACTIVO — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`,
-        titulo: `${after.accion === "Renovación" ? "Renovación activa" : "Contrato activo"} — alta de facturación y servicio`,
-        cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
-            El contrato <b>${escapeHtml(after.contrato_id || contratoId)}</b>
-            (${escapeHtml(after.tipo_contrato || "—")} · ${escapeHtml(after.duracion || "—")}) de
-            <b>${escapeHtml(after.cliente_nombre || "—")}</b> quedó <b>activo</b>${after.firmado_tipo === "digital" ? " con firma digital" : ""}.
-            ${conEquipo && after.entrega_confirmada !== true
-              ? "Lleva equipo por entregar: <b>la facturación arranca en la fecha de entrega</b> (la orden de servicio te llegará por el flujo normal)."
-              : "<b>La facturación arranca de una vez</b> — no hay entrega pendiente."}</p>
-          ${G.detalleAumentoHtml({ lineas: after.equipos || [], cargos: after.cargos || [],
-            totales: { total_mensual: after.total_mensual, cargos_uni: after.cargos_unico, primer_pago: after.primer_pago } })}`,
-        cliente_id: after.cliente_id,
-        ctaUrl: `${APP_BASE_URL}/contratos/documento.html?id=${encodeURIComponent(contratoId)}`,
-        ctaLabel: "Ver el documento del contrato",
-        meta: { source: "onContratoActivado_facturacion", contrato_id: after.contrato_id || contratoId },
-      });
-    }
-
+    // Verificación ANTES que el contrato (2026-09-02): la marca
+    // verificacion_ok solo puede existir si la verificación quedó escrita. En
+    // el orden viejo (contrato → correo → verificación) un fallo a mitad
+    // dejaba needsRepair encendido para siempre y este bloque completo corría
+    // en CADA escritura posterior del contrato.
     let aprobNombre = "—";
     let aprobEmail  = "—";
     let aprobRol    = "—";
@@ -267,6 +241,43 @@ const onContratoActivado = onDocumentUpdated(
       aprobado_por_rol:    aprobRol,
       creado_en: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
+
+    await afterSnap.ref.set({
+      firma_codigo: codigoCorto,
+      firma_hash: hmac,
+      firma_url: firmaUrl,
+      verificacion_ok: true,
+      ...vigenciaPatch,
+      ...(transitionedToActivo || transitionedToAprobado || !after.fecha_aprobacion ? {
+        fecha_aprobacion: admin.firestore.FieldValue.serverTimestamp(),
+      } : {}),
+    }, { merge: true });
+
+    // ── Aviso de facturación a RECEPCIÓN al pasar a ACTIVO (2026-09-02) ──
+    // El contrato ya es real: crear/actualizar en QuickBooks y POC. Si lleva
+    // equipo por entregar, la facturación arranca en la fecha de ENTREGA (la
+    // OS le llega a recepción por su flujo normal).
+    if (transitionedToActivo) {
+      const conEquipo = (after.equipos || []).some(e => Number(e.cantidad || 0) > 0)
+        && !after.renovacion_sin_equipo;
+      await G.avisoFacturacion({
+        subject: `FACTURACIÓN: ${after.accion === "Renovación" ? "renovación" : "contrato"} ACTIVO — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`,
+        titulo: `${after.accion === "Renovación" ? "Renovación activa" : "Contrato activo"} — alta de facturación y servicio`,
+        cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+            El contrato <b>${escapeHtml(after.contrato_id || contratoId)}</b>
+            (${escapeHtml(after.tipo_contrato || "—")} · ${escapeHtml(after.duracion || "—")}) de
+            <b>${escapeHtml(after.cliente_nombre || "—")}</b> quedó <b>activo</b>${after.firmado_tipo === "digital" ? " con firma digital" : ""}.
+            ${conEquipo && after.entrega_confirmada !== true
+              ? "Lleva equipo por entregar: <b>la facturación arranca en la fecha de entrega</b> (la orden de servicio te llegará por el flujo normal)."
+              : "<b>La facturación arranca de una vez</b> — no hay entrega pendiente."}</p>
+          ${G.detalleAumentoHtml({ lineas: after.equipos || [], cargos: after.cargos || [],
+            totales: { total_mensual: after.total_mensual, cargos_uni: after.cargos_unico, primer_pago: after.primer_pago } })}`,
+        cliente_id: after.cliente_id,
+        ctaUrl: `${APP_BASE_URL}/contratos/documento.html?id=${encodeURIComponent(contratoId)}`,
+        ctaLabel: "Ver el documento del contrato",
+        meta: { source: "onContratoActivado_facturacion", contrato_id: after.contrato_id || contratoId },
+      });
+    }
 
     return null;
   }
