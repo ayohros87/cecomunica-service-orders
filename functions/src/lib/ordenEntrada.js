@@ -70,6 +70,58 @@ function obsDeEntrada(u, motivo) {
   return partes.join(" ");
 }
 
+// Observación de un equipo agregado por una TANDA posterior (la ENTRADA ya
+// existía). Vive aquí junto a obsDeEntrada para que obsEquipoDevolucion —
+// que reconoce ambas formas para la corrección pre-firma — no se desincronice.
+function obsDeTanda(ordenDevId, dano) {
+  return `Tanda de devolución ${ordenDevId} — pendiente de inspección.` +
+    (dano ? ` Daño visible al recibir: ${dano}.` : "");
+}
+
+// Las dos formas auto-generadas de la observación de un equipo que entró por
+// una devolución: al CREAR la ENTRADA (obsDeEntrada, sin condición — el
+// check-in de devolución no la captura) o al agregarlo una tanda (obsDeTanda).
+function obsEquipoDevolucion(ordenDevId, motivoEntrada, dano) {
+  return [obsDeEntrada({ dano }, motivoEntrada), obsDeTanda(ordenDevId, dano)];
+}
+
+// Corrección pre-firma espejada en la ENTRADA: recepción corrigió accesorios
+// o daño de una unidad recibida ANTES de que el cliente firmara el acuse, y
+// la ENTRADA nació con los datos originales congelados. Transformación pura
+// (testeable sin Firestore) sobre el array `equipos` de la ENTRADA.
+//
+// Candado clave: la observación del equipo se reescribe SOLO si su texto
+// actual es EXACTAMENTE una de las auto-generadas con el daño anterior —
+// cualquier otra cosa es una nota hecha a mano (taller/recepción) y no se
+// pisa. Los checkmarks de accesorios solo cambian si la corrección trae
+// checklist. correcciones: [{ serial, accesorios, dano_visible, dano_antes }].
+function corregirEquiposEntrada(equipos, correcciones, ordenDevId, motivoEntrada) {
+  const lista = (Array.isArray(equipos) ? equipos : []).map(x => ({ ...x }));
+  let cambios = 0;
+  for (const c of (correcciones || [])) {
+    const serial = String(c.serial || "").trim().toUpperCase();
+    if (!serial) continue;
+    const i = lista.findIndex(x => !x.eliminado &&
+      String(x.numero_de_serie || x.serial || "").trim().toUpperCase() === serial);
+    if (i < 0) continue;
+    const eq = lista[i];
+    const esperadas = obsEquipoDevolucion(ordenDevId, motivoEntrada, c.dano_antes || "");
+    const idx = esperadas.indexOf(String(eq.observaciones || ""));
+    if (idx < 0) continue; // observación editada a mano: no se pisa
+    const acc = c.accesorios;
+    lista[i] = {
+      ...eq,
+      ...(acc ? {
+        bateria: !!acc.bateria, clip: !!acc.clip, cargador: !!acc.cargador,
+        fuente: !!acc.fuente, antena: !!acc.antena, cubrepolvo: !!acc.cubrepolvo,
+      } : {}),
+      observaciones: obsEquipoDevolucion(ordenDevId, motivoEntrada, c.dano_visible || "")[idx],
+    };
+    cambios++;
+  }
+  return { equipos: lista, cambios };
+}
+
 // Número de orden con el formato de la app (AAAAMMDD + secuencia de 2 dígitos,
 // ej. 2026071604). create() falla si el ID ya existe → reintenta con el
 // siguiente consecutivo (carrera con una creación manual simultánea).
@@ -250,4 +302,7 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
   return ordenId;
 }
 
-module.exports = { crearOrdenEntrada, equipoDeEntrada, frasePiezas, obsEntradaAuto, RE_OBS_AUTO };
+module.exports = {
+  crearOrdenEntrada, equipoDeEntrada, frasePiezas, obsEntradaAuto, RE_OBS_AUTO,
+  obsDeTanda, obsEquipoDevolucion, corregirEquiposEntrada,
+};

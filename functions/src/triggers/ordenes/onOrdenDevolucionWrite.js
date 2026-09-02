@@ -17,6 +17,10 @@
 // entregados y el daño visible, y por tanda la firma del cliente
 // (devolucion.acuses[]); todo viaja a la ENTRADA, que nace RECIBIDO EN
 // MOSTRADOR (los equipos ya están en el taller) con el acuse como recepción.
+// CORRECCIÓN PRE-FIRMA (2026-09-02): si recepción corrige accesorios/daño de
+// una unidad recibida ANTES de la firma del acuse, la corrección se espeja en
+// la ENTRADA — solo mientras el taller no la tome y sin pisar notas manuales
+// (ver aplicarCorreccionesEntrada).
 // SIN CONTRATO (2026-07-22): devoluciones de contratos de papel
 // (devolucion.modo == 'sin_contrato', creadas a mano) — los recibidos entran
 // al pool vía upsertContacto (crea el doc si el serial nunca tocó el sistema).
@@ -26,7 +30,7 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
-const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO } = require("../../lib/ordenEntrada");
+const { crearOrdenEntrada, equipoDeEntrada, frasePiezas, RE_OBS_AUTO, obsDeTanda, corregirEquiposEntrada } = require("../../lib/ordenEntrada");
 const { recepcionEmails } = require("../../lib/mailRecipients");
 const { APP_BASE_URL } = require("../../lib/inventario");
 const { pendientesDevolucion, resumenDevolucion, derivarEstadoDevolucion } = require("../../lib/devolucion");
@@ -285,9 +289,7 @@ async function crearOAlimentarEntrada(ordenId, after, unidades) {
       const seriales = new Set(actuales.map(x => (x.numero_de_serie || x.serial || "").toUpperCase()));
       const nuevos = unidades
         .filter(u => !seriales.has((u.serial || "").toUpperCase()))
-        .map(u => equipoDeEntrada(u,
-          `Tanda de devolución ${ordenId} — pendiente de inspección.` +
-          (u.dano ? ` Daño visible al recibir: ${u.dano}.` : "")));
+        .map(u => equipoDeEntrada(u, obsDeTanda(ordenId, u.dano)));
       if (nuevos.length) {
         const equipos = [...actuales, ...nuevos];
         const update = {
@@ -330,6 +332,51 @@ async function crearOAlimentarEntrada(ordenId, after, unidades) {
   return nuevaId;
 }
 
+// ── Corrección pre-firma espejada en la ENTRADA (pedido de recepción,
+// 2026-09-02: el checklist del lote pegó el mismo daño a los 25 seriales y la
+// corrección uno a uno no llegaba a la orden del taller) ──────────────────
+// La UI permite corregir accesorios/daño de una unidad recibida MIENTRAS el
+// cliente no firme el acuse; la ENTRADA nació con los datos congelados, así
+// que aquí se le siguen. TRES candados para no tocar nada que ya avanzó:
+//   1. Solo unidades SIN acuse_id (lo verifica quien nos llama): la firma es
+//      el papel que el cliente se lleva — después de firmar, la corrección va
+//      directo en la ENTRADA, que es el registro del taller.
+//   2. Solo si el taller NO tomó la ENTRADA (mismos estados que las tandas y
+//      sin técnico): una orden en manos de un técnico no cambia debajo de él.
+//   3. Solo si la observación del equipo sigue siendo EXACTAMENTE la
+//      auto-generada con el daño anterior (corregirEquiposEntrada): una nota
+//      editada a mano nunca se pisa.
+async function aplicarCorreccionesEntrada(ordenId, after, correcciones) {
+  let entradaId = after.orden_entrada_id || null;
+  if (!entradaId) {
+    entradaId = ((await db.collection("ordenes_de_servicio").doc(ordenId).get()).data() || {}).orden_entrada_id || null;
+  }
+  if (!entradaId) {
+    logger.info("[onOrdenDevolucionWrite] Corrección sin ENTRADA vinculada — queda solo en la devolución", { ordenId });
+    return;
+  }
+  const motivo = `Devolución ${ordenId} (${after.devolucion?.origen?.tipo || "devolución"})`;
+  const eRef = db.collection("ordenes_de_servicio").doc(entradaId);
+  const cambios = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(eRef);
+    if (!snap.exists) return 0;
+    const ent = snap.data();
+    const estado = (ent.estado_reparacion || "POR ASIGNAR").toUpperCase();
+    if (!ESTADOS_APPEND_ENTRADA.includes(estado) || ent.tecnico_asignado) return 0; // candado 2
+    const r = corregirEquiposEntrada(ent.equipos, correcciones, ordenId, motivo);
+    if (r.cambios) {
+      tx.update(eRef, {
+        equipos: r.equipos,
+        fecha_modificacion: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    return r.cambios;
+  });
+  logger.info("[onOrdenDevolucionWrite] Correcciones pre-firma espejadas en la ENTRADA", {
+    ordenId, entradaId, corregidas: cambios, solicitadas: correcciones.length,
+  });
+}
+
 module.exports = onDocumentWritten(
   { document: "ordenes_de_servicio/{ordenId}", region: "us-central1" },
   async (event) => {
@@ -347,12 +394,12 @@ module.exports = onDocumentWritten(
     }
 
     const dev = after.devolucion || {};
-    const antes = new Map(((before?.devolucion?.esperados) || []).map(e => [e.id, e.resolucion || null]));
+    const antes = new Map(((before?.devolucion?.esperados) || []).map(e => [e.id, e]));
     const tandaRecibida = []; // recibidos NUEVOS de esta escritura → ENTRADA por tanda
 
     for (const e of (dev.esperados || [])) {
       const res = e.resolucion || null;
-      if (!res || antes.get(e.id) === res) continue; // sin cambio en esta escritura
+      if (!res || (antes.get(e.id)?.resolucion || null) === res) continue; // sin cambio en esta escritura
 
       const refMov = { tipo: "orden", id: ordenId, label: `DEVOLUCIÓN ${ordenId}` };
       try {
@@ -499,6 +546,35 @@ module.exports = onDocumentWritten(
         await crearOAlimentarEntrada(ordenId, after, tandaRecibida);
       } catch (e) {
         logger.warn("[onOrdenDevolucionWrite] ENTRADA por tanda falló (no crítico)", { ordenId, error: e.message });
+      }
+    }
+
+    // Correcciones pre-firma: accesorios/daño de una unidad YA recibida
+    // cambiaron sin que cambiara la resolución (el loop de arriba no las ve).
+    // Se espejan en la ENTRADA — solo unidades sin acuse firmado (candado 1;
+    // los otros dos viven en aplicarCorreccionesEntrada). La firma del acuse
+    // no dispara esto: solo estampa acuse_id, sin tocar accesorios ni daño.
+    const correcciones = [];
+    for (const e of (dev.esperados || [])) {
+      if (e.resolucion !== "recibido" || e.acuse_id) continue;
+      const b = antes.get(e.id);
+      if (!b || b.resolucion !== "recibido" || b.acuse_id) continue; // recién recibida: la cubrió la tanda
+      const cambioDano = String(b.dano_visible || "") !== String(e.dano_visible || "");
+      const cambioAcc = JSON.stringify(b.accesorios || null) !== JSON.stringify(e.accesorios || null);
+      if (cambioDano || cambioAcc) {
+        correcciones.push({
+          serial: e.serial,
+          accesorios: e.accesorios || null,
+          dano_visible: e.dano_visible || "",
+          dano_antes: b.dano_visible || "",
+        });
+      }
+    }
+    if (correcciones.length) {
+      try {
+        await aplicarCorreccionesEntrada(ordenId, after, correcciones);
+      } catch (e) {
+        logger.warn("[onOrdenDevolucionWrite] Corrección pre-firma no llegó a la ENTRADA (no crítico)", { ordenId, error: e.message });
       }
     }
 
