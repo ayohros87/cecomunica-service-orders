@@ -430,8 +430,72 @@ async function limpiarAnulacion(gid, g) {
   return acciones;
 }
 
+// ── Aviso unificado a RECEPCIÓN (buzón "activaciones") ──────────────────────
+// Decisión Alberto 2026-09-02: cada vez que algo se vuelve COMERCIALMENTE
+// EFECTIVO — contrato/renovación activo, tramo de aumento entregado, ajuste o
+// regularización firmados, baja aprobada, terminación completada — recepción
+// recibe EL MISMO correo de acción: QuickBooks (manual, aún sin integración),
+// POC y taller. CC: el vendedor del cliente. Cuando QBO se integre, estos
+// cinco puntos son el enchufe de la automatización.
+const CHECKLIST_FACTURACION = `
+  <p style="margin:14px 0 0;font:13px/1.6 Arial,sans-serif;color:#40525f;border-top:1px solid #e5e7eb;padding-top:10px;">
+    <b>Acciones de recepción:</b> actualizar <b>QuickBooks</b> (manual — aún sin integración) ·
+    activar/ajustar en <b>POC</b> cuando aplique · pasar la información a <b>taller</b> si corresponde.</p>`;
+
+async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, ctaUrl, ctaLabel, meta }) {
+  try {
+    const { activacionesEmailTo } = require("./mailRecipients");
+    const to = await activacionesEmailTo();
+    const cc = await vendedorEmailDeCliente(cliente_id);
+    await encolarCorreo({
+      to, cc: cc || null, subject,
+      preheader: "Acción de facturación / servicio",
+      bodyContent: `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">${titulo}</h2>${cuerpo}${CHECKLIST_FACTURACION}`,
+      ctaUrl, ctaLabel, meta,
+    });
+  } catch (e) { logger.warn("[gestiones] avisoFacturacion no encolado", { message: e.message, subject }); }
+}
+
+// Detalle completo de un anexo/aumento (líneas con modalidad, cargos con sus
+// seriales, tarifas renegociadas, total) — compartido por los correos de
+// aprobación, cierre y los avisos de facturación.
+function detalleAumentoHtml(a = {}) {
+  let html = "";
+  if ((a.lineas || []).length) {
+    html += tablaHtml(["Cant.", "Equipo", "Precio/mes"], a.lineas.map(l => [
+      String(Number(l.cantidad || 0)),
+      escapeHtml(l.modelo || "—") + (l.modalidad === "propio" ? " — equipo del cliente" : ""),
+      `$${Number(l.precio || 0).toFixed(2)}`,
+    ]));
+  }
+  if ((a.cargos || []).length) {
+    html += tablaHtml(["Cant.", "Cargo / servicio", "Tipo", "Monto", "Equipos"], a.cargos.map(cg => [
+      String(Number(cg.cantidad || 1)),
+      escapeHtml(cg.concepto || "—"),
+      cg.recurrente ? "Mensual" : "Único",
+      `$${Number(cg.monto || 0).toFixed(2)}`,
+      (cg.seriales || []).length ? `<code>${cg.seriales.map(escapeHtml).join(", ")}</code>` : "—",
+    ]));
+  }
+  if ((a.ajustes_precio || []).length) {
+    html += `<p style="margin:12px 0 4px;font:14px Arial,sans-serif;"><b>Tarifas renegociadas:</b></p>`
+      + tablaHtml(["Línea", "Cant.", "Antes", "Ahora"], a.ajustes_precio.map(x => [
+          escapeHtml(x.modelo || "—"), String(Number(x.cantidad || 0)),
+          `$${Number(x.precio_anterior || 0).toFixed(2)}`, `<b>$${Number(x.precio_nuevo || 0).toFixed(2)}</b>`,
+        ]));
+  }
+  const t = a.totales || {};
+  if (t.total_mensual != null) {
+    html += `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Total mensual del anexo:
+      <b>$${Number(t.total_mensual || 0).toFixed(2)}</b>${Number(t.cargos_uni || 0) > 0
+        ? ` · Primer pago: <b>$${Number(t.primer_pago || 0).toFixed(2)}</b>` : ""}</p>`;
+  }
+  return html || `<p style="font:13px Arial,sans-serif;color:#666;">(sin detalle registrado)</p>`;
+}
+
 module.exports = {
   limpiarAnulacion,
+  avisoFacturacion, detalleAumentoHtml,
   TIPO_LABEL, escapeHtml, isEmail, urlGestion, tablaHtml,
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,

@@ -199,6 +199,22 @@ module.exports = onDocumentWritten(
               });
               await G.registrarEvento(gid, "entrega",
                 `Entrega registrada desde la OS ${ordenId}. El tramo del aumento arranca hoy: ${meses} meses de vigencia propia en el contrato ${a.contrato_id || a.contrato_doc_id}.`);
+              // Aviso de facturación (2026-09-02): el aumento se factura desde
+              // la ENTREGA — este es el momento efectivo, no la firma.
+              await G.avisoFacturacion({
+                subject: `FACTURACIÓN: tramo de aumento ENTREGADO — ${g.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
+                titulo: "Aumento entregado — el tramo se factura desde hoy",
+                cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                    La OS <b>${G.escapeHtml(ordenId)}</b> entregó los equipos del anexo
+                    <b>${G.escapeHtml(gid)}</b> al contrato <b>${G.escapeHtml(a.contrato_id || "")}</b> de
+                    <b>${G.escapeHtml(g.cliente_nombre || "—")}</b>. El tramo (${meses} meses) arrancó hoy.</p>
+                  ${G.detalleAumentoHtml(a)}
+                  ${(a.seriales_asignados || []).length ? `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Seriales entregados:
+                    ${a.seriales_asignados.map(s => `<code>${G.escapeHtml(s.serial || "")}</code>`).join(", ")}</p>` : ""}`,
+                cliente_id: g.cliente_id,
+                ctaUrl: G.urlGestion(g, gid), ctaLabel: "Ver el expediente",
+                meta: { gestion_id: gid, paso: "facturacion_aumento_entrega", orden: ordenId },
+              });
             } catch (e) {
               logger.warn("[onOrdenWriteGestion] vigencia del tramo no estampada", { gid, message: e.message });
             }
@@ -299,6 +315,20 @@ module.exports = onDocumentWritten(
                 await G.registrarEvento(gid, "terminacion",
                   `Terminación total: el contrato ${c.contrato_id || cDocId} pasa a CERRADO (vencido) con la flota recuperada${origCerrados ? `; ${origCerrados} contrato(s) origen del linaje cierran con él` : ""}${sueltos ? `; ${sueltos} equipo(s) propios del cliente sueltan el vínculo al contrato` : ""}.`);
                 logger.info("[onOrdenWriteGestion] terminación total aplicada", { gid, contrato: cDocId, sueltos });
+                // Aviso de facturación (2026-09-02): con la flota recuperada,
+                // recepción cierra la facturación y desactiva en POC.
+                await G.avisoFacturacion({
+                  subject: `FACTURACIÓN: terminación COMPLETADA — ${g.cliente_nombre || "Cliente"} (${c.contrato_id || ""})`,
+                  titulo: "Terminación total completada — cerrar facturación y POC",
+                  cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                      La flota del contrato <b>${G.escapeHtml(c.contrato_id || cDocId)}</b> de
+                      <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> quedó recuperada (devolución
+                      <b>${G.escapeHtml(ordenId)}</b>) y el contrato pasó a <b>cerrado</b>${origCerrados ? `, junto con ${origCerrados} contrato(s) origen de su linaje` : ""}.
+                      Corresponde <b>cerrar la facturación en QuickBooks</b> y <b>desactivar las unidades en POC</b>.</p>`,
+                  cliente_id: g.cliente_id,
+                  ctaUrl: G.urlGestion(g, gid), ctaLabel: "Ver el expediente",
+                  meta: { gestion_id: gid, paso: "facturacion_terminacion", contrato: c.contrato_id || cDocId },
+                });
               } catch (e2) {
                 logger.error("[onOrdenWriteGestion] terminación total falló", { gid, contrato: cDocId, message: e2.message });
               }

@@ -133,43 +133,9 @@ async function correoAprobadoresBaja(gid, g) {
 }
 
 // Aumento por enmienda: aprobación COMERCIAL previa al anexo (admin/gerencia).
-// Detalle COMPLETO del anexo para cualquier correo (2026-09-02, reclamo de
-// Alberto: el correo de aprobación no decía qué involucraba el aumento):
-// líneas de equipos (con modalidad), cargos con sus seriales, tarifas
-// renegociadas y el total. Una sola fuente para aprobación, firmado y cierre.
-function detalleAumentoHtml(a = {}) {
-  let html = "";
-  if ((a.lineas || []).length) {
-    html += G.tablaHtml(["Cant.", "Equipo", "Precio/mes"], a.lineas.map(l => [
-      String(Number(l.cantidad || 0)),
-      G.escapeHtml(l.modelo || "—") + (l.modalidad === "propio" ? " — equipo del cliente" : ""),
-      `$${Number(l.precio || 0).toFixed(2)}`,
-    ]));
-  }
-  if ((a.cargos || []).length) {
-    html += G.tablaHtml(["Cant.", "Cargo / servicio", "Tipo", "Monto", "Equipos"], a.cargos.map(cg => [
-      String(Number(cg.cantidad || 1)),
-      G.escapeHtml(cg.concepto || "—"),
-      cg.recurrente ? "Mensual" : "Único",
-      `$${Number(cg.monto || 0).toFixed(2)}`,
-      (cg.seriales || []).length ? `<code>${cg.seriales.map(G.escapeHtml).join(", ")}</code>` : "—",
-    ]));
-  }
-  if ((a.ajustes_precio || []).length) {
-    html += `<p style="margin:12px 0 4px;font:14px Arial,sans-serif;"><b>Tarifas renegociadas:</b></p>`
-      + G.tablaHtml(["Línea", "Cant.", "Antes", "Ahora"], a.ajustes_precio.map(x => [
-          G.escapeHtml(x.modelo || "—"), String(Number(x.cantidad || 0)),
-          `$${Number(x.precio_anterior || 0).toFixed(2)}`, `<b>$${Number(x.precio_nuevo || 0).toFixed(2)}</b>`,
-        ]));
-  }
-  const t = a.totales || {};
-  if (t.total_mensual != null) {
-    html += `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Total mensual del anexo:
-      <b>$${Number(t.total_mensual || 0).toFixed(2)}</b>${Number(t.cargos_uni || 0) > 0
-        ? ` · Primer pago: <b>$${Number(t.primer_pago || 0).toFixed(2)}</b>` : ""}</p>`;
-  }
-  return html || `<p style="font:13px Arial,sans-serif;color:#666;">(sin detalle registrado)</p>`;
-}
+// El detalle completo del anexo vive en G.detalleAumentoHtml (lib/gestiones)
+// — compartido con los avisos de facturación y los correos de firma.
+const detalleAumentoHtml = (a) => G.detalleAumentoHtml(a);
 
 async function correoAprobadoresAumento(gid, g) {
   // Regla 2026-08-28: la solicitud va SOLO a ventas@cecomunica.com (el buzón
@@ -424,6 +390,27 @@ module.exports = onDocumentWritten(
             logger.warn("[onGestionWrite] saliente de baja no marcado", { gid, serial, message: e.message });
           }
         }
+
+        // Aviso de facturación (2026-09-02): recepción necesita la FECHA DE
+        // FIN de facturación al aprobarse — independiente de cuándo devuelvan.
+        await G.avisoFacturacion({
+          subject: `FACTURACIÓN: ${gB.terminacion_total_de?.length ? "TERMINACIÓN TOTAL aprobada" : "baja aprobada"} — ${gB.cliente_nombre || "Cliente"} (${gid})`,
+          titulo: gB.terminacion_total_de?.length ? "Terminación total aprobada — fin de facturación" : "Baja de equipos aprobada — fin de facturación",
+          cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+              La ${gB.terminacion_total_de?.length ? "terminación total" : "baja"} <b>${G.escapeHtml(gid)}</b> de
+              <b>${G.escapeHtml(gB.cliente_nombre || "—")}</b> quedó aprobada.
+              ${gB.fecha_fin_facturacion ? `Fin de facturación: <b>${G.escapeHtml(String(gB.fecha_fin_facturacion))}</b>.` : "Fin de facturación según la fecha registrada en el expediente."}
+              Los equipos de CECOMUNICA entran por la orden de devolución; los propios del cliente no se recuperan.</p>
+            ${G.tablaHtml(["Serial", "Modelo", "Contrato"], (gB.items || []).map(it => [
+              `<code>${G.escapeHtml(it.serial_saliente || it.serial || "—")}</code>`,
+              G.escapeHtml(it.modelo || "—"),
+              `<code>${G.escapeHtml(it.contrato_id || "—")}</code>`,
+            ]))}
+            ${gB.penalidad_estimada?.total ? `<p style="margin:8px 0 0;font:14px Arial,sans-serif;">Liquidación estimada: <b>$${Number(gB.penalidad_estimada.total || 0).toFixed(2)}</b></p>` : ""}`,
+          cliente_id: gB.cliente_id,
+          ctaUrl: G.urlGestion(gB, gid), ctaLabel: "Ver el expediente",
+          meta: { gestion_id: gid, paso: "facturacion_baja" },
+        });
 
         const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
         // Regla de enmiendas: los equipos PROPIOS (del cliente) no se recuperan.
@@ -713,6 +700,19 @@ module.exports = onDocumentWritten(
             await G.registrarEvento(gid, "entrega",
               `Anexo de REGULARIZACIÓN aplicado: ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")}); el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
             logger.info("[onGestionWrite] regularización por anexo aplicada", { gid, contrato: a.contrato_doc_id, amarrados });
+            await G.avisoFacturacion({
+              subject: `FACTURACIÓN: regularización EFECTIVA — ${gA.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
+              titulo: "Regularización aplicada — el tramo arranca hoy",
+              cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                El cliente firmó el anexo <b>${G.escapeHtml(gid)}</b>: ${amarrados} equipo(s) que ya
+                estaban en su poder (${(a.regulariza_seriales || []).map(s => `<code>${G.escapeHtml(s.serial || "")}</code>`).join(", ")})
+                quedaron amarrados al contrato <b>${G.escapeHtml(a.contrato_id || "")}</b> con tarifa
+                desde <b>hoy</b> — sin bodega ni entrega.</p>
+                ${G.detalleAumentoHtml(a)}`,
+              cliente_id: gA.cliente_id,
+              ctaUrl: G.urlGestion(gA, gid), ctaLabel: "Ver el expediente",
+              meta: { gestion_id: gid, paso: "facturacion_regularizacion" },
+            });
           } else if (esAjuste) {
             // Estampar el servicio EN CADA SERIAL marcado (pool.servicios[]):
             // el Kardex y las bajas saben qué radios llevan qué servicio.
@@ -745,6 +745,18 @@ module.exports = onDocumentWritten(
                 (a.ajustes_precio || []).length ? `tarifas renegociadas: ${(a.ajustes_precio || []).map(x => `${x.modelo} $${Number(x.precio_anterior).toFixed(2)}→$${Number(x.precio_nuevo).toFixed(2)}`).join(", ")}` : "",
               ].filter(Boolean).join("; ")}${estampados ? `; servicio estampado en ${estampados} equipo(s) del pool` : ""}; totales del contrato recalculados. Sin bodega ni entrega — la gestión cierra.`);
             logger.info("[onGestionWrite] ajuste de tarifa aplicado", { gid, contrato: a.contrato_doc_id, estampados });
+            await G.avisoFacturacion({
+              subject: `FACTURACIÓN: ajuste de tarifa EFECTIVO — ${gA.cliente_nombre || "Cliente"} (${a.contrato_id || ""})`,
+              titulo: "Ajuste de tarifa / servicios aplicado",
+              cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
+                El cliente firmó el anexo <b>${G.escapeHtml(gid)}</b> y el ajuste al contrato
+                <b>${G.escapeHtml(a.contrato_id || "")}</b> de <b>${G.escapeHtml(gA.cliente_nombre || "—")}</b>
+                quedó <b>efectivo desde hoy</b> — el mensual del contrato ya está recalculado.</p>
+                ${G.detalleAumentoHtml(a)}`,
+              cliente_id: gA.cliente_id,
+              ctaUrl: G.urlGestion(gA, gid), ctaLabel: "Ver el expediente",
+              meta: { gestion_id: gid, paso: "facturacion_ajuste" },
+            });
           } else {
             await ref.set({ cierre: { ...(gA.cierre || {}), derivacion: true } }, { merge: true });
             await G.registrarEvento(gid, "derivacion",
