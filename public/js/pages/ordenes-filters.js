@@ -177,6 +177,13 @@ function matchesAdvancedFilters(order, filters) {
   if (filters.idsCorreo && filters.idsCorreo.size && !filters.idsCorreo.has(order.ordenId)) return false;
 
   if (filters.filtroEstado && estado !== filters.filtroEstado) return false;
+  // Filtrar por "POR ASIGNAR" es la cola de ASIGNACIÓN de taller (2026-09-02,
+  // pedido del dueño): las DEVOLUCIÓN viven en ese estado pero jamás llevan
+  // técnico — aquí solo estorban. Se encuentran por el filtro de tipo o sin
+  // filtro de estado.
+  if (String(filters.filtroEstado || "").toUpperCase() === "POR ASIGNAR"
+      && typeof PendientesDomain !== "undefined"
+      && !PendientesDomain.esColaDeTaller(order)) return false;
   if (filters.soloMias && !esOrdenMia(order)) return false;
   // Cola de control de calidad: completadas que no pueden entregarse hasta
   // que el QC quede aprobado. Las ENTRADA cierran sin QC, así que no son cola.

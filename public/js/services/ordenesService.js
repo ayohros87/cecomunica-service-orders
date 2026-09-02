@@ -891,6 +891,15 @@ const OrdenesService = {
   // que un cambio de OTRO usuario tarda ≤60s en reflejarse en el chip.
   _fbsMemo: new Map(),
 
+  // "POR ASIGNAR" es la cola de ASIGNACIÓN de taller (2026-09-02, pedido del
+  // dueño): las DEVOLUCIÓN viven en ese estado pero jamás llevan técnico —
+  // fuera de esta vista. Misma convención que PendientesDomain.esColaDeTaller
+  // (inline para no obligar a cargar pendientes.js en todas las páginas).
+  _sinDevolucionSiPorAsignar(estado, rows) {
+    if (String(estado || "").trim().toUpperCase() !== "POR ASIGNAR") return rows;
+    return rows.filter(o => (o.tipo_de_servicio || "").toUpperCase() !== "DEVOLUCION");
+  },
+
   /**
    * Filter orders by status
    * @param {string} estado - Status to filter by
@@ -912,12 +921,13 @@ const OrdenesService = {
         .limit(limit)
         .get();
 
-      const resultados = [];
+      let resultados = [];
       snap.forEach(doc => {
         const data = doc.data();
         if (data.eliminado === true) return;
         resultados.push({ ordenId: doc.id, ...data });
       });
+      resultados = this._sinDevolucionSiPorAsignar(estado, resultados);
 
       this._fbsMemo.set(memoKey, { at: Date.now(), rows: resultados });
       return resultados;
@@ -938,7 +948,8 @@ const OrdenesService = {
           allDocs.push({ ordenId: doc.id, ...data });
         });
 
-        const filtrados = allDocs.filter(o => o.estado_reparacion === estado);
+        const filtrados = this._sinDevolucionSiPorAsignar(estado,
+          allDocs.filter(o => o.estado_reparacion === estado));
         this._fbsMemo.set(memoKey, { at: Date.now(), rows: filtrados });
         return filtrados;
       }

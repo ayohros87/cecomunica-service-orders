@@ -87,9 +87,10 @@ const SenalesService = {
 
   // soloTaller (2026-09-02): los KPIs de asignación excluyen los tipos con
   // circuito propio (DEVOLUCION nace "POR ASIGNAR" pero nunca se asigna —
-  // eran 27 de las 48 vivas). El chip de la bandeja usa el default: ahí el
-  // conteo debe cuadrar con las filas que el filtro muestra.
-  countOrdenesPorEstado(estado, { soloTaller = false } = {}) {
+  // eran 27 de las 48 vivas). Para "POR ASIGNAR" el default es excluir:
+  // el filtro de la bandeja también las quita (pedido del dueño), así que
+  // conteo y filas cuadran.
+  countOrdenesPorEstado(estado, { soloTaller = (String(estado || '').trim().toUpperCase() === 'POR ASIGNAR') } = {}) {
     const db = firebase.firestore();
     const docFilter = soloTaller
       ? (o) => this._viva(o) && PendientesDomain.esColaDeTaller(o)
