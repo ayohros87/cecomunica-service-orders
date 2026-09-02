@@ -228,11 +228,15 @@ const EquiposPoolService = {
         || (a.serial || '').localeCompare(b.serial || ''));
   },
 
-  async listarPorCliente(clienteId) {
+  // `fresh` fuerza la lectura al servidor (get default puede resolver del
+  // caché de IndexedDB cuando la pestaña es secundaria y la primaria está
+  // congelada — el deep-link de correo del Centro de gestión).
+  async listarPorCliente(clienteId, { fresh = false } = {}) {
     if (!clienteId) return [];
     const db = firebase.firestore();
-    const snap = await db.collection('equipos_pool')
-      .where('asignacion.cliente_id', '==', clienteId).get();
+    const q = db.collection('equipos_pool')
+      .where('asignacion.cliente_id', '==', clienteId);
+    const snap = await (fresh ? q.get({ source: 'server' }) : q.get());
     return snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .sort((a, b) => (a.modelo_label || '').localeCompare(b.modelo_label || '')
         || (a.serial || '').localeCompare(b.serial || ''));

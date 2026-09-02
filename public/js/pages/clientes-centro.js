@@ -301,12 +301,7 @@ window.Centro = {
       document.getElementById('vistaFicha').classList.remove('hidden');
       window.scrollTo(0, 0);
 
-      document.getElementById('fAvatar').textContent = this._iniciales(c.nombre);
-      document.getElementById('fNombre').textContent = c.nombre || '(sin nombre)';
-      document.getElementById('fMeta').textContent = [
-        c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null, c.email || null,
-        c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
-      ].filter(Boolean).join(' · ') || '—';
+      this._pintarEncabezado(c);
 
       // Skeletons mientras cargan contratos/flota/gestiones (la ficha antes
       // aparecía a saltos, sección por sección).
@@ -330,9 +325,7 @@ window.Centro = {
           return [];
         }),
       ]);
-      this.contratos = conSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .filter(x => !x.deleted)
-        .sort((a, b) => (b.fecha_creacion?.toMillis?.() || 0) - (a.fecha_creacion?.toMillis?.() || 0));
+      this.contratos = this._mapContratos(conSnap);
       this.equipos = Array.isArray(equipos) ? equipos : [];
       this.gestiones = gestiones;
 
@@ -348,6 +341,12 @@ window.Centro = {
       // cada acción y la página lo adivinaba con setTimeout — ahora el
       // expediente se repinta cuando el dato REAL llega.
       this._escucharGestiones(clienteId);
+      // Con la persistencia multi-pestaña, la pestaña que abre el deep-link
+      // del correo entra como SECUNDARIA: si la primaria está congelada por
+      // el navegador, estos get() resuelven del caché de IndexedDB y la
+      // ficha sale vieja hasta el F5 (reporte 2026-09-02). Si este pintado
+      // salió del caché, se relee del servidor en background y se repinta.
+      if (conSnap.metadata && conSnap.metadata.fromCache) this._revalidarFicha(clienteId);
       // Deep-link desde correo (?g=): aterrizar EN el expediente, no arriba
       // de la página (pedido 2026-08-27).
       if (this.gSel) {
@@ -355,6 +354,62 @@ window.Centro = {
           ?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
       }
     } catch (e) { console.error(e); Toast.show('No se pudo abrir el cliente', 'bad'); }
+  },
+
+  _pintarEncabezado(c) {
+    document.getElementById('fAvatar').textContent = this._iniciales(c.nombre);
+    document.getElementById('fNombre').textContent = c.nombre || '(sin nombre)';
+    document.getElementById('fMeta').textContent = [
+      c.rucdv_norm ? `RUC ${c.rucdv_norm}` : null, c.telefono || null, c.email || null,
+      c.vendedor_email ? `Vendedor: ${c.vendedor_email}` : null,
+    ].filter(Boolean).join(' · ') || '—';
+  },
+
+  _mapContratos(snap) {
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(x => !x.deleted)
+      .sort((a, b) => (b.fecha_creacion?.toMillis?.() || 0) - (a.fecha_creacion?.toMillis?.() || 0));
+  },
+
+  // ── Revalidación contra el servidor ──
+  // firebase-init activa enablePersistence({synchronizeTabs:true}) y en ese
+  // modo solo la pestaña primaria habla con el servidor. {source:'server'}
+  // espera a que esta pestaña tome el liderazgo (la primaria congelada pierde
+  // el lease en segundos) y trae lo fresco. Las gestiones no se releen aquí:
+  // su onSnapshot ya repinta con la emisión del servidor cuando llega.
+  async _revalidarFicha(clienteId) {
+    try {
+      const db = firebase.firestore();
+      const [cliSnap, conSnap, equipos] = await Promise.all([
+        db.collection('clientes').doc(clienteId).get({ source: 'server' }),
+        db.collection('contratos').where('cliente_id', '==', clienteId).get({ source: 'server' }),
+        EquiposPoolService.listarPorCliente(clienteId, { fresh: true }),
+      ]);
+      if (!this.cliente || this.cliente.id !== clienteId) return; // ya navegó a otra vista
+      if (cliSnap.exists) {
+        const c = { id: cliSnap.id, ...cliSnap.data() };
+        // El candado de cartera se re-aplica sobre el dato real del servidor.
+        if (this.esVendedor() && c.vendedor_asignado !== this.uid) {
+          Toast.show('Este cliente no está en tu cartera', 'bad');
+          this.volver({ push: true });
+          return;
+        }
+        this.cliente = c;
+        this._pintarEncabezado(c);
+      }
+      this.contratos = this._mapContratos(conSnap);
+      this.equipos = Array.isArray(equipos) ? equipos : [];
+      this.pintarKpis();
+      this.pintarSenales();
+      this.pintarAcciones();
+      this.pintarContratos();
+      this.pintarEquipos();
+      this.armarMenu();
+      if (window.lucide?.createIcons) lucide.createIcons();
+    } catch (e) {
+      // Sin red de verdad (offline) el caché es lo mejor que hay: se queda.
+      console.warn('[centro] revalidación con el servidor no disponible:', e?.message || e);
+    }
   },
 
   _diasA(fv) {
