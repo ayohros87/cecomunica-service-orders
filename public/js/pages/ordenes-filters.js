@@ -824,20 +824,25 @@ window.limpiarFiltros = function () {
   cargarOrdenesYEquipos(true);
 };
 
+// Cambiar el orden NO toca Firestore (2026-09-02, factura de agosto): el sort
+// lo aplica ordenarOrdenes() en memoria dentro de renderOrdersList, así que
+// basta re-renderizar. Antes se llamaba cargarOrdenesYEquipos(), que destruye
+// y recrea el onSnapshot — y un listener nuevo re-descarga su primera página
+// completa (~50 docs de 8KB) para producir la misma pantalla.
 window.cambiarOrden = function () {
   const sel = document.getElementById("campoOrdenamiento");
   if (!sel) return;
   APP.state.sortField = sel.value;
   _syncFiltersToURL();
   syncSortHeaders();
-  cargarOrdenesYEquipos();
+  aplicarFiltrosCombinados();
 };
 
 window.cambiarDireccionOrden = function () {
   APP.state.sortAscending = !APP.state.sortAscending;
   _syncFiltersToURL();
   syncSortHeaders();
-  cargarOrdenesYEquipos();
+  aplicarFiltrosCombinados();
 };
 
 // ── Cabeceras ordenables (auditoría órdenes P2) ─────────────────────
@@ -861,7 +866,7 @@ window.sortColumna = function (el) {
     });
   _syncFiltersToURL();
   syncSortHeaders();
-  cargarOrdenesYEquipos();
+  aplicarFiltrosCombinados();
 };
 
 // Pinta ↑/↓ y aria-sort en la cabecera activa (y limpia las demás).
