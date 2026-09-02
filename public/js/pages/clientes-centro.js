@@ -2052,6 +2052,8 @@ window.Centro = {
       cuentaHtml = `
         <button type="button" onclick="Centro.abrirGestion('ct-${this.esc(tram.id)}')">Renovación en trámite — <span class="cg-mono">${this.esc(tram.contrato_id || '')}</span>
           <span style="display:block; font-size:11px; color:var(--fg-4);">abre el expediente para ver en qué paso va</span></button>
+        <button type="button" onclick="Centro.wizAjuste()">Ajuste de tarifa / servicios
+          <span style="display:block; font-size:11px; color:var(--fg-4);">cargos como GPS, amarrados por serial — sin bodega</span></button>
         <button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta</button>`;
     } else if (est.tipo === 'fragmentada') {
       const n = est.renovables.length;
@@ -2633,6 +2635,14 @@ window.Centro = {
     const contrato = this.contratos.find(c => c.id === contratoDocId);
     if (!contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
     const lineas = this._aumLineas();
+    // Sin equipos pero CON cargos = un AJUSTE DE TARIFA (2026-09-02): en vez
+    // de regañar, se redirige al wizard correcto — ahí se amarran los cargos
+    // por serial y el flujo cierra sin bodega.
+    if (!lineas.length && this._aumCargos().length) {
+      Toast.show('Solo cargos, sin equipos — eso es un Ajuste de tarifa: te llevo al wizard correcto', 'ok');
+      this.wizAjuste(contratoDocId);
+      return;
+    }
     if (!lineas.length) { Toast.show('Indica al menos un modelo (de la lista)', 'warn'); return; }
     if (lineas.some(l => !(l.precio > 0))) { Toast.show('Cada línea necesita su precio mensual', 'warn'); return; }
     const meses = Number(document.getElementById('waMeses')?.value || 0);
