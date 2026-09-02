@@ -6,7 +6,10 @@ const logger = require("firebase-functions/logger");
 const { db } = require("./admin");
 
 const FALLBACKS = {
-  activaciones:     "alberto.yohros@cecomunica.com, activaciones@cecomunica.com",
+  // 2026-09-02: SIN buzones personales — con email_activaciones vacío en
+  // empresa/config, los avisos de facturación caían al correo de Alberto
+  // (caso FANLYC). El fallback es el buzón del área, punto.
+  activaciones:     "activaciones@cecomunica.com",
   atencion_cliente: "atencionalcliente@cecomunica.com",
   // Jefe de taller: sin buzón por defecto — se configura en empresa/config
   // (email_taller). Los callers omiten el destinatario cuando viene vacío.
