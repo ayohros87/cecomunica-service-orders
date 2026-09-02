@@ -656,7 +656,10 @@
         if (!dest) {
           Toast.show('✅ Aprobada, pero falta "Email destinatario" para enviar. Usa "Reenviar al cliente" desde el detalle cuando lo tengas.', 'warn');
         } else {
-          const subject = `Cotización ${doc.cotizacion_id} aprobada · CeComunica`;
+          // Con el nombre de la empresa en el asunto/cuerpo la cotización se
+          // ubica desde el buzón sin cruzar el número contra el panel.
+          const clienteNom = String(doc.cliente_nombre || '').trim();
+          const subject = `Cotización ${doc.cotizacion_id} aprobada${clienteNom ? ` · ${clienteNom}` : ''} · CeComunica`;
           const intro = (doc.intro || 'Adjuntamos la cotización solicitada.')
             .replace(/[<>&]/g, s => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[s]));
           const totalTxt = FMT.money(Number(doc.total || 0));
@@ -673,6 +676,7 @@
               <p style="margin:0 0 12px;">Estimados señores,</p>
               ${dirA}
               <p style="margin:0 0 12px;">${intro}</p>
+              ${clienteNom ? `<p style="margin:0 0 4px;"><b>Empresa:</b> ${FMT.esc(clienteNom)}</p>` : ''}
               <p style="margin:0 0 4px;"><b>Total:</b> ${totalTxt}</p>
               <p style="margin:0 0 4px;"><b>Validez:</b> ${doc.validezDias || 15} días</p>
               ${adjuntosHtml}

@@ -766,7 +766,10 @@
   function reenviarPrompt(opts) {
     return new Promise((resolve) => {
       const esc = window.FMT.esc; // helper canónico (core/formatting.js)
-      const subject = `Cotización ${opts.cotizacionId || ''} · CeComunica`;
+      // El nombre de la empresa va en el asunto y el cuerpo: sin él, ubicar la
+      // cotización desde el buzón obliga a abrir el panel y cruzar el número.
+      const clienteNom = String(opts.clienteNombre || '').trim();
+      const subject = `Cotización ${opts.cotizacionId || ''}${clienteNom ? ` · ${clienteNom}` : ''} · CeComunica`;
       const dirAHtml = opts.dirigidoA ? `<p style="margin:0 0 10px;">A la atención de: <b>${esc(opts.dirigidoA)}</b></p>` : '';
       const introHtml = esc(opts.intro || 'Adjuntamos la cotización solicitada.');
       const adjuntos = Array.isArray(opts.adjuntos) ? opts.adjuntos.filter(a => a && a.url) : [];
@@ -786,6 +789,7 @@
   <p style="margin:0 0 10px;">Estimados señores,</p>
   ${dirAHtml}
   <p style="margin:0 0 10px;">${introHtml}</p>
+  ${clienteNom ? `<p style="margin:0 0 4px;"><b>Empresa:</b> ${esc(clienteNom)}</p>` : ''}
   <p style="margin:0 0 4px;"><b>Total:</b> ${esc(opts.totalTexto || window.FMT.money(Number(opts.total || 0)))}</p>
   <p style="margin:0 0 4px;"><b>Validez:</b> ${opts.validezDias || 15} días</p>
   ${adjuntosHtml}
