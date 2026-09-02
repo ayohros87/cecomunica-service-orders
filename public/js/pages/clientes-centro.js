@@ -1552,7 +1552,7 @@ window.Centro = {
           onclick="event.stopPropagation(); document.getElementById('btnGestion')?.scrollIntoView({block:'center'}); document.getElementById('btnGestion')?.click()">Nueva gestión</button></div>` : ''}</div>`;
       return;
     }
-    cont.innerHTML = tramHtml + (this.gestiones || []).map(g => {
+    const filaG = (g, atenuada) => {
       // Progreso con LOS PASOS DEL TIPO (el 4 fijo de reemplazo/demo pintaba
       // "3/4" en un aumento cerrado con sus 6 pasos completos).
       const defsG = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
@@ -1561,8 +1561,9 @@ window.Centro = {
       const abierta = this.gSel === g.id;
       return `
       <div class="cg-row" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
-           onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
-        <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;">${this.esc(g.id)}</div>
+           onkeydown="if(event.key==='Enter')this.click()"
+           style="${abierta ? 'border-color:var(--accent);' : ''}${atenuada && !abierta ? ' opacity:.62;' : ''}">
+        <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;${g.estado === 'anulada' ? ' text-decoration:line-through; color:var(--fg-3);' : ''}">${this.esc(g.id)}</div>
           <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo'
             : g.tipo === 'aumento' && g.aumento?.es_ajuste ? 'Ajuste de tarifa / servicios'
             : this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
@@ -1570,13 +1571,36 @@ window.Centro = {
             : g.tipo === 'aumento'
             ? this.esc([...(g.aumento?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`),
                         ...(g.aumento?.cargos || []).map(c => `${c.cantidad} × ${c.concepto}`)].join(', ') || '—')
-            : `${(g.items || []).length} serial(es)`} · ${fecha}</div></div>
-        <span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/${defsG.length}</span>
-        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
+            : `${(g.items || []).length} serial(es)`} · ${fecha}${g.estado === 'anulada' && g.anulada_motivo ? ` · <i>${this.esc(g.anulada_motivo)}</i>` : ''}</div></div>
+        ${atenuada ? '' : `<span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/${defsG.length}</span>`}
+        <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}"${atenuada ? ' style="margin-left:auto;"' : ''}>${this.esc(GestionesService.estadoLabel(g.estado))}</span>
         <span class="arr">${abierta ? '▾' : '›'}</span>
       </div>
       ${abierta ? this._detalleGestion(g) : ''}`;
-    }).join('');
+    };
+
+    // Jerarquía (2026-09-02, pedido de Alberto: "las anuladas toman casi la
+    // misma precedencia que las pendientes"): lo VIVO arriba — ordenado por
+    // urgencia (quién espera una acción) — y cerradas/anuladas plegadas como
+    // historial atenuado, igual que el Histórico de contratos.
+    const PESO = { pendiente_aprobacion: 0, pendiente_firma: 1, pendiente_bodega: 2, en_proceso: 3, retorno: 4, en_demo: 5 };
+    const ts = (g) => (g.fecha_solicitud?.toDate ? g.fecha_solicitud.toDate().getTime() : 0);
+    const todas = this.gestiones || [];
+    const vivas = todas.filter(g => !['cerrada', 'anulada'].includes(g.estado))
+      .sort((a, b) => ((PESO[a.estado] ?? 9) - (PESO[b.estado] ?? 9)) || (ts(b) - ts(a)));
+    const historial = todas.filter(g => ['cerrada', 'anulada'].includes(g.estado))
+      .sort((a, b) => (a.estado === 'anulada' ? 1 : 0) - (b.estado === 'anulada' ? 1 : 0) || (ts(b) - ts(a)));
+    const cerradasN = historial.filter(g => g.estado === 'cerrada').length;
+    const anuladasN = historial.length - cerradasN;
+    const histAbierto = historial.some(g => g.id === this.gSel);
+    cont.innerHTML = tramHtml
+      + vivas.map(g => filaG(g, false)).join('')
+      + (historial.length ? `
+        <details ${histAbierto ? 'open' : ''} style="margin-top:10px;">
+          <summary style="cursor:pointer; font-size:12.5px; color:var(--fg-3); padding:4px 2px; user-select:none;">
+            Historial — ${cerradasN} cerrada${cerradasN === 1 ? '' : 's'}${anuladasN ? ` · ${anuladasN} anulada${anuladasN === 1 ? '' : 's'}` : ''}</summary>
+          <div style="margin-top:8px;">${historial.map(g => filaG(g, true)).join('')}</div>
+        </details>` : '');
     this._decorarAsignacion();
   },
 
