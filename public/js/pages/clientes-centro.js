@@ -913,13 +913,18 @@ window.Centro = {
           contrato_id: a.contrato_id || '',
           cliente_id: g.cliente_id,
           cliente_nombre: g.cliente_nombre || '',
-          titulo: a.es_regularizacion
+          titulo: a.es_ajuste
+            ? `Anexo de ajuste de tarifa ${gid} — contrato ${a.contrato_id || ''}`
+            : a.es_regularizacion
             ? `Anexo de regularización ${gid} — contrato ${a.contrato_id || ''}`
             : `Anexo de aumento ${gid} — contrato ${a.contrato_id || ''}`,
-          declaracion: a.es_regularizacion
+          declaracion: a.es_ajuste
+            ? `Declaro que acepto los cargos del anexo ${gid} (${(a.cargos || []).map(c => `${c.concepto} $${Number(c.monto || 0).toFixed(2)}${c.recurrente ? '/mes' : ''} × ${c.cantidad}`).join('; ')}) al contrato ${a.contrato_id || ''} en nombre de ${g.cliente_nombre || 'la empresa'}.`
+            : a.es_regularizacion
             ? `Declaro que los equipos del anexo ${gid} (${(a.regulariza_seriales || []).map(s => s.serial).join(', ')}) están en poder de ${g.cliente_nombre || 'la empresa'} y acepto su incorporación al contrato ${a.contrato_id || ''} con las tarifas indicadas.`
             : `Declaro que he leído el anexo de aumento ${gid} al contrato ${a.contrato_id || ''} y acepto sus términos y condiciones en nombre de ${g.cliente_nombre || 'la empresa'}.`,
           representante: { nombre: this.cliente.representante || '', cedula: this.cliente.representante_cedula || '' },
+          ...(a.es_ajuste ? { es_ajuste: true } : {}),
           ...(a.es_regularizacion ? { es_regularizacion: true,
             regulariza_seriales: (a.regulariza_seriales || []).map(s => ({ serial: s.serial || '', modelo: s.modelo || '' })) } : {}),
           // Texto del anexo CONGELADO con su versión (misma regla que el
@@ -937,7 +942,8 @@ window.Centro = {
               ? `${a.duracion_meses || '?'} meses (desde la firma — equipos ya entregados)`
               : `${a.duracion_meses || '?'} meses (tramo del anexo, desde la entrega)`,
             equipos: (a.lineas || []).map(l => ({ modelo: l.modelo || '', cantidad: Number(l.cantidad || 0), precio: Number(l.precio || 0), ...(l.modalidad ? { modalidad: l.modalidad } : {}) })),
-            cargos: (a.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente })),
+            cargos: (a.cargos || []).map(x => ({ concepto: x.concepto || '', cantidad: Number(x.cantidad || 1), monto: Number(x.monto || 0), recurrente: !!x.recurrente,
+              ...(Array.isArray(x.seriales) && x.seriales.length ? { seriales: x.seriales } : {}) })),
             total_mensual: Number(t.total_mensual || 0),
             primer_pago: Number(t.primer_pago || 0),
             itbms_label: t.itbms_aplica ? `ITBMS (${Math.round((t.itbms_porcentaje || 0.07) * 100)}%)` : 'ITBMS EXENTO',
@@ -1526,10 +1532,13 @@ window.Centro = {
       <div class="cg-row" id="grow-${this.esc(g.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('${this.esc(g.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
         <div style="min-width:0;"><div class="n cg-mono" style="font-size:13px;">${this.esc(g.id)}</div>
-          <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo' : this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
+          <div class="s">${g.tipo === 'aumento' && g.aumento?.es_regularizacion ? 'Regularización por anexo'
+            : g.tipo === 'aumento' && g.aumento?.es_ajuste ? 'Ajuste de tarifa / servicios'
+            : this.esc(GestionesService.tipoLabel(g.tipo))} · ${g.tipo === 'demo'
             ? this.esc((g.demo?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ') || '—')
             : g.tipo === 'aumento'
-            ? this.esc((g.aumento?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`).join(', ') || '—')
+            ? this.esc([...(g.aumento?.lineas || []).map(l => `${l.cantidad} × ${l.modelo}`),
+                        ...(g.aumento?.cargos || []).map(c => `${c.cantidad} × ${c.concepto}`)].join(', ') || '—')
             : `${(g.items || []).length} serial(es)`} · ${fecha}</div></div>
         <span class="num" style="margin-left:auto; font-size:12px; color:var(--fg-3);">${done}/${defsG.length}</span>
         <span class="cg-chip cg-chip--estado-${this.esc(g.estado)}">${this.esc(GestionesService.estadoLabel(g.estado))}</span>
@@ -1610,7 +1619,15 @@ window.Centro = {
     let defs = this.CIERRE_DEFS[g.tipo] || this.CIERRE_DEFS.reemplazo;
     // La regularización comparte flags con el aumento pero su historia es
     // otra: sin bodega, sin OS, tramo desde la firma.
-    if (g.tipo === 'aumento' && g.aumento?.es_regularizacion) defs = [
+    if (g.tipo === 'aumento' && g.aumento?.es_ajuste) defs = [
+      ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
+      ['firma', 'Anexo firmado por el cliente', 'Acepta los cargos / servicios nuevos'],
+      ['derivacion', 'Cargos aplicados al contrato', 'Amarrados por serial cuando aplica'],
+      ['asignacion', 'Sin bodega', 'No aplica: no hay equipos nuevos'],
+      ['programacion', 'Sin orden de servicio', 'No aplica'],
+      ['entrega', 'Ajuste completo', 'La tarifa mensual del contrato queda actualizada'],
+    ];
+    else if (g.tipo === 'aumento' && g.aumento?.es_regularizacion) defs = [
       ['aprobacion', 'Aprobación comercial', 'Administración / gerencia'],
       ['firma', 'Anexo firmado por el cliente', 'Declara que los equipos ya están en su poder'],
       ['derivacion', 'Líneas aplicadas al contrato', 'El tramo corre desde la firma'],
@@ -1646,6 +1663,9 @@ window.Centro = {
       const asignados = a.seriales_asignados || [];
       const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega' && g.cierre?.derivacion;
       cuerpo = `
+        ${a.es_ajuste ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
+          <b>Anexo de ajuste de tarifa / servicios</b> — solo cargos, sin equipos nuevos;
+          al firmarse se aplica al contrato y cierra solo, sin bodega ni entrega.</p>` : ''}
         ${a.es_regularizacion ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
           <b>Anexo de regularización</b> — amarra equipos que el cliente ya tiene
           (<span class="cg-mono">${(a.regulariza_seriales || []).map(s => this.esc(s.serial)).join(', ')}</span>);
@@ -1658,7 +1678,8 @@ window.Centro = {
           ${(a.lineas || []).map(l => `<tr><td class="num">${Number(l.cantidad || 0)}</td>
             <td>${this.esc(l.modelo || '—')}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`).join('')}
           ${(a.cargos || []).map(c => `<tr><td class="num">${Number(c.cantidad || 0)}</td>
-            <td style="color:var(--fg-3);">${this.esc(c.concepto || '—')} <span class="cg-venc ${c.recurrente ? 'vigente' : 'por_vencer'}" style="font-size:10.5px;">${c.recurrente ? 'mensual' : 'único'}</span></td>
+            <td style="color:var(--fg-3);">${this.esc(c.concepto || '—')} <span class="cg-venc ${c.recurrente ? 'vigente' : 'por_vencer'}" style="font-size:10.5px;">${c.recurrente ? 'mensual' : 'único'}</span>
+              ${(c.seriales || []).length ? `<div class="cg-mono" style="font-size:11px; color:var(--fg-4);">${c.seriales.map(s => this.esc(s)).join(', ')}</div>` : ''}</td>
             <td class="num">$${Number(c.monto || 0).toFixed(2)}</td></tr>`).join('')}
         </tbody></table></div>
         ${a.totales ? `<p style="font-size:13px; margin:8px 0 0;">
@@ -2037,6 +2058,8 @@ window.Centro = {
       cuentaHtml = `
         <button type="button" onclick="Centro.wizAgregarEquipos()">Agregar equipos
           <span style="display:block; font-size:11px; color:var(--fg-4);">anexo rápido a la cuenta — el contrato ancla se elige solo</span></button>
+        <button type="button" onclick="Centro.wizAjuste()">Ajuste de tarifa / servicios
+          <span style="display:block; font-size:11px; color:var(--fg-4);">cargos como GPS, amarrados por serial — sin bodega</span></button>
         <button type="button" onclick="Centro.wizContrato({renovarCuenta:true})">Renovar cuenta
           <span style="display:block; font-size:11px; color:var(--fg-4);">consolida ${n ? `${n} contrato${n === 1 ? '' : 's'}` : 'la cuenta'}${est.custodia ? ` + ${est.custodia} radio${est.custodia === 1 ? '' : 's'} sin contrato` : ''} en un contrato maestro</span></button>
         ${n ? `<button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta
@@ -2045,6 +2068,8 @@ window.Centro = {
       const m = est.maestro;
       cuentaHtml = `
         <button type="button" onclick="Centro.wizAumento('${this.esc(m.id)}')">Aumento de equipos (anexo)</button>
+        <button type="button" onclick="Centro.wizAjuste('${this.esc(m.id)}')">Ajuste de tarifa / servicios
+          <span style="display:block; font-size:11px; color:var(--fg-4);">cargos como GPS, amarrados por serial — sin bodega</span></button>
         ${this._wcEnVentana(m)
           ? `<button type="button" onclick="Centro.wizContrato('${this.esc(m.id)}')">Renovar cuenta</button>` : ''}
         <button type="button" onclick="Centro.wizTerminacionCuenta()">Terminación de la cuenta</button>`;
@@ -2411,7 +2436,7 @@ window.Centro = {
   },
   // Las filas de cargos las comparten el aumento (#waTot) y el wizard de
   // contrato (#wcTot); cada preview no-opea si su contenedor no está.
-  _previewTarifario() { this._aumPreview(); this._wcPreview(); },
+  _previewTarifario() { this._aumPreview(); this._wcPreview(); this._wjPreview?.(); },
 
   // Lector genérico de líneas modelo·cantidad·precio (los data-attrs que
   // pinta _lineaModeloHtml). Lo comparten el aumento (wau) y el contrato (wcm).
@@ -2648,6 +2673,143 @@ window.Centro = {
       this._aumRegulariza = null;
       await this.recargarGestiones();
     } catch (e) { console.error(e); Toast.show('No se pudo crear el aumento', 'bad'); }
+  },
+
+  /* ═════════ Wizard: ajuste de tarifa / servicios (2026-09-02) ═════════ */
+
+  // Anexo SOLO-CARGOS (caso FORTALEZA: agregar "Servicio GPS" $5/mes a radios
+  // concretos). Sin equipos nuevos → sin bodega, sin OS, sin entrega: al
+  // firmarse el cliente, B3 aplica los cargos al contrato, estampa el servicio
+  // en el pool de cada serial marcado y CIERRA la gestión — mismo patrón del
+  // anexo de regularización. Los cargos recurrentes quedan AMARRADOS POR
+  // SERIAL (cargo.seriales[]): la cantidad sale de la selección, y la baja de
+  // un serial descuenta el cargo sola (onGestionWrite B2).
+  async wizAjuste(preselId) {
+    if (!this.puedeCrearGestion()) { Toast.show('Tu rol no crea gestiones desde aquí', 'warn'); return; }
+    this._cerrarModal();
+    document.getElementById('cgMenu')?.classList.add('hidden');
+    await this._cargarCargos();
+    const activos = this.contratos.filter(c => this._esVigente(c));
+    if (!activos.length) { Toast.show('El cliente no tiene contratos vigentes', 'warn'); return; }
+    const cBase = activos.find(c => c.id === preselId) || this._cuentaAncla() || activos[0];
+    const itbmsDefault = this.cliente?.itbms_exento === true ? false : (cBase?.itbms_aplica !== false);
+    this._abrirModalA({
+      titulo: `Ajuste de tarifa / servicios (anexo) — ${this.esc(this.cliente.nombre)}`,
+      cuerpo: `
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:70ch;">
+        Agrega <b>cargos del catálogo</b> (servicios como GPS, o ajustes) a un contrato vigente —
+        <b>sin equipos nuevos</b>: no pasa por bodega ni genera entrega. Requiere aprobación
+        comercial y la <b>firma del cliente</b>; al firmarse se aplica y cierra solo.</p>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">1</span> Contrato destino</div>
+        <div class="form-field" style="margin-bottom:4px; max-width:340px;">
+          <select class="form-select" id="wjContrato" onchange="Centro._wjSyncFlota()">
+            ${activos.map(c => `<option value="${this.esc(c.id)}" ${c.id === cBase.id ? 'selected' : ''}>${this.esc(c.contrato_id || c.id)} · ${this.esc(c.tipo_contrato || '')}</option>`).join('')}
+          </select></div>
+      </div>
+      <div oninput="Centro._wjPreview()">
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">2</span> Cargos / servicios</div>
+        <div id="wjCargos">${this._cargoLineaHtml()}</div>
+        <button class="btn btn-ghost cg-act"
+          onclick="document.getElementById('wjCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml())">+ Agregar cargo</button>
+      </div>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">3</span> ¿A cuáles equipos aplica?
+          <span class="hint">marca los seriales — la cantidad de los cargos mensuales sale sola</span></div>
+        <div id="wjFlota" style="max-height:200px; overflow:auto;"></div>
+      </div>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">4</span> Totales</div>
+        <label class="cg-toggle">
+          <input type="checkbox" id="wjItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._wjPreview()">
+          Aplica ITBMS</label>
+        <div id="wjTot" class="ds-card" style="padding:10px 14px; max-width:380px; margin-top:10px;"></div>
+      </div>
+      </div>`,
+      footer: `
+        <span class="sep"></span>
+        <button class="btn btn-ghost" onclick="Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="Centro.crearAjuste()">Enviar a aprobación</button>`,
+    });
+    this._wjSyncFlota();
+    this._wjPreview();
+  },
+  _wjSyncFlota() {
+    const cont = document.getElementById('wjFlota');
+    if (!cont) return;
+    const cid = document.getElementById('wjContrato')?.value || '';
+    const flota = this.equipos.filter(e => e.asignacion?.contrato_doc_id === cid);
+    cont.innerHTML = flota.length ? flota.map(e => `
+      <label style="display:flex; gap:8px; align-items:center; font-size:13px; padding:3px 0;">
+        <input type="checkbox" data-wj-serial value="${this.esc(e.serial || e.id)}"
+          onchange="Centro._wjSerialesChange()" style="width:auto; margin:0;">
+        <span class="cg-mono">${this.esc(e.serial || e.id)}</span>
+        <span style="color:var(--fg-3);">${this.esc(e.modelo_label || '')}</span>
+        ${(e.servicios || []).length ? `<span class="cg-venc vigente" style="font-size:10.5px;">${this.esc(e.servicios.join(', '))}</span>` : ''}
+      </label>`).join('')
+      : `<p style="font-size:12.5px; color:var(--fg-3); margin:0;">Este contrato no tiene seriales amarrados en el pool —
+         el cargo se aplica al contrato con cantidad manual.</p>`;
+    this._wjSerialesChange();
+  },
+  _wjSeriales() {
+    return [...document.querySelectorAll('input[data-wj-serial]:checked')].map(i => i.value);
+  },
+  _wjSerialesChange() {
+    const n = this._wjSeriales().length;
+    if (n > 0) {
+      // La cantidad de los cargos MENSUALES la manda la selección de seriales.
+      document.querySelectorAll('#wjCargos .wa-cargo').forEach(f => {
+        if (f.querySelector('[data-wac-tipo]')?.value === 'recurrente') {
+          const c = f.querySelector('[data-wac-cant]'); if (c) c.value = n;
+        }
+      });
+    }
+    this._wjPreview();
+  },
+  _wjPreview() {
+    const cont = document.getElementById('wjTot');
+    if (!cont) return;
+    const t = this._totAumento([], this._aumCargos(), document.getElementById('wjItbms')?.checked !== false);
+    cont.innerHTML = this._tarifarioHtml(t);
+  },
+  async crearAjuste() {
+    const cid = document.getElementById('wjContrato')?.value || '';
+    const contrato = this.contratos.find(c => c.id === cid);
+    if (!contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
+    const seriales = this._wjSeriales();
+    const cargos = this._aumCargos().map(c => c.recurrente && seriales.length
+      ? { ...c, cantidad: seriales.length, seriales } : c);
+    if (!cargos.length) { Toast.show('Agrega al menos un cargo del catálogo', 'warn'); return; }
+    const itbmsAplica = document.getElementById('wjItbms')?.checked !== false;
+    const totales = this._totAumento([], cargos, itbmsAplica);
+    try {
+      const gid = await GestionesService.crear({
+        tipo: 'aumento',
+        cliente_id: this.cliente.id,
+        cliente_nombre: this.cliente.nombre || '',
+        estado: 'pendiente_aprobacion',
+        origen: { tipo: 'vendedor' },
+        items: [],
+        cierre: {},
+        aprobacion: { requiere: true },
+        aumento: {
+          contrato_doc_id: contrato.id,
+          contrato_id: contrato.contrato_id || contrato.id,
+          lineas: [],
+          cargos,
+          itbms: { aplica: itbmsAplica, porcentaje: totales.itbms_porcentaje },
+          totales,
+          duracion_meses: null,
+          seriales_asignados: [],
+          es_ajuste: true,
+        },
+      });
+      this._cerrarModal();
+      this.gSel = gid;
+      Toast.show(`Ajuste ${gid} enviado a aprobación — al firmarse el cliente, se aplica y cierra solo`, 'ok');
+      await this.recargarGestiones();
+    } catch (e) { console.error(e); Toast.show('No se pudo crear el ajuste', 'bad'); }
   },
 
   /* ═════════ Wizard: nuevo contrato / renovación (Ola 7) ═════════ */

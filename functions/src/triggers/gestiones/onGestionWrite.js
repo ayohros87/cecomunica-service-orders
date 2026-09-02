@@ -290,7 +290,8 @@ module.exports = onDocumentWritten(
       }
       // Un anexo de REGULARIZACIÓN no pasa por bodega: los equipos ya están
       // con el cliente (B3 los amarra directo al firmarse).
-      const entraABodega = after.tipo !== "baja" && after.aumento?.es_regularizacion !== true && (
+      const entraABodega = after.tipo !== "baja" && after.aumento?.es_regularizacion !== true
+        && after.aumento?.es_ajuste !== true && (
         (creada && after.estado === "pendiente_bodega") ||
         (before && ["pendiente_aprobacion", "pendiente_firma"].includes(before.estado)
           && after.estado === "pendiente_bodega"));
@@ -325,6 +326,36 @@ module.exports = onDocumentWritten(
         const { derivarBajaContrato } = require("../../lib/bajas");
         const contratos = Array.isArray(gB.contratos_afectados) ? gB.contratos_afectados : [];
         for (const cid of contratos) await derivarBajaContrato(cid);
+
+        // Cargos amarrados por serial (2026-09-02, GPS): si un serial dado de
+        // baja llevaba un servicio, el cargo del contrato baja SOLO — se quita
+        // el serial y la cantidad sigue a seriales.length (un cargo que queda
+        // en cero se elimina). Sin esto, el cargo quedaba huérfano cobrando
+        // por un radio que ya no está.
+        const bajados = new Set((gB.items || [])
+          .map(it => String(it.serial_saliente || it.serial || "").trim()).filter(Boolean));
+        if (bajados.size) {
+          for (const cid of contratos) {
+            try {
+              await db.runTransaction(async (tx) => {
+                const cs = await tx.get(db.collection("contratos").doc(cid));
+                if (!cs.exists) return;
+                const antes = Array.isArray(cs.data().cargos) ? cs.data().cargos : [];
+                let tocado = false;
+                const cargos = antes.map((cg) => {
+                  if (!Array.isArray(cg.seriales) || !cg.seriales.length) return cg;
+                  const rest = cg.seriales.filter((s) => !bajados.has(String(s)));
+                  if (rest.length === cg.seriales.length) return cg;
+                  tocado = true;
+                  return { ...cg, seriales: rest, cantidad: rest.length };
+                }).filter((cg) => !(Array.isArray(cg.seriales) && cg.seriales.length === 0 && Number(cg.cantidad) === 0));
+                if (tocado) tx.set(db.collection("contratos").doc(cid), { cargos }, { merge: true });
+              });
+            } catch (e) {
+              logger.warn("[onGestionWrite] descuento de cargos por serial falló", { gid, contrato: cid, message: e.message });
+            }
+          }
+        }
 
         for (const it of (gB.items || [])) {
           const serial = String(it.serial_saliente || it.serial || "").trim();
@@ -462,7 +493,11 @@ module.exports = onDocumentWritten(
       }
       if (gA) {
         const a = gA.aumento || {};
-        if (!a.contrato_doc_id || !(a.lineas || []).length) {
+        // Ajuste de tarifa (2026-09-02, caso FORTALEZA/GPS): anexo SOLO-CARGOS
+        // — sin líneas de equipo es válido; los cargos se aplican, el servicio
+        // se estampa por serial y la gestión cierra sin bodega ni entrega.
+        const esAjuste = a.es_ajuste === true && (a.cargos || []).length > 0;
+        if (!a.contrato_doc_id || (!(a.lineas || []).length && !esAjuste)) {
           logger.error("[onGestionWrite] aumento firmado sin contrato destino o sin líneas", { gid });
         } else {
           // Anexo de REGULARIZACIÓN (2026-08-31, caso C COMUNICA): los equipos
@@ -506,7 +541,9 @@ module.exports = onDocumentWritten(
             }
             // Cargos del anexo (únicos y mensuales) al contrato — mismo shape
             // que nc-cargos.leer(); la facturación futura los lee de cargos[].
+            // Con `seriales` cuando el cargo está amarrado por equipo (GPS).
             const cargos = Array.isArray(cSnap.data().cargos) ? [...cSnap.data().cargos] : [];
+            if (cargos.some(cg => cg.enmienda_id === gid)) return; // idempotencia (ajuste solo-cargos)
             for (const cg of (a.cargos || [])) {
               cargos.push({
                 cargo_id: cg.cargo_id || "",
@@ -514,6 +551,7 @@ module.exports = onDocumentWritten(
                 cantidad: Number(cg.cantidad || 1),
                 monto: Number(cg.monto || 0),
                 recurrente: cg.recurrente === true,
+                ...(Array.isArray(cg.seriales) && cg.seriales.length ? { seriales: cg.seriales } : {}),
                 enmienda_id: gid,
               });
             }
@@ -574,6 +612,35 @@ module.exports = onDocumentWritten(
             await G.registrarEvento(gid, "entrega",
               `Anexo de REGULARIZACIÓN aplicado: ${amarrados} equipo(s) ya en campo amarrados al contrato ${a.contrato_id || a.contrato_doc_id} (${a.regulariza_seriales.map(s => s.serial).join(", ")}); el tramo de ${a.duracion_meses || "?"} meses arranca hoy. Sin bodega ni entrega — la gestión cierra.`);
             logger.info("[onGestionWrite] regularización por anexo aplicada", { gid, contrato: a.contrato_doc_id, amarrados });
+          } else if (esAjuste) {
+            // Estampar el servicio EN CADA SERIAL marcado (pool.servicios[]):
+            // el Kardex y las bajas saben qué radios llevan qué servicio.
+            let estampados = 0;
+            for (const cg of (a.cargos || [])) {
+              if (!cg.recurrente || !Array.isArray(cg.seriales)) continue;
+              for (const serial of cg.seriales) {
+                try {
+                  const r = await pool.resolver(serial, null, "");
+                  if (r?.ref && r.data) {
+                    await r.ref.update({
+                      servicios: admin.firestore.FieldValue.arrayUnion(cg.concepto || "Servicio"),
+                    });
+                    estampados++;
+                  }
+                } catch (e) {
+                  logger.warn("[onGestionWrite] servicio no estampado en el pool", { gid, serial, message: e.message });
+                }
+              }
+            }
+            // Sin bodega, OS ni entrega: el ajuste cierra al aplicarse.
+            await ref.set({
+              estado: "cerrada",
+              cerrada_at: admin.firestore.FieldValue.serverTimestamp(),
+              cierre: { ...(gA.cierre || {}), derivacion: true, asignacion: true, programacion: true, entrega: true },
+            }, { merge: true });
+            await G.registrarEvento(gid, "entrega",
+              `Anexo de AJUSTE aplicado: ${(a.cargos || []).map(cg => `${cg.concepto} $${Number(cg.monto || 0).toFixed(2)}${cg.recurrente ? "/mes" : ""} × ${cg.cantidad}${(cg.seriales || []).length ? ` (${cg.seriales.join(", ")})` : ""}`).join("; ")} al contrato ${a.contrato_id || a.contrato_doc_id}${estampados ? `; servicio estampado en ${estampados} equipo(s) del pool` : ""}. Sin bodega ni entrega — la gestión cierra.`);
+            logger.info("[onGestionWrite] ajuste de tarifa aplicado", { gid, contrato: a.contrato_doc_id, estampados });
           } else {
             await ref.set({ cierre: { ...(gA.cierre || {}), derivacion: true } }, { merge: true });
             await G.registrarEvento(gid, "derivacion",

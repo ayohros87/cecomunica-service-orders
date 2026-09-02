@@ -71,7 +71,9 @@
     });
     (c.cargos || []).forEach((x) => {
       const cant = Math.max(1, Number(x.cantidad || 1)); const monto = Number(x.monto || 0);
-      filas += `<tr><td>${cant}</td><td>${esc(x.concepto || '—')}</td>
+      const sers = (Array.isArray(x.seriales) && x.seriales.length)
+        ? `<br><span class="mono" style="font-size:10.5px; color:#555;">Equipos: ${x.seriales.map(esc).join(', ')}</span>` : '';
+      filas += `<tr><td>${cant}</td><td>${esc(x.concepto || '—')}${sers}</td>
         <td>${x.recurrente ? 'Mensual' : 'Único'}</td><td class="right">${money(monto)}</td><td class="right">${money(cant * monto)}</td></tr>`;
     });
     const subtotal = Number(c.subtotal ?? subEquipos) || subEquipos;

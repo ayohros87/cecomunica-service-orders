@@ -225,7 +225,7 @@
       const filas = [...(r.equipos || []).map(l =>
         `<tr><td>${this.esc(l.modelo)}${l.modalidad === 'propio' ? ' <span style="color:#8a99a8;font-size:11px;">equipo del cliente</span>' : ''}</td><td class="num">${Number(l.cantidad || 0)}</td><td class="num">$${Number(l.precio || 0).toFixed(2)}</td></tr>`),
       ...(r.cargos || []).map(x =>
-        `<tr><td>${this.esc(x.concepto)} <span style="color:#8a99a8;font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span></td><td class="num">${Number(x.cantidad || 1)}</td><td class="num">$${Number(x.monto || 0).toFixed(2)}</td></tr>`)].join('');
+        `<tr><td>${this.esc(x.concepto)} <span style="color:#8a99a8;font-size:11px;">${x.recurrente ? 'mensual' : 'único'}</span>${(x.seriales || []).length ? `<div style="color:#8a99a8;font-size:11px;">Equipos: ${x.seriales.map(s => this.esc(s)).join(', ')}</div>` : ''}</td><td class="num">${Number(x.cantidad || 1)}</td><td class="num">$${Number(x.monto || 0).toFixed(2)}</td></tr>`)].join('');
       document.getElementById('fTabla').innerHTML =
         `<thead><tr><th>Detalle</th><th class="num">Cant.</th><th class="num">Precio</th></tr></thead><tbody>${filas}</tbody>`;
       document.getElementById('fTotales').innerHTML =
@@ -266,11 +266,17 @@
         // Texto congelado en la solicitud (misma regla que el contrato); los
         // enlaces anteriores al congelado usan el texto desplegado como
         // respaldo.
-        const intro = d.intro_html || (window.ContratoV2Texto ? ContratoV2Texto.anexoIntro(regu) : '');
+        const ajuste = s.es_ajuste === true;
+        const intro = ajuste
+          ? `Incorpora al contrato marco los <b>cargos y servicios</b> de la tabla de arriba, con las
+             tarifas indicadas; cuando un cargo lista equipos, aplica a <b>esos seriales</b>. No hay
+             equipos nuevos ni entrega pendiente — el ajuste rige desde su aceptación
+             (cláusula 9 — tarifas aceptadas mediante anexo firmado).`
+          : d.intro_html || (window.ContratoV2Texto ? ContratoV2Texto.anexoIntro(regu) : '');
         const marco = d.marco_html || (window.ContratoV2Texto ? ContratoV2Texto.anexoMarco : '');
         const claus = d.clausulas_html || (window.ContratoV2Texto ? ContratoV2Texto.clausulasHtml : '');
         cont.innerHTML = `
-          <p>Anexo de ${regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
+          <p>Anexo de ${ajuste ? 'ajuste de tarifa' : regu ? 'regularización' : 'aumento'} al contrato <b>${this.esc(s.contrato_id || '—')}</b> entre
             <b>C COMUNICA, S.A.</b> y <b>${this.esc(s.cliente_nombre || 'EL CLIENTE')}</b>. ${intro}</p>
           ${regu && serialesRegu ? `<table><thead><tr><th>Serial</th><th>Modelo</th></tr></thead><tbody>${serialesRegu}</tbody></table>` : ''}
           <p>${marco}</p>
