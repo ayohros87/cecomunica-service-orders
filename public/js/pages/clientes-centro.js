@@ -2419,22 +2419,16 @@ window.Centro = {
     return this.cargosCat;
   },
 
-  // conSerial (solo el wizard de AJUSTE): cada cargo decide si se amarra a los
-  // seriales marcados (GPS) o va al contrato sin serial (consola PoC, 2026-09-02
-  // — el amarre global obligaba a la consola a llevar serial).
-  _cargoLineaHtml(conSerial = false) {
+  _cargoLineaHtml() {
     const opts = (this.cargosCat || []).map(c =>
       `<option value="${this.esc(c.id)}" data-monto="${Number(c.monto_default) || 0}" data-rec="${c.recurrente ? 1 : 0}">${this.esc(c.concepto || '')}</option>`).join('');
-    return `<div class="wa-cargo" style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
-      <select class="form-select" data-wac-sel style="flex:1; min-width:180px;" onchange="Centro._cargoSelChange(this)">
+    return `<div class="wa-cargo" style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+      <select class="form-select" data-wac-sel style="flex:1;" onchange="Centro._cargoSelChange(this)">
         <option value="">— cargo del catálogo —</option>${opts}</select>
       <input class="form-input" data-wac-cant type="number" min="1" value="1" style="width:70px;" title="Cantidad" onchange="Centro._previewTarifario()">
       <input class="form-input" data-wac-monto type="number" min="0" step="1" placeholder="$" style="width:100px;" onchange="Centro._previewTarifario()">
       <select class="form-select" data-wac-tipo style="width:110px;" onchange="Centro._previewTarifario()">
         <option value="unico">Único</option><option value="recurrente">Mensual</option></select>
-      ${conSerial ? `<label class="cg-toggle" style="flex:none; font-size:12px; padding:4px 9px;"
-        title="Marcado: el cargo se amarra a los seriales seleccionados abajo (la cantidad sale sola). Sin marcar: cargo del contrato, sin serial — como la consola PoC.">
-        <input type="checkbox" data-wac-porserial onchange="Centro._wjSerialesChange()"> por serial</label>` : ''}
       <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
         onclick="this.parentElement.remove(); Centro._previewTarifario()">✕</button>
     </div>`;
@@ -2481,8 +2475,6 @@ window.Centro = {
         cantidad: Math.max(1, Math.round(Number(f.querySelector('[data-wac-cant]')?.value)) || 1),
         monto: Math.max(0, Number(f.querySelector('[data-wac-monto]')?.value || 0)),
         recurrente: f.querySelector('[data-wac-tipo]')?.value === 'recurrente',
-        // Solo existe en el wizard de ajuste; en los demás queda false.
-        por_serial: f.querySelector('[data-wac-porserial]')?.checked === true,
       };
     }).filter(c => c.cargo_id && c.monto > 0);
   },
@@ -2663,7 +2655,7 @@ window.Centro = {
     if (lineas.some(l => !(l.precio > 0))) { Toast.show('Cada línea necesita su precio mensual', 'warn'); return; }
     const meses = Number(document.getElementById('waMeses')?.value || 0);
     if (!(meses > 0)) { Toast.show('Indica la vigencia del tramo en meses', 'warn'); return; }
-    const cargos = this._aumCargos().map(({ por_serial, ...c }) => c);
+    const cargos = this._aumCargos();
     const itbmsAplica = document.getElementById('waItbms')?.checked !== false;
     const totales = this._totAumento(lineas, cargos, itbmsAplica);
     try {
@@ -2740,19 +2732,13 @@ window.Centro = {
         <div id="wjLineas"></div>
       </div>
       <div class="cg-paso">
-        <div class="cg-paso-t"><span class="n">3</span> Cargos / servicios nuevos
-          <span class="hint">"por serial" = amarrado a equipos (GPS); sin marcar = del contrato, sin serial (consola)</span></div>
-        <div id="wjCargos">${this._cargoLineaHtml(true)}</div>
+        <div class="cg-paso-t"><span class="n">3</span> Cargos / servicios nuevos <span class="hint">opcional</span></div>
+        <div id="wjCargos">${this._wjCargoRow()}</div>
         <button class="btn btn-ghost cg-act"
-          onclick="document.getElementById('wjCargos').insertAdjacentHTML('beforeend', Centro._cargoLineaHtml(true))">+ Agregar cargo</button>
+          onclick="document.getElementById('wjCargos').insertAdjacentHTML('beforeend', Centro._wjCargoRow())">+ Agregar cargo</button>
       </div>
       <div class="cg-paso">
-        <div class="cg-paso-t"><span class="n">4</span> Seriales para los cargos "por serial"
-          <span class="hint">solo aplica a los cargos marcados "por serial" — su cantidad sale sola</span></div>
-        <div id="wjFlota" style="max-height:200px; overflow:auto;"></div>
-      </div>
-      <div class="cg-paso">
-        <div class="cg-paso-t"><span class="n">5</span> Totales</div>
+        <div class="cg-paso-t"><span class="n">4</span> Totales</div>
         <label class="cg-toggle">
           <input type="checkbox" id="wjItbms" ${itbmsDefault ? 'checked' : ''} onchange="Centro._wjPreview()">
           Aplica ITBMS</label>
@@ -2802,44 +2788,100 @@ window.Centro = {
         precio_anterior: Number(l.precio || 0), precio_nuevo: nuevo };
     }).filter(Boolean);
   },
+  // Cambio de contrato destino: tarifas nuevas + las filas de cargos se
+  // reinician (los pickers de radios dependen de la flota del destino).
   _wjSyncFlota() {
     this._wjSyncLineas();
-    const cont = document.getElementById('wjFlota');
-    if (!cont) return;
-    const cid = document.getElementById('wjContrato')?.value || '';
-    const flota = this.equipos.filter(e => e.asignacion?.contrato_doc_id === cid);
-    cont.innerHTML = flota.length ? flota.map(e => `
-      <label style="display:flex; gap:8px; align-items:center; font-size:13px; padding:3px 0;">
-        <input type="checkbox" data-wj-serial value="${this.esc(e.serial || e.id)}"
-          onchange="Centro._wjSerialesChange()" style="width:auto; margin:0;">
-        <span class="cg-mono">${this.esc(e.serial || e.id)}</span>
-        <span style="color:var(--fg-3);">${this.esc(e.modelo_label || '')}</span>
-        ${(e.servicios || []).length ? `<span class="cg-venc vigente" style="font-size:10.5px;">${this.esc(e.servicios.join(', '))}</span>` : ''}
-      </label>`).join('')
-      : `<p style="font-size:12.5px; color:var(--fg-3); margin:0;">Este contrato no tiene seriales amarrados en el pool —
-         el cargo se aplica al contrato con cantidad manual.</p>`;
-    this._wjSerialesChange();
-  },
-  _wjSeriales() {
-    return [...document.querySelectorAll('input[data-wj-serial]:checked')].map(i => i.value);
-  },
-  _wjSerialesChange() {
-    const n = this._wjSeriales().length;
-    // La selección solo manda la cantidad de los cargos marcados "por serial";
-    // los demás (consola PoC, ajustes generales) conservan su cantidad manual.
-    document.querySelectorAll('#wjCargos .wa-cargo').forEach(f => {
-      const porSerial = f.querySelector('[data-wac-porserial]')?.checked === true;
-      const c = f.querySelector('[data-wac-cant]');
-      if (!c) return;
-      if (porSerial && n > 0) { c.value = n; c.readOnly = true; }
-      else { c.readOnly = false; }
-    });
+    const cont = document.getElementById('wjCargos');
+    if (cont) cont.innerHTML = this._wjCargoRow();
     this._wjPreview();
+  },
+
+  // Fila de cargo del AJUSTE (rediseño 2026-09-02: cero jerga — el CATÁLOGO
+  // sabe si un cargo es por equipo, cargos.por_equipo). Al elegir "Servicio
+  // GPS" la fila despliega "¿A cuáles radios?" ahí mismo; al elegir "Consola"
+  // solo pide monto y cantidad. El vendedor nunca decide el amarre.
+  _wjCargoRow() {
+    const opts = (this.cargosCat || []).map(c =>
+      `<option value="${this.esc(c.id)}" data-monto="${Number(c.monto_default) || 0}"
+        data-rec="${c.recurrente ? 1 : 0}" data-poreq="${c.por_equipo ? 1 : 0}">${this.esc(c.concepto || '')}</option>`).join('');
+    return `<div class="wj-cargo" style="border:1px solid var(--border-subtle); border-radius:8px; padding:8px 10px; margin-bottom:8px;">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select class="form-select" data-wjc-sel style="flex:1;" onchange="Centro._wjRowSel(this)">
+          <option value="">— cargo del catálogo —</option>${opts}</select>
+        <input class="form-input" data-wjc-cant type="number" min="1" value="1" style="width:70px;" title="Cantidad" onchange="Centro._wjPreview()">
+        <input class="form-input" data-wjc-monto type="number" min="0" step="1" placeholder="$" style="width:100px;" onchange="Centro._wjPreview()">
+        <select class="form-select" data-wjc-tipo style="width:110px;" onchange="Centro._wjPreview()">
+          <option value="unico">Único</option><option value="recurrente">Mensual</option></select>
+        <button type="button" class="btn btn-ghost" style="padding:4px 8px;" title="Quitar"
+          onclick="this.closest('.wj-cargo').remove(); Centro._wjPreview()">✕</button>
+      </div>
+      <div data-wj-picker class="hidden" style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border-subtle);"></div>
+    </div>`;
+  },
+  _wjRowSel(sel) {
+    const fila = sel.closest('.wj-cargo');
+    const opt = sel.selectedOptions[0];
+    if (opt && opt.value) {
+      const m = Number(opt.dataset.monto) || 0;
+      const monto = fila.querySelector('[data-wjc-monto]');
+      if (m && !monto.value) monto.value = m;
+      fila.querySelector('[data-wjc-tipo]').value = opt.dataset.rec === '1' ? 'recurrente' : 'unico';
+    }
+    const picker = fila.querySelector('[data-wj-picker]');
+    const cant = fila.querySelector('[data-wjc-cant]');
+    if (opt?.dataset.poreq === '1') {
+      const cid = document.getElementById('wjContrato')?.value || '';
+      const flota = this.equipos.filter(e => e.asignacion?.contrato_doc_id === cid);
+      picker.innerHTML = `<div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">¿A cuáles radios aplica?</div>`
+        + (flota.length ? `<div style="max-height:160px; overflow:auto;">${flota.map(e => `
+          <label style="display:flex; gap:8px; align-items:center; font-size:13px; padding:2px 0;">
+            <input type="checkbox" data-wj-rs value="${this.esc(e.serial || e.id)}"
+              onchange="Centro._wjRowSerial(this)" style="width:auto; margin:0;">
+            <span class="cg-mono">${this.esc(e.serial || e.id)}</span>
+            <span style="color:var(--fg-3);">${this.esc(e.modelo_label || '')}</span>
+            ${(e.servicios || []).length ? `<span class="cg-venc vigente" style="font-size:10.5px;">${this.esc(e.servicios.join(', '))}</span>` : ''}
+          </label>`).join('')}</div>`
+        : `<p style="font-size:12.5px; color:var(--fg-3); margin:0;">El contrato no tiene seriales amarrados — el cargo irá con cantidad manual.</p>`);
+      picker.classList.remove('hidden');
+      if (flota.length) { cant.value = 0; cant.readOnly = true; }
+    } else {
+      picker.classList.add('hidden');
+      picker.innerHTML = '';
+      cant.readOnly = false;
+      if (!(Number(cant.value) > 0)) cant.value = 1;
+    }
+    this._wjPreview();
+  },
+  _wjRowSerial(chk) {
+    const fila = chk.closest('.wj-cargo');
+    const n = [...fila.querySelectorAll('input[data-wj-rs]:checked')].length;
+    const cant = fila.querySelector('[data-wjc-cant]');
+    if (cant && cant.readOnly) cant.value = n;
+    this._wjPreview();
+  },
+  _wjCargos() {
+    return [...document.querySelectorAll('#wjCargos .wj-cargo')].map(f => {
+      const sel = f.querySelector('[data-wjc-sel]');
+      const opt = sel?.selectedOptions[0];
+      if (!sel?.value) return null;
+      const seriales = [...f.querySelectorAll('input[data-wj-rs]:checked')].map(i => i.value);
+      return {
+        cargo_id: sel.value,
+        concepto: opt ? (opt.textContent || '').trim() : '',
+        cantidad: Math.max(seriales.length ? seriales.length : 1,
+          Math.round(Number(f.querySelector('[data-wjc-cant]')?.value)) || 1),
+        monto: Math.max(0, Number(f.querySelector('[data-wjc-monto]')?.value || 0)),
+        recurrente: f.querySelector('[data-wjc-tipo]')?.value === 'recurrente',
+        por_equipo: opt?.dataset.poreq === '1',
+        ...(seriales.length ? { seriales } : {}),
+      };
+    }).filter(c => c && c.monto > 0);
   },
   _wjPreview() {
     const cont = document.getElementById('wjTot');
     if (!cont) return;
-    const t = this._totAumento([], this._aumCargos(), document.getElementById('wjItbms')?.checked !== false);
+    const t = this._totAumento([], this._wjCargos(), document.getElementById('wjItbms')?.checked !== false);
     const ajustes = this._wjAjustes();
     const delta = ajustes.reduce((s, a) => s + a.cantidad * (a.precio_nuevo - a.precio_anterior), 0);
     cont.innerHTML =
@@ -2852,15 +2894,14 @@ window.Centro = {
     const cid = document.getElementById('wjContrato')?.value || '';
     const contrato = this.contratos.find(c => c.id === cid);
     if (!contrato) { Toast.show('Elige el contrato destino', 'warn'); return; }
-    const seriales = this._wjSeriales();
-    // El amarre es POR CARGO: solo los marcados "por serial" llevan la lista
-    // (GPS); los demás van al contrato sin serial (consola PoC).
-    const cargos = this._aumCargos().map(({ por_serial, ...c }) =>
-      por_serial && c.recurrente && seriales.length
-        ? { ...c, cantidad: seriales.length, seriales } : c);
-    if (this._aumCargos().some(c => c.por_serial && c.recurrente) && !seriales.length) {
-      Toast.show('Marcaste un cargo "por serial" — selecciona los equipos a los que aplica (o desmárcalo)', 'warn'); return;
+    // El catálogo decide el amarre: un cargo por_equipo (GPS) exige sus
+    // radios marcados; los demás (consola) van al contrato sin serial.
+    const cargosRaw = this._wjCargos();
+    const sinRadios = cargosRaw.find(c => c.por_equipo && !(c.seriales || []).length);
+    if (sinRadios) {
+      Toast.show(`"${sinRadios.concepto}" aplica por equipo — marca los radios en su fila`, 'warn'); return;
     }
+    const cargos = cargosRaw.map(({ por_equipo, ...c }) => c);
     const ajustes = this._wjAjustes();
     if (!cargos.length && !ajustes.length) {
       Toast.show('Agrega un cargo del catálogo o ajusta la tarifa de alguna línea', 'warn'); return;
@@ -3286,8 +3327,7 @@ window.Centro = {
         duracion_meses: meses,
         observaciones: document.getElementById('wcObs')?.value || '',
         equipos: lineas,
-        cargos: [...document.querySelectorAll('#wcCargos .wa-cargo')].length
-          ? this._aumCargos().map(({ por_serial, ...c }) => c) : [],
+        cargos: [...document.querySelectorAll('#wcCargos .wa-cargo')].length ? this._aumCargos() : [],
         itbms_aplica: document.getElementById('wcItbms')?.checked !== false,
         creado_por_uid: this.uid,
       });
