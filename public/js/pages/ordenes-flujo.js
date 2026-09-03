@@ -369,6 +369,20 @@ window.cerrarEntrada = function (ordenId) {
   const cotizada = !!orden.cotizacion_emitida;
   const nEquipos = (orden.equipos || []).filter(e => !e.eliminado).length;
 
+  // Equipos marcados como DESCARTADOS durante la revisión (modal de
+  // intervención). El cierre es quien los escribe en el registro central
+  // `equipos_descartados` — mismo momento que en QC lo hace la firma.
+  const descartados = (orden.equipos || []).filter(e => !e.eliminado && e.descartado_revision);
+  const avisoDescartes = descartados.length
+    ? `<div style="border:1px solid #FECACA;background:#FEF2F2;color:#991B1B;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">
+         ⛔ <b>${descartados.length} equipo(s) descartado(s) en la revisión</b> — al cerrar quedan en el registro de
+         equipos descartados (alerta al teclear el serial en bodega o taller):
+         <ul style="margin:6px 0 0;padding-left:18px;">
+           ${descartados.map(e => `<li><span style="font-family:var(--font-mono,monospace);">${escapeHtml(String(e.numero_de_serie || e.serial || e.SERIAL || '-'))}</span>${e.descarte_motivo ? ' — ' + escapeHtml(String(e.descarte_motivo)) : ''}</li>`).join('')}
+         </ul>
+       </div>`
+    : '';
+
   const avisoCot = cotizada
     ? `<div style="border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">✓ Cotización emitida para esta orden.</div>`
     : `<div style="border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">Si la revisión encontró <b>daños o faltantes cobrables</b>, emite la cotización antes de cerrar (menú ⋯ → Cotizar). Si no hay nada que cobrar, cierra sin más.</div>`;
@@ -389,6 +403,7 @@ window.cerrarEntrada = function (ordenId) {
           <b>inventario</b> — el destino final (bodega o baja) se decide por serial en
           <b>Inventario · Equipos por serial</b>. Esta orden <b>no se entrega al cliente</b>.
         </p>
+        ${avisoDescartes}
         ${avisoCot}
         <div class="form-field">
           <label class="form-label" for="cierreEntradaObs">Observaciones del cierre (opcional)</label>
@@ -419,8 +434,39 @@ window.cerrarEntrada = function (ordenId) {
     btn.textContent = 'Guardando…';
     try {
       await OrdenesService.closeEntrada(ordenId, { observaciones });
+
+      // Registro central de los descartados de la revisión — DESPUÉS del
+      // cierre (el cierre no se bloquea por un fallo del registro) y con el
+      // mismo fail-soft del QC: si algo falla, se pide registrarlo a mano.
+      const fallos = [];
+      if (descartados.length && typeof EquiposDescartadosService !== 'undefined') {
+        for (const e of descartados) {
+          const serial = String(e.numero_de_serie || e.serial || e.SERIAL || '');
+          try {
+            await EquiposDescartadosService.registrar({
+              serial,
+              modelo: String(e.modelo || e.MODEL || e.modelo_nombre || ''),
+              modelo_id: String(e.modelo_id || ''),
+              orden_id: ordenId,
+              equipo_id: String(e.id || ''),
+              cliente: typeof nombreClienteDe === 'function' ? nombreClienteDe(orden) : '',
+              motivo: String(e.descarte_motivo || 'Descartado en revisión de entrada')
+            });
+          } catch (err2) {
+            fallos.push(serial || '(sin serial)');
+            console.error('[cerrarEntrada] no se registró el descarte de', serial, err2);
+          }
+        }
+      }
+
       cleanup();
-      Toast.show('✅ Entrada cerrada — unidades bajo control de inventario', 'ok');
+      if (fallos.length) {
+        Toast.show(`Entrada cerrada, pero NO se registró el descarte de ${fallos.join(', ')}. Regístrelo a mano en Inventario · Descartados.`, 'bad');
+      } else if (descartados.length) {
+        Toast.show(`✅ Entrada cerrada — ${descartados.length} descartado(s) quedaron en el registro`, 'ok');
+      } else {
+        Toast.show('✅ Entrada cerrada — unidades bajo control de inventario', 'ok');
+      }
       // El snapshot en vivo de ordenes-data.js re-renderiza solo.
     } catch (err) {
       console.error('[cerrarEntrada]', err);

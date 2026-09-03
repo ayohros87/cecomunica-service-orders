@@ -1124,6 +1124,38 @@ const OrdenesService = {
   },
 
   /**
+   * Marca (o desmarca) un equipo como DESCARTADO durante la revisión de una
+   * orden de ENTRADA — la inspección de devueltos no lleva QC, así que este
+   * es su equivalente del "resultado: descartado" del QC. Solo estampa el
+   * equipo dentro de la orden (el técnico sí puede escribirla); el registro
+   * central en `equipos_descartados` lo hace el CIERRE de la entrada, igual
+   * que en QC lo hace la firma.
+   */
+  async updateEquipoDescartado({ ordenId, equipoId, descartado, motivo, uid, email }) {
+    const db = firebase.firestore();
+    const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
+    const snap = await ordenRef.get();
+
+    if (!snap.exists) throw new Error("Orden no encontrada");
+
+    const data = snap.data() || {};
+    const equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
+    const realIndex = equiposAll.findIndex(e => !e?.eliminado && e?.id === equipoId);
+
+    if (realIndex === -1) throw new Error("Equipo no encontrado");
+
+    equiposAll[realIndex].descartado_revision = !!descartado;
+    equiposAll[realIndex].descarte_motivo = descartado ? (motivo || "") : "";
+    equiposAll[realIndex].descarte_updated_at = firebase.firestore.Timestamp.now();
+    equiposAll[realIndex].descarte_uid = uid;
+    equiposAll[realIndex].descarte_email = email;
+
+    await ordenRef.update({ equipos: equiposAll });
+
+    return equiposAll;
+  },
+
+  /**
    * Append a photo entry to an equipo inside an order.
    * Photo is stored inline on equipos[i].fotos = [...]
    */

@@ -49,7 +49,7 @@
 <script defer src="../js/services/clientesService.js"></script>
 <!-- Predicados de pendiente: antes de ordenesService/senalesService/ordenes-qc, que delegan en él. -->
 <script defer src="../js/domain/pendientes.js?v=pen2"></script>
-<script defer src="../js/services/ordenesService.js?v=ser4"></script>
+<script defer src="../js/services/ordenesService.js?v=ser5"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script type="module" src="../js/firebase-aggregates.js?v=agg1"></script>
@@ -71,9 +71,9 @@
 <script defer src="../js/pages/ordenes-data.js?v=dup1"></script>
 <script defer src="../js/pages/ordenes-render.js?v=prog2"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq3"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=firma2"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=desc1"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=pen1"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=cc23"></script>
+<script defer src="../js/pages/ordenes-equipos.js?v=cc24"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
      uso, con sus dependencias (storage, firmaPad): ordenes-notas,
      ordenes-visita, ordenes-fotos (galería §5.23) y ordenes-devolucion.
@@ -796,6 +796,22 @@
         <span>Equipo no disponible para intervención</span>
       </label>
       <input type="text" id="trabajoMotivoNoDisponible" class="motivo-no-disponible" placeholder="Motivo (libre)">
+    </div>
+
+    <!-- Descarte en revisión — SOLO órdenes de ENTRADA (la inspección de
+         devueltos no lleva QC, así que el "resultado: descartado" del QC no
+         existe ahí). El registro central en equipos_descartados lo escribe el
+         cierre de la entrada; ordenes-equipos.js muestra/oculta el bloque. -->
+    <div id="trabajoDescarteCtrl" class="intervencion-ctrl intervencion-ctrl-modal" style="display:none;">
+      <label class="intervencion-no-disponible">
+        <input type="checkbox" id="trabajoDescartado">
+        <span style="color:#991B1B;">Equipo descartado en la revisión</span>
+      </label>
+      <input type="text" id="trabajoDescarteMotivo" class="motivo-no-disponible"
+        placeholder="Motivo del descarte (obligatorio) — quedará en el registro que consulta bodega">
+      <div id="trabajoDescarteAviso" style="display:none;font-size:12.5px;color:#991B1B;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:6px 10px;margin-top:6px;">
+        Al cerrar la entrada, este serial queda en el registro de equipos descartados: si alguien lo teclea en bodega o taller, saltará una alerta.
+      </div>
     </div>
 
     <!-- Lote (auditoría M3): mismas manos, mismo trabajo — una orden de 10

@@ -363,10 +363,21 @@ async function main() {
   ok("descartados: jefe_taller registra un descarte");
   await assertSucceeds(as("administrador").doc("equipos_descartados/ABC124").set({ serial_norm: "ABC124" }));
   ok("descartados: admin también");
-  for (const r of ["tecnico", "recepcion", "inventario", "vendedor", "vista"]) {
+  // Cierre de ENTRADA (2026-09-03): recepción/técnicos registran los descartes
+  // marcados en la revisión — pero SOLO escrituras que dejan el descarte
+  // vigente (revocado:false explícito). Revocar sigue siendo jefe_taller/admin.
+  for (const r of ["tecnico", "tecnico_operativo", "recepcion"]) {
+    await assertSucceeds(as(r).doc("equipos_descartados/ent_" + r)
+      .set({ serial_norm: "ENT1", motivo: "no enciende", revocado: false }));
     await assertFails(as(r).doc("equipos_descartados/bad_" + r).set({ serial_norm: "X" }));
+    await assertFails(as(r).doc("equipos_descartados/ent_" + r)
+      .set({ revocado: true, revocado_motivo: "sí servía" }, { merge: true }));
   }
-  ok("descartados: técnico/recepción/inventario/vendedor/vista NO pueden descartar");
+  ok("descartados: recepción/técnicos registran (cierre de ENTRADA) pero NO revocan ni omiten revocado");
+  for (const r of ["inventario", "vendedor", "vista"]) {
+    await assertFails(as(r).doc("equipos_descartados/bad_" + r).set({ serial_norm: "X", revocado: false }));
+  }
+  ok("descartados: inventario/vendedor/vista siguen sin poder descartar");
   // Bodega (rol inventario) es la que MÁS necesita leerlo antes de recibir.
   for (const r of ["inventario", "tecnico", "recepcion", "vista"]) {
     await assertSucceeds(as(r).doc("equipos_descartados/ABC123").get());

@@ -327,6 +327,7 @@ window.abrirEquiposMobile = function(ordenId) {
       const obs = (e.observaciones || e.descripcion || e.nombre || "").toString();
       const noDisponible = !!e.intervencion_no_disponible;
       const motivoNoDisponible = (e.motivo_no_disponible || "").toString();
+      const descartado = !!e.descartado_revision;
       const cardClass = `equipo-card ${noDisponible ? 'equipo-card--no-disponible' : (e.trabajo_tecnico ? 'equipo-card--ok' : '')}`;
 
       // 2-line clamp usando CSS inline simple
@@ -363,9 +364,11 @@ window.abrirEquiposMobile = function(ordenId) {
               <div class="equipo-card-serial"><i data-lucide="package"></i> ${escapeHtml(serial)} ${fotosBadge}</div>
               <div class="equipo-card-model">Modelo: <span class="equipo-card-model-value">${escapeHtml(modelo)}</span></div>
             </div>
-            ${noDisponible
-              ? '<div class="equipo-status-badge equipo-status-badge--warn"><i data-lucide="ban"></i> No disponible</div>'
-              : (e.trabajo_tecnico ? '<div class="equipo-status-badge equipo-status-badge--ok">✓ OK</div>' : '')
+            ${descartado
+              ? `<div class="equipo-status-badge equipo-status-badge--warn" style="background:#FEF2F2;color:#991B1B;border-color:#FECACA;" title="${escapeHtml((e.descarte_motivo || '').toString())}"><i data-lucide="ban"></i> Descartado</div>`
+              : (noDisponible
+                ? '<div class="equipo-status-badge equipo-status-badge--warn"><i data-lucide="ban"></i> No disponible</div>'
+                : (e.trabajo_tecnico ? '<div class="equipo-status-badge equipo-status-badge--ok">✓ OK</div>' : ''))
             }
           </div>
           ${obsHtml}
@@ -652,6 +655,35 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
   }
   if (txtEl) txtEl.disabled = isNoDisp;
 
+  // Descarte en revisión — SOLO en órdenes de ENTRADA (petición Solangel
+  // 2026-09-03): la inspección de devueltos no lleva QC, así que sin esto un
+  // radio descartado ahí no quedaba en ningún registro. Excluyente con "no
+  // disponible": un equipo que no llegó no se puede descartar.
+  const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(o);
+  const descarteCtrl = document.getElementById("trabajoDescarteCtrl");
+  const chkDescarte = document.getElementById("trabajoDescartado");
+  const motivoDescarte = document.getElementById("trabajoDescarteMotivo");
+  const avisoDescarte = document.getElementById("trabajoDescarteAviso");
+  const isDescartado = esEntrada && !!e.descartado_revision;
+  if (descarteCtrl) descarteCtrl.style.display = esEntrada ? "" : "none";
+  const _syncDescarteUI = () => {
+    const checked = !!chkDescarte?.checked;
+    if (motivoDescarte) motivoDescarte.disabled = !checked;
+    if (avisoDescarte) avisoDescarte.style.display = checked ? "" : "none";
+    if (chkNoDisp) chkNoDisp.disabled = checked;
+  };
+  if (chkDescarte) {
+    chkDescarte.checked = isDescartado;
+    chkDescarte.disabled = isNoDisp;
+    chkDescarte.onchange = () => {
+      if (!chkDescarte.checked && motivoDescarte) motivoDescarte.value = "";
+      _syncDescarteUI();
+      if (chkDescarte.checked) setTimeout(() => motivoDescarte?.focus(), 0);
+    };
+  }
+  if (motivoDescarte) motivoDescarte.value = isDescartado ? (e.descarte_motivo || "").toString() : "";
+  _syncDescarteUI();
+
   if (chkNoDisp) {
     chkNoDisp.onchange = () => {
       const checked = chkNoDisp.checked;
@@ -663,6 +695,13 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
       if (txtEl) {
         if (checked) txtEl.value = "";
         txtEl.disabled = checked;
+      }
+      if (chkDescarte) {
+        if (checked) { chkDescarte.checked = false; if (motivoDescarte) motivoDescarte.value = ""; }
+        chkDescarte.disabled = checked;
+        _syncDescarteUI();
+        // _syncDescarteUI re-habilita chkNoDisp cuando el descarte quedó
+        // desmarcado — correcto en ambos sentidos del toggle.
       }
     };
   }
@@ -1258,6 +1297,16 @@ window.guardarTrabajoEquipoModal = async function() {
   const motivoNoDisp = (document.getElementById("trabajoMotivoNoDisponible")?.value || "").trim();
   const marcarNoDisp = !!chkNoDisp?.checked;
 
+  // Descarte en revisión (solo ENTRADA — el bloque va oculto en el resto).
+  // El motivo es obligatorio: es lo que lee bodega en el registro central.
+  const marcarDescarte = !marcarNoDisp && !!document.getElementById("trabajoDescartado")?.checked;
+  const motivoDescarte = (document.getElementById("trabajoDescarteMotivo")?.value || "").trim();
+  if (marcarDescarte && !motivoDescarte) {
+    Toast.show("Escribe el motivo del descarte — es lo que queda en el registro.", "warn");
+    document.getElementById("trabajoDescarteMotivo")?.focus();
+    return;
+  }
+
   try {
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader"></i> Guardando...';
@@ -1273,7 +1322,7 @@ window.guardarTrabajoEquipoModal = async function() {
 
     if (marcarNoDisp) {
       if (!cacheEquipo?.id) throw new Error("Equipo no encontrado");
-      const equiposAll = await OrdenesService.updateEquipoNoDisponible({
+      let equiposAll = await OrdenesService.updateEquipoNoDisponible({
         ordenId: _trabajoOrdenId,
         equipoId: cacheEquipo?.id,
         noDisponible: true,
@@ -1281,6 +1330,19 @@ window.guardarTrabajoEquipoModal = async function() {
         uid,
         email
       });
+
+      // "No disponible" y "descartado" son excluyentes: si el equipo venía
+      // marcado como descartado, se limpia (la UI ya lo desmarcó).
+      if (cacheEquipo?.descartado_revision) {
+        equiposAll = await OrdenesService.updateEquipoDescartado({
+          ordenId: _trabajoOrdenId,
+          equipoId: cacheEquipo?.id,
+          descartado: false,
+          motivo: "",
+          uid,
+          email
+        });
+      }
 
       if (cacheOrden) cacheOrden.equipos = equiposAll;
       refrescarEquiposDeOrden(_trabajoOrdenId);
@@ -1312,7 +1374,7 @@ window.guardarTrabajoEquipoModal = async function() {
     const marcados = Array.from(document.querySelectorAll('#trabajoAplicarOtros .trabajo-aplicar-chk:checked'))
       .map(ch => Number(ch.value))
       .filter(i => Number.isInteger(i) && i !== _trabajoEquipoIdx);
-    const equiposAll = await OrdenesService.updateTrabajoTecnico({
+    let equiposAll = await OrdenesService.updateTrabajoTecnico({
       ordenId: _trabajoOrdenId,
       equipoIdx: _trabajoEquipoIdx,
       equipoIdxs: [_trabajoEquipoIdx, ...marcados],
@@ -1320,6 +1382,21 @@ window.guardarTrabajoEquipoModal = async function() {
       uid,
       email
     });
+
+    // Descarte en revisión (ENTRADA): se estampa solo si cambió — marcarlo,
+    // desmarcarlo o corregir el motivo. El registro central lo hace el cierre.
+    const descarteCambio = marcarDescarte !== !!cacheEquipo?.descartado_revision
+      || (marcarDescarte && motivoDescarte !== (cacheEquipo?.descarte_motivo || "").trim());
+    if (descarteCambio && cacheEquipo?.id) {
+      equiposAll = await OrdenesService.updateEquipoDescartado({
+        ordenId: _trabajoOrdenId,
+        equipoId: cacheEquipo.id,
+        descartado: marcarDescarte,
+        motivo: motivoDescarte,
+        uid,
+        email
+      });
+    }
 
     // Actualizar cache local
     const cache = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
@@ -1331,7 +1408,9 @@ window.guardarTrabajoEquipoModal = async function() {
     cerrarTrabajoEquipoModal();
     Toast.show(marcados.length
       ? `✅ Intervención guardada en ${1 + marcados.length} equipo(s)`
-      : "✅ Intervención guardada", "ok");
+      : (marcarDescarte
+        ? "⛔ Intervención guardada — equipo marcado como descartado (queda en el registro al cerrar la entrada)"
+        : "✅ Intervención guardada"), "ok");
     
     // Reset button state
     btn.disabled = false;

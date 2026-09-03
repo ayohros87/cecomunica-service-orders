@@ -622,20 +622,27 @@ service cloud.firestore {
       }
     }
 
-    // Equipos descartados en control de calidad. Doc ID = serial normalizado,
-    // así que la alerta al teclear un serial (SerialField, en Bodega y Taller)
-    // es un solo get por doc-ID, sin índice.
+    // Equipos descartados en control de calidad o en la revisión de una
+    // ENTRADA. Doc ID = serial normalizado, así que la alerta al teclear un
+    // serial (SerialField, en Bodega y Taller) es un solo get por doc-ID,
+    // sin índice.
     //   · Lectura: cualquier autenticado — la alerta tiene que salir en TODOS
     //     los puntos de captura de serial, y quien la necesita más es bodega.
-    //   · Escritura: los mismos que firman QC (es un resultado del QC), y NO
+    //   · Escritura: los que firman QC (es un resultado del QC), y NO
     //     puedeGestionarSeriales(): jefe_taller no está en esa lista y es
-    //     precisamente quien descarta.
+    //     precisamente quien descarta. Además, los roles que cierran una
+    //     ENTRADA (recepción/técnicos) pueden REGISTRAR descartes — el cierre
+    //     de la entrada escribe aquí los marcados en la revisión — pero solo
+    //     escrituras que dejan el descarte VIGENTE (revocado == false, y el
+    //     campo tiene que venir): revocar sigue siendo de jefe_taller/admin.
     //   · Nunca se borra desde la UI: revocar escribe `revocado: true` y apila
     //     la traza en `historial[]`. El delete queda solo para admin.
     match /equipos_descartados/{docId} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn()
-        && (userRole() in ["administrador", "jefe_taller"] || esRevisorQcExtra());
+        && (userRole() in ["administrador", "jefe_taller"] || esRevisorQcExtra()
+            || (userRole() in ["recepcion", "tecnico", "tecnico_operativo"]
+                && request.resource.data.get("revocado", true) == false));
       allow delete: if isAdmin();
     }
 
