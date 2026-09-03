@@ -21,6 +21,8 @@
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <!-- Kit de formularios (formato único 2026-09-03): encabezado de contexto -->
+  <link rel="stylesheet" href="../css/form-kit.css?v=fk3">
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
@@ -76,17 +78,24 @@
       <span class="app-breadcrumbs-current" id="bc-contrato-id">—</span>
     </nav>
 
-    <div class="app-page-header">
-      <div>
-        <h1>Editar Contrato</h1>
-        <p id="ph-subtitle">Modifique los datos del contrato y guarde los cambios.</p>
-      </div>
-      <div class="app-page-header-actions">
-        <!-- Enlaces del ciclo del equipo (P5): antes había que volver a la
-             lista y saberse el mapa de memoria para llegar a estas páginas. -->
-        <a class="btn btn-ghost btn-sm" id="lnkSeriales" href="#" style="display:none;"><i data-lucide="scan-barcode"></i> Seriales</a>
-        <a class="btn btn-ghost btn-sm" id="lnkTransicion" href="#" style="display:none;"><i data-lucide="repeat"></i> Transición</a>
-        <span id="ph-estado-chip" class="chip-estado chip-cotizada">Pendiente Aprobación</span>
+    <!-- Encabezado de contexto (formato único): qué contrato edito y en qué
+         estado está; los enlaces del ciclo viven aquí. -->
+    <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <div class="fk-contexto" style="margin-bottom:0;">
+        <div class="fk-avatar" style="font-size:12px;">CT</div>
+        <div class="fk-quien">
+          <h2 style="margin:0; font-size:18px;">Editar contrato</h2>
+          <p class="fk-meta" id="ph-subtitle">Cargando…</p>
+          <div class="fk-chips">
+            <span id="ph-estado-chip" class="chip-estado chip-cotizada">Pendiente Aprobación</span>
+          </div>
+        </div>
+        <div class="fk-acciones">
+          <!-- Enlaces del ciclo del equipo (P5): antes había que volver a la
+               lista y saberse el mapa de memoria para llegar a estas páginas. -->
+          <a class="btn btn-ghost btn-sm" id="lnkSeriales" href="#" style="display:none;"><i data-lucide="scan-barcode"></i> Seriales</a>
+          <a class="btn btn-ghost btn-sm" id="lnkTransicion" href="#" style="display:none;"><i data-lucide="repeat"></i> Transición</a>
+        </div>
       </div>
     </div>
     <script>
@@ -163,6 +172,7 @@
             <div class="form-field" id="otraDuracionLabel" style="display:none;">
               <label class="form-label" for="otra_duracion">Especificar duración (meses)</label>
               <input class="form-input" type="number" id="otra_duracion" min="1" placeholder="24" style="font-family:var(--font-mono);">
+              <span class="form-error-msg">Elegiste duración "Otro": indica el número de meses.</span>
             </div>
 
             <div class="form-field">
@@ -273,7 +283,7 @@
 
   <script src="../js/services/cargosService.js" defer></script>
   <script src="../js/pages/nc-cargos.js" defer></script>
-  <script src="../js/pages/editar-contrato.js?v=num3" defer></script>
+  <script src="../js/pages/editar-contrato.js?v=fk4" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

@@ -56,9 +56,30 @@
     });
   </script>
 
-  <div class="app-wrap app-wrap--default">
+  <style>
+    /* Formato único (2026-09-03): ritmo vertical de los campos — mismas
+       distancias que la ficha del cliente (ceco-ui no margina .form-field). */
+    #formCliente .form-field { margin-bottom: var(--sp-4); }
+    #formCliente .form-grid-2 .form-field { margin-bottom: 0; }
+    #formCliente .ds-card-padded > :last-child { margin-bottom: 0; }
+  </style>
+  <div class="app-wrap" style="max-width:820px;">
 
     <form id="formCliente">
+
+      <!-- Encabezado de contexto (formato único, modo alta) -->
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="fk-contexto" style="margin-bottom:0;">
+          <div class="fk-avatar">+</div>
+          <div class="fk-quien">
+            <h2 id="fxTitulo" style="margin:0; font-size:18px;">Nuevo cliente</h2>
+            <p class="fk-meta" id="fxMetaAlta">Al guardar sigues a crear el contrato</p>
+          </div>
+          <div class="fk-acciones">
+            <button type="button" class="btn btn-ghost" onclick="volverAContrato()">Cancelar</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Sección 1: Identificación fiscal -->
       <div class="form-section-header">
@@ -249,7 +270,7 @@
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
   <script defer src="../js/ui/formKit.js?v=fk3"></script>
-  <script src="../js/pages/nuevo-cliente.js?v=nc3" defer></script>
+  <script src="../js/pages/nuevo-cliente.js?v=nc4" defer></script>
   <script src="../js/pages/cliente-documentos.js" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

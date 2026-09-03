@@ -1,9 +1,10 @@
 // @ts-nocheck
     let currentUser = null;
     const form = document.getElementById("ordenForm");
-    // Guardia de salida (kit de formularios): cambios sin guardar avisan antes
-    // de cerrar la pestaña; el submit la libera solo.
-    if (window.FormKit) FormKit.guardia(form);
+    // Formato único (2026-09-03): la barra de guardado y la guardia de salida
+    // las maneja FormKit.crear (abajo). El form ya no tiene botón submit; se
+    // bloquea el submit implícito (Enter) para que no navegue.
+    form.addEventListener("submit", (e) => e.preventDefault());
     const mensaje = document.getElementById("mensaje");
     const params = new URLSearchParams(window.location.search);
     const ordenId = params.get("id");
@@ -191,7 +192,9 @@
       }
 
       document.getElementById("orden_id").value = ordenId;
-      document.getElementById("orderIdDisplay").textContent = `Orden #${ordenId}`;
+      document.getElementById("orderIdDisplay").textContent = ordenId;
+      const volver = document.getElementById("fxVolver");
+      if (volver) volver.href = `index.html?orden=${encodeURIComponent(ordenId)}`;
       const d = await OrdenesService.getOrder(ordenId);
 
       if (d) {
@@ -218,6 +221,13 @@
         document.getElementById("cliente").value = nombreCliente;
         // Guardar cliente_id para cargar contratos
         document.getElementById("cliente").dataset.clienteId = d.cliente_id || "";
+
+        // Encabezado de contexto (formato único): cliente en la meta, estado
+        // como chip — se mueve con los botones de flujo, no editando.
+        const fxMeta = document.getElementById("fxMeta");
+        if (fxMeta) fxMeta.textContent = nombreCliente || "—";
+        const chipEstado = document.getElementById("fxChipEstado");
+        if (chipEstado) chipEstado.textContent = estadoActual;
         
         // Cargar vendedores
         const vendSelect = document.getElementById("vendedor");
@@ -234,6 +244,8 @@
 
         await cargarTipos();
         document.getElementById("tipo").value = d.tipo_de_servicio || "";
+        const chipTipo = document.getElementById("fxChipTipo");
+        if (chipTipo && d.tipo_de_servicio) { chipTipo.textContent = d.tipo_de_servicio; chipTipo.style.display = ""; }
         
         // Manejar bloque de contrato si el tipo es PROGRAMACION
         if (esProgramacion(d.tipo_de_servicio)) {
@@ -314,33 +326,38 @@
     // esa ventana repetía el merge y el borrado de caché de contrato.
     let guardandoEdicion = false;
 
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    // Guardado (formato único): lo invoca la barra de FormKit. Lanza en todo
+    // camino que NO guarda, para que la barra no marque los campos como
+    // limpios; los errores de negocio se marcan JUNTO AL CAMPO (.has-error)
+    // además del aviso, en vez del toast flotante de antes.
+    async function guardarOrden() {
       if (guardandoEdicion) return;
 
       const tipoServicio = document.getElementById("tipo").value;
-      
+      const wrapSel = contratoSelect.closest(".form-field");
+      const wrapMot = contratoMotivo.closest(".form-field");
+      wrapSel?.classList.remove("has-error");
+      wrapMot?.classList.remove("has-error");
+
       // Validación específica para PROGRAMACIÓN
       if (esProgramacion(tipoServicio)) {
-        if (!contratoNoAplica.checked) {
-          // Debe tener contrato seleccionado
-          if (!contratoSelect.value) {
-            mostrarToast("Para PROGRAMACIÓN selecciona un contrato o marca 'No aplica'.", "error");
-            return;
-          }
-        } else {
-          // Debe tener motivo REAL (≥10 chars) — mismo umbral que nueva-orden
-          // (auditoría órdenes P2): sin él se colaban "n/a" y puntos.
-          if (contratoMotivo.value.trim().length < 10) {
-            mostrarToast("Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "error");
-            return;
-          }
+        if (!contratoNoAplica.checked && !contratoSelect.value) {
+          wrapSel?.classList.add("has-error");
+          contratoSelect.focus();
+          contratoSelect.scrollIntoView({ block: "center", behavior: "smooth" });
+          throw new Error("Para PROGRAMACIÓN selecciona un contrato o marca 'No aplica'.");
+        }
+        // Motivo REAL (≥10 chars) — mismo umbral que nueva-orden (auditoría
+        // órdenes P2): sin él se colaban "n/a" y puntos.
+        if (contratoNoAplica.checked && contratoMotivo.value.trim().length < 10) {
+          wrapMot?.classList.add("has-error");
+          contratoMotivo.focus();
+          contratoMotivo.scrollIntoView({ block: "center", behavior: "smooth" });
+          throw new Error("Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).");
         }
       }
-      
+
       guardandoEdicion = true;
-      const btnGuardarEdicion = form.querySelector("button[type='submit']");
-      if (btnGuardarEdicion) btnGuardarEdicion.disabled = true;
 
       const data = {
         vendedor_asignado: document.getElementById("vendedor").value || "",
@@ -398,10 +415,7 @@
         // menú que el gate de carga.
         const estadoFresco = (datosActuales.estado_reparacion || "POR ASIGNAR").toUpperCase();
         if (estadoFresco !== "POR ASIGNAR") {
-          mostrarToast(`La orden ya está en ${estadoFresco} — la cabecera solo se edita en POR ASIGNAR.`, "error");
-          guardandoEdicion = false;
-          if (btnGuardarEdicion) btnGuardarEdicion.disabled = false;
-          return;
+          throw new Error(`La orden ya está en ${estadoFresco} — la cabecera solo se edita en POR ASIGNAR.`);
         }
 
         // Si antes tenía contrato pero ahora no (o cambió), eliminar caché anterior
@@ -416,17 +430,17 @@
         }
         
         await OrdenesService.mergeOrder(ordenId, data);
-        
+
         mostrarToast("Orden actualizada.", "ok");
         // Volver A LA ORDEN en la lista (no al index pelado): conserva la fila
         // a la vista sin perder el contexto — el deep-link ?orden= ya existe.
         setTimeout(() => window.location.href = `index.html?orden=${encodeURIComponent(ordenId)}`, 1500);
       } catch (error) {
-        mostrarToast("No se pudo guardar: " + error.message, "error");
         guardandoEdicion = false;
-        if (btnGuardarEdicion) btnGuardarEdicion.disabled = false;
+        // Re-lanza: la barra de FormKit avisa y NO marca los campos limpios.
+        throw error;
       }
-    });
+    }
 
     async function cargarTecnicos() {
       const select = document.getElementById("tecnico");
@@ -484,7 +498,15 @@
       document.getElementById("observaciones").readOnly = !puedeEditarDetalles;
     }
 
+    // Barra de guardado + guardia de salida (formato único). Se crea ANTES de
+    // cargar y se re-toma la foto de originales al terminar la carga: sin ese
+    // setLimpio, los valores pintados por cargarOrden contarían como "cambios".
+    let fk = null;
+    if (window.FormKit) {
+      fk = FormKit.crear({ root: document.getElementById("fkRoot"), onGuardar: guardarOrden });
+    }
+
     // cargarOrden() orquesta internamente cargarTipos/cargarEstados/cargarTecnicos
     // en orden y luego fija los valores; no llamarlos aquí en paralelo (carrera que
     // puede borrar la selección de un campo required y bloquear el submit).
-    cargarOrden();
+    cargarOrden().then(() => { if (fk) fk.setLimpio(); });

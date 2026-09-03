@@ -22,6 +22,8 @@
   <!-- Rediseño Command Center F3: rail + stepper del ciclo de vida (híbrido).
        PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <!-- Kit de formularios (formato único 2026-09-03): anatomía fk + barra -->
+  <link rel="stylesheet" href="../css/form-kit.css?v=fk3">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
@@ -46,16 +48,6 @@
 
   <style>
     /* Page-local */
-    .order-id-badge {
-      display: inline-block;
-      background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-      color: white;
-      padding: 6px 14px;
-      border-radius: var(--radius-sm);
-      font-size: 14px; font-weight: 600;
-      font-family: var(--font-mono);
-      margin-top: var(--sp-2);
-    }
     .contrato-block {
       background: var(--accent-soft);
       border: 1px solid var(--accent-line);
@@ -68,6 +60,8 @@
       margin-bottom: var(--sp-2);
       display: flex; align-items: center; gap: 6px;
     }
+    /* El stepper vive dentro del encabezado de contexto */
+    .os-flow { margin-top: var(--sp-4); }
   </style>
 </head>
 <body>
@@ -78,19 +72,34 @@
   <div id="topbar-mount"></div>
   <script>
     Layout.renderTopbar({
-      title: '<i data-lucide="pencil"></i> Editar Orden de Servicio',
+      title: '<i data-lucide="pencil"></i> Editar orden de servicio',
       back: { label: '<i data-lucide="arrow-left"></i> Volver', href: 'index.html' },
       showHome: false, showLogout: true
     });
   </script>
 
-  <div class="app-wrap app-wrap--default">
+  <div class="app-wrap" style="max-width:820px;">
 
-    <div class="page-header-centered" style="padding-top:var(--sp-6);">
-      <div class="page-header-icon"><i data-lucide="pencil"></i></div>
-      <h1>Editar Orden de Servicio</h1>
-      <p>Modifique los datos de la orden seleccionada.</p>
-      <div class="order-id-badge" id="orderIdDisplay"></div>
+    <form id="ordenForm">
+    <div class="ds-card ds-card-padded" id="fkRoot">
+
+      <!-- Encabezado de contexto (formato único): número, cliente y estado
+           arriba — el estado y el técnico se mueven con los botones de flujo
+           de la bandeja, no editando, así que aquí son chips, no campos. -->
+      <div class="fk-contexto">
+        <div class="fk-avatar" style="font-size:12px;">OS</div>
+        <div class="fk-quien">
+          <h2 id="orderIdDisplay" style="margin:0; font-size:18px; font-family:var(--font-mono, ui-monospace);"></h2>
+          <p class="fk-meta" id="fxMeta">Cargando…</p>
+          <div class="fk-chips">
+            <span class="fk-chip" id="fxChipEstado" style="background:var(--soft-warn,#FBF3E0); color:#8A6415; border-color:transparent;">…</span>
+            <span class="fk-chip" id="fxChipTipo" style="display:none;"></span>
+          </div>
+        </div>
+        <div class="fk-acciones">
+          <a class="btn btn-ghost" id="fxVolver" href="index.html">Volver a la bandeja</a>
+        </div>
+      </div>
 
       <!-- Stepper del ciclo de vida — lo marca OrdenStepper.update() al cargar
            la orden; estados fuera del ciclo canónico lo dejan oculto. -->
@@ -116,126 +125,86 @@
           <div class="os-flow__lbl">Entregado al cliente</div>
         </div>
       </div>
-    </div>
 
-    <form id="ordenForm">
-
-      <!-- Información General -->
-      <div class="form-section-header">
-        <h3><i data-lucide="receipt"></i> Información General</h3>
+      <!-- Portadores ocultos: el JS los escribe/lee (cliente_id, técnico y
+           estado van en el payload de guardado) — dejaron de ser campos
+           visibles con el formato único, pero siguen cargando el valor. -->
+      <input type="hidden" id="orden_id">
+      <input type="hidden" id="cliente">
+      <div style="display:none;">
+        <select id="tecnico"><option value="">Por asignar</option></select>
+        <select id="estado"><option value="">Cargando estados…</option></select>
       </div>
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+
+      <!-- Clasificación -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Clasificación</h3></div>
         <div class="form-grid-2">
-
-          <div class="form-field">
-            <label class="form-label" for="orden_id">Número de orden <span class="req"></span></label>
-            <input class="form-input" type="text" id="orden_id" readonly style="font-family:var(--font-mono);">
-          </div>
-
-          <div class="form-field">
-            <label class="form-label" for="cliente">Cliente <span class="req"></span></label>
-            <input class="form-input" type="text" id="cliente" readonly>
-          </div>
-
-          <div class="form-field">
-            <label class="form-label" for="vendedor">Vendedor <span class="req"></span></label>
-            <select class="form-select" id="vendedor">
-              <option value="">Seleccione vendedor</option>
-            </select>
-          </div>
-
           <div class="form-field">
             <label class="form-label" for="tipo">Tipo de servicio <span class="req"></span></label>
-            <select class="form-select" id="tipo" required>
+            <select class="form-select" id="tipo" data-fk="Tipo de servicio" required>
               <option value="">Seleccione tipo de servicio</option>
             </select>
           </div>
-
-          <!-- Bloque de Contrato (solo para PROGRAMACIÓN) -->
-          <div id="contratoBlock" class="contrato-block" style="display: none; grid-column: 1 / -1;">
-            <div class="contrato-hint">
-              <i data-lucide="info" style="width:14px;height:14px;"></i>
-              <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marque "No aplica" solo si corresponde.</span>
-            </div>
-
-            <div class="form-field">
-              <!-- Sin span de obligatorio: la marca la pone/quita el JS con la clase
-                   `req` en este label según "No aplica" (antes el span estaba fijo y
-                   el campo se veía obligatorio aunque no lo fuera). -->
-              <label class="form-label" id="contratoLabel" for="contratoSelect">Contrato</label>
-              <select class="form-select" id="contratoSelect">
-                <option value="">Seleccione contrato</option>
-              </select>
-            </div>
-
-            <label class="form-check" style="margin-top:var(--sp-2);">
-              <input type="checkbox" id="contratoNoAplica">
-              <span><span class="form-check-label">No aplica contrato</span></span>
-            </label>
-
-            <div class="form-field" id="contratoMotivoField" style="display: none; margin-top:var(--sp-2);">
-              <label class="form-label" for="contratoMotivo">Motivo (no aplica) <span class="req"></span></label>
-              <textarea class="form-input form-textarea" id="contratoMotivo" rows="3" placeholder="Explica por qué no aplica contrato…"></textarea>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- Asignación y Estado -->
-      <div class="form-section-header">
-        <h3><i data-lucide="settings-2"></i> Asignación y estado</h3>
-      </div>
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-        <div class="form-grid-2">
           <div class="form-field">
-            <label class="form-label" for="tecnico">Técnico</label>
-            <select class="form-select" id="tecnico" disabled>
-              <option value="">Por asignar</option>
+            <label class="form-label" for="vendedor">Vendedor <span class="req"></span></label>
+            <select class="form-select" id="vendedor" data-fk="Vendedor">
+              <option value="">Seleccione vendedor</option>
             </select>
-            <span class="form-hint"><i data-lucide="lock" style="width:12px;height:12px;"></i> Solo se puede asignar desde el listado principal.</span>
+          </div>
+        </div>
+
+        <!-- Bloque de Contrato (solo para PROGRAMACIÓN) -->
+        <div id="contratoBlock" class="contrato-block" style="display: none; margin-top:var(--sp-4);">
+          <div class="contrato-hint">
+            <i data-lucide="info" style="width:14px;height:14px;"></i>
+            <span><strong>Obligatorio para PROGRAMACIÓN.</strong> Marca "No aplica" solo si corresponde.</span>
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="estado">Estado de reparación</label>
-            <select class="form-select" id="estado" disabled>
-              <option value="">Cargando estados…</option>
+            <!-- Sin span de obligatorio: la marca la pone/quita el JS con la clase
+                 `req` en este label según "No aplica". -->
+            <label class="form-label" id="contratoLabel" for="contratoSelect">Contrato</label>
+            <select class="form-select" id="contratoSelect" data-fk="Contrato">
+              <option value="">Seleccione contrato</option>
             </select>
-            <span class="form-hint"><i data-lucide="lock" style="width:12px;height:12px;"></i> Se actualiza automáticamente según el flujo.</span>
+            <span class="form-error-msg">Para PROGRAMACIÓN selecciona un contrato o marca 'No aplica'.</span>
           </div>
-        </div>
-      </div>
 
-      <!-- Equipos de la orden (P5): esta página no muestra equipos — antes no
-           decía DÓNDE viven y había que saberse el mapa de memoria. -->
-      <div class="form-section-header">
-        <h3><i data-lucide="radio"></i> Equipos de la orden</h3>
-      </div>
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
-        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <span id="equiposResumen" style="font-size:14px; color:var(--fg-3);">Cargando…</span>
-          <span style="flex:1;"></span>
-          <a class="btn btn-ghost btn-sm" id="lnkVerEquipos" href="#"><i data-lucide="list"></i> Ver en la lista de órdenes</a>
-          <a class="btn btn-ghost btn-sm" id="lnkAgregarEquipos" href="#"><i data-lucide="plus"></i> Agregar equipos</a>
+          <label class="form-check" style="margin-top:var(--sp-2);">
+            <input type="checkbox" id="contratoNoAplica" data-fk="Aplica contrato">
+            <span><span class="form-check-label">No aplica contrato</span></span>
+          </label>
+
+          <div class="form-field" id="contratoMotivoField" style="display: none; margin-top:var(--sp-2);">
+            <label class="form-label" for="contratoMotivo">Motivo (no aplica) <span class="req"></span></label>
+            <textarea class="form-input form-textarea" id="contratoMotivo" data-fk="Motivo no aplica" rows="3" placeholder="Explica por qué no aplica contrato…"></textarea>
+            <span class="form-error-msg">Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).</span>
+          </div>
         </div>
       </div>
 
       <!-- Observaciones -->
-      <div class="form-section-header">
-        <h3><i data-lucide="file-text"></i> Observaciones</h3>
-      </div>
-      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Observaciones</h3></div>
         <div class="form-field">
-          <label class="form-label" for="observaciones"># Contrato / Observaciones</label>
-          <textarea class="form-input form-textarea" id="observaciones" rows="4"></textarea>
+          <textarea class="form-input form-textarea" id="observaciones" data-fk="Observaciones" rows="4"></textarea>
         </div>
       </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary btn-lg"><i data-lucide="save"></i> Guardar cambios</button>
-        <button type="button" class="btn btn-ghost" onclick="window.location.href='index.html'"><i data-lucide="arrow-left"></i> Cancelar</button>
+      <!-- Del expediente (solo lectura) -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Del expediente</h3></div>
+        <p class="fk-desc">Los equipos se gestionan desde la lista de órdenes; esta página edita la cabecera.</p>
+        <div class="fk-enlaces">
+          <div class="fk-tarjeta"><span id="equiposResumen">Cargando…</span><br>
+            <a id="lnkVerEquipos" href="#">Ver en la lista de órdenes</a> ·
+            <a id="lnkAgregarEquipos" href="#">Agregar equipos</a></div>
+        </div>
       </div>
 
+      <!-- La barra de guardado la inserta FormKit.crear() aquí -->
+    </div>
     </form>
 
     <p id="mensaje" class="resumen"></p>
@@ -267,8 +236,9 @@
     document.addEventListener('DOMContentLoaded', () => Layout.initRail('ordenes'));
   </script>
 
+  <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/formKit.js?v=fk3"></script>
-  <script src="../js/pages/editar-orden.js?v=fix3" defer></script>
+  <script src="../js/pages/editar-orden.js?v=fk4" defer></script>
   <script defer src="/js/vendor/lucide.min.js?v=3"></script>
   <script defer src="/js/core/icons.js?v=1"></script>
 </body>

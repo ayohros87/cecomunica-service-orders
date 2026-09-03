@@ -464,17 +464,28 @@
     // CREAR duplicado) y encolaban DOS correos de notificación.
     let guardandoOrden = false;
 
+    // Error de negocio JUNTO AL CAMPO (formato único): marca el .form-field,
+    // enfoca, y además avisa por mensaje/toast como antes.
+    function errorJuntoAlCampo(el, texto) {
+      el.closest(".form-field")?.classList.add("has-error");
+      el.focus();
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      mostrarMensaje(texto, "rojo");
+    }
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (guardandoOrden) return;
+      [visitaSitio, contratoSelect, contratoMotivo].forEach(el =>
+        el.closest(".form-field")?.classList.remove("has-error"));
       if (!clienteSelect.value || !tipoSelect.value) {
-        mostrarMensaje("Por favor seleccione un cliente y el tipo de servicio.", "rojo");
+        mostrarMensaje("Selecciona un cliente y el tipo de servicio.", "rojo");
         return;
       }
-      
+
       // Validación específica para VISITA TECNICA
       if (esVisita(tipoSelect.value) && !visitaSitio.value.trim()) {
-        mostrarMensaje("Para VISITA TÉCNICA indica el sitio o la ubicación de la visita.", "rojo");
+        errorJuntoAlCampo(visitaSitio, "Para VISITA TÉCNICA indica el sitio o la ubicación de la visita.");
         return;
       }
 
@@ -484,7 +495,7 @@
           // Debe tener contrato seleccionado
           if (!contratoSelect.value) {
             const t = esEntrada(tipoSelect.value) ? "ENTRADA" : "PROGRAMACIÓN";
-            mostrarMensaje(`Para ${t} selecciona un contrato o marca 'No aplica'.`, "rojo");
+            errorJuntoAlCampo(contratoSelect, `Para ${t} selecciona un contrato o marca 'No aplica'.`);
             return;
           }
         } else {
@@ -492,7 +503,7 @@
           // se colaban "n/a" y puntos — el motivo es lo único que explica por
           // qué una PROGRAMACIÓN/ENTRADA quedó fuera de contrato.
           if (contratoMotivo.value.trim().length < 10) {
-            mostrarMensaje("Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "rojo");
+            errorJuntoAlCampo(contratoMotivo, "Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).");
             return;
           }
         }

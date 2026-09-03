@@ -150,8 +150,22 @@ window.addEventListener("DOMContentLoaded", async () => {
   // Wire del botón "agregar IP" (independiente del modo crear/editar).
   document.getElementById("addIP")?.addEventListener("click", agregarIP);
 
+  // Encabezado de contexto (formato único): título por modo y meta según el
+  // origen — a dónde te lleva el guardado (la convención from=).
+  const fxTitulo = document.getElementById("fxTitulo");
+  const fxMetaAlta = document.getElementById("fxMetaAlta");
+  const fromParam = params.get("from");
+  if (fxMetaAlta) {
+    fxMetaAlta.textContent =
+      fromParam === "cotizacion" ? "Al guardar sigues a la cotización" :
+      fromParam === "centro"     ? "Al guardar vuelves a la ficha 360" :
+      fromParam === "clientes"   ? "Al guardar vuelves al listado de clientes" :
+                                   "Al guardar sigues a crear el contrato";
+  }
+
   if (clienteId) {
     document.getElementById("pageTitle").textContent = "Editar cliente";
+    if (fxTitulo) fxTitulo.textContent = "Editar cliente";
 
     const d = await ClientesService.getCliente(clienteId);
     if (!d) return;

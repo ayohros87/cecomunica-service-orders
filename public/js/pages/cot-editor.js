@@ -80,15 +80,21 @@
         <span class="app-breadcrumbs-current">${esc(titulo)}</span>
       </nav>
 
-      <div class="app-page-header">
-        <div>
-          <h1>${esc(titulo)}</h1>
-          <p id="cotSubtitulo">${esc(subtitulo)}</p>
-        </div>
-        <div class="app-page-header-actions">
-          <button class="btn btn-ghost" id="btnCancelar"><i data-lucide="x"></i> Cancelar</button>
-          <button class="btn btn-secondary" id="btnPreview"><i data-lucide="eye"></i> Vista previa</button>
-          <button class="btn btn-primary" id="btnGuardar"><i data-lucide="save"></i> Guardar</button>
+      <!-- Encabezado de contexto (formato único 2026-09-03): número, estado y
+           acciones — misma anatomía que la ficha del cliente y las órdenes. -->
+      <div class="ds-card ds-card-padded" style="margin-bottom:var(--sp-4);">
+        <div class="fk-contexto" style="margin-bottom:0;">
+          <div class="fk-avatar" style="font-size:11px;">COT</div>
+          <div class="fk-quien">
+            <h2 style="margin:0; font-size:18px; ${esNueva ? '' : 'font-family:var(--font-mono, ui-monospace);'}">${esc(titulo)}</h2>
+            <p class="fk-meta" id="cotSubtitulo">${esc(subtitulo)}</p>
+            ${esNueva ? '' : `<div class="fk-chips"><span class="fk-chip">${esc((CotState.ESTADOS[draft.estado] || {}).label || draft.estado || '')}</span></div>`}
+          </div>
+          <div class="fk-acciones">
+            <button class="btn btn-ghost" id="btnCancelar"><i data-lucide="x"></i> Cancelar</button>
+            <button class="btn btn-secondary" id="btnPreview"><i data-lucide="eye"></i> Vista previa</button>
+            <button class="btn btn-primary" id="btnGuardar"><i data-lucide="save"></i> Guardar</button>
+          </div>
         </div>
       </div>
 

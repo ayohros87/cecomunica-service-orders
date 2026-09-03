@@ -184,12 +184,17 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
   e.preventDefault();
 
   const duracionSeleccionada = document.getElementById("duracion").value;
-  const otraDuracion = document.getElementById("otra_duracion").value.trim();
+  const otraDuracionEl = document.getElementById("otra_duracion");
+  const otraDuracion = otraDuracionEl.value.trim();
   // Mismo candado que el alta (nc-guardar.js): "Otro" sin meses guardaba
-  // una duración " meses" vacía que llegaba al documento impreso.
+  // una duración " meses" vacía que llegaba al documento impreso. El error
+  // se marca JUNTO AL CAMPO (formato único), no solo con el aviso.
+  otraDuracionEl.closest(".form-field")?.classList.remove("has-error");
   if (duracionSeleccionada === "Otro" && !(parseInt(otraDuracion, 10) > 0)) {
+    otraDuracionEl.closest(".form-field")?.classList.add("has-error");
     Toast.show('Elegiste duración "Otro": indica el número de meses.', 'warn');
-    document.getElementById("otra_duracion").focus();
+    otraDuracionEl.focus();
+    otraDuracionEl.scrollIntoView({ block: "center", behavior: "smooth" });
     return;
   }
   const duracionFinal = duracionSeleccionada === "Otro"
