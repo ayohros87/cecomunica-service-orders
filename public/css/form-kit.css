@@ -4,6 +4,13 @@
    migradas al kit (piloto: clientes/ficha.html). Construido sobre los
    tokens de ceco-ui. */
 
+/* En ceco-ui .form-error-msg es display:flex SIEMPRE (las páginas viejas solo
+   renderizan el span cuando hay error). El kit los deja en el markup y los
+   enciende con .has-error — sin esto, todos los mensajes salen en rojo de
+   entrada (reporte 2026-09-03). */
+.form-field .form-error-msg { display: none; }
+.form-field.has-error .form-error-msg { display: flex; }
+
 /* ── Encabezado de contexto ── */
 .fk-contexto { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; margin-bottom: var(--sp-4, 16px); }
 .fk-avatar {

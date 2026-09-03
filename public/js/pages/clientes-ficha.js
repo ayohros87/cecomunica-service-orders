@@ -201,21 +201,33 @@ window.FichaCliente = {
     location.href = id ? `./centro.html?id=${encodeURIComponent(id)}` : './centro.html';
   },
 
-  // ── Chips del expediente (agregaciones: 1 lectura cada una) ──
+  // ── Chips del expediente ──
+  // El SDK compat NO trae count() (verificado 2026-09-02, ver
+  // firebase-aggregates.js): los conteos van por FbAgg (SDK modular, 1 lectura
+  // facturada c/u). Sin FbAgg (módulo bloqueado / sesión modular aún
+  // restaurando) los chips se esconden — nunca se bajan documentos solo para
+  // pintar un número.
   async cargarChips() {
-    const db = firebase.firestore();
-    const cuenta = async (q) => {
-      try { const s = await q.count().get(); return s.data().count; } catch (e) { return null; }
-    };
-    const nCon = await cuenta(db.collection('contratos').where('cliente_id', '==', this.cliente.id));
-    if (nCon != null) document.getElementById('chipContratos').textContent =
-      `${nCon} contrato${nCon === 1 ? '' : 's'}`;
-    const nHist = await cuenta(db.collection('clientes').doc(this.cliente.id).collection('historial'));
-    if (nHist != null) {
-      document.getElementById('tarjHistN').textContent = nHist;
-      document.getElementById('chipHistorial').textContent =
-        `${nHist} cambio${nHist === 1 ? '' : 's'} en el historial`;
+    const id = this.cliente.id;
+    // FbAgg.disponible se enciende cuando el auth modular restaura la sesión;
+    // suele tardar <1s tras el login compat. Espera corta, sin bloquear nada.
+    for (let i = 0; i < 20 && !(window.FbAgg && FbAgg.disponible); i++) {
+      await new Promise(r => setTimeout(r, 150));
     }
+    const chipC = document.getElementById('chipContratos');
+    const chipH = document.getElementById('chipHistorial');
+    if (!(window.FbAgg && FbAgg.disponible)) { chipC.style.display = 'none'; chipH.style.display = 'none'; return; }
+    if (this.cliente.id !== id) return; // navegó a otro cliente mientras tanto
+
+    try {
+      const nCon = await FbAgg.count('contratos', [['cliente_id', '==', id]]);
+      chipC.textContent = `${nCon} contrato${nCon === 1 ? '' : 's'}`;
+    } catch (e) { chipC.style.display = 'none'; }
+    try {
+      const nHist = await FbAgg.count(`clientes/${id}/historial`, []);
+      document.getElementById('tarjHistN').textContent = nHist;
+      chipH.textContent = `${nHist} cambio${nHist === 1 ? '' : 's'} en el historial`;
+    } catch (e) { chipH.style.display = 'none'; }
   },
 
   // ── Historial (mismo formato que el modal del Centro) ──
