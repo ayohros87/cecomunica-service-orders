@@ -67,6 +67,11 @@ const ClientesService = {
       email: (raw.email || "").toLowerCase().trim(),
       representante: (raw.representante || "").trim(),
       representante_cedula: (raw.representante_cedula || raw.cedula_representante || "").trim(),
+      // Correos con destino propio: el del representante recibe el enlace de
+      // firma; email_acuses recibe los acuses de devolución. Antes no pasaban
+      // por aquí y una edición con el payload canónico los borraba en silencio.
+      representante_email: (raw.representante_email || "").toLowerCase().trim(),
+      email_acuses: (raw.email_acuses || "").toLowerCase().trim(),
       ip: (raw.ip || "").trim(),
       itbms_exento: itbmsExento,
       itbms_motivo_exencion: itbmsExento ? (raw.itbms_motivo_exencion || "").trim() : "",

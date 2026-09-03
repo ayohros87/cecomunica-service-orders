@@ -2280,7 +2280,7 @@ window.Centro = {
       <div class="hd">Comercial</div>
       <a href="../cotizaciones/index.html">Nueva cotización</a>
       <div class="hd">Cliente</div>
-      <a href="../contratos/nuevo-cliente.html?id=${this.esc(this.cliente.id)}&from=centro">Editar datos del cliente</a>
+      <a href="./ficha.html?id=${this.esc(this.cliente.id)}&from=centro">Editar datos del cliente</a>
       ${this._puedeMasiva() ? `<a href="./index.html">Edición masiva de clientes
         <span style="display:block; font-size:11px; color:var(--fg-4);">avanzada — hoja completa con autoguardado; cada cambio queda en el historial</span></a>` : ''}`;
   },

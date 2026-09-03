@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8" />
+  <title>Ficha del cliente - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <link rel="stylesheet" href="../css/form-kit.css?v=fk1">
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-storage-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
+  <script defer src="../js/firebase-init.js?v=ses2"></script>
+  <script src="../js/core/modulos.js?v=cc14"></script>
+  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script defer src="../js/services/clientesService.js?v=fk1"></script>
+  <script defer src="../js/services/clienteDocumentosService.js"></script>
+  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/ui/formKit.js?v=fk1"></script>
+  <script defer src="/js/vendor/lucide.min.js?v=3"></script>
+  <script defer src="/js/core/icons.js?v=1"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+  <div id="topbar-mount"></div>
+  <script>
+    Layout.renderTopbar({
+      title: '<i data-lucide="user"></i> Ficha del cliente',
+      back: { label: '<i data-lucide="arrow-left"></i> Volver', onclick: 'FichaCliente.volver()' },
+      showHome: true, homeHref: '../index.html', showLogout: true
+    });
+  </script>
+
+  <div class="app-wrap" style="max-width:820px;">
+
+    <div id="notaSoloLectura" class="ds-card ds-card-padded" style="display:none; margin-bottom:var(--sp-3); font-size:13px; color:var(--fg-3);">
+      Solo lectura: tu rol no edita la ficha del cliente. Pide el cambio a recepción o administración.
+    </div>
+
+    <div id="bannerErrores" class="ds-card ds-card-padded" style="display:none; margin-bottom:var(--sp-3);
+      background:var(--soft-bad, #FBE9E9); color:#A03030; font-size:13.5px; font-weight:600;"></div>
+
+    <div class="ds-card ds-card-padded" id="fkRoot">
+
+      <div class="fk-contexto">
+        <div class="fk-avatar" id="fkAvatar"></div>
+        <div class="fk-quien">
+          <h2 id="fkNombre"></h2>
+          <div class="fk-meta" id="fkMeta"></div>
+          <div class="fk-chips">
+            <span class="fk-chip ok" id="chipActivo">—</span>
+            <span class="fk-chip" id="chipContratos">contratos…</span>
+            <span class="fk-chip" id="chipHistorial">historial…</span>
+          </div>
+        </div>
+        <div class="fk-acciones">
+          <button class="btn btn-ghost" type="button" onclick="FichaCliente.verHistorial()"
+                  title="Quién cambió qué en esta ficha"><i data-lucide="history"></i> Historial</button>
+        </div>
+      </div>
+
+      <!-- Identificación fiscal -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Identificación fiscal</h3><span class="fk-auditado">queda en el historial</span></div>
+        <p class="fk-desc">Sale impreso en contratos y facturas. Cambiarlo no toca los contratos ya firmados.</p>
+        <div class="form-field">
+          <label class="form-label" for="nombre">Nombre o razón social <span class="req">*</span></label>
+          <input class="form-input" id="nombre" data-fk="Nombre" required>
+          <span class="form-error-msg">El nombre no puede quedar vacío.</span>
+        </div>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="ruc">RUC / Cédula <span class="req">*</span></label>
+            <input class="form-input" id="ruc" data-fk="RUC" data-fk-valida="ruc" required inputmode="numeric" style="font-family:var(--font-mono);">
+            <span class="form-hint">Solo números y guiones, sin el DV.</span>
+            <span class="form-error-msg">Revisa el RUC: solo admite números y guiones.</span>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="dv">DV <span class="optional">opcional</span></label>
+            <input class="form-input" id="dv" data-fk="DV" data-fk-valida="dv" inputmode="numeric" maxlength="2" style="font-family:var(--font-mono);">
+            <span class="form-error-msg">El DV son 1 o 2 dígitos.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Representante legal -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Representante legal</h3><span class="fk-auditado">queda en el historial</span></div>
+        <p class="fk-desc">Quien firma contratos y anexos. Si cambió por acta de junta, adjunta la evidencia:
+          queda en los documentos del cliente junto al registro del cambio.</p>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="representante">Nombre completo</label>
+            <input class="form-input" id="representante" data-fk="Representante legal">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="representante_cedula">Cédula</label>
+            <input class="form-input" id="representante_cedula" data-fk="Cédula del representante" data-fk-valida="cedula" style="font-family:var(--font-mono);">
+            <span class="form-error-msg">Formato de cédula panameña, por ejemplo 8-712-1043 o PE-12-345.</span>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="representante_email">Correo del representante <span class="optional">opcional</span></label>
+          <input class="form-input" id="representante_email" type="email" data-fk="Correo del representante" data-fk-valida="email">
+          <span class="form-hint">A este buzón llega el enlace de firma cuando difiere del contacto general.</span>
+          <span class="form-error-msg">Ese correo no parece válido.</span>
+        </div>
+        <div class="fk-evidencia" id="zonaEvidencia" role="button" tabindex="0">
+          <b>Adjuntar evidencia del cambio</b> — acta de junta o certificado del Registro Público (PDF o foto)
+          <span class="prog"></span>
+        </div>
+        <input type="file" id="fileEvidencia" accept=".pdf,image/*" style="display:none;">
+      </div>
+
+      <!-- Régimen fiscal -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Régimen fiscal</h3><span class="fk-auditado">queda en el historial</span></div>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="itbms_exento">ITBMS</label>
+            <select class="form-select" id="itbms_exento" data-fk="ITBMS">
+              <option value="false">Paga ITBMS (7%)</option>
+              <option value="true">Exento</option>
+            </select>
+            <span class="form-hint">Se aplica por defecto a contratos y cotizaciones nuevos.</span>
+          </div>
+          <div class="form-field" id="wrapMotivo" style="display:none;">
+            <label class="form-label" for="itbms_motivo_exencion">Motivo de exención</label>
+            <input class="form-input" id="itbms_motivo_exencion" data-fk="Motivo de exención" placeholder="Resolución, entidad estatal, ZLC…">
+          </div>
+        </div>
+      </div>
+
+      <!-- Contacto y direcciones -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Contacto y direcciones</h3></div>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="telefono">Teléfono</label>
+            <input class="form-input" id="telefono" data-fk="Teléfono" data-fk-valida="tel" inputmode="tel" style="font-family:var(--font-mono);">
+            <span class="form-error-msg">Solo números, espacios, guiones y el prefijo +.</span>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="email">Correo general</label>
+            <input class="form-input" id="email" type="email" data-fk="Correo" data-fk-valida="email">
+            <span class="form-error-msg">Ese correo no parece válido.</span>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="email_acuses">Correo de acuses <span class="optional">opcional</span></label>
+          <input class="form-input" id="email_acuses" type="email" data-fk="Correo de acuses" data-fk-valida="email">
+          <span class="form-hint">Recibe la copia de los acuses de devolución de equipos.</span>
+          <span class="form-error-msg">Ese correo no parece válido.</span>
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="direccion">Dirección</label>
+          <input class="form-input" id="direccion" data-fk="Dirección">
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="direccion_facturacion">Dirección de facturación <span class="optional">si difiere</span></label>
+          <input class="form-input" id="direccion_facturacion" data-fk="Dirección de facturación">
+        </div>
+      </div>
+
+      <!-- Comercial -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Comercial</h3><span class="fk-auditado">queda en el historial</span></div>
+        <div class="form-grid-2">
+          <div class="form-field">
+            <label class="form-label" for="vendedor">Vendedor asignado</label>
+            <select class="form-select" id="vendedor" data-fk="Vendedor"></select>
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="activo">Estado de la cuenta</label>
+            <label style="display:flex; gap:8px; align-items:center; font-size:14px; padding:8px 0;">
+              <input type="checkbox" id="activo" data-fk="Activo" style="width:auto;"> Cliente activo
+            </label>
+            <span class="form-hint">Inactivo lo esconde de los listados por defecto; no borra nada.</span>
+          </div>
+        </div>
+        <p class="form-hint" id="ipRow" style="display:none; margin:6px 0 0;"></p>
+      </div>
+
+      <!-- Expediente (solo lectura) -->
+      <div class="fk-seccion">
+        <div class="fk-cab"><h3>Del expediente</h3></div>
+        <p class="fk-desc">Solo lectura — contratos, equipos y gestiones se manejan desde la ficha 360.</p>
+        <div class="fk-enlaces">
+          <div class="fk-tarjeta"><b id="tarjHistN">—</b> cambios en el historial<br>
+            <a href="#" onclick="FichaCliente.verHistorial(); return false;">Ver historial</a></div>
+          <div class="fk-tarjeta"><b>360</b> contratos, equipos y gestiones<br>
+            <a href="#" onclick="FichaCliente.volver(); return false;">Ver en la ficha 360</a></div>
+        </div>
+      </div>
+
+      <!-- La barra pegajosa la inserta FormKit.crear() aquí -->
+    </div>
+  </div>
+
+  <!-- Modal del historial -->
+  <div id="modalHist" style="display:none; position:fixed; inset:0; background:rgba(11,42,71,.45); place-items:center; padding:20px; z-index:80;"
+       onclick="if(event.target===this) FichaCliente.cerrarHistorial()">
+    <div style="background:var(--surface-card,#fff); border-radius:14px; width:min(680px,100%); max-height:86vh; overflow:auto; padding:18px 22px;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <h3 style="margin:0; flex:1;">Historial de la ficha</h3>
+        <button class="btn btn-ghost" type="button" onclick="FichaCliente.cerrarHistorial()">Cerrar</button>
+      </div>
+      <div id="modalHistBody"></div>
+    </div>
+  </div>
+
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/pages/clientes-ficha.js?v=fk1"></script>
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => { Layout.initRail('centro'); FichaCliente.init(); });
+  </script>
+</body>
+</html>
