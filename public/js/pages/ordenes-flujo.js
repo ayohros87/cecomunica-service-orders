@@ -249,7 +249,93 @@ window.completarOrden = async function (ordenId) {
   }
 };
 
-window.entregarOrden = function (ordenId) {
+// ── Candado de firma del contrato (2026-09-03, requerimiento de Zuleika) ──
+// Una PROGRAMACIÓN entrega radios BAJO un contrato, y ese contrato debe estar
+// firmado en la plataforma (firmado=true, o estado 'activo' — la firma es lo
+// único que activa) ANTES de poner los radios en manos del cliente. Todo lo
+// demás (aprobación, seriales, asignación de la orden) corre sin esperar la
+// firma; el único punto duro es este. Las rules exigen lo mismo en la
+// transición a ENTREGADO (respaldo contra escrituras directas, admin exento).
+// Devuelve null si se puede entregar; si no, el contrato leído (para armar el
+// mensaje). Sin señal clara (error de red, vínculo roto) NO bloquea aquí: las
+// rules son el respaldo y un fallo de lectura no debe frenar una entrega.
+async function contratoSinFirmarParaEntrega(orden) {
+  const c = orden?.contrato;
+  if (!(c && c.aplica === true && c.contrato_doc_id)) return null;
+  if (!(typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(orden))) return null;
+  try {
+    const ref = firebase.firestore().collection('contratos').doc(c.contrato_doc_id);
+    const firmado = (d) => !!d && (d.firmado === true || d.estado === 'activo');
+    let snap = await ref.get();
+    if (snap.exists && firmado(snap.data())) return null;
+    // La caché multi-pestaña puede pintar viejo (patrón del Centro): antes de
+    // bloquear una entrega, la firma se revalida contra el servidor — pudo
+    // llegar hace un momento desde el celular del cliente.
+    if (snap.metadata && snap.metadata.fromCache) {
+      snap = await ref.get({ source: 'server' });
+      if (snap.exists && firmado(snap.data())) return null;
+    }
+    if (!snap.exists) return null; // vínculo roto = problema de datos, no de firma
+    return { id: c.contrato_doc_id, ...snap.data() };
+  } catch (e) {
+    console.warn('[entrega] no se pudo verificar la firma del contrato:', e);
+    return null;
+  }
+}
+
+function abrirModalFirmaPendiente(orden, contrato) {
+  const esAdmin = (APP.state.userRole || '') === (typeof ROLES !== 'undefined' ? ROLES.ADMIN : 'administrador');
+  const clienteId = orden.cliente_id || contrato.cliente_id || '';
+  const enValidacion = contrato.firmado_pendiente_validacion === true;
+  const detalle = enValidacion
+    ? `La firma digital <b>ya llegó</b>, pero el firmante no coincide con el representante
+       registrado: falta que ventas lo <b>valide</b> desde la ficha del cliente. En cuanto
+       se acepte, el contrato queda activo y la entrega sale.`
+    : `Desde la ficha del cliente se le puede <b>enviar el enlace de firma digital</b>
+       (firma desde su celular, sin usuario, en minutos) o <b>subir el PDF firmado</b>
+       si ya firmó en papel. Apenas quede firmado, esta entrega sale sin más trámite.`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '9500';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
+      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="pen-line"></i> Falta la firma del contrato</h3>
+        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
+        <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
+          Esta orden entrega equipos bajo el contrato
+          <b>${escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—')}</b>,
+          que todavía <b>no está firmado</b> en la plataforma. Los radios no se
+          entregan sin la firma del cliente.
+        </p>
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>
+      </div>
+      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);flex-wrap:wrap;">
+        ${esAdmin ? `<button class="btn btn-secondary" id="firmaOverrideBtn" style="margin-right:auto;"
+          title="Solo administración — para casos excepcionales">Entregar sin firma (admin)</button>` : ''}
+        <button class="btn btn-secondary" data-close="1">Cerrar</button>
+        ${clienteId ? `<a class="btn btn-primary" href="../clientes/centro.html?id=${encodeURIComponent(clienteId)}">
+          <i data-lucide="pen-line"></i> Abrir la ficha y gestionar la firma</a>` : ''}
+      </div>
+    </div>`;
+
+  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
+  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  document.addEventListener('keydown', kb);
+  document.body.appendChild(overlay);
+  APP.utils.lucideRefresh(overlay);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  });
+  const ov = overlay.querySelector('#firmaOverrideBtn');
+  if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
+}
+
+window.entregarOrden = async function (ordenId) {
   // Candado de QC: con control de calidad pendiente no se abre el modal de
   // entrega (las rules además rechazan la transición). Al rol que puede
   // ejecutar el QC se le abre directamente el checklist.
@@ -266,6 +352,9 @@ window.entregarOrden = function (ordenId) {
     }
     return;
   }
+  // Candado de firma del contrato (ver contratoSinFirmarParaEntrega arriba).
+  const sinFirmar = await contratoSinFirmarParaEntrega(orden);
+  if (sinFirmar) { abrirModalFirmaPendiente(orden, sinFirmar); return; }
   abrirModalEntrega(ordenId);
 };
 

@@ -413,7 +413,8 @@ service cloud.firestore {
               && resource.data.get("tipo_de_servicio", "") != "ENTRADA"
               && (resource.data.get("qc_requerido", false) != true
                   || (resource.data.get("qc", {}).get("resultado", "") == "aprobado"
-                      && qcCubreLosEquipos())))
+                      && qcCubreLosEquipos()))
+              && contratoFirmadoParaEntregar())
           // Rechazo de QC: única reversa permitida del flujo — el MISMO write
           // debe estampar qc.resultado='rechazado' (saveQcRechazado) y la
           // orden vuelve al técnico para corrección. Exigir que el write TOQUE
@@ -426,6 +427,24 @@ service cloud.firestore {
           || (de == "COMPLETADO (EN OFICINA)" && a == "ASIGNADO"
               && request.resource.data.get("qc", {}).get("resultado", "") == "rechazado"
               && request.resource.data.diff(resource.data).affectedKeys().hasAny(["qc"]));
+      }
+      // Entregar radios exige el contrato FIRMADO en la plataforma (2026-09-03,
+      // requerimiento de Zuleika): una orden amarrada a un contrato — solo
+      // PROGRAMACIÓN llega aquí con contrato.aplica, la ENTRADA ya no pasa a
+      // ENTREGADO — no se entrega si el contrato no está firmado (firmado=true
+      // o estado 'activo'; la firma digital y el PDF firmado son quienes
+      // activan). La preparación (seriales, asignación) nunca esperó la firma:
+      // el único punto duro es la entrega. Fail-open con vínculo roto (doc
+      // inexistente): ese caso es un problema de datos, no de firma, y la UI
+      // lo muestra. Admin exento por el OR de isAdmin() del allow.
+      function contratoFirmadoParaEntregar() {
+        let c = resource.data.get("contrato", {});
+        let cid = c.get("contrato_doc_id", "");
+        return c.get("aplica", false) != true
+          || !(cid is string) || cid == ""
+          || !exists(/databases/$(database)/documents/contratos/$(cid))
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("firmado", false) == true
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("estado", "") == "activo";
       }
       // El QC aprobado cubre los equipos que tenía la orden CUANDO se firmó:
       // saveQcAprobado estampa qc.equipos_n con ese conteo. "Agregar equipo" y

@@ -238,6 +238,38 @@ async function main() {
   await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oRepQc").set({ estado_reparacion: "ENTREGADO AL CLIENTE" }, { merge: true }));
   ok("ordenes: REPARACIÓN con QC aprobado sí se entrega (no se rompió el flujo)");
 
+  // ── Candado de firma del contrato en la ENTREGA (2026-09-03, Zuleika) ──────
+  // Una orden amarrada a un contrato (PROGRAMACIÓN con contrato.aplica) no pasa
+  // a ENTREGADO si el contrato no está firmado (firmado=true o estado 'activo').
+  // Fail-open con vínculo roto o sin contrato; admin exento.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.doc("contratos/cSinFirma").set({ estado: "aprobado", contrato_id: "ALQ-1" });
+    await db.doc("contratos/cFirmado").set({ estado: "aprobado", firmado: true, contrato_id: "ALQ-2" });
+    await db.doc("contratos/cActivo").set({ estado: "activo", contrato_id: "ALQ-3" });
+    const base = { estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "PROGRAMACIÓN",
+      qc_requerido: true, qc: { resultado: "aprobado" } };
+    await db.doc("ordenes_de_servicio/oProgSinFirma").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cSinFirma" } });
+    await db.doc("ordenes_de_servicio/oProgSinFirmaAdm").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cSinFirma" } });
+    await db.doc("ordenes_de_servicio/oProgFirmado").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cFirmado" } });
+    await db.doc("ordenes_de_servicio/oProgActivo").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cActivo" } });
+    await db.doc("ordenes_de_servicio/oProgNoAplica").set({ ...base, contrato: { aplica: false, contrato_doc_id: null, motivo_no_aplica: "venta directa" } });
+    await db.doc("ordenes_de_servicio/oProgRoto").set({ ...base, contrato: { aplica: true, contrato_doc_id: "no-existe" } });
+  });
+  const ENTREGADO = { estado_reparacion: "ENTREGADO AL CLIENTE" };
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oProgSinFirma").set(ENTREGADO, { merge: true }));
+  ok("firma: PROGRAMACIÓN con contrato SIN firmar NO se entrega");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgFirmado").set(ENTREGADO, { merge: true }));
+  ok("firma: contrato firmado=true (aprobado) sí se entrega");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgActivo").set(ENTREGADO, { merge: true }));
+  ok("firma: contrato activo sí se entrega");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgNoAplica").set(ENTREGADO, { merge: true }));
+  ok("firma: 'no aplica contrato' no se bloquea");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oProgRoto").set(ENTREGADO, { merge: true }));
+  ok("firma: vínculo roto (contrato inexistente) no bloquea — fail-open");
+  await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oProgSinFirmaAdm").set(ENTREGADO, { merge: true }));
+  ok("firma: admin exento (override de casos excepcionales)");
+
   // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
   const COMPLETADO = "COMPLETADO (EN OFICINA)";
   const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {
