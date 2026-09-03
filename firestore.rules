@@ -451,7 +451,8 @@ service cloud.firestore {
               && (resource.data.get("qc_requerido", false) != true
                   || (resource.data.get("qc", {}).get("resultado", "") == "aprobado"
                       && qcCubreLosEquipos()))
-              && contratoFirmadoParaEntregar())
+              && contratoFirmadoParaEntregar()
+              && facturaVentaParaEntregar())
           // Rechazo de QC: única reversa permitida del flujo — el MISMO write
           // debe estampar qc.resultado='rechazado' (saveQcRechazado) y la
           // orden vuelve al técnico para corrección. Exigir que el write TOQUE
@@ -482,6 +483,25 @@ service cloud.firestore {
           || !exists(/databases/$(database)/documents/contratos/$(cid))
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("firmado", false) == true
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("estado", "") == "activo";
+      }
+      // Entregar radios VENDIDOS exige la factura registrada (2026-09-03,
+      // decisión de Zuleika): un contrato "Propio" vende los equipos, y la
+      // entrega no sale sin contratos.factura_venta.numero (se registra en
+      // Contratos → Equipos). Solo aplica al tipo Propio/PROP — alquiler/demo/
+      // temporal no facturan equipos y pasan de largo. Mismo diseño que la
+      // firma: fail-open con vínculo roto, admin exento por el OR de isAdmin(),
+      // y la preparación (seriales, QC) nunca espera — el punto duro es la
+      // entrega. Los get() repiten el doc de contratoFirmadoParaEntregar, que
+      // Firestore cuenta UNA vez para el límite de lecturas por request.
+      function facturaVentaParaEntregar() {
+        let c = resource.data.get("contrato", {});
+        let cid = c.get("contrato_doc_id", "");
+        return c.get("aplica", false) != true
+          || !(cid is string) || cid == ""
+          || !exists(/databases/$(database)/documents/contratos/$(cid))
+          || !(get(/databases/$(database)/documents/contratos/$(cid)).data.get("tipo_contrato", "") == "Propio"
+               || get(/databases/$(database)/documents/contratos/$(cid)).data.get("codigo_tipo", "") == "PROP")
+          || get(/databases/$(database)/documents/contratos/$(cid)).data.get("factura_venta", {}).get("numero", "") != "";
       }
       // El QC aprobado cubre los equipos que tenía la orden CUANDO se firmó:
       // saveQcAprobado estampa qc.equipos_n con ese conteo. "Agregar equipo" y

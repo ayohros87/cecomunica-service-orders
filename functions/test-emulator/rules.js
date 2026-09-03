@@ -270,6 +270,30 @@ async function main() {
   await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oProgSinFirmaAdm").set(ENTREGADO, { merge: true }));
   ok("firma: admin exento (override de casos excepcionales)");
 
+  // ── Candado de factura de la venta en la ENTREGA (2026-09-03, Zuleika) ────
+  // Un contrato "Propio" VENDE los radios: sin contratos.factura_venta.numero
+  // la orden no pasa a ENTREGADO. Solo tipo Propio/PROP — que el alquiler pasa
+  // sin factura ya lo prueban oProgActivo/oProgFirmado arriba (entregaron y
+  // sus contratos no tienen factura). Admin exento; fail-open con vínculo
+  // roto (mismo camino que la firma, probado en oProgRoto).
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "PROGRAMACIÓN",
+      qc_requerido: true, qc: { resultado: "aprobado" } };
+    await db.doc("contratos/cPropSinFact").set({ estado: "activo", tipo_contrato: "Propio", contrato_id: "PROP-1" });
+    await db.doc("contratos/cPropConFact").set({ estado: "activo", codigo_tipo: "PROP", contrato_id: "PROP-2",
+      factura_venta: { numero: "001-0000010274" } });
+    await db.doc("ordenes_de_servicio/oPropSinFact").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cPropSinFact" } });
+    await db.doc("ordenes_de_servicio/oPropSinFactAdm").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cPropSinFact" } });
+    await db.doc("ordenes_de_servicio/oPropConFact").set({ ...base, contrato: { aplica: true, contrato_doc_id: "cPropConFact" } });
+  });
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oPropSinFact").set(ENTREGADO, { merge: true }));
+  ok("factura: venta Propio SIN factura registrada NO se entrega");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oPropConFact").set(ENTREGADO, { merge: true }));
+  ok("factura: con la factura registrada (codigo_tipo PROP) la entrega sale");
+  await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oPropSinFactAdm").set(ENTREGADO, { merge: true }));
+  ok("factura: admin exento (override de casos excepcionales)");
+
   // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
   const COMPLETADO = "COMPLETADO (EN OFICINA)";
   const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {

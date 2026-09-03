@@ -97,4 +97,19 @@ auth.onAuthStateChanged(async user => {
       Toast.show('⚠️ Solo administración o gerencia puede aprobar contratos.', 'warn');
     }
   }
+
+  // Deep-link ?factura_venta=<doc_id> (candado de entrega en órdenes): aterriza
+  // directo en el registro de la factura de la venta — el prompt valida rol,
+  // contrato y número por su cuenta (ContratosEquipos.registrarFactura).
+  const facturaVentaId = params.get('factura_venta');
+  if (facturaVentaId) {
+    const url = new URL(window.location);
+    url.searchParams.delete('factura_venta');
+    window.history.replaceState({}, document.title, url.toString());
+    if (canRole(rol, 'registrar-factura-venta')) {
+      ContratosEquipos.registrarFactura(facturaVentaId);
+    } else {
+      Toast.show('⚠️ Solo recepción, gerencia o administración registran la factura de venta.', 'warn');
+    }
+  }
 });

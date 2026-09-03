@@ -335,6 +335,95 @@ function abrirModalFirmaPendiente(orden, contrato) {
   if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
 }
 
+// ── Candado de factura de la venta (2026-09-03, decisión de Zuleika) ──────
+// Un contrato "Propio" VENDE los radios: la factura QBO debe estar registrada
+// (Contratos → Equipos → "Registrar factura de venta") ANTES de ponerlos en
+// manos del cliente. Igual que la firma: la preparación nunca espera — el
+// único punto duro es la entrega. Las rules exigen lo mismo en la transición
+// a ENTREGADO (respaldo contra escrituras directas, admin exento). Devuelve
+// null si se puede entregar; si no, el contrato leído. Sin señal clara (error
+// de red, vínculo roto) NO bloquea aquí: las rules son el respaldo.
+async function contratoSinFacturaParaEntrega(orden) {
+  const c = orden?.contrato;
+  if (!(c && c.aplica === true && c.contrato_doc_id)) return null;
+  if (!(typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(orden))) return null;
+  try {
+    const ref = firebase.firestore().collection('contratos').doc(c.contrato_doc_id);
+    // El candado aplica SOLO a ventas (tipo "Propio") — mismo criterio que
+    // onSerialWrite/contratos-equipos. Alquiler/demo/temporal no facturan
+    // equipos y pasan de largo.
+    const exento = (d) => !!d && !(d.tipo_contrato === 'Propio' || d.codigo_tipo === 'PROP');
+    const facturada = (d) => !!(d && d.factura_venta && (d.factura_venta.numero || '').trim());
+    let snap = await ref.get();
+    let d = snap.exists ? snap.data() : null;
+    if (d && (exento(d) || facturada(d))) return null;
+    // Caché multi-pestaña puede pintar viejo (patrón del Centro): antes de
+    // bloquear, se revalida contra el servidor — Recepción pudo registrar la
+    // factura hace un momento en otra máquina.
+    if (snap.metadata && snap.metadata.fromCache) {
+      snap = await ref.get({ source: 'server' });
+      d = snap.exists ? snap.data() : null;
+      if (d && (exento(d) || facturada(d))) return null;
+    }
+    if (!d) return null; // vínculo roto = problema de datos, no de factura
+    return { id: c.contrato_doc_id, ...d };
+  } catch (e) {
+    console.warn('[entrega] no se pudo verificar la factura de la venta:', e);
+    return null;
+  }
+}
+
+function abrirModalFacturaPendiente(orden, contrato) {
+  const rol = APP.state.userRole || '';
+  const esAdmin = rol === (typeof ROLES !== 'undefined' ? ROLES.ADMIN : 'administrador');
+  const puedeRegistrar = typeof canRole === 'function' && canRole(rol, 'registrar-factura-venta');
+  const detalle = puedeRegistrar
+    ? `El botón te lleva a <b>Contratos</b> y abre directo el registro: se escribe el
+       número de la factura de QuickBooks una sola vez y queda en el contrato y en
+       cada serial. Al volver, esta entrega sale sin más trámite.`
+    : `Recepción o gerencia la registran en <b>Contratos → Equipos del contrato →
+       "Registrar factura de venta"</b>. Apenas quede registrada, esta entrega sale.`;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '9500';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
+      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="receipt"></i> Falta la factura de la venta</h3>
+        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
+        <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
+          Esta orden entrega radios <b>vendidos</b> bajo el contrato
+          <b>${escapeHtml(contrato.contrato_id || orden.contrato?.contrato_id || '—')}</b>,
+          y la factura de la venta todavía <b>no está registrada</b> en la plataforma.
+          Los radios no se entregan sin facturar primero.
+        </p>
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">${detalle}</p>
+      </div>
+      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);flex-wrap:wrap;">
+        ${esAdmin ? `<button class="btn btn-secondary" id="factOverrideBtn" style="margin-right:auto;"
+          title="Solo administración — para casos excepcionales">Entregar sin factura (admin)</button>` : ''}
+        <button class="btn btn-secondary" data-close="1">Cerrar</button>
+        ${puedeRegistrar ? `<a class="btn btn-primary" href="../contratos/index.html?factura_venta=${encodeURIComponent(contrato.id)}">
+          <i data-lucide="receipt"></i> Registrar la factura</a>` : ''}
+      </div>
+    </div>`;
+
+  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
+  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  document.addEventListener('keydown', kb);
+  document.body.appendChild(overlay);
+  APP.utils.lucideRefresh(overlay);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  });
+  const ov = overlay.querySelector('#factOverrideBtn');
+  if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
+}
+
 window.entregarOrden = async function (ordenId) {
   // Candado de QC: con control de calidad pendiente no se abre el modal de
   // entrega (las rules además rechazan la transición). Al rol que puede
@@ -355,6 +444,9 @@ window.entregarOrden = async function (ordenId) {
   // Candado de firma del contrato (ver contratoSinFirmarParaEntrega arriba).
   const sinFirmar = await contratoSinFirmarParaEntrega(orden);
   if (sinFirmar) { abrirModalFirmaPendiente(orden, sinFirmar); return; }
+  // Candado de factura de la venta (solo contratos "Propio" — ver arriba).
+  const sinFactura = await contratoSinFacturaParaEntrega(orden);
+  if (sinFactura) { abrirModalFacturaPendiente(orden, sinFactura); return; }
   abrirModalEntrega(ordenId);
 };
 
