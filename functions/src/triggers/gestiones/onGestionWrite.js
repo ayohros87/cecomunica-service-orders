@@ -48,7 +48,10 @@ function asignacionCompleta(g) {
     return total > 0 && asignados >= total;
   }
   if (g.tipo === "aumento") {
-    if (g.cierre?.derivacion !== true) return false; // primero la firma y las líneas
+    // 2026-09-03 (Zuleika, segunda vuelta): la firma del anexo NO frena la OS —
+    // programación arranca apenas bodega complete los seriales, y el punto duro
+    // es la ENTREGA (rules + UI exigen cierre.firma). Antes se exigía aquí
+    // cierre.derivacion y el proceso entero esperaba al cliente.
     const total = (g.aumento?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
     const asignados = (g.aumento?.seriales_asignados || []).filter(s => String(s.serial || "").trim()).length;
     return total > 0 && asignados >= total;
@@ -252,13 +255,19 @@ async function correoRecepcion(gid, g, ordenIds) {
     : ((g.tipo === "aumento" ? g.aumento?.seriales_asignados : g.demo?.seriales_asignados) || []).map(s => [
         `<code>${G.escapeHtml(s.serial || "—")}</code>`, "—", G.escapeHtml(s.modelo || "—"),
       ]);
+  // Aumento pre-asignado (2026-09-03): la OS sale con el anexo aún en firma —
+  // programar se puede desde ya; la ENTREGA queda candada hasta cierre.firma.
+  const firmaEnParalelo = g.tipo === "aumento" && g.estado === "pendiente_firma"
+    && g.cierre?.firma !== true;
   await G.encolarCorreo({
     to: dests[0],
     cc: dests.length > 1 ? dests.slice(1).join(",") : null,
     subject: `OS de programación lista: ${ordenIds.join(", ")} — ${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid}`,
     preheader: g.tipo === "reemplazo"
       ? "Programar copiando la configuración del radio reemplazado"
-      : "Programar los equipos del demo",
+      : g.tipo === "aumento"
+        ? (firmaEnParalelo ? "Programar desde ya — la entrega espera la firma del anexo" : "Programar los equipos del aumento")
+        : "Programar los equipos del demo",
     bodyContent: `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Orden(es) de programación creada(s)</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
@@ -267,8 +276,13 @@ async function correoRecepcion(gid, g, ordenIds) {
         <b>${ordenIds.map(G.escapeHtml).join(", ")}</b>.
         ${g.tipo === "reemplazo"
           ? "Cada equipo indica el serial que sustituye: <b>copia su configuración, coloca su ID y confirma</b>."
-          : "Programar y coordinar la entrega del demo."}
+          : g.tipo === "aumento"
+            ? "Programar los equipos nuevos del aumento y coordinar la entrega."
+            : "Programar y coordinar la entrega del demo."}
       </p>
+      ${firmaEnParalelo ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;background:#FEF3C7;border-radius:6px;padding:10px 12px;">
+        ⚠️ La <b>firma del anexo corre en paralelo</b>: se puede programar desde ya, pero la
+        <b>entrega no sale</b> hasta que el cliente firme (el sistema la bloquea solo).</p>` : ""}
       ${G.tablaHtml(["Entra", "Sustituye a", "Modelo"], pares)}`,
     ctaUrl: `${APP_BASE_URL}/ordenes/index.html?ids=${encodeURIComponent(ordenIds.join(","))}`,
     ctaLabel: "Ver la(s) orden(es)",
@@ -319,10 +333,10 @@ module.exports = onDocumentWritten(
       // Aumento APROBADO comercialmente → aviso ANTICIPADO a bodega
       // (2026-09-03, planteamiento de Zuleika: la firma no debe frenar la
       // preparación): bodega asigna los seriales MIENTRAS el vendedor consigue
-      // la firma del anexo. La OS no puede salir antes de la firma —
-      // asignacionCompleta exige cierre.derivacion, que solo estampa B3 al
-      // firmarse — así que el candado queda en la entrega, no en la
-      // preparación. Regularización/ajuste no pasan por bodega.
+      // la firma del anexo, y al completarse la asignación la OS sale de una
+      // vez (sección C corre también en pendiente_firma) para que programación
+      // avance. El único punto duro es la ENTREGA: rules + UI exigen
+      // cierre.firma. Regularización/ajuste no pasan por bodega.
       const aumentoAprobado = after.tipo === "aumento"
         && after.estado === "pendiente_firma"
         && before && before.estado === "pendiente_aprobacion"
@@ -801,10 +815,18 @@ module.exports = onDocumentWritten(
               meta: { gestion_id: gid, paso: "facturacion_ajuste" },
             });
           } else {
-            await ref.set({ cierre: { ...(gA.cierre || {}), derivacion: true } }, { merge: true });
+            // Si la OS ya salió durante la firma (pre-asignación 2026-09-03),
+            // la sección C no volverá a correr (programacion_id estampado):
+            // aquí mismo se avanza a en_proceso — y la entrega, que esperaba
+            // cierre.firma, queda libre.
+            const osYaSalio = !!gA.ordenes?.programacion_id;
+            await ref.set({
+              cierre: { ...(gA.cierre || {}), derivacion: true },
+              ...(osYaSalio ? { estado: "en_proceso" } : {}),
+            }, { merge: true });
             await G.registrarEvento(gid, "derivacion",
-              `Anexo firmado: ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).`);
-            logger.info("[onGestionWrite] aumento aplicado al contrato", { gid, contrato: a.contrato_doc_id });
+              `Anexo firmado: ${(a.lineas || []).length} línea(s) agregada(s) al contrato ${a.contrato_id || a.contrato_doc_id} con vigencia propia (${a.duracion_meses || "?"} meses desde la entrega).${osYaSalio ? ` La OS ${gA.ordenes.programacion_id} ya estaba en curso — la entrega queda libre.` : ""}`);
+            logger.info("[onGestionWrite] aumento aplicado al contrato", { gid, contrato: a.contrato_doc_id, osYaSalio });
           }
         }
       }
@@ -813,9 +835,16 @@ module.exports = onDocumentWritten(
     }
 
     // ── C) asignación completa → pool + OS PROGRAMACIÓN + correo ────────
+    // Corre también en pendiente_firma (aumento pre-asignado, 2026-09-03): la
+    // OS sale para que programación avance en paralelo a la firma — la entrega
+    // es el único candado (rules + UI exigen cierre.firma). Ajuste y
+    // regularización nunca llegan aquí: no tienen seriales que asignar.
     try {
+      const estadoListo = (g) => ["pendiente_bodega", "en_proceso"].includes(g.estado)
+        || (g.estado === "pendiente_firma" && g.tipo === "aumento"
+            && g.aumento?.es_ajuste !== true && g.aumento?.es_regularizacion !== true);
       const lista = !after.ordenes?.programacion_id
-        && ["pendiente_bodega", "en_proceso"].includes(after.estado)
+        && estadoListo(after)
         && asignacionCompleta(after);
       // Lectura fresca (2026-08-31): una re-entrega del evento traería un
       // snapshot viejo sin programacion_id y duplicaría la(s) OS y los
@@ -825,7 +854,7 @@ module.exports = onDocumentWritten(
         const fresco = await ref.get();
         const d = fresco.exists ? fresco.data() : null;
         if (d && !d.ordenes?.programacion_id
-            && ["pendiente_bodega", "en_proceso"].includes(d.estado)
+            && estadoListo(d)
             && asignacionCompleta(d)) gC = d;
       }
       if (gC) {
@@ -893,8 +922,13 @@ module.exports = onDocumentWritten(
 
         const ordenIds = await G.crearOrdenesProgramacion(gid, gC);
         if (ordenIds.length) {
+          // Pre-firma la gestión se QUEDA en pendiente_firma: la máquina de la
+          // firma (rules esFirmaAnexoGestion, aplicarAnexo de onFirmaContrato)
+          // exige esa transición; B3 la avanza a en_proceso al aplicar las
+          // líneas cuando la OS ya existe.
+          const preFirma = gC.estado === "pendiente_firma";
           await ref.set({
-            estado: "en_proceso",
+            ...(preFirma ? {} : { estado: "en_proceso" }),
             ordenes: {
               ...(gC.ordenes || {}),
               programacion_id: ordenIds[0],
@@ -903,7 +937,7 @@ module.exports = onDocumentWritten(
             cierre: { ...(gC.cierre || {}), asignacion: true },
           }, { merge: true });
           await G.registrarEvento(gid, "programacion",
-            `Asignación completa. OS de programación ${ordenIds.join(", ")} creada(s); correo a Recepción con copia al vendedor.`);
+            `Asignación completa. OS de programación ${ordenIds.join(", ")} creada(s); correo a Recepción con copia al vendedor.${preFirma ? " La firma del anexo corre en paralelo — la ENTREGA queda candada hasta que el cliente firme." : ""}`);
           await correoRecepcion(gid, gC, ordenIds);
         }
       }

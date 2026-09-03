@@ -452,6 +452,7 @@ service cloud.firestore {
                   || (resource.data.get("qc", {}).get("resultado", "") == "aprobado"
                       && qcCubreLosEquipos()))
               && contratoFirmadoParaEntregar()
+              && anexoFirmadoParaEntregar()
               && facturaVentaParaEntregar())
           // Rechazo de QC: única reversa permitida del flujo — el MISMO write
           // debe estampar qc.resultado='rechazado' (saveQcRechazado) y la
@@ -483,6 +484,24 @@ service cloud.firestore {
           || !exists(/databases/$(database)/documents/contratos/$(cid))
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("firmado", false) == true
           || get(/databases/$(database)/documents/contratos/$(cid)).data.get("estado", "") == "activo";
+      }
+      // Entregar los equipos de un AUMENTO exige el anexo firmado (2026-09-03,
+      // segunda vuelta del planteamiento de Zuleika): la OS de programación
+      // sale APENAS bodega asigna — aunque el anexo siga en firma — para que
+      // el proceso avance completo; el único punto duro es esta entrega. El
+      // contrato marco ya está activo (contratoFirmadoParaEntregar pasa de
+      // largo), así que la firma que se exige aquí es la del ANEXO:
+      // gestiones/{gid}.cierre.firma, que estampan la firma digital
+      // (onFirmaContrato) y la subida del PDF firmado. Reemplazo y demo no
+      // llevan anexo — pasan de largo. Fail-open con vínculo roto y admin
+      // exento por el OR de isAdmin() del allow, igual que sus hermanos.
+      function anexoFirmadoParaEntregar() {
+        let ge = resource.data.get("gestion", {});
+        let gid = ge.get("id", "");
+        return ge.get("tipo", "") != "aumento"
+          || !(gid is string) || gid == ""
+          || !exists(/databases/$(database)/documents/gestiones/$(gid))
+          || get(/databases/$(database)/documents/gestiones/$(gid)).data.get("cierre", {}).get("firma", false) == true;
       }
       // Entregar radios VENDIDOS exige la factura registrada (2026-09-03,
       // decisión de Zuleika): un contrato "Propio" vende los equipos, y la

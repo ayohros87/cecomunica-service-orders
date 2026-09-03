@@ -335,6 +335,84 @@ function abrirModalFirmaPendiente(orden, contrato) {
   if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
 }
 
+// ── Candado de firma del ANEXO de aumento (2026-09-03, segunda vuelta) ────
+// La OS de un aumento sale apenas bodega asigna, con el anexo todavía en
+// firma — programar y completar corre todo en paralelo; el único punto duro
+// es la entrega. El contrato marco ya está activo (el candado de arriba pasa
+// de largo), así que aquí se verifica la firma del ANEXO: cierre.firma de la
+// gestión. Las rules exigen lo mismo en la transición a ENTREGADO (respaldo,
+// admin exento). Devuelve null si se puede entregar; si no, la gestión leída.
+// Sin señal clara (error de red, vínculo roto) NO bloquea: rules respaldan.
+async function anexoSinFirmarParaEntrega(orden) {
+  const ge = orden?.gestion;
+  if (!(ge && ge.tipo === 'aumento' && ge.id)) return null;
+  try {
+    const ref = firebase.firestore().collection('gestiones').doc(ge.id);
+    const firmado = (d) => !!d && d.cierre?.firma === true;
+    let snap = await ref.get();
+    if (snap.exists && firmado(snap.data())) return null;
+    // Caché multi-pestaña puede pintar viejo: la firma pudo llegar hace un
+    // momento desde el celular del cliente — revalidar contra el servidor.
+    if (snap.metadata && snap.metadata.fromCache) {
+      snap = await ref.get({ source: 'server' });
+      if (snap.exists && firmado(snap.data())) return null;
+    }
+    if (!snap.exists) return null; // vínculo roto = problema de datos, no de firma
+    return { id: ge.id, ...snap.data() };
+  } catch (e) {
+    console.warn('[entrega] no se pudo verificar la firma del anexo:', e);
+    return null;
+  }
+}
+
+function abrirModalFirmaAnexoPendiente(orden, gestion) {
+  const esAdmin = (APP.state.userRole || '') === (typeof ROLES !== 'undefined' ? ROLES.ADMIN : 'administrador');
+  const clienteId = orden.cliente_id || gestion.cliente_id || '';
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  overlay.style.display = 'flex';
+  overlay.style.zIndex = '9500';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;width:min(94vw,520px);">
+      <div class="sheet-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <h3 class="sheet-title" style="display:flex;align-items:center;gap:6px;"><i data-lucide="pen-line"></i> Falta la firma del anexo</h3>
+        <button class="btn btn-ghost" data-close="1" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="sheet-body" style="padding:12px 14px;max-height:70vh;overflow:auto;">
+        <p style="margin:0 0 8px;font-size:13.5px;color:var(--fg-2,#374151);">
+          Esta orden entrega los equipos del aumento
+          <b>${escapeHtml(gestion.id || '—')}</b> (contrato
+          <b>${escapeHtml(gestion.aumento?.contrato_id || orden.contrato?.contrato_id || '—')}</b>),
+          y el <b>anexo todavía no está firmado</b>. La programación corre en
+          paralelo, pero los radios no se entregan sin la firma del cliente.
+        </p>
+        <p style="margin:0 0 4px;font-size:13.5px;color:var(--fg-2,#374151);">
+          Desde el expediente del cliente se le puede <b>reenviar el enlace de firma
+          digital</b> (firma desde su celular, en minutos) o <b>subir el anexo firmado</b>
+          si ya firmó en papel. Apenas quede firmado, esta entrega sale sin más trámite.
+        </p>
+      </div>
+      <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);flex-wrap:wrap;">
+        ${esAdmin ? `<button class="btn btn-secondary" id="firmaAnexoOverrideBtn" style="margin-right:auto;"
+          title="Solo administración — para casos excepcionales">Entregar sin firma (admin)</button>` : ''}
+        <button class="btn btn-secondary" data-close="1">Cerrar</button>
+        ${clienteId ? `<a class="btn btn-primary" href="../clientes/centro.html?id=${encodeURIComponent(clienteId)}&g=${encodeURIComponent(gestion.id || '')}">
+          <i data-lucide="pen-line"></i> Abrir el expediente y gestionar la firma</a>` : ''}
+      </div>
+    </div>`;
+
+  const cleanup = () => { overlay.remove(); document.removeEventListener('keydown', kb); };
+  const kb = e => { if (e.key === 'Escape') cleanup(); };
+  document.addEventListener('keydown', kb);
+  document.body.appendChild(overlay);
+  APP.utils.lucideRefresh(overlay);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-close]')) cleanup();
+  });
+  const ov = overlay.querySelector('#firmaAnexoOverrideBtn');
+  if (ov) ov.onclick = () => { cleanup(); abrirModalEntrega(orden.ordenId); };
+}
+
 // ── Candado de factura de la venta (2026-09-03, decisión de Zuleika) ──────
 // Un contrato "Propio" VENDE los radios: la factura QBO debe estar registrada
 // (Contratos → Equipos → "Registrar factura de venta") ANTES de ponerlos en
@@ -444,6 +522,9 @@ window.entregarOrden = async function (ordenId) {
   // Candado de firma del contrato (ver contratoSinFirmarParaEntrega arriba).
   const sinFirmar = await contratoSinFirmarParaEntrega(orden);
   if (sinFirmar) { abrirModalFirmaPendiente(orden, sinFirmar); return; }
+  // Candado de firma del ANEXO (aumentos con la firma en paralelo — arriba).
+  const anexoSinFirmar = await anexoSinFirmarParaEntrega(orden);
+  if (anexoSinFirmar) { abrirModalFirmaAnexoPendiente(orden, anexoSinFirmar); return; }
   // Candado de factura de la venta (solo contratos "Propio" — ver arriba).
   const sinFactura = await contratoSinFacturaParaEntrega(orden);
   if (sinFactura) { abrirModalFacturaPendiente(orden, sinFactura); return; }

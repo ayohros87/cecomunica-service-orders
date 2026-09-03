@@ -1942,9 +1942,13 @@ window.Centro = {
       // la firma no debe frenar la preparación): bodega puede asignar los
       // seriales del aumento desde que se aprueba comercialmente — la OS solo
       // sale cuando el anexo quede firmado (el trigger exige cierre.derivacion).
-      const preAsignando = g.estado === 'pendiente_firma' && !a.es_ajuste && !a.es_regularizacion;
-      const asignando = this.puedeAsignar()
-        && ((g.estado === 'pendiente_bodega' && g.cierre?.derivacion) || preAsignando);
+      // Con la OS ya creada (sale apenas la asignación se completa, aunque el
+      // anexo siga en firma — 2026-09-03) los seriales dejan de editarse aquí:
+      // pool y orden ya los tienen amarrados.
+      const preAsignando = g.estado === 'pendiente_firma' && !a.es_ajuste && !a.es_regularizacion
+        && !g.ordenes?.programacion_id;
+      const asignando = this.puedeAsignar() && !g.ordenes?.programacion_id
+        && (g.estado === 'pendiente_bodega' || preAsignando);
       cuerpo = `
         ${a.es_ajuste ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
           <b>Anexo de ajuste de tarifa / servicios</b> — sin equipos nuevos;
@@ -2101,8 +2105,9 @@ window.Centro = {
     } else if (g.estado === 'pendiente_firma' && g.tipo === 'aumento') {
       aprobacion = `<div class="cg-senal info" style="margin:10px 0 0;">
            <span><b>Esperando la firma del cliente.</b> Imprime el anexo (deja explícito el período propio
-             del equipo nuevo), recoge la firma y sube el archivo firmado — recién entonces el sistema
-             aplica las líneas y avisa a Bodega.</span>
+             del equipo nuevo), recoge la firma y sube el archivo firmado. La preparación corre
+             <b>en paralelo</b>: bodega asigna y la orden de programación sale sola — la firma solo
+             frena la <b>entrega</b>.</span>
            ${this.puedeCrearGestion() ? `<span style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;">
              <a class="btn btn-ghost cg-act" target="_blank"
                 href="./anexo-aumento.html?g=${encodeURIComponent(g.id)}">Imprimir anexo</a>

@@ -294,6 +294,40 @@ async function main() {
   await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oPropSinFactAdm").set(ENTREGADO, { merge: true }));
   ok("factura: admin exento (override de casos excepcionales)");
 
+  // ── Candado de firma del ANEXO en la ENTREGA (2026-09-03, segunda vuelta) ──
+  // La OS de un aumento sale con el anexo todavía en firma (preparación en
+  // paralelo); el contrato marco ya está activo, así que el candado lee la
+  // gestión: sin cierre.firma no hay ENTREGADO. Reemplazo/demo pasan de largo;
+  // fail-open con gestión inexistente; admin exento.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    const base = { estado_reparacion: "COMPLETADO (EN OFICINA)", tipo_de_servicio: "PROGRAMACIÓN",
+      qc_requerido: true, qc: { resultado: "aprobado" } };
+    await db.doc("contratos/cMarcoActivo").set({ estado: "activo", contrato_id: "ALQ-9" });
+    await db.doc("gestiones/gAumSinFirma").set({ tipo: "aumento", estado: "pendiente_firma",
+      cliente_id: "x", deleted: false, cierre: { aprobacion: true, asignacion: true } });
+    await db.doc("gestiones/gAumFirmado").set({ tipo: "aumento", estado: "en_proceso",
+      cliente_id: "x", deleted: false, cierre: { aprobacion: true, firma: true, derivacion: true, asignacion: true } });
+    await db.doc("gestiones/gReemp").set({ tipo: "reemplazo", estado: "en_proceso",
+      cliente_id: "x", deleted: false, cierre: { asignacion: true } });
+    const conMarco = { aplica: true, contrato_doc_id: "cMarcoActivo" };
+    await db.doc("ordenes_de_servicio/oAumSinFirma").set({ ...base, contrato: conMarco, gestion: { id: "gAumSinFirma", tipo: "aumento" } });
+    await db.doc("ordenes_de_servicio/oAumSinFirmaAdm").set({ ...base, contrato: conMarco, gestion: { id: "gAumSinFirma", tipo: "aumento" } });
+    await db.doc("ordenes_de_servicio/oAumFirmado").set({ ...base, contrato: conMarco, gestion: { id: "gAumFirmado", tipo: "aumento" } });
+    await db.doc("ordenes_de_servicio/oAumRoto").set({ ...base, contrato: conMarco, gestion: { id: "no-existe", tipo: "aumento" } });
+    await db.doc("ordenes_de_servicio/oGesReemp").set({ ...base, contrato: conMarco, gestion: { id: "gReemp", tipo: "reemplazo" } });
+  });
+  await assertFails(as("recepcion").doc("ordenes_de_servicio/oAumSinFirma").set(ENTREGADO, { merge: true }));
+  ok("anexo: aumento con el anexo SIN firmar NO se entrega (aunque el marco esté activo)");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oAumFirmado").set(ENTREGADO, { merge: true }));
+  ok("anexo: con cierre.firma la entrega sale");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oGesReemp").set(ENTREGADO, { merge: true }));
+  ok("anexo: gestión de reemplazo (sin anexo) pasa de largo");
+  await assertSucceeds(as("recepcion").doc("ordenes_de_servicio/oAumRoto").set(ENTREGADO, { merge: true }));
+  ok("anexo: vínculo roto (gestión inexistente) no bloquea — fail-open");
+  await assertSucceeds(as("administrador").doc("ordenes_de_servicio/oAumSinFirmaAdm").set(ENTREGADO, { merge: true }));
+  ok("anexo: admin exento (override de casos excepcionales)");
+
   // ── QC: los cuatro huecos de la auditoría del 2026-08-04 ──────────────────
   const COMPLETADO = "COMPLETADO (EN OFICINA)";
   const seedOrden = (id, data) => testEnv.withSecurityRulesDisabled(async (ctx) => {
