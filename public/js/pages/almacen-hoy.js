@@ -159,6 +159,8 @@ window.AlmacenHoy = (() => {
   // Gestiones esperando a BODEGA (brecha Ola 6, caso GA20260828-01 de
   // C COMUNICA 2026-08-28: el aumento firmado quedó en pendiente_bodega y la
   // bandeja no lo mostraba — bodega solo se enteraba por el correo):
+  //   · aumento en 'pendiente_firma' sin seriales completos (2026-09-03: la
+  //     firma corre en paralelo — bodega puede pre-asignar desde la aprobación)
   //   · aumento en 'pendiente_bodega' (anexo firmado; faltan los seriales)
   //   · reemplazo/demo en 'en_proceso' sin cierre.asignacion
   // La asignación se resuelve en el expediente del Centro (mismo deep-link
@@ -166,13 +168,21 @@ window.AlmacenHoy = (() => {
   async function cargarGestionesBodega() {
     const db = firebase.firestore();
     const snap = await db.collection('gestiones')
-      .where('estado', 'in', ['pendiente_bodega', 'en_proceso']).limit(200).get();
+      .where('estado', 'in', ['pendiente_firma', 'pendiente_bodega', 'en_proceso']).limit(200).get();
     const out = [];
+    const serialesCompletos = (g) => {
+      const total = (g.aumento?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+      const asignados = (g.aumento?.seriales_asignados || []).filter(s => String(s.serial || '').trim()).length;
+      return total > 0 && asignados >= total;
+    };
     snap.docs.forEach(d => {
       const g = { id: d.id, ...d.data() };
       if (g.deleted) return;
       const espera = g.estado === 'pendiente_bodega'
-        || (g.estado === 'en_proceso' && ['reemplazo', 'demo'].includes(g.tipo) && !g.cierre?.asignacion);
+        || (g.estado === 'en_proceso' && ['reemplazo', 'demo'].includes(g.tipo) && !g.cierre?.asignacion)
+        || (g.estado === 'pendiente_firma' && g.tipo === 'aumento'
+            && g.aumento?.es_ajuste !== true && g.aumento?.es_regularizacion !== true
+            && !serialesCompletos(g));
       if (espera) out.push(g);
     });
     const ms = (g) => g.actualizado_at?.toMillis?.() || g.updated_at?.toMillis?.()
@@ -272,7 +282,8 @@ window.AlmacenHoy = (() => {
         let detalle = '';
         if (g.tipo === 'aumento') {
           const a = g.aumento || {};
-          detalle = ` — anexo firmado al <b>${esc(a.contrato_id || '—')}</b>: `
+          detalle = ` — anexo ${g.estado === 'pendiente_firma'
+              ? 'aprobado (<b>firma en paralelo</b>)' : 'firmado'} al <b>${esc(a.contrato_id || '—')}</b>: `
             + (a.lineas || []).map(l => `${Number(l.cantidad || 0)} × ${esc(l.modelo || '?')}`).join(', ');
         } else {
           const n = (g.items || []).length;

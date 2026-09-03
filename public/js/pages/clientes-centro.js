@@ -2371,8 +2371,9 @@ window.Centro = {
       <button type="button" onclick="Centro.wizBaja()">Baja de equipos (parcial, por serial)</button>
       <div class="hd">Cuenta</div>
       ${cuentaHtml}
-      <div class="hd">Comercial</div>
-      <a href="../cotizaciones/index.html">Nueva cotización</a>
+      ${this._puedeCotizar() ? `<div class="hd">Comercial</div>
+      <a href="../cotizaciones/nueva-cotizacion.html?cliente_id=${this.esc(this.cliente.id)}&from=centro">Nueva cotización
+        <span style="display:block; font-size:11px; color:var(--fg-4);">abre el editor con este cliente ya elegido; Cancelar regresa aquí</span></a>` : ''}
       <div class="hd">Cliente</div>
       <a href="./ficha.html?id=${this.esc(this.cliente.id)}&from=centro">Editar datos del cliente</a>
       ${this._puedeMasiva() ? `<a href="./index.html">Edición masiva de clientes
@@ -2383,6 +2384,11 @@ window.Centro = {
   // por aquí y solo los roles que la página acepta (su propio guard: admin y
   // recepción — gerente nunca pasó ese guard, así que no se le ofrece).
   _puedeMasiva() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION].includes(this.rol); },
+
+  // Espejo del guard del editor de cotizaciones (admin/vendedor/jefe_taller);
+  // gerente y recepción ven este menú pero el editor los rebotaría al home,
+  // así que a ellos no se les ofrece la entrada.
+  _puedeCotizar() { return [ROLES.ADMIN, 'admin', ROLES.VENDEDOR].includes(this.rol); },
 
   // Estado de la cuenta para el menú. Los DEMO/TEMP no cuentan (terminan por
   // su propia devolución); lo que define la cuenta son los renovables

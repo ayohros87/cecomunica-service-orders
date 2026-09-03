@@ -171,7 +171,10 @@ async function correoAprobadoresAumento(gid, g) {
   });
 }
 
-async function correoBodega(gid, g) {
+// `anticipo`: el aumento acaba de APROBARSE y la firma del anexo corre en
+// paralelo (2026-09-03, planteamiento de Zuleika: la firma no debe frenar la
+// preparación) — bodega puede asignar desde ya; la OS solo sale al firmarse.
+async function correoBodega(gid, g, { anticipo = false } = {}) {
   const to = await G.bodegaEmailTo();
   if (!to) {
     logger.warn("[onGestionWrite] sin buzón de bodega (email_bodega) — gestión sin aviso", { gid });
@@ -195,26 +198,43 @@ async function correoBodega(gid, g) {
           G.escapeHtml(l.modelo || "—"),
           G.escapeHtml(g.demo?.finalidad || "—"), "",
         ]);
+  const queEspera = g.tipo === "reemplazo"
+    ? "el serial del equipo que sustituye a cada radio"
+    : g.tipo === "aumento"
+      ? "los seriales del aumento"
+      : "los seriales del demo (stock nuevo o refurbished)";
   await G.encolarCorreo({
     to,
-    subject: `${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid}: asignar serial(es) — ${g.cliente_nombre || "Cliente"}`,
+    subject: `${G.TIPO_LABEL[g.tipo] || g.tipo} ${gid}: asignar serial(es)${anticipo ? " (firma del anexo en paralelo)" : ""} — ${g.cliente_nombre || "Cliente"}`,
     preheader: g.tipo === "reemplazo"
       ? `Asignar ${(g.items || []).length} equipo(s) de reemplazo`
-      : `Asignar equipos para demo (nuevo o refurbished)`,
+      : g.tipo === "aumento"
+        ? `Asignar los equipos del aumento`
+        : `Asignar equipos para demo (nuevo o refurbished)`,
     bodyContent: `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">${G.escapeHtml(G.TIPO_LABEL[g.tipo] || g.tipo)} — asignación de equipos</h2>
       <p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
         La gestión <b>${G.escapeHtml(gid)}</b> de <b>${G.escapeHtml(g.cliente_nombre || "—")}</b> espera
-        que Bodega asigne ${g.tipo === "reemplazo" ? "el serial del equipo que sustituye a cada radio" : "los seriales del demo (stock nuevo o refurbished)"}.
-        Al completar la asignación, el sistema crea solo la orden de programación y avisa a Recepción.
+        que Bodega asigne ${queEspera}.
+        ${anticipo
+          ? "El anexo quedó <b>aprobado</b> y la firma del cliente se está consiguiendo <b>en paralelo</b> — puedes asignar los seriales desde ya. La orden de programación saldrá sola cuando el anexo esté firmado."
+          : "Al completar la asignación, el sistema crea solo la orden de programación y avisa a Recepción."}
       </p>
       ${g.tipo === "reemplazo"
         ? G.tablaHtml(["Sale", "Modelo actual", "Modelo solicitado", "Motivo"], filas)
         : G.tablaHtml(["Cantidad", "Modelo", g.tipo === "aumento" ? "Detalle" : "Finalidad", ""], filas)}`,
     ctaUrl: G.urlGestion(g, gid),
     ctaLabel: "Asignar seriales",
-    meta: { gestion_id: gid, paso: "bodega" },
+    meta: { gestion_id: gid, paso: anticipo ? "bodega_anticipo" : "bodega" },
   });
+}
+
+// Los seriales del aumento ya están completos (pre-asignados durante la firma):
+// misma cuenta que asignacionCompleta, sin exigir cierre.derivacion.
+function serialesAumentoCompletos(g) {
+  const total = (g.aumento?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
+  const asignados = (g.aumento?.seriales_asignados || []).filter(s => String(s.serial || "").trim()).length;
+  return total > 0 && asignados >= total;
 }
 
 async function correoRecepcion(gid, g, ordenIds) {
@@ -296,14 +316,34 @@ module.exports = onDocumentWritten(
           await G.registrarEvento(gid, "correo_aprobacion", "Correo de aprobación enviado a administradores (excepción propio sin garantía).");
         }
       }
+      // Aumento APROBADO comercialmente → aviso ANTICIPADO a bodega
+      // (2026-09-03, planteamiento de Zuleika: la firma no debe frenar la
+      // preparación): bodega asigna los seriales MIENTRAS el vendedor consigue
+      // la firma del anexo. La OS no puede salir antes de la firma —
+      // asignacionCompleta exige cierre.derivacion, que solo estampa B3 al
+      // firmarse — así que el candado queda en la entrega, no en la
+      // preparación. Regularización/ajuste no pasan por bodega.
+      const aumentoAprobado = after.tipo === "aumento"
+        && after.estado === "pendiente_firma"
+        && before && before.estado === "pendiente_aprobacion"
+        && after.aumento?.es_regularizacion !== true
+        && after.aumento?.es_ajuste !== true;
+      if (aumentoAprobado) {
+        await correoBodega(gid, after, { anticipo: true });
+        await G.registrarEvento(gid, "correo_bodega",
+          "Aviso anticipado a Bodega: puede asignar los seriales mientras se consigue la firma del anexo.");
+      }
       // Un anexo de REGULARIZACIÓN no pasa por bodega: los equipos ya están
-      // con el cliente (B3 los amarra directo al firmarse).
+      // con el cliente (B3 los amarra directo al firmarse). Un aumento cuyos
+      // seriales ya quedaron pre-asignados durante la firma tampoco recibe el
+      // segundo correo: a bodega no le queda nada que hacer y la OS sale sola
+      // unos segundos después (sección C de este mismo flanco).
       const entraABodega = after.tipo !== "baja" && after.aumento?.es_regularizacion !== true
         && after.aumento?.es_ajuste !== true && (
         (creada && after.estado === "pendiente_bodega") ||
         (before && ["pendiente_aprobacion", "pendiente_firma"].includes(before.estado)
           && after.estado === "pendiente_bodega"));
-      if (entraABodega) {
+      if (entraABodega && !(after.tipo === "aumento" && serialesAumentoCompletos(after))) {
         await correoBodega(gid, after);
         await G.registrarEvento(gid, "correo_bodega", "Aviso enviado a Bodega para asignar seriales.");
       }
