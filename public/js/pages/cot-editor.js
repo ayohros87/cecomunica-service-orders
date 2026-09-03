@@ -892,7 +892,7 @@
       await CotState.enqueueAprobacionMail({ doc, docId, user });
     } catch (e) {
       console.warn('No se pudo encolar el correo de aprobación:', e);
-      Toast.show('⚠️ Cotización guardada, pero no se pudo encolar el correo de aprobación.', 'warn');
+      Toast.show('Cotización guardada, pero no se pudo encolar el correo de aprobación.', 'warn');
     }
   }
 

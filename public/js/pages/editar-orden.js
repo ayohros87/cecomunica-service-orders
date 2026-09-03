@@ -1,6 +1,9 @@
 // @ts-nocheck
     let currentUser = null;
     const form = document.getElementById("ordenForm");
+    // Guardia de salida (kit de formularios): cambios sin guardar avisan antes
+    // de cerrar la pestaña; el submit la libera solo.
+    if (window.FormKit) FormKit.guardia(form);
     const mensaje = document.getElementById("mensaje");
     const params = new URLSearchParams(window.location.search);
     const ordenId = params.get("id");
@@ -322,14 +325,14 @@
         if (!contratoNoAplica.checked) {
           // Debe tener contrato seleccionado
           if (!contratoSelect.value) {
-            mostrarToast("⚠️ Para PROGRAMACIÓN debe seleccionar un contrato o marcar 'No aplica'.", "error");
+            mostrarToast("Para PROGRAMACIÓN selecciona un contrato o marca 'No aplica'.", "error");
             return;
           }
         } else {
           // Debe tener motivo REAL (≥10 chars) — mismo umbral que nueva-orden
           // (auditoría órdenes P2): sin él se colaban "n/a" y puntos.
           if (contratoMotivo.value.trim().length < 10) {
-            mostrarToast("⚠️ Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "error");
+            mostrarToast("Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "error");
             return;
           }
         }
@@ -414,12 +417,12 @@
         
         await OrdenesService.mergeOrder(ordenId, data);
         
-        mostrarToast("✅ Orden actualizada correctamente", "ok");
+        mostrarToast("Orden actualizada.", "ok");
         // Volver A LA ORDEN en la lista (no al index pelado): conserva la fila
         // a la vista sin perder el contexto — el deep-link ?orden= ya existe.
         setTimeout(() => window.location.href = `index.html?orden=${encodeURIComponent(ordenId)}`, 1500);
       } catch (error) {
-        mostrarToast("❌ Error al guardar: " + error.message, "error");
+        mostrarToast("No se pudo guardar: " + error.message, "error");
         guardandoEdicion = false;
         if (btnGuardarEdicion) btnGuardarEdicion.disabled = false;
       }

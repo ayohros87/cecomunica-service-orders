@@ -176,6 +176,10 @@ function refreshRenovacionEditorUI() {
   if (refurbWrap) refurbWrap.classList.toggle("visible", !!checkbox.checked);
 }
 
+// Guardia de salida (kit de formularios): cambios sin guardar avisan antes de
+// cerrar la pestaña; el submit la libera solo.
+if (window.FormKit) FormKit.guardia(document.getElementById("formEditar"));
+
 document.getElementById("formEditar").addEventListener("submit", async e => {
   e.preventDefault();
 
@@ -184,7 +188,7 @@ document.getElementById("formEditar").addEventListener("submit", async e => {
   // Mismo candado que el alta (nc-guardar.js): "Otro" sin meses guardaba
   // una duración " meses" vacía que llegaba al documento impreso.
   if (duracionSeleccionada === "Otro" && !(parseInt(otraDuracion, 10) > 0)) {
-    Toast.show('⚠️ Eligió duración "Otro": indique el número de meses.', 'warn');
+    Toast.show('Elegiste duración "Otro": indica el número de meses.', 'warn');
     document.getElementById("otra_duracion").focus();
     return;
   }

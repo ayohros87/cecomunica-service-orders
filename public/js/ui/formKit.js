@@ -197,8 +197,33 @@
     };
   }
 
+  // Guardia de salida SUELTA, para formularios legacy con su propio botón y
+  // flujo de guardado: con cambios sin guardar, cerrar la pestaña o navegar
+  // dispara el aviso del navegador. El submit la libera (así el redirect
+  // post-guardado no pregunta); si la validación del handler falla, el
+  // siguiente teclazo la re-arma.
+  function guardia(form) {
+    let sucio = false;
+    const marca = () => { sucio = true; };
+    form.addEventListener("input", marca);
+    form.addEventListener("change", marca);
+    form.addEventListener("submit", () => { sucio = false; });
+    const onBU = (e) => {
+      if (!sucio) return undefined;
+      e.preventDefault();
+      e.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", onBU);
+    return {
+      esSucio: () => sucio,
+      limpiar: () => { sucio = false; },
+      soltar: () => { sucio = false; window.removeEventListener("beforeunload", onBU); },
+    };
+  }
+
   if (typeof window !== "undefined") {
-    window.FormKit = { VALIDA, esValido, validarCampo, crear, enlazarValidacion };
+    window.FormKit = { VALIDA, esValido, validarCampo, crear, enlazarValidacion, guardia };
   }
   // Para los tests de node (sin DOM): exporta solo lo puro.
   if (typeof module !== "undefined" && module.exports) {

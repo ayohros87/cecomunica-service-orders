@@ -1,5 +1,8 @@
 // @ts-nocheck
     const form = document.getElementById("ordenForm");
+    // Guardia de salida (kit de formularios): media orden a medio llenar no se
+    // pierde en silencio al cerrar la pestaña. El submit la libera solo.
+    if (window.FormKit) FormKit.guardia(form);
     const mensaje = document.getElementById("mensaje");
     const clienteSelect = document.getElementById("cliente");
     const tipoSelect = document.getElementById("tipo");
@@ -172,7 +175,7 @@
         }
       } catch (error) {
         console.error("Error cargando contratos:", error);
-        mostrarMensaje("⚠️ Error al cargar contratos: " + error.message, "rojo");
+        mostrarMensaje("No se pudieron cargar los contratos: " + error.message, "rojo");
       }
     }
 
@@ -471,7 +474,7 @@
       
       // Validación específica para VISITA TECNICA
       if (esVisita(tipoSelect.value) && !visitaSitio.value.trim()) {
-        mostrarMensaje("⚠️ Para VISITA TÉCNICA indique el sitio / ubicación de la visita.", "rojo");
+        mostrarMensaje("Para VISITA TÉCNICA indica el sitio o la ubicación de la visita.", "rojo");
         return;
       }
 
@@ -481,7 +484,7 @@
           // Debe tener contrato seleccionado
           if (!contratoSelect.value) {
             const t = esEntrada(tipoSelect.value) ? "ENTRADA" : "PROGRAMACIÓN";
-            mostrarMensaje(`⚠️ Para ${t} debe seleccionar un contrato o marcar 'No aplica'.`, "rojo");
+            mostrarMensaje(`Para ${t} selecciona un contrato o marca 'No aplica'.`, "rojo");
             return;
           }
         } else {
@@ -489,7 +492,7 @@
           // se colaban "n/a" y puntos — el motivo es lo único que explica por
           // qué una PROGRAMACIÓN/ENTRADA quedó fuera de contrato.
           if (contratoMotivo.value.trim().length < 10) {
-            mostrarMensaje("⚠️ Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "rojo");
+            mostrarMensaje("Indica el motivo por el cual no aplica contrato (mínimo 10 caracteres).", "rojo");
             return;
           }
         }
@@ -697,14 +700,14 @@ ${window.location.origin}/ordenes/index.html
           const auto = esProgramacion(tipoSelect.value);
           destino = `nuevo-batch.html?orden_id=${encodeURIComponent(id)}${auto ? "&jalar=contrato" : ""}`;
           aviso = auto
-            ? "✅ Orden guardada. Abriendo la carga de equipos con los seriales del contrato…"
-            : "✅ Orden guardada. Abriendo la carga de equipos…";
+            ? "Orden guardada. Abriendo la carga de equipos con los seriales del contrato…"
+            : "Orden guardada. Abriendo la carga de equipos…";
         } else if (!prefillVenta && !esVisita(tipoSelect.value)) {
           destino = `agregar-equipo.html?orden_id=${encodeURIComponent(id)}`;
-          aviso = "✅ Orden guardada. Abriendo la captura de equipos…";
+          aviso = "Orden guardada. Abriendo la captura de equipos…";
         } else {
           destino = `index.html?orden=${encodeURIComponent(id)}`;
-          aviso = "✅ Orden guardada correctamente.";
+          aviso = "Orden guardada.";
         }
         mostrarMensaje(aviso);
         setTimeout(() => window.location.href = destino, 800);
