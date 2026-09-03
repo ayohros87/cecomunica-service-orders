@@ -923,15 +923,11 @@ body.hide-fecha-entrega .fecha-entrega { display: none !important; }
 /* ======================================
    ESTADO BADGE + TIPO CHIP
    ====================================== */
-/* Left-border status accent — td:first-child to work with border-collapse.
-   The .estado-pill rules previously here were retired by R2 (chip migration);
-   per-order state badges now use .chip-estado.chip-{state} from ceco-ui.css. */
-tr[data-estado="POR ASIGNAR"] td:first-child  { border-left: 4px solid #ef4444; }
-tr[data-estado="RECIBIDO EN MOSTRADOR"] td:first-child { border-left: 4px solid #0EA5E9; }
-tr[data-estado="ASIGNADO"] td:first-child      { border-left: 4px solid #f59e0b; }
-tr[data-estado*="COMPLETADO"] td:first-child   { border-left: 4px solid var(--accent); }
-tr[data-estado*="ENTREGADO"] td:first-child    { border-left: 4px solid #22c55e; }
-tr[data-estado*="CERRADA"] td:first-child      { border-left: 4px solid #10b981; }
+/* El rail de color izquierdo por estado se retiró (2026-09-03, revisión de
+   densidad): era la TERCERA codificación del mismo dato en la fila (rail +
+   dot del chip + texto del chip). El chip de estado queda como única voz.
+   Las tarjetas móviles conservan el suyo (.card-contrato[data-estado]) —
+   allí el chip compite con más contenido y el rail sí orienta el scroll. */
 
 /* Tipo de servicio chip */
 .tipo-chip {
@@ -946,11 +942,14 @@ tr[data-estado*="CERRADA"] td:first-child      { border-left: 4px solid #10b981;
   letter-spacing: 0.2px;
   text-transform: uppercase;
 }
-.tipo-chip--reparacion    { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
-.tipo-chip--programacion  { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
-.tipo-chip--mantenimiento { background: #f0fdfa; color: #0f766e; border-color: #99f6e4; }
-.tipo-chip--venta         { background: #faf5ff; color: #7c3aed; border-color: #e9d5ff; }
-.tipo-chip--visita        { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
+/* Color SOLO para los tipos con circuito propio (DEVOLUCION/VISITA/ENTRADA):
+   el caso común va neutro para que el chip de ESTADO sea el único color
+   fuerte de la fila (2026-09-03). Sin fondo ni borde tampoco trunca: el
+   texto gris respira en la misma columna donde "PROGRAMACION" se cortaba. */
+.tipo-chip--neutro     { background: transparent; color: var(--fg-3); border-color: transparent; padding-left: 0; font-weight: 500; }
+.tipo-chip--devolucion { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.tipo-chip--visita     { background: #f0f9ff; color: #0369a1; border-color: #bae6fd; }
+.tipo-chip--entrada    { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
 
 /* ======================================
    EQUIPMENT TABLE (inside expanded row)
@@ -1238,31 +1237,29 @@ tr.activo .flecha { color: var(--accent); transform: rotate(90deg); }
   overflow: hidden;
 }
 .btn-flujo:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.10); }
-.btn-flujo--asignar   { color: var(--accent-press); border-color: var(--accent-line); }
-.btn-flujo--asignar:hover   { background: var(--accent-soft); }
-.btn-flujo--recibir   { color: #075985; border-color: #bae6fd; }
-.btn-flujo--recibir:hover   { background: #f0f9ff; }
-.btn-flujo--completar { color: #065f46; border-color: #6ee7b7; }
-.btn-flujo--completar:hover { background: #ecfdf5; }
-.btn-flujo--entregar  { color: #5b21b6; border-color: #c4b5fd; }
-.btn-flujo--entregar:hover  { background: #f5f3ff; }
-.btn-flujo--ver-entrega { color: #1e40af; border-color: #bfdbfe; }
-.btn-flujo--ver-entrega:hover { background: #eff6ff; }
-.btn-flujo--ver-recepcion { color: #075985; border-color: #bae6fd; }
-.btn-flujo--ver-recepcion:hover { background: #f0f9ff; }
-/* Control de calidad: pendiente resaltado (ámbar), aprobado consulta (verde),
-   rechazo consulta del motivo (rojo). El Entregar bloqueado por QC pendiente
-   sigue clickeable — entregarOrden avisa y abre el checklist al rol de QC. */
+/* Paleta ÚNICA y quieta (2026-09-03, revisión de densidad): cada acción tenía
+   su propio color y la columna Acciones era un arcoíris permanente que
+   competía con el chip de estado. El botón de flujo ya se distingue por ser
+   el único con texto de acción en la fila. El color queda reservado para las
+   dos excepciones que sí son alertas: el rechazo de QC (rojo) y el QC
+   pendiente que frena la entrega (ámbar). */
+.btn-flujo--asignar, .btn-flujo--recibir, .btn-flujo--completar,
+.btn-flujo--entregar, .btn-flujo--ver-entrega, .btn-flujo--ver-recepcion,
+.btn-flujo--qc-ok, .btn-flujo--checkin-dev {
+  color: var(--fg-2); border-color: var(--border-default); background: var(--surface-card);
+}
+.btn-flujo--asignar:hover, .btn-flujo--recibir:hover, .btn-flujo--completar:hover,
+.btn-flujo--entregar:hover, .btn-flujo--ver-entrega:hover, .btn-flujo--ver-recepcion:hover,
+.btn-flujo--qc-ok:hover, .btn-flujo--checkin-dev:hover {
+  color: var(--accent); border-color: var(--accent); background: var(--accent-soft);
+}
+/* Excepciones con semántica de alerta — se quedan con su color. El Entregar
+   bloqueado por QC pendiente sigue clickeable — entregarOrden avisa y abre
+   el checklist al rol de QC. */
 .btn-flujo--qc         { color: #92400e; border-color: #fcd34d; background: #fffbeb; }
 .btn-flujo--qc:hover   { background: #fef3c7; }
-.btn-flujo--qc-ok      { color: #065f46; border-color: #6ee7b7; }
-.btn-flujo--qc-ok:hover { background: #ecfdf5; }
 .btn-flujo--qc-rechazo { color: #991b1b; border-color: #fecaca; }
 .btn-flujo--qc-rechazo:hover { background: #fef2f2; }
-/* DEVOLUCIÓN con equipos pendientes: prompt de captura (ámbar, misma paleta
-   que QC pendiente) — el verde con package-check se leía como "ya están". */
-.btn-flujo--checkin-dev       { color: #92400e; border-color: #fcd34d; background: #fffbeb; }
-.btn-flujo--checkin-dev:hover { background: #fef3c7; }
 .btn-flujo--bloqueado  { opacity: 0.45; }
 .btn-flujo .lucide    { width: 14px; height: 14px; vertical-align: -2px; color: inherit; }
 
@@ -3034,13 +3031,16 @@ tr.activo:hover { background: #f0f9ff !important; }
 /* Edad en cola (§5.22): pill discreto junto a la fecha en POR ASIGNAR /
    RECIBIDO estancados. Informa sin estorbar: sin animación, sin bloqueo. */
 .edad-chip {
-  display: inline-block;
-  margin-left: 4px;
+  /* En su propia línea bajo la fecha (2026-09-03): inline, el nowrap+ellipsis
+     de la celda lo cortaba a "11/08/2026 …" — justo el dato de estancamiento
+     que el chip existe para mostrar. */
+  display: block;
+  width: max-content;
+  margin-top: 3px;
   padding: 1px 6px;
   border-radius: 999px;
   font-size: 10.5px;
   font-weight: 700;
-  vertical-align: middle;
   cursor: help;
 }
 .edad-chip--alta    { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }

@@ -297,12 +297,15 @@ function getEstadoClass(estado) {
 function tipoChip(tipo) {
   if (!tipo) return '';
   const t = tipo.trim().toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  // Color SOLO para los tipos con circuito propio fuera del flujo de taller
+  // (2026-09-03, revisión de densidad): son los raros Y los que cambian cómo
+  // se trabaja la fila. El caso común (REPARACION ≈80% de la bandeja) va
+  // neutro — un chip brillante en 8 de cada 10 filas no señala nada y
+  // competía con el chip de estado, que es el que debe mandar.
   const cls =
-    t.includes('REPAR')   ? 'tipo-chip--reparacion'   :
-    t.includes('PROGRAM') ? 'tipo-chip--programacion' :
-    t.includes('MANTEN')  ? 'tipo-chip--mantenimiento' :
-    t.includes('VENTA')   ? 'tipo-chip--venta'        :
-    t.includes('VISITA')  ? 'tipo-chip--visita'       : '';
+    t.includes('DEVOL')   ? 'tipo-chip--devolucion' :
+    t.includes('VISITA')  ? 'tipo-chip--visita'     :
+    t.includes('ENTRADA') ? 'tipo-chip--entrada'    : 'tipo-chip--neutro';
   return `<span class="tipo-chip ${cls}">${tipo.trim()}</span>`;
 }
 

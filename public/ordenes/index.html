@@ -28,7 +28,7 @@
        en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el
        aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
-  <link rel="stylesheet" href="../css/ordenes-index.css?v=firma1">
+  <link rel="stylesheet" href="../css/ordenes-index.css?v=calma1">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
@@ -67,7 +67,7 @@
 <script defer src="../js/ui/modal.js"></script>
 <!-- firmaPad DIFERIDO (P3.15): solo lo usa el check-in de devolución;
      lo trae CargaDiferida.devolucion() al primer uso. -->
-<script defer src="../js/pages/ordenes-state.js?v=prog1"></script>
+<script defer src="../js/pages/ordenes-state.js?v=prog2"></script>
 <script defer src="../js/pages/ordenes-data.js?v=dup1"></script>
 <script defer src="../js/pages/ordenes-render.js?v=prog2"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq3"></script>
@@ -204,31 +204,11 @@
   </div>
 </div>
 
-<!-- KPIs de señal (desktop). El contenedor lleva .estado-chips-bar para que
-     actualizarResumen() llene los [data-count]; los botones disparan el mismo
-     handler delegado de los chips (filtrar-estado-chip). Cero JS nuevo. -->
-<div class="os-kpis estado-chips-bar" id="ordenesKpis">
-  <button type="button" class="os-kpi os-kpi--alert" data-action="filtrar-estado-chip" data-estado="POR ASIGNAR">
-    <span class="os-kpi__label"><i data-lucide="alert-circle"></i> Por asignar</span>
-    <span class="os-kpi__val" data-count="POR ASIGNAR">0</span>
-    <span class="os-kpi__sub">requieren técnico</span>
-  </button>
-  <button type="button" class="os-kpi" data-action="filtrar-estado-chip" data-estado="ASIGNADO">
-    <span class="os-kpi__label"><i data-lucide="hammer"></i> Asignadas</span>
-    <span class="os-kpi__val" data-count="ASIGNADO">0</span>
-    <span class="os-kpi__sub">en taller</span>
-  </button>
-  <button type="button" class="os-kpi" data-action="filtrar-estado-chip" data-estado="COMPLETADO (EN OFICINA)">
-    <span class="os-kpi__label"><i data-lucide="package-check"></i> Completadas (en oficina)</span>
-    <span class="os-kpi__val" data-count="COMPLETADO (EN OFICINA)">0</span>
-    <span class="os-kpi__sub">para entregar</span>
-  </button>
-  <button type="button" class="os-kpi" data-action="filtrar-estado-chip" data-estado="ENTREGADO AL CLIENTE">
-    <span class="os-kpi__label"><i data-lucide="handshake"></i> Entregadas</span>
-    <span class="os-kpi__val" data-count="ENTREGADO AL CLIENTE">0</span>
-    <span class="os-kpi__sub">al cliente</span>
-  </button>
-</div>
+<!-- Las 4 tarjetas KPI que vivían aquí se retiraron (2026-09-03, revisión de
+     densidad): repetían los MISMOS números y los MISMOS clics que la barra de
+     chips de abajo, y costaban ~120px de altura antes de la primera orden.
+     La función de señal la cumple el home; dentro del módulo, los chips con
+     conteo bastan. -->
 
 <!-- Tarjeta de filtros -->
 <div class="card filters-card-sticky filters-card--desktop" id="desktopFiltersCard">
@@ -295,6 +275,26 @@
         </button>
         <div class="overflow-menu-dropdown" id="presetsMenu"></div>
       </div>
+      <!-- Tipo y Técnico viven en ESTA fila desde 2026-09-03 (revisión de
+           densidad): tenían una banda propia con etiquetas encima que costaba
+           ~56px; los selects se explican solos ("Tipo (todos)"). El select de
+           Estado sigue oculto como espejo de los chips. -->
+      <select id="filtroTipo" class="filter-select" data-action="filtrar-tipo" aria-label="Filtrar por tipo">
+        <option value="">Tipo (todos)</option>
+      </select>
+      <select id="filtroTecnico" class="filter-select" data-action="filtrar-tecnico" aria-label="Filtrar por técnico">
+        <option value="">Técnico (todos)</option>
+      </select>
+      <select id="filtroEstado" class="filter-select" data-action="filtrar-estado" hidden aria-hidden="true" tabindex="-1">
+        <option value="">Todos</option>
+        <option value="POR ASIGNAR">POR ASIGNAR</option>
+        <option value="RECIBIDO EN MOSTRADOR">RECIBIDO EN MOSTRADOR</option>
+        <option value="ASIGNADO">ASIGNADO</option>
+        <option value="COMPLETADO (EN OFICINA)">COMPLETADO (EN OFICINA)</option>
+        <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
+        <option value="CERRADA (VISITA)">CERRADA (VISITA)</option>
+        <option value="CERRADA (ENTRADA)">CERRADA (ENTRADA)</option>
+      </select>
     </div>
 
     <!-- El ordenamiento de escritorio vive en las CABECERAS de la tabla
@@ -304,6 +304,16 @@
          siguen leyendo/escribiendo. "Mostrar fecha entrega" vive en el menú
          "Más" del topbar. -->
     <div class="right">
+      <label class="filter-toggle" for="toggleMisOrdenes">
+        <input type="checkbox" id="toggleMisOrdenes" class="toggle-input" data-action="filtrar-mias">
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">Mis órdenes</span>
+      </label>
+      <!-- Cola de control de calidad. Sin control visible propio: lo togglean
+           el chip "QC n" de la barra de estados (data-action="filtrar-qc") y
+           ?qc=1 en la URL (CTA del correo diario y señal del home). -->
+      <input type="checkbox" id="filtroQcPendiente" hidden>
+      <div id="resumenOrdenes" role="status" aria-live="polite" aria-atomic="true"></div>
       <select id="campoOrdenamiento" data-action="cambiar-orden" hidden aria-hidden="true" tabindex="-1">
         <option value="ordenId">Número</option>
         <option value="cliente_nombre">Cliente</option>
@@ -324,52 +334,9 @@
     </div>
   </div>
 
-  <!-- Estado y Resumen como chips clickeables -->
-  <div class="toolbar mt-8 filtros-row">
-    <div class="left filtros-inline">
-      <div class="filter-field">
-        <label for="filtroTipo" class="form-label-bold">Tipo</label>
-        <select id="filtroTipo" class="filter-select" data-action="filtrar-tipo">
-          <option value="">Tipo (todos)</option>
-        </select>
-      </div>
-      <!-- Estado dropdown kept for URL/preset sync; visually replaced by
-           the chip bar above (ORDENES_INDEX_IMPROVEMENTS §4.3). The chip
-           handler mirrors its value here so getActiveFilters() still sees
-           the right value without code changes. -->
-      <div class="filter-field filter-field--hidden" aria-hidden="true">
-        <label for="filtroEstado" class="form-label-bold">Estado</label>
-        <select id="filtroEstado" class="filter-select" data-action="filtrar-estado" tabindex="-1">
-          <option value="">Todos</option>
-          <option value="POR ASIGNAR">POR ASIGNAR</option>
-          <option value="RECIBIDO EN MOSTRADOR">RECIBIDO EN MOSTRADOR</option>
-          <option value="ASIGNADO">ASIGNADO</option>
-          <option value="COMPLETADO (EN OFICINA)">COMPLETADO (EN OFICINA)</option>
-          <option value="ENTREGADO AL CLIENTE">ENTREGADO AL CLIENTE</option>
-          <option value="CERRADA (VISITA)">CERRADA (VISITA)</option>
-          <option value="CERRADA (ENTRADA)">CERRADA (ENTRADA)</option>
-        </select>
-      </div>
-      <div class="filter-field">
-        <label for="filtroTecnico" class="form-label-bold">Técnico</label>
-        <select id="filtroTecnico" class="filter-select" data-action="filtrar-tecnico">
-          <option value="">Técnico (todos)</option>
-        </select>
-      </div>
-    </div>  
-    <div class="right resumen resumen-compacto">
-      <label class="filter-toggle" for="toggleMisOrdenes">
-        <input type="checkbox" id="toggleMisOrdenes" class="toggle-input" data-action="filtrar-mias">
-        <span class="toggle-slider"></span>
-        <span class="toggle-label">Mis órdenes</span>
-      </label>
-      <!-- Cola de control de calidad. Sin control visible propio: lo togglean
-           el chip "QC n" de la barra de estados (data-action="filtrar-qc") y
-           ?qc=1 en la URL (CTA del correo diario y señal del home). -->
-      <input type="checkbox" id="filtroQcPendiente" hidden>
-      <div id="resumenOrdenes" role="status" aria-live="polite" aria-atomic="true"></div>
-    </div>
-  </div>
+  <!-- La banda "Tipo/Estado/Técnico + Mis órdenes" que vivía aquí se fusionó
+       con la fila del buscador (2026-09-03): en desktop cabían de sobra y la
+       banda extra retrasaba la primera orden otra media pulgada. -->
 </div>
 <div id="loader" class="loader-center hidden">
   <div class="loader"></div>
