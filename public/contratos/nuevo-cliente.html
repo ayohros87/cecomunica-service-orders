@@ -21,6 +21,8 @@
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
   <!-- Rediseño Command Center F5: rail lateral (híbrido). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <!-- Kit de formularios: esconde .form-error-msg hasta que el campo falle -->
+  <link rel="stylesheet" href="../css/form-kit.css?v=fk3">
 
   <!-- Firebase compat -->
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -66,19 +68,22 @@
         <div class="form-grid-2">
           <div class="form-field" style="grid-column:1/-1">
             <label class="form-label" for="nombre">Nombre del cliente <span class="req"></span></label>
-            <input class="form-input" type="text" id="nombre" required>
+            <input class="form-input" type="text" id="nombre" data-fk="Nombre" required>
+            <span class="form-error-msg">El nombre no puede quedar vacío.</span>
           </div>
 
           <div class="form-field">
             <label class="form-label" for="ruc">RUC / Cédula <span class="req"></span></label>
-            <input class="form-input" type="text" id="ruc" required style="font-family:var(--font-mono);">
+            <input class="form-input" type="text" id="ruc" data-fk="RUC" data-fk-valida="ruc" required inputmode="numeric" style="font-family:var(--font-mono);">
             <span class="form-hint">Ej: 15567890 (sin DV)</span>
+            <span class="form-error-msg">Revisa el RUC: solo admite números y guiones.</span>
           </div>
 
           <div class="form-field">
             <label class="form-label" for="dv">DV</label>
-            <input class="form-input" type="text" id="dv" inputmode="numeric" pattern="\d{1,2}" maxlength="2" placeholder="Ej. 55" title="1-2 dígitos" style="font-family:var(--font-mono);">
+            <input class="form-input" type="text" id="dv" data-fk="DV" data-fk-valida="dv" inputmode="numeric" maxlength="2" placeholder="Ej. 55" style="font-family:var(--font-mono);">
             <span class="form-hint">Si aplica, ingresa 1–2 dígitos.</span>
+            <span class="form-error-msg">El DV son 1 o 2 dígitos.</span>
           </div>
         </div>
       </div>
@@ -116,16 +121,18 @@
             <label class="form-label" for="telefono">Teléfono</label>
             <div class="form-input-wrap">
               <span class="form-input-prefix"><i data-lucide="phone" style="width:15px;height:15px;"></i></span>
-              <input class="form-input" type="text" id="telefono">
+              <input class="form-input" type="text" id="telefono" data-fk="Teléfono" data-fk-valida="tel" inputmode="tel">
             </div>
+            <span class="form-error-msg">Solo números, espacios, guiones y el prefijo +.</span>
           </div>
 
           <div class="form-field">
             <label class="form-label" for="email">Email</label>
             <div class="form-input-wrap">
               <span class="form-input-prefix"><i data-lucide="mail" style="width:15px;height:15px;"></i></span>
-              <input class="form-input" type="email" id="email">
+              <input class="form-input" type="email" id="email" data-fk="Correo" data-fk-valida="email">
             </div>
+            <span class="form-error-msg">Ese correo no parece válido.</span>
           </div>
         </div>
       </div>
@@ -143,7 +150,8 @@
 
           <div class="form-field">
             <label class="form-label" for="representante_cedula">Cédula del representante</label>
-            <input class="form-input" type="text" id="representante_cedula" style="font-family:var(--font-mono);">
+            <input class="form-input" type="text" id="representante_cedula" data-fk="Cédula del representante" data-fk-valida="cedula" style="font-family:var(--font-mono);">
+            <span class="form-error-msg">Formato de cédula panameña, por ejemplo 8-712-1043 o PE-12-345.</span>
           </div>
         </div>
       </div>
@@ -240,7 +248,8 @@
 
   <script defer src="../js/ui/toast.js"></script>
   <script defer src="../js/ui/modal.js"></script>
-  <script src="../js/pages/nuevo-cliente.js?v=nc2" defer></script>
+  <script defer src="../js/ui/formKit.js?v=fk2"></script>
+  <script src="../js/pages/nuevo-cliente.js?v=nc3" defer></script>
   <script src="../js/pages/cliente-documentos.js" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->

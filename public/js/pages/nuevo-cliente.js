@@ -79,14 +79,16 @@ auth.onAuthStateChanged(user => {
       itbms_motivo_exencion: document.getElementById("itbms_motivo_exencion")?.value || "",
     };
 
-    // 2) Validaciones mínimas
-    if (!raw.nombre.trim()) { mostrarMensaje("⚠️ Debes ingresar un nombre", "red"); return; }
-    if (raw.nombre.includes("/")) { mostrarMensaje("❌ El nombre no puede contener '/'", "red"); return; }
+    // 2) Validación de formato junto al campo (kit); los checks inline quedan
+    //    de respaldo por si formKit no cargó.
+    if (window.FormKit && typeof window._fkValidarTodo === "function" && !window._fkValidarTodo()) return;
+    if (!raw.nombre.trim()) { mostrarMensaje("Debes ingresar un nombre.", "red"); return; }
+    if (raw.nombre.includes("/")) { mostrarMensaje("El nombre no puede contener '/'.", "red"); return; }
     if (raw.dv.trim() && !/^\d{1,2}$/.test(raw.dv.trim())) {
-      mostrarMensaje("❌ DV inválido. Debe tener 1–2 dígitos.", "red"); return;
+      mostrarMensaje("El DV son 1 o 2 dígitos.", "red"); return;
     }
     if (raw.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.email.trim().toLowerCase())) {
-      mostrarMensaje("❌ Email inválido.", "red"); return;
+      mostrarMensaje("Ese correo no parece válido.", "red"); return;
     }
 
     // 3) Payload normalizado (single source of truth en el service)
@@ -96,16 +98,16 @@ auth.onAuthStateChanged(user => {
     if (!clienteId) {
       if (cliente.rucdv_norm && cliente.dv_norm) {
         if (await ClientesService.existsActiveByNorm("rucdv_norm", cliente.rucdv_norm)) {
-          mostrarMensaje("❌ Ya existe un cliente con ese RUC + DV.", "red"); return;
+          mostrarMensaje("Ya existe un cliente con ese RUC + DV.", "red"); return;
         }
       }
       if (cliente.ruc_norm) {
         if (await ClientesService.existsActiveByNorm("ruc_norm", cliente.ruc_norm)) {
-          mostrarMensaje("❌ Ya existe un cliente con ese RUC/Cédula.", "red"); return;
+          mostrarMensaje("Ya existe un cliente con ese RUC/Cédula.", "red"); return;
         }
       }
       if (await ClientesService.existsActiveByNorm("nombre_norm", cliente.nombre_norm)) {
-        mostrarMensaje("❌ Ya existe un cliente con ese nombre.", "red"); return;
+        mostrarMensaje("Ya existe un cliente con ese nombre.", "red"); return;
       }
     }
 
@@ -118,7 +120,7 @@ auth.onAuthStateChanged(user => {
     }
 
     // 6) Salida según contexto
-    mostrarMensaje(clienteId ? "✅ Cliente actualizado correctamente" : "✅ Cliente guardado exitosamente", "green");
+    mostrarMensaje(clienteId ? "Cliente actualizado." : "Cliente guardado.", "green");
     setTimeout(() => {
       if (params.get("from") === "clientes") {
         window.location.href = "../clientes/index.html";
@@ -139,11 +141,17 @@ window.addEventListener("DOMContentLoaded", async () => {
   const clienteId = params.get("id");
   let ipActual = "";
 
+  // Validación de formato junto al campo (kit de formularios). Devuelve el
+  // validador que el submit usa como primera puerta.
+  if (window.FormKit) {
+    window._fkValidarTodo = FormKit.enlazarValidacion(document.getElementById("formCliente"));
+  }
+
   // Wire del botón "agregar IP" (independiente del modo crear/editar).
   document.getElementById("addIP")?.addEventListener("click", agregarIP);
 
   if (clienteId) {
-    document.getElementById("pageTitle").textContent = "🧾 Editar Cliente";
+    document.getElementById("pageTitle").textContent = "Editar cliente";
 
     const d = await ClientesService.getCliente(clienteId);
     if (!d) return;

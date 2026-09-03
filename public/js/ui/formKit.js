@@ -174,8 +174,31 @@
              esSucio: () => sucios.size > 0, campos };
   }
 
+  // Adopción LIGERA para formularios con su propio botón de guardar (p. ej.
+  // el alta de cliente): solo la validación de formato al salir del campo,
+  // sin barra ni rastreo de sucios. Devuelve validarTodo() para el submit.
+  function enlazarValidacion(root) {
+    const campos = Array.prototype.slice.call(root.querySelectorAll("[data-fk-valida], [data-fk][required]"));
+    campos.forEach((el) => {
+      el.addEventListener("blur", () => validarCampo(el));
+      el.addEventListener("input", () => {
+        const wrap = el.closest(".form-field");
+        if (wrap && wrap.classList.contains("has-error")) validarCampo(el);
+      });
+    });
+    return function validarTodo() {
+      let primero = null;
+      campos.forEach((el) => { if (!validarCampo(el) && !primero) primero = el; });
+      if (primero) {
+        primero.focus();
+        if (primero.scrollIntoView) primero.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      return !primero;
+    };
+  }
+
   if (typeof window !== "undefined") {
-    window.FormKit = { VALIDA, esValido, validarCampo, crear };
+    window.FormKit = { VALIDA, esValido, validarCampo, crear, enlazarValidacion };
   }
   // Para los tests de node (sin DOM): exporta solo lo puro.
   if (typeof module !== "undefined" && module.exports) {

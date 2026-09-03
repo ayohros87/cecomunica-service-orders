@@ -374,13 +374,33 @@ service cloud.firestore {
     // ordenes_de_servicio/consumos, ordenes_de_servicio/equipos_meta, etc.).
 
     match /clientes/{docId} {
-      allow read, create, delete: if isSignedIn();
+      allow read, create: if isSignedIn();
+      // Borrado FÍSICO: ningún flujo del frontend lo usa (la UI soft-borra con
+      // deleted:true) — queda solo admin para correcciones manuales.
+      allow delete: if isAdmin();
+      // Candado de IDENTIDAD (F3 del kit de formularios, 2026-09-03): los
+      // campos que definen quién es el cliente y cómo se le factura solo los
+      // cambian admin/recepción/gerente — antes cualquier autenticado (la
+      // protección era solo UI). Los campos de CONTACTO (teléfono, email,
+      // email_acuses, direcciones, tags, ip) quedan abiertos: los escriben
+      // flujos operativos como upsertContacto y el acuse de devolución.
+      // Todo cambio queda igualmente en clientes/{id}/historial (trigger).
+      function tocaIdentidadCliente() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          "nombre", "nombre_norm", "ruc", "dv", "ruc_norm", "dv_norm", "rucdv_norm",
+          "representante", "representante_cedula", "representante_email",
+          "itbms_exento", "itbms_motivo_exencion",
+          "vendedor_asignado", "vendedor_email", "activo", "deleted"
+        ]);
+      }
       // El vínculo con QuickBooks decide a QUIÉN se le facturará: solo lo
       // cambian admin/contabilidad (la página de match ya gateaba en UI; H8).
       allow update: if isSignedIn()
         && (!request.resource.data.diff(resource.data).affectedKeys()
               .hasAny(["qbo_customer_id", "qbo_customer_name"])
-            || userRole() in ["administrador", "contabilidad"]);
+            || userRole() in ["administrador", "contabilidad"])
+        && (!tocaIdentidadCliente()
+            || userRole() in ["administrador", "recepcion", "gerente"]);
       // OJO (rules v2): `/{sub=**}` a secas matchea CERO segmentos y alcanza el
       // doc padre, anulando el candado de update de arriba (verificado en el
       // harness). El segmento nombrado obliga a que sea una subcolección real.

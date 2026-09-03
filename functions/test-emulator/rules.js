@@ -506,8 +506,36 @@ async function main() {
   // clientes: el vínculo QBO decide a quién se factura.
   await assertFails(as("vendedor").doc("clientes/cliQbo").set({ qbo_customer_id: "99" }, { merge: true }));
   await assertSucceeds(as("contabilidad").doc("clientes/cliQbo").set({ qbo_customer_id: "99", qbo_customer_name: "Q" }, { merge: true }));
-  await assertSucceeds(as("vendedor").doc("clientes/cliQbo").set({ nombre: "Z" }, { merge: true }));
-  ok("clientes: qbo_customer_* solo admin/contabilidad; edición normal abierta");
+  ok("clientes: qbo_customer_* solo admin/contabilidad");
+
+  // clientes: candado de IDENTIDAD (F3 kit de formularios, 2026-09-03) — los
+  // campos que definen quién es el cliente y cómo se factura, solo
+  // admin/recepción/gerente. El CONTACTO sigue abierto: upsertContacto y el
+  // acuse de devolución escriben teléfono/email/email_acuses desde otros roles.
+  await assertFails(as("vendedor").doc("clientes/cliQbo").set({ nombre: "Z" }, { merge: true }));
+  await assertFails(as("tecnico").doc("clientes/cliQbo").set({ representante: "Rep Nuevo" }, { merge: true }));
+  await assertFails(as("vendedor").doc("clientes/cliQbo").set({ vendedor_asignado: "yo" }, { merge: true }));
+  await assertFails(as("jefe_taller").doc("clientes/cliQbo").set({ itbms_exento: true }, { merge: true }));
+  await assertSucceeds(as("recepcion").doc("clientes/cliQbo").set({ representante: "Rep Nuevo", representante_cedula: "8-1-1" }, { merge: true }));
+  await assertSucceeds(as("gerente").doc("clientes/cliQbo").set({ activo: false }, { merge: true }));
+  await assertSucceeds(as("administrador").doc("clientes/cliQbo").set({ nombre: "Z2", nombre_norm: "z2" }, { merge: true }));
+  await assertSucceeds(as("tecnico").doc("clientes/cliQbo").set({ email_acuses: "a@b.com" }, { merge: true }));
+  await assertSucceeds(as("vendedor").doc("clientes/cliQbo").set({ telefono: "6000-0000", direccion: "PTY" }, { merge: true }));
+  ok("clientes: identidad solo admin/recepción/gerente; contacto sigue abierto");
+
+  // clientes/historial: lo escribe SOLO el trigger (Admin SDK) — inmutable
+  // desde el cliente; documentos (subcolección hermana) sigue abierta.
+  await assertFails(as("administrador").doc("clientes/cliQbo/historial/h1").set({ tipo: "edicion" }));
+  await assertSucceeds(as("vendedor").doc("clientes/cliQbo/historial/h1").get());
+  await assertSucceeds(as("recepcion").doc("clientes/cliQbo/documentos/d1").set({ tipo: "otro" }));
+  ok("clientes: historial solo-lectura desde el cliente; documentos abierto");
+
+  // clientes: delete FÍSICO solo admin (la UI soft-borra con deleted:true).
+  await assertSucceeds(as("vendedor").doc("clientes/cliDel").set({ nombre: "temporal" }));
+  await assertFails(as("recepcion").doc("clientes/cliDel").delete());
+  await assertFails(as("vendedor").doc("clientes/cliDel").delete());
+  await assertSucceeds(as("administrador").doc("clientes/cliDel").delete());
+  ok("clientes: delete físico solo admin; el alta sigue abierta a todo el staff");
 
   // inventario_piezas: stock abierto (flujo de órdenes), precio/QBO por rol.
   await assertFails(as("tecnico").doc("inventario_piezas/pPrecio").set({ precio_venta: 99 }, { merge: true }));
