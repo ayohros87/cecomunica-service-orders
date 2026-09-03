@@ -31,11 +31,21 @@
 .fk-acciones { display: flex; gap: 8px; align-items: center; }
 
 /* ── Secciones ── */
-.fk-seccion { border-top: 1px solid var(--border-subtle, #E5EAEF); padding: 20px 0; }
+.fk-seccion { border-top: 1px solid var(--border-subtle, #E5EAEF); padding: 22px 0; }
 .fk-seccion:first-of-type { border-top: 0; }
 .fk-cab { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
 .fk-cab h3 { margin: 0; font-size: 14px; }
-.fk-desc { font-size: 12.5px; color: var(--fg-3, #667); margin: 0 0 14px; max-width: 60ch; }
+.fk-desc { font-size: 12.5px; color: var(--fg-3, #667); margin: 0 0 16px; max-width: 60ch; }
+
+/* Ritmo vertical: ceco-ui deja .form-field SIN margen (las páginas viejas
+   espacian a mano) — sin esto los campos quedan pegados entre sí y a los
+   títulos de sección (reporte 2026-09-03). El grid espacia con su gap, así
+   que sus campos internos van a 0. */
+.fk-seccion .form-field { margin-bottom: var(--sp-4, 16px); }
+.fk-seccion .form-grid-2 { margin-bottom: var(--sp-4, 16px); }
+.fk-seccion .form-grid-2 .form-field { margin-bottom: 0; }
+.fk-seccion > :last-child { margin-bottom: 0; }
+.fk-cab + .form-field, .fk-cab + .form-grid-2, .fk-cab + .fk-enlaces { margin-top: 12px; }
 .fk-auditado {
   font-size: 11px; font-weight: 600; color: var(--fg-4, #889);
   display: inline-flex; align-items: center; gap: 5px;
