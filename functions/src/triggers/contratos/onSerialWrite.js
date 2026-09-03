@@ -140,6 +140,27 @@ module.exports = onDocumentWritten(
           },
         });
         logger.info("[onSerialWrite] Pool sync", { cid, serial: serialDespues, resultado: r });
+
+        // Venta con contrato ("Propio") ya facturada: el serial recién asignado
+        // hereda la factura QBO del contrato (contratos.factura_venta, la
+        // registra Recepción en Contratos → Equipos). Cubre el flujo
+        // factura-primero: la factura se registra con el contrato sin seriales
+        // y cada serial que bodega asigne la recibe aquí. Idempotente
+        // (facturaVentaPatch devuelve null si ya la tiene) y sin tocar estado.
+        const facturaVenta = (c.factura_venta?.numero || "").toString().trim();
+        if (propiedad === "cliente" && facturaVenta) {
+          const rf = await pool.estamparVentaContrato(serialDespues, after.modelo_id, after.modelo, {
+            factura: facturaVenta,
+            cliente_id:      after.cliente_id || c.cliente_id || "",
+            cliente_nombre:  after.cliente_nombre || c.cliente_nombre || "",
+            contrato_doc_id: cid,
+            contrato_id:     after.contrato_id || c.contrato_id || "",
+          });
+          if (rf === "estampado") {
+            logger.info("[onSerialWrite] Pool: factura de venta heredada del contrato",
+              { cid, serial: serialDespues, factura: facturaVenta });
+          }
+        }
       }
     } catch (e) {
       logger.warn("[onSerialWrite] Pool sync falló (no crítico)", { cid, message: e.message });

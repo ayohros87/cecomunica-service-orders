@@ -32,6 +32,11 @@ const _PERMISOS = {
   // encargado de inventario abre la página desde el correo "Solicitud de
   // seriales"; admin/recepción/vendedor/gerente también pueden completarlos.
   'gestionar-seriales': ['administrador', 'recepcion', 'vendedor', 'gerente', 'inventario'],
+  // Registrar la factura QBO de una venta con contrato ("Propio"): estampa el
+  // número en el contrato Y en las unidades del pool asignadas. Los roles deben
+  // poder escribir equipos_pool (regla puedeGestionarSeriales) — por eso
+  // contabilidad no está: su escritura al pool rebotaría en rules.
+  'registrar-factura-venta': ['administrador', 'recepcion', 'gerente'],
   'admin-equipos':     ['administrador'],
   // Catálogo de modelos + tarifas de facturación (info sensible) → contabilidad.
   'gestionar-modelos': ['administrador', 'contabilidad'],

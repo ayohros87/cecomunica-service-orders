@@ -401,6 +401,58 @@ async function desasignarContrato(serial, modeloId, modeloLabel,
   });
 }
 
+// Espejo contable de una venta con contrato ("Propio") sobre la unidad del
+// pool: la factura QBO vive en contratos.factura_venta y cada unidad asignada
+// la hereda en `venta.*` SIN tocar su estado (el ciclo del contrato manda).
+// Dot-paths a propósito: preservan venta.orden_programacion_id si existiera.
+// NO estampa orden_programacion_id — la orden de estas ventas nace del
+// contrato, no del feed "Órdenes por crear" (que además filtra estado
+// 'vendido'). Devuelve null si no hay nada que estampar (factura vacía o la
+// misma ya puesta — idempotente: onSerialWrite corre en cada edición).
+// Función pura (test/facturaVentaContrato.test.js). Espejo del frontend
+// equiposPoolService.estamparFacturaContrato — mantener sincronizados.
+function facturaVentaPatch(actual, { factura, cliente_id = "", cliente_nombre = "",
+                                     contrato_doc_id = null, contrato_id = "" } = {}) {
+  const fact = (factura || "").toString().trim();
+  if (!fact) return null;
+  if (((actual || {}).venta?.factura || "") === fact) return null;
+  return {
+    "venta.factura":         fact,
+    "venta.cliente_id":      (cliente_id || "").toString().trim(),
+    "venta.cliente_nombre":  (cliente_nombre || "").toString().trim(),
+    "venta.contrato_doc_id": contrato_doc_id || null,
+    "venta.contrato_id":     (contrato_id || "").toString().trim(),
+    "venta.origen":          "contrato",
+    propiedad: "cliente",
+  };
+}
+
+// Aplica facturaVentaPatch a la unidad de un serial (la que resuelve por
+// serial+modelo, igual que las demás transiciones) y deja línea de kardex.
+// Retorna 'estampado' | 'sin-cambio' | 'no-existe'.
+async function estamparVentaContrato(serial, modeloId, modeloLabel, opts = {}) {
+  const norm = normSerial(serial);
+  if (!esSerialValido(norm)) return "no-existe";
+  const { ref, data } = await resolver(serial, modeloId, modeloLabel);
+  if (!data) return "no-existe";
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "no-existe";
+    const patch = facturaVentaPatch(snap.data(), opts);
+    if (!patch) return "sin-cambio";
+    tx.update(ref, { ...patch,
+      "venta.at": admin.firestore.FieldValue.serverTimestamp(),
+      updated_at: admin.firestore.FieldValue.serverTimestamp() });
+    tx.set(ref.collection("movimientos").doc(), _movimiento({
+      tipo: "factura_venta",
+      ref: { tipo: "factura_qbo", id: patch["venta.factura"], label: patch["venta.factura"] },
+      notas: `Factura QBO ${patch["venta.factura"]} heredada del contrato `
+        + (opts.contrato_id || opts.contrato_doc_id || ""),
+    }));
+    return "estampado";
+  });
+}
+
 // Estado desde el que la unidad entró al taller por ESTA orden. El kardex ya lo
 // guarda (de_estado del movimiento ingreso_taller), así que deshacer no
 // necesita campo nuevo. Los movimientos por ficha son pocos: se filtran en
@@ -475,4 +527,5 @@ async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
 
 module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver,
   upsertContacto, transicionar, transicionarPorId, custodiaPatch,
-  desasignarContrato, estadoPrevioAOrden, destinoAlSalirDeOrden };
+  desasignarContrato, estadoPrevioAOrden, destinoAlSalirDeOrden,
+  facturaVentaPatch, estamparVentaContrato };

@@ -727,6 +727,48 @@ const EquiposPoolService = {
     }, user);
   },
 
+  // Venta CON contrato ("Propio"): el contrato ya tiene los seriales asignados
+  // y Recepción registra la factura QBO después. La unidad NO cambia de estado
+  // (sigue asignado_contrato / en_cliente — el ciclo del contrato manda): solo
+  // gana el vínculo contable en `venta.*` vía dot-paths (preserva
+  // orden_programacion_id si existiera) + propiedad cliente + línea de kardex.
+  // NO estampa venta.orden_programacion_id: la orden de estas ventas nace del
+  // contrato, no del feed "Órdenes por crear" (que además filtra por estado
+  // 'vendido'). Espejo server-side: equiposPool.facturaVentaPatch (functions) —
+  // mantener sincronizados.
+  async estamparFacturaContrato(id, { factura = '', cliente_id = '', cliente_nombre = '',
+                                      contrato_doc_id = '', contrato_id = '' } = {}, user) {
+    const fact = (factura || '').toString().trim();
+    if (!fact) throw new Error('Falta el número de la factura QBO.');
+    const db = firebase.firestore();
+    const ref = db.collection('equipos_pool').doc(id);
+    return db.runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) { const e = new Error('El equipo no existe en el pool'); e.code = 'no-existe'; throw e; }
+      const d = snap.data();
+      if ((d.venta?.factura || '') === fact) return 'sin-cambio';
+      const correccion = !!(d.venta?.factura && d.venta.factura !== fact);
+      tx.update(ref, {
+        'venta.factura':         fact,
+        'venta.cliente_id':      (cliente_id || '').toString().trim(),
+        'venta.cliente_nombre':  (cliente_nombre || '').toString().trim(),
+        'venta.contrato_doc_id': contrato_doc_id || null,
+        'venta.contrato_id':     (contrato_id || '').toString().trim(),
+        'venta.origen':          'contrato',
+        'venta.at':              firebase.firestore.FieldValue.serverTimestamp(),
+        propiedad: 'cliente',
+        ...this._autoria(user),
+      });
+      tx.set(ref.collection('movimientos').doc(), this._movimiento({
+        tipo: 'factura_venta',
+        ref: { tipo: 'factura_qbo', id: fact, label: fact },
+        notas: (correccion ? `Corrección: antes factura ${d.venta.factura}. ` : '')
+          + `Factura QBO ${fact} registrada desde el contrato ${contrato_id || contrato_doc_id || ''}`,
+      }, user));
+      return correccion ? 'corregido' : 'estampado';
+    });
+  },
+
   // Amarra la venta con su orden de PROGRAMACIÓN (CTA post-venta en
   // inventario/equipos.html → nueva-orden con ?origen=venta). No cambia el
   // estado — la unidad sigue 'vendido' — solo deja la traza factura↔orden en

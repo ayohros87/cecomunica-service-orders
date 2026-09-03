@@ -278,6 +278,20 @@ service cloud.firestore {
         return request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(["orden_prog_descartada"]);
       }
+      // Factura QBO de la venta con contrato ("Propio") — la registra Recepción
+      // desde Contratos → Equipos y se espeja en las unidades del pool. Piso de
+      // rol espejo del permiso 'registrar-factura-venta' de roles.js: son datos
+      // contables y no puede escribirlos cualquier autenticado. El historial
+      // además solo crece (mismo criterio que firmado_historial).
+      function tocaFacturaVenta() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+                 .hasAny(["factura_venta", "factura_venta_historial"]);
+      }
+      function facturaVentaHistorialAppendOnly() {
+        return resource.data.get("factura_venta_historial", []).size()
+            <= request.resource.data.get("factura_venta_historial", []).size()
+          || userRole() == "administrador";
+      }
       // Reemplazo del PDF firmado (contratos-upload.js, modo 'reemplazo'): el
       // archivo saliente se archiva en firmado_historial[] y de ahí sale el
       // evento REEMPLAZAR_FIRMADO de la auditoría. Sustituir el papel de un
@@ -295,6 +309,9 @@ service cloud.firestore {
         && !touchesCFOwnedFields()
         && firmadoHistorialAppendOnly()
         && (!tocaDescarteOrdenProg() || userRole() in ["administrador", "recepcion"])
+        && (!tocaFacturaVenta()
+            || (userRole() in ["administrador", "recepcion", "gerente"]
+                && facturaVentaHistorialAppendOnly()))
         && (!(resource.data.estado != "activo" && request.resource.data.estado == "activo")
             || userRole() in ["administrador", "gerente"]
             || esActivacionPorFirmado());

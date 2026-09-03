@@ -50,6 +50,33 @@ const ContratosService = {
     return db.collection('contratos').doc(id).update(fields);
   },
 
+  // Factura QBO de una venta con contrato ("Propio"): antes no había DÓNDE
+  // asociarla cuando el contrato nacía primero y bodega ya había asignado los
+  // seriales (el asistente de venta solo acepta unidades en bodega). El número
+  // vive aquí y se espeja en cada unidad del pool (equiposPoolService.
+  // estamparFacturaContrato / onSerialWrite para seriales futuros). Correcciones:
+  // se sobreescribe el vigente y el anterior queda en factura_venta_historial[]
+  // (append-only por rules, mismo criterio que firmado_historial).
+  async registrarFacturaVenta(id, { numero, nota = '' } = {}, user) {
+    const num = (numero || '').toString().trim();
+    if (!num) throw new Error('Escribe el número de la factura de QuickBooks.');
+    const db = firebase.firestore();
+    return db.collection('contratos').doc(id).update({
+      factura_venta: {
+        numero: num,
+        nota: (nota || '').toString().trim(),
+        at: firebase.firestore.FieldValue.serverTimestamp(),
+        por_uid:   user?.uid   || null,
+        por_email: user?.email || null,
+      },
+      factura_venta_historial: firebase.firestore.FieldValue.arrayUnion({
+        numero: num,
+        at: firebase.firestore.Timestamp.now(), // serverTimestamp no entra en arrayUnion
+        por_email: user?.email || null,
+      }),
+    });
+  },
+
   // Create a new contract document; returns the Firestore DocumentReference.
   // ── Búsqueda por tokens (auditoría A8) ──────────────────────────────────
   // La búsqueda server-side por PREFIJO de cliente_nombre_lower daba falsos

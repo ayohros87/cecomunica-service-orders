@@ -211,7 +211,16 @@ window.AsistenteVenta = {
         const enBodega = docs.filter(d => d.estado === 'en_bodega');
         if (!enBodega.length) {
           const estados = docs.map(d => EquiposPoolService.ESTADO_LABELS[d.estado] || d.estado).join(', ');
-          problemas.push(`${esc(norm)}: no está en bodega (${esc(estados)})`);
+          // Serial ya asignado a un contrato: no es un error de bodega — es el
+          // flujo contrato-primero. La factura de esa venta se registra desde
+          // el contrato (Contratos → Equipos → "Registrar factura de venta"),
+          // no por aquí. Sin esta pista Recepción quedaba en callejón sin
+          // salida (Zuleika 2026-09-03).
+          const conContrato = docs.find(d => d.asignacion?.contrato_doc_id);
+          const pista = conContrato
+            ? ` — está en el contrato ${esc(conContrato.asignacion.contrato_id || 'sin número')}: la factura de esa venta se registra en Contratos → Equipos del contrato`
+            : '';
+          problemas.push(`${esc(norm)}: no está en bodega (${esc(estados)})${pista}`);
           continue;
         }
         // Serial compartido con 2+ unidades en bodega: solo es inequívoco si la

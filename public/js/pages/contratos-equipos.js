@@ -110,6 +110,15 @@ window.ContratosEquipos = {
     catch (e) { return []; }
   },
 
+  // Venta con contrato de servicio: el tipo "Propio" (mismo criterio que
+  // functions/onSerialWrite — mantener sincronizados). En estos contratos los
+  // radios se FACTURAN, y la factura QBO se asocia aquí (antes no había dónde:
+  // el asistente de venta de bodega solo acepta unidades en_bodega, y con los
+  // seriales ya asignados al contrato la venta quedaba sin registro).
+  _esVentaPropio(c) {
+    return !!c && (c.tipo_contrato === 'Propio' || c.codigo_tipo === 'PROP');
+  },
+
   // "Ruta del equipo" (P5 auditoría 2026-07-24): responde "¿en qué paso va
   // esto?" sin ir al inventario — seriales → programación → entrega →
   // devolución. El paso pendiente que libera el ciclo queda señalado.
@@ -152,10 +161,110 @@ window.ContratosEquipos = {
           `Tiquete DEVOLUCIÓN ${contrato.orden_devolucion_id} — pendiente de check-in`)
       : '';
 
+    // Contratos "Propio": la venta debe quedar facturada. El paso va PRIMERO
+    // (lo ideal es facturar antes de entregar — Zuleika 2026-09-03) pero no
+    // bloquea nada: se puede registrar en cualquier momento.
+    const fv = contrato.factura_venta;
+    const p0 = this._esVentaPropio(contrato)
+      ? paso(fv?.numero ? 'done' : 'now',
+          fv?.numero ? `Factura ${fv.numero}` : 'Factura QBO',
+          fv?.numero ? `Factura QBO registrada por ${fv.por_email || '—'}`
+            : 'Venta sin factura asociada — regístrala con el botón "Registrar factura de venta"') + flecha
+      : '';
+
     return `<div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-bottom:16px;
       padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--bg-2, #fafafa);">
-      ${p1}${flecha}${p2}${flecha}${p3}${p4}
+      ${p0}${p1}${flecha}${p2}${flecha}${p3}${p4}
     </div>`;
+  },
+
+  // Sección de la factura de venta (solo contratos "Propio"): estado + acción.
+  // El botón se gatea por rol registrar-factura-venta (roles.js); el piso real
+  // vive en rules (tocaFacturaVenta en contratos + puedeGestionarSeriales en el
+  // pool).
+  _seccionFacturaHtml(contrato) {
+    if (!this._esVentaPropio(contrato)) return '';
+    const esc = CS.esc.bind(CS);
+    const fv = contrato.factura_venta || null;
+    const puede = typeof canRole === 'function' && canRole(window.userRole, 'registrar-factura-venta');
+    const fecha = fv?.at?.toDate ? ' · ' + fv.at.toDate().toLocaleDateString('es-PA') : '';
+    const estadoTxt = fv?.numero
+      ? `Factura QBO <b style="font-family:var(--font-mono,monospace);">${esc(fv.numero)}</b>
+         <span style="color:var(--fg-3);">· registrada por ${esc(fv.por_email || '—')}${fecha}</span>`
+      : `<span style="color:#92400e; font-weight:600;">Venta sin factura asociada.</span>
+         <span style="color:var(--fg-3);">El número de la factura QBO queda en el contrato y en cada serial asignado.</span>`;
+    const btn = puede
+      ? `<button class="btn" onclick="ContratosEquipos.registrarFactura('${esc(contrato.id)}')">
+           <i data-lucide="receipt"></i> ${fv?.numero ? 'Corregir factura' : 'Registrar factura de venta'}</button>`
+      : '';
+    return `<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+        margin-bottom:16px; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+        background:${fv?.numero ? 'var(--bg-2, #fafafa)' : '#fffbeb'};">
+      <div style="font-size:13px;">${estadoTxt}</div>${btn}
+    </div>`;
+  },
+
+  // Registrar (o corregir) la factura QBO de la venta: escribe el contrato y
+  // espeja en cada unidad del pool asignada, SIN tocar su estado. Los seriales
+  // que bodega asigne después la heredan solos (onSerialWrite).
+  async registrarFactura(id) {
+    const esc = CS.esc.bind(CS);
+    if (!(typeof canRole === 'function' && canRole(window.userRole, 'registrar-factura-venta'))) {
+      Toast.show('Tu rol no puede registrar la factura de venta.', 'bad'); return;
+    }
+    try {
+      const contrato = await ContratosService.getContrato(id);
+      if (!contrato) { Toast.show('Contrato no encontrado.', 'bad'); return; }
+      const actual = contrato.factura_venta?.numero || '';
+      const numero = await Modal.prompt({
+        title: actual ? 'Corregir factura de venta' : 'Registrar factura de venta',
+        message: `Número de la factura de QuickBooks de la venta del contrato
+          <b>${esc(contrato.contrato_id || id)}</b> (${esc(contrato.cliente_nombre || '—')}).`,
+        defaultValue: actual,
+        placeholder: '001-0000010274',
+      });
+      if (numero === null) return;
+      const num = (numero || '').trim();
+      if (!num) { Toast.show('Escribe el número de la factura.', 'bad'); return; }
+      if (num === actual) { Toast.show('Ese número ya está registrado.', 'ok'); return; }
+
+      const unidades = await this._fetchUnidades(id);
+      const detalle = unidades.slice(0, 12)
+        .map(u => `<span style="font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</span>`)
+        .join(', ') + (unidades.length > 12 ? ` … (+${unidades.length - 12})` : '');
+      const msg = unidades.length
+        ? `La factura <b>${esc(num)}</b> quedará asociada al contrato y a sus
+           <b>${unidades.length}</b> unidad(es) del pool:<br><br>${detalle}`
+        : `El contrato aún no tiene seriales en el pool: la factura <b>${esc(num)}</b>
+           queda registrada en el contrato y se asociará sola a cada serial que bodega asigne.`;
+      if (!await Modal.confirm({
+        title: 'Confirmar factura de venta', message: msg,
+        confirmLabel: actual ? 'Corregir' : 'Registrar',
+      })) return;
+
+      const user = firebase.auth().currentUser;
+      await ContratosService.registrarFacturaVenta(id, { numero: num }, user);
+      let ok = 0; const errores = [];
+      for (const u of unidades) {
+        try {
+          await EquiposPoolService.estamparFacturaContrato(u.id, {
+            factura: num,
+            cliente_id:      contrato.cliente_id || '',
+            cliente_nombre:  contrato.cliente_nombre || '',
+            contrato_doc_id: id,
+            contrato_id:     contrato.contrato_id || '',
+          }, user);
+          ok++;
+        } catch (e) { errores.push(`${u.serial || u.id}: ${e.message || e}`); }
+      }
+      let fin = `Factura ${num} registrada en el contrato${unidades.length ? ` y en ${ok} unidad(es)` : ''}.`;
+      if (errores.length) fin += ` ${errores.length} fallaron: ${errores.join(' · ')}`;
+      Toast.show(fin, errores.length ? 'warn' : 'ok');
+      await this.abrirModal(id); // repintar la ruta y la sección con la factura puesta
+    } catch (e) {
+      console.error('Error al registrar la factura de venta:', e);
+      Toast.show('Error al registrar la factura: ' + (e.message || e), 'bad');
+    }
   },
 
   _seccionPoolHtml(unidades) {
@@ -209,6 +318,7 @@ window.ContratosEquipos = {
       ]);
       const seccionPool = this._seccionPoolHtml(unidades);
       const ruta = this._rutaHtml(contrato, ordenes, unidades);
+      const seccionFactura = this._seccionFacturaHtml(contrato);
       const rows = [];
       for (const x of ordenes) {
         const orden = await OrdenesService.getOrder(x.id);
@@ -225,6 +335,7 @@ window.ContratosEquipos = {
       }
       document.getElementById('modalEquiposBody').innerHTML = `
         ${ruta}
+        ${seccionFactura}
         ${seccionPool}
         <div style="margin-bottom:10px; font-weight:700;">Equipos en órdenes vinculadas (${rows.length})</div>
         <div class="table-scroll">
@@ -240,6 +351,10 @@ window.ContratosEquipos = {
             <tbody>${rows.join('') || `<tr><td colspan="4" style="padding:10px; text-align:center;">No hay equipos.</td></tr>`}</tbody>
           </table>
         </div>`;
+      // El botón de la factura trae icono lucide; el resto del modal es texto.
+      const body = document.getElementById('modalEquiposBody');
+      if (window.Icons) Icons.pintar([body]);
+      else if (window.lucide) lucide.createIcons({ nodes: [body] });
       Modal.open('overlayEquiposContrato');
     } catch (err) {
       console.error('Error abriendo modal de equipos:', err);

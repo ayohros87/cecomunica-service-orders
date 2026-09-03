@@ -532,6 +532,30 @@ async function main() {
     .set({ orden_prog_descartada: { motivo: "otro", nota: "x" } }, { merge: true }));
   ok("contratos: orden_prog_descartada solo recepción/admin");
 
+  // contratos: factura QBO de la venta con contrato "Propio" (Zuleika
+  // 2026-09-03). Dato contable — piso de rol espejo de 'registrar-factura-venta'
+  // (roles.js): admin/recepción/gerente. El historial de correcciones solo
+  // crece (mismo criterio que firmado_historial); admin exento.
+  for (const r of ["vendedor", "tecnico", "inventario", "contabilidad", "vista"]) {
+    await assertFails(as(r).doc("contratos/cFact")
+      .set({ factura_venta: { numero: "001-0000010274" } }, { merge: true }));
+  }
+  await assertSucceeds(as("recepcion").doc("contratos/cFact").set({
+    factura_venta: { numero: "001-0000010274" },
+    factura_venta_historial: [{ numero: "001-0000010274" }],
+  }, { merge: true }));
+  ok("contratos: factura_venta solo admin/recepción/gerente (recepción registra)");
+  await assertSucceeds(as("gerente").doc("contratos/cFact").set({
+    factura_venta: { numero: "001-0000010275" },
+    factura_venta_historial: [{ numero: "001-0000010274" }, { numero: "001-0000010275" }],
+  }, { merge: true }));
+  ok("contratos: corrección (sobrescribe y apila historial) pasa para gerente");
+  await assertFails(as("recepcion").doc("contratos/cFact")
+    .set({ factura_venta_historial: [] }, { merge: true }));
+  await assertSucceeds(as("administrador").doc("contratos/cFact")
+    .set({ factura_venta_historial: [] }, { merge: true }));
+  ok("contratos: factura_venta_historial solo crece (admin exento)");
+
   // ── contratos: activación por firmado + reemplazo del PDF ────────────────
   // Subir el firmado de un contrato APROBADO lo activa (esActivacionPorFirmado);
   // corregir el archivo de uno YA ACTIVO (se subió el contrato sin firmar) es un
