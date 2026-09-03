@@ -148,8 +148,21 @@ function _detenerSnapshotInicial() {
   _limpiarWatchdogInicial();
 }
 
+// ── El cursor de paginación no se rebobina ────────────────────────────────
+// Reporte (2026-08-28): "al ver las órdenes por tipo DEVOLUCIÓN me aparecen
+// órdenes repetidas". El filtro por tipo tamiza en el navegador lo ya cargado,
+// así que la lista queda corta, el botón "Cargar más" se ve y el
+// IntersectionObserver pagina sin parar. Mientras tanto el listener vivo
+// reescribía APP.state.lastVisible con CADA snapshot — cualquier escritura
+// remota devolvía el cursor al final de la PRIMERA página aunque ya se hubiera
+// paginado hasta la quinta, y el siguiente "Cargar más" volvía a traer una
+// página ya cargada. Desde el primer "Cargar más", el cursor es de la
+// paginación y el snapshot vivo ya no lo toca.
+let _yaSePagino = false;
+
 function _iniciarSnapshotInicial() {
   _detenerSnapshotInicial();
+  _yaSePagino = false;
 
   const btnCargarMas = APP.utils.mustGetEl("btnCargarMas");
 
@@ -201,7 +214,11 @@ function _iniciarSnapshotInicial() {
       // estado; sin esta base congelada, los demás chips caían a 0 tras
       // filtrar ("Por asignar: 0" siendo falso).
       APP.state.chipBase = APP.state.orders;
-      APP.state.lastVisible = lastSnapshot;
+      // El cursor solo lo mueve el snapshot mientras la bandeja siga siendo la
+      // primera página. Tras el primer "Cargar más" mandan las páginas
+      // paginadas: rebobinar aquí traía dos veces la misma página (ver la nota
+      // de _yaSePagino).
+      if (!_yaSePagino) APP.state.lastVisible = lastSnapshot;
 
       // Hold the skeleton on the first snapshot if it's an empty result
       // served from the local cache — the server response lands a moment
@@ -337,15 +354,28 @@ window.cargarOrdenesYEquipos = async function (esCargaInicial = true) {
       limit: CONFIG.pageLimit(APP.state.userRole)
     });
 
+    // A partir de aquí el cursor es de la paginación: ni un snapshot vivo lo
+    // rebobina (ver _yaSePagino). Se marca aunque la página venga vacía —
+    // significa que ya no hay nada más viejo que traer.
+    _yaSePagino = true;
+
     if (orders.length === 0) {
       document.getElementById("btnCargarMas").style.display = "none";
       return;
     }
 
     APP.state.lastVisible = lastSnapshot;
-    const nuevasOrdenes = orders;
+    // Segundo candado contra las órdenes repetidas: la página se descarta
+    // contra lo que YA está cargado. Aunque una consulta vuelva a traer algo
+    // conocido (un cursor rebobinado, una orden que se movió entre páginas al
+    // crearse otra encima), no se pinta dos veces.
+    const yaCargadas = new Set((APP.state.orders || []).map(o => o.ordenId));
+    const nuevasOrdenes = orders.filter(o => !yaCargadas.has(o.ordenId));
     APP.state.orders.push(...nuevasOrdenes);
     APP.state.chipBase = APP.state.orders;
+    // Si la página entera ya estaba en pantalla, `nuevasOrdenes` queda vacía:
+    // no se añade ninguna fila, pero el cursor ya avanzó y el siguiente
+    // "Cargar más" mira más atrás.
 
     const filters = getActiveFilters();
     const filteredNuevas = hasActiveFilters(filters)

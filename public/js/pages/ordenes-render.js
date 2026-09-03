@@ -887,10 +887,19 @@ function botonesFlujo(ordenId, estado, ordenData) {
   const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(od);
   const esDevolucion = typeof esOrdenDevolucion === 'function' && esOrdenDevolucion(od);
   const esEntrada = typeof esOrdenEntrada === 'function' && esOrdenEntrada(od);
-  // PROGRAMACIÓN: los equipos ya están en CECOMUNICA (bodega → taller); no
-  // hay nada que recibir del cliente, el primer paso es Asignar.
   const esProgramacion = typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(od);
-  const btnAsignarDirecto = `<button class="btn-flujo btn-flujo--asignar" title="Asignar técnico — los equipos ya están en CECOMUNICA, sin recepción en mostrador" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
+  // Tipos que arrancan directo en Asignar: la recepción en mostrador no aplica.
+  //   · PROGRAMACIÓN — los equipos ya están en CECOMUNICA (bodega → taller),
+  //     el cliente no entrega nada.
+  //   · ENTRADA — el acuse del cliente lo firma la orden de DEVOLUCIÓN que
+  //     recupera los equipos; la ENTRADA es la inspección posterior en taller.
+  //     Pedir la firma otra vez duplicaba el trámite (decisión Alberto
+  //     2026-09-01: "entrada se reemplazó por devolución").
+  const sinRecepcion = esProgramacion || esEntrada;
+  const tituloAsignarDirecto = esEntrada
+    ? "Asignar técnico — el acuse del cliente ya lo firmó la devolución, sin recepción en mostrador"
+    : "Asignar técnico — los equipos ya están en CECOMUNICA, sin recepción en mostrador";
+  const btnAsignarDirecto = `<button class="btn-flujo btn-flujo--asignar" title="${tituloAsignarDirecto}" data-action="asignar-tecnico" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="wrench"></i> Asignar</button>`;
 
   // Órdenes de DEVOLUCIÓN (recuperar equipos del cliente / confirmar
   // anulación): su flujo es el check-in por serial, no el de taller.
@@ -970,9 +979,9 @@ function botonesFlujo(ordenId, estado, ordenData) {
   if (rol === ROLES.ADMIN || rol === ROLES.RECEPCION || rol === ROLES.JEFE_TALLER) {
     if (estado === "POR ASIGNAR") {
       // Primer paso obligatorio: recibir los equipos (acuse). No se puede
-      // asignar hasta haber recibido — EXCEPTO en PROGRAMACIÓN, donde nada
-      // viene del cliente.
-      html += esProgramacion
+      // asignar hasta haber recibido — EXCEPTO en PROGRAMACIÓN y ENTRADA
+      // (ver `sinRecepcion` arriba).
+      html += sinRecepcion
         ? btnAsignarDirecto
         : `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
     } else if (estado === "RECIBIDO EN MOSTRADOR") {
@@ -996,8 +1005,8 @@ function botonesFlujo(ordenId, estado, ordenData) {
     if (estado === "POR ASIGNAR") {
       // El técnico también puede recibir (primer paso). Si recepción no la
       // recibió, puede saltarse el paso con "Asignar (saltar recepción)" del ⋯.
-      // PROGRAMACIÓN va directo a Asignar (nada viene del cliente).
-      html += esProgramacion
+      // PROGRAMACIÓN y ENTRADA van directo a Asignar (ver `sinRecepcion`).
+      html += sinRecepcion
         ? btnAsignarDirecto
         : `<button class="btn-flujo btn-flujo--recibir" title="Recibir equipos (primer paso)" data-action="recibir-mostrador" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-plus"></i> Recibir</button>`;
     } else if (estado === "RECIBIDO EN MOSTRADOR") {
@@ -1058,6 +1067,17 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
   const o = APP.state.orders.find(x => x.ordenId === ordenId) || {};
   const tieneNota = o.nota_tecnica && o.nota_tecnica.trim() !== "";
   const esVisita = typeof esOrdenVisita === 'function' && esOrdenVisita(o);
+  const esDevolucion = typeof esOrdenDevolucion === 'function' && esOrdenDevolucion(o);
+  // Tipos que NUNCA pasan por la recepción en mostrador, así que el atajo
+  // "Asignar (saltar recepción)" del ⋯ no tiene paso que saltar:
+  //   · PROGRAMACIÓN / ENTRADA / VISITA — su botón inline en POR ASIGNAR ya
+  //     es "Asignar": el ítem del menú era el mismo botón dos veces.
+  //   · DEVOLUCIÓN — no tiene flujo de taller en absoluto. Ahí el atajo era
+  //     un bug: la mandaba a ASIGNADO y la sacaba del check-in por serial
+  //     (su único camino a CERRADA (DEVOLUCION)), sin forma de volver.
+  const sinPasoRecepcion = esVisita || esDevolucion
+    || (typeof esOrdenProgramacion === 'function' && esOrdenProgramacion(o))
+    || (typeof esOrdenEntrada === 'function' && esOrdenEntrada(o));
 
   let menuItems = [
     { icon: '<i data-lucide="camera"></i>', label: esVisita ? "Fotos de la visita" : "Fotos de taller", action: "go-fotos-taller", dataAttributes: `data-orden-id="${ordenId}"`, class: "" }
@@ -1094,8 +1114,9 @@ function botonesGestion(ordenId, estado, tooltipNota = "", estiloNota = "") {
 
   // Asignar aunque recepción no haya recibido la orden: opción en el menú
   // para saltarse el paso de recibir en POR ASIGNAR. Para todos los roles
-  // operativos (no para 'vista', que es solo lectura).
-  if (estadoUpper === "POR ASIGNAR" && rol !== ROLES.VISTA) {
+  // operativos (no para 'vista', que es solo lectura) y solo en los tipos que
+  // sí llevan recepción — ver `sinPasoRecepcion`.
+  if (estadoUpper === "POR ASIGNAR" && rol !== ROLES.VISTA && !sinPasoRecepcion) {
     menuItems.unshift({
       icon: '<i data-lucide="wrench"></i>',
       label: "Asignar (saltar recepción)",
