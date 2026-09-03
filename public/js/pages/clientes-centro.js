@@ -84,11 +84,13 @@ window.Centro = {
 
   esVendedor() { return this.rol === ROLES.VENDEDOR; },
 
-  // Franja "Para hoy" del directorio (pedido 2026-08-26: el admin debe ver las
-  // alertas en el home del Centro, no solo nombres). Contratos por vencer /
-  // vencidos + gestiones abiertas; el vendedor solo ve los de SU cartera.
-  // La lista de clientes sigue siendo la navegación principal — esto es la
-  // capa secundaria de señales, como se decidió el 2026-08-25.
+  // Franja "Para hoy" del directorio (pedido 2026-08-26; rediseño 2026-09-03:
+  // la franja lista SOLO lo que tiene una acción pendiente — de quien sea. El
+  // vendedor ve su contrato "espera aprobación" aunque aprobar no le toque a
+  // él: así puede perseguir al gerente si el trámite se traspapeló. Los
+  // vencimientos y la custodia sin contrato NO son acción de todos los días:
+  // van como CONTEO en chips arriba, con un toggle para abrir el listado.
+  // El vendedor solo ve lo de SU cartera).
   async cargarParaHoy() {
     const cont = document.getElementById('cgParaHoy');
     if (!cont) return;
@@ -102,10 +104,27 @@ window.Centro = {
       // Las gestiones se filtran a ABIERTAS en el servidor: sin filtro, el
       // limit devolvía por orden de doc-ID (GA… primero) y con el crecimiento
       // los reemplazos abiertos se caían de la franja (trampa clase bandeja-40).
-      const [venc, gest] = await Promise.all([
+      // Los trámites de contrato se consultan aparte: pendiente_aprobacion y
+      // firmante-por-validar son igualdades puras (merge de índices simples);
+      // "aprobado sin firmar" filtra por fecha_creacion en el servidor (misma
+      // ventana de 45 días de _tramitesContrato — necesita el índice
+      // estado+fecha_creacion) porque el histórico 'aprobado' nunca pasa a
+      // 'activo' y sin la fecha la consulta traería miles de docs.
+      const corte45 = new Date(Date.now() - 45 * 86400000);
+      const [venc, gest, aprobSnap, firmaSnap, validSnap, regA, regB] = await Promise.all([
         db.collection('contratos').where('vencimiento_estado', 'in', ['vencido', 'por_vencer']).limit(300).get(),
         db.collection('gestiones').where('estado', 'in', GestionesService.ABIERTAS)
           .limit(150).get().catch(() => ({ docs: [] })),
+        db.collection('contratos').where('estado', '==', 'pendiente_aprobacion')
+          .limit(100).get().catch(() => ({ docs: [] })),
+        db.collection('contratos').where('estado', '==', 'aprobado')
+          .where('fecha_creacion', '>=', corte45).limit(200).get().catch(() => ({ docs: [] })),
+        db.collection('contratos').where('firmado_pendiente_validacion', '==', true)
+          .limit(50).get().catch(() => ({ docs: [] })),
+        db.collection('contratos').where('regularizacion.sin_linea', '>', 0)
+          .limit(50).get().catch(() => ({ docs: [] })),
+        db.collection('contratos').where('regularizacion.sin_cupo', '>', 0)
+          .limit(50).get().catch(() => ({ docs: [] })),
       ]);
 
       // Regla 2026-08-27: cuentas con equipos SIN contrato formal ⇒ requieren
@@ -131,10 +150,58 @@ window.Centro = {
           sessionStorage.setItem(CK, JSON.stringify({ t: Date.now(), d: [...custodia.entries()] }));
         }
       } catch (e) { custodia = new Map(); }
+      // ── Acciones pendientes (la franja principal) ──
+      // Mismo criterio que "Requiere tu acción" de la ficha, pero SIN filtrar
+      // por rol: el pendiente se muestra aunque la acción le toque a otro.
+      const acciones = [];
+      const vistos = new Set();
+      const okCliente = (c) => !misClientes || misClientes.has(c.cliente_id);
+      const dSince = (t) => { const d = t?.toDate ? t.toDate() : (t ? new Date(t) : null); return d && !isNaN(d) ? (Date.now() - d) / 86400000 : 999; };
+      for (const d of aprobSnap.docs) {
+        const c = d.data();
+        if (c.deleted || !okCliente(c) || vistos.has(d.id)) continue;
+        vistos.add(d.id);
+        acciones.push({ tipo: 'warn', ord: 0, cliente_id: c.cliente_id,
+          txt: `${c.cliente_nombre || '—'} — ${c.contrato_id || d.id} espera APROBACIÓN (${c.accion === 'Renovación' ? 'renovación' : 'contrato nuevo'})` });
+      }
+      for (const d of validSnap.docs) {
+        const c = d.data();
+        if (c.deleted || !okCliente(c) || vistos.has(d.id)) continue;
+        vistos.add(d.id);
+        acciones.push({ tipo: 'warn', ord: 1, cliente_id: c.cliente_id,
+          txt: `${c.cliente_nombre || '—'} — validar al firmante de ${c.contrato_id || d.id} (firmó persona distinta al representante)` });
+      }
+      for (const d of firmaSnap.docs) {
+        const c = d.data();
+        if (c.deleted || c.firmado || !okCliente(c) || vistos.has(d.id)) continue;
+        vistos.add(d.id);
+        acciones.push({ tipo: 'warn', ord: 2, cliente_id: c.cliente_id,
+          txt: `${c.cliente_nombre || '—'} — ${c.contrato_id || d.id} espera la FIRMA del cliente${c.firma_solicitud_estado === 'pendiente' ? ' (enlace ya enviado)' : ''}` });
+      }
+      for (const d of [...regA.docs, ...regB.docs]) {
+        const c = d.data();
+        if (c.deleted || !okCliente(c) || vistos.has(d.id)) continue;
+        if (c.estado !== 'activo' || dSince(c.fecha_creacion) >= 45) continue;
+        vistos.add(d.id);
+        const sob = Number(c.regularizacion?.sin_linea || 0) + Number(c.regularizacion?.sin_cupo || 0);
+        acciones.push({ tipo: 'warn', ord: 3, cliente_id: c.cliente_id,
+          txt: `${c.cliente_nombre || '—'} — regularización parcial de ${c.contrato_id || d.id}: ${sob} equipo(s) sin resolver` });
+      }
+      gest.docs.forEach(d => {
+        const g = d.data();
+        if (!GestionesService.ABIERTAS.includes(g.estado)) return;
+        if (misClientes && !misClientes.has(g.cliente_id)) return;
+        acciones.push({ tipo: 'info', ord: 4, cliente_id: g.cliente_id, g: d.id,
+          txt: `${g.cliente_nombre || '—'} — ${GestionesService.tipoLabel(g.tipo)} ${d.id}: ${GestionesService.estadoLabel(g.estado)}` });
+      });
+      acciones.sort((a, b) => a.ord - b.ord);
+
+      // ── Renovaciones (vencidos / por vencer / custodia): conteo + toggle ──
       const mapa = new Map();
       venc.docs.forEach(d => mapa.set(d.id, { id: d.id, ...d.data() }));
 
-      const items = [];
+      const renov = [];
+      let nVencidos = 0, nPorVencer = 0;
       for (const c of mapa.values()) {
         if (c.deleted || !this._esVigente(c) || !this._aplicaVenc(c)) continue;
         if (misClientes && !misClientes.has(c.cliente_id)) continue;
@@ -148,50 +215,59 @@ window.Centro = {
         if (renovado) continue;
         const dias = this._diasA(c.fecha_vencimiento);
         if (dias === null) continue;
-        items.push({
+        if (dias < 0) nVencidos++; else nPorVencer++;
+        renov.push({
           tipo: dias < 0 ? 'bad' : 'warn', dias, cliente_id: c.cliente_id,
           txt: `${c.cliente_nombre || '—'} — ${c.contrato_id || c.id} ${dias < 0 ? `venció hace ${-dias} día${-dias === 1 ? '' : 's'}` : `vence en ${dias} día${dias === 1 ? '' : 's'}`}`,
         });
       }
-      // Cuentas con custodia (equipos sin contrato) — entre los vencimientos
-      // y las gestiones; a más equipos sueltos, más arriba.
+      // Cuentas con custodia (equipos sin contrato): también son trabajo de
+      // renovación/regularización, no acción diaria — van dentro del toggle.
+      let nCustodia = 0;
       for (const [cid, info] of custodia) {
         if (misClientes && !misClientes.has(cid)) continue;
-        items.push({
+        nCustodia++;
+        renov.push({
           tipo: 'warn', dias: 1000 + Math.max(0, 900 - info.n), cliente_id: cid,
           txt: `${info.nombre || '—'} — ${info.n} equipo(s) sin contrato formal: requiere renovación / regularización`,
         });
       }
+      renov.sort((a, b) => a.dias - b.dias);
 
-      gest.docs.forEach(d => {
-        const g = d.data();
-        if (!GestionesService.ABIERTAS.includes(g.estado)) return;
-        if (misClientes && !misClientes.has(g.cliente_id)) return;
-        items.push({
-          tipo: 'info', dias: 99999, cliente_id: g.cliente_id, g: d.id,
-          txt: `${g.cliente_nombre || '—'} — ${GestionesService.tipoLabel(g.tipo)} ${d.id}: ${GestionesService.estadoLabel(g.estado)}`,
-        });
-      });
-      items.sort((a, b) => a.dias - b.dias);
-      if (!items.length) { cont.innerHTML = ''; return; }
+      if (!acciones.length && !renov.length) { cont.innerHTML = ''; return; }
 
-      // Colapsable (pedido 2026-08-26); la preferencia sobrevive en localStorage.
-      const MAX = 12;
+      // Colapsable (pedido 2026-08-26); las preferencias sobreviven en localStorage.
+      const MAX = 12, MAXV = 30;
       const colapsado = localStorage.getItem('cg_hoy_colapsado') === '1';
+      const verVenc = localStorage.getItem('cg_hoy_venc') === '1';
+      const fila = (i) => `<button type="button" class="cg-hoy ${i.tipo}"
+            onclick="${i.g ? `Centro.gSel='${this.esc(i.g)}';` : ''}Centro.abrir('${this.esc(i.cliente_id)}')">
+            <span>${this.esc(i.txt)}</span><span style="margin-left:auto; color:var(--fg-4); font-weight:600;">›</span>
+          </button>`;
+      const chips = [];
+      if (nVencidos) chips.push(`<span class="cg-hoy-chip bad">${nVencidos} contrato${nVencidos === 1 ? '' : 's'} vencido${nVencidos === 1 ? '' : 's'}</span>`);
+      if (nPorVencer) chips.push(`<span class="cg-hoy-chip warn">${nPorVencer} por vencer</span>`);
+      if (nCustodia) chips.push(`<span class="cg-hoy-chip">${nCustodia} cuenta${nCustodia === 1 ? '' : 's'} sin contrato formal</span>`);
       cont.innerHTML = `<div class="ds-card" style="padding:0; margin-bottom:var(--sp-4); overflow:hidden;">
         <button type="button" onclick="Centro.toggleParaHoy()"
           style="width:100%; text-align:left; background:none; border:0; cursor:pointer; padding:10px 16px ${colapsado ? '10px' : '6px'};
                  font-size:11px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:#8A6415;
                  display:flex; align-items:center; gap:7px;">
-          <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Para hoy · ${items.length}
+          <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i>
+          Para hoy · ${acciones.length ? `${acciones.length} acci${acciones.length === 1 ? 'ón' : 'ones'} pendiente${acciones.length === 1 ? '' : 's'}` : 'sin acciones pendientes'}
           <span id="cgHoyCaret" style="margin-left:auto; color:var(--fg-4); font-size:14px;">${colapsado ? '▸' : '▾'}</span>
         </button>
         <div id="cgHoyBody" class="${colapsado ? 'hidden' : ''}">
-        ${items.slice(0, MAX).map(i => `<button type="button" class="cg-hoy ${i.tipo}"
-            onclick="${i.g ? `Centro.gSel='${this.esc(i.g)}';` : ''}Centro.abrir('${this.esc(i.cliente_id)}')">
-            <span>${this.esc(i.txt)}</span><span style="margin-left:auto; color:var(--fg-4); font-weight:600;">›</span>
-          </button>`).join('')}
-        ${items.length > MAX ? `<div style="padding:6px 16px 10px; font-size:12px; color:var(--fg-4);">…y ${items.length - MAX} más</div>` : ''}
+        ${renov.length ? `<div class="cg-hoy-resumen">
+            ${chips.join('')}
+            <button type="button" id="cgHoyVencBtn" class="cg-hoy-vertoggle" onclick="Centro.toggleVencer()">${verVenc ? 'Ocultar listado' : 'Ver listado'}</button>
+          </div>
+          <div id="cgHoyVenc" class="${verVenc ? '' : 'hidden'}" style="border-bottom:1px solid var(--border-subtle);">
+            ${renov.slice(0, MAXV).map(fila).join('')}
+            ${renov.length > MAXV ? `<div style="padding:6px 16px 10px; font-size:12px; color:var(--fg-4);">…y ${renov.length - MAXV} más</div>` : ''}
+          </div>` : ''}
+        ${acciones.slice(0, MAX).map(fila).join('')}
+        ${acciones.length > MAX ? `<div style="padding:6px 16px 10px; font-size:12px; color:var(--fg-4);">…y ${acciones.length - MAX} más</div>` : ''}
         </div>
       </div>`;
       if (window.lucide?.createIcons) lucide.createIcons();
@@ -209,6 +285,18 @@ window.Centro = {
     body.classList.toggle('hidden', colapsar);
     if (caret) caret.textContent = colapsar ? '▸' : '▾';
     try { localStorage.setItem('cg_hoy_colapsado', colapsar ? '1' : '0'); } catch (e) { /* sin persistencia */ }
+  },
+
+  // Toggle del listado de vencimientos/custodia (no es acción de todos los
+  // días — los chips con el conteo siempre están; el detalle, bajo demanda).
+  toggleVencer() {
+    const el = document.getElementById('cgHoyVenc');
+    const btn = document.getElementById('cgHoyVencBtn');
+    if (!el) return;
+    const ver = el.classList.contains('hidden');
+    el.classList.toggle('hidden', !ver);
+    if (btn) btn.textContent = ver ? 'Ocultar listado' : 'Ver listado';
+    try { localStorage.setItem('cg_hoy_venc', ver ? '1' : '0'); } catch (e) { /* sin persistencia */ }
   },
 
   setCartera(v) {
@@ -1850,7 +1938,13 @@ window.Centro = {
       const a = g.aumento || {};
       const total = (a.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
       const asignados = a.seriales_asignados || [];
-      const asignando = this.puedeAsignar() && g.estado === 'pendiente_bodega' && g.cierre?.derivacion;
+      // Pre-asignación durante la firma (2026-09-03, planteamiento de Zuleika:
+      // la firma no debe frenar la preparación): bodega puede asignar los
+      // seriales del aumento desde que se aprueba comercialmente — la OS solo
+      // sale cuando el anexo quede firmado (el trigger exige cierre.derivacion).
+      const preAsignando = g.estado === 'pendiente_firma' && !a.es_ajuste && !a.es_regularizacion;
+      const asignando = this.puedeAsignar()
+        && ((g.estado === 'pendiente_bodega' && g.cierre?.derivacion) || preAsignando);
       cuerpo = `
         ${a.es_ajuste ? `<p style="font-size:12.5px; margin:0 0 8px; color:var(--fg-3);">
           <b>Anexo de ajuste de tarifa / servicios</b> — sin equipos nuevos;
@@ -1904,7 +1998,7 @@ window.Centro = {
                 placeholder="${this.esc(m.label)} ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}"></span>`).join('')}
              <div style="margin-top:6px;"><button class="btn btn-primary" onclick="Centro.guardarAsignacionAumento('${this.esc(g.id)}')">
                Guardar asignación</button>
-               <span style="font-size:12.5px; color:var(--fg-3);"> Elige de los disponibles en bodega (el campo sugiere los del modelo).</span></div></div>`
+               <span style="font-size:12.5px; color:var(--fg-3);"> Elige de los disponibles en bodega (el campo sugiere los del modelo).${preAsignando ? ' La firma del anexo corre <b>en paralelo</b> — la orden de programación saldrá sola al firmarse.' : ''}</span></div></div>`
           : (asignados.length ? `<p style="font-size:13px; margin:8px 0 0;"><b>Seriales:</b>
               ${asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')}</p>` : '')}`;
     } else if (g.tipo === 'baja') {

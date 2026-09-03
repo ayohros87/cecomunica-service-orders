@@ -108,6 +108,14 @@
     .cg-hoy.bad span:first-child  { color:#A03030; }
     .cg-hoy.warn span:first-child { color:#8A6415; }
     .cg-hoy.info span:first-child { color:#0B5E8A; }
+    .cg-hoy-resumen { display:flex; flex-wrap:wrap; gap:6px; align-items:center; padding:2px 16px 9px; }
+    .cg-hoy-chip { font-size:12px; font-weight:700; padding:3px 10px; border-radius:999px;
+                   background:var(--surface-2, #EEF2F5); color:var(--fg-3); }
+    .cg-hoy-chip.bad  { background:#F9E4E4; color:#A03030; }
+    .cg-hoy-chip.warn { background:#F9F0D8; color:#8A6415; }
+    .cg-hoy-vertoggle { margin-left:auto; background:none; border:1px solid var(--border-subtle);
+                        border-radius:8px; padding:3px 10px; font-size:12px; color:var(--fg-2); cursor:pointer; }
+    .cg-hoy-vertoggle:hover { background:var(--accent-soft, #E6F4FB); }
     .cg-overlay { position:fixed; inset:0; background:rgba(11,42,71,.45); display:grid; place-items:center;
                   padding:20px; z-index:80; }
     .cg-modal { background:var(--surface-card); border-radius:14px; box-shadow:0 20px 50px -20px rgba(11,42,71,.4);
@@ -203,7 +211,7 @@
 <div id="cgModal" class="cg-overlay hidden"></div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/clientes-centro.js?v=cg59" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg60" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
