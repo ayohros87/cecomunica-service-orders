@@ -122,6 +122,9 @@ auth.onAuthStateChanged(user => {
     setTimeout(() => {
       if (params.get("from") === "clientes") {
         window.location.href = "../clientes/index.html";
+      } else if (params.get("from") === "centro") {
+        // Vuelve a la ficha 360 del cliente en el Centro (deep-link ?id=).
+        window.location.href = `../clientes/centro.html?id=${targetId}`;
       } else if (params.get("from") === "cotizacion") {
         window.location.href = `../cotizaciones/nueva-cotizacion.html?cliente_id=${targetId}`;
       } else {
@@ -243,6 +246,13 @@ function volverAContrato() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("from") === "clientes") {
     window.location.href = "../clientes/index.html";
+    return;
+  }
+  if (params.get("from") === "centro") {
+    const cid = params.get("id");
+    window.location.href = cid
+      ? `../clientes/centro.html?id=${encodeURIComponent(cid)}`
+      : "../clientes/centro.html";
     return;
   }
   const clienteId = params.get("id");

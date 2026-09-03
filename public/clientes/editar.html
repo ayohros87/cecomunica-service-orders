@@ -10,7 +10,9 @@
     (function(){
       var p = new URLSearchParams(location.search);
       var id = p.get('id');
-      var target = '../contratos/nuevo-cliente.html?from=clientes' + (id ? ('&id=' + encodeURIComponent(id)) : '');
+      // from=centro: al guardar/volver aterriza en la ficha 360 del Centro,
+      // no en el grid de edición masiva (que salió de la navegación 2026-09-03).
+      var target = '../contratos/nuevo-cliente.html?from=centro' + (id ? ('&id=' + encodeURIComponent(id)) : '');
       location.replace(target);
     })();
   </script>

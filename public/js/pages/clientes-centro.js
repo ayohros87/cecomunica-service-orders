@@ -2280,8 +2280,15 @@ window.Centro = {
       <div class="hd">Comercial</div>
       <a href="../cotizaciones/index.html">Nueva cotización</a>
       <div class="hd">Cliente</div>
-      <a href="./index.html">Editar datos del cliente</a>`;
+      <a href="../contratos/nuevo-cliente.html?id=${this.esc(this.cliente.id)}&from=centro">Editar datos del cliente</a>
+      ${this._puedeMasiva() ? `<a href="./index.html">Edición masiva de clientes
+        <span style="display:block; font-size:11px; color:var(--fg-4);">avanzada — hoja completa con autoguardado; cada cambio queda en el historial</span></a>` : ''}`;
   },
+
+  // El grid de edición masiva salió del home/rail (2026-09-03): se entra SOLO
+  // por aquí y solo los roles que la página acepta (su propio guard: admin y
+  // recepción — gerente nunca pasó ese guard, así que no se le ofrece).
+  _puedeMasiva() { return [ROLES.ADMIN, 'admin', ROLES.RECEPCION].includes(this.rol); },
 
   // Estado de la cuenta para el menú. Los DEMO/TEMP no cuentan (terminan por
   // su propia devolución); lo que define la cuenta son los renovables

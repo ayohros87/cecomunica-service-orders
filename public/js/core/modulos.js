@@ -25,18 +25,20 @@ window.MODULOS = (() => {
   // viejos (inventario/equipos/piezas/pendientes) siguen vivos durante la
   // migración para el rail de sus páginas.
   // "centro" (Centro de gestión de clientes, Ola 1 de gestiones por cliente):
-  // la vista 360 del cliente y el punto de partida de las gestiones. Es la
-  // PRIMERA entrada de los vendedores al mundo clientes — el módulo "clientes"
-  // (listado/edición masiva) sigue reservado a admin/gerente/recepción.
+  // la vista 360 del cliente y el punto de partida de las gestiones — la
+  // ÚNICA entrada al mundo clientes desde el home/rail (decisión 2026-09-03).
+  // El grid de edición masiva (/clientes/index.html) ya no es un módulo
+  // navegable: se llega SOLO desde el menú del Centro, marcado "avanzada"
+  // (admin/recepción; la página conserva su propio guard de roles).
   const visiblesPorRol = {
-    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "centro", "contratos", "cotizaciones", "clientes", "piezas", "firma"],
-    gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "centro", "contratos", "cotizaciones", "clientes", "firma"],
+    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
+    gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "centro", "contratos", "cotizaciones", "firma"],
     inventario:    ["almacen", "centro", "inventario", "equipos", "pendientes", "piezas", "firma"],
     contabilidad:  ["facturacion", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],
     jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],
-    recepcion:     ["ordenes", "poc", "vendedores", "centro", "contratos", "clientes", "firma"],
+    recepcion:     ["ordenes", "poc", "vendedores", "centro", "contratos", "firma"],
     vendedor:      ["ordenes", "vendedores", "centro", "contratos", "cotizaciones", "firma"],
     tecnico_operativo: ["ordenes", "firma"]
   };
@@ -56,7 +58,6 @@ window.MODULOS = (() => {
       { id: 'centro',       label: 'Centro de gestión', icon: 'compass', href: '/clientes/centro.html' },
       { id: 'cotizaciones', label: 'Cotizaciones', icon: 'receipt',   href: '/cotizaciones/index.html' },
       { id: 'contratos',    label: 'Contratos',    icon: 'file-text', href: '/contratos/index.html' },
-      { id: 'clientes',     label: 'Clientes',     icon: 'users',     href: '/clientes/index.html' },
     ]},
     { grupo: 'Almacén · finanzas', items: [
       { id: 'almacen',     label: 'Almacén',  icon: 'warehouse',  href: '/almacen/index.html' },
