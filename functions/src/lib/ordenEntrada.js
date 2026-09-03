@@ -202,11 +202,15 @@ async function crearOrdenEntrada({ clienteId, clienteNombre, contratoDocId, cont
     cliente_nombre: clienteNombre || "",
     vendedor_asignado: "",
     tipo_de_servicio: "ENTRADA",
-    // Nace RECIBIDO: los equipos ya están físicamente en el taller (los
-    // registró el check-in de la devolución). El acuse firmado del cliente
-    // (firma_recepcion_url / receptor) lo copia onOrdenDevolucionWrite cuando
-    // recepción lo guarda en la orden de DEVOLUCIÓN.
-    estado_reparacion: "RECIBIDO EN MOSTRADOR",
+    // Nace POR ASIGNAR (pedido del dueño 2026-09-03, caso 2026090308): lo que
+    // la ENTRADA espera es un TÉCNICO que la inspeccione, y "RECIBIDO EN
+    // MOSTRADOR" la escondía de la cola de asignación. La recepción física es
+    // real y queda sellada abajo (fecha_recepcion + acuse que copia
+    // onOrdenDevolucionWrite); el flujo no pasa por "Recibir": botonesFlujo
+    // ofrece Asignar directo para las ENTRADA (sinRecepcion) y las rules ya
+    // permiten POR ASIGNAR → ASIGNADO. Antes nacía "RECIBIDO EN MOSTRADOR"
+    // (2026-07-21, "los equipos ya están en el taller").
+    estado_reparacion: "POR ASIGNAR",
     fecha_recepcion: admin.firestore.FieldValue.serverTimestamp(),
     recepcion_por_uid: "system",
     recepcion_por_email: null,

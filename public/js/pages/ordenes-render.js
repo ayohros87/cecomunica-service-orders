@@ -112,7 +112,11 @@ function renderizarOrdenYEquipos(ordenId, ordenData, equipos, contenedor) {
   // escritor desde que se eliminó trabajar-orden [2026-07-06] — el punto gris
   // era ruido sin señal. Auditoría órdenes P2.)
 
-  const iconoAdvertencia = sinEquipos
+  // Una DEVOLUCION no lleva equipos[]: lo suyo son los esperados del
+  // check-in (devolucion.esperados). El triangulo "orden sin equipos" era
+  // falsa alarma en TODAS las devoluciones (reporte del dueno 2026-09-03).
+  const sinEquiposEsNormal = typeof esOrdenDevolucion === 'function' && esOrdenDevolucion(ordenData);
+  const iconoAdvertencia = (sinEquipos && !sinEquiposEsNormal)
     ? '<span title="Orden sin equipos" style="cursor:help;margin-left:6px;vertical-align:middle;"><i data-lucide="alert-triangle" class="warn-icon" style="color:#d97706;width:15px;height:15px;"></i></span>'
     : '';
 
