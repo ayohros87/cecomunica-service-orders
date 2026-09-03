@@ -121,6 +121,12 @@ window.ContratoTarifario = {
       deleted: false,
       creado_por_uid: d.creado_por_uid,
     };
+    // Aditivo 2026-09-03 (recordatorio del representante, petición de
+    // Zuleika): quién validó con el cliente qué nombre al confeccionar.
+    // Opcional: el formulario clásico lo pasa; el wizard del Centro aún no.
+    if (d.representante_validacion) {
+      doc.representante_validacion = { ...d.representante_validacion, at: new Date() };
+    }
     // Aditivo 2026-08-27 (wizard del Centro): la duración también como número.
     // El string " meses" vacío de la duración "Otro" dejó 53 contratos sin
     // vencimiento calculable; el número no puede quedar vacío.

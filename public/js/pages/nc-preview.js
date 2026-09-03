@@ -87,9 +87,8 @@ window.NCPreview = {
           <div><b>RUC/DV:</b> ${esc((draft.cliente_ruc || '') + (draft.cliente_dv ? ' - DV' + draft.cliente_dv : ''))}</div>
           <div><b>Dirección:</b> ${esc(draft.cliente_direccion || '')}</div>
           <div><b>Teléfono:</b> ${esc(draft.cliente_telefono || '')}</div>
-          <div><b>Representante:</b> ${esc(draft.representante || '')}</div>
-          <div><b>Cédula Rep.:</b> ${esc(draft.representante_cedula || '')}</div>
         </div>
+        ${this.renderRepBlockHTML(draft)}
       </div>
       <div class="preview-card">
         <h4>Detalles del contrato</h4>
@@ -140,6 +139,77 @@ window.NCPreview = {
     `;
   },
 
+  // ── Validación del representante legal (Zuleika, 2026-09-03) ──────────────
+  // Contratos confeccionados y luego anulados porque el representante de la
+  // ficha ya no era el vigente. La vista previa exige marcar que se validó
+  // con el cliente: sin el check, "Confirmar y Guardar" queda deshabilitado.
+  renderRepBlockHTML(draft) {
+    const esc      = NC.escapeHtml;
+    const tiene    = !!(draft.representante || '').trim();
+    // Mismo destino que el lápiz "Editar cliente" del combo.
+    const fichaUrl = `../contratos/nuevo-cliente.html?id=${encodeURIComponent(draft.cliente_id)}&redirect=true`;
+    return `
+      <div class="preview-rep ${tiene ? '' : 'preview-rep--falta'}">
+        ${tiene ? `
+          <div><b>Representante legal:</b> ${esc(draft.representante)}${draft.representante_cedula ? ` — céd. ${esc(draft.representante_cedula)}` : ''}</div>
+          <div id="repFrescura" class="preview-rep-frescura">Consultando la ficha…</div>
+          <label class="preview-rep-check">
+            <input type="checkbox" id="chkRepValidado">
+            <span>Validé con el cliente que <b>${esc(draft.representante)}</b> sigue siendo el representante legal.</span>
+          </label>
+          <a class="preview-rep-link" href="${fichaUrl}" target="_blank" rel="noopener">¿Cambió? Corregir en la ficha</a>
+        ` : `
+          <div><b>⚠️ Este cliente no tiene representante legal registrado</b> — el contrato se imprime con ese espacio en blanco.</div>
+          <label class="preview-rep-check">
+            <input type="checkbox" id="chkRepValidado">
+            <span>Confirmé con el cliente quién es el representante legal vigente.</span>
+          </label>
+          <a class="preview-rep-link" href="${fichaUrl}" target="_blank" rel="noopener">Completar la ficha</a>
+        `}
+      </div>`;
+  },
+
+  // Contexto que hace útil el check: última validación estampada en la ficha
+  // o último cambio del representante en el historial (onClienteHistorial).
+  // Best-effort: sin dato, la línea se queda en el texto neutro.
+  async cargarFrescuraRep(draft) {
+    if (!document.getElementById('repFrescura')) return;
+    try {
+      const cli = NC.listaClientes[draft.cliente_id] || {};
+      let hist = [];
+      try {
+        const qs = await firebase.firestore().collection('clientes').doc(draft.cliente_id)
+          .collection('historial').orderBy('at', 'desc').limit(30).get();
+        hist = qs.docs.map(d => d.data());
+      } catch (_) { /* sin historial legible, la validación previa aún aplica */ }
+      const r = RepValidacion.resumen(cli, hist, Date.now());
+      const n = document.getElementById('repFrescura');
+      if (!n) return;                       // el modal se cerró o re-renderizó
+      n.textContent  = r.texto;
+      n.dataset.tono = r.tono;
+    } catch (_) {
+      const n = document.getElementById('repFrescura');
+      if (n) n.textContent = '';
+    }
+  },
+
+  _gateConfirm() {
+    const btn = document.getElementById('btnConfirmPreview');
+    const chk = document.getElementById('chkRepValidado');
+    btn.disabled = !(chk && chk.checked);
+    btn.title = btn.disabled ? 'Marca la validación del representante legal para continuar' : '';
+  },
+
+  // Re-pinta el cuerpo de la vista previa desde el formulario actual y rearma
+  // el candado del representante. Lo usa el submit y el regreso de pestaña
+  // (el vendedor corrigió la ficha en otra pestaña y volvió).
+  refrescar() {
+    NC.previewDraft = this.buildContratoDraft();
+    document.getElementById('previewBody').innerHTML = this.renderPreviewHTML(NC.previewDraft);
+    this._gateConfirm();
+    this.cargarFrescuraRep(NC.previewDraft);
+  },
+
   open()  { Modal.open('previewOverlay'); },
   close() { Modal.close('previewOverlay'); },
 
@@ -169,11 +239,16 @@ window.NCPreview = {
         if (!v.ok) { Toast.show(`⚠️ ${v.mensaje}`, 'warn'); return; }
       }
 
-      NC.previewDraft = self.buildContratoDraft();
+      self.refrescar();
       const sub = `${NC.previewDraft.cliente_nombre || ''} · ${NC.previewDraft.tipo_contrato || ''} · ${NC.previewDraft.accion || ''}`;
       document.getElementById('previewSub').textContent  = sub;
-      document.getElementById('previewBody').innerHTML   = self.renderPreviewHTML(NC.previewDraft);
       self.open();
+    });
+
+    // El check del representante habilita/deshabilita Confirmar. Delegado en
+    // previewBody porque el innerHTML se re-pinta en cada apertura.
+    document.getElementById('previewBody').addEventListener('change', e => {
+      if (e.target && e.target.id === 'chkRepValidado') self._gateConfirm();
     });
 
     document.getElementById('btnEditPreview').addEventListener('click', () => self.close());

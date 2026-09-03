@@ -106,6 +106,17 @@ window.NCGuardar = {
       return;
     }
 
+    // Segundo candado del check del representante legal (Zuleika 2026-09-03):
+    // la vista previa deshabilita Confirmar sin el check, pero esta función es
+    // la única vía de creación y no debe depender de que la llamen bien.
+    // También ANTES del correlativo, como todo rechazo temprano.
+    const chkRep = document.getElementById('chkRepValidado');
+    if (!chkRep || !chkRep.checked) {
+      Toast.show('⚠️ Valida el representante legal con el cliente antes de guardar.', 'warn');
+      this._abortarGuardado();
+      return;
+    }
+
     // Segundo candado del vínculo al original. El submit ya validó, pero esta
     // función es la ÚNICA vía de creación de contratos y no debe depender de
     // que la llamen bien. Va ANTES de reservar el correlativo: rechazar después
@@ -232,9 +243,22 @@ window.NCGuardar = {
       cargos: (window.NCCargos ? NCCargos.leer() : []),
       itbms_aplica: (document.getElementById('itbms_aplica')?.value ?? 'true') === 'true',
       creado_por_uid: user.uid,
+      representante_validacion: RepValidacion.construir(clienteData, user),
     });
 
     const docRef = await ContratosService.addContrato(contrato);
+
+    // La ficha recuerda la validación: la próxima vista previa de este cliente
+    // muestra "Validado por última vez hace N" en vez de pedir fe ciega.
+    // Best-effort — el contrato ya quedó guardado y esto no debe estorbar.
+    try {
+      await firebase.firestore().collection('clientes').doc(clienteId).update({
+        representante_validacion: {
+          ...RepValidacion.construir(clienteData, user),
+          at: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+    } catch (e) { console.warn('No se pudo estampar la validación del representante:', e); }
 
     try {
       const equiposHtml    = contrato.equipos.map(e =>

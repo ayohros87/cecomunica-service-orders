@@ -130,7 +130,14 @@ document.addEventListener('visibilitychange', async () => {
   const q      = (combo.value || '').trim();
   if (hidden.value) {
     const c = await ClientesService.getCliente(hidden.value);
-    if (c) { NC.listaClientes[c.id] = c; NCCombo.selectCliente(c.id, true); }
+    if (c) {
+      NC.listaClientes[c.id] = c; NCCombo.selectCliente(c.id, true);
+      // Vista previa abierta: el caso típico es "Corregir en la ficha" en otra
+      // pestaña y volver — el representante nuevo debe verse sin cerrar el
+      // modal, y el check de validación se rearma para el valor corregido.
+      const ov = document.getElementById('previewOverlay');
+      if (ov && ov.style.display === 'flex' && window.NCPreview) NCPreview.refrescar();
+    }
   } else if (q.length >= 2) {
     NCCombo.doSearch(q);
   } else {
