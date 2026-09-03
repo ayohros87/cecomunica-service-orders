@@ -763,10 +763,20 @@
     location.href = destino;
   }
 
+  // Si se llegó desde el Centro de gestión (?from=centro&cliente_id=…),
+  // Cancelar y el breadcrumb devuelven al Centro de ese cliente en vez de a
+  // la lista de cotizaciones — cotizar desde el Centro no debe sacarte de él.
+  function destinoSalida() {
+    const p = new URLSearchParams(location.search);
+    const cid = p.get('cliente_id');
+    if (p.get('from') === 'centro' && cid) return '../clientes/centro.html?id=' + encodeURIComponent(cid);
+    return 'index.html';
+  }
+
   function bindHeader() {
-    $('btnCancelar').addEventListener('click', () => salir('index.html'));
+    $('btnCancelar').addEventListener('click', () => salir(destinoSalida()));
     const bcIndex = document.querySelector('.app-breadcrumbs a[href="index.html"]');
-    if (bcIndex) bcIndex.addEventListener('click', (e) => { e.preventDefault(); salir('index.html'); });
+    if (bcIndex) bcIndex.addEventListener('click', (e) => { e.preventDefault(); salir(destinoSalida()); });
     $('btnGuardar').addEventListener('click', guardar);
     $('btnPreview').addEventListener('click', preview);
     $('btnAddItem').addEventListener('click', () => {
