@@ -31,12 +31,15 @@ window.MODULOS = (() => {
   // navegable: se llega SOLO desde el menú del Centro, marcado "avanzada"
   // (admin/recepción; la página conserva su propio guard de roles).
   const visiblesPorRol = {
-    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "facturacion_bandeja", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
+    // admin/contabilidad llegan a la bandeja por Finanzas → Bandeja; el módulo
+    // suelto "facturacion_bandeja" es solo para recepción (una sola entrada
+    // por rol, sin duplicar tarjetas en el home — Alberto 2026-09-04).
+    administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
     gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "centro", "contratos", "cotizaciones", "firma"],
     // inventario perdió "centro" el 2026-09-03: bodega asigna los seriales de
     // las gestiones desde Almacén · Asignar, ya no desde la ficha del cliente.
     inventario:    ["almacen", "inventario", "equipos", "pendientes", "piezas", "firma"],
-    contabilidad:  ["facturacion", "facturacion_bandeja", "firma"],
+    contabilidad:  ["facturacion", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],
     jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],
