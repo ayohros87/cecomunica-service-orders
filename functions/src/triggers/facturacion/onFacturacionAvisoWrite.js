@@ -37,6 +37,9 @@ module.exports = onDocumentWritten(
             sent_at: admin.firestore.FieldValue.delete(),
             reenviado_at: admin.firestore.FieldValue.serverTimestamp(),
             reenviado_por: quien,
+            // Correos anteriores a la bandeja (respaldados) no traen el enlace:
+            // sin él, onMailQueued no espeja el resultado en el aviso.
+            "meta.aviso_id": avisoId,
           });
           patch.correo = { ...(after.correo || {}), status: "queued", error: null };
           detalle = "Correo reenviado";

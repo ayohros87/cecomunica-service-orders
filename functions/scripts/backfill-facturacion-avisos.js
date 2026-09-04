@@ -116,6 +116,9 @@ async function main() {
     if (!APPLY) continue;
     const res = await FA.crearAviso(r.aviso);
     await db.collection(FA.COL).doc(res.id).set({ correo, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    // Enlace inverso: sin meta.aviso_id, onMailQueued no espeja el resultado
+    // de un reenvío en el aviso.
+    await d.ref.update({ "meta.aviso_id": res.id }).catch(e => console.log("  (meta.aviso_id no estampado:", e.message, ")"));
     creados++;
   }
   console.log(`\ncreados=${creados} existentes=${existentes} saltados=${saltados}`);
