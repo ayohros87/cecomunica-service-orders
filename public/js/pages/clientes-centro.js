@@ -237,8 +237,12 @@ window.Centro = {
       if (!acciones.length && !renov.length) { cont.innerHTML = ''; return; }
 
       // Colapsable (pedido 2026-08-26); las preferencias sobreviven en localStorage.
+      // PLEGADA por defecto desde 2026-09-04 (pedido de Zuleika): la franja
+      // desplazaba el buscador y la lista — el flujo principal — media pantalla
+      // hacia abajo. Plegada, el encabezado sigue diciendo CUÁNTO hay (acciones,
+      // vencidos, por vencer, custodia); quien la abrió una vez la conserva abierta.
       const MAX = 12, MAXV = 30;
-      const colapsado = localStorage.getItem('cg_hoy_colapsado') === '1';
+      const colapsado = localStorage.getItem('cg_hoy_colapsado') !== '0';
       const verVenc = localStorage.getItem('cg_hoy_venc') === '1';
       const fila = (i) => `<button type="button" class="cg-hoy ${i.tipo}"
             onclick="${i.g ? `Centro.gSel='${this.esc(i.g)}';` : ''}Centro.abrir('${this.esc(i.cliente_id)}')">
@@ -248,14 +252,21 @@ window.Centro = {
       if (nVencidos) chips.push(`<span class="cg-hoy-chip bad">${nVencidos} contrato${nVencidos === 1 ? '' : 's'} vencido${nVencidos === 1 ? '' : 's'}</span>`);
       if (nPorVencer) chips.push(`<span class="cg-hoy-chip warn">${nPorVencer} por vencer</span>`);
       if (nCustodia) chips.push(`<span class="cg-hoy-chip">${nCustodia} cuenta${nCustodia === 1 ? '' : 's'} sin contrato formal</span>`);
+      // Resumen en el encabezado: visible aunque la franja esté plegada.
+      const resumenHead = [
+        nVencidos  ? `${nVencidos} vencido${nVencidos === 1 ? '' : 's'}` : '',
+        nPorVencer ? `${nPorVencer} por vencer` : '',
+        nCustodia  ? `${nCustodia} sin contrato formal` : '',
+      ].filter(Boolean).join(' · ');
       cont.innerHTML = `<div class="ds-card" style="padding:0; margin-bottom:var(--sp-4); overflow:hidden;">
-        <button type="button" onclick="Centro.toggleParaHoy()"
+        <button type="button" onclick="Centro.toggleParaHoy()" title="${colapsado ? 'Mostrar' : 'Ocultar'} el detalle"
           style="width:100%; text-align:left; background:none; border:0; cursor:pointer; padding:10px 16px ${colapsado ? '10px' : '6px'};
                  font-size:11px; letter-spacing:.09em; text-transform:uppercase; font-weight:700; color:#8A6415;
-                 display:flex; align-items:center; gap:7px;">
+                 display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
           <i data-lucide="alert-triangle" style="width:14px;height:14px;"></i>
           Para hoy · ${acciones.length ? `${acciones.length} acci${acciones.length === 1 ? 'ón' : 'ones'} pendiente${acciones.length === 1 ? '' : 's'}` : 'sin acciones pendientes'}
-          <span id="cgHoyCaret" style="margin-left:auto; color:var(--fg-4); font-size:14px;">${colapsado ? '▸' : '▾'}</span>
+          ${resumenHead ? `<span style="font-weight:600; color:var(--fg-3); letter-spacing:.04em;">· ${resumenHead}</span>` : ''}
+          <span id="cgHoyCaret" style="margin-left:auto; color:var(--fg-4); font-size:12px; letter-spacing:0; text-transform:none; font-weight:600;">${colapsado ? 'Mostrar ▸' : 'Ocultar ▾'}</span>
         </button>
         <div id="cgHoyBody" class="${colapsado ? 'hidden' : ''}">
         ${renov.length ? `<div class="cg-hoy-resumen">
@@ -283,7 +294,7 @@ window.Centro = {
     if (!body) return;
     const colapsar = !body.classList.contains('hidden');
     body.classList.toggle('hidden', colapsar);
-    if (caret) caret.textContent = colapsar ? '▸' : '▾';
+    if (caret) caret.textContent = colapsar ? 'Mostrar ▸' : 'Ocultar ▾';
     try { localStorage.setItem('cg_hoy_colapsado', colapsar ? '1' : '0'); } catch (e) { /* sin persistencia */ }
   },
 

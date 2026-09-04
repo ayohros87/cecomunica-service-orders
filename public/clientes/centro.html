@@ -139,7 +139,9 @@
 
   <!-- ── Vista: directorio ─────────────────────────────────────────── -->
   <div id="vistaLista">
-    <div id="cgParaHoy"></div>
+    <!-- El buscador va PRIMERO (pedido de Zuleika 2026-09-04): el objetivo de
+         esta pantalla es encontrar al cliente; "Para hoy" es la capa secundaria
+         de señales (decisión 2026-08-25) y vive debajo, plegada por defecto. -->
     <div class="cg-tools">
       <input class="form-input cg-buscar" id="cgBuscar" type="search"
              placeholder="Buscar cliente por nombre, RUC o representante…" autocomplete="off">
@@ -153,6 +155,7 @@
       </label>
       <span id="cgResumen" style="font-size:13px; color:var(--fg-3);"></span>
     </div>
+    <div id="cgParaHoy"></div>
     <div id="cgLista"></div>
     <div style="text-align:center; margin-top:var(--sp-3);">
       <button class="btn btn-ghost hidden" id="btnMas">Cargar más</button>
@@ -211,7 +214,7 @@
 <div id="cgModal" class="cg-overlay hidden"></div>
 
 <script defer src="../js/ui/toast.js"></script>
-<script src="../js/pages/clientes-centro.js?v=cg63" defer></script>
+<script src="../js/pages/clientes-centro.js?v=cg64" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>
