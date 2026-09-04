@@ -935,9 +935,12 @@ window.Centro = {
     const c = this.contratos.find(x => x.id === id);
     if (!c) return;
     if (![ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)) { Toast.show('Solo administración o gerencia puede anular contratos.', 'bad'); return; }
-    if (!ContratoAnulacion.esAnulable(c)) { Toast.show('Solo se puede anular un contrato ACTIVO o APROBADO.', 'bad'); return; }
+    if (!ContratoAnulacion.esAnulable(c)) { Toast.show('Solo se puede anular un contrato ACTIVO, APROBADO o pendiente de aprobación.', 'bad'); return; }
     const cands = ContratoAnulacion.candidatos(this.contratos, id);
     const enCampo = this.equipos.filter(e => e.asignacion?.contrato_doc_id === id).length;
+    // Un contrato EN TRÁMITE (pendiente de aprobación) nunca movió equipo: la
+    // pregunta de los equipos sobra — solo el motivo.
+    const conEquipos = ContratoAnulacion.preguntaEquipos(c);
     const opcion = (valor, checked, titulo, sub) => `
       <label style="display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid var(--border-default); border-radius:10px; cursor:pointer;">
         <input type="radio" name="anulTipo" value="${valor}" ${checked ? 'checked' : ''} style="margin-top:3px;" onchange="Centro._anulSync()">
@@ -946,13 +949,16 @@ window.Centro = {
     this._abrirModalA({
       titulo: `Anular <span class="cg-mono">${this.esc(c.contrato_id || id)}</span>`,
       cuerpo: `
+        ${conEquipos ? `
         <p style="font-size:13px; color:var(--fg-3); margin:0 0 12px;">¿Qué pasa con los equipos${enCampo ? ` (<b>${enCampo}</b> en campo bajo este contrato)` : ''}?
           De eso depende que el sistema abra o no una orden para recuperarlos.</p>
         <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
           ${opcion('sustitucion', true, 'Se rehace el contrato — el cliente conserva los equipos.', 'Error de precio, de representante, de modelo… El equipo no se mueve.')}
           ${opcion('terminacion', false, 'Termina el acuerdo — el cliente devuelve los equipos.', 'Se abrirá una orden de DEVOLUCIÓN para recuperarlos.')}
-        </div>
-        <div id="anulBloqueSust" style="margin-bottom:12px;">
+        </div>` : `
+        <p style="font-size:13px; color:var(--fg-3); margin:0 0 12px;">El contrato está <b>en trámite</b> (todavía no se aprobó): se anula sin mover ningún equipo
+          y queda en el historial con el motivo. Si hace falta, crea el contrato correcto después.</p>`}
+        <div id="anulBloqueSust" style="margin-bottom:12px;${conEquipos ? '' : ' display:none;'}">
           <label style="display:block; font-weight:600; font-size:13px; margin-bottom:4px;">Contrato que lo sustituye <small style="font-weight:400; color:var(--fg-3);">(opcional)</small></label>
           <select class="form-input" id="anulSustituto" style="width:100%;">
             <option value="">Todavía no lo he creado</option>
@@ -978,14 +984,17 @@ window.Centro = {
     if (!c) return;
     const motivo = (document.getElementById('anulMotivo')?.value || '').trim();
     if (!motivo) { document.getElementById('anulMotivo')?.focus(); Toast.show('Debes indicar un motivo.', 'bad'); return; }
-    const tipo = document.querySelector('#cgModal input[name="anulTipo"]:checked')?.value || 'sustitucion';
-    const sustId = tipo === 'sustitucion' ? (document.getElementById('anulSustituto')?.value || '') : '';
+    const conEquipos = ContratoAnulacion.preguntaEquipos(c);
+    const tipo = conEquipos
+      ? (document.querySelector('#cgModal input[name="anulTipo"]:checked')?.value || 'sustitucion')
+      : 'sustitucion';   // en trámite: nada se mueve
+    const sustId = conEquipos && tipo === 'sustitucion' ? (document.getElementById('anulSustituto')?.value || '') : '';
     const sustituto = sustId ? this.contratos.find(x => x.id === sustId) : null;
     const update = ContratoAnulacion.buildUpdate(c, { motivo, tipo, sustituto, uid: this.uid }, id);
     try {
       await ContratosService.updateContrato(id, update);
       this._cerrarModal();
-      Toast.show(ContratoAnulacion.mensaje(update), 'ok');
+      Toast.show(ContratoAnulacion.mensaje(update, c), 'ok');
       // onAnnulment corre en ~1-2s (devolución / traspaso de equipos): la ficha
       // se recarga completa para que contratos, equipos y señales lo reflejen.
       setTimeout(() => { if (this.cliente) this.abrir(this.cliente.id, { push: false }); }, 1500);
@@ -1752,7 +1761,9 @@ window.Centro = {
         ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
       ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
         ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})">Regularizar por anexo</button>` : ''}
-      <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`;
+      <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>
+      ${ContratoAnulacion.esAnulable(c) && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
+        ? `<button class="btn-quiet cg-act" style="margin-left:auto;" onclick="Centro.anularContrato('${this.esc(c.id)}')">Anular contrato…</button>` : ''}`;
     return `
       <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">

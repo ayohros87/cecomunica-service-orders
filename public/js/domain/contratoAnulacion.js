@@ -10,8 +10,17 @@
 //   · 'terminacion' — termina el acuerdo; onAnnulment abre la DEVOLUCIÓN.
 window.ContratoAnulacion = {
 
-  // Solo se anula un contrato vivo; admin y gerente (roles.js 'anular-contrato').
-  esAnulable(c) { return !!c && ['activo', 'aprobado'].includes(c.estado); },
+  // Se anula un contrato vivo O uno todavía en trámite (pendiente de
+  // aprobación — pedido de Alberto 2026-09-04: "cuando el contrato está en
+  // gestión debería haber una forma de anular"). Admin y gerente (roles.js
+  // 'anular-contrato'). El menú ⋯ de la lista sigue ofreciendo Eliminar para
+  // los pendientes; el Centro los anula con rastro (motivo + quién).
+  esAnulable(c) { return !!c && ['activo', 'aprobado', 'pendiente_aprobacion'].includes(c.estado); },
+
+  // ¿Aplica la pregunta "qué pasa con los equipos"? Solo si el contrato llegó
+  // a estar vivo: un pendiente de aprobación nunca movió equipo, se anula sin
+  // devolución ni traspaso (anulacion_tipo 'sustitucion' = nada se mueve).
+  preguntaEquipos(c) { return !!c && ['activo', 'aprobado'].includes(c.estado); },
 
   // Candidatos a sustituto: contratos vivos del MISMO cliente, el más nuevo primero.
   candidatos(contratosDelCliente, idAnulado) {
@@ -58,7 +67,9 @@ window.ContratoAnulacion = {
   },
 
   // Qué va a pasar con los equipos — es lo que la persona confirma de un vistazo.
-  mensaje(update) {
+  mensaje(update, c) {
+    if (c && c.estado === 'pendiente_aprobacion')
+      return '✅ Contrato ANULADO — no había sido aprobado, no se mueve ningún equipo.';
     if (update.anulacion_tipo === 'terminacion')
       return '✅ Contrato ANULADO. Se abrirá una orden de DEVOLUCIÓN para recuperar los equipos.';
     return update.sustituido_por_id
