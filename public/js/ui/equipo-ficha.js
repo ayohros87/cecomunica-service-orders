@@ -73,12 +73,16 @@ window.EquipoFicha = {
     } catch (e) { return; }
 
     if (!docs.length) {
+      // Sin ficha en el pool la condición igual se muestra: vive por serial,
+      // no por ficha (equipo del cliente que nunca entró a bodega).
+      const condicionHtml = await this._condicionHtml(serialRaw);
       this._render(`
         <div style="padding:18px 6px; text-align:center; color:var(--fg-3); line-height:1.6;">
           <div style="font-family:var(--mono, monospace); font-size:16px; color:var(--text);">${this._esc(serialRaw)}</div>
           Este serial no está registrado en el pool de equipos.<br>
           Se registrará automáticamente la próxima vez que toque un contrato, una orden o bodega.
-        </div>`);
+        </div>
+        ${condicionHtml}`);
       return;
     }
     if (docs.length > 1) {
@@ -113,6 +117,7 @@ window.EquipoFicha = {
     const esc = this._esc.bind(this);
     let movs = [];
     try { movs = await EquiposPoolService.getMovimientos(eq.id); } catch (e) { /* sin historia */ }
+    const condicionHtml = await this._condicionHtml(eq.serial || eq.serial_norm);
 
     const asig = eq.asignacion || null;
     const linkCliente = asig && asig.cliente_id
@@ -188,6 +193,7 @@ window.EquipoFicha = {
       </div>
       <div style="font-size:12.5px; color:var(--fg-3); margin:2px 0 12px;">${esc(eq.modelo_label || eq.modelo_id || 'Modelo sin registrar')}</div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px 16px; margin-bottom:14px;">${meta}</div>
+      ${condicionHtml}
       <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3); margin-bottom:8px;">Historia</div>
       <ul style="list-style:none; margin:0; padding:0; max-height:290px; overflow-y:auto;">${historia}</ul>`,
       footerAcciones + footerInv);
@@ -259,6 +265,118 @@ window.EquipoFicha = {
       if (typeof this.onCambio === 'function') this.onCambio();
     } catch (e) {
       aviso(e.message || String(e), 'bad');
+    }
+  },
+
+  // ── Condición particular (petición Solangel 2026-09-04) ────────────────
+  // Vive en equipos_condiciones, por serial, aparte del pool: el radio sirve
+  // pero arrastra una limitación (auricular dañado, etc.). Aquí se ve la
+  // vigente con su historial, se registra una nueva y se levanta cuando el
+  // radio se repara de verdad. Las reglas mandan; los roles de abajo solo
+  // deciden qué botones pintar.
+  _ROLES_CONDICION_LEVANTAR: ['administrador', 'jefe_taller', 'inventario'],
+  _ROLES_CONDICION_REGISTRAR: ['administrador', 'jefe_taller', 'inventario', 'tecnico', 'tecnico_operativo', 'recepcion'],
+
+  _rolActual() {
+    return window.userRole || (window.APP && APP.state && APP.state.userRole) || '';
+  },
+
+  async _condicionHtml(serial) {
+    if (typeof EquiposCondicionesService === 'undefined') return '';
+    const esc = this._esc.bind(this);
+    let c = null;
+    try { c = await EquiposCondicionesService.buscarCompleto(serial); } catch (e) { c = null; }
+    const rol = this._rolActual();
+    const puedeLevantar = this._ROLES_CONDICION_LEVANTAR.includes(rol)
+      || (window.OrdenesQC && typeof OrdenesQC.puedeHacerQc === 'function' && OrdenesQC.puedeHacerQc(rol));
+    const puedeRegistrar = this._ROLES_CONDICION_REGISTRAR.includes(rol) || puedeLevantar;
+    const serialAttr = esc(serial);
+    const btnRegistrar = puedeRegistrar
+      ? `<button type="button" class="btn btn-ghost btn-sm" onclick="EquipoFicha._registrarCondicion('${serialAttr}')">${c && c.vigente !== false ? 'Corregir la condición' : 'Registrar condición'}</button>`
+      : '';
+
+    if (!c || c.vigente === false) {
+      // Sin condición vigente: solo el botón (y, si la hubo, la traza).
+      const hist = (c && Array.isArray(c.historial) && c.historial.length)
+        ? `<details style="margin-top:6px;"><summary style="cursor:pointer; font-size:12px; color:var(--fg-3);">Tuvo una condición, ya levantada (${c.historial.length} movimiento(s))</summary>${this._condicionHistorialHtml(c)}</details>`
+        : '';
+      if (!btnRegistrar && !hist) return '';
+      return `
+        <div style="margin:0 0 14px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--fg-3);">Condición particular</div>
+          ${btnRegistrar}
+        </div>
+        ${hist ? `<div style="margin:-8px 0 14px;">${hist}</div>` : ''}`;
+    }
+
+    const cuando = this._fecha(c.registrado_at);
+    const btnLevantar = puedeLevantar
+      ? `<button type="button" class="btn btn-secondary btn-sm" onclick="EquipoFicha._levantarCondicion('${serialAttr}')" title="El radio ya no tiene esta limitación: el aviso deja de salir y queda la traza">Levantar (se resolvió)</button>`
+      : '';
+    return `
+      <div style="margin:0 0 14px; background:#FFFBEB; border:1px solid #FCD34D; border-radius:10px; padding:10px 12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:#92400E;">⚠ Condición particular vigente</div>
+          <div style="display:flex; gap:6px;">${btnRegistrar}${btnLevantar}</div>
+        </div>
+        <div style="font-size:13.5px; color:#78350F; margin-top:4px; line-height:1.5;">${esc(c.condicion)}</div>
+        <div style="font-size:11.5px; color:#92400E; margin-top:4px;">
+          ${[c.por_email, cuando, c.orden_id ? `orden ${c.orden_id}` : ''].filter(Boolean).map(esc).join(' · ')}
+        </div>
+        ${Array.isArray(c.historial) && c.historial.length > 1
+          ? `<details style="margin-top:6px;"><summary style="cursor:pointer; font-size:12px; color:#92400E;">Historial (${c.historial.length})</summary>${this._condicionHistorialHtml(c)}</details>`
+          : ''}
+      </div>`;
+  },
+
+  _condicionHistorialHtml(c) {
+    const esc = this._esc.bind(this);
+    const items = [...(c.historial || [])].reverse().map(h => {
+      const f = h.fecha_iso ? new Date(h.fecha_iso).toLocaleString('es-PA', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      const que = h.tipo === 'levantamiento'
+        ? `<b>Levantada</b>${h.motivo ? ': ' + esc(h.motivo) : ''}`
+        : `<b>Registrada</b>: ${esc(h.condicion || '')}`;
+      return `<li style="font-size:12px; line-height:1.5; padding:2px 0;">${que}
+        <span style="color:var(--fg-3);">· ${esc(h.por_email || '')}${f ? ' · ' + f : ''}${h.orden_id ? ' · orden ' + esc(h.orden_id) : ''}</span></li>`;
+    }).join('');
+    return `<ul style="margin:4px 0 0; padding-left:16px;">${items}</ul>`;
+  },
+
+  async _registrarCondicion(serial) {
+    if (!window.Modal || typeof EquiposCondicionesService === 'undefined') return;
+    const texto = await Modal.prompt({
+      title: 'Condición particular del equipo',
+      message: `El radio ${serial} funciona, pero con una limitación que hay que tener en cuenta antes de asignarlo o de volver a diagnosticarlo. Queda pegada al serial.`,
+      placeholder: 'Cuál — ej.: conector de auricular dañado, no repara en taller',
+    });
+    if (!texto || !texto.trim()) return;
+    try {
+      await EquiposCondicionesService.registrar({ serial, condicion: texto.trim(), origen: 'ficha' });
+      if (window.SerialField) SerialField.invalidar(serial);
+      if (window.Toast) Toast.show('Condición registrada', 'ok');
+      await this.abrir(serial);
+      if (typeof this.onCambio === 'function') this.onCambio();
+    } catch (e) {
+      if (window.Toast) Toast.show('No se pudo registrar: ' + (e.message || e), 'bad');
+    }
+  },
+
+  async _levantarCondicion(serial) {
+    if (!window.Modal || typeof EquiposCondicionesService === 'undefined') return;
+    const motivo = await Modal.prompt({
+      title: 'Levantar la condición',
+      message: `El aviso sobre ${serial} dejará de salir. El registro no se borra: queda quién la levantó y por qué.`,
+      placeholder: 'Motivo (obligatorio) — ej.: se cambió el conector fuera del taller',
+    });
+    if (!motivo || !motivo.trim()) return;
+    try {
+      await EquiposCondicionesService.levantar(serial, motivo.trim());
+      if (window.SerialField) SerialField.invalidar(serial);
+      if (window.Toast) Toast.show('Condición levantada', 'ok');
+      await this.abrir(serial);
+      if (typeof this.onCambio === 'function') this.onCambio();
+    } catch (e) {
+      if (window.Toast) Toast.show('No se pudo levantar: ' + (e.message || e), 'bad');
     }
   },
 

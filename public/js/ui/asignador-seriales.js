@@ -522,10 +522,33 @@ window.AsignadorSeriales = (() => {
 
     // ── Política SUAVE: avisos, nunca bloquea ──────────────────────────
     // Revisa solo los seriales nuevos frente a lo ya guardado (setGuardados).
+    // Condición particular registrada por serial (equipos_condiciones): el
+    // radio sirve, pero con una limitación. Aviso, nunca bloqueo — la
+    // condición es justamente "sirve para un cliente que no use esa función".
+    // Se muestra en las DOS políticas: en la suave va dentro de advertenciasPool;
+    // en la dura, después de que exigirEnBodega dio el visto bueno.
+    async function avisosCondiciones(seriales) {
+      if (typeof EquiposCondicionesService === 'undefined') return [];
+      const nuevos = (seriales || []).filter(s => !st.guardados.has(norm(s.serial)));
+      if (!nuevos.length) return [];
+      let mapa;
+      try { mapa = await EquiposCondicionesService.buscarVarios(nuevos.map(s => s.serial)); }
+      catch (e) { return []; }
+      const avisos = [];
+      for (const s of nuevos) {
+        const c = mapa.get(norm(s.serial));
+        if (!c) continue;
+        avisos.push({ serial: s.serial, chip: `⚠ condición: ${EquiposCondicionesService.resumen(c.condicion, 40)}`,
+          chipCss: 'background:#fef3c7;color:#92400e;',
+          detalle: `${c.condicion}${c.orden_id ? ` (orden ${c.orden_id})` : ''}. Funciona, pero verifica que este cliente no necesite justo esa función.` });
+      }
+      return avisos;
+    }
+
     async function advertenciasPool(seriales) {
       if (typeof EquiposPoolService === 'undefined') return [];
       const nuevos = (seriales || []).filter(s => !st.guardados.has(norm(s.serial)));
-      const avisos = [];
+      const avisos = await avisosCondiciones(seriales);
       for (const s of nuevos) {
         try {
           const docs = await EquiposPoolService.findBySerial(s.serial);
@@ -727,12 +750,19 @@ window.AsignadorSeriales = (() => {
         if (typeof ctxValidacion.permitir === 'function' && e.doc && ctxValidacion.permitir(e)) unidades.set(norm(e.serial), e.doc);
         else errores.push(e);
       });
-      if (!errores.length) return { unidades, excepcion: null };
-      const r = await panelBloqueo(errores);
-      if (!r) return null;
-      // Forzado: las unidades de modelo distinto entran con su doc real.
-      errores.forEach(e => { if (e.doc) unidades.set(norm(e.serial), e.doc); });
-      return { unidades, excepcion: { motivo: r.motivo, seriales: errores.map(e => e.serial) } };
+      let excepcion = null;
+      if (errores.length) {
+        const r = await panelBloqueo(errores);
+        if (!r) return null;
+        // Forzado: las unidades de modelo distinto entran con su doc real.
+        errores.forEach(e => { if (e.doc) unidades.set(norm(e.serial), e.doc); });
+        excepcion = { motivo: r.motivo, seriales: errores.map(e => e.serial) };
+      }
+      // Ya pasó la política dura: si alguna unidad arrastra una condición
+      // particular, se muestra para que bodega decida — no bloquea.
+      const avisos = await avisosCondiciones(seriales);
+      if (avisos.length && !(await panelRevisionSeriales(avisos, (seriales || []).length))) return null;
+      return { unidades, excepcion };
     }
 
     function setGuardados(seriales) {
@@ -749,7 +779,7 @@ window.AsignadorSeriales = (() => {
       render, refresh, collect, validarCompleto, presentes, setLocked, aplicarBusqueda,
       fillFrom, togglePaste, applyPaste, onOmitToggle,
       jalarItems, tomarDelPool, abrirPickerPool,
-      advertenciasPool, panelRevisionSeriales, confirmarAvisosPool,
+      advertenciasPool, avisosCondiciones, panelRevisionSeriales, confirmarAvisosPool,
       validarDuro, panelBloqueo, exigirEnBodega,
       setGuardados, setContexto,
     };

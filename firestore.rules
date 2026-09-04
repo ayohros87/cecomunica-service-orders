@@ -722,6 +722,27 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Equipos con CONDICIÓN PARTICULAR (petición de Solangel 2026-09-04): el
+    // radio funciona pero arrastra una limitación que el taller no puede
+    // resolver (p.ej. auricular dañado que pide microsoldadura). Un doc por
+    // serial normalizado, igual que equipos_descartados.
+    //   · Lectura: cualquier autenticado — es una alerta, cuanta más gente la
+    //     vea antes de asignar o recibir el radio, mejor.
+    //   · Registrar (vigente: true): quien la detecta. El técnico la marca en
+    //     su intervención y el cierre de una ENTRADA la escribe; jefe_taller
+    //     y sus suplentes la confirman al firmar el QC.
+    //   · Levantar (vigente: false): solo quien firma QC, inventario y admin —
+    //     es afirmar que el radio ya no tiene la limitación.
+    //   · Nunca se borra desde la UI: levantar apila la traza en `historial[]`.
+    match /equipos_condiciones/{docId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn()
+        && (userRole() in ["administrador", "jefe_taller", "inventario"] || esRevisorQcExtra()
+            || (userRole() in ["recepcion", "tecnico", "tecnico_operativo"]
+                && request.resource.data.get("vigente", false) == true));
+      allow delete: if isAdmin();
+    }
+
     // Equipos que el cliente NO devolvió y hay que cobrarle (finiquito,
     // pérdida, se los quedó). Un doc por renglón cobrable.
     // Plan: docs/plans/PLAN_EQUIPOS_NO_DEVUELTOS.md.

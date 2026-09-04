@@ -33,6 +33,7 @@
     'go-reporte-pendientes': () => window.open(BASE + 'reporte-pendientes.html', '_blank'),
     'go-progreso-tecnicos': () => window.location.href = 'progreso-tecnicos.html',
     'go-descartados': () => window.location.href = '../inventario/descartados.html',
+    'go-condiciones': () => window.location.href = '../inventario/condiciones.html',
     'go-menu-principal': () => window.location.href = '../index.html',
     'logout': () => cerrarSesion(),
     'toggle-topbar-menu': () => toggleTopbarMenu(),

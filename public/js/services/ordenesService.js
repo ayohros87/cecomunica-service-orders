@@ -1156,6 +1156,38 @@ const OrdenesService = {
   },
 
   /**
+   * Marca (o desmarca) un equipo con una CONDICIÓN PARTICULAR desde la
+   * intervención del técnico (petición Solangel 2026-09-04): el radio
+   * funciona, pero arrastra una limitación que el taller no puede resolver.
+   * Solo estampa el equipo dentro de la orden; el registro central por serial
+   * en `equipos_condiciones` lo escribe la firma del QC (o el cierre de una
+   * ENTRADA), igual que con el descarte.
+   */
+  async updateEquipoCondicion({ ordenId, equipoId, condicion, texto, uid, email }) {
+    const db = firebase.firestore();
+    const ordenRef = db.collection("ordenes_de_servicio").doc(ordenId);
+    const snap = await ordenRef.get();
+
+    if (!snap.exists) throw new Error("Orden no encontrada");
+
+    const data = snap.data() || {};
+    const equiposAll = Array.isArray(data.equipos) ? data.equipos : [];
+    const realIndex = equiposAll.findIndex(e => !e?.eliminado && e?.id === equipoId);
+
+    if (realIndex === -1) throw new Error("Equipo no encontrado");
+
+    equiposAll[realIndex].condicion_especial = !!condicion;
+    equiposAll[realIndex].condicion_texto = condicion ? (texto || "") : "";
+    equiposAll[realIndex].condicion_updated_at = firebase.firestore.Timestamp.now();
+    equiposAll[realIndex].condicion_uid = uid;
+    equiposAll[realIndex].condicion_email = email;
+
+    await ordenRef.update({ equipos: equiposAll });
+
+    return equiposAll;
+  },
+
+  /**
    * Append a photo entry to an equipo inside an order.
    * Photo is stored inline on equipos[i].fotos = [...]
    */

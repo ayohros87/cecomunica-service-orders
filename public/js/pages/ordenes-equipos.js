@@ -298,6 +298,53 @@ document.addEventListener('click', (e) => {
 
 // actualizarResumen → pages/ordenes-render.js
 
+// ── Condición particular por serial (equipos_condiciones) ─────────────────
+// Lo que YA está registrado sobre un serial, aparte de esta orden. Petición
+// de Alberto al aprobar lo de Solangel (2026-09-04): si el radio vuelve a
+// taller por cualquier proceso, el técnico tiene que verlo sin volver a
+// descifrar el mismo problema. Best-effort: sin servicio o sin red, nada.
+async function _mostrarCondicionVigente(serial, idx) {
+  const box = document.getElementById("trabajoCondicionVigente");
+  if (!box) return;
+  box.style.display = "none";
+  box.innerHTML = "";
+  if (typeof EquiposCondicionesService === "undefined") return;
+  let c = null;
+  try { c = await EquiposCondicionesService.buscar(serial); } catch (e) { c = null; }
+  // El modal navega entre equipos (Anterior/Siguiente): si ya cambió, no pintar.
+  if (!c || _trabajoEquipoIdx !== idx) return;
+  const f = c.registrado_at?.toDate ? c.registrado_at.toDate().toLocaleDateString("es-PA") : "";
+  const meta = [c.por_email, f, c.orden_id ? "orden " + c.orden_id : ""].filter(Boolean).join(" · ");
+  box.innerHTML = `⚠ <b>Este equipo ya tiene una condición registrada:</b> ${escapeHtml(String(c.condicion || ""))}
+    <div style="font-size:11.5px;margin-top:3px;">${escapeHtml(meta)} — si sigue igual no hace falta volver a marcarla; si cambió, márcala abajo con el texto nuevo.</div>`;
+  box.style.display = "";
+}
+
+// Chip amarillo en las tarjetas (móvil) con la condición registrada por
+// serial. Se pinta DESPUÉS del render, sin bloquearlo.
+async function _decorarCondicionesEnTarjetas(list, equipos) {
+  if (!list || typeof EquiposCondicionesService === "undefined") return;
+  const seriales = (equipos || []).map(e => String(e.numero_de_serie || e.serial || e.SERIAL || "")).filter(s => s.trim());
+  if (!seriales.length) return;
+  let mapa;
+  try { mapa = await EquiposCondicionesService.buscarVarios(seriales); } catch (e) { return; }
+  if (!mapa.size) return;
+  list.querySelectorAll(".equipo-card[data-serial]").forEach(card => {
+    const serial = card.getAttribute("data-serial") || "";
+    const c = mapa.get(EquiposCondicionesService.normalizar(serial));
+    if (!c) return;
+    const host = card.querySelector(".equipo-card-serial");
+    if (!host || host.querySelector(".eqcond-chip")) return;
+    const chip = document.createElement("a");
+    chip.className = "eqpool-chip eqpool-chip-aviso eqcond-chip";
+    chip.style.cssText = "text-decoration:none;cursor:pointer;margin-left:6px;";
+    chip.textContent = `⚠ condición: ${EquiposCondicionesService.resumen(c.condicion, 40)}`;
+    chip.title = `Condición registrada por serial: ${c.condicion}${c.orden_id ? " (orden " + c.orden_id + ")" : ""}. Click para ver la ficha.`;
+    chip.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); if (window.EquipoFicha) EquipoFicha.abrir(serial); });
+    host.appendChild(chip);
+  });
+}
+
 window.abrirEquiposMobile = function(ordenId) {
   const o = APP.state.orders.find(x => x.ordenId === ordenId);
   if (!o) return;
@@ -368,7 +415,9 @@ window.abrirEquiposMobile = function(ordenId) {
               ? `<div class="equipo-status-badge equipo-status-badge--warn" style="background:#FEF2F2;color:#991B1B;border-color:#FECACA;" title="${escapeHtml((e.descarte_motivo || '').toString())}"><i data-lucide="ban"></i> Descartado</div>`
               : (noDisponible
                 ? '<div class="equipo-status-badge equipo-status-badge--warn"><i data-lucide="ban"></i> No disponible</div>'
-                : (e.trabajo_tecnico ? '<div class="equipo-status-badge equipo-status-badge--ok">✓ OK</div>' : ''))
+                : (e.condicion_especial
+                  ? `<div class="equipo-status-badge equipo-status-badge--warn" style="background:#FFFBEB;color:#92400E;border-color:#FCD34D;" title="${escapeHtml((e.condicion_texto || '').toString())}"><i data-lucide="alert-triangle"></i> Con condición</div>`
+                  : (e.trabajo_tecnico ? '<div class="equipo-status-badge equipo-status-badge--ok">✓ OK</div>' : '')))
             }
           </div>
           ${obsHtml}
@@ -390,6 +439,8 @@ window.abrirEquiposMobile = function(ordenId) {
       `;
     }).join("");
   }
+
+  _decorarCondicionesEnTarjetas(list, equipos);
 
   // Buscador de serial (misma petición que en la tabla de escritorio). Al
   // cambiar de orden se limpia; si es un refresco de la MISMA orden se
@@ -678,11 +729,43 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
     chkDescarte.onchange = () => {
       if (!chkDescarte.checked && motivoDescarte) motivoDescarte.value = "";
       _syncDescarteUI();
+      // Un descartado no lleva condición: ya no circula.
+      if (chkDescarte.checked && chkCondicion) { chkCondicion.checked = false; if (txtCondicion) txtCondicion.value = ""; }
+      _syncCondicionUI();
       if (chkDescarte.checked) setTimeout(() => motivoDescarte?.focus(), 0);
     };
   }
   if (motivoDescarte) motivoDescarte.value = isDescartado ? (e.descarte_motivo || "").toString() : "";
   _syncDescarteUI();
+
+  // Condición particular (petición Solangel 2026-09-04) — en CUALQUIER tipo
+  // de orden: el radio funciona, pero con una limitación que el taller no
+  // puede resolver. Excluyente con "no disponible" (no se revisó) y con el
+  // descarte (ya no circula). Aquí solo se estampa en el equipo; el registro
+  // por serial lo escribe la firma del QC o el cierre de la ENTRADA.
+  const chkCondicion = document.getElementById("trabajoCondicion");
+  const txtCondicion = document.getElementById("trabajoCondicionTexto");
+  const avisoCondicion = document.getElementById("trabajoCondicionAviso");
+  const isConCondicion = !!e.condicion_especial;
+  const _syncCondicionUI = () => {
+    const checked = !!chkCondicion?.checked;
+    if (txtCondicion) txtCondicion.disabled = !checked;
+    if (avisoCondicion) avisoCondicion.style.display = checked ? "" : "none";
+    if (chkCondicion) chkCondicion.disabled = !!chkNoDisp?.checked || !!chkDescarte?.checked;
+  };
+  if (chkCondicion) {
+    chkCondicion.checked = isConCondicion;
+    chkCondicion.onchange = () => {
+      if (!chkCondicion.checked && txtCondicion) txtCondicion.value = "";
+      _syncCondicionUI();
+      if (chkCondicion.checked) setTimeout(() => txtCondicion?.focus(), 0);
+    };
+  }
+  if (txtCondicion) txtCondicion.value = isConCondicion ? (e.condicion_texto || "").toString() : "";
+  _syncCondicionUI();
+  // Lo que YA está registrado por serial, para que el técnico no vuelva a
+  // descifrar el mismo problema (pedido de Alberto al aprobar la petición).
+  _mostrarCondicionVigente(serial, idx);
 
   if (chkNoDisp) {
     chkNoDisp.onchange = () => {
@@ -696,6 +779,9 @@ window.abrirTrabajoEquipoModal = function(ordenId, idx) {
         if (checked) txtEl.value = "";
         txtEl.disabled = checked;
       }
+      // Un equipo que no llegó no se revisó: sin condición que marcar.
+      if (chkCondicion && checked) { chkCondicion.checked = false; if (txtCondicion) txtCondicion.value = ""; }
+      _syncCondicionUI();
       if (chkDescarte) {
         if (checked) { chkDescarte.checked = false; if (motivoDescarte) motivoDescarte.value = ""; }
         chkDescarte.disabled = checked;
@@ -1381,6 +1467,16 @@ window.guardarTrabajoEquipoModal = async function() {
     return;
   }
 
+  // Condición particular: el texto es obligatorio (es lo que leen bodega y el
+  // QC). No aplica si el radio no se revisó ni si se descartó.
+  const marcarCondicion = !marcarNoDisp && !marcarDescarte && !!document.getElementById("trabajoCondicion")?.checked;
+  const textoCondicion = (document.getElementById("trabajoCondicionTexto")?.value || "").trim();
+  if (marcarCondicion && !textoCondicion) {
+    Toast.show("Escribe cuál es la condición — es lo que verán bodega y el QC.", "warn");
+    document.getElementById("trabajoCondicionTexto")?.focus();
+    return;
+  }
+
   try {
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader"></i> Guardando...';
@@ -1413,6 +1509,17 @@ window.guardarTrabajoEquipoModal = async function() {
           equipoId: cacheEquipo?.id,
           descartado: false,
           motivo: "",
+          uid,
+          email
+        });
+      }
+      // Lo mismo con la condición: un equipo que no llegó no se revisó.
+      if (cacheEquipo?.condicion_especial) {
+        equiposAll = await OrdenesService.updateEquipoCondicion({
+          ordenId: _trabajoOrdenId,
+          equipoId: cacheEquipo?.id,
+          condicion: false,
+          texto: "",
           uid,
           email
         });
@@ -1472,6 +1579,21 @@ window.guardarTrabajoEquipoModal = async function() {
       });
     }
 
+    // Condición particular: igual, solo si cambió. El registro por serial lo
+    // hace la firma del QC (o el cierre de la ENTRADA).
+    const condicionCambio = marcarCondicion !== !!cacheEquipo?.condicion_especial
+      || (marcarCondicion && textoCondicion !== (cacheEquipo?.condicion_texto || "").trim());
+    if (condicionCambio && cacheEquipo?.id) {
+      equiposAll = await OrdenesService.updateEquipoCondicion({
+        ordenId: _trabajoOrdenId,
+        equipoId: cacheEquipo.id,
+        condicion: marcarCondicion,
+        texto: textoCondicion,
+        uid,
+        email
+      });
+    }
+
     // Actualizar cache local
     const cache = APP.state.orders.find(x => x.ordenId === _trabajoOrdenId);
     if (cache) cache.equipos = equiposAll;
@@ -1484,7 +1606,9 @@ window.guardarTrabajoEquipoModal = async function() {
       ? `✅ Intervención guardada en ${1 + marcados.length} equipo(s)`
       : (marcarDescarte
         ? "⛔ Intervención guardada — equipo marcado como descartado (queda en el registro al cerrar la entrada)"
-        : "✅ Intervención guardada"), "ok");
+        : (marcarCondicion
+          ? "⚠️ Intervención guardada — condición particular marcada (queda pegada al serial al firmar el QC)"
+          : "✅ Intervención guardada")), "ok");
     
     // Reset button state
     btn.disabled = false;

@@ -592,7 +592,11 @@ function renderEquiposTabla(ordenId, equipos, filaDetalle) {
   aplicarBusquedaSerialOrden(ordenId);
 
   APP.utils.lucideRefresh(filaDetalle);
-  decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle);
+  // Encadenado: el decorado del pool limpia los chips de la celda antes de
+  // pintar; el de condiciones va después para que no se lo lleve.
+  decorarEstadoPoolEnTabla(ordenId, equipos, filaDetalle)
+    .then(() => decorarCondicionesEnTabla(ordenId, equipos, filaDetalle))
+    .catch(() => {});
 }
 
 // ── Buscador de serial dentro de una orden ────────────────────────────────
@@ -698,6 +702,43 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();           // el filtro ya es en vivo; Enter no envía nada
   }
 });
+
+// Condición particular por serial (equipos_condiciones, petición Solangel
+// 2026-09-04): el radio funciona pero arrastra una limitación. Se pinta en
+// la columna Serie DESPUÉS del decorado del pool (que borra los .eqpool-chip
+// de la celda antes de pintar los suyos). Si el registro no la tiene todavía
+// pero el técnico la marcó en ESTA orden, también se ve — con otro título.
+async function decorarCondicionesEnTabla(ordenId, equipos, filaDetalle) {
+  if (typeof EquiposCondicionesService === 'undefined') return;
+  const conSerial = (equipos || [])
+    .map(e => ({ e, serial: String(e.numero_de_serie || e.serial || '').trim() }))
+    .filter(x => x.serial);
+  if (!conSerial.length) return;
+  let mapa = new Map();
+  try { mapa = await EquiposCondicionesService.buscarVarios(conSerial.map(x => x.serial)); } catch (err) { mapa = new Map(); }
+
+  for (const { e, serial } of conSerial) {
+    const celda = filaDetalle.querySelector(`tr[data-equipo-id="${ordenId}_${e.id}"] .col-serie .celda-editable`);
+    if (!celda) continue;
+    celda.querySelectorAll('.eqcond-chip').forEach(n => n.remove());
+    const reg = mapa.get(EquiposCondicionesService.normalizar(serial));
+    const local = e.condicion_especial ? String(e.condicion_texto || '').trim() : '';
+    if (!reg && !local) continue;
+    const texto = reg ? reg.condicion : local;
+    const chip = document.createElement('a');
+    chip.className = 'eqpool-chip eqpool-chip-aviso eqcond-chip';
+    chip.style.cssText = 'text-decoration:none;cursor:pointer;';
+    chip.textContent = `⚠ condición: ${EquiposCondicionesService.resumen(texto, 40)}`;
+    chip.title = reg
+      ? `Condición registrada por serial: ${reg.condicion}${reg.orden_id ? ' (orden ' + reg.orden_id + ')' : ''}. Click para ver la ficha.`
+      : `Marcada en esta orden por el técnico: ${local}. Queda registrada por serial al firmar el QC.`;
+    chip.addEventListener('click', (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      if (window.EquipoFicha) EquipoFicha.abrir(serial);
+    });
+    celda.appendChild(chip);
+  }
+}
 
 // Decora la columna Serie con el estado de la unidad en el pool de equipos
 // serializados (equipos_pool): chip de estado con link al kardex y, si el

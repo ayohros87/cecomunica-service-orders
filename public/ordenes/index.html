@@ -49,7 +49,7 @@
 <script defer src="../js/services/clientesService.js"></script>
 <!-- Predicados de pendiente: antes de ordenesService/senalesService/ordenes-qc, que delegan en él. -->
 <script defer src="../js/domain/pendientes.js?v=pen2"></script>
-<script defer src="../js/services/ordenesService.js?v=ser5"></script>
+<script defer src="../js/services/ordenesService.js?v=ser6"></script>
 <!-- count() agregados para los chips/KPIs (mismos números que las señales
      del home) — auditoría M4/A8. -->
 <script type="module" src="../js/firebase-aggregates.js?v=agg1"></script>
@@ -59,9 +59,9 @@
 <script defer src="../js/services/mailService.js"></script>
 <script defer src="../js/services/piezasService.js"></script>
 <script defer src="../js/services/modelosService.js"></script>
-<script defer src="../js/services/equiposPoolService.js"></script><script defer src="../js/services/equiposDescartadosService.js?v=qcdesc1"></script>
-<script defer src="../js/ui/equipo-ficha.js"></script>
-<script defer src="../js/ui/serial-field.js"></script>
+<script defer src="../js/services/equiposPoolService.js"></script><script defer src="../js/services/equiposDescartadosService.js?v=qcdesc1"></script><script defer src="../js/services/equiposCondicionesService.js?v=cond1"></script>
+<script defer src="../js/ui/equipo-ficha.js?v=cond1"></script>
+<script defer src="../js/ui/serial-field.js?v=cond1"></script>
 <script defer src="../js/domain/scoring.js"></script>
 <script defer src="../js/ui/toast.js"></script>
 <script defer src="../js/ui/modal.js"></script>
@@ -69,18 +69,18 @@
      lo trae CargaDiferida.devolucion() al primer uso. -->
 <script defer src="../js/pages/ordenes-state.js?v=prog2"></script>
 <script defer src="../js/pages/ordenes-data.js?v=dup2"></script>
-<script defer src="../js/pages/ordenes-render.js?v=prog6"></script>
+<script defer src="../js/pages/ordenes-render.js?v=cond1"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq3"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=fp1"></script>
-<script defer src="../js/pages/ordenes-qc.js?v=pen1"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=cc25"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=cond1"></script>
+<script defer src="../js/pages/ordenes-qc.js?v=cond1"></script>
+<script defer src="../js/pages/ordenes-equipos.js?v=cond1"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
      uso, con sus dependencias (storage, firmaPad): ordenes-notas,
      ordenes-visita, ordenes-fotos (galería §5.23) y ordenes-devolucion.
      Sus ?v= viven en core/carga-diferida.js. -->
 <script defer src="../js/pages/ordenes-ui.js?v=p2"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
-<script defer src="../js/pages/ordenes-events.js?v=cc25"></script>
+<script defer src="../js/pages/ordenes-events.js?v=cond1"></script>
 <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
      el barrido inicial de <i data-lucide>; los guards inline viejos quedan
      como no-ops en parse. Ver js/core/icons.js. -->
@@ -128,6 +128,7 @@
           <!-- Taller no tiene el módulo Almacén en el rail, así que el listado
                de descartados (que nace en el QC de esta página) se alcanza aquí. -->
           <button class="overflow-menu-item" data-action="go-descartados" title="Radios que control de calidad declaró inservibles"><i data-lucide="ban"></i> Equipos descartados</button>
+          <button class="overflow-menu-item" data-action="go-condiciones" title="Radios que funcionan pero arrastran una condición particular (p.ej. auricular dañado)"><i data-lucide="alert-triangle"></i> Equipos con condición</button>
           <button class="overflow-menu-item" id="topbarBtnAdminEquiposCliente" data-action="go-admin-equipos-cliente" style="display:none;"><i data-lucide="shield"></i> Equipos por cliente</button>
           <button class="overflow-menu-item" data-action="toggle-fecha-entrega"><i data-lucide="calendar"></i> <span class="toggle-fecha-entrega-btn">Mostrar fecha entrega</span></button>
           <button class="overflow-menu-item" data-action="go-config"><i data-lucide="settings"></i> Configuración</button>
@@ -783,6 +784,26 @@
         placeholder="Motivo del descarte (obligatorio) — quedará en el registro que consulta bodega">
       <div id="trabajoDescarteAviso" style="display:none;font-size:12.5px;color:#991B1B;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:6px 10px;margin-top:6px;">
         Al cerrar la entrada, este serial queda en el registro de equipos descartados: si alguien lo teclea en bodega o taller, saltará una alerta.
+      </div>
+    </div>
+
+    <!-- Condición particular (petición Solangel 2026-09-04): el radio funciona
+         pero arrastra una limitación que el taller no puede resolver (p.ej.
+         auricular dañado que pide microsoldadura). Se marca aquí, en cualquier
+         tipo de orden; el registro central por serial en equipos_condiciones
+         lo escribe la firma del QC o el cierre de la ENTRADA. Arriba,
+         #trabajoCondicionVigente muestra la condición YA registrada para ese
+         serial, para que el técnico no vuelva a descifrar el mismo problema. -->
+    <div id="trabajoCondicionVigente" style="display:none;font-size:12.5px;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:8px 10px;margin-top:10px;line-height:1.45;"></div>
+    <div id="trabajoCondicionCtrl" class="intervencion-ctrl intervencion-ctrl-modal">
+      <label class="intervencion-no-disponible">
+        <input type="checkbox" id="trabajoCondicion">
+        <span style="color:#92400E;">Funciona, pero con una condición particular</span>
+      </label>
+      <input type="text" id="trabajoCondicionTexto" class="motivo-no-disponible"
+        placeholder="Cuál (obligatorio) — ej.: conector de auricular dañado, no repara en taller">
+      <div id="trabajoCondicionAviso" style="display:none;font-size:12.5px;color:#92400E;background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:6px 10px;margin-top:6px;">
+        Queda pegada al serial: quien revise el QC la verá resaltada y, al firmarlo, saltará un aviso cada vez que alguien teclee este serial en bodega, taller o un contrato.
       </div>
     </div>
 

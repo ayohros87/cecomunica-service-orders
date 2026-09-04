@@ -192,7 +192,7 @@
   // su checklist propio y su desenlace. Antes esto era UNA sola lista para toda
   // la orden: con 10 radios, la firma decía "aprobado" sin poder decir qué se
   // revisó en cada uno.
-  function _equipoCardHtml(eq, key, items, idx) {
+  function _equipoCardHtml(eq, key, items, idx, condReg = null) {
     const serial = String(eq.numero_de_serie || eq.serial || '').trim();
     const t = (eq.trabajo_tecnico || '').trim();
     const nd = eq.intervencion_no_disponible;
@@ -200,6 +200,32 @@
       ? `<span style="color:#92400E;">no disponible${eq.motivo_no_disponible ? ': ' + esc(eq.motivo_no_disponible) : ''}</span>`
       : (t ? esc(t.length > 160 ? t.slice(0, 160) + '…' : t)
            : '<span style="color:#B91C1C;font-weight:600;">SIN intervención registrada</span>');
+
+    // Condición particular (petición Solangel 2026-09-04). Dos cosas distintas:
+    //   · la YA registrada por serial (condReg) — se muestra resaltada y se
+    //     puede levantar si en esta orden se resolvió;
+    //   · la que el técnico marcó en ESTA orden (eq.condicion_especial) — viene
+    //     pre-marcada para que quien firma la confirme; al firmar "aprobado"
+    //     queda registrada por serial.
+    const marcada = !!(eq.condicion_especial && String(eq.condicion_texto || '').trim());
+    const bannerReg = condReg ? `
+        <div class="qc-eq-cond-reg" style="margin:4px 0 6px;font-size:12px;background:#FFFBEB;border:1px solid #FCD34D;color:#92400E;border-radius:6px;padding:6px 8px;line-height:1.45;">
+          ⚠ <b>Condición registrada:</b> ${esc(condReg.condicion || '')}
+          <span style="opacity:.8;"> · ${esc([condReg.por_email, condReg.orden_id ? 'orden ' + condReg.orden_id : ''].filter(Boolean).join(' · '))}</span>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:5px;cursor:pointer;">
+            <input type="checkbox" class="qc-eq-cond-levantar"> Se resolvió en esta orden — levantar la condición al firmar
+          </label>
+        </div>` : '';
+    const condBlock = `
+        <div class="qc-eq-cond-wrap" style="margin-top:8px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;color:#92400E;">
+            <input type="checkbox" class="qc-eq-cond-chk" ${marcada ? 'checked' : ''}>
+            <span>Funciona, pero con una condición particular${marcada ? ' <span class="muted">(la marcó el técnico)</span>' : ''}</span>
+          </label>
+          <input type="text" class="form-input qc-eq-cond-txt" style="font-size:13px;margin-top:4px;${marcada ? '' : 'display:none;'}"
+                 value="${esc(marcada ? eq.condicion_texto : '')}"
+                 placeholder="Cuál (obligatorio) — queda pegada al serial y avisa en bodega, taller y contratos">
+        </div>`;
 
     return `
       <div class="qc-equipo-card" data-eq="${esc(key)}"
@@ -214,6 +240,7 @@
                   title="Marca todos los puntos de ESTE equipo como OK y lo deja aprobado">Todo OK</button>
         </div>
         <div style="font-size:12px;line-height:1.45;margin:4px 0 6px;">${detalle}</div>
+        ${bannerReg}
 
         <div class="qc-eq-checklist">
           ${items.map(it => _itemRowHtml(it, '', key)).join('')}
@@ -230,6 +257,7 @@
           <input type="text" class="form-input qc-eq-nota" style="font-size:13px;"
                  placeholder="Motivo (obligatorio) — qué falló o por qué se descarta">
         </div>
+        ${condBlock}
       </div>`;
   }
 
@@ -279,6 +307,39 @@
     return fallos;
   }
 
+  // Escribe en el registro por serial las condiciones particulares de los
+  // equipos APROBADOS (y levanta las que se marcaron como resueltas). Mismo
+  // fail-soft que los descartes: devuelve los seriales que no se pudieron
+  // registrar para avisarlo en pantalla.
+  async function _registrarCondiciones(ordenId, orden, porEquipoDoc) {
+    if (typeof EquiposCondicionesService === 'undefined') return [];
+    const fallos = [];
+    for (const d of Object.values(porEquipoDoc || {})) {
+      if (d.resultado !== 'aprobado' || !d.serial) continue;
+      if (!d.condicion && !d.levantar_condicion) continue;
+      try {
+        if (d.condicion) {
+          await EquiposCondicionesService.registrar({
+            serial: d.serial,
+            condicion: d.condicion,
+            modelo: d.modelo,
+            orden_id: ordenId,
+            equipo_id: d.equipo_id,
+            cliente: orden.cliente_nombre || orden.cliente || orden.nombre_cliente || '',
+            origen: 'qc',
+          });
+        } else {
+          await EquiposCondicionesService.levantar(d.serial, `Resuelta en la orden ${ordenId} (control de calidad)`);
+        }
+        if (window.SerialField) SerialField.invalidar(d.serial);
+      } catch (e) {
+        console.error('[OrdenesQC] no se registró la condición de', d.serial, e);
+        fallos.push(d.serial);
+      }
+    }
+    return fallos;
+  }
+
   // Resumen por equipo de una pasada ya firmada (modo consulta).
   function _porEquipoResumenHtml(qc) {
     const pe = qc?.por_equipo;
@@ -300,6 +361,8 @@
               &nbsp;<b>${ICONO[d.resultado] || ''} ${esc(d.resultado || '')}</b></span>
           </div>
           ${d.nota ? `<div class="muted" style="color:#991B1B;">${esc(d.nota)}</div>` : ''}
+          ${d.condicion ? `<div class="muted" style="color:#92400E;">⚠ Con condición: ${esc(d.condicion)}</div>` : ''}
+          ${d.levantar_condicion ? '<div class="muted" style="color:#065F46;">✓ Condición levantada en esta orden</div>' : ''}
         </div>`;
     }).join('');
     return `
@@ -415,6 +478,19 @@
       .map((eq, i) => ({ eq, key: _eqKey(eq, i) }));
     const porEquipoUI = eqs.length > 0;
 
+    // Condiciones YA registradas por serial (equipos_condiciones): quien
+    // firma la salida de taller tiene que verlas resaltadas en la tarjeta de
+    // cada radio (petición Solangel 2026-09-04). Best-effort.
+    let condiciones = new Map();
+    if (typeof EquiposCondicionesService !== 'undefined' && eqs.length) {
+      try {
+        condiciones = await EquiposCondicionesService.buscarVarios(
+          eqs.map(({ eq }) => String(eq.numero_de_serie || eq.serial || '')));
+      } catch (e) { condiciones = new Map(); }
+    }
+    const condRegDe = (eq) => typeof EquiposCondicionesService === 'undefined' ? null
+      : (condiciones.get(EquiposCondicionesService.normalizar(String(eq.numero_de_serie || eq.serial || ''))) || null);
+
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.style.display = 'flex';
@@ -499,7 +575,7 @@
             </div>
             <div id="qcChecklist">
               ${porEquipoUI
-                ? eqs.map(({ eq, key }, i) => _equipoCardHtml(eq, key, items, i)).join('')
+                ? eqs.map(({ eq, key }, i) => _equipoCardHtml(eq, key, items, i, condRegDe(eq))).join('')
                 : items.map(it => _itemRowHtml(it, '')).join('')}
             </div>
 
@@ -546,8 +622,18 @@
     // regla de Firestore ni las métricas por técnico, que siguen leyendo
     // qc.checklist como un mapa plano.
     const checklist = {};   // key → 'ok' | 'na'
-    const porEquipo = {};   // eqKey → { checklist:{}, resultado:'', nota:'' }
-    eqs.forEach(({ key }) => { porEquipo[key] = { checklist: {}, resultado: '', nota: '' }; });
+    const porEquipo = {};   // eqKey → { checklist:{}, resultado:'', nota:'', conCondicion, condicion, levantar }
+    eqs.forEach(({ eq, key }) => {
+      // La condición que el técnico marcó en la intervención viene pre-cargada
+      // para que quien firma la confirme (o la quite si no aplica).
+      const marcada = !!(eq.condicion_especial && String(eq.condicion_texto || '').trim());
+      porEquipo[key] = {
+        checklist: {}, resultado: '', nota: '',
+        conCondicion: marcada,
+        condicion: marcada ? String(eq.condicion_texto || '').trim() : '',
+        levantar: false,   // "se resolvió en esta orden" sobre una condición ya registrada
+      };
+    });
     const motivosSel = new Set();
 
     // Un equipo está resuelto cuando tiene desenlace y el respaldo que ese
@@ -559,7 +645,9 @@
       const st = porEquipo[key];
       if (!st || !st.resultado) return false;
       if (st.resultado === 'aprobado') {
-        return items.every(it => st.checklist[it.key] === 'ok' || st.checklist[it.key] === 'na');
+        const checklistOk = items.every(it => st.checklist[it.key] === 'ok' || st.checklist[it.key] === 'na');
+        // "Con condición" sin decir cuál no sirve de nada a bodega.
+        return checklistOk && (!st.conCondicion || !!st.condicion.trim());
       }
       return !!st.nota.trim();
     }
@@ -578,12 +666,14 @@
       const aprobados   = estados.filter(r => r === 'aprobado').length;
       const denegados   = estados.filter(r => r === 'denegado').length;
       const descartados = estados.filter(r => r === 'descartado').length;
+      const conCond     = eqs.filter(({ key }) => porEquipo[key].resultado === 'aprobado' && porEquipo[key].conCondicion).length;
       const pendientes  = eqs.filter(({ key }) => !_equipoResuelto(key)).length;
 
       if (resumen) {
         resumen.innerHTML = pendientes
           ? `<span style="color:#92400E;">Faltan ${pendientes} equipo(s) por resolver.</span>`
           : `${aprobados} aprobado(s)`
+            + (conCond ? ` · <b style="color:#92400E;">${conCond} con condición</b>` : '')
             + (denegados ? ` · <b style="color:#991B1B;">${denegados} denegado(s)</b>` : '')
             + (descartados ? ` · <b style="color:#991B1B;">${descartados} descartado(s)</b>` : '');
       }
@@ -653,10 +743,42 @@
     // El motivo por equipo se teclea, no se clickea: va por 'input'.
     overlay.addEventListener('input', (e) => {
       const nota = e.target.closest('.qc-eq-nota');
-      if (!nota) return;
-      const eqK = nota.closest('.qc-equipo-card').dataset.eq;
-      porEquipo[eqK].nota = nota.value;
+      const cond = e.target.closest('.qc-eq-cond-txt');
+      if (!nota && !cond) return;
+      const eqK = e.target.closest('.qc-equipo-card').dataset.eq;
+      if (nota) porEquipo[eqK].nota = nota.value;
+      else porEquipo[eqK].condicion = cond.value;
       _pintarResultado(eqK);   // el motivo escrito es lo que resuelve la tarjeta
+      _refrescarEstado();
+    });
+
+    // Condición particular: marcarla y "se resolvió" a la vez se contradicen,
+    // así que una desmarca la otra.
+    overlay.addEventListener('change', (e) => {
+      const chk = e.target.closest('.qc-eq-cond-chk');
+      const lev = e.target.closest('.qc-eq-cond-levantar');
+      if (!chk && !lev) return;
+      const card = e.target.closest('.qc-equipo-card');
+      const eqK = card.dataset.eq;
+      const st = porEquipo[eqK];
+      const txt = card.querySelector('.qc-eq-cond-txt');
+      if (chk) {
+        st.conCondicion = chk.checked;
+        if (txt) txt.style.display = chk.checked ? '' : 'none';
+        if (chk.checked) {
+          st.condicion = txt ? txt.value : '';
+          const l = card.querySelector('.qc-eq-cond-levantar');
+          if (l) { l.checked = false; st.levantar = false; }
+          setTimeout(() => txt?.focus(), 0);
+        }
+      } else {
+        st.levantar = lev.checked;
+        if (lev.checked) {
+          const c = card.querySelector('.qc-eq-cond-chk');
+          if (c && c.checked) { c.checked = false; st.conCondicion = false; if (txt) txt.style.display = 'none'; }
+        }
+      }
+      _pintarResultado(eqK);
       _refrescarEstado();
     });
 
@@ -752,10 +874,13 @@
     function _payloadEquipos() {
       if (!porEquipoUI) return null;
       const por_equipo = {};
-      const aprobados = [], denegados = [], descartados = [];
+      const aprobados = [], denegados = [], descartados = [], con_condicion = [];
       eqs.forEach(({ eq, key }) => {
         const st = porEquipo[key];
         const serial = String(eq.numero_de_serie || eq.serial || '').trim();
+        // La condición solo cuenta sobre un radio APROBADO: uno denegado
+        // vuelve al técnico y se registra en la pasada siguiente.
+        const condicion = st.resultado === 'aprobado' && st.conCondicion ? st.condicion.trim() : '';
         por_equipo[key] = {
           equipo_id: String(eq.id || ''),
           serial,
@@ -763,14 +888,17 @@
           checklist: { ...st.checklist },
           resultado: st.resultado,
           nota: st.nota.trim(),
+          condicion,
+          levantar_condicion: st.resultado === 'aprobado' && !condicion && !!st.levantar,
         };
         if (!serial) return;
         if (st.resultado === 'aprobado') aprobados.push(serial);
         else if (st.resultado === 'denegado') denegados.push(serial);
         else if (st.resultado === 'descartado') descartados.push(serial);
+        if (condicion) con_condicion.push(serial);
       });
       return {
-        por_equipo, aprobados, denegados, descartados,
+        por_equipo, aprobados, denegados, descartados, con_condicion,
         equipos_revisados_n: eqs.length,
         checklist: _rollupChecklist(items, porEquipo, eqs),
       };
@@ -801,9 +929,14 @@
           equipos: pe,
         });
         const fallos = pe ? await _registrarDescartes(ordenId, orden, pe.por_equipo) : [];
+        const fallosCond = pe ? await _registrarCondiciones(ordenId, orden, pe.por_equipo) : [];
         cleanup();
         if (fallos.length) {
           Toast.show(`QC aprobado, pero NO se registró el descarte de ${fallos.join(', ')}. Regístrelo a mano en Inventario · Descartados.`, 'bad');
+        } else if (fallosCond.length) {
+          Toast.show(`QC aprobado, pero NO se registró la condición de ${fallosCond.join(', ')}. Regístrala a mano desde la ficha del equipo.`, 'bad');
+        } else if (pe && pe.con_condicion.length) {
+          Toast.show(`✅ QC aprobado — ${pe.con_condicion.length} equipo(s) con condición quedaron registrados por serial`, 'ok');
         } else {
           Toast.show('✅ Control de calidad aprobado — la orden puede entregarse', 'ok');
         }
@@ -848,10 +981,15 @@
         };
         await OrdenesService.saveQcRechazado(ordenId, payload);
         const fallos = pe ? await _registrarDescartes(ordenId, orden, pe.por_equipo) : [];
+        // Los radios APROBADOS dentro de un rechazo sí registran su condición:
+        // ya no vuelven al técnico.
+        const fallosCond = pe ? await _registrarCondiciones(ordenId, orden, pe.por_equipo) : [];
         await _notificarRechazo(ordenId, orden, payload);
         cleanup();
         if (fallos.length) {
           Toast.show(`Orden devuelta al técnico, pero NO se registró el descarte de ${fallos.join(', ')}. Regístrelo a mano en Inventario · Descartados.`, 'bad');
+        } else if (fallosCond.length) {
+          Toast.show(`Orden devuelta al técnico, pero NO se registró la condición de ${fallosCond.join(', ')}. Regístrala a mano desde la ficha del equipo.`, 'bad');
         } else {
           Toast.show('Orden devuelta al técnico con el motivo del rechazo', 'ok');
         }

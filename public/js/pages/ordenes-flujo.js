@@ -556,6 +556,22 @@ window.cerrarEntrada = function (ordenId) {
        </div>`
     : '';
 
+  // Equipos marcados con CONDICIÓN PARTICULAR en la revisión (funcionan, pero
+  // con una limitación). Mismo momento de registro que los descartados: el
+  // cierre los escribe en `equipos_condiciones`. Un descartado no lleva
+  // condición — ya no circula.
+  const conCondicion = (orden.equipos || []).filter(e => !e.eliminado && !e.descartado_revision
+    && e.condicion_especial && String(e.condicion_texto || '').trim());
+  const avisoCondiciones = conCondicion.length
+    ? `<div style="border:1px solid #FCD34D;background:#FFFBEB;color:#92400E;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">
+         ⚠ <b>${conCondicion.length} equipo(s) con condición particular</b> — al cerrar quedan en el registro por serial
+         (aviso al teclear el serial en bodega, taller o un contrato):
+         <ul style="margin:6px 0 0;padding-left:18px;">
+           ${conCondicion.map(e => `<li><span style="font-family:var(--font-mono,monospace);">${escapeHtml(String(e.numero_de_serie || e.serial || e.SERIAL || '-'))}</span> — ${escapeHtml(String(e.condicion_texto))}</li>`).join('')}
+         </ul>
+       </div>`
+    : '';
+
   const avisoCot = cotizada
     ? `<div style="border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">✓ Cotización emitida para esta orden.</div>`
     : `<div style="border:1px solid #fde68a;background:#fffbeb;color:#92400e;border-radius:8px;padding:8px 12px;font-size:13px;margin:10px 0;">Si la revisión encontró <b>daños o faltantes cobrables</b>, emite la cotización antes de cerrar (menú ⋯ → Cotizar). Si no hay nada que cobrar, cierra sin más.</div>`;
@@ -577,6 +593,7 @@ window.cerrarEntrada = function (ordenId) {
           <b>Inventario · Equipos por serial</b>. Esta orden <b>no se entrega al cliente</b>.
         </p>
         ${avisoDescartes}
+        ${avisoCondiciones}
         ${avisoCot}
         <div class="form-field">
           <label class="form-label" for="cierreEntradaObs">Observaciones del cierre (opcional)</label>
@@ -632,11 +649,41 @@ window.cerrarEntrada = function (ordenId) {
         }
       }
 
+      // Condiciones particulares — mismo fail-soft. Un fallo aquí no deshace
+      // el cierre; se pide registrarla a mano desde la ficha del equipo.
+      const fallosCond = [];
+      if (conCondicion.length && typeof EquiposCondicionesService !== 'undefined') {
+        for (const e of conCondicion) {
+          const serial = String(e.numero_de_serie || e.serial || e.SERIAL || '');
+          try {
+            await EquiposCondicionesService.registrar({
+              serial,
+              condicion: String(e.condicion_texto || ''),
+              modelo: String(e.modelo || e.MODEL || e.modelo_nombre || ''),
+              modelo_id: String(e.modelo_id || ''),
+              orden_id: ordenId,
+              equipo_id: String(e.id || ''),
+              cliente: typeof nombreClienteDe === 'function' ? nombreClienteDe(orden) : '',
+              origen: 'entrada'
+            });
+            if (window.SerialField) SerialField.invalidar(serial);
+          } catch (err2) {
+            fallosCond.push(serial || '(sin serial)');
+            console.error('[cerrarEntrada] no se registró la condición de', serial, err2);
+          }
+        }
+      }
+
       cleanup();
       if (fallos.length) {
         Toast.show(`Entrada cerrada, pero NO se registró el descarte de ${fallos.join(', ')}. Regístrelo a mano en Inventario · Descartados.`, 'bad');
-      } else if (descartados.length) {
-        Toast.show(`✅ Entrada cerrada — ${descartados.length} descartado(s) quedaron en el registro`, 'ok');
+      } else if (fallosCond.length) {
+        Toast.show(`Entrada cerrada, pero NO se registró la condición de ${fallosCond.join(', ')}. Regístrala a mano desde la ficha del equipo.`, 'bad');
+      } else if (descartados.length || conCondicion.length) {
+        const partes = [];
+        if (descartados.length) partes.push(`${descartados.length} descartado(s)`);
+        if (conCondicion.length) partes.push(`${conCondicion.length} con condición`);
+        Toast.show(`✅ Entrada cerrada — ${partes.join(' y ')} quedaron en el registro`, 'ok');
       } else {
         Toast.show('✅ Entrada cerrada — unidades bajo control de inventario', 'ok');
       }

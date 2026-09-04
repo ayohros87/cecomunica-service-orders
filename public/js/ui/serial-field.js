@@ -16,6 +16,9 @@
 //     (equipos_descartados). Sale ANTES que cualquier otro chip y también
 //     cuando el serial no tiene ficha en el pool, que es justo el caso de un
 //     equipo descartado que alguien intenta reingresar a bodega.
+//   · con condición particular → chip amarillo "⚠ condición: …" (equipos_condiciones).
+//     El radio sirve, pero arrastra una limitación que hay que tener en cuenta
+//     antes de asignarlo o de volver a diagnosticarlo (petición Solangel).
 // Click en cualquier chip → EquipoFicha.abrir(serial) (si está cargada).
 //
 // API:
@@ -23,14 +26,16 @@
 //     opts.clienteId : () => string|null   — para detectar "otro cliente"
 //     opts.modelo    : () => ({modelo_id, modelo_label})|null — para detectar
 //                      desacuerdo de modelo con la ficha del pool
-//     opts.onInfo    : (info) => {}        — {docs, unidad|null, descartado|null}
+//     opts.onInfo    : (info) => {}        — {docs, unidad|null, descartado|null, condicion|null}
 //                      tras cada lookup (p.ej. autocompletar el modelo del
 //                      formulario, o bloquear el guardado si viene descartado).
 //                      `descartado` = doc de equipos_descartados vigente o null.
+//                      `condicion`  = doc de equipos_condiciones vigente o null.
 //     opts.slot      : Element             — dónde inyectar el chip (default:
 //                      un <span> insertado justo después del input)
-// Dependencias: EquiposPoolService; EquiposDescartadosService y EquipoFicha
-// opcionales (si no están cargados, el chip de descarte simplemente no sale).
+// Dependencias: EquiposPoolService; EquiposDescartadosService,
+// EquiposCondicionesService y EquipoFicha opcionales (si no están cargados, el
+// chip correspondiente simplemente no sale).
 window.SerialField = {
 
   _cache: new Map(), // norm → {docs, at}
@@ -83,7 +88,7 @@ window.SerialField = {
           slot.appendChild(hint);
         }
         slot._sfNorm = null;
-        if (opts.onInfo) opts.onInfo({ docs: [], unidad: null, descartado: null });
+        if (opts.onInfo) opts.onInfo({ docs: [], unidad: null, descartado: null, condicion: null });
         return;
       }
       // Evita re-consultar si el usuario solo pasó el foco sin cambiar nada.
@@ -97,14 +102,18 @@ window.SerialField = {
       // tenga varias (colisión de modelos). Es la alerta más importante del
       // campo — el equipo ya se declaró inservible en control de calidad.
       let descartado = null;
+      let condicion = null;
       try {
-        const [d, desc] = await Promise.all([
+        const [d, desc, cond] = await Promise.all([
           this._lookup(norm),
           typeof EquiposDescartadosService !== 'undefined'
             ? EquiposDescartadosService.buscar(norm)
             : Promise.resolve(null),
+          typeof EquiposCondicionesService !== 'undefined'
+            ? EquiposCondicionesService.buscar(norm)
+            : Promise.resolve(null),
         ]);
-        docs = d; descartado = desc;
+        docs = d; descartado = desc; condicion = cond;
       } catch (e) { return; }
       if (EquiposPoolService.normalizarSerial(input.value) !== norm) return; // cambió mientras consultaba
       slot.innerHTML = '';
@@ -144,10 +153,28 @@ window.SerialField = {
           `Control de calidad descartó esta unidad${detalle ? '. ' + detalle : ''}. No debe entregarse ni volver a inventario.`);
       }
 
+      // Condición particular — también fuera de las salidas tempranas: el
+      // radio sirve, pero con una limitación que hay que saber ANTES de
+      // asignarlo a un cliente que sí necesite esa función, o de volver a
+      // diagnosticarlo en taller. Amarillo, no rojo: no prohíbe, advierte.
+      if (condicion) {
+        const cuando = condicion.registrado_at?.toDate
+          ? condicion.registrado_at.toDate().toLocaleDateString('es-PA') : '';
+        const detalle = [
+          condicion.orden_id ? `Orden ${condicion.orden_id}` : '',
+          condicion.por_email || '',
+          cuando,
+        ].filter(Boolean).join(' · ');
+        const corto = typeof EquiposCondicionesService !== 'undefined'
+          ? EquiposCondicionesService.resumen(condicion.condicion, 48) : String(condicion.condicion || '');
+        chip(`⚠ condición: ${esc(corto)}`, 'eqpool-chip-aviso',
+          `Funciona, pero con una condición particular: ${condicion.condicion || ''}${detalle ? ' (' + detalle + ')' : ''}. Tenlo en cuenta antes de asignarlo o de diagnosticarlo de nuevo.`);
+      }
+
       if (!docs.length) {
         chip('sin registro en el pool', 'eqpool-chip-vacio',
           'Este serial no existe en el pool — se dará de alta automáticamente al guardar. Verifica que esté bien escrito.');
-        if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado });
+        if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado, condicion });
         return;
       }
 
@@ -161,7 +188,7 @@ window.SerialField = {
           confirmado
             ? 'Confirmado: son radios físicos distintos que comparten numeración (típico Kenwood NX-420 / NX-920). Click para elegir el modelo correcto.'
             : 'Este serial existe en más de una ficha, con modelos distintos. Click para ver y elegir; se resuelve en Inventario · pestaña Conflictos.');
-        if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado });
+        if (opts.onInfo) opts.onInfo({ docs, unidad: null, descartado, condicion });
         return;
       }
 
@@ -187,7 +214,7 @@ window.SerialField = {
           'El pool registra esta unidad con OTRO modelo — puede ser un error de dedo o una ficha por fusionar.');
       }
 
-      if (opts.onInfo) opts.onInfo({ docs, unidad: u, descartado });
+      if (opts.onInfo) opts.onInfo({ docs, unidad: u, descartado, condicion });
     };
 
     input.addEventListener('blur', refrescar);

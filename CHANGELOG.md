@@ -1,5 +1,38 @@
 # Changelog
 
+## [Equipos con condición particular, pegada al serial] — 2026-09-04
+
+> Petición de Solangel (taller): un radio que funciona pero arrastra una
+> limitación que el taller no puede resolver (conector del auricular que
+> pide microsoldadura) se asignaba sin que nadie lo supiera. Alberto sumó
+> que, si ese radio vuelve a taller por cualquier proceso, el técnico lo vea
+> sin volver a descifrar el mismo problema. Es la variante "amarilla" del
+> descarte: no prohíbe, advierte — y vive por SERIAL, no por orden.
+>
+> - **Registro** `equipos_condiciones` (doc = serial normalizado, como
+>   descartados): `condicion`, `vigente`, `historial[]` append-only. Nunca se
+>   borra: se **levanta** cuando el radio se repara de verdad. Reglas: técnico,
+>   recepción, jefe_taller, inventario y admin registran (`vigente == true`);
+>   levantar solo jefe_taller (+ suplentes de QC), inventario y admin.
+> - **Se marca** en la intervención del técnico ("Funciona, pero con una
+>   condición particular" + texto obligatorio, en cualquier tipo de orden;
+>   excluyente con "no disponible" y con el descarte) y en la ficha del
+>   equipo. El registro por serial lo escribe la **firma del QC** ("aprobado
+>   con condición", viene pre-marcada si el técnico la puso) o el **cierre de
+>   una ENTRADA**. En el QC, una condición ya registrada sale resaltada en la
+>   tarjeta del radio con "se resolvió en esta orden — levantar al firmar".
+> - **Salta** como chip amarillo en todo campo de serial (SerialField), en la
+>   fila y la tarjeta del equipo dentro de la orden, arriba del modal de
+>   intervención ("este equipo ya tiene una condición registrada"), en el
+>   panel "Revisión antes de guardar" de Almacén · Asignar y Contratos ·
+>   Seriales (aviso, no candado: la condición es justamente "sirve para un
+>   cliente que no use esa función"), y en la ficha del equipo con historial.
+> - **Listado** Inventario · Con condición (`inventario/condiciones.html`),
+>   pestaña en Almacén y entrada en el menú ⋯ de Órdenes.
+> - Test `functions/test/equiposCondiciones.test.js` (normalización = pool,
+>   `vigente: true` al registrar, la misma condición no re-escribe, levantar
+>   deja traza, la regla existe y exige `vigente == true` al técnico).
+
 ## [Renovación: seriales de la cuenta + correo a activaciones con el documento v2] — 2026-09-04
 
 > Reclamo de Alberto (caso CENTRO CULTURAL CHINO PANAMEÑO, SERV20260904-01):
