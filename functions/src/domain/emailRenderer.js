@@ -113,7 +113,12 @@ function buildBodyOrdenCompletada(orden) {
  *
  * Replaces the legacy frontend builder `_buildEmailHtml` in
  * `public/js/pages/ordenes-flujo.js`. Keeps two branches:
- *  - opts.noRecibido === true → "artículo no recibido" notice
+ *  - opts.noRecibido === true → entrega con firma en papel (sin firma
+ *    digital). El nombre "noRecibido" es histórico: la opción nació como
+ *    "el cliente no recibió", pero en la práctica el cliente SÍ recibe y
+ *    firma la nota impresa; lo que falta es la firma digital. `motivo` =
+ *    por qué no se firmó digitalmente; `personaInterna` = quién recibió
+ *    por el cliente (firmó la nota impresa).
  *  - otherwise → normal delivery with receptor + firma + optional sin-id note
  *
  * @param {object} params
@@ -224,7 +229,8 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
   if (opts.noRecibido) {
     return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
       <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:16px;">
-        <strong style="color:#92400e;">&#9888;&#65039; Artículo NO recibido por el cliente</strong>
+        <strong style="color:#92400e;">&#9888;&#65039; Entrega con firma en papel &mdash; sin firma digital</strong>
+        <div style="margin-top:4px;font-size:13px;color:#92400e;">El cliente recibió los equipos y firmó la nota de entrega impresa.</div>
       </div>
       <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font:14px Arial,sans-serif;margin-bottom:8px;">
         ${infoRows([
@@ -233,8 +239,8 @@ function buildBodyNotaEntrega({ orden, ordenId, opts }) {
           ["Tipo", f(orden.tipo_de_servicio)],
           ["Fecha", escapeHtml(fecha)],
           ["Contrato / Observaciones", f(orden.observaciones)],
-          ["Motivo", f(opts.motivo)],
-          ["Responsable interno", f(opts.personaInterna)]
+          ["Recibido por", f(opts.personaInterna)],
+          ["Motivo (sin firma digital)", f(opts.motivo)]
         ])}
       </table>
       ${equiposTable}
@@ -294,7 +300,7 @@ function renderByTemplate(data) {
         opts:    { ...(payload.opts || {}), interno: payload.interno === true },
       });
       const preheader = payload.opts?.noRecibido
-        ? `Artículo NO recibido — Orden ${payload.ordenId}`
+        ? `Entrega con firma en papel — Orden ${payload.ordenId}`
         : `Entrega registrada — Orden ${payload.ordenId}`;
       return buildEmailFromBase({
         preheader,

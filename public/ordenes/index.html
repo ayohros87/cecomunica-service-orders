@@ -69,9 +69,9 @@
      lo trae CargaDiferida.devolucion() al primer uso. -->
 <script defer src="../js/pages/ordenes-state.js?v=prog2"></script>
 <script defer src="../js/pages/ordenes-data.js?v=dup2"></script>
-<script defer src="../js/pages/ordenes-render.js?v=prog5"></script>
+<script defer src="../js/pages/ordenes-render.js?v=prog6"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq3"></script>
-<script defer src="../js/pages/ordenes-flujo.js?v=fv2"></script>
+<script defer src="../js/pages/ordenes-flujo.js?v=fp1"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=pen1"></script>
 <script defer src="../js/pages/ordenes-equipos.js?v=cc25"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
@@ -567,7 +567,12 @@
       Los radios ingresarán al taller para su revisión. Cualquier daño identificado como causado por mal uso, así como los accesorios o equipos no devueltos, serán notificados oportunamente mediante cotización para su posterior facturación.
     </div>
 
-    <!-- Checkbox A: Item not received — below the normal delivery block -->
+    <!-- Checkbox A: Entrega con firma en papel (sin firma digital) — below
+         the normal delivery block. Los ids/campos conservan el nombre
+         histórico "no recibido" (no_recibido en Firestore): la opción nació
+         como "el cliente no recibió", pero en la práctica se usa cuando el
+         cliente SÍ recibió y firmó la nota impresa pero la firma digital
+         falló. Ver emailRenderer.buildBodyNotaEntrega. -->
     <div class="modal-entrega__alert">
       <div class="modal-entrega__cb-row modal-entrega__cb-row--below" onclick="document.getElementById('entregaNoRecibido').click()">
         <input type="checkbox" id="entregaNoRecibido"
@@ -575,20 +580,20 @@
                data-action="entrega-no-recibido-change"
                onclick="event.stopPropagation()">
         <label for="entregaNoRecibido" class="modal-entrega__cb-label modal-entrega__cb-label--warn">
-          El artículo <strong>NO</strong> fue recibido por el cliente
+          El cliente recibió los equipos y firmó en papel, pero <strong>no</strong> pudo firmar digitalmente
         </label>
       </div>
       <div id="entregaNoRecibidoBloque" class="modal-entrega__sub hidden">
         <div class="form-field modal-entrega__field--tight">
-          <label class="modal-entrega__label--warn">Motivo <span class="req--warn">*</span></label>
+          <label class="modal-entrega__label--warn">¿Por qué no se pudo firmar digitalmente? <span class="req--warn">*</span></label>
           <textarea id="entregaNoRecibidoMotivo" rows="2"
-                    placeholder="Explique por qué no fue recibido..."
+                    placeholder="Ej.: la plataforma estaba actualizándose; se firmó la nota impresa..."
                     class="modal-entrega__warn-input"></textarea>
         </div>
         <div class="form-field">
-          <label class="modal-entrega__label--warn">¿Quién recibió / manejó los equipos? <span class="req--warn">*</span></label>
+          <label class="modal-entrega__label--warn">¿Quién recibió los equipos por el cliente? <span class="req--warn">*</span></label>
           <input type="text" id="entregaPersonaInterna"
-                 placeholder="Nombre del responsable interno"
+                 placeholder="Nombre de quien firmó la nota impresa"
                  class="modal-entrega__warn-input">
         </div>
       </div>

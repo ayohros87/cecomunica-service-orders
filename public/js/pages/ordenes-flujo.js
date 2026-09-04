@@ -1320,8 +1320,9 @@ window.copiarSeriales = function (ordenId) {
     const leg  = document.getElementById('entregaLegendaEntrada');
     if (nb)   nb.classList.toggle('hidden', !checked);
     if (norm) norm.classList.toggle('hidden', checked);
-    // Hide ENTRADA legend when toggled into "no recibido" — it's
-    // about delivering, not about not-receiving.
+    // Hide ENTRADA legend when toggled into "firma en papel" (flag
+    // histórico no_recibido): la leyenda es el texto que el cliente firma
+    // digitalmente, y en esta rama ya firmó la nota impresa.
     if (leg && checked) leg.classList.add('hidden');
     if (leg && !checked) {
       const t = String(leg.dataset.tipo || '').toUpperCase();
@@ -1556,11 +1557,13 @@ window.copiarSeriales = function (ordenId) {
       let emailOpts = { noRecibido, notas: notasEntrega };
 
       if (noRecibido) {
-        // ── Branch A: not received ──
+        // ── Branch A: entrega con firma en papel (sin firma digital) ──
+        // `no_recibido` es el nombre histórico del flag: el cliente SÍ
+        // recibió y firmó la nota impresa; lo que falta es la firma digital.
         const motivo = (document.getElementById('entregaNoRecibidoMotivo')?.value || '').trim();
         const personaInterna = (document.getElementById('entregaPersonaInterna')?.value || '').trim();
-        if (!motivo) { Toast.show('Indique el motivo por el cual no fue recibido', 'bad'); return; }
-        if (!personaInterna) { Toast.show('Indique quién recibió / manejó los equipos', 'bad'); return; }
+        if (!motivo) { Toast.show('Indique por qué no se pudo firmar digitalmente', 'bad'); return; }
+        if (!personaInterna) { Toast.show('Indique quién recibió los equipos por el cliente', 'bad'); return; }
         firestoreData.no_recibido_motivo = motivo;
         firestoreData.entrega_persona_interna = personaInterna;
         emailOpts = { ...emailOpts, motivo, personaInterna };
@@ -1650,7 +1653,7 @@ window.copiarSeriales = function (ordenId) {
       }
       const clienteEmailToUse = clienteEmailInput || clienteEmailOriginal;
 
-      const subject = `Nota de Entrega — Orden ${ordenId}${noRecibido ? ' (No recibido)' : ''}`;
+      const subject = `Nota de Entrega — Orden ${ordenId}${noRecibido ? ' (Firma en papel)' : ''}`;
       // Structured payload — onMailQueued renders the body via
       // emailRenderer.renderByTemplate. fechaISO is included so the
       // email reflects the moment the entrega was confirmed even if

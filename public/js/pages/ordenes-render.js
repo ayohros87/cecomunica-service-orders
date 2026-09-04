@@ -321,7 +321,7 @@ function _buildTimelineHTML(ordenData) {
   if (ordenData.fecha_entrega) {
     entries.push({
       icon: ordenData.no_recibido ? 'alert-triangle' : 'package-check',
-      label: ordenData.no_recibido ? 'Entrega NO recibida' : 'Entregada al cliente',
+      label: ordenData.no_recibido ? 'Entregada (firma en papel)' : 'Entregada al cliente',
       ts: ordenData.fecha_entrega,
       by: ordenData.entrega_por_email || '',
       kind: ordenData.no_recibido ? 'no-recibido' : 'entregado'

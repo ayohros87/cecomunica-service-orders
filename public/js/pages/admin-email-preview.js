@@ -44,9 +44,9 @@
   const TEMPLATE_VARIANTS = {
     nota_entrega: {
       Normal: SAMPLES.nota_entrega,
-      'No recibido': (() => {
+      'Firma en papel': (() => {
         const v = JSON.parse(JSON.stringify(SAMPLES.nota_entrega));
-        v.opts = { noRecibido: true, motivo: 'Cliente ausente, agendamos reenvío', personaInterna: 'Carlos Ruiz', notas: 'Reintentar entrega el lunes por la mañana.', fechaISO: v.opts.fechaISO };
+        v.opts = { noRecibido: true, motivo: 'La plataforma estaba actualizándose; el cliente firmó la nota impresa y se llevó su copia.', personaInterna: 'Sara Romero', notas: 'Adjuntar la nota firmada al expediente.', fechaISO: v.opts.fechaISO };
         return v;
       })(),
     },
