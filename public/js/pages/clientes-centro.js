@@ -1772,9 +1772,13 @@ window.Centro = {
         ? `<button class="btn btn-ghost cg-act" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')" title="Qué seriales siguen con el cliente, cuáles no tiene y cuáles faltan — antes de la firma">Seriales de la cuenta</button>` : ''}
       ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
         ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})">Regularizar por anexo</button>` : ''}
-      <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>
-      ${ContratoAnulacion.esAnulable(c) && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
-        ? `<button class="btn-quiet cg-act" style="margin-left:auto;" onclick="Centro.anularContrato('${this.esc(c.id)}')">Anular contrato…</button>` : ''}`;
+      <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>`;
+    // Pie del expediente, abajo a la derecha — MISMO sitio y MISMO botón que
+    // "Anular gestión" en _detalleGestion (Alberto 2026-09-04: dos lugares
+    // distintos para lo mismo, y el btn-quiet casi no se veía).
+    const anular = ContratoAnulacion.esAnulable(c) && [ROLES.ADMIN, ROLES.GERENTE].includes(this.rol)
+      ? `<button class="btn-danger cg-act" onclick="Centro.anularContrato('${this.esc(c.id)}')">Anular contrato…</button>`
+      : '';
     return `
       <div class="cg-row" id="grow-ct-${this.esc(c.id)}" role="button" tabindex="0" onclick="Centro.toggleGestion('ct-${this.esc(c.id)}')"
            onkeydown="if(event.key==='Enter')this.click()" style="${abierta ? 'border-color:var(--accent);' : ''}">
@@ -1796,6 +1800,7 @@ window.Centro = {
           </div>
           <div>${timeline}</div>
         </div>
+        ${anular ? `<div style="display:flex; justify-content:flex-end; margin-top:8px;">${anular}</div>` : ''}
       </div>` : ''}`;
   },
 
@@ -2143,7 +2148,7 @@ window.Centro = {
     const anular = (this.puedeAprobar() || this.rol === ROLES.GERENTE)
       && !['cerrada', 'anulada', 'pendiente_aprobacion'].includes(g.estado)
       && !g.cierre?.entrega
-      ? `<button class="btn-quiet" onclick="Centro.anularGestion('${this.esc(g.id)}')">Anular gestión</button>`
+      ? `<button class="btn-danger cg-act" onclick="Centro.anularGestion('${this.esc(g.id)}')">Anular gestión…</button>`
       : '';
 
     return `<div class="ds-card" style="padding:var(--sp-4); margin:-4px 0 10px; border-top:none;">
