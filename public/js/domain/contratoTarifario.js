@@ -98,6 +98,10 @@ window.ContratoTarifario = {
       contrato_origen_refs: origenRefs,
       origen_legacy_ref: origen.legacy ? (origen.legacy_ref || '') : '',
       transicion_plan: d.transicion_plan || null,
+      // Qué "papel" es (2026-09-04): 'v2' = contratos/documento.html (Anexo A
+      // por serial, firma digital). Lo estampa el Centro; el formulario
+      // clásico no lo manda y su contrato imprime el formato anterior.
+      ...(d.documento_version ? { documento_version: d.documento_version } : {}),
       // `[]` = "no se identificó" (una respuesta) ≠ `null` = "no aplica".
       reemplaza_seriales: (d.reemplaza_seriales !== undefined) ? d.reemplaza_seriales : null,
       estado: 'pendiente_aprobacion',

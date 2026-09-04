@@ -908,6 +908,15 @@ window.Centro = {
         <b>${enCampo.length}</b> equipo(s) en campo bajo este contrato${serialesCampo ? `: ${serialesCampo}${enCampo.length > 8 ? ` … y ${enCampo.length - 8} más` : ''}` : ''}.</p>` : ''}
       ${reg?.amarradas != null ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
         Regularización: ${reg.amarradas} radio(s) amarrados${reg.sin_cupo ? ` · <b style="color:var(--warn-deep, #92400E);">${reg.sin_cupo} sin cupo</b>` : ''}${reg.sin_linea ? ` · <b style="color:var(--warn-deep, #92400E);">${reg.sin_linea} sin línea: ${(reg.sin_linea_seriales || []).join(', ')}</b>` : ''}.</p>` : ''}
+      ${c.transicion_plan?.nivel === 'serial' && window.TransicionPlan ? `<p style="font-size:12.5px; color:var(--fg-3); margin:6px 0 0;">
+        Seriales declarados en la venta: ${this.esc(TransicionPlan.resumen(c.transicion_plan))}${c.plan_aplicado?.at ? ' — aplicado' : ''}.
+        ${(c.transicion_plan.unidades || []).filter(u => u.destino === 'no_tiene').length
+          ? `<br><b style="color:var(--warn-deep, #92400E);">No los tiene:</b> ${(c.transicion_plan.unidades || []).filter(u => u.destino === 'no_tiene').map(u => `<span class="cg-mono">${this.esc(u.serial)}</span>`).join(', ')}` : ''}
+        ${c.accion === 'Renovación' && c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
+          ? `<button class="btn btn-ghost cg-act" style="margin-left:8px;" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')">Corregir seriales</button>` : ''}</p>`
+        : (c.accion === 'Renovación' && c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
+          ? `<p style="font-size:12.5px; margin:6px 0 0;"><span style="color:var(--warn-deep, #92400E);">Esta renovación no declara qué seriales siguen con el cliente.</span>
+             <button class="btn btn-ghost cg-act" style="margin-left:8px;" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')">Seriales de la cuenta</button></p>` : '')}
       ${this._osCache[id] && !this._osCache[id].loading && this._osCache[id].os.length ? this._osTramiteHtml(c) : ''}
       ${c.observaciones ? `<p style="font-size:12.5px; color:var(--fg-3); margin:8px 0 0; max-width:72ch;">${this.esc(c.observaciones)}</p>` : ''}`,
       footer: `
@@ -1759,6 +1768,8 @@ window.Centro = {
         ? `<button class="btn btn-primary cg-act" onclick="Centro.aprobarContrato('${this.esc(c.id)}')">Aprobar contrato</button>` : ''}
       ${c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
         ? `<button class="btn btn-primary cg-act" onclick="Centro.enviarFirma('${this.esc(c.id)}')">Enviar para firma</button>` : ''}
+      ${esRenov && c.estado === 'aprobado' && !c.firmado && this.puedeCrearGestion()
+        ? `<button class="btn btn-ghost cg-act" onclick="Centro.wizSerialesRenovacion('${this.esc(c.id)}')" title="Qué seriales siguen con el cliente, cuáles no tiene y cuáles faltan — antes de la firma">Seriales de la cuenta</button>` : ''}
       ${reg?.motivo === 'sobrantes' && this.puedeCrearGestion()
         ? `<button class="btn btn-primary cg-act" onclick="Centro.wizAumento('${this.esc(c.id)}',{regularizar:true})">Regularizar por anexo</button>` : ''}
       <button class="btn btn-ghost cg-act" onclick="Centro.verContrato('${this.esc(c.id)}')">Ver contrato</button>
@@ -3337,7 +3348,7 @@ window.Centro = {
         </select>
         <div id="wcRenovBloque" class="${esRenov ? '' : 'hidden'}" style="margin-top:8px;">
           <label class="cg-toggle">
-            <input type="checkbox" id="wcSinEquipo"> Renovación sin equipo (los radios actuales continúan)
+            <input type="checkbox" id="wcSinEquipo" onchange="Centro._wcSyncPlan()"> Renovación sin equipo (los radios actuales continúan)
           </label>
           <label class="cg-toggle" style="margin-left:8px;">
             <input type="checkbox" id="wcRefurb"> Refurbished / componentes
@@ -3358,12 +3369,16 @@ window.Centro = {
             style="margin-top:6px; max-width:420px; ${legacyAuto ? '' : 'display:none;'}">
         </div>
         <div class="form-field" style="margin-bottom:4px;">
-          <label class="form-label">Plan de transición de los equipos del origen</label>
+          <label class="form-label">Seriales de la cuenta — qué pasa con cada equipo</label>
+          <p style="margin:0 0 8px; font-size:12.5px; color:var(--fg-3); max-width:72ch;">
+            Todo lo que el sistema cree que el cliente tiene, con su destino. Marca <b>“El cliente no lo
+            tiene”</b> en lo que no está con él (queda por clasificar y sale de la cuenta) y <b>agrega</b> los
+            seriales que sí tiene y no aparecen. Los que <b>continúan</b> entran al Anexo A que el cliente firma.</p>
           <div id="wcPlan" class="cg-twrap"></div>
         </div>
       </div>
 
-      <div oninput="Centro._wcPreview()">
+      <div oninput="Centro._wcPreview(); Centro._wcConciliar()">
       <div class="cg-paso">
         <div class="cg-paso-t"><span class="n">3</span> Equipos y tarifas
           <span class="hint">fusionados por modelo — la tarifa vigente manda</span></div>
@@ -3398,6 +3413,7 @@ window.Centro = {
       const ref = document.getElementById('wcLegacyRef');
       if (ref) ref.style.display = e.target.checked ? '' : 'none';
     });
+    this._wcPlanState = { destinos: {}, agregados: [] };
     this._wcSyncPlan();
     this._wcPreview();
   },
@@ -3436,31 +3452,305 @@ window.Centro = {
     return [...document.querySelectorAll('input[data-wco]:checked')].map(i => i.value);
   },
 
-  // Unidades del pool de los contratos origen elegidos → plan por serial con
-  // destino editable (default: continúa — es una renovación, no una excepción).
+  /* ═════════ Plan de seriales de la renovación (2026-09-04) ═════════
+   * Reclamo de Alberto (caso CENTRO CULTURAL CHINO PANAMEÑO): la renovación
+   * no aclaraba QUÉ seriales siguen con el cliente. La tabla solo listaba las
+   * fichas colgadas de un contrato de origen del sistema — y los contratos
+   * viejos (legacy) no tienen seriales, así que salía vacía mientras el pool
+   * tenía 22 fichas amarradas al cliente por la migración POC, sin verificar.
+   *
+   * Ahora la tabla es LA CUENTA COMPLETA: todo lo que el pool dice que el
+   * cliente tiene (contrato de origen, custodia sin contrato, migración sin
+   * verificar), con destino por serial — continúa / se devuelve / se
+   * reemplaza / el cliente NO lo tiene — más los seriales que el vendedor
+   * AGREGA porque el cliente sí los tiene y el sistema no lo sabía. Al
+   * aprobarse, functions/src/lib/planRenovacion.js lo aplica: los
+   * 'continúa' entran como filas del contrato (→ Anexo A), los 'no lo
+   * tiene' se sueltan del cliente (→ por clasificar). */
+
+  // Unidades del pool que el sistema le atribuye al cliente. `fuente` dice
+  // de dónde viene la atribución (rastro para el aprobador y el kardex).
+  _wcUnidadesCuenta(origenIds) {
+    const ids = origenIds || [];
+    return this.equipos
+      .filter(e => ['en_cliente', 'asignado_contrato', 'por_clasificar'].includes(e.estado))
+      .map(e => {
+        const cid = e.asignacion?.contrato_doc_id || null;
+        const fuente = e.estado === 'por_clasificar' || e.verificado === false && e.origen === 'migracion_poc' && !cid
+          ? 'migracion' : cid ? 'origen' : 'custodia';
+        return { u: e, fuente, deOrigen: !!cid && ids.includes(cid) };
+      })
+      // Primero las del origen que se renueva, luego custodia, luego migración.
+      .sort((a, b) => (['origen', 'custodia', 'migracion'].indexOf(a.fuente) - ['origen', 'custodia', 'migracion'].indexOf(b.fuente))
+        || String(a.u.serial || a.u.id).localeCompare(String(b.u.serial || b.u.id)));
+  },
+
+  _wcFuenteHtml(fuente, u) {
+    if (fuente === 'origen') return `<span class="cg-mono">${this.esc(u.asignacion?.contrato_id || 'contrato')}</span>`;
+    if (fuente === 'custodia') return '<span style="color:var(--fg-3);">en campo · sin contrato</span>';
+    if (fuente === 'agregado') return '<span style="color:var(--ok-deep, #065F46);">agregado por ti</span>';
+    return '<span style="color:var(--warn-deep, #92400E);" title="La ficha llegó de la migración POC y nadie la verificó con el cliente">migración · sin verificar</span>';
+  },
+
+  _wcDestinoSelect(id, destino, sinEquipo) {
+    const opts = [['continua', 'Continúa'], ['no_tiene', 'El cliente no lo tiene'], ['devuelve', 'Se devuelve']];
+    if (!sinEquipo) opts.push(['reemplaza', 'Se reemplaza']);
+    const d = opts.some(o => o[0] === destino) ? destino : 'continua';
+    return `<select class="form-select" data-wcp="${this.esc(id)}" onchange="Centro._wcConciliar()" style="min-width:170px;">
+      ${opts.map(([v, l]) => `<option value="${v}" ${v === d ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  },
+
+  // Estado vivo del plan mientras el wizard está abierto: destino elegido por
+  // pool_id (sobrevive a re-pintados) y seriales agregados a mano.
+  _wcPlanState: { destinos: {}, agregados: [] },
+
   _wcSyncPlan() {
     const cont = document.getElementById('wcPlan');
     if (!cont) return;
     const sel = { accion: document.getElementById('wcAccion')?.value, codigo_tipo: document.getElementById('wcTipo')?.value };
+    if (!TransicionPlan.aplica(sel)) { cont.innerHTML = ''; return; }
+    // Recoge lo elegido antes de re-pintar (cambio de origen, de modalidad…).
+    document.querySelectorAll('select[data-wcp]').forEach(s => { this._wcPlanState.destinos[s.dataset.wcp] = s.value; });
+    const sinEquipo = !!document.getElementById('wcSinEquipo')?.checked;
     const ids = this._wcOrigenIds();
-    if (!TransicionPlan.aplica(sel) || !ids.length) { cont.innerHTML = ''; return; }
-    const unidades = this.equipos.filter(e =>
-      ids.includes(e.asignacion?.contrato_doc_id) && ['en_cliente', 'asignado_contrato'].includes(e.estado));
-    if (!unidades.length) {
-      cont.innerHTML = '<p style="font-size:12.5px; color:var(--fg-3); margin:0;">El origen no tiene unidades con serial en el pool — el plan se resuelve con recepción.</p>';
-      return;
+    const unidades = this._wcUnidadesCuenta(ids);
+    const agregados = this._wcPlanState.agregados;
+    const filas = [
+      ...unidades.map(({ u, fuente }) => `<tr>
+        <td class="cg-mono">${this.esc(u.serial || u.id)}</td>
+        <td>${this.esc(u.modelo_label || '—')}${u.propiedad === 'cliente' ? ' <span style="color:var(--fg-4); font-size:11px;">del cliente</span>' : ''}</td>
+        <td style="font-size:12.5px;">${this._wcFuenteHtml(fuente, u)}</td>
+        <td>${this._wcDestinoSelect(u.id, this._wcPlanState.destinos[u.id] || 'continua', sinEquipo)}</td></tr>`),
+      ...agregados.map((a, i) => `<tr>
+        <td class="cg-mono">${this.esc(a.serial)}</td>
+        <td>${a.pool ? this.esc(a.modelo || '—') : this._selModelo(`data-wcpa-modelo="${i}" onchange="Centro._wcConciliar()" style="min-width:180px;"`, a.modelo_id, a.modelo)}
+          ${a.aviso ? `<div style="font-size:11.5px; color:var(--warn-deep, #92400E);">${this.esc(a.aviso)}</div>` : ''}</td>
+        <td style="font-size:12.5px;">${this._wcFuenteHtml('agregado', a)}</td>
+        <td style="white-space:nowrap;"><span style="font-size:12.5px;">Continúa</span>
+          <button type="button" class="btn btn-ghost" style="padding:2px 8px; margin-left:6px;" title="Quitar"
+            onclick="Centro._wcQuitarAgregado(${i})">✕</button></td></tr>`),
+    ];
+    const vacio = !filas.length;
+    cont.innerHTML = `
+      ${vacio ? '<p style="font-size:12.5px; color:var(--fg-3); margin:0 0 8px;">El sistema no le atribuye ningún serial a este cliente. Agrega abajo los que tiene.</p>'
+        : `<table class="cg-tabla"><thead><tr>
+            <th>Serial</th><th>Modelo</th><th>Según el sistema</th><th>Destino</th></tr></thead>
+          <tbody>${filas.join('')}</tbody></table>`}
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px;">
+        <input class="form-input" id="wcSerialNuevo" placeholder="Serial que el cliente tiene y no aparece…" style="max-width:280px;"
+          aria-label="Serial a agregar" onkeydown="if(event.key==='Enter'){event.preventDefault();Centro._wcAgregarSerial();}">
+        <button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcAgregarSerial()">+ Agregar serial</button>
+        ${unidades.length ? `<span style="flex:1;"></span>
+          <button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcMarcarTodos('continua')">Todos continúan</button>
+          <button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcMarcarTodos('no_tiene')">Ninguno lo tiene</button>` : ''}
+      </div>
+      <div id="wcPlanConc" style="margin-top:8px;"></div>`;
+    this._wcConciliar();
+  },
+
+  _wcMarcarTodos(destino) {
+    document.querySelectorAll('select[data-wcp]').forEach(s => {
+      if ([...s.options].some(o => o.value === destino)) s.value = destino;
+    });
+    this._wcConciliar();
+  },
+
+  _wcQuitarAgregado(i) {
+    this._wcPlanState.agregados.splice(i, 1);
+    this._wcSyncPlan();
+  },
+
+  // Agrega un serial que el cliente tiene y el sistema no le atribuye. Se
+  // busca en el pool: si existe, se toma su modelo y se AVISA dónde dice el
+  // sistema que está (otro cliente, bodega, taller…) — se permite igual,
+  // porque regularizar es justamente corregir eso, pero el aprobador lo ve.
+  async _wcAgregarSerial() {
+    const inp = document.getElementById('wcSerialNuevo');
+    const raw = (inp?.value || '').trim();
+    if (!raw) return;
+    const norm = EquiposPoolService.normalizarSerial(raw);
+    if (!EquiposPoolService.esSerialValido(norm)) { Toast.show('Ese serial no parece válido', 'warn'); return; }
+    const ya = this._wcPlanState.agregados.some(a => a.serial_norm === norm)
+      || this.equipos.some(e => e.id === norm || EquiposPoolService.normalizarSerial(e.serial) === norm);
+    if (ya) { Toast.show(`${norm} ya está en la lista`, 'warn'); return; }
+    let ficha = null;
+    try { ficha = await EquiposPoolService.findBySerial(raw); } catch (_) { /* sin red: se agrega sin ficha */ }
+    const L = EquiposPoolService.ESTADO_LABELS || {};
+    let aviso = '';
+    if (ficha) {
+      const otro = ficha.asignacion?.cliente_id && ficha.asignacion.cliente_id !== this.cliente.id
+        ? ` · asignado a ${ficha.asignacion.cliente_nombre || 'otro cliente'}${ficha.asignacion.contrato_id ? ` (${ficha.asignacion.contrato_id})` : ''}` : '';
+      aviso = `Según el sistema: ${L[ficha.estado] || ficha.estado || '—'}${otro}`;
+      if (ficha.estado === 'baja') { Toast.show(`${norm} está dado de BAJA — no se puede reactivar desde aquí`, 'bad'); return; }
+    } else {
+      aviso = 'Sin ficha en el pool: nace con este contrato — elige el modelo';
     }
-    cont.innerHTML = `<table class="cg-tabla"><thead><tr>
-      <th>Serial</th><th>Modelo</th><th>Contrato</th><th>Destino</th></tr></thead><tbody>
-      ${unidades.map(e => `<tr>
-        <td class="cg-mono">${this.esc(e.serial || e.id)}</td>
-        <td>${this.esc(e.modelo_label || '—')}</td>
-        <td class="cg-mono">${this.esc(e.asignacion?.contrato_id || '')}</td>
-        <td><select class="form-select" data-wcp="${this.esc(e.id)}" style="min-width:130px;">
-          <option value="continua" selected>Continúa</option>
-          <option value="devuelve">Se devuelve</option>
-          <option value="reemplaza">Se reemplaza</option>
-        </select></td></tr>`).join('')}</tbody></table>`;
+    this._wcPlanState.agregados.push({
+      serial: ficha ? (ficha.serial || raw) : raw, serial_norm: norm, pool: !!ficha, pool_id: ficha ? ficha.id : null,
+      modelo_id: ficha?.modelo_id || null, modelo: ficha?.modelo_label || '',
+      propiedad: ficha?.propiedad || null, aviso,
+    });
+    this._wcSyncPlan();
+    document.getElementById('wcSerialNuevo')?.focus();
+  },
+
+  // Lee el plan tal como está en pantalla (o null si no aplica / vacío).
+  _wcLeerPlan(origenIds) {
+    const unidades = [...document.querySelectorAll('select[data-wcp]')].map(s => {
+      const e = this.equipos.find(x => x.id === s.dataset.wcp);
+      if (!e) return null;
+      const cid = e.asignacion?.contrato_doc_id || null;
+      const fuente = e.estado === 'por_clasificar' ? 'migracion' : cid ? 'origen' : 'custodia';
+      return { pool_id: e.id, serial: e.serial || e.id, serial_norm: e.id,
+        modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', destino: s.value, fuente,
+        modalidad: e.propiedad === 'cliente' ? 'propio' : 'alquiler' };
+    }).filter(Boolean);
+    this._wcPlanState.agregados.forEach((a, i) => {
+      let modelo_id = a.modelo_id, modelo = a.modelo;
+      if (!a.pool) {
+        const m = this._modeloDeSelect(document.querySelector(`select[data-wcpa-modelo="${i}"]`));
+        modelo_id = m?.id || null; modelo = m?.label || '';
+      }
+      unidades.push({ pool_id: a.pool_id, serial: a.serial, serial_norm: a.serial_norm, modelo_id, modelo,
+        destino: 'continua', fuente: 'agregado', modalidad: a.propiedad === 'cliente' ? 'propio' : 'alquiler' });
+    });
+    if (!unidades.length) return null;
+    return TransicionPlan.construirSerial(unidades, origenIds || []);
+  },
+
+  // Aviso vivo: cuántos continúan por línea vs. la cantidad de la línea.
+  // En renovación SIN equipo la cantidad de la línea TIENE que ser la de los
+  // seriales que continúan (bodega no va a poner ninguno más) — el botón
+  // "Cuadrar" la iguala. Con equipo, la diferencia son los radios nuevos.
+  _wcConciliar() {
+    const box = document.getElementById('wcPlanConc');
+    if (!box) return { ok: true };
+    const plan = this._wcLeerPlan(this._wcOrigenIds());
+    if (!plan) { box.innerHTML = ''; return { ok: true }; }
+    const lineas = this._lineasModelo('wcm');
+    const sinEquipo = !!document.getElementById('wcSinEquipo')?.checked;
+    const r = TransicionPlan.conciliarLineas(plan, lineas);
+    const partes = [];
+    let desajuste = false;
+    r.porLinea.forEach(({ idx, continuan }) => {
+      const l = lineas[idx];
+      const cant = Number(l.cantidad || 0);
+      const ok = sinEquipo ? continuan === cant : continuan <= cant;
+      if (!ok) desajuste = true;
+      partes.push(`<span style="${ok ? '' : 'color:var(--warn-deep, #92400E); font-weight:600;'}">${this.esc(l.modelo)}${l.modalidad === 'propio' ? ' (del cliente)' : ''}: ${continuan} continúa${continuan === 1 ? '' : 'n'} · línea ${cant}</span>`);
+    });
+    const faltaModelo = plan.unidades.some(u => u.fuente === 'agregado' && !u.modelo && !u.modelo_id);
+    const sinLinea = r.sinLinea.length
+      ? `<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;"><b>${r.sinLinea.length} serial(es) sin línea en el contrato</b>: ${r.sinLinea.map(u => this.esc(u.serial)).join(', ')} — agrega su modelo en “Equipos y tarifas” o cámbiales el destino.</div>` : '';
+    box.innerHTML = `
+      <div style="font-size:12.5px; color:var(--fg-3);">${this.esc(TransicionPlan.resumen(plan))}</div>
+      ${partes.length ? `<div style="display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; margin-top:4px;">${partes.join('')}
+        ${desajuste && !this._wcSoloPlan ? `<button type="button" class="btn btn-ghost cg-act" onclick="Centro._wcCuadrar()">Cuadrar cantidades con los seriales</button>` : ''}</div>` : ''}
+      ${sinLinea}
+      ${faltaModelo ? '<div style="color:var(--warn-deep, #92400E); font-size:12.5px; margin-top:4px;">Elige el modelo de cada serial agregado sin ficha.</div>' : ''}`;
+    return { ok: !(sinEquipo && desajuste) && !r.sinLinea.length && !faltaModelo, plan, desajuste, sinLinea: r.sinLinea, faltaModelo };
+  },
+
+  // ── Corregir los seriales de una renovación YA APROBADA, antes de la firma
+  // (caso SERV20260904-01, Chino Panameño: se aprobó sin plan). Misma tabla
+  // del wizard; solo se guarda `transicion_plan` — el trigger onPlanRenovacion
+  // aplica la diferencia (filas del Anexo A, fichas que se sueltan). Tras la
+  // firma no se ofrece: el Anexo A firmado queda congelado y cualquier cambio
+  // va por anexo. Las líneas se muestran para conciliar, no se editan aquí. ──
+  async wizSerialesRenovacion(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c || c.accion !== 'Renovación') return;
+    if (c.estado !== 'aprobado' || c.firmado) { Toast.show('Los seriales se corrigen con el contrato aprobado y antes de la firma', 'warn'); return; }
+    if (!this.puedeCrearGestion()) { Toast.show('Tu rol no edita contratos desde aquí', 'warn'); return; }
+    this._cerrarModal();
+    await this._cargarModelos();
+    const origenIds = Array.isArray(c.contrato_origen_ids) ? c.contrato_origen_ids : (c.contrato_origen_id ? [c.contrato_origen_id] : []);
+    // Prefill desde el plan guardado.
+    const plan = c.transicion_plan?.nivel === 'serial' ? c.transicion_plan : null;
+    const destinos = {}; const agregados = [];
+    (plan?.unidades || []).forEach(u => {
+      if (u.fuente === 'agregado' || (u.pool_id && !this.equipos.some(e => e.id === u.pool_id))) {
+        agregados.push({ serial: u.serial, serial_norm: u.serial_norm, pool: !!u.pool_id, pool_id: u.pool_id || null,
+          modelo_id: u.modelo_id || null, modelo: u.modelo || '', propiedad: u.modalidad === 'propio' ? 'cliente' : null, aviso: '' });
+      } else if (u.pool_id) destinos[u.pool_id] = u.destino;
+    });
+    this._wcPlanState = { destinos, agregados };
+    this._wcSoloPlan = true;
+    this._abrirModalA({
+      titulo: `Seriales de la cuenta — <span class="cg-mono">${this.esc(c.contrato_id || c.id)}</span>`,
+      cuerpo: `
+      <p style="margin:0 0 12px; font-size:13px; color:var(--fg-3); max-width:72ch;">
+        Renovación <b>${c.renovacion_sin_equipo ? 'sin equipo' : 'con equipo'}</b>, aprobada y sin firmar. Declara qué
+        equipos siguen con el cliente, cuáles <b>no tiene</b> (salen de la cuenta y quedan por clasificar) y
+        agrega los que le faltan al sistema. Al guardar, los que continúan pasan al Anexo A que el cliente firma.</p>
+      <select id="wcAccion" class="hidden" aria-hidden="true"><option value="Renovación" selected>Renovación</option></select>
+      <select id="wcTipo" class="hidden" aria-hidden="true"><option value="${this.esc(c.codigo_tipo || 'SERV')}" selected></option></select>
+      <input type="checkbox" id="wcSinEquipo" class="hidden" aria-hidden="true" ${c.renovacion_sin_equipo ? 'checked' : ''}>
+      ${origenIds.map(o => `<input type="checkbox" data-wco value="${this.esc(o)}" checked class="hidden" aria-hidden="true">`).join('')}
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">1</span> Líneas del contrato <span class="hint">solo lectura — para conciliar</span></div>
+        <div id="wcLineas">${(c.equipos || []).map(l => this._lineaModeloPre('wcm', true, l)).join('')}</div>
+      </div>
+      <div class="cg-paso">
+        <div class="cg-paso-t"><span class="n">2</span> Seriales de la cuenta</div>
+        <div id="wcPlan" class="cg-twrap"></div>
+      </div>`,
+      footer: `
+        <span class="sep"></span>
+        <button class="btn btn-ghost" onclick="Centro._wcSoloPlan=false; Centro._cerrarModal()">Cancelar</button>
+        <button class="btn btn-primary" id="wcGuardarPlan" onclick="Centro.guardarPlanRenovacion('${this.esc(c.id)}')">Guardar seriales</button>`,
+    });
+    // Las líneas no se editan aquí (el contrato ya está aprobado).
+    document.querySelectorAll('#wcLineas input, #wcLineas select, #wcLineas button').forEach(el => { el.disabled = true; });
+    this._wcSyncPlan();
+  },
+
+  async guardarPlanRenovacion(id) {
+    const c = this.contratos.find(x => x.id === id);
+    if (!c) return;
+    const conc = this._wcConciliar();
+    const plan = conc.plan || null;
+    if (!plan) { Toast.show('Declara al menos un serial (o agrega los que el cliente tiene)', 'warn'); return; }
+    const v = TransicionPlan.validar(plan);
+    if (!v.ok) { Toast.show(`⚠️ ${v.mensaje}`, 'warn'); return; }
+    if (conc.faltaModelo) { Toast.show('⚠️ Elige el modelo de cada serial agregado sin ficha', 'warn'); return; }
+    if (conc.sinLinea.length) { Toast.show(`⚠️ ${conc.sinLinea.length} serial(es) que continúan no tienen línea en el contrato — cámbiales el destino o pide editar el contrato`, 'warn'); return; }
+    const btn = document.getElementById('wcGuardarPlan');
+    if (btn) btn.disabled = true;
+    try {
+      await ContratosService.updateContrato(id, {
+        transicion_plan: plan,
+        transicion_plan_actualizado_at: firebase.firestore.FieldValue.serverTimestamp(),
+        transicion_plan_actualizado_por_uid: this.uid,
+        fecha_modificacion: new Date(),
+      });
+      this._wcSoloPlan = false;
+      this._cerrarModal();
+      Toast.show(conc.desajuste
+        ? 'Seriales guardados — ojo: la cantidad de alguna línea no coincide con los que continúan (edita el contrato si aplica)'
+        : 'Seriales guardados — el Anexo A se actualiza solo', conc.desajuste ? 'warn' : 'ok');
+      await this.abrir(this.cliente.id, { push: false });
+    } catch (e) {
+      console.error(e); Toast.show('No se pudieron guardar los seriales', 'bad');
+      if (btn) btn.disabled = false;
+    }
+  },
+
+  _wcCuadrar() {
+    const plan = this._wcLeerPlan(this._wcOrigenIds());
+    if (!plan) return;
+    const lineas = this._lineasModelo('wcm');
+    const r = TransicionPlan.conciliarLineas(plan, lineas);
+    const cants = [...document.querySelectorAll('input[data-wcm-cant]')];
+    const selects = [...document.querySelectorAll('select[data-wcm-modelo]')];
+    // _lineasModelo salta los selects sin modelo: mapea idx → input real.
+    const reales = selects.map((s, i) => this._modeloDeSelect(s) ? i : -1).filter(i => i >= 0);
+    r.porLinea.forEach(({ idx, continuan }) => {
+      const inp = cants[reales[idx]];
+      if (inp && continuan > 0) inp.value = continuan;
+    });
+    this._wcPreview();
+    this._wcConciliar();
   },
 
   _wcPreview() {
@@ -3508,15 +3798,14 @@ window.Centro = {
 
     let plan = null;
     if (TransicionPlan.aplica(origenSel)) {
-      const unidades = [...document.querySelectorAll('select[data-wcp]')].map(s => {
-        const e = this.equipos.find(x => x.id === s.dataset.wcp);
-        return e ? { pool_id: e.id, serial: e.serial || e.id, serial_norm: e.id,
-          modelo_id: e.modelo_id || null, modelo: e.modelo_label || '', destino: s.value } : null;
-      }).filter(Boolean);
-      if (unidades.length) {
-        plan = TransicionPlan.construirSerial(unidades, origenIds);
+      const conc = this._wcConciliar();
+      plan = conc.plan || null;
+      if (plan) {
         const vPlan = TransicionPlan.validar(plan);
         if (!vPlan.ok) { Toast.show(`⚠️ ${vPlan.mensaje}`, 'warn'); return; }
+        if (conc.faltaModelo) { Toast.show('⚠️ Elige el modelo de cada serial agregado sin ficha', 'warn'); return; }
+        if (conc.sinLinea.length) { Toast.show(`⚠️ ${conc.sinLinea.length} serial(es) que continúan no tienen línea en el contrato — agrega su modelo o cámbiales el destino`, 'warn'); return; }
+        if (!conc.ok) { Toast.show('⚠️ Renovación sin equipo: la cantidad de cada línea tiene que ser la de los seriales que continúan — usa “Cuadrar cantidades”', 'warn'); return; }
       }
     }
 
@@ -3551,6 +3840,10 @@ window.Centro = {
         renovacion_refurbished_componentes: !!document.getElementById('wcRefurb')?.checked,
         origenSel,
         transicion_plan: plan,
+        // El Centro produce el documento v2 (Anexo A por serial, firma
+        // digital): el correo a activaciones enlaza a ese documento y no
+        // adjunta el PDF del formato anterior (functions/lib/documentoContrato).
+        documento_version: 'v2',
         reemplaza_seriales: null,
         duracion: durUnidad === 'dias' ? `${durN} día${durN === 1 ? '' : 's'}` : `${durN} meses`,
         duracion_meses: meses,

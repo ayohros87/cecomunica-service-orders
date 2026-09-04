@@ -87,3 +87,28 @@ test("serial del plan normalizado: 'a-1' matchea 'A1'", () => {
   const r = decidirSalientes(plan, [u("A1", "P50")], []);
   assert.equal(r.continuan.length, 1);
 });
+
+// ── 2026-09-04: 'no_tiene' y renovación SIN equipo (soloDeclaradas) ──
+test("'no_tiene' no se reclama ni continúa: va aparte (la ficha se soltó al aprobar)", () => {
+  const plan = planSerial([{ serial: "A1", serial_norm: "A1", destino: "no_tiene" }, { serial: "A2", serial_norm: "A2", destino: "devuelve" }]);
+  const r = decidirSalientes(plan, [u("A1", "P50"), u("A2", "P50")], []);
+  assert.deepEqual(r.noTienen.map((x) => x.serial), ["A1"]);
+  assert.deepEqual(r.reclamar.map((x) => x.unidad.serial), ["A2"]);
+  assert.equal(r.continuan.length, 0);
+});
+
+test("soloDeclaradas (renovación sin equipo): lo que no está en el plan CONTINÚA en vez de devolverse", () => {
+  const plan = planSerial([{ serial: "A1", serial_norm: "A1", destino: "devuelve" }]);
+  const unidades = [u("A1", "P50"), u("A2", "P50"), u("A3", "P50")];
+  const conFlag = decidirSalientes(plan, unidades, [], { soloDeclaradas: true });
+  assert.deepEqual(conFlag.reclamar.map((x) => x.unidad.serial), ["A1"]);
+  assert.deepEqual(conFlag.continuan.map((x) => x.serial), ["A2", "A3"]);
+  const sinFlag = decidirSalientes(plan, unidades, []);
+  assert.equal(sinFlag.reclamar.length, 3);
+});
+
+test("sin plan por serial, soloDeclaradas no cambia la regla clásica", () => {
+  const r = decidirSalientes(null, [u("A1", "P50")], [], { soloDeclaradas: true });
+  assert.equal(r.reclamar.length, 1);
+  assert.deepEqual(r.noTienen, []);
+});

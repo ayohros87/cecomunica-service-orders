@@ -401,6 +401,55 @@ async function desasignarContrato(serial, modeloId, modeloLabel,
   });
 }
 
+// Suelta una unidad DEL CLIENTE (no de un contrato): el vendedor declaró en la
+// renovación que el cliente NO tiene ese equipo (2026-09-04, caso Chino
+// Panameño — 20 fichas PNC360S amarradas al cliente por la migración POC que
+// nadie verificó). La ficha deja de colgar del cliente y cae a POR_CLASIFICAR
+// (ubicación desconocida: hay que ir a buscarla), con `verificado:false` y el
+// rastro de quién la tenía en `ultima_asignacion` para que la conciliación y
+// la bandeja de por-clasificar sepan de dónde viene. Solo parte de estados en
+// los que "está con el cliente" era la única evidencia (en_cliente,
+// asignado_contrato, por_clasificar). Una devolución en curso o una baja no se
+// tocan. Retorna 'liberado' | 'sin-cambio' | 'no-existe'.
+async function soltarDelCliente(serial, modeloId, modeloLabel,
+                                { cliente_id, refMov = null, notas = "" }) {
+  const norm = normSerial(serial);
+  if (!esSerialValido(norm) || !cliente_id) return "no-existe";
+  const { ref, data } = await resolver(serial, modeloId, modeloLabel, { adoptarSiExiste: true });
+  if (!data) return "no-existe";
+
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "no-existe";
+    const actual = snap.data();
+    const de = actual.estado;
+    if (de === ESTADOS.BAJA) return "sin-cambio";
+    if (actual.pendiente_devolucion) return "sin-cambio";
+    if (![ESTADOS.EN_CLIENTE, ESTADOS.ASIGNADO, ESTADOS.POR_CLASIFICAR].includes(de)) return "sin-cambio";
+    if ((actual.asignacion?.cliente_id || null) !== cliente_id) return "sin-cambio";
+
+    const cambios = {
+      estado: ESTADOS.POR_CLASIFICAR,
+      asignacion: null,
+      verificado: false,
+      ultima_asignacion: {
+        ...(actual.asignacion || {}),
+        soltada_at: admin.firestore.FieldValue.serverTimestamp(),
+        soltada_motivo: "no_tiene_en_renovacion",
+        soltada_ref: refMov || null,
+      },
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    Object.assign(cambios, custodiaPatch(ESTADOS.POR_CLASIFICAR, null, actual));
+    tx.set(ref, cambios, { merge: true });
+    tx.set(ref.collection("movimientos").doc(), _movimiento({
+      tipo: "liberacion", de_estado: de, a_estado: ESTADOS.POR_CLASIFICAR,
+      ref: refMov, notas,
+    }));
+    return "liberado";
+  });
+}
+
 // Espejo contable de una venta con contrato ("Propio") sobre la unidad del
 // pool: la factura QBO vive en contratos.factura_venta y cada unidad asignada
 // la hereda en `venta.*` SIN tocar su estado (el ciclo del contrato manda).
@@ -527,5 +576,5 @@ async function transicionarPorId(docId, { aEstado, soloDesde = null, tipo,
 
 module.exports = { ESTADOS, normSerial, esSerialValido, modeloKey, mismoModelo, resolver,
   upsertContacto, transicionar, transicionarPorId, custodiaPatch,
-  desasignarContrato, estadoPrevioAOrden, destinoAlSalirDeOrden,
+  desasignarContrato, soltarDelCliente, estadoPrevioAOrden, destinoAlSalirDeOrden,
   facturaVentaPatch, estamparVentaContrato };

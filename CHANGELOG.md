@@ -1,5 +1,49 @@
 # Changelog
 
+## [Renovación: seriales de la cuenta + correo a activaciones con el documento v2] — 2026-09-04
+
+> Reclamo de Alberto (caso CENTRO CULTURAL CHINO PANAMEÑO, SERV20260904-01):
+> (1) al aprobar desde el Centro, el correo a activaciones salía con "el
+> contrato viejo" — adjuntaba el PDF del formato anterior
+> (`templates/imprimir-contrato.html`) y enlazaba a `imprimir-contrato.html`,
+> cuando el contrato real desde el 2026-08-31 es el documento v2; (2) una
+> renovación sin equipo no aclaraba qué seriales siguen con el cliente: la
+> tabla del wizard solo listaba fichas colgadas de un contrato de origen del
+> sistema (los legacy no tienen), mientras el pool tenía 22 fichas amarradas
+> al cliente por la migración POC sin verificar.
+>
+> - **Correo a activaciones**: `lib/documentoContrato.esDocumentoV2` (SERV,
+>   marca `documento_version:'v2'` del Centro, o firma digital) → el correo
+>   enlaza a `contratos/documento.html` y NO adjunta el PDF viejo; los
+>   legacy siguen igual. En renovaciones con plan lista los seriales que
+>   continúan y los que el cliente declaró no tener.
+> - **Plan de seriales de la renovación** (Centro → Renovar cuenta): la
+>   tabla es LA CUENTA COMPLETA (origen, custodia sin contrato, migración
+>   sin verificar) con destino por serial: continúa / se devuelve / se
+>   reemplaza (solo con equipo) / **el cliente no lo tiene**; más "Agregar
+>   serial" (busca la ficha en el pool y avisa si está con otro cliente; sin
+>   ficha pide el modelo). Conciliación viva contra las líneas y "Cuadrar
+>   cantidades"; en renovación SIN equipo la cantidad de la línea tiene que
+>   ser la de los que continúan (candado al guardar).
+> - **Aplicación al aprobar** (`lib/planRenovacion.js`, llamado desde
+>   onContratoActivado antes de jalarSerialesPropios): 'continúa' → fila en
+>   `contratos/{cid}/seriales` (→ Anexo A que el cliente firma; onSerialWrite
+>   mueve el pool); 'no lo tiene' → `pool.soltarDelCliente` (por_clasificar,
+>   sin asignación, verificado:false, rastro en `ultima_asignacion`).
+>   Idempotente por hash del plan (`plan_aplicado`).
+> - **Corregir antes de la firma**: "Seriales de la cuenta" en el expediente
+>   y en Ver contrato de una renovación aprobada y sin firmar; guarda solo
+>   `transicion_plan` y el trigger nuevo `onPlanRenovacion` aplica la
+>   diferencia (quita filas propias, suelta fichas). Cubre SERV20260904-01,
+>   que se aprobó sin plan.
+> - onRenovacionActivada y jalarSerialesPropios ya no amarran por cupo lo
+>   que el plan declaró devuelto/no tenido. onEntregaTransicion acepta la
+>   renovación sin equipo cuando el plan declara devoluciones (reclama SOLO
+>   las declaradas — `soloDeclaradas`) y lee por ficha los salientes en
+>   custodia. `no_tiene` nunca se reclama.
+> - Aprobación (contratos/index.html) muestra el plan declarado (chips por
+>   destino, agregados marcados) también en renovación sin equipo.
+
 ## [Arranque rápido: por qué demoraba entrar a los módulos] — 2026-08-13
 
 > Investigación disparada por "me demora entrar a órdenes a veces" + un 503

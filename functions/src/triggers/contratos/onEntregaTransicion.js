@@ -82,8 +82,18 @@ module.exports = onDocumentUpdated(
     // predicado es el del CTA, y una adición pura necesita poder cerrarse con
     // `cerrarSinReemplazos()`. Los dos predicados divergen a propósito: uno
     // decide "¿hay que registrar algo?", este decide "¿se devuelve el origen?".
-    const esTransicionable = !after.renovacion_sin_equipo
-      && (after.accion === "Renovación" || after.codigo_tipo === "REEMP");
+    //
+    // Renovación SIN EQUIPO (2026-09-04): antes quedaba fuera del todo. Ahora
+    // entra SOLO si el plan por serial de la venta declaró unidades que se
+    // devuelven o se reemplazan — y en ese caso se reclaman ÚNICAMENTE esas
+    // (soloDeclaradas): lo que el vendedor no nombró continúa con el cliente.
+    const planSerial = (after.transicion_plan?.nivel === "serial" && Array.isArray(after.transicion_plan.unidades))
+      ? after.transicion_plan : null;
+    const declaradasSalientes = planSerial
+      ? planSerial.unidades.filter((u) => ["devuelve", "reemplaza"].includes(u.destino)) : [];
+    const sinEquipo = !!after.renovacion_sin_equipo;
+    const esTransicionable = (after.accion === "Renovación" || after.codigo_tipo === "REEMP")
+      && (!sinEquipo || declaradasSalientes.length > 0);
     if (!esTransicionable) return null;
     if (after.seriales_estado === "legacy") return null;
     if (Number(after.transicion_mapeos_count || 0) > 0) return null; // ya hay registro manual
@@ -103,13 +113,15 @@ module.exports = onDocumentUpdated(
       logger.info("[onEntregaTransicion] REEMP sin equipo saliente identificado; no se reclama nada", { contratoId });
       return null;
     }
-    if (!porSerial && !origenIds.length) return null;
+    if (!porSerial && !origenIds.length && !declaradasSalientes.length) return null;
 
     // Candados (a) y (b): ¿el origen es un hecho declarado o una suposición?
     // Va ANTES de leer el pool — si el vínculo no es confiable, las unidades
     // que cuelguen de él dan igual. La vía por serial se los salta: no depende
-    // del contrato de origen, así que no puede heredar su error.
-    if (!porSerial) {
+    // del contrato de origen, así que no puede heredar su error. Lo mismo un
+    // plan por serial sin contrato de origen en el sistema (origen en papel):
+    // cada saliente lo nombró el vendedor, no se dedujo de nada.
+    if (!porSerial && origenIds.length) {
       const vOrigen = evaluarOrigen(after);
       if (!vOrigen.ok) {
         await _bloquear(cid, contratoId, vOrigen, 0);
@@ -162,6 +174,29 @@ module.exports = onDocumentUpdated(
       }
     }
 
+    // Salientes DECLARADOS en el plan que no cuelgan de un origen del sistema
+    // (custodia sin contrato, migración, contrato en papel): se leen por ficha
+    // y entran si siguen con ESTE cliente. Sin esto, "se devuelve" sobre una
+    // unidad en custodia no producía ninguna orden de recuperación.
+    if (!porSerial && declaradasSalientes.length) {
+      for (const r of declaradasSalientes) {
+        const poolId = r.pool_id || r.serial_norm || r.serial;
+        if (!poolId || unidadesOrigen.some((x) => x.id === String(poolId))) continue;
+        try {
+          const d = await db.collection("equipos_pool").doc(String(poolId)).get();
+          if (!d.exists) continue;
+          const u = d.data();
+          if (!["asignado_contrato", "en_cliente"].includes(u.estado)) continue;
+          if ((u.asignacion?.cliente_id || null) !== (after.cliente_id || null)) continue;
+          if (u.asignacion?.contrato_doc_id === cid) continue; // ya es del contrato nuevo
+          if (unidadesOrigen.some((x) => x.id === d.id)) continue;
+          unidadesOrigen.push({ id: d.id, origenId: u.asignacion?.contrato_doc_id || null, ...u });
+        } catch (e) {
+          logger.warn("[onEntregaTransicion] No se pudo leer la ficha declarada en el plan", { contratoId, serial: r.serial, message: e.message });
+        }
+      }
+    }
+
     // Entrantes del contrato nuevo — para parear los 'reemplaza' del plan y
     // producir el linaje (onMapeoWrite estampa reemplaza_a cuando el mapeo
     // trae entrante Y saliente).
@@ -177,10 +212,15 @@ module.exports = onDocumentUpdated(
     // El plan decidido en la venta (P1 informe 2026-08-12). Sin plan —o con
     // plan por cantidades— aplica la regla clásica: todo el alquiler colgado
     // del origen se devuelve.
-    const { reclamar, continuan } = decidirSalientes(after.transicion_plan || null, unidadesOrigen, entrantesNuevo);
+    const { reclamar, continuan, noTienen } = decidirSalientes(after.transicion_plan || null, unidadesOrigen, entrantesNuevo,
+      { soloDeclaradas: sinEquipo });
     if (continuan.length) {
       logger.info("[onEntregaTransicion] Unidades que CONTINÚAN según el plan (no se reclaman)",
         { contratoId, continuan: continuan.map((u) => u.serial || u.id) });
+    }
+    if (noTienen && noTienen.length) {
+      logger.info("[onEntregaTransicion] Unidades que el cliente declaró NO tener (no se reclaman; se soltaron al aprobar)",
+        { contratoId, noTienen: noTienen.map((u) => u.serial || u.id) });
     }
 
     if (!reclamar.length) {
@@ -285,7 +325,9 @@ module.exports = onDocumentUpdated(
         })),
         motivo: porSerial
           ? `Reemplazo ${contratoId} entregado — recuperar el/los equipos sustituidos`
-          : `Renovación ${contratoId} entregada — recuperar los equipos del contrato anterior`,
+          : sinEquipo
+            ? `Renovación ${contratoId} (sin equipo) activada — recuperar los equipos que el vendedor declaró devueltos`
+            : `Renovación ${contratoId} entregada — recuperar los equipos del contrato anterior`,
       });
       if (ordenId) {
         await db.collection("contratos").doc(cid).set({ orden_devolucion_id: ordenId }, { merge: true });

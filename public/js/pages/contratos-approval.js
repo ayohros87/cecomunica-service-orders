@@ -122,13 +122,19 @@ window.ContratosAprobacion = {
     const aplicaTransicion = (esRenovacion && !esRenovacionSinEquipo)
       || c.tipo_contrato === 'REEMP'
       || (c.accion === 'Adición' && origenIds.length > 0);
+    // Plan de seriales declarado en la venta (Centro, 2026-09-04): el
+    // aprobador ve qué continúa, qué el cliente NO tiene (se suelta al
+    // aprobar) y qué agregó el vendedor — también en renovación sin equipo.
+    const planSerial = (c.transicion_plan?.nivel === 'serial' && Array.isArray(c.transicion_plan.unidades)) ? c.transicion_plan : null;
     if (fsTrans) {
-      fsTrans.style.display = aplicaTransicion ? '' : 'none';
+      fsTrans.style.display = (aplicaTransicion || planSerial) ? '' : 'none';
+      const cont = document.getElementById('transicionAprobacion');
+      if (cont) cont.innerHTML = '';
+      if (planSerial && cont) cont.innerHTML = this._planSerialHtml(planSerial, esRenovacionSinEquipo);
       if (aplicaTransicion) {
-        const cont = document.getElementById('transicionAprobacion');
-        if (cont) cont.innerHTML = '<span style="color:var(--fg-3);">Cargando equipos del cliente…</span>';
+        if (cont && !planSerial) cont.innerHTML = '<span style="color:var(--fg-3);">Cargando equipos del cliente…</span>';
         // Fire-and-forget: el modal abre ya; el bloque se rellena al llegar el pool.
-        this._cargarTransicion(c, id, { origenIds, origenRefs });
+        this._cargarTransicion(c, id, { origenIds, origenRefs, planHtml: planSerial ? cont?.innerHTML : '' });
       }
     }
 
@@ -138,7 +144,24 @@ window.ContratosAprobacion = {
   // Rellena el bloque "Transición de equipos" del modal. Mismos criterios de
   // carga que contrato-transicion-page: salientes anclados al/los originales
   // si hay vínculo; sin vínculo (o legacy/papel), todos los del cliente.
-  async _cargarTransicion(c, id, { origenIds, origenRefs }) {
+  _planSerialHtml(plan, sinEquipo) {
+    const esc = CS.esc.bind(CS);
+    const L = (window.TransicionPlan?.DESTINO_LABEL) || { continua: 'Continúa', devuelve: 'Se devuelve', reemplaza: 'Se reemplaza', no_tiene: 'El cliente no lo tiene' };
+    const F = { origen: 'contrato de origen', custodia: 'en campo · sin contrato', migracion: 'migración · sin verificar', agregado: 'agregado por el vendedor' };
+    const us = plan.unidades || [];
+    const grupos = ['continua', 'no_tiene', 'devuelve', 'reemplaza'].map(d => [d, us.filter(u => u.destino === d)]).filter(g => g[1].length);
+    const resumen = window.TransicionPlan ? TransicionPlan.resumen(plan) : `${us.length} serial(es)`;
+    return `
+      <p style="margin:0 0 8px;"><b>Seriales declarados por el vendedor${sinEquipo ? ' (renovación sin equipo — los radios siguen con el cliente)' : ''}:</b> ${esc(resumen)}.
+        Al aprobar, los que <b>continúan</b> pasan al Anexo A del contrato; los que el cliente <b>no tiene</b> se sueltan de la cuenta y quedan por clasificar.</p>
+      ${grupos.map(([d, lista]) => `
+        <div style="margin:0 0 6px;"><span style="font-weight:600; ${d === 'no_tiene' ? 'color:#92400e;' : ''}">${esc(L[d] || d)} (${lista.length})</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:3px;">
+            ${lista.map(u => `<span class="eqpool-chip" title="${esc(u.modelo || '')}${u.fuente ? ' · ' + esc(F[u.fuente] || u.fuente) : ''}">${esc(u.serial)}${u.fuente === 'agregado' ? ' <span style="font-size:10px; opacity:.8;">+</span>' : ''}</span>`).join('')}
+          </div></div>`).join('')}`;
+  },
+
+  async _cargarTransicion(c, id, { origenIds, origenRefs, planHtml = '' }) {
     const cont = document.getElementById('transicionAprobacion');
     if (!cont) return;
     const esc = CS.esc.bind(CS);
@@ -195,6 +218,7 @@ window.ContratosAprobacion = {
       const delta = mensualOrigen != null ? FMT.round2(ContractTotals.fromDoc(c).totalMensual - mensualOrigen) : null;
 
       cont.innerHTML = `
+        ${planHtml ? `${planHtml}<hr style="border:0; border-top:1px solid var(--border-subtle); margin:10px 0;">` : ''}
         <p style="margin:0 0 8px;">${ancla}</p>
         <p style="margin:0 0 8px;">
           Entran <b>${entrantes}</b> unidad(es) nueva(s) · el cliente tiene <b>${alquiler.length}</b> en alquiler

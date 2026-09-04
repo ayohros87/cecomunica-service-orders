@@ -10,6 +10,8 @@ const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
 const { activacionesEmailTo, ccContratoAprobado } = require("../../lib/mailRecipients");
 const vigencia = require("../../lib/vigencia");
 const { planAmarre } = require("../../lib/regularizacion");
+const { aplicarPlanRenovacion, serialesExcluidosPorPlan } = require("../../lib/planRenovacion");
+const { esDocumentoV2 } = require("../../lib/documentoContrato");
 const poolDom = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
 
@@ -31,8 +33,12 @@ async function jalarSerialesPropios(contratoRef, contrato, cid) {
     const poolSnap = await db.collection("equipos_pool")
       .where("asignacion.cliente_id", "==", contrato.cliente_id)
       .where("estado", "==", "en_cliente").get();
+    // Lo que el plan de la venta declaró 'se devuelve' / 'no lo tiene' no se
+    // amarra por cupo (2026-09-04): la decisión explícita manda.
+    const excluidos = serialesExcluidosPorPlan(contrato.transicion_plan);
     const custodia = poolSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
-      .filter((u) => !u.asignacion?.contrato_doc_id && u.propiedad === "cliente");
+      .filter((u) => !u.asignacion?.contrato_doc_id && u.propiedad === "cliente")
+      .filter((u) => !excluidos.has(u.serial_norm || poolDom.normSerial(u.serial || "")));
     if (!custodia.length) return;
     const filasSnap = await contratoRef.collection("seriales").get();
     const filas = filasSnap.docs.map((d) => {
@@ -126,6 +132,15 @@ const onContratoActivado = onDocumentUpdated(
     }
 
     if (transitionedToAprobado || transitionedToActivo) {
+      // Primero la declaración explícita del vendedor (plan por serial de la
+      // renovación: continúa / no lo tiene / agregados), después el amarre
+      // por cupo de la custodia propia — el plan ya excluye lo que declaró.
+      try {
+        await aplicarPlanRenovacion(afterSnap.ref, after, contratoId,
+          { motivo: transitionedToAprobado ? "aprobacion" : "activacion" });
+      } catch (e) {
+        logger.error("[onContratoActivado] plan de seriales de la renovación falló (no crítico)", { contratoId, message: e.message });
+      }
       await jalarSerialesPropios(afterSnap.ref, after, contratoId);
     }
 
@@ -568,27 +583,36 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         }
       }
 
-      const htmlForPdf = buildContractHtmlForPdf(contrato, vendedorInfo, aprobadorInfo);
-      const chromium   = require("@sparticuz/chromium");
-      const browser    = await puppeteer.launch({
-        args: chromium.args,
-        defaultViewport: chromium.defaultViewport,
-        executablePath: await chromium.executablePath(),
-        headless: chromium.headless,
-      });
-      let pdfBuffer;
-      try {
-        const page = await browser.newPage();
-        await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
-        pdfBuffer = await page.pdf({
-          format: "A4",
-          printBackground: true,
-          margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
+      // Documento v2 (SERV / Centro / firma digital, 2026-09-04): el PDF del
+      // formato ANTERIOR ya no es el contrato — adjuntarlo mandaba a
+      // activaciones "el contrato viejo" (reclamo de Alberto, caso Chino
+      // Panameño). Para v2 el correo enlaza al documento real
+      // (contratos/documento.html: Anexo A por serial, firma, QR) y no
+      // adjunta nada; la copia firmada llega con la firma del cliente.
+      const v2 = esDocumentoV2(contrato);
+      let pdfBuffer = null;
+      if (!v2) {
+        const htmlForPdf = buildContractHtmlForPdf(contrato, vendedorInfo, aprobadorInfo);
+        const chromium   = require("@sparticuz/chromium");
+        const browser    = await puppeteer.launch({
+          args: chromium.args,
+          defaultViewport: chromium.defaultViewport,
+          executablePath: await chromium.executablePath(),
+          headless: chromium.headless,
         });
-      } finally {
-        // Cierra Chromium aunque falle setContent/pdf; si no, la instancia
-        // caliente acumula procesos de 1-2 GiB y termina en OOM.
-        await browser.close();
+        try {
+          const page = await browser.newPage();
+          await page.setContent(htmlForPdf, { waitUntil: "networkidle0" });
+          pdfBuffer = await page.pdf({
+            format: "A4",
+            printBackground: true,
+            margin: { top: "10mm", bottom: "12mm", left: "10mm", right: "10mm" }
+          });
+        } finally {
+          // Cierra Chromium aunque falle setContent/pdf; si no, la instancia
+          // caliente acumula procesos de 1-2 GiB y termina en OOM.
+          await browser.close();
+        }
       }
 
       const equiposHtml = (contrato.equipos || []).map(e =>
@@ -598,22 +622,43 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
       // Seriales asignados (subcolección) agrupados por modelo.
       const serialesSnap = await contratoRef.collection("seriales").get();
       const serialesPorModelo = {};
+      const vistos = new Set();
       serialesSnap.forEach(d => {
         const s = d.data() || {};
         const serial = String(s.serial || "").trim();
         if (!serial) return;
+        vistos.add(poolDom.normSerial(serial));
         const m = s.modelo || "—";
         (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial);
       });
+      // Renovación con plan por serial: los 'continúa' declarados en la venta
+      // van en el correo aunque la fila del plan aún no exista (el plan se
+      // aplica en paralelo al aprobar y este correo puede salir antes).
+      const planV = contrato.transicion_plan;
+      let planNoTiene = [];
+      if (contrato.accion === "Renovación" && planV?.nivel === "serial" && Array.isArray(planV.unidades)) {
+        for (const u of planV.unidades) {
+          const serial = String(u.serial || u.serial_norm || "").trim();
+          if (!serial) continue;
+          if (u.destino === "no_tiene") { planNoTiene.push(serial); continue; }
+          if (u.destino !== "continua" || vistos.has(poolDom.normSerial(serial))) continue;
+          vistos.add(poolDom.normSerial(serial));
+          const m = u.modelo || "—";
+          (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial);
+        }
+      }
       const serialesRows = Object.keys(serialesPorModelo).sort().map(m =>
         `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(m)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].map(escapeHtml).join("<br>")}</td></tr>`
       ).join("");
+      const noTieneHtml = planNoTiene.length
+        ? `<p style="margin:8px 0 0;font:13px/1.5 Arial,sans-serif;color:#92400e;"><b>${planNoTiene.length} equipo(s) que el cliente declaró NO tener</b> se soltaron de la cuenta y quedaron por clasificar: <span style="font-family:monospace;font-size:12px;">${planNoTiene.map(escapeHtml).join(", ")}</span></p>`
+        : "";
       const serialesTable = serialesRows
-        ? `<h4 style="margin:16px 0 8px;font:600 16px Arial,sans-serif;">Seriales asignados</h4>
+        ? `<h4 style="margin:16px 0 8px;font:600 16px Arial,sans-serif;">${contrato.accion === "Renovación" && contrato.renovacion_sin_equipo ? "Seriales que continúan con el cliente" : "Seriales asignados"}</h4>
            <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:0 0 16px;">
              <thead><tr><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th><th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Serial</th></tr></thead>
-             <tbody>${serialesRows}</tbody></table>`
-        : "";
+             <tbody>${serialesRows}</tbody></table>${noTieneHtml}`
+        : noTieneHtml;
 
       // Equipos que inventario marcó SIN serial (override manual) + motivo.
       const omisionesRows = omisiones.map(o =>
@@ -658,17 +703,23 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         ${equiposHtml ? `<h4 style="margin:0 0 8px; font:600 16px Arial, sans-serif;">Equipos</h4><ul style="margin:0 0 16px; padding-left:18px; font:14px/1.5 Arial, sans-serif;">${equiposHtml}</ul>` : ""}
         ${serialesTable}
         ${omisionesTable}
+        ${v2 ? `<p style="margin:12px 0 0; font:13px/1.5 Arial, sans-serif; color:#374151;">
+          Este contrato usa el <b>documento nuevo</b> (secciones numeradas y Anexo A por serial).
+          Ábrelo con el botón de abajo — desde ahí se imprime o se guarda en PDF. La copia
+          <b>firmada</b> por el cliente llega por correo en cuanto firme.</p>` : ""}
       `;
 
       // Enlace por DOC ID, no por número: el número es mutable y no fue único
       // hasta el 2026-07-28 — un correo viejo con ALQ20260723-01 hoy abre el
       // contrato de otro cliente. El doc ID nunca cambia.
-      const contratoUrl = `https://app.cecomunica.net/contratos/imprimir-contrato.html?id=${encodeURIComponent(cid)}`;
+      const contratoUrl = v2
+        ? `https://app.cecomunica.net/contratos/documento.html?id=${encodeURIComponent(cid)}`
+        : `https://app.cecomunica.net/contratos/imprimir-contrato.html?id=${encodeURIComponent(cid)}`;
       const htmlEmail   = buildEmailFromBase({
         preheader,
         bodyHtml,
         ctaUrl:   contratoUrl,
-        ctaLabel: "Ver contrato"
+        ctaLabel: v2 ? "Ver el documento del contrato" : "Ver contrato"
       });
 
       mailContext = {
@@ -684,14 +735,16 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         cc:      mailContext.cc,
         subject: mailContext.subject,
         html: htmlEmail,
-        attachments: [{
+        attachments: pdfBuffer ? [{
           filename:    `${contrato.contrato_id || "contrato"}.pdf`,
           content:     pdfBuffer,
           contentType: "application/pdf"
-        }]
+        }] : [],
       });
 
-      logger.info("[onSerialesAsignadasSendPdf] Correo enviado con PDF", {
+      logger.info(v2
+        ? "[onSerialesAsignadasSendPdf] Correo enviado (documento v2, sin PDF del formato anterior)"
+        : "[onSerialesAsignadasSendPdf] Correo enviado con PDF", {
         contratoId: contrato.contrato_id,
         cliente:    contrato.cliente_nombre
       });

@@ -18,8 +18,15 @@
 //       - 'reemplaza' → se reclama, pareada con un entrante del MISMO modelo
 //                       (FIFO); sin entrante disponible queda sin sustituto.
 //       - 'devuelve'  → se reclama sin sustituto.
+//       - 'no_tiene'  → NO se reclama: el cliente declaró que no tiene ese
+//                       equipo y la ficha ya se soltó al aprobar
+//                       (lib/planRenovacion.js). Reclamarla abriría una
+//                       recuperación de algo que nadie tiene.
 //       - unidad FUERA del plan → 'devuelve' (la regla de fondo no cambia:
 //         todo el alquiler del origen se devuelve salvo decisión explícita).
+//         EXCEPCIÓN `soloDeclaradas` (renovación SIN equipo): ahí el plan es
+//         la lista completa que revisó el vendedor y lo que no aparece
+//         CONTINÚA — una renovación sin equipo no devuelve nada por omisión.
 //   · plan nivel 'cantidad' o SIN plan → comportamiento clásico: se reclama
 //     todo el alquiler aún asignado al origen. Es correcto también con plan
 //     por cantidades: las unidades que "continúan" se mueven al contrato nuevo
@@ -46,14 +53,16 @@ function _mismoModelo(unidad, entrante) {
  * @param {Array} unidadesOrigen — unidades del pool aún asignadas a los orígenes
  *   [{ id, serial, serial_norm, modelo_id, modelo_label, estado, propiedad }]
  * @param {Array} entrantesNuevo — unidades del pool asignadas al contrato NUEVO
- * @returns {{ reclamar: Array<{unidad, entrante|null}>, continuan: Array }}
+ * @param {{soloDeclaradas?: boolean}} [opts] — soloDeclaradas: lo que no está
+ *   en el plan continúa (renovación sin equipo); sin plan por serial no aplica.
+ * @returns {{ reclamar: Array<{unidad, entrante|null}>, continuan: Array, noTienen: Array }}
  */
-function decidirSalientes(plan, unidadesOrigen, entrantesNuevo) {
+function decidirSalientes(plan, unidadesOrigen, entrantesNuevo, opts = {}) {
   const alquiler = (unidadesOrigen || []).filter((u) => u.propiedad !== "cliente");
 
   const esSerial = plan && plan.nivel === "serial" && Array.isArray(plan.unidades);
   if (!esSerial) {
-    return { reclamar: alquiler.map((u) => ({ unidad: u, entrante: null })), continuan: [] };
+    return { reclamar: alquiler.map((u) => ({ unidad: u, entrante: null })), continuan: [], noTienen: [] };
   }
 
   const destinoDe = new Map();
@@ -61,13 +70,16 @@ function decidirSalientes(plan, unidadesOrigen, entrantesNuevo) {
     const k = norm(u.serial_norm || u.serial);
     if (k) destinoDe.set(k, u.destino);
   }
+  const fueraDelPlan = opts.soloDeclaradas ? "continua" : "devuelve";
 
   const continuan = [];
+  const noTienen = [];
   const aParear = [];
   const reclamar = [];
   for (const u of alquiler) {
-    const destino = destinoDe.get(norm(u.serial_norm || u.serial)) || "devuelve";
+    const destino = destinoDe.get(norm(u.serial_norm || u.serial)) || fueraDelPlan;
     if (destino === "continua") { continuan.push(u); continue; }
+    if (destino === "no_tiene") { noTienen.push(u); continue; }
     if (destino === "reemplaza") { aParear.push(u); continue; }
     reclamar.push({ unidad: u, entrante: null });
   }
@@ -83,7 +95,7 @@ function decidirSalientes(plan, unidadesOrigen, entrantesNuevo) {
     reclamar.push({ unidad: u, entrante: ent || null });
   }
 
-  return { reclamar, continuan };
+  return { reclamar, continuan, noTienen };
 }
 
 module.exports = { decidirSalientes };

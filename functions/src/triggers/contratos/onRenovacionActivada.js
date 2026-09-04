@@ -26,6 +26,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { planAmarre } = require("../../lib/regularizacion");
+const { serialesExcluidosPorPlan } = require("../../lib/planRenovacion");
 
 const SOURCE = "regularizacion_renovacion";
 
@@ -67,9 +68,14 @@ module.exports = onDocumentUpdated(
         .where("asignacion.cliente_id", "==", after.cliente_id)
         .where("estado", "==", "en_cliente")
         .get();
+      // Lo que el vendedor declaró en el plan de la venta con destino distinto
+      // de 'continúa' (se devuelve / no lo tiene) NO se amarra por cupo
+      // (2026-09-04): la declaración explícita manda sobre el automatismo.
+      const excluidos = serialesExcluidosPorPlan(after.transicion_plan);
       const custodia = poolSnap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((u) => !u.asignacion?.contrato_doc_id);
+        .filter((u) => !u.asignacion?.contrato_doc_id)
+        .filter((u) => !excluidos.has(u.serial_norm || pool.normSerial(u.serial || "")));
 
       const filasSnap = await event.data.after.ref.collection("seriales").get();
       const filas = filasSnap.docs.map((d) => {

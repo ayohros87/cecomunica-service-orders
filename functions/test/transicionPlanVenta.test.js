@@ -74,3 +74,40 @@ test("resumen — la frase que ven la vista previa, seriales y transición", () 
   assert.equal(P.resumen(serial), "1 se reemplaza");
   assert.equal(P.resumen(null), "Sin unidades en el plan");
 });
+
+// ── 2026-09-04: destino 'no_tiene', fuente por unidad y conciliación con las líneas ──
+test("'no_tiene' es un destino válido, se cuenta aparte y conserva la fuente y la modalidad", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "A1", modelo: "PNC360S", destino: "continua", fuente: "origen", modalidad: "alquiler" },
+    { serial: "A2", modelo: "PNC360S", destino: "no_tiene", fuente: "migracion" },
+    { serial: "A3", modelo: "PNC360S", destino: "continua", fuente: "agregado", modalidad: "propio" },
+    { serial: "A4", modelo: "PNC360S", destino: "continua", fuente: "loQueSea" },
+  ], ["o1"]);
+  assert.equal(P.validar(plan).ok, true);
+  const f = plan.por_modelo[0];
+  assert.deepEqual({ c: f.continuan, n: f.no_tienen, t: f.total }, { c: 3, n: 1, t: 4 });
+  assert.equal(plan.unidades[1].fuente, "migracion");
+  assert.equal(plan.unidades[2].modalidad, "propio");
+  assert.equal("fuente" in plan.unidades[3], false);
+  assert.match(P.resumen(plan), /3 continúan \(1 agregado por el vendedor\)/);
+  assert.match(P.resumen(plan), /1 no lo tiene el cliente/);
+});
+
+test("conciliarLineas cuenta los 'continúa' por línea (modelo + modalidad) y reporta los sin línea", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "A1", modelo: "HYTERA PNC360S-R", destino: "continua" },
+    { serial: "A2", modelo: "HYTERA PNC360S", destino: "continua" },
+    { serial: "A3", modelo: "HYTERA PNC360S", destino: "no_tiene" },
+    { serial: "P1", modelo: "HYTERA PNC360S", destino: "continua", modalidad: "propio" },
+    { serial: "X1", modelo: "TK-3000", destino: "continua" },
+  ], []);
+  const lineas = [
+    { modelo_id: "m1", modelo: "HYTERA PNC360S-R", cantidad: 24, modalidad: "alquiler" },
+    { modelo_id: "m1", modelo: "HYTERA PNC360S-R", cantidad: 1, modalidad: "propio" },
+  ];
+  const r = P.conciliarLineas(plan, lineas);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 2 }, { idx: 1, continuan: 1 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.sinLinea.map(u => u.serial))), ["X1"]);
+});
