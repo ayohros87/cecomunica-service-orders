@@ -407,8 +407,10 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
       subject:     `Solicitud de seriales: ${after.contrato_id || docId} – ${after.cliente_nombre || ""}`,
       preheader:   `Asigna los seriales del contrato ${after.contrato_id || docId}`,
       bodyContent,
-      ctaUrl:      `${APP_BASE_URL}/contratos/seriales.html?id=${encodeURIComponent(docId)}`,
-      ctaLabel:    "Agregar seriales",
+      // Bodega asigna desde Almacén · Asignar (2026-09-03): el enlace cae en
+      // la pestaña con el contrato ya abierto.
+      ctaUrl:      `${APP_BASE_URL}/almacen/index.html?tab=asignar&contrato=${encodeURIComponent(docId)}`,
+      ctaLabel:    "Asignar seriales",
       meta:        { source: "onContratoAprobadoSolicitaSeriales", contrato_id: after.contrato_id || docId },
       createdAt:   admin.firestore.FieldValue.serverTimestamp(),
     });

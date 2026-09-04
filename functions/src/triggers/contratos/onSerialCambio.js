@@ -123,7 +123,7 @@ module.exports = onDocumentWritten(
         subject:   `Cambio de serial solicitado: ${contratoIdVis} – ${clienteNombre}`,
         preheader: `Reemplaza ${items.length} serial(es) del contrato ${contratoIdVis}`,
         bodyContent,
-        ctaUrl:    `${APP_BASE_URL}/contratos/seriales.html?id=${encodeURIComponent(cid)}`,
+        ctaUrl:    `${APP_BASE_URL}/almacen/index.html?tab=asignar&contrato=${encodeURIComponent(cid)}`,
         ctaLabel:  "Reemplazar seriales",
         meta:      { source: "onSerialCambio.alta", contrato_id: contratoIdVis, req_id: reqId },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),

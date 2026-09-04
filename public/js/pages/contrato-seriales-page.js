@@ -1,9 +1,17 @@
 // @ts-nocheck
-// Página de asignación de seriales (flujo de inventario, al inicio del ciclo).
-// El encargado de inventario llega aquí desde el correo "Solicitud de seriales"
-// y coloca un serial por unidad (o marca "Sin serial" con motivo). Al confirmar,
-// escribe la señal `contratos/{id}/seriales_estado/current`, que un trigger
-// espeja al contrato y dispara el correo a activaciones (con seriales + PDF).
+// Página de asignación de seriales del CONTRATO (contratos/seriales.html).
+//
+// Desde 2026-09-03 (propuesta "Asignar desde Almacén", F0) el formulario de
+// cupos por modelo, el picker del pool, pegar columna y la revisión suave del
+// pool viven en el componente compartido js/ui/asignador-seriales.js. Esta
+// página conserva lo que es SOLO del contrato: el candado tras "asignados",
+// el modo reemplazo por solicitud de cambio, el registro histórico (legacy),
+// las fuentes de recuperación (plan de transición, POC, órdenes) y la hoja
+// de confirmación que dispara el correo a activaciones.
+//
+// Su usuario son recepción, vendedores, gerencia y admin. BODEGA (rol
+// inventario) ya no trabaja aquí: se redirige a Almacén · Asignar, donde el
+// mismo componente corre con la política dura.
 //
 // El frontend NUNCA escribe el documento del contrato (las reglas lo bloquean
 // post-aprobación por presencia de firma_codigo): solo subcolecciones.
@@ -12,39 +20,23 @@
   const contratoDocId = params.get('id');
 
   let contrato = null;
+  let asignador = null;
   const ctx = { contratoIdVisible: '', clienteNombre: '', clienteId: '' };
 
   const db = () => firebase.firestore();
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
-  // Identidad de serial = la del pool (L7 2026-07-27): "PD-606" y "PD 606"
-  // ahora se detectan como el MISMO serial (duplicado en rojo) en vez de
-  // colarse como dos filas del contrato.
+  // Identidad de serial = la del pool (L7 2026-07-27).
   const norm = (s) => ContratosService._serialKey(s);
   const $ = (id) => document.getElementById(id);
 
-  // ── Salidas de la página (R7, auditoría 2026-08-04) ────────────────────
-  // La página vive bajo /contratos/ pero su usuario principal es el rol
-  // `inventario`, que NO tiene el módulo Contratos (core/modulos.js): el botón
-  // Volver, el breadcrumb y el rail lo mandaban los tres a una lista que no
-  // puede abrir, y llegaba aquí sólo por el link del correo. Ahora las tres
-  // salidas apuntan al módulo que el rol sí tiene.
-  const SIN_CONTRATOS = ['inventario'];
+  // ── Salidas de la página ────────────────────────────────────────────────
   let _destinoVolver = 'index.html';
-
   window.volverDeSeriales = () => { location.href = _destinoVolver; };
 
-  function ajustarSalidas(rol) {
-    // Llegada desde la bandeja de Almacén (?volver=almacen): el regreso es al
-    // espacio, para cualquier rol. El topbar ya lo resuelve (layout.js); aquí
-    // se alinea el destino que usan los flujos post-guardar.
+  function ajustarSalidas() {
     if (new URLSearchParams(location.search).get('volver') === 'almacen') {
       _destinoVolver = '../almacen/index.html';
-      return;
     }
-    if (!SIN_CONTRATOS.includes(rol)) return;
-    _destinoVolver = '../inventario/equipos.html';
-    const bc = $('bc-modulo');
-    if (bc) { bc.textContent = 'Inventario · Equipos'; bc.href = '../inventario/equipos.html'; }
   }
 
   // ── Entry ──────────────────────────────────────────────────────────────
@@ -53,7 +45,14 @@
   });
 
   async function init(rol) {
-    ajustarSalidas(rol);
+    // Bodega tiene su propia herramienta: la pestaña Asignar de Almacén (misma
+    // cola, mismo componente, política dura). Esta página era un callejón para
+    // ese rol (auditoría 2026-08-04, B7).
+    if (rol === 'inventario' && contratoDocId) {
+      location.replace(`../almacen/index.html?tab=asignar&contrato=${encodeURIComponent(contratoDocId)}`);
+      return;
+    }
+    ajustarSalidas();
     if (!contratoDocId) {
       Toast.show('Falta el id del contrato.', 'bad');
       setTimeout(() => { location.href = 'index.html'; }, 1200);
@@ -78,11 +77,8 @@
     }
 
     // Corte legacy: contratos históricos no entran al flujo AUTOMÁTICO de
-    // seriales (no se notifica a activaciones). Pero SÍ se permite registrar
-    // seriales para referencia/historial — modo "registro histórico": render
-    // normal con banner, solo "Guardar" (se oculta "Confirmar y enviar"). El
-    // correo a activaciones queda bloqueado de todos modos por el backstop del
-    // trigger onSerialesAsignadasSendPdf. Ver backfill `marcarSerialesLegacy`.
+    // seriales (no se notifica a activaciones), pero SÍ se permite registrar
+    // seriales para referencia — modo "registro histórico".
     ctx.esLegacy = (contrato.seriales_estado === 'legacy');
 
     ctx.contratoIdVisible = contrato.contrato_id || contratoDocId;
@@ -93,6 +89,17 @@
     const ph = $('ph-cliente'); if (ph) ph.textContent = ctx.clienteNombre || '';
     const sub = $('ph-subtitle');
     if (sub) sub.textContent = `${ctx.contratoIdVisible} · ${ctx.clienteNombre || 'Cliente'}`;
+
+    asignador = AsignadorSeriales.crear({
+      body: $('serialesBody'),
+      norm,
+      politica: 'suave',
+      contratoDocId,
+      clienteId: ctx.clienteId,
+      esLegacy: ctx.esLegacy,
+      textoVacio: 'Este contrato no tiene unidades activas que serializar.',
+      onChange: ({ done, req }) => { const f = $('footProgreso'); if (f) f.textContent = `${done} / ${req}`; },
+    });
 
     // Prefill: seriales guardados + omisiones (de la señal).
     let serialesGuardados = [];
@@ -109,18 +116,14 @@
       }
     } catch (e) { /* ok */ }
 
-    // Candado: una vez "asignados", la pantalla queda en solo-lectura para evitar
-    // cambios accidentales. Solo administradores (o usuarios habilitados en
-    // empresa/config.seriales_editores_extra) pueden reabrir y editar. Los
-    // contratos legacy (registro histórico) no aplican al candado.
+    // Candado: una vez "asignados", solo-lectura salvo admin/allowlist.
     ctx.yaAsignados = !ctx.esLegacy &&
       (estadoSenal === 'asignados' || contrato.seriales_estado === 'asignados');
     ctx.puedeEditarAsignados = ctx.yaAsignados ? await puedeEditarAsignados(rol) : false;
     ctx.desbloqueado = false;
 
-    // Modo reemplazo: si hay una solicitud de cambio de serial PENDIENTE
-    // (creada por recepción/admin desde el módulo de contratos), inventario puede
-    // reemplazar SOLO los seriales marcados en la solicitud, aun con el candado.
+    // Modo reemplazo: solicitud de cambio de serial PENDIENTE → se reabren
+    // SOLO los seriales marcados, aun con el candado.
     ctx.cambioReq = null;
     ctx.cambioSet = new Set();
     if (ctx.yaAsignados) {
@@ -138,12 +141,10 @@
     }
     ctx.modoReemplazo = !!ctx.cambioReq && ctx.cambioSet.size > 0;
 
+    wireOnce();
     render(serialesGuardados, omisiones);
   }
 
-  // ¿Este usuario puede editar seriales YA asignados? Admin siempre; además, los
-  // emails habilitados en empresa/config.seriales_editores_extra (config del
-  // panel de administración). Falla cerrado si no se puede leer la config.
   async function puedeEditarAsignados(rol) {
     if (rol === (window.ROLES && ROLES.ADMIN) || rol === 'administrador') return true;
     try {
@@ -162,15 +163,11 @@
     if (window.lucide) lucide.createIcons();
   }
 
-  function render(serialesGuardados, omisiones) {
-    // Recordado para poder re-renderizar al (des)bloquear sin recargar.
-    ctx._saved = serialesGuardados;
-    ctx._oms = omisiones;
-    const locked = ctx.yaAsignados && !ctx.desbloqueado;
-
+  // Cupos por modelo del contrato: cantidad menos bajas parciales, con lo ya
+  // guardado (seriales + omisiones) repartido por modelo.
+  function gruposDelContrato(serialesGuardados, omisiones) {
     const equipos = Array.isArray(contrato.equipos) ? contrato.equipos : [];
     const cancelado = contrato.baja_cancelado || {};
-
     const savedByModel = {};
     serialesGuardados.forEach(s => {
       const k = norm(s.modelo);
@@ -181,57 +178,32 @@
       const k = norm(o.modelo);
       (omsByModel[k] = omsByModel[k] || []).push(String(o.motivo || ''));
     });
-
-    const gruposHtml = equipos.map(eq => {
+    return equipos.map(eq => {
       const modelo = String(eq?.modelo || '-').trim() || '-';
       const modeloId = eq?.modelo_id || '';
       const key = String(modeloId || modelo);
       const contratados = Number(eq?.cantidad || 0);
       const activos = Math.max(0, contratados - Number(cancelado[key] || 0));
-      if (activos === 0) return '';
+      if (activos === 0) return null;
       const k = norm(modelo);
-
       const slots = [];
       (savedByModel[k] || []).filter(Boolean).forEach(s => slots.push({ serial: s }));
       (omsByModel[k] || []).forEach(m => slots.push({ omitido: true, motivo: m }));
-      while (slots.length < activos) slots.push({});
+      return { modelo, modelo_id: modeloId, activos, slots };
+    }).filter(Boolean);
+  }
 
-      const filas = slots.map((slot, i) => rowHtml(modelo, modeloId, i + 1, slot)).join('');
+  function render(serialesGuardados, omisiones) {
+    ctx._saved = serialesGuardados;
+    ctx._oms = omisiones;
+    asignador.setGuardados(serialesGuardados);
+    const locked = ctx.yaAsignados && !ctx.desbloqueado;
 
-      return `
-        <div class="serial-group ds-card ds-card-padded" data-modelo="${esc(modelo)}" data-modelo-id="${esc(modeloId)}" data-activos="${activos}" style="margin-bottom:var(--sp-3);">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-            <div style="font-weight:600;">${esc(modelo)}
-              <span class="grupo-progreso" style="color:var(--fg-3); font-weight:400;">· 0/${activos}</span>
-            </div>
-            <div style="display:flex; gap:6px;">
-              <button type="button" class="btn btn-ghost btn-sm" data-action="toggle-paste"><i data-lucide="clipboard-paste"></i> Pegar columna</button>
-            </div>
-          </div>
-          <div class="paste-box" style="display:none; margin-bottom:8px;">
-            <textarea class="form-input paste-area" rows="4" placeholder="Pega aquí una columna de seriales (uno por línea) y pulsa Aplicar"></textarea>
-            <div style="display:flex; gap:6px; margin-top:6px;">
-              <button type="button" class="btn btn-primary btn-sm" data-action="apply-paste">Aplicar</button>
-              <button type="button" class="btn btn-ghost btn-sm" data-action="cancel-paste">Cancelar</button>
-            </div>
-          </div>
-          <div class="serial-rows">${filas}</div>
-        </div>`;
-    }).join('');
+    const hayGrupos = asignador.render(gruposDelContrato(serialesGuardados, omisiones));
 
-    $('serialesBody').innerHTML = gruposHtml ||
-      `<div class="ds-card ds-card-padded" style="color:var(--fg-3);">Este contrato no tiene unidades activas que serializar.</div>`;
-
-    // Barra de llenado. Auditoría 2026-08-04 (R4): las tres fuentes salían como
-    // botones fantasma idénticos, sin decir cuál es la correcta. "Tomar del
-    // pool" es el camino NORMAL (reserva unidades reales de bodega); jalar de
-    // POC o de las órdenes son rutas de recuperación y de registro histórico,
-    // así que bajan a un desplegable "Otras fuentes". No se muestra en modo
-    // solo-lectura (candado de seriales asignados).
-    if (gruposHtml && !locked) {
-      // Plan de transición decidido en la venta (informe tracking 2026-08-12,
-      // P2): las unidades marcadas "continúa" se traen del contrato original
-      // sin re-teclear — antes una renovación de 82 radios se tecleaba a mano.
+    // Barra de llenado (auditoría 2026-08-04, R4): "Tomar del pool" es el
+    // camino normal; POC y órdenes son rutas de recuperación en "Otras fuentes".
+    if (hayGrupos && !locked) {
       const continuan = (contrato.transicion_plan?.nivel === 'serial')
         ? (contrato.transicion_plan.unidades || []).filter(u => u.destino === 'continua')
         : [];
@@ -241,6 +213,7 @@
           + `<i data-lucide="repeat"></i> Traer del original (${continuan.length} continúan)</button>`
         : '';
       const toolbar = document.createElement('div');
+      toolbar.id = 'serialesToolbar';
       toolbar.style.cssText = 'display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:var(--sp-3,12px);';
       toolbar.innerHTML =
         btnPlan
@@ -259,9 +232,6 @@
       $('serialesBody').prepend(toolbar);
     }
 
-    // Modo "registro histórico" (contrato legacy): banner explicativo + se oculta
-    // "Confirmar y enviar a activaciones". "Guardar" sigue disponible para dejar
-    // los seriales registrados en el contrato sin notificar a nadie.
     if (ctx.esLegacy) {
       const banner = document.createElement('div');
       banner.style.cssText = 'margin-bottom:var(--sp-3,12px);padding:12px 14px;border:1px solid #BFDBFE;background:#EFF6FF;color:#1E3A8A;border-radius:10px;display:flex;gap:8px;align-items:flex-start;font-size:14px;';
@@ -271,39 +241,28 @@
     }
 
     const fs = $('footerStrip');
-    if (fs) fs.style.display = gruposHtml ? '' : 'none';
+    if (fs) fs.style.display = hayGrupos ? '' : 'none';
     const sw = $('serialBuscarWrap');
-    if (sw) sw.style.display = gruposHtml ? 'flex' : 'none';
+    if (sw) sw.style.display = hayGrupos ? 'flex' : 'none';
 
     aplicarCandado(locked);
-
-    wire();
-    refresh();
-    aplicarBusquedaSerial();   // re-resalta tras re-render (candado/desbloqueo)
+    asignador.refresh();
+    aplicarBusquedaSerial();
     if (window.lucide) lucide.createIcons();
   }
 
   // ── Buscador de seriales del contrato ───────────────────────────────────
-  // Con contratos de 80+ radios, ubicar a ojo el serial que indicó bodega se
-  // presta a omisiones. Resalta TODAS las coincidencias (identidad tolerante a
-  // guiones/espacios, la misma del pool) y hace scroll a la primera. Funciona
-  // también con la página bloqueada: leer .value no requiere inputs activos.
   function aplicarBusquedaSerial(conScroll) {
     const inp = $('serialBuscar');
     const info = $('serialBuscarInfo');
-    if (!inp) return;
-    const q = norm(inp.value);
-    const inputs = [...document.querySelectorAll('#serialesBody .serial-input')];
-    inputs.forEach(i => i.classList.remove('buscado'));
-    if (!q) { if (info) info.textContent = ''; return; }
-    const hits = inputs.filter(i => norm(i.value).includes(q));
-    hits.forEach(i => i.classList.add('buscado'));
+    if (!inp || !asignador) return;
+    if (!norm(inp.value)) { asignador.aplicarBusqueda(''); if (info) info.textContent = ''; return; }
+    const hits = asignador.aplicarBusqueda(inp.value, conScroll);
     if (info) {
       info.textContent = hits.length
         ? `${hits.length} coincidencia${hits.length === 1 ? '' : 's'}`
         : 'Sin coincidencias — revisa el serial';
     }
-    if (conScroll && hits.length) hits[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 
   // Modo solo-lectura sobre la pantalla ya renderizada. Tres estados:
@@ -325,22 +284,19 @@
 
     if (!locked) {
       if (btnGuardar) btnGuardar.style.display = '';
-      // Al editar seriales YA asignados NO reofrecemos "Confirmar y enviar a
-      // activaciones" (evitar reenvío): solo "Guardar cambios". Legacy ya se oculta.
+      // Al editar seriales YA asignados no se reofrece "Confirmar" (evitar reenvío).
       if (btnConfirmar) btnConfirmar.style.display = (ctx.yaAsignados || ctx.esLegacy) ? 'none' : '';
       return;
     }
 
-    // Bloqueado: deshabilita toda edición del cuerpo.
-    body.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = true; });
+    asignador.setLocked(true);
 
-    // ¿Modo reemplazo? Reabre SOLO los seriales marcados en la solicitud.
     let nReemplazo = 0;
     if (ctx.modoReemplazo) {
       body.querySelectorAll('.serial-input').forEach(inp => {
         if (ctx.cambioSet.has(norm(inp.value))) {
           inp.disabled = false;
-          inp.dataset.reemplazo = inp.value.trim();   // serial original a reemplazar
+          inp.dataset.reemplazo = inp.value.trim();
           inp.classList.add('reemplazo');
           nReemplazo++;
         }
@@ -353,7 +309,6 @@
       return;
     }
 
-    // Bloqueo normal (sin solicitud aplicable).
     body.prepend(bannerCandado(ctx.puedeEditarAsignados ? 'editable' : 'bloqueado'));
     if (btnEditar) btnEditar.style.display = ctx.puedeEditarAsignados ? '' : 'none';
     if (lockNote && !ctx.puedeEditarAsignados) { lockNote.style.display = ''; lockNote.textContent = 'Bloqueado — seriales asignados'; }
@@ -378,22 +333,9 @@
     return el;
   }
 
-  function rowHtml(modelo, modeloId, num, slot) {
-    const omit = !!slot?.omitido;
-    return `
-      <div class="serial-row">
-        <span class="serial-num">${esc(String(num))}.</span>
-        <input class="serial-input form-input" data-modelo="${esc(modelo)}" data-modelo-id="${esc(modeloId)}"
-               value="${esc(slot?.serial || '')}" placeholder="Número de serie" ${omit ? 'disabled' : ''}>
-        <label class="serial-omit"><input type="checkbox" class="omit-toggle" ${omit ? 'checked' : ''}> Sin serial</label>
-        <input class="motivo-input form-input" placeholder="Motivo (por qué no lleva serial)"
-               value="${esc(slot?.motivo || '')}" style="${omit ? '' : 'display:none;'}">
-      </div>`;
-  }
-
-  // ── Wiring ─────────────────────────────────────────────────────────────
+  // ── Wiring de la página (la del formulario la hace el componente) ───────
   let _wired = false;
-  function wire() {
+  function wireOnce() {
     if (_wired) return;
     _wired = true;
     const body = $('serialesBody');
@@ -402,48 +344,12 @@
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.getAttribute('data-action');
-      if (action === 'otras-fuentes') {
-        document.getElementById('menuOtrasFuentes')?.classList.toggle('open');
-        return;
-      }
-      if (action === 'tomar-pool') { tomarDelPool(); return; }
+      if (action === 'otras-fuentes') { document.getElementById('menuOtrasFuentes')?.classList.toggle('open'); return; }
+      if (action === 'tomar-pool') { asignador.tomarDelPool(); return; }
       if (action === 'traer-original') { traerDelOriginal(); return; }
       if (action === 'jalar-poc') { cerrarOtrasFuentes(); jalarDesdePoc(); return; }
       if (action === 'jalar-os')  { cerrarOtrasFuentes(); jalarDesdeOS();  return; }
-      const grupo = btn.closest('.serial-group');
-      if (action === 'toggle-paste') togglePaste(grupo, true);
-      else if (action === 'cancel-paste') togglePaste(grupo, false);
-      else if (action === 'apply-paste') applyPaste(grupo);
     });
-
-    body.addEventListener('change', (e) => {
-      if (e.target.classList.contains('omit-toggle')) onOmitToggle(e.target);
-    });
-
-    body.addEventListener('input', (e) => {
-      if (e.target.classList.contains('serial-input') || e.target.classList.contains('motivo-input')) refresh();
-    });
-
-    body.addEventListener('paste', (e) => {
-      if (e.target.classList.contains('serial-input')) onPasteSerial(e);
-    });
-
-    // SerialField: chip persistente con el estado del serial en el pool (en
-    // bodega / con otro cliente / sin registro / fichas en conflicto). El
-    // aviso al guardar (advertenciasPool) se mantiene como segunda red.
-    body.addEventListener('focusout', (e) => {
-      const inp = e.target;
-      if (!inp.classList?.contains('serial-input')) return;
-      if (typeof SerialField === 'undefined' || typeof EquiposPoolService === 'undefined') return;
-      if (inp._sfAdjuntado) return;
-      SerialField.adjuntar(inp, {
-        clienteId: () => ctx.clienteId || null,
-        modelo: () => ({ modelo_id: inp.getAttribute('data-modelo-id') || null,
-                         modelo_label: inp.getAttribute('data-modelo') || '' }),
-      });
-    });
-
-    // Cierre del desplegable "Otras fuentes": click fuera o ESC.
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.overflow-menu')) cerrarOtrasFuentes();
     });
@@ -471,166 +377,9 @@
     document.getElementById('menuOtrasFuentes')?.classList.remove('open');
   }
 
-  function onOmitToggle(chk) {
-    const row = chk.closest('.serial-row');
-    const serial = row.querySelector('.serial-input');
-    const motivo = row.querySelector('.motivo-input');
-    if (chk.checked) {
-      serial.value = '';
-      serial.disabled = true;
-      serial.classList.remove('dup');
-      motivo.style.display = '';
-      motivo.focus();
-    } else {
-      serial.disabled = false;
-      motivo.value = '';
-      motivo.style.display = 'none';
-      serial.focus();
-    }
-    refresh();
-  }
-
-  // Pegar multilínea sobre una casilla → reparte líneas/tabs en esta casilla y
-  // las siguientes del mismo grupo (estilo hoja de cálculo).
-  function onPasteSerial(e) {
-    const text = (e.clipboardData || window.clipboardData).getData('text');
-    if (!text || !/[\r\n\t]/.test(text)) return; // valor único → comportamiento normal
-    e.preventDefault();
-    const vals = text.split(/[\r\n\t]+/).map(s => s.trim()).filter(Boolean);
-    const grupo = e.target.closest('.serial-group');
-    fillFrom(grupo, e.target, vals);
-  }
-
-  // Reparte `vals` a partir de `startInput`, SIN crear filas: la cantidad la fija
-  // el contrato. Si se pegan más seriales que casillas disponibles, los de más se
-  // descartan y se avisa. Devuelve cuántos se aplicaron.
-  function fillFrom(grupo, startInput, vals) {
-    const inputs = [...grupo.querySelectorAll('.serial-input')];
-    let idx = inputs.indexOf(startInput);
-    if (idx < 0) idx = 0;
-    let applied = 0;
-    for (const v of vals) {
-      const inp = inputs[idx];
-      if (!inp) break; // no hay más casillas: el resto se descarta
-      // si la fila estaba marcada "sin serial", desmárcala
-      const chk = inp.closest('.serial-row').querySelector('.omit-toggle');
-      if (chk.checked) { chk.checked = false; onOmitToggle(chk); }
-      inp.disabled = false;
-      inp.value = v;
-      idx++;
-      applied++;
-    }
-    refresh();
-    const dropped = vals.length - applied;
-    if (dropped > 0) {
-      const req = Number(grupo.getAttribute('data-activos') || inputs.length);
-      Toast.show(`Se pegaron ${applied}; ${dropped} de más se ignoraron (este modelo tiene ${req} unidad(es) en el contrato).`, 'warn');
-    }
-    return applied;
-  }
-
-  function togglePaste(grupo, show) {
-    const box = grupo.querySelector('.paste-box');
-    if (!box) return;
-    box.style.display = show ? '' : 'none';
-    if (show) { const ta = box.querySelector('.paste-area'); ta.value = ''; ta.focus(); }
-  }
-
-  function applyPaste(grupo) {
-    const ta = grupo.querySelector('.paste-area');
-    const vals = ta.value.split(/[\r\n\t]+/).map(s => s.trim()).filter(Boolean);
-    if (!vals.length) { togglePaste(grupo, false); return; }
-    // Empieza en la primera casilla vacía (no pisa lo ya colocado).
-    const inputs = [...grupo.querySelectorAll('.serial-input')];
-    const start = inputs.find(i => !i.disabled && !i.value.trim()) || inputs[0];
-    const applied = fillFrom(grupo, start, vals);
-    togglePaste(grupo, false);
-    // Si hubo sobrantes, fillFrom ya mostró el aviso; aquí solo confirmo el éxito.
-    if (applied === vals.length) Toast.show(`${applied} serial(es) pegados.`, 'ok');
-  }
-
-  // ── Progress + duplicates ───────────────────────────────────────────────
-  function refresh() {
-    // duplicados (sobre seriales no omitidos)
-    const seen = new Map();
-    const inputs = [...document.querySelectorAll('#serialesBody .serial-input')];
-    inputs.forEach(i => i.classList.remove('dup'));
-    inputs.forEach(i => {
-      if (i.disabled) return;
-      const v = norm(i.value);
-      if (!v) return;
-      if (seen.has(v)) { i.classList.add('dup'); seen.get(v).classList.add('dup'); }
-      else seen.set(v, i);
-    });
-
-    // progreso por grupo + total
-    let totalReq = 0, totalDone = 0;
-    document.querySelectorAll('#serialesBody .serial-group').forEach(grupo => {
-      const req = Number(grupo.getAttribute('data-activos') || 0);
-      let done = 0;
-      grupo.querySelectorAll('.serial-row').forEach(row => {
-        const omit = row.querySelector('.omit-toggle').checked;
-        const serial = row.querySelector('.serial-input').value.trim();
-        const motivo = row.querySelector('.motivo-input').value.trim();
-        if ((omit && motivo) || (!omit && serial)) done++;
-      });
-      const el = grupo.querySelector('.grupo-progreso');
-      if (el) el.textContent = `· ${Math.min(done, req)}/${req}`;
-      totalReq += req;
-      totalDone += Math.min(done, req);
-    });
-    const foot = $('footProgreso');
-    if (foot) foot.textContent = `${totalDone} / ${totalReq}`;
-  }
-
-  // ── Collect + validate ──────────────────────────────────────────────────
-  function collect() {
-    const seriales = [];
-    const omisiones = [];
-    document.querySelectorAll('#serialesBody .serial-row').forEach(row => {
-      const inp = row.querySelector('.serial-input');
-      const omit = row.querySelector('.omit-toggle').checked;
-      const motivo = row.querySelector('.motivo-input').value.trim();
-      const modelo = inp.getAttribute('data-modelo') || '';
-      const modeloId = inp.getAttribute('data-modelo-id') || '';
-      if (omit) {
-        if (motivo) omisiones.push({ modelo, modelo_id: modeloId, motivo });
-      } else {
-        const serial = inp.value.trim();
-        if (serial) seriales.push({ modelo, modelo_id: modeloId, serial, source: 'manual' });
-      }
-    });
-    return { seriales, omisiones };
-  }
-
-  // Para confirmar: cada unidad activa debe tener serial O estar omitida con
-  // motivo, y no puede haber seriales duplicados.
-  function validarCompleto() {
-    if (document.querySelector('#serialesBody .serial-input.dup')) {
-      return 'Hay seriales duplicados (marcados en rojo).';
-    }
-    let faltan = [];
-    document.querySelectorAll('#serialesBody .serial-group').forEach(grupo => {
-      const modelo = grupo.getAttribute('data-modelo') || '';
-      const req = Number(grupo.getAttribute('data-activos') || 0);
-      let done = 0;
-      let omitSinMotivo = false;
-      grupo.querySelectorAll('.serial-row').forEach(row => {
-        const omit = row.querySelector('.omit-toggle').checked;
-        const serial = row.querySelector('.serial-input').value.trim();
-        const motivo = row.querySelector('.motivo-input').value.trim();
-        if (omit && !motivo) omitSinMotivo = true;
-        if ((omit && motivo) || (!omit && serial)) done++;
-      });
-      if (omitSinMotivo) faltan.push(`${modelo}: falta motivo en una unidad sin serial`);
-      else if (done < req) faltan.push(`${modelo}: faltan ${req - done} de ${req}`);
-    });
-    return faltan.length ? faltan.join(' · ') : null;
-  }
-
   // ── Save / confirm ──────────────────────────────────────────────────────
   async function persistir(estado) {
-    const { seriales, omisiones } = collect();
+    const { seriales, omisiones } = asignador.collect();
     const uid = firebase.auth().currentUser?.uid || null;
     const ref = db().collection('contratos').doc(contratoDocId);
 
@@ -656,14 +405,12 @@
     const btn = $('btnGuardar');
     btn.disabled = true;
     try {
-      if (!await confirmarAvisosPool(collect().seriales)) { btn.disabled = false; return; }
-      // Al corregir seriales YA asignados preservamos 'asignados' (no se degrada a
-      // 'pendiente' ni se reenvía a activaciones: el trigger solo dispara en la
-      // transición a 'asignados'). En el flujo normal se guarda como 'pendiente'.
+      if (!await asignador.confirmarAvisosPool(asignador.collect().seriales)) { btn.disabled = false; return; }
+      // Al corregir seriales YA asignados se preserva 'asignados' (no se
+      // degrada a 'pendiente' ni se reenvía a activaciones).
       const estadoGuardar = ctx.yaAsignados ? 'asignados' : 'pendiente';
       const { seriales, omisiones } = await persistir(estadoGuardar);
       Toast.show(`Guardado (${seriales.length} serial(es)${omisiones.length ? `, ${omisiones.length} sin serial` : ''}).`, 'ok');
-      // Si estábamos editando seriales asignados, re-bloquear tras guardar.
       if (ctx.yaAsignados) { ctx.desbloqueado = false; render(seriales, omisiones); }
     } catch (e) {
       console.error('Error guardando seriales:', e);
@@ -673,10 +420,9 @@
     }
   }
 
-  // Guardar reemplazo (modo solicitud de cambio de serial): persiste los seriales
-  // (preservando 'asignados', sin reenviar a activaciones desde el flujo normal) y
-  // marca la solicitud como resuelta con el mapeo anterior→nuevo; el trigger
-  // onSerialCambio envía la corrección a activaciones.
+  // Guardar reemplazo (solicitud de cambio de serial): persiste preservando
+  // 'asignados' y marca la solicitud resuelta con el mapeo anterior→nuevo; el
+  // trigger onSerialCambio envía la corrección a activaciones.
   async function guardarReemplazo() {
     if (!ctx.cambioReq) return;
     const reemplazos = [];
@@ -690,7 +436,6 @@
     });
     if (!reemplazos.length) { Toast.show('No cambiaste ningún serial marcado. Escribe el serial de reemplazo.', 'warn'); return; }
 
-    // Anti-duplicado contra TODOS los seriales (no solo los editables).
     const todos = [...document.querySelectorAll('#serialesBody .serial-input')]
       .map(i => norm(i.value)).filter(Boolean);
     const hayDup = todos.some((v, i) => todos.indexOf(v) !== i);
@@ -699,7 +444,7 @@
     const btn = $('btnReemplazo');
     btn.disabled = true;
     try {
-      if (!await confirmarAvisosPool(collect().seriales)) { btn.disabled = false; return; }
+      if (!await asignador.confirmarAvisosPool(asignador.collect().seriales)) { btn.disabled = false; return; }
       await persistir('asignados');
       const uid = firebase.auth().currentUser?.uid || null;
       await db().collection('contratos').doc(contratoDocId)
@@ -710,7 +455,7 @@
           reemplazos,
         }, { merge: true });
       Toast.show(`Reemplazo guardado (${reemplazos.length}). Se notificará a activaciones.`, 'ok');
-      setTimeout(() => { location.href = 'index.html'; }, 1400);
+      setTimeout(() => { location.href = _destinoVolver; }, 1400);
     } catch (e) {
       console.error('Error guardando reemplazo:', e);
       Toast.show('No se pudo guardar el reemplazo.', 'bad');
@@ -718,10 +463,7 @@
     }
   }
 
-  // Hoja de resumen del paso irreversible (auditoría 2026-08-04, R5). Antes era
-  // un window.confirm de una línea: no decía cuántos seriales iban, ni de qué
-  // contrato, ni qué correo salía — justo en la única acción de la página que
-  // no se puede deshacer (dispara el correo a activaciones y echa el candado).
+  // Hoja de resumen del paso irreversible (auditoría 2026-08-04, R5).
   function hojaConfirmarEnvio({ seriales, omisiones }) {
     return new Promise((resolve) => {
       const porModelo = new Map();
@@ -786,10 +528,10 @@
   }
 
   async function confirmar() {
-    const error = validarCompleto();
+    const error = asignador.validarCompleto();
     if (error) { Toast.show(error, 'warn'); return; }
-    const datos = collect();
-    if (!await confirmarAvisosPool(datos.seriales)) return;
+    const datos = asignador.collect();
+    if (!await asignador.confirmarAvisosPool(datos.seriales)) return;
     if (!await hojaConfirmarEnvio(datos)) return;
 
     const btn = $('btnConfirmar');
@@ -797,7 +539,7 @@
     try {
       await persistir('asignados');
       Toast.show('Seriales confirmados. Se notificará a activaciones.', 'ok');
-      setTimeout(() => { location.href = 'index.html'; }, 1400);
+      setTimeout(() => { location.href = _destinoVolver; }, 1400);
     } catch (e) {
       console.error('Error confirmando seriales:', e);
       Toast.show('No se pudo confirmar. Intenta de nuevo.', 'bad');
@@ -805,345 +547,15 @@
     }
   }
 
-  // ── Jalar seriales (POC / órdenes) ───────────────────────────────────────
-  // Distribuye una lista de candidatos {serial, modelo, modeloId} en los slots
-  // vacíos por modelo del contrato. Hace match por modelo_id (si ambos lo
-  // tienen) o, en su defecto, por nombre normalizado. Deduplica contra los
-  // seriales ya presentes en el formulario y dentro del mismo lote. No toca
-  // filas marcadas "Sin serial". Reporta cuántos entraron / duplicados / sin
-  // cupo / sin modelo en el contrato.
-  function jalarItems(items, origen) {
-    const grupos = [...document.querySelectorAll('#serialesBody .serial-group')];
-    if (!grupos.length) { Toast.show('No hay modelos que serializar en este contrato.', 'warn'); return; }
-
-    const presentes = new Set();
-    document.querySelectorAll('#serialesBody .serial-input').forEach(i => {
-      const v = norm(i.value); if (v) presentes.add(v);
-    });
-
-    const porId = new Map(), porNombre = new Map();
-    grupos.forEach(g => {
-      const mid = g.getAttribute('data-modelo-id') || '';
-      const mnom = norm(g.getAttribute('data-modelo') || '');
-      if (mid) porId.set(mid, g);
-      if (mnom && !porNombre.has(mnom)) porNombre.set(mnom, g);
-    });
-
-    let agregados = 0, duplicados = 0, sinModelo = 0, sinCupo = 0;
-
-    for (const it of (items || [])) {
-      const serial = String(it.serial || '').trim();
-      if (!serial) continue;
-      const key = serial.toLowerCase();
-      if (presentes.has(key)) { duplicados++; continue; }
-
-      const grupo = (it.modeloId && porId.get(it.modeloId)) || porNombre.get(norm(it.modelo)) || null;
-      if (!grupo) { sinModelo++; continue; }
-
-      const slot = [...grupo.querySelectorAll('.serial-row')].find(row => {
-        const inp = row.querySelector('.serial-input');
-        const omit = row.querySelector('.omit-toggle')?.checked;
-        return inp && !inp.disabled && !omit && !inp.value.trim();
-      });
-      if (!slot) { sinCupo++; continue; }
-
-      slot.querySelector('.serial-input').value = serial;
-      presentes.add(key);
-      agregados++;
-    }
-
-    refresh();
-
-    const partes = [`${agregados} agregado(s)`];
-    if (duplicados) partes.push(`${duplicados} ya presentes`);
-    if (sinCupo)    partes.push(`${sinCupo} sin cupo`);
-    if (sinModelo)  partes.push(`${sinModelo} sin modelo en el contrato`);
-    Toast.show(`Jalado desde ${origen}: ${partes.join(' · ')}.`, agregados ? 'ok' : 'warn');
-  }
-
-  // Trae las unidades que el plan de la venta marcó "continúa" — siguen
-  // físicamente con el cliente bajo el contrato original y pasan a servir a
-  // este. Reusa jalarItems (dedupe + match por modelo + reporte); la
-  // reasignación del pool la hace onSerialWrite al Guardar, con nota de
-  // reasignación en el kardex (informe tracking 2026-08-12, P2).
+  // ── Fuentes de recuperación (plan de transición, POC, órdenes) ──────────
   function traerDelOriginal() {
     const plan = contrato.transicion_plan;
     const continuan = (plan?.nivel === 'serial')
       ? (plan.unidades || []).filter(u => u.destino === 'continua')
       : [];
     if (!continuan.length) { Toast.show('El plan de la venta no tiene unidades que continúen.', 'warn'); return; }
-    jalarItems(continuan.map(u => ({ serial: u.serial, modelo: u.modelo || '', modeloId: u.modelo_id || '' })),
+    asignador.jalarItems(continuan.map(u => ({ serial: u.serial, modelo: u.modelo || '', modeloId: u.modelo_id || '' })),
       'el contrato original (plan de la venta)');
-  }
-
-  // Toma unidades DISPONIBLES (en_bodega) del pool de equipos serializados.
-  // Abre un picker donde el usuario ESCOGE qué unidades asignar — o pulsa
-  // "Selección automática" (las más antiguas en bodega por modelo). La
-  // transición del pool a asignado_contrato la hace el trigger onSerialWrite
-  // al Guardar/Confirmar (server-side, con validación de contrato) — aquí solo
-  // se llena el formulario.
-  async function tomarDelPool() {
-    if (typeof EquiposPoolService === 'undefined') { Toast.show('El pool de equipos no está disponible.', 'bad'); return; }
-    let enBodega;
-    try {
-      enBodega = await EquiposPoolService.listar({ estado: EquiposPoolService.ESTADOS.EN_BODEGA });
-    } catch (e) {
-      console.error('Error consultando el pool:', e);
-      Toast.show('No se pudo consultar el pool de equipos.', 'bad');
-      return;
-    }
-    if (!enBodega.length) { Toast.show('No hay equipos disponibles en bodega. Recibe equipos en Inventario · Equipos por serial.', 'warn'); return; }
-    abrirPickerPool(enBodega);
-  }
-
-  // Picker del pool: una sección por modelo del contrato con cupos vacíos,
-  // listando sus unidades en_bodega (match tolerante _mismoModelo, orden FIFO
-  // por ingreso a bodega). Los seriales ya tecleados en el formulario no se
-  // ofrecen. "Aplicar" pasa la selección por el mismo jalarItems del resto de
-  // orígenes (dedupe/match por modelo/reporte).
-  function abrirPickerPool(enBodega) {
-    const grupos = [...document.querySelectorAll('#serialesBody .serial-group')];
-    if (!grupos.length) { Toast.show('No hay modelos que serializar en este contrato.', 'warn'); return; }
-
-    const presentes = new Set();
-    document.querySelectorAll('#serialesBody .serial-input').forEach(i => {
-      const v = norm(i.value); if (v) presentes.add(v);
-    });
-
-    const secciones = [];
-    grupos.forEach(g => {
-      const modelo = g.getAttribute('data-modelo') || '';
-      const modeloId = g.getAttribute('data-modelo-id') || '';
-      const cupos = [...g.querySelectorAll('.serial-row')].filter(row => {
-        const inp = row.querySelector('.serial-input');
-        const omit = row.querySelector('.omit-toggle')?.checked;
-        return inp && !inp.disabled && !omit && !inp.value.trim();
-      }).length;
-      if (!cupos) return;
-      const unidades = enBodega
-        .filter(d => EquiposPoolService._mismoModelo(d, modeloId, modelo)
-                  && !presentes.has(norm(d.serial || d.serial_norm)))
-        .sort((a, b) => (a.ingreso_bodega_at?.toMillis?.() || 0) - (b.ingreso_bodega_at?.toMillis?.() || 0)
-          || String(a.serial || '').localeCompare(String(b.serial || '')));
-      secciones.push({ modelo, modeloId, cupos, unidades });
-    });
-
-    if (!secciones.length) { Toast.show('No hay cupos vacíos que llenar: todos los seriales están colocados u omitidos.', 'warn'); return; }
-    if (!secciones.some(s => s.unidades.length)) {
-      Toast.show('En bodega no hay unidades de los modelos de este contrato. Recibe equipos en Inventario · Equipos por serial.', 'warn');
-      return;
-    }
-
-    const seccionesHtml = secciones.map((s, si) => {
-      const filas = s.unidades.map(u => `
-        <label class="pp-item" style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border-subtle,#eee);cursor:pointer;font-size:13px;">
-          <input type="checkbox" class="pp-check" value="${esc(u.serial || u.serial_norm)}" data-grupo="${si}" style="width:16px;height:16px;">
-          <span class="pp-serial" style="font-family:var(--font-mono,monospace);">${esc(u.serial || u.serial_norm)}</span>
-          <span style="margin-left:auto;color:var(--fg-3);font-size:12px;">${u.condicion === 'reuso' ? 'Refurbished' : 'Nuevo'}</span>
-        </label>`).join('');
-      return `
-        <div class="pp-grupo" data-grupo="${si}" style="margin-bottom:12px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0;">
-            <div style="font-weight:600;">${esc(s.modelo)}</div>
-            <div class="pp-progreso" style="color:var(--fg-3);font-size:12px;">0/${s.cupos} · ${s.unidades.length} disponible(s)</div>
-          </div>
-          ${s.unidades.length
-            ? `<div style="border:1px solid var(--border-subtle,#e5e7eb);border-radius:8px;overflow:hidden;">${filas}</div>`
-            : `<div style="border:1px dashed var(--border-subtle,#e5e7eb);border-radius:8px;padding:10px;color:var(--fg-3);font-size:13px;">Sin unidades en bodega de este modelo.</div>`}
-        </div>`;
-    }).join('');
-
-    const overlay = document.createElement('div');
-    overlay.id = 'overlayPoolPicker';
-    overlay.className = 'modal-backdrop';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-    overlay.innerHTML = `
-      <div class="modal" style="max-width:640px;width:100%;">
-        <div class="modal-header">
-          <h3 class="modal-title"><i data-lucide="scan-barcode"></i> Tomar del pool (bodega)</h3>
-          <button type="button" class="modal-close" data-pp="cerrar" aria-label="Cerrar"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
-        </div>
-        <div class="modal-body" style="max-height:56vh;overflow:auto;">
-          <p style="margin:0 0 10px;font-size:13px;color:var(--fg-3);">
-            Marca las unidades que vas a asignar a este contrato, o usa
-            <b>Selección automática</b> (toma las más antiguas en bodega por modelo).
-          </p>
-          <input type="search" id="ppBuscar" class="form-input" placeholder="Filtrar por serial…" style="width:100%;margin-bottom:12px;height:36px;font-family:var(--font-mono,monospace);">
-          ${seccionesHtml}
-        </div>
-        <div class="modal-footer">
-          <span id="ppCount" class="ts" style="margin-right:auto;align-self:center;">Sin selección</span>
-          <button type="button" class="btn btn-ghost" data-pp="auto"><i data-lucide="list-checks"></i> Selección automática</button>
-          <button type="button" class="btn btn-ghost" data-pp="cerrar">Cancelar</button>
-          <button type="button" class="btn btn-primary" data-pp="aplicar"><i data-lucide="check"></i> Asignar seleccionados</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-
-    const cerrar = () => overlay.remove();
-
-    const refrescarConteos = () => {
-      let total = 0;
-      secciones.forEach((s, si) => {
-        const n = overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length;
-        total += n;
-        const el = overlay.querySelector(`.pp-grupo[data-grupo="${si}"] .pp-progreso`);
-        if (el) el.textContent = `${n}/${s.cupos} · ${s.unidades.length} disponible(s)`;
-      });
-      const c = overlay.querySelector('#ppCount');
-      if (c) c.textContent = total ? `${total} unidad(es) seleccionada(s)` : 'Sin selección';
-    };
-
-    overlay.addEventListener('change', (e) => {
-      const chk = e.target;
-      if (!chk.classList || !chk.classList.contains('pp-check')) return;
-      const si = Number(chk.getAttribute('data-grupo'));
-      const s = secciones[si];
-      if (chk.checked && s && overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]:checked`).length > s.cupos) {
-        chk.checked = false;
-        Toast.show(`${s.modelo}: solo hay ${s.cupos} cupo(s) vacío(s).`, 'warn');
-      }
-      refrescarConteos();
-    });
-
-    overlay.querySelector('#ppBuscar').addEventListener('input', (e) => {
-      const q = norm(e.target.value);
-      overlay.querySelectorAll('.pp-item').forEach(item => {
-        const serial = norm(item.querySelector('.pp-serial')?.textContent);
-        item.style.display = (!q || serial.includes(q)) ? '' : 'none';
-      });
-    });
-
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) { cerrar(); return; }
-      const btn = e.target.closest('[data-pp]');
-      if (!btn) return;
-      const act = btn.getAttribute('data-pp');
-      if (act === 'cerrar') { cerrar(); return; }
-      if (act === 'auto') {
-        // Completa cada modelo hasta su cupo con las primeras disponibles
-        // (FIFO por ingreso a bodega), respetando lo ya marcado a mano.
-        secciones.forEach((s, si) => {
-          const checks = [...overlay.querySelectorAll(`.pp-check[data-grupo="${si}"]`)];
-          let n = checks.filter(c => c.checked).length;
-          for (const c of checks) {
-            if (n >= s.cupos) break;
-            if (!c.checked) { c.checked = true; n++; }
-          }
-        });
-        refrescarConteos();
-        return;
-      }
-      if (act === 'aplicar') {
-        const items = [...overlay.querySelectorAll('.pp-check:checked')].map(c => {
-          const s = secciones[Number(c.getAttribute('data-grupo'))] || {};
-          return { serial: c.value, modelo: s.modelo || '', modeloId: s.modeloId || '' };
-        });
-        if (!items.length) { Toast.show('Marca al menos una unidad para asignar.', 'warn'); return; }
-        cerrar();
-        jalarItems(items, 'pool de bodega');
-      }
-    });
-
-    if (window.lucide) lucide.createIcons();
-    refrescarConteos();
-  }
-
-  // Validación SUAVE contra el pool antes de persistir (fase de transición del
-  // plan PLAN_POOL_EQUIPOS_SERIAL.md: avisar, nunca bloquear). Revisa solo los
-  // seriales nuevos vs lo ya guardado y devuelve una lista de avisos:
-  //   · el serial NO está en el pool — posible typo o equipo sin recibir; si se
-  //     guarda igual, el trigger lo crea por migración por contacto sin verificar
-  //   · el serial está en el pool pero en OTRO estado / asignado a otro cliente
-  //   · el serial existe solo en OTRO modelo (colisión tipo Kenwood NX420/NX920)
-  // En contratos legacy (registro histórico) no se avisa el "no está": esos
-  // equipos llevan años con el cliente y nunca pasaron por bodega.
-  async function advertenciasPool(seriales) {
-    if (typeof EquiposPoolService === 'undefined') return [];
-    const guardados = new Set((ctx._saved || []).map(s => norm(s.serial)));
-    const nuevos = (seriales || []).filter(s => !guardados.has(norm(s.serial)));
-    const avisos = []; // {serial, chip, detalle}
-    for (const s of nuevos) {
-      try {
-        const docs = await EquiposPoolService.findBySerial(s.serial);
-        if (!docs.length) {
-          if (!ctx.esLegacy) avisos.push({ serial: s.serial, chip: 'sin registro en el pool',
-            chipCss: 'background:transparent;border:1px dashed #cbd5e1;color:#64748b;',
-            detalle: 'Verifica que esté bien escrito, o recíbelo antes en Inventario · Equipos por serial. Se dará de alta al guardar.' });
-          continue;
-        }
-        const mismo = docs.find(d => EquiposPoolService._mismoModelo(d, s.modelo_id, s.modelo));
-        if (!mismo) {
-          const otros = docs.map(d => d.modelo_label || 'sin modelo').join(', ');
-          avisos.push({ serial: s.serial, chip: 'modelo distinto en el pool',
-            chipCss: 'background:#fee2e2;color:#b91c1c;',
-            detalle: `El pool lo registra como ${otros} — verifica que sea el ${s.modelo}. Si es el mismo radio, el conflicto se resuelve en Inventario · pestaña Conflictos.` });
-          continue;
-        }
-        if (mismo.estado !== EquiposPoolService.ESTADOS.EN_BODEGA
-            && mismo.asignacion?.contrato_doc_id !== contratoDocId) {
-          const est = EquiposPoolService.ESTADO_LABELS[mismo.estado] || mismo.estado;
-          const quien = mismo.asignacion?.cliente_nombre ? ` con ${mismo.asignacion.cliente_nombre}` : '';
-          avisos.push({ serial: s.serial, chip: `${est}${quien}`,
-            chipCss: 'background:#fef3c7;color:#92400e;',
-            detalle: 'Al guardar, la unidad se reasignará a este contrato (queda rastro del tenedor anterior en su historia).' });
-        }
-      } catch (e) { /* validación best-effort: nunca bloquea el guardado */ }
-    }
-    return avisos;
-  }
-
-  // Panel "Revisión de seriales" (P3 auditoría 2026-07-24): reemplaza el
-  // window.confirm de texto plano — con 10+ seriales era ilegible. Lista
-  // operable con chip por fila; guardar NUNCA se bloquea, igual que antes.
-  function panelRevisionSeriales(avisos, totalSeriales) {
-    return new Promise((resolve) => {
-      const overlay = document.createElement('div');
-      overlay.className = 'overlay';
-      overlay.style.display = 'flex';
-      const filas = avisos.map(a => `
-        <tr>
-          <td style="font-family:var(--font-mono, monospace); font-size:12.5px; white-space:nowrap; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top;">
-            <a href="#" data-ficha="${esc(a.serial)}" style="color:inherit; text-decoration:none;" title="Ver ficha del equipo">${esc(a.serial)}</a></td>
-          <td style="padding:8px 10px; border-bottom:1px solid var(--border); font-size:12.5px;">
-            <span class="eqpool-chip" style="${esc(a.chipCss)}">${esc(a.chip)}</span>
-            <div style="color:var(--fg-3); margin-top:3px; line-height:1.45;">${esc(a.detalle)}</div></td>
-        </tr>`).join('');
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:640px; width:min(640px, 94vw);">
-          <div class="sheet-header"><h3 class="sheet-title">Revisión antes de guardar</h3></div>
-          <div class="sheet-body" style="padding:12px 8px;">
-            <p style="margin:0 0 10px; font-size:13px; color:var(--fg-3);">
-              ${totalSeriales} serial(es) · <strong>${avisos.length} aviso(s)</strong> del pool de equipos. Guardar no se bloquea — revisa y decide.</p>
-            <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border); border-radius:8px;">
-              <table style="border-collapse:collapse; width:100%;">${filas}</table>
-            </div>
-          </div>
-          <div class="footer">
-            <button class="btn btn-ghost" data-action="cancel">Volver a editar</button>
-            <button class="btn btn-primary" data-action="confirm">Guardar con ${avisos.length} aviso(s)</button>
-          </div>
-        </div>`;
-      const cleanup = (r) => { overlay.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', kb); resolve(r); };
-      const kb = (e) => { if (e.key === 'Escape') cleanup(false); };
-      overlay.addEventListener('click', (e) => {
-        const ficha = e.target.closest('[data-ficha]');
-        if (ficha) { e.preventDefault(); window.EquipoFicha?.abrir(ficha.getAttribute('data-ficha')); return; }
-        const action = e.target.closest('[data-action]')?.dataset?.action;
-        if (action === 'confirm') cleanup(true);
-        else if (action === 'cancel' || e.target === overlay) cleanup(false);
-      });
-      document.addEventListener('keydown', kb);
-      document.body.appendChild(overlay);
-      document.body.style.overflow = 'hidden';
-    });
-  }
-
-  async function confirmarAvisosPool(seriales) {
-    const avisos = await advertenciasPool(seriales);
-    if (!avisos.length) return true;
-    return panelRevisionSeriales(avisos, (seriales || []).length);
   }
 
   async function jalarDesdePoc() {
@@ -1153,12 +565,11 @@
       let devices = await PocService.getByCliente({ clienteId: ctx.clienteId, clienteNombre: ctx.clienteNombre });
       devices = (devices || []).filter(d => d.deleted !== true && String(d.serial || '').trim());
       if (!devices.length) { Toast.show('No hay equipos en POC para este cliente.', 'warn'); return; }
-      const items = devices.map(d => ({
+      asignador.jalarItems(devices.map(d => ({
         serial: d.serial,
         modelo: d.modelo_label || d.modelo || '',
         modeloId: d.modelo_id || '',
-      }));
-      jalarItems(items, 'POC');
+      })), 'POC');
     } catch (e) {
       console.error('Error consultando POC:', e);
       Toast.show('No se pudo consultar POC.', 'bad');
@@ -1178,7 +589,7 @@
         if (serial) items.push({ serial, modelo: e.modelo || '', modeloId: '' });
       }));
       if (!items.length) { Toast.show('Las órdenes vinculadas no tienen seriales registrados.', 'warn'); return; }
-      jalarItems(items, 'órdenes del contrato');
+      asignador.jalarItems(items, 'órdenes del contrato');
     } catch (e) {
       console.error('Error leyendo órdenes del contrato:', e);
       Toast.show('No se pudieron leer las órdenes del contrato.', 'bad');

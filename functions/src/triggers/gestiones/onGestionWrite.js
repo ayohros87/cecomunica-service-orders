@@ -226,7 +226,7 @@ async function correoBodega(gid, g, { anticipo = false } = {}) {
       ${g.tipo === "reemplazo"
         ? G.tablaHtml(["Sale", "Modelo actual", "Modelo solicitado", "Motivo"], filas)
         : G.tablaHtml(["Cantidad", "Modelo", g.tipo === "aumento" ? "Detalle" : "Finalidad", ""], filas)}`,
-    ctaUrl: G.urlGestion(g, gid),
+    ctaUrl: G.urlBodegaGestion(gid),
     ctaLabel: "Asignar seriales",
     meta: { gestion_id: gid, paso: anticipo ? "bodega_anticipo" : "bodega" },
   });

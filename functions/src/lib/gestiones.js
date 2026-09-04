@@ -21,6 +21,12 @@ const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim())
 const TIPO_LABEL = { reemplazo: "Reemplazo", demo: "Demo", baja: "Baja de equipos", aumento: "Aumento de equipos" };
 
 // Deep-link al expediente dentro del Centro de gestión.
+// Enlace de BODEGA: la pestaña Asignar de Almacén con la gestión abierta
+// (2026-09-03). Bodega ya no trabaja en la ficha del cliente.
+function urlBodegaGestion(gid) {
+  return `${APP_BASE_URL}/almacen/index.html?tab=asignar&g=${encodeURIComponent(gid)}`;
+}
+
 function urlGestion(g, gid) {
   return `${APP_BASE_URL}/clientes/centro.html?id=${encodeURIComponent(g.cliente_id || "")}&g=${encodeURIComponent(gid)}`;
 }
@@ -528,7 +534,7 @@ function detalleAumentoHtml(a = {}) {
 module.exports = {
   limpiarAnulacion,
   avisoFacturacion, detalleAumentoHtml,
-  TIPO_LABEL, escapeHtml, isEmail, urlGestion, tablaHtml,
+  TIPO_LABEL, escapeHtml, isEmail, urlGestion, urlBodegaGestion, tablaHtml,
   destinatariosRecepcionVendedor, vendedorEmailDeCliente, adminEmails, aprobadoresEmails, aprobacionesTo, encolarCorreo,
   configEmailTo,
   registrarEvento, crearOrdenesProgramacion,

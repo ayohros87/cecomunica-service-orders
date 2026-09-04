@@ -33,7 +33,9 @@ window.MODULOS = (() => {
   const visiblesPorRol = {
     administrador: ["ordenes", "poc", "almacen", "inventario", "equipos", "pendientes", "facturacion", "vendedores", "centro", "contratos", "cotizaciones", "piezas", "firma"],
     gerente:       ["ordenes", "poc", "almacen", "inventario", "equipos", "centro", "contratos", "cotizaciones", "firma"],
-    inventario:    ["almacen", "centro", "inventario", "equipos", "pendientes", "piezas", "firma"],
+    // inventario perdió "centro" el 2026-09-03: bodega asigna los seriales de
+    // las gestiones desde Almacén · Asignar, ya no desde la ficha del cliente.
+    inventario:    ["almacen", "inventario", "equipos", "pendientes", "piezas", "firma"],
     contabilidad:  ["facturacion", "firma"],
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],

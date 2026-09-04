@@ -63,11 +63,9 @@
   <div class="cc-work">
   <div id="topbar-mount"></div>
   <script>
-    // El botón Volver es DINÁMICO (auditoría 2026-08-04, R7): esta página vive
-    // bajo /contratos/ pero su usuario principal es el rol `inventario`, que no
-    // tiene el módulo Contratos (modulos.js) — mandarlo a la lista de contratos
-    // era un callejón sin salida. volverDeSeriales() lo define
-    // contrato-seriales-page.js una vez que conoce el rol.
+    // El botón Volver regresa a Almacén cuando se llega con ?volver=almacen;
+    // volverDeSeriales() lo define contrato-seriales-page.js. Bodega (rol
+    // inventario) ya no trabaja aquí: la página lo redirige a Almacén · Asignar.
     Layout.renderTopbar({
       title: '<i data-lucide="scan-barcode"></i> Asignar seriales',
       back: { label: '<i data-lucide="arrow-left"></i> Volver', onclick: 'volverDeSeriales()' },
@@ -82,8 +80,6 @@
     <nav class="app-breadcrumbs" aria-label="Breadcrumb">
       <a href="../index.html">Inicio</a>
       <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
-      <!-- El crumb intermedio lo ajusta contrato-seriales-page.js según el rol
-           (Contratos, o Inventario · Equipos para el rol inventario). -->
       <a href="index.html" id="bc-modulo">Contratos</a>
       <span class="app-breadcrumbs-sep" aria-hidden="true"><i data-lucide="chevron-right" style="width:12px;height:12px;"></i></span>
       <span class="app-breadcrumbs-current" id="bc-contrato-id">—</span>
@@ -135,7 +131,8 @@
     </div>
   </div>
 
-  <script src="../js/pages/contrato-seriales-page.js?v=cc28" defer></script>
+  <script defer src="../js/ui/asignador-seriales.js?v=alm1"></script>
+  <script src="../js/pages/contrato-seriales-page.js?v=alm1" defer></script>
   </div> <!-- /cc-work -->
   </div> <!-- /cc-app -->
   <script>

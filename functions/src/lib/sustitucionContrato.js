@@ -256,7 +256,7 @@ async function avisarBodega({ sustitutoId, sustituto, origen, origenId, copiados
   const nuevoId  = sustituto.contrato_id || sustitutoId;
   const viejoId  = origen.contrato_id || origenId;
   const cliente  = sustituto.cliente_nombre || origen.cliente_nombre || "Cliente";
-  const urlSeriales = `${APP_BASE_URL}/contratos/seriales.html?id=${sustitutoId}`;
+  const urlSeriales = `${APP_BASE_URL}/almacen/index.html?tab=asignar&contrato=${encodeURIComponent(sustitutoId)}`;
 
   const filasFaltan = restantes.map((l) =>
     `<tr><td style="padding:6px 0;border-bottom:1px solid #eee;">${esc(l.modelo)}</td>

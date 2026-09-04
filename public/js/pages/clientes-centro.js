@@ -745,9 +745,10 @@ window.Centro = {
           'Firmó una persona distinta al representante — revisa la cédula, el selfie y la firma',
           B('Validar firmante…', `Centro.aceptarFirmanteGestion('${this.esc(g.id)}')`, true));
       } else if (g.estado === 'pendiente_bodega' && this.puedeAsignar()) {
-        it('info', `Asignar seriales de bodega a ${gid}`,
-          `${GestionesService.tipoLabel(g.tipo)} — elige de los disponibles del modelo`,
-          B('Asignar seriales', `Centro.abrirGestion('${this.esc(g.id)}')`, true));
+        // Bodega asigna desde Almacén · Asignar (2026-09-03); aquí solo se señala.
+        it('info', `Bodega debe asignar los seriales de ${gid}`,
+          `${GestionesService.tipoLabel(g.tipo)} — se asignan en Almacén · Asignar`,
+          `<a class="btn btn-primary cg-act" href="../almacen/index.html?tab=asignar&g=${encodeURIComponent(g.id)}">Asignar en Almacén</a>`);
       }
     }
 
@@ -1589,20 +1590,10 @@ window.Centro = {
       }
       return;
     }
-    // Conserva lo tecleado y aún no guardado en los inputs de asignación.
-    const SEL = '#fGestiones input[data-gitem], #fGestiones input[data-gdemo], #fGestiones input[data-gaum]';
-    const clave = (i) => `${i.dataset.gitem ?? ''}|${i.dataset.gdemo ?? ''}|${i.dataset.gaum ?? ''}`;
-    const escritos = new Map();
-    document.querySelectorAll(SEL).forEach(i => { if (i.value.trim()) escritos.set(clave(i), i.value); });
     this.pintarAcciones();
     this.pintarKpis();
     this.pintarSenales();
     this.pintarGestiones();
-    if (escritos.size) {
-      document.querySelectorAll(SEL).forEach(i => {
-        if (!i.value.trim() && escritos.has(clave(i))) i.value = escritos.get(clave(i));
-      });
-    }
     if (window.lucide?.createIcons) lucide.createIcons();
   },
 
@@ -1823,71 +1814,14 @@ window.Centro = {
             Historial — ${cerradasN} cerrada${cerradasN === 1 ? '' : 's'}${anuladasN ? ` · ${anuladasN} anulada${anuladasN === 1 ? '' : 's'}` : ''}</summary>
           <div style="margin-top:8px;">${historial.map(g => filaG(g, true)).join('')}</div>
         </details>` : '');
-    this._decorarAsignacion();
   },
 
-  // Inputs de asignación de bodega al nivel del resto del sistema (pedido
-  // 2026-08-28: "tiene que venir de un serial existente, mira los otros
-  // contratos"): cada input se decora con SerialField (chips de estado del
-  // pool, descartados, conflictos, modelo distinto — el MISMO componente de
-  // contratos/seriales y órdenes) y gana un datalist con los seriales
-  // DISPONIBLES EN BODEGA de su modelo, para elegir de existentes en vez de
-  // teclear a ciegas. La validación dura al guardar (_validarSerialBodega)
-  // se mantiene como candado final.
-  _bodegaCache: null,
-  async _bodegaDisponibles() {
-    if (this._bodegaCache && Date.now() - this._bodegaCache.t < 5 * 60 * 1000) return this._bodegaCache.d;
-    const snap = await firebase.firestore().collection('equipos_pool')
-      .where('estado', '==', 'en_bodega').limit(3000).get();
-    const d = snap.docs.map(x => ({ id: x.id, ...x.data() }));
-    this._bodegaCache = { t: Date.now(), d };
-    return d;
-  },
-  _slotsDeLineas(lineas) {
-    const slots = [];
-    (lineas || []).forEach(l => {
-      for (let i = 0; i < Number(l.cantidad || 0); i++) slots.push({ id: l.modelo_id || '', label: l.modelo || '' });
-    });
-    return slots;
-  },
-  async _decorarAsignacion() {
-    const inputs = [...document.querySelectorAll('input[data-gaum], input[data-gdemo], input[data-gitem]')];
-    if (!inputs.length) return;
-    // SerialField: chips del pool (si el componente está cargado).
-    if (window.SerialField) {
-      inputs.forEach(inp => SerialField.adjuntar(inp, {
-        modelo: () => ({ modelo_id: inp.dataset.modeloId || null, modelo_label: inp.dataset.modeloLabel || '' }),
-      }));
-    }
-    // A11y: los inputs eran placeholder-only — el lector de pantalla no tenía
-    // nombre para el campo.
-    inputs.forEach(inp => { if (!inp.getAttribute('aria-label')) inp.setAttribute('aria-label', inp.placeholder || 'Serial'); });
-    // Datalist de disponibles en bodega por modelo esperado.
-    try {
-      const bodega = await this._bodegaDisponibles();
-      const porClave = new Map();
-      for (const inp of inputs) {
-        const clave = inp.dataset.modeloId || this._normModelo(inp.dataset.modeloLabel || '');
-        if (!clave) continue;
-        if (!porClave.has(clave)) {
-          const dlId = `cg-dl-${clave.replace(/[^A-Za-z0-9_-]/g, '')}`;
-          let dl = document.getElementById(dlId);
-          if (!dl) {
-            dl = document.createElement('datalist');
-            dl.id = dlId;
-            const compatibles = bodega.filter(u => (window.EquiposPoolService?._mismoModelo)
-              ? EquiposPoolService._mismoModelo(u, inp.dataset.modeloId || null, inp.dataset.modeloLabel || '')
-              : this._mismoModeloLinea({ modelo_id: inp.dataset.modeloId, modelo: inp.dataset.modeloLabel }, u));
-            dl.innerHTML = compatibles.slice(0, 300).map(u =>
-              `<option value="${this.esc(u.serial || u.id)}">${this.esc(u.modelo_label || '')}${u.condicion ? ` · ${this.esc(u.condicion)}` : ''}</option>`).join('');
-            document.body.appendChild(dl);
-          }
-          porClave.set(clave, dl.id);
-        }
-        inp.setAttribute('list', porClave.get(clave));
-        inp.setAttribute('autocomplete', 'off');
-      }
-    } catch (e) { console.warn('[centro] datalist de bodega no disponible:', e?.message || e); }
+  // La asignación de seriales de bodega (aumento/demo/reemplazo) se hace en
+  // Almacén · Asignar desde 2026-09-03 (propuesta "Asignar desde Almacén"):
+  // mismo formulario que los contratos, picker del estante y política dura.
+  // El expediente solo la MUESTRA y, a quien puede asignar, le da el enlace.
+  _linkAsignar(g, texto = 'Asignar en Almacén') {
+    return `<a class="btn btn-primary cg-act" href="../almacen/index.html?tab=asignar&g=${encodeURIComponent(g.id)}">${texto}</a>`;
   },
 
   _detalleGestion(g) {
@@ -1994,17 +1928,14 @@ window.Centro = {
             <span>Anexo firmado por persona <b>distinta al representante</b> — falta validar al firmante.</span>
             <button class="btn btn-primary" style="margin-left:auto; flex:none; padding:3px 11px; font-size:12px;"
               onclick="Centro.aceptarFirmanteGestion('${this.esc(g.id)}')">Aceptar firmante…</button></div>` : ''}
+        ${asignados.length ? `<p style="font-size:13px; margin:8px 0 0;"><b>Seriales:</b>
+              ${asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')}
+              ${total > asignados.length ? `<span style="color:var(--fg-3);">· ${asignados.length} de ${total}</span>` : ''}</p>` : ''}
         ${asignando
-          ? `<div style="margin-top:10px;">${this._slotsDeLineas(a.lineas).map((m, ix) => `
-              <span style="display:inline-block; margin:0 6px 6px 0;">
-              <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;"
-                data-gaum="${ix}" data-modelo-id="${this.esc(m.id)}" data-modelo-label="${this.esc(m.label)}"
-                placeholder="${this.esc(m.label)} ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}"></span>`).join('')}
-             <div style="margin-top:6px;"><button class="btn btn-primary" onclick="Centro.guardarAsignacionAumento('${this.esc(g.id)}')">
-               Guardar asignación</button>
-               <span style="font-size:12.5px; color:var(--fg-3);"> Elige de los disponibles en bodega (el campo sugiere los del modelo).${preAsignando ? ' La firma del anexo corre <b>en paralelo</b> — la orden de programación saldrá sola al firmarse.' : ''}</span></div></div>`
-          : (asignados.length ? `<p style="font-size:13px; margin:8px 0 0;"><b>Seriales:</b>
-              ${asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')}</p>` : '')}`;
+          ? `<div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+               ${this._linkAsignar(g, asignados.length ? 'Completar en Almacén' : 'Asignar en Almacén')}
+               <span style="font-size:12.5px; color:var(--fg-3);">Bodega asigna los seriales desde Almacén · Asignar.${preAsignando ? ' La firma del anexo corre <b>en paralelo</b> — la orden de programación saldrá sola al firmarse.' : ''}</span></div>`
+          : ''}`;
     } else if (g.tipo === 'baja') {
       const pen = g.penalidad_estimada;
       const esTerm = Array.isArray(g.terminacion_total_de) && g.terminacion_total_de.length;
@@ -2045,20 +1976,15 @@ window.Centro = {
         ${(g.items || []).map((it, ix) => `<tr>
           <td class="cg-mono">${this.esc(it.serial_saliente || '—')}</td>
           <td>${this.esc(it.modelo || '—')}</td>
-          <td>${asignando
-            ? `<input class="form-input" style="max-width:170px;padding:5px 9px;font-size:13px;" data-gitem="${ix}"
-                 data-modelo-id="${this.esc(it.modelo_solicitado_id || '')}" data-modelo-label="${this.esc(it.modelo_solicitado || it.modelo || '')}"
-                 placeholder="Serial de bodega…" value="${this.esc(it.serial_nuevo || '')}">`
-            : `<span class="cg-mono">${this.esc(it.serial_nuevo || 'pendiente')}</span>`}</td>
+          <td><span class="cg-mono">${this.esc(it.serial_nuevo || 'pendiente')}</span></td>
           <td>${this.esc(it.modelo_solicitado || it.modelo || '—')}</td>
           <td style="font-size:12.5px;">${this.esc(it.motivo_detalle || it.motivo_codigo || '—')}
             ${it.elegibilidad === 'propio_excepcion' ? '<br><span class="cg-venc por_vencer">excepción serv. cliente</span>' : ''}</td>
           <td class="cg-mono" style="font-size:12px;">${this.esc(it.contrato_id || '—')}</td>
         </tr>`).join('')}</tbody></table></div>
-        ${asignando ? `<div style="margin-top:10px; display:flex; gap:8px; align-items:center;">
-          <button class="btn btn-primary" onclick="Centro.guardarAsignacion('${this.esc(g.id)}')">
-            Guardar asignación</button>
-          <span style="font-size:12.5px; color:var(--fg-3);">Cada serial debe existir en bodega (Disponible).
+        ${asignando ? `<div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          ${this._linkAsignar(g)}
+          <span style="font-size:12.5px; color:var(--fg-3);">Bodega elige en Almacén · Asignar la unidad que sustituye a cada radio.
             Al completar todos, el sistema crea la OS de programación y avisa a Recepción.</span></div>` : ''}`;
     } else {
       const total = (g.demo?.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0);
@@ -2068,18 +1994,15 @@ window.Centro = {
         <p style="font-size:13px; margin:0 0 8px;"><b>Finalidad:</b> ${this.esc(g.demo?.finalidad || '—')} ·
           <b>Salida:</b> ${this.esc(g.demo?.fecha_salida || '—')} ·
           <b>Devolución estimada:</b> ${this.esc(g.demo?.fecha_devolucion_estimada || 'sin fecha')}</p>
-        ${asignando
-          ? `<div>${this._slotsDeLineas(g.demo?.lineas).map((m, ix) => `
-              <span style="display:inline-block; margin:0 6px 6px 0;">
-              <input class="form-input" style="max-width:200px;padding:5px 9px;font-size:13px;"
-                data-gdemo="${ix}" data-modelo-id="${this.esc(m.id)}" data-modelo-label="${this.esc(m.label)}"
-                placeholder="${this.esc(m.label)} ${ix + 1}…" value="${this.esc(asignados[ix]?.serial || '')}"></span>`).join('')}
-             <div style="margin-top:6px;"><button class="btn btn-primary" onclick="Centro.guardarAsignacionDemo('${this.esc(g.id)}')">
-               Guardar asignación</button>
-               <span style="font-size:12.5px; color:var(--fg-3);"> Stock nuevo o refurbished, de bodega.</span></div>`
-          : `<p style="font-size:13px; margin:0;"><b>Seriales:</b> ${asignados.length
+        <p style="font-size:13px; margin:0;"><b>Seriales:</b> ${asignados.length
               ? asignados.map(s => `<span class="cg-mono">${this.esc(s.serial)}</span>`).join(', ')
-              : 'pendiente de bodega'}</p>`}`;
+                + (total > asignados.length ? ` <span style="color:var(--fg-3);">· ${asignados.length} de ${total}</span>` : '')
+              : 'pendiente de bodega'}</p>
+        ${asignando
+          ? `<div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+               ${this._linkAsignar(g, asignados.length ? 'Completar en Almacén' : 'Asignar en Almacén')}
+               <span style="font-size:12.5px; color:var(--fg-3);">Stock nuevo o refurbished, de bodega — se asigna en Almacén · Asignar.</span></div>`
+          : ''}`;
     }
 
     let aprobacion = '';
@@ -2176,33 +2099,6 @@ window.Centro = {
     } catch (e) { console.error(e); Toast.show('No se pudo subir el anexo', 'bad'); }
   },
 
-  async guardarAsignacionAumento(gid) {
-    const inputs = [...document.querySelectorAll('input[data-gaum]')];
-    const seriales = [];
-    const usados = new Set();
-    try {
-      for (const inp of inputs) {
-        const serial = inp.value.trim().toUpperCase();
-        if (!serial) continue;
-        if (usados.has(serial)) { Toast.show(`${serial}: repetido — cada renglón necesita un serial distinto`, 'bad'); return; }
-        usados.add(serial);
-        const v = await this._validarSerialBodega(serial, this._esperadoDeInput(inp));
-        if (!v.ok) { Toast.show(v.why, 'bad'); return; }
-        if (v.warn && !window.confirm(v.warn)) return;
-        seriales.push({
-          serial: v.unidad.serial || serial,
-          pool_doc_id: v.unidad.id || null,
-          modelo: v.unidad.modelo_label || '',
-          modelo_id: v.unidad.modelo_id || null,
-        });
-      }
-      if (!seriales.length) { Toast.show('Captura al menos un serial', 'warn'); return; }
-      await GestionesService.asignarAumento(gid, seriales);
-      Toast.show('Asignación guardada', 'ok');
-      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
-    } catch (e) { console.error(e); Toast.show('No se pudo guardar la asignación', 'bad'); }
-  },
-
   async aprobarBajaGestion(gid) {
     try {
       await GestionesService.aprobarBaja(gid);
@@ -2221,91 +2117,6 @@ window.Centro = {
       // para que equipos y señales dejen de mostrar los flags viejos.
       setTimeout(() => { if (this.cliente) this.abrir(this.cliente.id, { push: false }); }, 1800);
     } catch (e) { console.error(e); Toast.show('No se pudo anular', 'bad'); }
-  },
-
-  // Valida un serial contra el pool: debe existir y estar Disponible en bodega.
-  // `esperado` ({modelo_id, modelo_label}): si la unidad es de OTRO modelo que
-  // el solicitado, devuelve un aviso — el datalist sugería bien pero el candado
-  // final no lo exigía y bodega podía asignar un modelo distinto en silencio.
-  async _validarSerialBodega(serial, esperado = null) {
-    const matches = await EquiposPoolService.findBySerial(serial);
-    const lista = Array.isArray(matches) ? matches : (matches ? [matches] : []);
-    if (!lista.length) return { ok: false, why: `${serial}: no existe en el inventario` };
-    const disp = lista.find(m => m.estado === 'en_bodega');
-    if (!disp) return { ok: false, why: `${serial}: no está Disponible en bodega (está ${lista[0].estado})` };
-    let warn = null;
-    if (esperado && (esperado.modelo_id || esperado.modelo_label)) {
-      const coincide = (window.EquiposPoolService?._mismoModelo)
-        ? EquiposPoolService._mismoModelo(disp, esperado.modelo_id || null, esperado.modelo_label || '')
-        : this._mismoModeloLinea({ modelo_id: esperado.modelo_id, modelo: esperado.modelo_label }, disp);
-      if (!coincide) {
-        warn = `${serial} es ${disp.modelo_label || 'de otro modelo'} y lo solicitado es `
-          + `${esperado.modelo_label || esperado.modelo_id}. ¿Asignarlo de todos modos?`;
-      }
-    }
-    return { ok: true, unidad: disp, warn };
-  },
-
-  // Modelo esperado de un input de asignación (los data-attrs que pinta el
-  // expediente) — para la validación de coincidencia de _validarSerialBodega.
-  _esperadoDeInput(inp) {
-    return { modelo_id: inp.dataset.modeloId || null, modelo_label: inp.dataset.modeloLabel || '' };
-  },
-
-  async guardarAsignacion(gid) {
-    const g = (this.gestiones || []).find(x => x.id === gid);
-    if (!g) return;
-    const inputs = [...document.querySelectorAll('input[data-gitem]')];
-    const items = (g.items || []).map(it => ({ ...it }));
-    const usados = new Set();
-    try {
-      for (const inp of inputs) {
-        const ix = Number(inp.dataset.gitem);
-        const serial = inp.value.trim().toUpperCase();
-        if (!serial) { items[ix].serial_nuevo = null; items[ix].pool_doc_id_nuevo = null; continue; }
-        if (usados.has(serial)) { Toast.show(`${serial}: repetido — cada renglón necesita un serial distinto`, 'bad'); return; }
-        usados.add(serial);
-        const v = await this._validarSerialBodega(serial, this._esperadoDeInput(inp));
-        if (!v.ok) { Toast.show(v.why, 'bad'); return; }
-        if (v.warn && !window.confirm(v.warn)) return;
-        items[ix].serial_nuevo = v.unidad.serial || serial;
-        items[ix].pool_doc_id_nuevo = v.unidad.id || null;
-        items[ix].asignado_at = new Date().toISOString();
-      }
-      await GestionesService.asignarItems(gid, items);
-      const completo = items.every(it => it.serial_nuevo);
-      Toast.show(completo
-        ? 'Asignación completa — el sistema crea la OS de programación y avisa a Recepción'
-        : 'Asignación guardada (parcial)', 'ok');
-      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
-    } catch (e) { console.error(e); Toast.show('No se pudo guardar la asignación', 'bad'); }
-  },
-
-  async guardarAsignacionDemo(gid) {
-    const inputs = [...document.querySelectorAll('input[data-gdemo]')];
-    const seriales = [];
-    const usados = new Set();
-    try {
-      for (const inp of inputs) {
-        const serial = inp.value.trim().toUpperCase();
-        if (!serial) continue;
-        if (usados.has(serial)) { Toast.show(`${serial}: repetido — cada renglón necesita un serial distinto`, 'bad'); return; }
-        usados.add(serial);
-        const v = await this._validarSerialBodega(serial, this._esperadoDeInput(inp));
-        if (!v.ok) { Toast.show(v.why, 'bad'); return; }
-        if (v.warn && !window.confirm(v.warn)) return;
-        seriales.push({
-          serial: v.unidad.serial || serial,
-          pool_doc_id: v.unidad.id || null,
-          modelo: v.unidad.modelo_label || '',
-          modelo_id: v.unidad.modelo_id || null,
-        });
-      }
-      if (!seriales.length) { Toast.show('Captura al menos un serial', 'warn'); return; }
-      await GestionesService.asignarDemo(gid, seriales);
-      Toast.show('Asignación guardada', 'ok');
-      await this.recargarGestiones();   // el avance del trigger llega solo por la escucha en vivo
-    } catch (e) { console.error(e); Toast.show('No se pudo guardar la asignación', 'bad'); }
   },
 
   /* ═════════ Menú "Nueva gestión" ═════════ */

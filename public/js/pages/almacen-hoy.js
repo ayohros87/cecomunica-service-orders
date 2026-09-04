@@ -16,23 +16,34 @@
    ============================================================= */
 
 window.AlmacenPage = {
-  setTab(tab) {
-    document.getElementById('tab-hoy').style.display = tab === 'hoy' ? '' : 'none';
-    document.getElementById('tab-existencias').style.display = tab === 'existencias' ? '' : 'none';
+  setTab(tab, extra = {}) {
+    ['hoy', 'asignar', 'existencias'].forEach(t => {
+      const el = document.getElementById('tab-' + t);
+      if (el) el.style.display = t === tab ? '' : 'none';
+    });
     if (window.WorkspaceTabs) WorkspaceTabs.setActive(tab);
-    // Existencias carga bajo demanda la primera vez (pool completo).
+    // Existencias y Asignar cargan bajo demanda la primera vez.
     if (tab === 'existencias' && window.AlmacenExistencias) AlmacenExistencias.activar();
+    if (tab === 'asignar' && window.AlmacenAsignar) AlmacenAsignar.activar(extra);
     try {
       const url = new URL(location.href);
       if (tab === 'hoy') url.searchParams.delete('tab'); else url.searchParams.set('tab', tab);
+      if (tab !== 'asignar') { url.searchParams.delete('contrato'); url.searchParams.delete('g'); }
       history.replaceState(null, '', url);
     } catch { /* la pestaña cambió igual */ }
   },
 
+  // Desde Hoy (y desde cualquier <a data-asignar>): abrir la pestaña Asignar
+  // con un contrato o una gestión, sin recargar la página.
+  abrirAsignar({ contrato = null, g = null } = {}) {
+    AlmacenPage.setTab('asignar', { contrato, g });
+  },
+
   // "Recargar" del menú: refresca la pestaña que se está viendo.
   recargar() {
-    const ex = document.getElementById('tab-existencias');
-    if (ex && ex.style.display !== 'none' && window.AlmacenExistencias) return AlmacenExistencias.recargar();
+    const visible = (id) => { const el = document.getElementById(id); return el && el.style.display !== 'none'; };
+    if (visible('tab-existencias') && window.AlmacenExistencias) return AlmacenExistencias.recargar();
+    if (visible('tab-asignar') && window.AlmacenAsignar) return AlmacenAsignar.recargar();
     return AlmacenHoy.recargar();
   },
 
@@ -96,6 +107,15 @@ window.AlmacenHoy = (() => {
 
   function cta(href, icono, label) {
     return `<a class="btn btn-sm btn-accent hy-cta" href="${href}">
+      <i data-lucide="${icono}" style="width:14px;height:14px;"></i> ${esc(label)}</a>`;
+  }
+
+  // CTA que abre la pestaña Asignar de ESTA página (sin recargar). El href
+  // sigue siendo un deep-link real para "abrir en otra pestaña".
+  function ctaAsignar({ contrato = null, g = null }, icono, label) {
+    const q = contrato ? `contrato=${encodeURIComponent(contrato)}` : `g=${encodeURIComponent(g)}`;
+    return `<a class="btn btn-sm btn-accent hy-cta" href="index.html?tab=asignar&${q}" data-asignar
+       data-contrato="${esc(contrato || '')}" data-g="${esc(g || '')}">
       <i data-lucide="${icono}" style="width:14px;height:14px;"></i> ${esc(label)}</a>`;
   }
 
@@ -163,8 +183,8 @@ window.AlmacenHoy = (() => {
   //     firma corre en paralelo — bodega puede pre-asignar desde la aprobación)
   //   · aumento en 'pendiente_bodega' (anexo firmado; faltan los seriales)
   //   · reemplazo/demo en 'en_proceso' sin cierre.asignacion
-  // La asignación se resuelve en el expediente del Centro (mismo deep-link
-  // del correo de bodega).
+  // La asignación se resuelve en la pestaña Asignar (2026-09-03); antes era el
+  // expediente del Centro. La comparte AlmacenAsignar para armar su cola.
   async function cargarGestionesBodega() {
     const db = firebase.firestore();
     const snap = await db.collection('gestiones')
@@ -226,9 +246,11 @@ window.AlmacenHoy = (() => {
 
   // ── Render ────────────────────────────────────────────────────────────
   function filaContrato(r) {
+    // Seriales y cambios se trabajan en la pestaña Asignar de este mismo
+    // espacio; la transición sigue en su página (cola apagada).
     const cfgs = {
-      seriales: { chip: 'Seriales', cls: 'seriales', icono: 'scan-barcode', cta: 'Asignar seriales', href: vol(`../contratos/seriales.html?id=${encodeURIComponent(r.doc_id)}`) },
-      cambio: { chip: 'Cambio', cls: 'cambio', icono: 'replace', cta: 'Reemplazar', href: vol(`../contratos/seriales.html?id=${encodeURIComponent(r.doc_id)}`) },
+      seriales: { chip: 'Seriales', cls: 'seriales', icono: 'scan-barcode', cta: 'Asignar seriales', ctaHtml: ctaAsignar({ contrato: r.doc_id }, 'scan-barcode', 'Asignar seriales') },
+      cambio: { chip: 'Cambio', cls: 'cambio', icono: 'replace', cta: 'Reemplazar', ctaHtml: ctaAsignar({ contrato: r.doc_id }, 'replace', 'Reemplazar') },
       transicion: { chip: 'Transición', cls: 'transicion', icono: 'arrow-left-right', cta: 'Registrar', href: vol(`../contratos/transicion.html?id=${encodeURIComponent(r.doc_id)}`) },
     };
     const c = cfgs[r.tipo];
@@ -244,7 +266,7 @@ window.AlmacenHoy = (() => {
       chip: c.chip, chipCls: c.cls,
       txt: `<b>${esc(r.contrato_id)}</b> · ${esc(r.cliente_nombre)}${detalle}`,
       at: r.at,
-      ctaHtml: cta(c.href, c.icono, c.cta),
+      ctaHtml: c.ctaHtml || cta(c.href, c.icono, c.cta),
     });
   }
 
@@ -295,11 +317,12 @@ window.AlmacenHoy = (() => {
           chip, chipCls: cls,
           txt: `<b>${esc(g.id)}</b> · ${esc(g.cliente_nombre || '—')}${detalle}`,
           at: g._at || null,
-          ctaHtml: cta(vol(`../clientes/centro.html?id=${encodeURIComponent(g.cliente_id || '')}&g=${encodeURIComponent(g.id)}`),
-            'scan-barcode', 'Asignar seriales'),
+          ctaHtml: ctaAsignar({ g: g.id }, 'scan-barcode', 'Asignar seriales'),
         });
-      }, vol('../clientes/centro.html'), 'gestiones'),
+      }, 'index.html?tab=asignar', 'gestiones'),
     ));
+    // Badge de la pestaña Asignar = lo que bodega tiene que poner.
+    if (window.WorkspaceTabs) WorkspaceTabs.setBadge('asignar', colas.seriales.length + colas.cambios.length + gestiones.length);
 
     // ── Del pool ──
     let poolHtml = '';
@@ -580,6 +603,19 @@ window.AlmacenHoy = (() => {
     }
     // Una acción de la ficha (inspección, baja, venta…) refresca las listas.
     if (window.EquipoFicha) EquipoFicha.onCambio = () => AlmacenPage.recargarTodo();
+    // Los CTAs "Asignar" de la bandeja abren la pestaña sin recargar.
+    document.getElementById('hoyGrupos')?.addEventListener('click', (e) => {
+      const a = e.target.closest('a[data-asignar]');
+      if (!a || e.ctrlKey || e.metaKey || e.button !== 0) return;
+      e.preventDefault();
+      AlmacenPage.abrirAsignar({ contrato: a.dataset.contrato || null, g: a.dataset.g || null });
+    });
+    // Deep-link ?tab=asignar (correo de "Solicitud de seriales" / de bodega):
+    // la sección ya está visible desde el parse; aquí se cargan sus datos.
+    const qs = new URLSearchParams(location.search);
+    if (qs.get('tab') === 'asignar' && window.AlmacenAsignar) {
+      AlmacenAsignar.activar({ contrato: qs.get('contrato'), g: qs.get('g') });
+    }
     // ?accion=conteo|recibir|vender — deep-links de los asistentes.
     const accion = new URLSearchParams(location.search).get('accion');
     if (accion === 'conteo') AlmacenPage.abrirConteo();
@@ -588,5 +624,5 @@ window.AlmacenHoy = (() => {
     cargar();
   }
 
-  return { recargar, render, abrirConflicto, _conflictoFusionar, _conflictoDistintos };
+  return { recargar, render, abrirConflicto, _conflictoFusionar, _conflictoDistintos, cargarGestionesBodega };
 })();

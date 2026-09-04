@@ -334,7 +334,10 @@ test("la bandeja muestra contrato y progreso, nunca el precio", async () => {
   assert.match(html, /CLIENTE DEMO/);
   assert.match(html, /3\/8/);              // progreso de seriales
   assert.match(html, /4 días/);            // antigüedad de la cola
-  assert.match(html, /contratos\/seriales\.html\?id=c1/);
+  // El CTA abre la pestaña Asignar del propio espacio (2026-09-03), ya no
+  // la página de seriales del módulo Contratos.
+  assert.match(html, /tab=asignar&contrato=c1/);
+  assert.ok(!html.includes("contratos/seriales.html"), "la bandeja volvió a mandar a /contratos/");
   assert.ok(!html.includes("1250"), "la bandeja pintó el precio unitario");
   assert.ok(!html.includes("8490"), "la bandeja pintó el total del contrato");
 });

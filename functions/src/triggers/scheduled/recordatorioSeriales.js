@@ -91,8 +91,8 @@ module.exports = onSchedule(
           subject:   `Recordatorio ${intento}: seriales pendientes — ${c.contrato_id || doc.id}`,
           preheader: `El contrato ${c.contrato_id || doc.id} sigue esperando seriales`,
           bodyContent,
-          ctaUrl:    `${APP_BASE_URL}/contratos/seriales.html?id=${encodeURIComponent(doc.id)}`,
-          ctaLabel:  "Agregar seriales",
+          ctaUrl:    `${APP_BASE_URL}/almacen/index.html?tab=asignar&contrato=${encodeURIComponent(doc.id)}`,
+          ctaLabel:  "Asignar seriales",
           meta:      { source: "recordatorioSeriales", contrato_id: c.contrato_id || doc.id, intento },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
