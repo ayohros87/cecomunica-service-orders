@@ -925,51 +925,17 @@ window.ContratosLista = {
 
       const res = await this._dialogoAnulacion(c, candidatos);
       if (!res) return;
-      const motivoTrim = res.motivo;
 
-      const update = {
-        estado:           'anulado',
-        anulado:          true,
-        anulado_motivo:   motivoTrim,
-        anulado_fecha:    firebase.firestore.Timestamp.now(),
-        anulado_por_uid:  firebase.auth().currentUser?.uid || null,
-        anulado_ref:      c.contrato_id || id,
-        // Lo lee onAnnulment para decidir si el equipo se mueve. Se escribe en
-        // el MISMO update que `estado`: el trigger dispara con este snapshot, y
-        // mandarlo después sería tarde.
-        anulacion_tipo:   res.tipo,
-        fecha_modificacion: new Date()
-      };
-      if (res.sustitutoId) {
-        const sust = candidatos.find(x => x.id === res.sustitutoId);
-        update.sustituido_por_id = res.sustitutoId;
-        update.sustituido_por_contrato_id = sust?.contrato_id || '';
-      }
-
-      if (c.firmado || c.firmado_url) {
-        Object.assign(update, {
-          firmado_anulado:              true,
-          firmado_url_anulado:          c.firmado_url || null,
-          firmado_nombre_anulado:       c.firmado_nombre || null,
-          firmado_storage_path_anulado: c.firmado_storage_path || null,
-          firmado_fecha_anulado:        c.firmado_fecha || null,
-          firmado:              false,
-          firmado_url:          null,
-          firmado_nombre:       null,
-          firmado_storage_path: null,
-          firmado_fecha:        null,
-          firmado_por_uid:      null
-        });
-      }
+      // La escritura vive en js/domain/contratoAnulacion.js (compartida con el
+      // Centro de gestión): anulacion_tipo va en el MISMO update que `estado`
+      // porque onAnnulment dispara con ese snapshot.
+      const sustituto = res.sustitutoId ? candidatos.find(x => x.id === res.sustitutoId) : null;
+      const update = ContratoAnulacion.buildUpdate(c, { motivo: res.motivo, tipo: res.tipo, sustituto }, id);
 
       await ContratosService.updateContrato(id, update);
       // El mensaje dice qué va a pasar con los equipos, no solo que se anuló:
       // es la consecuencia que la persona necesita confirmar de un vistazo.
-      Toast.show(res.tipo === 'sustitucion'
-        ? (res.sustitutoId
-            ? `✅ Contrato ANULADO. Los equipos pasan a ${update.sustituido_por_contrato_id || 'el contrato sustituto'}.`
-            : '✅ Contrato ANULADO. Los equipos siguen con el cliente — recuerda vincular el contrato nuevo.')
-        : '✅ Contrato ANULADO. Se abrirá una orden de DEVOLUCIÓN para recuperar los equipos.', 'ok');
+      Toast.show(ContratoAnulacion.mensaje(update), 'ok');
       setTimeout(() => location.reload(), 1800);
     } catch (e) {
       console.error(e);
