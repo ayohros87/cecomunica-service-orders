@@ -944,6 +944,59 @@ let _materialEquipoActual = null;   // equipo del modal (para sugerencias por mo
 let _materialOtros = [];            // otros equipos de la orden [{equipo, key}] (lote P1.6)
 let _materialBuscarTimer = null;
 let _materialWired = false;
+// Pieza FUERA DE CATÁLOGO (2026-09-04, petición de Solangel): el catálogo
+// inventario_piezas tiene 16 piezas, todas Hytera. Para un Kenwood NX-420 el
+// técnico no podía registrar NADA — el modal exigía elegir del catálogo — y
+// terminaba en una hoja a mano que se perdía antes de llegar a cotización.
+// Con el modo activo el consumo se guarda con `fuera_catalogo: true`,
+// `pieza_id: null`, sin descontar stock ni alimentar analytics; bodega lo
+// recibe señalado en el resumen para cargarlo al catálogo.
+let _materialFueraCat = false;
+
+function _materialFueraCatSet(activo, { nombreSugerido } = {}) {
+  _materialFueraCat = !!activo;
+  const bloque = document.getElementById("materialFueraCatBloque");
+  const btn = document.getElementById("btnMaterialFueraCat");
+  const selEl = document.getElementById("materialSeleccion");
+  const sugEl = document.getElementById("materialSugerencias");
+  const buscar = document.getElementById("materialBuscar");
+  if (bloque) bloque.classList.toggle("hidden", !_materialFueraCat);
+  if (sugEl) sugEl.classList.toggle("hidden", _materialFueraCat);
+  if (buscar) buscar.classList.toggle("hidden", _materialFueraCat);
+  if (btn) {
+    btn.innerHTML = _materialFueraCat
+      ? '<i data-lucide="search"></i> Volver a buscar en el catálogo'
+      : '<i data-lucide="pencil-line"></i> No está en el catálogo — escribirla a mano';
+    APP.utils.lucideRefresh(btn);
+  }
+  if (_materialFueraCat) {
+    _materialSeleccionada = null;
+    if (selEl) selEl.innerHTML = "";
+    const nom = document.getElementById("materialFcNombre");
+    if (nom) {
+      if (nombreSugerido && !nom.value.trim()) nom.value = nombreSugerido;
+      setTimeout(() => nom.focus(), 30);
+    }
+  } else {
+    const nom = document.getElementById("materialFcNombre");
+    const sku = document.getElementById("materialFcSku");
+    if (nom) nom.value = "";
+    if (sku) sku.value = "";
+    setTimeout(() => buscar?.focus(), 30);
+  }
+  _materialSubtotalRefresh();
+}
+
+window.toggleMaterialFueraCatalogo = function(nombreSugerido) {
+  _materialFueraCatSet(!_materialFueraCat, { nombreSugerido: typeof nombreSugerido === "string" ? nombreSugerido : "" });
+};
+
+// Lo que se va a registrar cuando el modo fuera de catálogo está activo.
+function _materialFueraCatDatos() {
+  const nombre = (document.getElementById("materialFcNombre")?.value || "").trim();
+  const sku = (document.getElementById("materialFcSku")?.value || "").trim();
+  return { nombre, sku };
+}
 
 function _nombrePieza(p) {
   // Prioriza el nombre corto del catálogo; la descripción (texto largo de QBO)
@@ -994,7 +1047,7 @@ async function _renderEquipoMateriales() {
     <div class="equipo-material-item">
       <div class="equipo-material-main">
         <span class="equipo-material-name">${escapeHtml(it.pieza_nombre || "Pieza")}</span>
-        <span class="equipo-material-meta">${it.sku ? escapeHtml(it.sku) + " · " : ""}${Number(it.qty || 0)} × ${FMT.money(it.precio_unit || 0)} · ${escapeHtml(it.tipo || "cobro")}</span>
+        <span class="equipo-material-meta">${it.sku ? escapeHtml(it.sku) + " · " : ""}${Number(it.qty || 0)} × ${FMT.money(it.precio_unit || 0)} · ${escapeHtml(it.tipo || "cobro")}${it.fuera_catalogo ? ' · <span class="equipo-material-fc" title="Escrita a mano: no está en el catálogo de piezas">fuera de catálogo</span>' : ""}</span>
       </div>
       <button type="button" class="btn btn-ghost equipo-material-del" data-action="eliminar-material-equipo" data-linea-id="${escapeHtml(it.id)}" title="Eliminar material">
         <i data-lucide="trash-2"></i>
@@ -1010,7 +1063,8 @@ function _materialSubtotalRefresh() {
   const qty = Math.max(1, parseInt(document.getElementById("materialQty")?.value || "1", 10));
   const tipo = document.getElementById("materialTipo")?.value || "cobro";
   const precio = Number(document.getElementById("materialPrecio")?.value || 0);
-  if (!_materialSeleccionada) { out.textContent = ""; return; }
+  const listo = _materialFueraCat ? !!_materialFueraCatDatos().nombre : !!_materialSeleccionada;
+  if (!listo) { out.textContent = ""; return; }
   const sub = tipo === "cobro" ? qty * precio : 0;
   out.innerHTML = `Subtotal: <strong>${FMT.money(sub)}</strong>${tipo === "garantia" ? " (garantía — no se cobra)" : ""}`;
 }
@@ -1061,7 +1115,16 @@ function _materialRenderSugerencias(q) {
   if (!query) { _materialSugerenciasIniciales(_materialEquipoActual); return; }
   const piezas = _materialPiezas || [];
   const list = PiezaSearch.search(piezas, query.toLowerCase());
-  if (!list.length) { sug.innerHTML = '<div class="equipo-fotos-empty">Sin coincidencias.</div>'; return; }
+  if (!list.length) {
+    // Sin coincidencias ya no es un callejón: se ofrece registrarla a mano
+    // con lo que el técnico escribió como nombre inicial.
+    sug.innerHTML = `<div class="equipo-fotos-empty">Sin coincidencias en el catálogo.</div>
+      <button type="button" class="btn btn-secondary btn-sm" data-action="material-fuera-catalogo-toggle" data-nombre="${escapeHtml(query)}" style="align-self:flex-start;">
+        <i data-lucide="pencil-line"></i> Registrar «${escapeHtml(query.slice(0, 40))}» fuera de catálogo
+      </button>`;
+    APP.utils.lucideRefresh(sug);
+    return;
+  }
   sug.innerHTML = list.map(p => {
     const stock = Number(p.cantidad || 0);
     const sinControl = p.sin_control_inventario === true;
@@ -1086,6 +1149,7 @@ function _materialWireInputs() {
   document.getElementById("materialQty")?.addEventListener("input", _materialSubtotalRefresh);
   document.getElementById("materialTipo")?.addEventListener("change", _materialSubtotalRefresh);
   document.getElementById("materialPrecio")?.addEventListener("input", _materialSubtotalRefresh);
+  document.getElementById("materialFcNombre")?.addEventListener("input", _materialSubtotalRefresh);
 }
 
 window.abrirMaterialEquipoModal = async function() {
@@ -1095,6 +1159,7 @@ window.abrirMaterialEquipoModal = async function() {
 
   _materialWireInputs();
   _materialSeleccionada = null;
+  _materialFueraCatSet(false);
 
   const serial = (equipo.numero_de_serie || equipo.serial || equipo.SERIAL || "-").toString();
   const modelo = (equipo.modelo || equipo.MODEL || equipo.modelo_nombre || "-").toString();
@@ -1183,7 +1248,10 @@ window.confirmarMaterialEquipo = async function() {
   const equipo = _resolveEquipoActual();
   const equipoKey = _consumoKeyEquipoActual();
   if (!_trabajoOrdenId || !equipo || !equipoKey) { Toast.show("Abre la intervención primero", "bad"); return; }
-  if (!_materialSeleccionada) { Toast.show("Selecciona una pieza", "warn"); return; }
+  const fueraCat = _materialFueraCat ? _materialFueraCatDatos() : null;
+  if (fueraCat) {
+    if (!fueraCat.nombre) { Toast.show("Escribe el nombre de la pieza", "warn"); return; }
+  } else if (!_materialSeleccionada) { Toast.show("Selecciona una pieza", "warn"); return; }
   if (_ordenActualBloqueada()) { Toast.show("Orden bloqueada: la cotización ya fue emitida", "warn"); return; }
 
   const qty = Math.max(1, parseInt(document.getElementById("materialQty")?.value || "1", 10));
@@ -1202,14 +1270,18 @@ window.confirmarMaterialEquipo = async function() {
     if (btn) btn.disabled = true;
 
     // Releer la pieza para validar el stock COMBINADO antes de descontar
-    // (qty por CADA equipo del lote).
-    const piezaDB = await PiezasService.getPieza(_materialSeleccionada.id);
-    if (!piezaDB) { Toast.show("La pieza ya no existe en el catálogo", "bad"); return; }
-    const sinControl = piezaDB.sin_control_inventario === true;
-    const qtyTotal = qty * destinos.length;
-    if (!sinControl && Number(piezaDB.cantidad || 0) < qtyTotal) {
-      Toast.show(`Stock insuficiente para ${destinos.length} equipo(s): se necesitan ${qtyTotal} y hay ${Number(piezaDB.cantidad || 0)}`, "warn");
-      return;
+    // (qty por CADA equipo del lote). Fuera de catálogo no hay pieza que
+    // releer ni stock que validar.
+    let sinControl = true;
+    if (!fueraCat) {
+      const piezaDB = await PiezasService.getPieza(_materialSeleccionada.id);
+      if (!piezaDB) { Toast.show("La pieza ya no existe en el catálogo", "bad"); return; }
+      sinControl = piezaDB.sin_control_inventario === true;
+      const qtyTotal = qty * destinos.length;
+      if (!sinControl && Number(piezaDB.cantidad || 0) < qtyTotal) {
+        Toast.show(`Stock insuficiente para ${destinos.length} equipo(s): se necesitan ${qtyTotal} y hay ${Number(piezaDB.cantidad || 0)}`, "warn");
+        return;
+      }
     }
 
     let consumosOk = 0;
@@ -1217,9 +1289,10 @@ window.confirmarMaterialEquipo = async function() {
       if (btn && destinos.length > 1) btn.innerHTML = `<i data-lucide="loader"></i> Registrando ${consumosOk + 1}/${destinos.length}…`;
       await OrdenesService.addConsumo(_trabajoOrdenId, {
         equipoId: d.key,
-        pieza_id: _materialSeleccionada.id,
-        pieza_nombre: _nombrePieza(_materialSeleccionada),
-        sku: _materialSeleccionada.sku || "",
+        pieza_id: fueraCat ? null : _materialSeleccionada.id,
+        pieza_nombre: fueraCat ? fueraCat.nombre : _nombrePieza(_materialSeleccionada),
+        sku: fueraCat ? fueraCat.sku : (_materialSeleccionada.sku || ""),
+        fuera_catalogo: !!fueraCat,
         qty,
         precio_unit: precio,
         tipo,
@@ -1234,9 +1307,9 @@ window.confirmarMaterialEquipo = async function() {
     // A partir de aquí los consumos YA existen: los pasos restantes no deben
     // presentarse como fallo total — un reintento del usuario duplicaría el
     // consumo (y el descuento de stock).
-    const piezaId = _materialSeleccionada.id;
+    const piezaId = fueraCat ? null : _materialSeleccionada.id;
     try {
-      if (!sinControl) {
+      if (!sinControl && piezaId) {
         await PiezasService.ajustarDelta(piezaId, -qty * consumosOk);
         const cache = (_materialPiezas || []).find(x => x.id === piezaId);
         if (cache) cache.cantidad = Number(cache.cantidad || 0) - qty * consumosOk;
@@ -1247,8 +1320,9 @@ window.confirmarMaterialEquipo = async function() {
     }
 
     // Alimenta las recomendaciones "más usadas por modelo" (analytics) —
-    // una vez por modelo distinto dentro del lote.
-    if (tipo === "cobro") {
+    // una vez por modelo distinto dentro del lote. Fuera de catálogo no hay
+    // pieza_id que recomendar.
+    if (tipo === "cobro" && piezaId) {
       const modelos = new Set(destinos.map(d => PiezasService.modeloNormDeEquipo(d.equipo)).filter(Boolean));
       for (const m of modelos) {
         try { await PiezasService.incrementarUsoAnalytics(m, piezaId); }
@@ -1259,7 +1333,7 @@ window.confirmarMaterialEquipo = async function() {
     cerrarMaterialEquipoModal();
     Toast.show(destinos.length > 1
       ? `✅ Material registrado en ${consumosOk} equipo(s)`
-      : "✅ Material registrado", "ok");
+      : (fueraCat ? "✅ Pieza registrada fuera de catálogo" : "✅ Material registrado"), "ok");
     _renderEquipoMateriales();
   } catch (e) {
     console.error("❌ Error registrando material:", e);

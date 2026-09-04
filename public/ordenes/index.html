@@ -28,7 +28,7 @@
        en ceco-ui + anchos de columna en ordenes-index). Si no se bustea, el
        aviso "otro cliente" sale sin fondo con el CSS viejo en caché. -->
   <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
-  <link rel="stylesheet" href="../css/ordenes-index.css?v=calma1">
+  <link rel="stylesheet" href="../css/ordenes-index.css?v=calma2">
   <!-- Rediseño Command Center F2: rail lateral + KPIs de señal (híbrido,
        conserva ceco-ui). PLAN_REDISENO_COMMAND_CENTER.md -->
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
@@ -40,7 +40,7 @@
      al subir firma/foto o pedir la URL de una identificación. Los carga
      CargaDiferida al primer uso. -->
 <script defer src="../js/firebase-init.js?v=ses2"></script>
-<script defer src="../js/core/carga-diferida.js?v=4"></script>
+<script defer src="../js/core/carga-diferida.js?v=5"></script>
 <script src="../js/core/roles.js"></script>
 <script src="../js/core/modulos.js?v=cc14"></script>
 <script src="../js/core/layout.js?v=cc13"></script>
@@ -69,18 +69,18 @@
      lo trae CargaDiferida.devolucion() al primer uso. -->
 <script defer src="../js/pages/ordenes-state.js?v=prog2"></script>
 <script defer src="../js/pages/ordenes-data.js?v=dup2"></script>
-<script defer src="../js/pages/ordenes-render.js?v=prog4"></script>
+<script defer src="../js/pages/ordenes-render.js?v=prog5"></script>
 <script defer src="../js/pages/ordenes-filters.js?v=busq3"></script>
 <script defer src="../js/pages/ordenes-flujo.js?v=fv2"></script>
 <script defer src="../js/pages/ordenes-qc.js?v=pen1"></script>
-<script defer src="../js/pages/ordenes-equipos.js?v=cc24"></script>
+<script defer src="../js/pages/ordenes-equipos.js?v=cc25"></script>
 <!-- Módulos de acción DIFERIDOS (P3.15) — los carga CargaDiferida al primer
      uso, con sus dependencias (storage, firmaPad): ordenes-notas,
      ordenes-visita, ordenes-fotos (galería §5.23) y ordenes-devolucion.
      Sus ?v= viven en core/carga-diferida.js. -->
 <script defer src="../js/pages/ordenes-ui.js?v=p2"></script>
 <script defer src="../js/pages/ordenes-presets.js"></script>
-<script defer src="../js/pages/ordenes-events.js?v=cc24"></script>
+<script defer src="../js/pages/ordenes-events.js?v=cc25"></script>
 <!-- Lucide en defer + icons.js (par adyacente, en este orden): icons.js hace
      el barrido inicial de <i data-lucide>; los guards inline viejos quedan
      como no-ops en parse. Ver js/core/icons.js. -->
@@ -839,6 +839,26 @@
     <input type="text" id="materialBuscar" class="form-input" placeholder="Buscar pieza por nombre, SKU o marca…" autocomplete="off">
     <div id="materialSugerencias" class="material-sugerencias"></div>
     <div id="materialSeleccion" class="material-seleccion"></div>
+
+    <!-- Pieza fuera de catálogo (2026-09-04): el catálogo no cubre todas las
+         marcas (hoy solo Hytera). Sin esto el técnico no podía registrar nada
+         para un Kenwood y terminaba en una hoja a mano. -->
+    <div class="material-fuera-cat">
+      <button type="button" class="btn btn-ghost btn-sm" id="btnMaterialFueraCat" data-action="material-fuera-catalogo-toggle"><i data-lucide="pencil-line"></i> No está en el catálogo — escribirla a mano</button>
+      <div id="materialFueraCatBloque" class="hidden">
+        <div class="material-detalle" style="grid-template-columns:2fr 1fr;">
+          <div class="form-field">
+            <label class="form-label" for="materialFcNombre">Nombre de la pieza <span class="req"></span></label>
+            <input type="text" id="materialFcNombre" class="form-input" placeholder="Ej.: Batería KNB-45L" autocomplete="off">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="materialFcSku">Nº de parte / SKU</label>
+            <input type="text" id="materialFcSku" class="form-input" placeholder="Opcional" autocomplete="off">
+          </div>
+        </div>
+        <div class="form-hint" style="font-size:12px;color:var(--muted);margin-top:4px;">Queda marcada <b>fuera de catálogo</b>: no descuenta stock, y bodega la recibe señalada en el resumen para cargarla al catálogo.</div>
+      </div>
+    </div>
 
     <div class="material-detalle">
       <div class="form-field">

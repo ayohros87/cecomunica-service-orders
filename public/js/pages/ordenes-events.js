@@ -296,6 +296,7 @@
     'cerrar-material-equipo': () => cerrarMaterialEquipoModal(),
     'confirmar-material-equipo': () => confirmarMaterialEquipo(),
     'pick-material-equipo': (el) => pickMaterialEquipo(el.dataset.piezaId),
+    'material-fuera-catalogo-toggle': (el) => toggleMaterialFueraCatalogo(el.dataset.nombre || ''),
     'eliminar-material-equipo': (el) => eliminarMaterialEquipo(el.dataset.lineaId),
 
     'close-text-modal': () => closeTextModal(),

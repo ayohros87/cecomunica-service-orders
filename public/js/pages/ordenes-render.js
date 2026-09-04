@@ -947,6 +947,11 @@ function botonesFlujo(ordenId, estado, ordenData) {
     }
     if ((estado || "").toUpperCase() === "CERRADA (VISITA)") {
       html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver cierre de visita" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver cierre</button>`;
+      // Cotizar la visita ya cerrada (2026-09-04): el paso que antes vivía en
+      // una hoja a mano. Desaparece en cuanto la orden ya tiene cotización.
+      if (!od.cotizacion_doc_id && canRole(rol, 'preparar-cotizacion')) {
+        html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Preparar la cotización de esta visita" data-action="cotizar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="receipt"></i> Cotizar</button>`;
+      }
     }
     // Visitas legacy que llegaron a ENTREGADO por el flujo viejo: conservar
     // el acceso a su comprobante de entrega/recepción.
@@ -964,6 +969,9 @@ function botonesFlujo(ordenId, estado, ordenData) {
   if (esVisita) {
     if ((estado || "").toUpperCase() === "CERRADA (VISITA)") {
       html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Ver cierre de visita" data-action="ver-entrega" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="package-check"></i> Ver cierre</button>`;
+      if (!od.cotizacion_doc_id && canRole(rol, 'preparar-cotizacion')) {
+        html += `<button class="btn-flujo btn-flujo--ver-entrega" title="Preparar la cotización de esta visita" data-action="cotizar-orden" data-stop-propagation="true" data-orden-id="${ordenId}"><i data-lucide="receipt"></i> Cotizar</button>`;
+      }
     }
     if ((estado || "").toUpperCase().includes("ENTREGAD")
         && (od.firma_url || od.receptor_nombre || od.fecha_entrega || od.firma_recepcion_url || od.fecha_recepcion)) {

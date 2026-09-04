@@ -46,10 +46,15 @@ async function resumenPiezasDeOrden(ordenId) {
       porPieza.set(key, {
         nombre: c.pieza_nombre || c.sku || "(sin nombre)",
         sku: c.sku || "",
+        // Escrita a mano por el técnico porque el catálogo no la tiene
+        // (ordenes-equipos: modo "fuera de catálogo"). Bodega la ve señalada
+        // para cargarla a inventario_piezas, además de reponerla.
+        fuera_catalogo: c.fuera_catalogo === true,
         total: 0, cobro: 0, garantia: 0,
       });
     }
     const p = porPieza.get(key);
+    if (c.fuera_catalogo === true) p.fuera_catalogo = true;
     p.total += qty;
     if (String(c.tipo || "") === "garantia") p.garantia += qty;
     else p.cobro += qty;
@@ -78,9 +83,11 @@ async function enviarResumenABodega(docId, cot) {
   }
 
   const totalUnidades = piezas.reduce((n, p) => n + p.total, 0);
+  const fueraCat = piezas.filter((p) => p.fuera_catalogo);
+  const tagFc = `<span style="display:inline-block;margin-left:6px;padding:0 6px;border-radius:999px;background:#fef3c7;color:#92400e;font:600 11px Arial,sans-serif;">fuera de catálogo</span>`;
   const filas = piezas.map((p) => `
     <tr>
-      <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(p.nombre)}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #eee;">${esc(p.nombre)}${p.fuera_catalogo ? tagFc : ""}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;">${esc(p.sku || "—")}</td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;"><b>${p.total}</b></td>
       <td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right;">${p.cobro || "—"}</td>
@@ -113,10 +120,19 @@ async function enviarResumenABodega(docId, cot) {
       </table>
       <p style="margin:10px 0 0;font:13px/1.5 Arial,sans-serif;color:#6b7280;">
         Las de <b>garantía</b> no se le cobran al cliente, pero salieron de bodega igual.
-      </p>`,
+      </p>
+      ${fueraCat.length ? `
+      <div style="margin:14px 0 0;padding:10px 12px;border-left:3px solid #B45309;background:#FFFBEB;font:13px/1.5 Arial,sans-serif;">
+        <b>${fueraCat.length} pieza(s) fuera de catálogo.</b> El técnico las escribió a mano porque
+        no existen en Piezas y tarifas, así que no descontaron stock. Hay que cargarlas al
+        catálogo (nombre, número de parte y precio) para que la próxima vez se elijan de la lista:
+        <ul style="margin:6px 0 0;padding-left:18px;">
+          ${fueraCat.map((p) => `<li>${esc(p.nombre)}${p.sku ? ` <span style="font-family:monospace;">(${esc(p.sku)})</span>` : ""} — ${p.total} unidad(es)</li>`).join("")}
+        </ul>
+      </div>` : ""}`,
     ctaUrl: `${APP_BASE_URL}/ordenes/editar-orden.html?id=${encodeURIComponent(ordenId)}`,
     ctaLabel: "Ver la orden",
-    meta: { source: "onCotizacionEstadoChange", seccion: "piezas_a_bodega", ordenId, tipos: piezas.length, unidades: totalUnidades },
+    meta: { source: "onCotizacionEstadoChange", seccion: "piezas_a_bodega", ordenId, tipos: piezas.length, unidades: totalUnidades, fuera_catalogo: fueraCat.length },
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
   return true;

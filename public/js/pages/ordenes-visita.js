@@ -287,6 +287,28 @@
     const sitio = orden.visita?.sitio || '';
     const motivoLabel = (MOTIVOS.find(m => m.key === inf.motivo)?.label) || inf.motivo || '—';
 
+    // Cotizar desde el cierre (2026-09-04, petición de Solangel): la hoja de
+    // cotización a mano que el técnico llenaba en sitio se perdía entre la
+    // visita y el escritorio. Al cerrar, si marca la casilla, cae directo en
+    // el cotizador con la orden cargada; el borrador que prepara le llega al
+    // jefe de taller por correo (cotizar-orden → enqueueAprobacionMail).
+    // Marcada por defecto cuando hay piezas registradas o la visita no fue
+    // preventiva; una preventiva sin piezas normalmente no se cobra.
+    const puedeCotizar = typeof canRole === 'function'
+      && canRole(window.APP?.state?.userRole || '', 'preparar-cotizacion')
+      && !orden.cotizacion_doc_id;
+    let hayPiezas = false;
+    if (puedeCotizar) {
+      try { hayPiezas = ((await OrdenesService.getConsumos(ordenId)) || []).length > 0; }
+      catch (e) { console.warn('[abrirCierreVisita] consumos', e); }
+    }
+    const cotizarDefault = hayPiezas || (inf.motivo && inf.motivo !== 'preventivo');
+    const cotizarHtml = puedeCotizar ? `
+          <label class="form-check" style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line,#e5e7eb);border-radius:10px;background:#f8fafc;">
+            <input type="checkbox" id="cierreCotizar" ${cotizarDefault ? 'checked' : ''}>
+            <span class="form-check-label">Al cerrar, <b>preparar la cotización</b> de esta visita${hayPiezas ? ' (ya hay piezas registradas)' : ''}</span>
+          </label>` : '';
+
     const overlay = document.createElement('div');
     overlay.className = 'overlay';
     overlay.style.display = 'flex';
@@ -331,6 +353,7 @@
             <textarea class="form-input form-textarea" id="cierreSinFirmaMotivo" rows="2"
               placeholder="Ej.: no había personal de la empresa en el sitio al finalizar"></textarea>
           </div>
+          ${cotizarHtml}
         </div>
         <div class="footer" style="display:flex;justify-content:flex-end;gap:8px;padding:10px;border-top:1px solid var(--line,#eee);">
           <button class="btn btn-secondary" data-close="1">Cancelar</button>
@@ -402,9 +425,13 @@
           sinFirmaMotivo: motivo
         });
 
+        const irACotizar = !!overlay.querySelector('#cierreCotizar')?.checked;
         cleanup();
-        Toast.show('✅ Visita cerrada' + (sinFirma ? ' (sin firma, con motivo)' : ''), 'ok');
+        Toast.show('✅ Visita cerrada' + (sinFirma ? ' (sin firma, con motivo)' : '') + (irACotizar ? ' · abriendo el cotizador…' : ''), 'ok');
         // El snapshot en vivo de ordenes-data.js re-renderiza solo.
+        if (irACotizar) {
+          setTimeout(() => { location.href = 'cotizar-orden.html?id=' + encodeURIComponent(ordenId) + '&desde=visita'; }, 500);
+        }
       } catch (err) {
         console.error('[abrirCierreVisita] confirmar', err);
         Toast.show('❌ Error al cerrar la visita: ' + err.message, 'bad');

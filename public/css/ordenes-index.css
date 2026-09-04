@@ -3594,6 +3594,15 @@ tr.activo:hover { background: #f0f9ff !important; }
 .material-seleccion { margin-top: 10px; font-size: 13px; color: #1e293b; }
 .material-seleccion:empty { display: none; }
 
+/* Pieza fuera de catálogo: entrada manual cuando el catálogo no la tiene. */
+.material-fuera-cat { margin-top: 8px; }
+.material-fuera-cat > .btn { padding: 4px 8px; font-size: 12.5px; }
+.material-fuera-cat .material-detalle { margin-top: 8px; }
+.equipo-material-fc {
+  display: inline-block; padding: 0 6px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; font-size: 11px; font-weight: 600;
+}
+
 .material-detalle {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

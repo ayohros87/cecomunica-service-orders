@@ -35,7 +35,7 @@ window.CargaDiferida = (() => {
     // Solo lo necesita el cierre de una devolución con faltantes (itemizar lo
     // que el cliente no devolvió) — no tiene por qué pesar en cada orden.
     cobros:     "/js/services/cobrosEquiposService.js?v=nd1",
-    visita:     "/js/pages/ordenes-visita.js?v=f2",
+    visita:     "/js/pages/ordenes-visita.js?v=f3",
     fotos:      "/js/pages/ordenes-fotos.js?v=1",
     notas:      "/js/pages/ordenes-notas.js?v=1",
   };

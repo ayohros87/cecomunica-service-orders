@@ -15,6 +15,7 @@
   let user = null;
   let rolUsuario = null;     // rol del usuario actual (para textos/avisos)
   let orden = null;
+  let esVisita = false;      // VISITA TECNICA: el trabajo vive en informe_visita
   let equipos = [];          // [{ id, serial, modelo, nombre, intervencion }]
   let catalogos = null;      // { clientes, clientesById, ejecutivos, emisor }
   let piezas = [];           // inventario_piezas activas (catálogo + autocompletar)
@@ -295,7 +296,7 @@
         <ul class="co-consumos-list">
           ${cons.map((c, i) => `<li>
             <span class="co-cons-main">${esc(c.pieza_nombre || 'Pieza')}${c.sku ? ' · <span class="mono">' + esc(c.sku) + '</span>' : ''}</span>
-            <span class="co-cons-meta">${Number(c.qty || 0)} × ${FMT.money(c.precio_unit || 0)} <span class="co-cons-tipo tipo-${esc(c.tipo || 'cobro')}">${esc(c.tipo || 'cobro')}</span></span>
+            <span class="co-cons-meta">${Number(c.qty || 0)} × ${FMT.money(c.precio_unit || 0)} <span class="co-cons-tipo tipo-${esc(c.tipo || 'cobro')}">${esc(c.tipo || 'cobro')}</span>${c.fuera_catalogo ? ' <span class="co-cons-tipo tipo-fc" title="El técnico la escribió a mano: no está en el catálogo de piezas">fuera de catálogo</span>' : ''}</span>
             <button class="btn btn-ghost btn-icon btn-sm" data-add-cons="${esc(eq.id)}" data-cons-idx="${i}" title="Agregar a la cotización"><i data-lucide="plus"></i></button>
           </li>`).join('')}
         </ul>
@@ -629,7 +630,9 @@
       ui.validezDias = Number(form.validezDias || 15);
       ui.itbmsPct = Number(form.itbmsPct || 0);
       ui.descuentoPct = Number(form.descuentoPct || 0);
-      ui.intro = form.intro || `Cotización correspondiente a la orden de servicio ${ordenId}.`;
+      ui.intro = form.intro || (esVisita
+        ? `Cotización correspondiente a la visita técnica${orden.visita?.sitio ? ' en ' + orden.visita.sitio : ''} (orden ${ordenId}).`
+        : `Cotización correspondiente a la orden de servicio ${ordenId}.`);
       ui.items = items;
       ui.creado_por_uid = user.uid;
       ui.creado_por_email = user.email || null;
@@ -930,6 +933,31 @@
     orden = await OrdenesService.getOrder(ordenId);
     if (!orden) { Toast.show('Orden no encontrada', 'bad'); location.href = 'index.html'; return; }
     equipos = prepararEquipos(orden);
+
+    // Visita técnica (2026-09-04): el trabajo se documenta en informe_visita,
+    // no en equipos[].trabajo_tecnico, y una visita a torre/repetidor puede no
+    // tener equipos con serial. Sin esto el cotizador decía "Esta orden no
+    // tiene equipos" y no había dónde colgar una línea.
+    esVisita = /visita/i.test(String(orden.tipo_de_servicio || ''));
+    if (esVisita) {
+      const inf = orden.informe_visita || {};
+      const trabajo = String(inf.trabajo_realizado || '').trim();
+      const sitio = String(orden.visita?.sitio || '').trim();
+      equipos.forEach(eq => { if (!eq.intervencion && trabajo) eq.intervencion = trabajo; });
+      if (!equipos.length) {
+        const elementos = (Array.isArray(inf.elementos) ? inf.elementos : [])
+          .map(el => [el?.tipo, el?.detalle].filter(Boolean).join(' '))
+          .filter(Boolean);
+        equipos = [{
+          id: 'visita-sitio',
+          serial: '',
+          modelo: 'Visita técnica' + (sitio ? ' — ' + sitio : ''),
+          marca: '',
+          nombre: elementos.join(', '),
+          intervencion: trabajo,
+        }];
+      }
+    }
 
     // Piezas/accesorios que el técnico ya registró en el taller (consumos),
     // para mostrarlas y poder jalarlas a la cotización sin reescribir.
