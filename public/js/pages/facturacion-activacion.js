@@ -216,7 +216,7 @@ function filaContrato(c){
 
   let acciones='';
   if(vista==='listos'){
-    acciones = `<button class="btn btn-sm btn-primary" onclick="accion('${id}','activar')"><i data-lucide="play"></i> Activar</button>
+    acciones = `<button class="btn btn-sm btn-primary" onclick="accion('${id}','activar')" title="La app facturará este contrato por sí sola cuando exista la emisión"><i data-lucide="play"></i> Facturará la app</button>
       ${!r.entrega?`<button class="btn btn-sm btn-ghost" onclick="accion('${id}','confirmar_entrega')" title="Confirmar entrega"><i data-lucide="truck"></i></button>`:''}
       <button class="btn btn-sm btn-ghost" onclick="accion('${id}','no_facturable')" title="No factura"><i data-lucide="ban"></i></button>`;
   } else if(vista==='pendientes'){

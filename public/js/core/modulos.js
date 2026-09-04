@@ -40,7 +40,10 @@ window.MODULOS = (() => {
     vista:         ["ordenes", "poc", "firma"],
     tecnico:       ["ordenes", "poc", "firma"],
     jefe_taller:   ["ordenes", "poc", "cotizaciones", "firma"],
-    recepcion:     ["ordenes", "poc", "vendedores", "centro", "contratos", "firma"],
+    // recepcion ganó "facturacion" el 2026-09-04: quien arranca la facturación
+    // en QuickBooks es Recepción; el espacio estaba cerrado solo porque la
+    // emisión desde la app no existe. Su entrada es la Bandeja.
+    recepcion:     ["ordenes", "poc", "vendedores", "centro", "contratos", "facturacion", "firma"],
     vendedor:      ["ordenes", "vendedores", "centro", "contratos", "cotizaciones", "firma"],
     tecnico_operativo: ["ordenes", "firma"]
   };
@@ -64,7 +67,7 @@ window.MODULOS = (() => {
     { grupo: 'Almacén · finanzas', items: [
       { id: 'almacen',     label: 'Almacén',  icon: 'warehouse',  href: '/almacen/index.html' },
       { id: 'piezas',      label: 'Piezas',   icon: 'puzzle',     href: '/inventario/piezas.html' },
-      { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/inventario/modelos.html' },
+      { id: 'facturacion', label: 'Finanzas', icon: 'calculator', href: '/facturacion/bandeja.html' },
     ]},
   ];
 

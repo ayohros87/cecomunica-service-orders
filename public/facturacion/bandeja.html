@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="preconnect" href="https://www.gstatic.com">
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
+  <link rel="preload" href="/brand/fonts/ibm-plex-sans-400-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/brand/fonts/barlow-700-latin-v1.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" type="image/svg+xml" href="/brand/cecomunica-monogram.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0B2A47">
+  <meta charset="UTF-8">
+  <title>Facturación pendiente - Cecomunica</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="../css/ceco-ui.css?v=cc28">
+  <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
+  <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
+
+  <style>
+    /* Page-local — bandeja "Facturación pendiente" (propuesta 2026-09-04).
+       Convenciones de la revisión de densidad de Órdenes: sin tarjetas KPI,
+       chips con conteo, UNA voz de color por fila (el efecto sobre el cobro),
+       botones quietos. Tokens de ceco-ui.css. */
+    .fb-intro { color: var(--fg-3); font-size: 13px; margin: 0 0 var(--sp-3); }
+
+    .fb-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); }
+    .fb-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px;
+      border-radius: var(--radius-pill, 999px); border: 1px solid var(--border-default);
+      background: var(--surface-card, #fff); color: var(--fg-2); font: 500 13px/1 var(--font-body);
+      cursor: pointer; user-select: none; white-space: nowrap; }
+    .fb-chip:hover { background: var(--accent-soft); border-color: var(--accent); }
+    .fb-chip:focus-visible { outline: none; box-shadow: var(--ring-focus, 0 0 0 3px rgba(0,145,215,.30)); }
+    .fb-chip .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .fb-chip .cnt { margin-left: 2px; padding: 0 6px; height: 18px; min-width: 22px; display: inline-flex;
+      align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+      border-radius: 999px; background: rgba(0,0,0,.06); font-variant-numeric: tabular-nums; }
+    .fb-chip.active { font-weight: 600; border-width: 1.5px; color: var(--fg-1); }
+    .fb-chip--all.active { background: var(--fg-1); color: #fff; border-color: var(--fg-1); }
+    .fb-chip--arranca .dot { background: #166534; }
+    .fb-chip--cambia  .dot { background: #0369A1; }
+    .fb-chip--termina .dot { background: #9A3412; }
+    .fb-chip--espera  .dot { background: transparent; border: 2px solid var(--gray-400, #9AA7B4); width: 6px; height: 6px; }
+    .fb-chip--arranca.active { background: #F0FDF4; border-color: #166534; color: #166534; }
+    .fb-chip--cambia.active  { background: #F0F9FF; border-color: #0369A1; color: #0369A1; }
+    .fb-chip--termina.active { background: #FFF7ED; border-color: #9A3412; color: #9A3412; }
+    .fb-chip--espera.active  { background: var(--surface-sunken); border-color: var(--gray-400, #9AA7B4); color: var(--fg-2); }
+    .fb-chips .push { flex: 1; }
+    .fb-chips .form-input { height: 30px; font-size: 13px; }
+    .fb-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-3); cursor: pointer; }
+
+    .fb-rows { display: flex; flex-direction: column; gap: 6px; }
+    .fb-row { background: var(--surface-card, #fff); border: 1px solid var(--border-default); border-radius: var(--radius-md); }
+    .fb-main { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto auto auto; align-items: center;
+      gap: 12px; padding: 9px 12px; cursor: pointer; }
+    .fb-main:hover { background: #FAFCFE; }
+    .fb-row.is-open { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,145,215,.12); }
+    .fb-row.is-open .fb-main { background: #FAFCFE; }
+    .fb-row.is-cerrado .fb-main { opacity: .62; }
+    .fb-efecto { display: inline-flex; align-items: center; justify-content: center; height: 22px; padding: 0 9px;
+      border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+      border: 1px solid transparent; white-space: nowrap; }
+    .fb-efecto--arranca { background: #F0FDF4; color: #166534; border-color: #BBF7D0; }
+    .fb-efecto--cambia  { background: #F0F9FF; color: #0369A1; border-color: #BAE6FD; }
+    .fb-efecto--termina { background: #FFF7ED; color: #9A3412; border-color: #FED7AA; }
+    .fb-efecto--espera  { background: transparent; color: var(--fg-3); border-color: var(--border-default); border-style: dashed; }
+    .fb-efecto--hecho   { background: var(--surface-sunken); color: var(--fg-3); border-color: transparent; }
+    .fb-txt { min-width: 0; }
+    .fb-t1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; }
+    .fb-t1 b { font-weight: 600; color: var(--fg-1); }
+    .fb-t1 .id { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--fg-3); }
+    .fb-t1 .que { color: var(--fg-2); }
+    .fb-t2 { font-size: 12.5px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .fb-t2 .alerta { color: #991B1B; font-weight: 600; }
+    .fb-monto { font-family: var(--font-mono, monospace); font-size: 13px; color: var(--fg-2); text-align: right;
+      white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .fb-monto small { display: block; font-family: var(--font-body); font-size: 11px; color: var(--fg-4, #9AA7B4); }
+    .fb-age { font-size: 12px; color: var(--fg-3); white-space: nowrap; min-width: 44px; text-align: right; }
+    .fb-age.warn { color: #92400E; font-weight: 600; }
+    .fb-age.bad  { color: #991B1B; font-weight: 600; }
+    .fb-pasos { display: inline-flex; gap: 6px; align-items: center; }
+    .fb-paso { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border-radius: 999px;
+      border: 1px solid var(--border-default); background: var(--surface-card, #fff); font: 600 12px/1 var(--font-body);
+      color: var(--fg-2); cursor: pointer; white-space: nowrap; }
+    .fb-paso .o { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--gray-400, #9AA7B4); display: inline-block; position: relative; }
+    .fb-paso:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    .fb-paso.done { background: #F0FDF4; border-color: #BBF7D0; color: #166534; }
+    .fb-paso.done .o { border: 0; background: #166534; }
+    .fb-paso.done .o::after { content: ""; position: absolute; left: 4px; top: 1.5px; width: 3px; height: 6px;
+      border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+    .fb-paso.na { opacity: .45; cursor: default; border-style: dashed; }
+    .fb-paso.na:hover { border-color: var(--border-default); color: var(--fg-2); background: var(--surface-card, #fff); }
+    .fb-more { width: 26px; height: 26px; border-radius: 6px; border: 1px solid transparent; color: var(--fg-4, #9AA7B4);
+      display: inline-flex; align-items: center; justify-content: center; font-weight: 700; letter-spacing: .05em; }
+    .fb-main:hover .fb-more { border-color: var(--border-default); color: var(--fg-2); }
+
+    /* Popover del paso (pegado a la pastilla, sin modal) */
+    .fb-popwrap { position: relative; display: inline-block; }
+    .fb-pop { display: none; position: absolute; right: 0; top: 34px; z-index: 30; width: 300px;
+      background: var(--surface-card, #fff); border: 1px solid var(--border-default); border-radius: 8px;
+      box-shadow: 0 18px 40px rgba(6,24,41,.13), 0 6px 14px rgba(6,24,41,.07); padding: 12px 14px; text-align: left; cursor: default; }
+    .fb-pop.show { display: block; }
+    .fb-pop h6 { margin: 0 0 8px; font: 600 13.5px/1.3 var(--font-body); color: var(--fg-1); }
+    .fb-pop label { display: block; font-size: 11.5px; color: var(--fg-3); margin: 8px 0 3px; font-weight: 500; }
+    .fb-pop .form-input { height: 30px; font-size: 13px; width: 100%; }
+    .fb-pop .hint { font-size: 11.5px; color: var(--fg-3); margin-top: 4px; line-height: 1.4; }
+    .fb-pop .act { display: flex; gap: 6px; justify-content: flex-end; margin-top: 12px; }
+    .fb-pop .err { font-size: 12px; color: #991B1B; margin-top: 6px; min-height: 0; }
+
+    /* Detalle expandido */
+    .fb-det { display: none; border-top: 1px solid var(--border-subtle); padding: 14px 16px 16px 120px; background: #FBFCFD; }
+    .fb-row.is-open .fb-det { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 10px 28px; }
+    .fb-det h5 { margin: 0 0 6px; font: 600 11.5px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
+    .fb-det table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    .fb-det td, .fb-det th { padding: 5px 8px; border-bottom: 1px solid var(--border-subtle); text-align: left; }
+    .fb-det th { font-weight: 600; color: var(--fg-3); font-size: 11.5px; }
+    .fb-det td.r, .fb-det th.r { text-align: right; font-variant-numeric: tabular-nums; }
+    .fb-det .seriales { font-family: var(--font-mono, monospace); font-size: 12px; color: var(--fg-2); line-height: 1.7; word-break: break-word; }
+    .fb-det .kv { font-size: 12.5px; line-height: 1.7; color: var(--fg-2); }
+    .fb-det .links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .fb-mail { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 8px 10px; border-radius: 6px;
+      background: var(--surface-sunken); color: var(--fg-2); }
+    .fb-mail.err { background: #FEF2F2; color: #991B1B; }
+    .fb-hist { font-size: 12px; color: var(--fg-3); line-height: 1.7; }
+    .fb-hist b { color: var(--fg-2); font-weight: 600; }
+    .fb-detfoot { grid-column: 1 / -1; display: flex; gap: 6px; align-items: center; padding-top: 8px; border-top: 1px solid var(--border-subtle); }
+    .fb-detfoot .push { flex: 1; }
+    .fb-desc { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 10px 12px; border-radius: 6px; background: #FFFBEB; border: 1px solid #FDE68A; }
+    .fb-desc .t { width: 100%; font-size: 13px; font-weight: 600; color: #92400E; }
+    .fb-desc .form-input { height: 30px; font-size: 13px; }
+    .fb-desc .err { width: 100%; font-size: 12px; color: #991B1B; }
+    .fb-descartado { font-size: 12.5px; color: var(--fg-3); }
+
+    .fb-vacio { text-align: center; color: var(--fg-3); padding: var(--sp-6); }
+    .fb-vacio svg { width: 34px; height: 34px; color: #16A34A; }
+    .fb-aviso { display: flex; align-items: flex-start; gap: 8px; margin-bottom: var(--sp-3); padding: 9px 12px;
+      border-radius: var(--radius-md); font-size: 13px; background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+    .fb-sep { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); margin: 14px 0 6px; }
+    @media (max-width: 860px) {
+      .fb-main { grid-template-columns: 84px minmax(0,1fr); }
+      .fb-monto, .fb-age { display: none; }
+      .fb-pasos { grid-column: 2; justify-content: flex-end; }
+      .fb-det { padding-left: 16px; }
+      .fb-row.is-open .fb-det { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+
+  <script src="../js/ui/workspace-tabs.js?v=f2"></script>
+  <script src="../js/ui/finanzas-nav.js?v=f4"></script>
+
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-auth-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
+  <script defer src="../js/firebase-init.js?v=ses2"></script>
+  <script src="../js/core/modulos.js?v=cc15"></script>
+  <script src="../js/core/layout.js?v=cc13"></script>
+  <script src="../js/core/roles.js"></script>
+  <script src="../js/core/formatting.js"></script>
+  <script defer src="../js/services/usuariosService.js"></script>
+  <script defer src="../js/services/facturacionAvisosService.js?v=fb1"></script>
+  <script defer src="../js/ui/toast.js"></script>
+  <script defer src="../js/ui/modal.js"></script>
+  <script defer src="../js/pages/facturacion-bandeja.js?v=fb1"></script>
+  <script defer src="/js/vendor/lucide.min.js?v=3"></script>
+  <script defer src="/js/core/icons.js?v=1"></script>
+</head>
+<body>
+  <div class="cc-app">
+  <div id="rail-mount"></div>
+  <div class="cc-work">
+
+<div id="topbar-mount"></div>
+<script>
+  Layout.renderTopbarFor('index', {
+    back: { href: '../index.html', label: '<i data-lucide="arrow-left"></i> Inicio' },
+    title: '<i data-lucide="inbox"></i> Facturación pendiente',
+  });
+</script>
+
+<div class="app-wrap app-wrap--full">
+
+  <div id="wsTabs-mount"></div>
+  <script>FinanzasNav.render('bandeja'); // en el parse: la barra sale en el primer frame</script>
+  <p class="fb-intro">
+    Cada vez que un contrato, renovación, aumento, ajuste o baja se vuelve efectivo, aparece aquí (y llega el correo a activaciones@).
+    Marca <b>QBO</b> cuando lo hayas facturado en QuickBooks y <b>POC</b> cuando el servicio esté al día. Lo más viejo va arriba.
+  </p>
+
+  <div id="fbAviso" class="fb-aviso" hidden></div>
+
+  <div class="fb-chips" id="fbChips" role="tablist" aria-label="Filtrar por efecto">
+    <button type="button" class="fb-chip fb-chip--all active" data-f="all" role="tab">Pendientes <span class="cnt" data-cnt="all">0</span></button>
+    <button type="button" class="fb-chip fb-chip--arranca" data-f="arranca" role="tab"><span class="dot"></span>Arranca cobro <span class="cnt" data-cnt="arranca">0</span></button>
+    <button type="button" class="fb-chip fb-chip--cambia" data-f="cambia" role="tab"><span class="dot"></span>Cambia cobro <span class="cnt" data-cnt="cambia">0</span></button>
+    <button type="button" class="fb-chip fb-chip--termina" data-f="termina" role="tab"><span class="dot"></span>Termina cobro <span class="cnt" data-cnt="termina">0</span></button>
+    <button type="button" class="fb-chip fb-chip--espera" data-f="espera" role="tab"><span class="dot"></span>Esperando entrega <span class="cnt" data-cnt="espera">0</span></button>
+    <span class="push"></span>
+    <input type="search" id="fbBuscar" class="form-input" placeholder="Buscar cliente o contrato…" style="max-width:220px;" autocomplete="off">
+    <label class="fb-toggle"><input type="checkbox" id="fbVerHechos"> Ver hechos y descartados</label>
+  </div>
+
+  <div id="fbRows" class="fb-rows"><div class="fb-vacio">Cargando…</div></div>
+</div>
+
+  </div> <!-- /cc-work -->
+  </div> <!-- /cc-app -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => Layout.initRail('facturacion'));
+  </script>
+</body>
+</html>

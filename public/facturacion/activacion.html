@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="../css/ceco-rail.css?v=cc8">
   <link rel="stylesheet" href="../css/ws-tabs.css?v=f2">
   <script src="../js/ui/workspace-tabs.js?v=f2"></script>
-  <script src="../js/ui/finanzas-nav.js?v=f3"></script>
+  <script src="../js/ui/finanzas-nav.js?v=f4"></script>
   <link rel="stylesheet" href="../css/app-kit-extras.css">
 
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-app-compat.js"></script>
@@ -32,7 +32,7 @@
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.10.0/firebase-functions-compat.js"></script>
   <script defer src="../js/firebase-init.js?v=ses2"></script>
-  <script src="../js/core/modulos.js?v=cc14"></script>
+  <script src="../js/core/modulos.js?v=cc15"></script>
   <script src="../js/core/layout.js?v=cc13"></script>
   <script src="../js/core/roles.js"></script>
   <script src="../js/core/formatting.js"></script>
@@ -57,7 +57,7 @@
 <script>
   Layout.renderTopbarFor('index', {
     back: { href: '../inventario/modelos.html', label: '<i data-lucide="arrow-left"></i> Finanzas' },
-    title: '<i data-lucide="play-circle"></i> Activación de facturación',
+    title: '<i data-lucide="play-circle"></i> Contratos que facturará la app',
   });
 </script>
 
@@ -66,9 +66,14 @@
   <!-- Navegación del espacio Finanzas (propuesta 2026-08, E3/E4) -->
   <div id="wsTabs-mount"></div>
   <script>FinanzasNav.render('activacion'); // en el parse: la barra sale en el primer frame</script>
+  <!-- 2026-09-04: "activar" aquí NO es lo que Recepción hace en QuickBooks
+       (eso se registra en la Bandeja). Aquí se marca qué contratos facturará
+       la app por sí sola cuando exista la emisión. Textos renombrados para que
+       las dos cosas no se confundan. -->
   <p style="color:var(--fg-3); margin:0 0 var(--sp-3); font-size:13px;">
-    Requeridos para activar: <b>contrato vigente</b> + <b>mapeo QuickBooks</b>. Entrega, seriales y firmado son recomendados (no bloquean).
-    La facturación no se emite todavía — esto solo marca qué contratos están listos.
+    Esto <b>no</b> es la facturación de hoy: eso lo hace Recepción en QuickBooks y se registra en la <a href="bandeja.html">Bandeja</a>.
+    Aquí se marca qué contratos <b>facturará la app por sí sola</b> cuando la emisión esté construida (todavía no emite nada).
+    Requeridos: <b>contrato vigente</b> + <b>mapeo QuickBooks</b>. Entrega, seriales y firmado son recomendados (no bloquean).
   </p>
 
   <div id="kpis" class="fact-kpis" style="margin:0 0 var(--sp-3);"></div>

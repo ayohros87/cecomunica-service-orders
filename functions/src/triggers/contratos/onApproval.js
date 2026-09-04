@@ -260,23 +260,59 @@ const onContratoActivado = onDocumentUpdated(
     if (transitionedToActivo) {
       const conEquipo = (after.equipos || []).some(e => Number(e.cantidad || 0) > 0)
         && !after.renovacion_sin_equipo;
+      const esRenov = after.accion === "Renovación";
+      const esperando = conEquipo && after.entrega_confirmada !== true;
+      // Monto SIEMPRE desde las líneas (2026-09-04): total_mensual no existe
+      // en contratos anteriores a jun-2026 y los avisos salían sin monto.
+      const FA = require("../../lib/facturacionAvisos");
+      const m = FA.mensualDeContrato(after);
+      // Quién activó: el que subió el PDF firmado, o el cliente con firma digital.
+      let activadoPor = after.firmado_tipo === "digital" ? "firma digital del cliente" : null;
+      if (!activadoPor && after.firmado_por_uid) {
+        try {
+          const u = await db.collection("usuarios").doc(after.firmado_por_uid).get();
+          activadoPor = u.exists ? (u.data().nombre || u.data().email || null) : null;
+        } catch (e) { /* best-effort */ }
+      }
+      const contratoFecha = after.creado_en?.toDate ? after.creado_en.toDate().toISOString().slice(0, 10) : null;
       await G.avisoFacturacion({
-        subject: `FACTURACIÓN: ${after.accion === "Renovación" ? "renovación" : "contrato"} ACTIVO — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`,
-        titulo: `${after.accion === "Renovación" ? "Renovación activa" : "Contrato activo"} — alta de facturación y servicio`,
+        subject: `FACTURACIÓN: ${esRenov ? "renovación" : "contrato"} ACTIVO — ${after.cliente_nombre || "Cliente"} (${after.contrato_id || contratoId})`,
+        titulo: `${esRenov ? "Renovación activa" : "Contrato activo"} — alta de facturación y servicio`,
         cuerpo: `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;">
             El contrato <b>${escapeHtml(after.contrato_id || contratoId)}</b>
             (${escapeHtml(after.tipo_contrato || "—")} · ${escapeHtml(after.duracion || "—")}) de
             <b>${escapeHtml(after.cliente_nombre || "—")}</b> quedó <b>activo</b>${after.firmado_tipo === "digital" ? " con firma digital" : ""}.
-            ${conEquipo && after.entrega_confirmada !== true
-              ? "Lleva equipo por entregar: <b>la facturación arranca en la fecha de entrega</b> (la orden de servicio te llegará por el flujo normal)."
+            ${esperando
+              ? "Lleva equipo por entregar: <b>la facturación arranca en la fecha de entrega</b> (te avisaremos cuando se entregue)."
               : "<b>La facturación arranca de una vez</b> — no hay entrega pendiente."}</p>
-          ${G.detalleAumentoHtml({ lineas: after.equipos || [], cargos: after.cargos || [],
-            totales: { total_mensual: after.total_mensual, cargos_uni: after.cargos_unico, primer_pago: after.primer_pago } })}`,
+          ${G.detalleAumentoHtml({ lineas: after.equipos || [], cargos: after.cargos || [] })}
+          <p style="margin:8px 0 0;font:14px Arial,sans-serif;">Total mensual: <b>$${m.mensual.toFixed(2)}</b>${m.exento ? " (exento de ITBMS)" : ` · $${m.con_itbms.toFixed(2)} con ITBMS`}${m.unico > 0 ? ` · Cargos únicos: <b>$${m.unico.toFixed(2)}</b>` : ""}</p>`,
         cliente_id: after.cliente_id, cliente_nombre: after.cliente_nombre || "",
         responsable_uid: after.creado_por_uid || null,
         ctaUrl: `${APP_BASE_URL}/contratos/documento.html?id=${encodeURIComponent(contratoId)}`,
         ctaLabel: "Ver el documento del contrato",
         meta: { source: "onContratoActivado_facturacion", contrato_id: after.contrato_id || contratoId },
+        aviso: {
+          tipo: esRenov ? "renovacion_activa" : "contrato_activo",
+          origen_col: "contratos", origen_id: contratoId,
+          contrato_id: after.contrato_id || contratoId, contrato_doc_id: contratoId,
+          fecha_efectiva: esperando ? null : new Date(),
+          esperando,
+          contexto: {
+            activado_por: activadoPor, contrato_fecha: contratoFecha, duracion: after.duracion || null,
+            tipo_contrato: after.tipo_contrato || null, firmado_tipo: after.firmado_tipo || null,
+            entrega_pendiente: esperando,
+            origen_texto: `${esRenov ? "Renovación" : "Contrato"} activo${activadoPor ? ` (${activadoPor})` : ""}`,
+          },
+          resumen: {
+            equipos: FA.equiposTexto(after.equipos), equipos_n: m.equipos_n,
+            mensual: m.mensual, con_itbms: m.con_itbms, exento: m.exento, unico: m.unico,
+            delta_mensual: m.mensual,
+            seriales_count: Number(after.seriales_count || 0) + Number(after.seriales_omitidos_count || 0),
+            seriales_total: m.equipos_n,
+          },
+          detalle: { lineas: after.equipos || [], cargos: after.cargos || [] },
+        },
       });
     }
 

@@ -604,6 +604,43 @@ async function main() {
   await assertSucceeds(as("administrador").doc("inventario_piezas/pDel").delete());
   ok("inventario_piezas: precio/costo/QBO gated; stock sigue abierto; delete solo admin");
 
+  // facturacion_avisos (bandeja "Facturación pendiente", 2026-09-04): lo crea
+  // solo el servidor; recepción/admin/gerente/contabilidad marcan pasos,
+  // descartan o piden reenvío sobre campos acotados; el historial solo crece.
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await ctx.firestore().doc("facturacion_avisos/av1").set({
+      tipo: "renovacion_activa", estado: "pendiente", cliente_nombre: "X",
+      pasos: { qbo: { aplica: true, hecho: false }, poc: { aplica: true, hecho: false } },
+      historial: [{ accion: "creado" }], correo: { mail_queue_id: "m1", status: "sent" },
+    });
+  });
+  for (const r of ["vendedor", "tecnico", "inventario", "vista", "jefe_taller"]) {
+    await assertFails(as(r).doc("facturacion_avisos/av1").get());
+    await assertFails(as(r).doc("facturacion_avisos/av1").set({ estado: "hecho" }, { merge: true }));
+  }
+  ok("facturacion_avisos: vendedor/técnico/inventario/vista/jefe_taller no leen ni escriben");
+  for (const r of ["recepcion", "administrador", "gerente", "contabilidad"]) {
+    await assertSucceeds(as(r).doc("facturacion_avisos/av1").get());
+  }
+  await assertSucceeds(as("recepcion").doc("facturacion_avisos/av1").set({
+    pasos: { qbo: { aplica: true, hecho: true, por_email: "b@x" }, poc: { aplica: true, hecho: false } },
+    historial: [{ accion: "creado" }, { accion: "qbo_hecho" }],
+    updated_at: 1,
+  }, { merge: true }));
+  ok("facturacion_avisos: recepción marca un paso (campos acotados + historial crece)");
+  await assertSucceeds(as("contabilidad").doc("facturacion_avisos/av1").set({ reenvio_solicitado: { por_email: "c@x" } }, { merge: true }));
+  ok("facturacion_avisos: contabilidad puede pedir reenvío del correo");
+  await assertFails(as("recepcion").doc("facturacion_avisos/av1").set({ cliente_nombre: "otro" }, { merge: true }));
+  await assertFails(as("recepcion").doc("facturacion_avisos/av1").set({ correo: { mail_queue_id: "hack" } }, { merge: true }));
+  await assertFails(as("recepcion").doc("facturacion_avisos/av1").set({ resumen: { mensual: 1 } }, { merge: true }));
+  ok("facturacion_avisos: el navegador NO toca cliente/correo/resumen (solo el servidor)");
+  await assertFails(as("recepcion").doc("facturacion_avisos/av1").set({ historial: [] }, { merge: true }));
+  await assertFails(as("administrador").doc("facturacion_avisos/av1").set({ estado: "inventado" }, { merge: true }));
+  ok("facturacion_avisos: historial no se recorta; estado fuera del catálogo rebota");
+  await assertFails(as("administrador").doc("facturacion_avisos/nuevo").set({ tipo: "x", estado: "pendiente" }));
+  await assertFails(as("administrador").doc("facturacion_avisos/av1").delete());
+  ok("facturacion_avisos: ni admin crea ni borra desde el navegador");
+
   // contratos: descarte de la orden de programación ("no se va a crear"). Lo
   // escribe quien ve la bandeja del home — recepción/admin. Es el campo que
   // apaga el CTA "Crear orden" de la lista de contratos, así que no puede

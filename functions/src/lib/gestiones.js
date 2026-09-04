@@ -116,8 +116,10 @@ async function aprobacionesTo() {
   return configEmailTo("aprobaciones", "ventas@cecomunica.com");
 }
 
+// Devuelve el id del doc en mail_queue (la bandeja de facturación lo enlaza
+// para mostrar si el correo salió y reenviarlo si falló).
 async function encolarCorreo({ to, cc, subject, preheader, bodyContent, ctaUrl, ctaLabel, meta }) {
-  await db.collection("mail_queue").add({
+  const ref = await db.collection("mail_queue").add({
     to,
     cc: cc || null,
     subject, preheader, bodyContent,
@@ -125,6 +127,7 @@ async function encolarCorreo({ to, cc, subject, preheader, bodyContent, ctaUrl, 
     meta: { created_at: admin.firestore.FieldValue.serverTimestamp(), source: "gestiones", ...(meta || {}) },
     status: "queued",
   });
+  return ref.id;
 }
 
 function tablaHtml(headers, rows) {
@@ -443,23 +446,45 @@ async function limpiarAnulacion(gid, g) {
 // recibe EL MISMO correo de acción: QuickBooks (manual, aún sin integración),
 // POC y taller. CC: el vendedor del cliente. Cuando QBO se integre, estos
 // cinco puntos son el enchufe de la automatización.
+// 2026-09-04 (bandeja "Facturación pendiente"): el pie ya no lista acciones —
+// dice dónde se marcan. "Pasar a taller" salió: la OS llega a taller sola.
 const CHECKLIST_FACTURACION = `
   <p style="margin:14px 0 0;font:13px/1.6 Arial,sans-serif;color:#40525f;border-top:1px solid #e5e7eb;padding-top:10px;">
-    <b>Acciones de recepción:</b> actualizar <b>QuickBooks</b> (manual — aún sin integración) ·
-    activar/ajustar en <b>POC</b> cuando aplique · pasar la información a <b>taller</b> si corresponde.</p>`;
+    Marca <b>QuickBooks</b> y <b>POC</b> como hechos en la bandeja <b>Facturación pendiente</b> (Finanzas).
+    Si este aviso no aplica, descártalo ahí con el motivo.</p>`;
 
+// `aviso` (opcional): datos estructurados para crear el renglón en
+// facturacion_avisos ANTES de encolar el correo — el correo puede fallar y el
+// aviso existe igual. Ver lib/facturacionAvisos.js. Si viene, el CTA del
+// correo apunta a la fila de la bandeja (el contrato/expediente se abren desde
+// ahí) y el aviso queda enlazado al doc de mail_queue.
 async function avisoFacturacion({ subject, titulo, cuerpo, cliente_id, cliente_nombre = "",
-  responsable_uid = null, responsable_email = null, ctaUrl, ctaLabel, meta }) {
+  responsable_uid = null, responsable_email = null, ctaUrl, ctaLabel, meta, aviso = null }) {
+  let avisoId = null;
   try {
+    const cc = await vendedorEmailDeCliente(cliente_id);
+    if (aviso) {
+      try {
+        const FA = require("./facturacionAvisos");
+        const r = await FA.crearAviso({ ...aviso, cliente_id, cliente_nombre, vendedor_email: cc || null,
+          source: meta?.source || meta?.paso || null });
+        avisoId = r.id;
+      } catch (e0) { logger.error("[gestiones] facturacion_avisos no creado", { message: e0.message, subject }); }
+    }
     const { activacionesEmailTo } = require("./mailRecipients");
     const to = await activacionesEmailTo();
-    const cc = await vendedorEmailDeCliente(cliente_id);
-    await encolarCorreo({
+    const mailId = await encolarCorreo({
       to, cc: cc || null, subject,
       preheader: "Acción de facturación / servicio",
       bodyContent: `<h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#0B2A47;">${titulo}</h2>${cuerpo}${CHECKLIST_FACTURACION}`,
-      ctaUrl, ctaLabel, meta,
+      ctaUrl: avisoId ? `${APP_BASE_URL}/facturacion/bandeja.html?aviso=${encodeURIComponent(avisoId)}` : ctaUrl,
+      ctaLabel: avisoId ? "Abrir en Facturación pendiente" : ctaLabel,
+      meta: { ...(meta || {}), ...(avisoId ? { aviso_id: avisoId } : {}) },
     });
+    if (avisoId && mailId) {
+      try { await require("./facturacionAvisos").vincularCorreo(avisoId, mailId); }
+      catch (e1) { logger.warn("[gestiones] aviso sin enlace al correo", { avisoId, message: e1.message }); }
+    }
 
     // Ficha SIN vendedor asignado (2026-09-02, decisión Alberto tras el caso
     // FANLYC): el aviso salió sin CC al vendedor — se alerta a RECEPCIÓN

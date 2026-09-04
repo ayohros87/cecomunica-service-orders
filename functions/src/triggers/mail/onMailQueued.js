@@ -25,6 +25,24 @@ const { buildEmailFromBase, renderByTemplate } = require("../../domain/emailRend
  */
 
 // Refleja el resultado del envío en el acuse de la orden de DEVOLUCIÓN.
+// Espejo en la bandeja "Facturación pendiente" (2026-09-04): el aviso de
+// facturación muestra si su correo salió y ofrece reenviarlo si falló. Solo
+// el resultado TERMINAL (enviado / error), igual que el acuse. Best-effort.
+async function mirrorAvisoFacturacion(after, ok, errorMsg) {
+  const avisoId = after?.meta?.aviso_id;
+  if (!avisoId) return;
+  try {
+    await db.collection("facturacion_avisos").doc(avisoId).set({
+      correo: ok
+        ? { status: "sent", sent_at: admin.firestore.Timestamp.now(), error: null }
+        : { status: "error", error: String(errorMsg || "Fallo de envío") },
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  } catch (e) {
+    console.error("[onMailQueued] no se pudo espejar el aviso de facturación:", e);
+  }
+}
+
 async function mirrorAcuseDevolucion(after, ok, errorMsg) {
   const meta = after?.meta || {};
   if (meta.source !== "acuse-devolucion" || !meta.orden_id || !meta.acuse_id) return;
@@ -126,6 +144,7 @@ module.exports = onDocumentWritten(
         error:    admin.firestore.FieldValue.delete(),
       });
       await mirrorAcuseDevolucion(after, true, null);
+      await mirrorAvisoFacturacion(after, true, null);
     } catch (err) {
       console.error("Error enviando correo encolado:", err);
 
@@ -155,6 +174,7 @@ module.exports = onDocumentWritten(
       // Solo el fallo TERMINAL se espeja: un transitorio en reintento aún
       // puede terminar en 'enviado'.
       await mirrorAcuseDevolucion(after, false, err?.message || err);
+      await mirrorAvisoFacturacion(after, false, err?.message || err);
     }
   }
 );

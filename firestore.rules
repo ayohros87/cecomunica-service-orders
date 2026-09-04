@@ -745,6 +745,32 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── Facturación pendiente (bandeja de Recepción, 2026-09-04) ──
+    // Un doc por momento que cambia lo que se cobra (contrato activo, aumento
+    // entregado, baja aprobada…). Lo CREA solo el servidor (lib/facturacionAvisos
+    // en el mismo embudo que encola el correo). El navegador únicamente marca
+    // pasos (QBO/POC), descarta con motivo, reactiva o pide reenviar el correo:
+    // campos acotados, historial que solo crece, nada se borra. Roles: los que
+    // facturan a mano en QuickBooks (recepción) + quienes supervisan.
+    match /facturacion_avisos/{docId} {
+      function rolBandejaFact() {
+        return isSignedIn() && userRole() in ["administrador", "recepcion", "gerente", "contabilidad"];
+      }
+      function avisoHistorialSoloCrece() {
+        return resource.data.get("historial", []).size()
+            <= request.resource.data.get("historial", []).size();
+      }
+      allow read:   if rolBandejaFact();
+      allow create: if false;
+      allow update: if rolBandejaFact()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["pasos", "estado", "descarte", "historial", "reenvio_solicitado",
+                       "updated_at", "por_uid", "por_email"])
+        && request.resource.data.estado in ["esperando", "pendiente", "hecho", "descartado"]
+        && avisoHistorialSoloCrece();
+      allow delete: if false;
+    }
+
     // Modelos: catálogo + tarifas de facturación (info sensible). Lectura para
     // cualquier autenticado (inventario cuenta stock, contratos eligen modelo).
     // Escritura SOLO admin/contabilidad (modelo-de-radio.html ya es admin-only).

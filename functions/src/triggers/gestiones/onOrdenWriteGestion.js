@@ -215,6 +215,18 @@ module.exports = onDocumentWritten(
                 responsable_uid: g.responsable_uid || null, responsable_email: g.responsable_email || null,
                 ctaUrl: G.urlGestion(g, gid), ctaLabel: "Ver el expediente",
                 meta: { gestion_id: gid, paso: "facturacion_aumento_entrega", orden: ordenId },
+                aviso: {
+                  tipo: "aumento_entregado", origen_col: "gestiones", origen_id: gid, gestion_id: gid, orden_id: ordenId,
+                  contrato_id: a.contrato_id || null, contrato_doc_id: a.contrato_doc_id || null,
+                  fecha_efectiva: new Date(),
+                  contexto: { duracion_meses: meses, orden: ordenId, origen_texto: `Aumento entregado con la OS ${ordenId}` },
+                  resumen: { equipos: require("../../lib/facturacionAvisos").equiposTexto(a.lineas),
+                    equipos_n: (a.lineas || []).reduce((s, l) => s + Number(l.cantidad || 0), 0),
+                    mensual: a.totales?.total_mensual ?? null, delta_mensual: a.totales?.total_mensual ?? null,
+                    unico: a.totales?.cargos_uni ?? null,
+                    seriales: (a.seriales_asignados || []).map(s => s.serial).filter(Boolean) },
+                  detalle: { lineas: a.lineas || [], cargos: a.cargos || [], ajustes_precio: a.ajustes_precio || [] },
+                },
               });
             } catch (e) {
               logger.warn("[onOrdenWriteGestion] vigencia del tramo no estampada", { gid, message: e.message });
@@ -330,6 +342,19 @@ module.exports = onDocumentWritten(
                   responsable_uid: g.responsable_uid || null, responsable_email: g.responsable_email || null,
                   ctaUrl: G.urlGestion(g, gid), ctaLabel: "Ver el expediente",
                   meta: { gestion_id: gid, paso: "facturacion_terminacion", contrato: c.contrato_id || cDocId },
+                  aviso: {
+                    tipo: "terminacion_completada", origen_col: "gestiones", origen_id: `${gid}__${cDocId}`,
+                    gestion_id: gid, orden_id: ordenId,
+                    contrato_id: c.contrato_id || null, contrato_doc_id: cDocId,
+                    fecha_efectiva: new Date(),
+                    contexto: { orden: ordenId, origenes_cerrados: origCerrados || 0, propios_sueltos: sueltos || 0,
+                      origen_texto: `Terminación total completada (devolución ${ordenId})` },
+                    resumen: { equipos: require("../../lib/facturacionAvisos").equiposTexto(c.equipos),
+                      equipos_n: (c.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0),
+                      mensual: require("../../lib/facturacionAvisos").mensualDeContrato(c).mensual,
+                      delta_mensual: -require("../../lib/facturacionAvisos").mensualDeContrato(c).mensual },
+                    detalle: { lineas: c.equipos || [], cargos: c.cargos || [] },
+                  },
                 });
               } catch (e2) {
                 logger.error("[onOrdenWriteGestion] terminación total falló", { gid, contrato: cDocId, message: e2.message });

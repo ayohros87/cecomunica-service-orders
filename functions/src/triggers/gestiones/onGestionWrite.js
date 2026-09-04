@@ -465,6 +465,23 @@ module.exports = onDocumentWritten(
           responsable_uid: gB.responsable_uid || null, responsable_email: gB.responsable_email || null,
           ctaUrl: G.urlGestion(gB, gid), ctaLabel: "Ver el expediente",
           meta: { gestion_id: gid, paso: "facturacion_baja" },
+          aviso: (() => {
+            const items = gB.items || [];
+            const finTxt = gB.fecha_fin_facturacion ? String(gB.fecha_fin_facturacion) : null;
+            const fin = finTxt && /^\d{4}-\d{2}-\d{2}/.test(finTxt) ? new Date(`${finTxt.slice(0, 10)}T12:00:00-05:00`) : null;
+            const contratos = [...new Set(items.map(it => it.contrato_id).filter(Boolean))];
+            return {
+              tipo: "baja_aprobada", origen_col: "gestiones", origen_id: gid, gestion_id: gid,
+              contrato_id: contratos.join(", ") || null,
+              fecha_efectiva: fin && !isNaN(fin) ? fin : new Date(),
+              contexto: { terminacion_total: !!gB.terminacion_total_de?.length, fecha_fin_texto: finTxt,
+                liquidacion: gB.penalidad_estimada?.total ?? null,
+                origen_texto: gB.terminacion_total_de?.length ? "Terminación total aprobada" : "Baja parcial aprobada" },
+              resumen: { equipos_n: items.length, seriales: items.map(it => it.serial_saliente || it.serial).filter(Boolean),
+                equipos: items.map(it => it.modelo).filter(Boolean).join(", "), delta_mensual: null },
+              detalle: { items },
+            };
+          })(),
         });
 
         const { crearOrdenDevolucion } = require("../../lib/ordenDevolucion");
@@ -768,6 +785,16 @@ module.exports = onDocumentWritten(
               responsable_uid: gA.responsable_uid || null, responsable_email: gA.responsable_email || null,
               ctaUrl: G.urlGestion(gA, gid), ctaLabel: "Ver el expediente",
               meta: { gestion_id: gid, paso: "facturacion_regularizacion" },
+              aviso: {
+                tipo: "regularizacion", origen_col: "gestiones", origen_id: gid, gestion_id: gid,
+                contrato_id: a.contrato_id || null, contrato_doc_id: a.contrato_doc_id || null,
+                fecha_efectiva: new Date(),
+                contexto: { duracion_meses: a.duracion_meses || null, origen_texto: "Regularización firmada" },
+                resumen: { equipos: require("../../lib/facturacionAvisos").equiposTexto(a.lineas),
+                  equipos_n: amarrados, mensual: a.totales?.total_mensual ?? null, delta_mensual: a.totales?.total_mensual ?? null,
+                  seriales: (a.regulariza_seriales || []).map(s => s.serial).filter(Boolean) },
+                detalle: { lineas: a.lineas || [], cargos: a.cargos || [], ajustes_precio: a.ajustes_precio || [] },
+              },
             });
           } else if (esAjuste) {
             // Estampar el servicio EN CADA SERIAL marcado (pool.servicios[]):
@@ -813,6 +840,16 @@ module.exports = onDocumentWritten(
               responsable_uid: gA.responsable_uid || null, responsable_email: gA.responsable_email || null,
               ctaUrl: G.urlGestion(gA, gid), ctaLabel: "Ver el expediente",
               meta: { gestion_id: gid, paso: "facturacion_ajuste" },
+              aviso: {
+                tipo: "ajuste_tarifa", origen_col: "gestiones", origen_id: gid, gestion_id: gid,
+                contrato_id: a.contrato_id || null, contrato_doc_id: a.contrato_doc_id || null,
+                fecha_efectiva: new Date(),
+                contexto: { origen_texto: "Ajuste de tarifa / servicios firmado", servicios_estampados: estampados },
+                resumen: { equipos: (a.ajustes_precio || []).map(x => x.modelo).filter(Boolean).join(", "),
+                  mensual: a.totales?.total_mensual ?? null, delta_mensual: a.totales?.total_mensual ?? null,
+                  seriales: [...new Set((a.cargos || []).flatMap(cg => cg.seriales || []))] },
+                detalle: { lineas: a.lineas || [], cargos: a.cargos || [], ajustes_precio: a.ajustes_precio || [] },
+              },
             });
           } else {
             // Si la OS ya salió durante la firma (pre-asignación 2026-09-03),
