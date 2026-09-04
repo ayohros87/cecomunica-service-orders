@@ -112,3 +112,11 @@ test("sin plan por serial, soloDeclaradas no cambia la regla clásica", () => {
   assert.equal(r.reclamar.length, 1);
   assert.deepEqual(r.noTienen, []);
 });
+
+test("reemplazo por OTRO modelo se parea con un entrante de ESE modelo, no del de la saliente", () => {
+  const plan = planSerial([{ serial: "A1", serial_norm: "A1", destino: "reemplaza", reemplazo_modelo_id: "m3", reemplazo_modelo: "KENWOOD TK-3000" }]);
+  const entrantes = [u("N1", "HYTERA PNC360S"), u("N2", "KENWOOD TK-3000", { modelo_id: "m3" })];
+  const r = decidirSalientes(plan, [u("A1", "HYTERA PNC360S")], entrantes);
+  assert.equal(r.reclamar.length, 1);
+  assert.equal(r.reclamar[0].entrante.serial, "N2");
+});

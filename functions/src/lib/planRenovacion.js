@@ -115,6 +115,9 @@ async function aplicarPlanRenovacion(contratoRef, contrato, cid, { motivo = "apr
         cliente_nombre: contrato.cliente_nombre || "",
         source: SOURCE,
         fuente_plan: u.fuente || null,
+        // Refurbished por serial (2026-09-04): viaja con la fila para que el
+        // correo a activaciones y la ficha lo muestren por radio.
+        ...(u.refurbished === true ? { refurbished: true } : {}),
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         created_by: `trigger:${SOURCE}`,
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -178,4 +181,26 @@ function serialesExcluidosPorPlan(plan) {
   return set;
 }
 
-module.exports = { SOURCE, hashPlan, decidirAplicacion, aplicarPlanRenovacion, serialesExcluidosPorPlan };
+// Reemplazos declarados (2026-09-04): una renovación "sin equipo" con
+// reemplazos SÍ pide seriales a bodega y SÍ espera entrega — solo de los
+// reemplazos. Agrupa por el modelo ENTRANTE (reemplazo_modelo o el propio).
+function reemplazosPorModelo(plan) {
+  const out = new Map();
+  if (!plan || plan.nivel !== "serial") return [];
+  for (const u of (plan.unidades || [])) {
+    if (u.destino !== "reemplaza") continue;
+    const modelo_id = u.reemplazo_modelo_id || (u.reemplazo_modelo ? null : (u.modelo_id || null));
+    const modelo = u.reemplazo_modelo || u.modelo || "";
+    const k = modelo_id || modelo.toUpperCase();
+    const cur = out.get(k) || { modelo_id, modelo, cantidad: 0, otro_modelo: !!(u.reemplazo_modelo_id || u.reemplazo_modelo) };
+    cur.cantidad++;
+    out.set(k, cur);
+  }
+  return [...out.values()];
+}
+function planTieneReemplazos(plan) {
+  return reemplazosPorModelo(plan).length > 0;
+}
+
+module.exports = { SOURCE, hashPlan, decidirAplicacion, aplicarPlanRenovacion, serialesExcluidosPorPlan,
+  reemplazosPorModelo, planTieneReemplazos };

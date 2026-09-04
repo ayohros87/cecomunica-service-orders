@@ -26,7 +26,7 @@ const logger = require("firebase-functions/logger");
 const { admin, db } = require("../../lib/admin");
 const pool = require("../../domain/equiposPool");
 const { planAmarre } = require("../../lib/regularizacion");
-const { serialesExcluidosPorPlan } = require("../../lib/planRenovacion");
+const { serialesExcluidosPorPlan, planTieneReemplazos } = require("../../lib/planRenovacion");
 
 const SOURCE = "regularizacion_renovacion";
 
@@ -41,8 +41,11 @@ module.exports = onDocumentUpdated(
     if (after.regularizacion?.at) return null;   // ya corrió
 
     const entregaFlip = before.entrega_confirmada !== true && after.entrega_confirmada === true;
+    // Con REEMPLAZOS declarados en el plan (2026-09-04) sí hay entrega física
+    // (la de los reemplazos): la señal llega con la orden, no con la activación.
     const activoSinEquipo = before.estado !== "activo" && after.estado === "activo"
-      && after.renovacion_sin_equipo === true && after.entrega_confirmada !== true;
+      && after.renovacion_sin_equipo === true && after.entrega_confirmada !== true
+      && !planTieneReemplazos(after.transicion_plan);
 
     // Renovación sin equipo: no habrá entrega física — la activación ES la
     // señal. Se estampa la entrega y el write re-dispara la cadena completa.

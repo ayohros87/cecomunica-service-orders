@@ -108,6 +108,46 @@ test("conciliarLineas cuenta los 'continúa' por línea (modelo + modalidad) y r
     { modelo_id: "m1", modelo: "HYTERA PNC360S-R", cantidad: 1, modalidad: "propio" },
   ];
   const r = P.conciliarLineas(plan, lineas);
-  assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 2 }, { idx: 1, continuan: 1 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(r.porLinea)), [{ idx: 0, continuan: 2, reemplazan: 0 }, { idx: 1, continuan: 1, reemplazan: 0 }]);
   assert.deepEqual(JSON.parse(JSON.stringify(r.sinLinea.map(u => u.serial))), ["X1"]);
+});
+
+// ── 2026-09-04 (2): reemplazo por OTRO modelo, refurbished por serial, modalidad derivada ──
+test("reemplaza por otro modelo y refurbished por serial viajan en la unidad; la conciliación cuenta el reemplazo en la línea del modelo ENTRANTE", () => {
+  const P = cargar();
+  const plan = P.construirSerial([
+    { serial: "A1", modelo: "HYTERA PNC360S", destino: "continua", refurbished: true },
+    { serial: "A2", modelo: "HYTERA PNC360S", destino: "reemplaza" },
+    { serial: "A3", modelo: "HYTERA PNC360S", destino: "reemplaza", reemplazo_modelo_id: "m3", reemplazo_modelo: "KENWOOD TK-3000" },
+    { serial: "A4", modelo: "HYTERA PNC360S", destino: "devuelve", refurbished: true },  // refurbished solo aplica a continúa
+  ], []);
+  assert.equal(plan.unidades[0].refurbished, true);
+  assert.equal("refurbished" in plan.unidades[3], false);
+  assert.equal(plan.unidades[2].reemplazo_modelo_id, "m3");
+  assert.equal("reemplazo_modelo_id" in plan.unidades[1], false);
+  assert.match(P.resumen(plan), /2 se reemplazan \(1 por otro modelo\)/);
+  const lineas = [
+    { modelo_id: "x7", modelo: "HYTERA PNC360S-R", cantidad: 2 },
+    { modelo_id: "m3", modelo: "KENWOOD TK-3000", cantidad: 1 },
+  ];
+  const r = JSON.parse(JSON.stringify(P.conciliarLineas(plan, lineas)));
+  assert.deepEqual(r.porLinea, [{ idx: 0, continuan: 1, reemplazan: 1 }, { idx: 1, continuan: 0, reemplazan: 1 }]);
+  assert.equal(r.sinLinea.length, 0);
+  assert.equal(P.tieneReemplazos(plan), true);
+});
+
+test("derivarModalidad: sin equipo solo cuando no hay reemplazos ni unidades de más; refurbished si algún continúa lo marca", () => {
+  const P = cargar();
+  const soloContinuan = P.construirSerial([
+    { serial: "A1", modelo: "P", destino: "continua", refurbished: true },
+    { serial: "A2", modelo: "P", destino: "no_tiene" },
+  ], []);
+  let m = P.derivarModalidad(soloContinuan, [{ modelo: "P", cantidad: 1 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(m)), { sin_equipo: true, refurbished: true, refurbished_n: 1, reemplazos: 0, continuan: 1, nuevos: 0 });
+  m = P.derivarModalidad(soloContinuan, [{ modelo: "P", cantidad: 3 }]);
+  assert.equal(m.sin_equipo, false); assert.equal(m.nuevos, 2);
+  const conReemplazo = P.construirSerial([{ serial: "A1", modelo: "P", destino: "reemplaza" }], []);
+  m = P.derivarModalidad(conReemplazo, [{ modelo: "P", cantidad: 1 }]);
+  assert.equal(m.sin_equipo, false); assert.equal(m.reemplazos, 1); assert.equal(m.refurbished, false);
+  assert.equal(P.derivarModalidad(null, []).sin_equipo, true);
 });

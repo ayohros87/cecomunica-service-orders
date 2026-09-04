@@ -82,6 +82,14 @@ window.TransicionPlan = {
       modelo_id: u.modelo_id || null,
       modelo: u.modelo || '',
       destino: this.DESTINOS.includes(u.destino) ? u.destino : 'devuelve',
+      // 'reemplaza' POR QUÉ (2026-09-04, pedido de Alberto): por uno nuevo
+      // del MISMO modelo (sin campos) o por OTRO modelo del catálogo — el
+      // entrante que bodega asigna y con el que se parea el linaje.
+      ...(u.destino === 'reemplaza' && (u.reemplazo_modelo_id || u.reemplazo_modelo)
+        ? { reemplazo_modelo_id: u.reemplazo_modelo_id || null, reemplazo_modelo: u.reemplazo_modelo || '' } : {}),
+      // Refurbished POR SERIAL (2026-09-04): batería/antena/clip/piezas para
+      // ese radio que continúa. Reemplaza al check global de la renovación.
+      ...(u.destino === 'continua' && u.refurbished === true ? { refurbished: true } : {}),
       ...(this.FUENTES.includes(u.fuente) ? { fuente: u.fuente } : {}),
       // Modalidad de la línea a la que pertenece (SERV mixto): 'propio' si
       // el equipo es del cliente, 'alquiler' si es de CECOMUNICA.
@@ -122,7 +130,7 @@ window.TransicionPlan = {
     }
     if (p.nivel === 'serial') {
       const malo = (p.unidades || []).find(u => !this.DESTINOS.includes(u.destino));
-      if (malo) return { ok: false, mensaje: `El serial ${malo.serial || '?'} quedó sin destino — elige continúa, se devuelve o se reemplaza.` };
+      if (malo) return { ok: false, mensaje: `El serial ${malo.serial || '?'} quedó sin destino — elige continúa, se devuelve, se reemplaza o "el cliente no lo tiene".` };
       return { ok: true };
     }
     for (const f of (p.por_modelo || [])) {
@@ -146,9 +154,10 @@ window.TransicionPlan = {
       t.no_tienen += Number(f.no_tienen || 0);
     }
     const agregados = (p.unidades || []).filter(u => u.fuente === 'agregado').length;
+    const otroModelo = (p.unidades || []).filter(u => u.destino === 'reemplaza' && (u.reemplazo_modelo_id || u.reemplazo_modelo)).length;
     const partes = [];
     if (t.continuan) partes.push(`${t.continuan} continúa${t.continuan === 1 ? '' : 'n'}${agregados ? ` (${agregados} agregado${agregados === 1 ? '' : 's'} por el vendedor)` : ''}`);
-    if (t.reemplazan) partes.push(`${t.reemplazan} se reemplaza${t.reemplazan === 1 ? '' : 'n'}`);
+    if (t.reemplazan) partes.push(`${t.reemplazan} se reemplaza${t.reemplazan === 1 ? '' : 'n'}${otroModelo ? ` (${otroModelo} por otro modelo)` : ''}`);
     if (t.devuelven) partes.push(`${t.devuelven} se devuelve${t.devuelven === 1 ? '' : 'n'}`);
     if (t.no_tienen) partes.push(`${t.no_tienen} no ${t.no_tienen === 1 ? 'lo' : 'los'} tiene el cliente (se sueltan de la cuenta)`);
     if (!partes.length) return 'Sin unidades en el plan';
@@ -159,7 +168,10 @@ window.TransicionPlan = {
   // Cuenta cuántas unidades 'continua' del plan caen en cada línea del
   // contrato (mismo modelo — id exacto o texto tolerante al sufijo -R — y
   // misma modalidad; una línea sin modalidad es legacy y acepta ambas).
-  // Devuelve { porLinea: [{ idx, continuan }], sinLinea: [unidad] }.
+  // Devuelve { porLinea: [{ idx, continuan, reemplazan }], sinLinea: [unidad] }.
+  // Los 'reemplaza' cuentan en la línea del modelo ENTRANTE (el declarado en
+  // reemplazo_modelo o, si es por uno nuevo igual, el propio): la línea debe
+  // cubrir continúan + reemplazos, porque ambos son radios facturados.
   // Lo usa el wizard del Centro para avisar "la línea dice 24 y solo
   // continúan 22" y para el botón "Cuadrar cantidades".
   _claveModelo(s) {
@@ -178,16 +190,49 @@ window.TransicionPlan = {
   },
   conciliarLineas(plan, lineas) {
     const ls = Array.isArray(lineas) ? lineas : [];
-    const porLinea = ls.map((_, idx) => ({ idx, continuan: 0 }));
+    const porLinea = ls.map((_, idx) => ({ idx, continuan: 0, reemplazan: 0 }));
     const sinLinea = [];
     for (const u of ((plan && plan.unidades) || [])) {
-      if (u.destino !== 'continua') continue;
+      if (u.destino !== 'continua' && u.destino !== 'reemplaza') continue;
+      // El reemplazo se busca por el modelo ENTRANTE.
+      const q = (u.destino === 'reemplaza' && (u.reemplazo_modelo_id || u.reemplazo_modelo))
+        ? { modelo_id: u.reemplazo_modelo_id || null, modelo: u.reemplazo_modelo || '', modalidad: u.modalidad }
+        : u;
       // Exacto por modelo_id primero; luego el tolerante por texto.
-      let idx = ls.findIndex(l => (l.modalidad || 'alquiler') === (u.modalidad || 'alquiler') && u.modelo_id && l.modelo_id && u.modelo_id === l.modelo_id);
-      if (idx < 0) idx = ls.findIndex(l => this._mismaLinea(u, l));
+      let idx = ls.findIndex(l => (l.modalidad || 'alquiler') === (q.modalidad || 'alquiler') && q.modelo_id && l.modelo_id && q.modelo_id === l.modelo_id);
+      if (idx < 0) idx = ls.findIndex(l => this._mismaLinea(q, l));
       if (idx < 0) { sinLinea.push(u); continue; }
-      porLinea[idx].continuan++;
+      if (u.destino === 'continua') porLinea[idx].continuan++; else porLinea[idx].reemplazan++;
     }
     return { porLinea, sinLinea };
+  },
+
+  // ¿El plan declara reemplazos? Una renovación "sin equipo" con reemplazos
+  // SÍ tiene equipo por asignar y entregar (solo el de los reemplazos).
+  tieneReemplazos(plan) {
+    return !!(plan && plan.nivel === 'serial' && (plan.unidades || []).some(u => u.destino === 'reemplaza'));
+  },
+
+  // Modalidad de la renovación DERIVADA del plan (2026-09-04, Alberto: "las
+  // opciones de arriba se vuelven nulas — esto se maneja a nivel de serial").
+  // Ya no se pregunta "¿sin equipo?" ni "¿refurbished?": se deducen.
+  //   · sin_equipo  — no hay reemplazos y las líneas no traen más unidades
+  //                   que los seriales que continúan (nada físico que entregar).
+  //   · refurbished — algún serial que continúa lleva refurbished marcado.
+  //   · nuevos      — unidades de las líneas por encima de continúan+reemplazan
+  //                   (venta nueva dentro de la renovación).
+  derivarModalidad(plan, lineas) {
+    const us = (plan && plan.unidades) || [];
+    const reemplazos = us.filter(u => u.destino === 'reemplaza').length;
+    const continuan = us.filter(u => u.destino === 'continua').length;
+    const refurbished = us.filter(u => u.destino === 'continua' && u.refurbished === true).length;
+    const totalLineas = (lineas || []).reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+    const nuevos = Math.max(0, totalLineas - continuan - reemplazos);
+    return {
+      sin_equipo: reemplazos === 0 && nuevos === 0,
+      refurbished: refurbished > 0,
+      refurbished_n: refurbished,
+      reemplazos, continuan, nuevos,
+    };
   },
 };

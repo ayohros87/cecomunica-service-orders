@@ -43,6 +43,17 @@
 >   custodia. `no_tiene` nunca se reclama.
 > - Aprobación (contratos/index.html) muestra el plan declarado (chips por
 >   destino, agregados marcados) también en renovación sin equipo.
+> - **Ajuste del mismo día (Alberto)**: "se reemplaza" está siempre y
+>   pregunta POR QUÉ — uno nuevo del mismo modelo u OTRO modelo del
+>   catálogo (`reemplazo_modelo_id`; bodega asigna el entrante y el pareo
+>   del linaje usa ese modelo). El **destino es obligatorio** en cada
+>   serial (arranca en "— elige —"; sin cuenta hay que confirmarlo).
+>   **Refurbished por serial** (`refurbished` en la unidad y en la fila).
+>   Las casillas "renovación sin equipo" y "refurbished" del wizard
+>   desaparecen: se DERIVAN del plan (`TransicionPlan.derivarModalidad`) —
+>   sin equipo = sin reemplazos ni unidades de más en las líneas. Una
+>   renovación sin equipo con reemplazos sí pide a bodega los seriales de
+>   los reemplazos y espera su entrega.
 
 ## [Arranque rápido: por qué demoraba entrar a los módulos] — 2026-08-13
 

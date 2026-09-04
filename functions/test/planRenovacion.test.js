@@ -60,3 +60,20 @@ test("serialesExcluidosPorPlan: todo lo que no continúa queda fuera del amarre 
   assert.deepEqual([...s].sort(), ["A2", "A3", "A4"]);
   assert.equal(serialesExcluidosPorPlan(null).size, 0);
 });
+
+test("reemplazosPorModelo agrupa por el modelo ENTRANTE y marca los de otro modelo", () => {
+  const { reemplazosPorModelo, planTieneReemplazos } = require("../src/lib/planRenovacion");
+  const p = plan([
+    { serial: "A1", serial_norm: "A1", modelo_id: "m2", modelo: "HYTERA PNC360S", destino: "reemplaza" },
+    { serial: "A2", serial_norm: "A2", modelo_id: "m2", modelo: "HYTERA PNC360S", destino: "reemplaza" },
+    { serial: "A3", serial_norm: "A3", modelo_id: "m2", modelo: "HYTERA PNC360S", destino: "reemplaza", reemplazo_modelo_id: "m3", reemplazo_modelo: "KENWOOD TK-3000" },
+    { serial: "A4", serial_norm: "A4", modelo_id: "m2", modelo: "HYTERA PNC360S", destino: "continua" },
+  ]);
+  const r = reemplazosPorModelo(p);
+  assert.deepEqual(r, [
+    { modelo_id: "m2", modelo: "HYTERA PNC360S", cantidad: 2, otro_modelo: false },
+    { modelo_id: "m3", modelo: "KENWOOD TK-3000", cantidad: 1, otro_modelo: true },
+  ]);
+  assert.equal(planTieneReemplazos(p), true);
+  assert.equal(planTieneReemplazos(plan([U("A1", "continua")])), false);
+});

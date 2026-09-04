@@ -54,7 +54,10 @@ window.ContratoTarifario = {
     const cli      = d.cliente || {};
     const esRenov  = d.accion === 'Renovación';
     const sinEq    = esRenov && !!d.renovacion_sin_equipo;
-    const refurb   = esRenov && sinEq && !!d.renovacion_refurbished_componentes;
+    // Refurbished ya no depende de "sin equipo" (2026-09-04): se marca por
+    // serial en el plan y aplica a los radios que continúan, haya o no
+    // reemplazos/radios nuevos en la misma renovación.
+    const refurb   = esRenov && !!d.renovacion_refurbished_componentes;
     const equipos  = (d.equipos || []).map(e => ({
       modelo_id: e.modelo_id || '',
       modelo: e.modelo || '',

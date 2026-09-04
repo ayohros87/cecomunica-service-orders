@@ -65,10 +65,10 @@ function decidirSalientes(plan, unidadesOrigen, entrantesNuevo, opts = {}) {
     return { reclamar: alquiler.map((u) => ({ unidad: u, entrante: null })), continuan: [], noTienen: [] };
   }
 
-  const destinoDe = new Map();
+  const planDe = new Map();
   for (const u of plan.unidades) {
     const k = norm(u.serial_norm || u.serial);
-    if (k) destinoDe.set(k, u.destino);
+    if (k) planDe.set(k, u);
   }
   const fueraDelPlan = opts.soloDeclaradas ? "continua" : "devuelve";
 
@@ -77,20 +77,26 @@ function decidirSalientes(plan, unidadesOrigen, entrantesNuevo, opts = {}) {
   const aParear = [];
   const reclamar = [];
   for (const u of alquiler) {
-    const destino = destinoDe.get(norm(u.serial_norm || u.serial)) || fueraDelPlan;
+    const pu = planDe.get(norm(u.serial_norm || u.serial));
+    const destino = (pu && pu.destino) || fueraDelPlan;
     if (destino === "continua") { continuan.push(u); continue; }
     if (destino === "no_tiene") { noTienen.push(u); continue; }
-    if (destino === "reemplaza") { aParear.push(u); continue; }
+    if (destino === "reemplaza") { aParear.push({ u, pu }); continue; }
     reclamar.push({ unidad: u, entrante: null });
   }
 
   // Pareo FIFO por modelo: cada 'reemplaza' toma el primer entrante libre del
-  // mismo modelo. El orden estable (serial) hace el resultado reproducible.
+  // modelo ENTRANTE — el declarado en el plan (reemplazo por OTRO modelo,
+  // 2026-09-04) o, si no, el mismo de la saliente. El orden estable (serial)
+  // hace el resultado reproducible.
   const libres = [...(entrantesNuevo || [])]
     .sort((a, b) => String(a.serial || a.serial_norm || "").localeCompare(String(b.serial || b.serial_norm || "")));
   const usados = new Set();
-  for (const u of aParear.sort((a, b) => String(a.serial || "").localeCompare(String(b.serial || "")))) {
-    const ent = libres.find((e) => !usados.has(e.id) && _mismoModelo(u, e));
+  for (const { u, pu } of aParear.sort((a, b) => String(a.u.serial || "").localeCompare(String(b.u.serial || "")))) {
+    const objetivo = (pu && (pu.reemplazo_modelo_id || pu.reemplazo_modelo))
+      ? { modelo_id: pu.reemplazo_modelo_id || null, modelo_label: pu.reemplazo_modelo || "" }
+      : u;
+    const ent = libres.find((e) => !usados.has(e.id) && _mismoModelo(objetivo, e));
     if (ent) usados.add(ent.id);
     reclamar.push({ unidad: u, entrante: ent || null });
   }

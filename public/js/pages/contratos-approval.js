@@ -284,7 +284,8 @@ window.ContratosAprobacion = {
       // sin equipo) el contrato va directo a activaciones.
       const totalUnidades = (c.equipos || []).reduce((s, e) => s + Number(e.cantidad || 0), 0);
       const unidades = Math.max(0, totalUnidades - Number(c.baja_cancelado_total || 0));
-      const sinSeriales = unidades <= 0 || (c.accion === 'Renovación' && !!c.renovacion_sin_equipo);
+      const conReemplazos = !!(window.TransicionPlan?.tieneReemplazos?.(c.transicion_plan));
+      const sinSeriales = unidades <= 0 || (c.accion === 'Renovación' && !!c.renovacion_sin_equipo && !conReemplazos);
 
       this.cancelar();
       Toast.show(sinSeriales

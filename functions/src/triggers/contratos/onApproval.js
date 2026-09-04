@@ -10,7 +10,7 @@ const { APP_BASE_URL, inventarioEmailTo } = require("../../lib/inventario");
 const { activacionesEmailTo, ccContratoAprobado } = require("../../lib/mailRecipients");
 const vigencia = require("../../lib/vigencia");
 const { planAmarre } = require("../../lib/regularizacion");
-const { aplicarPlanRenovacion, serialesExcluidosPorPlan } = require("../../lib/planRenovacion");
+const { aplicarPlanRenovacion, serialesExcluidosPorPlan, reemplazosPorModelo } = require("../../lib/planRenovacion");
 const { esDocumentoV2 } = require("../../lib/documentoContrato");
 const poolDom = require("../../domain/equiposPool");
 const G = require("../../lib/gestiones");
@@ -415,7 +415,12 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
     // (cantidad > 0) pero NO se entrega equipo físico — no hay seriales que
     // asignar. Pedirlos a inventario solo confunde a bodega y deja el contrato
     // trabado sin llegar nunca a activaciones (caso Silverking ALQ20260713-04).
-    const esRenovSinEquipo = after.accion === "Renovación" && !!after.renovacion_sin_equipo;
+    //
+    // EXCEPCIÓN (2026-09-04): si el plan de la venta declara REEMPLAZOS, sí
+    // hay equipo que asignar y entregar — el de los reemplazos. Se pide a
+    // bodega solo eso; los que continúan ya son filas del contrato.
+    const reemplazos = after.accion === "Renovación" ? reemplazosPorModelo(after.transicion_plan) : [];
+    const esRenovSinEquipo = after.accion === "Renovación" && !!after.renovacion_sin_equipo && !reemplazos.length;
 
     // Sin equipos que serializar → completa la señal y deja que el trigger de
     // activaciones envíe el correo (sin seriales, con la modalidad de renovación).
@@ -435,10 +440,16 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
     // Marca pendiente (para el botón de la lista) y solicita seriales a inventario.
     await contratoRef.set({ seriales_estado: "pendiente" }, { merge: true });
 
-    const equiposRows = (after.equipos || [])
-      .filter(e => Number(e.cantidad || 0) > 0)
+    // Renovación con reemplazos declarados: a bodega le toca SOLO lo que
+    // entra por reemplazo (los que continúan ya están registrados).
+    const soloReemplazos = reemplazos.length > 0 && !!after.renovacion_sin_equipo;
+    const filasPedido = soloReemplazos
+      ? reemplazos.map(r => ({ modelo: r.modelo, cantidad: r.cantidad }))
+      : (after.equipos || []).filter(e => Number(e.cantidad || 0) > 0);
+    const equiposRows = filasPedido
       .map(e => `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(e.modelo || "—")}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center;">${Number(e.cantidad || 0)}</td></tr>`)
       .join("");
+    const continuanN = (after.transicion_plan?.unidades || []).filter(u => u.destino === "continua").length;
 
     const bodyContent = `
       <h2 style="margin:0 0 12px;font:700 22px Arial,sans-serif;color:#111827;">Solicitud de seriales</h2>
@@ -447,6 +458,10 @@ const onContratoAprobadoSolicitaSeriales = onDocumentUpdated(
         <b>${escapeHtml(after.cliente_nombre || "—")}</b> fue aprobado. Asigna los
         seriales de los siguientes equipos para continuar el proceso.
       </p>
+      ${reemplazos.length ? `<p style="margin:0 0 12px;font:14px/1.5 Arial,sans-serif;color:#1e3a8a;">
+        <b>Renovación con ${reemplazos.length === 1 && reemplazos[0].cantidad === 1 ? "un reemplazo" : "reemplazos"} declarado${reemplazos.length === 1 && reemplazos[0].cantidad === 1 ? "" : "s"} por el vendedor</b>:
+        ${continuanN} radio(s) continúan con el cliente y ya están registrados en el contrato — ${soloReemplazos ? "solo" : "entre lo que asignes van"} los de la tabla
+        ${reemplazos.some(r => r.otro_modelo) ? "(hay reemplazos por OTRO modelo: el modelo de la tabla es el que ENTRA)" : ""}.</p>` : ""}
       <table role="presentation" width="100%" style="border-collapse:collapse;font:14px Arial,sans-serif;margin:8px 0 4px;">
         <thead><tr>
           <th style="text-align:left;padding:6px 8px;border-bottom:2px solid #e5e7eb;">Modelo</th>
@@ -629,7 +644,7 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
         if (!serial) return;
         vistos.add(poolDom.normSerial(serial));
         const m = s.modelo || "—";
-        (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial);
+        (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial + (s.refurbished === true ? " · refurbished" : ""));
       });
       // Renovación con plan por serial: los 'continúa' declarados en la venta
       // van en el correo aunque la fila del plan aún no exista (el plan se
@@ -644,11 +659,18 @@ const onSerialesAsignadasSendPdf = onDocumentWritten(
           if (u.destino !== "continua" || vistos.has(poolDom.normSerial(serial))) continue;
           vistos.add(poolDom.normSerial(serial));
           const m = u.modelo || "—";
-          (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial);
+          (serialesPorModelo[m] = serialesPorModelo[m] || []).push(serial + (u.refurbished === true ? " · refurbished" : ""));
+        }
+        const reempl = planV.unidades.filter(u => u.destino === "reemplaza");
+        if (reempl.length) {
+          serialesPorModelo["__reemplazos__"] = reempl.map(u =>
+            `${escapeHtml(u.serial || u.serial_norm || "")} → ${escapeHtml(u.reemplazo_modelo || u.modelo || "mismo modelo")}${u.reemplazo_modelo ? " (otro modelo)" : " (uno nuevo igual)"}`);
         }
       }
       const serialesRows = Object.keys(serialesPorModelo).sort().map(m =>
-        `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(m)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].map(escapeHtml).join("<br>")}</td></tr>`
+        m === "__reemplazos__"
+          ? `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;color:#1e3a8a;"><b>Se reemplazan</b><br><span style="font-size:11px;">(bodega asigna el entrante)</span></td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].join("<br>")}</td></tr>`
+          : `<tr><td style="padding:6px 8px;border-bottom:1px solid #eee;">${escapeHtml(m)}</td><td style="padding:6px 8px;border-bottom:1px solid #eee;font-family:monospace;font-size:12px;">${serialesPorModelo[m].map(escapeHtml).join("<br>")}</td></tr>`
       ).join("");
       const noTieneHtml = planNoTiene.length
         ? `<p style="margin:8px 0 0;font:13px/1.5 Arial,sans-serif;color:#92400e;"><b>${planNoTiene.length} equipo(s) que el cliente declaró NO tener</b> se soltaron de la cuenta y quedaron por clasificar: <span style="font-family:monospace;font-size:12px;">${planNoTiene.map(escapeHtml).join(", ")}</span></p>`
